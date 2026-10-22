@@ -47,6 +47,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
     private FirstShowEffects? _effects;
     private readonly Stopwatch _life = Stopwatch.StartNew(), _show = new();
     private readonly List<string> _files = new();
+    private readonly ConditioningControlPanel.Controls.ScrolllerCreditBadge _credit = new() { HorizontalAlignment = HorizontalAlignment.Left };
     private CancellationTokenSource? _load;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious;
     private double _last, _moveAt, _spokeAt = -10;
@@ -86,6 +87,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
         }, 35);
         _logo.Child = new Image { Source = new BitmapImage(new Uri("pack://application:,,,/Resources/features/ccp_banner.png")), Stretch = Stretch.Uniform };
         _stage.Children.Add(_logo);
+        Canvas.SetLeft(_credit, 16); Canvas.SetBottom(_credit, 12); _stage.Children.Add(_credit);   // "via Scrolller" during a Scrolller show
         _loadingPanel.Children.Add(_loadingBar); _loadingPanel.Children.Add(_loadingStatus);
         _bubbleContent.Children.Add(_speech); _bubbleContent.Children.Add(_loadingPanel); _bubbleContent.Children.Add(_choices);
         _bubble.Child = _bubbleContent; _speechWindow.Content = _bubble;
@@ -231,6 +233,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
     {
         _choices.Children.Clear(); _serious = false; _playing = true; _ending = false; _beat = -1;
         _stage.Background = Brushes.Transparent; _show.Restart();
+        _credit.SetShown(_files.Exists(ConditioningControlPanel.Services.Video.ScrolllerCredit.IsScrolllerMedia));
         Button(Text("stop"), Close);
     }
     private void Frame(object? sender, EventArgs args)
@@ -258,6 +261,7 @@ internal sealed partial class FirstShowDesktopWindow : Window
             if (time >= FirstShowScript.Length)
             {
                 _playing = false; _ending = true; _show.Stop(); _stage.Background = null;
+                _credit.SetShown(false);
                 AskVerdict();
             }
         }

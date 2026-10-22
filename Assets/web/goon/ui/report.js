@@ -91,6 +91,100 @@ export const SEEK_TIMEOUT_MS = 4000;
 
 const SHA_RE = /^[0-9a-f]{64}$/;
 
+/* ----------------------------------------------------------------- source
+ * WHERE THE REPORTED ITEM CAME FROM (Scrolller licence clause 3.4, 2026-10-21).
+ * We may not store Scrolller media on our servers, so a report against a
+ * Scrolller picture or clip names the post instead of carrying frames; only a
+ * `csam` or `illegal` report still sends its strip (a moderator has to see it).
+ *
+ *   {kind:'own'}       the sender's own file, transferred and hashed (every
+ *                      receivedStore row; the recap shortlist tags it `from`)
+ *   {kind:'scrolller', post_id?, url?, subreddit?}
+ *                      an id shaped `scrolller/<sub>/<postId>`, a url on
+ *                      scrolller.com or a subdomain, or the Discord Activity
+ *                      proxy path; only the fields the artifact knows go out
+ *   null               the page cannot tell: `source` is OMITTED and the server
+ *                      keeps any frame 24 h only
+ */
+export const SOURCE_OWN = 'own';
+export const SOURCE_SCROLLLER = 'scrolller';
+export const SCROLLLER_ID_PREFIX = 'scrolller/';
+/** The reasons that still send frames for Scrolller media. */
+export const SCROLLLER_EVIDENCE_REASONS = Object.freeze(['csam', 'illegal']);
+
+const SUB_RE = /^[A-Za-z0-9_]{1,64}$/;
+const POST_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const URL_MAX = 2048;
+
+/** `r/Name`, `/r/Name` or `Name` -> `Name`, or '' when it is not a plain subreddit. */
+export function plainSubreddit(v) {
+  let s = String(v == null ? '' : v).trim();
+  if (s.startsWith('/')) s = s.slice(1);
+  if (s.toLowerCase().startsWith('r/')) s = s.slice(2);
+  return SUB_RE.test(s) ? s : '';
+}
+
+/** `scrolller/<sub>/<postId>` (a `:k` segment suffix allowed) -> parts, or null. */
+export function parseScrolllerId(id) {
+  const s = String(id == null ? '' : id);
+  if (!s.startsWith(SCROLLLER_ID_PREFIX)) return null;
+  const parts = s.slice(SCROLLLER_ID_PREFIX.length).split('/');
+  if (parts.length !== 2) return null;
+  const subreddit = plainSubreddit(parts[0]);
+  const colon = parts[1].indexOf(':');
+  const postId = colon >= 0 ? parts[1].slice(0, colon) : parts[1];
+  return { subreddit, post_id: POST_RE.test(postId) ? postId : '' };
+}
+
+/** The url when it is https on scrolller.com or a subdomain, else ''. */
+export function scrolllerHttpsUrl(u) {
+  const s = String(u == null ? '' : u);
+  if (!s || s.length > URL_MAX) return '';
+  let x = null;
+  try { x = new URL(s); } catch (_e) { return ''; }
+  if (x.protocol !== 'https:' || x.username || x.password) return '';
+  const h = x.hostname.toLowerCase();
+  return (h === 'scrolller.com' || h.endsWith('.scrolller.com')) ? x.href : '';
+}
+
+/** Any Scrolller url, https or not, including the Discord Activity proxy path. */
+function looksScrolller(u) {
+  const s = String(u == null ? '' : u);
+  if (!s) return false;
+  let x = null;
+  try { x = new URL(s); } catch (_e) { return false; }
+  const h = x.hostname.toLowerCase();
+  return h === 'scrolller.com' || h.endsWith('.scrolller.com') || x.pathname.startsWith('/scrolller-media/');
+}
+
+/**
+ * The `source` a report against this artifact carries, or null.
+ * A Scrolller signal wins over `from: 'received'`: if a transferred row ever
+ * names a Scrolller post, the stricter rule is the safe one.
+ */
+export function reportSourceFor(artifact) {
+  const a = artifact || {};
+  const ids = parseScrolllerId(a.id);
+  const url = scrolllerHttpsUrl(a.url);
+  if (ids || url || looksScrolller(a.url) || a.from === SOURCE_SCROLLLER) {
+    const out = { kind: SOURCE_SCROLLLER };
+    const postId = (ids && ids.post_id) || (POST_RE.test(String(a.postId || '')) ? String(a.postId) : '');
+    if (postId) out.post_id = postId;
+    if (url) out.url = url;
+    const sub = (ids && ids.subreddit) || plainSubreddit(a.subreddit);
+    if (sub) out.subreddit = sub;
+    return out;
+  }
+  if (a.from === 'received') return { kind: SOURCE_OWN };
+  return null;
+}
+
+/** May a report with this source and reason capture and send frames? */
+export function evidenceAllowed(source, reason) {
+  if (!source || source.kind !== SOURCE_SCROLLLER) return true;
+  return SCROLLLER_EVIDENCE_REASONS.indexOf(reason) >= 0;
+}
+
 /* ============================================================================
  * PURE — no DOM, no network, no clock. All of this is what the selftest reads.
  * ==========================================================================*/
@@ -179,6 +273,9 @@ export function validEvidence(ev) {
  *
  * `evidence` is OMITTED (not null) when there is none — the route branches on
  * `ev != null` and a null would be an object-shaped 400 waiting to happen.
+ * It is also dropped HERE, whatever the caller passed, for Scrolller media
+ * under any reason but csam / illegal (`evidenceAllowed`). `source` is omitted
+ * when `reportSourceFor` cannot tell.
  *
  * @returns {object|null} null when the identifiers are not reportable
  */
@@ -208,7 +305,9 @@ export function buildReportBody({ session, artifact, reason, note, atMatchMs, ev
     note: clampNote(note),
     at_match_ms: Math.max(0, Math.floor(Number(atMatchMs) || 0)),
   };
-  if (validEvidence(evidence)) {
+  const source = reportSourceFor(a);
+  if (source) body.source = source;
+  if (evidenceAllowed(source, reason) && validEvidence(evidence)) {
     body.evidence = {
       kind: EVIDENCE_KIND,
       mime: evidence.mime,
@@ -498,13 +597,15 @@ export async function evidenceFor(view, opts) {
  *
  * @param {object} o
  * @param {object} o.session       boot's `session` ({identity, room})
- * @param {{sha:string, mime?:string, bytes?:number}} o.artifact
+ * @param {{sha:string, mime?:string, bytes?:number, from?:string, id?:string, url?:string,
+ *          subreddit?:string, postId?:string}} o.artifact (see reportSourceFor)
  * @param {string} o.reason        one of REPORT_REASONS (the WIRE code)
  * @param {string} [o.note]        clamped to NOTE_MAX
  * @param {number} [o.atMatchMs]
  * @param {object|null} [o.evidence]
  * @param {(path:string, body:object) => Promise<{status:number, body:string}>} [o.post]
- * @returns {Promise<{ok:boolean, id:string, deduped:boolean, status:number, error:string}>}
+ * @returns {Promise<{ok:boolean, id:string, deduped:boolean, status:number, error:string,
+ *                    sourceKind:string}>} sourceKind '' when no source went out
  */
 export async function submitReport({
   session, artifact, reason, note, atMatchMs, evidence, post,
@@ -519,7 +620,12 @@ export async function submitReport({
   let res = null;
   try { res = await send('/v2/goon/report', body); }
   catch (_e) { res = null; }                     // postNet does not reject; a fake might
-  return parseReportResponse(res || { status: 0, body: '' });
+  const out = parseReportResponse(res || { status: 0, body: '' });
+  // The recap's "sent to the media host too" line keys off this.
+  out.sourceKind = body.source ? body.source.kind : '';
+  return out;
 }
 
-export default { evidenceFor, submitReport, buildReportBody, parseReportResponse };
+export default {
+  evidenceFor, submitReport, buildReportBody, parseReportResponse, reportSourceFor, evidenceAllowed,
+};

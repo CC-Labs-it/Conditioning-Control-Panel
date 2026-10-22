@@ -591,6 +591,26 @@ public class BubbleService : IDisposable
     /// and the red Natasha bubble (pop on a click, resist on a hold) both read the button.</summary>
     internal static bool PressPassesThrough(bool needsHoldDefuse, bool isNatasha) => needsHoldDefuse || isNatasha;
 
+    /// <summary>ccp-bugs #1406: a press the hook lets through must not reach the app behind the
+    /// bubble. On the ambient field (where the only hold-judged bubble is the red one) it is caught
+    /// by <see cref="BubblePressCatcher"/>; a chaos run keeps its own rules.</summary>
+    internal static bool CatchesPassedPress(bool passesThrough, bool chaosActive) => passesThrough && !chaosActive;
+
+    /// <summary>HOOK THREAD: is this physical-px point on a live host bubble right now? Bubbles draw
+    /// above flashes (CompositorLayers.Bubbles over Flash), so the flash hook asks this before it
+    /// claims a click: the thing drawn on top takes it (ccp-bugs #1416). Reads only the immutable
+    /// disc snapshot, which is empty whenever no bubble hook is listening.</summary>
+    internal static bool HostBubbleAt(double pxX, double pxY)
+    {
+        var discs = ChaosClickDiscsSnapshot;
+        foreach (var d in discs)
+        {
+            double dx = d.X - pxX, dy = d.Y - pxY;
+            if (dx * dx + dy * dy <= d.R * d.R) return true;
+        }
+        return false;
+    }
+
     /// <summary>HOOK THREAD: a press landed at this physical-px point (either button — the ambient
     /// field routes its right-button message here too; chaos keeps right for the Ripple). If it's
     /// inside a live clickable bubble's hit disc, swallow it (so the click-through host doesn't also pass the click
@@ -604,10 +624,11 @@ public class BubbleService : IDisposable
         if (!_chaosActive && !_ambientHost) return false;
         var discs = ChaosClickDiscsSnapshot;
         bool hit = false, needsHold = false;
+        double hitX = 0, hitY = 0, hitR = 0;
         foreach (var d in discs)
         {
             double dx = d.X - px.X, dy = d.Y - px.Y;
-            if (dx * dx + dy * dy <= d.R * d.R) { hit = true; needsHold = d.Hold; break; }
+            if (dx * dx + dy * dy <= d.R * d.R) { hit = true; needsHold = d.Hold; hitX = d.X; hitY = d.Y; hitR = d.R; break; }
         }
         if (!hit) return false;
         var disp = Application.Current?.Dispatcher;
@@ -618,6 +639,10 @@ public class BubbleService : IDisposable
         // depends on this hook hearing the button-up (ccp-bugs #1342).
         var upSeq = needsHold ? -1L : Interlocked.Read(ref PointerUpSeq);
         disp.BeginInvoke(new Action(() => PopTopmostAt(px, upSeq)));
+        // ccp-bugs #1406: a red bubble's press is let through (below), and used to land on the app
+        // behind the click-through host. Slide the catcher under the pointer first so it lands there
+        // instead. Ambient field only: live defuse bubbles belong to a chaos run, unchanged.
+        if (CatchesPassedPress(needsHold, _chaosActive)) BubblePressCatcher.Catch(hitX, hitY, hitR);
         // Live hold-to-defuse bubbles must NOT swallow: the channel reads the held button via
         // GetAsyncKeyState, which never sees a swallowed low-level click (→ instant detonate). Let the
         // click pass through for those; instant-pop bubbles swallow cleanly (one click, no desktop leak).
@@ -840,6 +865,7 @@ public class BubbleService : IDisposable
         if (App.Settings?.Current?.BubbleSharedHost != true && !Bubble.UseCompositor) return;
         _ambientHost = true;
         Bubble.AmbientHostActive = true;
+        BubblePressCatcher.EnsureCreated();   // ccp-bugs #1406: takes a red bubble's let-through press
         ChaosBubbleHostOverlay.EnsureCreated();
         try
         {
@@ -870,6 +896,7 @@ public class BubbleService : IDisposable
         Bubble.AmbientHostActive = false;
         try { _ambientHook?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _ambientHook = null;
+        BubblePressCatcher.Destroy();
         ChaosBubbleHostOverlay.CloseActive();
         if (ChaosClickDiscsSnapshot.Length > 0) ChaosClickDiscsSnapshot = Array.Empty<(double, double, double, bool)>();
     }
@@ -5238,6 +5265,7 @@ internal class Bubble
             if (FlashService.IsRemotePath(path))
             {
                 _ = LoadRemoteFaceAsync(img, path, Math.Max(64, (int)inner));
+                if (Video.ScrolllerCredit.IsScrolllerMedia(path)) Controls.ScrolllerCreditChip.Hold(this);   // "via Scrolller" while this face is up
             }
             else if (animate)
             {
@@ -5446,6 +5474,7 @@ internal class Bubble
     {
         if (_isDestroyed) return;
         _isDestroyed = true;
+        Controls.ScrolllerCreditChip.Release(this);
         _isAlive = false;
 
         // Release this tease's animated-gif budget slot (process-wide cap).

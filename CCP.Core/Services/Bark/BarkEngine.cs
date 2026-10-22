@@ -1,61 +1,42 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using ConditioningControlPanel.Services.Companion;
-using ConditioningControlPanel.Services.Possession;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Bark
 {
-    /// <summary>A bark the engine decided to speak: the rule, the chosen line and the fire's context.</summary>
-    public sealed record BarkPick(BarkRule Rule, BarkVariant Variant, BarkContext Context)
-    {
-        /// <summary>WPF Speak: non-Normal class or priority &gt;= 100 preempts (GigglePriority).</summary>
-        public bool Preempts => Rule.Class != BarkClass.Normal || Rule.Priority >= BarkEngine.PriorityBarkThreshold;
-    }
+    /// <summary>A line for the mouth: text, clip or null, preempting (WPF GigglePriority), mood, muted easter egg.</summary>
+    public readonly record struct BarkSpeech(string Text, string? AudioPath, bool Priority, string? Mood, bool SilentEgg);
 
     /// <summary>
-    /// The bark decision engine: condition match, gate (one-shot latch, safety hold, chat suppression,
-    /// global min-gap, per-rule cooldown, chance), no-repeat variant/idle rotation and commit. A
-    /// faithful extraction of ConditioningControlPanel/Services/Companion/BarkService.cs (Raise :1097,
-    /// DispatchIdle :1178, ConditionPass :1379, EvaluateGate :1645, CommitFire :1793, PickVariant :1867):
-    /// same order of checks, same constants. Everything the head owns (the avatar, whisper audio,
-    /// the narrator, live service reads) comes in through the Func seams below; unseeded they answer
-    /// "not busy / unknown", and settings come from <see cref="CoreSettings"/>.
-    /// <para>ponytail: lane barks-wpf - WPF BarkService still carries its own copy of this logic and
-    /// should delegate here (its tests only run on the Windows rgate job). Until then both copies are
-    /// pinned to the same behaviour by Tests/CCP.Core.Tests/BarkEngineTests.cs.</para>
+    /// The matcher, gate and rotation of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>, so every head
+    /// runs the same rules with the same numbers: the priority walk (Raise :1096), conditions with the
+    /// _gte/_lte/_gt/_lt/_eq suffixes (:1379), the gate (EvaluateGate :1645: EMI mute, companion off,
+    /// one-shot latches, safety hold, chat suppression, speaking, the 60 s floor and its exemptions,
+    /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
+    /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
+    /// ponytail: DispatchIdle, PickVoiceLine, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
+    /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
     {
         public const int GlobalMinGapMs = 60000;
-        public const int SafetyHoldMs = 6000;
         public const int PriorityBarkThreshold = 100;
+        public const int SafetyHoldMs = 6000;
         public const int RecentlySpokenMemory = 8;
-        public const double GatedIdleBias = 0.35;
-        public const string EmergencyExitOpenedTrigger = "EmergencyExitOpened";
-        public const string EmergencyExitVerdictTrigger = "EmergencyExitVerdict";
-        private static readonly TimeSpan RapidClickWindow = TimeSpan.FromSeconds(60);
+        public static readonly TimeSpan RapidModSwitchWindow = TimeSpan.FromSeconds(60);
+        public static readonly TimeSpan RapidClickWindow = TimeSpan.FromSeconds(60);
 
-        /// <summary>WPF GlobalGapExemptTriggers: functional triggers skip ONLY the global min-gap.</summary>
+        /// <summary>WPF GlobalGapExemptTriggers (:77): functional corrections skip the 60 s floor.</summary>
         public static readonly HashSet<string> GlobalGapExemptTriggers = new(StringComparer.OrdinalIgnoreCase)
         {
-            "AttentionCheckFail",
-            PossessionBarkTriggers.Effect, PossessionBarkTriggers.Tripwire, PossessionBarkTriggers.Warden,
-            PossessionBarkTriggers.RungChanged, PossessionBarkTriggers.TimerRestarted, PossessionBarkTriggers.Remember,
-            EmergencyExitOpenedTrigger, EmergencyExitVerdictTrigger,
-            PossessionBarkTriggers.Conscript,
-        };
-
-        private static readonly HashSet<string> TextOnlyAttribution = new(StringComparer.OrdinalIgnoreCase)
-        {
-            PossessionBarkTriggers.Effect, PossessionBarkTriggers.Tripwire, PossessionBarkTriggers.Warden,
-            PossessionBarkTriggers.RungChanged, PossessionBarkTriggers.TimerRestarted, PossessionBarkTriggers.Remember,
-            PossessionBarkTriggers.Conscript, EmergencyExitOpenedTrigger, EmergencyExitVerdictTrigger,
+            "AttentionCheckFail", "PossessionEffect", "PossessionTripwire", "PossessionWarden", "PossessionRungChanged",
+            "PossessionTimerRestarted", "PossessionRemember", "LockdownConscript", "EmergencyExitOpened", "EmergencyExitVerdict",
         };
 
         private readonly object _gate = new();
-        private readonly TimeProvider _clock;
+        private readonly Func<BarkRuleSet> _loadRules;
         private readonly Random _rng;
         private BarkRuleSet _rules = BarkRuleSet.Empty;
         private readonly Dictionary<string, DateTime> _lastFiredUtc = new(StringComparer.OrdinalIgnoreCase);
@@ -64,478 +45,329 @@ namespace ConditioningControlPanel.Services.Bark
         private readonly Dictionary<string, string> _lastVariantKey = new(StringComparer.OrdinalIgnoreCase);
         private readonly Queue<string> _recentlySpoken = new();
         private readonly HashSet<string> _recentlySpokenSet = new(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
-        private readonly List<DateTime> _avatarClicks = new();
-        private string? _lastIdleRuleId;
         private DateTime _globalLastFireUtc = DateTime.MinValue;
         private DateTime _safetyHoldUntilUtc = DateTime.MinValue;
         private DateTime _lastUserMessageUtc = DateTime.MinValue;
 
-        // ---- head seams (null = unknown / not busy) ----
-        /// <summary>A live head read for a condition field (video_playing, webcam_running…); null = not known here.</summary>
-        public Func<string, object?>? LiveField { get; set; }
-        public Func<bool>? EmiAvatarMuted { get; set; }
-        public Func<bool>? WhisperPlaying { get; set; }
-        public Func<bool>? NarratorPlaying { get; set; }
-        public Func<bool>? AvatarSpeaking { get; set; }
-        /// <summary>WPF AvatarWindow.IsCompanionBusy(windowMs): an AI reply in flight or shown within the window.</summary>
-        public Func<int, bool>? AvatarBusy { get; set; }
-        /// <summary>The current Patreon tier name, for tier-scoped latches ("id@Tier").</summary>
-        public Func<string>? TierName { get; set; }
-        /// <summary>A pool_ref rule's phrases (WPF App.Mods.GetPhrases).</summary>
-        public Func<string, string[]?>? PoolRefPhrases { get; set; }
+        // WPF BarkState's rolling mod-switch and avatar-click windows, the counters a source on this head feeds.
+        private readonly List<DateTime> _modSwitches = new(), _avatarClicks = new();
+        public void RegisterModSwitch() => Register(_modSwitches, 64);
+        public int ModSwitchesWithin(TimeSpan window) => CountWithin(_modSwitches, window);
+        public void RegisterAvatarClick() => Register(_avatarClicks, 256);
+        public int AvatarClicksWithin(TimeSpan window) => CountWithin(_avatarClicks, window);
+        private void Register(List<DateTime> list, int cap) { lock (list) { list.Add(Now); if (list.Count > cap) list.RemoveRange(0, list.Count - cap); } }
+        private int CountWithin(List<DateTime> list, TimeSpan window) { var cutoff = Now - window; lock (list) return list.Count(t => t >= cutoff); }
 
-        /// <summary>The settings the gate reads and the rotation persists into (tests pass their own).</summary>
-        public Func<ConditioningControlPanel.Models.AppSettings> Settings { get; set; } = () => CoreSettings.Current;
-        public Action SaveSettings { get; set; } = () => CoreSettings.Save(suppressCloudBackup: true);
+        /// <summary>The gap / cooldown / hold clock; tests step it (P08).</summary>
+        public TimeProvider Clock { get; set; } = TimeProvider.System;
+        private DateTime Now => Clock.GetUtcNow().UtcDateTime;
 
-        public bool DryRun { get; set; }
+        // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
+        public Action<BarkSpeech>? Speak;
+        public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
+        public Func<int, bool>? IsCompanionBusy;       // App.AvatarWindow.IsCompanionBusy(windowMs)
+        public Func<bool>? EmiDeskAvatarMuted;         // App.EmiDesk.AvatarMuted
+        public Func<string?>? FocusedAppName;          // WindowAwareness service ?? detected name, for {0}
+        /// <summary>video_playing, webcam_running, achievements_all_unlocked, all_skills_unlocked (null = false).</summary>
+        public Func<string, object?>? LiveField;
+        /// <summary>WPF ResolveBarkAudio (:1625): the active mod's ladder.</summary>
+        public Func<string, string?> ResolveAudio = file =>
+            ModCompanionContent.ResolveActive(CompanionChannel.BarkAudio, file) is { Found: true } pick ? pick.Path : null;
 
-        public BarkEngine(TimeProvider? clock = null, Random? rng = null)
+        /// <summary>WPF BarkSpoken (:143): a line reached the mouth, with its final text (the brain's echo).</summary>
+        public event Action<BarkRule, string>? BarkSpoken;
+
+        public BarkEngine(Func<BarkRuleSet>? loadRules = null, Random? rng = null)
         {
-            _clock = clock ?? TimeProvider.System;
+            _loadRules = loadRules ?? BarkRuleManifest.Load;
             _rng = rng ?? new Random();
         }
 
-        private DateTime Now => _clock.GetUtcNow().UtcDateTime;
+        public int RuleCount { get { lock (_gate) return _rules.Count; } }
 
-        public BarkRuleSet Rules { get { lock (_gate) return _rules; } }
-
-        /// <summary>WPF Start: rules plus the persisted rotation.</summary>
-        public void Load(BarkRuleSet rules)
+        /// <summary>WPF Start (:190): the rules and the persisted no-repeat rotation.</summary>
+        public void Start()
         {
+            var fresh = SafeLoad();
+            var s = CoreSettings.Current;
             lock (_gate)
             {
-                _rules = rules;
-                var s = Settings();
+                _rules = fresh;
                 _usedVariantKeys.Clear();
                 foreach (var kv in s.BarkVariantRotation)
                     _usedVariantKeys[kv.Key] = new HashSet<string>(kv.Value ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-                _usedIdleRules.Clear();
-                foreach (var id in s.BarkIdleRotation) _usedIdleRules.Add(id);
             }
+            Log.Information("BarkEngine started - {Count} rules", fresh.Count);
         }
 
-        /// <summary>WPF ReloadRules: a mod switch re-arms session one-shots and cooldowns; rotation stays.</summary>
-        public void Reload(BarkRuleSet rules)
+        /// <summary>WPF ReloadRules (:632): session one-shots and cooldowns re-arm (ids are shared across mods);
+        /// rotation and lifetime latches stay.</summary>
+        public void ReloadRules()
         {
+            var fresh = SafeLoad();
             lock (_gate)
             {
-                _rules = rules;
+                _rules = fresh;
                 _firedOnceSession.Clear();
                 _lastFiredUtc.Clear();
             }
+            Log.Information("BarkEngine: reloaded {Count} rules (rotation preserved)", fresh.Count);
         }
 
-        /// <summary>WPF NotifyExternalLineSpoken: another mouth spoke; the global min-gap restarts.</summary>
-        public void NoteExternalLineSpoken() { lock (_gate) _globalLastFireUtc = Now; }
+        private BarkRuleSet SafeLoad()
+        { try { return _loadRules() ?? BarkRuleSet.Empty; } catch (Exception ex) { Log.Warning(ex, "BarkEngine: rule load failed"); return BarkRuleSet.Empty; } }
 
-        /// <summary>Panic: nothing but a safety bark speaks for <see cref="SafetyHoldMs"/> (the hold WPF's
-        /// Panic safety bark sets in CommitFire).</summary>
-        public void HoldFloor() { lock (_gate) _safetyHoldUntilUtc = Now.AddMilliseconds(SafetyHoldMs); }
+        public void NoteUserMessage() { lock (_gate) _lastUserMessageUtc = Now; }   // WPF :806, chat suppression
 
-        /// <summary>WPF UserMessageSent: anchors chat suppression.</summary>
-        public void NoteUserMessage() { lock (_gate) _lastUserMessageUtc = Now; }
-
-        /// <summary>WPF BarkState.RegisterAvatarClick + AvatarClicksWithin(60 s).</summary>
-        public int RegisterAvatarClick()
+        /// <summary>WPF Raise (:1096): the first passing rule (priority order) wins; the gate decides under the
+        /// lock, the mouth speaks after it. True when it spoke.</summary>
+        public bool Raise(string trigger, Action<BarkContext>? fill = null, bool guaranteed = false)
         {
-            lock (_gate)
+            try
             {
-                var now = Now;
-                _avatarClicks.Add(now);
-                if (_avatarClicks.Count > 256) _avatarClicks.RemoveRange(0, _avatarClicks.Count - 256);
-                return _avatarClicks.Count(t => t >= now - RapidClickWindow);
-            }
-        }
+                IReadOnlyList<BarkRule> rules;
+                lock (_gate) rules = _rules.ForTrigger(trigger);
+                if (rules.Count == 0) return false;
+                var ctx = new BarkContext(trigger);
+                fill?.Invoke(ctx);
 
-        /// <summary>WPF Raise: the first rule (priority order) whose conditions pass, through the gate.</summary>
-        public BarkPick? Decide(string trigger, BarkContext ctx, bool guaranteed = false)
-        {
-            lock (_gate)
-            {
-                var rules = _rules.ForTrigger(trigger);
-                BarkRule? winner = rules.FirstOrDefault(r => ConditionsPass(r, ctx));
-                return winner == null ? null : DecideLocked(winner, ctx, guaranteed);
-            }
-        }
-
-        /// <summary>WPF DispatchIdle (the mute and speaking checks stay with the caller).</summary>
-        public BarkPick? DecideIdle()
-        {
-            var ctx = new BarkContext("Idle");
-            lock (_gate)
-            {
-                var eligible = _rules.ForTrigger("Idle").Where(r => ConditionsPass(r, ctx)).ToList();
-                if (eligible.Count == 0) return null;
-                var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
-                if (unused.Count == 0)
+                BarkRule? winner;
+                int idx;
+                List<BarkVariant> pool;
+                lock (_gate)
                 {
-                    _usedIdleRules.Clear();
-                    if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
-                    PersistIdleRotation();
-                    unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
-                    if (unused.Count == 0) unused = eligible;
+                    winner = rules.FirstOrDefault(r => ConditionsPass(r, ctx));
+                    if (winner == null) { Log.Debug("[BARK] trigger={Trigger} no rule matched conditions", trigger); return false; }
+                    pool = ResolvePool(winner);
+                    (var fire, idx, var reason) = EvaluateGate(winner, pool, guaranteed);
+                    if (!fire) { Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} reason={Reason}", trigger, winner.Id, reason); return false; }
+                    Log.Information("[BARK] FIRE trigger={Trigger} rule={Rule} class={Class} variant#={Idx}", trigger, winner.Id, winner.Class, idx);
+                    if (Speak == null) return false;
+                    CommitFire(winner, idx, pool);
                 }
-                var gated = unused.Where(r => r.Conditions != null && r.Conditions.Count > 0).ToList();
-                var winner = gated.Count > 0 && _rng.NextDouble() < GatedIdleBias
-                    ? gated[_rng.Next(gated.Count)]
-                    : unused[_rng.Next(unused.Count)];
-                return DecideLocked(winner, ctx, guaranteed: false);
+                return SpeakLine(winner, pool[idx], ctx);
             }
+            catch (Exception ex) { Log.Warning(ex, "BarkEngine: Raise('{Trigger}') failed", trigger); return false; }
         }
 
-        private BarkPick? DecideLocked(BarkRule winner, BarkContext ctx, bool guaranteed)
-        {
-            var pool = ResolvePool(winner);
-            var (fire, idx, reason) = EvaluateGate(winner, pool, guaranteed);
-            if (!fire)
-            {
-                Serilog.Log.Debug("[BARK] blocked trigger={Trigger} rule={Rule} reason={Reason}", ctx.Trigger, winner.Id, reason);
-                return null;
-            }
-            CommitFire(winner, idx, pool);
-            Serilog.Log.Information("[BARK] {Verb} trigger={Trigger} rule={Rule} variant#={Idx}",
-                DryRun ? "WOULD FIRE" : "FIRE", ctx.Trigger, winner.Id, idx);
-            return DryRun ? null : new BarkPick(winner, pool[idx], ctx);
-        }
-
-        // ===================== conditions (WPF :1369-1520) =====================
-
-        private bool ConditionsPass(BarkRule rule, BarkContext ctx)
-        {
-            if (rule.Conditions == null || rule.Conditions.Count == 0) return true;
-            foreach (var kvp in rule.Conditions)
-                if (!ConditionPass(kvp.Key, kvp.Value, ctx)) return false;
-            return true;
-        }
+        public bool ConditionsPass(BarkRule rule, BarkContext ctx) =>
+            rule.Conditions == null || rule.Conditions.All(kv => ConditionPass(kv.Key, kv.Value, ctx));
 
         private bool ConditionPass(string key, object? expected, BarkContext ctx)
         {
-            string field = key;
-            string op = "eq";
-            foreach (var suffix in new[] { "_gte", "_lte", "_gt", "_lt", "_eq" })
-            {
-                if (key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                {
-                    field = key.Substring(0, key.Length - suffix.Length);
-                    op = suffix.Substring(1);
-                    break;
-                }
-            }
-
+            string field = key, op = "eq";
+            var suffix = new[] { "_gte", "_lte", "_gt", "_lt", "_eq" }.FirstOrDefault(x => key.EndsWith(x, StringComparison.OrdinalIgnoreCase));
+            if (suffix != null) (field, op) = (key[..^suffix.Length], suffix[1..]);
             var actual = ResolveField(field, ctx);
             if (actual == null) return false;
-
             if (op == "eq")
             {
                 if (expected is bool eb && TryBool(actual, out var ab)) return ab == eb;
-                if (TryDouble(expected, out var en) && TryDouble(actual, out var an))
-                    return Math.Abs(an - en) < 0.0001;
+                if (TryDouble(expected, out var en) && TryDouble(actual, out var an)) return Math.Abs(an - en) < 0.0001;
                 return string.Equals(actual.ToString(), expected?.ToString(), StringComparison.OrdinalIgnoreCase);
             }
-
             if (!TryDouble(actual, out var a) || !TryDouble(expected, out var e)) return false;
-            return op switch
-            {
-                "gte" => a >= e,
-                "lte" => a <= e,
-                "gt" => a > e,
-                "lt" => a < e,
-                _ => false
-            };
+            return op switch { "gte" => a >= e, "lte" => a <= e, "gt" => a > e, "lt" => a < e, _ => false };
         }
 
-        /// <summary>The settings/time fields of WPF ResolveField; the head's live reads; else the context.</summary>
+        /// <summary>WPF ResolveField (:1417): well-known live reads first, else the per-fire context.</summary>
         private object? ResolveField(string field, BarkContext ctx)
         {
-            var s = Settings();
-            var local = _clock.GetLocalNow();
+            var s = CoreSettings.Current;
             switch (field.ToLowerInvariant())
             {
-                case "clicks_60s": return (double)_avatarClicks.Count(t => t >= Now - RapidClickWindow);
+                case "video_playing":
+                case "webcam_running":
+                case "achievements_all_unlocked":
+                case "all_skills_unlocked":
+                    try { return LiveField?.Invoke(field.ToLowerInvariant()) ?? false; } catch { return false; }
+                case "session_running": return CoreSession.IsSessionRunning;
+                case "mod_switches_60s": return ModSwitchesWithin(RapidModSwitchWindow);
+                case "clicks_60s": return AvatarClicksWithin(RapidClickWindow);
+                // ponytail: session_elapsed_sec, phase_*, blink_count, face_lost_sec, pauses/refocus, setup_idle_sec,
+                // days_away and instant_relaunch are read only by triggers with no source here (session engine,
+                // webcam, SessionSetupReady, SessionStarted); they land with those sources.
                 case "master_volume": return (double)s.MasterVolume;
                 case "mute": return s.MasterVolume == 0;
                 case "player_level": return (double)s.PlayerLevel;
                 case "total_sessions": return (double)s.TotalSessions;
                 case "daily_quest_streak": return (double)s.DailyQuestStreak;
                 case "current_streak": return (double)s.CurrentStreak;
-                case "is_nye": return (local.Month == 12 && local.Day == 31) || (local.Month == 1 && local.Day == 1);
-                case "local_hour": return (double)local.Hour;
+                case "is_nye": { var now = DateTime.Now; return (now.Month == 12 && now.Day == 31) || (now.Month == 1 && now.Day == 1); }
+                case "local_hour": return (double)DateTime.Now.Hour;
                 case "sessions_7d": return (double)s.SessionsWithinDays(7);
                 case "late_sessions_7d": return (double)s.LateSessionsWithinDays(7);
                 case "sessions_today": return (double)s.SessionsToday();
                 case "same_mod_run": return (double)s.SameModRun;
-                case "is_late_hour": { int h = local.Hour; return h >= 23 || h < 4; }
+                case "is_late_hour": { int h = DateTime.Now.Hour; return h >= 23 || h < 4; }
+                default: return ctx.Values.TryGetValue(field, out var v) ? v : null;
             }
-            object? live = null;
-            try { live = LiveField?.Invoke(field.ToLowerInvariant()); } catch { }
-            if (live != null) return live;
-            return ctx.Values.TryGetValue(field, out var v) ? v : null;
         }
 
-        private static bool TryDouble(object? raw, out double value)
+        // Same coercions as BarkContext.TryGetNumber / TryGetBool (WPF TryDouble / TryBool).
+        private static bool TryDouble(object? raw, out double value) => new BarkContext("").Set("v", raw!).TryGetNumber("v", out value);
+        private static bool TryBool(object? raw, out bool value) => new BarkContext("").Set("v", raw!).TryGetBool("v", out value);
+
+        /// <summary>WPF ResolvePool (:1520): the inline pool minus Phrase-Manager-hidden lines, else pool_ref as text.</summary>
+        private static List<BarkVariant> ResolvePool(BarkRule rule)
         {
-            value = 0;
-            switch (raw)
+            if (rule.VariantPool is { Count: > 0 })
             {
-                case null: return false;
-                case double d: value = d; return true;
-                case int i: value = i; return true;
-                case long l: value = l; return true;
-                case float f: value = f; return true;
-                case bool b: value = b ? 1 : 0; return true;
-                case string str when double.TryParse(str, NumberStyles.Any, CultureInfo.InvariantCulture, out var p):
-                    value = p; return true;
-                default: return false;
+                var s = CoreSettings.Current;
+                return rule.VariantPool.Where(v =>
+                {
+                    var id = BarkLineId(rule.Id, v);
+                    return !s.DisabledPhraseIds.Contains(id) && !s.RemovedPhraseIds.Contains(id);
+                }).ToList();
             }
+            var phrases = string.IsNullOrWhiteSpace(rule.PoolRef) ? null : CoreMods.GetPhrases(rule.PoolRef!);
+            return phrases is { Length: > 0 } ? phrases.Select(p => new BarkVariant(p)).ToList() : new List<BarkVariant>();
         }
 
-        private static bool TryBool(object? raw, out bool value)
+        public static string BarkLineId(string ruleId, BarkVariant v) => CompanionPhraseIds.BarkLineId(ruleId, v.Text, v.Audio);
+
+        /// <summary>WPF GetAllBarkLines (:1564): the inline lines, for the Phrase Manager (pool_ref ones are listed already).</summary>
+        public IReadOnlyList<BarkLineInfo> GetAllBarkLines()
         {
-            value = false;
-            switch (raw)
-            {
-                case bool b: value = b; return true;
-                case int i: value = i != 0; return true;
-                case double d: value = Math.Abs(d) > double.Epsilon; return true;
-                case string str when bool.TryParse(str, out var p): value = p; return true;
-                default: return false;
-            }
+            BarkRuleSet rules;
+            lock (_gate) rules = _rules;
+            return rules.AllRules.SelectMany(r => (r.VariantPool ?? new List<BarkVariant>()).Where(v => v.HasText).Select(v =>
+                new BarkLineInfo(BarkLineId(r.Id, v), r.Id, r.Trigger, v.Text, v.Audio,
+                    SafeResolveAudio(v.Audio) is { } path ? System.IO.Path.GetDirectoryName(path) : null))).ToList();
         }
 
-        // ===================== pool (WPF ResolvePool :1522) =====================
-
-        private List<BarkVariant> ResolvePool(BarkRule rule)
+        private string? SafeResolveAudio(string? file)
         {
-            if (rule.VariantPool != null && rule.VariantPool.Count > 0)
-                return rule.VariantPool.Where(v => IsBarkLineEnabled(rule.Id, v)).ToList();
-            if (!string.IsNullOrWhiteSpace(rule.PoolRef))
-            {
-                string[]? phrases = null;
-                try { phrases = PoolRefPhrases?.Invoke(rule.PoolRef!); } catch { }
-                if (phrases != null && phrases.Length > 0)
-                    return phrases.Select(p => new BarkVariant(p)).ToList();
-            }
-            return new List<BarkVariant>();
+            if (string.IsNullOrWhiteSpace(file)) return null;
+            try { return ResolveAudio(file!); } catch { return null; }
         }
 
-        private bool IsBarkLineEnabled(string ruleId, BarkVariant v)
-        {
-            var s = Settings();
-            var id = CompanionPhraseIds.BarkLineId(ruleId, v.Text, v.Audio);
-            return !s.DisabledPhraseIds.Contains(id) && !s.RemovedPhraseIds.Contains(id);
-        }
+        private static bool Safe(Func<bool>? f) { try { return f?.Invoke() == true; } catch { return false; } }
 
-        /// <summary>WPF GetAllBarkLines (Phrase Manager), minus the folder (resolved by the caller).</summary>
-        public IReadOnlyList<(BarkRule Rule, BarkVariant Variant)> AllInlineLines()
-        {
-            var result = new List<(BarkRule, BarkVariant)>();
-            foreach (var rule in Rules.AllRules)
-            {
-                if (rule.VariantPool == null || rule.VariantPool.Count == 0) continue;
-                foreach (var v in rule.VariantPool) if (v.HasText) result.Add((rule, v));
-            }
-            return result;
-        }
-
-        // ===================== gate (WPF EvaluateGate :1645) =====================
-
-        private static bool Ask(Func<bool>? f) { try { return f?.Invoke() == true; } catch { return false; } }
-
+        /// <summary>WPF EvaluateGate (:1645). Caller holds the lock.</summary>
         private (bool Fire, int Index, string Reason) EvaluateGate(BarkRule rule, List<BarkVariant> pool, bool guaranteed)
         {
             if (pool.Count == 0) return (false, -1, "empty-pool");
-
             bool isSafety = rule.Class == BarkClass.Safety;
-            bool bypass = isSafety || guaranteed;
-            var s = Settings();
+            var s = CoreSettings.Current;
 
-            if (!isSafety && Ask(EmiAvatarMuted)) return (false, -1, "emi-desk-mute");
+            if (!isSafety && Safe(EmiDeskAvatarMuted)) return (false, -1, "emi-desk-mute");
             if (!isSafety && !s.AvatarEnabled) return (false, -1, "companion-off");
             if (!isSafety && !rule.Repeatable && AlreadyFiredOnce(rule)) return (false, -1, $"already-fired ({rule.Scope})");
 
-            if (!bypass)
+            if (!isSafety && !guaranteed)
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
-                if (Ask(WhisperPlaying) && !TextOnlyAttribution.Contains(rule.Trigger)) return (false, -1, "whisper-active");
-                if (Ask(NarratorPlaying)) return (false, -1, "narrator-active");
-
                 int window = s.BarkChatSuppressionMs;
-                if (CompanionBusy(window, now)) return (false, -1, $"chat-suppressed ({window}ms)");
-
+                if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
+                    || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))
+                    return (false, -1, $"chat-suppressed ({window}ms)");
                 bool willPreempt = rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold;
-                if (!willPreempt && Ask(AvatarSpeaking)) return (false, -1, "speaking");
-
-                if (!GlobalGapExemptTriggers.Contains(rule.Trigger))
-                {
-                    var sinceGlobal = (now - _globalLastFireUtc).TotalMilliseconds;
-                    if (sinceGlobal < GlobalMinGapMs) return (false, -1, $"min-gap ({sinceGlobal:F0}/{GlobalMinGapMs}ms)");
-                }
-
-                if (rule.CooldownMs > 0 && _lastFiredUtc.TryGetValue(rule.Id, out var last))
-                {
-                    var sinceRule = (now - last).TotalMilliseconds;
-                    if (sinceRule < rule.CooldownMs) return (false, -1, $"cooldown ({sinceRule:F0}/{rule.CooldownMs}ms)");
-                }
-
+                if (!willPreempt && Safe(IsSpeaking)) return (false, -1, "speaking");
+                var sinceGlobal = (now - _globalLastFireUtc).TotalMilliseconds;
+                if (!GlobalGapExemptTriggers.Contains(rule.Trigger) && sinceGlobal < GlobalMinGapMs)
+                    return (false, -1, $"min-gap ({sinceGlobal:F0}/{GlobalMinGapMs}ms)");
+                if (rule.CooldownMs > 0 && _lastFiredUtc.TryGetValue(rule.Id, out var last)
+                    && (now - last).TotalMilliseconds < rule.CooldownMs)
+                    return (false, -1, $"cooldown ({rule.CooldownMs}ms)");
                 if (rule.Chance < 1.0 && _rng.NextDouble() >= rule.Chance) return (false, -1, $"chance ({rule.Chance:0.##})");
             }
 
-            int idx = 0;
-            if (pool.Count > 1)
+            if (pool.Count == 1) return (true, 0, "OK");
+            if (!rule.Repeatable) return (true, _rng.Next(pool.Count), "OK");   // one-shot: any line
+            int idx = PickVariant(pool, rule.Id, _usedVariantKeys.TryGetValue(rule.Id, out var used) ? used : null);
+            if (idx < 0)
             {
-                if (rule.Repeatable)
-                {
-                    var usedKeys = _usedVariantKeys.TryGetValue(rule.Id, out var set) ? set : null;
-                    idx = PickVariant(pool, rule.Id, usedKeys);
-                    if (idx < 0)
-                    {
-                        var reseed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                        if (_lastVariantKey.TryGetValue(rule.Id, out var lastKey)) reseed.Add(lastKey);
-                        _usedVariantKeys[rule.Id] = reseed;
-                        PersistVariantRotation(rule.Id);
-                        idx = PickVariant(pool, rule.Id, reseed);
-                        if (idx < 0) idx = 0;
-                    }
-                }
-                else idx = _rng.Next(pool.Count);
+                // Pool exhausted: recycle, reseeded with the last line so it cannot repeat back-to-back.
+                var reseed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                if (_lastVariantKey.TryGetValue(rule.Id, out var lastKey)) reseed.Add(lastKey);
+                _usedVariantKeys[rule.Id] = reseed;
+                PersistVariantRotation(rule.Id);
+                idx = Math.Max(0, PickVariant(pool, rule.Id, reseed));
             }
             return (true, idx, "OK");
         }
 
-        private bool AlreadyFiredOnce(BarkRule rule)
-        {
-            if (_firedOnceSession.Contains(rule.Id)) return true;
-            if (rule.Scope != BarkScope.Session) return Settings().IsBarkFired(LatchKey(rule));
-            return false;
-        }
+        private bool AlreadyFiredOnce(BarkRule rule) =>
+            _firedOnceSession.Contains(rule.Id)
+            || (rule.Scope != BarkScope.Session && CoreSettings.Current.IsBarkFired(LatchKey(rule)));
 
-        private string LatchKey(BarkRule rule)
-        {
-            if (rule.Scope != BarkScope.Tier) return rule.Id;
-            string tier = "None";
-            try { tier = TierName?.Invoke() ?? "None"; } catch { }
-            return rule.Id + "@" + tier;
-        }
+        private static string LatchKey(BarkRule rule) => rule.Scope == BarkScope.Tier ? rule.Id + "@None" : rule.Id;
 
-        private bool CompanionBusy(int windowMs, DateTime now)
-        {
-            try { if (AvatarBusy?.Invoke(windowMs) == true) return true; } catch { }
-            return windowMs > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < windowMs;
-        }
-
-        // ===================== commit (WPF CommitFire :1793) =====================
-
-        private void CommitFire(BarkRule rule, int variantIndex, List<BarkVariant> pool)
+        /// <summary>WPF CommitFire (:1793). Caller holds the lock.</summary>
+        private void CommitFire(BarkRule rule, int idx, List<BarkVariant> pool)
         {
             var now = Now;
             _lastFiredUtc[rule.Id] = now;
             _globalLastFireUtc = now;
-
-            if (variantIndex >= 0 && variantIndex < pool.Count) RememberSpoken(pool[variantIndex].Audio);
+            RememberSpoken(pool[idx].Audio);
             if (rule.Class == BarkClass.Safety) _safetyHoldUntilUtc = now.AddMilliseconds(SafetyHoldMs);
-
             if (!rule.Repeatable)
             {
                 _firedOnceSession.Add(rule.Id);
-                if (rule.Scope != BarkScope.Session && !DryRun) Settings().MarkBarkFired(LatchKey(rule));
+                if (rule.Scope != BarkScope.Session) CoreSettings.Current.MarkBarkFired(LatchKey(rule));
             }
-
-            if (variantIndex >= 0 && variantIndex < pool.Count)
-            {
-                var key = CompanionPhraseIds.BarkLineId(rule.Id, pool[variantIndex].Text, pool[variantIndex].Audio);
-                if (!_usedVariantKeys.TryGetValue(rule.Id, out var set))
-                    _usedVariantKeys[rule.Id] = set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                set.Add(key);
-                _lastVariantKey[rule.Id] = key;
-                PersistVariantRotation(rule.Id);
-            }
-
-            if (string.Equals(rule.Trigger, "Idle", StringComparison.OrdinalIgnoreCase))
-            {
-                _usedIdleRules.Add(rule.Id);
-                _lastIdleRuleId = rule.Id;
-                PersistIdleRotation();
-            }
+            var key = BarkLineId(rule.Id, pool[idx]);
+            if (!_usedVariantKeys.TryGetValue(rule.Id, out var set))
+                _usedVariantKeys[rule.Id] = set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            set.Add(key);
+            _lastVariantKey[rule.Id] = key;
+            PersistVariantRotation(rule.Id);
         }
 
+        /// <summary>WPF PickVariant (:1867): an unused line, preferring a clip no rule spoke lately; -1 when all used.</summary>
         private int PickVariant(List<BarkVariant> pool, string ruleId, HashSet<string>? usedKeys)
         {
-            List<int>? unused = null;
-            for (int i = 0; i < pool.Count; i++)
-                if (usedKeys == null || !usedKeys.Contains(CompanionPhraseIds.BarkLineId(ruleId, pool[i].Text, pool[i].Audio)))
-                    (unused ??= new List<int>()).Add(i);
-            if (unused == null || unused.Count == 0) return -1;
-
-            List<int>? fresh = null;
-            if (_recentlySpokenSet.Count > 0)
-                foreach (var i in unused)
-                    if (!_recentlySpokenSet.Contains(pool[i].Audio ?? string.Empty))
-                        (fresh ??= new List<int>()).Add(i);
-
-            var pick = fresh ?? unused;
+            var unused = Enumerable.Range(0, pool.Count)
+                .Where(i => usedKeys == null || !usedKeys.Contains(BarkLineId(ruleId, pool[i]))).ToList();
+            if (unused.Count == 0) return -1;
+            var fresh = unused.Where(i => !_recentlySpokenSet.Contains(pool[i].Audio ?? string.Empty)).ToList();
+            var pick = fresh.Count > 0 ? fresh : unused;
             return pick[_rng.Next(pick.Count)];
         }
 
         private void RememberSpoken(string? audio)
         {
-            if (string.IsNullOrEmpty(audio)) return;
-            if (!_recentlySpokenSet.Add(audio)) return;
+            if (string.IsNullOrEmpty(audio) || !_recentlySpokenSet.Add(audio)) return;
             _recentlySpoken.Enqueue(audio);
-            while (_recentlySpoken.Count > RecentlySpokenMemory)
-                _recentlySpokenSet.Remove(_recentlySpoken.Dequeue());
+            while (_recentlySpoken.Count > RecentlySpokenMemory) _recentlySpokenSet.Remove(_recentlySpoken.Dequeue());
         }
 
         private void PersistVariantRotation(string ruleId)
         {
-            if (DryRun) return;
-            Settings().BarkVariantRotation[ruleId] = _usedVariantKeys.TryGetValue(ruleId, out var set)
-                ? new List<string>(set) : new List<string>();
-            SaveSettings();
+            CoreSettings.Current.BarkVariantRotation[ruleId] =
+                _usedVariantKeys.TryGetValue(ruleId, out var set) ? new List<string>(set) : new List<string>();
+            CoreSettings.Save(suppressCloudBackup: true);   // local-only, rides the next real change to cloud
         }
 
-        private void PersistIdleRotation()
+        /// <summary>WPF Speak (:1943): a muted easter egg shows text only; non-Normal or priority >= 100 preempts.</summary>
+        private bool SpeakLine(BarkRule rule, BarkVariant variant, BarkContext ctx)
         {
-            if (DryRun) return;
-            Settings().BarkIdleRotation = new List<string>(_usedIdleRules);
-            SaveSettings();
+            var mouth = Speak;
+            var line = ApplySubstitutions(variant.Text, ctx);
+            if (mouth == null || string.IsNullOrWhiteSpace(line)) return false;
+            var mood = string.IsNullOrEmpty(rule.Mood) ? null : rule.Mood;
+            if (rule.Class == BarkClass.EasterEgg && CoreSettings.Current.MasterVolume == 0)
+                mouth(new BarkSpeech(line, null, false, mood, SilentEgg: true));
+            else
+                mouth(new BarkSpeech(line, SafeResolveAudio(variant.Audio),
+                    rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold, mood, SilentEgg: false));
+            try { BarkSpoken?.Invoke(rule, line); }
+            catch (Exception ex) { Log.Debug("[BARK] BarkSpoken subscriber error: {Error}", ex.Message); }
+            return true;
         }
 
-        // ===================== speak helpers (WPF :2000) =====================
-
-        /// <summary>Substitute {0} (focused app, "that" when unknown) and {key} tokens from the context.</summary>
-        public static string ApplySubstitutions(string text, BarkContext ctx, string? focusedApp = null)
+        /// <summary>WPF ApplySubstitutions (:2000): {0} = the focused app ("that" when unknown), {key} = context.</summary>
+        public string ApplySubstitutions(string text, BarkContext ctx)
         {
             if (string.IsNullOrEmpty(text)) return text;
-            if (text.Contains("{0}"))
-                text = text.Replace("{0}", string.IsNullOrWhiteSpace(focusedApp) ? "that" : focusedApp);
+            string? app = null;
+            if (text.Contains("{0}")) try { app = FocusedAppName?.Invoke(); } catch { }
+            text = text.Replace("{0}", string.IsNullOrWhiteSpace(app) ? "that" : app);
             foreach (var kvp in ctx.Values)
-            {
-                var token = "{" + kvp.Key + "}";
-                if (text.Contains(token)) text = text.Replace(token, kvp.Value?.ToString() ?? "");
-            }
+                text = text.Replace("{" + kvp.Key + "}", kvp.Value?.ToString() ?? "");
             return text;
-        }
-
-        /// <summary>WPF TryGetSettingNumber: a setting's value as a double (bool 0/1, enum int); false otherwise.</summary>
-        public static bool TryGetSettingNumber(string name, out double value)
-        {
-            value = 0;
-            object? raw;
-            try { raw = typeof(ConditioningControlPanel.Models.AppSettings).GetProperty(name)?.GetValue(CoreSettings.Current); }
-            catch { return false; }
-            switch (raw)
-            {
-                case bool b: value = b ? 1 : 0; return true;
-                case int i: value = i; return true;
-                case long l: value = l; return true;
-                case double d: value = d; return true;
-                case float f: value = f; return true;
-                case Enum en: value = Convert.ToDouble(en); return true;
-                default: return false;
-            }
         }
     }
 }
