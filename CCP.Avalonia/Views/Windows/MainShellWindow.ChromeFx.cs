@@ -1,5 +1,15 @@
 // PORTED-IN-PART: WPF MainWindow.ChromeFx.cs. START clipping and banner message sheens are live.
-// ponytail: tab/nav/start/XP choreography remains in wire-shell-chrome-fx-b.
+// ponytail: the rest is wire-shell-chrome-fx-b. Restore in this order, on BeatLoop (no infinite
+// animations), gated by ChromeBannerSheen/Pr4aAmbientAllowed:
+//   1. START sheen and XP gloss - SweepStartSheen, _startSheenTimer, ApplyXpSheen, ParkSheen.
+//   2. breathing glows - ApplyNavGlowBreath, ApplyStartButtonGlow and their Min/Max/Breath constants.
+//   3. tab transition + card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab, CollapseOutgoingTab,
+//      StaggerTabCards, StaggerCleanupTimer_Tick, FindStaggerTargets, TabFadeOutMs/TabFadeInMs/TabSlidePx;
+//      caller is ShowTab, which still snaps panels on and off.
+//   4. nav rail hover/active - NavButton_MouseEnter/Leave, NudgeNavIcon, ApplyNavActiveGlow,
+//      SetNavIndicator, NavIconHoverScale/NavIconHoverMs.
+//   5. XP meter - AnimateXpDisplay, FillXpBarTo, _lastXpShown; caller is the Progression XP refresh.
+// Gone for good: _chromeFxWindowActive / OnChromeFxWindowStateish (re-expressed by Pr4aAmbientAllowed).
 
 using System;
 using Avalonia;

@@ -94,6 +94,50 @@ public sealed class ChromeBannerSheenTests
         }
     });
 
+    /// <summary>Review P2: the focused test above lifts the banner out of the shell, so this one keeps the real
+    /// layout and proves the authored banner is laid out, visible and sweeps where the user sees it.</summary>
+    [Fact]
+    public void AnnouncementSweepsInsideTheRealShellLayout() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldClock = BeatLoop.Time;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var clock = new Clock();
+        BeatLoop.Time = clock;
+        CoreSettings.Current.Welcomed = true;
+        CoreSettings.Current.HasAcceptedAgeVerification = true;
+        CoreSettings.Current.WhatMovedCardShown = 1;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            shell.UpdateLayout();
+            var host = shell.Named<Grid>("BannerSheenHost")!;
+            var band = shell.Named<Border>("BannerSheen")!;
+            Assert.True(host.IsEffectivelyVisible, "banner sheen host is hidden in the real shell");
+            Assert.True(host.Bounds.Width > 0 && host.Bounds.Height > 0, $"banner sheen host is {host.Bounds}");
+            shell.SetBannerAnnouncement("A real announcement");
+            clock.Now += TimeSpan.FromSeconds(0.3).Ticks;
+            BeatLoop.StepAll();
+            Assert.Equal(0.22, band.Opacity, 5);
+        }
+        finally
+        {
+            shell.Close();
+            CoreSettings.ServiceProvider = oldSettings;
+            BeatLoop.Time = oldClock;
+        }
+    });
+
     private sealed class Clock : TimeProvider
     {
         public long Now;
