@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Stakes;
 
 namespace ConditioningControlPanel.Services.GoonGame
@@ -43,7 +44,7 @@ namespace ConditioningControlPanel.Services.GoonGame
     ///   Page -&gt; Host:  ready · log              (consumed inside ChaosWebViewHost)
     ///                  heartbeat { t, paint, vis } · pong · boot-error · fullscreen-set
     ///                  exit · exit-done
-    ///                  toy-pattern · toy-stop   (STUBS — haptics v2 is not merged)
+    ///                  toy-pattern · toy-stop   (GoonToyDirector)
     ///                  match-result             (STUB — XP wiring comes later)
     ///                  net-post { id, path, body }
     ///                  cache-req { op } · cache-put · encode-done
@@ -78,6 +79,8 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// <summary>The heartbeat watch's own tick interval. A tick that arrives much later than
         /// this means the UI thread itself was stalled, see <see cref="PaintStallVerdict"/>.</summary>
         internal const double WatchIntervalSeconds = 5;
+        /// <summary>Heartbeat silence after which a running toy cue is stopped.</summary>
+        internal const double ToyCueSilenceSeconds = 6;
 
         /// <summary>Slack on <see cref="WatchIntervalSeconds"/> before a late tick counts as a UI
         /// stall, and the <see cref="VideoDiag.UiStallMs"/> age that counts as one too.</summary>
@@ -121,6 +124,24 @@ namespace ConditioningControlPanel.Services.GoonGame
         private static readonly HttpClient Http = BuildHttpClient();
 
         public static bool IsActive => _host != null;
+
+        /// <summary>True while the game window is in front and can keep Escape as its pause.</summary>
+        public static bool IsInFront => _host?.IsForeground == true;
+
+        /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+        public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+        /// <summary>Hand the page a kept Escape after PanicPolicy.KeptEscapeGoesTo allows it,
+        /// then return keyboard focus so the pause card works without another click.</summary>
+        public static void PostKeptEscape()
+        {
+            try
+            {
+                _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+                _host?.FocusWeb();
+            }
+            catch (Exception ex) { App.Logger?.Debug("GoonHost: kept Escape post failed: {E}", ex.Message); }
+        }
 
         /// <summary>The join code of the room this window is hosting while nobody has sat down
         /// yet, else null. The page reports it (<c>room-code</c>); the friends drawer sends it.</summary>
@@ -347,6 +368,9 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// <summary>Graceful close: ask the page to wind down, watchdog-force after 1200 ms. Idempotent.</summary>
         public static void CloseActive()
         {
+            // The toy first, and refused until the window opens again: the page winding down may
+            // still send a cue after a panic (review, ccp-bugs #1429).
+            try { GoonToyDirector.Close(); } catch { }
             try
             {
                 if (_host == null) return;
@@ -425,6 +449,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 _paintStallHandled = false;
                 _host?.FocusWeb();
                 HookMicPermission();
+                HookToys();
 
                 var consent = new ConsentSheetMsg();   // the engine's own defaults, never a fork
                 _host?.Post(new
@@ -452,7 +477,8 @@ namespace ConditioningControlPanel.Services.GoonGame
                     },
                     caps = new
                     {
-                        haptics = false,          // haptics v2 is not merged; toy-* are stubs below
+                        // A toy connected in CCP, Lovense or Intiface alike (ccp-bugs #1429).
+                        haptics = GoonToyDirector.ReadyNow,
                         brainDrain = BrainDrainAllowed(),
                         spiral = true,            // in-page spiral veil; exec/ owns the renderer
                         camera = false,           // no webcam bridge into the page in v1
@@ -475,6 +501,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                         payloadMinGapMs = consent.PayloadMinGapMs,
                     },
                     fullscreen = _host?.IsFullscreen == true,
+                    // The plan list (contract C1 via PlanCatalog) for the recap's "Host the next
+                    // one" card (C10). A page shows a price only when this is present.
+                    plans = Services.Vault.PlanCatalog.ToWire(Services.Vault.PlanCatalog.Current),
                     // Discord sharing state (contract §4). Built from the CACHE only — init is
                     // posted synchronously and an avatar may never sit on a boot path. If the
                     // cached own-avatar is stale/absent, KickOwnAvatarRefresh below fetches it and
@@ -730,13 +759,12 @@ namespace ConditioningControlPanel.Services.GoonGame
                     DisposeAll();
                     break;
                 case "toy-pattern":
+                    // Clamped to the consent sheet's toy cap the page sends with it; the player's
+                    // own master cap still applies inside the mixer.
+                    GoonToyDirector.OnPattern(o);
+                    break;
                 case "toy-stop":
-                    // STUB. The haptics v2 multi-toy director is not merged yet, so a toy cue is
-                    // logged and dropped. Deliberately a no-op rather than a call into the v1
-                    // haptics path: the consent sheet's toyCap is enforced by the mixer that
-                    // doesn't exist here, and an uncapped buzz is exactly the thing the sheet is
-                    // for. Wire this to the director when the overhaul lands.
-                    App.Logger?.Debug("GoonHostService: {Type} (haptics stub, no-op)", (string?)o["type"]);
+                    GoonToyDirector.Stop();
                     break;
                 case "match-result":
                     // STUB. XP / progression wiring comes with the client ledger; log it so a
@@ -789,6 +817,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                     break;
                 case "open-prime":       // page's patron sheet "See the tiers": the app's own refusal and upgrade path
                     TierGate.DemandPremium("Goon Game");
+                    break;
+                case Services.Funnel.FunnelPageMessage.Type:   // recap end card (contract C10): count + open the plan checkout
+                    Services.Funnel.FunnelPageMessage.Handle(o, mayOpen: !_exiting);
                     break;
                 case "peer-niches":      // the opponent's hello named their niches; fill a pool from them
                     OnPeerNiches(o);
@@ -999,7 +1030,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                 ? (string?)o["body"] ?? ""
                 : o["body"]?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
 
-            if (!path.StartsWith(AllowedPathPrefix, StringComparison.Ordinal))
+            // Judged on the BUILT Uri, not the raw string: "/v2/goon/../user/me" starts with the
+            // prefix and still lands on /v2/user/me once System.Uri collapses it (HostNetPathRule).
+            if (!HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out var target) || target is null)
             {
                 App.Logger?.Warning("GoonHostService: net-post REJECTED for path '{Path}'", path);
                 ReplyNetPost(id, 0, "forbidden_path");
@@ -1012,7 +1045,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 string responseBody = "";
                 try
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, ProxyBaseUrl + path)
+                    using var request = new HttpRequestMessage(HttpMethod.Post, target)
                     {
                         Content = new StringContent(body, Encoding.UTF8, "application/json")
                     };
@@ -1739,6 +1772,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                 // page can't false-trip.
                 if (_host == null || !_host.IsReady || _exiting) return;
                 var silent = (DateTime.UtcNow - _lastHeartbeatUtc).TotalSeconds;
+                // A page that stopped beating cannot send toy-stop: end its cue long before the
+                // 20 s recovery (review, ccp-bugs #1429). The next cue from a live page plays.
+                if (silent > ToyCueSilenceSeconds) { try { GoonToyDirector.Stop(); } catch { } }
                 if (silent > 20)
                 {
                     App.Logger?.Warning("GoonHostService: page heartbeat silent >20s - recovering");
@@ -2111,12 +2147,48 @@ namespace ConditioningControlPanel.Services.GoonGame
             }));
         }
 
+        // ============================ toys ============================
+
+        private static bool _toysHooked;
+
+        /// <summary>Cues may play while the window is up, and the page hears a toy connect or drop.</summary>
+        private static void HookToys()
+        {
+            GoonToyDirector.Open();
+            if (_toysHooked || App.Haptics == null) return;
+            App.Haptics.ConnectionChanged += OnToyConnectionChanged;
+            _toysHooked = true;
+        }
+
+        private static void UnhookToys()
+        {
+            GoonToyDirector.Close();
+            if (!_toysHooked) return;
+            _toysHooked = false;
+            try { if (App.Haptics != null) App.Haptics.ConnectionChanged -= OnToyConnectionChanged; } catch { }
+        }
+
+        private static void OnToyConnectionChanged(object? sender, bool connected)
+        {
+            try
+            {
+                Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+                {
+                    if (_disposing) return;
+                    _host?.Post(new { type = "haptics-state", connected = GoonToyDirector.ReadyNow });
+                }));
+            }
+            catch { }
+        }
+
         private static void DisposeAll()
         {
             if (_disposing) return;   // _host.Dispose() closes the window, re-raising Closed -> here
             _disposing = true;
             try
             {
+                // The toy first: a closed window (panic included) never leaves it running.
+                try { UnhookToys(); } catch { }
                 CancelExitWatchdog();
                 StopHeartbeatWatch();
                 // Unbind the cache feed BEFORE the host goes, so a worker-thread Changed can't post

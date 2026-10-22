@@ -59,6 +59,12 @@ import * as THREE from 'three';
 import { BAND_LO, BAND_HI, makeWallFrame } from './walls.js';
 import { roomById } from './rooms.js';
 import { warmShots, warmWallPosters } from './wallWarm.js';
+import { sourceCredit } from '../shared/sourceCredit.js';
+
+/** The wall is remote-only (hostMedia.drawRemoteDom) and Scrolller is the app's only remote
+ *  source, so a poster standing on it is Scrolller's: the page's one "via Scrolller" mark is
+ *  held while at least one is shown, and dropped with the layer. */
+const CREDIT_KEY = 'race-wall';
 
 /* The drawn set. Twelve, because the forward window below is ~56 m and a slot lands
  * every ~6.5 m, so twelve covers the whole visible band with a little slack: one
@@ -203,6 +209,12 @@ export function createWallDomPosters({ root, layout, camera, media, rng }) {
   }
 
   const off = (slot) => { if (slot.shown) { slot.shown = false; slot.el.style.opacity = '0'; slot.el.style.visibility = 'hidden'; } };
+  let credited = false;
+  const credit = (on) => {
+    if (on === credited) return;
+    credited = on;
+    if (on) sourceCredit.hold(CREDIT_KEY); else sourceCredit.drop(CREDIT_KEY);
+  };
 
   function setRoom(id) {
     if (id === room) return;
@@ -214,6 +226,7 @@ export function createWallDomPosters({ root, layout, camera, media, rng }) {
   function setHidden(v) {
     hidden = !!v;
     if (hidden && wasHidden !== true) { wasHidden = true; if (box) box.style.display = 'none'; }
+    if (hidden) credit(false);
   }
   const ready = () => shots.length > 0;
 
@@ -242,6 +255,7 @@ export function createWallDomPosters({ root, layout, camera, media, rng }) {
     // This is the whole of the no-feed cost, and it is a room lookup and a compare.
     if (hidden || !live || !shots.length) {
       if (box && wasHidden !== true) { wasHidden = true; box.style.display = 'none'; }
+      credit(false);
       return;
     }
     if (!box) build();
@@ -290,10 +304,12 @@ export function createWallDomPosters({ root, layout, camera, media, rng }) {
       slot.el.style.opacity = e6(o);
       if (!slot.shown) { slot.shown = true; slot.el.style.visibility = 'visible'; }
     }
+    credit(slots.some((sl) => sl.shown));
   }
 
   function dispose() {
     disposed = true;
+    credit(false);
     for (const img of loading) { img.onload = null; img.onerror = null; img.src = ''; }
     loading.clear();
     for (const slot of slots) { slot.el.src = ''; slot.shot = null; }

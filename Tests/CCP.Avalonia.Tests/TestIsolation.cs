@@ -78,7 +78,32 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
                 { res.Remove(k); res.Remove(k + "Brush"); }
             Current?.Restore();
             Current = null;
+            // A closed window's Skia surfaces and render targets are native, freed by finalizers, and
+            // invisible to the GC's budget (a few KB of managed wrapper each), so without this the
+            // dead windows of a few hundred tests pile up to GBs before a gen2 ever runs.
+            if (OpenWindows.OpenedSinceMark) { GC.Collect(); GC.WaitForPendingFinalizers(); }
+            MemLog(methodUnderTest);
         });
+
+    // Opt-in leak hunting (CCP_TEST_MEMLOG, CCP_TEST_HOLD_AT; docs/avalonia-decisions.md suite-memory): one line per test with RSS and the GC heap.
+    private static readonly string? MemLogPath = Environment.GetEnvironmentVariable("CCP_TEST_MEMLOG");
+    private static void MemLog(MethodInfo m)
+    {
+        if (MemLogPath is null) return;
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+        using var p = System.Diagnostics.Process.GetCurrentProcess();
+        File.AppendAllText(MemLogPath, $"{p.WorkingSet64 >> 20}\t{GC.GetTotalMemory(false) >> 20}\t{OpenWindows.Count}\t{m.DeclaringType?.Name}.{m.Name}\n");
+        // CCP_TEST_HOLD_AT=N parks the testhost after test N so roots.sh can take a heap dump.
+        if (++_memLogged == int.Parse(Environment.GetEnvironmentVariable("CCP_TEST_HOLD_AT") ?? "-1"))
+        {
+            // Parked on a signal (not a sleep, P08) until roots.sh deletes the marker.
+            var hold = MemLogPath + ".hold";
+            using var gone = new FileSystemWatcher(Path.GetDirectoryName(hold)!, Path.GetFileName(hold));
+            File.WriteAllText(hold, Environment.ProcessId.ToString());
+            while (File.Exists(hold)) gone.WaitForChanged(WatcherChangeTypes.Deleted, 1000);
+        }
+    }
+    private static int _memLogged;
 }
 
 /// <summary>Every window open in the test process, tracked by class handler (headless tests have no
@@ -88,16 +113,19 @@ internal static class OpenWindows
     private static readonly HashSet<global::Avalonia.Controls.Window> Open = new();
     private static HashSet<global::Avalonia.Controls.Window> _before = new();
     private static bool _hooked;
+    internal static int Count => Open.Count;
+    internal static bool OpenedSinceMark { get; private set; }
 
     internal static void Mark()
     {
         if (!_hooked)
         {
             _hooked = true;
-            global::Avalonia.Controls.Window.WindowOpenedEvent.AddClassHandler<global::Avalonia.Controls.Window>((w, _) => Open.Add(w));
+            global::Avalonia.Controls.Window.WindowOpenedEvent.AddClassHandler<global::Avalonia.Controls.Window>((w, _) => { Open.Add(w); OpenedSinceMark = true; });
             global::Avalonia.Controls.Window.WindowClosedEvent.AddClassHandler<global::Avalonia.Controls.Window>((w, _) => Open.Remove(w));
         }
         _before = new(Open);
+        OpenedSinceMark = false;
     }
 
     /// <summary>Closes the windows this test opened that are app windows (types from the head);
@@ -133,6 +161,7 @@ internal sealed class ProcessStateSnapshot
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
         foreach (var settings in new[] { CoreSettings.Current, FallbackSettings() }.Distinct())
             s._settings.Add((settings, JsonConvert.SerializeObject(settings, Json)));
+        PutBackLateWrites();
         foreach (var f in Directory.EnumerateFiles(TestUserDataProfile.Root, "*.json"))
             s._files[f] = File.ReadAllBytes(f);
         return s;
@@ -152,7 +181,31 @@ internal sealed class ProcessStateSnapshot
         ConditioningControlPanel.Services.SettingsService.DisarmAllPendingSaves();
         foreach (var f in Directory.EnumerateFiles(TestUserDataProfile.Root, "*.json"))
             if (!_files.ContainsKey(f)) try { File.Delete(f); } catch (IOException) { }
-        foreach (var (f, bytes) in _files)
+        WriteBack(_files);
+        _restored = _files;
+    }
+
+    // The files as the last Restore left them. A write that lands after it (a save still in flight
+    // past the disarm's bounded wait) would otherwise become the NEXT test's baseline and every later
+    // test's: a settings.json with Welcomed and no age acceptance put an Age Verification dialog in
+    // each later shell (JumpRightInTests saw two MessageDialogs, update-core-a gate 2026-10-13).
+    private static Dictionary<string, byte[]>? _restored;
+
+    private static void PutBackLateWrites()
+    {
+        if (_restored is not { } expected) return;
+        foreach (var f in Directory.EnumerateFiles(TestUserDataProfile.Root, "*.json").ToList())
+        {
+            if (expected.TryGetValue(f, out var bytes) && File.ReadAllBytes(f).AsSpan().SequenceEqual(bytes)) continue;
+            Serilog.Log.Warning("[TestIsolation] {File} changed after the previous test's restore; put back", Path.GetFileName(f));
+            if (bytes is null) try { File.Delete(f); } catch (IOException) { }
+        }
+        WriteBack(expected);
+    }
+
+    private static void WriteBack(Dictionary<string, byte[]> files)
+    {
+        foreach (var (f, bytes) in files)
             if (!File.Exists(f) || !File.ReadAllBytes(f).AsSpan().SequenceEqual(bytes))
                 try { File.WriteAllBytes(f, bytes); } catch (IOException) { }
     }

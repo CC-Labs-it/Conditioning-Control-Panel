@@ -56,7 +56,9 @@ internal static class ConversationRules
         return true;
     }
 
-    internal static bool Shows(TurnKind kind) => kind is TurnKind.UserChat or TurnKind.AssistantChat;
+    // Every AI line the tube said shows here too (#1443): ambient replies and display-only tube lines.
+    internal static bool Shows(TurnKind kind) =>
+        kind is TurnKind.UserChat or TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine;
 
     internal static bool ShouldSpeak(string? text, bool avatarEnabled) => avatarEnabled && !string.IsNullOrWhiteSpace(text);
 
