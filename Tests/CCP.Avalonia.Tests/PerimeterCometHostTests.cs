@@ -1,5 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Linq;
 using System.Reflection;
 using Avalonia;
@@ -12,10 +17,12 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaster;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -79,13 +86,21 @@ public sealed class PerimeterCometHostTests
     [Fact]
     public void ChasterLinkWaitLapsHeroAndStopsOnCancelHideOrDetach() => Run(clock =>
     {
+        var dir = Directory.CreateTempSubdirectory("ccp-comet-").FullName;
+        var chaster = new ChasterService(new ChasterClient(new Refuse()), new SecretChasterTokenStore(),
+            Path.Combine(dir, "chaster_tab.json"), () => new ChasterOptions(false, "", new HashSet<string>()));
+        var oldShell = ExternalOpener.Shell;
+        ExternalOpener.Shell = _ => true; // the consent page never reaches the desktop
+        ChasterHead.Service = chaster;
         var tab = new ChasterTabView();
         var hero = tab.FindControl<StackPanel>("UnlinkedPanel")!.GetVisualAncestors().OfType<Border>().First();
         var showLinking = typeof(ChasterTabView).GetMethod("ShowLinking", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var w = new Window { Width = 1200, Height = 800, Content = tab };
         try
         {
-            showLinking.Invoke(tab, new object[] { true });
+            tab.Refresh();
+            Click(tab.FindControl<Button>("BtnLink")!); // the user path: the Link button starts the wait
+            Assert.True(chaster.IsLinking);
             Assert.Null(Comet(hero)); // Linking already started before the page acquired a layer.
             w.Show(); Settle(w);
             var first = Assert.IsType<PerimeterCometAdorner>(Comet(hero));
@@ -93,7 +108,8 @@ public sealed class PerimeterCometHostTests
             clock.Now += TimeSpan.FromSeconds(3).Ticks;
             first.Tick();
             Assert.Equal(0.5, first.Phase, 3); // WPF linking lap: six seconds.
-            showLinking.Invoke(tab, new object[] { false });
+            Click(tab.FindControl<StackPanel>("LinkingRow")!.Children.OfType<Button>().Single()); // Cancel
+            PumpUntil(() => !tab.FindControl<Control>("LinkingRow")!.IsVisible);
             Assert.Null(Comet(hero));
             Assert.False(first.IsTicking);
             showLinking.Invoke(tab, new object[] { true });
@@ -112,8 +128,35 @@ public sealed class PerimeterCometHostTests
             showLinking.Invoke(tab, new object[] { true });
             Assert.Null(Comet(hero)); // WPF host has no wait comet without ambient motion.
         }
-        finally { w.Close(); }
+        finally
+        {
+            w.Close();
+            chaster.CancelLink();
+            ChasterHead.Service = null;
+            chaster.Dispose();
+            ExternalOpener.Shell = oldShell;
+            try { Directory.Delete(dir, true); } catch { }
+        }
     });
+
+    private sealed class Refuse : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+    }
+
+    private static void Click(Button b)
+    {
+        Assert.True(b.IsEffectivelyEnabled);
+        b.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+    }
+
+    private static void PumpUntil(Func<bool> done)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew(); // P73: bounded by time
+        while (!done() && sw.Elapsed < TimeSpan.FromSeconds(10)) { Dispatcher.UIThread.RunJobs(); Thread.Yield(); }
+        Assert.True(done(), "timed out");
+    }
 
     [Fact]
     public void LauncherPointerCometMovesAndParksOnLeaveRebuildAndDeactivation() => Run(clock =>

@@ -97,12 +97,18 @@ public sealed class LockdownVeilTests
         Frame();
         Assert.False(veil.IsVisible);
         Assert.False(launcher.VeilBreathing);
+        // The tile glow lives in the window adorner layer, above the veil; WPF's Effect glow sat under it.
+        // Re-read each time: Show() rebuilds the tiles, so an earlier glow reference goes stale.
+        Border Glow() => launcher.TileGlow(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!
+            .Children.OfType<Border>().First())!;
+        Assert.True(Glow().IsVisible);
 
         ld.Activate(TimeSpan.FromMinutes(30));   // e.g. a remote/Takeover start while the launcher is up
         Frame();
         Assert.True(veil.IsVisible);
         Assert.Equal(Loc.Get("launcher_lockdown_veil"), launcher.FindControl<TextBlock>("LockdownText")!.Text);
         Assert.True(launcher.VeilBreathing);
+        Assert.False(Glow().IsVisible);
 
         // A click on the panel CTA lands on the veil.
         var p = cta.TranslatePoint(new Point(cta.Bounds.Width / 2, cta.Bounds.Height / 2), launcher)!.Value;
@@ -133,7 +139,8 @@ public sealed class LockdownVeilTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(launcher.VeilBreathing);
         launcher.Show();
-        Dispatcher.UIThread.RunJobs();
+        Frame();   // the re-shown window rebuilt its tiles; let the new ones load their glow
+        Assert.False(Glow().IsVisible);   // re-shown window: still under the veil
         Assert.True(AmbientFxCanvas.Env.AllowAmbientLoops);   // MotionLevel.Full, so the next asserts mean something
         Assert.True(launcher.VeilBreathing);
         launcher.WindowState = WindowState.Minimized;
@@ -147,6 +154,7 @@ public sealed class LockdownVeilTests
         Frame();
         Assert.False(veil.IsVisible);
         Assert.False(launcher.VeilBreathing);
+        Assert.True(Glow().IsVisible);
         cta.Focus();
         launcher.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
         launcher.KeyReleaseQwerty(PhysicalKey.Enter, RawInputModifiers.None);

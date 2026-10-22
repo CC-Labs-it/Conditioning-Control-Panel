@@ -23,14 +23,22 @@ public partial class LauncherWindow
             {
                 Color = fx.Hue, Blur = Math.Min(20, AmbientFxCanvas.Env.MaxGlowBlurRadius(AmbientFxCanvas.Env.CurrentTier)),
             }),
-            IsVisible = fx.Tile.IsEffectivelyVisible,
+            IsVisible = TileGlowShown(fx),
         };
         AdornerLayer.SetAdornedElement(fx.Glow, fx.Tile);
         layer.Children.Add(fx.Glow);
         fx.GlowWatch = EffectiveVisibility.Watch(fx.Tile, () =>
         {
-            if (fx.Glow != null) fx.Glow.IsVisible = fx.Tile.IsEffectivelyVisible;
+            if (fx.Glow != null) fx.Glow.IsVisible = TileGlowShown(fx);
         });
+    }
+
+    // The window adorner layer draws above LockdownVeil; WPF's Effect glow sat under it, so hide while veiled.
+    private bool TileGlowShown(TileFx fx) => fx.Tile.IsEffectivelyVisible && !LockdownVeil.IsVisible;
+
+    private void RefreshTileGlowVisibility()
+    {
+        foreach (var fx in _tileFx) if (fx.Glow != null) fx.Glow.IsVisible = TileGlowShown(fx);
     }
 
     private static void RemoveTileGlow(TileFx fx)
