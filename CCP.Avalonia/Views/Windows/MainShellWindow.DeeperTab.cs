@@ -21,8 +21,10 @@
 // would be a second writer for one setting.
 //
 // LIBRARY ACTIONS (open, play, delete, folder, demo) are in MainShellWindow.DeeperHub.cs.
+// RESTORED ELSEWHERE: OpenInDeeperPlayer and OpenInDeeperEditorForMedia (single-media drop
+// Play/Edit) live in MainShellWindow.SessionIO.cs via ShowOrActivateDeeperPlayer/OpenDeeperEditor.
 // STILL OUT, and why:
-//   OpenInDeeperPlayer, OpenDeeperEditorFromPlayer, OpenInDeeperEditorForMedia,
+//   OpenDeeperEditorFromPlayer,
 //   HandlePendingFileOpen (file-association entry points), OnDeeperLibraryChanged (no watcher),
 //   BtnDeeperImport_Click / ImportEnhancementFiles (EnhancementLibrary.FindDuplicateOf /
 //   PromoteToLibrary are in Core now; this head has no EnhancementLibrary instance yet).
