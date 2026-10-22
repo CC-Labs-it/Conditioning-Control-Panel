@@ -26,7 +26,7 @@
 //                            vat filled from anything else is a number nobody agreed to.
 //   the faucet: Arm/Disarm and charge-hold now live in MainShellWindow.ProfileFaucet.cs.
 //   ApplyDescentToVat (with its VatFaucetHold fold) is follow-up lane wire-shell-profile-vat-b;
-//   the remaining ambient/celebration FX are follow-up lane wire-shell-profile-faucet-b.
+//   its ambient/celebration motion lives in MainShellWindow.ProfileFaucetFx.cs.
 //   MaybeShowFeatureIntro  - CCP.Avalonia/Views/Windows/FeatureIntroPopup exists, but the spend
 //                            ledger it reads is on the shell's stub side; and the explainer may
 //                            only fire from ApplyDescentToVat, which is blocked above.

@@ -1,5 +1,5 @@
 // Charge-hold slice adapted from WPF MainWindow.ProfileFaucet.cs and parity/trunk a4ee52d40.
-// Server polling and the ambient/celebration transforms remain in the named follow-up lane.
+// Server polling is follow-up lane wire-shell-profile-vat-b; the motion is MainShellWindow.ProfileFaucetFx.cs.
 using System;
 using Avalonia;
 using Avalonia.Controls;
@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DateTime _faucetChargeStart;
         private double _faucetChargeBudgetMs;
         private int _faucetChargeRungsPlayed;
-        private bool _faucetCharging, _faucetKeyHeld, _faucetWired;
+        private bool _faucetCharging, _faucetChargeCompact, _faucetKeyHeld, _faucetWired;
         private IPointer? _faucetPointer;
         private T? Vat<T>(string name) where T : Control => ProfilePage?.FindControl<T>(name);
         internal int FaucetHeldXp => _faucetHold.HeldXp;
@@ -72,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CancelFaucetCharge(silent: true);
             _faucetHold.Reset();
+            StopFaucetFx();
             foreach (string name in new[] { "ProfileVatFaucet", "ProfileVatChip", "ProfileVatChargeRing", "ProfileVatTickDrain", "ProfileVatTickCap", "ProfileVatTickMax" })
                 if (Vat<Control>(name) is { } control) control.IsVisible = false;
             Vat<Canvas>("ProfileVatSparks")?.Children.Clear();
@@ -82,6 +83,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_faucetWired) return;
             _faucetWired = true;
+            faucet.RenderTransform = new TransformGroup { Children = { FaucetShake, FaucetScale, FaucetTilt } };
+            if (Vat<Grid>("ProfileVatHandle") is { } handle) handle.RenderTransform = FaucetHandleScale;
+            if (Vat<Control>("ProfileVatFaucetDrop") is { } drop) drop.RenderTransform = FaucetDropFall;
+            if (Vat<Border>("ProfileVatChip") is { } chip) chip.RenderTransform = FaucetChipScale;
+            faucet.PointerEntered += (_, _) => { if (!_faucetCharging) AnimateFaucetScale(1.16); };
             faucet.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(faucet).Properties.IsLeftButtonPressed) return;
@@ -98,7 +104,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 CancelFaucetCharge(silent: false);
                 e.Pointer.Capture(null);
             };
-            faucet.PointerExited += (_, _) => { if (_faucetCharging) CancelFaucetCharge(silent: false); };
+            // Sliding off mid-charge is an early release: the hold is kept and the tap shivers.
+            faucet.PointerExited += (_, _) => { if (_faucetCharging) CancelFaucetCharge(silent: false); else AnimateFaucetScale(1); };
             faucet.PointerCaptureLost += (_, _) => CancelFaucetCharge(silent: true);
             faucet.LostFocus += (_, _) => { _faucetKeyHeld = false; CancelFaucetCharge(silent: true); };
             faucet.KeyDown += (_, e) =>
@@ -138,15 +145,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var tap = Vat<Grid>("ProfileVatFaucet");
             if (tap == null || !tap.IsVisible) return;
             int held = _faucetHold.HeldXp;
+            bool waiting = held > 0 && VatGlass?.IsPouring != true && !_faucetCharging;
             var tip = new StackPanel { MaxWidth = 320 };
             tip.Children.Add(new TextBlock { Text = held > 0 ? Loc.GetF("profile_faucet_tip_held", held) : Loc.Get("profile_faucet_tip_empty"), TextWrapping = TextWrapping.Wrap, FontWeight = FontWeight.SemiBold });
             tip.Children.Add(new TextBlock { Text = Loc.Get("profile_vat_help_tip"), TextWrapping = TextWrapping.Wrap, FontSize = 11, Opacity = .72, Margin = new Thickness(0, 5, 0, 0) });
             ToolTip.SetTip(tap, tip);
-            if (Vat<Border>("ProfileVatChip") is { } chip) chip.IsVisible = held > 0 && VatGlass?.IsPouring != true && !_faucetCharging;
+            if (Vat<Border>("ProfileVatChip") is { } chip) chip.IsVisible = waiting;
             if (Vat<TextBlock>("ProfileVatChipText") is { } text) text.Text = Loc.GetF("profile_vat_chip", held);
             if (Vat<Control>("ProfileVatFaucetBadge") is { } badge) badge.IsVisible = held > 0 && !AmbientFxCanvas.Env.AllowAmbientLoops;
-            // ponytail: wobble, chip breath, sparse ticks, sparkle and transform celebrations are
-            // the named follow-up; no ambient animation is introduced by this charge-hold slice.
+            // The wobble and the chip's breath (its sparkle and tick ride the wobble) are ambient loops;
+            // a hidden tab or minimised window parks their BeatLoop the way WPF's _vatOnScreen stops them.
+            SetFaucetAmbient(waiting && AmbientFxCanvas.Env.AllowAmbientLoops);
         }
 
         internal void BeginFaucetCharge()
@@ -162,9 +171,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _faucetCharging = true;
             _faucetChargeRungsPlayed = 1;
-            _faucetChargeBudgetMs = VatFaucetChargePolicy.BudgetMilliseconds(_faucetHold.HeldXp, _faucetChargePolicy.IsCompact(DateTime.UtcNow));
+            _faucetChargeCompact = _faucetChargePolicy.IsCompact(DateTime.UtcNow);
+            _faucetChargeBudgetMs = VatFaucetChargePolicy.BudgetMilliseconds(_faucetHold.HeldXp, _faucetChargeCompact);
             _faucetChargeStart = DateTime.UtcNow;
-            if (Vat<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = true; ring.Opacity = 1; }
+            AnimateFaucetScale(.94, 90); // THE BOUNCE, on the way down
+            // The ring fades in over 120 ms on the charge beat (WPF ShowChargeRing), at once without transitions.
+            bool fade = AmbientFxCanvas.Env.AllowTransitions;
+            if (Vat<Grid>("ProfileVatChargeRing") is { } ring) { ring.IsVisible = true; ring.Opacity = fade ? 0 : 1; }
             UpdateChargeRing(AmbientFxCanvas.Env.Level == MotionLevel.Full ? 0 : 1, force: true);
             PlayFaucetSfx("faucet_charge_1.wav", .15f);
             UpdateFaucetPresentation();
@@ -172,6 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_faucetChargeTimer == null && Vat<Grid>("ProfileVatChargeRing") is { } owner)
                 _faucetChargeTimer = new BeatLoop(owner, t =>
                 {
+                    if (AmbientFxCanvas.Env.AllowTransitions) owner.Opacity = Math.Clamp(t / .12, 0, 1);
                     if (t > 0) AdvanceFaucetCharge((DateTime.UtcNow - _faucetChargeStart).TotalMilliseconds / _faucetChargeBudgetMs);
                 });
             _faucetChargeTimer?.Start();
@@ -194,16 +208,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (progress < 1) return;
             _faucetCharging = false;
             HideChargeRing();
-            if (!_vatArmed || VatGlass is not { } glass || _faucetHold.HeldXp <= 0) { UpdateFaucetPresentation(); return; }
+            if (!_vatArmed || VatGlass is not { } glass || _faucetHold.HeldXp <= 0) { AnimateFaucetScale(1); UpdateFaucetPresentation(); return; }
             bool wasOver = glass.IsPastBrim(glass.Fill);
             var step = _faucetHold.PourAll();
-            PlayFaucetSfx("faucet_pour.wav", .35f);
+            AnimateFaucetScale(1, 120);
+            FaucetThud();
+            PlayFaucetSfx("faucet_pour.wav", .35f); // SAME FRAME as the thud
+            AnimateFaucetTilt(14);
             glass.PourTo(step.Fill, userGesture: true);
             var rule = CoreSettings.Current.Haptics?.V2?.Rule(HapticEventKind.LevelUp);
             if (rule is { Enabled: true, Intensity: > 0 } && CoreHaptics.Service is { } haptics)
                 _ = haptics.PostEvent(HapticEventKind.LevelUp, Math.Clamp(rule.Intensity * .35, 0, 1));
             if (!wasOver && glass.IsPastBrim(step.Fill)) { glass.PulseOverflow(); PlayFaucetSfx("faucet_brim.wav", .30f); }
+            if (!_faucetChargeCompact) SpawnFaucetSparkles();
             _faucetChargePolicy.NotePour(DateTime.UtcNow);
+            StartFaucetSettleWatch();
             UpdateFaucetPresentation();
         }
 
@@ -215,7 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var pointer = _faucetPointer;
             _faucetPointer = null;
             pointer?.Capture(null);
-            if (wasCharging && !silent) PlayFaucetSfx("faucet_charge_drop.wav", .15f);
+            if (wasCharging) AnimateFaucetScale(1);
+            if (wasCharging && !silent) { FaucetShiverAndDrip(); PlayFaucetSfx("faucet_charge_drop.wav", .15f); }
             UpdateFaucetPresentation();
         }
 
