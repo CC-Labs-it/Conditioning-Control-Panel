@@ -2386,3 +2386,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/overlay-speak-cue: +499
 - Speak cue overlay + Core SpeakCueState ported (fade, anchor, panic, render-all); row stays stub until Deeper runtime gives it a caller.
+
+## avalonia-port/ci-skip-cloud: +19
+- Push-triggered port workflows (distro-check, reference-render, snapshot-lock) skip avalonia-port/cloud-** and gate-** branches; workflow_dispatch kept.
+- Decision entry reserves the cloud-/gate- prefixes for throwaway branches and notes that gate pushes already carry [skip ci].
