@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace ConditioningControlPanel.Services.Banner
 {
@@ -14,6 +15,22 @@ namespace ConditioningControlPanel.Services.Banner
         public const string Teletype = "teletype";
         public const string NeonWarmUp = "neon-warmup";
         public const string Redaction = "redaction";
+
+        /// <summary>Every act, in the WPF table's order (MarqueeReadEffects.Build).</summary>
+        public static readonly IReadOnlyList<string> All = new[] { GlitchHeal, NumberFirst, Teletype, NeonWarmUp, Redaction };
+
+        /// <summary>WPF NumberFirstEffect.Integer: the figure the number-first act rolls up.</summary>
+        public static readonly Regex Integer = new(@"\d{1,7}", RegexOptions.Compiled);
+
+        /// <summary>
+        /// The acts' CanPlay (WPF MarqueeReadEffects.cs): every act needs a body; number-first also
+        /// needs a rendered integer in it, and declines otherwise so the picker moves on.
+        /// </summary>
+        public static bool CanPlay(string id, string? body)
+        {
+            if (string.IsNullOrWhiteSpace(body)) return false;
+            return id != NumberFirst || Integer.IsMatch(body);
+        }
 
         /// <summary>
         /// Pick an act. Never the one that just played, never one that says it cannot carry the

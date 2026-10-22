@@ -2568,3 +2568,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/video-core-c: +257
 - Cloud session unit (video-core-c); reviewed and gated locally.
+
+## avalonia-port/marquee-reads-b: +752
+- Home marquee interludes: all five WPF read acts, NeonWarmUp flicker + tag breath, baked strip glow, return sheen on the shell's support banner (WPF SweepBannerSheen); Photosafe drops flicker/jitter.
+- shell-marquee-reads -> wired; MarqueeGlyphRot moved to Core, CanPlay rule in Core.

@@ -297,4 +297,24 @@ public class MarqueeReadTests
         clock.Advance(TimeSpan.FromSeconds(21));
         Assert.True(cadence.NoteLoop());
     }
+    /// <summary>WPF MarqueeReadEffects CanPlay: every act needs a body; number-first also needs a rendered integer.</summary>
+    [Fact]
+    public void Number_first_declines_a_line_without_a_figure_and_every_act_declines_a_blank_body()
+    {
+        Assert.True(MarqueeReadActs.CanPlay(MarqueeReadActs.NumberFirst, "3 days unbroken."));
+        Assert.False(MarqueeReadActs.CanPlay(MarqueeReadActs.NumberFirst, "Two weeks without a missed day."));
+        Assert.True(MarqueeReadActs.CanPlay(MarqueeReadActs.Teletype, "Two weeks without a missed day."));
+        foreach (var id in MarqueeReadActs.All) Assert.False(MarqueeReadActs.CanPlay(id, "  "));
+        Assert.Equal(5, MarqueeReadActs.All.Distinct().Count());
+    }
+
+    /// <summary>The marquee rot keeps the character count, so a healing line never re-flows.</summary>
+    [Fact]
+    public void Glyph_rot_keeps_the_length_and_eats_every_letter()
+    {
+        var rot = MarqueeGlyphRot.Rot("days unbroken");
+        Assert.Equal("days unbroken".Length, rot.Length);
+        Assert.Equal(' ', rot[4]);
+        Assert.DoesNotContain(rot.Where((c, i) => i != 4), c => char.IsAsciiLetterLower(c));
+    }
 }
