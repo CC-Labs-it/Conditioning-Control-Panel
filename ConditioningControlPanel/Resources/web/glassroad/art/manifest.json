@@ -343,9 +343,9 @@
     "id": "emi-teacup-kart",
     "file": "models/emi-teacup-kart.glb",
     "kind": "kart",
-    "tris": 4722,
+    "tris": 4982,
     "texBytes": 2796200,
-    "boundRadiusM": 1.274,
+    "boundRadiusM": 1.338,
     "materialSlots": [
       "kart_surface",
       "emi_screen"
@@ -357,7 +357,7 @@
     "skins": 1,
     "joints": 13,
     "sizeM": [
-      1.52835,
+      1.545926,
       1.26305,
       1.44
     ],
@@ -367,7 +367,156 @@
     },
     "tintDetailChannel": "baseColorTexture.a",
     "tintAlphaMode": "OPAQUE",
-    "attachPoint": "head_attach"
+    "attachPoint": "head_attach",
+    "restBoundRadiusM": 1.275,
+    "animationFps": 30,
+    "animationBlendMode": "normal",
+    "animationBindings": "models/emi-kart-event-bindings.json",
+    "animations": [
+      {
+        "name": "idle_bob",
+        "durationSec": 2.4,
+        "playback": "loop"
+      },
+      {
+        "name": "lean_left",
+        "durationSec": 0.5,
+        "playback": "hold"
+      },
+      {
+        "name": "lean_right",
+        "durationSec": 0.5,
+        "playback": "hold"
+      },
+      {
+        "name": "hop_squash",
+        "durationSec": 0.9,
+        "playback": "one-shot"
+      },
+      {
+        "name": "landing_squash",
+        "durationSec": 0.6,
+        "playback": "one-shot"
+      },
+      {
+        "name": "hit_wobble",
+        "durationSec": 1,
+        "playback": "one-shot"
+      },
+      {
+        "name": "spin_out",
+        "durationSec": 1.2,
+        "playback": "one-shot"
+      },
+      {
+        "name": "wave",
+        "durationSec": 1.5,
+        "playback": "one-shot"
+      },
+      {
+        "name": "cheer",
+        "durationSec": 1.6,
+        "playback": "loop"
+      },
+      {
+        "name": "sulk",
+        "durationSec": 1.2,
+        "playback": "hold"
+      },
+      {
+        "name": "bump_left",
+        "durationSec": 0.5,
+        "playback": "one-shot"
+      },
+      {
+        "name": "bump_right",
+        "durationSec": 0.5,
+        "playback": "one-shot"
+      },
+      {
+        "name": "hit_recoil",
+        "durationSec": 0.8,
+        "playback": "one-shot"
+      },
+      {
+        "name": "rescue_pull",
+        "durationSec": 0.5,
+        "playback": "hold"
+      },
+      {
+        "name": "rescue_hover",
+        "durationSec": 0.6,
+        "playback": "loop"
+      },
+      {
+        "name": "rescue_release",
+        "durationSec": 0.5,
+        "playback": "one-shot"
+      },
+      {
+        "name": "jump_takeoff",
+        "durationSec": 0.3,
+        "playback": "one-shot"
+      },
+      {
+        "name": "ramp_takeoff",
+        "durationSec": 0.4,
+        "playback": "one-shot"
+      },
+      {
+        "name": "air_glide",
+        "durationSec": 1.2,
+        "playback": "loop"
+      },
+      {
+        "name": "landing_heavy",
+        "durationSec": 0.8,
+        "playback": "one-shot"
+      },
+      {
+        "name": "max_speed",
+        "durationSec": 1.2,
+        "playback": "loop"
+      },
+      {
+        "name": "boost_recoil",
+        "durationSec": 0.6,
+        "playback": "one-shot"
+      },
+      {
+        "name": "item_ready",
+        "durationSec": 1.6,
+        "playback": "loop"
+      },
+      {
+        "name": "item_throw",
+        "durationSec": 0.5,
+        "playback": "one-shot"
+      },
+      {
+        "name": "item_lob",
+        "durationSec": 0.7,
+        "playback": "one-shot"
+      },
+      {
+        "name": "countdown_ready",
+        "durationSec": 0.7,
+        "playback": "hold"
+      }
+    ],
+    "skinJoints": 13
+  },
+  {
+    "id": "emi-kart-event-bindings",
+    "file": "models/emi-kart-event-bindings.json",
+    "kind": "animation-bindings",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "model": "emi-teacup-kart",
+    "clips": 26
   },
   {
     "id": "bubble",
