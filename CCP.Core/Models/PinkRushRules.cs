@@ -37,6 +37,18 @@ namespace ConditioningControlPanel.Models
             s.PinkRushEndTime = null;
         }
 
+        // ScreenWash, WPF b86fa2aa6: constant-alpha compositor fade, 30 Hz for 500 ms.
+        public const int WashFadeMs = 500;
+        public const int WashStepMs = 33;
+        public const double WashPeak = 100.0 / 255.0 * 0.6;
+
+        public static byte WashAlphaAt(double elapsedMs, double fadeMs, double peak)
+        {
+            if (double.IsNaN(elapsedMs) || double.IsNaN(peak) || fadeMs <= 0) return 0;
+            var k = 1.0 - Math.Clamp(elapsedMs / fadeMs, 0, 1);
+            return (byte)Math.Round(255 * Math.Clamp(peak, 0, 1) * k);
+        }
+
         /// <summary>The multiplicative term of GetTotalXpMultiplier: 3x while a rush runs and the skill is owned.</summary>
         public static double XpFactor(AppSettings s) =>
             s.PinkRushActive && SkillTreeRules.HasSkill(s, SkillId) ? 3.0 : 1.0;

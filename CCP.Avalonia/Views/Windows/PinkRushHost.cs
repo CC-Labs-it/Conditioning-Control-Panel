@@ -5,7 +5,6 @@
 
 using System;
 using Avalonia;
-using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -92,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF SkillTreeService.Stop, called on every engine stop (so panic and exit too).</summary>
         internal static void Stop()
         {
+            PinkRushWash.CloseAll();
             _check?.Stop();
             _expiry?.Stop();
             if (CoreSettings.Current.PinkRushActive) End();
@@ -105,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try { p?.Close(); } catch { /* already closing */ }
         }
 
-        /// <summary>WPF's half-second pink wash (FF1493 at alpha 100, window opacity 0.6 -> 0 over 500 ms).
+        /// <summary>WPF's half-second pink wash (FF1493 at alpha 60 -> 0 over 500 ms).
         /// Only where a click-through tint can reach the screen, as PinkFilterOverlay refuses otherwise.</summary>
         private static void Wash()
         {
@@ -115,17 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (host is null || !PinkFilterOverlay.CanShowTint(host)) return;
                 foreach (var screen in ScreenList.Enumerate(host))
                 {
-                    var w = new TintOverlayWindow { Opacity = 0.6 };
-                    w.PlaceOn(screen);
-                    w.SetTint(0xFF, 0x14, 0x93, 100 / 255.0);
-                    w.Show();
-                    if (!X11Overlay.SetClickThrough(w, true)) { w.Close(); return; }
-                    w.Transitions = new Transitions
-                    {
-                        new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(500) }
-                    };
-                    w.Opacity = 0;
-                    DispatcherTimer.RunOnce(() => { try { w.Close(); } catch { } }, TimeSpan.FromMilliseconds(500));
+                    PinkRushWash.Show(screen);
                 }
             }
             catch (Exception ex)

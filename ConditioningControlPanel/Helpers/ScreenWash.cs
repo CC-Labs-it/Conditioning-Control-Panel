@@ -17,22 +17,18 @@ internal static class ScreenWash
 {
     /// <summary>The wash's peak, 0..1. The old window was a 100/255 fill at 0.6 opacity; this is
     /// the same strength in one number.</summary>
-    internal const double PinkRushPeak = 100.0 / 255.0 * 0.6;
+    internal const double PinkRushPeak = Models.PinkRushRules.WashPeak;
 
-    internal const int PinkRushFadeMs = 500;
+    internal const int PinkRushFadeMs = Models.PinkRushRules.WashFadeMs;
 
     /// <summary>Steps of the fade. 30 a second, the house effect clock.</summary>
-    internal const int StepMs = 33;
+    internal const int StepMs = Models.PinkRushRules.WashStepMs;
 
     /// <summary>Alpha (0..255) of the wash <paramref name="elapsedMs"/> into a fade of
     /// <paramref name="fadeMs"/> that starts at <paramref name="peak"/>: a straight line down to
     /// zero, never above the peak, never below zero.</summary>
     internal static byte AlphaAt(double elapsedMs, double fadeMs, double peak)
-    {
-        if (double.IsNaN(elapsedMs) || double.IsNaN(peak) || fadeMs <= 0) return 0;
-        var k = 1.0 - Math.Clamp(elapsedMs / fadeMs, 0, 1);
-        return (byte)Math.Round(255 * Math.Clamp(peak, 0, 1) * k);
-    }
+        => Models.PinkRushRules.WashAlphaAt(elapsedMs, fadeMs, peak);
 
     /// <summary>UI thread. Show the wash at its peak and fade it out. Never throws.</summary>
     public static void Flash(byte r, byte g, byte b, double peak, int fadeMs)
