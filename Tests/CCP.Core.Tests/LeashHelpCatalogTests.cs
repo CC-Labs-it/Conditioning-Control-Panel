@@ -69,6 +69,11 @@ public sealed class LeashHelpCatalogTests
             foreach (var k in keys) Assert.True(json[k] != null, $"{lang}.json is missing {k}");
             foreach (var e in LeashHelpCatalog.All)
                 Assert.Equal(e.CaptionNamesThem, ((string)json[e.CaptionKey]!).Contains("{0}"));
+            // WPF Slip_copy_says_what_the_player_sees: the slips name what the player sees, never "the gate".
+            if (lang == "en")
+                foreach (var e in LeashHelpCatalog.All)
+                    foreach (var k in new[] { e.CaptionKey, e.LimitsKey })
+                        Assert.DoesNotContain("gate", ((string)json[k]!).ToLowerInvariant());
         }
     }
 }
