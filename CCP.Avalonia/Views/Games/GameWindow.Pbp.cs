@@ -3,8 +3,8 @@
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
 // ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (no Core
-// StakeBridge on this head), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
-// MergedAccountRecovery and SeasonRecapService.TrackFeature.
+// StakeBridge on this head), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape)
+// and SeasonRecapService.TrackFeature.
 
 using System;
 using System.Collections.Generic;
@@ -211,6 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             PbpPending = Task.Run(async () =>
             {
                 var (status, body) = await PbpHostRules.SendAsync(http, baseUrl, call, token, CoreReleaseContent.AppVersion).ConfigureAwait(false);
+                MergedAccountRecovery.TryHandle(status, body);   // contract D (WPF PieceByPieceHostService.cs:613)
                 Dispatcher.UIThread.Post(() => { if (!_closing) Post(PbpHostRules.NetResult(call.Id, status, body)); });
             });
         }

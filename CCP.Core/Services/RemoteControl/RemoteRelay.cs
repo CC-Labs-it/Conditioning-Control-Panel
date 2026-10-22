@@ -106,7 +106,11 @@ namespace ConditioningControlPanel.Services
             { Content = new StringContent(JsonConvert.SerializeObject(body), Encoding.UTF8, "application/json") };
             var token = _token();
             if (!string.IsNullOrEmpty(token)) req.Headers.Add("X-Auth-Token", token);
-            return await _http.SendAsync(req).ConfigureAwait(false);
+            var response = await _http.SendAsync(req).ConfigureAwait(false);
+            // Contract D (WPF RemoteControlService.cs:132), through the door the head seeds with its seams. Callers
+            // still see the 409 and fail this one call as they already do.
+            if (V2AuthService.MergedRecovery is { } merged) await merged(response, null).ConfigureAwait(false);
+            return response;
         }
 
         /// <summary>WPF StartSessionAsync: the new session code, or null (logged; see <see cref="LastStartFailedAuth"/>).</summary>

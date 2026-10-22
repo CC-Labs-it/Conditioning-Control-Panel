@@ -102,6 +102,7 @@ Views/Windows/QuizWindow.axaml.cs :: TrendDirection.Flat => "\u2192", :: trend a
 Views/Controls/Companion/CompanionRoomPreviewWindow.axaml :: narrow ⇄ wide :: arrow between two words of a dev-preview button label, typography (content (c).4)
 App.axaml.cs :: Glyph = "👗" :: InboxItem.Glyph is Core row data, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon - IconMap maps 👗 to Wand once it draws via IconGlyph Emoji=
 Platform/FriendsLanding.cs :: ? "✨" : item.Kind == SendKind.Invite ? "🚪" : "🎁" :: InboxItem.Glyph is Core row data copied from WPF FriendsLanding.cs:283, not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon
+Platform/MergedAccountRecoveryHead.cs :: Glyph = "🔗" :: InboxItem.Glyph is Core row data copied from WPF MergedAccountRecoveryHead.cs (OfferSignIn), not an icon slot in this file; the inbox row renderer (InboxFlyout) owns the icon
 
 # --- verbatim imports (Stack rule 4); each follow-up converts the file and deletes its entry ---
 Tours/TutorialService.cs :: * :: verbatim: import (Stack rule 4, trunk 557d9aac3c0aabdedc9280218757373970439ed4); step Icon strings are data mapped via IconMap at render; follow-up tutorials-icons converts the data and removes this exemption

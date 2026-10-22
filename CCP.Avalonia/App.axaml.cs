@@ -587,6 +587,9 @@ namespace ConditioningControlPanel.Avalonia
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
                         sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
                         { Countdown = DescentCountdown };
+                    // Contract D (WPF App.xaml.cs:380-384): every seam first, then the doors, before the session validate.
+                    //BREAK3
+                    Platform.MergedAccountRecoveryHead.WireDoors();
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
