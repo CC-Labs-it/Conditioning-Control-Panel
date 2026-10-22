@@ -1213,6 +1213,14 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+- Follow-up 2026-10-22 (advised by: oracle-deep, option C; lane migration-privacy-seed): `SyncPush.ConsentFields` stays
+  scoped. Loading a WPF-written settings.json (no `consentOwnedFields` key, so no consent-aware build saved it) with a
+  non-empty `UnifiedId` and all six privacy switches as JSON bools sets `ConsentOwnedAccount` = that id and
+  `ConsentOwnedFields` = all six (`SyncPush.SeedFromWpfSettings`, called from `SettingsService.Load`). WPF sent all six on
+  every sync, so re-sending them changes nothing on the wire. A partial file (any of the six missing or not a bool), a
+  fresh install, a missing/corrupt file, a backup restore or no `UnifiedId` seeds nothing and stays scoped (B); another
+  account sends none. Accepted risk (WPF parity): a privacy change made on web or
+  mobile after the last WPF sync is reverted by the first Avalonia sync. Tests: `Tests/CCP.Core.Tests/PrivacyMigrationSeedTests.cs`.
 
 ## 2026-10-14: Settings migration test input = local only (avalonia-port/settings-migration-test)
 - Question: the settings-migration test needs a real WPF-release settings file. Found the user's WPF 7.x profile on the
