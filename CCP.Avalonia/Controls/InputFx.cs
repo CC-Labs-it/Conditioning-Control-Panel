@@ -70,6 +70,8 @@ public static class InputFx
         if (!GetIsEnabled(box)) return;
         var border = FindBorder(box);
         if (border == null) return; // WPF InputFx also permits Focus() before ApplyTemplate().
+        // Borderless (.transparent) boxes: WPF's glow falls on the text, not on a box (MantraWindow.xaml:164).
+        if (border.BorderThickness == default) { border.ClearValue(Border.BoxShadowProperty); return; }
         var c = GetGlowColor(box);
         var alpha = (byte)Math.Round(Math.Clamp(GetGlowLevel(box), 0, 0.45) * 255);
         border.BoxShadow = new BoxShadows(new BoxShadow { Blur = 8, Color = Color.FromArgb(alpha, c.R, c.G, c.B) });

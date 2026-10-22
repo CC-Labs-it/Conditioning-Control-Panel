@@ -543,7 +543,8 @@
     <Setter Property="MinHeight" Value="0"/>
     <Setter Property="MinWidth" Value="0"/>
     <Setter Property="CaretBrush" Value="{DynamicResource PinkBrush}"/>
-    <Setter Property="SelectionBrush" Value="{DynamicResource PinkBrush}"/>
+    <!-- Avalonia paints SelectionBrush at full strength; WPF applies SelectionOpacity 0.4. -->
+    <Setter Property="SelectionBrush" Value="{DynamicResource SelectionPinkBrush}"/>
     <Setter Property="DragDrop.AllowDrop" Value="True"/>
     <Setter Property="fx:InputFx.IsEnabled" Value="True"/>
     <Setter Property="fx:InputFx.GlowColor" Value="{DynamicResource PinkColor}"/>
