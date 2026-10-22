@@ -126,6 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeInviteEnding(); // MainShellWindow.Patreon.cs (WPF MainWindow.xaml.cs:3590, main fbe161de2)
             InitializePremiumCelebration(); // MainShellWindow.Patreon.cs (WPF InitializePatreonTab + MainWindow.xaml.cs:3559)
             InitializePremiumSpark();       // MainShellWindow.PremiumSpark.cs (WPF MainWindow.PremiumSpark.cs)
+            InitializeSparkleWallet();      // MainShellWindow.SparkleWallet.cs (WPF MainWindow.SparkleWallet.cs)
             InitializeWebcamLoadingSplash(); // MainShellWindow.WebcamSplash.cs (WPF MainWindow.xaml.cs:3631)
             InitializeOfflineModeUI(); // MainShellWindow.OfflineMode.cs (WPF MainWindow.Settings.cs:122)
             InitializeHelpButtons(); // MainShellWindow.HelpButtons.cs (WPF MainWindow.Presets.cs:35 SetupHelpButtons)
@@ -138,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
             InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
+            InitializeLeashHold(); // MainShellWindow.LeashHold.cs (WPF MainWindow.Leash.cs hold-to-cut)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
             Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled) InitializeAvatarTube(); };
             Closed += (_, _) => _avatarTubeWindow?.Close();
