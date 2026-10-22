@@ -176,6 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
+            if (ScriptOverride is { } fake) return await fake(javaScript);
             if (_web is null || string.IsNullOrEmpty(javaScript)) return null;
             try { return await _web.InvokeScript(javaScript); }
             catch (Exception ex)
@@ -310,6 +311,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <summary>Count of <see cref="Navigate"/> calls; a headless test's view of them.</summary>
         internal int NavigationRequests { get; private set; }
+
+        /// <summary>Test seam: headless has no engine, so a test answers <see cref="InvokeScriptAsync"/> itself.</summary>
+        internal Func<string, Task<string?>>? ScriptOverride { get; set; }
 
         /// <summary>Count of <see cref="Navigate"/> calls the sandbox kept from the engine.</summary>
         internal int RefusedNavigations { get; private set; }

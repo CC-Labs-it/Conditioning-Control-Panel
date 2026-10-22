@@ -99,9 +99,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Log.Information("MainShell: ccp_exit_fullscreen received (forced FS active = {Active})", _isBrowserFullscreen);
                     if (_isBrowserFullscreen) ExitBrowserFullscreen();
                     break;
-                case BrowserFullscreenOnMessage: EnterBrowserFullscreen(); break;
+                case BrowserFullscreenOnMessage: _ = EnterIfPageIsFullscreenAsync(); break;
                 case BrowserFullscreenOffMessage: ExitBrowserFullscreen(); break;
             }
+        }
+
+        /// <summary>WPF reacts only to the engine's ContainsFullScreenElementChanged, which a page cannot fake; any page script
+        /// can post the string, so the document is asked whether it really holds a fullscreen element before we go topmost.</summary>
+        private async System.Threading.Tasks.Task EnterIfPageIsFullscreenAsync()
+        {
+            var answer = await (BrowserView?.InvokeScriptAsync("!!(document.fullscreenElement||document.webkitFullscreenElement)")
+                ?? System.Threading.Tasks.Task.FromResult<string?>(null));
+            if (answer?.Trim().Trim('"') == "true") EnterBrowserFullscreen();
+            else Log.Information("MainShell: ccp_fullscreen_on ignored, the page holds no fullscreen element");
         }
 
         /// <summary>WPF ArmFullscreenEscapes: Topmost is rented (dropped on Deactivated, taken back on Activated while still

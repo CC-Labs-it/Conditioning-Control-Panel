@@ -102,12 +102,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug("Leash gate check failed: {E}", ex.Message); }
         }
 
-        private LeashGateInputs ReadLeashWorld(bool due) => new(
+        internal LeashGateInputs ReadLeashWorld(bool due) => new(
             Due: due,
             SessionRunning: CoreSession.IsSessionRunning || CoreEngine.IsRunning,
             GameUp: PanicSurfaces.AnyOwnsTheScreen(),
             LockCardOpen: LockCardWindow.IsAnyOpen() || BubbleCountWindow.IsAnyOpen(),
-            FullscreenEffect: CoreEngine.Video?.IsPlaying == true,
+            FullscreenEffect: _isBrowserFullscreen || CoreEngine.Video?.IsPlaying == true,   // WPF Leash.cs:176
             ModalUp: LockdownActive || Named<Border>("RemoteControlOverlay")?.IsVisible == true,
             PanelAway: !IsVisible || WindowState == WindowState.Minimized,
             Watching: _leashRunner?.IsRunning == true || DateTime.UtcNow < _leashSnoozeUntilUtc);

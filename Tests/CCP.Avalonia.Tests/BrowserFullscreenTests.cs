@@ -38,10 +38,13 @@ public sealed class BrowserFullscreenTests
                 shell.ShowTab("settings");
                 Dispatcher.UIThread.RunJobs();
                 var page = shell.Named<SettingsTabView>("SettingsTab")!;
-                check(shell, page, page.FindControl<WebHost>("BrowserWebHost")!);
+                var host = page.FindControl<WebHost>("BrowserWebHost")!;
+                host.ScriptOverride = _ => Task.FromResult<string?>(PageHoldsFullscreen);   // WebView2 shape: a JSON literal
+                check(shell, page, host);
             }
             finally
             {
+                PageHoldsFullscreen = "true";
                 CoreEngine.StoppedHook = null;
                 shell.Close();
                 CoreSettings.Current.OfflineMode = offline;
@@ -49,6 +52,8 @@ public sealed class BrowserFullscreenTests
             }
             return Task.CompletedTask;
         });
+
+    private static string? PageHoldsFullscreen = "true";
 
     private static Grid Container(SettingsTabView page) => page.FindControl<Grid>("BrowserContainer")!;
 
@@ -126,5 +131,21 @@ public sealed class BrowserFullscreenTests
         Assert.False(shell.IsBrowserFullscreen);
         Assert.Null(shell.BrowserPopoutWindow);
         Assert.Contains(host, Container(page).Children);
+    });
+
+    [Fact]
+    public Task AFakedFullscreenMessageIsIgnoredAndRealFullscreenHoldsTheLeashGate() => WithShell((shell, page, host) =>
+    {
+        // Any page script can post the string; WPF only reacts to the engine's ContainsFullScreenElementChanged.
+        PageHoldsFullscreen = "false";
+        host.OnWebMessage(MainShellWindow.BrowserFullscreenOnMessage);
+        Assert.False(shell.IsBrowserFullscreen);
+        Assert.Null(shell.BrowserPopoutWindow);
+        Assert.False(shell.ReadLeashWorld(true).FullscreenEffect);
+
+        PageHoldsFullscreen = "true";
+        host.OnWebMessage(MainShellWindow.BrowserFullscreenOnMessage);
+        Assert.True(shell.IsBrowserFullscreen);
+        Assert.True(shell.ReadLeashWorld(true).FullscreenEffect);   // WPF Leash.cs:176
     });
 }
