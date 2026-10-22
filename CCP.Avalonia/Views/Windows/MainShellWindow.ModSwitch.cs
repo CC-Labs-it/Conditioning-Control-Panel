@@ -161,6 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Named<Tabs.AwarenessTabView>("AwarenessTab")?.RefreshAwarenessPresetCards();
 
             InitializeModSelector();
+            LoadLogo();   // WPF MainWindow.xaml.cs:3127
             RefreshThemeAwareElements();
 
             Log.Information("Mod changed to {ModId}", mods.ActiveModId);

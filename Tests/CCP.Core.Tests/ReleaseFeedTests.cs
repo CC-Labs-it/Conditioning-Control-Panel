@@ -205,4 +205,60 @@ public sealed class ReleaseFeedTests
             @"C:\Users\u\AppData\Local\ConditioningControlPanel\update_result.txt", elevated);
         Assert.Equal(golden, new UTF8Encoding(false).GetBytes(script));
     }
+
+    [Fact]
+    public void TransientErrorsFollowWpfRules()
+    {
+        Assert.True(ReleaseFeed.IsTransientNetworkError(new InvalidOperationException("x", new System.Net.Sockets.SocketException())));
+        Assert.True(ReleaseFeed.IsTransientNetworkError(new InvalidOperationException("The connection was closed")));
+        Assert.True(ReleaseFeed.IsTransientNetworkError(new System.Threading.Tasks.TaskCanceledException()));
+        Assert.False(ReleaseFeed.IsTransientNetworkError(new InvalidOperationException("Could not find Setup.exe")));
+    }
+
+    [Fact]
+    public void InnoInstallDirNeedsTheUninstallerNextToTheExe()
+    {
+        var d = TempDir();
+        try
+        {
+            var exe = Path.Combine(d, "ConditioningControlPanel.exe");
+            Assert.Null(ReleaseFeed.InnoInstallDirOf(exe));           // portable / dev run
+            File.WriteAllText(Path.Combine(d, "unins000.exe"), "");
+            Assert.Equal(d, ReleaseFeed.InnoInstallDirOf(exe));
+            Assert.Null(ReleaseFeed.InnoInstallDirOf(null));
+            Assert.Null(ReleaseFeed.InnoInstallDirOf(""));
+        }
+        finally { Directory.Delete(d, true); }
+    }
+
+    [Fact]
+    public void WritableOrMissingInstallDirNeedsNoElevation()
+    {
+        var d = TempDir();
+        try
+        {
+            Assert.False(ReleaseFeed.NeedsElevationToInstall(null));
+            Assert.False(ReleaseFeed.NeedsElevationToInstall(Path.Combine(d, "missing")));
+            Assert.False(ReleaseFeed.NeedsElevationToInstall(d));
+            Assert.Empty(Directory.GetFiles(d));                     // the write probe cleans up after itself
+        }
+        finally { Directory.Delete(d, true); }
+    }
+
+    [Fact]
+    public void ReadOnlyInstallDirNeedsElevation()
+    {
+        if (OperatingSystem.IsWindows() || Environment.UserName == "root") return;   // ponytail: mode bits do not bind root or Windows ACLs
+        var d = TempDir();
+        try
+        {
+            File.SetUnixFileMode(d, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            Assert.True(ReleaseFeed.NeedsElevationToInstall(d));
+        }
+        finally
+        {
+            File.SetUnixFileMode(d, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            Directory.Delete(d, true);
+        }
+    }
 }

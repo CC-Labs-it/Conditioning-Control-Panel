@@ -270,8 +270,15 @@ export function createGoonMediaPool() {
     return { url: entry.url, release() {}, provenance: 'local' };
   }
 
+  /* "via Scrolller" (2026-10-17): every online item that goes on screen pings the page's mark. */
+  let onOnlineShown = null;
+  function pingOnline() {
+    if (onOnlineShown) { try { onOnlineShown(); } catch (_e) { /* a credit is never load-bearing */ } }
+  }
+
   function noteShown(e) {
     if (!e || !e.online) return;
+    pingOnline();
     onlineShown.add(e.name);
     if (onlineAsked || !onOnlineLow || !onlineEntries.length) return;
     if (onlineShown.size < Math.ceil(onlineEntries.length * ONLINE_LOW_SHARE)) return;
@@ -294,7 +301,7 @@ export function createGoonMediaPool() {
     if (!pool.length) return null;
     let best = pool[0];
     for (const e of pool) if ((peerNicheShownAt.get(e.url) || 0) < (peerNicheShownAt.get(best.url) || 0)) best = e;
-    if (stamp) peerNicheShownAt.set(best.url, ++peerNicheSeq);
+    if (stamp) { peerNicheShownAt.set(best.url, ++peerNicheSeq); pingOnline(); }
     const e = best;
     return {
       kind: e.kind, name: e.name, url: e.url, clip: e.clip, provenance: 'niche',
@@ -508,6 +515,8 @@ export function createGoonMediaPool() {
 
     /** fn() once the online set is mostly shown (boot sends `media-more`). One ask per list. */
     setOnlineLowHandler(fn) { onOnlineLow = typeof fn === 'function' ? fn : null; },
+    /** fn() each time an online (Scrolller) item is handed out to go on screen: the credit mark. */
+    setOnlineShownHandler(fn) { onOnlineShown = typeof fn === 'function' ? fn : null; },
     /**
      * Swap in the OPPONENT'S niche set (host `peer-media` frame): the whole current list every
      * time, an empty or missing list takes it back out. Never touches the deck or `received`.

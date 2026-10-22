@@ -205,7 +205,7 @@
             </Grid>
 
             <!-- 1. THE LOCK -->
-            <Border Grid.Row="1" Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{DynamicResource PanelAccentBrush}"
+            <Border x:Name="HeroCard" Grid.Row="1" Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{DynamicResource PanelAccentBrush}"
                     BorderThickness="1" CornerRadius="18" MinHeight="368" Margin="0,0,0,10">
                 <Panel>
                 <!-- CIRCE'S MOOD: the heat row drawn, bottom right. Hidden with heat off (WPF :495). -->
@@ -213,8 +213,8 @@
                 <!-- CIRCE SAYS: her line, above the meter. Hidden between lines. -->
                 <fx:CirceSays x:Name="PageSays" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,190" ZIndex="6"/>
                 <StackPanel Margin="26,14,26,14" VerticalAlignment="Center">
-                    <TextBlock x:Name="HeroTitle" Text="{loc:Str chaster_hero_title}" FontFamily="Fredoka, Segoe UI" FontSize="88"
-                               FontWeight="Bold" Foreground="#FF7AC0" HorizontalAlignment="Center" IsVisible="False"/>
+                    <!-- the lock's name, big and candy, every o a padlock (WPF :505) -->
+                    <fx:LockTitle x:Name="HeroTitle" FontSize="112" HorizontalAlignment="Center" Margin="0,-26,0,4" IsVisible="False"/>
                     <!-- under it: the calendar, one square a day, and the countdown beside it (WPF :505-560) -->
                     <Grid x:Name="HeroLower" ColumnDefinitions="Auto,*">
                     <Panel x:Name="CalendarRow" IsVisible="False" VerticalAlignment="Top" Margin="0,2,18,0">

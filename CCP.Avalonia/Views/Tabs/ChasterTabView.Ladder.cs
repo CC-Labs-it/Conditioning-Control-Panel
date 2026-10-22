@@ -78,6 +78,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!RenderProof.Rendering || ChasterHead.Service != null) return;
             AddedRow.IsVisible = true;
+            HeroTitle.Text = Loc.Get("chaster_hero_title");
+            HeroTitle.IsVisible = true;
             PaintAddedClock(5 * 3600 + 42 * 60);
             TxtAddedMonth.Text = Loc.GetF("chaster_added_month", ChasterLadder.FormatClock(3 * 3600));
             PaintScrap(new LadderBoard("2026-10", new[] { new LadderRow(1, "Alpha", true, 9000, false), new LadderRow(2, "Locked 1A", false, 5000, false) },
