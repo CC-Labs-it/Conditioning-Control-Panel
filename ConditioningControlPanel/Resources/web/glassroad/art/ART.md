@@ -1252,6 +1252,34 @@ Original project artwork authored procedurally for this family. The approved W1 
 LOD0 stays below 12000 triangles and LOD1 below 3000. Native masters and fresh GLB imports were checked for finite coordinates, degenerate triangles, dimensions, material names, hierarchy, bounds and corridor clearance. Six fixed views plus a sky-and-road context were captured privately. Meshopt packing and final decoded checks are recorded in the private delivery evidence.
 
 Masters, construction source, measured checks and all review images remain private. Only runtime GLBs, manifest rows and this documentation belong in the public art tree.
+## Wave 4 sky depth
+
+Three original nebula layers sit between the existing galaxy and star layers.
+They are soft static equirectangular colour and straight-alpha fields, with
+billowing density, translucent dust and broad veils. No star sprites, motion,
+flashes or spiral animation are baked. The existing galaxy is not replaced.
+
+Desktop nebulae are 2048 x 1024; phone variants are 1024 x 512 and use -phone
+IDs with tier phone. All are sRGB UASTC KTX2 with mips. Decode sRGB before
+compositing. Repeat U and clamp V. Source longitudes match and poles are constant.
+The host owns sky layer scale, relative rotation, opacity and Gentle Visuals.
+
+Only ONE active palette nebula is resident on ANY tier. Desktop active allocation
+is 10.667 MiB RGBA8 including mips; phone active allocation is 2.667 MiB.
+All three palette files are supplied, but do not preload all three.
+On a palette change, release the old nebula before loading the new one.
+Do not hold two palette nebulae concurrently.
+
+shooting-star is a grayscale ETC1S streak, desktop 256 x 64 and phone 128 x 32.
+Sample .r, clamp both axes, orient its bright head toward the direction of travel.
+Its opacity, lifetime and movement come from the engine. It adds 0.083 MiB on
+desktop and 0.021 MiB on phone. No model triangles.
+
+UASTC avoids visible colour banding in translucent nebula gradients. Every KTX2
+passes strict validation, is decoded, and is reviewed alone and over the existing
+galaxy. Private checks record seams, poles, error and exact file hashes.
+Artwork is original deterministic spherical density fields using project palettes.
+No third-party imagery or runtime text. Sources, masters and contacts stay private.
 
 ### Tier residency and running budget
 
@@ -1269,6 +1297,8 @@ is resident on either tier; release the previous palette layer before loading an
 | phone | 2.666656 | 7.083340 | 116.416656 | 124.326813 |
 | desktop | 0.000000 | 76.333340 | 185.666656 | 194.666656 |
 | phone | 0.000000 | 7.083340 | 116.416656 | 124.326813 |
+| desktop | 10.750008 | 87.083347 | 196.416664 | 205.416664 |
+| phone | 2.687508 | 9.770847 | 119.104164 | 127.014320 |
 
 Running totals include the delivered Wave 3 catalog and 17 existing engine icons.
 Wave 3 persistent baseline is 109.333317 MiB. Families accumulate in brief order.
