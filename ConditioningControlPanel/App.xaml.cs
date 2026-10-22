@@ -310,6 +310,15 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // The browser video gate's rules live in Core; the WebView2 engine half stays here.
+            // Touching Instance also kicks off the shared environment build on first use, so a
+            // later video finds IsAvailable already settled. A file the page cannot serve (outside
+            // every mapped virtual host) would 404 and cost a pointless fallback, so it is decided
+            // here rather than at runtime.
+            Services.Video.Browser.BrowserVideoGate.EngineAccepts = (path, stableKey) =>
+                Services.Video.Browser.BrowserVideoEngine.Instance.IsAvailable
+                && Services.Video.Browser.BrowserVideoEngine.BuildPageUrl(path) != null
+                && !Services.Video.Browser.BrowserUnsafeVideoCache.Contains(path, stableKey);
             // Race rules live in Core; the prize store and the NAudio decoder stay here.
             Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
             Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
