@@ -215,6 +215,7 @@ public sealed class GameWindowFypTests
             File.WriteAllBytes(path, new byte[] { 1 });
             w.HandleMessage("{\"type\":\"file-menu\",\"id\":\"videos/clip.mp4\"}");
             var lastMenu = Assert.IsType<ContextMenu>(w.FypFileMenu);
+            Assert.True(lastMenu.IsOpen);
             GameWindow.CloseAllForPanic();
             Assert.False(lastMenu.IsOpen);
             Assert.Null(w.FypFileMenu);

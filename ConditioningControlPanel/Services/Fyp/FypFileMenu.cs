@@ -15,12 +15,10 @@ namespace ConditioningControlPanel.Services.Fyp;
 /// </summary>
 internal static class FypFileMenu
 {
-    internal static string? ResolveLocal(string? root, string? id) => FypFileRules.ResolveLocal(root, id);
-
     /// <summary>Shows the menu at the pointer. UI thread only.</summary>
     internal static void Show(string? id)
     {
-        var path = ResolveLocal(App.EffectiveAssetsPath, id);
+        var path = FypFileRules.ResolveLocal(App.EffectiveAssetsPath, id);
         if (path == null || !File.Exists(path)) return;
 
         var menu = new ContextMenu { Placement = PlacementMode.MousePoint };
