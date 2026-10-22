@@ -2383,3 +2383,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-pop-text: +440
 - Chaos pop text ported: pooled click-through combat-text overlay with WPF timing/tint, pool closed on run teardown.
 - Row stays stub until bubble field/toys/payout callers are ported; live overlay steps queued.
+
+## avalonia-port/overlay-speak-cue: +499
+- Speak cue overlay + Core SpeakCueState ported (fade, anchor, panic, render-all); row stays stub until Deeper runtime gives it a caller.
