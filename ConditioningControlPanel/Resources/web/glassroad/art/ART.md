@@ -1214,6 +1214,44 @@ All 32 front/three-quarter pairs show changed pixels, while all 16 source hashes
 Material fixture previews use actual KTX2 decoded level 0. Thickness is previewed as roughness variation only.
 Contact sheets cover both chess LODs, the other props, all desktop/phone materials and 2x2 tiling.
 Native review fixtures, PNG masters, extraction/bake scripts and validation evidence remain private.
+## Wave 4 colossal set pieces
+
+Five original sculpted structures, each with LOD0 and LOD1. All dimensions are actual metres, GLB Y up, forward -Z, with a base-centre origin. Shared by desktop and phone. No embedded textures; this family adds 0 MiB to either texture tier.
+
+| Asset | LOD0 tris | LOD1 tris | Span m | Height m | Clearance m | Draws |
+|---|---:|---:|---:|---:|---:|---:|
+| card-arch-bridge | 4260 | 1236 | 135.751 | 173.923 | 32 | 2 |
+| pendulum-gantry | 8064 | 2288 | 154.000 | 144.500 | 34 | 4 |
+| spiral-ribbon-arch | 5112 | 1128 | 184.393 | 120.895 | 75 | 2 |
+| teacup-tower | 10032 | 2440 | 69.990 | 132.650 | 0 | 2 |
+| floating-staircase | 8316 | 2690 | 104.598 | 137.745 | 0 | 2 |
+
+### Placement and materials
+
+- `spanM` is the outer X extent at rest, including plinths and trim.
+- `clearanceM` is the conservative free height within a centred 14.4 m-wide road corridor along Z. It is not the overall asset height.
+- Card bridge, pendulum gantry and ribbon arch may straddle the road at their exported scale.
+- Cup tower and staircase are beside-road pieces; their clearance is 0. Use `boundRadiusM` when placing them away from the driving corridor.
+- Scaling requires scaling span, clearance and radius together. The supplied sizes range from about 121 to 174 m high.
+- `colossus_surface` uses neutral grayscale vertex colour, clearcoat and soft roughness for palette tinting. Ribbon and stair variants include restrained transmission.
+- `colossus_glow` is reserved for rim lines and seams. Its quiet default emission can be driven by the engine. No baked moving pattern, flash, lettering or media.
+- Static models use two mesh/material draws. The gantry uses four so the watch and its emissive seams can move independently of the frame.
+
+### Pendulum contract
+
+- Rotate node `pivot` around its local GLB Z axis, limited to +/-25 degrees. The engine supplies timing; the asset contains no animation clip.
+- Pivot is at [0,128,0] m in the exported gantry. Its two children contain the entire watch, crown, hands and rigid connecting link.
+- The link meets the axle and crown loop. The crown stem overlaps the watch case. Fixed piers and crossbar remain outside the pivot.
+- `boundRadiusM` includes the complete allowed swing envelope, calculated analytically per vertex with an outward margin. Do not replace it with a rest-pose radius.
+- Clearance remains conservative through the allowed swing. A 14.4 m-wide corridor is checked after import.
+
+### Sources and validation
+
+Original project artwork authored procedurally for this family. The approved W1 card and pocket-watch look informed the rounded rim and original orbit motif. No external geometry, images or texture sources were used. Existing project GLBs, including chess assets, were not modified.
+
+LOD0 stays below 12000 triangles and LOD1 below 3000. Native masters and fresh GLB imports were checked for finite coordinates, degenerate triangles, dimensions, material names, hierarchy, bounds and corridor clearance. Six fixed views plus a sky-and-road context were captured privately. Meshopt packing and final decoded checks are recorded in the private delivery evidence.
+
+Masters, construction source, measured checks and all review images remain private. Only runtime GLBs, manifest rows and this documentation belong in the public art tree.
 
 ### Tier residency and running budget
 
@@ -1229,6 +1267,8 @@ is resident on either tier; release the previous palette layer before loading an
 | phone | 0.416698 | 4.416683 | 113.750000 | 121.660156 |
 | desktop | 10.666656 | 76.333340 | 185.666656 | 194.666656 |
 | phone | 2.666656 | 7.083340 | 116.416656 | 124.326813 |
+| desktop | 0.000000 | 76.333340 | 185.666656 | 194.666656 |
+| phone | 0.000000 | 7.083340 | 116.416656 | 124.326813 |
 
 Running totals include the delivered Wave 3 catalog and 17 existing engine icons.
 Wave 3 persistent baseline is 109.333317 MiB. Families accumulate in brief order.
