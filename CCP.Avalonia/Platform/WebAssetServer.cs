@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Helpers;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Quiz;
 using Serilog;
 
@@ -80,8 +81,13 @@ public sealed class WebAssetServer : IDisposable
 
     /// <summary>The URL a page loads a library file by (WPF DtrhAssetManifest.AssetUrl's https://ccp.assets/&lt;rel&gt;):
     /// same origin as the page, so the token cookie covers it; each path segment escaped.</summary>
-    public string AssetUrl(string rel) =>
-        $"http://127.0.0.1:{Port}/{AssetsPrefix}" + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
+    public string AssetUrl(string rel) => $"http://127.0.0.1:{Port}" + AssetPath(rel);
+
+    /// <summary><see cref="AssetUrl"/> without the origin ("/ccp.assets/images/a.png"): what DtRH's hostMedia.js
+    /// counts as local (its LOCAL_URL_RE knows https://ccp.*/ and root-relative urls, not 127.0.0.1), so the
+    /// page's WebGL layer may draw it.</summary>
+    public static string AssetPath(string rel) =>
+        "/" + AssetsPrefix + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
 
     /// <summary>Per-port so two runs on 127.0.0.1 (cookies ignore the port) never overwrite each other.</summary>
     string CookieName => $"ccp_t_{Port}";
@@ -137,10 +143,49 @@ public sealed class WebAssetServer : IDisposable
         res.Headers.Add("Cache-Control", "no-cache");
         res.Headers.Add("X-Content-Type-Options", "nosniff");
         res.Headers.Add("Referrer-Policy", "no-referrer");
-        // ponytail: whole-file responses, no Range; add 206 handling if a page needs to seek long media.
+        res.Headers.Add("Accept-Ranges", "bytes");
         using var file = File.OpenRead(path);
-        res.ContentLength64 = file.Length;
-        if (req.HttpMethod == "GET") file.CopyTo(res.OutputStream);
+        long from = 0, to = file.Length - 1;
+        // One bytes=a-b / a- / -n range (what a media element asks for to seek, as WebView2's virtual host
+        // answers it): 206 with just that slice, 416 when it lies past the end; anything else gets the whole file.
+        if (ParseRange(req.Headers["Range"], file.Length) is { } r)
+        {
+            if (r.From < 0) { res.StatusCode = 416; res.Headers.Add("Content-Range", $"bytes */{file.Length}"); return; }
+            (from, to) = r;
+            res.StatusCode = 206;
+            res.Headers.Add("Content-Range", $"bytes {from}-{to}/{file.Length}");
+        }
+        res.ContentLength64 = to - from + 1;
+        if (req.HttpMethod != "GET") return;
+        file.Position = from;
+        var buf = new byte[81920];
+        for (long left = to - from + 1; left > 0;)
+        {
+            int n = file.Read(buf, 0, (int)Math.Min(buf.Length, left));
+            if (n <= 0) break;
+            res.OutputStream.Write(buf, 0, n);
+            left -= n;
+        }
+    }
+
+    /// <summary>A single byte range, clamped to the file; (-1,-1) = unsatisfiable; null = absent or not one range.</summary>
+    internal static (long From, long To)? ParseRange(string? header, long length)
+    {
+        if (header == null || !header.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase)) return null;
+        var spec = header[6..].Trim();
+        int dash = spec.IndexOf('-');
+        if (dash < 0 || spec.Contains(',')) return null;
+        string a = spec[..dash].Trim(), b = spec[(dash + 1)..].Trim();
+        if (a.Length == 0)
+        {
+            if (!long.TryParse(b, out var tail) || tail < 0) return null;
+            return length == 0 || tail == 0 ? (-1, -1) : (Math.Max(0, length - tail), length - 1);
+        }
+        if (!long.TryParse(a, out var from) || from < 0) return null;
+        long to = length - 1;
+        if (b.Length > 0 && (!long.TryParse(b, out to) || to < from)) return null;
+        if (from >= length) return (-1, -1);
+        return (from, Math.Min(to, length - 1));
     }
 
     /// <summary>URL prefix for the user's asset library, WPF's second virtual host <c>https://ccp.assets/</c>
@@ -164,7 +209,7 @@ public sealed class WebAssetServer : IDisposable
             rel = rel[AssetsPrefix.Length..];
             // Media only, never the app's own dot-folders (.temp, .packs), never the profile itself.
             if (!MediaTypeSniffer.MediaExtensions.Contains(Path.GetExtension(rel))
-                || rel.Split('/', '\\').Any(seg => seg.StartsWith('.'))
+                || (rel.Split('/', '\\').Any(seg => seg.StartsWith('.')) && !IsRemoteCopy(rel))
                 || HoldsUserData(root)) return null;
         }
         if (rel.Length == 0 || rel.EndsWith('/')) rel += "index.html";
@@ -173,6 +218,14 @@ public sealed class WebAssetServer : IDisposable
         if (!Inside(full, root) || !File.Exists(full) || !LinksStayInside(full, root)) return null;
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
+    }
+
+    /// <summary>The one dot-folder file served: DtRH's copy of an online entry, <c>.temp/ccp_temp_remote_*</c>
+    /// (Core DtrhRemoteMedia; WPF's ccp.assets maps the whole folder). Pack decrypts there stay unserved.</summary>
+    static bool IsRemoteCopy(string rel)
+    {
+        var seg = rel.Split('/', '\\');
+        return seg.Length == 2 && seg[0] == ".temp" && DtrhRemoteMedia.IsCopyFile(seg[1]);
     }
 
     /// <summary>The user's unchecked assets (Settings DisabledAssetPaths), never served.</summary>

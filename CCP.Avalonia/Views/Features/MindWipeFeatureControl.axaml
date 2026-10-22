@@ -9,12 +9,12 @@
        ImageBrush x:Name HeroArtBrush/SideArtBrush -> named plate Borders HeroArt/SideArt painted by
                                             ModArt.BindFeaturePlates (features/Mind_Wipers.png, mod override first)
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
-       feat:AdaptiveSideArt.CollapseBelow-> dropped (ponytail: WPF-head attached prop)
+       feat:AdaptiveSideArt.CollapseBelow-> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        LinearGradientBrush "0,1"/"0,0"   -> "0%,100%"/"0%,0%"
        <Slider> (unstyled)               -> Theme="{StaticResource PinkSlider}" (the WPF theme applies
                                             PinkSlider implicitly to every Slider: Resources/Theme/MainWindow.xaml:341)
        Checked/Unchecked/Click/...       -> wired in the constructor -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -56,7 +56,7 @@
                 </Grid>
             </Border>
 
-            <Grid>
+            <Grid sideart:AdaptiveSideArt.CollapseBelow="700">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="3*" MaxWidth="780"/>
                     <ColumnDefinition Width="2*"/>

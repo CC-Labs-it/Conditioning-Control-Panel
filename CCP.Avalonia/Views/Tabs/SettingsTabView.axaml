@@ -598,23 +598,7 @@
               <ScaleTransform ScaleX="1" ScaleY="1"/>
             </Border.RenderTransform>
             <Grid>
-              <!-- ponytail: the wordmark bitmap is a pack:// resource of the WPF head. The Image
-                   stays, sourceless, so MainWindow's painter has its slot back unchanged when
-                   Resources/ moves; the type below is the placeholder that keeps the 2x2 cell
-                   from rendering as a hole in the middle of the wall. Delete it with the art. -->
-              <StackPanel x:Name="LogoWordmarkPlaceholder"
-                          HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="CONDITIONING"
-                           HorizontalAlignment="Center" TextAlignment="Center"
-                           Foreground="{DynamicResource PinkBrush}"
-                           FontSize="26" FontWeight="Black" Opacity="0.85"/>
-                <TextBlock Text="CONTROL PANEL"
-                           HorizontalAlignment="Center" TextAlignment="Center"
-                           Foreground="{DynamicResource TextLightBrush}"
-                           FontSize="18" FontWeight="Bold" Opacity="0.7"
-                           Margin="0,2,0,0"/>
-              </StackPanel>
-              <Image x:Name="ImgLogo" Stretch="Uniform"
+              <fx:AnimatedLogoImage x:Name="ImgLogo"
                      HorizontalAlignment="Stretch" VerticalAlignment="Center"
                      RenderOptions.BitmapInterpolationMode="HighQuality"/>
               <!-- Occasional light pass over the wordmark (one shot every 25-40s, fired by a
@@ -1463,10 +1447,10 @@
     <!-- Scrolling Marquee Banner - row 3, spans all columns -->
     <Border x:Name="MarqueeBanner" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4"
             Background="#1A0A1A" BorderBrush="{DynamicResource DarkPinkBrush}" BorderThickness="2"
-            CornerRadius="8" Height="48" Margin="5,5,5,0" ClipToBounds="True">
-      <Border.Effect>
-        <DropShadowEffect Color="{DynamicResource DarkPink}" BlurRadius="15" OffsetX="0" OffsetY="0" Opacity="0.5"/>
-      </Border.Effect>
+            CornerRadius="8" Height="48" Margin="5,5,5,0" ClipToBounds="True"
+            BoxShadow="0 0 15 0 #80FF1493">
+      <!-- BoxShadow, not a DropShadowEffect: the strip below scrolls on the 30 fps beat, and an Effect
+           over a moving child re-rasterises its blur every frame (SettingsTabView.Marquee.cs). -->
       <!-- Chrome FX edge fade. The mask CANNOT live on MarqueeCanvas: a relative-mapped
            OpacityMask is stretched over the masked visual's own bounds, and the canvas's bounds
            are its overflowing child - a marquee string thousands of pixels wide. A 6% fade of
@@ -1476,18 +1460,19 @@
            (MarqueeFadeHost_SizeChanged) so the fade is a genuine ~40px at each end. -->
       <Grid x:Name="MarqueeFadeHost" ClipToBounds="True">
         <Canvas x:Name="MarqueeCanvas" ClipToBounds="True">
+          <!-- Text comes from SettingsTabView.Marquee.cs (the saved message); no {loc:Str} under it.
+               ponytail: WPF's 8px text glow is dropped - a blur on the scrolling text is the trap above. -->
           <TextBlock x:Name="MarqueeText"
-                     Text="{loc:Str label_v5_2_1_is_out_thanks_to_all_the_100_patreons}"
                      FontFamily="Impact, Arial Black, Segoe UI" FontSize="28" FontWeight="Bold"
                      Foreground="{DynamicResource PinkBrush}" Canvas.Top="8">
-            <TextBlock.Effect>
-              <DropShadowEffect Color="{DynamicResource DarkPink}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.8"/>
-            </TextBlock.Effect>
             <TextBlock.RenderTransform>
               <TranslateTransform/>
             </TextBlock.RenderTransform>
           </TextBlock>
         </Canvas>
+        <!-- WPF SettingsTabView.xaml:2089 MarqueeRead: the interlude stage, empty and invisible until
+             SettingsTabView.MarqueeReads.cs takes the ticker off stage. -->
+        <Grid x:Name="MarqueeRead" Opacity="0" IsHitTestVisible="False" ClipToBounds="True"/>
       </Grid>
     </Border>
   </Grid>

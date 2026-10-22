@@ -103,13 +103,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> EnhancementAudioPlayer (NAudio), EnhancementLibrary, WebcamTracking
-    ///         and the editor jump still live in the WPF head, so every handler that reached them is
-    ///         a stub. EnhancementHostService and DeeperFetcher no longer block anything: the host's
+    ///   <item><b>Services.</b> EnhancementAudioPlayer (NAudio), WebcamTracking and the editor jump
+    ///         still live in the WPF head, so every handler that reached them is a stub.
+    ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
-    ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. What
-    ///         does NOT come with them is the host's OTHER half — <c>Bind</c>, the rule engine and
-    ///         the playback time source — so a loaded enhancement's rules never fire here.</item>
+    ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. The
+    ///         host's <c>Bind</c> and the rule engine are in Core too, but this head has no
+    ///         <c>IPlaybackTimeSource</c> for the web pane and seeds no
+    ///         <c>EnhancementHostService.DispatcherFactory</c>/<c>WebcamProvider</c>, so a loaded
+    ///         enhancement's rules never fire here.</item>
     ///   <item><b>WebView2.</b> The WPF pane hosted a <c>wv2:WebView2</c> driven through
     ///         <c>CoreWebView2</c>. <see cref="Controls.WebHost"/> covers more of that than the
     ///         first pass assumed: NavigationStarted carries a settable Cancel (so the allowlist
@@ -591,7 +593,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         ///
         /// ponytail: this head leaves EnhancementResolver.LibraryMatchProvider unset, so the library
         /// tier never hits; the auto-promotion of an embedded enhancement into the library and its
-        /// 6 s toast need EnhancementLibrary, which has not moved. A media file whose enhancement
+        /// 6 s toast need an EnhancementLibrary instance (Core) this head does not construct yet. A media file whose enhancement
         /// lives only in the library lands in the "nothing found" branch and offers Create-new.
         /// </summary>
         private void TryAutoLoadEnhancement(string mediaPath)
@@ -776,7 +778,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// and MaybePromptForWebcamBeforePlay for the consent gate — which is a second reason not
         /// to make Play do more than this: skipping a consent prompt is worse than not playing.
         /// Note that even in video mode the enhancement's RULES do not fire: that needs
-        /// EnhancementHostService.Bind and the engine, both still in the WPF head.
+        /// an IPlaybackTimeSource over the web pane and a seeded DispatcherFactory for
+        /// EnhancementHostService.Bind (host and engine are in Core; this head supplies neither).
         /// </summary>
         private async void BtnPlayPause_Click()
         {
@@ -1716,14 +1719,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 ? b
                 : Brushes.Gray;
 
-        private static string FormatTime(double seconds)
-        {
-            if (seconds < 0 || double.IsNaN(seconds)) seconds = 0;
-            var ts = TimeSpan.FromSeconds(seconds);
-            return ts.TotalHours >= 1
-                ? $"{(int)ts.TotalHours}:{ts.Minutes:00}:{ts.Seconds:00}"
-                : $"{ts.Minutes}:{ts.Seconds:00}";
-        }
+        // WPF EnhancementPlayerWindow.FormatTime is the same one-liner over the Core rule.
+        private static string FormatTime(double seconds) => MediaDurationCache.Format(seconds);
 
         // ====================================================================================
         // Render sample. Placeholder data, never reachable from a production caller.
