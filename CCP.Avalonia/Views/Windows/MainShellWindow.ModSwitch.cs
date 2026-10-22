@@ -5,10 +5,10 @@
 // already live in Core's PendingModChoice. The combo, the Mod Manager, the pending first-run
 // choice and the wizard all go through ActivateMod + ApplyActiveModChange; nothing else switches.
 //
-// ponytail: ApplyActiveModChange repaints what this head has - the selector, the palette. WPF also
-// reloads the takeover art, achievement grid, BambiCloud radio + browser URL, Hypnotube link
-// editor and per-mod defaults; each joins here when its surface is live. Home tile art now follows
-// CoreMods.ModChanged as well as startup; the manager footer is the WPF 7.1.5 action row.
+// ApplyActiveModChange repaints the selector, logo, palette, BambiCloud radio + site + default
+// page, personality and per-mod default presets. Home tile art, the skill tree, the link editor
+// and the companion room follow CoreMods.ModChanged themselves; the achievement grid refreshes on
+// show. ponytail: WPF's LoadTakeoverImage labels are owned by the takeover tab's port.
 
 using System;
 using System.Linq;
@@ -183,7 +183,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             LoadLogo();   // WPF MainWindow.xaml.cs:3127
             RefreshThemeAwareElements();
 
+            // WPF :3139-3159: the BambiCloud radio, the site selection, and a mod that does not use
+            // BambiCloud takes a loaded browser to its own default page.
+            var modWantsBambiCloud = mods.ShowBambiCloudOption();
+            if (BrowserPage?.FindControl<RadioButton>("RbBambiCloud") is { } rbBambi)
+                rbBambi.IsVisible = modWantsBambiCloud || CoreSettings.Current.ForceShowBambiCloud;
+            SyncSiteRadiosToActiveMod();
+            if (!modWantsBambiCloud && BrowserView?.Source != null && !BrowserBlockedOffline(userInitiated: false))
+                NavigateBrowser(mods.GetDefaultBrowserUrl());
+
+            // The personality picked in this mod comes back, like the look does (WPF :3165).
+            try { PersonalityService.Shared.RestoreForActiveMod(); }
+            catch (Exception ex) { Log.Warning(ex, "Mod switch: personality restore failed"); }
+
+            // Last: the user's per-mod default presets (WPF :3170).
+            ApplyModDefaultPresets(mods.ActiveModId);
+
             Log.Information("Mod changed to {ModId}", mods.ActiveModId);
+        }
+
+        /// <summary>WPF ApplyModDefaultPresets (MainWindow.Presets.cs:2189): only the user's stored per-mod
+        /// choice applies; assets through the Assets page, settings through the quiet, session-guarded LoadPreset.</summary>
+        internal void ApplyModDefaultPresets(string? modId)
+        {
+            var s = CoreSettings.Current;
+            var assetId = ModPresetDefaults.ForActivation(s.ModDefaultAssetPreset, modId);
+            if (assetId != null && AssetPresetService.Find(s.AssetPresets, assetId) != null)
+                ApplyAssetPresetFromLauncher(assetId);
+
+            var settingsId = ModPresetDefaults.ForActivation(s.ModDefaultSettingsPreset, modId);
+            var preset = settingsId == null ? null
+                : Preset.GetDefaultPresets().Concat(s.UserPresets).FirstOrDefault(p => p.Id == settingsId);
+            if (preset != null) Named<Tabs.PresetsTabView>("PresetsTab")?.LoadPreset(preset);
         }
 
         /// <summary>WPF InitializeModSelector: stock mods in canonical order, then user mods A-Z.</summary>

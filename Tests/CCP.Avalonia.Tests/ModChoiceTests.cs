@@ -145,6 +145,46 @@ public sealed class ModChoiceTests
         await Task.CompletedTask;
     });
 
+    [Fact]   // WPF ApplyActiveModChange :3139-3170
+    public Task HeaderModSwitchFollowsTheModsSitePersonalityAndDefaultPreset() => Run(async (shell, svc, server) =>
+    {
+        var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+        var bambi = dash.FindControl<RadioButton>("RbBambiCloud")!;
+        var hypno = dash.FindControl<RadioButton>("RbHypnoTube")!;
+        var web = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("BrowserWebHost")!;
+        bambi.IsChecked = true;
+        web.Navigate(new Uri("https://bambicloud.com/"));   // a loaded browser
+        var s = CoreSettings.Current;
+        var voice = new PersonalityPreset { Id = "mod-switch-test-voice", Name = "Test voice" };
+        s.UserPersonalityPresets.Add(voice);
+        s.ModPersonalityPreset[BuiltInMods.DronificationId] = voice.Id;
+        var oldVoice = s.ActivePersonalityPresetId;
+        var preset = Preset.GetDefaultPresets().First();
+        s.CurrentPresetName = "before";
+        s.ModDefaultSettingsPreset[BuiltInMods.DronificationId] = preset.Id;
+        try
+        {
+            var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+            combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.False(AvApp.Mods!.ShowBambiCloudOption());
+            Assert.False(bambi.IsVisible);
+            Assert.True(hypno.IsChecked);
+            Assert.Equal(new Uri(AvApp.Mods.GetDefaultBrowserUrl()), web.Source);   // the mod's own page
+            Assert.Equal(voice.Id, s.ActivePersonalityPresetId);
+            Assert.Equal(preset.Name, s.CurrentPresetName);
+        }
+        finally
+        {
+            s.ActivePersonalityPresetId = oldVoice;
+            s.UserPersonalityPresets.Remove(voice);
+            s.ModPersonalityPreset.Remove(BuiltInMods.DronificationId);
+            s.ModDefaultSettingsPreset.Remove(BuiltInMods.DronificationId);
+        }
+        await Task.CompletedTask;
+    });
+
     [Fact]
     public Task FirstRunPackChoiceRecordsDownloadsThenActivatesOnArrival() => Run(async (shell, svc, server) =>
     {
