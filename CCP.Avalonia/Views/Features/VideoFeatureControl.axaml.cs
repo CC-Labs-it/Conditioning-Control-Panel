@@ -416,7 +416,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
         internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
 
-        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = TestVideoAsync();
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = LogFault(TestVideoAsync());
+
+        // The click used to be async void (faults reached the global handler); a stored Task
+        // would swallow them silently, so log here instead.
+        private static async Task LogFault(Task run)
+        {
+            try { await run; }
+            catch (Exception ex) { Serilog.Log.Error(ex, "Test video failed"); }
+        }
 
         private async Task TestVideoAsync()
         {

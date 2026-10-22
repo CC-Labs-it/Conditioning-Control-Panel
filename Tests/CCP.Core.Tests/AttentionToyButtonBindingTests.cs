@@ -21,6 +21,8 @@ public sealed class AttentionToyButtonBindingTests
         var pending = new Queue<Action>();
         var old = CoreDispatch.PostProvider;
         CoreDispatch.PostProvider = pending.Enqueue;
+        var rewards = new List<string>();
+        h.HapticTriggered += (_, label) => rewards.Add(label);
         try
         {
             var hits = 0;
@@ -28,6 +30,7 @@ public sealed class AttentionToyButtonBindingTests
             p.Press("one"); p.Press("two");
             while (pending.TryDequeue(out var work)) work();
             Assert.Equal(1, hits);
+            Assert.Single(rewards, r => r.StartsWith(nameof(HapticEventKind.ToyButtonReward) + ":"));
 
             var live = false;
             using var expired = AttentionToyButtonBinding.Arm(h, () => live, () => hits++);
@@ -43,6 +46,7 @@ public sealed class AttentionToyButtonBindingTests
             stopped!.Dispose();
             while (pending.TryDequeue(out var work)) work();
             Assert.Equal(1, hits);
+            Assert.Single(rewards, r => r.StartsWith(nameof(HapticEventKind.ToyButtonReward) + ":"));
         }
         finally { CoreDispatch.PostProvider = old; }
     }

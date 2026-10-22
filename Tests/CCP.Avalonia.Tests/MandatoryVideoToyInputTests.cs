@@ -40,7 +40,7 @@ public sealed class MandatoryVideoToyInputTests
             CoreHaptics.Service = h;
             var xp = 0.0;
             CoreProgression.AddXPProvider = (x, _) => xp += x;
-            o.Scheduler = new MandatoryVideoScheduler(o, library: Array.Empty<string>);
+            o.Scheduler = new MandatoryVideoScheduler(o, new StillTime(), Array.Empty<string>);
             var layer = new Canvas { Width = 800, Height = 600 };
             var w = new Window { Content = layer, Width = 800, Height = 600 };
             w.Show();
@@ -48,6 +48,7 @@ public sealed class MandatoryVideoToyInputTests
             void Drain() { while (pending.TryDequeue(out var work)) work(); Dispatcher.UIThread.RunJobs(); }
             try
             {
+                Assert.True(o.Scheduler.Trigger(false, "toy-test.mp4"));   // playing; the pre-roll never fires
                 o.Spawn(0);
                 Assert.Equal(1, o.LiveTargets);
                 p.Press("a"); p.Press("b"); Drain();
@@ -63,7 +64,8 @@ public sealed class MandatoryVideoToyInputTests
 
                 o.Spawn(0);
                 p.Press("queued-before-panic");
-                o.CloseAll(); Drain();
+                o.Scheduler.Stop(); Drain();   // engine stop / panic -> ForceCleanup -> host CloseAll
+                Assert.False(o.Scheduler.IsPlaying);
                 Assert.Equal(1, o.Scheduler.AttentionHits);
                 Assert.Empty(o.Windows);
             }
@@ -116,6 +118,17 @@ public sealed class MandatoryVideoToyInputTests
         public void Show(string path, bool strict) { }
         public double CloseAll() { Closed++; return 0; }
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+    }
+
+    private sealed class StillTime : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => new Never();
+        private sealed class Never : ITimer
+        {
+            public bool Change(TimeSpan due, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => default;
+        }
     }
 
     private sealed class ButtonProvider : IHapticProviderV2
