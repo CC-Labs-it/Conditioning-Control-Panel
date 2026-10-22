@@ -251,6 +251,8 @@ namespace ConditioningControlPanel
         static App()
         {
             CorePaths.EffectiveAssetsProvider = () => EffectiveAssetsPath;
+            // Chaos bubble payloads are Core data; what firing one does is this head's.
+            Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.

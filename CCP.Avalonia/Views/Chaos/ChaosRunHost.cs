@@ -13,7 +13,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// OnOverlayClosed tear down the same way.
     ///
     /// <para>ponytail: three things are NOT here, so nothing user-facing starts a run yet (the
-    /// hub's FALL IN stays a logged no-op): the bubble field (SpawnTick, pops, score), the boon
+    /// hub's FALL IN stays a logged no-op): the bubble field (SpawnTick, pops, score - its rules
+    /// are in Core now: ChaosBubbleVariants picks the spec, ChaosFieldMath the cadence and pop
+    /// points, EffectPayload.Firer is the unseeded payload hook; still missing is a chaos bubble
+    /// on BubbleOverlay with fuses, defuse and detonation, and this head's payload firer), the boon
     /// draft on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts
     /// off), and the payout (AddXP, AwardRunRewards, RevealService.Sync, the rank card) - the
     /// recap shows the computed XP and never saves. A bubble-less run that banked rewards would
@@ -133,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null) return;
             _spawning = false;
             _runTimer?.Stop();
+            try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF EndRun :3241
 
             double durMin = Math.Max(1, _state.RunDurationSec) / 60.0;
             double capBase = 250.0 * durMin * _state.Config.DifficultyMult;
@@ -165,6 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static void CleanupAfterRun()
         {
+            try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
             _runTimer = null;
             _hud = null;
