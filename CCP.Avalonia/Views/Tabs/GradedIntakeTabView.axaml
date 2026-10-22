@@ -22,8 +22,7 @@
                                              as ABSOLUTE pixels, which collapses a gradient to 1px
                                              (and would un-mask the whole hero plate)
        x:FieldModifier="internal"        ->  dropped; x:Names kept (nothing on this head pokes them)
-       feat:AdaptiveSideArt.CollapseBelow ->  dropped (WPF-head attached behaviour; it follows
-                                             its service to Core)
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        hover:HoverPop.IsEnabled          ->  unchanged (Controls/HoverPop.cs)
        feat:SessionLock.Owned            ->  sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
        ImageBrush GradedIntakeHeroBrush  ->  x:Name on a brush is AVLN2000, so the two plate
@@ -40,7 +39,7 @@
 
      NOTE: this tab hosts NO WebView2. The intake itself runs in its own window
      (MainWindow.BtnStartIntake_Click); the page only carries the launch button. -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
@@ -101,8 +100,8 @@
 
                 <!-- Round-3 capped column + side art. On WPF, below 1000px the art column collapses
                      to zero and the settings retake the full width (Features/AdaptiveSideArt.cs);
-                     that attached behaviour is not on this head, so the columns stay static. -->
-                <Grid>
+                     same here through Helpers/AdaptiveSideArt.cs. -->
+                <Grid sideart:AdaptiveSideArt.CollapseBelow="1000">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" MaxWidth="780"/>
                         <ColumnDefinition Width="2*"/>
