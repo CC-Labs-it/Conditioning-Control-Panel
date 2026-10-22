@@ -307,6 +307,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Per-read stall window and retry backoff; tests shrink both.</summary>
         internal static TimeSpan StallTimeout = ReleaseFeed.DownloadStallTimeout;
         internal static Func<int, TimeSpan> RetryDelay = attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt));
+        /// <summary>Where the installer lands (wiped first); tests point it at their own temp folder.</summary>
+        internal static string DownloadDir = Path.Combine(Path.GetTempPath(), "ConditioningControlPanel_Update");
 
         internal static async Task<string> DownloadInstallerAsync(string api, string version, Action<int> progress)
         {
@@ -322,7 +324,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (Sandboxed && !LoopbackUrl.IsHonoured(url, out _))
                 throw new InvalidOperationException($"Sandboxed profile: refusing non-loopback installer URL {url}");
 
-            var dir = Path.Combine(Path.GetTempPath(), "ConditioningControlPanel_Update");
+            var dir = DownloadDir;
             try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, Path.GetFileName(new Uri(url).LocalPath));

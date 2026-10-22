@@ -195,8 +195,11 @@ public sealed class AppUpdaterTests
 
         var oldStall = AppUpdater.StallTimeout;
         var oldDelay = AppUpdater.RetryDelay;
+        var oldDir = AppUpdater.DownloadDir;
+        var tmp = Directory.CreateTempSubdirectory("ccp-stall-").FullName;
         try
         {
+            AppUpdater.DownloadDir = Path.Combine(tmp, "update");   // never the real %TEMP% updater folder
             AppUpdater.StallTimeout = TimeSpan.FromMilliseconds(300);
             AppUpdater.RetryDelay = _ => TimeSpan.FromMilliseconds(50);
             var api = $"http://127.0.0.1:{port}/api";
@@ -216,6 +219,8 @@ public sealed class AppUpdaterTests
         {
             AppUpdater.StallTimeout = oldStall;
             AppUpdater.RetryDelay = oldDelay;
+            AppUpdater.DownloadDir = oldDir;
+            try { Directory.Delete(tmp, true); } catch { }
             stop.Cancel();
             listener.Stop();
         }

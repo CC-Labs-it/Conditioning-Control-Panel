@@ -1228,3 +1228,13 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Behaviour WPF has and this engine lacks goes to follow-up lane companion-barks-b (listed with WPF lines in the parity row
   `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
   barks queued through Giggle. Lane barks-wpf gets the same rule.
+
+## 2026-10-22: The installer stall copy lives twice: WPF keeps its own, Avalonia uses Core (avalonia-port/updater-stall-timeout)
+- Question: Core `ReleaseFeed.CopyWithStallTimeoutAsync` (port of WPF ddc9dd047) is a second copy of WPF
+  `UpdateService.CopyWithStallTimeoutAsync` (`ConditioningControlPanel/Services/Update/UpdateService.cs:657`). CLAUDE.md forbids
+  a second copy of logic.
+- Options: A) delegate: WPF calls Core, as `UpdateService.IsTransientNetworkError` (`:1483`) already does; B) keep: WPF keeps
+  its own copy, only the Avalonia `AppUpdater` uses Core.
+- Choice: B (keep), advised by the reviewer and the supervisor.
+- Reason: the WPF head is frozen, and the last WPF release's updater is what hands users over to this release, so its behaviour
+  must stay byte-identical. The two copies are equal today; Core tests (`ReleaseFeedTests`, `AppUpdaterTests`) cover the Core one.
