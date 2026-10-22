@@ -3,8 +3,8 @@
 // the live hero clock (:301), the ends line (:277), the pills (:372), the account chip (:871),
 // the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
 // Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
-// ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
-// LockTitle letters, trailer and most Fx. Menu/help/price editing and limits are separate partials. The numbers + receipt (Numbers.cs), calendar (Calendar.cs) and keys (Keys.cs) are partials.
+// The ground (spiral/glow/ambient), hero art and paper tag are ChasterTabView.Stage.cs.
+// ponytail: LockTitle letters, trailer and most Fx. Menu/help/price editing and limits are separate partials. The numbers + receipt (Numbers.cs), calendar (Calendar.cs) and keys (Keys.cs) are partials.
 // The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
 // bursts included) are later slices. Unlink, the switch + consent and pause are real (slice 2).
 using System;
@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public ChasterTabView()
         {
             InitializeComponent();
+            StageInit();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
             SlowTick.Tick += (_, _) => RefreshHero();
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
@@ -74,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void Subscribe(bool on)
         {
+            Stage(on);
             if (on && _subscribed == null && ChasterHead.Service is { } c)
             {
                 _subscribed = c;
@@ -111,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             UnlinkedPanel.IsVisible = !linked;
             FactRow.IsVisible = !linked;
             AccountStrip.IsVisible = linked;
+            PaperTag.IsVisible = linked;
             AddedRow.IsVisible = linked;
             NumbersPanel.IsVisible = linked;
             LinkedMenuPanel.IsVisible = linked; // WPF: the menu and limits sit inside LinkedPanel (ChasterTabView.xaml:642)

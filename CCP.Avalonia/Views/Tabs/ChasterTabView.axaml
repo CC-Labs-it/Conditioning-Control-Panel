@@ -129,6 +129,49 @@
         </ControlTheme>
     </UserControl.Resources>
 
+    <Grid x:Name="PageRoot" ClipToBounds="True">
+    <!-- the ground (the launcher's backdrop), WPF ChasterTabView.xaml:262-309 -->
+    <Border CornerRadius="18">
+        <Border.Background>
+            <RadialGradientBrush GradientOrigin="22%,18%" Center="22%,18%" RadiusX="100%" RadiusY="95%">
+                <GradientStop Color="#FF2C1450" Offset="0"/>
+                <GradientStop Color="#FF1C1233" Offset="0.42"/>
+                <GradientStop Color="#FF100A1E" Offset="0.74"/>
+                <GradientStop Color="#FF07040F" Offset="1"/>
+            </RadialGradientBrush>
+        </Border.Background>
+    </Border>
+    <!-- the spiral watermark, turning once every 90 s under the hero -->
+    <Panel x:Name="SpiralLayer" Width="760" Height="760" HorizontalAlignment="Right" VerticalAlignment="Top"
+           Margin="0,-300,-260,0" Opacity="0.1" IsHitTestVisible="False" RenderTransformOrigin="50%,50%">
+        <Path x:Name="SpiralPath" StrokeThickness="2.2" StrokeLineCap="Round">
+            <Path.Stroke>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Color="{DynamicResource FxGlowColor}" Offset="0"/>
+                    <GradientStop Color="{DynamicResource FxParticleColor}" Offset="1"/>
+                </LinearGradientBrush>
+            </Path.Stroke>
+        </Path>
+    </Panel>
+    <Border x:Name="GlowLayer" Opacity="0.3" IsHitTestVisible="False" CornerRadius="18">
+        <Border.Background>
+            <RadialGradientBrush GradientOrigin="78%,12%" Center="78%,12%" RadiusX="50%" RadiusY="55%">
+                <GradientStop Color="{DynamicResource FxGlowColor}" Offset="0"/>
+                <GradientStop Color="#00000000" Offset="1"/>
+            </RadialGradientBrush>
+        </Border.Background>
+    </Border>
+    <Border IsHitTestVisible="False" CornerRadius="18">
+        <Border.Background>
+            <RadialGradientBrush GradientOrigin="50%,45%" Center="50%,45%" RadiusX="85%" RadiusY="85%">
+                <GradientStop Color="#00000000" Offset="0.45"/>
+                <GradientStop Color="#55000000" Offset="0.8"/>
+                <GradientStop Color="#B0000000" Offset="1"/>
+            </RadialGradientBrush>
+        </Border.Background>
+    </Border>
+    <fx:AmbientFxCanvas x:Name="Ambient" IsHitTestVisible="False"/>
+
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="26,22,26,20" MaxWidth="1080" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
             <!-- header: the name, and the account -->
@@ -197,14 +240,50 @@
             </Grid>
 
             <!-- 1. THE LOCK -->
-            <Border Grid.Row="1" Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{DynamicResource PanelAccentBrush}"
+            <Border x:Name="HeroCard" Grid.Row="1" Background="{DynamicResource SurfaceBgBrush}" BorderBrush="{DynamicResource PanelAccentBrush}"
                     BorderThickness="1" CornerRadius="18" MinHeight="368" Margin="0,0,0,10">
-                <Panel>
+                <Grid x:Name="HeroBody" ColumnDefinitions="*,Auto">
+                <!-- the neon art, bleeding in from the right and fading into the card (WPF :431-441) -->
+                <Border x:Name="HeroArtPlate" Grid.Column="1" Width="380" ClipToBounds="True" CornerRadius="0,17,17,0">
+                    <Panel>
+                        <Image x:Name="HeroArt" Source="avares://CCP.Avalonia/Resources/features/Phrase_Lock.png"
+                               Stretch="UniformToFill" Opacity="0.85" RenderTransformOrigin="50%,50%"/>
+                        <Border x:Name="HeroArtFade" IsHitTestVisible="False"/>
+                    </Panel>
+                </Border>
+                <!-- THE PAPER TAG, hanging off the lock: what is on the tab, when it lands, UNPAID (WPF :443-492). -->
+                <Panel x:Name="PaperTag" Grid.Column="1" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-8,0,0,14"
+                       ZIndex="5" RenderTransformOrigin="50%,0%" IsVisible="False" Cursor="Hand">
+                    <Line StartPoint="0,0" EndPoint="0,14" Stroke="#B0F3EAD9" StrokeThickness="1.4" HorizontalAlignment="Center" VerticalAlignment="Top"/>
+                    <Border Width="164" Margin="0,12,0,0" Background="#FFF3EAD9" CornerRadius="4" Padding="12,10,12,10"
+                            BoxShadow="0 4 14 0 #73000000">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="9" Height="9" Stroke="#FF241A2E" StrokeThickness="1.4" Fill="#FF1A1230" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{loc:Str chaster_tag_eyebrow}" FontFamily="Consolas, Courier New" FontSize="10"
+                                           FontWeight="Bold" Foreground="#FF241A2E" Opacity="0.7" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <TextBlock x:Name="TxtTagAmount" Text="0:00" FontFamily="Fredoka, Segoe UI" FontSize="30"
+                                       FontWeight="Bold" Foreground="#FFC8244A" Margin="0,2,0,0"/>
+                            <Grid Margin="0,2,0,0" ColumnDefinitions="*,Auto">
+                                <TextBlock x:Name="TxtTagLands" FontFamily="Consolas, Courier New" FontSize="9.5" Foreground="#FF241A2E"
+                                           Opacity="0.75" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                <!-- the rubber stamp -->
+                                <Border x:Name="TagStamp" Grid.Column="1" VerticalAlignment="Bottom" Margin="6,5,-6,-2"
+                                        BorderBrush="#FFC8244A" BorderThickness="2" CornerRadius="3" Padding="5,1" Opacity="0.85"
+                                        RenderTransform="rotate(-14deg)">
+                                    <TextBlock x:Name="TxtTagStamp" FontFamily="Consolas, Courier New" FontSize="12"
+                                               FontWeight="Bold" Foreground="#FFC8244A"/>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </Panel>
                 <!-- CIRCE'S MOOD: the heat row drawn, bottom right. Hidden with heat off (WPF :495). -->
-                <fx:CircesMoodMeter x:Name="MoodMeter" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,16" ZIndex="5"/>
+                <fx:CircesMoodMeter x:Name="MoodMeter" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,16" ZIndex="5"/>
                 <!-- CIRCE SAYS: her line, above the meter. Hidden between lines. -->
-                <fx:CirceSays x:Name="PageSays" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,190" ZIndex="6"/>
-                <StackPanel Margin="26,14,26,14" VerticalAlignment="Center">
+                <fx:CirceSays x:Name="PageSays" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,20,190" ZIndex="6"/>
+                <StackPanel Grid.ColumnSpan="2" Margin="26,14,26,14" VerticalAlignment="Center">
                     <TextBlock x:Name="HeroTitle" Text="{loc:Str chaster_hero_title}" FontFamily="Fredoka, Segoe UI" FontSize="88"
                                FontWeight="Bold" Foreground="#FF7AC0" HorizontalAlignment="Center" IsVisible="False"/>
                     <!-- under it: the calendar, one square a day, and the countdown beside it (WPF :505-560) -->
@@ -267,7 +346,7 @@
                         <TextBlock x:Name="TxtLinkNote" IsVisible="False" TextWrapping="Wrap" FontSize="12" Foreground="#FFC98A" Margin="2,8,0,0"/>
                     </StackPanel>
                 </StackPanel>
-                </Panel>
+                </Grid>
             </Border>
 
             <!-- The first switch-on, and only the first: four facts, one button. -->
@@ -678,4 +757,7 @@
             </StackPanel>
         </Grid>
     </ScrollViewer>
+    <!-- the page's edge, the launcher's window edge at card weight (WPF :1166) -->
+    <Border BorderBrush="{DynamicResource PanelAccentBrush}" BorderThickness="1.5" CornerRadius="18" Opacity="0.45" IsHitTestVisible="False"/>
+    </Grid>
 </UserControl>
