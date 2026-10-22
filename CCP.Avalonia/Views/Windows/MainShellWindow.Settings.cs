@@ -295,9 +295,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>ponytail: see the "Still blocked" note at the top of this file - restoring
+        /// <summary>WPF BtnSave_Click's first line (Settings.cs:381): the "absorbed" tick + ripple.
+        /// ponytail: see the "Still blocked" note at the top of this file - restoring
         /// SaveSettings() here would make the shell a second writer of settings each Settings
         /// section already owns and saves.</summary>
-        private void BtnSave_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) { }
+        private void BtnSave_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => FlashSaveAbsorb();
     }
 }

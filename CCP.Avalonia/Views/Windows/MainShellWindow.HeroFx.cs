@@ -11,15 +11,17 @@
 // The profile menu's Level/XP rail is painted from the same numbers.
 // XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
 //
-// STILL MISSING vs WPF, so the row stays a stub:
-//   the level-up burst (FireBurstAt) and THE BANK hold
-//   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
-//   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
-//   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
+// Level-up also bursts on the track's cap (CelebrateLevelUp FireBurstAt, EventFx.cs:262), shows the
+// level-up notification and plays lvup.mp3 (OnLevelUp, MainWindow.xaml.cs:770-776); the rank title
+// follows the level (UpdateLevelDisplay, UiUpdates.cs:71-79). START/Save hero FX: HeroStart.cs.
+// STILL MISSING vs WPF, so the row stays a stub: THE BANK hold (MainWindow.BankFx.cs, a stub here,
+// so CelebrateLevelUp's AbortBankFlight has nothing to abort) and the avatar tube's level art
+// (_avatarTubeWindow.UpdateAvatarForLevel).
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
 
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -45,7 +47,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay(); });
+            Action<int> levelUp = newLevel => Dispatcher.UIThread.Post(() =>
+            {
+                CelebrateLevelUp();
+                UpdateLevelDisplay();
+                // WPF OnLevelUp: the tray balloon (here the OS notification) and the level-up sound.
+                Platform.OsNotifications.Show(Loc.Get("toast_level_up_title"), Loc.GetF("toast_level_up_body", newLevel));
+                PlayLevelUpSound();
+            });
             HookHeroXpFx();
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
@@ -71,6 +80,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var xp = s.PlayerXP;
                 var needed = XpCurve.GetXPForLevel(level, XpCurve.EpochOf(s));
                 if (Named<TextBlock>("TxtLevelLabel") is { } label) label.Text = $"LVL {level}";
+                // WPF UiUpdates.cs:71-79: the rank title by level, made mod-aware. The XAML {loc:Str}
+                // binds at Template priority, so this local value survives a language switch (P09).
+                var rankTitle = level switch
+                {
+                    < 20 => "BASIC BIMBO",
+                    < 50 => "DUMB AIRHEAD",
+                    < 100 => "SYNTHETIC BLOWDOLL",
+                    _ => "PERFECT FUCKPUPPET",
+                };
+                if (Named<TextBlock>("TxtPlayerTitle") is { } title) title.Text = CoreMods.MakeModAware(rankTitle);
                 if (Named<TextBlock>("TxtXP") is { } txt) AnimateXpReadout(txt, xp, needed, level);
                 _xpFraction = Math.Min(1.0, needed > 0 ? xp / needed : 0);
                 FillXpBar(animate: true);
@@ -116,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void HookHeroXpFx()
         {
+            HookHeroStartFx();
             Opened += (_, _) =>
             {
                 // Opened fires again on every tray Hide/Show: never stack the static subscription (P41).
@@ -123,8 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 AmbientFxCanvas.Env.MotionGateChanged += RefreshHeroXpFx;
                 RefreshHeroXpFx();
             };
-            Activated += (_, _) => ApplyXpMeniscusPulse();
-            Deactivated += (_, _) => ApplyXpMeniscusPulse();
+            Activated += (_, _) => { ApplyXpMeniscusPulse(); ApplyStartHeroState(); };
+            Deactivated += (_, _) => { ApplyXpMeniscusPulse(); ApplyStartHeroState(); };
             PropertyChanged += (_, e) =>
             {
                 if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) RefreshHeroXpFx();
@@ -142,7 +162,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void RefreshHeroXpFx()
         {
             ApplyXpMeniscusPulse();
+            ApplyStartHeroState();
             if (AmbientFxCanvas.Env.AllowTransitions && IsVisible && WindowState != WindowState.Minimized) return;
+            EndStartIgnition();
+            EndSaveAbsorb();
             _xpOdometer?.Stop();
             if (_xpReadoutTarget != null && Named<TextBlock>("TxtXP") is { } txt) txt.Text = _xpReadoutTarget;
             _levelChipPop?.Stop();
@@ -244,6 +267,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             scale.ScaleX = scale.ScaleY = 1 + 0.35 * amount;
             rotate.Angle = -4 * amount;
+        }
+
+        private readonly EventBurstLayer _levelUpBurst = new();
+        private Action? _levelUpSoundStop;
+
+        /// <summary>Level-up bursts fired (test hook).</summary>
+        internal int LevelUpBursts => _levelUpBurst.Count;
+
+        /// <summary>WPF CelebrateLevelUp (EventFx.cs:249): bloom, chip pop and a 110-spark burst on the
+        /// track's right edge (the cap the fill just reached), all off at MotionLevel Off.</summary>
+        private void CelebrateLevelUp()
+        {
+            try
+            {
+                if (!AmbientFxCanvas.Env.AllowTransitions) return;
+                FlashLevelUp();
+                PopLevelChip();
+                if (Named<Border>("XPBarTrack") is { } track) _levelUpBurst.Fire(track, 110, rightEdge: true);
+            }
+            catch (Exception ex) { Log.Debug("CelebrateLevelUp: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF PlayLevelUpSound (MainWindow.xaml.cs:782): lvup.mp3 at master^1.5 x 0.2625, the
+        /// previous one stopped first.</summary>
+        private void PlayLevelUpSound()
+        {
+            try
+            {
+                var soundPath = new[]
+                {
+                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", "lvup.mp3"),
+                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "lvlup.mp3"),
+                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "sounds", "lvlup.mp3"),
+                }.FirstOrDefault(System.IO.File.Exists);
+                if (soundPath == null) { Log.Debug("Level up sound not found"); return; }
+                StopLevelUpSound();
+                var curved = (float)Math.Pow(CoreSettings.Current.MasterVolume / 100f, 1.5) * 0.2625f;
+                _levelUpSoundStop = CoreAudio.PlayStoppable(soundPath, Math.Max(0.01f, curved), "level-up");
+            }
+            catch (Exception ex) { Log.Warning("Failed to play level up sound: {Error}", ex.Message); }
+        }
+
+        private void StopLevelUpSound()
+        {
+            try { _levelUpSoundStop?.Invoke(); } catch { }
+            _levelUpSoundStop = null;
         }
 
         /// <summary>CelebrateLevelUp's FlashOverlay(XPBarFlashOverlay): 0 -> 1 over 250ms, auto-reversed.</summary>

@@ -203,6 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<TextBlock>("TxtStartIcon") is { } icon) icon.Text = "\U0001F3AE";
             Named<TextBlock>("TxtStartLabel")?.Bind(TextBlock.TextProperty,
                 (Binding)new Localization.StrExtension("label_remote_connected").ProvideValue(null!));
+            ApplyStartHeroState();   // WPF StartStop.cs:1049: neither idle nor running, so no loop
         }
 
         /// <summary>WPF BtnEndRemoteSession_Click (:1255): stop the relay; the tab unticks on SessionEnded.</summary>

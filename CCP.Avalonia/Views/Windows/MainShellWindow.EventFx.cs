@@ -5,7 +5,7 @@
 // so the particle burst every Celebrate* method fires can be drawn on this head today. What is
 // missing is every CALLER - the progression moments themselves:
 //
-//   CelebrateLevelUp                <- the XP/level path (MainWindow.ProfileBubble.cs)
+//   CelebrateLevelUp                <- the XP/level path (ported: MainShellWindow.HeroFx.cs)
 //   CelebrateAchievementUnlock      <- MainWindow.AchievementsTab.cs:782 (on-tile reveal + burst: AchievementsTabView.Fx.cs)
 //   CelebrateQuestComplete          <- MainWindow.Quests.cs:77 (on-tab burst: QuestsTabView.Fx.cs)
 //   CelebrateProgramDayComplete     <- MainWindow.ProgramsTab.cs:1020
@@ -45,7 +45,6 @@
 //   private AmbientFxCanvas? EnsureEventBurstLayer(…)
 //   internal bool FireBurstAt(…)
 //   private void FireBurstAtFirstVisible(…)
-//   internal void CelebrateLevelUp(…)
 //   internal void CelebrateAchievementUnlock(…)
 //   private void RevealAchievementTile(…)
 //   internal void CelebrateQuestComplete(…)
