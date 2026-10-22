@@ -1216,3 +1216,15 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Constraint: `cloud-` and `gate-` are reserved prefixes. A real lane slug must not start with either, or its pushes
   silently lose distro-check, reference-render and snapshot-lock.
 - Advised: main session.
+## 2026-10-22: One Core bark engine: main's BarkEngine + BarkHead, companion-barks' second engine dropped (main-sync #7 merge)
+- Question: the main-sync #7 tip (`avalonia-port/main-20261015-compat`) already carries a Core `BarkEngine` hosted by
+  `CCP.Avalonia/Platform/BarkHead.cs` (companion lane, b0aa1083e/8485a6665/661745d7a). Lane companion-barks added a different,
+  API-incompatible `BarkEngine` at the same path plus `Views/AvatarTube/BarkHost.cs`, also started from App startup: two engines
+  would double-fire every bark.
+- Options: A) keep main's engine + BarkHead, drop ours, re-point our callers; B) keep ours, delete main's (breaks CompanionCore,
+  CoreBark, CompanionBarkHeadTests); C) merge both engines in one sync (too large for a merge).
+- Choice: A, advised by the supervisor. The bouncing-text triggers now raise on `BarkHead.Engine`; the panic `barks` surface
+  (a P06 floor hold WPF does not have) is dropped, main's ladder-mode `Raise("Panic")` stays; `BarkRuleLoader` stays in the WPF head.
+- Behaviour WPF has and this engine lacks goes to follow-up lane companion-barks-b (listed with WPF lines in the parity row
+  `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
+  barks queued through Giggle. Lane barks-wpf gets the same rule.
