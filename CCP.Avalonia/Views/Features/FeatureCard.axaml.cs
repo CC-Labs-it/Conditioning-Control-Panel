@@ -398,10 +398,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             bool on = _hovered && !IsLocked;
             _rootScale.ScaleX = _rootScale.ScaleY = on ? HoverLiftScale : 1;
             _rimLight.Opacity = on ? RimLightOpacity : 0;
-            if (!Env.AllowTransitions)
-            {
-                if (on) HoverPop.Enter(_imgIconHost); else HoverPop.Leave(_imgIconHost);
-            }
         }
 
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
