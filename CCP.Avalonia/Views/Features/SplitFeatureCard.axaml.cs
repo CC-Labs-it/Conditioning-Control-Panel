@@ -444,15 +444,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             bool right = e.InitialPressMouseButton == MouseButton.Right;
             bool toggle = Services.UI.DashboardClickRules.IsToggle(right, DashboardDepth, true, CoreSettings.Current.DashboardInvertClicks);
             if (right || toggle) e.Handled = true;
-            if (!toggle)
-            {
-                RaiseEvent(new RoutedEventArgs(halfA ? ClickAEvent : ClickBEvent, this));
-            }
-            else
-            {
-                e.Handled = true;
-                RaiseEvent(new RoutedEventArgs(halfA ? ToggleAEvent : ToggleBEvent, this));
-            }
+            RaiseEvent(new RoutedEventArgs(toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent), this));
         }
 
         /// <summary>Commits the card to a half: the wash flips, the seam sweeps, its title grows.

@@ -39,16 +39,22 @@ public sealed class DashboardClickChoiceTests
         shell.Show(); Dispatcher.UIThread.RunJobs();
         var dash = shell.SettingsPage!;
         T F<T>(string name) where T : Control => dash.FindControl<T>(name)!;
+        Point AnchorCentre() { var a = F<Button>("ClickChoiceAnchor"); return a.TranslatePoint(new Point(a.Bounds.Width / 2, a.Bounds.Height / 2), shell)!.Value; }
+        void Hover() { shell.MouseMove(AnchorCentre()); Dispatcher.UIThread.RunJobs(); }
+        void Leave() { shell.MouseMove(new Point(1, 1)); Dispatcher.UIThread.RunJobs(); }
+        void ClickAnchor() { var pt = AnchorCentre(); shell.MouseMove(pt); shell.MouseDown(pt, MouseButton.Left); shell.MouseUp(pt, MouseButton.Left); Dispatcher.UIThread.RunJobs(); }
         try
         {
             dash.SetFavoritesDrawer(true, animate: false);
-            dash.OpenClickChoice(pinned: false);
+            Hover(); // real pointer over the "Left or right?" anchor, not a direct call
             Assert.True(F<Popup>("ClickChoicePopup").IsOpen);
             Assert.False(F<Popup>("ClickChoicePopup").IsLightDismissEnabled);
             Assert.Equal(Loc.Get("dash_click_default"), F<TextBlock>("ClickChoiceDescription").Text);
-            dash.CloseClickChoiceAfterDelay();
+            Leave(); dash.CloseClickChoiceAfterDelay();
             Assert.False(F<Popup>("ClickChoicePopup").IsOpen);
-            dash.OpenClickChoice(pinned: true);
+            ClickAnchor();
+            Assert.True(F<Popup>("ClickChoicePopup").IsOpen);
+            Assert.True(F<Popup>("ClickChoicePopup").IsLightDismissEnabled);
             F<CheckBox>("InvertDashboardClicks").IsChecked = true;
             Assert.True(service.Current.DashboardInvertClicks);
             Assert.Equal(Loc.Get("dash_click_swapped"), F<TextBlock>("ClickChoiceDescription").Text);
