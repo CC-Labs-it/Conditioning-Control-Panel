@@ -141,6 +141,44 @@ public sealed class KeywordTriggersPanelTests
     });
 
     [Fact]
+    public Task MasterAndKeyboardDenialSaysWhyLikeWpf() => Run((view, panel, s) =>
+    {
+        // WPF MainWindow.Awareness.cs:397-407: no access -> box bounces, MessageBox explains.
+        var told = new List<string>();
+        KeywordTriggersPanel.Inform = (_, title, text) => { told.Add(title + "|" + text); return Task.CompletedTask; };
+        var master = view.FindControl<CheckBox>("ChkAwarenessMaster")!;
+        var keyboard = view.FindControl<CheckBox>("ChkAwarenessKeyboard")!;
+        var oldEnabled = s.KeywordTriggersEnabled;
+        try
+        {
+            s.KeywordTriggersEnabled = false;
+            view.SyncAwarenessTabUi();
+            var expected = Loc.Get("title_patreon_feature") + "|" + Loc.Get("msg_keyword_triggers_patreon_only");
+
+            master.IsChecked = true;
+            Assert.False(master.IsChecked == true);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.Equal(expected, Assert.Single(told));
+
+            keyboard.IsChecked = true;                                // routes through the master (WPF :489)
+            Assert.False(master.IsChecked == true);
+            Assert.False(s.KeywordTriggersEnabled);
+            Assert.Equal(2, told.Count);
+            Assert.Equal(expected, told[1]);
+
+            told.Clear();
+            CoreEntitlement.HasPremiumProvider = () => true;
+            master.IsChecked = true;
+            Assert.True(s.KeywordTriggersEnabled);
+            Assert.Empty(told);
+        }
+        finally
+        {
+            s.KeywordTriggersEnabled = oldEnabled;
+        }
+    });
+
+    [Fact]
     public Task OcrCombosPersistAndOcrDetailNeedsAccess() => Run((view, panel, s) =>
     {
         var told = new List<string>();
