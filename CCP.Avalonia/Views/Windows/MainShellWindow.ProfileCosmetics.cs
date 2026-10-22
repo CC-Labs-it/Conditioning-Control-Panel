@@ -1,11 +1,13 @@
 // WPF MainWindow.ProfileCosmetics: paint every equipped and cleared state. Avatar slot
 // ownership and quick pin gestures remain the named follow-up in the parity ledger.
+using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -17,9 +19,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var page = ProfilePage;
             if (page == null) return;
-            if (page.FindControl<Border>("ProfileHeroBanner") is { } banner)
-                banner.Background = ModArt.Banner(cosmetics.BannerId, 1024, AlignmentY.Top);
+            // WPF wraps each ApplyProfileX in its own try: one failing step must not skip the rest.
+            Step("banner", () =>
+            {
+                if (page.FindControl<Border>("ProfileHeroBanner") is { } banner)
+                    banner.Background = ModArt.Banner(cosmetics.BannerId, 1024, AlignmentY.Top);
+            });
+            Step("accent", () => PaintAccent(page, cosmetics));
+            Step("title", () => PaintTitle(page, cosmetics));
+            Step("pins", () => PaintPins(page, cosmetics));
+        }
 
+        private static void Step(string name, Action paint)
+        {
+            try { paint(); }
+            catch (Exception ex) { Log.Debug("ApplyProfileCosmeticsPaint {Step}: {E}", name, ex.Message); }
+        }
+
+        private static void PaintAccent(DiscordTabView page, ProfileCosmetics cosmetics)
+        {
             var hasAccent = cosmetics.Accent != null;
             var accent = Color.Parse(cosmetics.Accent ?? "#FF69B4");
             page.ProfileHeroCard.BorderBrush = new SolidColorBrush(Color.FromArgb(0x99, accent.R, accent.G, accent.B));
@@ -30,14 +48,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var headerBrush = new SolidColorBrush(hasAccent ? accent : Colors.White);
             foreach (var name in new[] { "TxtProfileRecordHeader", "TxtProfileShowcaseHeader", "TxtProfileCommunityHeader" })
                 if (page.FindControl<TextBlock>(name) is { } header) header.Foreground = headerBrush;
+        }
 
+        private static void PaintTitle(DiscordTabView page, ProfileCosmetics cosmetics)
+        {
             if (page.FindControl<TextBlock>("TxtProfileEquippedTitle") is { } title)
             {
                 title.Text = cosmetics.TitleId != null && Achievement.All.TryGetValue(cosmetics.TitleId, out var achievement)
                     ? CoreMods.MakeModAware(achievement.TitleName) : string.Empty;
                 title.IsVisible = !string.IsNullOrEmpty(title.Text);
             }
+        }
 
+        private void PaintPins(DiscordTabView page, ProfileCosmetics cosmetics)
+        {
             var tiles = new List<ProfileAchievementTile>();
             foreach (var id in cosmetics.PinnedAchievements)
             {
