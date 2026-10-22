@@ -6,33 +6,6 @@ using Serilog;
 namespace ConditioningControlPanel.Services.GoonGame
 {
     /// <summary>
-    /// Marshals Goon Game callbacks onto the head's UI thread through <see cref="CoreDispatch"/>.
-    ///
-    /// Every transport raises its events from somewhere else — a SIPSorcery SCTP thread, an
-    /// HttpClient continuation, a Task.Delay timer — and the match engine and HUD both touch UI
-    /// objects, so nothing may surface on those threads.
-    ///
-    /// With no head attached (a test harness) CoreDispatch runs inline, which keeps ordering and is
-    /// what makes the loopback transport usable from a plain test. A callback that throws is logged
-    /// here, never raised into the transport or the dispatcher.
-    /// ponytail: the WPF original dropped work once the dispatcher began shutting down; the WPF
-    /// CoreDispatch seed runs it inline instead, so during shutdown a callback now runs off the UI
-    /// thread; one that touches WPF throws, and the catch below logs it instead of dropping it.
-    /// </summary>
-    internal static class GoonDispatch
-    {
-        public static void Post(Action action)
-        {
-            if (action == null) return;
-            CoreDispatch.Post(() =>
-            {
-                try { action(); }
-                catch (Exception ex) { Log.Error(ex, "[Goon] Dispatched callback failed"); }
-            });
-        }
-    }
-
-    /// <summary>
     /// What every <see cref="IGoonTransport"/> in this folder shares: the serialize/route/raise
     /// pipeline, the clock hookup, and the state machine plumbing. Subclasses only implement
     /// "get this string to the peer" and "tell me when the channel is up".

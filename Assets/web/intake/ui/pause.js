@@ -34,10 +34,7 @@
  *      zero edits to beats.js / effects.js / steering.js.
  *
  *      HONEST LIMITS — what keeps running while paused (see the report notes):
- *        · WebAudio events already SCHEDULED on the audio clock still fire. The
- *          binaural bed is suspended (audio.suspendBed) and <video>/<audio>
- *          elements are paused, but a one-shot VO line already in flight plays
- *          out its last moment.
+ *        Audio contexts and media elements pause with the run.
  *        · Animated GIFs cannot be paused by the web platform.
  *        · CSS *transitions* already in flight complete (CSS *animations* are
  *          held via `animation-play-state: paused`).
@@ -54,7 +51,7 @@
 
 import * as shim from '../web-shim.js';
 import { getPrefs, subscribe } from './prefs.js';
-import { startMenuMusic, stopMenuMusic } from './menuMusic.js';
+import { stopMenuMusic } from './menuMusic.js';
 import { setBandDepth, resetCorruption, isDeepBand } from './corruption.js';
 import * as fullscreen from './fullscreen.js';
 
@@ -406,51 +403,18 @@ export function installPause(ctx = {}) {
   const scrim = root.querySelector('.kw-pause-scrim');
   if (scrim) scrim.addEventListener('click', () => close());
 
-  /* ---- ESCAPE, WITHOUT STEALING STEERING'S ESCAPE ------------------------
-   * render/steering.js's MouseHijack registers a WINDOW/CAPTURE keydown that
-   * disarms the hijack on Escape — invariant #1, "the player can always get
-   * out". That must keep winning.
-   *
-   * We use two listeners and the DOM's own ordering:
-   *   probe  — window/capture, registered HERE at install time, therefore ahead
-   *            of every per-beat steering listener. It only RECORDS whether a
-   *            hijack is currently armed; it never consumes the key.
-   *   opener — document/capture. Capture runs window -> document -> ... , so
-   *            this fires strictly AFTER every window-capture listener, i.e.
-   *            after steering has already had (and possibly used) the key.
-   *            If the probe saw an armed hijack, the Escape belonged to
-   *            steering and we do not open, plus we hold a short suppression
-   *            window so the same press cannot double-fire.
-   * Result: while a steer is armed, Escape is steering's and only steering's. */
-  let hijackWasArmed = false;
+  // Steering disarms on window capture; document capture then opens the pause.
   let suppressUntil = 0;
-
-  const isHijackArmed = () => {
-    try {
-      if (doc.querySelector('.intake-hijack-cursor')) return true;
-      const stage = doc.getElementById('intake-stage');
-      if (stage && stage.classList.contains('intake-hijack-none')) return true;
-    } catch (_e) {}
-    return false;
-  };
-
-  const probe = (e) => {
-    if (!isEsc(e)) return;
-    hijackWasArmed = isHijackArmed();
-  };
 
   const opener = (e) => {
     if (!isEsc(e)) return;
     if (open_) return;                       // the blocker below already closed us
     const t = N.perfNow();
-    if (hijackWasArmed || t < suppressUntil) { suppressUntil = t + 700; return; }
-    // The jumpscare ceremony owns the screen; never pause on top of it.
-    try { if (doc.body.classList.contains('ix-freeze')) return; } catch (_e) {}
+    if (e.repeat || t < suppressUntil) return;
     e.preventDefault();
     open();
   };
 
-  win.addEventListener('keydown', probe, true);
   doc.addEventListener('keydown', opener, true);
 
   /* ---- input blocking while paused ---------------------------------------
@@ -478,6 +442,7 @@ export function installPause(ctx = {}) {
       return;
     }
     if (isEsc(e)) {
+      if (e.repeat) { e.preventDefault(); return; }
       // Escape closes the menu. We do NOT stopImmediatePropagation here: a stale
       // steering disarm receiving this key is harmless, and letting it through
       // keeps steering's guarantee unconditional. We DO arm the suppression
@@ -514,7 +479,6 @@ export function installPause(ctx = {}) {
   /* ---- open / close ------------------------------------------------------ */
   function open() {
     if (open_ || destroyed || quitting) return;
-    try { if (doc.body.classList.contains('ix-freeze')) return; } catch (_e) {}
 
     // 1. STOP THE CLOCKS. Order matters: freeze the clocks, THEN bank the timers,
     //    so nothing re-arms itself against a moving `now`.
@@ -540,12 +504,11 @@ export function installPause(ctx = {}) {
     }
     safe(() => effects && typeof effects.setFrozen === 'function' && effects.setFrozen(true));
     safe(() => audio && typeof audio.suspendBed === 'function' && audio.suspendBed());
+    safe(() => audio?.setPaused?.(true));
+    safe(() => win.dispatchEvent(new CustomEvent('intake-pause', { detail: true })));
     heldMedia = pauseMedia(doc, root);
-    // The shell song comes back while a menu is up — pause IS a menu screen.
-    // It resumes mid-track (menuMusic keeps the playhead), and it is immune to
-    // pauseMedia above because the element is never appended to the document.
-    // Honours its own mute pref, so a player who silenced it stays silenced.
-    safe(() => startMenuMusic());
+    // Pause is silent, including the menu track.
+    safe(() => stopMenuMusic({ immediate: true }));
 
     // 4. Show the menu. A new pause session gets a whole new Quit button — the
     //    fall never respawns WITHIN a session, but reopening later is fine.
@@ -589,6 +552,8 @@ export function installPause(ctx = {}) {
     }
     safe(() => effects && typeof effects.setFrozen === 'function' && effects.setFrozen(false));
     safe(() => audio && typeof audio.resumeBed === 'function' && audio.resumeBed());
+    safe(() => audio?.setPaused?.(false));
+    safe(() => win.dispatchEvent(new CustomEvent('intake-pause', { detail: false })));
     resumeMedia(heldMedia); heldMedia = [];
     // ...and back out of the way of the run. Fade, not cut — the binaural bed
     // is resuming on the same beat and a hard stop would read as a glitch.
@@ -950,7 +915,7 @@ export function installPause(ctx = {}) {
   function resetQuitButton(r) {
     const q = r.querySelector('[data-act="quit"]');
     if (!q || quitting) return;
-    q.textContent = 'Quit run';
+    q.textContent = 'Leave';
     q.classList.remove('kw-pause-quit--armed', 'kw-quit-gone', 'kw-quit-spent');
     q.disabled = false;
   }
@@ -975,7 +940,6 @@ export function installPause(ctx = {}) {
     // a SECOND run in the same page starts from a clean palette and a clean
     // song (installPause() resets again on the way in, belt and braces).
     try { resetCorruption(); } catch (_e) {}
-    win.removeEventListener('keydown', probe, true);
     doc.removeEventListener('keydown', opener, true);
     for (const t of KEY_EVENTS) win.removeEventListener(t, keyBlocker, true);
     for (const t of PTR_EVENTS) win.removeEventListener(t, ptrBlocker, true);
@@ -1042,7 +1006,7 @@ function buildRoot(doc) {
 
   const title = doc.createElement('h2');
   title.className = 'kw-pause-title kw-bounce-line';
-  const word = 'paused!';
+  const word = 'Paused';
   for (let i = 0; i < word.length; i++) {
     const g = doc.createElement('span');
     g.className = 'kw-bl';
@@ -1066,7 +1030,7 @@ function buildRoot(doc) {
   // leaving it is never a hunt, and this menu is one Escape away from anywhere
   // in the run. It is also the one button in this column no prank ever touches.
   acts.appendChild(mkBtn(doc, 'fullscreen', 'Fullscreen', 'kw-btn kw-btn--soft kw-pause-fs'));
-  acts.appendChild(mkBtn(doc, 'quit', 'Quit run', 'kw-btn kw-btn--soft kw-pause-quit'));
+  acts.appendChild(mkBtn(doc, 'quit', 'Leave', 'kw-btn kw-btn--soft kw-pause-quit'));
   panel.appendChild(acts);
 
   const ruleBot = doc.createElement('hr');

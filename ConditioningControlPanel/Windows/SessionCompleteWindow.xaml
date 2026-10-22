@@ -80,6 +80,10 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
                     <StackPanel Grid.Column="0" HorizontalAlignment="Center">
                         <TextBlock Text="{loc:Str label_session}" Foreground="#808090" FontSize="12" HorizontalAlignment="Center"/>
@@ -98,6 +102,13 @@
                         <TextBlock x:Name="TxtXP" Foreground="#90EE90" FontSize="18" FontWeight="Bold"
                                    HorizontalAlignment="Center" Margin="0,4,0,0"/>
                     </StackPanel>
+
+                    <!-- One quiet line for an account with no tier, after the result. A text row
+                         only: never a second button in the way of Continue. -->
+                    <TextBlock x:Name="TxtTasteLine" Grid.Row="1" Grid.ColumnSpan="3"
+                               Text="{loc:Str conv_session_taste}" Visibility="Collapsed"
+                               Foreground="#B8B1CC" FontSize="12" TextWrapping="Wrap"
+                               HorizontalAlignment="Center" TextAlignment="Center" Margin="0,12,0,0"/>
                 </Grid>
             </Border>
 

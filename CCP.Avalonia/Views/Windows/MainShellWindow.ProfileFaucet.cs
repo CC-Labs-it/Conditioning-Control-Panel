@@ -6,11 +6,10 @@
 // THE FAUCET IS THE TAP ON THE VAT. It holds the XP the Descent earned and pours it into the glass
 // jar when the user presses and HOLDS it - a charge with rungs, a ring that fills, a thud and a
 // shiver on release. Two things block it:
-//   * VatFaucetHold - ConditioningControlPanel/Services/Descent/VatFaucetHold.cs, still in the WPF
-//     head. It owns how much XP is held and what a completed charge is worth. Its siblings
-//     VatFillCoordinator and DescentReader are already in CCP.Core/Services/Descent/, so this is
-//     the last piece of that fold which is not portable - and re-deriving the hold here would be a
-//     second copy of the number the vat's fill is agreed on.
+//   * VatFaucetHold - now CCP.Core/Services/Descent/VatFaucetHold.cs (moved in descent-core-a)
+//     with its AppSettingsVatPourLedger. It owns how much XP is held and what a completed charge
+//     is worth; re-deriving the hold here would be a second copy of the number the vat's fill is
+//     agreed on, so the port uses that Core copy.
 //   * MotionFx.AllowTransitions / AllowAmbientLoops - ConditioningControlPanel/Services/MotionFx.cs.
 //     StartFaucetWobble, StartFaucetSparkle and StartChipBreath are ambient loops and must not run
 //     under reduced motion; the only copy of that gate on this head is AmbientFxCanvas's private
@@ -22,7 +21,7 @@
 // live there and arm/disarm the JAR only; each carries the one-line note saying where
 // ArmFaucet(glass, jarW, jarH) and DisarmFaucet() belong. PositionVatTickGlyphs and
 // OnFaucetVatOffScreen are named in that file's header too. So restoring this file is an edit in
-// exactly two known places once VatFaucetHold moves to Core.
+// exactly two known places; VatFaucetHold is in Core now, MotionFx is what still blocks it.
 //
 // Members dropped (71):
 //   private const double FaucetSpoutXInBox

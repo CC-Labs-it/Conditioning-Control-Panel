@@ -45,8 +45,38 @@ namespace ConditioningControlPanel
             _targetModel = ResolveStartingModel();
             TxtAdvancedModel.Text = _targetModel;
             UpdateConsentDiskNote();
+            UpdatePerfCard();
 
             Loaded += async (_, __) => await StartDetectAsync();
+        }
+
+        /// <summary>
+        /// The slowdown warning (owner, 2026-10-14). Always shown on the consent page; the title
+        /// turns into a plain warning when this PC is under the recommendation. Never blocks.
+        /// </summary>
+        private void UpdatePerfCard()
+        {
+            try
+            {
+                var ram = LocalAiHardware.TotalRamBytes();
+                var vram = LocalAiHardware.LargestVramBytes();
+                var fit = LocalAiHardware.Judge(ram, vram);
+                App.Logger?.Information("Local AI wizard: RAM {Ram} B, VRAM {Vram} B, fit {Fit}", ram, vram, fit);
+                if (fit == LocalAiHardware.Fit.Below)
+                {
+                    TxtPerfTitle.Text = Loc.Get("label_local_ai_perf_title_below");
+                    TxtPerfTitle.Foreground = (System.Windows.Media.Brush)FindResource("PinkBrush");
+                }
+                TxtPerfFound.Text = fit == LocalAiHardware.Fit.Unknown
+                    ? Loc.Get("label_local_ai_perf_recommended")
+                    : Loc.GetF("label_local_ai_perf_found", LocalAiHardware.FormatGb(ram), LocalAiHardware.FormatGb(vram))
+                      + " " + Loc.Get("label_local_ai_perf_recommended");
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Local AI wizard: hardware read failed: {E}", ex.Message);
+                TxtPerfFound.Text = Loc.Get("label_local_ai_perf_recommended");
+            }
         }
 
         private static string ResolveStartingModel()
@@ -385,8 +415,10 @@ namespace ConditioningControlPanel
             {
                 if (App.Settings?.Current?.CompanionPrompt != null)
                 {
-                    App.Settings.Current.CompanionPrompt.AiProvider = Models.AiProviderType.Local;
-                    App.Settings.Current.CompanionPrompt.AiModel = _targetModel;
+                    // Every step ran against OllamaSetupService.DefaultHost (no host is passed), so
+                    // that is the host the smoke test just verified.
+                    OllamaSetupService.ApplyVerifiedSetup(App.Settings.Current.CompanionPrompt,
+                        OllamaSetupService.DefaultHost, _targetModel);
                     App.Settings.Save();
                 }
             }

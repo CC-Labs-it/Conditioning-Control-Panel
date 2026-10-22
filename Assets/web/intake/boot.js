@@ -21,18 +21,23 @@
  * ==========================================================================*/
 
 import * as shim from './web-shim.js';
+import { createHostEscape, HOST_ESCAPE } from './host-escape.js';
 import { createAI } from './core/ai.js';
 import { createEngine } from './core/engine.js';
 import { PRODUCT_NAME, Band, BAND_ORDER, themeOf, clamp01, bandIndex } from './core/contracts.js';
 import { resetPalette, noteColorPick, deepen, COLOR_TAG, harvestedColors, COLOR_SWATCHES } from './core/palette.js';
 import { resetSpiralLog, recordedSpirals, spiralCount } from './core/spiralLog.js';
 import { resetMediaLog, recordedMedia, mediaShownCount } from './core/mediaLog.js';
+import { pageMark } from './core/scrolllerMark.js';
 // Side-effect import: ui/fullscreen.js binds F11 and the host's window-mode echo
 // at load. Both consumers (ui/options.js, ui/pause.js) are lazy, and F11 has to
 // work from the loader onward — including a run that launched straight into a
 // remembered fullscreen and has not opened a menu yet. Import-safe: every DOM
 // touch inside it is guarded, exactly like the handles below.
 import './ui/fullscreen.js';
+
+const hostEscape = createHostEscape(); // Before pause installs its frozen clocks.
+shim.on(HOST_ESCAPE, () => hostEscape.kept());
 
 /* ----------------------------------------------------------------------------
  * DOM handles — guarded so importing this module in node (no `document`) is
@@ -260,6 +265,9 @@ shim.onBoot(async (config) => {
     if (config.remoteMedia) {
       shim.onMediaAppend(() => shim.requestRemoteMedia());
       shim.requestRemoteMedia();
+      // "via Scrolller" (2026-10-17): remote stills are raw Scrolller urls on <img> /
+      // background-image, so one corner mark follows any of them on screen.
+      try { pageMark().watch(); } catch (_e) { /* credit only */ }
     }
 
     // --- kawaii MAIN MENU (ui/menu.js) ------------------------------------

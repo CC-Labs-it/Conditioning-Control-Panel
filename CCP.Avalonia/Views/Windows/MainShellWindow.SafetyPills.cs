@@ -19,7 +19,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var tracker = WebcamTracker.Instance;
             Action onState = () => Dispatcher.UIThread.Post(UpdateWebcamPill);
-            Opened += (_, _) => { tracker.StateChanged += onState; UpdateWebcamPill(); };
+            // Opened fires on every Hide/Show; Closed only once.
+            Opened += (_, _) => { tracker.StateChanged -= onState; tracker.StateChanged += onState; UpdateWebcamPill(); };
             Closed += (_, _) => tracker.StateChanged -= onState;
             if (Named<Border>("WebcamActivePill") is { } pill)
                 pill.KeyDown += (_, e) =>   // P17: the privacy stop is keyboard-reachable
