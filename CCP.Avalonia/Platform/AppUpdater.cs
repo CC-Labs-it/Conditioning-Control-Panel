@@ -304,7 +304,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        private static async Task<string> DownloadInstallerAsync(string api, string version, Action<int> progress)
+        /// <summary>Per-read stall window and retry backoff; tests shrink both.</summary>
+        internal static TimeSpan StallTimeout = ReleaseFeed.DownloadStallTimeout;
+        internal static Func<int, TimeSpan> RetryDelay = attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt));
+
+        internal static async Task<string> DownloadInstallerAsync(string api, string version, Action<int> progress)
         {
             using var client = Client(TimeSpan.FromMinutes(10));
             string? url = null;
@@ -327,21 +331,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 try
                 {
-                    if (attempt > 1) await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+                    if (attempt > 1) await Task.Delay(RetryDelay(attempt));
                     using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
                     response.EnsureSuccessStatusCode();
                     var total = response.Content.Headers.ContentLength ?? -1;
                     await using var src = await response.Content.ReadAsStreamAsync();
                     await using var dst = File.Create(path);
-                    var buffer = new byte[81920];
-                    long done = 0;
-                    int read, last = -1;
-                    while ((read = await src.ReadAsync(buffer)) > 0)
+                    var last = -1;
+                    // A stalled read fails the attempt (TimeoutException = transient, so it retries).
+                    await ReleaseFeed.CopyWithStallTimeoutAsync(src, dst, StallTimeout, done =>
                     {
-                        await dst.WriteAsync(buffer.AsMemory(0, read));
-                        done += read;
                         if (total > 0 && (int)(done * 100 / total) is var p && p != last) progress(last = p);
-                    }
+                    }, default);
                     return path;
                 }
                 catch (Exception ex) when (ReleaseFeed.IsTransientNetworkError(ex))

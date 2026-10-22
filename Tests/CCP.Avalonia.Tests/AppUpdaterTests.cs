@@ -139,4 +139,85 @@ public sealed class AppUpdaterTests
             }
         });
     }
+
+    /// <summary>
+    /// WPF ddc9dd047 on this head: a loopback server sends the installer's headers and 1000 bytes, then
+    /// goes quiet. Each attempt fails on the stall window, is retried as transient, and the third
+    /// failure surfaces - bounded, instead of hanging forever. A moving download still completes.
+    /// </summary>
+    [Fact(Timeout = 60_000)]   // a regression hangs forever; make it a failure instead
+    public async Task AStalledInstallerDownloadRetriesThenFailsInBoundedTime()
+    {
+        var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var downloads = 0;
+        using var stop = new CancellationTokenSource();
+        var ok = new byte[200_000];
+        new Random(5).NextBytes(ok);
+        _ = Task.Run(async () =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                var client = await listener.AcceptTcpClientAsync(stop.Token);
+                _ = Task.Run(async () =>
+                {
+                    using var c = client;
+                    var s = c.GetStream();
+                    var head = new System.Text.StringBuilder();
+                    var one = new byte[1];
+                    while (!head.ToString().EndsWith("\r\n\r\n") && await s.ReadAsync(one) > 0) head.Append((char)one[0]);
+                    var path = head.ToString().Split(' ')[1];
+                    async Task Send(string type, byte[] body, long length = -1)
+                    {
+                        if (length < 0) length = body.Length;
+                        await s.WriteAsync(System.Text.Encoding.ASCII.GetBytes(
+                            $"HTTP/1.1 200 OK\r\nContent-Type: {type}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n"));
+                        await s.WriteAsync(body);
+                        await s.FlushAsync();
+                    }
+                    if (path.StartsWith("/api/releases/tags/v"))
+                    {
+                        var v = path["/api/releases/tags/v".Length..];
+                        await Send("application/json", System.Text.Encoding.UTF8.GetBytes(
+                            $"{{\"assets\":[{{\"browser_download_url\":\"http://127.0.0.1:{port}/dl/ConditioningControlPanel-{v}-Setup.exe\"}}]}}"));
+                    }
+                    else if (path.Contains("-99.1.0-"))
+                    {
+                        Interlocked.Increment(ref downloads);
+                        await Send("application/octet-stream", new byte[1000], 1_000_000);   // promises 1 MB, sends 1000 bytes
+                        try { await s.ReadAsync(one, stop.Token); } catch { }   // stay silent until the client hangs up
+                    }
+                    else await Send("application/octet-stream", ok);
+                });
+            }
+        });
+
+        var oldStall = AppUpdater.StallTimeout;
+        var oldDelay = AppUpdater.RetryDelay;
+        try
+        {
+            AppUpdater.StallTimeout = TimeSpan.FromMilliseconds(300);
+            AppUpdater.RetryDelay = _ => TimeSpan.FromMilliseconds(50);
+            var api = $"http://127.0.0.1:{port}/api";
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => AppUpdater.DownloadInstallerAsync(api, "99.1.0", _ => { }));
+            clock.Stop();
+            Assert.IsType<TimeoutException>(ex.InnerException);
+            Assert.Contains("after 3 attempts", ex.Message);
+            Assert.Equal(3, Volatile.Read(ref downloads));
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(20), $"took {clock.Elapsed}");
+
+            var path = await AppUpdater.DownloadInstallerAsync(api, "99.2.0", _ => { });
+            Assert.Equal(ok, File.ReadAllBytes(path));
+        }
+        finally
+        {
+            AppUpdater.StallTimeout = oldStall;
+            AppUpdater.RetryDelay = oldDelay;
+            stop.Cancel();
+            listener.Stop();
+        }
+    }
 }
