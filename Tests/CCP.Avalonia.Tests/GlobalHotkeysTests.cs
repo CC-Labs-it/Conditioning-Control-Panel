@@ -1,12 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Threading;
+using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
+using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -90,4 +99,91 @@ public sealed class GlobalHotkeysTests
         Assert.Null(X11SummonChord.Match(slots, 28, ctrl | shift));
         Assert.Null(X11SummonChord.Match(slots, 29, ctrl));
     }
+
+    [Fact]
+    public void AHeldChordFiresOnceUntilItsKeyIsReleased()
+    {
+        var fired = 0;
+        var slots = new Dictionary<int, (int Code, uint Mask, Action OnPress)> { [X11SummonChord.CameraId] = (28, 12, () => fired++) };
+        var held = new HashSet<int>();
+        // Press, two X auto-repeat presses (no release between them), release, press again.
+        foreach (var (press, code) in new[] { (true, 28), (true, 28), (true, 28), (false, 28), (true, 28) })
+            X11SummonChord.OnKey(slots, held, press, code, 12)?.Invoke();
+        Assert.Equal(2, fired);
+        Assert.Null(X11SummonChord.OnKey(slots, held, true, 29, 12));   // another key is not a slot
+    }
+
+    private static async Task Until(Func<bool> done)
+    {
+        for (var i = 0; i < 400 && !done(); i++) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+    }
+
+    /// <summary>A headless shell started the way App starts it (StartGlobalHotkeys), with the OS grab
+    /// replaced by a map of the armed callbacks, so a test can "press" a slot.</summary>
+    private static Task WithShell(Func<MainShellWindow, Dictionary<int, Action>, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = CoreSettings.Current;
+        s.Welcomed = true;
+        s.HasAcceptedAgeVerification = true;
+        s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+        s.AvatarEnabled = false;
+        s.WebcamConsentGiven = false;
+        var (oldReg, oldUnreg, oldTarget, oldFactory) = (MainShellWindow.RegisterGlobalHotkey,
+            MainShellWindow.UnregisterGlobalHotkey, MainShellWindow.HotkeyTarget, WebcamTracker.SourceFactory);
+        var armed = new Dictionary<int, Action>();
+        var shell = new MainShellWindow();
+        try
+        {
+            MainShellWindow.RegisterGlobalHotkey = (id, _, _, onPress) => { armed[id] = onPress; return true; };
+            MainShellWindow.UnregisterGlobalHotkey = id => armed.Remove(id);
+            MainShellWindow.HotkeyTarget = () => shell;
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            shell.StartGlobalHotkeys();
+            await body(shell, armed);
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
+            shell.Close();
+            (MainShellWindow.RegisterGlobalHotkey, MainShellWindow.UnregisterGlobalHotkey, MainShellWindow.HotkeyTarget,
+                WebcamTracker.SourceFactory) = (oldReg, oldUnreg, oldTarget, oldFactory);
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+    });
+
+    [Fact]
+    public Task StartupArmsBothSlotsAndTheChatPressRaisesTheShell() => WithShell(async (shell, armed) =>
+    {
+        Assert.Equal(new[] { X11SummonChord.ChatId, X11SummonChord.CameraId }, armed.Keys.OrderBy(k => k));
+        shell.WindowState = WindowState.Minimized;
+        armed[X11SummonChord.ChatId]();
+        await Until(() => shell.WindowState == WindowState.Normal);
+        Assert.Equal(WindowState.Normal, shell.WindowState);
+        Assert.Empty(shell.OwnedWindows.OfType<WebcamConsentDialog>());   // chat is not the camera slot
+    });
+
+    [Fact]
+    public Task CameraPressAsksConsentAndARefusalNeverOpensTheCamera() => WithShell(async (shell, armed) =>
+    {
+        var opened = 0;
+        WebcamTracker.SourceFactory = () => { opened++; return new BlinkTrainerSessionTests.BlackFrames(); };
+        armed[X11SummonChord.CameraId]();
+        await Until(() => shell.OwnedWindows.OfType<WebcamConsentDialog>().Any());
+        shell.OwnedWindows.OfType<WebcamConsentDialog>().Single().Close();   // closed without consenting
+        await Until(() => false);
+        try
+        {
+            Assert.False(WebcamTracker.Instance.IsRunning);
+            Assert.Equal(0, opened);
+        }
+        finally { await WebcamTracker.Instance.StopAsync(); }
+    });
 }

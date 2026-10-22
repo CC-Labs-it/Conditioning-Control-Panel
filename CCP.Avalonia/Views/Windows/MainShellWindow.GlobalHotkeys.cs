@@ -24,6 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The OS grab (WPF GlobalHotkeyService.Register/Unregister). Seams so tests never touch X.</summary>
         internal static Func<int, ChordMods, string, Action, bool> RegisterGlobalHotkey = X11SummonChord.Arm;
         internal static Action<int> UnregisterGlobalHotkey = X11SummonChord.Disarm;
+        /// <summary>The shell a hotkey acts on. A seam: headless tests have no desktop lifetime.</summary>
+        internal static Func<MainShellWindow?> HotkeyTarget = () => Current;
 
         /// <summary>App calls this once on the desktop path, after the panic key: the shell's in-window
         /// chat binding plus the two system-wide hotkeys (WPF MainWindow.xaml.cs:236-241).</summary>
@@ -43,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var (mods, key) = ParseShortcut(s?.ChatShortcutKey, s?.ChatShortcutModifiers ?? "Control", "T", ChordMods.Ctrl);
             // X delivers the press on the listener thread: marshal to the UI thread.
             RegisterGlobalHotkey(X11SummonChord.ChatId, mods, key,
-                () => Dispatcher.UIThread.Post(() => Current?.BringToForegroundAndOpenChat()));
+                () => Dispatcher.UIThread.Post(() => HotkeyTarget()?.BringToForegroundAndOpenChat()));
         }
 
         /// <summary>WPF ApplyGlobalCameraHotkey: same shape, default Ctrl+Alt+K, toggles the tracker.</summary>
@@ -53,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (s?.CameraShortcutGlobal == false) { UnregisterGlobalHotkey(X11SummonChord.CameraId); return; }
             var (mods, key) = ParseShortcut(s?.CameraShortcutKey, s?.CameraShortcutModifiers ?? "Control,Alt", "K", ChordMods.Ctrl | ChordMods.Alt);
             RegisterGlobalHotkey(X11SummonChord.CameraId, mods, key,
-                () => Dispatcher.UIThread.Post(() => Current?.ToggleWebcamFromHotkey()));
+                () => Dispatcher.UIThread.Post(() => HotkeyTarget()?.ToggleWebcamFromHotkey()));
         }
 
         /// <summary>The stored "T" / "Control,Alt" pair as a chord: an unknown key falls back to the default

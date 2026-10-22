@@ -20,7 +20,7 @@ internal static class X11SummonChord
     internal const int ChatId = 0xB1B1, CameraId = 0xB1B2, EmiDeskId = 0xB1B4;
 
     private const string LibX11 = "libX11.so.6";
-    private const int KeyPress = 2, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1, AnyModifier = 1 << 15;
+    private const int KeyPress = 2, KeyRelease = 3, MappingNotify = 34, BadAccess = 10, GrabModeAsync = 1, AnyModifier = 1 << 15;
     private const uint ShiftMask = 1, LockMask = 2, ControlMask = 4, Mod1Mask = 8, Mod2Mask = 16, Mod4Mask = 64;
     private const int XEventSize = 192, KeyEventState = 80, KeyEventKeycode = 84, ErrorEventCode = 32;
     private const uint ChordMask = ShiftMask | ControlMask | Mod1Mask | Mod4Mask;
@@ -43,6 +43,7 @@ internal static class X11SummonChord
     [DllImport(LibX11)] private static extern byte XKeysymToKeycode(IntPtr display, ulong keysym);
     [DllImport(LibX11)] private static extern int XRefreshKeyboardMapping(IntPtr mappingEvent);
     [DllImport(LibX11)] private static extern IntPtr XSetErrorHandler(IntPtr handler);
+    [DllImport(LibX11)] private static extern int XkbSetDetectableAutoRepeat(IntPtr display, int detectable, out int supported);
     [DllImport("libc", SetLastError = true)] private static extern int poll([In, Out] PollFd[] fds, ulong nfds, int timeout);
     [DllImport("libc")] private static extern int pipe(int[] fds);
     [DllImport("libc")] private static extern nint read(int fd, byte[] buf, nint count);
@@ -53,6 +54,7 @@ internal static class X11SummonChord
     private static IntPtr _display, _root;
     private static readonly Dictionary<int, (int Code, uint Mask, Action OnPress)> _slots = new();
     private static readonly uint[] LockCombos = { 0u, LockMask, Mod2Mask, LockMask | Mod2Mask };
+    private static readonly HashSet<int> _held = new();   // grabbed keycodes pressed and not yet released
     private static bool _badAccess;
     // Rooted for the process lifetime: Xlib keeps the pointer while it is installed.
     private static readonly XErrorHandler Handler = OnXError;
@@ -76,6 +78,7 @@ internal static class X11SummonChord
             {
                 if (!EnsureDisplay()) return false;
                 UngrabLocked(id);
+                _held.Clear();   // a release lost to a broken grab must not mute the chord forever
                 int code = XKeysymToKeycode(_display, X11PanicKey.KeysymOf(key));
                 if (code == 0) { Log.Warning("[Hotkey] chord key '{Key}' has no X keycode (slot 0x{Id:X})", key, id); return false; }
                 uint mask = ((mods & ChordMods.Ctrl) != 0 ? ControlMask : 0) | ((mods & ChordMods.Alt) != 0 ? Mod1Mask : 0)
@@ -138,12 +141,24 @@ internal static class X11SummonChord
         return null;
     }
 
+    /// <summary>WPF registers with MOD_NOREPEAT: a held chord fires once. With detectable auto-repeat X
+    /// sends repeats as presses without releases, so a press is dropped while its key is still held.</summary>
+    internal static Action? OnKey(IReadOnlyDictionary<int, (int Code, uint Mask, Action OnPress)> slots, HashSet<int> held,
+        bool press, int code, uint state)
+    {
+        if (!press) { held.Remove(code); return null; }
+        var action = Match(slots, code, state);
+        return action != null && held.Add(code) ? action : null;
+    }
+
     private static bool EnsureDisplay()
     {
         if (_display != IntPtr.Zero) return true;
         _display = XOpenDisplay(IntPtr.Zero);
         if (_display == IntPtr.Zero) { Log.Warning("[EmiDesk] no X display: the summon chord cannot be armed"); return false; }
         _root = XDefaultRootWindow(_display);
+        XkbSetDetectableAutoRepeat(_display, 1, out var detectable);
+        if (detectable == 0) Log.Warning("[Hotkey] X server lacks detectable auto-repeat: a held chord may fire repeatedly");
         var fd = XConnectionNumber(_display);
         pipe(_wake);
         new Thread(() => Listen(fd)) { IsBackground = true, Name = "emi-chord-x11" }.Start();
@@ -173,7 +188,7 @@ internal static class X11SummonChord
                 // Block without the lock on the X socket and the wake pipe; drain the queue on every wake.
                 if (poll(pfd, _wake[0] >= 0 ? 2UL : 1UL, -1) < 0 && Marshal.GetLastWin32Error() != 4 /* EINTR */) Thread.Sleep(1000);
                 if ((pfd[1].REvents & 1) != 0) read(_wake[0], buf, buf.Length);
-                Action? fire = null;
+                var fire = new List<Action>();   // every chord in one drain, in order
                 lock (Gate)
                 {
                     while (XPending(_display) > 0)
@@ -181,11 +196,13 @@ internal static class X11SummonChord
                         XNextEvent(_display, ev);
                         int type = Marshal.ReadInt32(ev);
                         if (type == MappingNotify) XRefreshKeyboardMapping(ev);
-                        else if (type == KeyPress)
-                            fire = Match(_slots, Marshal.ReadInt32(ev, KeyEventKeycode), (uint)Marshal.ReadInt32(ev, KeyEventState)) ?? fire;
+                        else if (type is KeyPress or KeyRelease
+                                 && OnKey(_slots, _held, type == KeyPress, Marshal.ReadInt32(ev, KeyEventKeycode),
+                                          (uint)Marshal.ReadInt32(ev, KeyEventState)) is { } action)
+                            fire.Add(action);
                     }
                 }
-                fire?.Invoke();
+                foreach (var run in fire) run();
             }
             catch (Exception ex)
             {
