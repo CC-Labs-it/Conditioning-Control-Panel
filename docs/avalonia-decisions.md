@@ -1137,6 +1137,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   the earliest `cm > 0` entry is the tracker's first run. Same test: a day before the first log day is null and not
   charged (fail-first: red with `Expected null, Actual 0` before the guard).
 ## 2026-10-12: Linux web views stay off by default; CCP_LINUX_WEBVIEW opts in (webview-probe-fix)
+- Superseded by the 2026-10-13 entry (webview-render): WebKitGTK is the Linux default; the "stall" was a web-process crash.
 - Question: on Arch/CachyOS with webkit2gtk-4.1 and wpewebkit installed every web surface said "No native web view on
   this platform." `WebHost.ProbeUnavailableReason` accepted only adapters advertising `NativeControlHost`; in
   Avalonia.Controls.WebView 12.1.0 `GetAdapterInfo` reports WebKitGtk as `NativeDialog` and WpeWebKit/Headless as
@@ -1161,16 +1162,57 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   The GameWindow no-engine guard is in gamewindow-followup.md (games-host lane).
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs` (adapter-info table; default-off and gtk rows fail-proven).
 
+## 2026-10-13: WebKitGTK is the Linux web view; the "rAF stall" was a missing GStreamer audio sink (webview-render)
+- Question: no Linux web view kept drawing (2026-10-12 entry above). Is it the engines, Avalonia's frame pump, or the box?
+- Root cause (live, ~/ccp-port/evidence/webview-render/findings.md): the WEB PROCESS crashed. Without GStreamer's
+  `autoaudiosink` (gst-plugins-good) WebKitWebProcess/WPEWebProcess SIGABRT on a page's first WebAudio sound
+  ("autoaudiosink not found", then g_signal_connect_data(NULL)). The host keeps the last frame and rAF dies. Every earlier live
+  run has that coredump about 3 s after intake's `init`. Without audio, WebKitGTK (GtkX11) draws continuously at ~62 fps, WebGL included.
+  With a scratch-extracted autoaudiosink on GST_PLUGIN_PATH, intake animates and heartbeats in the real app.
+  WEBKIT_DISABLE_DMABUF_RENDERER, WEBKIT_DISABLE_COMPOSITING_MODE, GDK_BACKEND=x11 and LIBGL_ALWAYS_SOFTWARE change nothing.
+  The WPE frame pump is push (frame_complete per copied buffer) and needs no render-loop call.
+- Second finding: Arch wpewebkit 2.54.1-2 is built without the legacy libwpe API (`webkit_web_view_backend_new` gone,
+  upstream AvaloniaUI/Avalonia.Controls.WebView#88). 12.1's WPE adapter then throws from an async void and kills the app,
+  and WPE is the package's default Linux pick.
+- Answer (advised by: supervisor; advised: oracle-deep - keep the gate, no fake sink, add a CCP_LINUX_WEBVIEW=gtk override and
+  follow GStreamer's own plugin-path rules): on Linux, WebHost always sets `PreferWebKitGtkInstead` (WebKitGTK default).
+  `CCP_LINUX_WEBVIEW=wpe` is honoured only when libWPEWebKit exports `webkit_web_view_backend_new` (`NativeLibrary.TryGetExport`),
+  otherwise GTK is used. `=off` gives the fallback panel. A Linux engine without the audio sink gives the panel with the per-distro
+  command (Core `LinuxDependencies`, "web views (sound)": gst-plugins-good / gstreamer1.0-plugins-good / gstreamer1-plugins-good;
+  found on GST_PLUGIN_SYSTEM_PATH(_1_0), GST_PLUGIN_PATH(_1_0) and the distro plugin dirs). A gate, not a warning: a page that
+  aborts on its first sound is worse than an honest panel. WPE is opt-in only, so the startup toast (`LinuxDependencies.Required`)
+  and the panel (`WebViews`) no longer name it. PKGBUILD: gst-plugins-good in depends, the WPE trio in optdepends. Headless, `--smoke`,
+  `--render-all` and tests are unchanged (never an engine). Windows/macOS are untouched.
+- Override and probe rules (oracle-deep): an explicit `CCP_LINUX_WEBVIEW=gtk` skips the sink check (one warning logged), so a
+  probe false negative (NixOS/Guix store paths, other Debian arches) cannot block every page for good; the unset default stays
+  gated. The probe follows GStreamer: GST_PLUGIN_PATH(_1_0), the user dir ($XDG_DATA_HOME/gstreamer-1.0/plugins), then
+  GST_PLUGIN_SYSTEM_PATH(_1_0), which REPLACES the distro dirs when set (AppImage/Snap/Nix wrappers; the user dir stays, as in
+  GStreamer's registry scan). The panel and the startup toast say to restart CCP after installing (probed once per process); `=wpe` falling back to GTK on 2.54 logs one warning.
+- Not chosen: GTK `ExperimentalOffscreen` survives intake without the sink but pushes ~16 fps and hides the missing dependency.
+- Not chosen: a null/fake audio sink. WebKit asks GStreamer for `autoaudiosink` by name and no WebKit or GStreamer setting maps it
+  to another element; bundling libgstautodetect ties us to the host's GStreamer; turning off WebAudio/media in WebKit settings
+  would make `new AudioContext()` throw in our pages and stop video.
+- Wayland: Avalonia is pinned to X11 (XWayland), and the GTK adapter's `ForceX11GdkBackend` (default true) forces GDK_BACKEND=x11
+  around GTK init. Untested: NVIDIA's proprietary driver is widely reported to give blank WebKitGTK views; `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  is the user-side switch. Fractional/HiDPI scale between GTK and Avalonia is not measured.
+- Residuals: airspace (Avalonia popups under the X11 child), a shutdown-only SIGABRT seen once, and Avalonia 12.1 surfaces no
+  web-process-terminated event, so a future web-process crash would again freeze a page silently.
+- Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
+  (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
 ## 2026-10-14: The user's max video length also ends app-started web videos (avalonia-port/video-max-cap-links)
-- Bug BUG-7NAKK79CZ2: a 25-minute web video played under a 20m 3s "Duration filter" max. Every mandatory-video path
-  already armed the cap; the uncapped path was the browser web-video takeover (autonomy WebVideo, AI effect, chaos HT link,
-  remote `play_hypnotube`), whose hard stop was only clip length + 15 s (max 1 h).
-- Answer (advised by: supervisor, from user bug BUG-7NAKK79CZ2): Core `VideoMaxCap.TakeoverStopAfter` bounds every takeover
-  the user did not start by `VideoMaxDurationSeconds`, counted from the takeover start (a site auto-advancing to the next
-  clip cannot restart it), also when the page never reports a length. Remote is included (the cap is the user's own limit).
-  User-started playback and avatar speech-bubble links are excluded, and leaving fullscreen (ownership passes to User)
-  stands the stop down, as before. A replay of the same mandatory clip (vout heal, browser->LibVLC fallback) continues the
-  clip's cap via `VideoMaxCap.CapLeft` instead of restarting it, on both heads.
-- Avalonia has no web-video takeover yet; when it is ported it must use `VideoMaxCap.TakeoverStopAfter`.
+- Bug BUG-7NAKK79CZ2 (= WPF ccp-bugs #1438): a 25-minute web video played under a 20m 3s "Duration filter" max. Every
+  mandatory-video path already armed the cap; the uncapped path was the browser web-video takeover (autonomy WebVideo, AI
+  effect, chaos HT link, remote `play_hypnotube`), whose hard stop was only clip length + 15 s (max 1 h).
+- WPF main fixed the takeover itself (#1438, `Services/Video/VideoLengthCap.cs`): the cut counts PLAYED time from the
+  takeover's first playback (`BrowserMediaService.OnMediaProgress` playedSeconds), never for User/AvatarLink or a video the
+  player asked for in chat, also when the page reports no length. The 2026-10-15 main sync took that over this branch's
+  wall-clock `VideoMaxCap.TakeoverStopAfter`, which was deleted (two cuts would let pauses eat the allowance, which #1438 forbids).
+- Kept from this branch (advised by: supervisor): a replay of the same mandatory clip (vout heal, browser->LibVLC fallback)
+  continues the clip's cap instead of restarting it - WPF carries the played milliseconds into the next
+  `StartMaxLengthCapTimer` (`CarryMaxLenCap`, read before the teardown drops the clock); Avalonia's
+  `MandatoryVideoScheduler.Guard` adds `capSpentBefore` via Core `VideoMaxCap.CapLeft`.
+- Avalonia has no web-video takeover yet; when it is ported it must follow WPF `VideoLengthCap.BrowserTakeoverSeconds`.
 - Tests: `Tests/CCP.Core.Tests/VideoMaxCapTests.cs`, `Tests/CCP.Avalonia.Tests/MandatoryVideoOverlayTests.cs` (heal replay
   ends at the cap), each fail-proven. Live tester step: ~/ccp-port/evidence/live-queue/media.md.

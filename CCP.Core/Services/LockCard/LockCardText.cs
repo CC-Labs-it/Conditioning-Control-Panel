@@ -25,10 +25,20 @@ namespace ConditioningControlPanel.Services
     {
         /// <summary>
         /// Folds a phrase or a typed answer to its comparable form: typographic punctuation
-        /// flattened to ASCII, whitespace collapsed to single spaces, ends trimmed. Case is left
+        /// flattened to ASCII, sentence punctuation (, . ; : ! ? -) read as a word break,
+        /// whitespace collapsed to single spaces, ends trimmed. Case is left
         /// alone - callers compare with <see cref="StringComparison.OrdinalIgnoreCase"/>.
         /// </summary>
-        internal static string Normalize(string? text)
+        internal static string Normalize(string? text) => Normalize(text, dropSentencePunctuation: true);
+
+        /// <summary>
+        /// How many keystrokes the phrase takes when typed as written: the normalised form with
+        /// its sentence punctuation kept. Drives the by-length repeat budget, which must not move
+        /// just because the compare stopped insisting on full stops.
+        /// </summary>
+        internal static int TypedLength(string? text) => Normalize(text, dropSentencePunctuation: false).Length;
+
+        private static string Normalize(string? text, bool dropSentencePunctuation)
         {
             if (string.IsNullOrEmpty(text)) return "";
 
@@ -48,12 +58,24 @@ namespace ConditioningControlPanel.Services
 
                 if (IsInvisible(raw)) continue;
 
-                if (pendingSpace)
+                foreach (var c in MapPunctuation(raw))
                 {
-                    sb.Append(' ');
-                    pendingSpace = false;
+                    // Sentence punctuation is not part of the line: "PROCESS, COMPLY, REPEAT"
+                    // recites "PROCESS. COMPLY. REPEAT." and a mic never hears a full stop. It
+                    // reads as a word break, so "obey.drop" still splits into two words.
+                    if (dropSentencePunctuation && IsIgnorablePunctuation(c))
+                    {
+                        if (sb.Length > 0) pendingSpace = true;
+                        continue;
+                    }
+
+                    if (pendingSpace)
+                    {
+                        sb.Append(' ');
+                        pendingSpace = false;
+                    }
+                    sb.Append(c);
                 }
-                sb.Append(MapPunctuation(raw));
             }
 
             return sb.ToString();
@@ -87,6 +109,14 @@ namespace ConditioningControlPanel.Services
             || c == (char)0x200C      // zero-width non-joiner
             || c == (char)0x200D      // zero-width joiner
             || c == (char)0xFEFF;     // BOM / zero-width no-break space
+
+        /// <summary>
+        /// Sentence punctuation a recital may leave out or swap: , . ; : ! ? and the hyphen (an
+        /// ellipsis is flattened to full stops first and every dash to a hyphen, so they go too:
+        /// "SYSTEM OVERLOAD — SHUTDOWN" is recited as "SYSTEM OVERLOAD SHUTDOWN").
+        /// </summary>
+        private static bool IsIgnorablePunctuation(char c)
+            => c == ',' || c == '.' || c == ';' || c == ':' || c == '!' || c == '?' || c == '-';
 
         /// <summary>
         /// One character in, its ASCII shape out. Multi-character expansions come back as a

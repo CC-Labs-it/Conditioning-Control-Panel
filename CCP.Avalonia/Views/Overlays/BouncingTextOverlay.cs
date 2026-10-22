@@ -422,12 +422,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public double FontSize { get; set; } = 60;
         public FontFamily Family { get; set; } = new("Segoe UI");
         public IBrush Fill { get; set; } = Brushes.White;
+        public IBrush Stroke { get; set; } = Brushes.Black;
+        /// <summary>WPF OutlinedText.StrokeThickness; null keeps the bouncing-text default (FontSize / 22, min 2).</summary>
+        public double? StrokeThickness { get; set; }
         public double Pad { get; private set; }
         private Geometry? _geo;
 
         public void Build()
         {
-            var stroke = Math.Max(2.0, FontSize / 22.0);
+            var stroke = StrokeThickness ?? Math.Max(2.0, FontSize / 22.0);
             Pad = stroke + 6;
             var ft = new FormattedText(Text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
                 new Typeface(Family, FontStyle.Normal, FontWeight.Bold), FontSize, Fill);
@@ -440,7 +443,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public override void Render(DrawingContext dc)
         {
             if (_geo == null) return;
-            dc.DrawGeometry(null, new Pen(Brushes.Black, (Pad - 6) * 2, lineJoin: PenLineJoin.Round), _geo);
+            dc.DrawGeometry(null, new Pen(Stroke, (Pad - 6) * 2, lineJoin: PenLineJoin.Round), _geo);
             dc.DrawGeometry(Fill, null, _geo);
         }
     }

@@ -15,35 +15,6 @@ public sealed class VideoMaxCapTests
         => Assert.Equal(expected, VideoMaxCap.CapLeft(max, spent));
 
     [Fact]
-    public void AppTakeoverEndsAtTheUsersMaxNotAtTheClip()
-        // 25-min Hypnotube clip, 20m 3s max, autonomy takeover: stop at the cap, not clip + 15 s.
-        => Assert.Equal(1203.0, VideoMaxCap.TakeoverStopAfter(1500, 0, 1203, userStarted: false));
-
-    [Fact]
-    public void AutoAdvanceCannotRestartTheCap()
-        // 600 s into the takeover the site advances to a 25-min clip: what is left of the cap.
-        => Assert.Equal(603.0, VideoMaxCap.TakeoverStopAfter(1500, 600, 1203, userStarted: false));
-
-    [Fact]
-    public void UnknownLengthStillCappedForAppTakeover()
-    {
-        Assert.Equal(1203.0, VideoMaxCap.TakeoverStopAfter(0, 0, 1203, userStarted: false));
-        Assert.Null(VideoMaxCap.TakeoverStopAfter(0, 0, 0, userStarted: false));   // no cap: heartbeat governs, as before
-    }
-
-    [Fact]
-    public void ShortClipStillEndsAtClipPlusGrace()
-        => Assert.Equal(315.0, VideoMaxCap.TakeoverStopAfter(300, 0, 1203, userStarted: false));
-
-    [Fact]
-    public void UserStartedTakeoverIgnoresTheCap()
-    {
-        Assert.Equal(1515.0, VideoMaxCap.TakeoverStopAfter(1500, 0, 1203, userStarted: true));
-        Assert.Null(VideoMaxCap.TakeoverStopAfter(0, 0, 1203, userStarted: true));
-        Assert.Equal(VideoMaxCap.TakeoverMaxSeconds, VideoMaxCap.TakeoverStopAfter(99999, 0, 0, userStarted: true));
-    }
-
-    [Fact]
     public void MandatoryGuardCountsCapSpentBeforeAReplay()
     {
         Assert.Null(MandatoryVideoScheduler.Guard(3, 2, true, true, 600, 0, 8));
