@@ -6,6 +6,8 @@
 export const FLAGS = Object.freeze(['start', 'rail', 'railL', 'railR', 'open', 'magnet', 'boost', 'jump', 'glide', 'pit', 'flow']);
 export const SURFACES = Object.freeze(['glass', 'grip', 'haze']);
 export const SPACING_M = Object.freeze([8, 15]);
+/** Track `items` kinds known to the engine (B1): an item box row member, a pickup bubble. Others warn. */
+export const ITEM_KINDS = Object.freeze(['box', 'bubble']);
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 const isInt = (v) => Number.isInteger(v);
@@ -97,7 +99,13 @@ export function validate(t) {
       else check(e, at);
     });
   };
-  list('items', (e, at) => { if (!isNum(e.x) || !isStr(e.kind)) err(at + ' needs x and kind'); });
+  list('items', (e, at) => {
+    if (!isNum(e.x) || !isStr(e.kind)) { err(at + ' needs x and kind'); return; }
+    if (Math.abs(e.x) > nodes[e.node].w / 2) err(at + ' off the road');
+    if (e.ds !== undefined && (!isNum(e.ds) || e.ds < 0 || e.ds > 40)) err(at + '.ds must be 0..40 m');
+    if (!ITEM_KINDS.includes(e.kind)) warn(at + ' unknown kind ' + e.kind);
+    if (nodes[e.node].flags.includes('jump')) err(at + ' sits over a jump gap');
+  });
   list('boosts', (e, at) => {
     if (!isNum(e.x) || !isNum(e.w) || e.w <= 0 || !isNum(e.len) || e.len <= 0) err(at + ' needs x, w > 0, len > 0');
   });

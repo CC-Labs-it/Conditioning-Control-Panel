@@ -42,6 +42,23 @@ const SECTIONS = [
 ];
 const W = 14, TOP = 30, G = 28;
 
+// Item box rows: piece, place along it (0..1), box x positions (metres, + right). 3 to 4 across, away
+// from the jump (kicker to landing) and the open corner; the checks below hold those margins.
+const BOX_ROWS = [
+  { piece: 'start', at: 0.8, xs: [-5, -1.7, 1.7, 5] },
+  { piece: 'S2', at: 0.5, xs: [-3.5, 0, 3.5] },
+  { piece: 'L3a', at: 0.5, xs: [-4.5, -1.5, 1.5, 4.5] },
+  { piece: 'L3b', at: 0.3, xs: [-3.5, 0, 3.5] },
+  { piece: 'sweepD', at: 0.5, xs: [-4.5, -1.5, 1.5, 4.5] },
+];
+// Pickup-bubble clusters: [ds metres past the node, x] per bubble, on the inside line of a bend.
+const BUBBLE_CLUSTERS = [
+  { piece: 'sweepA', at: 0.45, dots: [[0, 3], [3, 3.8], [6, 4.4], [9, 3.8], [12, 3]] },
+  { piece: 'spiral', at: 0.55, dots: [[0, 2.5], [3, 3.2], [6, 3.6], [9, 3.2], [12, 2.5]] },
+  { piece: 'L2', at: 0.1, dots: [[0, -2], [3, -1], [6, 0], [9, 1], [12, 2]] },
+];
+const ITEM_JUMP_CLEAR_M = 40, ITEM_OPEN_CLEAR_M = 30, ITEM_PAD_CLEAR_M = 8;
+
 const pieceLen = (p) => (p.turn ? Math.abs(p.turn) * DEG * p.r : p.len);
 const ease = (k, u) => (k === 'lin' ? u : k === 'kick' ? u * u : u * u * (3 - 2 * u));
 
@@ -141,6 +158,18 @@ function build() {
   const lip = meta.findIndex((m) => m.piece === lipPiece);
   const jumps = [{ node: lip, airLen: PIECES[lipPiece].len, height: r2(nodes[lip].p[1] - nodes[lip + 1].p[1]) }];
 
+  // B1 item boxes (rows across the road) and pickup-bubble clusters (CONTRACT-B1.md section 9)
+  const items = [];
+  const pieceIdx = (id) => PIECES.findIndex((p) => p.id === id);
+  for (const row of BOX_ROWS) {
+    const i = nodeAt(pieceIdx(row.piece), row.at);
+    for (const x of row.xs) items.push({ node: i, x, kind: 'box' });
+  }
+  for (const c of BUBBLE_CLUSTERS) {
+    const i = nodeAt(pieceIdx(c.piece), c.at);
+    c.dots.forEach(([ds, x]) => items.push({ node: i, x, kind: 'bubble', ds }));
+  }
+
   const checkpoints = [0, 0.25, 0.5, 0.75].map((f) => {
     let best = 0, bd = 1e9;
     meta.forEach((m, i) => {
@@ -159,7 +188,7 @@ function build() {
     sections: sectionRows,
     checkpoints,
     spawn: { node: 0, grid: [[-3, -4], [3, -6], [-3, -8], [3, -10], [-3, -12], [3, -14], [-3, -16], [3, -18]] },
-    items: [], boosts, jumps, hazards: [], media: [],
+    items, boosts, jumps, hazards: [], media: [],
     ai: { lines: [], pace: [1.0, 1.05, 1.1] },
     beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: Math.floor(minY - 25), edgeGraceM: 1.2, edgeGraceS: 0.8 },
@@ -169,8 +198,23 @@ function build() {
 
 const r2 = (v) => Math.round(v * 100) / 100;
 
-function checks({ track, closure, lengthM, lipPiece }) {
+function checks({ track, closure, lengthM, lipPiece, meta }) {
   const errs = [], N = track.nodes.length, P = track.nodes.map((n) => n.p);
+  // items: inside the road, boxes clear of the jump and pads, everything clear of the open corner
+  const L = lengthM, sd = (a, b) => { const d = Math.abs(((a - b) % L + L) % L); return Math.min(d, L - d); };
+  const lipS = meta[track.jumps[0].node].s;
+  let landI = track.jumps[0].node;
+  while (track.nodes[landI].flags.includes('jump')) landI++;
+  const landS = meta[landI].s;
+  const openS = meta.filter((m, i) => track.nodes[i].flags.includes('open')).map((m) => m.s);
+  for (const it of track.items) {
+    const s = meta[it.node].s + (it.ds || 0), w = track.nodes[it.node].w;
+    if (Math.abs(it.x) > w / 2 - 1) errs.push('item off the road at node ' + it.node);
+    if (openS.some((o) => sd(s, o) < ITEM_OPEN_CLEAR_M)) errs.push(it.kind + ' near the open corner at node ' + it.node);
+    if (it.kind !== 'box') continue;
+    if (s > lipS - ITEM_JUMP_CLEAR_M && s < landS + ITEM_JUMP_CLEAR_M) errs.push('box near the jump at node ' + it.node);
+    for (const b of track.boosts) { const bs = meta[b.node].s; if (s > bs - ITEM_PAD_CLEAR_M && s < bs + b.len + ITEM_PAD_CLEAR_M) errs.push('box on a pad at node ' + it.node); }
+  }
   if (closure.closeErr > 0.01) errs.push('loop does not close: ' + closure.closeErr);
   if (Math.abs(closure.headErr) > 0.01 && Math.abs(closure.headErr - 360) > 0.01) errs.push('heading does not close: ' + closure.headErr);
   for (const p of PIECES) if (p.auto && p.len < 30) errs.push('auto straight ' + p.id + ' too short: ' + p.len.toFixed(1));
@@ -209,7 +253,8 @@ function checks({ track, closure, lengthM, lipPiece }) {
     if (x < gap.len + 1) errs.push('jump not cleared at ' + f + ' of top: ' + x.toFixed(1) + ' m');
   }
   return { errs, info: { nodes: N, lengthM: Math.round(lengthM), spacing: [r2(minGap), r2(maxGap)], minOverlapSepM: r2(minSep),
-    lipPitchDeg: r2(pitch / DEG), jumpLand: report.join(' '), autos: PIECES.filter((p) => p.auto).map((p) => p.id + '=' + p.len.toFixed(1)),
+    lipPitchDeg: r2(pitch / DEG), jumpLand: report.join(' '),
+    items: track.items.filter((i) => i.kind === 'box').length + ' boxes, ' + track.items.filter((i) => i.kind === 'bubble').length + ' bubbles', autos: PIECES.filter((p) => p.auto).map((p) => p.id + '=' + p.len.toFixed(1)),
     yRange: [Math.min(...P.map((p) => p[1])), Math.max(...P.map((p) => p[1]))] } };
 }
 

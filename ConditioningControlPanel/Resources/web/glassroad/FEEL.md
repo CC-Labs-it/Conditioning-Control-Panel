@@ -162,3 +162,135 @@ default so the code has no hidden number.
 - `gentle.riseMs` 300: rise floor.
 - `gentle.contrastMul` 0.5: band and spiral contrast share.
 - `gentle.scrollMul` 0.5: band and spiral scroll share.
+
+## items (B1 effect bubbles, design board section 03; read by sim/items.js, sim/itemTable.js, fx/effects.js)
+Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = never in that bucket.
+- `items.boxRadiusM` 1.8: a kart within this (along and across) of a live item box draws from it.
+- `items.pickHeightM` 2.5: a kart higher than this above the road (a jump arc) passes over boxes and bubbles.
+- `items.boxRespawnS` 3: a taken box comes back after this.
+- `items.rollS` 1.0: the slot spins this long before the drawn item shows and can be used.
+- `items.bubbleRadiusM` 1.3: pickup-bubble pop distance.
+- `items.bubbleRespawnS` 8: a popped pickup bubble comes back after this.
+- `items.bubbleAmount` 0.05: boost size of a pickup bubble, share of top speed.
+- `items.bubbleHoldS` 0.35: boost hold of a pickup bubble.
+- `items.frontGapM` 25: the leader, and anyone within this of the leader's progress, draws from the front bucket.
+- `items.backGapM` 120: this far or more behind the leader draws from the back bucket; between is middle.
+- `items.flashWeights` [1, 3, 1]: Flash draw weights.
+- `items.spiralWeights` [0, 3, 1]: Spiral draw weights.
+- `items.brainDrainWeights` [0, 3, 1]: Brain Drain draw weights.
+- `items.freezeWeights` [1, 3, 0]: Freeze draw weights.
+- `items.blackoutWeights` [0, 0, 3]: Blackout draw weights (back only).
+- `items.pinkWeights` [0, 1, 2]: Pink draw weights.
+- `items.meltWeights` [4, 1, 0]: Melt draw weights (front trap).
+- `items.shatterWeights` [0, 0, 0.6]: Shatter draw weights (rare, back only).
+- `items.surgeWeights` [1, 2, 3]: Surge draw weights.
+- `items.glassWeights` [4, 1, 0]: Glass draw weights (front shield).
+- `items.echoWeights` [0, 0, 2]: Echo draw weights (back).
+- `items.goldenWeights` [0, 0, 0.6]: Golden draw weights (rare, back only).
+- `items.flashS` 1.2: Flash: a picture over flashCover of the screen, then it fades.
+- `items.spiralS` 2.0: Spiral over the middle of the view, steering drifts with it.
+- `items.brainDrainS` 2.5: Brain Drain: edges blur and go grey, the centre stays sharp.
+- `items.freezeS` 2.0: Freeze: steering answers at freezeSteerMul, frost on the edges.
+- `items.blackoutS` 2.0: Blackout: the view closes to a circle; rails and road lines keep glowing.
+- `items.pinkS` 3.0: Pink: pink wash, low contrast.
+- `items.meltS` 2.0: Melt hit: the whole view blurs and runs downward, the kart slides like on ice.
+- `items.shatterS` 1.5: Shatter spin-out length (the one real crash).
+- `items.surgeS` 1.2: Surge boost hold.
+- `items.goldenS` 4.0: Golden: nothing sticks, bumps shove harder.
+- `items.echoS` 6.0: Echo copies last this long (or until all are used).
+- `items.glassMaxS` 20: a Glass bubble that soaks nothing pops by itself after this.
+- `items.flashCover` 0.4: share of the screen a Flash picture covers.
+- `items.spiralSteerAmp` 0.35: Spiral steering drift, stick share added at the peak.
+- `items.spiralSteerHz` 0.4: Spiral steering drift rate (one slow sway per 1 / Hz s).
+- `items.freezeSteerMul` 0.4: Freeze steering share.
+- `items.meltGripMul` 6: Melt multiplies the grip bleed time (kart.gripTcS) by this: ice.
+- `items.meltSlideMul` 2.5: Melt multiplies the drift slide time (drift.slideTcS) by this.
+- `items.shatterSpeedKeep` 0.3: Shatter cuts engineV to this share of what it was.
+- `items.shatterSpinTurns` 2: Shatter visual spin turns over shatterS (render only; the sim side is the stall).
+- `items.shatterEdgeSafeM` 40: Shatter never fires, lands or is laid within this of an open segment.
+- `items.pinkRangeM` 40: Pink hits every kart up to this far ahead of the user.
+- `items.surgeAmount` [0.1, 0.16, 0.24]: Surge boost size by the user's bucket [front, middle, back].
+- `items.goldenShoveMul` 2: a Golden kart's bumps shove this much harder.
+- `items.echoCopies` 3: Echo copies; each decoyed throw uses one.
+- `items.echoDecoyChance` 0.75: chance a throw or lob at an Echo kart goes for a copy.
+- `items.throwExtraMps` 22: a throw flies at the user's speed plus this, along the driveline.
+- `items.throwLifeS` 5: a throw that reaches nobody pops after this.
+- `items.throwRangeM` 150: a throw locks on the kart ahead only within this; past it, it flies straight.
+- `items.homeTcS` 0.25: a throw eases across to its target's lateral with this time constant.
+- `items.hitRadiusM` 1.6: a throw or lob hits within this (along and across).
+- `items.throwHeightM` 1.1: a throw flies this high above the road.
+- `items.throwArcM` 0.5: extra height of the first arc out of the hand.
+- `items.lobFlightS` 1.6: a lob reaches the leader in this, wherever they are.
+- `items.lobHeightM` 14: lob arc peak height.
+- `items.dropBehindM` 3.5: a dropped trap lands this far behind the user.
+- `items.trapLifeS` 45: a trap no one drives over pops after this.
+- `items.trapArmS` 0.6: a trap cannot hit its own layer for this long.
+- `items.trapRadiusM` 1.5: trap hit distance.
+- `items.meltRadiusM` 2.4: Melt puddle hit distance.
+- `items.maxTraps` 12: the oldest trap pops when one more is laid.
+- `items.mercyS` 2: after a screen effect ends, no screen effect lands on that kart for this.
+- `items.viewBudgetS` 3: at most this much blocked view per viewWindowS (a hit is trimmed to fit).
+- `items.viewWindowS` 10: the rolling window for viewBudgetS.
+- `items.mildBlockMul` 0.5: Pink and Freeze count this share of their time against the budget.
+- `items.minHitS` 0.4: a hit trimmed under this lands as mercy instead.
+- `items.effectInS` 0.2: screen effect IN (Gentle raises it to the rise floor).
+- `items.effectOutS` 0.4: screen effect OUT (Gentle raises it to the fade length).
+- `items.photosafeInS` 0.5: IN used when the flash limiter refuses the step (the effect still lands, softer).
+- `items.gentleFlashScale` 0.35: under Gentle a Flash is a corner card this share of the screen.
+- `items.gentleSpiralDim` 0.35: under Gentle a Spiral is a soft dim this deep.
+- `items.gentleBlurMul` 0.5: under Gentle every blur is this share.
+- `items.popShowS` 0.6: a pop stays in the item view this long for its burst.
+
+## ai (B1 bots, sim/ai.js and sim/racers.js)
+- `ai.playerSlot` 5: grid slot of the local player (0 = front); bots fill the rest.
+- `ai.difficulty` 1: index into difficultyMul (0 easy, 1 normal, 2 hard).
+- `ai.difficultyMul` [0.92, 1.0, 1.06]: bot top speed share per difficulty.
+- `ai.paceMul` [0.9, 0.92, 0.94, 0.96, 0.97, 0.98, 1.0]: per-bot top speed share (bot 1..7), times difficultyMul.
+- `ai.lookAheadS` 0.55: steering aim point this many seconds ahead at the bot's speed.
+- `ai.lookAheadMinM` 8: the aim point is never nearer than this.
+- `ai.steerGain` 2.2: stick = clamp(atan2(right, ahead) x gain).
+- `ai.lineSpreadM` 2.5: each bot keeps its own lateral line within +- this.
+- `ai.lineWanderM` 1.0: slow wander around that line.
+- `ai.lineWanderS` 7: wander period.
+- `ai.cornerCutM` 2.0: lateral pull toward the inside of a bend at full curvature.
+- `ai.openEdgeMarginM` 3.5: bots keep at least this inside an open edge.
+- `ai.driftCurveDegPerM` 0.5: heading change per metre over the look-ahead that starts a hop drift.
+- `ai.driftMinS` 0.9: a bot drift is held at least this (a tier 1 release).
+- `ai.rubberBehindM` 60: a bot this far behind the player runs rubberUpMul.
+- `ai.rubberAheadM` 40: a bot this far ahead of the player runs rubberDownMul (eased in between).
+- `ai.rubberUpMul` 1.08: top speed share when far behind.
+- `ai.rubberDownMul` 0.94: top speed share when far ahead.
+- `ai.launchChance` 0.35: chance a bot gets the launch boost at go.
+- `ai.avoidM` 10: look this far ahead for karts and traps to steer around.
+- `ai.avoidShiftM` 2.5: lateral shift used to go around one.
+- `ai.blindSteerNoise` 0.35: steering noise while a bot is under a view effect (mods.blind).
+- `ai.blindThrottle` 0.75: throttle share while blind.
+- `ai.itemUseChancePerS` 0.3: chance per second a bot uses a ready item (bots use items less often than people).
+- `ai.itemHoldMinS` 1.5: a bot holds a drawn item at least this.
+- `ai.itemCooldownS` 4: no bot item use for this after one.
+- `ai.itemDropChance` 0.5: chance a front bot drops a throw behind as a trap instead.
+- `ai.itemRangeM` 60: a bot throws only when its target is within this.
+- `ai.resultsWaitS` 10: after the player finishes, results wait at most this for the bots (the rest are placed by distance).
+- `ai.audibleKarts` 3: the nearest this many bot engines are heard.
+
+## contact (B1 kart contact and slipstream, sim/contact.js)
+- `contact.radiusM` 0.8: kart contact radius (two karts touch under 2x this).
+- `contact.maxHeightM` 1.5: karts further apart than this along the road normal never touch.
+- `contact.pushMps` 3.5: least sideways speed a touch gives.
+- `contact.pushPerDv` 0.5: extra sideways speed per m/s of closing speed.
+- `contact.maxPushMps` 7: cap on the sideways speed of one bump.
+- `contact.speedRefMps` 12: weight = 1 + speed / this (the faster kart moves less).
+- `contact.boostShoveMul` 1.6: a boosting kart weighs this much more.
+- `contact.stalledShoveMul` 1.6: a stalled kart weighs this much less (divides).
+- `contact.engineLoss` 0.03: engineV share both karts lose on a bump.
+- `contact.ghostS` 1.5: after go a kart is a ghost (no contact) this long; a rescue's own grace does the same.
+- `contact.cueMinDvMps` 1.5: a bump under this closing speed emits no bump event.
+- `contact.cooldownS` 0.25: one bump event per pair per this.
+- `contact.slipMinM` 2: the wake starts this far behind a kart.
+- `contact.slipMaxM` 14: the wake ends this far behind it.
+- `contact.slipWidthM` 1.6: the wake is this wide either side.
+- `contact.slipMinPct` 0.6: both karts above this speedPct.
+- `contact.slipChargeS` 0.8: time in the wake before the slingshot.
+- `contact.slipAmount` 0.1: slingshot boost size, share of top speed.
+- `contact.slipHoldS` 0.6: slingshot boost hold.
+- `contact.slipCooldownS` 2.5: no second slingshot for this.

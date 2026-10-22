@@ -355,3 +355,30 @@ Review PNGs are evidence only, not runtime inputs.
 
 Each family branch starts directly from the same main snapshot. When integrating families,
 append their distinct manifest rows and retain all family ART.md sections. The sampled palettes are identical.
+
+## fx: effect bubble icons (B1, lifted from DtRH)
+
+Source: our own DtRH art, `Resources/web/dtrh/assets/bubbles/effects/*.png` and `bubbles/bubble.png`
+(CCP originals, same rights as the DtRH tree). Copied into `art/fx/` and re-encoded as RGBA PNG at
+256 px or less with PIL (the sources are already 256 x 256, so no resize). Plain PNG, sRGB, straight
+alpha; NOT in `manifest.json` and not loaded by `render/art.js` (KTX2 only): the B1 lanes load them with
+a three.js `TextureLoader` (render) or as `<img>` (HUD). Each icon is a whole glass bubble with the
+effect drawn inside; `bubble.png` is the empty bubble.
+
+| Item id (sim/itemTable.js) | File | Notes |
+|---|---|---|
+| flash | flash.png | white star |
+| spiral | spiral.png | teal spiral |
+| brainDrain | braindrain.png | green static |
+| freeze | bambifreeze.png | snowflake |
+| blackout | blackout.png | black sphere |
+| pink | pinkfilter.png | pink level |
+| melt | melt.png | dripping drop |
+| shatter | prism.png | rainbow swirl |
+| surge | gold_droplet.png | gold drop |
+| glass | bubble.png | the empty bubble |
+| echo | glitch.png | broken copies |
+| golden | golden.png | gold dust spiral |
+| (later: Glitch, Lock, Subliminal, Video) | gifwash.png, htlink.png, lock.png, subliminal.png, video.png | unused in B1 |
+
+17 files, 1.2 MB together. The phone tier uses them as is (256 px).
