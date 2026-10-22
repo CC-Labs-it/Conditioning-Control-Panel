@@ -28,6 +28,14 @@ public partial class ConversationPage : UserControl
     public ConversationPage()
     {
         InitializeComponent();
+        // WPF ConversationPage ctor: the portrait's dust field. The canvas gates its own clock on
+        // effective visibility, reduced motion and the performance tier.
+        StageDust.StartLayers(new ConditioningControlPanel.Avalonia.Controls.AmbientFxConfig
+        {
+            Layers = ConditioningControlPanel.Avalonia.Controls.AmbientFxLayers.DustField,
+            Intensity = 0.8, DustDensity = 0.65,
+            Tint = global::Avalonia.Media.Color.FromRgb(244, 134, 211)
+        });
         Vm = new ConversationPageVm(() => Room?.HeroZone.ViewModel, () => Room?.EngineZone.DataContext as EngineRoomVm);
         Vm.Turns.CollectionChanged += TurnsChanged;
         Composer.AddHandler(KeyDownEvent, Composer_KeyDown, RoutingStrategies.Tunnel);
