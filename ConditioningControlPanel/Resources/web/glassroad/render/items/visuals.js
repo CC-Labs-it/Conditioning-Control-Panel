@@ -165,6 +165,9 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
     root.add(obj);
     return { obj, u: g.uniforms };
   }, (e) => { e.obj.visible = false; });
+  // one of each pooled look exists from boot so the warm links it (pass 4: the first echo copy froze Firefox ~55 s in)
+  for (const p of [puddles, waves, marks, shadows, copies]) p.prime(1);
+  boxes[0] = buildBox(0); boxes[0].visible = false;
 
   // ---- helpers ----
   function addMotes(x, y, z, R, id, n, seed, alpha = 1) {

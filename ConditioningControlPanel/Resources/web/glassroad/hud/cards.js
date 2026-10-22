@@ -9,8 +9,14 @@
  * Polish 1: the Controls card and the pause hint name the buttons of the device used last (hud/
  * labels.js); a pad without the standard mapping gets a layout button there. The menu doors and
  * the results wear the SVG kit when it has loaded (the `kit-*` classes on #card).
+ * Music road pass 4: the 1-2-3 how-to card (hud/howto.js) shows before the first race of a session (the Race
+ * door opens it, unless "Don't show again" is on) and from the menu's and the Controls card's How to play link.
+ * Throttle dismisses it (boot.js passes a throttle press as nav('throttle')), so the card teaches the launch;
+ * the Go button does the same for a tap or Enter. ?howto=0 skips it, and so does ?bot=1 unless ?howto=1.
+ * Options gains Steer assist (Light, Strong, Off; sim/assist.js); the old assist toggle reads Soft rails.
  */
 import { formatTime, ordinal, pauseLine, resultRows } from './format.js';
+import { howtoHtml } from './howto.js';
 import { cleanOptions, loadOptions, saveOptions, stepOption, cycleOption, choiceLabel, STEER_SENS } from './options.js';
 import { controlRows, deviceView, pauseHint } from './labels.js';
 import { PROFILES, nextProfile } from '../input/padmap.js';
@@ -46,13 +52,24 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (fill) fill.style.transform = 'scaleX(' + load.p.toFixed(3) + ')';
     if (bar) bar.setAttribute('aria-valuenow', String(Math.round(load.p * 100)));
   }
-  const stack = { options: null, controls: null };
+  const stack = { options: null, controls: null, howto: null };
+  // the how-to card: once a session before the first race, never in a dev bot run unless asked for
+  let howtoSeen = false, leaving = 0;
+  const howtoSkip = (() => {
+    try { const q = new URLSearchParams(doc.defaultView.location.search); return q.get('howto') === '0' || (q.get('bot') === '1' && q.get('howto') !== '1'); }
+    catch (e) { return false; }
+  })();
+  const howtoDue = () => !howtoSeen && !opts.howtoOff && !howtoSkip;
+  const BACKS = ['options', 'controls', 'howto'];
 
   function show(k, d = {}) {
     kind = k; data = d || {};
+    if (leaving) { clearTimeout(leaving); leaving = 0; }
+    body.classList.remove('out');
     card.hidden = !k;
     if (!k) return;
     card.dataset.kind = k;
+    card.classList.toggle('c-gentle', !!(host.gentle || opts.gentlePreview));
     body.classList.remove('in'); void body.offsetWidth; body.classList.add('in');
     go.hidden = !(k === 'start' || k === 'finish');
     extra.innerHTML = '';
@@ -75,7 +92,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
         btn('race', '<b>Race</b><em>You and 7 bots</em>', 'c-door hot') +
         btn('online', '<b>Online</b><em>Rooms and friends</em><span class="c-stamp">soon</span>', 'c-door soon', ' aria-disabled="true"') +
         '</div><div class="c-links">' + btn('options', 'Options', 'c-link') + btn('controls', 'Controls', 'c-link') +
-        btn('back', 'Back', 'c-link') + '</div>';
+        btn('howto', 'How to play', 'c-link') + btn('back', 'Back', 'c-link') + '</div>';
     } else if (k === 'pause') {
       title.textContent = 'Paused';
       note.textContent = pauseLine(data) || 'The race waits';
@@ -90,7 +107,11 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     } else if (k === 'controls') {
       title.textContent = 'Controls';
       note.hidden = true;
-      extra.innerHTML = '<div class="c-keyswrap">' + keysHtml() + '</div><div class="c-list">' + btn('back', 'Back', 'quiet') + '</div>';
+      extra.innerHTML = '<div class="c-keyswrap">' + keysHtml() + '</div><div class="c-list">' + btn('howto', 'How to play') + btn('back', 'Back', 'quiet') + '</div>';
+    } else if (k === 'howto') {
+      title.textContent = 'How to race';
+      note.hidden = true;
+      extra.innerHTML = '<div class="hw-wrap">' + howtoHtml(devices || {}, { off: opts.howtoOff }) + '</div>';
     } else if (k === 'results') {
       const me = data.me || {}, o = ordinal(me.place || 0);
       const flag = kit && kit.ok('flag-finish') ? '<img class="c-flag" src="' + kit.url('flag-finish') + '" alt="" draggable="false">' : '';
@@ -111,7 +132,9 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       btn('toggle', lock ? 'On' : on ? 'On' : 'Off', 'c-tog' + (on || lock ? ' on' : ''), ' data-key="' + key + '" aria-pressed="' + !!(on || lock) + '"' + (lock ? ' disabled' : '')) + '</div>';
     return '<div class="c-opts">' +
       tog('gentlePreview', 'Gentle preview', opts.gentlePreview, g ? 'Set in CCP, stays on' : 'Softer effects, no flicker', g) +
-      tog('assist', 'Steering assist', opts.assist, 'Soft rails keep you on', false) +
+      '<div class="c-opt"><span>Steer assist<small>Leans to the middle, drives hands off</small></span>' +
+        btn('cycle', choiceLabel('steerAssist', opts.steerAssist), 'c-tog', ' data-key="steerAssist" aria-label="Steer assist"') + '</div>' +
+      tog('assist', 'Soft rails', opts.assist, 'Open edges hold you in', false) +
       '<label class="c-opt"><span>Steering<small>How hard the wheel turns</small></span><input type="range" min="' + STEER_SENS.min + '" max="' +
         STEER_SENS.max + '" step="' + STEER_SENS.step + '" data-key="steerSens" value="' + opts.steerSens + '" aria-label="Steering"></label>' +
       VOL_ROWS.map(([key, label]) => '<label class="c-opt"><span>' + label + '</span><input type="range" min="0" max="1" step="0.05" data-key="' +
@@ -145,6 +168,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function refreshDevice() {
     if (card.hidden) return;
     if (kind === 'pause') { hint(); return; }
+    const hw = kind === 'howto' && extra.querySelector('.hw-wrap');
+    if (hw) { hw.innerHTML = howtoHtml(devices || {}, { off: opts.howtoOff }); focusFirst(); return; }
     const wrap = kind === 'controls' && extra.querySelector('.c-keyswrap');
     if (!wrap) return;
     const focusAct = wrap.contains(doc.activeElement) && doc.activeElement.dataset ? doc.activeElement.dataset.act : null;
@@ -178,6 +203,15 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       return;
     }
     if (a === 'cycle') { cycle(el, 1); return; }
+    if (a === 'race' && kind === 'menu' && howtoDue()) { openHowto({ then: 'race' }); return; }
+    if (a === 'howto') { openHowto({}); return; }
+    if (a === 'howto-go') { howtoGo(); return; }
+    if (a === 'howto-off') {
+      const on = !opts.howtoOff;
+      setOption('howtoOff', on);
+      el.classList.toggle('on', on); el.setAttribute('aria-pressed', String(on));
+      return;
+    }
     if (a === 'online') { note.textContent = 'Online opens later'; emit('online', {}); return; }
     if (a === 'layout') {
       const pad = devices && devices.pad;
@@ -190,8 +224,28 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       emit(a, { from: stack[a].kind });
       return;
     }
-    if (a === 'back' && (kind === 'options' || kind === 'controls')) { back(); return; }
+    if (a === 'back' && BACKS.includes(kind)) { back(); return; }
     emit(a, a === 'back' ? { from: kind } : {});
+  }
+
+  /** The how-to card over the card that opened it (then: 'race' starts the race when it is dismissed). */
+  function openHowto(d) {
+    stack.howto = { kind, data };
+    show('howto', { ...d, from: kind });
+    emit('howto', { from: stack.howto.kind });
+  }
+  /** Throttle or Go: the card leaves (its OUT), then the race starts or the opener comes back. */
+  function howtoGo() {
+    if (kind !== 'howto' || card.hidden || leaving) return;
+    howtoSeen = true;
+    const then = data.then, gentle = card.classList.contains('c-gentle');
+    body.classList.remove('in'); body.classList.add('out');
+    leaving = setTimeout(() => {
+      leaving = 0;                                   // show() takes the out class off the next card
+      if (kind !== 'howto') return;
+      if (then === 'race') { const prev = stack.howto; stack.howto = null; kind = prev ? prev.kind : 'menu'; emit('race', {}); }
+      else back();
+    }, gentle ? 320 : 200);
   }
 
   function cycle(el, dir) {
@@ -223,7 +277,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   /** Pad or arrow navigation on the visible card. */
   function nav(dir) {
     if (card.hidden) return;
-    if (dir === 'back') { if (kind === 'options' || kind === 'controls') back(); return; }
+    if (dir === 'throttle') { if (kind === 'howto') howtoGo(); return; }   // boot.js: a throttle press on a card
+    if (dir === 'back') { if (BACKS.includes(kind)) back(); return; }
     const list = focusables();
     if (!list.length) return;
     const cur = doc.activeElement, i = list.indexOf(cur);
@@ -246,7 +301,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   doc.addEventListener('keydown', (e) => {
     if (card.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
-    if (e.key === 'Escape') { if (kind === 'options' || kind === 'controls') back(); return; }   // never swallowed
+    if (e.key === 'Escape') { if (BACKS.includes(kind)) back(); return; }   // never swallowed
     if (kind === 'start') {
       if (e.repeat || e.key === 'Shift' || e.key === 'Tab' || e.key === 'CapsLock') return;
       e.preventDefault(); if (ready) emit('start', {}); return;

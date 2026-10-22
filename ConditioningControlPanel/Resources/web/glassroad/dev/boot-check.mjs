@@ -99,7 +99,7 @@ async function run(backend, httpPort) {
     await c.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, sid);
     await c.send('Emulation.setFocusEmulationEnabled', { enabled: true }, sid);
     const flag = backend === 'webgl2' ? '&renderer=webgl2' : '';
-    const query = CARDS ? '/?x=1' : '/?bot=1' + (FALL ? '&botFall=1' : '');
+    const query = CARDS ? '/?x=1&howto=0' : '/?bot=1' + (FALL ? '&botFall=1' : '');
     await c.send('Page.navigate', { url: 'http://127.0.0.1:' + httpPort + query + flag + FLAGS }, sid);
     const state = async () => {
       const r = await c.send('Runtime.evaluate', { expression: 'JSON.stringify(window.__glassroad ? { ...window.__glassroad, now: performance.now() } : null)', returnByValue: true }, sid);

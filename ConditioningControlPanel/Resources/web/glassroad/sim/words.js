@@ -1,8 +1,10 @@
 /* sim/words.js - the song's words in bubbles on the road (handoff-1022/MUSIC-ROAD-BRIEF.md section 4).
  *
- * Pure: no three.js, no DOM. EVERY SUNG WORD rides a bubble, the Racing Thoughts way (dtrh/race/wordBubbles.js,
- * the owner's picture: one word, one bubble, and the sentence is what a LINE of them spells down one lane).
- * scriptBubbles(song) builds the road's script once:
+ * Pure: no three.js, no DOM. Pass 4 (owner 2026-10-23, "way less bubbles to gather"): only the IMPACTFUL words
+ * ride a bubble now, the ones sim/wordPick.js pickWords marks BUBBLE, GATE or TRIGGER (about 20 moments on the
+ * pink-road chart); every other sung word is painted on the road (render/roadWords.js) and never collected.
+ * createWordRun(..., { pick }) takes another picker (tests and dev pass everyWord: every sung word a bubble,
+ * the pass 3 Racing Thoughts way). scriptBubbles(song) builds the road's script once from the picked words:
  *   - two words closer than mergeS share one bubble ("in a"); nothing is ever dropped;
  *   - a PHRASE is a run of speech with no gap over phraseGapS, cut on a clause's punctuation and at
  *     phraseMax bubbles; every bubble of one phrase sits in ONE lane, in a line;
@@ -26,6 +28,10 @@
  * fresh pass.
  */
 import { clamp, wrap } from '../core/math.js';
+import { pickWords, ROAD, BUBBLE, GATE, TRIGGER } from './wordPick.js';
+
+/** The pass 3 picker: every sung word a bubble (gate and trigger words keep their rows). Tests and dev. */
+export const everyWord = (song) => pickWords(song).map((k) => (k === ROAD ? BUBBLE : k));
 
 export const WORD_LOOK = Object.freeze({
   leadS: 2.6,          // a bubble shows this long before its word is sung
@@ -44,12 +50,12 @@ export const WORD_LOOK = Object.freeze({
   triggerRow: [-0.86, -0.43, 0, 0.43, 0.86],
   triggerMatchS: 0.2,  // a trigger's first word must start this close to the trigger
   minSpeedMps: 14,     // the aim never assumes a slower player (the countdown, a stall)
-  popSM: 1.6, popLatM: 1.6,
+  popSM: 1.6, popLatM: 1.9,   // popLatM: the bigger pass 4 bubble is taken anywhere on its face
   missBehindM: 3,      // passed by this much: missed
   missAfterS: 1.5,     // or this long after the word ended
   keepS: 1.2,          // popped and missed views stay this long for their OUT
   edgeMarginM: 2.4,    // lateral room kept clear of the rails
-  heightM: 1.1,
+  heightM: 1.6,        // pass 4 bubbles are bigger (render/wordBubblesMath.js sizeM): the centre rides higher
   loopBackS: 1,        // tS this much below the last read is a loop, not jitter
 });
 
@@ -71,29 +77,38 @@ export function hash01(seed, i) {
  * `line` is the phrase index (a row is a line of its own), `gapS` the silence before a line's first bubble,
  * `last` marks a line's final bubble.
  */
-export function scriptBubbles(song, L = WORD_LOOK) {
-  const words = ((song && song.words) || []).filter((w) => w && faceOf(w.w));
+export function scriptBubbles(song, L = WORD_LOOK, pick = pickWords) {
+  const all = (song && song.words) || [], kinds = pick(song);
+  // the picked words only (a ROAD word is painted on the road, not here), each with its kind
+  const words = [], kind = [];
+  for (let i = 0; i < all.length; i++) {
+    const w = all[i];
+    if (!w || !faceOf(w.w) || !kinds[i]) continue;
+    words.push(w); kind.push(kinds[i]);
+  }
   const trig = ((song && song.triggers) || []).filter((t) => t.kind === 'word' && t.w);
   const out = [];
-  let ti = 0;
   for (let k = 0; k < words.length; k++) {
     const w = words[k];
-    // a trigger phrase: the words it names, from the one sung on the trigger, become one row
-    while (ti < trig.length && trig[ti].startS < w.startS - L.triggerMatchS) ti++;
-    const t = trig[ti];
-    if (t && Math.abs(t.startS - w.startS) <= L.triggerMatchS) {
-      const n = Math.max(1, Math.min(words.length - k, String(t.w).trim().split(/\s+/).length));
+    // a trigger phrase: its run of TRIGGER words (as many as the phrase names) becomes one row wearing the phrase
+    if (kind[k] === TRIGGER) {
+      let t = null;
+      for (const x of trig) if (Math.abs(x.startS - w.startS) <= L.triggerMatchS && (!t || Math.abs(x.startS - w.startS) < Math.abs(t.startS - w.startS))) t = x;
+      const named = t ? String(t.w).trim().split(/\s+/).length : ROW_MAX;
+      let n = 1;
+      while (n < named && k + n < words.length && kind[k + n] === TRIGGER) n++;
       const end = words[k + n - 1];
-      out.push({ w: faceOf(t.w), startS: w.startS, endS: Math.max(end.endS, w.startS), row: 5, n: 1, cut: true });
-      k += n - 1; ti++;
+      out.push({ w: t ? faceOf(t.w) : words.slice(k, k + n).map((x) => faceOf(x.w)).join(' '), startS: w.startS, endS: Math.max(end.endS, w.startS), row: 5, n: 1, cut: true });
+      k += n - 1;
       continue;
     }
+    const gate = kind[k] === GATE;
     const last = out[out.length - 1];
-    if (last && !last.row && !w.gate && !last.cut && last.n < 2 && w.startS - last.startS < L.mergeS) {
+    if (last && !last.row && !gate && !last.cut && last.n < 2 && w.startS - last.startS < L.mergeS) {
       last.w += ' ' + faceOf(w.w); last.n = 2; last.endS = Math.max(last.endS, w.endS); last.cut = CUT.test(w.w);
       continue;
     }
-    out.push({ w: faceOf(w.w), startS: w.startS, endS: Math.max(w.endS, w.startS), row: w.gate ? 3 : 0, n: 1, cut: CUT.test(w.w) || !!w.gate });
+    out.push({ w: faceOf(w.w), startS: w.startS, endS: Math.max(w.endS, w.startS), row: gate ? 3 : 0, n: 1, cut: CUT.test(w.w) || gate });
   }
   // phrases: a row is a line on its own; otherwise a gap, a cut or a full line starts the next
   let line = -1, count = 0, prevEnd = -Infinity, prevCut = true;
@@ -136,9 +151,9 @@ const signed = (d, lapM) => { const x = wrap(d, lapM); return x > lapM / 2 ? x -
  *   pops: number, shown: number, total: number, streak: number, best: number, lines: number,
  *   reset(seed?: number): void, onPop(fn: Function): () => void, words: object[] }}
  */
-export function createWordRun(song, track, { seed = 1, look = WORD_LOOK } = {}) {
+export function createWordRun(song, track, { seed = 1, look = WORD_LOOK, pick = pickWords } = {}) {
   const L = look, lapM = track.lengthM;
-  const picked = scriptBubbles(song, L);
+  const picked = scriptBubbles(song, L, pick);
   const fr = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0], w: 14 };
   let shares = laneShares(picked, seed, L);
   const rowOf = (b) => (b.row === 5 ? L.triggerRow : b.row === 3 ? L.gateRow : null);

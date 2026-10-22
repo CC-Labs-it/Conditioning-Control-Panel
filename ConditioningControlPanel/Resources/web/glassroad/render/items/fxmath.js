@@ -165,7 +165,8 @@ export function impactSeen(dx, dy, dz, fx, fy, fz, { maxM = ITEM_LOOK.impactAskM
 
 /**
  * A per-frame pool over a fixed cap: begin(), then take() per thing drawn (null when the cap is met),
- * end() hides every object not taken this frame. make(i) builds one; hide(obj) parks it.
+ * end() hides every object not taken this frame. make(i) builds one; hide(obj) parks it. prime(n) builds the first n
+ * up front and parks them, so the boot warm links their programs (Firefox links serially: a first make() mid-race froze it).
  */
 export function createPool(cap, make, hide) {
   const items = [];
@@ -180,6 +181,7 @@ export function createPool(cap, make, hide) {
     },
     end() { for (let i = used; i < items.length; i++) hide(items[i]); },
     each(fn) { items.forEach(fn); },
+    prime(n = 1) { while (items.length < Math.min(n, cap)) { const e = make(items.length); items.push(e); hide(e); } return this; },
   };
 }
 

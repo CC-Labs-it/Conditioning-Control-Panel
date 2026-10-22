@@ -1,0 +1,394 @@
+/* render/roadWords.js - the song's ROAD words painted on the track as road markings (pass 4, sim/roadWords.js).
+ *
+ * One draw: a pooled mesh of marking strips that follow the road surface (each strip is ROWS rows down the road
+ * from track.frameAt, so it rides every crest and bank), 3.5 cm over the glass with a polygon offset, under the
+ * karts (depth tested, never written). The letters come from a canvas atlas built ONCE per song, after the fonts
+ * loaded (render/fonts.js), a few markings per frame so the build never stalls a frame, then uploaded once. The
+ * atlas carries three masks per marking, measured and drawn with the same face and weight: R the fill, G a soft
+ * glow, B the contour (thick ink with a clear core and a soft edge, no plate). The letters are drawn upright in the
+ * atlas and stretched along the road (lenM of road per atlas row, STRETCH times longer than wide), the road
+ * marking way, so they read at a grazing angle from the chase camera. Looks per music mode, the IN wipe, the
+ * karaoke light, the drop lift, the glitch slide and the shatter shards are render/roadWordsMath.js plus the
+ * shader below; the per-marking state rides vertex attributes, the music frame rides uniforms, so nothing here
+ * ever builds a new program mid-race (the mesh sits in the scene from boot and the warm links it).
+ * Gentle: no glitch, no kick pulse, slower IN and light (roadWordsMath); the drop boost asks photosafe once.
+ */
+import { Mesh, BufferGeometry, BufferAttribute, DynamicDrawUsage, MeshBasicNodeMaterial, DoubleSide, CanvasTexture, NoColorSpace,
+  CustomBlending, OneFactor, OneMinusSrcAlphaFactor, Vector4 } from 'three/webgpu';
+import { attribute, uniform, texture, vec2, vec3, float, floor, fract, hash, mix, smoothstep, clamp, exp, step, max, min, length, positionLocal, normalLocal, uniformArray, int } from 'three/tsl';
+import { wrap } from '../core/math.js';
+import { S } from '../sim/state.js';
+import { createRoadRun, ROAD_LOOK } from '../sim/roadWords.js';
+import { FACES } from './fonts.js';
+import { Q } from './quality.js';
+import { STYLES, STYLE, phraseStyle, paintText, packAtlas, markLook, frameLook } from './roadWordsMath.js';
+
+export const ROAD_PAINT = Object.freeze({
+  atlasW: 2048, atlasH: 4096,      // one sheet per song; the phone tier holds half (atlasPhoneH); rows shrink to fit
+  atlasPhoneH: 2048,
+  rowPx: [128, 112, 96, 84, 72],   // atlas row heights tried in order
+  padPx: 0.16,                     // glow room round each marking (share of the row)
+  stretch: 2.6,                    // letters this many times longer along the road than drawn
+  slots: 40,                       // markings on the road at once
+  rows: 8,                         // strip rows down one marking (it follows crests and banks)
+  liftM: 0.035,                    // over the glass (with the polygon offset: never z-fighting)
+  buildMs: 3,                      // atlas drawing budget per frame
+  glowPx: 0.14,                    // the glow blur (share of the row)
+  ringN: 16,                       // offset fills that draw the contour
+  shardM: 1.15,                    // shatter shard size (metres of road)
+  shardSlideM: 0.32,               // how far a shard slides at full shatter
+  stencilAt: [0.47, 0.535],        // the stencil gap across the letters (share of the row height)
+  glowCover: 0.12,                 // how much of the glow covers the road (the rest is added light)
+});
+
+const VERTS = (ROAD_PAINT.rows + 1) * 2, LOOK_VEC4 = 5;
+
+/** The atlas: every marking of the song drawn once, a few per frame. */
+function createAtlas(P = ROAD_PAINT) {
+  const H = Q.name === 'phone' ? P.atlasPhoneH : P.atlasH;
+  const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+  if (canvas) { canvas.width = P.atlasW; canvas.height = H; }
+  const ctx = canvas ? canvas.getContext('2d') : null;
+  if (ctx) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, P.atlasW, H); }
+  const tex = new CanvasTexture(canvas || { width: 1, height: 1 });
+  tex.colorSpace = NoColorSpace;          // masks, not colours
+  tex.anisotropy = 8;                     // the grazing angle needs it
+  let job = null;
+  const metrics = new Map();
+
+  /** px metrics of one look at one font size: the baseline offset that centres caps (and x-height) in a row. */
+  function metricOf(st, px) {
+    const k = st.face + '|' + st.weight + '|' + px;
+    let m = metrics.get(k);
+    if (!m) {
+      ctx.font = FACES[st.face].css(px, st.weight);
+      const h = ctx.measureText('H'), g = ctx.measureText('g');
+      const asc = h.actualBoundingBoxAscent || px * 0.7, desc = st.upper ? 0 : (g.actualBoundingBoxDescent || px * 0.2) * 0.6;
+      m = { base: (asc - desc) / 2 }; metrics.set(k, m);
+    }
+    return m;
+  }
+
+  function font(st, px, c2 = ctx) {
+    c2.font = FACES[st.face].css(px, st.weight);
+    if ('letterSpacing' in c2) c2.letterSpacing = Math.round(st.spacing * px) + 'px';
+  }
+  // the glow is blurred in a TALL scratch (the marking's road proportions) and squashed into its row, so it is
+  // as soft along the road as across it; blurred in the row itself it smeared 2.6 times longer toward the camera
+  let tall = null, tctx = null;
+  function tallOf(w, h) {
+    if (!tall) { tall = document.createElement('canvas'); tctx = tall.getContext('2d'); }
+    if (tall.width < w || tall.height < h) { tall.width = Math.max(tall.width, w); tall.height = Math.max(tall.height, h); }
+    return tctx;
+  }
+
+  /**
+   * Plans the song's sheet: items [{ key, text, style }] -> { cells: Map key -> { u0, v0, u1, v1, wPx }, rowPx } and
+   * starts drawing. maxInkM is the widest marking (metres), lenM the marking length (metres per row).
+   */
+  function plan(items, maxInkM, lenM) {
+    if (!ctx) return null;
+    for (const rowPx of P.rowPx) {
+      const latMPerPx = lenM / rowPx / P.stretch, maxInk = Math.floor(maxInkM / latMPerPx), pad = Math.round(rowPx * P.padPx);
+      const widths = items.map((it) => {
+        const st = STYLES[it.style], px = Math.round(rowPx * st.em);
+        font(st, px);
+        const w = ctx.measureText(it.text).width;
+        it.squeeze = w > maxInk ? maxInk / w : 1;
+        it.inkPx = Math.min(w, maxInk);
+        it.px = px;
+        return Math.ceil(it.inkPx + pad * 2);
+      });
+      const pk = packAtlas(widths, P.atlasW, rowPx, H);
+      if (!pk) continue;
+      const cells = new Map();
+      items.forEach((it, i) => {
+        const x = pk.x[i], y = pk.y[i], w = widths[i];
+        // flipY: canvas top is v 1; the text's top (far end of the marking) gets the larger v
+        cells.set(it.key, { u0: x / P.atlasW, u1: (x + w) / P.atlasW, v0: 1 - (y + rowPx) / H, v1: 1 - y / H,
+          wM: w * latMPerPx, x, y, w });
+      });
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, P.atlasW, H);
+      job = { items, cells, rowPx, pad, next: 0 };
+      return { cells, rowPx };
+    }
+    return null;
+  }
+
+  function drawOne(it) {
+    const { cells, rowPx } = job, c = cells.get(it.key), st = STYLES[it.style], k = P.stretch;
+    const base = metricOf(st, it.px).base, cx = c.x + c.w / 2, cy = c.y + rowPx / 2 + base;
+    // G: the glow, a shadow only (the text is drawn far off and clipped away), in the tall scratch
+    const th = Math.ceil(rowPx * k), t2 = tallOf(c.w, th), OFF = 8192;
+    t2.setTransform(1, 0, 0, 1, 0, 0);
+    t2.globalCompositeOperation = 'source-over';
+    t2.clearRect(0, 0, c.w, th);
+    t2.save();
+    t2.beginPath(); t2.rect(0, 0, c.w, th); t2.clip();
+    font(st, it.px, t2);
+    t2.textAlign = 'center'; t2.textBaseline = 'alphabetic';
+    t2.shadowColor = 'rgb(0,255,0)'; t2.shadowBlur = Math.max(4, rowPx * P.glowPx); t2.shadowOffsetX = OFF;
+    t2.setTransform(it.squeeze, 0, 0, k, c.w / 2 - OFF, (rowPx / 2 + base) * k);
+    t2.fillStyle = 'rgb(0,255,0)'; t2.fillText(it.text, 0, 0);
+    t2.restore();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(c.x, c.y, c.w, rowPx); ctx.clip();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(tall, 0, 0, c.w, th, c.x, c.y, c.w, rowPx);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    font(st, it.px);
+    // B: the contour, a ring of offset fills that is round ON THE ROAD (k times thinner along the row's height)
+    const r = Math.max(1.5, it.px * st.stroke);
+    ctx.fillStyle = 'rgb(0,0,255)';
+    for (let i = 0; i < P.ringN; i++) {
+      const a = (i / P.ringN) * Math.PI * 2;
+      ctx.setTransform(it.squeeze, 0, 0, 1, cx + Math.cos(a) * r, cy + Math.sin(a) * r / k);
+      ctx.fillText(it.text, 0, 0);
+    }
+    ctx.setTransform(it.squeeze, 0, 0, 1, cx, cy);
+    ctx.fillText(it.text, 0, 0);
+    // R: the fill
+    ctx.fillStyle = 'rgb(255,0,0)'; ctx.fillText(it.text, 0, 0);
+    ctx.restore();
+  }
+
+  return {
+    texture: tex, plan, canvas,
+    get ready() { return !!job && job.next >= job.items.length; },
+    /** Draws markings until the frame budget is spent; uploads the sheet once when the last one is in. */
+    step(budgetMs) {
+      if (!job || job.next >= job.items.length) return false;
+      const t0 = performance.now();
+      while (job.next < job.items.length && performance.now() - t0 < budgetMs) drawOne(job.items[job.next++]);
+      if (job.next >= job.items.length) { tex.needsUpdate = true; return true; }
+      return false;
+    },
+    dispose() { tex.dispose(); },
+  };
+}
+
+/** The pooled marking mesh and its shader. */
+function createPaint(atlasTex, P = ROAD_PAINT) {
+  const n = P.slots, V = VERTS;
+  const buf = (k) => new BufferAttribute(new Float32Array(n * V * k), k).setUsage(DynamicDrawUsage);
+  // six vertex buffers (WebGPU allows eight per pipeline): the per-look constants live in a uniform array
+  // indexed by the look id riding aLoc.z, never in attributes
+  const a = { position: buf(3), normal: buf(3), aLoc: buf(4), aRect: buf(4), aGeo: buf(4), aState: buf(4) };
+  const g = new BufferGeometry();
+  for (const k in a) g.setAttribute(k, a[k]);
+  const idx = new Uint16Array(n * P.rows * 6);
+  for (let s = 0, o = 0; s < n; s++) for (let r = 0; r < P.rows; r++) {
+    const b = s * V + r * 2;
+    idx[o++] = b; idx[o++] = b + 1; idx[o++] = b + 3; idx[o++] = b; idx[o++] = b + 3; idx[o++] = b + 2;
+  }
+  g.setIndex(new BufferAttribute(idx, 1));
+  for (let s = 0; s < n; s++) for (let v = 0; v < V; v++) { a.aLoc.array[(s * V + v) * 4] = v & 1; a.aLoc.array[(s * V + v) * 4 + 1] = (v >> 1) / P.rows; }
+
+  const u = { kartS: uniform(0), lapM: uniform(1000), wave: uniform(0), waveD: uniform(0), pulse: uniform(0), glitch: uniform(0),
+    glow: uniform(0.5), shatter: uniform(0), beat: uniform(0), time: uniform(0), calm: uniform(0), sweep: uniform(0) };
+  const loc = attribute('aLoc', 'vec4'), rect = attribute('aRect', 'vec4'), geo = attribute('aGeo', 'vec4');
+  const st = attribute('aState', 'vec4');
+  // per look, LOOK_VEC4 vec4s: ink (rgb, alpha), edge, glow, fx (stencil, wear, kick, glitch), fx2 (energy, gloss)
+  const looks = uniformArray(STYLES.flatMap((x) => [new Vector4(...x.ink, x.inkA), new Vector4(...x.edge, x.edgeA),
+    new Vector4(...x.glow, x.glowA), new Vector4(x.stencil, x.wear, x.kick, x.glitch), new Vector4(x.energy, x.gloss, 0, 0)]), 'vec4');
+  const li = int(loc.z.add(0.5)).mul(LOOK_VEC4);
+  const ink = looks.element(li), edgeC = looks.element(li.add(1)), glowC = looks.element(li.add(2));
+  const fx = looks.element(li.add(3)), fx2 = looks.element(li.add(4));
+  // geo: x width m, y length m, z road s, w seed
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -6,
+    blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor, blendSrcAlpha: OneFactor, blendDstAlpha: OneMinusSrcAlphaFactor });
+  // vertex: the karaoke lift plus the drop wave, which lifts the letters as it runs down the road to the kart
+  const dAhead = fract(geo.z.sub(u.kartS).div(u.lapM).add(0.5)).sub(0.5).mul(u.lapM);
+  const waveLift = exp(dAhead.sub(u.waveD).div(9).pow(2).negate()).mul(u.wave).mul(0.42);
+  m.positionNode = positionLocal.add(normalLocal.mul(st.w.add(waveLift)));
+
+  // the glitch: slices across the marking slide sideways on the beat (the helix), a move and never a strobe
+  const slice = floor(loc.y.mul(4));
+  const gx = hash(slice.add(u.beat.mul(7.13)).add(geo.w.mul(31))).sub(0.5).mul(u.glitch).mul(fx.w).div(max(geo.x, 0.5));
+  // the shatter: shards fixed to the marking, each sliding off a little and turning its hue
+  const lm = vec2(loc.x.mul(geo.x), loc.y.mul(geo.y)).div(P.shardM), ci = floor(lm), cf = fract(lm);
+  let F1 = float(9), F2 = float(9), sid = float(0), sid2 = float(0);
+  for (let ox = -1; ox <= 1; ox++) for (let oy = -1; oy <= 1; oy++) {
+    const cid = ci.add(vec2(ox, oy));
+    const h1 = hash(cid.x.add(cid.y.mul(57.3)).add(geo.w.mul(13))), h2 = hash(cid.x.mul(11.7).add(cid.y.mul(23.1)).add(3.7));
+    const d = length(vec2(ox, oy).add(vec2(h1, h2)).sub(cf));
+    F2 = min(F2, max(F1, d));
+    const nearer = step(d, F1);
+    sid = mix(sid, h1, nearer); sid2 = mix(sid2, h2, nearer); F1 = min(F1, d);
+  }
+  const sh = u.shatter;
+  const slide = vec2(sid.sub(0.5).div(max(geo.x, 0.5)), sid2.sub(0.5).div(max(geo.y, 0.5))).mul(sh).mul(P.shardSlideM * 2);
+  const lx = loc.x.add(gx).add(slide.x), ly = loc.y.add(slide.y);
+  const tuv = vec2(mix(rect.x, rect.z, clamp(lx, 0.002, 0.998)), mix(rect.y, rect.w, clamp(ly, 0.002, 0.998)));
+  const tx = texture(atlasTex, tuv);
+  const inBox = step(0, lx).mul(step(lx, 1)).mul(step(0, ly)).mul(step(ly, 1));
+  // the stencil gap and the worn thermoplastic grain
+  const gap = smoothstep(P.stencilAt[0] - 0.012, P.stencilAt[0], loc.y).mul(float(1).sub(smoothstep(P.stencilAt[1], P.stencilAt[1] + 0.012, loc.y))).mul(fx.x);
+  const grain = hash(floor(loc.x.mul(geo.x).mul(9)).add(floor(loc.y.mul(geo.y).mul(5)).mul(91.7)).add(geo.w));
+  const worn = step(0.8, grain).mul(fx.y).mul(0.75);
+  const crack = float(1).sub(smoothstep(0.03, 0.09, F2.sub(F1))).mul(sh);
+  const fill = tx.r.mul(inBox).mul(float(1).sub(gap)).mul(float(1).sub(worn)).mul(float(1).sub(crack));
+  const edge = tx.b.mul(inBox).mul(float(1).sub(tx.r));
+  const glowM = tx.g.mul(inBox);
+  // IN: the paint wipes in from a glow line, near end to far
+  const inK = st.y;
+  const reveal = float(1).sub(smoothstep(inK.sub(0.05), inK, loc.y));
+  const frontLine = exp(loc.y.sub(inK).div(0.045).pow(2).negate()).mul(float(1).sub(smoothstep(0.82, 1, inK))).mul(smoothstep(0, 0.06, inK));
+  // the karaoke light: the paint burns brighter and warmer on its word, the glow swells
+  const sung = st.z;
+  const bright = float(1).add(u.pulse.mul(fx.z)).add(sung.mul(0.65));
+  // the gloss: a slow diagonal light running over the letters (the song clock; Gentle runs it slower)
+  const sweepAt = fract(u.time.mul(u.sweep).add(geo.w)).mul(2.4).sub(0.7);
+  const gloss = exp(loc.x.mul(0.5).add(loc.y).sub(sweepAt).div(0.09).pow(2).negate()).mul(fx2.y).mul(0.9);
+  const hot = vec3(1.7, 1.5, 1.45);
+  // the shard hue: every shard takes a hue of its own between pink, cyan and gold (the road shatter's colours)
+  const tint = mix(mix(vec3(1.25, 0.42, 0.95), vec3(0.42, 0.95, 1.25), sid2), vec3(1.25, 0.95, 0.4), step(0.72, sid));
+  const turn = sh.mul(0.75);
+  const inkCol0 = mix(ink.xyz, ink.xyz.mul(tint), turn);
+  const inkCol = mix(inkCol0.mul(bright), hot, sung.mul(0.45)).add(vec3(1.2, 1.1, 1.15).mul(gloss));
+  const glowCol = mix(glowC.xyz, tint, turn).mul(float(1).add(sung.mul(0.5)));
+  // premultiplied: the fill and the contour cover the road, the glow and the wipe line mostly ADD light (a dark
+  // halo over the bright glass read as a shadow), so a neon marking glows and the bloom pass picks up its core
+  const fA = fill.mul(ink.w).mul(reveal);
+  const eA = edge.mul(edgeC.w).mul(reveal).mul(float(1).sub(fA));
+  const gL = glowM.mul(glowC.w).mul(mix(float(0.7), u.glow, fx2.x)).mul(mix(float(1), float(1.8), sung)).mul(reveal).mul(float(1).sub(fA)).mul(float(1).sub(edge.mul(0.6)));
+  const lA = frontLine.mul(0.9);
+  const crackL = crack.mul(tx.b).mul(0.9);
+  const lit = inkCol.mul(fA).add(edgeC.xyz.mul(eA)).add(glowCol.mul(gL)).add(vec3(1.6, 1.25, 1.5).mul(lA)).add(glowCol.mul(1.3).mul(crackL));
+  const cover = clamp(fA.add(eA).add(gL.mul(P.glowCover)).add(lA.mul(0.3)), 0, 1);
+  m.colorNode = lit.mul(st.x);
+  m.opacityNode = cover.mul(st.x);
+  const mesh = new Mesh(g, m);
+  mesh.frustumCulled = false; mesh.renderOrder = 1; mesh.castShadow = false; mesh.receiveShadow = false;
+  mesh.visible = false;
+  mesh.name = 'road-words';
+  return { mesh, a, u, dispose() { g.dispose(); m.dispose(); } };
+}
+
+/**
+ * @param scene the world scene
+ * @param opts { track, feel (speed.topMps), photosafe (the drop boost asks it once per drop) }
+ * @returns {{ object, update(song, songS, kart, mf, ctx): void, clear(): void, dispose(): void, stats(): object }}
+ */
+export function createRoadWords(scene, { track, feel = null, photosafe = null } = {}) {
+  const P = ROAD_PAINT, R = ROAD_LOOK, V = VERTS;
+  const atlas = createAtlas(P), paint = createPaint(atlas.texture, P);
+  scene.add(paint.mesh);
+  const { a, u } = paint;
+  u.lapM.value = track.lengthM;
+  let song = null, run = null, cells = null, styleOf = null, keyOf = null, ready = false, rowPx = 0;
+  const slotOf = new Map(), slotId = new Int32Array(P.slots).fill(-1), slotS = new Float64Array(P.slots), seen = new Uint8Array(P.slots);
+  const fr = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0], w: 14 };
+  const player = { s: 0, lat: 0, speedMps: 0 }, look = {}, fl = {};
+  let dropIdx = -1, dropOk = false, staticDirty = false;
+
+  /** A new song: its run, a look per phrase and the atlas plan (drawn over the next frames). */
+  function setSong(s) {
+    song = s; run = null; cells = null; ready = false; clear();
+    if (!s.words || !s.words.length) return;
+    run = createRoadRun(s, track);
+    const sc = run.script;
+    styleOf = new Uint8Array(sc.length); keyOf = new Array(sc.length);
+    let ph = -1, sty = STYLE.STENCIL;
+    const items = new Map();
+    for (const e of sc) {
+      if (e.phrase !== ph) { ph = e.phrase; sty = phraseStyle(s, e.startS, ph); }
+      const st = STYLES[sty], text = paintText(e.text, sty);
+      const key = st.face + '|' + st.weight + '|' + st.em + '|' + st.spacing + '|' + st.stroke + '|' + text;
+      styleOf[e.i] = sty; keyOf[e.i] = key;
+      if (!items.has(key)) items.set(key, { key, text, style: sty });
+    }
+    const pl = atlas.plan([...items.values()], R.maxWidthM, R.lenM);
+    if (!pl) { run = null; console.warn('[glassroad/roadWords] the script does not fit the atlas'); return; }
+    cells = pl.cells; rowPx = pl.rowPx;
+  }
+
+  function writeStatic(slot, id) {
+    const sty = styleOf[id], c = cells.get(keyOf[id]);
+    for (let v = 0; v < V; v++) {
+      const i = (slot * V + v) * 4;
+      a.aRect.array[i] = c.u0; a.aRect.array[i + 1] = c.v0; a.aRect.array[i + 2] = c.u1; a.aRect.array[i + 3] = c.v1;
+      a.aLoc.array[i + 2] = sty;
+    }
+  }
+
+  /** The strip of one marking on the road: ROWS rows from track frames, lateral x, centred on s. */
+  function writeStrip(slot, view) {
+    const c = cells.get(keyOf[view.id]), wM = c.wM, lenM = R.lenM, lap = track.lengthM;
+    const P3 = a.position.array, N3 = a.normal.array, G4 = a.aGeo.array, seed = (view.id * 0.618034) % 1;
+    for (let r = 0; r <= P.rows; r++) {
+      const s = wrap(view.s - lenM / 2 + (lenM * r) / P.rows, lap);
+      track.frameAt(s, fr);
+      for (let side = 0; side < 2; side++) {
+        const x = view.x + (side ? wM / 2 : -wM / 2), v = slot * V + r * 2 + side;
+        for (let j = 0; j < 3; j++) { P3[v * 3 + j] = fr.p[j] + fr.b[j] * x + fr.n[j] * P.liftM; N3[v * 3 + j] = fr.n[j]; }
+        G4[v * 4] = wM; G4[v * 4 + 1] = lenM; G4[v * 4 + 2] = s; G4[v * 4 + 3] = seed;
+      }
+    }
+    slotS[slot] = view.s;
+  }
+
+  function freeSlot(slot) {
+    slotOf.delete(slotId[slot]); slotId[slot] = -1;
+    for (let v = 0; v < V; v++) a.aState.array[(slot * V + v) * 4] = 0;
+  }
+
+  function update(s, tS, kart, mf, { gentle = false, paused = false } = {}) {
+    // a new song plans its atlas; no song (the menu, between races) only hides the paint: the atlas is kept
+    if (s && s !== song) setSong(s);
+    if (!s) { if (paint.mesh.visible) clear(); return; }
+    if (run && !ready) {
+      atlas.step(P.buildMs);
+      ready = atlas.ready;
+    }
+    if (!run || !ready || !kart || !Number.isFinite(tS)) { if (paint.mesh.visible) clear(); return; }
+    player.s = kart[S.s] || 0; player.lat = kart[S.lateral] || 0;
+    player.speedMps = Math.max(0, kart[S.speedPct] || 0) * (feel ? feel.get('speed.topMps') : 40);
+    const live = run.update(tS, player);
+    seen.fill(0);
+    let geoDirty = false;
+    for (const v of live) {
+      let slot = slotOf.get(v.id);
+      if (slot === undefined) {
+        slot = slotId.indexOf(-1);
+        if (slot < 0) continue;              // the pool is full: this one waits
+        slotId[slot] = v.id; slotOf.set(v.id, slot);
+        writeStatic(slot, v.id); writeStrip(slot, v); staticDirty = geoDirty = true;
+      } else if (slotS[slot] !== v.s) { writeStrip(slot, v); geoDirty = true; }
+      seen[slot] = 1;
+      markLook(v, { gentle }, look);
+      for (let k = 0; k < V; k++) {
+        const i = (slot * V + k) * 4;
+        a.aState.array[i] = look.alpha; a.aState.array[i + 1] = look.inK; a.aState.array[i + 2] = look.sung; a.aState.array[i + 3] = look.liftM;
+      }
+    }
+    for (let sl = 0; sl < P.slots; sl++) if (!seen[sl] && slotId[sl] >= 0) freeSlot(sl);
+    // the drop boost asks photosafe once per drop (the event index keys the grant, never a timer)
+    if (mf && mf.waveIdx !== dropIdx) { dropIdx = mf.waveIdx; dropOk = dropIdx >= 0 && !gentle && (!photosafe || photosafe.request('road-words-drop')); }
+    frameLook(mf, { gentle, dropOk: dropOk && !gentle }, fl);
+    u.kartS.value = player.s; u.wave.value = fl.wave; u.waveD.value = fl.waveD; u.pulse.value = fl.pulse;
+    u.glitch.value = paused ? u.glitch.value : fl.glitch; u.glow.value = fl.glow; u.shatter.value = fl.shatter; u.beat.value = fl.beat;
+    u.time.value = tS; u.calm.value = fl.calm; u.sweep.value = gentle ? 0.12 : 0.3;
+    a.aState.needsUpdate = true;
+    if (geoDirty) { a.position.needsUpdate = a.normal.needsUpdate = a.aGeo.needsUpdate = true; }
+    if (staticDirty) { a.aRect.needsUpdate = a.aLoc.needsUpdate = true; staticDirty = false; }
+    paint.mesh.visible = live.length > 0;
+  }
+
+  /** Every marking off the road (a restart; the same song's atlas is kept). */
+  function clear() {
+    for (let sl = 0; sl < P.slots; sl++) if (slotId[sl] >= 0) freeSlot(sl);
+    a.aState.needsUpdate = true;
+    if (run) run.reset();
+    paint.mesh.visible = false;
+    dropIdx = -1; dropOk = false;
+  }
+
+  return {
+    object: paint.mesh, update, clear, _dev: { canvas: atlas.canvas },
+    stats() { return { ready, markings: run ? run.total : 0, live: slotOf.size, shown: run ? run.shown : 0, rowPx }; },
+    dispose() { scene.remove(paint.mesh); paint.dispose(); atlas.dispose(); },
+  };
+}

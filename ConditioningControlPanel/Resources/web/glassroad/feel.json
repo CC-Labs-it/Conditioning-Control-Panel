@@ -24,6 +24,11 @@
     "slipCostDriftPerDegS": 0.0035
   },
   "input": { "keyStart": 0.12, "keyRampS": 0.4, "keyRampPow": 1.6, "stickPow": 2, "touchPow": 1.8 },
+  "assist": {
+    "inputDead": 0.04, "pullFromHalf": 0.33, "pull": 0.28, "align": 0.5, "alignLeadS": 0.35, "max": 0.3,
+    "autoSteerAfterS": 2, "autoEaseS": 0.8, "cruiseAfterS": 3, "cruiseEaseS": 0.8, "cruisePct": 0.8,
+    "cruiseThrottle": 0.8, "cruiseCornerShare": 0.8, "lineCutM": 1.2, "lineBandHalf": 0.4
+  },
   "offroad": { "hazeThrustLoss": 0.35 },
   "wall": { "normalKeep": 0.4, "engineLoss": 0.12, "cueFullDvMps": 12, "shakeFrac": 0.5, "topM": 1.5 },
   "route": { "catchPct": 0.25, "catchHoldS": 2.5, "cleanLenM": 24, "cleanLatM": 3.5, "cleanDeg": 25, "cleanAmount": 0.15, "cleanHoldS": 0.6 },

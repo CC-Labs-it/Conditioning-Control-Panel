@@ -44,6 +44,8 @@ import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
 import { createSlotFx } from './render/items/slotfx.js';
 import { createGateScreen } from './render/gateScreen.js';
+import { loadFonts } from './render/fonts.js';
+import { createAssist } from './sim/assist.js';
 
 const qs = new URLSearchParams(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
@@ -138,12 +140,14 @@ async function boot() {
   const bridge = createBridge();
   const hostEscape = createHostEscape();          // before the key listeners: its capture hears Escape first
   const init = await bridge.init;
+  // the diegetic faces (render/fonts.js) load beside the feel: road markings and bubble text measure with them
   const [feel, trackJson] = await Promise.all([
     loadFeel(),
     fetch(new URL('./tracks/threshold.json', import.meta.url), { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error('track ' + r.status);
       return r.json();
     }),
+    loadFonts(),   // never rejects; a face that fails keeps its system fallback
   ]);
   const gentle = createGentle(feel);
   gentle.set(init.gentle);
@@ -214,6 +218,7 @@ async function boot() {
   const race = createRace(track, feel, queue);
   const racers = createRacers(track, feel, queue, { count: COUNT, seed });
   const ai = createAi(track, feel, { seed });
+  const assist = createAssist(track, feel);       // the player's Steer assist (Options), never the bots'
   const contact = createContact(track, feel, queue);
   const standings = createStandings(track, feel, queue);
   const items = createItems(track, feel, queue, { seed });
@@ -253,6 +258,7 @@ async function boot() {
     opts = o;
     gentle.set({ on: hostGentle || !!o.gentlePreview });
     racers.setAssist(!!o.assist);
+    assist.setMode(o.steerAssist);
     audio.setVolumes({ master: o.volMaster, music: o.volMusic, sfx: o.volSfx });
     if (Number.isFinite(o.steerSens)) feel.set('steer.userMul', o.steerSens);   // FEEL.md: grip yaw, player only
     renderer.setOptions(o);
@@ -263,7 +269,7 @@ async function boot() {
 
   function resetAll() {
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
-    effects.reset(); ai.reset(); fx.reset();
+    effects.reset(); ai.reset(); fx.reset(); assist.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
     const sec = P.st[S.sectionIdx];
@@ -395,7 +401,7 @@ async function boot() {
 
   const DIAG = (location.port === '8790' || location.port === '8792') && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
 
-  let diagT = 0;
+  let diagT = 0, cardThrottle = false;
   function frame(now) {
     requestAnimationFrame(frame);
     if (!renderer.frameDue(now)) return;                          // the Frame cap option skips this one
@@ -406,8 +412,10 @@ async function boot() {
     if (card) {                                                   // 0. cards take the pad; Escape only ever pauses
       if (card === 'pause' && pad.pause) setPaused(false);
       else if (nav) hud.nav(nav);
+      else if (a.throttle >= 0.5 && !cardThrottle) hud.nav('throttle');   // the how-to card leaves on a throttle press
       hopLatch.clear(); itemLatch.clear(); a.hopPressed = false; a.item = false;
     } else if (a.pause && !paused) setPaused(true);
+    cardThrottle = a.throttle >= 0.5;
     if (BOT && botT && now >= botT) {
       botT = 0;
       if (state === 'menu') startRace();
@@ -425,8 +433,10 @@ async function boot() {
           h.hopPressed = false;
         }
       }
-      race.update(clock.dt, a, P.st);
-      racers.step(clock.dt, a, race, sctx);
+      // the Steer assist reshapes the player's hands only (sim/assist.js); a ?bot=1 run opts in with debug.assistOn
+      const pa = BOT && !debug.assistOn ? a : assist.apply(a, P.st, clock.dt, race.phase);
+      race.update(clock.dt, pa, P.st);
+      racers.step(clock.dt, pa, race, sctx);
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
       items.update(clock.dt, racers.list, standings, race);       //    pickups, use, flights, hits, mods
@@ -475,6 +485,7 @@ async function boot() {
         big: +m.big.toFixed(2), shatter: +m.shatter.toFixed(2), wave: +m.waveAmp.toFixed(2), words: words ? words.pops : 0, wordsOf: words ? words.total : 0 };
     }
     if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
+    if (BOT && world.roadWords) debug.roadWords = world.roadWords.stats();   // dev only: the painted road words
     renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
     renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: paused ? 0 : frameDt });   // 7. render
 

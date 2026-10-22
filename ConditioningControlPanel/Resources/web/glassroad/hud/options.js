@@ -1,7 +1,8 @@
 /* hud/options.js - the player's options, kept in this browser.
  *
  * Gentle preview, steering assist, steering sensitivity, three volumes and the display rows (polish 2):
- * frame cap, render scale, quality, shadows and the fps readout. Stored under 'glassroad.options.v1';
+ * frame cap, render scale, quality, shadows and the fps readout. Music road pass 4: Steer assist (Light, Strong,
+ * Off; sim/assist.js) and the how-to card's "don't show again" (howtoOff). Stored under 'glassroad.options.v1';
  * every storage access sits in try/catch (private windows, blocked storage, previews), and a bad or
  * missing record reads as the defaults. Pure apart from the injected storage.
  */
@@ -10,18 +11,20 @@ export const OPTIONS_KEY = 'glassroad.options.v1';
 export const OPTION_DEFAULTS = Object.freeze({
   gentlePreview: false, assist: false, volMaster: 0.8, volMusic: 1, volSfx: 0.55, mixV: 2,
   frameCap: 'display', renderScale: 'auto', quality: 'auto', showFps: false, steerSens: 1, shadows: true,
+  steerAssist: 'light', howtoOff: false,
 });
 const VOLS = ['volMaster', 'volMusic', 'volSfx'];
 // mixV 2 (owner, 2026-10-22: effects too loud, the song and its voice too quiet): a record saved before it keeps
 // every other option and takes the new volume defaults once
 const MIX_V = 2;
-const BOOLS = ['gentlePreview', 'assist', 'showFps', 'shadows'];
+const BOOLS = ['gentlePreview', 'assist', 'showFps', 'shadows', 'howtoOff'];
 
 /** The choice rows: allowed values in cycle order (the first is the default). */
 export const OPTION_CHOICES = Object.freeze({
   frameCap: Object.freeze(['display', 60, 30]),
   renderScale: Object.freeze(['auto', 1, 0.75, 0.5]),
   quality: Object.freeze(['auto', 'high', 'mid', 'phone']),
+  steerAssist: Object.freeze(['light', 'strong', 'off']),   // sim/assist.js ASSIST_MODES, the same order
 });
 export const STEER_SENS = Object.freeze({ min: 0.6, max: 1.4, step: 0.1 });
 
@@ -66,6 +69,7 @@ export function choiceLabel(key, v) {
   if (key === 'frameCap') return c === 'display' ? 'Off' : String(c);
   if (key === 'renderScale') return c === 'auto' ? 'Auto' : Math.round(c * 100) + '%';
   if (key === 'quality') return { auto: 'Auto', high: 'High', mid: 'Mid', phone: 'Low' }[c];
+  if (key === 'steerAssist') return { off: 'Off', light: 'Light', strong: 'Strong' }[c];
   return String(c);
 }
 

@@ -264,3 +264,61 @@
 .feel-row input[type="number"], .feel-row input[type="text"] { width: 60px; flex: 1 1 60px; }
 .feel-row input[type="range"] { flex: 1 1 80px; padding: 0; }
 .feel-row input[type="checkbox"] { flex: 0 0 auto; }
+
+/* the 1-2-3 how-to card (music road pass 4, hud/howto.js): three paper panels, a rubber-stamp number each, ink
+ * drawings; the keys press on the countdown beat (96 bpm), slower and shallower under Gentle; IN = the panels stamp
+ * down one after another, OUT = the card lifts away */
+#card { --hw-beat: 0.625s; --hw-paper: #fbf8f2; }
+#card[data-kind="howto"] .card-body { width: min(760px, calc(100vw - 24px)); padding: 18px 20px 16px; text-align: left; }
+#card[data-kind="howto"] .card-title { font-size: 21px; margin: 0 0 14px 2px; }
+.hw-panels { list-style: none; margin: 0 0 14px; padding: 6px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.hw-panel { --hw-r: 0deg; position: relative; padding: 12px 8px 9px; background: var(--hw-paper); border: 1.5px solid var(--paper-ink);
+  border-radius: 3px; box-shadow: 2px 2px 0 rgba(28, 23, 34, 0.18); transform: rotate(var(--hw-r));
+  animation: hw-in 0.34s cubic-bezier(0.2, 0.9, 0.3, 1.25) both; animation-delay: calc(var(--hw-i, 0) * 0.12s + 0.08s); }
+.hw-panel:nth-child(1) { --hw-r: -0.7deg; }
+.hw-panel:nth-child(2) { --hw-r: 0.5deg; }
+.hw-panel:nth-child(3) { --hw-r: -0.3deg; }
+@keyframes hw-in { from { opacity: 0; transform: translateY(-6px) scale(1.06) rotate(var(--hw-r)); } to { opacity: 1; transform: rotate(var(--hw-r)); } }
+.hw-n { position: absolute; top: -13px; left: -9px; width: 30px; height: 30px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid var(--paper-pink); color: var(--paper-pink); background: var(--paper); font: 900 17px/26px var(--font);
+  text-align: center; box-shadow: inset 0 0 0 2px var(--paper), inset 0 0 0 3.5px var(--paper-pink); transform: rotate(-10deg); opacity: 0.92; }
+.hw-panel:nth-child(2) .hw-n { transform: rotate(7deg); }
+.hw-panel:nth-child(3) .hw-n { transform: rotate(-4deg); }
+.hw-art { display: block; width: 100%; height: auto; color: var(--paper-ink); overflow: visible; }
+.hw-art .ink-fill { fill: currentColor; stroke: none; }
+.hw-art .paper-fill { fill: var(--hw-paper); stroke: currentColor; }
+.hw-art .pk-line { stroke: var(--paper-pink); }
+.hw-art .pk-fill { fill: var(--paper-pink); stroke: none; }
+.hw-art .pk-soft { fill: rgba(212, 48, 124, 0.14); stroke: var(--paper-pink); }
+.hw-art .paper-line { stroke: #fff; }
+.hw-art text { stroke: none; }
+.hw-art .hw-t { fill: currentColor; font-family: var(--mono); font-weight: 700; }
+.hw-art .hw-stamp-t { fill: var(--paper-pink); font-family: var(--font); font-weight: 900; letter-spacing: 0.08em; }
+.hw-art .hw-bub-t { fill: var(--paper-pink); font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 700; }
+.hw-art .hw-road-t { fill: currentColor; opacity: 0.45; font-family: var(--font); font-weight: 800; }
+.hw-key .hw-top { animation: hw-press var(--hw-beat) ease-out infinite; }
+@keyframes hw-press { 0%, 100% { transform: translateY(0); } 10% { transform: translateY(3px); } 45% { transform: translateY(0); } }
+.hw-ring { transform-box: fill-box; transform-origin: center; animation: hw-ring var(--hw-beat) ease-out infinite; }
+@keyframes hw-ring { from { transform: scale(0.7); opacity: 0.9; } to { transform: scale(1.35); opacity: 0; } }
+.hw-cap { margin: 6px 0 0; font: 700 13px/1.25 var(--mono); text-align: center; }
+.hw-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+#card .hw-go { padding: 9px 18px; font-size: 15px; }
+#card .hw-off { min-height: 32px; padding: 4px 12px; font-size: 13px; border-color: rgba(28, 23, 34, 0.35); }
+#card .card-body.out { animation: hw-out 0.2s ease-in forwards; pointer-events: none; }
+@keyframes hw-out { to { opacity: 0; transform: translateY(-12px) scale(0.98); } }
+#card.c-gentle .hw-key .hw-top { animation-name: hw-press-soft; animation-duration: calc(var(--hw-beat) * 2); }
+@keyframes hw-press-soft { 0%, 100% { transform: translateY(0); } 25% { transform: translateY(1.5px); } 60% { transform: translateY(0); } }
+#card.c-gentle .hw-ring { animation-duration: calc(var(--hw-beat) * 2); }
+#card.c-gentle .hw-panel { animation: hw-in-soft 0.5s ease-out both; animation-delay: calc(var(--hw-i, 0) * 0.16s + 0.08s); }
+@keyframes hw-in-soft { from { opacity: 0; } to { opacity: 1; } }
+#card.c-gentle .card-body.out { animation: hw-out-soft 0.32s ease-out forwards; }
+@keyframes hw-out-soft { to { opacity: 0; } }
+@media (max-width: 520px) {
+  .hw-panels { gap: 8px; }
+  .hw-panel { padding: 10px 4px 7px; }
+  .hw-cap { font-size: 10.5px; }
+  .hw-n { width: 24px; height: 24px; font-size: 14px; line-height: 20px; top: -10px; left: -6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hw-panel, .hw-key .hw-top, .hw-ring, #card .card-body.out { animation: none; }
+}

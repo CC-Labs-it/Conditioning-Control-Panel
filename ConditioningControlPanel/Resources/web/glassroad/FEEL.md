@@ -57,6 +57,25 @@ of the lock (0.41 before).
 - `input.stickPow` 2: gamepad stick curve `sign(x) |x|^p`: gentle near centre, full at the edge (was expo 0.35).
 - `input.touchPow` 1.8: the same for the touch steer drag (was expo 0.2).
 
+## assist (music road pass 4, the player's Steer assist option, `sim/assist.js`; bots never pass here)
+Off / Light / Strong (default Light). Strong multiplies pull 1.9, align 1.7 and max 1.8; the hands-off autopilot runs
+in Light and Strong. A steer the player makes always wins: an agreeing assist adds a little, a disagreeing one is dropped.
+- `assist.inputDead` 0.04: below this a steer, throttle or brake value counts as no input.
+- `assist.pullFromHalf` 0.33: the centre pull starts past this share of the half width ...
+- `assist.pull` 0.28: ... and grows to this much steer at the edge (Light).
+- `assist.align` 0.5: steer per radian of nose against the road ahead (Light) ...
+- `assist.alignLeadS` 0.35: ... read this many seconds of speed ahead (at least 4 m), so it leans into a bend.
+- `assist.max` 0.3: cap on pull plus align (Light).
+- `assist.autoSteerAfterS` 2: no steer input this long and the autopilot steering eases in ...
+- `assist.autoEaseS` 0.8: ... over this long; any steer input drops it at once.
+- `assist.cruiseAfterS` 3: no input at all this long and the soft cruise throttle eases in ...
+- `assist.cruiseEaseS` 0.8: ... over this long; any input drops it at once.
+- `assist.cruisePct` 0.8: the cruise holds this share of top speed at most ...
+- `assist.cruiseThrottle` 0.8: ... with this much throttle under it ...
+- `assist.cruiseCornerShare` 0.8: ... lifting (and braking gently) for a bend ahead with this share of the grip yaw.
+- `assist.lineCutM` 1.2: the autopilot's drive line cuts this far to the inside of a bend ...
+- `assist.lineBandHalf` 0.4: ... never further from the centre than this share of the half width.
+
 ## offroad
 - `offroad.hazeThrustLoss` 0.35: thrust lost on `haze` surface; skipped during any boost.
 

@@ -1,5 +1,6 @@
 /* hud/words.js - the script counter under the lap timer (sim/words.js): bubbles popped out of the script's
- * total ("37 / 249 words"), only while a song with words plays, and a streak chip ("x12") while a clean run
+ * total ("7 / 20 words"; pass 4: only the impact words ride bubbles, the rest are painted on the road and
+ * never counted, so the total is the bubble moments, a row counting once), only while a song with words plays, and a streak chip ("x12") while a clean run
  * of pops lasts. A pop kicks the count up and back (IN and OUT); a row or a finished line kicks it harder and
  * warms it gold; a streak breaking fades its chip out. Gentle keeps everything still (the colours still turn).
  */

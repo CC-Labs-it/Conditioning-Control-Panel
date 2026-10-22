@@ -45,6 +45,8 @@ import { racerLabels } from '../hud/format.js';
 import { createMusicRoad } from './musicRoad.js';
 import { createWordBubbles } from './wordBubbles.js';
 import { createWordPopFx } from './wordPopFx.js';
+import { createRoadWords } from './roadWords.js';
+import { createWordRush } from './wordRush.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -205,9 +207,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   let musicRoad = null, wordVis = null;
   try { musicRoad = createMusicRoad({ road, rails, track, pal, photosafe, scene }); } catch (e) { console.warn('[glassroad/world] music road failed: ' + (e && e.message)); }
   try { wordVis = createWordBubbles(scene, { feel, photosafe }); } catch (e) { console.warn('[glassroad/world] word bubbles failed: ' + (e && e.message)); }
+  // pass 4: the ROAD words painted on the track like road markings (render/roadWords.js, in the scene from boot for the warm)
+  let roadWords = null;
+  try { roadWords = createRoadWords(scene, { track, feel, photosafe }); } catch (e) { console.warn('[glassroad/world] road words failed: ' + (e && e.message)); }
   // a word taken: the pop burst, a ring under the kart and light streaks (render/wordPopFx.js, on `word-pop`)
   let wordFx = null;
   try { wordFx = createWordPopFx(scene, { particles, wakes, kart, bus, feel, photosafe }); } catch (e) { console.warn('[glassroad/world] word pop fx failed: ' + (e && e.message)); }
+  // pass 4: the popped word rushes at the camera (render/wordRush.js, a DOM layer under the cards, on `word-pop`)
+  let wordRush = null;
+  try { wordRush = globalThis.document ? createWordRush({ bus, feel }) : null; } catch (e) { console.warn('[glassroad/world] word rush failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)
   const pending = [];
@@ -377,8 +385,10 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     lines.update(dt, k, fx, kart);
     if (view.mode === 'menu') lines.object.visible = false;
     if (itemVis && view.items) itemVis.update(view.items, dt, racers, view.camera);   // visuals read racer .st (CONTRACT-B1 view.karts)
-    if (wordVis) wordVis.update(view.words || []);
+    if (wordVis) wordVis.update(view.words || [], view.song || null, dt);
     if (wordFx) wordFx.update(dt, view.camera);
+    if (roadWords) roadWords.update(view.song || null, view.songS, k, mf, { gentle, paused: !!view.paused });
+    if (wordRush) wordRush.update(dt, !!view.paused);
   }
 
   function dispose() {
@@ -393,9 +403,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (musicRoad) musicRoad.dispose();
     if (wordVis) wordVis.dispose();
     if (wordFx) wordFx.dispose();
+    if (roadWords) roadWords.dispose();
+    if (wordRush) wordRush.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush,
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); } };
+    resetReactions: () => { karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }
