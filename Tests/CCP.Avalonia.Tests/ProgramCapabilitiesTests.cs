@@ -88,6 +88,11 @@ public sealed class ProgramCapabilitiesTests
             Assert.Matches(@"QuestMinutes\.Follow\(false\)", src);
         }
         Assert.Matches(@"LockdownDeactivated \+=[^;]*?TrackLockdownCompleted\(", Src("App.axaml.cs"));
+
+        // The achievement half (WPF AchievementService:221-279, :535): totals, unlocks, continuous spiral reset.
+        Assert.Matches(@"QuestMinutes = new\(\s*m => \{ App\.Achievements\?\.TrackPinkFilterMinutes\(m\);", Src("Views", "Overlays", "PinkFilterOverlay.cs"));
+        Assert.Matches(@"QuestMinutes = new\(\s*m => \{ App\.Achievements\?\.TrackSpiralMinutes\(m\);[^;]*;[^;]*\},\s*\(\) => App\.Achievements\?\.ResetContinuousSpiral\(\)\)", Src("Views", "Overlays", "SpiralOverlay.cs"));
+        Assert.Matches(@"App\.Achievements\?\.TrackLockCardCompletion\(completionTime, _totalErrors, _requiredRepeats\)", Src("Views", "Windows", "LockCardWindow.axaml.cs"));
     }
 
     // Strips comments and string literals (P23), as ShellInitializerScanTests does.

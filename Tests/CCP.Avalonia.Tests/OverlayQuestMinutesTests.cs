@@ -39,4 +39,18 @@ public sealed class OverlayQuestMinutesTests
         Assert.Equal(1.0, credited.Sum(), 6);
         return Task.CompletedTask;
     });
+
+    /// <summary>WPF AchievementService:276: the spiral going off screen restarts its continuous run.</summary>
+    [Fact]
+    public Task HidingRunsTheHiddenHookAndShowingDoesNot() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var hidden = 0;
+        var counter = new OverlayQuestMinutes(_ => { }, () => hidden++) { Clock = () => TimeSpan.Zero };
+        counter.Follow(true);
+        counter.Follow(true);
+        Assert.Equal(0, hidden);
+        counter.Follow(false);
+        Assert.Equal(1, hidden);
+        return Task.CompletedTask;
+    });
 }
