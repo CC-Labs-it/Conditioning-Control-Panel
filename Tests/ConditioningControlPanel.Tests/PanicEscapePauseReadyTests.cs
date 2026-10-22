@@ -74,6 +74,14 @@ public class PanicEscapePauseReadyTests
         Assert.Contains("finally { _panicFromStopButton = false; }", body);
     }
 
+    [Fact]
+    public void AStopButton_IsNeverEatenByTheSettingsPalette()
+    {
+        // Escape with the Ctrl+K palette open only closes the palette; a Stop click is not an Escape.
+        var source = Read("MainWindow", "MainWindow.xaml.cs");
+        Assert.Contains("bool paletteClaimed = !lockCardOpen && !_panicFromStopButton", source);
+    }
+
     [Theory]
     [InlineData("MainWindow.RemoteHud.cs", "private void StopFromRemoteHud()")]
     [InlineData("MainWindow.Leash.cs", "private void PanicFromLeashGate()")]

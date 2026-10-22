@@ -1670,7 +1670,8 @@ namespace ConditioningControlPanel
             // short grace window, so the press is claimed exactly once whichever of the two
             // deliveries (WPF KeyDown vs the hook's queued handler) lands first - and it is only
             // ASKED when no lock card is open, because asking closes the palette as a side effect.
-            bool paletteClaimed = !lockCardOpen
+            // A Stop / Panic BUTTON is never an Escape: it never closes the palette instead of stopping.
+            bool paletteClaimed = !lockCardOpen && !_panicFromStopButton
                 && string.Equals(App.Settings?.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)
                 && SettingsPaletteWindow.TryConsumeEscape();
 
