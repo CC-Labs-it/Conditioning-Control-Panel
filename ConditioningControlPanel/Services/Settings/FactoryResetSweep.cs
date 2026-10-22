@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (!Directory.Exists(dir)) return found;
                 found.AddRange(Directory.GetFiles(dir, "settings.json*.tmp"));
-                foreach (var name in new[] { "settings.json.restored", SessionSettingsJournal.FileName, SessionSettingsJournal.RampFileName })
+                foreach (var name in new[] { "settings.json.restored", SessionSettingsJournal.FileName, SessionSettingsJournal.RampFileName, Remote.RemoteHoldings.FileName, "lockdown_recovery.json" })
                 {
                     var path = Path.Combine(dir, name);
                     if (File.Exists(path)) found.Add(path);
