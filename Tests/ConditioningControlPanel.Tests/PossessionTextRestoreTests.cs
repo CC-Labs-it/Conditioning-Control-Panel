@@ -38,14 +38,15 @@ public class PossessionTextRestoreTests
     private sealed class BareAttribution : IPossessionAttribution
     {
         private sealed class Nothing : IDisposable { public void Dispose() { } }
-        public Task ChargeAsync(FrameworkElement target, CancellationToken ct, int durationMs = 400)
+        public Task ChargeAsync(object target, CancellationToken ct, int durationMs = 400)
             => Task.CompletedTask;
-        public IDisposable Possess(FrameworkElement target) => new Nothing();
+        public IDisposable Possess(object target) => new Nothing();
         public void EdgePulse(double strength) { }
         public bool AnyPossessed => false;
+        public void ReleaseAll() { }
     }
 
-    private sealed class BareHost : IPossessionHost
+    private sealed class BareHost : IWpfPossessionHost
     {
         /// <summary>Never read on these paths: ApplyAsync only reaches for the window when the effect
         /// is targetless, and every effect here takes a victim.</summary>
@@ -71,7 +72,7 @@ public class PossessionTextRestoreTests
     };
 
     private static PossessionTarget TargetFor(FrameworkElement el, PossessionRole role)
-        => new() { Element = el, Role = role, Key = "test", DisplayName = "the label" };
+        => new() { Visual = el, Role = role, Key = "test", DisplayName = "the label" };
 
     /// <summary>Safe here (and only here): nothing on these paths yields.</summary>
     private static void Run(Task t) => t.GetAwaiter().GetResult();

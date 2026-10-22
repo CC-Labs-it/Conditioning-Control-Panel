@@ -67,6 +67,8 @@ namespace ConditioningControlPanel
 
             public StepPosition TextPosition { get; init; } = StepPosition.Bottom;
             public AdvanceTrigger Advance { get; init; } = AdvanceTrigger.Manual;
+            /// <summary>WPF TutorialStep.AdvanceEventName: the bus event an OnEvent step waits for.</summary>
+            public string? AdvanceEventName { get; init; }
 
             /// <summary>The card offers "Skip step" as well as waiting for the trigger.</summary>
             public bool AllowManualSkip { get; init; }
@@ -154,10 +156,12 @@ namespace ConditioningControlPanel
         /// <summary>Abandon the tour. Never latches it as completed - see the head's ledger.</summary>
         public static void Skip() { try { SkipAction?.Invoke(); } catch { /* see Next */ } }
 
-        /// <summary>Start the named tour. A no-op when the head has no such tour, and unseeded.</summary>
+        /// <summary>Start the named tour. A no-op when the head has no such tour, when unseeded, and
+        /// while a tour is running (WPF StartTutorial returns while an overlay is up) - so a refused
+        /// start never renames the running tour a Finished handler reads.</summary>
         public static void Start(string tourName)
         {
-            if (string.IsNullOrWhiteSpace(tourName)) return;
+            if (string.IsNullOrWhiteSpace(tourName) || IsActive) return;
             CurrentTourName = tourName;
             try { StartAction?.Invoke(tourName); } catch { /* see Next */ }
         }

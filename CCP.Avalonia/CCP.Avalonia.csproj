@@ -96,6 +96,13 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <!-- One icon per launcher tile beside the exe: a desktop shortcut cannot read an embedded resource
+         (WPF csproj :614, Core LauncherShortcuts.IconFolder). -->
+    <Content Include="..\Assets\launcher-icons\*.ico" Link="Resources\launcher-icons\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
     <!-- The shipped spiral (WPF Resources\spiral.gif): SpiralOverlay's default and the card's Default thumbnail. -->
     <Content Include="..\Assets\spiral.gif" Link="Resources\spiral.gif">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -201,11 +208,16 @@
          (AppFonts.Mono) is the app-wide monospace. Licenses ship
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
+    <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
     <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\Assets\*.png"
                       Link="Resources\%(Filename)%(Extension)" />
+    <!-- The animated dashboard logo (WPF ConditioningControlPanel.csproj:272) and its renderer, one
+         SkiaSharp source compiled into both heads rather than a second copy. -->
+    <AvaloniaResource Include="..\Assets\branding\ccp-logo.jpg" Link="Resources\branding\ccp-logo.jpg" />
+    <Compile Include="..\ConditioningControlPanel\Controls\DashboardLogoRenderer.cs" Link="Controls\DashboardLogoRenderer.cs" />
 
     <AvaloniaResource Include="..\Assets\achievements\*.png"
                       Link="Resources\achievements\%(Filename)%(Extension)" />

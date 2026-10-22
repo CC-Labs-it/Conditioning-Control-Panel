@@ -190,6 +190,23 @@ namespace ConditioningControlPanel.Services.Speech
             Path.Combine(CorePaths.UserData, "Models", "vosk"),
         };
 
+        /// <summary>
+        /// Which mic to open: the saved device NAME first (robust to the OS reshuffling ordinals
+        /// when virtual audio devices come and go - the "voice worked yesterday, not today"
+        /// failure, #441b), then the saved index if still listed, else null = the OS default.
+        /// The -1 "System default" entry is never a match. Shared by both heads' mic sources.
+        /// </summary>
+        public static SpeechInputDevice? ResolveInputDevice(IReadOnlyList<SpeechInputDevice> devices, int savedIndex, string? savedName)
+        {
+            var real = devices.Where(d => d.Index >= 0).ToList();
+            if (!string.IsNullOrWhiteSpace(savedName))
+                foreach (var d in real)
+                    if (string.Equals(d.Name, savedName, StringComparison.OrdinalIgnoreCase)) return d;
+            foreach (var d in real)
+                if (d.Index == savedIndex) return d;
+            return null;
+        }
+
         public SpeechEngine(IMicSource mic, IReadOnlyList<string> modelRoots)
         {
             _mic = mic;

@@ -53,6 +53,11 @@ public sealed class PanicKeyTests
                 shell.HandlePanicKeyPress(t0);
                 Assert.True(CoreFlash.IsRunning);
                 MainShellWindow.CapturingPanicKey = false;
+                // A Pause-key capture takes the press first (WPF MainWindow.xaml.cs:914).
+                global::ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey = true;
+                try { shell.HandlePanicKeyPress(t0); }
+                finally { global::ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey = false; }
+                Assert.True(CoreFlash.IsRunning);
 
                 // Press 1 stops everything and the app stays up; press 2 three seconds later is a new
                 // first press, not an exit.

@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Services.Awareness
         public const int ExcursionToleranceSeconds = 30;
 
         /// <summary>Minimum visits today before <see cref="TrendKind.ReturnVisit"/> is worth saying.</summary>
-        public const int ReturnVisitMinimum = 3;
+        public const int ReturnVisitMinimum = TrendEvent.ReturnVisitMinimum;
 
         /// <summary>Minimum consecutive days before <see cref="TrendKind.Streak"/> is worth saying.</summary>
         public const int StreakMinimumDays = 3;
