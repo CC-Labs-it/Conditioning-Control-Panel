@@ -221,13 +221,6 @@ namespace ConditioningControlPanel.Services
         /// latched the guard shut".</summary>
         private DateTime _triggerStartedUtc = DateTime.MinValue;
 
-        /// <summary>How long a trigger may sit between claiming <see cref="_triggerInProgress"/> and
-        /// reaching PlayVideo before the next trigger declares it dead and takes over. Generously
-        /// past the real path (an off-thread clip selection, which for a content-pack clip decrypts
-        /// the whole file, plus the 800ms freeze delay) and far short of the InteractionQueue's
-        /// 5-minute stuck detector, which is what used to be the only way out.</summary>
-        internal static readonly TimeSpan TriggerStallCeiling = TimeSpan.FromSeconds(45);
-
         // ---- a video the descent asked for (ccp-bugs #1201) ------------------------------
         // A chaos video is REQUESTED when the bubble detonates and only reaches the screen much
         // later: clip selection runs off the UI thread, the freeze delay adds another 800ms, and
@@ -243,14 +236,6 @@ namespace ConditioningControlPanel.Services
         private int _chaosVideoToken;             // last token handed out; 0 is never a token
         private int _chaosVideoCancelledThrough;  // every token <= this one has been cancelled
 
-        /// <summary>
-        /// The pure rule behind the cancellation, extracted so a test can pin it without LibVLC
-        /// behind it (the same seam <see cref="EvaluateTriggerGuard"/> uses). A request is
-        /// abandoned only when it carries a token AND a cancel has swept through that token, so a
-        /// video requested AFTER the cancel - the next run's, or the user's own - still plays.
-        /// </summary>
-        internal static bool ShouldAbandonVideoRequest(int requestToken, int cancelledThrough)
-            => requestToken != 0 && requestToken <= cancelledThrough;
 
         /// <summary>
         /// Take a token for a video a descent run is about to fire. Claimed at DETONATION time,
@@ -278,7 +263,7 @@ namespace ConditioningControlPanel.Services
         }
 
         private bool IsChaosVideoRequestCancelled(int requestToken)
-            => ShouldAbandonVideoRequest(requestToken, Volatile.Read(ref _chaosVideoCancelledThrough));
+            => VideoTriggerRules.ShouldAbandonVideoRequest(requestToken, Volatile.Read(ref _chaosVideoCancelledThrough));
 
         /// <summary>
         /// The shared abandon step for a cancelled chaos request. It also hands the InteractionQueue
@@ -2002,7 +1987,7 @@ namespace ConditioningControlPanel.Services
         /// whether a trigger stood down for the feed owes the user a toast. Only a press the user
         /// just made does. The ambient scheduler deferring is not news, and a video EARNED by a
         /// bubble pop never defers at all (it plays over the feed), so it has nothing to announce.
-        /// Extracted so the rule is testable without LibVLC, like EvaluateTriggerGuard.
+        /// Extracted so the rule is testable without LibVLC, like VideoTriggerRules.EvaluateTriggerGuard.
         /// </summary>
         internal static bool ShouldAnnounceFeedDefer(bool feedOwnsTheScreen, bool userInitiated, bool userEarned)
             => feedOwnsTheScreen && userInitiated && !userEarned;
@@ -2141,31 +2126,6 @@ namespace ConditioningControlPanel.Services
             App.Logger?.Information("VideoService: deferring mandatory video until the For You feed leaves the screen");
         }
 
-        /// <summary>What a fresh TriggerVideo call should do about the in-progress guard.</summary>
-        internal enum TriggerGuardDecision
-        {
-            /// <summary>Nothing in flight - claim the guard and go.</summary>
-            Proceed,
-            /// <summary>A trigger really is mid-flight; this one is a genuine overlap and is dropped.</summary>
-            Skip,
-            /// <summary>The in-flight trigger is older than anything real can be: it died on the way
-            /// to PlayVideo and latched the guard. Clear it and let this trigger through.</summary>
-            ClearStaleAndProceed
-        }
-
-        /// <summary>
-        /// Pure decision for the <see cref="_triggerInProgress"/> guard, extracted so the escape
-        /// hatch is unit-testable without LibVLC (the seam pattern EvaluateGraceRequest already uses).
-        /// The escape exists because the guard could latch forever and silently eat every later
-        /// video: the #1135 "video bubbles do nothing" report.
-        /// </summary>
-        internal static TriggerGuardDecision EvaluateTriggerGuard(bool triggerInProgress, TimeSpan sinceTriggerStarted)
-        {
-            if (!triggerInProgress) return TriggerGuardDecision.Proceed;
-            return sinceTriggerStarted < TriggerStallCeiling
-                ? TriggerGuardDecision.Skip
-                : TriggerGuardDecision.ClearStaleAndProceed;
-        }
 
         /// <param name="silentIfEmpty">
         /// When true, an empty videos folder is logged and ignored instead of popping the
@@ -2225,7 +2185,7 @@ namespace ConditioningControlPanel.Services
             // the flag indefinitely: a trigger that has not reached PlayVideo within
             // TriggerStallCeiling is declared dead and this one takes over.
             var triggerAge = DateTime.UtcNow - _triggerStartedUtc;
-            switch (EvaluateTriggerGuard(_triggerInProgress, triggerAge))
+            switch (VideoTriggerRules.EvaluateTriggerGuard(_triggerInProgress, triggerAge))
             {
                 case TriggerGuardDecision.Skip:
                     App.Logger?.Information("VideoService: TriggerVideo skipped - trigger already in progress ({Sec:F1}s ago)",
@@ -2234,7 +2194,7 @@ namespace ConditioningControlPanel.Services
 
                 case TriggerGuardDecision.ClearStaleAndProceed:
                     App.Logger?.Warning("VideoService: clearing a STALE in-progress trigger ({Sec:F0}s old, ceiling {Ceiling:F0}s) - the previous trigger never reached PlayVideo; this one proceeds",
-                        triggerAge.TotalSeconds, TriggerStallCeiling.TotalSeconds);
+                        triggerAge.TotalSeconds, VideoTriggerRules.TriggerStallCeiling.TotalSeconds);
                     _triggerInProgress = false;
                     // The dead trigger claimed the queue's Video slot and will never release it. Only
                     // release when nothing is actually on screen - a live video's claim is its own.
