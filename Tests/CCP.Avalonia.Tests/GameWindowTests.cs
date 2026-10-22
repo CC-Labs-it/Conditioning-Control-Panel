@@ -344,14 +344,22 @@ public sealed class GameWindowTests
             Directory.CreateDirectory(Path.Combine(lib, "braindrain"));
             File.WriteAllBytes(Path.Combine(lib, "braindrain", "a one.wav"), new byte[] { 1 });
             File.WriteAllBytes(Path.Combine(lib, "braindrain", "ignored.txt"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "off.wav"), new byte[] { 1 });
+            CoreSettings.Current.DisabledAssetPaths.Add("braindrain/off.wav");   // unchecked: never offered
             CorePaths.EffectiveAssetsProvider = () => lib;
+            using var server = new WebAssetServer(lib) { AssetsRoot = () => lib };
+            GameWindow.Server = () => server;
             var w = GameWindow.Launch(GameWindow.PbpId)!;
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
             var settings = sent.Single(o => (string?)o["type"] == "pbp:settings");
-            Assert.Equal(w.PageUrl!.Authority, new Uri((string)settings["whispers"]!.Single()!).Authority);
-            Assert.EndsWith("/ccp.assets/braindrain/a%20one.wav", (string?)settings["whispers"]!.Single());
+            var url = (string)settings["whispers"]!.Single()!;
+            Assert.Equal(w.PageUrl!.Authority, new Uri(url).Authority);
+            Assert.EndsWith("/ccp.assets/braindrain/a%20one.wav", url);
+            using var http = new System.Net.Http.HttpClient();   // the offered clip is actually served
+            using var got = http.GetAsync(url + "?ccp_t=" + server.Token).GetAwaiter().GetResult();
+            Assert.Equal(System.Net.HttpStatusCode.OK, got.StatusCode);
             w.HandleMessage("{\"type\":\"ready\"}");
             Assert.Single(sent.Where(o => (string?)o["type"] == "pbp:settings"));
         }
@@ -359,6 +367,34 @@ public sealed class GameWindowTests
         {
             CorePaths.EffectiveAssetsProvider = oldAssets;
             Directory.Delete(lib, true);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_SettingsWhispers_AllOwnClipsUnchecked_FallBackToWords() => RunBoard(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("pbp-off-").FullName;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "braindrain"));
+            File.WriteAllBytes(Path.Combine(dir, "braindrain", "off.wav"), new byte[] { 1 });
+            var words = Directory.CreateDirectory(Path.Combine(dir, "words")).FullName;
+            File.WriteAllBytes(Path.Combine(words, "drop.mp3"), new byte[] { 1 });
+            CoreSettings.Current.DisabledAssetPaths.Add("braindrain/off.wav");
+            CorePaths.EffectiveAssetsProvider = () => dir;
+            using var server = new WebAssetServer(dir) { SubAudioRoot = () => null, WordsRoot = () => words };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.EndsWith("/ccp.words/drop.mp3", (string?)sent.Single(o => (string?)o["type"] == "pbp:settings")["whispers"]!.Single());
+        }
+        finally
+        {
+            CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(dir, true);
         }
     });
 

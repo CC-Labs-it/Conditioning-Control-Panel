@@ -238,8 +238,7 @@ public sealed class WebAssetServer : IDisposable
         if (rel.Contains('\0')) return null;
         var full = Path.GetFullPath(Path.Combine(root, rel));
         if (!Inside(full, root) || !File.Exists(full) || !LinksStayInside(full, root)) return null;
-        // ponytail: brain-drain whisper clips also pass this filter, so a clip the user unchecked is offered by
-        // pbp:settings but 404s here (WPF serves every clip). Filtering the offered list instead is a follow-up.
+        // Brain-drain whisper clips pass this too; GameWindow.PbpWhispers leaves unchecked ones out of the offer.
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
     }
