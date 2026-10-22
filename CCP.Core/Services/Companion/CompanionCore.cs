@@ -8,8 +8,8 @@ namespace ConditioningControlPanel.Services.Companion
     /// The settings half of WPF 7.1.5 <c>Services/Companion/CompanionService.cs</c>, same numbers: switching
     /// (:185), the perk XP modifier (:226), companion XP and its level loop (:276), the Brain Parasite drain
     /// (:393) and active time (:429). The head owns the timers and the reactions. Named apart from WPF's type.
-    /// ponytail: ApplyCompanionPrompt (:476) and the autonomy bonus's IsActionInProgress wait for a community-prompt
-    /// service and an autonomy service on this head; XPDrained for the drain flash's ported view.
+    /// ponytail: the autonomy bonus's IsActionInProgress waits for an autonomy service on this head; XPDrained for
+    /// the drain flash's ported view.
     /// </summary>
     public static class CompanionCore
     {
@@ -51,6 +51,7 @@ namespace ConditioningControlPanel.Services.Companion
             CoreSettings.Save();
             var progress = CoreSettings.Current.ActiveCompanionProgress;
             if (progress.FirstActivated == DateTime.MinValue) progress.FirstActivated = DateTime.Now;
+            ApplyCompanionPrompt(newCompanion);   // WPF :214, auto-switch to the companion's assigned prompt
             try { Switched?.Invoke(newCompanion); } catch (Exception ex) { Log.Debug("CompanionSwitched handler: {E}", ex.Message); }
             Log.Information("Switched companion: {Old} -> {New}",
                 CompanionDefinition.GetById(old).Name, CompanionDefinition.GetById(newCompanion).Name);
@@ -114,6 +115,36 @@ namespace ConditioningControlPanel.Services.Companion
                 CoreSettings.Save();
             }
             return true;
+        }
+
+        private static CommunityPromptService? _prompts;
+
+        /// <summary>WPF App.CommunityPrompts: one service per process, created on first use (tests may set it).</summary>
+        public static CommunityPromptService Prompts
+        {
+            get => _prompts ??= new CommunityPromptService();
+            internal set => _prompts = value;
+        }
+
+        /// <summary>WPF ApplyCompanionPrompt (:426): activate the companion's assigned prompt, if any.</summary>
+        public static void ApplyCompanionPrompt(CompanionId companion)
+        {
+            try
+            {
+                var promptId = CoreSettings.Current?.GetCompanionPromptId((int)companion);
+                if (string.IsNullOrEmpty(promptId)) return;   // none assigned: the current prompt stays
+                Prompts.ActivatePrompt(promptId);
+                Log.Information("Activated prompt '{PromptId}' for companion {Companion}",
+                    promptId, CompanionDefinition.GetById(companion).Name);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to apply companion prompt"); }
+        }
+
+        /// <summary>WPF GetAssignedPromptName (:454): the assigned installed prompt's name, or null.</summary>
+        public static string? GetAssignedPromptName(CompanionId companion)
+        {
+            var promptId = CoreSettings.Current?.GetCompanionPromptId((int)companion);
+            return string.IsNullOrEmpty(promptId) ? null : Prompts.GetInstalledPrompt(promptId)?.Name;
         }
 
         /// <summary>WPF UpdateActiveTime (:429): the active companion's TotalActiveTime.</summary>

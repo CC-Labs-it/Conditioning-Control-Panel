@@ -30,22 +30,14 @@
 //                             colours are the one part that would resolve. Their level, lock state
 //                             and active ring do not, and a card wearing four right answers and one
 //                             wrong one is worse than a card that waits.
-//   UpdateCommunityPromptsUI- App.CommunityPrompts.GetInstalledPrompts / ActivatePrompt /
-//   CreatePromptRow           GetInstalledPrompt (…/Services/Companion/CommunityPromptService.cs)
-//                             and Models.CommunityPrompt. The row BUILDER itself is portable
-//                             (Grid/StackPanel/TextBlock/Button + Loc.GetF("label_by_author", …)),
-//                             and its explicit-content gate is too - Services.ExplicitContentGate is
-//                             in Core (CCP.Core/Services/ExplicitContentGate.cs) and this head ships
-//                             Views/Dialogs/ExplicitContentAcknowledgementDialog. Only the roster is
-//                             missing, so this is the member to restore FIRST once
-//                             CommunityPromptService crosses.
-//   GetActivePromptDisplayName - App.Settings.Current.CompanionPrompt is reachable; the display name
-//                             it resolves comes from CommunityPromptService.
-//   BtnCompanionPersonality_Click - a Microsoft.Win32.OpenFileDialog seeded from
-//                             App.EffectiveAssetsPath (CorePaths answers that half) plus
-//                             CompanionService.GetAssignedPromptName. The picker maps to Avalonia's
-//                             StorageProvider; the assignment it performs does not.
-//   UpdateCompanionPromptLabels - the same assigned-name lookup, once per card.
+//   UpdateCommunityPromptsUI- DONE elsewhere: CommunityPromptService is in Core
+//   CreatePromptRow           (CCP.Core/Services/Companion/CommunityPromptService.cs) and the rows,
+//                             consent gate and Z4 re-sync live in the cell that owns the controls,
+//                             Views/Controls/Companion/Runtime/WorkshopCommunityCell.
+//   GetActivePromptDisplayName - reachable now (Core service); not wired: Z4 still shows the prompt id.
+//   BtnCompanionPersonality_Click - DONE elsewhere: Views/Controls/Companion/Runtime/
+//   UpdateCompanionPromptLabels  WorkshopRosterCell owns the picker and labels; CompanionCore
+//                             carries ApplyCompanionPrompt / GetAssignedPromptName.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

@@ -60,6 +60,7 @@ public sealed class WorkshopRosterSwitchTests
                 Dispatcher.UIThread.RunJobs();
             }
             var name = cell.FindControl<TextBlock>("TxtCompanion2Name")!;
+            cell.PickPromptFileForTests = _ => Task.FromResult<string?>(null);   // picker cancelled
             Press(name, MouseButton.Right);
             Assert.Equal(0, s.ActiveCompanionId);
             Press(cell.FindControl<Button>("BtnCompanion2Personality")!, MouseButton.Left);

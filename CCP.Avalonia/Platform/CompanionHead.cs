@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Threading;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Companion;
 using Serilog;
 
@@ -24,6 +25,21 @@ internal static class CompanionHead
         try { CompanionCore.Start(); } catch (Exception ex) { Log.Warning(ex, "CompanionCore start failed"); }
         CoreModsHooks.ActiveCompanionProvider = () => CompanionCore.ActiveCompanion;
         CoreModsHooks.SwitchCompanion = id => CompanionCore.SwitchCompanion(id);
+
+        // WPF App.xaml.cs: App.CommunityPrompts is created here and its advisory shown as a warning box.
+        try
+        {
+            CompanionCore.Prompts.ValidationAdvisory += (_, count) => Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    if ((global::Avalonia.Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow is { IsVisible: true } owner)
+                        await Views.Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("community_prompt_warning_title"), Loc.GetF("community_prompt_warning_body", count));
+                }
+                catch (Exception ex) { Log.Debug("Community prompt advisory failed: {E}", ex.Message); }
+            });
+        }
+        catch (Exception ex) { Log.Warning(ex, "Community prompt service start failed"); }
 
         // ponytail: WPF runs this timer only under Brain Parasite; here DrainTick returns at once for other perks.
         _drainTimer = DispatcherTimer.Run(() => { try { CompanionCore.DrainTick(DateTime.UtcNow); } catch (Exception ex) { Log.Debug("Drain tick: {E}", ex.Message); } return true; },
