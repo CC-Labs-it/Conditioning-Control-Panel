@@ -7,11 +7,11 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using ConditioningControlPanel.Services.Chaos;
 
 namespace ConditioningControlPanel;
 
-/// <summary>What a Chaos announcement is about — drives the accent palette.</summary>
-public enum ChaosAnnounceKind { Mantra, Temptation, Willpower, Depth, Streak, Item, PowerUp, Narrator }
+// ChaosAnnounceKind, the queue and the timings live in CCP.Core (Services/Chaos/ChaosAnnouncer.cs).
 
 /// <summary>
 /// Full-screen, click-through overlay that flashes a fast bordered "subtitle" line in the
@@ -27,10 +27,10 @@ public enum ChaosAnnounceKind { Mantra, Temptation, Willpower, Depth, Streak, It
 public sealed class ChaosAnnouncerOverlay : Window
 {
     // ---- timing / layout tunables ----
-    private const int IN_MS         = 110;    // scale-pop + fade-in
-    private const int HOLD_MS       = 650;    // dwell (default — event beats: boon names, relapse, streaks)
-    public  const int TEACH_HOLD_MS = 3000;   // onboarding/help lines linger so they can actually be read
-    private const int OUT_MS        = 240;    // fade-out ("fades almost immediately")
+    private const int IN_MS         = ChaosAnnounceTiming.InMs;      // scale-pop + fade-in
+    private const int HOLD_MS       = ChaosAnnounceTiming.HoldMs;    // dwell (default — event beats: boon names, relapse, streaks)
+    public  const int TEACH_HOLD_MS = ChaosAnnounceTiming.TeachHoldMs;   // onboarding/help lines linger so they can actually be read
+    private const int OUT_MS        = ChaosAnnounceTiming.OutMs;     // fade-out ("fades almost immediately")
     private const double FONT_SIZE  = 60;
     private const double SUB_FONT_SIZE = 26;  // dynamic suffix under a banner image
     private const double ART_HEIGHT_DIP = 120; // banner image height (≈ the 60px text line's presence)
@@ -39,20 +39,8 @@ public sealed class ChaosAnnouncerOverlay : Window
     private static ChaosAnnouncerOverlay? _active;
     // Priority queue (was FIFO): higher priority shows first; ties keep insertion order. Gameplay
     // announces enqueue at priority 0; the narrator (the Madam) enqueues above them, with STORY > REACTIVE.
-    private static readonly List<(string text, ChaosAnnounceKind kind, string? artKey, string? subText, int holdMs, int priority)> _queue = new();
+    private static readonly ChaosAnnounceQueue _queue = new();
     private static bool _showing;
-
-    private static bool TryDequeue(out (string text, ChaosAnnounceKind kind, string? artKey, string? subText, int holdMs, int priority) item)
-    {
-        item = default;
-        if (_queue.Count == 0) return false;
-        int best = 0;
-        for (int i = 1; i < _queue.Count; i++)
-            if (_queue[i].priority > _queue[best].priority) best = i;   // stable: first of the max wins
-        item = _queue[best];
-        _queue.RemoveAt(best);
-        return true;
-    }
 
     /// <summary>
     /// Queue a bordered fading announcement. No-op unless the announcer is enabled.
@@ -73,7 +61,7 @@ public sealed class ChaosAnnouncerOverlay : Window
             if (disp == null || disp.HasShutdownStarted) return;
             disp.Invoke(() =>
             {
-                _queue.Add((text, kind, artKey, subText, holdMs ?? HOLD_MS, 0));
+                _queue.Add(new ChaosAnnouncement(text, kind, artKey, subText, holdMs ?? HOLD_MS, 0));
                 if (!_showing) ShowNext();
             });
         }
@@ -97,7 +85,7 @@ public sealed class ChaosAnnouncerOverlay : Window
             if (disp == null || disp.HasShutdownStarted) return;
             disp.Invoke(() =>
             {
-                _queue.Add((text, ChaosAnnounceKind.Narrator, null, null, holdMs, 100 + bandPriority));
+                _queue.Add(new ChaosAnnouncement(text, ChaosAnnounceKind.Narrator, null, null, holdMs, ChaosAnnounceQueue.NarratorPriority(bandPriority)));
                 if (!_showing) ShowNext();
                 else if (interrupt) _active?.CutShort();   // STORY: end the current line so she shows next
             });
@@ -116,7 +104,7 @@ public sealed class ChaosAnnouncerOverlay : Window
 
     private static void ShowNext()
     {
-        if (!TryDequeue(out var dq)) { _showing = false; return; }
+        if (!_queue.TryDequeue(out var dq)) { _showing = false; return; }
         _showing = true;
         var (text, kind, artKey, subText, holdMs, _) = dq;
         try

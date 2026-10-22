@@ -307,7 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
             _bodyRoot.RenderTransform = new TransformGroup
             {
-                Children = { _crtScale, _squashScale, _wobbleRotate, _moveShift }
+                Children = { _crtScale, _squashScale, _landShift, _wobbleRotate, _moveShift }
             };
             _faceView.RenderTransform = _gazeShift;
 
@@ -1211,6 +1211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     _dragMoved = true;
                     CloseRing();   // WPF Ring.cs OnRingWatchMove: a drag past the threshold folds the fan
+                    OnPickedUp();
                 }
                 if (!_dragMoved) return;
 
@@ -1242,6 +1243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     SavePlacement();
                     try { Moved?.Invoke(this, EventArgs.Empty); }
                     catch (Exception ex) { Log.Debug(ex, "[EmiDesk] Moved handler threw"); }
+                    OnPutDown();
                     return;
                 }
 
@@ -1969,6 +1971,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _wobbleLastX = x;
 
                 _wobbleVx = _wobbleVx * WobbleVelKeep + raw * (1.0 - WobbleVelKeep);
+                if (_dragMoved) NoteTossFrame(dt, _wobbleVx);   // WPF React.cs:286
 
                 // She TRAILS the hand: drag her right and her feet swing left, which about a
                 // head-high pivot is a positive (clockwise) angle in a y-down frame.
