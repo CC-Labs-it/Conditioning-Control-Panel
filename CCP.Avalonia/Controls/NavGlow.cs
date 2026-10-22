@@ -8,7 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Models;
 using Serilog;
 
@@ -54,10 +54,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// <summary>The ring and its four fading halo strokes (WPF GlowAdorner.OnRender).</summary>
     internal sealed class NavGlowRing : Control
     {
+        /// <summary>True while its clock rides the window's frames (tests).</summary>
+        internal bool OnFrameBeat => _clock is { IsEnabled: true, IsFrameLocked: true };
+
         private readonly Pen _ring;
         private readonly Pen[] _halo = new Pen[4];
         private readonly IBrush _fill;
-        private DispatcherTimer? _timer;
+        private FrameClock? _clock;
         private Action? _unhook;
         private MotionLevel _level;
         private long _start;
@@ -89,9 +92,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
             Tick();
             if (_gone) return;
             // Elapsed time on NavGlow.Time, not Avalonia's animation clock (real time, no seam):
-            // a slow frame cannot stretch it (P40) and a test steps it (P08).
-            _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(1000.0 / 60), DispatcherPriority.Background, (_, _) => Tick());
-            _timer.Start();
+            // a slow frame cannot stretch it (P40) and a test steps it (P08). Ticks on the window's
+            // shared frame beat at 60 fps (WPF default rate), not a private timer.
+            _clock = new FrameClock(this) { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+            _clock.Tick += (_, _) => Tick();
+            _clock.Start();
         }
 
         /// <summary>One frame: opacity at the elapsed time, or leave once the glow is over.</summary>
@@ -119,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             if (_gone) return;
             _gone = true;
-            _timer?.Stop();
+            _clock?.Stop();
             _unhook?.Invoke();
             (Parent as Panel)?.Children.Remove(this);
         }

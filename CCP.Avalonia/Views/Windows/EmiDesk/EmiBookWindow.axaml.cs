@@ -911,14 +911,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         ///         (a session, not the plain engine), in Core. Unseeded on this head, and "no session is running" is the truth here,
         ///         not a placebo.</item>
         ///   <item><c>App.Tutorial?.IsActive</c> is <c>CoreTutorial.IsActive</c>, in Core since the
-        ///         tutorial seam landed. Also unseeded here - CCP.Avalonia/App.axaml.cs says why:
-        ///         TutorialService and its twenty-two step lists are still in the WPF head.</item>
+        ///         tutorial seam landed, and seeded here by <c>Tours.TutorialHead.Seed</c>.</item>
         ///   <item><c>EmiState.HasTourDone(tour)</c>, the already-walked latch, is the one that is
         ///         genuinely still head-side (Services/EmiDesk/EmiState.cs).</item>
         /// </list>
-        /// <para>So this is NOT restored, and deliberately: all three resolvable conditions are
-        /// constant-false on this head, so evaluating them would change nothing a reader can see
-        /// while implying the fourth was checked too. The thing that would make the button honest
+        /// <para>So this is NOT restored, and deliberately: the button cannot start a tour (see
+        /// <see cref="Go"/>), so gating it on the running-tour checks would imply a tour it never
+        /// opens. The thing that would make the button honest
         /// is <see cref="Go"/> being able to START a tour, and it cannot - see there. It stays lit
         /// so the card renders in its full shape, which is what the render proves.</para>
         /// </summary>
@@ -926,9 +925,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>
         /// ponytail: the tour half is NOT blocked on a move any more and the old note was wrong to
-        /// say so. <c>CoreTutorial.Start(tourName)</c> is in Core; what is missing is that this head
-        /// leaves the seam UNSEEDED (CCP.Avalonia/App.axaml.cs), so <c>Start</c> is a silent no-op
-        /// and calling it would give a button that looks like it walked you somewhere. The door half
+        /// say so. <c>CoreTutorial.Start(tourName)</c> is in Core and seeded by
+        /// <c>Tours.TutorialHead.Seed</c>; what is missing is this button calling it (and the
+        /// HasTourDone latch above), so it does not walk you anywhere yet. The door half
         /// is <c>EmiTargets.Open</c>. Both ends of the button are a
         /// detour into the app. The door half is wired: straight through <see cref="EmiTargets"/>,
         /// the ring's own Pick, so a door opened from the book is a door used. The
@@ -1056,12 +1055,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         ///
         /// <para>ponytail: the OWNER is here now, so this is one member away. What is missing is
         /// <c>EmiDeskWindow.SpeakLine</c> and the <c>LineDraw</c> record, and those are blocked on
-        /// <c>EmiLineEngine</c> + <c>EmiChains.Player</c>
-        /// (ConditioningControlPanel/Services/EmiDesk/). Of those two, AUDITED 2026-09-04, only
-        /// EmiChains is close: its whole head coupling is Player's DispatcherTimer, one seam swap.
-        /// EmiLineEngine reads App.Settings and calls App.EmiDesk.AskSituationOk(), which its own
-        /// header says do not exist without the shell - so the margin line is behind the shell, not
-        /// behind a move. Meanwhile the widget's <c>Say</c> and
+        /// <c>EmiLineEngine</c> + <c>EmiChains.Player</c>.
+        /// EmiLineEngine is in Core now (CCP.Core/Services/EmiDesk, WPF seeds its ask probes;
+        /// unset here means no offers);
+        /// EmiChains is still WPF-only, its whole head coupling is Player's DispatcherTimer, one
+        /// seam swap. Meanwhile the widget's <c>Say</c> and
         /// <c>PlayChain</c> are still no-ops on this head, so a line handed over would be swallowed
         /// rather than spoken. Priority 2, keyed "book.margin.&lt;id&gt;", face from the card - all
         /// of that is data this stub already carries, so only the delivery is missing.</para>
