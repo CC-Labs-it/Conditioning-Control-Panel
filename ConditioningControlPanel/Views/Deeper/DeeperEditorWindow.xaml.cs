@@ -507,6 +507,7 @@ namespace ConditioningControlPanel.Views.Deeper
                     userDataFolder: userDataFolder).ConfigureAwait(true);
                 await BrowserPreview.EnsureCoreWebView2Async(env).ConfigureAwait(true);
                 if (BrowserPreview.CoreWebView2 == null) { ShowPlaceholder(); return; }
+                global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(BrowserPreview.CoreWebView2);
 
                 // Settings hardening — JS stays on (BrowserVideoTimeSource needs
                 // it to drive the <video> element) but we strip every other

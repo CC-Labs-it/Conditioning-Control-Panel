@@ -283,6 +283,7 @@ internal sealed class JackpotRemixBuilder : IDisposable
             await _web.EnsureCoreWebView2Async(env).ConfigureAwait(true);
             if (_web?.CoreWebView2 == null || _disposed) return;
             var core = _web.CoreWebView2;
+            global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(core);
             var s = core.Settings;
             s.AreDevToolsEnabled = false;
             s.AreDefaultContextMenusEnabled = false;

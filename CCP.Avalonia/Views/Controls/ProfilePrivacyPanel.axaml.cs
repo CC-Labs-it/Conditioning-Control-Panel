@@ -7,7 +7,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <summary>
     /// The Profile tab's "Privacy &amp; Sharing" body, ported from the WPF head.
     ///
-    /// NOTHING HERE IS WIRED, and the refusal STANDS - but not for the reason first written. The
+    /// Only the two Rich Presence switches are wired (WirePresence). The rest: the refusal STANDS - but not for the reason first written. The
     /// original note blamed MainWindow being a <c>System.Windows.Window</c>; that is stale. Every
     /// flag these twelve toggles write (DiscordShareAchievements, PublicShareRealAvatar,
     /// GoonShareAvatar, GoonShareDiscordDm, GoonRichPresence, ...) is on <c>CoreSettings.Current</c>
@@ -26,8 +26,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     ///    <c>Current.HasLinkedDiscord</c>, and snaps itself back when it does. That gate is a
     ///    settings read and IS portable; it is listed here only so the next pass wires it with the
     ///    push, not without.
-    ///  - <c>ChkShowLevelInPresence</c> and <c>ChkAllowDiscordDm</c> also drive
-    ///    <c>App.DiscordRpc</c>, which has no seam here.
+    ///    (Now wired: <c>WirePresence</c>, with ChkDiscordTabShowLevel.)
+    ///  - <c>ChkAllowDiscordDm</c> also needs the profile push.
     /// The unblocking symbol is a profile-sync seam in CCP.Core (an equivalent of
     /// ConditioningControlPanel/Services/Profile/ProfileSyncService.cs), not a host. Until then the
     /// toggles render and animate and persist nothing, which is visibly inert rather than quietly
@@ -42,6 +42,57 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             AvaloniaXamlLoader.Load(this);
             DataContext = new ProfilePrivacyPanelViewModel();
+            WirePresence();
+        }
+
+        private bool _paintingPresence;
+
+        /// <summary>WPF ChkDiscordRichPresence_Changed (MainWindow.AccountShell.cs:279-316) and
+        /// ChkShowLevelInPresence_Changed (MainWindow.Patreon.cs:902): presence never arms without a
+        /// linked Discord; Show level updates the presence at once.</summary>
+        private void WirePresence()
+        {
+            var rp = this.FindControl<CheckBox>("ChkDiscordTabRichPresence");
+            var lvl = this.FindControl<CheckBox>("ChkDiscordTabShowLevel");
+            PaintPresence();
+            if (rp != null) rp.IsCheckedChanged += (_, _) =>
+            {
+                if (_paintingPresence) return;
+                var s = CoreSettings.Current;
+                bool on = rp.IsChecked == true;
+                if (on && !s.HasLinkedDiscord)
+                {
+                    PaintPresence();
+                    if (TopLevel.GetTopLevel(this) is Window { IsVisible: true } owner && !Tabs.SettingsTabView.SuppressDialogsForTest)
+                        _ = Dialogs.MessageDialog.ShowAsync(owner, "Discord Not Linked",
+                            Loc.Get("msg_discord_rich_presence_requires_a_linked_disco"));
+                    return;
+                }
+                if (s.DiscordRichPresenceEnabled == on) return;
+                s.DiscordRichPresenceEnabled = on;
+                CoreSettings.Save();
+                App.ApplyRichPresence();
+            };
+            if (lvl != null) lvl.IsCheckedChanged += (_, _) =>
+            {
+                if (_paintingPresence) return;
+                CoreSettings.Current.DiscordShowLevelInPresence = lvl.IsChecked == true;
+                CoreSettings.Save();
+                App.DiscordRpc?.UpdateLevel(CoreSettings.Current.PlayerLevel);
+            };
+            AttachedToVisualTree += (_, _) => { App.RichPresenceChanged -= PaintPresence; App.RichPresenceChanged += PaintPresence; };
+            DetachedFromVisualTree += (_, _) => App.RichPresenceChanged -= PaintPresence;
+        }
+
+        private void PaintPresence()
+        {
+            _paintingPresence = true;
+            try
+            {
+                if (this.FindControl<CheckBox>("ChkDiscordTabRichPresence") is { } rp) rp.IsChecked = CoreSettings.Current.DiscordRichPresenceEnabled;
+                if (this.FindControl<CheckBox>("ChkDiscordTabShowLevel") is { } lvl) lvl.IsChecked = CoreSettings.Current.DiscordShowLevelInPresence;
+            }
+            finally { _paintingPresence = false; }
         }
 
         /// <summary>The panel joins a window only when its dialog opens, after the shell's offline

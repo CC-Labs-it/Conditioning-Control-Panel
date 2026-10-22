@@ -215,8 +215,9 @@ public sealed partial class FriendsDrawer : Border
     internal void TogglePresence()
     {
         if (_svc?.Available != true) return;
-        try { _svc.PresenceShared = !_svc.PresenceShared; } catch (Exception ex) { Serilog.Log.Debug("[Friends] presence write failed: {E}", ex.Message); }
-        PresenceAsk.MarkAsked(); // WPF FriendsPresenceSetting.Write: answering here counts as answering the ask
+        // WPF FriendsDrawer.Presence.cs:76-81, same Core rule; answering here counts as answering the ask
+        var next = !FriendsPresenceSetting.Read(_svc, () => false);
+        FriendsPresenceSetting.Write(next, _svc, _ => { }, () => PresenceAsk.MarkAsked());
         Render();
     }
     private void RenderList(FriendsSnapshot snap)
@@ -610,9 +611,9 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>The window a word outside the drawer flies over. The drawer lives in a popup (not a Window) and is
     /// detached once folded, so its host (the rail chip) sets this to its own window.</summary>
     internal Func<Window?> OwnerWindow { get; set; }
-    /// <summary>WPF TellOutside(always) -> FriendsLanding.Say: a floating word over the window.</summary>
-    private void Say(string text, bool good) =>
-        Overlays.FloatingWord.Throw(OwnerWindow(), text, pink: !good, small: true);
+    /// <summary>WPF TellOutside(always) -> FriendsLanding.Tell: a floating word over the active game, the
+    /// panel or the launcher, else over the drawer's own window.</summary>
+    private void Say(string text, bool good) => Platform.FriendsLanding.Tell(text, good, OwnerWindow());
     internal static TextBlock Label(string text, double size, IBrush fg, FontFamily? font = null, FontWeight weight = FontWeight.Normal) => new()
     {
         Text = text, FontSize = size, Foreground = fg, FontFamily = font ?? FontFamily.Default, FontWeight = weight,

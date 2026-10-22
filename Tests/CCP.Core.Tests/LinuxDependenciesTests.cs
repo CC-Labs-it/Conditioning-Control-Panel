@@ -90,3 +90,80 @@ public sealed class LinuxDependenciesTests
             LinuxDependencies.Message(missing, "ID=fedora\n")!.Value.Command);
     }
 }
+
+// webview-render: without GStreamer's autoaudiosink (gst-plugins-good) WebKitWebProcess aborts on a page's first WebAudio
+// sound and the page freezes on its last frame (~/ccp-port/evidence/webview-render/findings.md). The plugin is a file
+// under a gstreamer-1.0 dir, not a soname, so it is probed by path.
+public sealed class GstAudioSinkDependencyTests
+{
+    private static bool NoSink(string lib) => !lib.StartsWith(LinuxDependencies.GstPluginPrefix);
+
+    [Theory]
+    [InlineData("ID=cachyos\nID_LIKE=arch\n", "sudo pacman -S --needed gst-plugins-good")]
+    [InlineData("ID=ubuntu\nID_LIKE=debian\n", "sudo apt install gstreamer1.0-plugins-good")]
+    [InlineData("ID=fedora\n", "sudo dnf install gstreamer1-plugins-good")]
+    public void AMissingAudioSinkNamesTheGoodPluginsPackage(string osRelease, string command)
+    {
+        var missing = LinuxDependencies.Missing(NoSink, LinuxDependencies.WebViews);
+        Assert.Equal(new[] { LinuxDependencies.WebViewSound }, missing.Select(d => d.Need));
+        var msg = LinuxDependencies.Message(missing, osRelease)!.Value;
+        Assert.Equal(command, msg.Command);
+        Assert.DoesNotContain("WPE", msg.Text);
+    }
+
+    // Probed once per process (startup toast and WebHost panel share this text): an install needs a restart (oracle-deep nit).
+    [Theory]
+    [InlineData("ID=cachyos\nID_LIKE=arch\n")]
+    [InlineData("ID=opensuse-tumbleweed\n")]
+    public void TheMessageSaysToRestartAfterInstalling(string osRelease) =>
+        Assert.Contains(LinuxDependencies.RestartHint, LinuxDependencies.Message(LinuxDependencies.Missing(NoSink, LinuxDependencies.WebViews), osRelease)!.Value.Text);
+
+    [Fact]
+    public void WebViewsAreWebKitGtkPlusTheSinkAndNeverWpe()
+    {
+        Assert.Equal(new[] { "web views", LinuxDependencies.WebViewSound }, LinuxDependencies.WebViews.Select(d => d.Need));
+        // GTK is the Linux engine now; WPE is an opt-in, so neither the startup toast nor the panel may claim pages need it.
+        Assert.DoesNotContain(LinuxDependencies.Required, d => d.Need.Contains("WPE"));
+        Assert.Contains(LinuxDependencies.Required, d => d.Need == LinuxDependencies.WebViewSound);
+    }
+
+    private static System.Func<string, string?> Env(params (string Key, string Value)[] vars) =>
+        k => vars.FirstOrDefault(v => v.Key == k).Value;
+
+    [Theory]
+    [InlineData("/usr/lib/gstreamer-1.0/libgstautodetect.so")]                     // Arch
+    [InlineData("/usr/lib64/gstreamer-1.0/libgstautodetect.so")]                   // Fedora
+    [InlineData("/usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstautodetect.so")]    // Debian/Ubuntu
+    [InlineData("/usr/lib/aarch64-linux-gnu/gstreamer-1.0/libgstautodetect.so")]
+    public void TheSinkIsFoundInEachDistroPluginDir(string file) =>
+        Assert.True(LinuxDependencies.GstPluginPresent("libgstautodetect.so", Env(), p => p == file));
+
+    [Theory]
+    [InlineData("GST_PLUGIN_SYSTEM_PATH_1_0")]
+    [InlineData("GST_PLUGIN_SYSTEM_PATH")]
+    [InlineData("GST_PLUGIN_PATH_1_0")]
+    [InlineData("GST_PLUGIN_PATH")]
+    public void TheSinkIsFoundOnAnyGstPluginPathVariable(string variable) =>
+        Assert.True(LinuxDependencies.GstPluginPresent("libgstautodetect.so", Env((variable, "/nope::/opt/gst/plugins")),
+            p => p == "/opt/gst/plugins/libgstautodetect.so"));
+
+    // GStreamer's rule: GST_PLUGIN_SYSTEM_PATH(_1_0) REPLACES the built-in dirs (AppImage/Flatpak/Nix wrappers), so a plugin only
+    // in /usr/lib is invisible to WebKit there; counting it would bring the crash back (oracle-deep fix B).
+    [Theory]
+    [InlineData("GST_PLUGIN_SYSTEM_PATH_1_0")]
+    [InlineData("GST_PLUGIN_SYSTEM_PATH")]
+    public void ASystemPathOverrideHidesTheDistroDirs(string variable) =>
+        Assert.False(LinuxDependencies.GstPluginPresent("libgstautodetect.so", Env((variable, "/app/lib/gstreamer-1.0")),
+            p => p == "/usr/lib/gstreamer-1.0/libgstautodetect.so"));
+
+    [Theory]
+    [InlineData(null, "/home/u/.local/share/gstreamer-1.0/plugins/libgstautodetect.so")]
+    [InlineData("/xdg", "/xdg/gstreamer-1.0/plugins/libgstautodetect.so")]
+    public void TheUserPluginDirCounts(string? xdgDataHome, string file) =>
+        Assert.True(LinuxDependencies.GstPluginPresent("libgstautodetect.so",
+            k => k switch { "XDG_DATA_HOME" => xdgDataHome, "HOME" => "/home/u", _ => null }, p => p == file));
+
+    [Fact]
+    public void NoSinkAnywhereIsMissing() =>
+        Assert.False(LinuxDependencies.GstPluginPresent("libgstautodetect.so", Env(("GST_PLUGIN_PATH", "/opt/x")), _ => false));
+}

@@ -13,12 +13,10 @@ namespace ConditioningControlPanel.Services
     /// Rules:
     /// 1. Preset opts in unconditionally via <see cref="PersonalityPreset.RequiresExplicitAcknowledgement"/>
     ///    (currently only the "slutmode" built-in).
-    /// 2. The "strict-domme" and "bimbo-cow" built-ins are gated ONLY when SlutMode is on
-    ///    (they have explicit SlutModePersonality variants).
-    /// 3. Any other preset (built-in or community/asset) with a non-empty SlutModePersonality
-    ///    is gated when SlutMode is on. This covers asset prompts in assets/prompts/*.json
-    ///    (Soft Hypnotist, Strict Domme v1, Chaotic Gremlin, Elegant Mistress) and user-installed
-    ///    community prompts that ship slut variants.
+    /// 2. Slut Mode ON gates EVERY preset (2026-10-16). The SlutModeBite block rides on every
+    ///    persona while the switch is on, so every persona is explicit while it is on, whether
+    ///    or not it ships its own SlutModePersonality. Before this only presets with a variant
+    ///    were gated, which matched the old behaviour where the others did not change at all.
     /// </summary>
     public static class ExplicitContentGate
     {
@@ -34,15 +32,8 @@ namespace ConditioningControlPanel.Services
             // Rule 1: unconditional preset opt-in (e.g. SlutMode built-in).
             if (preset.RequiresExplicitAcknowledgement) return true;
 
-            // Rule 2 + 3: SlutMode-conditional. Any preset that ships a SlutModePersonality
-            // expressed an intent to deliver an explicit variant when SlutMode is on.
-            if (slutModeOn)
-            {
-                var slutText = preset.PromptSettings?.SlutModePersonality;
-                if (!string.IsNullOrWhiteSpace(slutText)) return true;
-            }
-
-            return false;
+            // Rule 2: the switch itself is explicit on every persona now (SlutModeBite).
+            return slutModeOn;
         }
 
         /// <summary>

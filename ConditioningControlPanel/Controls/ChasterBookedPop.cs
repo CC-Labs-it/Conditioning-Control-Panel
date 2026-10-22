@@ -40,7 +40,7 @@ namespace ConditioningControlPanel.Controls
         private static readonly Random Rng = new();
 
         private readonly BookedPopLayout.PopPlan _plan;
-        private readonly Point _originPx;
+        private readonly ScreenPoint _originPx;
         private readonly int _slot;
         private readonly long _bornMs;
         private readonly Canvas _stage = new() { IsHitTestVisible = false };
@@ -66,7 +66,7 @@ namespace ConditioningControlPanel.Controls
         private Color _colour;
         private bool _gone;
 
-        private ChasterBookedPop(Point originPx, int slot, BookedFlashPlan.Plan look, BookedPopLayout.PopPlan plan)
+        private ChasterBookedPop(ScreenPoint originPx, int slot, BookedFlashPlan.Plan look, BookedPopLayout.PopPlan plan)
         {
             _plan = plan;
             _originPx = originPx;
@@ -114,7 +114,7 @@ namespace ConditioningControlPanel.Controls
         /// so a booking inside the coalescing window can re-label it, or null when it could not
         /// be shown (decoration fails quietly).
         /// </summary>
-        internal static ChasterBookedPop? Show(Point originPx, BookedFlashPlan.Plan look, BookedPopLayout.PopPlan plan)
+        internal static ChasterBookedPop? Show(ScreenPoint originPx, BookedFlashPlan.Plan look, BookedPopLayout.PopPlan plan)
         {
             try
             {
@@ -330,7 +330,7 @@ namespace ConditioningControlPanel.Controls
                 var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)_originPx.X, (int)_originPx.Y));
                 var scale = CompositorHostWindow.GetDpiScaleForScreen(screen);
                 var b = screen.Bounds;
-                var topLeft = BookedPopLayout.TopLeftPx(_originPx, _slot, scale, new Rect(b.Left, b.Top, b.Width, b.Height));
+                var topLeft = BookedPopLayout.TopLeftPx(_originPx, _slot, scale, new AvatarTubeLayout.Box(b.Left, b.Top, b.Width, b.Height));
                 SetWindowPos(hwnd, HWND_TOPMOST, (int)topLeft.X, (int)topLeft.Y, 0, 0,
                     SWP_NOSIZE | SWP_NOACTIVATE);
             }
