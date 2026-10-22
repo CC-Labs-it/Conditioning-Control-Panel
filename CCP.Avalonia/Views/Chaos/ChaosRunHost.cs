@@ -52,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _overlay.OnRunAgain = RunAgain;
                 _overlay.OnDismissed = OnOverlayClosed;
                 _overlay.Show();
+                ChaosEffectBannerOverlay.EnsureCreated();   // WPF :410 birth the banner window NOW, not mid-chaos
                 _overlay.ShowCountdown(BeginRun, shortFlash: isRestart);   // 1s flash on RunAgain
             }
             catch (Exception ex)
@@ -144,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
+            ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
             Log.Information("Chaos run complete (no payout on this head): base {Base:0} x skill {Mult:0.0} = {Final:0} XP",
                 baseXp, skillMult, finalXp);
@@ -166,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void CleanupAfterRun()
         {
             ChaosSkiaFxOverlay.CloseActive();   // WPF CleanupAfterRun
+            ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
             _runTimer = null;
             _hud = null;
             _overlay = null;
