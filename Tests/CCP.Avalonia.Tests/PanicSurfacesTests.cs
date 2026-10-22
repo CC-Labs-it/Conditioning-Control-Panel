@@ -80,7 +80,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "gif-cascade", "chaos-intro", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "companion-transcript", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
+        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "speak-cue", "companion-transcript", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
@@ -174,6 +174,7 @@ public sealed class PanicSurfacesTests
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
+        ["InlineLoopVideo"] = "WPF parity: the help card's muted, no-audio clip poster; it lives only while that card is open, and closing the card detaches and frees it",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
     };
