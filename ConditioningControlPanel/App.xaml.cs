@@ -1809,10 +1809,7 @@ namespace ConditioningControlPanel
                 }
 
                 // Check for rendering thread failure - this is unrecoverable and can cause dialog loops
-                var isRenderFailure = args.Exception.Message.Contains("RENDER") ||
-                                      args.Exception.Message.Contains("0x88980406") ||
-                                      args.Exception.HResult == unchecked((int)0x88980406) ||
-                                      args.Exception is OutOfMemoryException;
+                var isRenderFailure = Services.Diagnostics.UiThreadExit.IsRenderFailure(args.Exception);
 
                 // Render-thread failure / OOM in the composition channel is unrecoverable.
                 // Exit IMMEDIATELY, before any UI attempt - MessageBox.Show runs a nested
@@ -1820,13 +1817,23 @@ namespace ConditioningControlPanel
                 // so we can't safely show a dialog. (See 2026-05-25 crash storm:
                 // 10,251 cascading reports because the exit branch was gated behind a
                 // blocking MessageBox.Show that never returned.)
+                // Never Environment.Exit on this thread: ProcessExit's SystemEvents.Shutdown waits on
+                // a Send to this very thread, and the "hard exit" froze the app (ccp-bugs #1468).
                 if (isRenderFailure)
                 {
                     if (Interlocked.Exchange(ref exitInProgress, 1) == 0)
                     {
                         try { Logger?.Error("Render thread failure / OOM - hard exit to prevent cascade"); } catch { }
-                        Environment.Exit(1);
+                        Services.Diagnostics.UiThreadExit.Begin(1,
+                            beforeTerminate: Services.Logging.LogPipeline.WriteSessionFooter);
                     }
+                    args.Handled = true;
+                    return;
+                }
+
+                // The exit thread is already on its way out (up to 5 s): never open a dialog meanwhile.
+                if (Volatile.Read(ref exitInProgress) == 1)
+                {
                     args.Handled = true;
                     return;
                 }
