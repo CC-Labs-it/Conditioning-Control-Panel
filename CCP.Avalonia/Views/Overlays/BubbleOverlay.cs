@@ -124,7 +124,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public static void Stop()
         {
-            var wasRunning = _running;
+            // WPF Stop returns early when the ambient game is idle, so a chaos-only teardown keeps presence.
+            var wasRunning = IsRunning;
             if (_chaosPopped != null && _running)
             {
                 // The ambient game stops mid-run: its bubbles go, the run keeps the windows.
@@ -133,7 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Field.Bubbles.RemoveAll(b => b.Spec == null);
                 _chaosOpenedWindows = true;
                 foreach (var w in Windows) w.Sync();
-                App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:853 (runs whatever chaos holds)
+                if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:853
                 return;
             }
             _chaosOpenedWindows = false;
