@@ -25,8 +25,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///     Lockdown starts mid-video, and refused again on the press.
     ///   * MUTE silences this video run only (player volume 0, never the system mixer). Cleared when
     ///     the run ends, kept across an attention-check replay and the output heal.
-    /// ponytail: chaosRunning is always false here - no Chaos run state exists on this head yet
-    /// (ChaosOverlayWindow.OpenHubAt notes App.Chaos.IsRunning) and Down the Rabbit Hole is not hosted.
+    /// A Chaos run (<see cref="Chaos.ChaosRunHost.IsActive"/>) hides both, as WPF LockedChaosRun;
+    /// Down the Rabbit Hole is not hosted on this head (n/a).
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay
     {
@@ -39,8 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal int PlayerVolume { get; private set; }
 
         private static bool LockdownActive => LockdownService.Current?.IsActive == true;
-        private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, chaosRunning: false);
-        private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, chaosRunning: false);
+        private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
+        private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
 
         private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p)
         {

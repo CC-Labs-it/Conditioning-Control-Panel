@@ -60,10 +60,10 @@ public sealed class MandatoryVideoOverlayTests
         return w;
     }
 
-    /// <summary>Real-time wait for LibVLC/dispatcher work, bounded at 5 s.</summary>
-    internal static async Task Until(Func<bool> done)
+    /// <summary>Real-time wait for LibVLC/dispatcher work, bounded (5 s by default).</summary>
+    internal static async Task Until(Func<bool> done, int seconds = 5)
     {
-        for (var i = 0; i < 100 && !done(); i++) await Task.Delay(50);
+        for (var i = 0; i < seconds * 20 && !done(); i++) await Task.Delay(50);
     }
 
     [Fact]
@@ -403,7 +403,8 @@ public sealed class MandatoryVideoOverlayTests
                     v.Ended();
                     s.AttentionChecksEnabled = false;
                     Assert.False(o.UserMuted);   // between clips, nothing is muted
-                    await Until(() => o.Windows.Count == 1 && o.FirstFrameMs >= 0 && o.Surfaces[0].Buttons.Row.IsVisible);
+                    // 2 s verdict + 1.3 s pre-roll + decode: a wider bound so a loaded runner does not flake.
+                    await Until(() => o.Windows.Count == 1 && o.FirstFrameMs >= 0 && o.Surfaces[0].Buttons.Row.IsVisible, 15);
                     Assert.True(v.IsPlaying && o.UserMuted && o.PlayerVolume == 0, "the attention replay stays muted");
 
                     // The X: the Esc dismiss without the grace pause; the next clip has its sound.
