@@ -11,8 +11,8 @@
 // OnTabShown "assets"): RefreshAssetTree (local images/videos), BuildFolderTree, the folder and
 // thumbnail checks, Select/Deselect All, thumbnails (images; videos keep the placeholder), preview
 // and reveal, the asset counts and the preset combo + Save As/Update/Delete. AssetPresetService
-// .OnlineChannelsReset is seeded in App startup (main 03af6e8bb). Still missing from the tree: the
-// Content Packs node, encrypted image thumbnails, pack checks/counts and preview now live in AssetsTabView.Packs.cs, using ContentPackStore.
+// .OnlineChannelsReset is seeded in App startup (main 03af6e8bb). The Content Packs node, encrypted
+// image thumbnails, pack checks/counts and preview live in AssetsTabView.Packs.cs, using ContentPackStore.
 //
 // The rest, by blocker:
 //   App.ContentPacks - RefreshPacksAsync, BtnRefreshPacks_Click, BtnPackDownload_Click,
