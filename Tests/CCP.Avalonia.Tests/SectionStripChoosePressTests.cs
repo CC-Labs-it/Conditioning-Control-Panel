@@ -117,9 +117,13 @@ public sealed class SectionStripChoosePressTests : IDisposable
                 w.MouseMove(at);
                 w.MouseDown(at, MouseButton.Left);
                 Assert.Equal(0.97, ((TransformGroup)p.Ring.RenderTransform!).Children.OfType<ScaleTransform>().First().GetBaseValue(ScaleTransform.ScaleXProperty).GetValueOrDefault());
+                var pressTransitions = p.PressScale.Transitions;
                 w.MouseUp(at, MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal("ramp", w.CurrentTab);
+                // One click squishes three times (release, Click, capture loss); a new Transitions
+                // collection each time would cancel the running 80 ms release ease.
+                Assert.Same(pressTransitions, p.PressScale.Transitions);
                 Assert.Equal(1, ((TransformGroup)p.Ring.RenderTransform!).Children.OfType<ScaleTransform>().First().GetBaseValue(ScaleTransform.ScaleXProperty).GetValueOrDefault());
                 var layer = AdornerLayer.GetAdornerLayer(p.Pill)!;
                 var rings = layer.Children.OfType<NavGlowRing>().Where(r => AdornerLayer.GetAdornedElement(r) == p.Pill).ToArray();

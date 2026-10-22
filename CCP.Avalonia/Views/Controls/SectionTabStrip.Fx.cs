@@ -164,7 +164,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             else
             {
                 var duration = TimeSpan.FromMilliseconds(InteractionPressMotion.DurationMs);
-                p.PressScale.Transitions = new Transitions
+                // Build once: one click calls this three times (release, Click, capture loss), and
+                // replacing the collection would cancel the running 80 ms release ease.
+                p.PressScale.Transitions ??= new Transitions
                 {
                     new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = duration, Easing = new QuadraticEaseOut() },
                     new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = duration, Easing = new QuadraticEaseOut() },
