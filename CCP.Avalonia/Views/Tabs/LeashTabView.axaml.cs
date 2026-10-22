@@ -7,54 +7,35 @@ using ConditioningControlPanel.Services.Leash;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
-/// <summary>Social &gt; Leash. WPF page repaint and the leashed account's own card.</summary>
+/// <summary>Social &gt; Leash. Hosts a second <see cref="LeashDrawerSection"/> like WPF LeashTabView.xaml.cs:32
+/// (the drawer keeps its own), so every action is the section's own. Empty: one line and a button to Friends.</summary>
 public partial class LeashTabView : UserControl
 {
-    private readonly Func<ILeashService?> _resolve;
-    private ILeashService? _service;
-    private LeashSelfCard? _self;
+    internal LeashDrawerSection Section { get; }
 
     public LeashTabView() : this(() => LeashHead.Service) { }
     internal LeashTabView(Func<ILeashService?> service)
     {
-        _resolve = service;
         InitializeComponent();
+        Section = new LeashDrawerSection(service);
+        Section.Changed += SyncEmpty;
+        SectionHost.Children.Add(Section);
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
-        DetachedFromVisualTree += (_, _) => Unsubscribe();
-        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) Unsubscribe(); };
+        // The shell hides tabs with IsVisible; a hidden page stops listening (P01) and redraws on the next show.
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) Section.Unsubscribe(); };
+        SyncEmpty();
     }
 
     internal bool ShowingEmpty => EmptyPanel.IsVisible;
-    internal LeashSelfCard? SelfCard => _self;
+    internal LeashSelfCard? SelfCard => Section.SelfCard;
 
+    private void SyncEmpty() => EmptyPanel.IsVisible = !Section.IsVisible;
+
+    /// <summary>ShowTab("leash"): repaint, and report the offers / today's task on screen.</summary>
     internal void OnShown()
     {
-        Unsubscribe();
-        try { _service = _resolve(); } catch { _service = null; }
-        if (_service != null) _service.SnapshotChanged += OnSnapshot;
-        Render();
-    }
-
-    private void Unsubscribe()
-    {
-        if (_service != null) _service.SnapshotChanged -= OnSnapshot;
-    }
-    private void OnSnapshot(LeashSnapshot _) => Render();
-
-    private void Render()
-    {
-        MyLeash? me = null;
-        try { if (_service?.Available == true) me = _service.Snapshot.Me; } catch { }
-        SectionHost.Children.Clear();
-        if (me != null)
-        {
-            if (_self == null) _self = new LeashSelfCard(me, () => _service);
-            else _self.Update(me);
-            SectionHost.Children.Add(_self);
-            // WPF NoteOnScreen: assignments are seen here; punishments are seen on the gate.
-            if (IsEffectivelyVisible && me.Assignment is { } a) _service?.NoteShown(a.Aid);
-        }
-        else _self = null;
-        EmptyPanel.IsVisible = me == null;
+        try { Section.OnShown(); }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] page repaint failed: {E}", ex.Message); }
+        SyncEmpty();
     }
 }

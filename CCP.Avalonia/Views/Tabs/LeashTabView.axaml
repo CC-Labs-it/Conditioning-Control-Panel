@@ -1,5 +1,5 @@
-<!-- PORTED from WPF LeashTabView.xaml(.cs): own-card and repaint slice.
-     ponytail: offers, held cards and help remain in wire-views-tab-leash-b. -->
+<!-- PORTED from WPF LeashTabView.xaml(.cs): the shared LeashDrawerSection (offers + own card).
+     ponytail: held cards and the page "?" remain in wire-views-tab-leash-b-next. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"

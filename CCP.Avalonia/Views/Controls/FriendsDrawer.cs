@@ -4,7 +4,7 @@
 // report), request answers, add by code and your own code. Driven only by IFriendsService.
 // The send pickers (poke / invite / watch) are in FriendsDrawer.Pickers.cs.
 // ponytail: no feed, trails,
-// open tables or leash section, no lock-day chip, no once-only presence ask, no juice (.Juice.cs), no bell (the corner notices are not on this
+// open tables, no leash holder cards or Offer chip, no lock-day chip, no once-only presence ask, no juice (.Juice.cs), no bell (the corner notices are not on this
 // head), no per-PC block list (the server's list only). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
@@ -55,6 +55,8 @@ public sealed partial class FriendsDrawer : Border
     private readonly Dictionary<string, (string Text, bool Good)> _results = new();
     private readonly Border _head = new(), _addBox = new(), _foot = new();
     private readonly StackPanel _list = new();
+    // WPF FriendsDrawer.cs:52: the popup's own leash section (the Leash page hosts a second one).
+    private readonly Leash.LeashDrawerSection _leash = new();
     private readonly TextBox _codeBox = new();
     private readonly Button _addGo;
     private readonly TextBlock _addResult = Label("", 11.5, Muted, Display);
@@ -236,6 +238,8 @@ public sealed partial class FriendsDrawer : Border
             _list.Children.Add(box);
             return;
         }
+        // WPF FriendsDrawer.cs:395: the page leaves the leash to Social > Leash; the popup keeps it pinned on top.
+        if (!AsPage) _list.Children.Add(_leash);
         var (online, offline) = FriendsDrawerRules.Split(snap);
         if (_openId != null && !Contains(snap, _openId)) (_openId, _picker) = (null, null);
         if (_confirm is { } c && !Contains(snap, c.Id)) _confirm = null;
