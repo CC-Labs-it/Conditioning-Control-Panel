@@ -5,10 +5,12 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
@@ -22,7 +24,7 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class WorkshopBehaviorBrowserTests
 {
-    private static void Run(Action<WorkshopBehaviorCell, WebHost> body) => AvaloniaTestDispatcher.Run(() =>
+    private static void Run(Action<WorkshopBehaviorCell, WebHost> body, bool avatar = false) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -31,7 +33,7 @@ public sealed class WorkshopBehaviorBrowserTests
         var settings = new SettingsService();
         CoreSettings.ServiceProvider = () => settings;
         var s = settings.Current;
-        (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown, s.AvatarEnabled) = (true, true, 1, false);
+        (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown, s.AvatarEnabled) = (true, true, 1, avatar);
         s.MotionLevel = MotionLevel.Off;
         var shell = new MainShellWindow();
         try
@@ -46,7 +48,8 @@ public sealed class WorkshopBehaviorBrowserTests
         }
         finally
         {
-            shell.Close(); Dispatcher.UIThread.RunJobs();
+            if (avatar) shell.RequestExit(); else shell.Close();
+            Dispatcher.UIThread.RunJobs();
             CoreSettings.ServiceProvider = old;
         }
     });
@@ -113,5 +116,60 @@ public sealed class WorkshopBehaviorBrowserTests
         Dispatcher.UIThread.RunJobs();
         Assert.Empty(sent);
         Assert.True(toggle.IsChecked);
+    });
+
+    /// <summary>WPF MenuItemPauseBrowser_Click -> SyncQuickControlsUI(pauseBrowser) and
+    /// ChkPauseBrowser_Changed -> AvatarTubeWindow.SetBrowserPaused: the tube item and the Workshop
+    /// switch mirror each other, and the mirror never re-sends the pause.</summary>
+    [Fact]
+    public void TubePauseItemAndWorkshopSwitchMirrorEachOther() => Run((cell, host) =>
+    {
+        var sent = new List<string>();
+        host.ScriptInvoker = script => { sent.Add(script); return Task.FromResult<string?>("paused"); };
+        var tube = ((MainShellWindow)TopLevel.GetTopLevel(cell)!).Tube!;
+        var item = tube.FindControl<MenuItem>("MenuItemPauseBrowser")!;
+        var toggle = cell.FindControl<CheckBox>("ChkPauseBrowserCompanion")!;
+
+        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(toggle.IsChecked);
+        Assert.Equal(2, sent.Count); // mute + pause once; the mirrored switch did not replay it
+        Assert.Contains("el.pause()", sent[1]);
+        Assert.Equal("menu_resume_browser", (item.Header as IconLabel)?.Key);
+
+        toggle.IsChecked = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains("el.play()", sent[^1]);
+        Assert.Equal("menu_pause_browser", (item.Header as IconLabel)?.Key);
+    }, avatar: true);
+
+    /// <summary>WPF SyncTubeMidnightRow + MidnightGlassWanted: the row and the tube's glass follow the
+    /// persisted wallet (ArcademyHostService.WalletOwnsSku), greyed when the prize was not sold.</summary>
+    [Fact]
+    public void MidnightGlassRowAndTubeFollowTheSavedWallet() => Run((cell, _) =>
+    {
+        var path = System.IO.Path.Combine(CorePaths.UserData, "arcademy_meta.json");
+        var backup = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : null;
+        var row = cell.FindControl<CheckBox>("ChkTubeMidnightGlass")!;
+        try
+        {
+            CoreSettings.Current.TubeMidnightGlass = true;
+            System.IO.File.Delete(path);
+            cell.SyncFromSettings();
+            Assert.False(row.IsEnabled);
+            Assert.False(row.IsChecked);
+            Assert.False(global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.MidnightGlassWanted());
+
+            System.IO.Directory.CreateDirectory(CorePaths.UserData);
+            System.IO.File.WriteAllText(path, "{\"wallet\":{\"inv\":{\"tube_midnight\":{\"n\":1}}}}");
+            cell.SyncFromSettings();
+            Assert.True(row.IsEnabled);
+            Assert.True(row.IsChecked);
+            Assert.True(global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.MidnightGlassWanted());
+        }
+        finally
+        {
+            if (backup != null) System.IO.File.WriteAllText(path, backup); else System.IO.File.Delete(path);
+        }
     });
 }
