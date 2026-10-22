@@ -829,5 +829,31 @@
       0.71991
     ],
     "lod": 1
-  }
+  },
+  {"id":"place-1-white","file":"ui/place-1-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":1,"variant":"white","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-1-pink","file":"ui/place-1-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":1,"variant":"pink","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-2-white","file":"ui/place-2-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":2,"variant":"white","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-2-pink","file":"ui/place-2-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":2,"variant":"pink","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-3-white","file":"ui/place-3-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":3,"variant":"white","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-3-pink","file":"ui/place-3-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":3,"variant":"pink","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-4-white","file":"ui/place-4-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":4,"variant":"white","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-4-pink","file":"ui/place-4-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":4,"variant":"pink","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-5-white","file":"ui/place-5-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":5,"variant":"white","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-5-pink","file":"ui/place-5-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":5,"variant":"pink","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-6-white","file":"ui/place-6-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":6,"variant":"white","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-6-pink","file":"ui/place-6-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":6,"variant":"pink","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-7-white","file":"ui/place-7-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":7,"variant":"white","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-7-pink","file":"ui/place-7-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":7,"variant":"pink","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-8-white","file":"ui/place-8-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":8,"variant":"white","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"place-8-pink","file":"ui/place-8-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":104,"height":112,"format":"svg","numeral":8,"variant":"pink","minDisplayHeightPx":48,"contentBox":[12,5,87,105]},
+  {"id":"item-slot-frame","file":"ui/item-slot-frame.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":112,"height":112,"format":"svg","safeContentBox":[28,28,56,56]},
+  {"id":"drift-pip-pink","file":"ui/drift-pip-pink.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":32,"height":32,"format":"svg","state":"pink"},
+  {"id":"drift-pip-white","file":"ui/drift-pip-white.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":32,"height":32,"format":"svg","state":"white"},
+  {"id":"drift-pip-gold","file":"ui/drift-pip-gold.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":32,"height":32,"format":"svg","state":"gold"},
+  {"id":"lap-time-divider","file":"ui/lap-time-divider.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":192,"height":16,"format":"svg"},
+  {"id":"minimap-frame","file":"ui/minimap-frame.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":200,"height":152,"format":"svg","safeContentBox":[24,24,152,104]},
+  {"id":"flag-start","file":"ui/flag-start.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":128,"height":120,"format":"svg","variant":"start"},
+  {"id":"flag-finish","file":"ui/flag-finish.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":128,"height":120,"format":"svg","variant":"finish"},
+  {"id":"menu-race-frame","file":"ui/menu-race-frame.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":256,"height":168,"format":"svg","safeLabelBox":[27,120,196,25],"safeDetailBox":[98,38,109,61]},
+  {"id":"menu-online-frame","file":"ui/menu-online-frame.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":256,"height":168,"format":"svg","safeLabelBox":[27,120,196,25],"safeDetailBox":[98,38,109,61]}
 ]

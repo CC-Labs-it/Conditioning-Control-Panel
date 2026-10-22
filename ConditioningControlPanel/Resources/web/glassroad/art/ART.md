@@ -355,3 +355,64 @@ Review PNGs are evidence only, not runtime inputs.
 
 Each family branch starts directly from the same main snapshot. When integrating families,
 append their distinct manifest rows and retain all family ART.md sections. The sampled palettes are identical.
+
+## Wave 2 HUD kit
+
+26 original SVGs, 19,396 bytes total. No embedded raster images, text nodes, font
+references, filters, scripts, remote references or animation. No baked texture
+allocation; each manifest row has texBytes: 0, tris: 0, boundRadiusM: 0.
+
+| Assets | Count | ViewBox | Use |
+|---|---:|---|---|
+| place-1-white.svg through place-8-white.svg | 8 | 104 x 112 | Main place numeral |
+| place-1-pink.svg through place-8-pink.svg | 8 | 104 x 112 | CCP pink place variant |
+| item-slot-frame.svg | 1 | 112 x 112 | Round item frame |
+| drift-pip-pink.svg, drift-pip-white.svg, drift-pip-gold.svg | 3 | 32 x 32 | Drift stages in that order |
+| lap-time-divider.svg | 1 | 192 x 16 | Separator only |
+| minimap-frame.svg | 1 | 200 x 152 | Empty map frame |
+| flag-start.svg, flag-finish.svg | 2 | 128 x 120 | Original spiral-stamp flags |
+| menu-race-frame.svg, menu-online-frame.svg | 2 | 256 x 168 | Icon frames with empty label areas |
+
+### Binding
+
+- Render place numerals at a minimum height of 48 CSS px, with their native aspect
+  ratio. All 16 were opened at that exact height on dark and light backgrounds.
+  Common numeral contentBox is [12,5,87,105], with one pixel of padding around
+  the combined nonzero-alpha bounds [13,6,85,103] at native size.
+  The engine supplies any localized ordinal suffix separately.
+- Palette: ink #17151c, paper #fff8ef, pink #ff5fa8, gold #ffd36b.
+  Paper is intentionally warm. Pink and gold follow the supplied design board.
+- The item frame's safe content rectangle is [28,28,56,56].
+- The minimap's safe content rectangle is [24,24,152,104].
+- Menu labels belong in [27,120,196,25]; optional descriptions fit in
+  [98,38,109,61]. The frames contain icons only. Render text in the engine.
+- SVG width and height match the viewBox and manifest dimensions. Preserve
+  aspect ratio. Frames are not nine-slice assets.
+- The three drift fills also carry one, two and three ink ticks. Use host opacity
+  for inactive pips; the kit adds no pulse, transition or glow.
+- Start uses a two-by-two alternating spiral stamp and a pink forward pennant.
+  Finish uses a three-by-two spiral stamp and a small gold seal. Neither uses a
+  conventional square checker fill.
+- The SVGs work as ordinary images. An inline renderer may override fills if
+  needed, but no CSS variables or external stylesheet is required.
+
+### Source and review
+
+Original path geometry authored for this project. No external font outlines,
+stock icons, traced concept shapes or third-party artwork were used. Reuse is
+under the repository's existing licence and owner-directed asset policy.
+
+The supplied design board was read and opened in an isolated browser at its HUD
+section. Its clear centre, corner placement, round item frame, pink/white/gold
+drift sequence and two-door menu guided the kit. Localizable text remains outside
+the art.
+
+Validation rasterized every SVG using Sharp, checked nonempty alpha and clear
+viewBox margins, and scanned for text, fonts, images, filters, scripts and external
+references. The contact sheet and separate 48px proof were opened and reviewed.
+Private review PNGs are excluded from the runtime tree.
+
+Assumptions: one white and one pink variant per place; three filled drift states
+with inactive opacity supplied by the host; empty minimap and menu text areas;
+flags are HUD emblems, not track geometry. Placement, focus states, text and motion
+remain the engine's responsibility.
