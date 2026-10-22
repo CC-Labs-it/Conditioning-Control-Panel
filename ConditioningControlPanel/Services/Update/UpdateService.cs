@@ -20,13 +20,62 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.1.12";
+        public const string AppVersion = "7.1.14";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.1.12 - Hold Still
+        public const string CurrentPatchNotes = @"v7.1.14 - Bring a Friend
+
+NEW IN 7.1.14
+
+ONLINE MEDIA
+- online media kept on your PC now clears itself 24 hours after it was downloaded. switching online media off clears it at once.
+- the built-in browser pages clear their own copies of online media too.
+- the ""Media from Scrolller"" line now sits on the Assets card and on the wallpaper credit.
+- a Scrolller picture is never left behind as your Windows wallpaper. a plain one takes its place when the wallpaper switches off.
+- bug reports no longer carry which online posts you looked at.
+
+NEW IN 7.1.13
+
+FRIENDS
+- friend links: press Copy link in the Friends drawer and send it anywhere. whoever opens it becomes your friend, on the desktop, the phone or app.cclabs.app. a link lasts 7 days or 25 uses, and New link retires the old one.
+- paste a friend's link into the add box to claim it, even when it sits inside a longer message.
+- online friends show where they are: a small PC, phone or globe mark next to their name.
+- friends on the web can invite you to Racing Thoughts and Breakout, and the invite opens the right place.
+
+ONLINE MEDIA, GOING OFFICIAL
+- we're finalising a commercial licence with Scrolller and starting the work now. every online picture, GIF and clip carries a small ""via Scrolller"" mark.
+- each plan gets a daily share of online media. the meter in the title bar shows today's use in percent and resets at midnight, your time.
+- anything you've seen in the last 24 hours is kept on your PC and replays free. sessions mix it with fresh picks, so the share goes further.
+- when the share runs out, kept media and your own files keep playing. fresh online media is back at midnight.
+- Basic gets more each day than Free, and Prime the most. a new install gets extra on its first day.
+- the meter is counted on your PC only. a one-time card explains all this the first time you use online media.
+
+GAMES
+- Arcademy: the Records Annex cameras show the whole picture on wide screens.
+- Goon: a listed table says so, and reminds you that you never see your own table in the list.
+
+VIDEOS
+- floating mandatory videos have three new switches on the Video page: Pop up together opens every window at once (up to Most at once), Keep sound stays on the video you're watching while new ones join muted, and Replay after a failed check can be turned off. strict videos and Lockdown always replay.
+
+COMPANION
+- personality studio: edit and delete your own personalities. Save now updates yours instead of adding a copy, and the name box shows the whole name.
+
+ACCOUNT AND HOME
+- an account with no display name is asked for one after signing in.
+- the Discord pill on Home is now a round Discord bubble.
+
+FIXES IN 7.1.13
+- haptics synced to audio no longer stop at 30:00.
+- lock cards accept punctuation: PROCESS, COMPLY, REPEAT matches PROCESS. COMPLY. REPEAT.
+- drone program: day 12 no longer gets stuck. optional tasks keep counting after the required ones finish the day.
+- Ollama setup: Finish saves the host it checked, and the Engine Room shows it.
+- the Strict note on the Video page says which modes keep videos full screen.
+- new pop-ups wait until a running session or Lockdown is over.
+
+v7.1.12 - Hold Still
 
 NEW IN 7.1.12
 - mandatory videos have a small mute button and a close X in the top right. the X is hidden on strict videos and in Lockdown, and neither shows during a Down the Rabbit Hole run.
