@@ -509,16 +509,8 @@ public static class EmiChains
     /// <c>.</c> / <c>..</c> / <c>...</c> cadence. Verbatim from chains.js <c>makeSay</c>.
     /// </summary>
     public static EmiChain MakeSay(string? line, string reactionFace = "^_^", int holdMs = 1800)
-        => new("say", "SAY",
-            new[]
-            {
-                Fb("0_0", 420, "."),
-                Fb("0_0", 420, ".."),
-                Fb("0_0", 520, "..."),
-                Fb(string.IsNullOrEmpty(reactionFace) ? "^_^" : reactionFace,
-                   Math.Max(400, holdMs), line ?? string.Empty),
-                Fb("0_0", 200, null)
-            });
+        => new("say", "SAY", System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(
+            EmiSayFrames.Create(line, reactionFace, holdMs), f => Fb(f.Face, f.Ms, f.Bubble))));
 
     /// <summary>
     /// How long a landed line hangs, the campus formula (widget.js <c>sayHoldMs</c>, already
@@ -526,11 +518,7 @@ public static class EmiChains
     /// There is deliberately no ceiling; the growth is linear and her longest line is under 120
     /// characters.
     /// </summary>
-    public static int SayHoldMs(string? line)
-    {
-        int len = line?.Length ?? 0;
-        return Math.Max(4050, 1890 + 61 * len);
-    }
+    public static int SayHoldMs(string? line) => EmiSayFrames.HoldMs(line);
 
     // ---------------------------------------------------------------- the player
 

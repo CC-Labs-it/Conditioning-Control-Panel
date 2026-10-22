@@ -162,6 +162,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 }
 
                 // The ledger is debounced; a deliberate act should survive a hard kill.
+                EmiDeskService.Instance.NotePinMadeElsewhere(id, nowPinned);
+                // Pin retirement is persisted in the same deliberate write as the accepted pin.
                 EmiState.SaveNow();
                 RefreshRing();
                 Refresh();

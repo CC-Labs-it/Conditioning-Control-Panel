@@ -265,10 +265,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private PixelPoint _resizeStartScreen;
         private double _resizeStartWidth;
 
-        /// <summary>True while a chain is on screen.</summary>
-        // ponytail: needs EmiChains.Player (Services/EmiDesk/EmiChains.cs), wired when the chain
-        // player moves to Core. Nothing on this head can start a chain, so nothing is ever live.
-        public bool ChainLive => false;
+        /// <summary>The speech cadence owns the WPF chain busy gate.</summary>
+        // ponytail: named body/FX chains still await the shared chain player.
+        public bool ChainLive => SpeechActive;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
         public bool Transiting => _transiting;
@@ -898,15 +897,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: needs EmiChains.MakeSay / SayHoldMs / FrameForFace, none of them in Core.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
-        {
-            done?.Invoke();
-        }
+            => StartSpeech(line, reactionFace, done);
 
         /// <summary>Kill the running chain without firing its done hook.</summary>
         public void CancelChain()
         {
+            CancelSpeech();
             try { OnBubbleTextCore(null); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CancelChain failed"); }
         }
@@ -927,10 +924,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True when something is on screen that an idle beat must not interrupt.</summary>
         private bool Busy()
         {
-            // ChainLive is the WPF gate's `_player.IsLive` and is constant false on this head. It is
-            // in the expression anyway: this is the one place that decides whether an idle beat may
-            // interrupt her, and a gate that has to be REMEMBERED when the chain player lands is a
-            // gate that will be forgotten.
+            // The speech clock owns the same busy gate as WPF’s chain player.
             if (PresentationActive || _transiting || ChainLive || InputLocked) return true;
             bool glass = false;
             try { OnGlassLiveQuery(ref glass); }
@@ -2512,11 +2506,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <c>Application.Current.Dispatcher.HasShutdownStarted</c>, and <c>_closingForGood</c> is
         /// this head's twin of it - ShutDown and the Closed handler both set it.
         /// </summary>
+        /// <summary>Test seam (P08): when set, <see cref="After"/> waits on this clock instead of a DispatcherTimer.</summary>
+        internal TimeProvider? FxClock { get; set; }
+
         private void After(int ms, Action act)
         {
             try
             {
-                DispatcherTimer.RunOnce(() =>
+                void Step()
                 {
                     try
                     {
@@ -2527,7 +2524,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     {
                         Log.Debug(ex, "[EmiDesk] deferred FX step failed");
                     }
-                }, TimeSpan.FromMilliseconds(Math.Max(1, ms)), DispatcherPriority.Background);
+                }
+                var due = TimeSpan.FromMilliseconds(Math.Max(1, ms));
+                if (FxClock is { } clock)
+                    clock.CreateTimer(_ => Dispatcher.UIThread.Post(Step, DispatcherPriority.Background), null, due, System.Threading.Timeout.InfiniteTimeSpan);
+                else
+                    DispatcherTimer.RunOnce(Step, due, DispatcherPriority.Background);
             }
             catch (Exception ex)
             {

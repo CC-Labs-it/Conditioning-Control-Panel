@@ -9,10 +9,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// The ring half of the widget: a click on her toggles the card fan, which lives in its own
     /// <see cref="EmiRingWindow"/>. Port of ConditioningControlPanel/Windows/EmiDesk/EmiDeskWindow.Ring.cs.
     ///
-    /// <para>ponytail: the moments WPF fires around the ring (<c>ringOpen</c>, <c>ringDismissed</c>,
-    /// <c>suggestionIgnored3x</c>, <c>pinAdded</c>) and the nudge after an opening need
-    /// <c>App.EmiDesk.Fire</c> / EmiNudges, which this head does not have. The counters behind them
-    /// (<see cref="EmiState.NoteRingOpen"/>, <see cref="EmiState.Current"/>.RingIgnoreStreak) are kept.</para>
+    /// <para>Moments and the delayed pin nudge use the shared Core line/nudge services.</para>
     /// </summary>
     public partial class EmiDeskWindow
     {
@@ -59,7 +56,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             ring.SetWidgetGeometry(BodyPx(), AnchorPx());
             ring.OpenRing();
             if (!ring.IsOpen) return;
-            try { EmiState.NoteRingOpen(); }
+            try
+            {
+                EmiDeskService.Instance.Fire("ringOpen");
+                EmiDeskService.Instance.NoteRingOpened();
+            }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring-open bookkeeping failed"); }
         }
 
@@ -111,6 +112,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             }
         }
 
+        /// <summary>WPF's pin-made seam: the first accepted pin retires its onboarding track forever.</summary>
+        public void NotePinMadeElsewhere(string id, bool pinned)
+        {
+            EmiDeskService.Instance.NotePinMadeElsewhere(id, pinned);
+        }
+
         private void OnRingCardPicked(object? sender, EmiRingCard card)
         {
             try { EmiTargets.Find(card.Id)?.Open(); }
@@ -118,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>WPF OnRingClosed: three dismissals in a row is her cue that the fan is not landing.</summary>
-        private static void OnRingClosed(object? sender, bool picked)
+        private void OnRingClosed(object? sender, bool picked)
         {
             try
             {
@@ -128,9 +135,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     if (st.RingIgnoreStreak == 0) return;
                     st.RingIgnoreStreak = 0;
                 }
-                else if (++st.RingIgnoreStreak >= 3)
+                else
                 {
-                    st.RingIgnoreStreak = 0;   // ponytail: WPF fires suggestionIgnored3x here
+                    EmiDeskService.Instance.Fire("ringDismissed");
+                    if (++st.RingIgnoreStreak >= 3)
+                    {
+                        st.RingIgnoreStreak = 0;
+                        EmiDeskService.Instance.Fire("suggestionIgnored3x");
+                    }
                 }
                 EmiState.SaveSoon();
             }
