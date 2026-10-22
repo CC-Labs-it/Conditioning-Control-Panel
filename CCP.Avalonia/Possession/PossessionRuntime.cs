@@ -11,12 +11,10 @@
 // Panic: every live runtime registers itself; PanicSurfaces "possession" calls UndoAllLive, which
 // returns every touched control's own transform and origin at once.
 //
+// possession-head-b wires the shell walk and Core director lifecycle through DirectorHeadEffect.
 // Still WPF-only (later slices):
-//   possession-head-b: the shell host (MainWindow.Possession.cs walk: Possession.Role opt-in,
-//     InferLeafRole, size/placement filter, display names, the two overlay canvases), the Lockdown
-//     lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
-//     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, PossessionPointer, Warden,
-//     PossessionAudio, PossessionRemember, bark naming of IsBig effects.
+//   possession-head-b2: full Ghost/cursor/edge, scenes, PossessionEvents tripwires,
+//     Warden, PossessionAudio, PossessionRemember, bark naming, and the Lockdown rung readout.
 //   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,
 //     drop, fall, ghost cursor, glitch portrait, glyphrot, melt, misroute, relabel, reorder doors,
 //     retitle, rewrite, room warp, scroll hijack, slider creep, steal card, swap, toast, toggle lie,
@@ -24,6 +22,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services.Possession;
@@ -49,6 +48,9 @@ namespace ConditioningControlPanel.Avalonia.Possession
             public TimeSpan? Start;
             public double Tx, Ty, Rot, Sx = 1, Sy = 1;   // snapshot when the return begins
             public bool Returning;
+            public double? ForcedHoldMs;
+            public double ReturnDurationMs = ReturnMs;
+            public TaskCompletionSource Done = new();
         }
 
         private readonly IFrameSource _frames;
@@ -85,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public bool TryApply(HeadEffect effect, PossessionHeadTarget target)
         {
             var el = target.Element;
-            if (PossessionTree.IsOffLimits(el)) return false;
+            if (PossessionTree.IsOffLimits(el) && !(effect is WobbleHeadEffect && target.Role == PossessionRole.Timer && PossessionTree.IsTaggedTimer(el))) return false;
             if (!el.IsEffectivelyVisible || el.Bounds.Width <= 0 || el.Bounds.Height <= 0) return false;
             if (!Contains(effect.Roles, target.Role)) return false;
             foreach (var g in _ghosts)
@@ -110,7 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             var metas = new List<PossessionTargetMeta>();
             foreach (var t in targets)
             {
-                if (!t.Element.IsEffectivelyVisible || PossessionTree.IsOffLimits(t.Element)) continue;   // never offered
+                if (!t.Element.IsEffectivelyVisible || (PossessionTree.IsOffLimits(t.Element) && !PossessionTree.IsTaggedTimer(t.Element))) continue;   // never offered
                 bool live = _ghosts.Exists(g => ReferenceEquals(g.Target.Element, t.Element));
                 bool cool = _cooldownUntil.TryGetValue(t.Key, out var until) && until > now;
                 offered.Add(t);
@@ -129,7 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             {
                 g.Start ??= now;
                 double ms = (now - g.Start.Value).TotalMilliseconds;
-                double hold = g.Effect.HoldFor.TotalMilliseconds;
+                double hold = g.ForcedHoldMs ?? g.Effect.HoldFor.TotalMilliseconds;
                 if (ms < hold) { g.Effect.Frame(ms); continue; }
                 var l = g.Lease;
                 if (!g.Returning)
@@ -138,7 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
                     g.Tx = l.Translate.X; g.Ty = l.Translate.Y; g.Rot = l.Rotate.Angle;
                     g.Sx = l.Scale.ScaleX; g.Sy = l.Scale.ScaleY;
                 }
-                double f = Math.Min(1, (ms - hold) / ReturnMs);
+                double f = Math.Min(1, (ms - hold) / g.ReturnDurationMs);
                 if (f >= 1) { Finish(g); continue; }
                 double k = 1 - HeadEffect.CubicInOut(f);
                 l.Translate.X = g.Tx * k; l.Translate.Y = g.Ty * k; l.Rotate.Angle = g.Rot * k;
@@ -153,6 +155,26 @@ namespace ConditioningControlPanel.Avalonia.Possession
             try { g.Lease.ReleaseImmediate(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Possession {Id} release failed", g.Effect.Id); }
             _cooldownUntil[g.Target.Key] = _time.GetTimestamp() + (long)(PossessionDeck.TargetCooldown.TotalSeconds * _time.TimestampFrequency);
+            g.Done.TrySetResult();
+        }
+
+        internal bool IsLive(HeadEffect effect) => _ghosts.Exists(g => ReferenceEquals(g.Effect, effect));
+
+        // The Core director also requests an early return on exit/restart. Normal holds still run
+        // from frame timestamps; reassembly uses the director's supplied duration.
+        internal Task Return(HeadEffect effect, TimeSpan duration)
+        {
+            var ghost = _ghosts.Find(g => ReferenceEquals(g.Effect, effect));
+            if (ghost == null) return Task.CompletedTask;
+            if (duration <= TimeSpan.Zero) { Finish(ghost); if (_ghosts.Count == 0) Unsubscribe(); }
+            else
+            {
+                ghost.Start = null;
+                ghost.ForcedHoldMs = 0;
+                ghost.ReturnDurationMs = duration.TotalMilliseconds;
+                ghost.Returning = false;
+            }
+            return ghost.Done.Task;
         }
 
         private void Unsubscribe()

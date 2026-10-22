@@ -560,65 +560,10 @@ namespace ConditioningControlPanel
         /// <summary>Possession.Name, then a string Content, then a ToolTip, then AutomationProperties.Name,
         /// then the role's own noun. Written the way the bark lines need it ("oops, the Start button
         /// moved") - see the note on Possession.NameProperty for why this is not a loc key.</summary>
-        private static string DisplayNameFor(FrameworkElement fe, PossessionRole role)
-        {
-            try
-            {
-                var hand = Services.Possession.Possession.GetName(fe);
-                if (!string.IsNullOrWhiteSpace(hand)) return hand;
-
-                var text = Tidy(fe is ContentControl cc ? cc.Content as string : null)
-                           ?? Tidy(fe is TextBlock tb ? tb.Text : null)
-                           ?? Tidy(fe.ToolTip as string)
-                           ?? Tidy(AutomationProperties.GetName(fe));
-
-                if (string.IsNullOrEmpty(text)) return FallbackDisplayName(role);
-
-                return role switch
-                {
-                    PossessionRole.Button => "the " + text + " button",
-                    PossessionRole.Toggle => "the " + text + " toggle",
-                    PossessionRole.TabHeader => "the " + text + " tab",
-                    PossessionRole.Slider => "the " + text + " slider",
-                    PossessionRole.Combo => "the " + text + " dropdown",
-                    PossessionRole.Card => "the " + text + " card",
-                    PossessionRole.Title => "the " + text + " heading",
-                    PossessionRole.Label => "the " + text + " label",
-                    _ => "the " + text,
-                };
-            }
-            catch { return FallbackDisplayName(role); }
-        }
-
-        /// <summary>One line, no runs of whitespace, short enough to drop into a spoken sentence.</summary>
-        private static string? Tidy(string? raw)
-        {
-            if (string.IsNullOrWhiteSpace(raw)) return null;
-            var s = raw.Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ').Trim();
-            while (s.Contains("  ", StringComparison.Ordinal)) s = s.Replace("  ", " ", StringComparison.Ordinal);
-            if (s.Length is < 2 or > 32) return null;
-            return s;
-        }
-
-        /// <summary>Last resort so the warden never says "oops, the moved". Untranslated by design -
-        /// see the note on Possession.NameProperty.</summary>
-        private static string FallbackDisplayName(PossessionRole role) => role switch
-        {
-            PossessionRole.Button => "that button",
-            PossessionRole.Card => "that card",
-            PossessionRole.Toggle => "that toggle",
-            PossessionRole.Title => "the title",
-            PossessionRole.Label => "that label",
-            PossessionRole.TabHeader => "that tab",
-            PossessionRole.Timer => "the timer",
-            PossessionRole.Slider => "that slider",
-            PossessionRole.Combo => "that dropdown",
-            PossessionRole.Image => "that picture",
-            PossessionRole.Scroll => "that list",
-            PossessionRole.Progress => "that bar",
-            PossessionRole.TextBox => "that box",
-            _ => "something",
-        };
+        private static string DisplayNameFor(FrameworkElement fe, PossessionRole role) =>
+            PossessionTargetNames.For(role, Services.Possession.Possession.GetName(fe),
+                fe is ContentControl cc ? cc.Content as string : null,
+                fe is TextBlock tb ? tb.Text : null, fe.ToolTip as string, AutomationProperties.GetName(fe));
 
         Point IWpfPossessionHost.PointOf(FrameworkElement element)
         {

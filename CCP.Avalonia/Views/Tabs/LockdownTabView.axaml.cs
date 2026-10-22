@@ -45,6 +45,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             InitializeComponent();
 
             LoadPossessionSettings();
+            global::ConditioningControlPanel.Avalonia.Possession.PossessionTree.SetRole(TxtLockdownTimer, PossessionRole.Timer);
+            global::ConditioningControlPanel.Avalonia.Possession.PossessionTree.SetName(TxtLockdownTimer, "the timer");
+            global::ConditioningControlPanel.Avalonia.Possession.PossessionTree.SetExclude(TxtLockdownExit, true);
+            global::ConditioningControlPanel.Avalonia.Possession.PossessionTree.SetExclude(BtnEmergencyExit, true);
             UpdateQuestHint();
 
             // Tabs are shown and hidden rather than rebuilt, so the first attach fires once.
@@ -321,7 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper,
-        /// Possession: none run here; system keys off Windows, where nothing blocks them) and with the
+        /// full Possession theatre: only transform effects run; system keys off Windows) and with the
         /// platform's safety valve.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
@@ -338,6 +342,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
+            if (cfg.LockdownPossessionEnabled)
+                warn.Append("\n- Possession is ON: the app's own UI will misbehave, on purpose.\n")
+                    .Append("  Nothing you see is real damage.");
             return warn.ToString();
         }
 

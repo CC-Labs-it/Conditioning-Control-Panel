@@ -131,6 +131,14 @@ namespace ConditioningControlPanel.Avalonia.Possession
         private PossessionTree() { }
 
         public const int MaxDepth = 16;
+        public static readonly AttachedProperty<PossessionRole> RoleProperty =
+            AvaloniaProperty.RegisterAttached<PossessionTree, Control, PossessionRole>("Role");
+        public static PossessionRole GetRole(Control c) => c.GetValue(RoleProperty);
+        public static void SetRole(Control c, PossessionRole v) => c.SetValue(RoleProperty, v);
+        public static readonly AttachedProperty<string?> NameProperty =
+            AvaloniaProperty.RegisterAttached<PossessionTree, Control, string?>("Name");
+        public static string? GetName(Control c) => c.GetValue(NameProperty);
+        public static void SetName(Control c, string? v) => c.SetValue(NameProperty, v);
 
         /// <summary>Keeps a control and its subtree out of the haunt (WPF Possession.Exclude).</summary>
         public static readonly AttachedProperty<bool> ExcludeProperty =
@@ -157,6 +165,11 @@ namespace ConditioningControlPanel.Avalonia.Possession
             catch { return true; }
             return false;
         }
+
+        // WPF's Timer hand tag allows only wobble of the glass; the displayed value stays true.
+        internal static bool IsTaggedTimer(Control c) => GetRole(c) == PossessionRole.Timer
+            && !ContainsExcluded(c, 0) && !GetExclude(c)
+            && !c.GetVisualAncestors().OfType<Control>().Any(GetExclude);
 
         private static bool ContainsExcluded(Visual node, int depth)
         {

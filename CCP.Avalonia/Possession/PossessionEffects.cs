@@ -7,7 +7,7 @@
 // runtime calls it from the window's frame clock. Same curves (cubic ease out/in, sine ping-pong),
 // no Animation objects (P82).
 //
-// Not ported (possession-head-b/c): the ember charge + attribution (EmberAttribution, Ghost) and the
+// Not ported (possession-head-b2/c): full Ghost/cursor/edge theatre and the
 // remaining effects - see PossessionRuntime.cs.
 
 using System;
