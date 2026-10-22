@@ -40,7 +40,6 @@ public sealed class PresetsFocalFxTests
             Assert.NotSame(first, Assert.Single(Sheens(host)));
             var row = view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>().First();
             row.Focus(); host.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, ""); Settle();
-            Assert.Single(Sheens(host));
             var sessionSheen = Assert.Single(Sheens(host));
             CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, true)); Settle();
             Assert.False(sessionSheen.IsTicking);
@@ -99,7 +98,8 @@ public sealed class PresetsFocalFxTests
         Assert.Contains(rack.Children.OfType<Border>(), c => c.Opacity < 1);
         var row = rack.Children.OfType<Border>().First();
         row.Focus(); host.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, ""); Settle();
-        Assert.All(panel.Children.OfType<Border>(), c => Assert.Equal(1, c.Opacity));
+        // Rebuilt chips must not replay; BtnNewPreset keeps finishing its own arrival.
+        Assert.All(panel.Children.OfType<Border>().Where(b => b.Tag is string), c => Assert.Equal(1, c.Opacity));
         CoreSettings.Current.MotionLevel = MotionLevel.Off;
         view.IsVisible = false; view.IsVisible = true; Settle();
         Assert.All(rack.Children.OfType<Border>(), c =>

@@ -30,7 +30,7 @@ public partial class PresetsTabView
     {
         WirePress(BtnLoadPreset);
         WirePress(BtnStartSession);
-        Loaded += (_, _) => { StaggerZones(); RefreshCardSheen(); };
+        Loaded += (_, _) => { if (IsEffectivelyVisible) StaggerZones(); RefreshCardSheen(); };
     }
 
     private void AttachFocalFx()
