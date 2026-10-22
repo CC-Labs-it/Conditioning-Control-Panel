@@ -497,3 +497,74 @@ separation checks. The icon UVs span 0..1 and measured corner clearance is
 0.055025 m. Front, three-quarter, rear, both sides and top views were opened for
 review. The separate runtime example binds the existing spiral icon only in the
 review scene; that image is not embedded in either GLB.
+## Rivals: porcelain colourways and head accessories
+
+The accepted EMI kart keeps its geometry, UVs, normals, weights, 13 joints and two material draws.
+This replaces models/emi-teacup-kart.glb in place; it is not a second kart mesh.
+Seven karts palette entries carry cup/saucer colours, an accessory id and cosmetic personality copy.
+No gameplay behaviour is implied by the personality text.
+
+### Tint binding
+
+Two glTF custom scalar vertex attributes contain binary masks:
+_CUP_TINT selects the bowl and handle; _SAUCER_TINT selects porcelain on the saucer.
+three.js GLTFLoader exposes them as geometry attributes _cup_tint and _saucer_tint.
+Gold rims, tea, EMI, and emi_screen are zero in both. Masks never overlap.
+The existing base-colour atlas now has alpha reserved for detail protection:
+alpha is zero on the four tiny gold decal dots and one on the surrounding porcelain.
+Keep kart_surface OPAQUE. This alpha is data, not opacity.
+
+Decode the base-colour texture RGB from sRGB, then apply each tint in linear space.
+Let porcelainReferenceLinear = [0.95597335, 0.83076988, 0.87962240].
+For each channel, weight = semanticMask * baseColourSample.a.
+Multiply base colour by mix([1,1,1], tintLinear / porcelainReferenceLinear, weight).
+Apply the cup and saucer multipliers in sequence, then use output alpha 1.
+Palette hex values are sRGB target porcelain colours, not linear multipliers.
+Read tint alpha before any material opacity multiplication.
+The two KTX2 atlases remain 512 square UASTC with full mip chains.
+No additional texture, material or draw is introduced by the tint system.
+
+### Attachment binding
+
+The kart adds a non-joint Empty named head_attach beneath EMI_root.
+In the bind pose it is at [0, 1.111116, -0.176895] metres with identity world rotation.
+Its local transform follows EMI_root automatically; do not add a fourteenth skin joint.
+Every accessory exports a root named head_attach at its own attachment origin.
+Parent the complete accessory scene to the kart's head_attach and reset its local
+position/rotation/scale to zero/identity/one. Do not add the bind-pose position again.
+Accessories face -Z and have a narrow fitted saddle touching the forward head roof.
+The halo ring has two visible supports. Spiral crown curls have continuous stems.
+EMI geometry is unchanged, and the screen and antenna remain visible.
+Use SkeletonUtils.clone for each complete kart rig, then attach that instance's accessory.
+Find the blank emi_screen by material name; it retains exact 0..1 UVs.
+
+### Budget
+
+| Asset | Tris | Draws | Texture bytes, RGBA8 with mips | Radius m |
+|---|---:|---:|---:|---:|
+| EMI kart, replacement | 4722 | 2 | 2796200 | 1.274 |
+| Bow | 180 | 1 | 0 | 0.205 |
+| Cat ears | 216 | 1 | 0 | 0.256 |
+| Halo | 376 | 1 | 0 | 0.276 |
+| Spiral crown | 350 | 1 | 0 | 0.199 |
+
+Kart texture residency is unchanged from Wave 1: 2.667 MiB conservative RGBA8,
+or 699104 bytes for 16-byte 4x4 GPU blocks, both including all mips.
+Rivals adds 0 texture bytes to the running wave budget. Seven colourways share one kart.
+An equipped accessory adds one draw and its listed triangles per racer.
+Accessory radii are measured from their head attachment origin, not the kart origin.
+
+### Sources, validation and assumptions
+
+Original accessory geometry and colourways created for CCP; existing project asset rights apply.
+The approved dtrh/race/assets/emi.glb remains the source of EMI's unchanged visible geometry.
+The accepted Wave 1 teacup master is reused. No third-party geometry, pixels or concept tracing.
+Masters, scripts and contact sheets stay in the private glassroad-art/w2/rivals folder.
+All five final GLBs use meshopt. Both embedded KTX2 textures pass strict Khronos validation.
+Fresh imports retain the 4722-triangle kart, one skin, 13 joints, screen UVs and zero degenerates.
+All 3063 original exported position/normal/UV/joint/weight signatures are preserved.
+Tint checks find 1066 masked vertices, zero masked EMI vertices and no overlapping masks.
+Each accessory passes the strict under-400-triangle budget and has no texture allocation.
+Six packed-asset views, fitted front/three-quarter closeups and seven colourway views were reviewed.
+Cup target colours, personality lines and the forward roof attachment position are art choices.
+The existing omitted selection clips remain omitted; no new animation ships.
