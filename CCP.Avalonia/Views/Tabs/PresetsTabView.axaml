@@ -758,7 +758,7 @@
                                  window the last pinned chip is cut, and everything is still one
                                  click away in the tray. -->
                             <Grid ClipToBounds="True">
-                                <fx:TakeawayShelfPanel x:Name="TakeawayShelf" Orientation="Horizontal"/>
+                                <fx:TakeawayShelfPanel x:Name="TakeawayShelf" Orientation="Horizontal" HorizontalAlignment="Left"/>
                             </Grid>
                         </DockPanel>
 

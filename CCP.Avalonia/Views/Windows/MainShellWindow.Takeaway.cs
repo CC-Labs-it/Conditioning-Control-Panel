@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        private bool _takeawayLoading, _takeawayTrayOpen;
+        private bool _takeawayLoading, _takeawayReload, _takeawayTrayOpen;
         private int _takeawayMoreCount;
         private TextBlock? _takeawayMoreLabel;
         private IReadOnlyList<JustDropOrdersService.Order> _takeawayOrders = Array.Empty<JustDropOrdersService.Order>();
@@ -52,7 +52,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void RefreshTakeawayShelf()
         {
-            if (_takeawayLoading || TakeawayTab is null) return;
+            if (TakeawayTab is null) return;
+            // A refresh asked for mid-fetch (account switch) runs once the fetch lands.
+            if (_takeawayLoading) { _takeawayReload = true; return; }
             _takeawayLoading = true;
             TakeawayLoad = LoadTakeawayShelfAsync();
         }
@@ -61,7 +63,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try { PaintTakeawayShelf(await JustDropOrdersService.FetchAsync()); }
             catch (Exception ex) { Log.Debug("Takeaway refresh failed: {Kind}", ex.GetType().Name); }
-            finally { _takeawayLoading = false; }
+            finally
+            {
+                _takeawayLoading = false;
+                if (_takeawayReload) { _takeawayReload = false; RefreshTakeawayShelf(); }
+            }
         }
 
         internal void PaintTakeawayShelf(IReadOnlyList<JustDropOrdersService.Order> orders)

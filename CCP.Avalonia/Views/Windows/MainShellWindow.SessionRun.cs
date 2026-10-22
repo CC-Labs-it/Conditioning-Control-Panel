@@ -5,7 +5,7 @@
 // The head owns one Core SessionRunner (App.Sessions), which runs only the ported subset - flash,
 // subliminal, bouncing text, lock cards (docs/avalonia-decisions.md).
 // BtnPauseSession_Click (:2021) too.
-// ponytail: dropped, each with no service on this head: corner-GIF options, remote gates, program/punch-card/Bark/profile-sync hooks, the takeaway-shelf refresh, the
+// ponytail: dropped, each with no service on this head: corner-GIF options, remote gates, program/punch-card/Bark/profile-sync hooks, the
 // Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).
 // ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
 // "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
@@ -178,6 +178,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var log = e.Log;
             Dispatcher.UIThread.Post(() =>
             {
+                // WPF MainWindow.Presets.cs:1709: the run that just ended is a receipt now; after the
+                // suppressed-summary return above, so a quiet stop stays quiet.
+                RefreshTakeawayShelf();
                 try
                 {
                     var dialog = new SessionCompleteWindow(log);

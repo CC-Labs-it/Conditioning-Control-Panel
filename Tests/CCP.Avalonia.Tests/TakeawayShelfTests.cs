@@ -45,6 +45,11 @@ public sealed class TakeawayShelfTests
             Assert.NotNull(frame);
             frame.Save(System.IO.Path.Combine(AppContext.BaseDirectory, "TakeawayShelf.png"));
         }
+        // WPF: with room to spare the shop sits right after the newest receipt, not against Export.
+        shell.PaintTakeawayShelf(new[] { new JustDropOrdersService.Order { Code = "solo", Name = "Solo", SizeId = "S" } });
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, shelf.Children.Count);
+        Assert.InRange(shelf.Children[1].Bounds.Left - shelf.Children[0].Bounds.Right, 0, 10); // chip margin only
         shell.RefreshTakeawayShelf(); await shell.TakeawayLoad;
         Assert.False(tab.FindControl<Border>("TakeawayTrayHost")!.IsVisible);
         Assert.DoesNotContain(shelf.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("https://") == true);
@@ -104,7 +109,7 @@ public sealed class TakeawayShelfTests
         var get = CoreSecrets.RetrieveProvider;
         var id = CoreAccount.UnifiedUserId;
         var http = JustDropOrdersService.Http;
-        var available = JustDropService.DoorAvailable;
+        var available = JustDropService.ServerEnabledForTests;
         using var client = new HttpClient(new Drawer());
         MainShellWindow? shell = null;
         try
