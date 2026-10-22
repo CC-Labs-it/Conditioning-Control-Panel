@@ -13,6 +13,8 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
+using Avalonia.Controls.Primitives;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -141,6 +143,61 @@ public sealed class AssetsTabTests
             Assert.Equal(3.0, slide.X);
             Hover(new Point(1, 1));
             Assert.Equal(0.0, slide.X);
+        }
+        finally { s.MotionLevel = old; }
+    });
+
+    [Fact]
+    public Task HoveringAPackCardSheensItAndLeavingHidingOrMotionOffParksIt() => Run(async (shell, tab, s) =>
+    {
+        // WPF ships the strip hidden (PacksSectionEnabled const false); flip it as the flag would.
+        tab.PacksSection.IsVisible = true;
+        var cards = await Realized(shell, () =>
+        {
+            var c = tab.PackCardsItemsControl.GetVisualDescendants().OfType<Border>()
+                .Where(b => b.Classes.Contains("packCard")).ToList();
+            return c.Count >= 2 && c[1].Bounds.Width > 0 ? c : null;
+        });
+        Point Mid(Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), shell)!.Value;
+        void Hover(Point p)
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // hit testing reads the last rendered frame
+            shell.MouseMove(p, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+        }
+        var away = new Point(1, 1);
+
+        // MainWindow.AssetsFx.cs OnPackCardHover: the hovered card wears the one sheen.
+        Hover(Mid(cards[0]));
+        var first = Assert.IsType<CardSheenAdorner>(tab.PackCardSheen);
+        Assert.Same(cards[0], AdornerLayer.GetAdornedElement(first));
+        Assert.True(first.IsTicking);
+
+        // Moving to the next card moves it; leaving takes it off.
+        Hover(Mid(cards[1]));
+        Assert.Same(cards[1], AdornerLayer.GetAdornedElement(Assert.IsType<CardSheenAdorner>(tab.PackCardSheen)));
+        Assert.False(first.IsTicking);
+        Hover(away);
+        Assert.Null(tab.PackCardSheen);
+
+        // Tab hide (OnAssetsTabVisibilityChanged) detaches it.
+        Hover(Mid(cards[0]));
+        var hidden = Assert.IsType<CardSheenAdorner>(tab.PackCardSheen);
+        shell.ShowTab("settings");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(tab.PackCardSheen);
+        Assert.False(hidden.IsTicking);
+        shell.ShowTab("assets");
+        Dispatcher.UIThread.RunJobs();
+        Hover(away);
+
+        // Interaction clock off: no sheen at all.
+        var old = s.MotionLevel;
+        s.MotionLevel = MotionLevel.Off;
+        try
+        {
+            Hover(Mid(cards[0]));
+            Assert.Null(tab.PackCardSheen);
         }
         finally { s.MotionLevel = old; }
     });

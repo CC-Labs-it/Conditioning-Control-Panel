@@ -355,6 +355,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:PackCardViewModel">
                                     <Border Classes="packCard" Classes.external="{Binding IsExternal}"
+                                            PointerEntered="PackCard_PointerEntered" PointerExited="PackCard_PointerExited"
                                             Width="192" Height="240" Margin="0,0,10,0" CornerRadius="8"
                                             Background="{DynamicResource SurfaceBgBrush}"
                                             BorderBrush="{DynamicResource PanelAccentBrush}" BorderThickness="1">

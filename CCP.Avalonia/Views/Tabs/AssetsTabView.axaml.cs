@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// ponytail: not on this head yet - the Content Packs tree node and pack cards (ContentPackService
     /// is seeded but builds no cards; the section is hidden in WPF too), video thumbnails (WPF uses the
     /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
-    /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
+    /// PacksScrollViewer wheel-to-pan. The pack-card hover sheen is in AssetsTabView.Sheen.cs.
     /// </summary>
     public partial class AssetsTabView : UserControl
     {
@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Confirm = (title, msg) => MessageDialog.ConfirmAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             Inform = (title, msg) => MessageDialog.ShowAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             IsVisibleChanged(this);
+            DetachedFromVisualTree += (_, _) => DetachPackCardSheen();
             BtnPickAssetsFolder.Click += BtnPickAssetsFolder_Click;
             InitializeRemoteMediaPicker();   // AssetsTabView.MediaPicker.cs; re-syncs on every show
         }
@@ -93,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             => view.PropertyChanged += (_, e) =>
             {
                 // MainWindow.AssetsFx.cs:OnAssetsTabVisibilityChanged: hidden stops the motion.
-                if (e.Property == IsVisibleProperty && !view.IsVisible) view.StopMediaLogPulse(resetOpacity: true);
+                if (e.Property == IsVisibleProperty && !view.IsVisible) { view.StopMediaLogPulse(resetOpacity: true); view.DetachPackCardSheen(); }
                 if (e.Property == IsVisibleProperty && view.IsVisible) view.PaintAssetsFolder();
             };
 
