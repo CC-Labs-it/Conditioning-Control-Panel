@@ -3,46 +3,50 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Platform;
-using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     /// <summary>
-    /// Port of WPF <c>ConditioningControlPanel/Chaos/ChaosFxWindow.cs</c>, the <see cref="Pulse"/>
-    /// half: a full-screen, click-through colour edge-vignette for Chaos impact juice (red =
-    /// detonation, green = defuse, gold = combo, blue = shield save) that snaps up and fades fast.
+    /// The Avalonia twin of WPF <c>ChaosFxWindow</c> (ConditioningControlPanel/Chaos/ChaosFxWindow.cs):
+    /// a full-screen, click-through colour vignette on the PRIMARY screen (WPF sizes it to
+    /// <c>SystemParameters.PrimaryScreen*</c> at 0,0, so one monitor, as there). Three layers, back to
+    /// front: the warm heat tint, the held edge glow, the impact pulse. Same brushes and stops as WPF.
     ///
-    /// <para>Same brush (radial, transparent to 45 %, the colour at the rim, radius 0.9 x 1.0) and
-    /// envelope (peak 0.22 + 0.5 x strength clamped 0.15-0.72; rise 40 ms floored by Gentle
-    /// Visuals, then a 260 ms fade) as WPF. The envelope is computed per frame on a
-    /// <see cref="FrameClock"/> from <see cref="Clock"/> (P82: no Animation on a brush), and the
-    /// clock runs only while a pulse is fading (P07).</para>
+    /// <para>The opacity animations are <see cref="ChaosFxRamp"/>s from Core (WPF's key frames and
+    /// durations), sampled on real elapsed time (<see cref="Clock"/>, P40) every composed frame (a
+    /// <see cref="FrameClock"/>, WPF animations run at render rate) only while a ramp is moving. Code-only like <c>TintOverlayWindow</c>.</para>
     ///
-    /// <para>Click-through is <c>X11Overlay.SetClickThrough</c> (WPF WS_EX_TRANSPARENT) on an
-    /// override-redirect window over the primary screen (WPF PrimaryScreenWidth/Height). A platform
-    /// without a compositor or that refuses either gets no vignette rather than an opaque
-    /// full-screen window that eats clicks.</para>
-    ///
-    /// <para>ponytail: the freeze edge-hold, the freeze burst, the Heat tint and the re-raise over a
-    /// mid-run video (WPF BeginEdgeHold / FreezeBurst / SetHeatTint / RaiseToTopmost) wait for the freeze pickup and Heat tint, which are not ported
-    /// (chaos-payout-fallin-d-next).</para>
+    /// <para>Click-through is <c>X11Overlay.SetClickThrough</c> (WPF's <c>WS_EX_TRANSPARENT</c>);
+    /// <see cref="Open"/> refuses the window, as <c>PinkFilterOverlay.Accept</c> does, when the
+    /// platform cannot make it click-through or denies transparency - a topmost full-screen window
+    /// that swallows clicks or paints opaque would lock the desktop.</para>
     /// </summary>
     internal sealed class ChaosFxWindow : Window
     {
-        internal const int FADE_MS = 260;
         internal static TimeProvider Clock = TimeProvider.System;
-        internal static bool SkipPlatformChecksForTests;
 
-        private readonly Border _vignette;
+        /// <summary>The two safety checks <see cref="Open"/> runs after Show. Tests replace it:
+        /// headless has no X11 window, so the real check always refuses there.</summary>
+        internal static Func<Window, bool> Accept = DefaultAccept;
+
+        private sealed class Layer
+        {
+            public readonly Border Border = new() { Opacity = 0, IsHitTestVisible = false };
+            public ChaosFxRamp? Ramp;
+            public long Start;
+        }
+
+        private readonly Layer _heat = new(), _edge = new(), _vignette = new();
         private readonly FrameClock _frames;
-        private DateTimeOffset _pulseStart;
-        private double _from, _peak;
-        private int _riseMs;
 
-        internal Border Vignette => _vignette;
+        internal Border HeatLayer => _heat.Border;
+        internal Border EdgeLayer => _edge.Border;
+        internal Border VignetteLayer => _vignette.Border;
         internal bool IsAnimating => _frames.IsEnabled;
 
         public ChaosFxWindow()
@@ -50,114 +54,144 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop;   // WPF ChaosWindowZ.BornTopmost
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
             Focusable = false;
             IsHitTestVisible = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
-            Width = 1280;
-            Height = 720;
-            _vignette = new Border { Opacity = 0, IsHitTestVisible = false };
-            Content = _vignette;
-            _frames = new FrameClock(this) { Interval = TimeSpan.FromMilliseconds(16) };
-            _frames.Tick += (_, _) => Step();
-            if (RenderProof.Rendering)   // --render-all: a settled red detonation pulse at its peak
-            {
-                _vignette.Background = Rim(Color.FromRgb(255, 50, 50));
-                _vignette.Opacity = PeakFor(0.6);
-            }
+            Width = 640;
+            Height = 400;
+            var root = new Grid { IsHitTestVisible = false };
+            root.Children.Add(_heat.Border);       // warm temperature tint sits at the very back
+            root.Children.Add(_edge.Border);       // held glow sits under the impact pulses
+            root.Children.Add(_vignette.Border);
+            Content = root;
+            _frames = new FrameClock(this) { Interval = TimeSpan.Zero };   // every frame, like a WPF animation
+            _frames.Tick += (_, _) => Frame();
+            Closed += (_, _) => _frames.Stop();
         }
 
-        /// <summary>WPF StartRun (:500) <c>new ChaosFxWindow().Show()</c>: null when the platform
-        /// cannot give a composited click-through window.</summary>
-        internal static ChaosFxWindow? TryCreate()
+        /// <summary>WPF BeginRun (ChaosModeService.cs:500): one FX window per run. Null when the
+        /// platform cannot show it safely (see the class notes).</summary>
+        internal static ChaosFxWindow? Open()
         {
+            var w = new ChaosFxWindow();
             try
             {
-                if (!SkipPlatformChecksForTests && (!X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
-                {
-                    Log.Warning("ChaosFx: no composited click-through overlay on this platform, so no colour pulses");
-                    return null;
-                }
-                var w = new ChaosFxWindow();
-                if ((!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, w.ScreenBounds()))
-                    && !SkipPlatformChecksForTests)
-                {
-                    Log.Warning("ChaosFx: the platform refused a click-through topmost window, so no colour pulses");
-                    w.Close();
-                    return null;
-                }
+                w.SizeToPrimaryScreen();
                 w.Show();
-                return w;
+                if (Accept(w)) return w;
             }
-            catch (Exception ex)
-            {
-                Log.Debug("Chaos FX init: {E}", ex.Message);
-                return null;
-            }
+            catch (Exception ex) { Log.Debug("Chaos FX init: {E}", ex.Message); }
+            try { w.Close(); } catch (Exception ex) { Log.Debug("Chaos FX close: {E}", ex.Message); }
+            return null;
         }
 
-        /// <summary>WPF: Left = 0, Top = 0, PrimaryScreenWidth x PrimaryScreenHeight.</summary>
-        private PixelRect ScreenBounds()
+        private static bool DefaultAccept(Window w)
         {
-            var screen = Screens?.Primary ?? Screens?.All.FirstOrDefault();
-            return screen?.Bounds ?? new PixelRect(0, 0, 1280, 720);
+            if (!X11Overlay.SetClickThrough(w, true))
+            {
+                Log.Warning("Chaos FX: this platform cannot make the vignette click-through, so it is not shown");
+                return false;
+            }
+            if (w.ActualTransparencyLevel == WindowTransparencyLevel.None)
+            {
+                Log.Warning("Chaos FX: no per-pixel transparency (no compositor), so the vignette is not shown");
+                return false;
+            }
+            return true;
         }
 
-        /// <summary>WPF Pulse peak: 0.22 + strength x 0.5, clamped to 0.15-0.72.</summary>
-        internal static double PeakFor(double strength) => Math.Clamp(0.22 + strength * 0.5, 0.15, 0.72);
-
-        /// <summary>WPF Pulse's frozen RadialGradientBrush: clear centre, the colour at the rim.</summary>
-        private static IBrush Rim(Color c) => new RadialGradientBrush
+        private void SizeToPrimaryScreen()
         {
-            GradientOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
-            Center = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
-            RadiusX = new RelativeScalar(0.9, RelativeUnit.Relative),
-            RadiusY = new RelativeScalar(1.0, RelativeUnit.Relative),
-            GradientStops =
-            {
-                new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0.0),
-                new GradientStop(Color.FromArgb(0, c.R, c.G, c.B), 0.45),
-                new GradientStop(Color.FromArgb(255, c.R, c.G, c.B), 1.0),
-            },
-        };
+            var screen = Screens?.Primary ?? Screens?.All?.FirstOrDefault();
+            if (screen is null) return;
+            var scale = screen.Scaling > 0 ? screen.Scaling : 1.0;
+            Position = screen.Bounds.Position;          // physical
+            Width = screen.Bounds.Width / scale;        // DIPs
+            Height = screen.Bounds.Height / scale;
+        }
 
-        /// <summary>Flash a coloured edge-vignette. <paramref name="strength"/> 0..1 scales peak opacity.
-        /// A new pulse takes over from the current opacity, as WPF's BeginAnimation hand-off does.</summary>
+        /// <summary>WPF BeginEdgeHold: a sustained coloured edge glow held until <see cref="EndEdgeHold"/>.</summary>
+        public void BeginEdgeHold(Color color, double strength)
+        {
+            _edge.Border.Background = Edge(color, 0.95, 1.05, 0.55);
+            Run(_edge, ChaosFxEnvelope.EdgeHoldIn(_edge.Border.Opacity, strength));
+        }
+
+        public void EndEdgeHold() => Run(_edge, ChaosFxEnvelope.EdgeHoldOut(_edge.Border.Opacity));
+
+        /// <summary>WPF SetHeatTint: the brush is built once per window (first colour wins, as there).</summary>
+        public void SetHeatTint(Color color, double opacity)
+        {
+            _heat.Border.Background ??= Edge(color, 1.0, 1.1, 0.40);
+            Run(_heat, ChaosFxEnvelope.HeatIn(_heat.Border.Opacity, opacity));
+        }
+
+        public void EndHeatTint() => Run(_heat, ChaosFxEnvelope.HeatOut(_heat.Border.Opacity));
+
+        /// <summary>WPF FreezeBurst: the icy full-screen frost flash on the pulse layer.</summary>
+        public void FreezeBurst(Color color)
+        {
+            _vignette.Border.Background = Radial(1.1, 1.2,
+                (Color.FromArgb(235, 255, 255, 255), 0.0),
+                (Color.FromArgb(170, color.R, color.G, color.B), 0.45),
+                (Color.FromArgb(90, color.R, color.G, color.B), 1.0));
+            Run(_vignette, ChaosFxEnvelope.FreezeBurst(_vignette.Border.Opacity));
+        }
+
+        /// <summary>WPF Pulse: flash a coloured edge vignette.</summary>
         public void Pulse(Color color, double strength)
         {
-            try
-            {
-                _vignette.Background = Rim(color);
-                _from = _vignette.Opacity;
-                _peak = PeakFor(strength);
-                _riseMs = GentleVisuals.RiseMs(40);
-                _pulseStart = Clock.GetUtcNow();
-                _frames.Start();
-                Step();
-            }
-            catch (Exception ex) { Log.Debug("ChaosFx.Pulse: {E}", ex.Message); }
+            _vignette.Border.Background = Edge(color, 0.9, 1.0, 0.45);
+            Run(_vignette, ChaosFxEnvelope.Pulse(_vignette.Border.Opacity, strength));
         }
 
-        /// <summary>One frame of WPF's key frames: linear to the peak over the rise, linear to 0 over 260 ms.</summary>
-        internal void Step()
+        private void Run(Layer layer, ChaosFxRamp ramp)
         {
-            double t = (Clock.GetUtcNow() - _pulseStart).TotalMilliseconds;
-            if (t < _riseMs) _vignette.Opacity = _from + (_peak - _from) * (t / _riseMs);
-            else if (t < _riseMs + FADE_MS) _vignette.Opacity = _peak * (1 - (t - _riseMs) / FADE_MS);
-            else
-            {
-                _vignette.Opacity = 0;
-                _frames.Stop();
-            }
+            layer.Ramp = ramp;
+            layer.Start = Clock.GetTimestamp();
+            if (!_frames.IsEnabled) _frames.Start();
         }
 
-        protected override void OnClosed(EventArgs e)
+        /// <summary>One frame: every moving layer to its ramp at real elapsed time; the timer stops
+        /// once all of them have reached their hold value.</summary>
+        internal void Frame()
         {
-            _frames.Stop();
-            base.OnClosed(e);
+            var now = Clock.GetTimestamp();
+            bool moving = Step(_heat, now) | Step(_edge, now) | Step(_vignette, now);
+            if (!moving) _frames.Stop();
+        }
+
+        private static bool Step(Layer layer, long now)
+        {
+            if (layer.Ramp is not { } ramp) return false;
+            var ms = Clock.GetElapsedTime(layer.Start, now).TotalMilliseconds;
+            layer.Border.Opacity = ramp.Sample(ms);
+            if (ms < ramp.DurationMs) return true;
+            layer.Ramp = null;
+            return false;
+        }
+
+        /// <summary>Transparent centre out to <paramref name="clearTo"/>, full colour at the rim.</summary>
+        private static IBrush Edge(Color c, double rx, double ry, double clearTo) => Radial(rx, ry,
+            (Color.FromArgb(0, c.R, c.G, c.B), 0.0),
+            (Color.FromArgb(0, c.R, c.G, c.B), clearTo),
+            (Color.FromArgb(255, c.R, c.G, c.B), 1.0));
+
+        private static IBrush Radial(double rx, double ry, params (Color C, double At)[] stops)
+        {
+            var brush = new RadialGradientBrush
+            {
+                Center = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+                GradientOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+                RadiusX = new RelativeScalar(rx, RelativeUnit.Relative),
+                RadiusY = new RelativeScalar(ry, RelativeUnit.Relative),
+            };
+            foreach (var (c, at) in stops) brush.GradientStops.Add(new GradientStop(c, at));
+            return brush.ToImmutable();   // WPF Freeze()
         }
     }
 }

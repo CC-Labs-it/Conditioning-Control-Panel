@@ -75,12 +75,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Action<Color, double>? PulseFx;
         /// <summary>Test seam over WPF <c>App.ScreenShake.Shake(intensity, ms)</c>; null = <see cref="ScreenShake"/>.</summary>
         internal static Action<double, int>? ShakeFx;
-        internal static ChaosFxWindow? Fx => _fx;
+        private static double _lastHeatTint = -1;
         private static bool _active, _spawning, _manualPaused;
 
         internal static ChaosRunState? State => _state;
         internal static ChaosOverlayWindow? Overlay => _overlay;
         internal static ChaosHudWindow? Hud => _hud;
+        internal static ChaosFxWindow? Fx => _fx;
         internal static bool IsActive => _active;
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
         internal static bool IsDescending => _spawning;
@@ -94,6 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state = new ChaosRunState(cfg);
                 _active = true;
+                _lastHeatTint = -1;
                 _hud = new ChaosHudWindow(_state);
                 _hud.Show();
                 _overlay = ChaosOverlayWindow.ForRun();
@@ -125,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
             _spawning = true;
-            _fx ??= ChaosFxWindow.TryCreate();   // WPF :500
+            _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
             _runTimer.Tick += (_, _) => Tick();
             _runTimer.Start();
@@ -429,6 +431,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null || _manualPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
+            UpdateHeatTint();
             var end = ChaosRunEngine.CheckEnd(_state, elapsed);
             if (end == ChaosRunEngine.EndCheck.RunOver) { EndRun(); return; }
             if (end == ChaosRunEngine.EndCheck.Relapse) _state.PushEvent("☠ relapse. one more loop — everything drips double");
@@ -442,6 +445,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.WaveIndex = newWave;
                 _state.ActIndex = ChaosRunEngine.ActFor(newWave);
             }
+        }
+
+        /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
+        /// re-issued only when the quantized level moves. Honours the colour-flashes toggle.</summary>
+        private static void UpdateHeatTint()
+        {
+            if (_state?.Config?.ColorFlashesEnabled != true || _fx == null) return;
+            if (ChaosFxEnvelope.HeatTintLevel(_state.Heat, _lastHeatTint) is not { } q) return;
+            _lastHeatTint = q;
+            var (r, g, b) = ChaosFxEnvelope.HeatTintColor;
+            if (q <= 0) _fx.EndHeatTint();
+            else _fx.SetHeatTint(global::Avalonia.Media.Color.FromRgb(r, g, b), q * ChaosFxEnvelope.HEAT_TINT_MAX_OPACITY);
+        }
+
+        private static void CloseFx()
+        {
+            try { _fx?.Close(); } catch (Exception ex) { Log.Debug("Chaos FX close: {E}", ex.Message); }
+            _fx = null;
         }
 
         /// <summary>WPF ToggleManualPause (:257), the clock half: paused holds the clock.</summary>
@@ -463,7 +484,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
-            if (!_active && _hud == null && _overlay == null) return;
+            if (!_active && _hud == null && _overlay == null && _fx == null) return;
             _spawning = false;
             _runTimer?.Stop();
             EndField();
@@ -474,6 +495,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 try { _overlay.Close(); } catch (Exception ex) { Log.Debug("Chaos overlay close: {E}", ex.Message); }
             }
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
+            CloseFx();   // WPF ForceShutdown :3189
             CleanupAfterRun();
         }
 
@@ -514,6 +536,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _spawning = false;
             _runTimer?.Stop();
             EndField();
+            try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF EndRun :3241
 
             var (baseXp, skillMult, finalXp) = ChaosPayout.Xp(_state.RunDurationSec,
                 _state.Config.DifficultyMult, _state.Score, _state.SkillMult);
@@ -550,16 +573,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CleanupAfterRun();
         }
 
-        private static void CloseFx()
-        {
-            try { _fx?.Close(); } catch (Exception ex) { Log.Debug("Chaos FX close: {E}", ex.Message); }
-            _fx = null;
-        }
-
         private static void CleanupAfterRun()
         {
+            try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
-            CloseFx();
+            CloseFx();   // WPF CleanupAfterRun :3338 (also covers an overlay closed mid-run)
             _runTimer = null;
             _hud = null;
             _overlay = null;
