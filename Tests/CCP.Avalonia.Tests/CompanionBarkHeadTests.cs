@@ -74,6 +74,37 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Theory]   // WPF BarkService.cs:727-733: OnBounce -> BouncingTextBounce, OnCornerHit -> BouncingTextCorner
+    [InlineData("BouncingTextBounce", 2.0, 300.0)]   // left wall only
+    [InlineData("BouncingTextCorner", 2.0, 2.0)]     // both walls at once
+    public void ABouncingTextWallOrCornerRaisesItsBark(string trigger, double x, double y) => WithSeamsRestored(_ =>
+    {
+        var old = (BarkHead.Engine, ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.CornerHit);
+        var eng = ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.Engine;
+        BarkHead.Engine = Seeded(Rule(trigger, "boing"), out var spoken);
+        try
+        {
+            ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.CornerHit = () => { };
+            ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.Stop();
+            eng.SetBounds(0, 0, 1000, 800);
+            eng.Measure = (_, _) => (200, 60);
+            eng.Start(new ConditioningControlPanel.Models.AppSettings());
+            var l = eng.Logos[0];
+            (l.PosX, l.PosY, l.VelX, l.VelY) = (400, 300, 100, 100);
+            ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.Advance(0.05);   // mid-screen: nothing
+            Assert.Null(spoken());
+            (l.PosX, l.PosY, l.VelX, l.VelY) = (x, y, -100, -100);
+            ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.Advance(0.05);
+            Assert.Equal("boing", spoken());
+        }
+        finally
+        {
+            (BarkHead.Engine, ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.CornerHit) = old;
+            ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.Stop();
+            eng.Measure = null;
+        }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },

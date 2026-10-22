@@ -227,7 +227,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var l = logos[i];
                 var step = Engine.Step(l, dt, s);
-                if (step.CornerHit) CornerHit();
+                if (step.CornerHit)
+                {
+                    CornerHit();
+                    BarkHead.Engine?.Raise("BouncingTextCorner");   // WPF OnCornerHit -> BarkService.cs:732
+                }
                 if (step.CornerHit && s.BouncingTextFxCornerBurst)
                 {
                     var c = step.ColorBeforeBounce;
@@ -235,6 +239,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
                 if (step.Bounced)
                 {
+                    BarkHead.Engine?.Raise("BouncingTextBounce");   // WPF OnBounce -> BarkService.cs:729
                     _ = CoreHaptics.Service?.BouncingTextBounceAsync();   // WPF BouncingTextService.cs:372
                     UpdateText(i);
                 }
