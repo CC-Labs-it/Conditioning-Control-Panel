@@ -13,6 +13,9 @@ using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Race;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Controls;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
@@ -117,6 +120,117 @@ public sealed class PlayWallTests
                 (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc) = (week, utc);
                 service.SaveImmediate();
                 CoreSettings.ServiceProvider = prevSettings;
+            }
+        });
+    }
+
+    /// <summary>WPF PlayTabView.xaml:336-605 (nav rework 2026-10-06): no H1, nine games in three columns,
+    /// the T2 bands on DtRH/Arcademy follow the tier, Racing Thoughts runs the launcher entry (login door
+    /// when signed out), the Web App card opens like the rail door and retires the banner beat.</summary>
+    [Fact]
+    public void NineGameWall_DoorsRunTheLauncherEntryAndTheWebApp()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var service = new SettingsService();
+            var prevSettings = CoreSettings.ServiceProvider;
+            CoreSettings.ServiceProvider = () => service;
+            var (loggedIn, lab, owns, prevServer, prevShell) = (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider,
+                RacingAccess.IsGrantedProvider, GameWindow.Server, ExternalOpener.Shell);
+            var prevFree = CoreEntitlement.IsFreeTodayProvider;
+            bool isLoggedIn = false, isLab = false;
+            string? freeKey = null;
+            CoreAccount.IsLoggedInProvider = () => isLoggedIn;
+            CoreEntitlement.HasLabProvider = () => isLab;
+            CoreEntitlement.IsFreeTodayProvider = k => k == freeKey;
+            RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
+            string? opened = null;
+            ExternalOpener.Shell = t => { opened = t; return true; };
+            var root = Directory.CreateTempSubdirectory("play-nine-games-");
+            var prevAssets = CorePaths.EffectiveAssetsProvider;
+            CorePaths.EffectiveAssetsProvider = () => root.FullName;
+            using var server = new WebAssetServer(root.FullName);
+            GameWindow.Server = () => server;
+            var shell = new MainShellWindow();
+            shell.Show();
+            try
+            {
+                shell.ShowTab("play");
+                Dispatcher.UIThread.RunJobs();
+                var play = shell.Named<Control>("PlayTab")!;
+                T C<T>(string n) where T : Control => play.FindControl<T>(n)!;
+
+                // Layout: WPF order, three columns, no "Play" H1 above the subtitle.
+                var grid = C<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid");
+                Assert.Equal(3, grid.Columns);
+                Assert.Equal(new[] { "SlotBreakoutDemo", "SlotBreakout", "SlotGoon", "SlotPieceByPiece", "SlotBackRoom",
+                    "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotWebApp" }, grid.Children.Select(c => c.Name));
+                var wall = (StackPanel)C<ScrollViewer>("WallScroll").Content!;
+                Assert.Equal(Loc.Get("pl6_play_subtitle"), Assert.IsType<TextBlock>(wall.Children[0]).Text);
+
+                // Hostless doors refuse honestly; the T2 bands follow the tier.
+                foreach (var n in new[] { "BtnPlayBackRoom", "BtnPlayDtrh", "BtnPlayArcademy" })
+                {
+                    Assert.False(C<Button>(n).IsEnabled, n);
+                    Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(C<Button>(n)));
+                }
+                Assert.True(C<Border>("PlayLockDtrh").IsVisible);
+                Assert.True(C<Border>("PlayLockArcademy").IsVisible);
+                Assert.False(C<TierBadge>("PlayBadgeDtrh").FreeToday);
+                // A DtRH drop day (WPF RequiresLab(.., "dtrh") + SetFreeStamp): band off, FREE TODAY on.
+                freeKey = "dtrh";
+                ((global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView)play).RefreshPlayCards();
+                Assert.False(C<Border>("PlayLockDtrh").IsVisible);
+                Assert.True(C<TierBadge>("PlayBadgeDtrh").FreeToday);
+                Assert.True(C<Border>("PlayLockArcademy").IsVisible);
+                isLab = true;
+                ((global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView)play).RefreshPlayCards();
+                Assert.False(C<Border>("PlayLockDtrh").IsVisible);
+                Assert.False(C<Border>("PlayLockArcademy").IsVisible);
+                Assert.False(C<TierBadge>("PlayBadgeDtrh").FreeToday); // an owner gets no gift
+
+                // Racing Thoughts signed out: the login door, no race.
+                var race = C<Button>("BtnPlayRacingThoughts");
+                race.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Single(shell.OwnedWindows.OfType<LoginDialog>()).Close();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(GameWindow.OpenForTests("race"));
+
+                // Signed in with a track: the launcher's own race host.
+                isLoggedIn = true;
+                race.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("/dtrh/race.html", GameWindow.OpenForTests("race")!.PageUrl!.AbsolutePath);
+                GameWindow.CloseAllForPanic();
+                Dispatcher.UIThread.RunJobs();
+
+                // Web App: the rail door's URL (or its no-browser notice under the sandbox), then the beat retires.
+                service.Current.SeenFeatureIntros.Remove(MainShellWindow.WebBannerSeenKey);
+                C<Button>("BtnPlayWebApp").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                if (shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault() is { } notice)
+                {
+                    Assert.Contains("https://app.cclabs.app", notice.FindControl<TextBlock>("TxtMessage")!.Text);
+                    notice.Close();
+                    Dispatcher.UIThread.RunJobs();
+                }
+                else Assert.Equal("https://app.cclabs.app", opened);
+                Assert.Contains(MainShellWindow.WebBannerSeenKey, service.Current.SeenFeatureIntros);
+            }
+            finally
+            {
+                GameWindow.CloseAllForPanic();
+                shell.Close();
+                (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider, RacingAccess.IsGrantedProvider, CoreEntitlement.IsFreeTodayProvider) = (loggedIn, lab, owns, prevFree);
+                (GameWindow.Server, ExternalOpener.Shell, CorePaths.EffectiveAssetsProvider) = (prevServer, prevShell, prevAssets);
+                service.SealForReset();
+                CoreSettings.ServiceProvider = prevSettings;
+                root.Delete(true);
             }
         });
     }
