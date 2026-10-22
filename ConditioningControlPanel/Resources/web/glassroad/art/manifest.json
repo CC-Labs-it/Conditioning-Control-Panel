@@ -1722,5 +1722,14 @@
       109,
       61
     ]
-  }
+  },
+  {"id":"card-pause","file":"ui/cards/card-pause.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":480,"height":560,"format":"svg","safeTitleBox":[42,37,321,49],"safeContentBox":[42,122,396,353],"safeFooterBox":[42,509,396,25],"panelFill":"#fff8ef","frameScaling":"preserve-aspect"},
+  {"id":"card-options","file":"ui/cards/card-options.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":640,"height":640,"format":"svg","safeTitleBox":[42,37,481,49],"safeContentBox":[42,122,556,433],"safeFooterBox":[42,589,556,25],"panelFill":"#fff8ef","frameScaling":"preserve-aspect"},
+  {"id":"card-results","file":"ui/cards/card-results.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":880,"height":640,"format":"svg","safeTitleBox":[42,37,721,49],"safeContentBox":[42,122,796,433],"safeFooterBox":[42,589,796,25],"panelFill":"#fff8ef","frameScaling":"preserve-aspect"},
+  {"id":"card-controls","file":"ui/cards/card-controls.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":760,"height":620,"format":"svg","safeTitleBox":[42,37,601,49],"safeContentBox":[42,122,676,413],"safeFooterBox":[42,569,676,25],"panelFill":"#fff8ef","frameScaling":"preserve-aspect"},
+  {"id":"results-row","file":"ui/cards/results-row.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":600,"height":80,"format":"svg","placeStampBox":[27,23,34,34],"safeNameBox":[89,19,277,42],"safeTimeBox":[411,19,153,42],"panelFill":"#fff8ef","frameScaling":"preserve-aspect"},
+  {"id":"stamp-new-best","file":"ui/cards/stamp-new-best.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":128,"height":128,"format":"svg","semantic":"personal-best","textFree":true,"minDisplayHeightPx":48},
+  {"id":"podium-gold","file":"ui/cards/podium-gold.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":128,"height":144,"format":"svg","rank":1,"textFree":true,"minDisplayHeightPx":48},
+  {"id":"podium-silver","file":"ui/cards/podium-silver.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":128,"height":144,"format":"svg","rank":2,"textFree":true,"minDisplayHeightPx":48},
+  {"id":"podium-bronze","file":"ui/cards/podium-bronze.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":128,"height":144,"format":"svg","rank":3,"textFree":true,"minDisplayHeightPx":48}
 ]
