@@ -615,8 +615,8 @@ public sealed partial class FriendsDrawer : Border
             mine.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(mine, 1);
             foot.Children.Add(new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 0, 2, 4), Children = { copied, mine } });
+            if (LinkNote() is { } note) foot.Children.Add(note);   // WPF FriendsDrawer.cs:955, inside the MyCode block
         }
-        if (LinkNote() is { } note) foot.Children.Add(note);
         foot.Children.Add(buttons);
         _foot.Child = foot;
     }

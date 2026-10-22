@@ -221,6 +221,7 @@ internal static class FriendsLanding
     {
         try
         {
+            if (!ExternalOpener.Allowed(url)) return;   // sandbox: no clipboard write, no dialog (LoginDialog.axaml.cs:382)
             var owner = Anchor();
             if (await ExternalOpener.OpenAsync(owner, url)) return;
             if (owner?.Clipboard is { } cb) await cb.SetTextAsync(url);
