@@ -2472,3 +2472,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/companion-picker-card: +689
 - CompanionPickerCard ported (live + preview faces, PerkPicker, Core `CompanionPerks.Active/TrySelect` shared with WPF SetPerk); left unhosted per ruling B, rendered by render-all. Row views-companion-picker-card: missing -> stub (hosting -> lane companion-picker-host, needs a WPF reference render).
 - Test CompanionPickerCardTests (selection -> settings fail-proven); local gate GATE-OK, Windows not gated (P97).
+
+## avalonia-port/chaos-vibe-trail: +482
+- VibePopping pointer glow + fading trail overlay ported (Core `ChaosVibeTrail` maths, click-through Avalonia window, panic surface); row stays stub until the vibe window starts it.
