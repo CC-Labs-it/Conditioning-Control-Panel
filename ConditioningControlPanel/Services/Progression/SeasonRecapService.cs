@@ -27,16 +27,8 @@ namespace ConditioningControlPanel.Services
         /// So prefer the server's CurrentSeason; fall back to wall-clock only when it's unknown
         /// (not logged in / invite users) or not in yyyy-MM form.
         /// </summary>
-        public static string CurrentSeasonKey
-        {
-            get
-            {
-                var server = App.Settings?.Current?.CurrentSeason;
-                if (!string.IsNullOrWhiteSpace(server) && LooksLikeMonthKey(server!))
-                    return server!;
-                return DateTime.UtcNow.ToString("yyyy-MM");
-            }
-        }
+        public static string CurrentSeasonKey =>
+            SeasonFeatureTracking.CurrentSeasonKey(App.Settings?.Current?.CurrentSeason, DateTime.UtcNow);
 
         /// <summary>
         /// True when <see cref="CurrentSeasonKey"/> is the SERVER's key rather than the wall-clock
@@ -191,18 +183,9 @@ namespace ConditioningControlPanel.Services
 
         public static void TrackFeature(string featureKey)
         {
-            // The one hook every feature calls also feeds the per-day engagement log the server
-            // aggregates (stats.feature_day_log event keys). Keys with no wire name stay local.
-            var ev = SeasonFeatureKeys.ToDayLogEvent(featureKey);
-            if (ev != null) App.FeatureDayLog?.Note(ev);
-
-            // The season bucket (recap card badge row, Ditzy Data lifetime bars) only knows the
-            // Catalog: a Lab launch or a chat message counted there would skew those bars.
-            if (SeasonFeatureKeys.Find(featureKey) == null) return;
-
-            var s = App.Settings?.Current; if (s == null) return;
-            EnsureBucket(s);
-            s.TrackSeasonFeature(featureKey);
+            // Shared with every head: day-log event first, then the Catalog-only season bucket.
+            SeasonFeatureTracking.Track(App.Settings?.Current, featureKey,
+                ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
         }
 
         /// <summary>Count sparkle points spent on an enhancement this season (Prestige delta).</summary>

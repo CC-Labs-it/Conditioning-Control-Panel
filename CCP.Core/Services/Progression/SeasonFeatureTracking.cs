@@ -5,7 +5,7 @@ namespace ConditioningControlPanel.Services
 {
     /// <summary>
     /// The feature-use hook of WPF <c>SeasonRecapService</c> (TrackFeature :192, CurrentSeasonKey :30,
-    /// EnsureBucket :131), for heads without that service. The WPF head keeps its own copy for now.
+    /// EnsureBucket :131). WPF <c>SeasonRecapService.TrackFeature</c>/<c>CurrentSeasonKey</c> delegate here.
     /// </summary>
     public static class SeasonFeatureTracking
     {
