@@ -121,6 +121,54 @@ public sealed class AiPermissionsLiveFeedTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF AiPermissionsGrid.xaml.cs:53 / MainWindow.UiUpdates.cs:951: a mid-session upgrade or a
+    /// re-show repaints the lock band; Loaded alone left it locked for the rest of the session.</summary>
+    [Fact]
+    public Task LockBandFollowsTierChangesAndReShowWithoutReload() => Run(_ =>
+    {
+        var (oldGet, oldSet) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+        CoreSecrets.RetrieveProvider = _ => null;
+        CoreSecrets.StoreProvider = (_, _) => { };
+        Window? window = null;
+        try
+        {
+            Assert.True(ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ProviderSubscription(p, () => new AppSettings())));
+            var lab = false;
+            CoreAccount.HasLabAccessProvider = () => lab;
+            var grid = new AiPermissionsGrid();
+            window = new Window { Width = 900, Height = 700, Content = grid };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var band = grid.FindControl<Grid>("EffectsLockBand")!;
+            Assert.True(band.IsVisible);
+
+            lab = true;   // signed in / upgraded: the provider says so
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon!.NotifyEntitlementRaised(PatreonTier.Level2);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(band.IsVisible);
+
+            lab = false;  // lapsed while hidden: becoming visible repaints
+            grid.IsVisible = false;
+            grid.IsVisible = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(band.IsVisible);
+        }
+        finally
+        {
+            window?.Close();
+            CoreSecrets.RetrieveProvider = oldGet;
+            CoreSecrets.StoreProvider = oldSet;
+            ConditioningControlPanel.Avalonia.Platform.AccountSeed.Seed(p => new ProviderSubscription(p, () => new AppSettings()));
+            CoreAccount.IsLoggedInProvider = CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = CoreAccount.IsWhitelistedProvider = null;
+            CoreAccount.DisplayNameProvider = null;
+            CoreAccount.ChangeDisplayNameProvider = null;
+            CoreAccount.DeleteAccountProvider = null;
+            CoreEntitlement.HasPremiumProvider = CoreEntitlement.HasLabProvider = null;
+            CoreProgram.HasPremiumProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task LockBandCtaOpensSettingsAccountAsWpfDoes() => Run(_ =>
     {

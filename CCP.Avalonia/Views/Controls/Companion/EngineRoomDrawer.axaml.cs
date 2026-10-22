@@ -12,8 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// <para>Two things the WPF code-behind does are NOT done here, and neither is stubbed:</para>
     /// <list type="bullet">
     ///   <item><description><c>CompanionWheelRelay.Attach(LiveActionsFeed)</c> — the relay is a WPF
-    ///   helper for WPF's routed <c>MouseWheel</c> event. Avalonia's ScrollViewer already chains
-    ///   wheel input at its edge, so no relay is needed for the capped list.</description></item>
+    ///   helper for WPF's routed <c>MouseWheel</c> event. Not ported: this relies on Avalonia's
+    ///   ScrollViewer chaining wheel input at the capped list's edge, which is untested.</description></item>
     ///   <item><description>The typed <c>ViewModel</c> accessor — <c>IEngineRoomDrawerVm</c> lives
     ///   in the WPF head. The drawer builds its own <see cref="EngineRoomVm"/> instead.</description></item>
     /// </list>

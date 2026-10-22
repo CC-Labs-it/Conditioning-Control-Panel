@@ -28,10 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// head that can read Patreon may repair it.</para>
     ///
     /// <para><see cref="ApplyTierGate"/> and the master toggle's refusal now call the real
-    /// <c>TierGate</c> (CCP.Core/Services/TierGate.cs), not a local stand-in. It still fails
-    /// closed here - this head seeds no <c>CoreEntitlement</c> providers, so there is no account
-    /// to read - but the band copy and the refusal are the shipped ones, and the day a head seeds
-    /// an entitlement this control opens with no further edit.</para>
+    /// <c>TierGate</c> (CCP.Core/Services/TierGate.cs), not a local stand-in, over the providers
+    /// <c>AccountSeed</c> installs. Like WPF (AiPermissionsGrid.xaml.cs:53 IsVisibleChanged,
+    /// MainWindow.UiUpdates.cs:951 on a tier change) the band repaints on becoming visible and on
+    /// either provider's <c>TierChanged</c>, so a mid-session sign-in or upgrade unlocks it.</para>
     ///
     /// <para>Motion budget: zero.</para>
     /// </summary>
@@ -67,12 +67,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon is { } p) p.TierChanged += OnTierChanged;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar is { } ss) ss.TierChanged += OnTierChanged;
             SyncFromSettings();
+            ApplyTierGate();
         }
+
+        protected override void OnPropertyChanged(global::Avalonia.AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property == IsVisibleProperty && IsVisible) ApplyTierGate();
+        }
+
+        // Providers raise this off the UI thread (a poll or a sign-in callback).
+        private void OnTierChanged(object? sender, global::ConditioningControlPanel.Models.PatreonTier tier) => Dispatcher.UIThread.Post(ApplyTierGate);
 
         protected override void OnDetachedFromVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon is { } p) p.TierChanged -= OnTierChanged;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar is { } ss) ss.TierChanged -= OnTierChanged;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -152,6 +166,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
         }
 
+        // The retired route refused under Lockdown; WPF's CTA does not, and ShowTab has no Lockdown
+        // check either - a Patreon/account page is not an escape from a lock.
         private void BtnEffectsLockCta_Click(object? sender, RoutedEventArgs e)
             => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("patreon");
 
