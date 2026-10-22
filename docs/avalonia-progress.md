@@ -2437,3 +2437,57 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/lock-title: +635
 - LockTitle ported (padlock letters, candy/ice, entry/idle/jolt/rattle with WPF timings on one FrameClock parked when hidden/detached) and wired into the Chaster hero; ctrl-lock-title -> wired.
 - LockTitleTests (curves + stepped-clock lifecycle, fail-proven, incl. the 4 Chaster tab hooks); no shadow (P82 ratchet), no booking sparks.
+
+## avalonia-port/banner-link-overrun: +40
+- Banner web link stays inside its line at the narrower header (lead + link in one embedded DockPanel; link ellipsizes like WPF); headless test narrows HeaderBannerHost explicitly.
+
+## avalonia-port/chaos-gif-cascade: +798
+- Chaos gif rain ported: Core GifCascade maths (WPF timing/caps/motion) + click-through FrameClock overlay ticking every frame; panic surface gif-cascade. Row stub (no caller yet).
+- Review P3s fixed: spawn band uses the window's DesktopScaling (mixed DPI).
+
+## avalonia-port/chaos-boon-bar: +420
+- Chaos run-pick ribbon (ChaosBoonBarOverlay) ported: opened at BeginRun, rebuilt live in pick order with newcomer pop-in (Core ChaosBoonBarRules), closed at run end/panic.
+- Row chaos-boon-bar missing -> stub (no user path starts a run yet); live steps queued in live-queue/overlays.md.
+
+## avalonia-port/chaos-cursor-glow: +410
+- Rabbit Caller cursor halo ported: Core maths (size/breath/follow), click-through topmost Avalonia overlay with Arm/Disarm/MoveToPx/CloseActive seam, closed by ChaosRunHost teardown and panic (PanicSurfaces).
+- Row chaos-cursor-glow missing -> stub (nothing arms it until the Rabbit Caller skill/run loop exist).
+
+## avalonia-port/emi-desk-extras: +518
+- Emi desk toss on Avalonia: drag lift cue, fling detection, landing squash and the land face, using the new Core `EmiToss` (EmiFlingDetector + EmiTossRules.LandingScale), which WPF now calls too.
+- Row win-emi-desk-extras missing -> stub (land body frame and dizzy chain missing; Tube has no user path).
+
+## avalonia-port/chaos-bubble-field-b: +418
+- Chaos bubble field: SpawnTick cadence, treat/prism pops and score on BubbleOverlay, cleared by panic/stop (Core ApplyTreatPop/ApplyPrismPop); manual pause holds the field and swallows clicks.
+- Still no live bubbles, FALL IN or payout (next: chaos-payout-fallin).
+
+## avalonia-port/game-dtrh-host: +897
+- Down the Rabbit Hole opens on Avalonia behind the Lab door. Start-up sends init with motionLevel and the media manifest; the run lifecycle and payout use Core `DtrhRunWire`, which the WPF host now calls too; a window closed mid-descent banks its last snapshot.
+- Escape with DtRH in front pauses it (kept-escape); a second Escape inside 2 s closes it. Slice B covers meta, online media, the art/audio origins, watchdog and barks.
+
+## avalonia-port/chaos-announcer: +618
+- Chaos announcer: Core queue/timing shared by both heads; Avalonia click-through overlay on the shared beat, T-10 s/Relapse announces, panic closes it (row stub).
+- Review fix: ChaosOverlayWindow calls the real announcer (stand-ins gone); line centred on the work area incl. left-docked panels.
+
+## avalonia-port/companion-picker-card: +689
+- CompanionPickerCard ported (live + preview faces, PerkPicker, Core `CompanionPerks.Active/TrySelect` shared with WPF SetPerk); left unhosted per ruling B, rendered by render-all. Row views-companion-picker-card: missing -> stub (hosting -> lane companion-picker-host, needs a WPF reference render).
+- Test CompanionPickerCardTests (selection -> settings fail-proven); local gate GATE-OK, Windows not gated (P97).
+
+## avalonia-port/chaos-vibe-trail: +482
+- VibePopping pointer glow + fading trail overlay ported (Core `ChaosVibeTrail` maths, click-through Avalonia window, panic surface); row stays stub until the vibe window starts it.
+
+## avalonia-port/chaster-help-price-edit: +693
+- Chaster tab: menu boards (rows write ChasterPrices, red flash switch), how-it-works card, menu hint, Reset times and a per-row price editor on Core TabPriceEdit. Esc belongs to the box (Windows only; X11 has no claim yet), and a starting lock closes and freezes it.
+- `ChasterMenuTests` (2 tests, 6 breaks each turned a test red); the render frame shows the menu states; views-chaster-help-price-edit -> wired.
+
+## avalonia-port/marquee-reads: +490
+- Home marquee Barnum interludes are wired: cadence, split, picker and banner pool are in Core; only one act (NeonWarmUp, fade path) is ported. Row shell-marquee-reads missing -> stub.
+- The loop clock stops while Home is hidden (as in WPF). Rest of the acts and FX: marquee-reads-b.
+
+## avalonia-port/chaos-flash-overlay: +483
+- Chaos braindrain wash on Avalonia: a faint desktop-wide click-through image or GIF wash per stage screen, on the WPF fade curve (new Core `ChaosFlashWash`), refused without a compositor, closed by panic, run end and exit.
+- Row chaos-flash-overlay missing -> stub (no caller on this head yet).
+
+## avalonia-port/chaos-field-fx: +641
+- chaos-field-fx missing -> stub: Core ChaosFieldFxModel (fail-proven tests) + click-through Avalonia overlay on the shared FrameClock, hidden/paused when idle, refuses without compositor.
+- Panic and run teardown close it (PanicSurfaces chaos-field-fx); nothing draws on it until the bubble field lands.
