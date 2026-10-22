@@ -342,9 +342,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
-            if (cfg.LockdownPossessionEnabled)
-                warn.Append("\n- Possession is ON: the app's own UI will misbehave, on purpose.\n")
-                    .Append("  Nothing you see is real damage.");
+            if (cfg.LockdownPossessionEnabled)   // WPF MainWindow.Lab.cs:94-104; no fake-crash line: no scares here yet
+                warn.Append("\n- Possession is ON (").Append(cfg.LockdownPossessionIntensity switch
+                    {
+                        0 => "Gentle",
+                        2 => "Full Doki",
+                        _ => "Eerie",
+                    })
+                    .Append("): the app's own UI will misbehave, on purpose.\n")
+                    .Append("  Ember glow = it was Lockdown, not a bug. Nothing you see is real damage.");
             return warn.ToString();
         }
 

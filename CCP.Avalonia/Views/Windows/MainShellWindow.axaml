@@ -25,7 +25,7 @@
        WindowStyle="None" + WindowChrome   -> SystemDecorations="None" (the bar is drawn in XAML)
        ResizeMode=CanResizeWithGrip        -> CanResize="True"; the grip itself is lost
        Window.CommandBindings              -> dropped; Avalonia has no RoutedCommand/CommandBinding
-       poss:Possession.* attached props    -> dropped (Services/Possession stays in the WPF head)
+       poss:Possession.* attached props    -> poss:PossessionTree.* (CCP.Avalonia/Possession)
        x:Name on a non-Control              -> dropped. Avalonia only names Controls, so the 20
                                               named ScaleTransform / RotateTransform /
                                               TranslateTransform / GradientStop / DropShadowEffect
@@ -57,6 +57,7 @@
         xmlns:cmpPages="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         xmlns:plat="clr-namespace:ConditioningControlPanel.Avalonia.Platform"
+        xmlns:poss="clr-namespace:ConditioningControlPanel.Avalonia.Possession"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow"
         x:CompileBindings="False"
         Title="Conditioning Control Panel"
@@ -384,6 +385,7 @@
                          auto-tagger's deck. Visibility, the clock and the click are all owned by
                          MainWindow.Lab.cs (OnLockdownActivated / OnLockdownTick / LockdownBadge_Click). -->
                     <Border x:Name="LockdownBadge"
+                            poss:PossessionTree.Exclude="True"
                             IsVisible="False"
                             VerticalAlignment="Center"
                             Background="#DC143C" CornerRadius="12" Padding="11,4"

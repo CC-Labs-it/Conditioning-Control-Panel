@@ -34,10 +34,14 @@ public partial class MainShellWindow : IPossessionHost
         "TxtPossessionRung", "PossessionPips", "TxtXP", "EmiDockChip",
     };
 
+    /// <summary>Test seam: a stepped frame source instead of the window's render clock.</summary>
+    internal static IFrameSource? PossessionFramesForTests;
+    private IFrameSource PossessionFrames => PossessionFramesForTests ?? TopLevelFrameSource.For(this);
+
     private void InitializePossessionHost()
     {
         if (LockdownService.Current is not { } lockdown) return;
-        _possessionRuntime = new PossessionRuntime(TopLevelFrameSource.For(this));
+        _possessionRuntime = new PossessionRuntime(PossessionFrames);
         var effects = PossessionRuntime.CreateAll().Select(e => new DirectorHeadEffect(e, _possessionRuntime));
         PossessionDirector = new PossessionDirector(lockdown, effects, new PossessionDirectorHead
         {
@@ -54,7 +58,7 @@ public partial class MainShellWindow : IPossessionHost
             {
                 EnsurePossessionLayers();
                 return new EmberHeadAttribution(_possessionGhostLayer!,
-                    c => TryPossessionBounds(c, out var r) ? r : null, TopLevelFrameSource.For(this),
+                    c => TryPossessionBounds(c, out var r) ? r : null, PossessionFrames,
                     () => CoreSettings.Current.LockdownPhotosafe
                         || global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level != global::ConditioningControlPanel.Models.MotionLevel.Full);
             },
@@ -139,7 +143,9 @@ public partial class MainShellWindow : IPossessionHost
         }
         if (role == PossessionRole.None && interactive && !card && c is Border b && b.Background != null
             && b.CornerRadius != default && b.Bounds.Width >= 60 && b.Bounds.Height >= 60) role = PossessionRole.Card;
-        if (c != null && role != PossessionRole.None && (hand != PossessionRole.None || PassesPossessionPlacement(c)))
+        // DirectorHeadEffect.CanApply refuses these, and each refused pick would cost a cadence beat.
+        if (c != null && role != PossessionRole.None && (hand != PossessionRole.None || PassesPossessionPlacement(c))
+            && (!PossessionTree.IsOffLimits(c) || PossessionTree.IsTaggedTimer(c)))
         {
             var target = _possessionTargets.GetValue(c, el => new PossessionTarget
             {
@@ -171,7 +177,7 @@ public partial class MainShellWindow : IPossessionHost
         _ => PossessionRole.None,
     };
 
-    private bool PassesPossessionPlacement(Control c) => c.IsEnabled && c.IsHitTestVisible
+    private bool PassesPossessionPlacement(Control c) => c.IsEffectivelyEnabled && c.IsHitTestVisible
         && TryPossessionBounds(c, out var r) && r.Width >= 8 && r.Height >= 8
         && r.Right > 0 && r.Bottom > 0 && r.Left < Bounds.Width && r.Top < Bounds.Height;
 

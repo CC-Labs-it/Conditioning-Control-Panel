@@ -36,6 +36,7 @@ public sealed class PossessionShellTests
         using var lockdown = new LockdownService();
         LockdownService.Current = lockdown;
         var shell = new MainShellWindow();
+        Assert.True(PossessionTree.GetExclude(shell.Named<Border>("LockdownBadge")!)); // WPF MainWindow.xaml Exclude
         var button = Button("BtnVictim");
         var inner = new Border { Name = "Inner", Width = 180, Height = 80, Background = Brushes.Gray,
             CornerRadius = new CornerRadius(5), Child = button };
@@ -51,7 +52,9 @@ public sealed class PossessionShellTests
         PossessionTree.SetRole(tagged, PossessionRole.Progress);
         PossessionTree.SetName(tagged, "the bank");
         var anonymous = Button("");
-        var panel = new StackPanel { Children = { outer, excluded, hidden, tiny, disabled, dock, tagged, anonymous } };
+        var lockTab = new StackPanel { Name = "LockdownTab", Children = { Button("BtnLockStart") } };
+        var gated = new StackPanel { IsEnabled = false, Children = { Button("BtnGatedChild") } };
+        var panel = new StackPanel { Children = { outer, excluded, hidden, tiny, disabled, dock, tagged, anonymous, lockTab, gated } };
         shell.Content = panel;
         shell.Show();
         Dispatcher.UIThread.RunJobs();
@@ -62,8 +65,10 @@ public sealed class PossessionShellTests
                 && t.DisplayName == "the Start button");
             Assert.Contains(targets, t => ReferenceEquals(t.Visual, inner) && t.Role == PossessionRole.Card);
             Assert.DoesNotContain(targets, t => ReferenceEquals(t.Visual, outer));
-            Assert.DoesNotContain(targets, t => t.Key is "BtnExcluded" or "BtnHidden" or "BtnTiny" or "BtnDisabled" or "BtnCompanion");
-            var hand = Assert.Single(targets.Where(t => ReferenceEquals(t.Visual, tagged)));
+            Assert.DoesNotContain(targets, t => t.Key is "BtnExcluded" or "BtnHidden" or "BtnTiny" or "BtnDisabled" or "BtnCompanion"
+                or "BtnLockStart" or "BtnGatedChild"); // CanApply refuses off-limits; IsEnabled does not inherit
+            Assert.DoesNotContain(targets, t => ReferenceEquals(t.Visual, lockTab));
+            var hand = Assert.Single(targets, t => ReferenceEquals(t.Visual, tagged));
             Assert.Equal(PossessionRole.Progress, hand.Role);
             Assert.Equal("the bank", hand.DisplayName);
             Assert.StartsWith("Button#", targets.Single(t => ReferenceEquals(t.Visual, anonymous)).Key);
@@ -81,7 +86,7 @@ public sealed class PossessionShellTests
     });
 
     [Fact]
-    public Task LockdownArmsCoreDirectorUsesLiveRungsAndRealEffectsAndPanicRestoresTheVictim() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task LockdownArmsCoreDirectorUsesLiveRungsAndRealEffectsAndPanicRestoresTheVictim() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var s = CoreSettings.Current;
@@ -95,6 +100,8 @@ public sealed class PossessionShellTests
         var now = DateTime.UtcNow;
         lockdown.UtcNow = () => now;
         LockdownService.Current = lockdown;
+        var frames = new Frames();
+        MainShellWindow.PossessionFramesForTests = frames;
         var shell = new MainShellWindow();
         var label = new TextBlock { Name = "TxtVictim", Text = "drifting", Width = 100, Height = 30, FontSize = 14 };
         var prior = new ScaleTransform(1.1, 1.1);
@@ -103,7 +110,9 @@ public sealed class PossessionShellTests
         shell.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
-            Assert.Contains("misbehave, on purpose", global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView.LockdownWarning(10, s));
+            var warning = global::ConditioningControlPanel.Avalonia.Views.Tabs.LockdownTabView.LockdownWarning(10, s);
+            Assert.Contains("- Possession is ON (Full Doki): the app's own UI will misbehave, on purpose.", warning); // WPF Lab.cs:94-104
+            Assert.Contains("Ember glow = it was Lockdown, not a bug.", warning);
             var director = Assert.IsType<PossessionDirector>(shell.PossessionDirector);
             Assert.False(director.IsHaunting);
             lockdown.Activate(TimeSpan.FromMinutes(10));
@@ -124,9 +133,9 @@ public sealed class PossessionShellTests
             Tick();
             Assert.Equal(1, director.LiveEffectCount);
             Assert.False(PossessionLease.IsLeased(label)); // charge precedes any movement
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
-            await Task.Delay(750); // real frame source; the attribution unit test steps its fake below
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
+            frames.Frame(TimeSpan.Zero); Dispatcher.UIThread.RunJobs();
+            frames.Frame(TimeSpan.FromMilliseconds(600)); Dispatcher.UIThread.RunJobs(); // photosafe charge ends
+            frames.Frame(TimeSpan.FromMilliseconds(616)); Dispatcher.UIThread.RunJobs();
             Assert.True(PossessionLease.IsLeased(label));
             Assert.True((DateTime)due.GetValue(director)! > DateTime.Now); // NextDelay, no immediate second pick
             PanicSurfaces.All.Single(x => x.Id == "possession").Stop(shell);
@@ -141,8 +150,10 @@ public sealed class PossessionShellTests
         finally
         {
             lockdown.Deactivate(); Dispatcher.UIThread.RunJobs(); shell.Close(); LockdownService.Current = previous;
+            MainShellWindow.PossessionFramesForTests = null;
             s.LockdownPossessionEnabled = enabled; s.LockdownPhotosafe = safe; s.LockdownPossessionIntensity = intensity;
         }
+        return Task.CompletedTask;
     });
 
     [Fact]
