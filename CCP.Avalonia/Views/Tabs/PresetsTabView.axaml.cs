@@ -444,7 +444,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             s.UserPresets.Add(preset);
             s.CurrentPresetName = name;
             CoreSettings.Save();
-            RefreshPresetsList();
             SelectPreset(preset);
             Serilog.Log.Information("Created new preset: {Name}", name);
             return preset;

@@ -56,7 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF GetSpiralPath: the configured file if it exists, else the active mod's spiral,
         /// else the shipped one. ponytail: SpiralRandomize needs WPF's personal-folder refusal
-        /// (SecurityHelper.IsPersonalFolderRoot, #1053), still head-only, so it is not honoured here
+        /// (#1053, now in Core AssetFolderSafety) but is not wired here yet, so it is not honoured here
         /// rather than honoured unsafely; video spirals (.mp4 etc., WPF MediaElement) decode to no
         /// frames and show nothing.</summary>
         internal static string SourcePath()

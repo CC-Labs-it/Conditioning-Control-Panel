@@ -24,10 +24,7 @@ public partial class MainShellWindow
         if (choice == true && current != null)
         {
             if (page.SaveOverPreset(current) is { } updated)
-            {
-                page.RefreshPresetsList();
                 await MessageDialog.ShowAsync(this, Loc.Get("title_preset_saved"), Loc.GetF("msg_preset_0_updated", updated.Name));
-            }
         }
         else if (choice == false) await page.PromptSaveNewPreset(this);
     }
