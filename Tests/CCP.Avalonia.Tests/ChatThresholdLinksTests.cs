@@ -98,4 +98,64 @@ public sealed class ChatThresholdLinksTests
             CompanionLinkIndex.ResetForTests();
         }
     });
+
+    // WPF attaches CompanionWheelRelay to ThreadList; this head relies on Avalonia's native scroll chaining
+    // instead, so a notch past the thread's end must still move the page.
+    [Fact]
+    public Task WheelPastTheThreadEndScrollsThePage() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previousSettings = CoreSettings.ServiceProvider;
+        var previousBrain = AvApp.Brain;
+        var previousAccount = CoreAccount.UnifiedUserId;
+        var directory = Directory.CreateTempSubdirectory("ccp-threshold-wheel-").FullName;
+        ChatThresholdViewModel? vm = null;
+        Window? window = null;
+        try
+        {
+            var settings = new SettingsService();
+            CoreSettings.ServiceProvider = () => settings;
+            CoreSettings.Current.UseCompanionBrain = true;
+            CoreSettings.Current.AiChatEnabled = true;
+            CoreAccount.UnifiedUserId = "threshold-wheel-test";
+            CoreSettings.Current.CompanionPrompt.AiProvider = AiProviderType.Cloud;
+            using var brain = new CompanionBrain(new AiService("http://127.0.0.1:1"),
+                memory: new MemoryStore(Path.Combine(directory, "memory.json")),
+                store: new CompanionSessionStore(Path.Combine(directory, "session.json"), Path.Combine(directory, "legacy.json")));
+            AvApp.Brain = brain;
+            var longLine = string.Join(' ', Enumerable.Repeat("a long line that wraps across the thread", 20));
+            for (var i = 0; i < 3; i++) brain.Session.Append(TurnKind.AssistantChat, longLine);
+            vm = ChatThresholdViewModel.CreateLive();
+            var view = new ChatThresholdView { ViewModel = vm };
+            var page = new ScrollViewer
+            {
+                Content = new StackPanel { Children = { view, new Border { Height = 2000 } } }
+            };
+            window = new Window { Width = 700, Height = 600, Content = page };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var thread = view.GetVisualDescendants().OfType<ItemsControl>().Single(c => c.Name == "ThreadList");
+            var inner = thread.GetVisualDescendants().OfType<ScrollViewer>().First();
+            Assert.True(inner.Extent.Height > inner.Viewport.Height, "thread must overflow for this test");
+            inner.ScrollToEnd();
+            Dispatcher.UIThread.RunJobs();
+            var innerEnd = inner.Offset.Y;
+            Assert.Equal(0, page.Offset.Y);
+            var point = thread.TranslatePoint(new Point(thread.Bounds.Width / 2, thread.Bounds.Height / 2), window)!.Value;
+            Assert.True(point.Y > 0 && point.Y < window.Height, $"thread centre {point} off screen");
+            window.MouseWheel(point, new Vector(0, -1));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(innerEnd, inner.Offset.Y);
+            Assert.True(page.Offset.Y > 0, "the page did not scroll: the thread swallowed the wheel");
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            window?.Close();
+            vm?.Detach();
+            AvApp.Brain = previousBrain;
+            CoreAccount.UnifiedUserId = previousAccount;
+            CoreSettings.ServiceProvider = previousSettings;
+        }
+    });
 }
