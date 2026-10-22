@@ -163,8 +163,12 @@ public class SpiralGlyphProgressTests
 
         Assert.DoesNotContain("FlagEnabled", code, StringComparison.Ordinal);
         Assert.DoesNotContain("DescentSpiralRailEnabled", code, StringComparison.Ordinal);
-        // The gate that IS there: a real block, on your own card.
-        Assert.Contains("block is not null && _profileViewingSelf", code, StringComparison.Ordinal);
+        // The gate that IS there: a real block, on your own card - shared with the Avalonia head
+        // through Core's ProfileSpiral.IsVisible, which must not read the flag either.
+        Assert.Contains("ProfileSpiral.IsVisible(block, SpiralWithheld, _profileViewingSelf)", code, StringComparison.Ordinal);
+        var gate = SourceRoots.ReadProductFile("Services", "Descent", "ProfileSpiral.cs");
+        Assert.DoesNotContain("DescentSpiralRailEnabled", gate, StringComparison.Ordinal);
+        Assert.Contains("block is not null && !withheld && viewingSelf", gate, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -13,6 +13,19 @@ public partial class MainShellWindow
     private DescentService? _profileDescent;
     private string? _profileDescentAccount;
     private bool _profileSpiralClosed;
+    private DispatcherTimer? _profileSpiralPoll;
+    internal bool ProfileSpiralPollRunning => _profileSpiralPoll?.IsEnabled == true;
+
+    private bool ProfileSpiralPollWanted => !_profileSpiralClosed
+        && _profileDescent?.HasSeenBlock == true
+        && ProfilePage?.IsEffectivelyVisible == true
+        && VatGlassCanvas.WindowIsPresenting(this);
+
+    internal void EvaluateProfileSpiralPoll()
+    {
+        if (_profileSpiralPoll is null) return;
+        if (ProfileSpiralPollWanted) _profileSpiralPoll.Start(); else _profileSpiralPoll.Stop();
+    }
     internal DescentService? ProfileDescent => _profileDescent;
 
     private void InitializeProfileSpiral()
@@ -21,18 +34,25 @@ public partial class MainShellWindow
         _profileDescent = new DescentService(() => CoreSettings.Current, AccountSeed.NewV2());
         _profileDescent.BlockChanged += OnSpiralBlockChanged;
         AccountSeed.ProfileLoaded += OnSpiralProfileLoaded;
-        // WPF's visible Trainer Card poll only runs after this account has carried a block.
-        var poll = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
-        poll.Tick += (_, _) =>
+        // WPF's Trainer Card poll (MainWindow.ProfileVat.cs:133-170): runs only while the card is on
+        // screen, the window is presenting (not minimised/hidden/inactive) and this account has
+        // carried a block. Re-evaluated on window state, tab change and block change.
+        _profileSpiralPoll = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(60) };
+        _profileSpiralPoll.Tick += (_, _) =>
         {
-            if (_profileDescent.HasSeenBlock && ProfilePage?.IsEffectivelyVisible == true)
-                _profileDescent.RequestRefresh("trainer card poll");
+            if (!ProfileSpiralPollWanted) { _profileSpiralPoll.Stop(); return; }
+            _profileDescent.RequestRefresh("trainer card poll");
         };
-        Opened += (_, _) => poll.Start();
+        Activated += (_, _) => EvaluateProfileSpiralPoll();
+        Deactivated += (_, _) => EvaluateProfileSpiralPoll();
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) EvaluateProfileSpiralPoll();
+        };
         Closed += (_, _) =>
         {
             _profileSpiralClosed = true;
-            poll.Stop();
+            _profileSpiralPoll.Stop();
             AccountSeed.ProfileLoaded -= OnSpiralProfileLoaded;
             _profileDescent.BlockChanged -= OnSpiralBlockChanged;
             _profileDescent.Reset();
@@ -49,6 +69,7 @@ public partial class MainShellWindow
         if (_profileSpiralClosed) return;
         RefreshProfileSpiralPlate();
         RefreshProfileMenuSpiral();
+        EvaluateProfileSpiralPoll();
     });
 
     private void RefreshProfileSpiralAccount()
@@ -60,10 +81,11 @@ public partial class MainShellWindow
         {
             _profileDescentAccount = account;
             _profileDescent.Reset();
+            // WPF asks unconditionally only on sign-in/profile load; repaints read the cache.
+            if (account is not null) _profileDescent.OnSignedIn();
         }
         RefreshProfileSpiralPlate();
         RefreshProfileMenuSpiral();
-        if (account is not null) _profileDescent.OnSignedIn();
     }
 
     internal void RefreshProfileSpiralPlate()

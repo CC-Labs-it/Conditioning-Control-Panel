@@ -192,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 RefreshEntitlementVeils();
+                EvaluateProfileSpiralPoll(); // the Trainer Card poll follows the card (ProfileSpiral.cs)
                 switch (tab)
                 {
                     // WPF re-derives the session feature lock on the way into each of these

@@ -66,13 +66,21 @@ public sealed class ProfileSpiralTests
             Assert.False(row.IsVisible);
             s.OfflineMode = false;
             shell.UpdateQuickLoginUI();
-            for (int i = 0; i < 100 && !row.IsVisible; i++)
-            {
-                await Task.Delay(10);
-                Dispatcher.UIThread.RunJobs();
-            }
+            await shell.ProfileDescent!.RefreshAsync("signed in", force: true);
+            Dispatcher.UIThread.RunJobs();
             Assert.True(plate.IsVisible);
             Assert.True(row.IsVisible);
+            // WPF ProfileVat.cs:133-170: the poll runs only while the card is on screen and the
+            // window is presenting; minimising or leaving the card stops it.
+            Assert.True(shell.ProfileSpiralPollRunning);
+            shell.WindowState = WindowState.Minimized;
+            Assert.False(shell.ProfileSpiralPollRunning);
+            shell.WindowState = WindowState.Normal;
+            Assert.True(shell.ProfileSpiralPollRunning);
+            shell.ShowTab("settings");
+            Assert.False(shell.ProfileSpiralPollRunning);
+            shell.ShowTab("discord");
+            Assert.True(shell.ProfileSpiralPollRunning);
             Assert.Equal(Loc.GetF("programs_card_day", 12) + " · " + Loc.Get("descent_stage_3_name"),
                 shell.Named<TextBlock>("ProfileMenuSpiralSummary")!.Text);
 
