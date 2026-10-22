@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Localization;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
@@ -46,12 +47,12 @@ namespace ConditioningControlPanel.Avalonia.Controls
         {
             if (Shown == shown) return;
             Shown = shown;
-            Transitions = new Transitions
-            {
-                new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(FadeMs)) },
-            };
+            var fade = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(FadeMs));
+            Transitions = new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = fade } };
             if (shown) IsVisible = true;
             Opacity = shown ? ShownOpacity : 0;
+            // WPF ScrolllerCreditMark.cs:58-59: collapsed once the fade-out has run.
+            if (!shown) DispatcherTimer.RunOnce(() => { if (!Shown) IsVisible = false; }, fade);
         }
     }
 
