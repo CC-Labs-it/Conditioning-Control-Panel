@@ -322,7 +322,9 @@ public sealed class AmbientBeatLoopsTests
             shell.ShowTab("not-a-tab");
             Assert.True(shell.LockdownPulsing); // invalid navigation keeps the current tab
             shell.ShowTab("lockdown");
-            Assert.Equal(midpoint, ((ISolidColorBrush)plate.BorderBrush!).Color); // no duplicate restart
+            Assert.True(shell.LockdownPulsing);
+            // WPF stops and restarts on every switch, so re-selecting Lockdown begins again at #FF1493.
+            Assert.Equal(Color.FromRgb(0xFF, 0x14, 0x93), ((ISolidColorBrush)plate.BorderBrush!).Color);
             shell.ShowTab("settings");
             Assert.False(shell.LockdownPulsing);
             Assert.Same(resting, plate.BorderBrush);

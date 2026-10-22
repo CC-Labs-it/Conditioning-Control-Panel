@@ -40,9 +40,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void ApplyLockdownPulse(string tab)
         {
+            // WPF stops on every switch (:305) and starts again on Lockdown (:677), so re-selecting
+            // Lockdown restarts the pulse from #FF1493.
+            StopLockdownPulse();
             if (tab == "lockdown" && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops)
                 StartLockdownPulse();
-            else StopLockdownPulse();
         }
 
         internal void StartLockdownPulse()
