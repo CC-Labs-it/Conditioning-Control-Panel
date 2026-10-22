@@ -739,3 +739,71 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 3 far horizon atlas
+
+far-landmarks.ktx2 is a 2048 x 1024 RGBA atlas with eight static silhouettes.
+The source is neutral grayscale in RGB with straight alpha, soft upper-left light
+and reduced contrast for distance. The engine applies the track palette.
+
+| Asset | Runtime tris | Texture bytes, RGBA8 with all mips | Packed bytes |
+|---|---:|---:|---:|
+| far-landmarks | 0 | 11,184,812 | 405,800 |
+
+The atlas adds 10.666668 MiB to the running texture budget.
+A 16-byte block GPU transcode needs 2,796,240 bytes including all mips.
+Against the approximately 90 MiB pre-W3 total, this family alone brings usage to
+100.667 MiB. Other Wave 3 allocations must be added by the combined manifest.
+
+| Cell key | Column, row | Source |
+|---|---|---|
+| king | 0, 0 | Approved king.glb, including its crown |
+| pocketWatch | 1, 0 | Wave 1 pocket-watch.glb |
+| cardTower | 2, 0 | Twelve transformed instances of Wave 1 card-orbit.glb |
+| slotTower | 3, 0 | Three transformed instances of Wave 1 slot-cabinet-lod0.glb |
+| teacupMoon | 0, 1 | Accepted kart's rigid cup, saucer, handle and tea geometry |
+| spiralLighthouse | 1, 1 | Original column, architectural helix and lantern cage |
+| bubbleCloud | 2, 1 | Seven transformed instances of Wave 1 bubble.glb |
+| floatingStaircase | 3, 1 | Fourteen original floating treads |
+
+Runtime contract:
+- KTX2 UASTC, sRGB, straight alpha, 12 supplied mip levels.
+- Four columns and two rows; cells are 512 square with origin at the top left.
+- Each cell reserves at least 32 transparent pixels on every edge.
+- Sample the selected cell only. Clamp atlas sampling and retain the gutters.
+- Clamp the sampled mip level to maxSafeLod 3, including trilinear upper levels.
+  Coarser atlas mips begin mixing content into the gutters.
+- Decode RGB as sRGB and multiply the desired palette tint in linear space.
+  Keep the authored alpha for haze and the translucent bubble centres.
+- Intended placement is 800 to 2000 metres away. Billboard dimensions, facing,
+  placement, fog and any transitions belong to the engine.
+- A cell's contents retain their natural aspect ratio inside the square.
+  Do not stretch its visible alpha bounds to fill a square.
+- The architectural lighthouse helix is a static silhouette, not a moving spiral
+  texture. No animation, flash, strobe, text or media imagery is baked in.
+
+Sources and rights:
+- Original scene arrangements and two original meshes created for this project.
+- Existing approved project assets retain their existing rights.
+- The exact approved piecebypiece/assets/pieces/king.glb supplied all 12,364 king
+  and crown triangles. No king vertices were decimated, regenerated or remodelled.
+  Its source SHA256 was checked before and after production and is unchanged.
+- Watch, cards, cabinet and bubbles use unchanged source triangles with instance
+  transforms. The cup selects the existing rigid kart_root triangles, excluding EMI.
+- Source meshes are projected by a private CPU rasterizer with interpolated normals
+  and a depth buffer. No image generator or downloaded art was used.
+- Geometry sources, new mesh data, scripts, masters and review PNGs stay private.
+
+Validation:
+- Strict Khronos KTX2 validation passes with warnings treated as errors.
+- The decoded base-level alpha is zero throughout every 32px gutter.
+- At decoded mip 3, gutter alpha is at most 1/255 in every cell.
+- Visible RGB mean packing error is 0.311 byte or less.
+- The actual decoded atlas contact and actual decoded mip-3 cells were opened
+  and visually reviewed. The latter are displayed at native 64px cell size.
+- Private checks.json records hashes, codec errors and every cell's gutter result.
+  source-checks.json records content bounds and triangle counts used for projection.
+
+Assumptions: the teacup moon is an oversized suspended teacup, the cabinet tower
+has three tiers, the card tower has three tiers and the bubble cloud has seven
+bubbles. These are distant billboards, not additional runtime GLB props.
