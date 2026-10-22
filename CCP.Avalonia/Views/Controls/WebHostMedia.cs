@@ -40,12 +40,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         /// <summary>WPF's live pause switch mutes, then pauses/resumes top-document media.
-        /// It does not alter the saved Home mute preference.</summary>
+        /// It does not alter the saved Home mute preference, and resuming restores that preference rather than
+        /// unmuting outright (WPF unmutes, leaving the header icon saying "muted" over audible sound).</summary>
         internal static async Task<bool> SetPausedAsync(this WebHost host, bool paused)
         {
             host.MediaPaused = paused;
             if (!host.HasEngine) return false;
-            var muted = await host.SetMutedAsync(paused);
+            var muted = await host.SetMutedAsync(paused || CoreSettings.Current.BrowserVideoMuted);
             var result = await host.InvokeScriptAsync(Services.BrowserMediaPlaybackScript.ForPaused(paused));
             return muted && result?.Trim('"') == (paused ? "paused" : "playing");
         }

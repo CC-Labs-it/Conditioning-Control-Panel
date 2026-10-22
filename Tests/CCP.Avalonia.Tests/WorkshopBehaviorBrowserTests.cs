@@ -72,7 +72,7 @@ public sealed class WorkshopBehaviorBrowserTests
         toggle.IsChecked = false;
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(4, sent.Count);
-        Assert.Contains(")(false)", sent[2]);
+        Assert.Contains(")(true)", sent[2]); // resume keeps the saved mute: header icon and sound agree
         Assert.Contains("el.play()", sent[3]);
         Assert.True(CoreSettings.Current.BrowserVideoMuted); // Pause is live state, not this persisted preference.
     });
@@ -105,8 +105,13 @@ public sealed class WorkshopBehaviorBrowserTests
     {
         var sent = new List<string>();
         host.ScriptInvoker = script => { sent.Add(script); return Task.FromResult<string?>("paused"); };
-        cell.SyncFromSettings();
+        var toggle = cell.FindControl<CheckBox>("ChkPauseBrowserCompanion")!;
+        toggle.IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+        sent.Clear();
+        cell.SyncFromSettings(); // a reveal re-syncs; it must neither reset the live switch nor resend a command
+        Dispatcher.UIThread.RunJobs();
         Assert.Empty(sent);
-        Assert.False(cell.FindControl<CheckBox>("ChkPauseBrowserCompanion")!.IsChecked ?? false);
+        Assert.True(toggle.IsChecked);
     });
 }
