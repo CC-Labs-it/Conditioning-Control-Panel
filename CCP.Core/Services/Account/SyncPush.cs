@@ -33,8 +33,8 @@ namespace ConditioningControlPanel.Services
             !string.IsNullOrEmpty(s.UnifiedId) && string.Equals(s.ConsentOwnedAccount, s.UnifiedId, StringComparison.Ordinal)
                 ? (SyncBody.Field)s.ConsentOwnedFields & Privacy : SyncBody.Field.None;
 
-        /// <summary>WPF's push-on-change privacy handlers. Persist the debt even offline; the next loaded-account
-        /// sync carries it. Adapted from parity/trunk 4f739180ca68a1e45f62c70a78d2bfbd0f1afcc0, owning each field
+        /// <summary>WPF's push-on-change privacy handlers. The owned fields are saved even offline and every later
+        /// push (the after-load push included) carries them, so no separate retry flag is needed. Adapted from parity/trunk 4f739180ca68a1e45f62c70a78d2bfbd0f1afcc0, owning each field
         /// individually so changing one switch does not overwrite other audiences with fresh-install defaults.</summary>
         public async Task<bool> PushPrivacyAsync(SyncBody.Field field)
         {
@@ -54,7 +54,6 @@ namespace ConditioningControlPanel.Services
             if (!string.Equals(s.ConsentOwnedAccount, s.UnifiedId, StringComparison.Ordinal)) s.ConsentOwnedFields = 0;
             s.ConsentOwnedAccount = s.UnifiedId;
             s.ConsentOwnedFields |= (long)field;
-            s.ConsentPushPending = true;
             return true;
         }
 
@@ -209,9 +208,7 @@ namespace ConditioningControlPanel.Services
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
-                var consent = ConsentFields(s);
-                var consentSent = (s.AllowDiscordDm, s.ShowOnlineStatus, s.ShareProfilePicture, s.PublicShareRealAvatar, s.GoonShareAvatar, s.GoonShareDiscordDm);
-                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, consent));
+                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s)));
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -263,9 +260,6 @@ namespace ConditioningControlPanel.Services
                 (_backoffFailures, _blockedUntilUtc) = (0, null);
                 // The clear has reached the server; an empty loadout goes back to meaning "no change" (WPF).
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
-                if (consent != SyncBody.Field.None && consent == ConsentFields(s)
-                    && consentSent == (s.AllowDiscordDm, s.ShowOnlineStatus, s.ShareProfilePicture, s.PublicShareRealAvatar, s.GoonShareAvatar, s.GoonShareDiscordDm))
-                    s.ConsentPushPending = false;
                 Log.Information("V2 Profile synced successfully ({Bytes} bytes)", json.Length);
                 try
                 {

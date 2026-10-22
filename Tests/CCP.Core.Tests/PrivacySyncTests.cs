@@ -61,28 +61,23 @@ public sealed class PrivacySyncTests
             s.PublicShareRealAvatar = false;
             Assert.False(await sync.PushPrivacyAsync(SyncBody.Field.PublicShareAvatar));
             Assert.Empty(handler.Bodies);
-            Assert.True(s.ConsentPushPending);
             settings.SaveImmediate();
             settings = new SettingsService();
             s = settings.Current;
-            Assert.True(s.ConsentPushPending);
             Assert.Equal(SyncBody.Field.PublicShareAvatar, SyncPush.ConsentFields(s));
             s.OfflineMode = false;
             var now = DateTime.UtcNow;
             sync.UtcNow = () => now;
             sync.MarkLoaded(null);
             Assert.True(await sync.PushAsync("after load"));
-            Assert.False(s.ConsentPushPending);
             Assert.Equal(JTokenType.Boolean, handler.Bodies[0]["public_share_avatar"]!.Type);
             Assert.False(handler.Bodies[0].Value<bool>("public_share_avatar"));
             Assert.Null(handler.Bodies[0]["goon_share_avatar"]);
             s.GoonShareDiscordDm = false;
             Assert.False(await sync.PushPrivacyAsync(SyncBody.Field.GoonShareDm));
-            Assert.True(s.ConsentPushPending);
             Assert.Single(handler.Bodies);
             now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
             Assert.True(await sync.PushAsync("after cooldown"));
-            Assert.False(s.ConsentPushPending);
             Assert.Equal(JTokenType.Boolean, handler.Bodies[1]["goon_share_dm"]!.Type);
             Assert.False(handler.Bodies[1].Value<bool>("goon_share_dm"));
             Assert.Null(handler.Bodies[1]["share_profile_picture"]);
@@ -123,13 +118,11 @@ public sealed class PrivacySyncTests
             handler.Hold.SetResult(true);
             Assert.True(await grant);
             Assert.True(handler.Bodies[0].Value<bool>("public_share_avatar"));
-            Assert.True(s.ConsentPushPending); // grant response cannot acknowledge the newer revoke
             handler.Hold = null;
             now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
             Assert.True(await sync.PushAsync("revoke"));
             Assert.Equal(JTokenType.Boolean, handler.Bodies[1]["public_share_avatar"]!.Type);
             Assert.False(handler.Bodies[1].Value<bool>("public_share_avatar"));
-            Assert.False(s.ConsentPushPending);
         }
         finally
         {

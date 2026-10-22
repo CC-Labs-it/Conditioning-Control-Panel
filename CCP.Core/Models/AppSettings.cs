@@ -8376,8 +8376,6 @@ namespace ConditioningControlPanel.Models
         public string? ConsentOwnedAccount { get; set; }
         [JsonProperty("consentOwnedFields")]
         public long ConsentOwnedFields { get; set; }
-        [JsonProperty("consentPushPending")]
-        public bool ConsentPushPending { get; set; }
 
         private bool _goonRichPresence = false;
         /// <summary>
