@@ -343,9 +343,9 @@
     "id": "emi-teacup-kart",
     "file": "models/emi-teacup-kart.glb",
     "kind": "kart",
-    "tris": 4982,
+    "tris": 4892,
     "texBytes": 2796200,
-    "boundRadiusM": 1.338,
+    "boundRadiusM": 1.451,
     "materialSlots": [
       "kart_surface",
       "emi_screen"
@@ -355,10 +355,10 @@
     "texBytesBlock16": 699104,
     "textureEncoding": "UASTC",
     "skins": 1,
-    "joints": 13,
+    "joints": 15,
     "sizeM": [
-      1.545926,
-      1.26305,
+      1.469185,
+      1.099799,
       1.44
     ],
     "tintAttributes": {
@@ -368,7 +368,7 @@
     "tintDetailChannel": "baseColorTexture.a",
     "tintAlphaMode": "OPAQUE",
     "attachPoint": "head_attach",
-    "restBoundRadiusM": 1.275,
+    "restBoundRadiusM": 1.113,
     "animationFps": 30,
     "animationBlendMode": "normal",
     "animationBindings": "models/emi-kart-event-bindings.json",
@@ -390,7 +390,7 @@
       },
       {
         "name": "hop_squash",
-        "durationSec": 0.9,
+        "durationSec": 1.2,
         "playback": "one-shot"
       },
       {
@@ -456,12 +456,12 @@
       {
         "name": "jump_takeoff",
         "durationSec": 0.3,
-        "playback": "one-shot"
+        "playback": "hold"
       },
       {
         "name": "ramp_takeoff",
         "durationSec": 0.4,
-        "playback": "one-shot"
+        "playback": "hold"
       },
       {
         "name": "air_glide",
@@ -504,7 +504,13 @@
         "playback": "hold"
       }
     ],
-    "skinJoints": 13
+    "skinJoints": 15,
+    "assemblyControls": [
+      "cup_body",
+      "saucer_body",
+      "rider_mount"
+    ],
+    "animationBoundsScope": "All26 individual clips sampled120fps plus3mm margin; arbitrary blends require contact solve."
   },
   {
     "id": "emi-kart-event-bindings",
