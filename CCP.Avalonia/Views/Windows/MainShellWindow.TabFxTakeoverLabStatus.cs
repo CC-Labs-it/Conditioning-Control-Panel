@@ -81,7 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>Window focus + not minimised: the ambient gate every loop in this file passes
-        /// through. See the header for the two halves that are missing.</summary>
+        /// through; ApplyStatusPulse adds WPF's AllowAmbientLoops/AllowGlow halves.</summary>
         internal bool Pr4aAmbientAllowed => IsActive && WindowState != WindowState.Minimized;
 
         /// <summary>The mod's glow colour, from the one theme key a mod switch rewrites. The
