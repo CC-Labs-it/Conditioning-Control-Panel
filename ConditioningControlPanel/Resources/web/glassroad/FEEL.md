@@ -236,7 +236,7 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.effectInS` 0.2: screen effect IN (Gentle raises it to the rise floor).
 - `items.effectOutS` 0.4: screen effect OUT (Gentle raises it to the fade length).
 - `items.photosafeInS` 0.5: IN used when the flash limiter refuses the step (the effect still lands, softer).
-- `items.gentleFlashScale` 0.35: under Gentle a Flash is a corner card this share of the screen.
+- `items.gentleFlashScale` 0.35: under Gentle a Flash card is drawn at this linear scale (sent as `params.scale`).
 - `items.gentleSpiralDim` 0.35: under Gentle a Spiral is a soft dim this deep.
 - `items.gentleBlurMul` 0.5: under Gentle every blur is this share.
 - `items.popShowS` 0.6: a pop stays in the item view this long for its burst.

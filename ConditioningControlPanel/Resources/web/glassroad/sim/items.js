@@ -26,7 +26,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   const L = track.lengthM;
   const g = (k) => feel.get('items.' + k);
   const sd = (a, b) => { const d = wrap(a - b, L); return d > L / 2 ? d - L : d; };   // signed a - b
-  let rand = makeRand(seed), now = 0, nextId = 1, list = [];
+  let rand = makeRand(seed), now = 0, nextId = 1, list = [], ver = 0;
 
   // Open stretches: any segment without rails on both sides (open, railL, railR, the jump gap).
   const open = [];
@@ -119,6 +119,17 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     return best;
   }
 
+  /** A lob's target: the first racer in the standings that is not i and still racing (the leader, or
+   * place 2 when i leads). -1 when nobody is left. */
+  function lobTarget(i, standings) {
+    for (const j of standings.order) {
+      if (j === i) continue;
+      const o = racer(j);
+      if (o && !o.finished) return j;
+    }
+    return -1;
+  }
+
   function use(r, standings) {
     const id = r.item.id, it = ITEMS[id], st = r.st, s = st[S.s], x = st[S.lateral];
     let mode = it.use === 'trap' || (r.input.back && (it.use === 'throw' || it.use === 'lob')) ? 'drop' : it.use;
@@ -136,8 +147,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       projectiles.push({ id: nextId++, kind: id, mode, by: r.i, target, t: 0, s: wrap(s + THROW_LEAD_M, L), x, h: g('throwHeightM'),
         v: Math.max(0, st[S.speedPct]) * feel.get('speed.topMps') + g('throwExtraMps') });
     } else if (mode === 'lob') {
-      const order = standings.order;
-      target = order[0] === r.i ? (order.length > 1 ? order[1] : -1) : order[0];
+      target = lobTarget(r.i, standings);
       if (target < 0) return;   // alone on the road: keep it
       projectiles.push({ id: nextId++, kind: id, mode, by: r.i, target, t: 0, fromS: s, fromX: x, s, x, h: g('throwHeightM') });
     } else if (mode === 'wide') {
@@ -165,17 +175,18 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   // ---- per tick -------------------------------------------------------------------------------
   function pickups(r, standings) {
     if (!low(r)) return;
+    const boxR = g('boxRadiusM'), bubbleR = g('bubbleRadiusM');   // read once per racer, not per pickup
     for (let i = 0; i < pick.length; i++) {
       const b = pick[i];
       if (b.downT > 0) continue;
       if (b.kind === 'box') {
-        if (r.item.id || r.item.rolling || !near(r, b.s, b.x, g('boxRadiusM'))) continue;
+        if (r.item.id || r.item.rolling || !near(r, b.s, b.x, boxR)) continue;
         b.downT = g('boxRespawnS'); b.upT = 0;
         const id = rollItem(feel, bucketOf(feel, standings.placeOf(r.i), standings.gapToLeader(r.i)), rand);
         r.item.id = id; r.item.rolling = true; r.item.rollT = 0; r.item.heldT = 0;
         pop('box', 'box', b.s, b.x);
         events.emit('item-box', { racer: r.i, box: i, p: b.v.p.slice() });
-      } else if (near(r, b.s, b.x, g('bubbleRadiusM'))) {
+      } else if (near(r, b.s, b.x, bubbleR)) {
         b.downT = g('bubbleRespawnS'); b.upT = 0;
         grantBoost(r.st, g('bubbleAmount'), g('bubbleHoldS'), 'bubble', feel, sink(r.i));
         pop('bubble', 'bubble', b.s, b.x);
@@ -272,7 +283,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   function update(dt, racers, standings, race) {
     if (!race || (race.phase !== 'racing' && race.phase !== 'finished')) return;
     list = racers;
-    now += dt;
+    now += dt; ver++;
     for (const b of pick) {
       if (b.downT > 0) b.downT = Math.max(0, b.downT - dt);
       else b.upT += dt;
@@ -293,33 +304,63 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   }
 
   // ---- view -----------------------------------------------------------------------------------
+  // Built at most once per tick (ver moves on update and reset) into pooled rows: the arrays and their
+  // row objects are reused, so a reader must not keep a row past the next tick.
   const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [] };
   for (const b of pick) (b.kind === 'box' ? V.boxes : V.bubbles).push(b.v);
+  const POOL = { held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [] };
+  let builtVer = -1;
+  /** Next pooled row of V[key] (call after V[key].length = 0). */
+  function row(key) {
+    const out = V[key], pool = POOL[key], k = out.length;
+    if (k >= pool.length) pool.push(key === 'traps' ? { p: [0, 0, 0], n: [0, 0, 0] } : key === 'held' || key === 'shields' ? {} : { p: [0, 0, 0] });
+    out.push(pool[k]);
+    return pool[k];
+  }
+  function shield(r, kind, t, k, copies) { const o = row('shields'); o.racer = r.i; o.kind = kind; o.t = t; o.k = k; o.copies = copies; }
   function view() {
+    if (builtVer === ver) return V;
+    builtVer = ver;
     for (const b of pick) { b.v.alive = b.downT <= 0; b.v.k = b.v.alive ? Math.min(1, b.upT / GROW_S) : 0; }
-    V.held.length = 0;
-    for (const r of list) if (r.item && (r.item.id || r.item.rolling)) V.held.push({ racer: r.i, id: r.item.id, rolling: r.item.rolling, rollT: r.item.rollT });
-    V.projectiles = projectiles.map((pr) => ({ id: pr.id, kind: pr.kind, mode: pr.mode, p: point(pr.s, pr.x, pr.h), t: pr.t, target: pr.target, s: pr.s, x: pr.x }));
-    V.traps = traps.map((tp) => ({ id: tp.id, kind: tp.kind, p: point(tp.s, tp.x, 0), n: track.frameAt(tp.s, fr).n.slice(), t: tp.t,
-      armed: tp.t >= g('trapArmS'), s: tp.s, x: tp.x }));
-    V.waves = waves.map((w) => ({ id: w.id, kind: w.kind, from: w.from, p: point(w.s, w.x, 0), t: w.t, rangeM: g('pinkRangeM') }));
-    V.shields.length = 0;
+    for (const key in POOL) V[key].length = 0;
+    for (const r of list) {
+      if (!r.item || !(r.item.id || r.item.rolling)) continue;
+      const o = row('held'); o.racer = r.i; o.id = r.item.id; o.rolling = r.item.rolling; o.rollT = r.item.rollT;
+    }
+    for (const pr of projectiles) {
+      const o = row('projectiles');
+      o.id = pr.id; o.kind = pr.kind; o.mode = pr.mode; point(pr.s, pr.x, pr.h, o.p); o.t = pr.t; o.target = pr.target; o.s = pr.s; o.x = pr.x;
+    }
+    const armS = g('trapArmS');
+    for (const tp of traps) {
+      const o = row('traps'), f = track.frameAt(tp.s, fr);
+      for (let k = 0; k < 3; k++) { o.p[k] = f.p[k] + f.b[k] * tp.x; o.n[k] = f.n[k]; }
+      o.id = tp.id; o.kind = tp.kind; o.t = tp.t; o.armed = tp.t >= armS; o.s = tp.s; o.x = tp.x;
+    }
+    for (const w of waves) {
+      const o = row('waves');
+      o.id = w.id; o.kind = w.kind; o.from = w.from; point(w.s, w.x, 0, o.p); o.t = w.t; o.rangeM = g('pinkRangeM');
+    }
     for (const r of list) {
       const x = R[r.i];
       if (!x) continue;
-      if (x.glass > 0) V.shields.push({ racer: r.i, kind: 'glass', t: g('glassMaxS') - x.glass, k: x.glass / g('glassMaxS'), copies: 0 });
-      if (x.golden > 0) V.shields.push({ racer: r.i, kind: 'golden', t: g('goldenS') - x.golden, k: x.golden / g('goldenS'), copies: 0 });
-      if (x.echo > 0) V.shields.push({ racer: r.i, kind: 'echo', t: g('echoS') - x.echoT, k: Math.max(0, x.echoT / g('echoS')), copies: x.echo });
+      if (x.glass > 0) shield(r, 'glass', g('glassMaxS') - x.glass, x.glass / g('glassMaxS'), 0);
+      if (x.golden > 0) shield(r, 'golden', g('goldenS') - x.golden, x.golden / g('goldenS'), 0);
+      if (x.echo > 0) shield(r, 'echo', g('echoS') - x.echoT, Math.max(0, x.echoT / g('echoS')), x.echo);
     }
-    V.pops = pops.map((p) => ({ kind: p.kind, at: p.at, p: point(p.s, p.x, p.h), t: p.t }));
+    for (const p of pops) { const o = row('pops'); o.kind = p.kind; o.at = p.at; point(p.s, p.x, p.h, o.p); o.t = p.t; }
     return V;
   }
 
+  /** The live traps on the road, read-only rows { id, kind, s, x, t, layer }: the cheap query for the bots
+   * (no frames, no copies). Do not keep or edit them. */
+  const trapRows = () => traps;
+
   function reset() {
-    rand = makeRand(seed); now = 0; nextId = 1;
+    rand = makeRand(seed); now = 0; nextId = 1; ver++;
     projectiles = []; traps = []; waves = []; pops = []; R = [];
     for (const b of pick) { b.downT = 0; b.upT = 1e9; }
   }
 
-  return { update, view, reset, nearOpenEdge };
+  return { update, view, reset, nearOpenEdge, trapRows, lobTarget };
 }

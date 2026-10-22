@@ -21,7 +21,7 @@ export function createEffects(bus, feel, { gentle, photosafe } = {}) {
 
   const screen = {
     kind: 'none', t: 0, durS: 0, k: 0, strength: 0, prevKind: 'none', prevK: 0,
-    params: { gentle: false, corner: false, dimOnly: false, blurMul: 1, flicker: false, cover: 0, seed: 0, by: -1 },
+    params: { gentle: false, corner: false, dimOnly: false, blurMul: 1, flicker: false, cover: 0, scale: 0, seed: 0, by: -1 },
   };
   let inS = 0, outS = 0, prevFrom = 0, prevT = 0, prevS = 0, paused = false, seed = 0;
 
@@ -32,7 +32,10 @@ export function createEffects(bus, feel, { gentle, photosafe } = {}) {
     p.dimOnly = on && screen.kind === 'spiral';
     p.blurMul = on ? g('gentleBlurMul') : 1;
     p.flicker = !on;
-    p.cover = screen.kind === 'flash' ? (on ? g('gentleFlashScale') : g('flashCover')) : 0;
+    // cover = the full Flash card's share of the view; under Gentle the corner card is that card scaled
+    // LINEARLY by scale (items.gentleFlashScale), 0 = no scale given (render keeps its own default)
+    p.cover = screen.kind === 'flash' ? g('flashCover') : 0;
+    p.scale = p.corner ? g('gentleFlashScale') : 0;
     screen.strength = screen.kind === 'none' ? 0 : p.dimOnly ? g('gentleSpiralDim') : 1;
   }
 

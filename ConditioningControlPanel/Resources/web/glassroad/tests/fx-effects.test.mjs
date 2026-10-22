@@ -86,7 +86,9 @@ test('gentle transforms: corner Flash, Spiral a soft dim, blur halved, no flicke
   t.hit('flash', 1.2);
   const p = t.s.params;
   assert.equal(p.gentle, true); assert.equal(p.corner, true); assert.equal(p.flicker, false);
-  assert.equal(p.cover, t.feel.get('items.gentleFlashScale'));
+  assert.equal(p.cover, t.feel.get('items.flashCover'), 'cover stays the full card share');
+  assert.equal(p.scale, t.feel.get('items.gentleFlashScale'), 'Gentle scales the card linearly');
+  assert.equal(off.s.params.scale, 0, 'no scale without Gentle');
   assert.equal(p.blurMul, t.feel.get('items.gentleBlurMul'));
   t.run(0.2);
   assert.ok(t.s.k < 0.8, 'IN held to 300 ms: ' + t.s.k);

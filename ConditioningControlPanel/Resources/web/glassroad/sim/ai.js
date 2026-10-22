@@ -33,7 +33,17 @@ const GAPS = {
   'ai.driftWideM': 4,          // how wide a bot sets up for a drift
   'ai.driftBankTolDeg': 4,     // bank change allowed over a drift
 };
-const fg = (feel, k) => { try { return feel.get(k); } catch (e) { return GAPS[k]; } };
+// feel.get throws on a missing key, and a feel never gains keys (set refuses them), so a miss is
+// remembered per feel: no throw per bot per tick.
+const MISSING = new WeakMap();
+const fg = (feel, k) => {
+  const miss = MISSING.get(feel);
+  if (miss && miss.has(k)) return GAPS[k];
+  try { return feel.get(k); } catch (e) {
+    if (miss) miss.add(k); else MISSING.set(feel, new Set([k]));
+    return GAPS[k];
+  }
+};
 
 // feel gap: personalities (multipliers on the ai.* numbers)
 export const PERSONAS = Object.freeze([
@@ -56,7 +66,15 @@ export function rng(seed) {
 
 const STEP = 2;                      // m between table samples
 const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] }, FR0 = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
-const QO = { normal: [0, 0, 0], p: [0, 0, 0] };
+const NO_TRAPS = Object.freeze([]);
+
+/** The live traps as rows with s and x: the items' cheap query when it has one, else its view. */
+function trapsOf(items) {
+  if (!items) return NO_TRAPS;
+  if (typeof items.trapRows === 'function') return items.trapRows() || NO_TRAPS;
+  const v = typeof items.view === 'function' ? items.view() : null;
+  return (v && v.traps) || NO_TRAPS;
+}
 
 export function createAi(track, feel, { seed = 1 } = {}) {
   const L = track.lengthM, N = Math.ceil(L / STEP);
@@ -85,7 +103,6 @@ export function createAi(track, feel, { seed = 1 } = {}) {
   const openAhead = (s, m) => { for (let d = 0; d <= m; d += STEP) { const k = at(s + d); if (openL[k] || openR[k]) return true; } return false; };
 
   const bots = new Map();
-  let trapCache = new Map();
 
   function bot(i) {
     let b = bots.get(i);
@@ -100,7 +117,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     return b;
   }
 
-  function reset() { bots.clear(); trapCache = new Map(); }
+  function reset() { bots.clear(); }
 
   /** The lateral band (lo..hi) clear of rails and open edges over the next m metres. */
   function lineLimits(s, m, out) {
@@ -117,24 +134,12 @@ export function createAi(track, feel, { seed = 1 } = {}) {
   }
   const LIM = { lo: 0, hi: 0 };
 
-  /** Fastest speed (m/s) the kart can take a bend of k deg/m with the planned share of its yaw rate. */
-  function bendSpeed(r, kDeg) {
+  /** Fastest speed (m/s) the kart can take a bend of k deg/m with ymax rad/s of yaw (speed ref ref). */
+  function bendSpeed(kDeg, ymax, ref) {
     const k = Math.abs(kDeg) * Math.PI / 180;
     if (k < 1e-4) return Infinity;
-    const ymax = r.feel.rad('steer.yawRateDegps') * fg(feel, 'ai.cornerMargin'), ref = r.feel.get('steer.yawSpeedRefMps');
     const a = k / ref;                                // k v (1 + v / ref) = ymax
     return (-k + Math.sqrt(k * k + 4 * a * ymax)) / (2 * a);
-  }
-
-  function trapPoint(t) {
-    let c = trapCache.get(t.id);
-    if (!c) {
-      const q = track.query(t.p[0], t.p[1], t.p[2], -1, QO);
-      c = { s: q.s, lat: q.lateral };
-      trapCache.set(t.id, c);
-      if (trapCache.size > 64) trapCache = new Map([[t.id, c]]);
-    }
-    return c;
   }
 
   function drive(r, ctx, dt, out) {
@@ -195,14 +200,12 @@ export function createAi(track, feel, { seed = 1 } = {}) {
         if (Math.abs(ol - target) < shift) target = ol + (target >= ol ? shift : -shift);
       }
     }
-    const view = ctx.items && typeof ctx.items.view === 'function' ? ctx.items.view() : null;
-    if (view && view.traps) {
-      for (const t of view.traps) {
-        if (!t || !t.p) continue;
-        const c = trapPoint(t), ds = wrap(c.s - s, L);
-        if (ds > avoidM * 1.5) continue;
-        if (Math.abs(c.lat - target) < shift) target = c.lat + (target >= c.lat ? shift : -shift);
-      }
+    const traps = trapsOf(ctx.items);
+    for (let k = 0; k < traps.length; k++) {
+      const t = traps[k];
+      if (!t || !(t.s >= 0) || typeof t.x !== 'number') continue;   // rows carry the trap's own s and x
+      if (wrap(t.s - s, L) > avoidM * 1.5) continue;
+      if (Math.abs(t.x - target) < shift) target = t.x + (target >= t.x ? shift : -shift);
     }
     lineLimits(s, la * 1.5, LIM);
     target = clamp(target, LIM.lo, LIM.hi);
@@ -236,8 +239,9 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     // throttle and brakes for the bend ahead (lift, then brake if well over)
     let vmax = Infinity;
     const brakeLook = Math.max(la, speed * 1.2), coast = feel.get('engine.coastMps2');
+    const ymax = r.feel.rad('steer.yawRateDegps') * fg(feel, 'ai.cornerMargin'), yref = r.feel.get('steer.yawSpeedRefMps');
     for (let d = 0; d <= brakeLook; d += STEP * 2) {
-      const v = bendSpeed(r, bend[at(s + d)]);
+      const v = bendSpeed(bend[at(s + d)], ymax, yref);
       vmax = Math.min(vmax, Math.sqrt(v * v + 2 * coast * d));
     }
     out.throttle = 1;
@@ -335,11 +339,12 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     const def = ITEMS[it.id];
     if (!def) return;
     const range = feel.get('ai.itemRangeM'), me = r.progressM;
-    let ahead = false, behind = false, wideAhead = false;
+    let ahead = false, behind = false, wideAhead = false, leaderAhead = false;
     const pinkM = feel.get('items.pinkRangeM');
     for (const o of ctx.racers || []) {
-      if (o === r) continue;
+      if (o === r || o.finished) continue;             // a finished kart is never a target (items skip it too)
       const d = o.progressM - me;
+      if (d > 0) leaderAhead = true;
       if (d > 0 && d <= range) ahead = true;
       if (d > 0 && d <= pinkM) wideAhead = true;
       if (d < 0 && -d <= range) behind = true;
@@ -349,7 +354,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     else if (def.use === 'throw') {
       if (ahead) press = true;
       else if (behind && b.rand() < feel.get('ai.itemDropChance')) { press = true; back = true; }
-    } else if (def.use === 'lob') press = r.place > 1;
+    } else if (def.use === 'lob') press = leaderAhead || behind;   // at the leader; leading, at place 2 once close
     else if (def.use === 'wide') press = wideAhead;
     else if (def.use === 'trap') press = behind;
     if (press && it.id === 'shatter' && ctx.items && typeof ctx.items.nearOpenEdge === 'function' &&

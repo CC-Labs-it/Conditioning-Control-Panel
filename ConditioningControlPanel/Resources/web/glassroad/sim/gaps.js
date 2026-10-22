@@ -15,8 +15,20 @@ const GAPS = {
   'respawn.hoverM': 2.0,      // hover height above the anchor node during a rescue
 };
 
+// feel.get throws on a missing key and a feel never gains keys (set refuses them), so a miss is remembered
+// per feel object: no Error thrown per kart per tick. A racer overlay (sim/racers.js) can gain a key in
+// its own `over` at any time, so that is checked first.
+const MISSING = new WeakMap();
+const hasOwn = Object.prototype.hasOwnProperty;
+
 /** @returns {any} feel value, else the slice default above */
 export function gap(feel, path) {
-  try { return feel.get(path); } catch (e) { return GAPS[path]; }
+  if (feel.over && hasOwn.call(feel.over, path)) return feel.over[path];
+  const miss = MISSING.get(feel);
+  if (miss && miss.has(path)) return GAPS[path];
+  try { return feel.get(path); } catch (e) {
+    if (miss) miss.add(path); else MISSING.set(feel, new Set([path]));
+    return GAPS[path];
+  }
 }
 export const GAP_KEYS = Object.freeze(Object.keys(GAPS));
