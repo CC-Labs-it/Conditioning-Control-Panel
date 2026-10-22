@@ -2379,3 +2379,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-bubble-field: +458
 - Chaos bubble variants and payloads moved to CCP.Core (uint tints; Fire goes through the head-seeded EffectPayload.Firer). WPF fire bodies are now in EffectPayloadFiring.
 - New ChaosFieldMath (spawn cadence, pop points) is used by WPF ChaosModeService and has tests proven to fail when broken. Avalonia seeds Firer with a logging no-op; the bubble field is the next lane.
+
+## avalonia-port/chaos-pop-text: +440
+- Chaos pop text ported: pooled click-through combat-text overlay with WPF timing/tint, pool closed on run teardown.
+- Row stays stub until bubble field/toys/payout callers are ported; live overlay steps queued.

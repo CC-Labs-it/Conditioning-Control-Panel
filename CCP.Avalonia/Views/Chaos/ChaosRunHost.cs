@@ -136,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_spawning || _state == null) return;
             _spawning = false;
             _runTimer?.Stop();
+            try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF EndRun :3241
 
             double durMin = Math.Max(1, _state.RunDurationSec) / 60.0;
             double capBase = 250.0 * durMin * _state.Config.DifficultyMult;
@@ -168,6 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private static void CleanupAfterRun()
         {
+            try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
             _runTimer = null;
             _hud = null;
