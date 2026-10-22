@@ -556,13 +556,50 @@ public class ChasterServiceTests : IDisposable
         service.NoteSeconds("watcher", 600);
 
         Assert.Equal(SettleOutcome.TryLater, await service.SettleAsync());
-        Assert.Equal(600, service.BalanceSeconds);
+        // Counted as landed at once, not at the next settle.
+        Assert.Equal(0, service.BalanceSeconds);
 
         _http.Answer = _ => new HttpResponseMessage(HttpStatusCode.NoContent);
         Assert.Equal(SettleOutcome.Nothing, await service.SettleAsync());
         Assert.Equal(0, service.BalanceSeconds);
         Assert.Equal(0, service.Bill().PushedSeconds);
         Assert.Single(_http.Seen, s => s.Path.EndsWith("update-time"));
+    }
+
+    [Fact]
+    public async Task A_credit_earned_after_an_unanswered_push_is_kept()
+    {
+        // Bug hunt 2026-10-22: the doubt waited for the next settle (the 10-minute tick) with the
+        // sent 10:00 still on the balance. A finished session in between cancelled it, and the
+        // doubt then took the 10:00 off a balance of 0: the session's credit was gone, so the next
+        // slip-ups went to the lock instead of being cancelled.
+        File.WriteAllText(Path.Combine(_dir, "tab.json"), "{\"pushed_net\":3600}");
+        _http.Answer = _ => throw new TaskCanceledException("timeout");
+        using var service = Make();
+        service.NoteSeconds("watcher", 600);
+
+        Assert.Equal(SettleOutcome.TryLater, await service.SettleAsync());
+        service.Note("session");
+        Assert.Equal(-600, service.BalanceSeconds);
+
+        _http.Answer = _ => new HttpResponseMessage(HttpStatusCode.NoContent);
+        Assert.Equal(SettleOutcome.Nothing, await service.SettleAsync());
+        Assert.Equal(-600, service.BalanceSeconds);
+        Assert.Single(_http.Seen, s => s.Path.EndsWith("update-time"));
+    }
+
+    [Fact]
+    public void A_push_cut_off_by_a_crash_is_settled_at_load_so_an_early_credit_is_kept()
+    {
+        var day = CircesTab.DayKey(_utc.ToLocalTime());
+        File.WriteAllText(Path.Combine(_dir, "tab.json"),
+            "{\"balance\":600,\"pending\":600,\"pending_day\":\"" + day + "\",\"pushed_net\":3600}");
+        using var service = Make();
+
+        Assert.Equal(0, service.BalanceSeconds);
+        service.Note("session");
+        Assert.Equal(-600, service.BalanceSeconds);
+        Assert.Empty(_http.Seen);
     }
 
     [Fact]
