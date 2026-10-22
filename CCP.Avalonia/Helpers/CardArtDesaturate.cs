@@ -1,13 +1,12 @@
 using System;
-using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using ConditioningControlPanel.Services;
 using SkiaSharp;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Helpers;
 
@@ -22,17 +21,26 @@ internal static class CardArtDesaturate
         if (Cache.TryGetValue(source, out var cached)) return cached;
         try
         {
-            using var png = new MemoryStream();
-            bitmap.Save(png);
-            using var decoded = SKBitmap.Decode(png.ToArray());
-            if (decoded == null || decoded.Width <= 0 || decoded.Height <= 0) return null;
-            double scale = Math.Min(1, 320.0 / Math.Max(decoded.Width, decoded.Height));
-            int w = Math.Max(1, (int)Math.Round(decoded.Width * scale));
-            int h = Math.Max(1, (int)Math.Round(decoded.Height * scale));
+            int sw = bitmap.PixelSize.Width, sh = bitmap.PixelSize.Height;
+            if (sw <= 0 || sh <= 0) return null;
+            // Scale before touching pixels, as WPF ArtDesaturate does; no PNG encode/decode round trip.
+            double scale = Math.Min(1, 320.0 / Math.Max(sw, sh));
+            int w = Math.Max(1, (int)Math.Round(sw * scale));
+            int h = Math.Max(1, (int)Math.Round(sh * scale));
+            // Skia's ResizeBitmap only accepts immutable (decoded) bitmaps; a WriteableBitmap is resampled below instead.
+            using var scaled = scale < 1 && bitmap is not WriteableBitmap
+                ? bitmap.CreateScaledBitmap(new PixelSize(w, h), BitmapInterpolationMode.HighQuality) : null;
+            var src = scaled ?? bitmap;
+            using var staging = new WriteableBitmap(src.PixelSize, new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);
+            using var frame = staging.Lock();
+            src.CopyPixels(frame);   // transcodes Rgba/Unpremul sources to Bgra8888 Premul
+            using var full = new SKBitmap();
+            full.InstallPixels(new SKImageInfo(src.PixelSize.Width, src.PixelSize.Height, SKColorType.Bgra8888, SKAlphaType.Premul),
+                frame.Address, frame.RowBytes);
             using var small = new SKBitmap(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
             using (var canvas = new SKCanvas(small))
             using (var paint = new SKPaint { FilterQuality = SKFilterQuality.High })
-                canvas.DrawBitmap(decoded, new SKRect(0, 0, w, h), paint);
+                canvas.DrawBitmap(full, new SKRect(0, 0, w, h), paint);
             var bytes = small.Bytes;
             CardMutePixels.ToGrey(bytes);
             var grey = new WriteableBitmap(new PixelSize(w, h), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Premul);

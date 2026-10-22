@@ -152,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private readonly Path[] _bevels = new Path[2];
         private readonly TranslateTransform[] _travel = { new(), new() };
         private readonly RotateTransform[] _tilt = { new(), new() };
+        private readonly double[] _tiltTarget = new double[2];
         private bool? _pressedHalf;
 
         public SplitFeatureCard()
@@ -506,8 +507,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 var size = _faces[i].Bounds.Size;
                 double angle = allow && _halfHover == (i == 0) && size.Width > 0 && size.Height > 0
                     ? DashboardDepthLaw.TiltFor(at.X / size.Width * 2 - 1, at.Y / size.Height * 2 - 1) : 0;
-                SetDepthValue(_tilt[i], RotateTransform.AngleProperty, angle,
-                    DepthLaw.Ms(DepthLaw.HoverMs, Env.Level), new LinearEasing());
+                TiltTo(i, angle, new LinearEasing());
             }
         }
 
@@ -530,9 +530,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 if (target != from || !Env.AllowTransitions)
                     SetDepthValue(_travel[i], TranslateTransform.YProperty, target, ms, easing);
                 if (!hovered || pressed || !DashboardDepth || Env.Level == MotionLevel.Off || Env.CurrentTier == PerformanceTier.Performance)
-                    SetDepthValue(_tilt[i], RotateTransform.AngleProperty, 0,
-                        DepthLaw.Ms(DepthLaw.HoverMs, Env.Level), new QuadraticEaseOut());
+                    TiltTo(i, 0, new QuadraticEaseOut());
             }
+        }
+
+        // Pointer moves fire constantly: an unchanged target must not restart (or cancel) the running tween.
+        private void TiltTo(int i, double angle, Easing easing)
+        {
+            if (angle == _tiltTarget[i]) return;
+            _tiltTarget[i] = angle;
+            SetDepthValue(_tilt[i], RotateTransform.AngleProperty, angle, DepthLaw.Ms(DepthLaw.HoverMs, Env.Level), easing);
         }
 
         private void SetDepthValue<T>(T transform, StyledProperty<double> property, double value, int ms, Easing easing)
@@ -540,10 +547,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (ms <= 0 || !IsLoaded || !IsEffectivelyVisible)
             { Snap(transform, () => transform.SetValue(property, value)); return; }
-            transform.Transitions = new Transitions
-            {
-                new DoubleTransition { Property = property, Duration = TimeSpan.FromMilliseconds(ms), Easing = easing }
-            };
+            var duration = TimeSpan.FromMilliseconds(ms);
+            // Reuse the transform's one transition when nothing about it changed; a new set cancels the tween.
+            if (transform.Transitions is not [DoubleTransition t] || t.Property != property || t.Duration != duration
+                || t.Easing.GetType() != easing.GetType() || easing is DepthSpring)
+                transform.Transitions = new Transitions
+                {
+                    new DoubleTransition { Property = property, Duration = duration, Easing = easing }
+                };
             transform.SetValue(property, value);
         }
 

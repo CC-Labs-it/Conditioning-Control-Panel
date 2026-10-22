@@ -123,6 +123,17 @@ public sealed class SplitFeatureCardDepthTests
                 Assert.Equal((byte)255, pixel.Alpha);
             }
             Assert.Equal(Stretch.UniformToFill, brushA.Stretch);
+            using (var png = new MemoryStream())
+            {
+                art.Save(png); png.Position = 0;
+                using var decodedArt = new global::Avalonia.Media.Imaging.Bitmap(png); // real art: immutable, CreateScaledBitmap path
+                card.IconA = decodedArt;
+                var greyDecoded = (global::Avalonia.Media.Imaging.WriteableBitmap)((ImageBrush)a.Background!).Source!;
+                Assert.Equal(new PixelSize(320, 160), greyDecoded.PixelSize);
+                using var px = greyDecoded.Lock();
+                Assert.Equal((byte)76, System.Runtime.InteropServices.Marshal.ReadByte(px.Address, 2));
+                card.IconA = art;
+            }
             window.MouseMove(card.TranslatePoint(new Point(20, 20), window)!.Value);
             Assert.Equal(0, a.Opacity); Assert.Equal(1, b.Opacity);
             card.DashboardDepth = true;
@@ -175,6 +186,37 @@ public sealed class SplitFeatureCardDepthTests
             Assert.Equal(1, Travel(faceA));
         }
         finally { window.Close(); s.MotionLevel = motion; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task TiltKeepsOneTransitionPerTransformAcrossPointerMoves() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions
+                { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.MotionLevel, s.PerformanceMode);
+        s.MotionLevel = MotionLevel.Full;
+        s.PerformanceMode = false;
+        var card = new SplitFeatureCard { Width = 220, Height = 220 };
+        var window = new Window { Width = 260, Height = 260, Content = card };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            var tilt = (RotateTransform)((TransformGroup)card.FindControl<Grid>("HalfFaceA")!.RenderTransform!).Children[0];
+            int sets = 0;
+            tilt.PropertyChanged += (_, e) => { if (e.Property == global::Avalonia.Animation.Animatable.TransitionsProperty && e.NewValue != null) sets++; };
+            void Moves() { foreach (var p in new[] { new Point(20, 20), new Point(40, 25), new Point(60, 30) }) window.MouseMove(card.TranslatePoint(p, window)!.Value); }
+            Moves();
+            Assert.Equal(0, sets); // a flat card's tilt target never changes, so nothing is rebuilt
+            card.DashboardDepth = true;
+            Moves();
+            Assert.Equal(1, sets); // later moves retarget the same transition instead of cancelling it
+            Assert.NotNull(tilt.Transitions);
+        }
+        finally { window.Close(); (s.MotionLevel, s.PerformanceMode) = saved; }
         return Task.CompletedTask;
     });
 }
