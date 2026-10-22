@@ -1722,5 +1722,8 @@
       109,
       61
     ]
-  }
+  },
+  {"id":"road-bands-deep","file":"textures/road-bands-deep.ktx2","kind":"texture","tris":0,"texBytes":1398100,"boundRadiusM":0,"materialSlots":["road_bands"],"palette":"deep","width":512,"height":512,"encoding":"ETC1S","colorSpace":"linear","mipLevels":10,"sampleChannel":"r","wrap":["repeat","repeat"],"tileMeters":[12,16]},
+  {"id":"road-bands-afterglow","file":"textures/road-bands-afterglow.ktx2","kind":"texture","tris":0,"texBytes":1398100,"boundRadiusM":0,"materialSlots":["road_bands"],"palette":"afterglow","width":512,"height":512,"encoding":"ETC1S","colorSpace":"linear","mipLevels":10,"sampleChannel":"r","wrap":["repeat","repeat"],"tileMeters":[12,16]},
+  {"id":"road-rim-mask","file":"textures/road-rim-mask.ktx2","kind":"texture","tris":0,"texBytes":699068,"boundRadiusM":0,"materialSlots":["road_rim"],"palette":"all","width":1024,"height":128,"encoding":"ETC1S","colorSpace":"linear","mipLevels":11,"sampleChannel":"r","wrap":["clamp","repeat"],"tileMeters":[12,16],"edgeWidthM":0.6}
 ]
