@@ -154,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF Patreon.cs:152 - the mirror case: entitlement resolving late re-arms what the
                 // settings (and consent) already ask for. Start() re-checks everything itself.
                 var s = CoreSettings.Current;
+                MaybePostConversionRows();
                 if (s.AwarenessModeEnabled && s.AwarenessConsentGiven && ConditioningControlPanel.Services.WindowAwarenessService.HasEntitlement
                     && !App.WindowAwareness.IsRunning)
                     App.WindowAwareness.Start();

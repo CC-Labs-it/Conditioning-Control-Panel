@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Invites;
 using ConditioningControlPanel.Services.Invites;
+using ConditioningControlPanel.Localization;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -80,12 +81,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             // WPF MainWindow.InviteTicket.cs:99: the Tonight Board's Waiting card reads the same answer.
             try { Services.Billboard.Providers.WaitingSignals.NoteInvites(mine); } catch { }
+            PostInviteNews(mine);
             if (Named<Button>("BtnInviteTicket") is not { } ticket) return;
             ticket.IsVisible = _inviteTicketShown = InviteTicketRule.ShouldShow(mine);
             SyncInviteWobble();
         }
 
         /// <summary>The wobble runs only while the ticket is up AND the window is shown.</summary>
+        private void PostInviteNews(InviteMine? mine)
+        {
+            var s = CoreSettings.Current;
+            var news = InviteClaimNotice.Decide(mine, s.UnifiedId, s.InboxStamps, out bool changed);
+            if (changed) CoreSettings.Save();
+            foreach (var item in news)
+            {
+                bool subscribed = item.Kind == InviteNewsKind.Subscribed;
+                var name = item.Name ?? Loc.Get("invites_news_someone");
+                var title = subscribed ? (item.Name == null ? Loc.Get("invites_news_subscribed_plain") : Loc.GetF("invites_news_subscribed", name))
+                    : Loc.GetF("invites_news_claimed", name);
+                var body = Loc.Get(subscribed ? "invites_news_subscribed_body" : "invites_news_claimed_body");
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = item.Key, Title = title, Summary = body,
+                    Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, Loc.Get("invites_news_see"), OpenInvitesCard) });
+            }
+        }
+
         private void SyncInviteWobble()
         {
             if (_inviteTicketWobble == null) return;

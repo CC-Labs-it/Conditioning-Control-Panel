@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>Weekly free-tier pass for the Graded Intake (WPF App.IntakePass).</summary>
         public static IntakePassService IntakePass { get; } = new();
+        internal static DailyFreeService? DailyFree { get; private set; }
 
         /// <summary>HT-URL lookup + download (WPF App.CatalogueLookup). The shell registers the opener.</summary>
         internal static CatalogueLookup CatalogueLookup { get; set; } = new(
@@ -547,6 +548,7 @@ namespace ConditioningControlPanel.Avalonia
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
                 var dailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+                DailyFree = dailyFree;
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
                 // WPF App.xaml.cs:494: the weekly Graded Intake pass. Its TierChanged hooks are

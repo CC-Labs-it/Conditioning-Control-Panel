@@ -144,6 +144,46 @@ internal static class AccountSeed
 
     /// <summary>WPF ProfileSyncService.ProfileLoaded: a profile load succeeded (the welcome-back sheet's second look).</summary>
     internal static event Action? ProfileLoaded;
+    internal static event Action? ConversionApplied;
+
+    private static DateTime _lastConversionCheckUtc = DateTime.MinValue;
+    private static bool _conversionInFlight;
+
+    /// <summary>WPF EntitlementTierSync.OnMainWindowFocused: at most one read every 20 seconds.</summary>
+    internal static async Task RefreshConversionAsync()
+    {
+        var s = CoreSettings.Current;
+        if (_conversionInFlight || s.OfflineMode || string.IsNullOrEmpty(s.UnifiedId) || string.IsNullOrEmpty(s.AuthToken)
+            || DateTime.UtcNow - _lastConversionCheckUtc < TimeSpan.FromSeconds(20)) return;
+        _conversionInFlight = true;
+        _lastConversionCheckUtc = DateTime.UtcNow;
+        var id = s.UnifiedId;
+        try
+        {
+            var node = await NewV2().GetUserProfileNodeAsync(id);
+            if (s.UnifiedId == id && ApplyConversionProfile(node)) CoreSettings.Save();
+        }
+        catch (Exception ex) { Log.Debug(ex, "Conversion focus read failed"); }
+        finally { _conversionInFlight = false; }
+    }
+
+    private static bool ApplyConversionProfile(Newtonsoft.Json.Linq.JObject? node)
+    {
+        var s = CoreSettings.Current;
+        if (node == null || string.IsNullOrEmpty(s.AuthToken) || string.IsNullOrEmpty(s.UnifiedId)) return false;
+        var tier = EntitlementTierRule.ParseTier(node["effective_tier"]);
+        var seen = EntitlementTierRule.ServerTierSeenAfter(EntitlementTierRule.Decide(s.PatreonTier, tier), tier, s.ServerTierSeen);
+        bool dirty = seen != s.ServerTierSeen;
+        s.ServerTierSeen = seen;
+        dirty |= EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
+        dirty |= Services.Startup.Conversion.ProfileExtras.Apply(s, Services.Startup.Conversion.ProfileExtras.Parse(node));
+        if (dirty)
+        {
+            App.DailyFree?.NotifyInputsChanged();
+            ConversionApplied?.Invoke();
+        }
+        return dirty;
+    }
 
     /// <summary>Tests only: the client every default-path load and restore uses.</summary>
     internal static Func<V2AuthService> NewV2 = () => new V2AuthService();
@@ -153,13 +193,16 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
-        var user = await v2.GetUserProfileAsync(id);
+        var node = await v2.GetUserProfileNodeAsync(id);
+        if (s.UnifiedId != id) return false;
+        var user = node?.ToObject<V2AuthService.V2User>();
         if (user == null)
         {
             Log.Warning("Profile load: server profile could not be read for {Id}", id);
             return false;
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
+        ApplyConversionProfile(node);
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
         if (!string.IsNullOrEmpty(s.AuthToken))
             EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
