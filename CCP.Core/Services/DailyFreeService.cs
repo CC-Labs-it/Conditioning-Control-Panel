@@ -55,8 +55,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Floor between two ATTEMPTS on the same day, whatever they returned. The success gate
         /// above cannot carry this on its own: it is keyed on <see cref="_serverKeyForDate"/>,
-        /// which only a 200 ever writes, so while the endpoint 404s (it does not exist yet
-        /// server-side) every dashboard repaint would fire a live HTTPS GET.
+        /// which only a 200 ever writes, so while the endpoint fails (or names no key) every
+        /// dashboard repaint would fire a live HTTPS GET.
         /// </summary>
         private static readonly TimeSpan RetryEvery = TimeSpan.FromMinutes(10);
 
@@ -145,9 +145,60 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        /// <summary>True when <paramref name="featureKey"/> is today's free feature.</summary>
-        public bool IsFreeToday(string? featureKey) =>
-            featureKey != null && string.Equals(TodayKey, featureKey, StringComparison.OrdinalIgnoreCase);
+        /// <summary>
+        /// True when <paramref name="featureKey"/> is open today without a tier: today's gift, a free
+        /// Patreon member's second gift (<see cref="MemberKey"/>, proposal 6b), or an unexpired post
+        /// code grant (brief C6). Every gate already ORs this in, so the three agree everywhere.
+        /// </summary>
+        public bool IsFreeToday(string? featureKey)
+        {
+            if (featureKey == null) return false;
+            if (string.Equals(TodayKey, featureKey, StringComparison.OrdinalIgnoreCase)) return true;
+            var settings = App.Settings?.Current;
+            if (settings == null) return false;
+            if (Startup.Conversion.ProfileExtras.GrantOpen(settings.PostGrants, featureKey, DateTime.UtcNow)) return true;
+            return settings.PatreonMember && string.Equals(MemberKey, featureKey, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// A free Patreon member's second gift today, or null when this account is not a member.
+        /// The server may name it (<c>member_key</c> on <c>/config/daily-feature</c>); otherwise it is
+        /// tomorrow's seeded pick, which the spacing rule keeps different from today's.
+        /// </summary>
+        public string? MemberKey
+        {
+            get
+            {
+                if (App.Settings?.Current?.PatreonMember != true) return null;
+                var stamp = LocalDateStamp();
+                var server = _serverMemberKeyForDate == stamp ? _serverMemberKey : null;
+                var today = TodayKey;
+                // Memoised per (date, today's key, server key): engine gates ask often, and walking
+                // the seeded chain to tomorrow and back costs a re-walk from the epoch each time.
+                var memoKey = stamp + "|" + today + "|" + server;
+                if (_memberMemoKey == memoKey) return _memberMemo;
+                var tomorrow = SeededPick(DateTime.Today.AddDays(1));
+                _memberMemo = Startup.Conversion.ProfileExtras.MemberSecondKey(today, server, tomorrow, Pool);
+                _memberMemoKey = memoKey;
+                return _memberMemo;
+            }
+        }
+
+        private string? _serverMemberKey;
+        private string? _serverMemberKeyForDate;
+        private string? _memberMemoKey;
+        private string? _memberMemo;
+
+        /// <summary>Membership or a post grant changed: repaint as if the day had rolled.</summary>
+        public void NotifyInputsChanged()
+        {
+            try { TodayChanged?.Invoke(); }
+            catch (Exception ex) { App.Logger?.Debug("DailyFree: inputs-changed repaint failed: {E}", ex.Message); }
+        }
+
+        /// <summary>The wheel's own pick for a local date, ignoring any server override. For looking
+        /// back a day (the Daily Gift relock row); gates read <see cref="IsFreeToday"/>.</summary>
+        public string SeededKeyFor(DateTime localDate) => SeededPick(localDate);
 
         private static string LocalDateStamp() => DateTime.Now.ToString("yyyy-MM-dd");
 
@@ -285,6 +336,12 @@ namespace ConditioningControlPanel.Services
 
                 var body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
                 var json = JObject.Parse(body);
+                // A free member's second gift, when the server names one (optional; MemberKey falls
+                // back to tomorrow's seeded pick). Same allowlist as the main key.
+                var memberKey = (json["member_key"] as JValue)?.Value as string;
+                memberKey = string.IsNullOrWhiteSpace(memberKey) ? null : memberKey.Trim().ToLowerInvariant();
+                _serverMemberKey = memberKey != null && OverridableKeys.Contains(memberKey) ? memberKey : null;
+                _serverMemberKeyForDate = LocalDateStamp();
                 var key = (string?)json["key"];
                 if (string.IsNullOrWhiteSpace(key)) return;
                 key = key.Trim().ToLowerInvariant();

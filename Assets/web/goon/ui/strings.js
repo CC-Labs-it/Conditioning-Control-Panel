@@ -479,6 +479,10 @@ export const RAW = {
 
     thumbLabel: tpl({ video: 'clip {n}', image: 'image {n}' }, (kind, n) => ({ n }), (kind) => (kind === 'video' ? 'video' : 'image')),
     evidenceNote: 'a small thumbnail is made here and sent with the report, so a human can check without asking you for the file.',
+    /* Scrolller media (licence clause 3.4): no frames leave the device unless the
+     * reason is csam / illegal, and the report is passed on to the host. */
+    evidenceNoteHost: 'no thumbnail leaves your device for this one. the report names the post and goes to the media host too.',
+    hostToo: 'sent to the media host too.',
   },
 
   /* -------------------------------------------------------------- options */
@@ -1367,6 +1371,7 @@ export const RAW = {
     visFriends: 'Friends',
     visAnyone: 'Anyone',
     visOff: 'Off',
+    visDefault: 'Starts on Friends. Pick Anyone to list it for every player.',
     hintFriends: 'Your friends can see this table.',
     hintAnyone: 'Every signed-in player can see this table.',
     hintOff: 'Hidden. Share the code to play.',
@@ -1380,6 +1385,8 @@ export const RAW = {
     close: 'Close the table',
     closed: 'Table closed',
     listFailed: 'The list did not take it. The code still works.',
+    listedAnyone: 'Listed for Anyone. You never see your own table in the list.',
+    listedFriends: 'Listed for your friends. You never see your own table in the list.',
   },
 
   /* ---------------------------------------------- the patron sheet (hosting) */

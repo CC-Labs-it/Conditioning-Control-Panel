@@ -317,7 +317,10 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 // the 100-token chat cap and get guillotined mid-string. Size the budget to
                 // what we asked the model to produce. See AiCallOptions.ChatWithEffects.
                 var effectsOn = ConditioningControlPanel.Services.Companion.AiEffectControlGate.IsOnNow;
-                var options = effectsOn ? AiCallOptions.ChatWithEffects : AiCallOptions.Chat;
+                var spiceOn = App.Settings?.Current?.SlutModeEnabled == true;
+                var options = effectsOn ? AiCallOptions.ChatWithEffects
+                    : spiceOn ? AiCallOptions.ChatSpice
+                    : AiCallOptions.Chat;
                 var offered = _preview() && !ConversationDelivery.CardFollows(input)
                     ? ConversationDelivery.Select(Activities(), input, Session.Turns) : Array.Empty<CompanionActivity>();
                 if (_preview())
@@ -610,11 +613,28 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 // BarkEchoes are flavor: capped at 5 per window and never persisted (they replay from
                 // bark_rules.json anyway, and they say nothing about the user).
                 Session.Append(TurnKind.BarkEcho, CompanionTurn.FormatBarkEcho(speaker, line),
-                    mood: rule?.Mood, voiced: true);
+                    mood: rule?.Mood, voiced: CompanionIdleVoice.ShouldVoiceNow(CompanionIdleVoice.IsUnprompted(rule?.Trigger))); // #1468: a held idle line was not spoken aloud
             }
             catch (Exception ex)
             {
                 Log.Debug("CompanionBrain: bark echo failed: {Error}", ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// The tube just showed an AI line. Records it for the Companion page unless a chat or
+        /// ambient reply already holds the same words (ccp-bugs #1443).
+        /// </summary>
+        public void NoteTubeLine(string? text)
+        {
+            try
+            {
+                if (ChatSession.TubeLineIsNew(Session.Turns, text, DateTime.UtcNow))
+                    Session.Append(TurnKind.TubeLine, text!.Trim());
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("CompanionBrain: tube line failed: {Error}", ex.Message);
             }
         }
 
