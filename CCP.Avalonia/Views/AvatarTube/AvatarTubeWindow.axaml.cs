@@ -1132,15 +1132,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
         public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
         {
-            int set = companionId switch
-            {
-                CompanionId.OGBambiSprite => 3,
-                CompanionId.CultBunny => 4,
-                CompanionId.BrainParasite => 5,
-                CompanionId.BambiTrainer => 6,
-                CompanionId.BimboCow => 7,
-                _ => 1,
-            };
+            // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
+            // so the mapping lives once. No set -> set 1 (BambiSprite's default).
+            int set = 1;
+            for (int n = 3; n <= 7; n++)
+                if (CompanionForAvatarSet(n) == companionId) { set = n; break; }
             _currentAvatarSet = set;
             var s = CoreSettings.Current;
             s.SelectedAvatarSet = set;
