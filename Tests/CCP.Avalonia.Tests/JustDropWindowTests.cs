@@ -75,6 +75,48 @@ public sealed class JustDropWindowTests
 
     private static GameWindow? Open() => GameWindow.OpenForTests(GameWindow.JustDropId);
 
+    private sealed class OrdersHandler : System.Net.Http.HttpMessageHandler
+    {
+        public int Calls;
+        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
+        {
+            Calls++;
+            return Task.FromResult(new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            { Content = new System.Net.Http.StringContent("{\"orders\":[{\"code\":\"JD-LIVE\",\"sizeId\":\"S\",\"name\":\"From the drawer\"}]}") });
+        }
+    }
+
+    /// <summary>P04: the user path, not PaintTakeaway - showing the Session door fetches the drawer and draws it.</summary>
+    [Fact]
+    public Task ShowingThePresetsTabLoadsTheDrawerAndDrawsItsReceipts() => RunAsync(async shell =>
+    {
+        var previous = (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, JustDropOrdersService.HttpOverride);
+        var handler = new OrdersHandler();
+        using var client = new System.Net.Http.HttpClient(handler);
+        try
+        {
+            JustDropService.SetServerEnabledForTests(false);
+            CoreAccount.UnifiedUserId = "u-tab";
+            CoreSecrets.RetrieveProvider = key => key == CoreSecrets.AuthToken ? "t" : null;
+            JustDropOrdersService.HttpOverride = client;
+            JustDropOrdersService.Invalidate();
+            shell.ShowTab("studio");
+            shell.ShowTab("presets");
+            var shelf = shell.FindControl<PresetsTabView>("PresetsTab")!.FindControl<StackPanel>("TakeawayShelf")!;
+            var until = DateTime.UtcNow.AddSeconds(5);   // the fetch hops the thread pool; pump until it paints
+            while (shelf.Children.Count == 0 && DateTime.UtcNow < until) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+            Assert.True(handler.Calls >= 1);
+            var receipt = Assert.IsType<Border>(Assert.Single(shelf.Children));
+            Assert.Equal("JD-LIVE", Assert.IsType<JustDropOrdersService.Order>(receipt.Tag).Code);
+            Assert.True(shelf.IsVisible);
+        }
+        finally
+        {
+            (CoreAccount.UnifiedUserId, CoreSecrets.RetrieveProvider, JustDropOrdersService.HttpOverride) = previous;
+            JustDropOrdersService.Invalidate();
+        }
+    });
+
     [Fact]
     public void ShowTab_OpensTheShopOnlyWhenTheDoorIsOpen_AndPanicClosesIt() => Run(shell =>
     {

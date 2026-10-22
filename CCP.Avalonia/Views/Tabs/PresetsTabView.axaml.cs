@@ -104,13 +104,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnAttachedToVisualTree(e);
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             RefreshLocalizedDetails();
-            ConditioningControlPanel.Services.JustDrop.JustDropService.AvailabilityChanged += OnJustDropDoorChanged;
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
-            ConditioningControlPanel.Services.JustDrop.JustDropService.AvailabilityChanged -= OnJustDropDoorChanged;
             base.OnDetachedFromVisualTree(e);
         }
 

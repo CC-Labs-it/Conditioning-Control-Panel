@@ -7,7 +7,6 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Localization;
@@ -20,9 +19,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class PresetsTabView
 {
     private bool _takeawayLoading;
-
-    private void OnJustDropDoorChanged(object? sender, EventArgs e) =>
-        Dispatcher.UIThread.Post(() => _ = RefreshTakeawayAsync());
 
     internal async Task RefreshTakeawayAsync()
     {

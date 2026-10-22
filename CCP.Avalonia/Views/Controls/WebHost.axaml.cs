@@ -64,7 +64,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>WebView2 profiles using different browser arguments must not share a folder.</summary>
         public string? WindowsUserDataFolder { get; set; }
 
-
         /// <summary>
         /// The URL the page actually sits on after its last completed navigation: redirects,
         /// in-page links and script hops included, unlike <see cref="Source"/>, which is only
@@ -233,9 +232,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                         {
                             if (e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
                         };
-                    // Subscribed once, here, rather than when a caller sets AllowNavigation: the
-                    // gate has to be live for the FIRST navigation too, and a caller that assigns
-                    // the predicate and the Source in that order would otherwise race the engine.
                     _web.EnvironmentRequested += (_, e) =>
                     {
                         if (OperatingSystem.IsWindows() && e is WindowsWebView2EnvironmentRequestedEventArgs windows)
@@ -244,6 +240,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                             if (WindowsUserDataFolder is { } folder) windows.UserDataFolder = folder;
                         }
                     };
+                    // Subscribed once, here, rather than when a caller sets AllowNavigation: the
+                    // gate has to be live for the FIRST navigation too, and a caller that assigns
+                    // the predicate and the Source in that order would otherwise race the engine.
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);

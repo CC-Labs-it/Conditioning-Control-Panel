@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -40,7 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static GameWindow? LaunchJustDropReplay(string orderCode, Window owner)
         {
             if (string.IsNullOrWhiteSpace(orderCode)) return null;
-            var live = OpenForTests(JustDropId);
+            GameWindow? live;
+            lock (Open) live = Open.FirstOrDefault(w => w.Spec.Id == JustDropId);
             if (live != null) { live.Activate(); return live; }
             var window = new GameWindow(Games[JustDropId]) { _justDropPath = JustDropHandoff.ReplayPath(orderCode) };
             window.Load(Server());
