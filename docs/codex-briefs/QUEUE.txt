@@ -173,3 +173,6 @@ sync7-game-hosts
 sync7-local-ai
 sync7-webcam
 companion-barks-b
+chaos-unlock-card-b
+game-dtrh-host-c
+companion-picker-host
