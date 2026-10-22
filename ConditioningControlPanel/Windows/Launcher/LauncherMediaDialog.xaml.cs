@@ -136,6 +136,7 @@ public partial class LauncherMediaDialog : Window
             RatioSlider.Value = s.RemoteMediaRatio;
             RatioLabel.Text = string.Format(Loc.Get("launcher_media_mixed_share"), s.RemoteMediaRatio);
             RatioRow.Visibility = source == LauncherMediaSettings.SourceMixed ? Visibility.Visible : Visibility.Collapsed;
+            ScrolllerCreditLine.Visibility = source == LauncherMediaSettings.SourceLocal ? Visibility.Collapsed : Visibility.Visible;
 
             var selected = new HashSet<string>(s.FypOnlineNiches ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             foreach (var chip in _nicheChips)
@@ -148,6 +149,9 @@ public partial class LauncherMediaDialog : Window
         }
         finally { _syncing = false; }
     }
+
+    /// <summary>The credit line's scrolller.com link (calm surface; refused under any lock).</summary>
+    private void ScrolllerLink_Click(object sender, RoutedEventArgs e) => Services.Video.ScrolllerCredit.OpenHome();
 
     // ------------------------------------------------------------------ changes
 

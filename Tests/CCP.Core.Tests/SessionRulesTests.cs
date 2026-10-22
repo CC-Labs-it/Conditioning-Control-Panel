@@ -87,6 +87,47 @@ public sealed class SessionRulesTests
         Assert.Equal(new[] { "flash" }, fired);
     }
 
+    /// <summary>WPF CheckDelayedFeatures fires EMI "sessionFeatureArrived" after each start that
+    /// succeeded, with the target minute - never for a start that threw.</summary>
+    [Fact]
+    public void DeferredQueue_StartedCallback_RunsOnlyAfterASuccessfulStart_WithTheTargetMinute()
+    {
+        var q = new DeferredStartQueue();
+        var arrived = new List<(string, int)>();
+        q.Defer("bad", 0, () => throw new InvalidOperationException());
+        q.Defer("bubble count", 2, () => { });
+        q.FireDue(1.0, (name, minute) => arrived.Add((name, minute)));
+        Assert.Empty(arrived);
+        q.FireDue(2.4, (name, minute) => arrived.Add((name, minute)));
+        Assert.Equal(new[] { ("bubble count", 2) }, arrived);
+    }
+
+    /// <summary>session-core-a: the WPF engine runs these rules from Core, so it keeps no second copy.</summary>
+    [Fact]
+    public void WpfSessionEngine_RoutesToTheCoreRules_InsteadOfCopyingThem()
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Services", "Session", "SessionEngine.cs")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var engine = CodeOnly(System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "ConditioningControlPanel", "Services", "Session", "SessionEngine.cs")));
+        foreach (var call in new[] { "SessionClock.Elapsed(", "SessionXp.Compute(", "SessionXp.PausePenalty",
+                     "SessionTimeline.PhaseIndexAt(", "DeferredStartQueue _pendingFeatureStarts", "PhrasePoolCustody.FoldUserPoolEdit(",
+                     "SessionRunner.RandomizedStart(" })
+            Assert.Contains(call, engine);
+        foreach (var copy in new[] { "static void FoldUserPoolEdit(", "divergence.TotalSeconds", "Math.Min(2500",
+                     "_currentSession.Phases[i]", "_random.NextDouble() * 6" })
+            Assert.DoesNotContain(copy, engine);
+        var progression = CodeOnly(System.IO.File.ReadAllText(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Services", "Progression", "ProgressionService.cs")));
+        Assert.Contains("GetSessionXPMultiplier(int level) => SessionXp.Multiplier(level)", progression);
+        Assert.DoesNotContain("PauseCount * 100", engine);
+    }
+
+    /// <summary>Source with comments and string/char literals removed (PLAYBOOK P23): a call that only
+    /// survives in a comment or a log message does not count as wired.</summary>
+    private static string CodeOnly(string src) => System.Text.RegularExpressions.Regex.Replace(src,
+        @"@""(?:[^""]|"""")*""|""(?:\\.|[^""\\\n])*""|'(?:\\.|[^'\\\n])+'|//[^\n]*|/\*[\s\S]*?\*/", " ");
+
     /// <summary>WPF SaveCurrentSettings' 36 fields, in order (SessionEngine.cs:1060-1114), plus
     /// SubliminalDuration (37): WPF writes it from the session and never restores it (decision log).</summary>
     // PopQuizEnabled left the list in 7.1.5 (WPF f30b54f31): a session must not restore it.

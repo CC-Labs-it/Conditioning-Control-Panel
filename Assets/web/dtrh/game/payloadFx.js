@@ -24,6 +24,7 @@
 import { S } from '../engine/settings.js';
 import { isMuted, onMuteChange } from '../shared/audioMute.js';
 import { pickSpiralUrl, pickSpiral } from '../engine/loomSpirals.js';
+import { softPulse } from '../shared/softPulse.js';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const clamp01 = (v) => clamp(v, 0, 1);
@@ -330,7 +331,7 @@ export function createPayloadFx({ hud, fx, media, flashBurst, subliminalFx = nul
 
   // ---- transient bursts (flash / subliminal / bambi freeze) ------------------
   async function flash(strength, durMult) {
-    try { fx && fx.pulseFlash && fx.pulseFlash(clamp01(0.45 + 0.004 * strength)); } catch { /* engine build without it */ }
+    softPulse(fx, clamp01(0.45 + 0.004 * strength));   // capped under reduced motion, skipped under off
     const amount = scale(1, 3, strength);
     // Preferred: the engine's clickable, MULTIPLYING hydra clips (same system the
     // tunnel's flash veils use) - popping one spawns two more. Count comes from the
@@ -554,22 +555,58 @@ export function createPayloadFx({ hud, fx, media, flashBurst, subliminalFx = nul
     }
     return pinnedEl;
   }
+  // A live weave has no run length of its own, so the pinned one is mounted for far longer
+  // than any run and taken off by hand when the spiral hides.
+  const PINNED_HOLD_MS = 6 * 60 * 60 * 1000;
+  let pinnedDropTimer = 0;
+  /** Paint the pinned element: a live Loom weave where one can be drawn, else a picture. */
+  function paintPinned(el) {
+    if (pinnedDropTimer) { clearTimeout(pinnedDropTimer); pinnedDropTimer = 0; }
+    const src = spiralSource();
+    if (src && typeof src === 'object' && src.loom && spiralFx) {
+      const took = spiralFx.mount(el, src, {
+        kind: 'pinned',
+        durMs: PINNED_HOLD_MS,
+        onLost: () => { if (!disposed && src.href) el.style.backgroundImage = `url('${src.href}')`; },
+      });
+      if (took) {
+        // the weave is drawn at the window's shape; the pinned element is square, so the
+        // canvas keeps the window's shape and hangs centred over it (the mask crops it)
+        const view = el.querySelector('canvas.rh-loom-spiral');
+        const a = window.innerHeight > 0 ? window.innerWidth / window.innerHeight : 1;
+        if (view && a >= 1) { view.style.width = `${a * 100}%`; view.style.left = `${-(a - 1) * 50}%`; }
+        else if (view) { view.style.height = `${100 / a}%`; view.style.top = `${-(1 / a - 1) * 50}%`; }
+        return;
+      }
+    }
+    if (spiralFx) spiralFx.drop(el);
+    const url = src && typeof src === 'object' ? src.href : src;
+    if (url) el.style.backgroundImage = `url('${url}')`;
+  }
   /** Show (or, if the toggle is off, ensure hidden) the pinned spiral for a run. */
   function showPinnedSpiral() {
     if (disposed) return;
     if (!S.runPinnedSpiral) { hidePinnedSpiral(); return; }
     const el = ensurePinned();
-    el.style.backgroundImage = `url('${pickSpiralUrl()}')`;
+    paintPinned(el);
     el.classList.add('is-on');
   }
   /** Re-pick the image on a room/biome change (only if it's currently shown). */
   function refreshPinnedSpiral() {
     if (disposed || !pinnedEl || !S.runPinnedSpiral || !pinnedEl.classList.contains('is-on')) return;
-    pinnedEl.style.backgroundImage = `url('${pickSpiralUrl()}')`;
+    paintPinned(pinnedEl);
   }
   /** Fade it out (run end / back to the hub). */
   function hidePinnedSpiral() {
-    if (pinnedEl) pinnedEl.classList.remove('is-on');
+    if (!pinnedEl) return;
+    pinnedEl.classList.remove('is-on');
+    // the live canvas leaves once the 1.2 s fade is over, unless the spiral came back
+    if (spiralFx && !pinnedDropTimer) {
+      pinnedDropTimer = window.setTimeout(() => {
+        pinnedDropTimer = 0;
+        if (!disposed && pinnedEl && !pinnedEl.classList.contains('is-on')) spiralFx.drop(pinnedEl);
+      }, 1400);
+    }
   }
 
   /**
@@ -609,6 +646,7 @@ export function createPayloadFx({ hud, fx, media, flashBurst, subliminalFx = nul
 
   function dispose() {
     disposed = true;
+    if (pinnedDropTimer) { clearTimeout(pinnedDropTimer); pinnedDropTimer = 0; }
     for (const h of Object.values(holds)) { if (h.hideTimer) clearTimeout(h.hideTimer); }
     for (const l of loops) { try { l.cancel(); } catch { /* best effort */ } }
     loops.clear();

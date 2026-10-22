@@ -15,7 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// openers this head has. WPF twin: ConditioningControlPanel/Services/EmiDesk/EmiTargets.cs, whose
     /// availability, lock probe and opener this mirrors door for door.
     ///
-    /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, fyp, dtrh,
+    /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, dtrh,
     /// intake, spiral (overlay), goon, backroom and justdrop. Each is a host window or overlay no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
     /// same way an unavailable door does. Also missing: the moments WPF's Pick fires
@@ -60,6 +60,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             "remote" => Premium(id, "remote", () => Nav("remotecontrol")),
             "takeover" => Premium(id, "takeover", () => Nav("bambitakeover")),
             "lockdown" => Premium(id, null, () => Nav("lockdown")),
+            // WPF :215 opens the feed directly (Mw.OpenFypFeed), not the panel; the feed's gate demands premium.
+            "fyp" => Premium(id, "fyp", () => Views.Games.GameWindow.Launch(Views.Games.GameWindow.FypId)),
             "vault" => Free(() => Nav("premium")),
             "companion" => Free(() => Nav("companion")),
             "progression" => Free(() => Nav("progression")),
