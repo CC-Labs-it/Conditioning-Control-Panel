@@ -12,7 +12,9 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using IconKind = FluentIcons.Common.Symbol;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -60,6 +62,10 @@ public sealed class AssetsTabTests
             Assert.Equal(new[] { "a.png", "b.png" }, tab.CurrentFolderFiles.Select(f => f.Name));
             Assert.All(tab.CurrentFolderFiles, f => Assert.NotNull(f.Thumbnail));
             Assert.False(Directory.Exists(Path.Combine(assets, ".temp"))); // thumbnail decrypts stay in memory
+            var firstThumbs = tab.CurrentFolderFiles.Select(f => f.Thumbnail).ToList();
+            var packGlyphs = await Realized(shell, () => tab.AssetTreeView.GetVisualDescendants().OfType<IconGlyph>()
+                .Where(g => g.DataContext == packs && g.IsVisible).ToList() is { Count: > 0 } l ? l : null);
+            Assert.Equal(IconKind.Box, Assert.Single(packGlyphs).Kind); // WPF names the root with a package emoji
             tab.OpenAssetPreview(tab.CurrentFolderFiles[0]);
             var preview = Assert.Single(shell.OwnedWindows.OfType<MiniPlayerWindow>());
             var extracted = Assert.Single(Directory.GetFiles(Path.Combine(assets, ".temp")));
@@ -92,6 +98,9 @@ public sealed class AssetsTabTests
             Assert.Equal(3, preset.EnabledVideoCount);
             tab.RefreshAssetTree();
             Assert.Equal("image", ((AssetTreeItem)tab.AssetTreeView.SelectedItem!).PackFileType);
+            await tab.ThumbnailLoads;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(firstThumbs, tab.CurrentFolderFiles.Select(f => f.Thumbnail)); // WPF LRU cache: no second decrypt
             Assert.All(tab.CurrentFolderFiles, f => Assert.False(f.IsChecked));
             tab.BtnSelectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, ContentPackStore.Current.GetAllActivePackImages().Count);
