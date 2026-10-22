@@ -36,6 +36,10 @@ namespace ConditioningControlPanel.Services
             public string[] Aliases = Array.Empty<string>();
             /// <summary>Run on the UI thread when matched. Null + <see cref="IsMantra"/> = fall back to a mantra.</summary>
             public Action? Execute;
+            /// <summary>In place of <see cref="Execute"/> for a command that applies its own safety rule:
+            /// false = it did nothing on purpose (panic where the panic key cannot run), so no
+            /// confirmation is spoken and nothing else happens.</summary>
+            public Func<bool>? Run;
             /// <summary>When it returns true the command is refused: Execute is skipped and
             /// <see cref="BlockedConfirm"/> is spoken instead of <see cref="Confirm"/>.</summary>
             public Func<bool>? Blocked;
@@ -105,8 +109,10 @@ namespace ConditioningControlPanel.Services
         // Guard EVERY intent that reaches a privileged teardown, not just the obvious ones: the
         // original report was `video_off`, but session `pause` funnels into SessionEngine.PauseSession
         // -> App.Video.Stop() through a completely different file, and its aliases ("wait", "hold on")
-        // are the ones a frustrated user actually reaches for. Panic stays unguarded — it is the
-        // intended way out and routes to the same teardown on purpose.
+        // are the ones a frustrated user actually reaches for. Panic does not use this guard: it is the
+        // intended way out and reaches exactly as far as the panic key (hard rule 6, owner 2026-10-22):
+        // under Lockdown or with panic off it does nothing but the leash part (VoicePanicReach, asked
+        // inside TriggerPanicFromRemote). Strict Lock alone leaves it whole, as it leaves the key.
         private static bool StopLocked() =>
             App.Lockdown?.IsActive == true ||
             App.Video?.IsStrictActive == true ||
@@ -147,12 +153,13 @@ namespace ConditioningControlPanel.Services
         private static List<VoiceCommandIntent> VoiceCommandIntents => _voiceCommandIntents ??= new()
         {
             // ── Safety ────────────────────────────────────────────────────────────
-            // Routes to the exact panic-key teardown. A false positive just stops things.
+            // Routes to the exact panic-key teardown. A false positive just stops things. Where the
+            // panic key cannot run it says nothing and stops nothing (bar a leash task).
             new VoiceCommandIntent
             {
                 Name = "panic",
                 Aliases = new[] { "red", "stop everything", "stop it all", "shut it all down", "safe word", "i'm done", "make it all stop", "make it stop", "everything off", "turn everything off", "kill everything", "that's too much", "i need to stop", "all stop", "emergency stop" },
-                Execute = () => App.MainWindowRef?.TriggerPanicFromRemote(),
+                Run = () => App.MainWindowRef?.TriggerPanicFromRemote() == true,
                 VoiceRuleId = "voicecmd_panic",
                 NoChain = true,
                 Repeatable = false,
@@ -1102,8 +1109,19 @@ namespace ConditioningControlPanel.Services
                 return;
             }
 
-            try { intent.Execute?.Invoke(); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "AutonomyService: voice command '{Name}' execute failed", intent.Name); }
+            if (intent.Run != null)
+            {
+                bool ran = true;
+                try { ran = intent.Run(); }
+                catch (Exception ex) { App.Logger?.Warning(ex, "AutonomyService: voice command '{Name}' run failed", intent.Name); }
+                // Refused by its own safety rule: no line claims it worked.
+                if (!ran) return;
+            }
+            else
+            {
+                try { intent.Execute?.Invoke(); }
+                catch (Exception ex) { App.Logger?.Warning(ex, "AutonomyService: voice command '{Name}' execute failed", intent.Name); }
+            }
 
             // Utility verbs get a short, text-only ack. Feature verbs prefer the voiced manifest variant
             // (text + matching clip for the active mod), falling back to the inline per-mod text.

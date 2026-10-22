@@ -102,7 +102,7 @@ public class ChasterHooksTests
     }
 
     [Theory]
-    [InlineData("MainWindow.RemoteControl.cs", "internal void TriggerPanicFromRemote()")]
+    [InlineData("MainWindow.RemoteControl.cs", "internal bool TriggerPanicFromRemote()")]
     [InlineData("MainWindow.xaml.cs", "private void HandlePanicKeyPress()")]
     [InlineData("MainWindow.xaml.cs", "private void RunEmergencyPanicTeardown()")]
     public void Every_panic_path_opens_the_chaster_safety_hold(string file, string signature)
