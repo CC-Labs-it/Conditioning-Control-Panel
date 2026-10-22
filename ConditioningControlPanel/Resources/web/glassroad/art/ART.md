@@ -1399,8 +1399,8 @@ bone-local axes differ from model axes. Resolve controls by name, not skin index
 Clone the complete common scene root with SkeletonUtils, keeping skin and bones
 together. Drive the common host root for physics, road alignment and rescue travel.
 
-Soles meet the actual cup floor atY 0.320. Supported hand pads meet the actual
-brim annulus atY 0.510, radii 0.374-0.400 m. Ordinary driving keeps the soles planted.
+Soles meet the actual cup floor at Y 0.320. Supported hand pads meet the actual
+brim annulus at Y 0.510, radii 0.374-0.400 m. Ordinary driving keeps the soles planted.
 The floor/brim surface patches are embedded in the binding file for integration.
 At 120 fps, supported palms deviate at most 0.558 mm and planted sole patches at most
 0.252 mm. Intentional foot/hand release windows are explicit per action.
@@ -1410,7 +1410,7 @@ then cup clearance above saucer, then rider clearance above cup floor. Correct
 actual cup-foot and sole patches after composing rotations. An unrelated Y offset
 per sibling or a common-root lift does not maintain these contacts.
 
-The full hop lasts 1.20 s: hands release byframe 5, external takeoff at 6, cup separates
+The full hop lasts 1.20 s: hands release by frame 5, external takeoff at 6, cup separates
 at 9, rider separates at 12, saucer touchdown at 21, cup seats at 25, soles at 29,
 hands at 32 and antenna settles at 36. The reference peak uses 90 mm cup clearance
 and 240 mm sole-to-floor clearance. Air breathing adds at most 3 mm. Body pitch/roll
@@ -1456,7 +1456,9 @@ hit, so mercy, shield and decoy results do not flinch. Read view.items.held for
 held items. Max-speed thresholds 0.98 enter/0.90 exit are proposed art defaults.
 There is no slope-entry signal; airborne cause lip selects ramp_takeoff.
 An overtake wave is optional, low priority and never queued. Item-fire already
-created the projectile, so the cast marker must not delay gameplay.
+created the projectile, so the cast marker must not delay gameplay. Boost kinds include
+drift with tier 0..3 and trick; suppress the latest procedural hitMotion yaw/roll/lift
+and fireMotion pitch while the corresponding animation channels are owned.
 
 Gentle halves semantic envelopes, then solves cumulative contacts again. Never
 halve independently sampled bone transforms. If that solver is unavailable,
