@@ -2393,3 +2393,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/flake-clocks: +52
 - ChasterFlash coalescing and MatchClock scheduled fire run on a TimeProvider seam; ChasterBill coalescing test and the P108 GoonClock dispatch test are deterministic (stepped clocks), both fail-proven; rgate 39687660015 green.
+
+## avalonia-port/panic-key-sweep: +185
+- Panic key matched by Key value (alias-aware, Enter/Return) on MandatoryVideoOverlay, BubbleCount game/result, FirstShowStage via one helper `Platform/HotkeyNames`.
+- Panic bound to Enter now beats the focused control; headless tests fail-proven.
