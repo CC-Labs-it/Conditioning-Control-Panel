@@ -33,6 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Func<bool> TrayHostPresent { get; set; } = ProbeTrayHost;
 
         private bool _exitRequested;
+        // Test seam: headless cannot raise an OS/app shutdown, so tests set the shutdown flag directly.
+        internal void MarkExitRequestedForTest() => _exitRequested = true;
         // WPF TrayIconService._windowClosed: Show() on a closed window throws.
         private bool _windowClosed;
         // WPF TrayIconService._hasShownFirstMinimizeNotification.

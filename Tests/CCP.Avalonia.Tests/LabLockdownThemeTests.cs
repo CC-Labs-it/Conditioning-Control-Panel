@@ -114,8 +114,7 @@ public sealed class LabLockdownThemeTests
     public void QueuedRefreshCannotThemeAShellClosedDuringLockdown() => Run((shell, ld) =>
     {
         ld.Activate(TimeSpan.FromMinutes(30));
-        typeof(MainShellWindow).GetField("_exitRequested",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(shell, true);
+        shell.MarkExitRequestedForTest();
         shell.Close();
         Dispatcher.UIThread.RunJobs();
         Assert.False(shell.LockdownThemed);
