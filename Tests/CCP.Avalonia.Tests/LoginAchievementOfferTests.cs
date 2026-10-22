@@ -43,7 +43,8 @@ public sealed class LoginAchievementOfferTests
         var oldSync = AccountSeed.Sync;
         var oldNotRemembered = SecretStore.NotRemembered;
         SecretStore.NotRemembered = false;
-        var service = new SettingsService();
+        // Saves stay armed and never touch disk: tests check HasPendingSave, not settings.json (P08).
+        var service = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         s.Welcomed = s.HasAcceptedAgeVerification = true;
@@ -125,30 +126,27 @@ public sealed class LoginAchievementOfferTests
         Assert.Equal(Loc.Get("title_discord_linked"), offer.Title);
         Assert.Equal(Loc.Get("msg_discord_share_achievements_prompt"), offer.FindControl<TextBlock>("TxtMessage")!.Text);
         Assert.False(s.DiscordShareAchievements); // never enabled merely by linking
+        Assert.Equal(Loc.Get("btn_yes"), ((TextBlock)offer.FindControl<Button>("BtnOk")!.Content!).Text);
+        Assert.Equal(Loc.Get("btn_no"), ((TextBlock)offer.FindControl<Button>("BtnCancel")!.Content!).Text);
+        var service = CoreSettings.Service!;
+        SettingsService.DisarmAllPendingSaves();
         offer.FindControl<Button>(accept ? "BtnOk" : "BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        if (accept)
+        {
+            await WaitFor(() => s.DiscordShareAchievements);
+            Assert.True(service.HasPendingSave); // set and saved in the same continuation
+        }
         await signIn;
         Assert.Equal(accept, s.DiscordShareAchievements);
         if (accept)
         {
             var sharing = shell.ProfilePage!.PrivacyPanel.FindControl<CheckBox>("ChkDiscordTabShareAchievements")!;
             Assert.True(sharing.IsChecked);
-            bool Saved(bool expected)
-            {
-                var path = Path.Combine(CorePaths.UserData, "settings.json");
-                try
-                {
-                    // Let the atomic writer replace the file while this cross-platform test reads it.
-                    using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                    using var reader = new StreamReader(stream);
-                    return (bool?)JObject.Parse(reader.ReadToEnd())["DiscordShareAchievements"] == expected;
-                }
-                catch (IOException) { return false; }
-            }
-            await WaitFor(() => Saved(true));
             // The question promises this switch can turn sharing off again; prove the whole path.
+            SettingsService.DisarmAllPendingSaves();
             sharing.IsChecked = false;
             Assert.False(s.DiscordShareAchievements);
-            await WaitFor(() => Saved(false));
+            Assert.True(service.HasPendingSave);
         }
     });
 
@@ -188,6 +186,10 @@ public sealed class LoginAchievementOfferTests
         {
             await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
             Assert.False(release.Task.IsCompleted);
+            // WPF OnProfileLoaded repaints the level while the question is still open.
+            s.PlayerLevel = 42;
+            release.TrySetResult();
+            await WaitFor(() => shell.Named<TextBlock>("TxtLevelLabel")?.Text == "LVL 42");
             Assert.Single(shell.OwnedWindows.OfType<MessageDialog>()).Close(false);
         }
         finally

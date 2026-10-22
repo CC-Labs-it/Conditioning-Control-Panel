@@ -2644,6 +2644,8 @@
   "label_session_saved": "세션 저장됨!",
   "label_do_you_surrender_completely": "완전히 항복할 건가요?",
   "label_yes": "네",
+  "btn_yes": "예",
+  "btn_no": "아니요",
   "dialog_confirm_photo": "사진 확인",
   "label_text_9": "📷",
   "label_does_this_photo_show_you_completing": "이 사진이 다음을 완료하는 모습을 보여주나요:",

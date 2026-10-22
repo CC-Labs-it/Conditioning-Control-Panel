@@ -3788,6 +3788,8 @@
   "label_session_saved": "Session saved!",
   "label_do_you_surrender_completely": "Do you surrender completely?",
   "label_yes": "YES",
+  "btn_yes": "Yes",
+  "btn_no": "No",
   "dialog_confirm_photo": "Confirm Photo",
   "label_text_9": "📷",
   "label_does_this_photo_show_you_completing": "Does this photo show you completing:",

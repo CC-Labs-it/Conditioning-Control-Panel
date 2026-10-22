@@ -77,12 +77,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _notRememberedShown = true;
                     await MessageDialog.ShowAsync(owner ?? this, Loc.Get("login_not_remembered_title"), Loc.Get("login_not_remembered_body"));
                 }
-                // WPF Login.cs:214: the sharing question does not wait for the background profile load.
-                if (AccountSeed.Discord?.IsAuthenticated == true)
-                    await OfferAchievementSharingAfterDiscordLink();
+                // WPF Login.cs:214: the sharing question does not wait for the background profile load,
+                // and the profile load does not wait for the answer.
+                var offer = AccountSeed.Discord?.IsAuthenticated == true
+                    ? OfferAchievementSharingAfterDiscordLink() : Task.CompletedTask;
                 // The cloud profile may adopt a different level (WPF OnProfileLoaded -> UpdateLevelDisplay).
                 try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
                 UpdateLevelDisplay();
+                await offer;
             }
         }
 
@@ -128,7 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (!await MessageDialog.ConfirmAsync(this, Loc.Get("title_discord_linked"),
                     Loc.Get("msg_discord_share_achievements_prompt"),
-                    okText: Loc.Get("label_yes"), cancelText: Loc.Get("leash_cut_confirm_no"))) return;
+                    okText: Loc.Get("btn_yes"), cancelText: Loc.Get("btn_no"))) return;
                 s.DiscordShareAchievements = true;
                 CoreSettings.Save();
                 if (ProfilePage?.PrivacyPanel.FindControl<CheckBox>("ChkDiscordTabShareAchievements") is { } checkbox)
