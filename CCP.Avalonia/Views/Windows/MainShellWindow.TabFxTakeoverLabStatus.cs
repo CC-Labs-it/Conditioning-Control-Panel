@@ -198,16 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("ApplyPr4aStatusPulses: {E}", ex.Message); }
         }
 
-        /// <summary>
-        /// One dot, one decision. The pulse is a breathing sibling shadow BEHIND the dot rather than an
-        /// opacity blink ON it: a status light that keeps disappearing reads as a fault, one that
-        /// breathes reads as a pulse. Only the sibling layer's Opacity moves - an animated BlurRadius
-        /// re-rasterises the kernel every frame, which is the expensive part.
-        ///
-        /// Off means the dot goes back to exactly what its own code painted: the local Effect is
-        /// cleared and Opacity is 1. Nothing here ever touches Fill, so the tabs keep full
-        /// ownership of colour.
-        /// </summary>
+        /// <summary>Paints the sibling glow layer in the dot's tint, blur capped by the tier.</summary>
         private static void PaintStatusGlow(StatusPulseRequest req)
         {
             if (req.Glow == null) return;
@@ -220,6 +211,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
+        /// <summary>
+        /// One dot, one decision. The pulse is a breathing sibling shadow BEHIND the dot rather than an
+        /// opacity blink ON it: a status light that keeps disappearing reads as a fault, one that
+        /// breathes reads as a pulse. Only the sibling layer's Opacity moves - an animated BlurRadius
+        /// re-rasterises the kernel every frame, which is the expensive part.
+        ///
+        /// Off means the dot goes back to exactly what its own code painted: the local Effect is
+        /// cleared and Opacity is 1. Nothing here ever touches Fill, so the tabs keep full
+        /// ownership of colour.
+        /// </summary>
         private void ApplyStatusPulse(Control dot, StatusPulseRequest req)
         {
             try
