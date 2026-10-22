@@ -164,10 +164,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // WPF TutorialOverlay.OnKeyDown: Escape abandons the tour. Tunnelled on the HOST window, since
-        // the card never takes keyboard focus.
+        // the card never takes keyboard focus. WPF only saw Escape while its overlay had focus, so an
+        // Escape typed into one of the host's text boxes stays with that box.
         private void OnStageKeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Key != Key.Escape || _tornDown) return;
+            if (e.Key != Key.Escape || _tornDown || e.Source is TextBox) return;
             SkipTutorial();
             e.Handled = true;
         }

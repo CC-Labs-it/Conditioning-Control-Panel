@@ -124,10 +124,27 @@ public sealed class TutorialStageTests
     public Task HostEscapeEndsTheTourWithoutTakingFocus() => WithHost((host, overlay, target, _, _) =>
     {
         target.Focus();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(target, host.FocusManager?.GetFocusedElement()); // the card did not pull focus back
         host.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
         Dispatcher.UIThread.RunJobs();
         Assert.False(CoreTutorial.IsActive);
         Assert.False(overlay.IsOnStage);
+        Assert.Same(target, host.FocusManager?.GetFocusedElement()); // Escape reached the host while target kept focus
+    });
+
+    [Fact]
+    public Task EscapeInsideAHostTextBoxStaysWithTheTextBox() => WithHost((host, overlay, _, _, index) =>
+    {
+        var box = new TextBox { Width = 120 };
+        ((Canvas)host.Content!).Children.Add(box);
+        Dispatcher.UIThread.RunJobs();
+        box.Focus();
+        host.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(CoreTutorial.IsActive);
+        Assert.True(overlay.IsOnStage);
+        Assert.Equal(index, CoreTutorial.CurrentStepIndex);
     });
 
     private sealed class SecondHost : Window { }
