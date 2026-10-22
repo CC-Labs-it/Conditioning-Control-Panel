@@ -2456,3 +2456,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/emi-desk-extras: +518
 - Emi desk toss on Avalonia: drag lift cue, fling detection, landing squash and the land face, using the new Core `EmiToss` (EmiFlingDetector + EmiTossRules.LandingScale), which WPF now calls too.
 - Row win-emi-desk-extras missing -> stub (land body frame and dizzy chain missing; Tube has no user path).
+
+## avalonia-port/chaos-bubble-field-b: +418
+- Chaos bubble field: SpawnTick cadence, treat/prism pops and score on BubbleOverlay, cleared by panic/stop (Core ApplyTreatPop/ApplyPrismPop); manual pause holds the field and swallows clicks.
+- Still no live bubbles, FALL IN or payout (next: chaos-payout-fallin).
