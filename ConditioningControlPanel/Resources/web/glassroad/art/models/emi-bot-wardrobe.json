@@ -42,49 +42,58 @@
       "id": "emi-outfit-croupier",
       "label": "Croupier",
       "file": "models/emi-outfit-croupier.glb",
-      "source": "Back Room fitted croupier, plum waistcoat and visor"
+      "source": "Back Room fitted croupier, plum waistcoat and visor",
+      "headAccessory": "Dealer visor"
     },
     {
       "id": "emi-outfit-pool",
       "label": "Pool waistcoat",
       "file": "models/emi-outfit-pool.glb",
-      "source": "Pool fitted waistcoat, ivory cuffs and back tab"
+      "source": "Pool fitted waistcoat, ivory cuffs and back tab",
+      "headAccessory": "Plum beret"
     },
     {
       "id": "emi-outfit-varsity",
       "label": "Varsity",
       "file": "models/emi-outfit-varsity.glb",
-      "source": "Arcademy varsity outfit, navy jacket and cream sleeves"
+      "source": "Arcademy varsity outfit, navy jacket and cream sleeves",
+      "headAccessory": "Navy varsity cap"
     },
     {
       "id": "emi-outfit-labcoat",
       "label": "Lab coat",
       "file": "models/emi-outfit-labcoat.glb",
-      "source": "Arcademy labcoat outfit, white coat and pockets"
+      "source": "Arcademy labcoat outfit, white coat and pockets",
+      "headAccessory": "Folded lab cap"
     },
     {
       "id": "emi-outfit-cheer",
       "label": "Cheer",
       "file": "models/emi-outfit-cheer.glb",
-      "source": "Arcademy cheer outfit, pink trim and pleated hem"
+      "source": "Arcademy cheer outfit, pink trim and pleated hem",
+      "headAccessory": "Pink side bow"
     },
     {
       "id": "emi-outfit-swim",
       "label": "Swim club",
       "file": "models/emi-outfit-swim.glb",
-      "source": "Arcademy swim outfit, goggles and side towel"
+      "source": "Arcademy swim outfit, goggles and side towel",
+      "headAccessory": "Swim cap and goggles"
     },
     {
       "id": "emi-outfit-drone-protocol",
       "label": "Drone Protocol",
       "file": "models/emi-outfit-drone-protocol.glb",
-      "source": "New outfit derived from Arcademy Drone Protocol theme"
+      "source": "New outfit derived from Arcademy Drone Protocol theme",
+      "headAccessory": "Lime comms headset"
     },
     {
       "id": "emi-outfit-snow-day",
       "label": "Snow Day",
       "file": "models/emi-outfit-snow-day.glb",
-      "source": "New outfit derived from Arcademy Snow Day theme"
+      "source": "New outfit derived from Arcademy Snow Day theme",
+      "headAccessory": "Knit cap and pom"
     }
-  ]
+  ],
+  "wardrobeRevision": 2
 }
