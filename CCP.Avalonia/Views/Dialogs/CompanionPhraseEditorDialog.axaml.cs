@@ -217,6 +217,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// head-side, so that row kind is missing here. Collapses into one GetAllPhrases() call
         /// when the service moves to Core.
         /// </summary>
+        /// <summary>WPF CompanionPhraseService.GetActivePhraseCount (:430) over this head's pool
+        /// (no voice-line rows, see <see cref="LoadPhrases"/>).</summary>
+        internal static int ActivePhraseCount() => LoadPhrases().Count(p => p.IsEnabled);
+
         private static List<CompanionPhrase> LoadPhrases()
         {
             var settings = CoreSettings.Current;
