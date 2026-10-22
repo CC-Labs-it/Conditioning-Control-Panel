@@ -204,6 +204,9 @@ public sealed class LockdownVeilTests
                 // WPF StartStop.cs:45
                 ("Start/Stop button", () => Click(shell.Named<Button>("BtnStart")!), () => !CoreEngine.IsRunning),
                 ("tray Stop everything", MainShellWindow.StopEverything, () => !CoreEngine.IsRunning || runner.IsPaused),
+                // WPF AvatarTubeWindow.ChatInput.cs:1062-1078 (#479) and :1135-1140 (#514): her right-click menu
+                ("tube menu Engine Stop", () => shell.Tube!.OnMenuEngine(), () => shell.Tube == null || !CoreEngine.IsRunning),
+                ("tube menu Takeover off", () => shell.Tube!.OnMenuTakeover(), () => shell.Tube == null || !shell.Autonomy.IsEnabled),
                 // WPF MainWindow.xaml.cs:866 (every global key, panic included)
                 ("panic key x2", () => { shell.HandlePanicKeyPress(t0); shell.HandlePanicKeyPress(t0.AddSeconds(0.5)); },
                     () => !CoreEngine.IsRunning || closed),

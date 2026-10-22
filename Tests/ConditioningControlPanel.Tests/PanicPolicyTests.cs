@@ -731,6 +731,68 @@ public class PanicPolicyTests
     public void TheRaceWinsATie_AsTheClaimsLogLineReads()
         => Assert.Equal(KeptEscapePage.Race, KeptEscapeGoesTo(true, true, true, true, true, true, true));
 
+    private static readonly KeptEscapePage[] KeptPages =
+    {
+        KeptEscapePage.Race, KeptEscapePage.Board, KeptEscapePage.Breakout, KeptEscapePage.Dtrh,
+        KeptEscapePage.Arcademy, KeptEscapePage.Goon, KeptEscapePage.Room, KeptEscapePage.Intake
+    };
+
+    public static System.Collections.Generic.IEnumerable<object[]> KeptPageStates()
+    {
+        for (int page = 0; page < KeptPages.Length; page++)
+            foreach (bool claimed in new[] { false, true })
+                foreach (bool inFront in new[] { false, true })
+                    foreach (bool ready in new[] { false, true })
+                        yield return new object[] { page, claimed, inFront, ready };
+    }
+
+    [Theory]
+    [MemberData(nameof(KeptPageStates))]
+    public void EveryPage_ReceivesOnlyAClaimedPressWhileInFrontAndReady(int page, bool claimed,
+        bool inFront, bool ready)
+    {
+        var fronts = new bool[KeptPages.Length];
+        var readies = new bool[KeptPages.Length];
+        fronts[page] = inFront;
+        readies[page] = ready;
+
+        Assert.Equal(claimed && inFront && ready ? KeptPages[page] : KeptEscapePage.None,
+            RouteKeptEscape(claimed, fronts, readies));
+    }
+
+    public static System.Collections.Generic.IEnumerable<object[]> KeptPagePairs()
+    {
+        for (int first = 0; first < KeptPages.Length; first++)
+            for (int second = first + 1; second < KeptPages.Length; second++)
+                yield return new object[] { first, second };
+    }
+
+    [Theory]
+    [MemberData(nameof(KeptPagePairs))]
+    public void TwoPagesInFront_KeepPrecedenceEvenWhenTheFirstIsNotReady(int first, int second)
+    {
+        var fronts = new bool[KeptPages.Length];
+        var readies = new bool[KeptPages.Length];
+        fronts[first] = fronts[second] = true;
+        readies[first] = readies[second] = true;
+        Assert.Equal(KeptPages[first], RouteKeptEscape(true, fronts, readies));
+
+        // A booting winner must not hand the press to a different game or queue it for later.
+        readies[first] = false;
+        Assert.Equal(KeptEscapePage.None, RouteKeptEscape(true, fronts, readies));
+    }
+
+    private static KeptEscapePage RouteKeptEscape(bool claimed, bool[] fronts, bool[] readies)
+        => KeptEscapeGoesTo(claimed,
+            raceInFront: fronts[0], raceReady: readies[0],
+            boardInFront: fronts[1], boardReady: readies[1],
+            breakoutInFront: fronts[2], breakoutReady: readies[2],
+            dtrhInFront: fronts[3], dtrhReady: readies[3],
+            arcademyInFront: fronts[4], arcademyReady: readies[4],
+            goonInFront: fronts[5], goonReady: readies[5],
+            roomInFront: fronts[6], roomReady: readies[6],
+            intakeInFront: fronts[7], intakeReady: readies[7]);
+
     [Fact]
     public void TheKeptEscape_IsPostedOnlyOnceThePressWasKept()
     {
@@ -744,11 +806,23 @@ public class PanicPolicyTests
         var gate = body.IndexOf("PanicPolicy.KeptEscapeGoesTo(claim", StringComparison.Ordinal);
         Assert.True(kept >= 0 && gate > kept, "a page must be handed the press only once it was kept");
         foreach (var post in new[] { "CaucusHostService.PostKeptEscape()", "PieceByPieceHostService.PostKeptEscape()",
-                     "BackRoomHostService.PostKeptEscape()" })
+                     "BackRoomHostService.PostKeptEscape()", "DtrhHostService.PostKeptEscape()",
+                     "ArcademyHostService.PostKeptEscape()", "GoonHostService.PostKeptEscape()",
+                     "IntakeHostService.PostKeptEscape()" })
             Assert.True(body.IndexOf(post, StringComparison.Ordinal) > gate, post + " must sit behind KeptEscapeGoesTo");
         Assert.Contains("PieceByPieceHostService.IsReady", body);
         Assert.Contains("CaucusHostService.IsReady", body);
         Assert.Contains("BackRoomHostService.IsBreakoutReady", body);
+        Assert.Contains("DtrhHostService.IsReady", body);
+        Assert.Contains("ArcademyHostService.IsReady", body);
+        Assert.Contains("GoonHostService.IsReady", body);
+        Assert.Contains("BackRoomHostService.IsRoomReady", body);
+        Assert.Contains("IntakeHostService.IsReady", body);
+        Assert.Contains("ArcademyHostService.IsInFront", body);
+        Assert.Contains("GoonHostService.IsInFront", body);
+        Assert.Contains("BackRoomHostService.IsRoomInFront", body);
+        Assert.Contains("IntakeHostService.IsInFront", body);
+        Assert.Contains("|| arcademyInFront || goonInFront || roomInFront || intakeInFront", body);
     }
 
     [Fact]

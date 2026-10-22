@@ -1185,8 +1185,8 @@
                             </ControlTheme>
                         </ComboBox.ItemContainerTheme>
                     </ComboBox>
-                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_1_5_is_out}"
-                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_1_5_stay_tuned}"
+                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_1_14_is_out}"
+                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_1_14_bring_a_friend}"
                             FontSize="11" FontWeight="Bold" Cursor="Hand">
                         <Button.Theme>
                             <ControlTheme TargetType="Button">
@@ -1205,11 +1205,30 @@
                                                                  Content="{TemplateBinding Content}"
                                                                  ContentTemplate="{TemplateBinding ContentTemplate}"/>
                                             </Border>
-                                            <!-- ponytail: WPF ControlTemplate.Triggers (IsMouseOver, Tag) dropped. Avalonia writes these as
-                                                 Style selectors outside the template (":pointerover /template/ Border#x"); the
-                                                 rest state renders correctly and only the hover/press/tag skins are lost. -->
                                         </ControlTemplate>
                                 </Setter>
+                                <!-- WPF MainWindow.xaml:1353-1373 template triggers, in WPF's order (Tag wins over hover).
+                                     FontSize/FontWeight stay local on the button as in WPF (local beats template triggers). -->
+                                <Style Selector="^:pointerover /template/ Border#border">
+                                    <Setter Property="Background" Value="#2D2D50"/>
+                                    <Setter Property="BorderBrush" Value="#5D5D80"/>
+                                </Style>
+                                <Style Selector="^[Tag=UpdateAvailable]">
+                                    <Setter Property="Foreground" Value="White"/>
+                                </Style>
+                                <Style Selector="^[Tag=UpdateAvailable] /template/ Border#border">
+                                    <Setter Property="Background" Value="{DynamicResource DarkPinkBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+                                    <Setter Property="BorderThickness" Value="2"/>
+                                </Style>
+                                <Style Selector="^[Tag=UrgentUpdate]">
+                                    <Setter Property="Foreground" Value="White"/>
+                                </Style>
+                                <Style Selector="^[Tag=UrgentUpdate] /template/ Border#border">
+                                    <Setter Property="Background" Value="#DC143C"/>
+                                    <Setter Property="BorderBrush" Value="#FF4444"/>
+                                    <Setter Property="BorderThickness" Value="3"/>
+                                </Style>
                             </ControlTheme>
                         </Button.Theme>
                     </Button>

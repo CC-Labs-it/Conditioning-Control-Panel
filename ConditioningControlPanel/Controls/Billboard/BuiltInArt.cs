@@ -71,7 +71,8 @@ namespace ConditioningControlPanel.Controls.Billboard
         }
 
         /// <summary>
-        /// Calendar, from the providers' payloads: Locktober {counted, need, days, today}, a
+        /// Calendar, from the providers' payloads: Locktober {counted, mask, need, days, today}
+        /// (mask = the real counted dates, bit 0 = day 1; without one, days 1..counted), a
         /// program {day, days} (days before today count, the bar runs to the last day), the old
         /// int[] {counted, needed}, or nothing (this month, today ringed, no bar). Every figure is
         /// clamped into a month.
@@ -81,6 +82,7 @@ namespace ConditioningControlPanel.Controls.Billboard
             var now = nowLocal ?? DateTime.Now;
             int monthDays = DateTime.DaysInMonth(now.Year, now.Month);
             int counted = 0, needed = 0, days = monthDays, today = now.Day;
+            int? lit = null;
             if (data is int[] a && a.Length >= 2) { counted = a[0]; needed = a[1]; }
             else if (Get(data, "day") is int day && Get(data, "counted") == null)
             {
@@ -92,17 +94,25 @@ namespace ConditioningControlPanel.Controls.Billboard
             else if (data is IReadOnlyDictionary<string, int>)
             {
                 counted = Get(data, "counted") ?? 0;
+                lit = Get(data, "mask");
                 needed = Get(data, "need") ?? 0;
                 days = Get(data, "days") ?? monthDays;
                 today = Get(data, "today") ?? now.Day;
             }
             days = Math.Clamp(days, 1, 31);
-            return new CalendarInfo(Math.Clamp(counted, 0, days), Math.Clamp(needed, 0, 31), days, Math.Clamp(today, 1, days));
+            counted = Math.Clamp(counted, 0, days);
+            int inMonth = (int)((1L << days) - 1);
+            int mask = (lit ?? (int)((1L << counted) - 1)) & inMonth;
+            return new CalendarInfo(counted, Math.Clamp(needed, 0, 31), days, Math.Clamp(today, 1, days), mask);
         }
     }
 
-    /// <summary>What the calendar draws: counted days filled, the bar toward needed, today ringed.</summary>
-    public readonly record struct CalendarInfo(int Counted, int Needed, int Days, int Today);
+    /// <summary>What the calendar draws: the <see cref="Lit"/> days filled (bit 0 = day 1, the
+    /// real dates), the bar from <see cref="Counted"/> toward needed, today ringed.</summary>
+    public readonly record struct CalendarInfo(int Counted, int Needed, int Days, int Today, int Lit)
+    {
+        public bool IsLit(int day) => day >= 1 && day <= 31 && (Lit & (1 << (day - 1))) != 0;
+    }
 
     /// <summary>Open tables sliding in one by one, each with a breathing "seat free" ring.</summary>
     public sealed class TablesArtView : BillboardVectorArt
@@ -267,6 +277,7 @@ namespace ConditioningControlPanel.Controls.Billboard
     {
         private static readonly Typeface Face = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
         private const double LandedAt = 1.3;
+        private readonly CalendarInfo _data;
         private readonly int _counted;
         private readonly int _needed;
         private readonly int _days;
@@ -274,6 +285,7 @@ namespace ConditioningControlPanel.Controls.Billboard
 
         public CalendarArtView(CalendarInfo data)
         {
+            _data = data;
             _counted = data.Counted;
             _needed = data.Needed;
             _days = data.Days;
@@ -307,7 +319,7 @@ namespace ConditioningControlPanel.Controls.Billboard
                 int i = _today - 1;
                 double lift = cell * 0.08 + Math.Max(0, Math.Sin(t * 2)) * cell * 0.06;
                 var rect = new Rect(gx + (i % cols) * pitch, gy + (i / cols) * pitch - lift, cell, cell);
-                bool on = _today <= _counted;
+                bool on = _data.IsLit(_today);
                 Plate(dc, rect, cell * 0.2, on ? Fill(Accent, 0.95) : Fill(Color.FromRgb(58, 52, 96)), lift + cell * 0.06);
                 dc.DrawRoundedRectangle(null, Stroke(Colors.White, cell * 0.07, 0.6 + 0.4 * Math.Sin(t * 4)), rect, cell * 0.2, cell * 0.2);
                 Number(dc, _today, rect, cell, on, dip);
@@ -335,7 +347,7 @@ namespace ConditioningControlPanel.Controls.Billboard
             Twinkles(dc, w, h, t, Mix(Accent, Colors.White, 0.4), 3, 67, new Rect(0.48, 0.08, 0.5, 0.84), 0.024);
         }
 
-        /// <summary>Every day but today: counted ones pressed in and lit (they pop in at the start), the rest raised.</summary>
+        /// <summary>Every day but today: counted ones (their real dates) pressed in and lit (they pop in at the start), the rest raised.</summary>
         private void PaintCells(DrawingContext dc, double t, double cell, double gx, double gy, double pitch, double dip, bool skipToday)
         {
             const int cols = 7;
@@ -346,7 +358,7 @@ namespace ConditioningControlPanel.Controls.Billboard
                 if (skipToday && d == _today) continue;
                 int i = d - 1;
                 var rect = new Rect(gx + (i % cols) * pitch, gy + (i / cols) * pitch, cell, cell);
-                bool on = d <= _counted;
+                bool on = _data.IsLit(d);
                 if (on)
                 {
                     double k = BackOut(t * 2.4 - i * 0.03, 2);
