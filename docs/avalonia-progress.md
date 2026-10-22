@@ -2448,3 +2448,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-boon-bar: +420
 - Chaos run-pick ribbon (ChaosBoonBarOverlay) ported: opened at BeginRun, rebuilt live in pick order with newcomer pop-in (Core ChaosBoonBarRules), closed at run end/panic.
 - Row chaos-boon-bar missing -> stub (no user path starts a run yet); live steps queued in live-queue/overlays.md.
+
+## avalonia-port/chaos-cursor-glow: +410
+- Rabbit Caller cursor halo ported: Core maths (size/breath/follow), click-through topmost Avalonia overlay with Arm/Disarm/MoveToPx/CloseActive seam, closed by ChaosRunHost teardown and panic (PanicSurfaces).
+- Row chaos-cursor-glow missing -> stub (nothing arms it until the Rabbit Caller skill/run loop exist).
