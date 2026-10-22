@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
-using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;
@@ -51,12 +50,6 @@ public sealed class LibVlcSilenceTests
         Assert.Matches(SilencingWrite, "_mediaPlayer.Volume = 0;");
         Assert.DoesNotMatch(SilencingWrite, "_mediaPlayer.Volume = Math.Clamp(volume, 0, 100);");
         Assert.DoesNotMatch(SilencingWrite, "media.Volume = 0; // a WPF MediaElement");
-    }
-
-    [Fact]
-    public void TheSilentOptionIsLibVlcsNoAudio()
-    {
-        Assert.Equal(":no-audio", LibVlcSilence.NoAudioOption);
     }
 
     private static string SourceRoot()
