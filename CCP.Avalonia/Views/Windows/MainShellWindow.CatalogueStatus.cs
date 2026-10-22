@@ -50,9 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Task CheckDeeperSubmissionStatusesAsync(bool force = false) =>
             PollAsync(CatalogueKindDeeper, CoreSettings.Current.DeeperSubmissions, force,
                 () => App.Catalogue.FetchMySubmissionsAsync(default),
-                (id, key) => App.Notifications.Show(
+                (id, key) => App.Notifications.ShowSticky("deeper_submission_accepted_" + id,
                     Loc.GetF("deeper_submission_accepted_toast_fmt", Path.GetFileNameWithoutExtension(key)),
-                    Helpers.NotificationType.Success, TimeSpan.FromSeconds(15),
+                    Helpers.NotificationType.Success,
                     Loc.Get("deeper_submission_accepted_action_view"), () => ShowTab("deeper")),
                 RefreshDeeperLibraryRows);
 

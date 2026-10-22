@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.CatalogueSubmissions.cs:63: remember a share's server id/status. Only
         /// Success/Duplicate carry one; other outcomes are no-ops. WPF ends with RefreshCatalogueShareBadges
-        /// (MainShellWindow.CatalogueStatus.cs, instance); the Share caller does that when it lands.</summary>
+        /// (MainShellWindow.CatalogueStatus.cs, instance); PresetIO's Share caller does that; mod share repaints by refreshing the Mod Manager list.</summary>
         internal static void RecordCatalogueSubmission(string kind, string key, SubmissionResult result)
         {
             try

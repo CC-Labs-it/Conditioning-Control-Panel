@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///  - The mod-id → pack-id mapping comes from Core <c>ModService.PackIdForMod</c>; pack sizes and install state come from
     ///    <see cref="ModPickerCatalog"/> on this head.
     ///  - Install, uninstall, activate and export go through the head's <c>App.Mods</c>
-    ///    (Core ModService), exactly as WPF. Catalogue sharing is still a stub (no catalogue client).
+    ///    (Core ModService), exactly as WPF. Share-to-catalogue goes through MainShellWindow.ModCatalogue (Core ModCatalogueAsset).
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>DragMove()</c> -> <c>BeginMoveDrag(e)</c>;
     ///    <c>ColorConverter.ConvertFromString</c> -> <c>Color.Parse</c>;
     ///    <c>BitmapImage</c> -> <c>Bitmap</c> (<c>DecodePixelWidth</c> becomes
