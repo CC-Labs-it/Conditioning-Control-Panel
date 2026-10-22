@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
-        private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
+        private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed, _voicePaused;
         private long _watchedMs;
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
@@ -423,7 +423,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void ResumeFromGrace(string reason)
         {
             if (!_gracePaused) return;
-            _gracePaused = false;
+            _gracePaused = _voicePaused = false;   // Resume plays, so a voice hold under it ends too
             _graceConsumed = true;   // spent whether it ended by hand or by timeout
             _graceTimer?.Stop();
             _graceTimer = null;
@@ -435,11 +435,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Log.Information("VideoService: grace pause released ({Reason}) after {Sec:F1}s", reason, (Now - _gracePausedAt).TotalSeconds);
         }
 
+        // ---- voice "pause/resume the video" (WPF VideoService.PausePrimary / PlayPrimary) ----
+
+        internal bool VoicePaused => _voicePaused;
+
+        /// <summary>WPF PausePrimary: hold the playing clip. The clocks freeze like a grace pause so the
+        /// stall guard does not read a held frame as a dead output and replay or end the clip.</summary>
+        internal void PausePrimary()
+        {
+            if (_player == null || _voicePaused || _gracePaused) return;
+            _voicePaused = true;
+            _player.SetPause(true);
+            _sinceShow.Stop();
+            _sinceFrame.Stop();
+        }
+
+        /// <summary>WPF PlayPrimary. #735: never un-pauses a grace pause from outside.</summary>
+        internal void PlayPrimary()
+        {
+            if (!_voicePaused || _gracePaused) return;
+            _voicePaused = false;
+            _sinceShow.Start();
+            if (FirstFrameMs >= 0) _sinceFrame.Start();
+            FrameTs = Stopwatch.GetTimestamp();
+            _player?.SetPause(false);
+        }
+
         /// <summary>WPF safety/fallback/max-length timers and the vout watchdog, as one tick: a clip
         /// that shows no frame, stalls, overruns or passes the user's max ends like a dismiss.</summary>
         internal void GuardTick()
         {
-            if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            if (_gracePaused || _voicePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
             var framed = FirstFrameMs >= 0;
             var why = MandatoryVideoScheduler.Guard(Elapsed, framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed, framed,
                 (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
@@ -787,7 +813,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closing = true;
             try
             {
-                _attention = _gracePaused = false;
+                _attention = _gracePaused = _voicePaused = false;
                 _graceTimer?.Stop();
                 _guard?.Stop();
                 _graceTimer = _guard = null;

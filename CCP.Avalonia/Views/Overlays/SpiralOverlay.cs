@@ -36,6 +36,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// real show/animate/close path. Never set outside tests.</summary>
         internal static bool SkipPlatformChecksForTests;
 
+        /// <summary>WPF OverlayService _sustainedSpiralHeld (ShowOverlaySustained "spiral"): the voice
+        /// "show me the spiral" keeps the user's own spiral up, at their opacity, whatever the card or
+        /// engine say, until "stop the spiral" or an engine stop/panic clears it.</summary>
+        internal static bool SustainedHold;
+
         private static readonly List<SpiralOverlayWindow> Windows = new();
         private static int[] _shownOn = Array.Empty<int>();
         private static List<Bitmap> _frames = new();
@@ -73,7 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (!SustainedHold && (!s.SpiralEnabled || !ShouldShow())) { CloseAll(); return; }
 
             var path = SourcePath();
             if (_framesKey != path)

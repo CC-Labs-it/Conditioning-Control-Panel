@@ -102,6 +102,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CancelAutonomyPulses();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
+            // WPF StopPinkFilter/StopSpiral drop a voice sustained hold with the overlay (panic too).
+            (PinkFilterOverlay.SustainedOpacity, SpiralOverlay.SustainedHold) = (null, false);
             App.StopDesktopOverlays(final: false);
             PopQuizHost.Instance.CloseAll();   // first: drops a queued quiz before cards close; WPF StartStop.cs:521
             LockCardWindow.ForceCloseAll();

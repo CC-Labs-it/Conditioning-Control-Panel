@@ -6,8 +6,7 @@
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path), no bark voice lines (text confirmations), no
 // echo wait on her clip (confirmations here are text-only; a 300 ms tail stands in). Intents with no
-// seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, shake, deeper,
-// session pause/resume, volume/mute, video pause/resume) are left out of the grammar.
+// seam here (keyword triggers, shake, deeper) are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -67,18 +66,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             || (BubbleCountWindow.IsAnyOpen() && CoreSettings.Current.BubbleCountStrictLock);
 
         /// <summary>The intents this head can run (null = not on this head, so not in the grammar).</summary>
-        private Action? VoiceAction(string name) => name switch
+        internal Action? VoiceAction(string name) => name switch
         {
             "panic" => VoicePanic,
             "bubbles_on" when CoreBubbles.StartAction != null => CoreBubbles.Start,
             "bubbles_off" when CoreBubbles.StopAction != null => CoreBubbles.Stop,
             "video_on" when CoreEngine.Video != null => () => CoreEngine.Video?.Trigger(),
             "video_off" when CoreEngine.Video != null => () => CoreEngine.Video?.Stop(),
+            "video_pause" when CoreEngine.Video != null => MandatoryVideoOverlay.Instance.PausePrimary,
+            "video_resume" when CoreEngine.Video != null => MandatoryVideoOverlay.Instance.PlayPrimary,
             "flash_once" when CoreFlash.ShowProvider != null => () => CoreFlash.ShowProvider?.Invoke(),
             "subliminals_on" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Start,
             "subliminals_off" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Stop,
             "bouncing_on" when CoreBouncingText.StartAction != null => CoreBouncingText.Start,
             "bouncing_off" when CoreBouncingText.StopAction != null => CoreBouncingText.Stop,
+            // The user's OWN spiral at her opacity (#1051); the tint never below 0.4 (WPF VoiceCommandHost).
+            "spiral_on" when CanShowDesktopOverlay() => () => { SpiralOverlay.SustainedHold = true; SpiralOverlay.Refresh(this); },
+            "spiral_off" when CanShowDesktopOverlay() => () => { SpiralOverlay.SustainedHold = false; SpiralOverlay.Refresh(this); },
+            "pink_on" when CanShowDesktopOverlay() => () =>
+            {
+                PinkFilterOverlay.SustainedOpacity = Math.Max(0.4, CoreSettings.Current.PinkFilterOpacity / 100.0);
+                PinkFilterOverlay.Refresh(this);
+            },
+            "pink_off" when CanShowDesktopOverlay() => () => { PinkFilterOverlay.SustainedOpacity = null; PinkFilterOverlay.Refresh(this); },
+            "wipe_once" when CoreMindWipe.TriggerOnceProvider != null => CoreMindWipe.TriggerOnce,
+            "quiz_once" when CoreEngine.PopQuiz != null => () => CoreEngine.PopQuiz?.Show(),
+            // forceTest: runs with the engine stopped (WPF TriggerGame(forceTest: true)).
+            "count_once" when CoreEngine.BubbleCount != null => () => CoreEngine.BubbleCount?.Trigger(forceTest: true),
+            "pause" => PauseSessionByVoice,
+            "resume" => ResumeSessionByVoice,
+            // No StopLocked on mute: silencing is not escaping (the mute intent in Core).
+            "mute" => () => ApplyVoiceMute(true),
+            "unmute" => () => ApplyVoiceMute(false),
+            "louder" => () => AdjustMasterVolume(+15),
+            "quieter" => () => AdjustMasterVolume(-15),
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
             "takeover_on" => () => Autonomy.Start(),
@@ -86,6 +107,68 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "stop_listening" => StopVoiceInput,
             _ => null,
         };
+
+        /// <summary>Spiral and tint need a composited click-through X11 overlay (the same gate the
+        /// overlays apply before they draw). Static and locked, so the wake loop may ask off the UI thread.</summary>
+        internal static Func<bool> CanShowDesktopOverlay = () => Platform.X11Overlay.IsAvailable && Platform.X11Overlay.IsCompositing;
+
+        /// <summary>WPF PauseSessionFromRemote (MainWindow.RemoteControl.cs:1340) plus the pause button's
+        /// repaint (BtnPauseSession_Click). Lockdown refuses it in Core (StopLocked guard).</summary>
+        internal void PauseSessionByVoice()
+        {
+            if (App.Sessions is not { IsRunning: true, IsPaused: false } runner) return;
+            runner.Pause();
+            PinkFilterOverlay.Refresh(this);
+            SpiralOverlay.Refresh(this);
+            SetPauseButton(true);
+        }
+
+        /// <summary>WPF ResumeSessionFromRemote, through the portal wrapper like the pause button.</summary>
+        internal void ResumeSessionByVoice()
+        {
+            if (App.Sessions is not { IsRunning: true, IsPaused: true }) return;
+            StartEffect(() =>
+            {
+                if (App.Sessions is not { IsPaused: true } r) return;
+                r.Resume();
+                PinkFilterOverlay.Refresh(this);
+                SpiralOverlay.Refresh(this);
+                SetPauseButton(false);
+                OnSessionTick();
+            });
+        }
+
+        private int _preMuteMasterVolume;
+
+        /// <summary>WPF ApplyVoiceMute (MainWindow.Patreon.cs:2136): master to 0, whispers off, her voice
+        /// muted; unmute restores the remembered master (70 if none). Every mirror repaints from settings.</summary>
+        internal void ApplyVoiceMute(bool muted)
+        {
+            var s = CoreSettings.Current;
+            if (muted)
+            {
+                if (s.MasterVolume > 0) _preMuteMasterVolume = s.MasterVolume;
+                (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = (0, false, true);
+            }
+            else (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = (_preMuteMasterVolume > 0 ? _preMuteMasterVolume : 70, true, false);
+            MasterVolumeChanged();
+        }
+
+        /// <summary>WPF AdjustMasterVolume (MainWindow.Patreon.cs:2189): "louder" / "quieter".</summary>
+        internal void AdjustMasterVolume(int delta)
+        {
+            var s = CoreSettings.Current;
+            s.MasterVolume = Math.Clamp(s.MasterVolume + delta, 0, 100);
+            MasterVolumeChanged();
+        }
+
+        private static void MasterVolumeChanged()
+        {
+            CoreSettings.Save();
+            Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
+            MandatoryVideoOverlay.Instance.UpdateVolume();
+            Controls.AppSettings.AudioSettingsBinder.RaiseChanged();   // the Settings slider + readout
+        }
 
         /// <summary>WPF TriggerPanicFromRemote: the spoken safe word. Deliberately NOT refused under
         /// Lockdown or a strict lock - it is the intended way out (decisions "Panic ↔ mic").</summary>

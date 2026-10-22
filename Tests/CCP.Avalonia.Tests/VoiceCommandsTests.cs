@@ -101,13 +101,14 @@ public sealed class VoiceCommandsTests
     {
         var help = shell.VoiceCmds.HelpLine();
         Assert.Contains("take over", help);
-        Assert.DoesNotContain("spiral", help);
-        Assert.DoesNotContain("quiz", help);
+        bool Runs(string intent) => shell.VoiceCmds.Available.Any(i => i.Name == intent);
+        Assert.Equal(Runs("spiral_on"), help.Contains("spiral"));   // only with a composited overlay
+        Assert.True(Runs("pause") && Runs("louder") && Runs("mute"));    // session + volume run everywhere
         shell.ShowTab("shelistening");
         Dispatcher.UIThread.RunJobs();
         var rows = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell.SheListeningPage!)
             .OfType<ConditioningControlPanel.Avalonia.Controls.IconLabel>().Where(t => t.Tag is string g && g.StartsWith("voice:")).ToList();
-        Assert.False(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
+        Assert.Equal(Runs("spiral_on"), rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
         Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
         var toys = rows.Single(t => t.Text!.Contains("Quick toys"));   // freeze runs here only if its seam is seeded
         Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "freeze_once"), toys.IsVisible);
