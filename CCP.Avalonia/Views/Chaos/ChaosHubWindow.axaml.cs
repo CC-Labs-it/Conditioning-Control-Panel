@@ -1770,15 +1770,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void BtnDefaults_Click(object? sender, RoutedEventArgs e) { LoadDefaults(); ApplyExtremeGate(); }
 
-        /// <summary>WPF saved the setup, closed the hub and handed the config to
-        /// <c>App.Chaos.StartRun</c>. There is no ChaosService on this head, so this closes and
-        /// says so. ponytail: needs ChaosService + ChaosRunConfig, wired when they move to Core.</summary>
+        /// <summary>WPF BtnBegin_Click (ChaosHubWindow.xaml.cs:1718): save the setup, close the hub,
+        /// build the run from the saved settings, stamp the mode and start it on the next turn.</summary>
         private void BtnBegin_Click(object? sender, RoutedEventArgs e)
         {
-            var mode = (sender as Control)?.Tag?.ToString() == "FreeDesktop" ? "FreeDesktop" : "Story";
+            var mode = (sender as Control)?.Tag?.ToString() == "FreeDesktop"
+                ? ChaosPlayMode.FreeDesktop : ChaosPlayMode.Story;
             SaveToSettings();
-            Log.Debug("ChaosHub: FALL IN ({Mode}) requested; no ChaosService on this head yet", mode);
             Close();
+            var cfg = ChaosRunConfig.FromSettings();
+            cfg.PlayMode = mode;
+            Dispatcher.UIThread.Post(() => ChaosRunHost.StartRun(cfg));
         }
 
         /// <summary>The loadout sidebar's FALL IN hero button lands here — same path as the

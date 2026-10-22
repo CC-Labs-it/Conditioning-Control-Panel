@@ -23,7 +23,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// prism; a pop fires the payload and scores through ChaosFieldMath.ApplyTreatPop/ApplyPrismPop.
     /// Panic, stop and the recap clear the field.</para>
     ///
-    /// <para>ponytail: still NOT here, so the hub's FALL IN stays a logged no-op: live bubbles (fuses,
+    /// <para>The hub's FALL IN starts a run here (WPF ChaosHubWindow BtnBegin_Click :1718); EndRun
+    /// banks the payout like WPF (:3243-3268): AddXP(base), AwardRunRewards (Sparks + lifetime
+    /// stats), RevealService.Sync, the rank card; the loop tip banks gold at every loop boundary
+    /// and at a full-course end. Panic (ForceShutdown) pays nothing, as in WPF.</para>
+    ///
+    /// <para>ponytail: still NOT here: live bubbles (fuses,
     /// snap/defuse, detonation, shields) and therefore the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns only treat variants until they land; every
@@ -31,9 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// milestones, lessons/first-times, pulses, SFX, announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
-    /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off) and
-    /// the payout (AddXP, AwardRunRewards, RevealService.Sync, the rank card) - the recap shows the
-    /// computed XP and never saves (lane chaos-payout-fallin). The FX window's Pulse/FreezeBurst/edge-hold
+    /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off); the
+    /// payout's lesson hooks (ChaosLessonHooks) and barks (NotifyChaosRunCompleted, gold-first). The FX window's Pulse/FreezeBurst/edge-hold
     /// callers (pops, detonations, the freeze power-up) are not wired yet; only the heat tint is driven from here.</para>
     ///
     /// <para><see cref="Tick"/> is the stepped clock: the DispatcherTimer only calls it, tests call
@@ -46,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static ChaosOverlayWindow? _overlay;
         private static ChaosBoonBarOverlay? _boonBar;
         private static DispatcherTimer? _runTimer, _spawnTimer;
-        private static int _spawnSerial, _ordinarySpawns;
+        private static int _spawnSerial, _ordinarySpawns, _waveDetonatedAt;
         private static readonly Random Rng = new();
 
         /// <summary>WPF ChaosPopText.Show(xDip, yDip, text, color); seeded by the pop-text lane,
@@ -108,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // WPF :450 Pocket Watch: birth the wave-countdown window now (keep-alive contract).
             if (_state.ShowWaveTimer) ChaosWaveTimerWindow.EnsureCreated();
             _state.StartShields = _state.Shields;
+            _waveDetonatedAt = _state.Detonated;
             _spawning = true;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
             _runTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(ChaosRunEngine.TICK_SEC) };
@@ -244,7 +249,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosWaveTimerWindow.Update(newWave, _state.WaveCount, waveLen - (elapsed % waveLen), _state.Score);
             if (newWave > _state.WaveIndex)
             {
-                // WPF BeginWaveTransition with drafts off (:1449): roll straight into the next wave.
+                // WPF BeginWaveTransition with drafts off (:1442-1449): tip, then roll straight on.
+                AwardLoopTip();
                 _state.AllLiveNextWave = false;
                 _state.WaveIndex = newWave;
                 _state.ActIndex = ChaosRunEngine.ActFor(newWave);
@@ -308,21 +314,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CleanupAfterRun();
         }
 
-        /// <summary>WPF EndRun (:3200) minus the payout: the same XP arithmetic, shown not banked.</summary>
+        /// <summary>WPF AwardLoopTip (:1743) + BankGold (:1709): gold for the loop just finished,
+        /// doubled when it had no detonation.</summary>
+        private static void AwardLoopTip()
+        {
+            if (_state == null) return;
+            bool clean = _state.Detonated == _waveDetonatedAt;
+            _waveDetonatedAt = _state.Detonated;
+            int tip = ChaosPayout.LoopTip(Rng.Next(3, 7), _state.Config.DifficultyMult, clean, _state);
+            if (tip > 0)
+            {
+                bool first = !ChaosMeta.State.SeenGoldFirst;
+                if (first) ChaosMeta.State.SeenGoldFirst = true;
+                ChaosMeta.AddGold(tip);   // persists
+                if (first) _state.PushEvent($"{ChaosGlyphs.Gold} gold. she takes it at her bench.");
+            }
+            _state.PushEvent(clean
+                ? $"{ChaosGlyphs.Gold} clean loop — she tips +{tip} gold"
+                : $"{ChaosGlyphs.Gold} loop done — she tips +{tip} gold");
+        }
+
+        /// <summary>WPF EndRun (:3199): the loop tip on a full course, then XP, Sparks, reveals,
+        /// the rank card and the recap. Each banking step is isolated like WPF's.</summary>
         private static void EndRun()
         {
             if (!_spawning || _state == null) return;
+            if (_state.ElapsedSec >= _state.RunDurationSec) AwardLoopTip();   // a quit forfeits it
             _spawning = false;
             _runTimer?.Stop();
             EndField();
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF EndRun :3241
 
-            double durMin = Math.Max(1, _state.RunDurationSec) / 60.0;
-            double capBase = 250.0 * durMin * _state.Config.DifficultyMult;
-            double baseXp = Math.Min(_state.Score, capBase);
-            double skillMult = _state.SkillMult;
-            double finalXp = baseXp * skillMult;
-            long previousBest = ChaosMeta.State.BestScore;
+            var (baseXp, skillMult, finalXp) = ChaosPayout.Xp(_state.RunDurationSec,
+                _state.Config.DifficultyMult, _state.Score, _state.SkillMult);
+            if (!CoreProgression.AddXP(baseXp, "Chaos")) Log.Debug("Chaos payout AddXP failed");
+            long previousBest = ChaosMeta.State.BestScore;   // before the award moves it
+            int sparksEarned = 0;
+            try { sparksEarned = ChaosRunEffects.AwardRunRewards(_state); }
+            catch (Exception ex) { Log.Debug("Chaos meta award: {E}", ex.Message); }
+            try { RevealService.Sync("run_end"); } catch (Exception ex) { Log.Debug("Chaos reveal sync: {E}", ex.Message); }
+            ChaosRank? rankUp = null;
+            try { rankUp = ChaosPayout.RankUp(ChaosMeta.State.RunsCompleted, ChaosMeta.State.LastRankSeen); }
+            catch (Exception ex) { Log.Debug("Chaos rank-up: {E}", ex.Message); }
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
@@ -335,9 +368,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
             ChaosVibeTrailOverlay.CloseActive();   // WPF EndRun :3237
             CloseFx();   // WPF EndRun :3242
-            _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
-            Log.Information("Chaos run complete (no payout on this head): base {Base:0} x skill {Mult:0.0} = {Final:0} XP",
-                baseXp, skillMult, finalXp);
+            _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned, rankUp);
+            Log.Information("Chaos run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks",
+                baseXp, skillMult, finalXp, sparksEarned);
         }
 
         private static void RunAgain()

@@ -17,7 +17,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>The run-lifecycle slice of WPF ChaosModeService on a stepped clock: countdown -> 4 Hz
 /// ticks -> recap; nothing ticks while the overlay is hidden or paused; panic during the countdown
-/// or mid-run tears everything down; the recap never saves.</summary>
+/// or mid-run tears everything down and pays nothing; FALL IN starts a run whose end banks the payout.</summary>
 public sealed class ChaosRunHostTests
 {
     private static void Setup()
@@ -32,14 +32,21 @@ public sealed class ChaosRunHostTests
 
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
+    /// <summary>A fresh in-memory save (TestIsolation puts the files back afterwards).</summary>
+    private static void FreshMeta()
+    {
+        for (int s = 1; s <= 3; s++) ChaosMetaStore.Delete(s);
+        ChaosMeta.Init();
+    }
+
     [Fact]
-    public async Task A_run_counts_down_ticks_and_ends_on_the_recap_without_saving()
+    public async Task A_run_counts_down_ticks_and_ends_on_the_recap()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
+            FreshMeta();
             var meta = ChaosMeta.State;
-            int runs = meta.RunsCompleted; long best = meta.BestScore; int sparks = meta.Sparks;
             try
             {
                 ChaosRunHost.StartRun(Cfg());
@@ -73,10 +80,10 @@ public sealed class ChaosRunHostTests
                 Assert.True(overlay.FindControl<Border>("ResultsPanel")!.IsVisible);
                 overlay.UpdateLayout();
                 Assert.Contains(overlay.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "BEST STREAK");
-                Assert.Equal((runs, best, sparks), (meta.RunsCompleted, meta.BestScore, meta.Sparks));   // no payout
+                Assert.Equal(1, meta.RunsCompleted);   // the run counted (payout: see the FALL IN test)
                 Assert.Same(meta, ChaosMeta.State);
             }
-            finally { ChaosRunHost.ForceShutdown(); }
+            finally { ChaosRunHost.ForceShutdown(); FreshMeta(); }
             return Task.CompletedTask;
         });
     }
@@ -166,9 +173,17 @@ public sealed class ChaosRunHostTests
                 hud = ChaosRunHost.Hud!;
                 overlay.FinishCountdown();
                 var state = ChaosRunHost.State!;
+                state.Score = 500;
+                var meta = ChaosMeta.State;
+                var before = (meta.RunsCompleted, meta.Sparks, meta.Gold, meta.BestScore);
+                bool paidXp = false;   // the Core* seam is restored by TestIsolation
+                CoreProgression.AddXPProvider = (_, _) => paidXp = true;
                 Ticks(8);
                 shell.HandlePanicKeyPress(t0.AddSeconds(3));
                 Assert.False(ChaosRunHost.IsActive || ChaosRunHost.IsDescending);
+                // WPF ForceShutdown: no results, no payout.
+                Assert.Equal(before, (meta.RunsCompleted, meta.Sparks, meta.Gold, meta.BestScore));
+                Assert.False(paidXp);
                 Assert.False(overlay.IsVisible || hud.IsVisible);
                 double at = state.ElapsedSec;
                 Ticks(8);   // a stale timer tick after the teardown does nothing
@@ -283,6 +298,54 @@ public sealed class ChaosRunHostTests
                 Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, x => x.Spec != null);
             }
             finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF ChaosHubWindow BtnBegin_Click :1718 -> StartRun; EndRun :3243-3268 banks
+    /// AddXP(base), Sparks (AwardRunRewards) and the loop tips. Expected values use WPF's formulas
+    /// written out here, not ChaosPayout.</summary>
+    [Fact]
+    public async Task Fall_in_starts_a_run_and_its_end_banks_the_wpf_payout()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var xp = new System.Collections.Generic.List<(double Amount, string Source)>();
+            CoreProgression.AddXPProvider = (a, src) => xp.Add((a, src));   // TestIsolation restores it
+            ChaosHubWindow? hub = null;
+            try
+            {
+                hub = new ChaosHubWindow();
+                hub.FindControl<Button>("BtnMenuFallIn")!
+                    .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.True(ChaosRunHost.IsActive);
+                Assert.Equal(ChaosPlayMode.Story, ChaosRunHost.State!.Config.PlayMode);
+
+                ChaosRunHost.Overlay!.FinishCountdown();
+                var state = ChaosRunHost.State!;
+                state.Score = 1234;
+                var meta = ChaosMeta.State;
+                int gold0 = meta.Gold;
+                for (int i = 0; i < 4 * 1000 && ChaosRunHost.IsDescending; i++) ChaosRunHost.Tick();
+                Assert.False(ChaosRunHost.IsDescending);
+
+                double durMin = state.RunDurationSec / 60.0, diff = state.Config.DifficultyMult;
+                var paid = Assert.Single(xp);
+                Assert.Equal("Chaos", paid.Source);
+                Assert.Equal(Math.Min(1234, 250.0 * durMin * diff), paid.Amount, 6);
+                int sparks = (int)Math.Round((1.5 * Math.Sqrt(1234) + 35.0 * diff * Math.Min(1.0, durMin / 3.0))
+                                             * state.Config.SparkGainMult) + ChaosMeta.FIRST_FALL_BONUS;
+                Assert.Equal(sparks, meta.Sparks);
+                Assert.Equal((1, 1234L), (meta.RunsCompleted, meta.BestScore));
+                // One loop tip per loop (the last on the full course), each >= 2 x round(3 x diff) clean.
+                Assert.True(meta.Gold - gold0 >= state.WaveCount * 2 * (int)Math.Round(3 * diff),
+                    $"gold {gold0} -> {meta.Gold}");
+                Assert.True(ChaosRunHost.Overlay!.FindControl<Border>("ResultsPanel")!.IsVisible);
+            }
+            finally { ChaosRunHost.ForceShutdown(); hub?.Close(); FreshMeta(); }
             return Task.CompletedTask;
         });
     }
