@@ -5686,6 +5686,7 @@
   "set2_tooltip_auto_performance": "플래시나 거품으로 화면이 붐빌 때만 렌더링 품질을 낮췄다가 다시 되돌립니다.",
   "set2_setting_unified_overlay": "통합 오버레이 렌더러",
   "set2_tooltip_unified_overlay": "전체 화면 효과(나선, 핑크 필터, 플래시, 거품 등)를 모니터마다 하나의 창에 그립니다. 한 번에 많이 뜰수록 부드럽습니다. 오버레이가 말썽이면 꺼서 효과마다 창을 하나씩 쓰는 방식으로 돌아갑니다.",
+  "set2_unified_overlay_unavailable": "이 버전에서는 아직 사용할 수 없습니다. 여기서는 각 효과가 자체 창에 그려집니다.",
   "set2_setting_video_hw_decode": "비디오 GPU 디코딩 강제",
   "set2_tooltip_video_hw_decode": "필수 영상을 GPU로 디코딩합니다. 기본값은 꺼짐. 소프트웨어 디코딩이 일부 기기의 흰 화면 버그를 피해 갑니다. 영상이 이미 잘 재생될 때만 켜세요.",
   "set2_dnd_header": "방해 금지",

@@ -6195,6 +6195,7 @@
   "set2_tooltip_auto_performance": "只在画面被闪图或泡泡挤满时降低渲染质量，之后再调回来。",
   "set2_setting_unified_overlay": "统一覆盖层渲染器",
   "set2_tooltip_unified_overlay": "把全屏效果（螺旋、粉色滤镜、闪图、泡泡等等）画在每块显示器的同一个窗口里。同时出现很多东西时更顺。要是叠加层出毛病，关掉就回到一个效果一个窗口的老做法。",
+  "set2_unified_overlay_unavailable": "此版本暂不可用：此处每个效果都在各自的窗口中绘制。",
   "set2_setting_video_hw_decode": "强制视频 GPU 解码",
   "set2_tooltip_video_hw_decode": "用 GPU 解码强制视频。默认关闭：软解能绕开某些机器上的白屏问题。只有在视频本来就播得好好的时候再开。",
   "set2_dnd_header": "勿打扰",

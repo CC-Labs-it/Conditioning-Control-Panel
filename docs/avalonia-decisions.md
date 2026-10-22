@@ -1160,3 +1160,23 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   steps). WPE suspect: frame_complete is only dispatched when the compositor consumes a buffer (WpeWebViewAdapter.cs:421).
   The GameWindow no-engine guard is in gamewindow-followup.md (games-host lane).
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs` (adapter-info table; default-off and gtk rows fail-proven).
+
+## 2026-10-22: The unified overlay compositor is not ported; one window per effect, gated by a bench (avalonia-port/overlay-bench)
+- Question: port WPF's shared Skia compositor (`Services/Compositor`, `LayeredCompositorHost`, ~4.5k lines,
+  bucket E) that `UnifiedOverlayHost` / `ChkUnifiedOverlay` switch on, or keep one overlay window per effect?
+- Choice (option A, advised by oracle-deep, `~/ccp-port/briefs/oracle-compositor.md`): not ported. The
+  compositor exists to fix #550, which is WPF-only: WPF rasterised fullscreen transparent windows on its UI
+  thread (`LayeredCompositorHost.cs:8-15`). Avalonia renders on its own render thread and on X11 the desktop
+  compositor blends the ARGB windows, so that bug does not carry over by construction. Overlays stay on the
+  X11 backend (XWayland on Wayland, 2026-09-28 row above); Avalonia 12.1.2 has no Wayland layer-shell.
+- Settings: `UnifiedOverlayHost` and its Core migration (`MigrateEnableUnifiedOverlayHost`) stay, because the
+  settings file is shared with WPF. The Avalonia checkbox is shown disabled with the localized reason
+  `set2_unified_overlay_unavailable` and still reflects the saved value; it never writes it.
+- Gate: `CCP.Avalonia -- --overlay-bench [seconds]` (`OverlayBench.cs`) runs pink + spiral + bubbles + flash
+  bursts + subliminals on every screen and exits non-zero when max UI-thread latency > 100 ms or any UI or
+  window-frame stall >= 1 s (`OverlayBenchMetrics`, `OverlayBenchMetricsTests`). It also reports p95, missed
+  frames per window and CPU %. Run it in a nested compositor only, never on the live desktop. If it fails
+  on a real machine (most likely cause: GLX swaps serialising across windows), build option B: one X11
+  overlay per screen drawing Core's layer list through an `ICustomDrawOperation`, Windows on `Win32Overlay`,
+  `LayeredCompositorHost` still not ported, brain drain stays n/a. CPU against WPF can only be compared
+  approximately (numbers from Windows CI or the #550/#853 history).

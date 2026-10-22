@@ -6422,6 +6422,7 @@
   "set2_tooltip_auto_performance": "Abbassa la qualità del rendering solo mentre lo schermo è carico di flash o bolle, poi la ripristina.",
   "set2_setting_unified_overlay": "Renderer overlay unificato",
   "set2_tooltip_unified_overlay": "Disegna gli effetti a schermo intero (spirale, filtro rosa, flash, bolle e il resto) in un'unica finestra condivisa per monitor. Più fluido quando c'è molto a schermo. Disattivalo per tornare a una finestra per effetto se gli overlay si comportano male.",
+  "set2_unified_overlay_unavailable": "Non ancora disponibile in questa versione: qui ogni effetto viene disegnato nella propria finestra.",
   "set2_setting_video_hw_decode": "Forza decodifica video su GPU",
   "set2_tooltip_video_hw_decode": "Decodifica i video obbligatori sulla GPU. Disattivo di default: la decodifica software evita un bug dello schermo bianco su alcuni computer. Attivalo solo se i tuoi video già vanno bene.",
   "set2_dnd_header": "Non disturbare",

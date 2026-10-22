@@ -5686,6 +5686,7 @@
   "set2_tooltip_auto_performance": "Reduz a qualidade de render só enquanto a tela está cheia de flashes ou bolhas, e depois devolve.",
   "set2_setting_unified_overlay": "Renderizador de overlay unificado",
   "set2_tooltip_unified_overlay": "Desenha os efeitos em tela cheia (espiral, filtro rosa, flashes, bolhas e o resto) numa única janela por monitor. Fica mais suave quando tem muita coisa de uma vez. Desligue para voltar a uma janela por efeito se as camadas aprontarem.",
+  "set2_unified_overlay_unavailable": "Ainda não disponível nesta versão: aqui cada efeito é desenhado em sua própria janela.",
   "set2_setting_video_hw_decode": "Forçar decodificação de vídeo por GPU",
   "set2_tooltip_video_hw_decode": "Decodifica os vídeos obrigatórios na GPU. Desligado por padrão: a decodificação por software desvia de um bug de tela branca em algumas máquinas. Só ligue se seus vídeos já rodam bem.",
   "set2_dnd_header": "Não perturbe",
