@@ -243,6 +243,55 @@ public sealed class FriendsDrawerTests
         Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_bad"));
     });
 
+    /// <summary>WPF FriendsDrawer.cs :310/:550 tier plates, :565 the lock-day chip, :871 the notices bell, and the
+    /// FriendsSfx cues (Click on the bell, Sent on a poke that went out).</summary>
+    [Fact]
+    public Task TheDrawerWearsPlatesTheLockDayAndTheBellAndPlaysItsCues() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (global::Avalonia.Application.Current is null)   // the plates decode the launcher art (P45)
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var (oldPlay, oldVolume, oldNotices) = (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, s.MasterVolume, s.FriendNotificationsEnabled);
+        try
+        {
+            var tags = new List<string>();
+            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, done) => { tags.Add(tag); done?.Invoke(); };
+            (s.MasterVolume, s.FriendNotificationsEnabled) = (80, true);
+            var (svc, wire) = Service();
+            wire.StateBody = State.Replace("\"name\":\"Mia\",\"tier\":0", "\"name\":\"Mia\",\"tier\":2");
+            var d = new FriendsDrawer(svc) { MeTier = () => 1 };
+            await svc.RefreshAsync();
+            d.Render();
+            Assert.NotNull(Tagged<Image>(d, "friends-tier-1"));   // your own plate in the head
+            var mia = Tagged<Border>(d, "friends-row:u_on")!;
+            var zed = Tagged<Border>(d, "friends-row:u_off")!;
+            Assert.NotNull(Tagged<Image>(mia, "friends-tier-2"));
+            Assert.Empty(zed.GetLogicalDescendants().OfType<Image>());   // free wears nothing
+            var lockChip = Tagged<Border>(mia, "friends-lock")!;
+            Assert.Equal(IconKind.LockClosed, lockChip.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind);
+            Assert.Equal(Loc.GetF("friends_lock_day", 3), lockChip.GetLogicalDescendants().OfType<TextBlock>().Single().Text);
+            Assert.Null(Tagged<Border>(zed, "friends-lock"));
+
+            var bell = Tagged<Button>(d, "friends-notices")!;
+            Assert.Equal(Loc.Get("friends_notices_on"), ToolTip.GetTip(bell));
+            FriendsLanding.SfxGate = new FriendsSfxGate();   // the 130 ms gap is real time; a fresh gate stands in for it
+            Click(d, "friends-notices");
+            Assert.False(s.FriendNotificationsEnabled);
+            Assert.Equal(Loc.Get("friends_notices_off"), ToolTip.GetTip(bell));
+            Assert.Equal(new[] { "friends-click" }, tags);
+
+            FriendsLanding.SfxGate = new FriendsSfxGate();
+            Assert.Equal(SendResult.Sent, await d.PokeAsync("u_on", PokeSet.Shipped[0]));
+            Assert.Equal(new[] { "friends-click", "friends-sent" }, tags);
+        }
+        finally
+        {
+            (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, s.MasterVolume, s.FriendNotificationsEnabled) = (oldPlay, oldVolume, oldNotices);
+            FriendsLanding.SfxGate = new FriendsSfxGate();
+        }
+    });
+
     /// <summary>audit #1976: a click inside the drawer routes through the Popup to the chip; it must
     /// not toggle the drawer shut (WPF's HWND popup never reached the chip at all).</summary>
     [Fact]
