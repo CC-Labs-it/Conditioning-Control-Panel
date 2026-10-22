@@ -99,6 +99,8 @@ public sealed class LoginDeviceCodeTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (oldGet, oldSet) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
@@ -129,7 +131,7 @@ public sealed class LoginDeviceCodeTests
             await Until(() => dialog.FindControl<StackPanel>("DeviceCodePanel")!.IsVisible);
             Assert.Equal("ABC-DEF", dialog.FindControl<TextBlock>("TxtDeviceCode")!.Text);
             Assert.Equal(V2DeviceCodeService.VerificationUrl, dialog.FindControl<TextBox>("TxtVerificationUrl")!.Text);
-            Assert.Equal("Waiting for browser confirmation...", dialog.FindControl<TextBlock>("TxtDeviceStatus")!.Text);
+            Assert.Equal(Loc.Get("login_device_waiting"), dialog.FindControl<TextBlock>("TxtDeviceStatus")!.Text);
             await body(dialog, clock, s);
         }
         finally
@@ -184,7 +186,7 @@ public sealed class LoginDeviceCodeTests
                 clock.Advance(TimeSpan.FromSeconds(3)); // past the server's expires_at: no second poll
                 await Until(() => dialog.OwnedWindows.OfType<MessageDialog>().Any());
                 var box = dialog.OwnedWindows.OfType<MessageDialog>().Single();
-                Assert.Equal("Sign-in code expired. Please try again.", box.FindControl<TextBlock>("TxtMessage")!.Text);
+                Assert.Equal(Loc.Get("login_device_expired"), box.FindControl<TextBlock>("TxtMessage")!.Text);
                 box.Close();
                 await dialog.DevicePoll;
                 Assert.Equal(1, wire.Polls);
@@ -204,6 +206,8 @@ public sealed class LoginDeviceCodeTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldShell = ExternalOpener.Shell;

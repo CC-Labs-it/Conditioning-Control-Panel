@@ -4137,20 +4137,8 @@ namespace ConditioningControlPanel.Services
         /// because the change route spends its 60 s cooldown even on a taken name. Null when the
         /// server could not answer; the change route still has the last word.
         /// </summary>
-        public async Task<bool?> IsDisplayNameAvailableAsync(string name)
-        {
-            try
-            {
-                var json = await _httpClient.GetStringAsync(
-                    $"{ProxyBaseUrl}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
-                return (bool?)JObject.Parse(json)["available"];
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("Display name check failed: {Error}", ex.Message);
-                return null;
-            }
-        }
+        public Task<bool?> IsDisplayNameAvailableAsync(string name) =>
+            new V2AuthService().IsDisplayNameAvailableAsync(name);
 
         /// <summary>
         /// Change the user's display name via server-side validation.

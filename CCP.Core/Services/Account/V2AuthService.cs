@@ -757,6 +757,22 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>WPF ProfileSyncService's name check. Only used after a refused rename, so an
+        /// account's own name is accepted by the change endpoint before availability is consulted.</summary>
+        public async Task<bool?> IsDisplayNameAvailableAsync(string name)
+        {
+            try
+            {
+                var json = await _http.GetStringAsync($"{SERVER_URL}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
+                return (bool?)JObject.Parse(json)["available"];
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Display name check failed: {Error}", ex.Message);
+                return null;
+            }
+        }
+
         /// <summary>
         /// Rename the account (WPF ProfileSyncService.ChangeDisplayNameAsync): the server checks uniqueness
         /// and answers with the name it settled on. Errors carry the server's own text, as WPF showed it.

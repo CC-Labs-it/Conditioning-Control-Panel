@@ -34,8 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 // Not WPF's `s.UnifiedId ||`: a stored id with nothing to prove it is not restored (AccountSeed.RestoreSession).
                 var isLoggedIn = CoreAccount.IsLoggedIn;
-                var displayName = s.UserDisplayName ?? AccountSeed.Patreon?.DisplayName ?? AccountSeed.Discord?.DisplayName
-                                  ?? AccountSeed.SubscribeStar?.DisplayName ?? "User";
+                var displayName = ConditioningControlPanel.Services.NeedsDisplayNameRule.FirstName(
+                    s.UserDisplayName, AccountSeed.Patreon?.DisplayName, AccountSeed.Discord?.DisplayName,
+                    AccountSeed.SubscribeStar?.DisplayName) ?? Loc.Get("account_name_not_set");
 
                 var settings = SettingsPage;
                 SetVisible(settings?.FindControl<Button>("BtnUnifiedLogin"), !isLoggedIn);
@@ -68,18 +69,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal async Task OpenUnifiedLoginDialog(Window? owner = null)
         {
             var dialog = new LoginDialog();
-            if (await dialog.ShowDialogSafe<bool>(owner ?? this) && dialog.Result is not null)
+            _nameSignInActive = true;
+            try
             {
-                UpdateQuickLoginUI(accountChanged: true);
-                if (SecretStore.NotRemembered && !_notRememberedShown)
+                if (await dialog.ShowDialogSafe<bool>(owner ?? this) && dialog.Result is not null)
                 {
-                    _notRememberedShown = true;
-                    await MessageDialog.ShowAsync(owner ?? this, Loc.Get("login_not_remembered_title"), Loc.Get("login_not_remembered_body"));
+                    UpdateQuickLoginUI(accountChanged: true);
+                    await AskDisplayNameAfterSignInAsync(owner ?? this, dialog.Result.DisplayName, dialog.Result.ServerNeedsDisplayName);
+                    if (SecretStore.NotRemembered && !_notRememberedShown)
+                    {
+                        _notRememberedShown = true;
+                        await MessageDialog.ShowAsync(owner ?? this, Loc.Get("login_not_remembered_title"), Loc.Get("login_not_remembered_body"));
+                    }
+                    // The cloud profile may adopt a different level (WPF OnProfileLoaded -> UpdateLevelDisplay).
+                    try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
+                    UpdateLevelDisplay();
                 }
-                // The cloud profile may adopt a different level (WPF OnProfileLoaded -> UpdateLevelDisplay).
-                try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
-                UpdateLevelDisplay();
             }
+            finally { _nameSignInActive = false; }
         }
 
         /// <summary>WPF BtnQuickLogout_Click (AccountSeed.Logout carries the pre-logout sync and progression clear).</summary>
