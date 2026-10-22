@@ -1,0 +1,29 @@
+# sync7-companion-a — recorded audio, Voice level and Send
+
+- Ported the Audio action's active-mod / neutral recorded-clip fallback and panic stop from WPF `b1a39bc77`. The Core policy was already merged, but its voice-pool providers were unseeded. `CompanionVoiceFiles` now owns the WPF folder resolution, two-root enumeration, stable-ID migration and enable/remove filtering; the WPF service delegates to that same copy. A new Audio clip replaces the previous one, and the panic registry stops the current handle even with the engine off.
+- Ported the existing spoken-bubble paths and Workshop Voice level slider from `c34ce92d2`. Default 80 preserves the previous trims; zero keeps text and completes speech callbacks without starting a recorded clip. The control seeds and re-reads settings, and persists the value for the next line. The remainder of this WPF row stays needs-port, as listed below.
+- Ported `b248a7b91`: Send closes the tube chat box. Updated the former “stays open” assertion to the newer owner's explicit WPF behavior; no test was removed or skipped.
+- WPF reference commits inspected: `877085a51`, `b1a39bc77`, `c34ce92d2`, `8682c093b`, `b248a7b91`, `20b2ccce0`, `f5455ca20`, `e5830315e`. No parity/trunk code imported.
+
+## Remaining slice — sync7-companion-a-next
+
+The matching broad parity rows remain **stub**. Rows 7, 77 (partial), 113, 217, 218 and 226 remain needs-port with explicit next-lane notes:
+
+- Tube art haze needs both alpha scrubbing and native input-region behavior. Merely clearing art pixels would leave this base's detached X11 rectangular input region swallowing clicks.
+- Voice level still needs the currently absent idle voiced-clip, phrase-preview service, note/50-click and voiced-flash paths. This slice handles all recorded speech paths presently implemented by the tube; it does not invent substitute hosts.
+- Companion page history needs its conversation VM/history host; this base has no `ConversationPageVm` counterpart. Core TubeLine support alone cannot display a page history.
+- Idle voice rules need the idle timer/dispatch path, the unprompted bit carried through queues to playback, the switch alongside its real consumer, and held-line avatar/emote plus brain voiced-echo wiring. The tube on this base starts no idle loop. DtRH's heard-voice host is n/a here.
+
+## Verification limits
+
+Commands used .NET from `/workspace/shared/dotnet`, `DOTNET_PROCESSOR_COUNT=2`, `DiffEngine_Disabled=true`, Release, `-m:1 -p:UseSharedCompilation=false`. Generated-output copies used MSBuild hardlink properties (`CreateHardLinksForCopyFilesToOutputDirectoryIfPossible`, `CreateHardLinksForCopyLocalIfPossible`, `CreateHardLinksForAdditionalFilesIfPossible`, `CreateHardLinksForCopyAdditionalFilesIfPossible`) to fit the shared cloud filesystem; these change copy strategy only.
+
+- `dotnet build` succeeded for CCP.Core, CCP.Avalonia and all 11 Linux test projects named in `.github/workflows/build.yml`: Core.Tests, Core.Settings.Tests, Core.Content.Tests; Avalonia.Tests, Avalonia.Consent.Tests, Avalonia.Language.Tests, Avalonia.CatalogueStartup.Tests, Avalonia.Scheduler.Tests, Avalonia.Report.Tests, Avalonia.GeneralSettings.Tests, Avalonia.Snapshot.Tests. Every result tail reported `0 Error(s)`. Existing warnings remain.
+- `dotnet build Tests/ConditioningControlPanel.Tests -c Release -p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false` also succeeded: `564 Warning(s), 0 Error(s)`; Windows-targeted WPF app/test code was compiled, **not run** on Linux.
+- `bash .github/scripts/core-guards.sh`: `All Core guards passed` (429 XAML type references checked).
+- `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter 'FullyQualifiedName~Sync7CompanionTests|FullyQualifiedName~TubeChatAiTests|FullyQualifiedName~PanicSurfacesTests'`: **10 passed, 0 failed, 0 skipped**. Touched tests use the real Program builder's fonts, like RenderProof; an initial bare-builder run failed on missing glyph typefaces. The slider test waits for the real debounced write and reloads its sandbox settings file.
+- Before/after proof: the five focused behavior tests ran against a saved pre-fix head DLL with the same final tests/font setup: **5 failed, 0 passed**, for the expected missing slider, unchanged gain, absent Audio stop, unseeded pool and still-open input assertions. Restoring the fixed DLL and running the final touched classes, including those five cases: **10 passed, 0 failed**. No test was disabled or weakened to obtain these results.
+- `dotnet test Tests/CCP.Core.Tests -c Release --no-build --filter 'FullyQualifiedName~CompanionVoiceFilesTests'`: **3 passed, 0 failed, 0 skipped**, after all builds finished.
+- `dotnet test Tests/CCP.Core.Tests -c Release`: **2848 passed, 1 failed, 5 skipped**. The unchanged `BoardTilesTests.A_frame_fits_the_budget` measured **42.68 ms** during concurrent builds. An isolated retry together with the three new Core tests returned **3 passed, 1 failed**, the same board timing check measuring **21.65 ms**. All three `CompanionVoiceFilesTests` passed. The full Core suite is therefore **not green** here. The five existing Vosk tests skipped because the external speech model was absent; tests and thresholds were left intact.
+- `dotnet run --project CCP.Avalonia -c Release --no-build -- --render-all /tmp/worker1-companion-render`: **225/225 views rendered**, exit 0. Inspected `/tmp/worker1-companion-render/WorkshopBehaviorCell.png`: Voice Level appears between Speech Bubble Persistence and the shortcut controls, with the default 80 and the WPF hint. `AvatarTubeWindow.png` also rendered.
+- No Windows desktop, actual audio output device, live external AI/account or detached native input-mask behavior was exercised. Windows-targeted code can only be compiled here. Tests used headless Avalonia, loopback AI, fake playback and isolated profiles.

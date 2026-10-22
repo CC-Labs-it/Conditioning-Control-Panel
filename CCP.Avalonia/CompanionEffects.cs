@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -117,17 +119,35 @@ namespace ConditioningControlPanel.Avalonia
             MediaCommand.VideoSurface = path => Start(() =>
                 CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
             MediaCommand.AudioSurface = PlayAudio;
+            MediaCommand.ModVoiceLinesProvider = () => Dispatcher.UIThread.CheckAccess()
+                ? EnabledModVoiceLines() : Dispatcher.UIThread.Invoke(EnabledModVoiceLines);
+            MediaCommand.NeutralWordClipsProvider = () => SubliminalWhisper.Manifest().Values
+                .Select(name => Path.Combine(SubliminalWhisper.WordsRoot(), name)).Where(File.Exists).ToArray();
             GetBackToMeCommand.AiProvider = () => App.Ai;
             GetBackToMeCommand.SaySurface = (text, aiGenerated) =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() =>
                     Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: true, aiGenerated: aiGenerated));
         }
 
+        private static Action? _stopAudio;
+
+        /// <summary>The single Audio-action clip, including when no engine is running (WPF KillAllAudio).</summary>
+        internal static void StopAudio() => Interlocked.Exchange(ref _stopAudio, null)?.Invoke();
+
+        private static IReadOnlyList<string> EnabledModVoiceLines()
+        {
+            var files = CompanionVoiceFiles.GetFiles(CoreMods.ActiveModId, CoreMods.ActiveModPackage?.InstalledPath);
+            var settings = CoreSettings.Current;
+            if (CompanionVoiceFiles.MigrateLegacyIds(settings, files)) CoreSettings.Save();
+            return CompanionVoiceFiles.Enabled(files, settings, ConditioningControlPanel.Models.CompanionPhrase.DefaultAudioFolder);
+        }
+
         /// <summary>True once the clip is really playing, false when refused or it never starts.</summary>
         internal static async Task<bool> PlayAudio(string path)
         {
             var started = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            CoreAudio.PlayOneShot(path, 1f, "ai", _ => started.TrySetResult(true), () => started.TrySetResult(false));
+            StopAudio(); // a new one-shot replaces the previous one, as WPF AudioService.PlaySound does
+            _stopAudio = CoreAudio.PlayStoppable(path, 1f, "ai", _ => started.TrySetResult(true), () => started.TrySetResult(false));
             return await Task.WhenAny(started.Task, Task.Delay(10_000)) == started.Task && started.Task.Result;
         }
 
