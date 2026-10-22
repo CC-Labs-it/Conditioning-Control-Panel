@@ -1,0 +1,64 @@
+/* glassroad styles: HUD, start / pause / finish card, feel sheet. Dry, quiet chrome. */
+:root {
+  --ink: #f4eef8;
+  --ink-dim: rgba(244, 238, 248, 0.62);
+  --glass: rgba(14, 12, 22, 0.58);
+  --line: rgba(244, 238, 248, 0.16);
+  --accent: #ff8fc4;
+  --font: system-ui, "Segoe UI", sans-serif;
+  --mono: ui-monospace, Consolas, "Courier New", monospace;
+}
+
+/* HUD */
+.hud { position: fixed; inset: 0; pointer-events: none; color: var(--ink); font: 600 15px/1.2 var(--font);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); user-select: none; }
+.hud-top, .hud-bottom { position: absolute; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: center; }
+.hud-top { top: max(14px, env(safe-area-inset-top)); }
+.hud-bottom { bottom: max(14px, env(safe-area-inset-bottom)); }
+.hud-time, .hud-speed b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.hud-speed b { font-size: 28px; }
+.hud-speed { color: var(--ink-dim); }
+.hud-count { position: absolute; top: 34%; left: 0; right: 0; text-align: center; font-size: 72px; font-weight: 700; }
+.hud-count.pulse { animation: hud-pulse 0.4s ease-out; }
+@keyframes hud-pulse { from { transform: scale(1.18); } to { transform: scale(1); } }
+.hud-pips { display: flex; gap: 6px; }
+.hud-pips i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line); transition: background-color 0.12s, border-color 0.12s; }
+.hud-pips i.on { background: var(--pip, #fff); border-color: var(--pip, #fff); }
+.hud-credit { position: absolute; right: 16px; bottom: max(52px, calc(env(safe-area-inset-bottom) + 40px)); font-size: 12px; color: var(--ink-dim); }
+.hud-credit:empty { display: none; }
+.hud.paused .hud-count { visibility: hidden; }
+
+/* card */
+#card { background: rgba(8, 7, 14, 0.45); z-index: 10; }
+#card .card-body { min-width: min(320px, calc(100vw - 32px)); max-width: calc(100vw - 32px); box-sizing: border-box;
+  padding: 24px 28px; background: var(--glass); border: 1px solid var(--line); border-radius: 14px;
+  text-align: center; backdrop-filter: blur(6px); animation: card-in 0.3s ease-out; }
+@keyframes card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+#card .card-title { margin: 0 0 6px; font-size: 26px; font-weight: 700; letter-spacing: 0.02em; }
+#card .card-note { margin: 0 0 18px; color: var(--ink-dim); font-family: var(--mono); }
+#card button { font: 600 15px var(--font); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  border-radius: 999px; padding: 8px 22px; margin: 0 4px; cursor: pointer; }
+#card button:hover:not(:disabled), #card button:focus-visible { border-color: var(--accent); outline: none; }
+#card button:disabled { opacity: 0.4; cursor: default; }
+#card button[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-count.pulse, #card .card-body { animation: none; }
+}
+
+/* feel sheet (?feel=1) */
+.feel-sheet { position: fixed; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100vw - 16px)); overflow: auto;
+  z-index: 20; background: rgba(10, 9, 16, 0.92); border: 1px solid var(--line); border-radius: 10px;
+  color: var(--ink); font: 12px/1.3 var(--font); padding: 6px 8px; box-sizing: border-box; }
+.feel-sheet.folded { bottom: auto; overflow: hidden; }
+.feel-sheet.folded details { display: none; }
+.feel-bar { display: flex; gap: 6px; position: sticky; top: -6px; background: inherit; padding: 4px 0 6px; }
+.feel-bar button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+.feel-sheet summary { cursor: pointer; padding: 4px 0; font-weight: 700; color: var(--accent); }
+.feel-row { display: flex; align-items: center; gap: 6px; padding: 2px 0 2px 8px; }
+.feel-row span { flex: 0 0 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); }
+.feel-row input { min-width: 0; font: 12px var(--mono); color: var(--ink); background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; }
+.feel-row input[type="number"], .feel-row input[type="text"] { width: 60px; flex: 1 1 60px; }
+.feel-row input[type="range"] { flex: 1 1 80px; padding: 0; }
+.feel-row input[type="checkbox"] { flex: 0 0 auto; }
