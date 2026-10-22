@@ -14,10 +14,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     ///
     /// <para>PORTED from ConditioningControlPanel/Views/Controls/Companion/CompanionRoomView.xaml.cs.
     /// All three page-level behaviours the WPF view owns now cross: the navigator, the shelf
-    /// collapse and the clock parking. What is still missing is the viewmodel half - ICompanionRoomVm
-    /// and its eight zone interfaces are in the WPF head, so ViewModel/Claim and the compat-seam
-    /// passthroughs (TxtDetachStatusCompanion, the sixteen AiPermissionsGrid names, ...) have no
-    /// source to read; every zone seeds itself from CoreSettings instead.</para>
+    /// collapse and the clock parking, plus the claim/teardown (<see cref="Claim"/>). ICompanionRoomVm
+    /// and its eight zone interfaces stay in the WPF head: this view composes the zones itself, so
+    /// there is no ViewModel property and no compat-seam passthroughs (nothing on this head writes
+    /// to the room by name); every zone seeds itself from CoreSettings.</para>
     /// </summary>
     public partial class CompanionRoomView : UserControl, ICompanionRoomNavigator
     {
@@ -73,6 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            Claim(true);
 
             foreach (var v in this.GetSelfAndVisualAncestors())
                 _visibilityWatch.Add(v.GetObservable(IsVisibleProperty).Subscribe(new VisibilityObserver(this)));
@@ -82,8 +83,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             foreach (var d in _visibilityWatch) d.Dispose();
             _visibilityWatch.Clear();
+            // WPF OnUnloaded: Claim(null) + ParkClocks.
+            Claim(false);
             ParkClocks();
             base.OnDetachedFromVisualTree(e);
+        }
+
+        /// <summary>
+        /// WPF CompanionRoomView.Claim / CompanionRoomRuntimeVm.Navigator: a torn-down page is never
+        /// reachable from a live zone (a deep link from a stale navigator would scroll a dead tree),
+        /// and letting go is Z2's teardown signal - the chat stops listening to the brain's turn log
+        /// (ChatVm.Detach). Nothing re-attaches the chat here: the next Sync does, as in WPF.
+        /// </summary>
+        private void Claim(bool claim)
+        {
+            if (HeroZone.ViewModel is { } hero)
+            {
+                if (claim) hero.Host = this;
+                else if (ReferenceEquals(hero.Host, this)) hero.Host = null;
+            }
+            if (!claim) ChatZone.ViewModel?.Detach();
         }
 
         /// <summary>One subscription per link in the chain, all answering the same question.</summary>
@@ -133,8 +152,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// accent ring and supported set follow a mod switch made while the tab is open.</summary>
         internal void RefreshRoster() => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
 
-        // ponytail: ICompanionRoomVm (zone interfaces) lives in the WPF head; hero, chat and memory are
-        // live, the other zones seed their own viewmodels until their runtime crosses.
 
         /// <summary>
         /// True while the shelf is one column. Exposed for the tests and the preview harness — the
@@ -168,6 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 ChatZone.ViewModel?.Sync();
                 ChatZone.SyncThinking();
                 MemoryZone.ViewModel?.Sync();
+                (EngineZone.DataContext as EngineRoomVm)?.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> EngineVm.Sync
                 PersonalityZone.ViewModel.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> PersonalityVm.Sync
                 AttentionZone.ViewModel?.Sync();
                 // The constellation's one-shot dormant sweep waits for the first time the tab is seen.
