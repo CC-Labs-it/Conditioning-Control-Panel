@@ -74,16 +74,15 @@ public sealed class ModChoiceTests
         personality.Presets.Single(p => p.Id == "pick-drone").IsSelected = true;
         Assert.Equal("pick-drone", s.ModPersonalityPreset[BuiltInMods.DronificationId]);
 
-        // A mod restore is not a fresh pick: preserve a custom prompt and fence old replies.
+        // A mod restore is not a fresh pick: it must keep a custom prompt. (No fence assert here:
+        // ModService fences on every mod switch, so it cannot tell a broken restore apart.)
         s.ActiveCommunityPromptId = "remembered-custom";
         s.CompanionPrompt.UseCustomPrompt = true;
-        s.PersonaVoiceFenceUtc = DateTime.UnixEpoch;
         combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.CCPDefaultId);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("pick-neutral", s.ActivePersonalityPresetId);
         Assert.Equal("remembered-custom", s.ActiveCommunityPromptId);
         Assert.True(s.CompanionPrompt.UseCustomPrompt);
-        Assert.True(s.PersonaVoiceFenceUtc > DateTime.UnixEpoch);
         Assert.True(personality.Presets.Single(p => p.Id == "pick-neutral").IsSelected);
         Assert.False(personality.Presets.Single(p => p.Id == "pick-drone").IsSelected);
         Assert.Equal(2, s.ModPersonalityPreset.Count);
@@ -316,7 +315,7 @@ public sealed class ModChoiceTests
     {
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);   // never the real profile
         if (Application.Current is null)
-            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var zip = BuildZip();
