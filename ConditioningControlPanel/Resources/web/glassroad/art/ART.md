@@ -1326,3 +1326,37 @@ compressed download sizes. The one-at-a-time Wave 3 backdrops add 9 MiB on deskt
 and 7.910156 MiB on phone. SVGs have zero baked texture allocation. Per-vertex
 sidecars are separate attribute bytes, never counted as texture memory.
 The combined phone persistent addition stays below 14 MiB; the phone ceiling is 128 MiB.
+
+
+## EMI bot wardrobe (2026-10-23)
+
+Eight original modular 3D outfits for the approved EMI. Croupier and pool use their accepted fitted Back Room and pool references. Varsity, lab coat, cheer and swim translate the existing Arcademy outfits into 3D. Drone Protocol and Snow Day are new clothing interpretations of those Arcademy shop theme palettes, not previously existing outfits. No source character, screen, cup, saucer, rig or animation is replaced.
+
+| Outfit | Tris | Draws | Added texture bytes | GLB bytes | Animated radius m |
+|---|---:|---:|---:|---:|---:|
+| Croupier | 1324 | 2 | 0 | 28900 | 1.493 |
+| Pool waistcoat | 1058 | 2 | 0 | 24416 | 1.212 |
+| Varsity | 1128 | 2 | 0 | 26172 | 1.215 |
+| Lab coat | 1080 | 2 | 0 | 25832 | 1.224 |
+| Cheer | 1424 | 2 | 0 | 32372 | 1.468 |
+| Swim club | 1492 | 2 | 0 | 30060 | 1.461 |
+| Drone Protocol | 1088 | 2 | 0 | 28284 | 1.228 |
+| Snow Day | 1052 | 1 | 0 | 24196 | 1.224 |
+
+All GLBs use meshopt, rigid one-joint weights, linear COLOR_0, opaque fabric/metal materials and no images. Radius includes all 26 clips sampled at all exported keys and 60 fps, padded by 10 mm. Base kart remains 4,892 tris and two draws. Wearing an outfit adds its table cost, so the dressed kart exceeds the original 5k target; the maximum is 6384 tris and four draws. Eight distinct outfits add 9646 tris and 15 draws to a full field. This is a measured art cost, not a new phone performance claim.
+
+### Binding and ownership
+
+Requires the approved seated R4 EMI model from draft #2621 and classic R5 faces from draft #2622. The exact base hash and 15 joint names are in models/emi-bot-wardrobe.json. Reject mismatched bases instead of guessing transforms. Load the outfit, collect its SkinnedMesh objects, and map each skin joint by name to the cloned kart's existing Bone objects. Discard the outfit's temporary rig. Add the outfit mesh as a sibling of the original kart mesh with identity local position, rotation and scale. Bind with the copied outfit inverse-bind matrices and an identity bindMatrix. Never calculate new inverse binds from a posed rider or copy a world transform into the model's local transform.
+
+One outfit is selected per racer. Reuse the existing 26 actions and reaction ownership contract, including Gentle and motion-off behavior. Clothing follows existing bones; there is no extra cloth simulation or animation clock. Face atlas, bare palms, soles and antenna are unchanged. No engine integration is included in this art family.
+
+### Residency by tier
+
+Desktop and phone use the same geometry. Eight outfits add 0 MiB persistent textures. Share the existing kart maps (2.666664 MiB) and classic face atlas (5.333332 MiB), counted once. Running projection remains 196.416664 MiB desktop and 119.104164 MiB phone; with one selected menu backdrop 205.416664/127.014320 MiB. W4 additions remain 87.083347/9.770847 MiB. Only the active sky palette's nebula is resident. Render targets, decoder buffers and optional 63,154-byte vertex sidecars are outside these texture totals.
+
+### Provenance and review
+
+CC Labs original work. Reference pixels and meshes are not redistributed in these outfits. The croupier tailoring comes from the Back Room counter/card-table EMI; the pool tailoring comes from the newer continuous runtime waistcoat, not the old plate costume in its GLB. Arcademy references are art/emi/{varsity,labcoat,cheer,swim} and its Drone Protocol/Snow Day theme palettes.
+
+Private sources and editable Blender masters stay in the art workspace. Contact sheets, actual Three.js motion captures and vehicle shape proposals are attached to the unpublished draft review release and PR description. Vehicle studies are proposals only and are not included in runtime files. Packed GLBs pass a fresh meshopt decode, exact rig/bind comparison, finite/normal/degenerate checks and the Khronos core validator. Fresh Blender imports preserve the triangle totals, 15 required bones, rigid weights and vertex colours; eight editable masters are saved privately. The existing non-root skin warning is retained. Runtime composite views cover front, rear, sides, top, jump, impact and item poses. Integration and a real race playtest remain Claude's lane.

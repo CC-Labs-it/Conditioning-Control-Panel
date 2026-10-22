@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "id": "emi-bot-wardrobe-r4-v1",
+  "baseAsset": "emi-teacup-kart",
+  "baseSha256": "7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1",
+  "faceAsset": "emi-faces",
+  "approvedFaceSha256": "591d9d8dfcf74b95e23035961e0781bdaae8dcabc717fdd4c299c68866cb7b08",
+  "geometrySpace": "accepted kart model space, metres, Y up, forward -Z",
+  "bindMode": "reuse-existing-bones",
+  "meshParent": "sibling of accepted kart mesh",
+  "meshLocalTransform": "identity",
+  "bindMatrix": "identity",
+  "boneInverseSource": "outfit GLB skin inverseBindMatrices",
+  "temporaryRig": "discard after exact-name remapping to the cloned kart bones",
+  "jointNames": [
+    "kart_root",
+    "cup_body",
+    "rider_mount",
+    "EMI_root",
+    "ant0",
+    "ant1",
+    "ant2",
+    "ballpiv",
+    "button",
+    "EMI_glass",
+    "footL",
+    "footR",
+    "shoulderL",
+    "shoulderR",
+    "saucer_body"
+  ],
+  "rejectIf": "base hash or exact bone-name set differs",
+  "animationSource": "approved shared 26 kart clips; outfits contain no clips",
+  "selection": "one outfit per racer; geometry may be shared across racers",
+  "texturesAddedBytes": 0,
+  "textureResidencyMiB": {
+    "desktop": 196.416664,
+    "phone": 119.104164
+  },
+  "outfits": [
+    {
+      "id": "emi-outfit-croupier",
+      "label": "Croupier",
+      "file": "models/emi-outfit-croupier.glb",
+      "source": "Back Room fitted croupier, plum waistcoat and visor"
+    },
+    {
+      "id": "emi-outfit-pool",
+      "label": "Pool waistcoat",
+      "file": "models/emi-outfit-pool.glb",
+      "source": "Pool fitted waistcoat, ivory cuffs and back tab"
+    },
+    {
+      "id": "emi-outfit-varsity",
+      "label": "Varsity",
+      "file": "models/emi-outfit-varsity.glb",
+      "source": "Arcademy varsity outfit, navy jacket and cream sleeves"
+    },
+    {
+      "id": "emi-outfit-labcoat",
+      "label": "Lab coat",
+      "file": "models/emi-outfit-labcoat.glb",
+      "source": "Arcademy labcoat outfit, white coat and pockets"
+    },
+    {
+      "id": "emi-outfit-cheer",
+      "label": "Cheer",
+      "file": "models/emi-outfit-cheer.glb",
+      "source": "Arcademy cheer outfit, pink trim and pleated hem"
+    },
+    {
+      "id": "emi-outfit-swim",
+      "label": "Swim club",
+      "file": "models/emi-outfit-swim.glb",
+      "source": "Arcademy swim outfit, goggles and side towel"
+    },
+    {
+      "id": "emi-outfit-drone-protocol",
+      "label": "Drone Protocol",
+      "file": "models/emi-outfit-drone-protocol.glb",
+      "source": "New outfit derived from Arcademy Drone Protocol theme"
+    },
+    {
+      "id": "emi-outfit-snow-day",
+      "label": "Snow Day",
+      "file": "models/emi-outfit-snow-day.glb",
+      "source": "New outfit derived from Arcademy Snow Day theme"
+    }
+  ]
+}
