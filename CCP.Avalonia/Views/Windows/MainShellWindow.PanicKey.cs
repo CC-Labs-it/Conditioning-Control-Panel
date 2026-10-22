@@ -41,16 +41,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EscapeClaim.MarkType(typeof(Views.Controls.FriendsDrawer));
             EscapeClaim.StartTracking();
             if (OperatingSystem.IsWindows()) return Win32Input.Start(() => HandlePanicKeyPress(DateTime.Now));   // WH_KEYBOARD_LL twin
-            return X11PanicKey.Start(() => CoreSettings.Current.PanicKey,
-                () =>
-                {
-                    Serilog.Log.Information("Panic trigger: XInput2 key press");
-                    var s = CoreSettings.Current;
-                    if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
-                        Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
-                    else
-                        PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
-                });
+            return X11PanicKey.Start(() => CoreSettings.Current.PanicKey, OnX11PanicPress);
+        }
+
+        /// <summary>One X11 raw press of the panic key (listener thread): the panic, then the leash hold.</summary>
+        internal void OnX11PanicPress()
+        {
+            Serilog.Log.Information("Panic trigger: XInput2 key press");
+            var s = CoreSettings.Current;
+            if (!s.PanicKeyEnabled || CapturingPanicKey || LockdownActive || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
+                Dispatcher.UIThread.Post(() => HandlePanicKeyPress(DateTime.Now));
+            else
+                PanicWatchdog.QueueWatched(() => HandlePanicKeyPress(DateTime.Now));   // #919b
+            Dispatcher.UIThread.Post(LeashHoldPressed);   // after the panic: hold-to-cut (MainShellWindow.LeashHold.cs)
         }
 
         /// <summary>One press of the configured key (UI thread). Each press stops everything; a second

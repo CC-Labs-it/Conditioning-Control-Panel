@@ -26,7 +26,7 @@ internal static class X11PanicKey
     private const string LibX11 = "libX11.so.6";
     private const string LibXi = "libXi.so.6";
     // Values and offsets from the compiler against X11/extensions/XInput2.h on x86_64.
-    private const int MappingNotify = 34, GenericEvent = 35, XI_RawKeyPress = 13, XIAllMasterDevices = 1;
+    private const int MappingNotify = 34, GenericEvent = 35, XI_RawKeyPress = 13, XI_RawKeyRelease = 14, XIAllMasterDevices = 1;
     private const int XEventSize = 192, CookieExtension = 32, CookieEvType = 36, CookieData = 48, RawDetail = 56;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -62,6 +62,48 @@ internal static class X11PanicKey
     internal static volatile Func<string?>? PushToTalkKey;
     internal static volatile Action? PushToTalk;
 
+    /// <summary>The panic key came up (listener thread). The leash's hold-to-cut ends its hold here
+    /// (WPF GlobalKeyboardHook.KeyReleased -> OnLeashKeyReleased). Handlers must post, never work.</summary>
+    internal static volatile Action? PanicReleased;
+
+    /// <summary>One raw key of the bound panic key: a press runs <paramref name="onPress"/> exactly as
+    /// before; a release only tells <see cref="PanicReleased"/>. False for any other key.</summary>
+    internal static bool Route(bool press, int keycode, Action onPress)
+    {
+        if (_boundCode == 0 || keycode != _boundCode) return false;
+        if (press) onPress();
+        else PanicReleased?.Invoke();
+        return true;
+    }
+
+    [DllImport(LibX11)] private static extern int XQueryKeymap(IntPtr display, byte[] keys);
+    private static IntPtr _queryDisplay;
+    private static readonly object QueryGate = new();
+
+    /// <summary>Is the panic key physically down right now (XQueryKeymap on its own connection, never
+    /// the listener's)? Null = unknown (listener not up, no X). XWayland releases its keys when focus
+    /// leaves for a native Wayland window, so a lost key-up reads as up here.</summary>
+    internal static bool? IsPanicKeyDown()
+    {
+        var code = _boundCode;
+        if (!IsListening || code is <= 0 or > 255) return null;
+        lock (QueryGate)
+        {
+            try
+            {
+                if (_queryDisplay == IntPtr.Zero) _queryDisplay = XOpenDisplay(IntPtr.Zero);
+                if (_queryDisplay == IntPtr.Zero) return null;
+                var keys = new byte[32];
+                XQueryKeymap(_queryDisplay, keys);
+                return (keys[code >> 3] & (1 << (code & 7))) != 0;
+            }
+            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
+        }
+    }
+
+    /// <summary>Test seam: the keycode a test routes as the panic key.</summary>
+    internal static void BindKeycodeForTest(int code) => _boundCode = code;
+
     /// <summary>Starts the listener once. <paramref name="onPress"/> runs on the listener thread for
     /// every press of <paramref name="currentKey"/>() (read per event, so rebinds apply live).
     /// False when there is no X display or no XInput 2.2 - the caller logs and relies on the tray.</summary>
@@ -79,7 +121,7 @@ internal static class X11PanicKey
             if (XIQueryVersion(display, ref major, ref minor) != 0) return Fail("XInput 2.2 unavailable");
 
             var bits = Marshal.AllocHGlobal(4);   // bit 13 (XI_RawKeyPress) lives in the first 4 mask bytes
-            Marshal.WriteInt32(bits, 1 << XI_RawKeyPress);
+            Marshal.WriteInt32(bits, (1 << XI_RawKeyPress) | (1 << XI_RawKeyRelease));
             var mask = new XIEventMask { DeviceId = XIAllMasterDevices, MaskLen = 4, Mask = bits };
             XISelectEvents(display, XDefaultRootWindow(display), ref mask, 1);
             XFlush(display);
@@ -133,13 +175,15 @@ internal static class X11PanicKey
                 if (Marshal.ReadInt32(ev) != GenericEvent || Marshal.ReadInt32(ev, CookieExtension) != opcode) continue;
                 if (!XGetEventData(display, ev)) continue;
                 int keycode = -1;
-                if (Marshal.ReadInt32(ev, CookieEvType) == XI_RawKeyPress)
+                var evType = Marshal.ReadInt32(ev, CookieEvType);
+                if (evType is XI_RawKeyPress or XI_RawKeyRelease)
                     keycode = Marshal.ReadInt32(Marshal.ReadIntPtr(ev, CookieData), RawDetail);
                 XFreeEventData(display, ev);
                 if (keycode < 0) continue;
 
                 Resolve();
-                if (_boundCode != 0 && keycode == _boundCode) onPress();
+                if (evType == XI_RawKeyRelease) { Route(false, keycode, onPress); continue; }
+                Route(true, keycode, onPress);
                 // She's Listening push-to-talk rides the same XI2 listener (WPF GlobalKeyboardHook).
                 if (PushToTalk is { } ptt && KeysymOf(PushToTalkKey?.Invoke()) is var ps and not 0
                     && keycode == XKeysymToKeycode(display, ps)) ptt();
