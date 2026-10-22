@@ -168,6 +168,36 @@ public sealed class GameWindowFypTests
         Assert.Contains("hypnofeed", s.FypOnlineCustomSubs);
     });
 
+    /// <summary>WPF ServeRemoteBatch (main 43edcea2d): fresh counts only ids new to the page, so a spent/away batch of
+    /// cached files the page already holds does not reset its dry ladder; the files are still appended.</summary>
+    [Fact]
+    public void RemoteBatchCountsOnlyIdsNewToThePage() => Run((_, _) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        var s = CoreSettings.Current;
+        s.FypOnlineConsented = true;
+        s.FypSource = "online";
+        var w = GameWindow.Launch(GameWindow.FypId)!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        var ids = new[] { "scrolller/a/1" };
+        w.FypFetchOverride = _ => Task.FromResult(new FypOnlineCoordinator.FeedBatch(
+            ids.Select(id => new ConditioningControlPanel.Services.Fyp.FypAssetManifest.Entry { Id = id, Url = "https://cdn.invalid/" + id }).ToList(),
+            null, false, 3));
+        int Fresh() => (int)sent.Last(o => (string?)o["type"] == "online-status")["fresh"]!;
+
+        Wait(w.ServeFypRemoteBatch());
+        Assert.Equal(1, Fresh());
+        sent.Clear();
+        Wait(w.ServeFypRemoteBatch());                       // the same cached post again
+        Assert.Equal(new[] { "assets-append", "online-status" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(0, Fresh());
+        Assert.Equal(0, (int)sent[1]["added"]!);
+        ids = new[] { "scrolller/a/1", "scrolller/a/2" };
+        Wait(w.ServeFypRemoteBatch());
+        Assert.Equal(1, Fresh());                            // only the new one
+    });
+
     private static void Wait(Task t)
     {
         var until = DateTime.UtcNow.AddSeconds(10);

@@ -666,6 +666,8 @@ namespace ConditioningControlPanel.Avalonia
                 var sandboxed = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"));
                 try { ContentPackStore.SweepStaleTemps(Path.Combine(CorePaths.EffectiveAssets, ".temp"), sandboxed ? null : Path.GetTempPath()); }
                 catch (Exception ex) { Serilog.Log.Debug("Stale pack temp sweep failed: {E}", ex.Message); }
+                // WPF App.xaml.cs:2507-2516: the Scrolller licence switch, the daily share and the device cache.
+                Platform.ScrolllerHead.Start(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"));
                 try
                 {
                     StartContentPacks(new ContentPackStore(), Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
@@ -1182,6 +1184,7 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            Platform.ScrolllerHead.Flush();   // WPF App.OnExit:6206-6209
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }

@@ -31,6 +31,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool _fypHooked;
         private int _fypRemoteInFlight;   // 0/1 via Interlocked
         private readonly HashSet<string> _fypProbesInFlight = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>WPF FypHostService._remoteSentIds (main 43edcea2d): remote ids this page was handed (UI thread).
+        /// Per window, so a new feed starts empty as WPF's Launch clears it.</summary>
+        private readonly HashSet<string> _fypRemoteSentIds = new(StringComparer.Ordinal);
 
         /// <summary>Test seams: the remote batch and the sub probe (default: the Core coordinator).</summary>
         internal Func<CancellationToken, Task<FypOnlineCoordinator.FeedBatch>>? FypFetchOverride;
@@ -192,7 +195,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     if (_closing) return;   // feed closed while fetching
-                    foreach (var frame in FypRules.BatchFrames(batch)) Post(frame);
+                    // WPF :551: fresh = ids new to this page; a spent/away batch of cached files the page
+                    // already holds would otherwise reset its dry ladder and it asks again about once a second.
+                    int newToPage = ScrolllerReuse.CountNewToPage(_fypRemoteSentIds, (batch.Entries ?? new()).Select(e => e.Id));
+                    foreach (var frame in FypRules.BatchFrames(batch, newToPage)) Post(frame);
                 });
             }
             catch (Exception ex) { Log.Warning("[Game] fyp: remote batch failed: {E}", ex.Message); }
