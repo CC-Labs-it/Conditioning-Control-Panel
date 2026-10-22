@@ -295,6 +295,41 @@ public sealed class SessionRunnerTests : IDisposable
     }
 
     [Fact]
+    public void MindWipe_StartsInSessionModeAtItsMinute_StopsOnPause_ResumesPlain_StopsAtTheEnd()
+    {
+        // WPF SessionEngine.cs:207-226 (StartSession, deferred), :515 (pause), :562 (resume via Start), :359 (stop).
+        var old = (CoreMindWipe.StartSessionProvider, CoreMindWipe.StartProvider, CoreMindWipe.StopProvider);
+        var calls = new System.Collections.Generic.List<string>();
+        CoreMindWipe.StartSessionProvider = (b, v) => calls.Add($"session {b} {v * 100:0}");
+        CoreMindWipe.StartProvider = (f, v) => calls.Add($"start {f} {v * 100:0}");
+        CoreMindWipe.StopProvider = () => calls.Add("stop");
+        try
+        {
+            var session = OneMinute();
+            session.DurationMinutes = 3;
+            session.Settings.MindWipeEnabled = true;
+            session.Settings.MindWipeStartMinute = 1;
+            session.Settings.MindWipeBaseMultiplier = 2;
+            session.Settings.MindWipeVolume = 60;
+            _runner.Start(session);
+            Assert.DoesNotContain(calls, c => c.StartsWith("session"));   // deferred to minute 1
+            _runner.Tick(TimeSpan.FromSeconds(61));
+            Assert.Equal("session 2 60", calls.Last());
+
+            calls.Clear();
+            _runner.Pause();
+            Assert.Equal(new[] { "stop" }, calls);
+            _runner.Resume();
+            Assert.Equal(new[] { "stop", "start 2 60" }, calls);
+
+            calls.Clear();
+            _runner.Stop();
+            Assert.Equal("stop", calls.First());
+        }
+        finally { (CoreMindWipe.StartSessionProvider, CoreMindWipe.StartProvider, CoreMindWipe.StopProvider) = old; }
+    }
+
+    [Fact]
     public void Resume_RestartsOnlyFeaturesWhoseStartMinuteHasPassed()
     {
         int btStarts = 0;
