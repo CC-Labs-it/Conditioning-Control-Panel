@@ -2572,3 +2572,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/marquee-reads-b: +752
 - Home marquee interludes: all five WPF read acts, NeonWarmUp flicker + tag breath, baked strip glow, return sheen on the shell's support banner (WPF SweepBannerSheen); Photosafe drops flicker/jitter.
 - shell-marquee-reads -> wired; MarqueeGlyphRot moved to Core, CanPlay rule in Core.
+
+## avalonia-port/friends-feed: +557
+- Friends drawer "What happened" feed, per-friend send trails, chip unread badge, tray unread count, accept-after-fold honesty word (feat-friends-feed -> partial).
+- No Core changes (rules already in Core); 4 fail-proven tests; Windows not gated (P97 local fallback).
