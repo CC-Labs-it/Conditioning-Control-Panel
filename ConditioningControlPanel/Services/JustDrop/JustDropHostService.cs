@@ -175,6 +175,9 @@ namespace ConditioningControlPanel.Services.JustDrop
 
             core.WebResourceRequested += (_, e) =>
             {
+                // The event fires for EVERY filter on this core (the Scrolller gate adds its own),
+                // so check the path here too or the token would ride along to other hosts.
+                if (!IsDesktopSessionRequest(e.Request.Uri)) return;
                 try { e.Request.Headers.SetHeader(JustDropHandoff.AuthHeaderName, token); }
                 catch (Exception ex)
                 {
@@ -182,6 +185,19 @@ namespace ConditioningControlPanel.Services.JustDrop
                     App.Logger?.Warning("JustDropHost: could not attach the auth header: {E}", ex.Message);
                 }
             };
+        }
+
+        /// <summary>The sign-in request and nothing else, judged on the PARSED url (scheme, host,
+        /// port, no user info, exact path; the query may vary), never a raw string prefix.</summary>
+        internal static bool IsDesktopSessionRequest(string? requestUri)
+        {
+            if (!Uri.TryCreate(requestUri, UriKind.Absolute, out var u)) return false;
+            if (!Uri.TryCreate(SiteOrigin, UriKind.Absolute, out var site)) return false;
+            return string.Equals(u.Scheme, site.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(u.Host, site.Host, StringComparison.OrdinalIgnoreCase)
+                && u.Port == site.Port
+                && u.UserInfo.Length == 0
+                && string.Equals(u.AbsolutePath.TrimEnd('/'), "/api/auth/desktop-session", StringComparison.Ordinal);
         }
 
         /// <summary>The ccp-server token the site's bridge endpoint validates. Empty when signed
