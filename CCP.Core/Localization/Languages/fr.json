@@ -5686,6 +5686,7 @@
   "set2_tooltip_auto_performance": "Baisse la qualité de rendu seulement quand l'écran est chargé de flashs ou de bulles, puis la remet.",
   "set2_setting_unified_overlay": "Rendu d'overlay unifié",
   "set2_tooltip_unified_overlay": "Dessine les effets plein écran (spirale, filtre rose, flashs, bulles et le reste) dans une seule fenêtre par écran. Plus fluide quand il y a beaucoup de choses à la fois. Désactive-le pour revenir à une fenêtre par effet si les surcouches font des siennes.",
+  "set2_unified_overlay_unavailable": "Pas encore disponible dans cette version : ici, chaque effet s'affiche dans sa propre fenêtre.",
   "set2_setting_video_hw_decode": "Forcer le décodage GPU des vidéos",
   "set2_tooltip_video_hw_decode": "Décode les vidéos obligatoires sur le GPU. Désactivé par défaut : le décodage logiciel évite un bug d'écran blanc sur certaines machines. À activer seulement si tes vidéos passent déjà bien.",
   "set2_dnd_header": "Ne pas déranger",

@@ -62,6 +62,38 @@ public sealed class PerformanceSettingsWiringTests
         return Task.CompletedTask;
     });
 
+    /// <summary>Compositor decision 2026-10-22: no shared host on this head, so the box is shown
+    /// disabled with its localized reason and still reflects (never drops) UnifiedOverlayHost.</summary>
+    [Fact]
+    public Task UnifiedOverlayIsShownDisabledWithItsReason() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var unified = s.UnifiedOverlayHost;
+        Window? w = null;
+        try
+        {
+            s.UnifiedOverlayHost = false;
+            var section = new PerformanceSettingsSection();
+            w = new Window { Content = section, Width = 700, Height = 1400 };
+            w.Show();
+            Dispatcher.UIThread.RunJobs();
+            var box = section.FindControl<CheckBox>("ChkUnifiedOverlay")!;
+            Assert.False(box.IsEnabled);
+            Assert.False(box.IsChecked);
+            var reason = section.FindControl<TextBlock>("TxtUnifiedOverlayUnavailable")!;
+            Assert.True(reason.IsEffectivelyVisible);
+            Assert.Equal(global::ConditioningControlPanel.Localization.Loc.Get("set2_unified_overlay_unavailable"), reason.Text);
+            Assert.NotEqual("set2_unified_overlay_unavailable", reason.Text);
+        }
+        finally
+        {
+            w?.Close();
+            s.UnifiedOverlayHost = unified;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task HwDecodeBoxFollowsTheMonitorsEditor() => AvaloniaTestDispatcher.RunAsync(() =>
     {

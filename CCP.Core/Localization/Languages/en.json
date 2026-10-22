@@ -6241,6 +6241,7 @@
   "set2_tooltip_auto_performance": "Drops rendering quality only while the screen is busy with flashes or bubbles, then puts it back.",
   "set2_setting_unified_overlay": "Unified overlay renderer",
   "set2_tooltip_unified_overlay": "Draws fullscreen effects (spiral, pink filter, flashes, bubbles and the rest) in one shared window per monitor. Smoother when a lot is on screen at once. Turn it off to go back to one window per effect if the overlays misbehave.",
+  "set2_unified_overlay_unavailable": "Not available in this version yet: each effect draws in its own window here.",
   "set2_setting_video_hw_decode": "Force video GPU decode",
   "set2_tooltip_video_hw_decode": "Decode mandatory videos on the GPU. Off by default: software decoding dodges a white-screen bug on some machines. Only turn it on if your videos already play fine.",
   "set2_dnd_header": "Do not disturb",

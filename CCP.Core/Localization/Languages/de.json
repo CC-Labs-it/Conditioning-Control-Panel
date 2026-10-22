@@ -5686,6 +5686,7 @@
   "set2_tooltip_auto_performance": "Senkt die Renderqualität nur, solange viele Flashes oder Blasen auf dem Bildschirm sind, und stellt sie danach wieder her.",
   "set2_setting_unified_overlay": "Vereinheitlichter Overlay-Renderer",
   "set2_tooltip_unified_overlay": "Zeichnet Vollbildeffekte (Spirale, Pink-Filter, Flashes, Blasen und den Rest) in einem gemeinsamen Fenster pro Monitor. Läuft runder, wenn viel gleichzeitig läuft. Aus schaltet zurück auf ein Fenster pro Effekt, falls die Overlays Zicken machen.",
+  "set2_unified_overlay_unavailable": "In dieser Version noch nicht verfügbar: Hier zeichnet jeder Effekt in seinem eigenen Fenster.",
   "set2_setting_video_hw_decode": "Video-GPU-Dekodierung erzwingen",
   "set2_tooltip_video_hw_decode": "Dekodiert Pflichtvideos auf der GPU. Standardmäßig aus: Software-Dekodierung umgeht auf manchen Rechnern einen Weißbild-Fehler. Nur anschalten, wenn deine Videos ohnehin sauber laufen.",
   "set2_dnd_header": "Nicht stören",

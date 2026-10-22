@@ -119,6 +119,17 @@ namespace ConditioningControlPanel.Avalonia
             if (Array.IndexOf(args, "--overlay-check") >= 0)
                 return OverlayCheck.Run();
 
+            // --overlay-bench [seconds] [--overlay-bench-out file] [--overlay-bench-stall]: the per-effect
+            // overlay measurement gate (OverlayBench.cs). Sandbox + nested compositor only.
+            var ob = Array.IndexOf(args, "--overlay-bench");
+            if (ob >= 0)
+            {
+                var secs = ob + 1 < args.Length && int.TryParse(args[ob + 1], out var n) ? n : 60;
+                var obo = Array.IndexOf(args, "--overlay-bench-out");
+                return OverlayBench.Run(secs, Array.IndexOf(args, "--overlay-bench-stall") >= 0,
+                    obo >= 0 && obo + 1 < args.Length ? args[obo + 1] : null);
+            }
+
             // --tray-probe: prints whether a StatusNotifierWatcher owns its name (X hides to tray only then).
             if (Array.IndexOf(args, "--tray-probe") >= 0)
             {

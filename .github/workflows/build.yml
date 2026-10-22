@@ -70,6 +70,23 @@ jobs:
       # --smoke plays a clip through LibVLC (dummy output); Linux uses the system libvlc.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvlc-dev vlc-plugin-base
       - run: dotnet run --project CCP.Avalonia/CCP.Avalonia.csproj -c Release -- --smoke
+      # The compositor decision's gate (CCP.Avalonia/OverlayBench.cs). ADVISORY: Xvfb + xcompmgr is a
+      # software stand-in, so its numbers say little about a real desktop; this proves the bench runs and
+      # that an injected 1.5 s UI stall fails it. Real numbers come from a nested compositor (decisions log).
+      - name: Overlay bench under Xvfb (advisory)
+        continue-on-error: true
+        timeout-minutes: 8
+        run: |
+          sudo apt-get install -y --no-install-recommends xvfb xcompmgr
+          export CCP_USERDATA_DIR="$(mktemp -d)" XDG_CONFIG_HOME="$(mktemp -d)"
+          xvfb-run -a -s "-screen 0 1280x720x24" bash -c '
+            xcompmgr & sleep 1
+            bench() { timeout 180 dotnet run --project CCP.Avalonia/CCP.Avalonia.csproj -c Release --no-build -- --overlay-bench "$@"; }
+            bench 15 --overlay-bench-out "$RUNNER_TEMP/overlay-bench.json" || echo "overlay-bench exit $?"
+            rc=0; bench 10 --overlay-bench-stall --overlay-bench-out "$RUNNER_TEMP/overlay-bench-stall.json" || rc=$?
+            # 1 = the verdict failed; 0 would mean a stall passes, anything else a crash/timeout/refusal.
+            [ "$rc" -eq 1 ] || { echo "FAIL: the injected stall exited $rc, expected 1"; exit 1; }
+            echo "OK: the injected stall exited 1"'
       # The shipped shape: the linux-x64 tarball (publish profile + Vosk model + .desktop + icon) that the
       # Flatpak manifest and the AUR PKGBUILD consume, extracted and smoked with the bundled model required.
       # A workflow artifact only - never a release.

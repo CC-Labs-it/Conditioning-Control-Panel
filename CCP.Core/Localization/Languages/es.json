@@ -5686,6 +5686,7 @@
   "set2_tooltip_auto_performance": "Baja la calidad de render solo mientras la pantalla está llena de destellos o burbujas, y luego la devuelve.",
   "set2_setting_unified_overlay": "Renderizador de overlay unificado",
   "set2_tooltip_unified_overlay": "Dibuja los efectos a pantalla completa (espiral, filtro rosa, destellos, burbujas y demás) en una sola ventana por monitor. Va más fino cuando hay mucho a la vez. Apágalo para volver a una ventana por efecto si las capas se portan mal.",
+  "set2_unified_overlay_unavailable": "Aún no disponible en esta versión: aquí cada efecto se dibuja en su propia ventana.",
   "set2_setting_video_hw_decode": "Forzar decodificación GPU de vídeo",
   "set2_tooltip_video_hw_decode": "Descodifica los vídeos obligatorios en la GPU. Apagado por defecto: la descodificación por software esquiva un fallo de pantalla en blanco en algunos equipos. Actívalo solo si tus vídeos ya van bien.",
   "set2_dnd_header": "No molestar",

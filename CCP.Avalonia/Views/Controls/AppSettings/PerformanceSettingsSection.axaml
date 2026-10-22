@@ -100,11 +100,16 @@
                     <Border Grid.Row="1" Grid.Column="0" Theme="{StaticResource SettingChip}"
                             ToolTip.Tip="{loc:Str set2_tooltip_unified_overlay}">
                         <Grid MinHeight="22" ColumnDefinitions="*,Auto">
-                            <TextBlock Grid.Column="0" Text="{loc:Str set2_setting_unified_overlay}"
-                                       Foreground="{DynamicResource TextLightBrush}"
-                                       FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <CheckBox Grid.Column="1" x:Name="ChkUnifiedOverlay"
+                            <!-- n/a on this head by decision (docs/avalonia-decisions.md 2026-10-22): no shared
+                                 compositor, one window per effect. Disabled with its reason; the key is kept. -->
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
+                                <TextBlock Text="{loc:Str set2_setting_unified_overlay}"
+                                           Foreground="{DynamicResource TextLightBrush}"
+                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="TxtUnifiedOverlayUnavailable" Text="{loc:Str set2_unified_overlay_unavailable}"
+                                           Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" x:Name="ChkUnifiedOverlay" IsEnabled="False"
                                       Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center" IsChecked="True"
                                       IsCheckedChanged="ChkUnifiedOverlay_Changed"/>
                         </Grid>
