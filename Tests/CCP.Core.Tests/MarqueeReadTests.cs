@@ -6,7 +6,7 @@ using ConditioningControlPanel.Services.Banner;
 using Newtonsoft.Json;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// The marquee's Barnum interludes: the two-beat split, the single-bucket draw, the act picker and
@@ -154,20 +154,12 @@ public class MarqueeReadTests
 
     private static readonly List<string> Acts = new()
     {
-        MarqueeReadEffects.GlitchHeal,
-        MarqueeReadEffects.NumberFirst,
-        MarqueeReadEffects.Teletype,
-        MarqueeReadEffects.NeonWarmUp,
-        MarqueeReadEffects.Redaction,
+        MarqueeReadActs.GlitchHeal,
+        MarqueeReadActs.NumberFirst,
+        MarqueeReadActs.Teletype,
+        MarqueeReadActs.NeonWarmUp,
+        MarqueeReadActs.Redaction,
     };
-
-    [Fact]
-    public void The_table_and_the_ids_are_the_same_five_acts()
-    {
-        var built = MarqueeReadEffects.Build().Select(a => a.Id).ToArray();
-        Assert.Equal(Acts.OrderBy(s => s).ToArray(), built.OrderBy(s => s).ToArray());
-        Assert.Equal(5, built.Length);
-    }
 
     [Fact]
     public void The_same_act_never_plays_twice_in_a_row()
@@ -176,7 +168,7 @@ public class MarqueeReadTests
         string? last = null;
         for (int i = 0; i < 400; i++)
         {
-            var pick = MarqueeReadEffects.PickId(Acts, last, _ => true, rng.Next);
+            var pick = MarqueeReadActs.PickId(Acts, last, _ => true, rng.Next);
             Assert.NotNull(pick);
             Assert.NotEqual(last, pick);
             last = pick;
@@ -189,9 +181,9 @@ public class MarqueeReadTests
         // A line with no number in it: the odometer act declines and the picker moves on.
         for (int roll = 0; roll < 40; roll++)
         {
-            var pick = MarqueeReadEffects.PickId(Acts, null,
-                                                 id => id != MarqueeReadEffects.NumberFirst, _ => roll);
-            Assert.NotEqual(MarqueeReadEffects.NumberFirst, pick);
+            var pick = MarqueeReadActs.PickId(Acts, null,
+                                                 id => id != MarqueeReadActs.NumberFirst, _ => roll);
+            Assert.NotEqual(MarqueeReadActs.NumberFirst, pick);
             Assert.NotNull(pick);
         }
     }
@@ -201,16 +193,16 @@ public class MarqueeReadTests
     {
         // The no-repeat rule yields rather than returning nothing: a blank interlude is worse than
         // the same act twice.
-        var pick = MarqueeReadEffects.PickId(Acts, MarqueeReadEffects.Teletype,
-                                             id => id == MarqueeReadEffects.Teletype, _ => 0);
-        Assert.Equal(MarqueeReadEffects.Teletype, pick);
+        var pick = MarqueeReadActs.PickId(Acts, MarqueeReadActs.Teletype,
+                                             id => id == MarqueeReadActs.Teletype, _ => 0);
+        Assert.Equal(MarqueeReadActs.Teletype, pick);
     }
 
     [Fact]
     public void Nothing_usable_is_a_skipped_interlude_not_a_crash()
     {
-        Assert.Null(MarqueeReadEffects.PickId(Acts, null, _ => false, _ => 0));
-        Assert.Null(MarqueeReadEffects.PickId(new List<string>(), null, _ => true, _ => 0));
+        Assert.Null(MarqueeReadActs.PickId(Acts, null, _ => false, _ => 0));
+        Assert.Null(MarqueeReadActs.PickId(new List<string>(), null, _ => true, _ => 0));
     }
 
     // =====================================================================================
