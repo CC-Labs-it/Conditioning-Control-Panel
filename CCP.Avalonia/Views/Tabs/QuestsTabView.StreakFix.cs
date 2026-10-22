@@ -37,7 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Test seams: the server spend and the Yes/No question.</summary>
         internal Func<DateTime, Task<(bool success, string? error, int? credits)>> SpendStreakFix = day => new StreakFix().UseAsync(day);
         internal Func<Window?, string, string, Task<bool>> AskStreakFix = (owner, title, message) =>
-            owner == null ? Task.FromResult(false) : Dialogs.MessageDialog.ConfirmAsync(owner, title, message, okText: "Yes", cancelText: "No");
+            owner == null ? Task.FromResult(false) : Dialogs.MessageDialog.ConfirmAsync(owner, title, message, 
+                okText: ConditioningControlPanel.Localization.Loc.Get("dialog_yes"), cancelText: ConditioningControlPanel.Localization.Loc.Get("dialog_no"));
 
         /// <summary>Test seam: the calendar's "today" (the 1st of a month has no missed day).</summary>
         internal Func<DateTime> Today = () => DateTime.Today;

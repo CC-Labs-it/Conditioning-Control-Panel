@@ -250,6 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void PaintMonth(QuestService quests)
         {
+            _fixRings.Clear();   // the canvas was just cleared: never pulse rings no longer on screen
             double width = StreakCalendarCanvas.Bounds.Width;
             if (width <= 0) { PaintFixButton(StreakFix.HasMissedDays(quests.Progress, Today())); return; }   // not laid out yet
             var completed = new HashSet<DateTime>(quests.Progress.DailyQuestCompletionDates.Select(d => d.Date));
@@ -264,7 +265,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             double spacing = width / days, centerY = 25, prevX = 0;
             bool prevDone = false, hasMissedDays = false;
             const string letters = "SMTWTFS";
-            _fixRings.Clear();
             for (int i = 0; i < days; i++)
             {
                 var day = new DateTime(today.Year, today.Month, i + 1);

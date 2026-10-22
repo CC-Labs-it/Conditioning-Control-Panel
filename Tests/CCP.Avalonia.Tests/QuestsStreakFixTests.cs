@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media.Imaging;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -107,6 +108,18 @@ public sealed class QuestsStreakFixTests
             Assert.Equal(0.3, tab.StreakFixRings[0].Opacity, 3);
             tab.StepFixPulse(1.2);
             Assert.Equal(1.0, tab.StreakFixRings[0].Opacity, 3);
+
+            // A repaint with no width (not laid out) clears the canvas, so it must drop the rings too:
+            // the pulse would otherwise keep animating controls no longer on screen.
+            var canvas = tab.FindControl<Canvas>("StreakCalendarCanvas")!;
+            canvas.Width = 0;
+            host.UpdateLayout();
+            tab.RefreshQuestUI();
+            Assert.Empty(tab.StreakFixRings);
+            canvas.ClearValue(Layoutable.WidthProperty);
+            host.UpdateLayout();
+            tab.RefreshQuestUI();
+            Assert.Equal(today.Day - 1, tab.StreakFixRings.Count);
 
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
