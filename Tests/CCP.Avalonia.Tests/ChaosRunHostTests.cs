@@ -123,7 +123,17 @@ public sealed class ChaosRunHostTests
                 Assert.Equal("ready", btn.Status.Text);
                 Assert.Equal(new[] { "Q" }, ConditioningControlPanel.Avalonia.Platform.X11PanicKey.ToyKeys!());
 
-                global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                // Hit testing reads the compositor's last frame: wait until a frame with the button is drawn
+                // (one forced tick is not enough once the run opens its other overlay windows).
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                var batch = global::Avalonia.Rendering.Composition.ElementComposition.GetElementVisual(btn)!.Compositor.RequestCompositionBatchCommitAsync();
+                var deadline = System.Diagnostics.Stopwatch.StartNew();
+                while (!batch.Rendered.IsCompleted)
+                {
+                    Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(10), "the compositor never drew the toy button");
+                    global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                }
                 var mid = new Point(btn.Width / 2, btn.Height / 2);
                 btn.MouseDown(mid, global::Avalonia.Input.MouseButton.Left);
                 btn.MouseUp(mid, global::Avalonia.Input.MouseButton.Left);
