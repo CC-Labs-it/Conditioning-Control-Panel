@@ -574,6 +574,386 @@
   </ControlTheme>
   <ControlTheme x:Key="FocusGlowTextBox" TargetType="TextBox" BasedOn="{StaticResource InputTextBoxTheme}"/>
 
+  <!-- Inputs.xaml:157-216 ComboBoxItem: r6 rows, a 5px accent dot on the selected row. Applied through
+       InputComboBoxTheme's ItemContainerTheme so a combo's own ItemContainerTheme still wins. -->
+  <ControlTheme x:Key="InputComboBoxItemTheme" TargetType="ComboBoxItem">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="8,6"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <!-- WPF binds these to the ComboBox, whose implicit chrome sets Left/Center. -->
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBoxItem">
+        <Border x:Name="Bd" CornerRadius="6" Margin="0,1"
+                Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="5,*">
+            <Ellipse x:Name="SelDot" Width="5" Height="5" HorizontalAlignment="Left" VerticalAlignment="Center"
+                     Fill="{DynamicResource PinkBrush}" IsVisible="False"/>
+            <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="7,0,0,0"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ Border#Bd">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ Ellipse#SelDot">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:42-150 ComboBox. Fluent's template (popup, keyboard, editable parts) kept and its
+       chrome replaced: r8, 60% accent hover, accent border + 35% glow while open, r10 popup. -->
+  <ControlTheme x:Key="InputComboBoxTheme" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentHoverBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="Padding" Value="10,0"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="ItemContainerTheme" Value="{StaticResource InputComboBoxItemTheme}"/>
+    <Style Selector="^ /template/ Border#Background">
+      <Setter Property="fx:InputFx.GlowColor" Value="{DynamicResource PinkColor}"/>
+      <Setter Property="fx:InputFx.GlowBlur" Value="10"/>
+    </Style>
+    <!-- [IsVisible=True] only lifts these to StyleTrigger priority: values Fluent sets inline in its
+         template have Template priority, which an unconditional selector cannot override. -->
+    <Style Selector="^[IsVisible=True]">
+      <Style Selector="^ /template/ ContentControl#ContentPresenter">
+        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+      </Style>
+      <Style Selector="^ /template/ PathIcon#DropDownGlyph">
+        <Setter Property="Width" Value="8"/>
+        <Setter Property="Height" Value="5"/>
+        <Setter Property="Margin" Value="0,0,9,0"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+      </Style>
+      <Style Selector="^ /template/ Border#PopupBorder">
+        <Setter Property="Margin" Value="0,4,0,0"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+      </Style>
+      <Style Selector="^ /template/ ItemsPresenter#PART_ItemsPresenter">
+        <Setter Property="Margin" Value="0"/>
+      </Style>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#Background">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource InputHoverBorderBrush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ PathIcon#DropDownGlyph">
+      <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <Style Selector="^:pressed /template/ Border#Background">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <!-- WPF's ToggleButton IsChecked == IsDropDownOpen: accent border, accent arrow, single-control glow. -->
+    <Style Selector="^:dropdownopen /template/ Border#Background">
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="fx:InputFx.GlowOpacity" Value="0.35"/>
+    </Style>
+    <Style Selector="^:dropdownopen /template/ PathIcon#DropDownGlyph">
+      <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <!-- FocusVisualStyle={x:Null}: no Fluent focus ring. -->
+    <Style Selector="^:focus-visible /template/ Border#HighlightBackground">
+      <Setter Property="IsVisible" Value="False"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Border#Background">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+    <Style Selector="^:disabled /template/ PathIcon#DropDownGlyph">
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    </Style>
+    <Style Selector="^:empty /template/ Border#PopupBorder">
+      <Setter Property="MinHeight" Value="28"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:218-309 CheckBox: the house 18px dot, white core when checked, 40% accent fill for
+       the three-state middle value, 140ms check-pop. A Grid, not a StackPanel, so wrapping content wraps.
+       Keyed switches (ToggleStyle etc.) set Theme locally and never reach this. -->
+  <ControlTheme x:Key="InputCheckBoxTheme" TargetType="CheckBox">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource PanelAccentBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="CheckBox">
+        <Grid ColumnDefinitions="Auto,*" Background="Transparent">
+          <Panel x:Name="DotHost" Width="18" Height="18" VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+            <Border x:Name="Dot" CornerRadius="9" BorderThickness="1"
+                    Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    fx:InputFx.GlowColor="{DynamicResource PinkColor}" fx:InputFx.GlowBlur="8"/>
+            <Ellipse x:Name="Core" Width="7" Height="7" Fill="White" IsVisible="False"/>
+          </Panel>
+          <!-- Hidden without content: a content-less box carries no 8px gap (WPF Content=null trigger). -->
+          <ContentPresenter x:Name="PART_ContentPresenter" Grid.Column="1" Margin="8,0,0,0"
+                            RecognizesAccessKey="True"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            IsVisible="{TemplateBinding Content, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#Dot">
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <Style Selector="^:indeterminate /template/ Border#Dot">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <Style Selector="^:checked /template/ Border#Dot">
+      <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="fx:InputFx.GlowOpacity" Value="0.5"/>
+    </Style>
+    <Style Selector="^:checked /template/ Ellipse#Core">
+      <Setter Property="IsVisible" Value="True"/>
+    </Style>
+    <!-- check-pop: 1 -> 1.18 -> 1 over 140ms (WPF linear keyframes). -->
+    <Style Selector="^:checked /template/ Panel#DotHost">
+      <Style.Animations>
+        <Animation Duration="0:0:0.14">
+          <KeyFrame Cue="0%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1"/>
+            <Setter Property="ScaleTransform.ScaleY" Value="1"/>
+          </KeyFrame>
+          <KeyFrame Cue="50%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1.18"/>
+            <Setter Property="ScaleTransform.ScaleY" Value="1.18"/>
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1"/>
+            <Setter Property="ScaleTransform.ScaleY" Value="1"/>
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:394-431 ListBoxItem: kills the stock accent selection. Handed over by the implicit
+       ListBox style (App.axaml) as ItemContainerTheme, so a list's own ItemContainerTheme wins. -->
+  <ControlTheme x:Key="InputListBoxItemTheme" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="4,3"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <!-- StyleTrigger priority (see InputComboBoxTheme) so Fluent's state foregrounds give way. -->
+    <Style Selector="^[IsVisible=True] /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:441-470 ContextMenu: elevated surface, 20% accent border, r10, 4px padding. -->
+  <ControlTheme x:Key="InputContextMenuTheme" TargetType="ContextMenu" BasedOn="{StaticResource {x:Type ContextMenu}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="4"/>
+    <Style Selector="^[IsVisible=True] /template/ ItemsPresenter#PART_ItemsPresenter">
+      <Setter Property="Margin" Value="0"/>
+    </Style>
+  </ControlTheme>
+  <!-- The ported WPF ContextMenus that became a MenuFlyout (Deeper editor) wear the same chrome. -->
+  <ControlTheme x:Key="InputMenuFlyoutPresenterTheme" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource {x:Type MenuFlyoutPresenter}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="Padding" Value="4"/>
+    <Style Selector="^[IsVisible=True] /template/ ItemsPresenter#PART_ItemsPresenter">
+      <Setter Property="Margin" Value="0"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:476-528 + 566-669 MenuItem roles SubmenuItem/SubmenuHeader: r6 rows, 20% accent
+       highlight, pink check mark in the icon column (any IsChecked, as WPF), muted gesture text, the
+       submenu popup in the shared popup chrome. Fluent's grid keeps the shared icon/gesture columns. -->
+  <ControlTheme x:Key="InputMenuItemTheme" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="10,6"/>
+    <Setter Property="Margin" Value="0,1"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <!-- StyleTrigger priority over Fluent's inline template values (see InputComboBoxTheme). -->
+    <Style Selector="^[IsVisible=True]">
+      <Style Selector="^ /template/ ContentControl#PART_IconPresenter">
+        <Setter Property="Margin" Value="0,0,8,0"/>
+      </Style>
+      <Style Selector="^ /template/ ContentControl#PART_ToggleIconPresenter">
+        <Setter Property="Margin" Value="0,0,8,0"/>
+      </Style>
+      <Style Selector="^ /template/ ContentPresenter#PART_HeaderPresenter">
+        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+      </Style>
+      <Style Selector="^ /template/ TextBlock#PART_InputGestureText">
+        <Setter Property="Margin" Value="18,0,0,0"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+      </Style>
+      <Style Selector="^ /template/ Path#PART_ChevronPath">
+        <Setter Property="Margin" Value="18,0,0,0"/>
+        <Setter Property="Width" Value="4"/>
+        <Setter Property="Height" Value="8"/>
+        <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}"/>
+      </Style>
+      <Style Selector="^ /template/ Popup#PART_Popup > Border">
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+      </Style>
+    </Style>
+    <Style Selector="^:selected /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:open /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:pressed /template/ Border#PART_LayoutRoot:pointerover">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:checked /template/ ContentControl#PART_ToggleIconPresenter">
+      <Setter Property="IsVisible" Value="True"/>
+      <Setter Property="Content">
+        <Template>
+          <fx:IconGlyph Kind="Checkmark" Size="10" Foreground="{DynamicResource PinkBrush}"/>
+        </Template>
+      </Setter>
+    </Style>
+    <Style Selector="^:checked /template/ ContentControl#PART_IconPresenter">
+      <Setter Property="IsVisible" Value="False"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:530-612 MenuItem roles TopLevelItem/TopLevelHeader (a Menu bar entry): 10,4 padding,
+       r6, 20% highlight, 40% while its popup is open, popup 4px below in the shared chrome. -->
+  <ControlTheme x:Key="InputTopLevelMenuItemTheme" TargetType="MenuItem" BasedOn="{StaticResource FluentTopLevelMenuItem}">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Padding" Value="10,4"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    <Style Selector="^[IsVisible=True]">
+      <Style Selector="^ /template/ ContentPresenter#PART_HeaderPresenter">
+        <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
+      </Style>
+      <Style Selector="^ /template/ Popup#PART_Popup > Border">
+        <Setter Property="Margin" Value="0,4,0,0"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="4"/>
+        <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+      </Style>
+    </Style>
+    <Style Selector="^:selected /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:pressed /template/ Border#PART_LayoutRoot:pointerover">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+    <Style Selector="^:open /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Border#PART_LayoutRoot">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Inputs.xaml:675-709 Separator: a 1px glass-border line; 0,6 standalone, 6,4 inside a menu
+       (WPF's MenuItem.SeparatorStyleKey). App.axaml picks the menu form by ancestry. -->
+  <ControlTheme x:Key="InputSeparatorTheme" TargetType="Separator">
+    <Setter Property="Background" Value="{DynamicResource GlassBorderBrush}"/>
+    <Setter Property="Height" Value="1"/>
+    <Setter Property="Margin" Value="0,6"/>
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Separator">
+        <Border Height="{TemplateBinding Height}" Background="{TemplateBinding Background}"/>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+  <ControlTheme x:Key="InputMenuSeparatorTheme" TargetType="Separator" BasedOn="{StaticResource InputSeparatorTheme}">
+    <Setter Property="Margin" Value="6,4"/>
+  </ControlTheme>
+
   <!-- MainWindow.xaml:280. The WPF template replaced wholesale, and so does this one: a
        ControlTheme's Resources are NOT in the DynamicResource lookup path of the templated parts,
        and a `/template/ Thumb` setter loses to Fluent's own thumb theme (both measured: the thumb

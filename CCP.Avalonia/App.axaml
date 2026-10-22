@@ -28,6 +28,35 @@
     <Style Selector="TextBox">
       <Setter Property="Theme" Value="{StaticResource InputTextBoxTheme}"/>
     </Style>
+    <Style Selector="ComboBox">
+      <Setter Property="Theme" Value="{StaticResource InputComboBoxTheme}"/>
+    </Style>
+    <Style Selector="CheckBox">
+      <Setter Property="Theme" Value="{StaticResource InputCheckBoxTheme}"/>
+    </Style>
+    <!-- Item rows go through ItemContainerTheme, never a Theme style: a styled Theme would make
+         ItemsControl skip a list's own ItemContainerTheme. -->
+    <Style Selector="ListBox">
+      <Setter Property="ItemContainerTheme" Value="{StaticResource InputListBoxItemTheme}"/>
+    </Style>
+    <Style Selector="ContextMenu">
+      <Setter Property="Theme" Value="{StaticResource InputContextMenuTheme}"/>
+    </Style>
+    <Style Selector="MenuFlyoutPresenter">
+      <Setter Property="Theme" Value="{StaticResource InputMenuFlyoutPresenterTheme}"/>
+    </Style>
+    <Style Selector="Menu">
+      <Setter Property="ItemContainerTheme" Value="{StaticResource InputTopLevelMenuItemTheme}"/>
+    </Style>
+    <Style Selector="ContextMenu MenuItem, MenuFlyoutPresenter MenuItem, Menu MenuItem MenuItem">
+      <Setter Property="Theme" Value="{StaticResource InputMenuItemTheme}"/>
+    </Style>
+    <Style Selector="Separator">
+      <Setter Property="Theme" Value="{StaticResource InputSeparatorTheme}"/>
+    </Style>
+    <Style Selector="ContextMenu Separator, MenuFlyoutPresenter Separator, MenuItem Separator">
+      <Setter Property="Theme" Value="{StaticResource InputMenuSeparatorTheme}"/>
+    </Style>
     <!-- Icon size ramp + semantic icon brushes (Controls/Icons, fluent icons 2026-10-10). -->
     <StyleInclude Source="avares://CCP.Avalonia/Theme/Icons.axaml"/>
   </Application.Styles>
