@@ -755,8 +755,8 @@ The host owns sky layer scale, relative rotation, opacity and Gentle Visuals.
 Only ONE active palette nebula is resident on ANY tier. Desktop active allocation
 is 10.667 MiB RGBA8 including mips; phone active allocation is 2.667 MiB.
 All three palette files are supplied, but do not preload all three.
-On a palette change, release the old nebula before loading the new one, or use
-a temporary crossfade budget explicitly accounted by the host.
+On a palette change, release the old nebula before loading the new one.
+Do not hold two palette nebulae concurrently.
 
 shooting-star is a grayscale ETC1S streak, desktop 256 x 64 and phone 128 x 32.
 Sample .r, clamp both axes, orient its bright head toward the direction of travel.
