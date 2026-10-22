@@ -439,7 +439,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildPoolsSection();
             BuildPersonalitiesSection();
             BuildAdvancedSection();
-            BuildDeferredSection("barks", "Barks", "ModCreatorWindow.Barks.cs");
+            BuildBarksSection();
             BuildDeferredSection("mantras", "Mantras", "ModCreatorWindow.Mantras.cs");
             BuildDeferredSection("eventaudio", "Event Audio", "ModCreatorWindow.EventAudio.cs");
             BuildDeferredSection("portraits", "Portraits", "ModCreatorWindow.Portraits.cs");
@@ -462,13 +462,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         // ─── Side-file seams ─────────────────────────────────────
-        // ponytail: needs the panel partials (Barks/Mantras/EventAudio/Portraits/Emotes), wired
-        // when each is ported. In the WPF head these three aggregate hooks let export write each
-        // panel's side files into the .ccpmod resources tree, let load repopulate the panels from
-        // an extracted tree, and let reset clear them.
-        private void WriteSideFilesTo(string resourcesDir) { }
-        private void LoadSideFilesFrom(string resourcesDir) { }
-        private void ClearSideFileState() { }
+        // Export writes each panel's side files into the .ccpmod resources tree, load repopulates
+        // the panels from an extracted tree, reset clears them (WPF ModCreatorWindow.xaml.cs:377-402).
+        // ponytail: Mantras/EventAudio/Portraits/Emotes join these hooks as their partials are ported.
+        private async Task WriteSideFilesTo(string resourcesDir)
+        {
+            var badConditions = WriteBarksTo(resourcesDir);
+            if (badConditions.Count > 0)
+                await MessageDialog.ShowAsync(this, "Barks - invalid conditions",
+                    "The Conditions JSON is invalid for these bark rules:\n\n  " +
+                    string.Join("\n  ", badConditions) +
+                    "\n\nThose rules were exported without the invalid conditions.");
+        }
+
+        private void LoadSideFilesFrom(string resourcesDir) => LoadBarksFrom(resourcesDir);
+
+        private void ClearSideFileState() => ClearBarksSection();
 
         private void ApplyPanelSectionsToManifest(ModManifest manifest)
         {
@@ -2523,7 +2532,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
 
                 // Barks / mantras / event audio / portraits / emotes.
-                WriteSideFilesTo(resourcesDir);
+                await WriteSideFilesTo(resourcesDir);
 
                 // Create ZIP
                 if (File.Exists(savePath)) File.Delete(savePath!);
