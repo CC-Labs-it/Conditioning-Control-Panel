@@ -739,3 +739,53 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 3 input and option glyphs
+
+63 original SVGs under ui/glyphs, 35,776 bytes total. Each is 56 x 56 and
+was reviewed at an actual rendered height of 28 px on dark and paper backgrounds.
+Every row has tris 0, texBytes 0 and boundRadiusM 0.
+
+| Group | Count | IDs |
+|---|---:|---|
+| Xbox face and shoulder controls | 10 | xbox-a, b, x, y, lb, rb, lt, rt, start, view |
+| PlayStation face and shoulder controls | 10 | ps-cross, circle, square, triangle, l1, r1, l2, r2, options, create |
+| Generic numbered pad buttons | 12 | pad-1 through pad-12 |
+| Shared sticks and d-pad | 5 | pad-stick-left, right, press-left, press-right; pad-dpad |
+| Keyboard | 13 | key-w, a, s, d, e, up, right, down, left, space, shift, esc, enter |
+| Mouse | 4 | mouse-body, left, right, wheel |
+| Touch | 3 | touch-tap, hold, drag |
+| Options | 6 | option-gentle-visuals, steering-assist, music, effects, controls, back |
+
+Binding:
+- Preserve the square aspect ratio. Use a minimum 28 CSS px height.
+- Shared stick/d-pad glyphs work with all three pad families.
+- Numbered generic labels are human-facing 1 to 12. The engine owns the mapping to
+  device button indices; these are not zero-based Gamepad API indices.
+- Stick-click glyphs use a downward pink mark. Touch hold uses a clock,
+  tap uses three contact marks, and drag uses a horizontal two-way arrow.
+- Space uses a spacebar bracket, Shift an upward key arrow, Enter a return arrow,
+  Start/Options menu bars and View overlapping panels.
+- Device detection, action mapping, focused/disabled states and motion belong to the engine.
+- Accessible names and every localized action label remain external to the SVG.
+- Ink #17151c, paper #fff8ef and pink #ff5fa8 match the Wave 2 HUD.
+- Functional button letters and digits are original hand-authored paths.
+  There are no font outlines, text nodes, linked fonts, images, filters or scripts.
+
+Original design for this project. Standard functional identifiers describe the
+controls; no platform logos, stock icon files or third-party artwork are included.
+The design board HUD, menu, pause and results sections were read and opened in a
+private browser. Sources and review images remain in the private art archive.
+
+Validation:
+- All 63 exported SVGs rasterize and contain visible pixels.
+- Every source viewBox has a clear outermost pixel border.
+- SHA256, file bytes and measured alpha bounds are recorded in private checks.json.
+- The final contact and actual 28px proof were opened and visually reviewed.
+- Shoulder labels were centred within their key shapes; touch marks have contrast
+  on both the dark and paper proof backgrounds.
+- Runtime SVGs and manifest rows are compact; no source or review file ships.
+
+No baked texture allocation is added. Host SVG raster caches are implementation
+dependent and are not included in texBytes. The shared pre-W3 estimate remains
+about 90 MiB including the existing effect icons; these glyphs add 0 MiB.
