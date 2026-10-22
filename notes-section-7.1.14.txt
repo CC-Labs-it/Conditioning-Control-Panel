@@ -1,0 +1,9 @@
+NEW IN 7.1.14
+
+ONLINE MEDIA
+- online media kept on your PC now clears itself 24 hours after it was downloaded. switching online media off clears it at once.
+- the built-in browser pages clear their own copies of online media too.
+- the "Media from Scrolller" line now sits on the Assets card and on the wallpaper credit.
+- a Scrolller picture is never left behind as your Windows wallpaper. a plain one takes its place when the wallpaper switches off.
+- bug reports no longer carry which online posts you looked at.
+

@@ -59,4 +59,33 @@ public class FlashStayRuleTests
         Assert.False(FlashStayRule.ScreenFull(true, 39, 40));
         Assert.False(FlashStayRule.ScreenFull(false, 99, 40));
     }
+
+    [Theory]
+    [InlineData(30, 20, 20)]   // shared host: the slider is the ceiling, not the 30 headroom
+    [InlineData(30, 8, 8)]
+    [InlineData(10, 20, 10)]   // classic windows keep their lower cap
+    [InlineData(30, 99, 20)]   // a bad stored value never lifts it past 20
+    [InlineData(30, 0, 1)]
+    public void MaxOnScreenIsTheCeilingForEveryPath(int modeCap, int maxOnScreen, int expected)
+        => Assert.Equal(expected, FlashStayRule.OnScreen(modeCap, maxOnScreen));
+
+    // #1452: the stay copy promises "Up to 40 at once"; the 1..20 slider must not trim it.
+    [Theory]
+    [InlineData(20)]
+    [InlineData(5)]
+    [InlineData(1)]
+    public void StayUntilPoppedReachesFortyOnASharedHost(int maxOnScreen)
+    {
+        int modeCap = FlashStayRule.Cap(FlashService.ResolveFlashCap(true, false), stay: true, sharedHost: true);
+        Assert.Equal(40, FlashStayRule.OnScreen(modeCap, maxOnScreen, stay: true));
+        Assert.False(FlashStayRule.ScreenFull(true, 20, FlashStayRule.OnScreen(modeCap, maxOnScreen, stay: true)));
+    }
+
+    [Fact]
+    public void StayOnClassicWindowsKeepsTheirOwnCap()
+        => Assert.Equal(10, FlashStayRule.OnScreen(FlashStayRule.Cap(10, stay: true, sharedHost: false), 20, stay: true));
+
+    [Fact]
+    public void NonStaySpawnsStillObeyTheSlider()
+        => Assert.Equal(20, FlashStayRule.OnScreen(FlashStayRule.Cap(30, stay: false, sharedHost: true), 20, stay: false));
 }
