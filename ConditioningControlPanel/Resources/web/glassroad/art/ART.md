@@ -739,3 +739,40 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 4 reaction sprites
+
+Ten original wordless marks extend the existing paper, dark ink, pink and gold UI:
+anger puff, sweat drop, question curl, heart, sleepy swirl, sparkle, dizzy spiral,
+musical note, surprise burst and oops swirl. No letters or baked labels.
+
+Files are SVG paths and simple shapes in a 64-square viewBox, readable at 32px.
+Desktop and phone share the same files. There are zero baked texture bytes or tris.
+No fonts, images, external references, filters or scripts appear in runtime SVGs.
+
+The host owns placement above the kart, lifetime, scale, entry/exit and motion
+settings. Preserve the viewBox aspect ratio. The curl symbols are original marks,
+not literal punctuation or text. Paper strokes preserve contrast over the sky.
+
+Validation rasterizes every file at native 32px, checks clear exterior borders,
+and reviews the contact on both paper and dark backgrounds. Editable path sources,
+raster proofs and hashes remain private. No third-party assets were added.
+
+### Tier residency and running budget
+
+Load only the selected texture tier: plain IDs on desktop, matching -phone IDs on phone.
+The tiers share GLBs, SVGs and per-vertex sidecars. Only the active sky palette nebula
+is resident on either tier; release the previous palette layer before loading another.
+
+| Tier | This family MiB | W4 cumulative MiB | Running persistent MiB | With one menu backdrop MiB |
+|---|---:|---:|---:|---:|
+| desktop | 0.000000 | 87.083347 | 196.416664 | 205.416664 |
+| phone | 0.000000 | 9.770847 | 119.104164 | 127.014320 |
+
+Running totals include the delivered Wave 3 catalog and 17 existing engine icons.
+Wave 3 persistent baseline is 109.333317 MiB. Families accumulate in brief order.
+These are conservative decoded RGBA8 allocations including supplied mip chains, not
+compressed download sizes. The one-at-a-time Wave 3 backdrops add 9 MiB on desktop
+and 7.910156 MiB on phone. SVGs have zero baked texture allocation. Per-vertex
+sidecars are separate attribute bytes, never counted as texture memory.
+The combined phone persistent addition stays below 14 MiB; the phone ceiling is 128 MiB.

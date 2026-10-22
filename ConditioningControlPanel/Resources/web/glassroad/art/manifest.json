@@ -1722,5 +1722,15 @@
       109,
       61
     ]
-  }
+  },
+  {"id":"react-anger-puff","file":"ui/react/react-anger-puff.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-sweat-drop","file":"ui/react/react-sweat-drop.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-question-curl","file":"ui/react/react-question-curl.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-heart","file":"ui/react/react-heart.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-sleepy-swirl","file":"ui/react/react-sleepy-swirl.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-sparkle","file":"ui/react/react-sparkle.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-dizzy-spiral","file":"ui/react/react-dizzy-spiral.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-musical-note","file":"ui/react/react-musical-note.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-surprise-burst","file":"ui/react/react-surprise-burst.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true},
+  {"id":"react-oops-swirl","file":"ui/react/react-oops-swirl.svg","kind":"ui","tris":0,"texBytes":0,"boundRadiusM":0,"materialSlots":[],"palette":"all","tier":"all","width":64,"height":64,"format":"svg","minDisplayHeightPx":32,"textFree":true}
 ]
