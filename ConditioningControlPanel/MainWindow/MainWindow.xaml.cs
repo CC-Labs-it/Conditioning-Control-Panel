@@ -2100,6 +2100,9 @@ namespace ConditioningControlPanel
         {
             try
             {
+                // A Takeover pulse writes its boost into the saved spiral/pink settings; settle it
+                // now, as the stop-all pass does, instead of leaving it there for up to 30 s.
+                App.Autonomy?.CancelActivePulses();
                 App.KillAllAudio();
                 App.Video?.Stop();
                 App.Flash?.Stop();
