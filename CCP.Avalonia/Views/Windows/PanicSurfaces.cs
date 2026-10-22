@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("gif-cascade", _ => Chaos.ChaosGifCascadeOverlay.CloseActive()),
             // WPF ForceShutdown :3177 ChaosAnnouncerOverlay.CloseActive: queue dropped, window closed, run or not.
             new("chaos-announcer", _ => Chaos.ChaosAnnouncerOverlay.CloseActive()),
+            new("chaos-dvd", _ => Chaos.ChaosDvdOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosDvdOverlay.CloseActive (:3179)
             new("chaos-cursor-glow", _ => Chaos.ChaosCursorGlowOverlay.CloseActive()),   // WPF ForceShutdown :3183 closes the halo
             new("chaos-vibe-trail", _ => Chaos.ChaosVibeTrailOverlay.CloseActive()),   // WPF ForceShutdown :3184; also when no run owns it
             new("chaos-estim", _ => Chaos.ChaosEStimOverlay.CloseActive()),   // lightning + cursor halo (WPF ChaosModeService.cs:3185)

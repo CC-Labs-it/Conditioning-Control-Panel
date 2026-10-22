@@ -363,6 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Overlays.ChaosFlashOverlay.CloseActive();   // WPF EndRun :3228: the wash never sits over the results card
             ChaosGifCascadeOverlay.CloseActive();   // WPF EndRun :3229
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3230
+            ChaosDvdOverlay.CloseActive();   // WPF EndRun (:3232)
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
             ChaosWaveTimerWindow.CloseActive();   // WPF EndRun :3234
             CloseBoonBar();   // WPF EndRun :3235
@@ -402,6 +403,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void CleanupAfterRun()
         {
             Overlays.ChaosFlashOverlay.CloseActive();   // WPF ForceShutdown :3175
+            ChaosDvdOverlay.CloseActive();   // WPF CleanupAfterRun (:3319), ForceShutdown (:3179)
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
             CloseBoonBar();
