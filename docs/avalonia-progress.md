@@ -2460,3 +2460,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-bubble-field-b: +418
 - Chaos bubble field: SpawnTick cadence, treat/prism pops and score on BubbleOverlay, cleared by panic/stop (Core ApplyTreatPop/ApplyPrismPop); manual pause holds the field and swallows clicks.
 - Still no live bubbles, FALL IN or payout (next: chaos-payout-fallin).
+
+## avalonia-port/game-dtrh-host: +897
+- Down the Rabbit Hole opens on Avalonia behind the Lab door. Start-up sends init with motionLevel and the media manifest; the run lifecycle and payout use Core `DtrhRunWire`, which the WPF host now calls too; a window closed mid-descent banks its last snapshot.
+- Escape with DtRH in front pauses it (kept-escape); a second Escape inside 2 s closes it. Slice B covers meta, online media, the art/audio origins, watchdog and barks.
