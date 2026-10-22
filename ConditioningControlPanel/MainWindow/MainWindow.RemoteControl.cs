@@ -1437,43 +1437,42 @@ namespace ConditioningControlPanel
             }
         }
 
+        /// <summary>
+        /// The voice "panic" (red, safe word, stop everything): the wearer's own way out, so it stops
+        /// what the panic key stops. It used to run a short list of its own: the toy kept vibrating, a
+        /// game window, the Deeper player, a Takeover web video and a running leash task all stayed
+        /// up, and the engine kept running. The controller's trigger_panic is a different path
+        /// (RemoteControlService.StopAllRemoteEffects). No pause mark here (PanicAftermathTests).
+        /// </summary>
         internal void TriggerPanicFromRemote()
         {
             try
             {
                 // EMI Desk (MOMENTS 4.B): the second panic entry point. Nothing else hooks it - the
-                // bark's Panic trigger is raised from the key path only - so without this a remote
+                // bark's Panic trigger is raised from the key path only - so without this a voice
                 // panic would leave her chatting.
                 try { App.EmiDesk?.Fire("panicPressed", null); } catch { }
                 // Trigger Mode stays quiet too. No pause mark: the controller may resume its own panic.
                 Services.Safety.PanicAftermath.ArmQuiet();
 
-                App.Logger?.Information("[RemoteControl] Panic triggered from remote");
+                App.Logger?.Information("[Panic] Voice panic: stopping every surface");
+
+                // The panic key's preamble: the welcome show, Circe's tab safety hold, a leash task.
+                try { Services.FirstShow.FirstShowService.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                try { App.Chaster?.NoteSafetyExit(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                try { LeashOnPanicPress(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
                 // Track panic press for Relapse achievement
                 App.Achievements?.TrackPanicPressed();
-
-                // Kill all audio immediately
-                App.KillAllAudio();
-                App.Autonomy?.CancelActivePulses();
 
                 if (_sessionEngine != null && _sessionEngine.IsRunning && !_sessionEngine.IsPaused)
                 {
                     _sessionEngine.PauseSession();
                 }
 
-                // Stop video explicitly (closes all video windows)
-                App.Video?.Stop();
-
-                // Stop other active effects
-                App.Flash?.Stop();
-                App.Subliminal?.Stop();
-                App.Bubbles?.Stop();
-                App.BouncingText?.Stop();
-                App.BubbleCount?.Stop();
-                App.MindWipe?.Stop();
-                App.BrainDrain?.Stop();
-                App.LockCard?.Stop(dismissOpenCards: true);   // remote panic == local panic
+                App.LockCard?.Stop(dismissOpenCards: true);   // voice panic == panic key
+                // Everything the panic key's stop pass takes down, one guarded step at a time.
+                PanicStopEverySurface();
 
                 // Turn off overlays. The overlay service stops (no reconcile tick can repaint while
                 // it is stopped); a controller's show_pink_filter / show_spiral starts it again
@@ -1485,7 +1484,17 @@ namespace ConditioningControlPanel
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
 
-                App.InteractionQueue?.ForceReset();
+                // The engine stops, and the scheduler must not start it again: what STOP does. Only
+                // where the panic key could stop it (hard rule 6): never under Lockdown or with the
+                // panic switched off, where the key stops nothing (VoicePanicReach).
+                if (Services.Safety.VoicePanicReach.StopsEngine(
+                        lockdownActive: App.Lockdown?.IsActive == true,
+                        panicKeyEnabled: App.Settings?.Current?.PanicKeyEnabled == true))
+                {
+                    if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
+                        _manuallyStoppedDuringSchedule = true;
+                    if (_isRunning) StopEngine();
+                }
 
                 Show();
                 WindowState = WindowState.Normal;
@@ -1497,7 +1506,7 @@ namespace ConditioningControlPanel
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[RemoteControl] Failed to trigger panic from remote");
+                App.Logger?.Error(ex, "[Panic] Voice panic failed");
             }
         }
 

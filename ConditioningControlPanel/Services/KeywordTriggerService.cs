@@ -1469,6 +1469,15 @@ namespace ConditioningControlPanel.Services
         private async Task DispatchMergedAsync(List<KeywordTrigger> firedTriggers, List<OcrWordHit>? matchedWords)
         {
             if (firedTriggers == null || firedTriggers.Count == 0) return;
+            // A panic's quiet (PanicAftermath, the same five minutes as Trigger Mode): a keyword on
+            // screen or typed must not flash, play or pulse the toy seconds after the panic stopped
+            // everything. The haptic mixer's own panic mute lasts 400 ms.
+            if (Safety.PanicAftermath.TriggersSilenced())
+            {
+                App.Logger?.Information("KeywordTriggers: [{Keywords}] held - a panic is still quiet",
+                    string.Join(",", firedTriggers.Select(t => t.Keyword)));
+                return;
+            }
             var first = firedTriggers[0];
 
             // If only one trigger matched, skip the merge allocation and dispatch directly.
