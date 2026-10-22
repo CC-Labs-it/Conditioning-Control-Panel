@@ -2487,3 +2487,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/chaos-flash-overlay: +483
 - Chaos braindrain wash on Avalonia: a faint desktop-wide click-through image or GIF wash per stage screen, on the WPF fade curve (new Core `ChaosFlashWash`), refused without a compositor, closed by panic, run end and exit.
 - Row chaos-flash-overlay missing -> stub (no caller on this head yet).
+
+## avalonia-port/chaos-field-fx: +641
+- chaos-field-fx missing -> stub: Core ChaosFieldFxModel (fail-proven tests) + click-through Avalonia overlay on the shared FrameClock, hidden/paused when idle, refuses without compositor.
+- Panic and run teardown close it (PanicSurfaces chaos-field-fx); nothing draws on it until the bubble field lands.

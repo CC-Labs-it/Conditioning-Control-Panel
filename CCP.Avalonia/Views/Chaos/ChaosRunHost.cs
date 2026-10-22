@@ -363,6 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CloseBoonBar();
             ChaosCursorGlowOverlay.CloseActive();   // WPF CleanupAfterRun :3323
             ChaosVibeTrailOverlay.CloseActive();   // WPF ForceShutdown :3184 / CleanupAfterRun :3324
+            Overlays.ChaosFieldFxOverlay.CloseActive();   // WPF ChaosModeService.cs:3186/3239/3326
             CloseFx();   // WPF CleanupAfterRun :3338 (also covers an overlay closed mid-run)
             _runTimer = null;
             _hud = null;
