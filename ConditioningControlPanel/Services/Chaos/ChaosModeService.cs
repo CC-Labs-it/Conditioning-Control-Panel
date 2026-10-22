@@ -1105,13 +1105,13 @@ public sealed class ChaosModeService
 
         var cfg = _state.Config;
         double intensity = _state.RunIntensity;
-        double effIntensity = Math.Clamp(intensity + (cfg.DifficultyMult - 1.0) * 0.15, 0, 1);
+        double effIntensity = ChaosFieldMath.EffectiveIntensity(intensity, cfg.DifficultyMult);
         double diffFactor = cfg.DifficultyMult;
 
         // Field density: power-ups (ripple/freeze/chains/sweeps) clear the screen in bulk, so the
         // cap has to be high enough that the field refills instead of sitting empty. 6 early → 16
         // late (×√difficulty). Bumped 2026-06-13 from 4→11 — runs played "always cleared".
-        int maxConcurrent = (int)Math.Round((6 + intensity * 10) * Math.Sqrt(diffFactor));
+        int maxConcurrent = ChaosFieldMath.MaxConcurrent(intensity, diffFactor);
         // Behavioral bubbles (Echo/Chaperone/Tease/Bound): each rolls to REPLACE this ordinary
         // spawn slot, so the field density stays the same. Darters still roll below either way.
         bool behavioralSpawned = (App.Bubbles?.ActiveBubbles ?? 0) < maxConcurrent
@@ -1214,14 +1214,13 @@ public sealed class ChaosModeService
         // Refill cadence: 1000ms early → 320ms late (÷difficulty), steeper late ramp so the field
         // gets "progressively faster" as the run deepens. Quickened 2026-06-13 from 1300→450 to keep
         // the bigger cap actually filled against bulk-clearing power-ups.
-        double interval = (1000 - intensity * 680) / diffFactor;
         // SpawnRateMult scales SPAWNS, so it divides the interval: 0.6 rate = fewer
         // spawns = a LONGER gap between ticks (the scripted run 1 breathes at ~0.6).
-        interval /= Math.Clamp(cfg.SpawnRateMult, 0.1, 10.0);
-        if (_slowMoRemainingSec > 0) interval /= SLOWMO_FACTOR;   // slow-mo stretches the spawn cadence
-        // Perf governor: while the render thread is dropping frames, stretch the refill cadence.
-        // Applied AFTER the floor-feeding math so a hitching late run can breathe above 280ms.
-        interval = Math.Max(280, interval) * _perfBackoff;
+        // Slow-mo stretches the spawn cadence. Perf governor: while the render thread is dropping
+        // frames, stretch the refill cadence - applied AFTER the 280ms floor so a hitching late
+        // run can breathe above it.
+        double interval = ChaosFieldMath.SpawnIntervalMs(intensity, diffFactor, cfg.SpawnRateMult,
+            _slowMoRemainingSec > 0 ? SLOWMO_FACTOR : 1.0, _perfBackoff);
         _spawnTimer!.Interval = TimeSpan.FromMilliseconds(interval);
     }
 
@@ -1685,7 +1684,7 @@ public sealed class ChaosModeService
     /// pop word, anchored at the popped bubble's centre (written by Bubble.Pop a moment ago).</summary>
     private void ShowPopScore(double pts)
     {
-        if (_state?.ShowPopScores != true || pts <= 0) return;
+        if (!ChaosFieldMath.ShowsPopScore(_state?.ShowPopScores == true, pts)) return;
         ChaosPopText.Show(BubbleService.ChaosLastPopXDip, BubbleService.ChaosLastPopYDip + 30,
             "+" + ((long)pts).ToString("N0"), Color.FromRgb(0xFF, 0xE9, 0xA0));
     }
@@ -1830,7 +1829,7 @@ public sealed class ChaosModeService
             _state.EffectsFired++;
             _state.Combo++;
             _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
-            double prismPts = BasePoints(spec.Strength) * 10.0 * _state.TotalMult * BoonPayMult;
+            double prismPts = ChaosFieldMath.PrismPoints(spec.Strength, _state.TotalMult, BoonPayMult);
             _state.Score += prismPts;
             ShowPopScore(prismPts);
             ChaosAnnouncerOverlay.Announce($"🔮 the colors! 10x — it was {spec.Payload.DisplayName}", ChaosAnnounceKind.Temptation,
@@ -1851,7 +1850,7 @@ public sealed class ChaosModeService
         // Focus economy: every treat-class pop refuels the hand, REGARDLESS of source (a
         // rabbit mowing treats still feeds the player). Heavies refuel a little extra.
         bool focusWasLow = _state.FocusLow;
-        double focusGain = spec.PayMult > 1 ? ChaosTuning.FOCUS_PER_HEAVY : ChaosTuning.FOCUS_PER_POP;
+        double focusGain = ChaosFieldMath.TreatFocusGain(spec.PayMult);
         _state.Focus += focusGain;
         // While the tank is under a snap's price, each pop names its refill at the pop point —
         // the recovery loop teaches itself, and the float stops the moment focus is healthy.
@@ -1861,8 +1860,8 @@ public sealed class ChaosModeService
         _state.Heat = Math.Min(1.0, _state.Heat + 0.04);
         // Golden Touch charm raises the calm-pop baseline (0.4 unworn → 0.45–0.60 by level).
         double benignMult = _state.BenignBaseline;
-        double pts = BasePoints(spec.Strength) * benignMult * spec.PayMult * PendulumFactor()
-                     * ChanceFlip() * _state.TotalMult * BoonPayMult;
+        double pts = ChaosFieldMath.TreatPoints(spec.Strength, benignMult, spec.PayMult, PendulumFactor(),
+                                                ChanceFlip(), _state.TotalMult, BoonPayMult);
         _state.Score += pts;
         BankDripFeed();   // Drip Feed (x2 in the relapse loop, clamped to the per-descent cap)
         ShowPopScore(pts);                                                     // Blank Eyes
