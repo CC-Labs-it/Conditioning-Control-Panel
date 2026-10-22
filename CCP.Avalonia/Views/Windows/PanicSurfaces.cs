@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             // WPF ChaosModeService.ForceShutdown (:3176) closes the rain; it also runs outside a run (trigger bubble, Emi, BackRoom).
             new("gif-cascade", _ => Chaos.ChaosGifCascadeOverlay.CloseActive()),
+            new("chaos-cursor-glow", _ => Chaos.ChaosCursorGlowOverlay.CloseActive()),   // WPF ForceShutdown :3183 closes the halo
             new("chaos-intro", _ => Chaos.ChaosIntroWindow.CloseForPanic()),   // the modal first-run card (WPF left it up)
             // WPF PanicStopEverySurface (:1992): the toys go to zero, bypassing throttles and gates.
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),

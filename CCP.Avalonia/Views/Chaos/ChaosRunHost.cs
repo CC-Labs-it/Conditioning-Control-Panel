@@ -150,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
             if (!_active && _hud == null && _overlay == null && _fx == null) return;
             _spawning = false;
             _runTimer?.Stop();
@@ -186,6 +187,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosGifCascadeOverlay.CloseActive();   // WPF EndRun :3229
             ChaosEffectBannerOverlay.CloseActive();   // WPF EndRun :3233
             CloseBoonBar();   // WPF EndRun :3235
+            ChaosCursorGlowOverlay.CloseActive();   // WPF EndRun :3236
             CloseFx();   // WPF EndRun :3242
             _overlay?.ShowResults(_state, baseXp, skillMult, finalXp, previousBest, sparksEarned: 0);
             Log.Information("Chaos run complete (no payout on this head): base {Base:0} x skill {Mult:0.0} = {Final:0} XP",
@@ -218,6 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             try { ChaosPopText.ShutdownPool(); } catch (Exception ex) { Log.Debug("Chaos pop text: {E}", ex.Message); }   // WPF :3188/:3330
             ChaosEffectBannerOverlay.CloseActive();   // WPF ForceShutdown :3180 / CleanupAfterRun :3320
             CloseBoonBar();
+            ChaosCursorGlowOverlay.CloseActive();   // WPF CleanupAfterRun :3323
             CloseFx();   // WPF CleanupAfterRun :3338 (also covers an overlay closed mid-run)
             _runTimer = null;
             _hud = null;
