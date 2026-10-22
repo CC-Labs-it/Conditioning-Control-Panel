@@ -25,18 +25,7 @@ namespace ConditioningControlPanel.Services
         private bool _started;
         private readonly object _gate = new();
 
-        // The pure decisions (conditions, gate, rotation, commit) live in Core; this head only feeds
-        // it the live reads it owns and renders what it picks.
-        private readonly BarkEngine _engine = new()
-        {
-            EmiAvatarMuted = () => App.EmiDesk?.AvatarMuted == true,
-            WhisperPlaying = () => App.Audio?.IsWhisperAudioPlaying == true,
-            NarratorPlaying = () => Services.Chaos.ChaosNarrator.IsPlaying,
-            AvatarSpeaking = () => App.AvatarWindow?.IsSpeaking ?? false,
-            AvatarBusy = ms => App.AvatarWindow?.IsCompanionBusy(ms) ?? false,
-            TierName = () => App.Patreon?.CurrentTier.ToString() ?? "None",
-            PoolRefPhrases = category => App.Mods?.GetPhrases(category),
-        };
+        private BarkRuleSet _rules = BarkRuleSet.Empty;
         private readonly BarkState _state = new();
 
         // Subscription teardown (named delegates captured so -= matches +=).
@@ -44,9 +33,96 @@ namespace ConditioningControlPanel.Services
         private readonly List<Action> _engineUnsubscribe = new();
         private readonly List<Action> _trayUnsubscribe = new();
 
-        /// <summary>The Emergency Exit's two bark triggers (Core <see cref="BarkEngine"/> owns the gate exemptions).</summary>
-        internal const string EmergencyExitOpenedTrigger = BarkEngine.EmergencyExitOpenedTrigger;
-        internal const string EmergencyExitVerdictTrigger = BarkEngine.EmergencyExitVerdictTrigger;
+        // --- reused gate primitives (cooldown dict / global min-gap / one-fire latch / variant rotation) ---
+        private readonly Dictionary<string, DateTime> _lastFiredUtc = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _firedOnceSession = new(StringComparer.OrdinalIgnoreCase);
+        // Per-rule variant rotation, keyed by the variant's stable LINE ID (not index) so it survives
+        // content edits AND can be PERSISTED across sessions (AppSettings.BarkVariantRotation). This is
+        // the hard no-repeat-until-exhausted guarantee: a rule never replays a line until every line in
+        // its pool has been spoken this cycle. Loaded from settings on Start().
+        private readonly Dictionary<string, HashSet<string>> _usedVariantKeys = new(StringComparer.OrdinalIgnoreCase);
+        // Last variant line id fired per rule — used to avoid an immediate repeat when a repeatable
+        // pool is exhausted and recycled (see EvaluateGate).
+        private readonly Dictionary<string, string> _lastVariantKey = new(StringComparer.OrdinalIgnoreCase);
+        private DateTime _globalLastFireUtc = DateTime.MinValue;
+
+        // Audio filenames of the last few barks spoken across ALL rules — a soft, global de-dupe.
+        // Per-rule variant rotation (_usedVariantKeys) only stops a rule repeating ITS OWN lines; it
+        // does nothing for the felt repetition of a high-frequency rule (flash/subliminal) cycling
+        // its small pool over a long session, nor for two rules echoing the same line back-to-back.
+        // Variant selection prefers a line whose audio isn't in this window — a preference, not a
+        // hard gate (if every candidate is recent we still speak rather than go silent).
+        private readonly Queue<string> _recentlySpoken = new();
+        private readonly HashSet<string> _recentlySpokenSet = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>How many distinct just-spoken lines to avoid replaying across all rules.</summary>
+        private const int RecentlySpokenMemory = 8;
+
+        /// <summary>
+        /// Hard global cooldown between any two reactive/idle barks (temporary — a user-facing slider
+        /// is the planned follow-up). Users reported she "runs her mouth constantly" and that reactive
+        /// lines (esp. the webcam FaceFound "back into frame" line) ignore the interval sliders; a 60s
+        /// floor keeps her from firing more than once a minute. Safety (Panic) and `guaranteed` barks
+        /// bypass this (see the `!bypass` block in EvaluateGate), so this never mutes a panic response
+        /// or a one-shot milestone.
+        /// </summary>
+        private const int GlobalMinGapMs = 60000;
+
+        /// <summary>
+        /// Triggers that skip ONLY the hard global min-gap floor above (they keep their own per-rule
+        /// cooldown_ms and every other gate). These are FUNCTIONAL corrections that must keep their
+        /// authored cadence rather than flavor chatter — currently the mandatory-video attention-check
+        /// fail ("eyes on the screen, pay attention"), which authors a 20s cooldown. Trigger keys are
+        /// app-raised constants, so a mod's rule under this trigger inherits the exemption.
+        /// </summary>
+        private static readonly HashSet<string> GlobalGapExemptTriggers =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                "AttentionCheckFail",
+                // Possession attribution is functional, not flavor: "the warden names the big ones" is
+                // the clarity-in-front rule (POSSESSION.md), and a tripwire that fires silently because
+                // the room chatted 40s ago reads as a bug. Per-rule cooldowns (4-20s) stay in force.
+                Services.Possession.PossessionBarkTriggers.Effect,
+                Services.Possession.PossessionBarkTriggers.Tripwire,
+                Services.Possession.PossessionBarkTriggers.Warden,
+                Services.Possession.PossessionBarkTriggers.RungChanged,
+                Services.Possession.PossessionBarkTriggers.TimerRestarted,
+                Services.Possession.PossessionBarkTriggers.Remember,
+                // The Emergency Exit's two moments are functional for the same reason: the door the
+                // user just pressed has to be ACKNOWLEDGED, and a verdict that lands in silence
+                // because the room chatted 40s ago reads as the button doing nothing. Both rules are
+                // text-only and carry their own cooldowns.
+                EmergencyExitOpenedTrigger,
+                EmergencyExitVerdictTrigger,
+                // The Dose: "you aren't picking anything, so I pick" has to be SAID the moment the
+                // feature lights up, or it reads as the app flipping switches on its own.
+                Services.Possession.PossessionBarkTriggers.Conscript,
+            };
+
+        /// <summary>The huge button was pressed and a minigame opened. ctx: game, attempt.</summary>
+        internal const string EmergencyExitOpenedTrigger = "EmergencyExitOpened";
+
+        /// <summary>The minigame resolved. ctx: game, outcome ("escape" | "sendback").</summary>
+        internal const string EmergencyExitVerdictTrigger = "EmergencyExitVerdict";
+
+        private static bool IsPossessionAttribution(string? trigger) =>
+            string.Equals(trigger, Services.Possession.PossessionBarkTriggers.Effect, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trigger, Services.Possession.PossessionBarkTriggers.Tripwire, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trigger, Services.Possession.PossessionBarkTriggers.Warden, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trigger, Services.Possession.PossessionBarkTriggers.RungChanged, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trigger, Services.Possession.PossessionBarkTriggers.TimerRestarted, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trigger, Services.Possession.PossessionBarkTriggers.Remember, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trigger, Services.Possession.PossessionBarkTriggers.Conscript, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Sibling of <see cref="IsPossessionAttribution"/> for the Emergency Exit. Same
+        /// contract, same reason: both rules are authored text-only (audio null), so they can never
+        /// BE the second voice a whisper is being protected from - and staying mute through the one
+        /// exchange the user actively started is worse than talking over a subliminal tail.</summary>
+        private static bool IsEmergencyExitAttribution(string? trigger) =>
+            string.Equals(trigger, EmergencyExitOpenedTrigger, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trigger, EmergencyExitVerdictTrigger, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Barks at/above this priority (or any non-Normal class) speak via GigglePriority; lower ones queue via Giggle.</summary>
+        private const int PriorityBarkThreshold = 100;
 
         /// <summary>After rendering a bark, mute its line this long so it can't re-trigger awareness/OCR.</summary>
         private const int SelfEchoMuteMs = 8000;
@@ -74,12 +150,25 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { App.Logger?.Debug("[BARK] BarkSpoken subscriber error: {Error}", ex.Message); }
         }
 
+        /// <summary>How long a safety bark holds the floor (no non-safety bark may fire). Approximate — we have no speech-duration callback.</summary>
+        private const int SafetyHoldMs = 6000;
+
         private static readonly TimeSpan RapidModSwitchWindow = TimeSpan.FromSeconds(60);
         private static readonly TimeSpan RapidClickWindow = TimeSpan.FromSeconds(60);
 
         // Coin flip is varied per call; not security-sensitive.
         private readonly Random _rng = new();
+        private DateTime _lastUserMessageUtc = DateTime.MinValue;
+        private DateTime _safetyHoldUntilUtc = DateTime.MinValue;
         private PatreonTier _lastTier = PatreonTier.None; // to detect tier-up for the upgrade egg
+
+        // --- idle chatter (item F): pool-wide no-repeat across all eligible Idle rules.
+        // Cadence is OWNED by AvatarTubeWindow's idle timer (companion-tab slider,
+        // IdleGiggleIntervalSeconds) which calls DispatchIdle() — barks ARE the idle chatter now.
+        private readonly HashSet<string> _usedIdleRules = new(StringComparer.OrdinalIgnoreCase);
+        private string? _lastIdleRuleId;
+        /// <summary>Chance an idle tick prefers an eligible band-gated idle rule over the ungated majority.</summary>
+        private const double GatedIdleBias = 0.35;
 
         // --- anticipatory SessionSetupReady detector (item E): debounced, fires when the user goes quiet ---
         private System.Windows.Threading.DispatcherTimer? _setupReadyTimer;
@@ -92,7 +181,7 @@ namespace ConditioningControlPanel.Services
         /// When true the matcher evaluates and logs ("[BARK dry-run] …") but never renders to the
         /// avatar and never writes persisted latches. Speak path is otherwise fully exercised.
         /// </summary>
-        public bool DryRun { get => _engine.DryRun; set => _engine.DryRun = value; }
+        public bool DryRun { get; set; } = false;
 
         public BarkState State => _state;
 
@@ -110,9 +199,8 @@ namespace ConditioningControlPanel.Services
                 if (string.Equals(Environment.GetEnvironmentVariable("CCP_BARK_DRYRUN"), "1", StringComparison.Ordinal))
                     DryRun = true;
 
-                _engine.LiveField = ResolveLiveField;
-                var rules = BarkRuleLoader.Load();
-                _engine.Load(rules); // restores persisted no-repeat rotation so pools don't reset each launch
+                _rules = BarkRuleLoader.Load();
+                LoadRotationFromSettings(); // restore persisted no-repeat rotation so pools don't reset each launch
                 // Instant-relaunch egg threshold: relaunched within 60s of last seen.
                 _state.CaptureLaunchRecency(App.Settings?.Current?.LastSeenUtc, instantThresholdSeconds: 60);
                 _lastTier = App.Patreon?.CurrentTier ?? PatreonTier.None;
@@ -127,7 +215,7 @@ namespace ConditioningControlPanel.Services
 
                 App.Logger?.Information(
                     "BarkService started — {Count} rules, {Triggers} trigger keys, dry-run={DryRun}",
-                    rules.Count, rules.Triggers.Count(), DryRun);
+                    _rules.Count, _rules.Triggers.Count(), DryRun);
             }
             catch (Exception ex)
             {
@@ -203,7 +291,7 @@ namespace ConditioningControlPanel.Services
             if (frame == null) return false;
 
             // The arbiter records THIS delivery itself (cooldown ledger first, pacing state second),
-            // so RecordWithArbiter must not also report it as an external bark — one line, one charge.
+            // so CommitFire must not also report it as an external bark — one line, one charge.
             // EMI Desk (MOMENTS 4.B / 3.5): THE AVATAR OWNS VOICE. The arbiter has decided the tube
             // is about to talk about the active window, so EMI goes to blink-only faces for the
             // duration plus the moment's 20s tail. A HOLD, never a line.
@@ -232,7 +320,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>
         /// Re-entrancy guard for the one place a bark is fired ON BEHALF of the arbiter. See
-        /// <c>RecordWithArbiter</c>: every other bark reports itself to the arbiter's shared ledger,
+        /// <see cref="CommitFire"/>: every other bark reports itself to the arbiter's shared ledger,
         /// this one is already accounted for there.
         /// </summary>
         private bool _inAwarenessBark;
@@ -241,14 +329,14 @@ namespace ConditioningControlPanel.Services
         /// Tells this service that the companion just spoke a line it did not fire — today, an
         /// awareness quip written by the model and delivered straight to the speech bubble.
         ///
-        /// <para>The 60s <see cref="BarkEngine.GlobalMinGapMs"/> floor is only a floor if it moves for every
+        /// <para>The 60s <see cref="GlobalMinGapMs"/> floor is only a floor if it moves for every
         /// ambient line, not just the ones this class produced: without this the next bark trigger
         /// after the awareness bubble closes fires against a stale gap, and a preempting bark can
         /// speak over the bubble outright.</para>
         /// </summary>
         public void NotifyExternalLineSpoken()
         {
-            _engine.NoteExternalLineSpoken();
+            lock (_gate) _globalLastFireUtc = DateTime.UtcNow;
         }
 
         /// <summary>A dashboard feature popup was opened (feature = control type name w/o "FeatureControl", e.g. "Flash").</summary>
@@ -273,7 +361,7 @@ namespace ConditioningControlPanel.Services
             // a "setup action" (even non-numeric ones that the SettingChanged rules below can't match).
             _state.MarkSettingChanged();
             ArmSetupReadyDebounce();
-            if (!BarkEngine.TryGetSettingNumber(setting!, out var value)) return;
+            if (!TryGetSettingNumber(setting!, out var value)) return;
             Raise("SettingChanged", c => c.Set("setting", setting!).Set("value", value));
         }
 
@@ -287,7 +375,6 @@ namespace ConditioningControlPanel.Services
         public void NotifyAvatarClicked()
         {
             _state.RegisterAvatarClick();
-            _engine.RegisterAvatarClick(); // the engine's clicks_60s condition reads its own window
             Raise("AvatarClicked", c => c.Set("clicks_60s", (double)_state.AvatarClicksWithin(RapidClickWindow)));
         }
 
@@ -503,6 +590,38 @@ namespace ConditioningControlPanel.Services
         /// <summary>An untouched draft timed out before the skip is revealed: it autopicked a card.</summary>
         public void NotifyChaosDraftAutopick() => Raise("ChaosDraftAutopick");
 
+        // Reflection cache so a numeric-setting read on every PropertyChanged stays cheap.
+        private static readonly Dictionary<string, System.Reflection.PropertyInfo?> _settingPropCache = new(StringComparer.Ordinal);
+        /// <summary>Read a setting's current value as a double (bool→0/1, enum→int). False for non-numeric/missing props.</summary>
+        private bool TryGetSettingNumber(string name, out double value)
+        {
+            value = 0;
+            var cur = App.Settings?.Current;
+            if (cur == null) return false;
+            System.Reflection.PropertyInfo? pi;
+            lock (_settingPropCache)
+            {
+                if (!_settingPropCache.TryGetValue(name, out pi))
+                {
+                    pi = cur.GetType().GetProperty(name);
+                    _settingPropCache[name] = pi;
+                }
+            }
+            if (pi == null) return false;
+            object? raw;
+            try { raw = pi.GetValue(cur); } catch { return false; }
+            switch (raw)
+            {
+                case bool b: value = b ? 1 : 0; return true;
+                case int i: value = i; return true;
+                case long l: value = l; return true;
+                case double d: value = d; return true;
+                case float f: value = f; return true;
+                case Enum en: value = Convert.ToDouble(en); return true;
+                default: return false;
+            }
+        }
+
         /// <summary>
         /// Reload rules from disk (e.g. after a mod switch so the new mod's manifest applies).
         /// Rotation / cooldown / session one-shot state is keyed by rule id, and ids are SHARED
@@ -515,7 +634,15 @@ namespace ConditioningControlPanel.Services
             try
             {
                 var fresh = BarkRuleLoader.Load();
-                _engine.Reload(fresh); // re-arms session one-shots and cooldowns; rotation is kept
+                lock (_gate)
+                {
+                    _rules = fresh;
+                    _firedOnceSession.Clear();
+                    _lastFiredUtc.Clear();
+                    // Variant/idle rotation is intentionally NOT cleared — it's persistent no-repeat state
+                    // (line ids filter against whatever the new mod's pool contains), so a mod switch must
+                    // not restart every pool. Session one-shots above are still re-armed.
+                }
                 App.Logger?.Information("BarkService: reloaded {Count} rules (rotation preserved)", fresh.Count);
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "BarkService: rule reload failed"); }
@@ -676,7 +803,7 @@ namespace ConditioningControlPanel.Services
                     h => App.Companion.CompanionLevelUp += h, h => App.Companion.CompanionLevelUp -= h,
                     (_, e) => Raise("CompanionLevelUp", c => c.Set("level", e.NewLevel)));
                 Wire<EventHandler>(h => App.Companion.UserMessageSent += h, h => App.Companion.UserMessageSent -= h,
-                    (_, __) => { _engine.NoteUserMessage(); Raise("UserMessageSent"); });
+                    (_, __) => { _lastUserMessageUtc = DateTime.UtcNow; Raise("UserMessageSent"); });
             }
             if (App.SkillTree != null)
             {
@@ -978,18 +1105,40 @@ namespace ConditioningControlPanel.Services
                 // is away, so it can neither change nor delay the bark under it.
                 Services.EmiDesk.EmiBarkBridge.Mirror(trigger, fill);
 
-                if (_engine.Rules.ForTrigger(trigger).Count == 0) return false;
+                var rules = _rules.ForTrigger(trigger);
+                if (rules.Count == 0) return false;
 
                 var ctx = new BarkContext(trigger);
                 fill?.Invoke(ctx);
 
-                // Core decides (priority walk, gate, commit) under its lock; render after it returns
-                // (GigglePriority/Giggle marshal to UI).
-                var pick = _engine.Decide(trigger, ctx, guaranteed);
-                if (pick == null) return false;
-                RecordWithArbiter(pick.Rule);
-                Speak(pick);
-                return true;
+                // Decide under the lock; render after releasing it (GigglePriority/Giggle marshal to UI).
+                BarkRule? toSpeak = null;
+                int variantIndex = -1;
+                List<BarkVariant>? pool = null;
+
+                lock (_gate)
+                {
+                    BarkRule? winner = null;
+                    foreach (var rule in rules) // already priority-descending
+                    {
+                        if (ConditionsPass(rule, ctx)) { winner = rule; break; }
+                    }
+
+                    if (winner == null)
+                    {
+                        App.Logger?.Debug("[BARK] trigger={Trigger} no rule matched conditions", trigger);
+                        return false;
+                    }
+
+                    (toSpeak, variantIndex, pool) = DecideLocked(trigger, winner, guaranteed);
+                }
+
+                if (toSpeak != null && pool != null)
+                {
+                    Speak(toSpeak, variantIndex, ctx, pool);
+                    return true;
+                }
+                return false;
             }
             catch (Exception ex)
             {
@@ -999,28 +1148,32 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// One mouth, in BOTH directions (doc 02 §5.1). The arbiter's cooldown ledger is the shared
-        /// "when did anything last speak", so every non-safety bark this service fires on its own —
-        /// achievement, level-up, video-done, flash, idle chatter — has to land in it. Safety barks are
-        /// exempt for the same reason they bypass every other floor. The awareness bark path is excluded
-        /// because the arbiter records that one itself (recording twice double-charges the hourly
-        /// budget). IsActive, not "an arbiter exists": with the v2 kill switch down no v2 state may
-        /// have any effect. Only called for a committed, non-dry-run fire.
+        /// Shared gate→commit→speak decision for an already-chosen winner. Caller MUST hold
+        /// <see cref="_gate"/>. Returns the rule/variant/pool to speak, or (null,-1,null) when the
+        /// gate blocks the fire or we're in dry-run. Reused by <see cref="Raise"/> (priority-walk
+        /// winner) and <see cref="DispatchIdle"/> (no-repeat idle winner).
         /// </summary>
-        private void RecordWithArbiter(BarkRule rule)
+        private (BarkRule? toSpeak, int variantIndex, List<BarkVariant>? pool) DecideLocked(
+            string trigger, BarkRule winner, bool guaranteed)
         {
-            if (_inAwarenessBark || rule.Class == BarkClass.Safety || !Awareness.AwarenessV2Routing.IsActive) return;
-            try { Awareness.AwarenessV2Routing.Arbiter?.RecordExternalLine(Awareness.ReactionSource.Bark); }
-            catch (Exception ex) { App.Logger?.Debug("BarkService: arbiter report failed: {Error}", ex.Message); }
+            var resolved = ResolvePool(winner);
+            var decision = EvaluateGate(winner, resolved, guaranteed);
+            LogDecision(trigger, winner, decision);
+
+            if (!decision.WouldFire) return (null, -1, null);
+
+            CommitFire(winner, decision.VariantIndex, resolved);
+            return DryRun ? (null, -1, null) : (winner, decision.VariantIndex, resolved);
         }
 
         // ===================== idle chatter (item F) =====================
 
         /// <summary>
         /// Raise an idle ("Idle") bark, chosen with a pool-wide no-repeat across ALL eligible idle
-        /// rules (Core <see cref="BarkEngine.DecideIdle"/>). Called by AvatarTubeWindow's idle timer
-        /// (companion-tab slider cadence). Skipped while muted or while she's already speaking so idle
-        /// never talks over a real bark; the normal gate still applies on top.
+        /// rules. Called by AvatarTubeWindow's idle timer (companion-tab slider cadence). Skipped
+        /// while muted or while she's already speaking so idle never talks over a real bark; the
+        /// normal gate (min-gap / chat-suppression / whisper / safety-hold) still applies on top,
+        /// so a recent real bark also preempts idle.
         /// </summary>
         public void DispatchIdle()
         {
@@ -1030,12 +1183,46 @@ namespace ConditioningControlPanel.Services
                 if ((App.Settings?.Current?.MasterVolume ?? 0) == 0) return;
                 if (App.AvatarWindow?.IsSpeaking ?? false) return;
 
-                var pick = _engine.DecideIdle();
-                if (pick == null) return;
-                RecordWithArbiter(pick.Rule);
-                Speak(pick);
+                BarkRule? toSpeak = null; int variantIndex = -1; List<BarkVariant>? pool = null;
+                var ctx = new BarkContext("Idle");
+                lock (_gate)
+                {
+                    var idleRules = _rules.ForTrigger("Idle");
+                    if (idleRules.Count == 0) return;
+                    var eligible = idleRules.Where(r => ConditionsPass(r, ctx)).ToList();
+                    if (eligible.Count == 0) return;
+                    var winner = PickIdleRuleLocked(eligible);
+                    if (winner == null) return;
+                    (toSpeak, variantIndex, pool) = DecideLocked("Idle", winner, guaranteed: false);
+                }
+                if (toSpeak != null && pool != null) Speak(toSpeak, variantIndex, ctx, pool);
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "BarkService: DispatchIdle failed"); }
+        }
+
+        /// <summary>
+        /// Pick an idle rule with pool-wide no-repeat: don't replay a rule until every eligible idle
+        /// rule has fired, then recycle (reseeding with the last one so it can't immediately repeat).
+        /// Biased (<see cref="GatedIdleBias"/>) to occasionally surface an eligible band-gated rule
+        /// (idle_gated_*) so the ~3 gated lines aren't drowned by the ~32 ungated ones. Caller holds
+        /// <see cref="_gate"/>.
+        /// </summary>
+        private BarkRule? PickIdleRuleLocked(List<BarkRule> eligible)
+        {
+            var unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+            if (unused.Count == 0)
+            {
+                _usedIdleRules.Clear();
+                if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
+                PersistIdleRotation(); // exhausted → recycle; mirror the reset so it persists
+                unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
+                if (unused.Count == 0) unused = eligible; // single eligible rule — unavoidable repeat
+            }
+
+            var gated = unused.Where(r => r.Conditions != null && r.Conditions.Count > 0).ToList();
+            if (gated.Count > 0 && _rng.NextDouble() < GatedIdleBias)
+                return gated[_rng.Next(gated.Count)];
+            return unused[_rng.Next(unused.Count)];
         }
 
         // ===================== anticipatory setup-ready detector (item E) =====================
@@ -1179,13 +1366,57 @@ namespace ConditioningControlPanel.Services
                 .Set("mistakes", e.Mistakes)
                 .Set("repeats", e.Repeats), guaranteed: true);
 
-        /// <summary>
-        /// The condition fields only this head can read (Core <see cref="BarkEngine"/> resolves the
-        /// settings/time ones and falls back to the per-fire context when this returns null).
-        /// </summary>
-        private object? ResolveLiveField(string field)
+        private bool ConditionsPass(BarkRule rule, BarkContext ctx)
         {
-            switch (field)
+            if (rule.Conditions == null || rule.Conditions.Count == 0) return true;
+            foreach (var kvp in rule.Conditions)
+            {
+                if (!ConditionPass(kvp.Key, kvp.Value, ctx)) return false;
+            }
+            return true;
+        }
+
+        private bool ConditionPass(string key, object? expected, BarkContext ctx)
+        {
+            string field = key;
+            string op = "eq";
+            foreach (var suffix in new[] { "_gte", "_lte", "_gt", "_lt", "_eq" })
+            {
+                if (key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    field = key.Substring(0, key.Length - suffix.Length);
+                    op = suffix.Substring(1);
+                    break;
+                }
+            }
+
+            var actual = ResolveField(field, ctx);
+            if (actual == null) return false;
+
+            if (op == "eq")
+            {
+                // bool/string equality first, numeric fallback.
+                if (expected is bool eb && TryBool(actual, out var ab)) return ab == eb;
+                if (TryDouble(expected, out var en) && TryDouble(actual, out var an))
+                    return Math.Abs(an - en) < 0.0001;
+                return string.Equals(actual.ToString(), expected?.ToString(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (!TryDouble(actual, out var a) || !TryDouble(expected, out var e)) return false;
+            return op switch
+            {
+                "gte" => a >= e,
+                "lte" => a <= e,
+                "gt" => a > e,
+                "lt" => a < e,
+                _ => false
+            };
+        }
+
+        /// <summary>Resolve a condition field: well-known live reads first, else the per-fire context.</summary>
+        private object? ResolveField(string field, BarkContext ctx)
+        {
+            switch (field.ToLowerInvariant())
             {
                 case "video_playing": return App.Video?.IsPlaying ?? false;
                 // True only while webcam tracking is actually live (Tracking/FaceLost) — the same
@@ -1199,8 +1430,15 @@ namespace ConditioningControlPanel.Services
                 case "blink_count": return (double)_state.BlinkCount;
                 case "face_lost_sec": return _state.FaceLostSeconds;
                 case "mod_switches_60s": return _state.ModSwitchesWithin(RapidModSwitchWindow);
+                case "clicks_60s": return _state.AvatarClicksWithin(RapidClickWindow);
                 case "days_away": return _state.DaysAwayAtLaunch;
                 case "instant_relaunch": return _state.InstantRelaunch;
+                case "master_volume": return (double)(App.Settings?.Current?.MasterVolume ?? 0);
+                case "mute": return (App.Settings?.Current?.MasterVolume ?? 0) == 0;
+                case "player_level": return (double)(App.Settings?.Current?.PlayerLevel ?? 0);
+                case "total_sessions": return (double)(App.Settings?.Current?.TotalSessions ?? 0);
+                case "daily_quest_streak": return (double)(App.Settings?.Current?.DailyQuestStreak ?? 0);
+                case "current_streak": return (double)(App.Settings?.Current?.CurrentStreak ?? 0);
 
                 // --- lifetime-completion egg conditions ---
                 case "achievements_all_unlocked":
@@ -1222,6 +1460,14 @@ namespace ConditioningControlPanel.Services
                 }
                 // (max-level egg uses the existing "player_level_gte" condition — there is no level cap.)
 
+                // --- date / time-of-day ---
+                case "is_nye":
+                {
+                    var now = DateTime.Now; // Dec 31 or Jan 1 (local)
+                    return (now.Month == 12 && now.Day == 31) || (now.Month == 1 && now.Day == 1);
+                }
+                case "local_hour": return (double)DateTime.Now.Hour;
+
                 // --- session phase (for deepener conditions on non-phase events) ---
                 case "phase_name": return _state.CurrentPhaseName;
                 case "phase_is_deepener": return _state.CurrentPhaseIsDeepener;
@@ -1229,12 +1475,65 @@ namespace ConditioningControlPanel.Services
                 // --- "I noticed" reads: the real-hit half of a cold read. Every one of these is a
                 // fact the app actually holds; a rule that needs one and finds it at 0 should simply
                 // not match, never guess. ---
+                case "sessions_7d": return (double)(App.Settings?.Current?.SessionsWithinDays(7) ?? 0);
+                case "late_sessions_7d": return (double)(App.Settings?.Current?.LateSessionsWithinDays(7) ?? 0);
+                case "sessions_today": return (double)(App.Settings?.Current?.SessionsToday() ?? 0);
+                case "same_mod_run": return (double)(App.Settings?.Current?.SameModRun ?? 0);
                 case "pauses_this_session": return (double)_state.PauseCount;
                 case "refocus_this_session": return (double)_state.RefocusCount;
                 case "session_planned_min": return _state.SessionPlannedMinutes;
+                case "is_late_hour": { int h = DateTime.Now.Hour; return h >= 23 || h < 4; }
 
-                default: return null;
+                default:
+                    return ctx.Values.TryGetValue(field, out var v) ? v : null;
             }
+        }
+
+        private static bool TryDouble(object? raw, out double value)
+        {
+            value = 0;
+            switch (raw)
+            {
+                case null: return false;
+                case double d: value = d; return true;
+                case int i: value = i; return true;
+                case long l: value = l; return true;
+                case float f: value = f; return true;
+                case bool b: value = b ? 1 : 0; return true;
+                case string s when double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var p):
+                    value = p; return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryBool(object? raw, out bool value)
+        {
+            value = false;
+            switch (raw)
+            {
+                case bool b: value = b; return true;
+                case int i: value = i != 0; return true;
+                case double d: value = Math.Abs(d) > double.Epsilon; return true;
+                case string s when bool.TryParse(s, out var p): value = p; return true;
+                default: return false;
+            }
+        }
+
+        private List<BarkVariant> ResolvePool(BarkRule rule)
+        {
+            // Inline pool: drop any lines the user disabled/hid in the Phrase Manager (shares
+            // DisabledPhraseIds / RemovedPhraseIds with built-in phrases via the "Bark:" id prefix).
+            // A filtered copy — never mutate the rule's live VariantPool. If everything's disabled the
+            // pool comes back empty and EvaluateGate short-circuits on "empty-pool" (rule stays silent).
+            if (rule.VariantPool != null && rule.VariantPool.Count > 0)
+                return rule.VariantPool.Where(v => IsBarkLineEnabled(rule.Id, v)).ToList();
+            if (!string.IsNullOrWhiteSpace(rule.PoolRef))
+            {
+                var phrases = App.Mods?.GetPhrases(rule.PoolRef!);
+                if (phrases != null && phrases.Length > 0)
+                    return phrases.Select(p => new BarkVariant(p)).ToList(); // pool-ref lines are text-only
+            }
+            return new List<BarkVariant>();
         }
 
         /// <summary>
@@ -1248,6 +1547,15 @@ namespace ConditioningControlPanel.Services
         public static string BarkLineId(string ruleId, BarkVariant v) =>
             CompanionPhraseIds.BarkLineId(ruleId, v.Text, v.Audio);
 
+        /// <summary>True unless the user disabled or hid this bark line in the Phrase Manager.</summary>
+        private static bool IsBarkLineEnabled(string ruleId, BarkVariant v)
+        {
+            var s = App.Settings?.Current;
+            if (s == null) return true;
+            var id = BarkLineId(ruleId, v);
+            return !s.DisabledPhraseIds.Contains(id) && !s.RemovedPhraseIds.Contains(id);
+        }
+
         /// <summary>
         /// All inline bark lines for the ACTIVE mod's loaded rule set, for display in the Phrase
         /// Manager. Skips <c>pool_ref</c> rules — those reuse existing phrase categories already shown
@@ -1257,7 +1565,7 @@ namespace ConditioningControlPanel.Services
         {
             var result = new List<BarkLineInfo>();
             BarkRuleSet rules;
-            rules = _engine.Rules;
+            lock (_gate) rules = _rules;
 
             foreach (var rule in rules.AllRules)
             {
@@ -1298,7 +1606,7 @@ namespace ConditioningControlPanel.Services
             BarkVariant? v;
             lock (_gate)
             {
-                var rule = _engine.Rules.AllRules.FirstOrDefault(
+                var rule = _rules.AllRules.FirstOrDefault(
                     r => string.Equals(r.Id, ruleId, StringComparison.OrdinalIgnoreCase));
                 var pool = rule?.VariantPool;
                 if (pool == null || pool.Count == 0) return null;
@@ -1327,11 +1635,314 @@ namespace ConditioningControlPanel.Services
             return pick.Found ? pick.Path : null;
         }
 
+        private readonly struct GateDecision
+        {
+            public bool WouldFire { get; init; }
+            public int VariantIndex { get; init; }
+            public string Reason { get; init; }
+        }
+
+        private GateDecision EvaluateGate(BarkRule rule, List<BarkVariant> pool, bool guaranteed)
+        {
+            if (pool.Count == 0)
+                return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = "empty-pool" };
+
+            // Safety and guaranteed reactions bypass the timing/floor gates entirely.
+            bool isSafety = rule.Class == BarkClass.Safety;
+            bool bypass = isSafety || guaranteed;
+
+            // EMI Desk: while she is out and the user chose to mute the avatar, ordinary barks sit
+            // this one out. Deliberately ABOVE the `bypass` branch and exempting only safety: a
+            // `guaranteed` bark still gets muted (guaranteed means "ignore timing and floors", not
+            // "talk over EMI"), but a Safety bark never does - panic must always be able to speak.
+            if (!isSafety && App.EmiDesk?.AvatarMuted == true)
+                return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = "emi-desk-mute" };
+
+            // Companion dismissed: the reactive layer goes with her (#1099). This gate never asked.
+            // The only thing that stopped a bark with the companion off was AvatarTubeWindow's
+            // render-side IsAvatarVisibleOnScreen check - which drops the line AFTER CommitFire has
+            // already spent the rule's variant rotation and, for a lifetime one-shot, written the
+            // persisted latch. A milestone bark could be burned forever without ever being heard.
+            // Safety (Panic) stays exempt for the same reason it bypasses every other floor.
+            if (!isSafety && App.Settings?.Current?.AvatarEnabled != true)
+                return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = "companion-off" };
+
+            // One-shot (repeatable=false): fire once per scope. Session is in-memory; tier/lifetime
+            // consult the persisted latch (AppSettings.BarkLifetimeFired). This dedup is NOT bypassed
+            // by `guaranteed` — guaranteed means "ignore timing/floor", not "fire again". Otherwise a
+            // guaranteed lifetime one-shot (e.g. a streak milestone) would replay on every launch if
+            // the caller's own latch ever got reset. Safety barks (Panic) stay exempt — they may
+            // intentionally fire repeatedly and are typically repeatable anyway.
+            if (!isSafety && !rule.Repeatable && AlreadyFiredOnce(rule))
+                return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = $"already-fired ({rule.Scope})" };
+
+            if (!bypass)
+            {
+                // A safety bark holds the floor: nothing fires over it for SafetyHoldMs.
+                if (DateTime.UtcNow < _safetyHoldUntilUtc)
+                    return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = "safety-active" };
+
+                // Don't talk over a subliminal/flash whisper that's still audible — two voices at once is
+                // jarring. Safety/guaranteed barks bypass this (handled above) so panic still speaks.
+                // Possession attribution barks are text-only by contract (POSSESSION.md: audio null,
+                // bubble still shows), so they cannot be a second voice - let them name the haunt.
+                if (App.Audio?.IsWhisperAudioPlaying == true && !IsPossessionAttribution(rule.Trigger)
+                    && !IsEmergencyExitAttribution(rule.Trigger))
+                    return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = "whisper-active" };
+
+                // Don't talk over the Chaos narrator (the Madam). She holds the floor; the next
+                // eligible event speaks once she's done (anti-stale drops stale queued barks naturally).
+                if (Services.Chaos.ChaosNarrator.IsPlaying)
+                    return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = "narrator-active" };
+
+                // Chat-suppression: don't talk over an active conversation.
+                int window = App.Settings?.Current?.BarkChatSuppressionMs ?? 10000;
+                if (CompanionBusy(window))
+                    return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = $"chat-suppressed ({window}ms)" };
+
+                // Anti-stale: ordinary (queue-class) barks would pile up behind a bubble that's already
+                // on screen and, by the time the queue drained, comment on something that happened 10s
+                // ago. Drop them while she's mid-bubble — the next eligible event gets a FRESH reaction
+                // instead. Preempting barks (non-Normal class or priority >= threshold) are exempt: they
+                // route through GigglePriority, which clears the queue and shows the latest immediately.
+                bool willPreempt = rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold;
+                if (!willPreempt && (App.AvatarWindow?.IsSpeaking ?? false))
+                    return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = "speaking" };
+
+                // Global min-gap. Functional triggers (e.g. the video attention-check correction) skip
+                // ONLY this floor and keep their own per-rule cooldown below, so a needed correction
+                // still speaks even when recent chatter would otherwise wall it off for a full minute.
+                if (!GlobalGapExemptTriggers.Contains(rule.Trigger))
+                {
+                    var sinceGlobal = (DateTime.UtcNow - _globalLastFireUtc).TotalMilliseconds;
+                    if (sinceGlobal < GlobalMinGapMs)
+                        return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = $"min-gap ({sinceGlobal:F0}/{GlobalMinGapMs}ms)" };
+                }
+
+                // Per-bark cooldown.
+                if (rule.CooldownMs > 0 && _lastFiredUtc.TryGetValue(rule.Id, out var last))
+                {
+                    var sinceRule = (DateTime.UtcNow - last).TotalMilliseconds;
+                    if (sinceRule < rule.CooldownMs)
+                        return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = $"cooldown ({sinceRule:F0}/{rule.CooldownMs}ms)" };
+                }
+
+                // Probability roll — last gate before variant selection. Lets a high-frequency
+                // reactive rule fire only ~Chance of the time (e.g. 0.2 = "~1 in 5").
+                if (rule.Chance < 1.0 && _rng.NextDouble() >= rule.Chance)
+                    return new GateDecision { WouldFire = false, VariantIndex = -1, Reason = $"chance ({rule.Chance:0.##})" };
+            }
+
+            // Variant selection:
+            //  • repeatable, pool>1 → pick a RANDOM unused variant; when ALL are used, RECYCLE the pool
+            //    (clear the used-set) so the bark keeps talking instead of going silent forever,
+            //    reseeding with the last index so we don't immediately repeat the line just spoken.
+            //    Random-among-unused (rather than first-unused-in-order) means the play order is
+            //    reshuffled every cycle — no-repeat-until-exhausted AND no learnable rhythm.
+            //  • one-shot, pool>1 → pick a random line (it only fires once, so use the whole pool
+            //    rather than always line 0; otherwise the extra authored variants are dead content).
+            int idx = 0;
+            if (pool.Count > 1)
+            {
+                if (rule.Repeatable)
+                {
+                    var usedKeys = _usedVariantKeys.TryGetValue(rule.Id, out var set) ? set : null;
+                    idx = PickVariant(pool, rule.Id, usedKeys);
+                    if (idx < 0)
+                    {
+                        // Exhausted → recycle. Reseed the used-set with the last-fired line so the
+                        // next pick avoids repeating the line we just played.
+                        var reseed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        if (_lastVariantKey.TryGetValue(rule.Id, out var lastKey))
+                            reseed.Add(lastKey);
+                        _usedVariantKeys[rule.Id] = reseed;
+                        PersistVariantRotation(rule.Id);
+                        idx = PickVariant(pool, rule.Id, reseed);
+                        if (idx < 0) idx = 0; // safety (pool>1 means reseed has ≤1 entry, so unreachable)
+                    }
+                }
+                else
+                {
+                    idx = _rng.Next(pool.Count); // one-shot: random line from the pool
+                }
+            }
+
+            return new GateDecision { WouldFire = true, VariantIndex = idx, Reason = "OK" };
+        }
+
+        private bool AlreadyFiredOnce(BarkRule rule)
+        {
+            if (_firedOnceSession.Contains(rule.Id)) return true;
+            if (rule.Scope != BarkScope.Session)
+                return App.Settings?.Current?.IsBarkFired(LatchKey(rule)) == true;
+            return false;
+        }
+
+        /// <summary>Persisted-latch key: lifetime = id; tier = "id@Tier" so a tier change re-arms it.</summary>
+        private static string LatchKey(BarkRule rule) =>
+            rule.Scope == BarkScope.Tier
+                ? rule.Id + "@" + (App.Patreon?.CurrentTier.ToString() ?? "None")
+                : rule.Id;
+
+        private bool CompanionBusy(int windowMs)
+        {
+            if ((App.AvatarWindow?.IsCompanionBusy(windowMs) ?? false)) return true;
+            return windowMs > 0 && (DateTime.UtcNow - _lastUserMessageUtc).TotalMilliseconds < windowMs;
+        }
+
+        private void CommitFire(BarkRule rule, int variantIndex, List<BarkVariant> pool)
+        {
+            var now = DateTime.UtcNow;
+            _lastFiredUtc[rule.Id] = now;
+            _globalLastFireUtc = now;
+
+            // One mouth, in BOTH directions (doc 02 §5.1). The arbiter's cooldown ledger is the shared
+            // "when did anything last speak", so every non-safety bark this service fires on its own —
+            // achievement, level-up, video-done, flash, idle chatter — has to land in it. Without this
+            // an achievement bark at T is followed by an awareness quip at T+5s, because the arbiter's
+            // last-spoke-at was still null. Safety barks are exempt for the same reason they bypass
+            // every other floor. The awareness bark path is excluded because the arbiter records that
+            // one itself, and recording it twice would double-charge the hourly budget.
+            // IsActive, not "an arbiter exists": with the v2 kill switch down the flag's contract is
+            // that no v2 state has any effect, and writing into a ledger nothing reads is how that
+            // quietly stops being true (the keyword path had the same bug).
+            if (!_inAwarenessBark && !DryRun && rule.Class != BarkClass.Safety &&
+                Awareness.AwarenessV2Routing.IsActive)
+            {
+                try { Awareness.AwarenessV2Routing.Arbiter?.RecordExternalLine(Awareness.ReactionSource.Bark); }
+                catch (Exception ex) { App.Logger?.Debug("BarkService: arbiter report failed: {Error}", ex.Message); }
+            }
+
+            // Feed the global recency window so the NEXT pick (any rule) avoids this exact line.
+            if (variantIndex >= 0 && variantIndex < pool.Count)
+                RememberSpoken(pool[variantIndex].Audio);
+
+            // A fired safety bark holds the floor.
+            if (rule.Class == BarkClass.Safety)
+                _safetyHoldUntilUtc = now.AddMilliseconds(SafetyHoldMs);
+
+            if (!rule.Repeatable)
+            {
+                _firedOnceSession.Add(rule.Id);
+                // Persist lifetime/tier latches — but never in dry-run (it must not mutate settings).
+                if (rule.Scope != BarkScope.Session && !DryRun)
+                    App.Settings?.Current?.MarkBarkFired(LatchKey(rule));
+            }
+
+            if (variantIndex >= 0 && variantIndex < pool.Count)
+            {
+                var key = BarkLineId(rule.Id, pool[variantIndex]);
+                if (!_usedVariantKeys.TryGetValue(rule.Id, out var set))
+                {
+                    set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    _usedVariantKeys[rule.Id] = set;
+                }
+                set.Add(key);
+                _lastVariantKey[rule.Id] = key; // for no-immediate-repeat on pool recycle
+                PersistVariantRotation(rule.Id);
+            }
+
+            // Pool-wide no-repeat for the idle class (each idle line is its own single-variant rule,
+            // so per-rule variant rotation above can't help — track at the rule-id level instead).
+            if (string.Equals(rule.Trigger, "Idle", StringComparison.OrdinalIgnoreCase))
+            {
+                _usedIdleRules.Add(rule.Id);
+                _lastIdleRuleId = rule.Id;
+                PersistIdleRotation();
+            }
+        }
+
+        /// <summary>
+        /// Choose a variant index for a repeatable pool. Two layers, both no-repeat:
+        ///  1. per-rule — only lines whose LINE ID is NOT in <paramref name="usedKeys"/> (the rule's own
+        ///     rotation set); this is the HARD guarantee — a line never replays until the pool's exhausted;
+        ///  2. global — among those, PREFER lines whose audio isn't in <see cref="_recentlySpokenSet"/>
+        ///     (the last few lines spoken across ALL rules), so a small high-frequency pool stops
+        ///     dominating a session and two rules can't echo the same line back-to-back.
+        /// Layer 2 is a soft preference: if every per-rule-unused line is also globally-recent we fall
+        /// back to the unused set rather than going silent. Random (not first-in-order) within the
+        /// chosen set so there's no learnable rhythm. Returns -1 only when every line is in
+        /// <paramref name="usedKeys"/> (caller recycles).
+        /// </summary>
+        private int PickVariant(List<BarkVariant> pool, string ruleId, HashSet<string>? usedKeys)
+        {
+            // Layer 1: per-rule no-repeat — gather indices whose line id isn't yet used this cycle.
+            List<int>? unused = null;
+            for (int i = 0; i < pool.Count; i++)
+                if (usedKeys == null || !usedKeys.Contains(BarkLineId(ruleId, pool[i])))
+                    (unused ??= new List<int>()).Add(i);
+            if (unused == null || unused.Count == 0) return -1;
+
+            // Layer 2: global recency — prefer lines not spoken in the last RecentlySpokenMemory barks.
+            List<int>? fresh = null;
+            if (_recentlySpokenSet.Count > 0)
+                foreach (var i in unused)
+                    if (!_recentlySpokenSet.Contains(pool[i].Audio ?? string.Empty))
+                        (fresh ??= new List<int>()).Add(i);
+
+            var pick = fresh ?? unused;
+            return pick[_rng.Next(pick.Count)];
+        }
+
+        /// <summary>Record a just-spoken line's audio in the bounded global recency window.</summary>
+        private void RememberSpoken(string? audio)
+        {
+            if (string.IsNullOrEmpty(audio)) return;
+            if (!_recentlySpokenSet.Add(audio)) return; // already in-window
+            _recentlySpoken.Enqueue(audio);
+            while (_recentlySpoken.Count > RecentlySpokenMemory)
+                _recentlySpokenSet.Remove(_recentlySpoken.Dequeue());
+        }
+
+        // ===================== persistent rotation =====================
+        // The no-repeat rotation is mirrored to AppSettings so it survives restarts — otherwise every
+        // launch restarts each pool and the "same few" lines get heard again. Save() is debounced (500ms),
+        // so persisting on each bark coalesces to ~one write per bark and flushes on shutdown.
+
+        /// <summary>Restore persisted variant/idle rotation into the in-memory sets on startup.</summary>
+        private void LoadRotationFromSettings()
+        {
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            try
+            {
+                _usedVariantKeys.Clear();
+                foreach (var kv in s.BarkVariantRotation)
+                    _usedVariantKeys[kv.Key] = new HashSet<string>(kv.Value ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+
+                _usedIdleRules.Clear();
+                foreach (var id in s.BarkIdleRotation)
+                    _usedIdleRules.Add(id);
+            }
+            catch (Exception ex) { App.Logger?.Debug("BarkService: rotation restore failed: {Error}", ex.Message); }
+        }
+
+        /// <summary>Mirror one rule's variant rotation into settings and request a (debounced) save.</summary>
+        private void PersistVariantRotation(string ruleId)
+        {
+            if (DryRun) return; // dry-run must not mutate settings
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.BarkVariantRotation[ruleId] = _usedVariantKeys.TryGetValue(ruleId, out var set)
+                ? new List<string>(set) : new List<string>();
+            App.Settings?.Save(suppressCloudBackup: true); // local-only; low-value, rides next real change to cloud
+        }
+
+        /// <summary>Mirror the idle rotation into settings and request a (debounced) save.</summary>
+        private void PersistIdleRotation()
+        {
+            if (DryRun) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.BarkIdleRotation = new List<string>(_usedIdleRules);
+            App.Settings?.Save(suppressCloudBackup: true);
+        }
+
         // ===================== speak =====================
 
-        private void Speak(BarkPick pick)
+        private void Speak(BarkRule rule, int variantIndex, BarkContext ctx, List<BarkVariant> pool)
         {
-            var rule = pick.Rule;
+            if (variantIndex < 0 || variantIndex >= pool.Count) return;
             var avatar = App.AvatarWindow;
             if (avatar == null)
             {
@@ -1339,8 +1950,8 @@ namespace ConditioningControlPanel.Services
                 return;
             }
 
-            var variant = pick.Variant;
-            string line = BarkEngine.ApplySubstitutions(variant.Text, pick.Context, FocusedApp());
+            var variant = pool[variantIndex];
+            string line = ApplySubstitutions(variant.Text, ctx);
             if (string.IsNullOrWhiteSpace(line)) return;
 
             // Mute egg (Fork F): an easter_egg bark while audio is fully muted shows a silent, text-only
@@ -1357,10 +1968,15 @@ namespace ConditioningControlPanel.Services
             // Resolve the variant's voiceline (if any) to a real path under the active mod.
             string? audioPath = ResolveBarkAudio(variant.Audio);
 
+            // ccp-bugs #1468: an Idle-trigger line is unprompted; the tube holds its sound while the
+            // engine is off (CompanionIdleVoice). The bubble shows either way.
+            bool unprompted = CompanionIdleVoice.IsUnprompted(rule.Trigger);
+            bool held = !CompanionIdleVoice.ShouldVoiceNow(unprompted);
+
             // DtRH session telemetry (local-only): a spoken bark counts toward the descent's
-            // "voiceover heard". Only read the clip duration when a run is live so the global
-            // bark path pays nothing off the game. No-ops elsewhere.
-            if (audioPath != null && Services.Chaos.DtrhHostService.IsRunActive)
+            // "voiceover heard" (a held idle line was not heard). Only read the clip duration when
+            // a run is live so the global bark path pays nothing off the game. No-ops elsewhere.
+            if (audioPath != null && !held && Services.Chaos.DtrhHostService.IsRunActive)
             {
                 double sec = 0;
                 try { using var r = new NAudio.Wave.AudioFileReader(audioPath); sec = r.TotalTime.TotalSeconds; }
@@ -1371,12 +1987,13 @@ namespace ConditioningControlPanel.Services
             // Route by class/priority: non-Normal or high-priority barks preempt (GigglePriority);
             // ordinary barks queue (Giggle). Safety is non-Normal, so it preempts and clears the queue.
             // When a voiceline exists it plays as the bubble's audio (no giggle sound on top).
-            bool priority = pick.Preempts;
+            bool priority = rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold;
             if (priority)
                 avatar.GigglePriority(line, playSound: audioPath == null, aiGenerated: false,
-                    phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood);
+                    phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood, unprompted: unprompted);
             else
-                avatar.Giggle(line, phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood);
+                avatar.Giggle(line, phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood,
+                    unprompted: unprompted);
 
             // Self-echo guard so the bubble text can't trip awareness/OCR off its own output.
             App.KeywordTriggers?.MuteKeywordEcho(line, SelfEchoMuteMs);
@@ -1385,11 +2002,52 @@ namespace ConditioningControlPanel.Services
             RaiseBarkSpoken(rule, line);
         }
 
-        /// <summary>The app {0} names in a bark line: service name, else detected name (Core substitutes "that").</summary>
-        private static string? FocusedApp()
+        /// <summary>Substitute {0} (focused app) and {key} tokens (from the per-fire context).</summary>
+        private static string ApplySubstitutions(string text, BarkContext ctx)
         {
-            var app = App.WindowAwareness?.CurrentServiceName;
-            return string.IsNullOrWhiteSpace(app) ? App.WindowAwareness?.CurrentDetectedName : app;
+            if (string.IsNullOrEmpty(text)) return text;
+
+            if (text.Contains("{0}"))
+            {
+                var app = App.WindowAwareness?.CurrentServiceName;
+                if (string.IsNullOrWhiteSpace(app)) app = App.WindowAwareness?.CurrentDetectedName;
+                if (string.IsNullOrWhiteSpace(app)) app = "that";
+                text = text.Replace("{0}", app);
+            }
+
+            foreach (var kvp in ctx.Values)
+            {
+                var token = "{" + kvp.Key + "}";
+                if (text.Contains(token))
+                    text = text.Replace(token, kvp.Value?.ToString() ?? "");
+            }
+            return text;
+        }
+
+        private void LogDecision(string trigger, BarkRule rule, GateDecision decision)
+        {
+            var pool = ResolvePool(rule);
+            // Length, not the line. The bark text is the companion talking to the user and is
+            // the sort of thing that ends up pasted into a support thread; rule + variant index
+            // identify the line exactly for anyone with the pack in front of them.
+            int lineChars = decision.VariantIndex >= 0 && decision.VariantIndex < pool.Count
+                ? (pool[decision.VariantIndex].Text ?? "").Length
+                : -1;
+            string tag = DryRun ? "[BARK dry-run]" : "[BARK]";
+
+            if (decision.WouldFire)
+            {
+                string verb = DryRun ? "WOULD FIRE" : "FIRE";
+                App.Logger?.Information(
+                    "{Tag} {Verb} trigger={Trigger} rule={Rule} class={Class} mood={Mood} priority={Priority} variant#={Idx} lineChars={Chars}",
+                    tag, verb, trigger, rule.Id, rule.Class, rule.Mood, rule.Priority, decision.VariantIndex, lineChars);
+            }
+            else
+            {
+                App.Logger?.Debug(
+                    "{Tag} blocked trigger={Trigger} rule={Rule} class={Class} priority={Priority} reason={Reason}",
+                    tag, trigger, rule.Id, rule.Class, rule.Priority, decision.Reason);
+            }
         }
     }
 }

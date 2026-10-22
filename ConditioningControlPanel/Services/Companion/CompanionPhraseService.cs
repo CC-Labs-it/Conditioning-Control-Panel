@@ -261,7 +261,7 @@ namespace ConditioningControlPanel.Services
 
             // Reactive "bark" voicelines for the active mod (BarkService). Treated as built-in: the
             // "Bark:" id prefix shares DisabledPhraseIds / RemovedPhraseIds, so toggling/hiding routes
-            // through the same path and BarkEngine.ResolvePool drops disabled lines at speak time.
+            // through the same path and BarkService.ResolvePool drops disabled lines at speak time.
             var barkLines = App.Bark?.GetAllBarkLines();
             if (barkLines != null)
             {
@@ -368,8 +368,7 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
-                var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100f;
-                var volume = (float)Math.Pow(masterVolume, 1.5) * 0.7f;
+                var volume = CompanionVoiceGain.Current(CompanionVoiceGain.PreviewTrim);
                 App.Audio?.PlayOneShot(path, volume, "phrase-audio");
             }
             catch (Exception ex)

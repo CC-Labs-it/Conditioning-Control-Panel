@@ -30,7 +30,7 @@ public class PossessionRestoreTests
     // ---- harness -------------------------------------------------------------------------------
 
     /// <summary>Only the ghost layer matters here; nothing under test reaches for the window.</summary>
-    private sealed class StubHost : IPossessionHost
+    private sealed class StubHost : IWpfPossessionHost
     {
         public StubHost(Canvas layer) { GhostLayer = layer; }
         public Window Window => null!;
