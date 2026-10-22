@@ -20,7 +20,8 @@ public sealed class AppFontsTests
     public Task SharedMonoResourceMatchesWpfApplication() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApplication();
-        Assert.True(Application.Current!.TryFindResource("Font.Mono", out var value));
+        var app = Application.Current!;
+        Assert.True(app.TryFindResource("Font.Mono", out var value));
         Assert.Equal(new[] { "Cascadia Mono", "Consolas", "Courier New" }, Assert.IsType<FontFamily>(value).FamilyNames);
         // A real consumer: the exception detail of the update-failed dialog (WPF UpdateFailedDialog.xaml).
         var window = new UpdateFailedDialog("t", "m", "System.IO.IOException: detail");
@@ -41,7 +42,7 @@ public sealed class AppFontsTests
             Assert.Equal(value, label.FontFamily);
             Assert.Equal(value, wire.FontFamily);
             var replacement = new FontFamily(AppFonts.Mono);
-            Application.Current.Resources["Font.Mono"] = replacement;
+            app.Resources["Font.Mono"] = replacement;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(replacement, label.FontFamily);
             Assert.Equal(replacement, wire.FontFamily);
@@ -50,7 +51,7 @@ public sealed class AppFontsTests
         {
             window.Close();
             wireHost.Close();
-            Application.Current.Resources["Font.Mono"] = value;
+            app.Resources["Font.Mono"] = value;
         }
         return Task.CompletedTask;
     });
@@ -60,12 +61,20 @@ public sealed class AppFontsTests
     {
         EnsureApplication();
         if (OperatingSystem.IsWindows()) return Task.CompletedTask;
+        // The names a consumer actually writes: the shared composite chain and each link. Avalonia
+        // walks a composite's FamilyNames in order and applies FontFamilyMappings per name, so the
+        // chain's FIRST link must be mapped or an installed face could win before the bundled one.
         var mappings = AppFonts.Options(systemEmoji: false).FontFamilyMappings!;
-        foreach (var name in new[] { "Cascadia Mono", "Consolas", "Courier New", "monospace" })
+        // Other suites in the same testhost build the app without AppFonts.Options; only resolve the
+        // raw names through the live FontManager when it carries our options (Inter default).
+        var live = FontManager.Current.DefaultFontFamily.Name.Contains("Inter");
+        foreach (var name in new[] { "Cascadia Mono, Consolas, Courier New", "Cascadia Mono", "Consolas", "Courier New", "monospace" })
         {
-            Assert.True(mappings.TryGetValue(name, out var family), name);
-            Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(family!), out var glyphs));
-            Assert.Equal("Noto Sans Mono", glyphs!.FamilyName);
+            var first = new FontFamily(name).FamilyNames[0];
+            Assert.True(mappings.TryGetValue(first, out var mapped), name);
+            var typeface = new Typeface(live ? new FontFamily(name) : mapped!);
+            Assert.True(FontManager.Current.TryGetGlyphTypeface(typeface, out var glyphs), name);
+            Assert.True(glyphs!.FamilyName == "Noto Sans Mono", $"{name} -> {glyphs.FamilyName}");
             Assert.True(glyphs.CharacterToGlyphMap.TryGetGlyph('i', out var narrow));
             Assert.True(glyphs.CharacterToGlyphMap.TryGetGlyph('W', out var wide));
             Assert.True(glyphs.TryGetHorizontalGlyphAdvance(narrow, out var narrowAdvance));
