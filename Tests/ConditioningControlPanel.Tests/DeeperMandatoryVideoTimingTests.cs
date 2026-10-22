@@ -181,7 +181,7 @@ public class DeeperMandatoryVideoTimingTests
         public void Seek(double seconds) { }
         public void Pause() { }
         public void Play() { }
-        public Rect GetVideoRect() => Rect.Empty;
+        public PlaybackRect GetVideoRect() => PlaybackRect.Empty;
     }
 
     private sealed class FakeDispatcher : IActionDispatcher
