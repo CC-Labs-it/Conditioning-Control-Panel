@@ -593,3 +593,10 @@ ceremony, so the Avalonia `DescentCeremonyWindow` and Core `DescentCeremonyCopy`
 The delta ledger for the sixth main sync (`avalonia-port/main-20261009`) is
 [`avalonia-main-sync-20261009.md`](avalonia-main-sync-20261009.md): one row per non-merge commit (148), each
 ported-by-merge, needs-port (with its `sync6-*` port lane) or n/a with a reason. Tick its rows as each lane lands.
+
+## main-sync-7 (releases 7.1.6-7.1.14, pin `f7f0f612b`)
+
+The delta ledger for the seventh main sync (`avalonia-port/main-20261015`) is
+[`avalonia-main-sync-20261015.md`](avalonia-main-sync-20261015.md): one row per non-merge commit (309), each
+ported-by-merge, needs-port (with its `sync7-*` port lane, 18 lanes) or n/a with a reason. Tick its rows as each lane
+lands.

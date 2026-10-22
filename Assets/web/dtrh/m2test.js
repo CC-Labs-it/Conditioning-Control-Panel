@@ -41,7 +41,7 @@ export async function run(bridge, hostState) {
   check('payloadfx-live', !!pfx, pfx ? 'in-world dispatcher present' : 'window.__sfPayloadFx missing');
   for (const p of payloads) {
     if (p.kind === 'audio' || p.kind === 'video') {
-      bridge.send({ type: 'fire-payload', ...p });   // native path (sfx / mandatory video)
+      bridge.send({ type: 'fire-payload', ...p });   // native path (sfx only; the host refuses video)
     } else if (pfx) {
       pfx.applyPayload({ variantId: 'm2test', strength: p.strength,
         payload: { kind: p.kind, overlay: p.overlay } }, { durationMult: 1 });
