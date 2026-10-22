@@ -2437,3 +2437,30 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/lock-title: +635
 - LockTitle ported (padlock letters, candy/ice, entry/idle/jolt/rattle with WPF timings on one FrameClock parked when hidden/detached) and wired into the Chaster hero; ctrl-lock-title -> wired.
 - LockTitleTests (curves + stepped-clock lifecycle, fail-proven, incl. the 4 Chaster tab hooks); no shadow (P82 ratchet), no booking sparks.
+
+## avalonia-port/banner-link-overrun: +40
+- Banner web link stays inside its line at the narrower header (lead + link in one embedded DockPanel; link ellipsizes like WPF); headless test narrows HeaderBannerHost explicitly.
+
+## avalonia-port/chaos-gif-cascade: +798
+- Chaos gif rain ported: Core GifCascade maths (WPF timing/caps/motion) + click-through FrameClock overlay ticking every frame; panic surface gif-cascade. Row stub (no caller yet).
+- Review P3s fixed: spawn band uses the window's DesktopScaling (mixed DPI).
+
+## avalonia-port/chaos-boon-bar: +420
+- Chaos run-pick ribbon (ChaosBoonBarOverlay) ported: opened at BeginRun, rebuilt live in pick order with newcomer pop-in (Core ChaosBoonBarRules), closed at run end/panic.
+- Row chaos-boon-bar missing -> stub (no user path starts a run yet); live steps queued in live-queue/overlays.md.
+
+## avalonia-port/chaos-cursor-glow: +410
+- Rabbit Caller cursor halo ported: Core maths (size/breath/follow), click-through topmost Avalonia overlay with Arm/Disarm/MoveToPx/CloseActive seam, closed by ChaosRunHost teardown and panic (PanicSurfaces).
+- Row chaos-cursor-glow missing -> stub (nothing arms it until the Rabbit Caller skill/run loop exist).
+
+## avalonia-port/emi-desk-extras: +518
+- Emi desk toss on Avalonia: drag lift cue, fling detection, landing squash and the land face, using the new Core `EmiToss` (EmiFlingDetector + EmiTossRules.LandingScale), which WPF now calls too.
+- Row win-emi-desk-extras missing -> stub (land body frame and dizzy chain missing; Tube has no user path).
+
+## avalonia-port/chaos-bubble-field-b: +418
+- Chaos bubble field: SpawnTick cadence, treat/prism pops and score on BubbleOverlay, cleared by panic/stop (Core ApplyTreatPop/ApplyPrismPop); manual pause holds the field and swallows clicks.
+- Still no live bubbles, FALL IN or payout (next: chaos-payout-fallin).
+
+## avalonia-port/game-dtrh-host: +897
+- Down the Rabbit Hole opens on Avalonia behind the Lab door. Start-up sends init with motionLevel and the media manifest; the run lifecycle and payout use Core `DtrhRunWire`, which the WPF host now calls too; a window closed mid-descent banks its last snapshot.
+- Escape with DtRH in front pauses it (kept-escape); a second Escape inside 2 s closes it. Slice B covers meta, online media, the art/audio origins, watchdog and barks.
