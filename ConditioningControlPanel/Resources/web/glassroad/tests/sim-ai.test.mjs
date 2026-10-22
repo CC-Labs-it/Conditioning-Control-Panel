@@ -45,7 +45,12 @@ test('race: sane standings and one result', () => {
   for (let k = 1; k < 8; k++) assert.ok(res.rows[k].timeS >= res.rows[k - 1].timeS, 'times ascend');
   assert.equal(res.rows.filter((r) => r.me).length, 1);
   assert.equal(res.me.place, res.rows.find((r) => r.me).place);
-  for (const row of res.rows) assert.ok(Math.abs(row.timeS - R.racers.list[row.i].finishS) < 1e-6);
+  // home before the result: its exact time; still driving: the estimate lands near its real finish (a spread field)
+  for (const row of res.rows) {
+    const fin = R.racers.list[row.i].finishS;
+    if (row.finished) assert.ok(Math.abs(row.timeS - fin) < 1e-6);
+    else assert.ok(Math.abs(row.timeS - fin) < fin * 0.08, row.i + " estimate " + row.timeS.toFixed(1) + " vs " + fin.toFixed(1));
+  }
   // live places agree with the result once everyone is home
   assert.deepEqual(R.standings.order, res.rows.map((r) => r.i));
   // a race, not a procession: places changed hands
@@ -81,10 +86,10 @@ test('rubber band: soft, up when behind the player, down when ahead, only on top
   const bot = racers.list[1], ctx = { racers: racers.list, race };
   racers.player.progressM = 500; bot.progressM = 0;
   for (let i = 0; i < 600; i++) ai.drive(bot, ctx, DT, out);
-  assert.ok(bot.rubber > 1.03 && bot.rubber <= feel.get('ai.rubberUpMul') + 1e-9, 'behind ' + bot.rubber);
+  assert.ok(bot.rubber > 1 + (feel.get('ai.rubberUpMul') - 1) * 0.6 && bot.rubber <= feel.get('ai.rubberUpMul') + 1e-9, 'behind ' + bot.rubber);
   racers.player.progressM = 0; bot.progressM = 500;
   for (let i = 0; i < 600; i++) ai.drive(bot, ctx, DT, out);
-  assert.ok(bot.rubber < 0.97 && bot.rubber >= feel.get('ai.rubberDownMul') - 1e-9, 'ahead ' + bot.rubber);
+  assert.ok(bot.rubber < 1 - (1 - feel.get('ai.rubberDownMul')) * 0.6 && bot.rubber >= feel.get('ai.rubberDownMul') - 1e-9, 'ahead ' + bot.rubber);
   racers.player.finished = true;
   for (let i = 0; i < 900; i++) ai.drive(bot, ctx, DT, out);
   assert.ok(Math.abs(bot.rubber - 1) < 0.01, 'off once the player is home');

@@ -137,8 +137,24 @@ export function createGateScreen(host, { feel = null, photosafe = null, gentle =
     canvas = null; field = null; ctx2d = null; broken = true;
   }
 
+  /**
+   * Build the screen and draw one hidden frame behind the warming card: its own WebGL context and the Loom
+   * program are made here, not on the first gate (in Firefox that first link froze the race 1 to 3 s,
+   * about 7 s in, owner 2026-10-22). The canvas stays display:none; nothing shows.
+   */
+  function warm(params) {
+    if (!mount()) return false;
+    try {
+      const w = normalizeParams2(params || {});
+      if (field) field.render(w, 0);
+      else if (ctx2d) drawFallbackFrame(ctx2d, w, 0, canvas.width, canvas.height);
+      if (field && field.gl && field.gl.finish) field.gl.finish();
+    } catch (e) { console.warn('[glassroad/gateScreen] warm: ' + (e && e.message)); }
+    return true;
+  }
+
   return {
-    play, update, dispose,
+    play, update, dispose, warm,
     get active() { return age >= 0; },
     /** current opacity 0..1 on the glass (dev and tests) */
     get level() { return level; },

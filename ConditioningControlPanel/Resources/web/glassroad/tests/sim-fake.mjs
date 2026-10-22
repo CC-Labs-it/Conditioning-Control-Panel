@@ -56,7 +56,7 @@ export function fakeTrack({ nodes = 4000, spacing = 10, w = 14, rollDeg = 0, fla
 
 /** A kart on the road at s, lateral, heading (deg, + right of travel), forward speed and engine. */
 export function place(track, { s = 100, lateral = 0, height = 0, headingDeg = 0, speed = 0, engine = speed, airborne = false } = {}) {
-  const st = createState(), f = track.frameAt(s, {});
+  const st = createState(), f = track.frameAt(s, { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });   // a real track writes into these arrays
   const F = qrotate([0, 0, 0], qaxis([0, 0, 0, 1], f.n, -headingDeg * Math.PI / 180), f.t);
   const p = v3addScaled([0, 0, 0], f.p, f.b, lateral);
   setPos(st, v3addScaled(p, p, f.n, height)); setQuat(st, qlook([0, 0, 0, 1], v3norm(F, F), f.n));

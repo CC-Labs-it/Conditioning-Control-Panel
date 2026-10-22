@@ -370,6 +370,8 @@ async function boot() {
 
   // warm every material and the post chain behind the warming card
   await renderer.compile(world.scene, cam.camera);
+  // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
+  gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
   hud.setReady(true);
   bridge.ready();
   toMenu();
@@ -377,7 +379,7 @@ async function boot() {
 
   let fpsN = 0, fpsT = performance.now(), telT = 0;
 
-  const DIAG = location.port === '8790' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
+  const DIAG = (location.port === '8790' || location.port === '8792') && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
 
   let diagT = 0;
   function frame(now) {
@@ -496,7 +498,7 @@ async function boot() {
       debug.shadowMode = world.shadows ? world.shadows.mode : 'none';
       if (bridge.hosted && now - telT >= 5000) { telT = now; bridge.telemetry({ fps: debug.fps, ...renderer.stats() }); }
       // dev server only (node dev/serve.mjs prints it): what the tester's own browser actually runs
-      if (DIAG && now - diagT >= 10000) { diagT = now; try { navigator.sendBeacon('/__diag', JSON.stringify({ fps: debug.fps, backend: debug.backend, gpu: debug.gpu, tier: renderer.tier, art: debug.art, colossi: debug.colossi.length, lap: debug.lap, s: Math.round(debug.s || 0), stats: renderer.stats(), w: innerWidth, h: innerHeight, dpr: devicePixelRatio, ua: navigator.userAgent })); } catch { /* best effort */ } }
+      if (DIAG && now - diagT >= 10000) { diagT = now; try { navigator.sendBeacon('/__diag', JSON.stringify({ fps: debug.fps, backend: debug.backend, gpu: debug.gpu, tier: renderer.tier, art: debug.art, song: audio.music ? { chart: debug.chart || null, playing: audio.music.playing, has: !!audio.music.song, t: Math.round(audio.music.songS), ctx: audio.state } : 'no-music', words: words ? words.pops + '/' + words.total : null, colossi: debug.colossi.length, lap: debug.lap, s: Math.round(debug.s || 0), stats: renderer.stats(), w: innerWidth, h: innerHeight, dpr: devicePixelRatio, ua: navigator.userAgent })); } catch { /* best effort */ } }
     }
   }
   requestAnimationFrame(frame);

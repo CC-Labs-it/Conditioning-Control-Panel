@@ -73,6 +73,7 @@ test('bots read traps from trapRows: no items.view(), no track.query, and they s
   const drive = (traps) => {
     const feel = makeFeel(), racers = createRacers(TR, feel, { emit() {} }, { count: 2, seed: 1 }), ai = createAi(TR, feel, { seed: 1 });
     const bot = racers.list[1], out = Object.assign(createActions(), { item: false, back: false });
+    bot.st.set(place(TR, { s: bot.st[S.s], lateral: 0, speed: 20 }));   // centred: a grid slot off to the side pins the steer at full lock
     const items = { trapRows: () => traps(bot), view() { throw new Error('view() called by a bot'); }, nearOpenEdge: () => false };
     TR.query = (...a) => { queries++; return q(...a); };
     try { ai.drive(bot, { racers: racers.list, race: { phase: 'racing', timeS: 10, lapStartS: 0 }, items }, DT, out); } finally { TR.query = q; }
@@ -86,6 +87,7 @@ test('bots read traps from trapRows: no items.view(), no track.query, and they s
   // an old items object with only view() still works through the view rows' s and x
   const feel = makeFeel(), racers = createRacers(TR, feel, { emit() {} }, { count: 2, seed: 1 }), ai = createAi(TR, feel, { seed: 1 });
   const bot = racers.list[1], out = Object.assign(createActions(), { item: false, back: false });
+    bot.st.set(place(TR, { s: bot.st[S.s], lateral: 0, speed: 20 }));   // centred: a grid slot off to the side pins the steer at full lock
   const view = { traps: wall(bot).map((t) => ({ ...t, p: [0, 0, 0] })) };
   ai.drive(bot, { racers: racers.list, race: { phase: 'racing', timeS: 10, lapStartS: 0 }, items: { view: () => view } }, DT, out);
   assert.equal(out.steer, blocked);
