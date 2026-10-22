@@ -81,8 +81,9 @@ export function createPalette() {
       t.value = mixT;
       rows.value.set(...fromRows.map((v, i) => v + (toRows[i] - v) * mixT));
     },
-    /** Optional, once a frame: the player's speed (m/s) and the Gentle flag. Overrides the camera estimate. */
-    drive({ speedMps = 0, gentle = false } = {}) { driven = { speedMps, gentle }; },
+    /** Optional, once a frame: the player's speed (m/s), the Gentle flag and the pause. Overrides the camera estimate;
+     *  while paused the road lanes and the hue drift hold still. */
+    drive({ speedMps = 0, gentle = false, paused = false } = {}) { driven = { speedMps, gentle, paused }; },
   };
   const tick = (frame) => {
     const cam = frame && frame.camera;
@@ -91,6 +92,7 @@ export function createPalette() {
     if (lastMs >= 0 && now - lastMs < 2) return;      // a second render in the same frame
     const dt = lastMs < 0 ? 0 : Math.min(0.1, (now - lastMs) / 1000);
     lastMs = now;
+    if (driven && driven.paused) { driven = null; return; }   // the pause card freezes the floor too
     cam.getWorldPosition(P);
     if (dt > 0 && lastPos) {
       const v = Math.min(S.flowMaxMps, P.distanceTo(lastPos) / dt);

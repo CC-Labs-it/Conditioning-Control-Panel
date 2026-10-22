@@ -49,3 +49,35 @@ test('render: pickTier and setTier', () => {
   assert.equal(Q.particles, TIERS.mid.particles);
   setTier('high');
 });
+
+// polish 4: the owner sat on phone at 59 Hz because a vsynced frame (16.7 ms) is never under 12 ms
+const feedAt = (g, ms, displayMs, seconds) => {
+  const out = [];
+  for (let t = 0; t < seconds; t += ms / 1000) { const r = g.sample(ms, displayMs); if (r) out.push(r); }
+  return out;
+};
+
+test('render: at 60 Hz a tier that holds vsync steps back up', () => {
+  const g = createGovernor({ tier: 'phone', ceiling: 'high' });
+  assert.deepEqual(feedAt(g, 16.7, 16.7, GOVERNOR.upS * 2 + 1), ['mid', 'high']);
+  assert.deepEqual(feedAt(createGovernor({ tier: 'phone', ceiling: 'high' }), 16.7, 0, GOVERNOR.upS * 3), []);   // the old rule
+});
+
+test('render: at 60 Hz only a slow mean steps down, and never in the boot grace', () => {
+  assert.deepEqual(feedAt(createGovernor({ tier: 'high' }), 19, 16.7, 6), []);          // 53 fps: under the 1.2 line
+  // Firefox WebGPU paces rAF unevenly: 9 ms and 24.4 ms alternating is a steady 60 fps with a p95 over 1.4 intervals
+  const jitter = createGovernor({ tier: 'mid', ceiling: 'high' }), out = [];
+  for (let t = 0; t < GOVERNOR.upS * 1.5; t += 0.0167) { const r = jitter.sample(t * 60 % 2 < 1 ? 9 : 24.4, 16.7); if (r) out.push(r); }
+  assert.deepEqual(out, ['high']);
+  assert.deepEqual(feedAt(createGovernor({ tier: 'high' }), 33.4, 16.7, 3), ['mid']);
+  const graced = createGovernor({ tier: 'high', rules: { ...GOVERNOR, graceS: 6 } });
+  assert.deepEqual(feedAt(graced, 33.4, 16.7, 5), []);
+  assert.deepEqual(feedAt(graced, 33.4, 16.7, 4), ['mid']);
+});
+
+test('render: each step down makes the next step up wait longer', () => {
+  const g = createGovernor({ tier: 'high' });
+  assert.deepEqual(feedAt(g, 33.4, 16.7, 3), ['mid']);
+  assert.deepEqual(feedAt(g, 16.7, 16.7, GOVERNOR.upS + 1), []);
+  assert.deepEqual(feedAt(g, 16.7, 16.7, GOVERNOR.upS), ['high']);
+});

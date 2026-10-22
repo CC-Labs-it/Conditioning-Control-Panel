@@ -57,28 +57,50 @@ export function p95(values) {
   return a[Math.min(a.length - 1, Math.ceil(a.length * 0.95) - 1)];
 }
 
+/** The verdict on one window for one display. A vsynced frame never shows faster than the display interval, so
+ *  on a 60 Hz screen "p95 under 12 ms" can never be met and a tier lost to a loading hitch never came back
+ *  (polish 4, the owner sat on phone at 59 Hz); and some browsers (Firefox WebGPU) pace rAF unevenly, so a p95
+ *  over 1.5 intervals shows up at a steady 60 fps. With a display interval the governor judges the MEAN frame
+ *  (down below about 83 percent of the display rate, or a p95 of 3 intervals: real hitches) and steps up when the
+ *  mean holds the display rate. Without one (tests, an unknown display) the plan's p95 rule stands. */
+export function governorVerdict(buf, rules, displayMs = 0) {
+  const p = p95(buf);
+  if (!(displayMs > 0)) return { slow: p > rules.downMs, fast: p < rules.upMs };
+  let sum = 0;
+  for (const v of buf) sum += v;
+  const mean = buf.length ? sum / buf.length : 0;
+  return {
+    slow: mean > Math.max(rules.downMs, displayMs * 1.2) || p > displayMs * 3,
+    fast: mean <= Math.max(rules.upMs, displayMs * 1.05) && p <= displayMs * 2,
+  };
+}
+
 /**
- * @param {{ tier?: string, ceiling?: string, rules?: object }} opts ceiling = highest tier allowed (default: the start tier)
- * @returns {{ tier: string, sample(frameMs: number): string|null, reset(): void }} sample returns the new tier on a step
+ * @param {{ tier?: string, ceiling?: string, rules?: object }} opts ceiling = highest tier allowed (default: the start tier).
+ *   rules.graceS (optional): no step down in the first seconds of samples (boot, art decode and shader warm-up hitches).
+ * @returns {{ tier: string, sample(frameMs: number, displayMs?: number): string|null, reset(): void }} sample returns the new
+ *   tier on a step; displayMs (the learnt display interval) switches to the mean rule (governorVerdict). Each step down makes the
+ *   next step up wait one more upS, so a tier that cannot hold vsync does not bounce.
  */
 export function createGovernor({ tier = 'high', ceiling = tier, rules = GOVERNOR } = {}) {
   const g = { tier, sample, reset };
-  let buf = [], bufT = 0, sinceEval = 0, overS = 0, underS = 0;
+  let buf = [], bufT = 0, sinceEval = 0, overS = 0, underS = 0, aliveS = 0, downs = 0;
   function reset() { buf = []; bufT = 0; sinceEval = 0; overS = 0; underS = 0; }
-  function sample(frameMs) {
+  function sample(frameMs, displayMs = 0) {
     if (!(frameMs > 0) || frameMs > rules.gapMs) return null; // a hidden tab or a pause is not a slow frame
     const dt = frameMs / 1000;
+    aliveS += dt;
     buf.push(frameMs); bufT += dt; sinceEval += dt;
     while (bufT > rules.windowS && buf.length > 1) bufT -= buf.shift() / 1000;
     if (sinceEval < rules.everyS) return null;
     const step = sinceEval; sinceEval = 0;
-    const p = p95(buf);
-    overS = p > rules.downMs ? overS + step : 0;
-    underS = p < rules.upMs ? underS + step : 0;
+    const v = governorVerdict(buf, rules, displayMs);
+    overS = v.slow && aliveS >= (rules.graceS || 0) ? overS + step : 0;
+    underS = v.fast ? underS + step : 0;
     const i = ORDER.indexOf(g.tier);
     let next = null;
-    if (overS >= rules.downS && i > 0) next = ORDER[i - 1];
-    else if (underS >= rules.upS && i < ORDER.indexOf(ceiling)) next = ORDER[i + 1];
+    if (overS >= rules.downS && i > 0) { next = ORDER[i - 1]; downs++; }
+    else if (underS >= rules.upS * (1 + Math.min(downs, 5)) && i < ORDER.indexOf(ceiling)) next = ORDER[i + 1];
     if (next) { g.tier = next; reset(); }
     return next;
   }

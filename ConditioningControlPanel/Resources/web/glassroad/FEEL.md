@@ -22,17 +22,23 @@ Polish 2 (owner: "the steering is too strong"): grip yaw = `steer * rate / (1 + 
 (`sim/steer.js`). Full-lock grip yaw, before / after: 8 m/s 104 / 104 deg/s, 20 m/s 76 / 51 (-33%), 30 m/s (top)
 62.5 / 40 (-36%), 39 m/s (boosted top) 54 / 27 (-50%). Drift yaw keeps the uncalmed base law, so a drift is the strong
 turn. -50% already at 30 m/s cost 5.8% lap time on Threshold (the 280 m banked sweeper at 1.2 deg/m); -36% costs 2.8%.
+Polish 4 (owner: "it takes way too little to steer completely"): about another third off at cruise and top, so a held
+key carves a wide arc and the tight bends ask for a hold, a lift or a drift. Full-lock grip yaw before / after: 20 m/s
+51.2 / 35.1 deg/s (-31%), 30 m/s 40.0 / 28.1 (-30%), 39 m/s 26.9 / 18.8 (-30%); 8 m/s unchanged (104). Full lock at
+top is now a 61 m arc. Threshold at top speed (30 m/s): the 55 to 58 m bends need 30 to 31 deg/s (a small lift or a
+drift), the 38 to 49 m bends and the helix (r about 36 m on the road plane, 47 deg/s) need a drift (45 to 91 deg/s at
+30 m/s) or grip at 22 to 26 m/s.
 - `steer.slewCentreS` 0.09: stick slew time near centre (0.06 before polish 2: a tap is a small correction now).
 - `steer.slewFullS` 0.18: stick slew time at full lock (0.14 before).
 - `steer.yawRateDegps` 137.5: yaw rate at full lock and zero speed (2.4 rad/s), before the calm.
 - `steer.yawSpeedRefMps` 25: speed that halves the base yaw rate.
 - `steer.calmFromMps` 8: below this the base law is untouched (nimble when slow).
 - `steer.cruiseMps` 20: cruise point of the calm ...
-- `steer.cruiseYawMul` 0.67: ... grip yaw multiplier there (smoothstep from 1 at calmFromMps).
+- `steer.cruiseYawMul` 0.46: ... grip yaw multiplier there (smoothstep from 1 at calmFromMps; 0.67 before polish 4).
 - `steer.topCalmMps` 30: top-speed point of the calm ...
-- `steer.topYawMul` 0.64: ... grip yaw multiplier there.
+- `steer.topYawMul` 0.45: ... grip yaw multiplier there (0.64 before polish 4).
 - `steer.boostCalmMps` 39: boosted-top point of the calm (speed.topMps x speed.maxPct) ...
-- `steer.boostYawMul` 0.5: ... grip yaw multiplier there and above.
+- `steer.boostYawMul` 0.35: ... grip yaw multiplier there and above (0.5 before polish 4).
 - `steer.userMul` 1: steering sensitivity, the player's Options `steerSens` (0.6 to 1.4 in 0.1 steps). The integrator
   wires it with `feel.set('steer.userMul', opts.steerSens)`. Scales grip yaw only (not drift yaw); bots hold it at 1
   (`sim/racers.js` overlay), and the bots' corner planning reads the same calmed law.
@@ -42,10 +48,14 @@ turn. -50% already at 30 m/s cost 5.8% lap time on Threshold (the 280 m banked s
 ## input (human steering response, `input/steerCurve.js`; bots never pass here)
 Each source tags its steer (`steerKind` key, stick or touch) and the action map shapes it before the merge. Pass the
 feel to `createActionMap(sources, { items: true, feel })` for live edits; without it the same numbers are the defaults.
-- `input.keyStart` 0.35: a key press starts at this share of full lock ...
-- `input.keyRampS` 0.3: ... and builds to full over this long held (a release or a change of side starts over).
-- `input.stickExpo` 0.35: gamepad stick expo, `(1 - e) x + e x^3`: fine near centre, full at the edge.
-- `input.touchExpo` 0.2: the same for the touch steer drag.
+Polish 4: progressive. A held key reaches full input at 0.40 s (0.30 before) on an ease-in; the kart's slewed steer
+passes 50% at 0.33 s (0.20 before), 90% at 0.60 s (0.47). Sticks and touch use a power curve: half stick is a quarter
+of the lock (0.41 before).
+- `input.keyStart` 0.12: a key press starts at this share of full lock (0.35 before) ...
+- `input.keyRampS` 0.4: ... and builds to full over this long held (a release or a change of side starts over; 0.3 before) ...
+- `input.keyRampPow` 1.6: ... on this ease-in, `start + (1 - start) t^pow` (1 = linear): a tap stays a small correction.
+- `input.stickPow` 2: gamepad stick curve `sign(x) |x|^p`: gentle near centre, full at the edge (was expo 0.35).
+- `input.touchPow` 1.8: the same for the touch steer drag (was expo 0.2).
 
 ## offroad
 - `offroad.hazeThrustLoss` 0.35: thrust lost on `haze` surface; skipped during any boost.
@@ -55,6 +65,16 @@ feel to `createActionMap(sources, { items: true, feel })` for live edits; withou
 - `wall.engineLoss` 0.12: engineV fraction lost per wall hit.
 - `wall.cueFullDvMps` 12: delta-v that plays the wall cue at full volume (added).
 - `wall.shakeFrac` 0.5: share of cueFullDvMps that shakes the camera (added).
+- `wall.topM` 1.5: an airborne kart this far over the road plane, or already past the edge, clears a rail (the tube is 0.9 m; polish 4 drop shortcut).
+
+## route (polish 4 drop shortcut, `sim/routes.js`; the catch-zone mesh in `track/mesh.js` repeats cleanLenM and cleanLatM)
+- `route.catchPct` 0.25: a route landing keeps at most this share of top speed ("soft glass").
+- `route.catchHoldS` 2.5: thrust stays capped there this long.
+- `route.cleanLenM` 24: a clean landing is within this length of road around the pad.
+- `route.cleanLatM` 3.5: and this far either side of the pad centre.
+- `route.cleanDeg` 25: with the nose this close to the road heading.
+- `route.cleanAmount` 0.15: the clean landing boost (share of top over top), paid when the catch ends.
+- `route.cleanHoldS` 0.6: how long that boost holds.
 
 ## hop
 Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every drift); now 0.40 m, 0.33 s, lands soft.
@@ -64,15 +84,30 @@ Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every d
 - `hop.gravityEaseS` 0.25: time to ease from hop gravity to rest gravity (0.3 before).
 
 ## drift
-- `drift.minSpeedMps` 8: a hop starts a drift only above this speed; dropping under it cancels.
-- `drift.tightMin` 0.6: drift yaw share with the stick away from the turn.
+Polish 4: a hop OR a brake press while steering at speed (throttle held: the power slide) starts the slide; the first
+tier comes at 0.5 s (0.4 s steering into it), and every drift that charged 0.4 s pays at least the mini-turbo on
+release. Drift yaw at 30 m/s: 45 to 91 deg/s (60 to 100 before), so the slide is the strong turn and still holdable.
+Events: `drift-start { dir, via: 'hop' | 'brake' }`, `drift-tier { tier, dir }`, `drift-release { tier }`,
+`drift-boost { tier, dir }` (every paid release, tier 0 = mini-turbo), `drift-cancel { reason }`; a bot's arrive as
+`racer-event { racer, name, p }`. Skid flag: `skidOf(st)` in `sim/drift.js` (drifting and grounded).
+- `drift.minSpeedMps` 8: a hop or a brake starts a drift only above this speed; dropping under it cancels.
+- `drift.tightMin` 0.5: drift yaw share with the stick away from the turn (0.6 before polish 4).
 - `drift.tightMax` 1.0: drift yaw share with the stick into the turn.
-- `drift.yawMul` 1.6: max drift yaw as a multiple of grip yaw.
+- `drift.yawMul` 1.45: max drift yaw as a multiple of the uncalmed base yaw (1.6 before polish 4).
 - `drift.cancelSlipDeg` 6: slip under this angle ...
-- `drift.cancelSlipS` 0.2: ... for this long cancels the drift (also release, low speed, wall).
-- `drift.tierS` [0.6, 1.4, 2.4]: charge seconds for tiers 1, 2, 3 (hold time is primary).
-- `drift.softInMul` 1.4: charge rate while steering into the drift.
+- `drift.cancelSlipS` 0.2: ... for this long ends the drift: one that charged `drift.miniMinS` pays like a release
+  (the slide straightened out by itself), a shorter one cancels (also release, low speed, wall).
+- `drift.tierS` [0.5, 1.2, 2.1]: charge seconds for tiers 1, 2, 3 ([0.6, 1.4, 2.4] before polish 4).
+- `drift.softInMul` 1.25: charge rate while steering into the drift (1.4 before polish 4).
 - `drift.softOutMul` 0.7: charge rate while counter-steering.
+- `drift.miniMinS` 0.4: charge that pays the mini-turbo on release with no tier reached (boost.miniAmount).
+- `drift.brakeMin` 0.6: brake share that starts a power slide ...
+- `drift.brakeHoldMin` 0.3: ... and the share that keeps holding it (letting off under this releases and pays).
+- `drift.brakeEntryS` 0.15: the brake press counts as fresh this long: steer within it to slide (a held brake brakes).
+- `drift.brakeThrottleMin` 0.5: a power slide needs the throttle held; brake with no throttle is a real brake.
+- `drift.brakeDragMps2` 3: engineV lost per second in a power slide with the throttle held (the brake does not brake).
+- `drift.straightenMax` 0.12: a power slide with the stick under this share ...
+- `drift.straightenS` 0.2: ... for this long counts as straightened: it releases and pays.
 - `drift.beatBonusOn` false: beat release bonus, off in the slice.
 - `drift.beatBonus` 0.25: extra boost for a release on the beat (music tracks only).
 - `drift.beatWindowS` 0.08: how close to the beat counts.
@@ -80,6 +115,8 @@ Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every d
 ## boost
 - `boost.tierAmount` [0.12, 0.18, 0.24]: drift boost size per tier, fraction of top speed.
 - `boost.tierHoldS` [0.5, 0.9, 1.4]: drift boost hold per tier.
+- `boost.miniAmount` 0.06: the mini-turbo, paid by a drift released with no tier (kind 'drift', tier 0).
+- `boost.miniHoldS` 0.3: the mini-turbo hold.
 - `boost.riseS` 0.1: envelope rise.
 - `boost.tailTcS` 0.5: exponential tail time constant after the hold. Off-road loss and turn drag are skipped while any boost runs.
 - `boost.launchTier` 2: tier a launch boost pays.
@@ -88,6 +125,24 @@ Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every d
 ## pad
 - `pad.amount` 0.2: boost pad pins the engine at top + this share.
 - `pad.holdS` 1.0: pad hold, same envelope as drift boosts.
+
+## trick (polish 4, `sim/trick.js`)
+A hop pressed in a window around a lip pays a trick boost on landing: in the air up to lateS after a lip or crest
+take-off, on a pad up to padLateS after entering it, or on the ground up to earlyS before a jump, crest or pad ahead
+(the early side needs kart.js to pass the track to `hop()`). Outside the window a press is a plain hop. Events:
+`trick { grade: 'good' | 'great', airS, at: 'lip' | 'crest' | 'pad' }` when it registers (airS = air so far) and
+`trick-land { grade, airS, amount, holdS }` on touch-down; boost-start kind 'trick'. A drop or rescue loses it.
+- `trick.earlyS` 0.12: a ground press this long before the lip still counts (at the kart's speed).
+- `trick.lateS` 0.2: an air press this long after a lip or crest take-off still counts.
+- `trick.greatS` 0.06: within this of the lip moment the grade is 'great', else 'good'.
+- `trick.padLateS` 0.25: a hop this long after entering a pad is a pad trick.
+- `trick.crestDeg` 8: a road pitch drop this big just ahead reads as a crest lip (early side).
+- `trick.amount` [0.12, 0.18]: trick boost size for good, great (fraction of top speed).
+- `trick.holdS` [0.35, 0.55]: trick boost hold for good, great ...
+- `trick.holdPerAirS` 0.5: ... plus this per second of air (bigger air pays longer) ...
+- `trick.holdMaxS` 1.3: ... capped here.
+- `trick.stackAdd` 0.05: over a running boost the trick pays at least that amount plus this, and the longer hold.
+- `trick.botChance` 0.35: chance a bot tricks at a lip (read by sim/ai.js once it presses hop after a lip take-off).
 
 ## air (landing tiers by airtime)
 - `air.lightS` 0.35: under this, nothing (0.25 before; a plain hop, 0.33 s, now lands soft).
@@ -150,7 +205,7 @@ Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every d
 - `juice.countdownBloomStep` 0.1: bloom added per pulse.
 - `juice.goReleaseS` 0.6: go pulse bloom release.
 - `juice.launchCamSettleS` 0.5: camera settle after a launch boost.
-- `juice.sparkColours` pink, white, gold: drift spark colour per tier.
+- `juice.sparkColours` blue, orange, pink: drift spark colour per tier (HUD pips; sparks, skid marks and ribbons use the same, render/atlas.js).
 - `juice.sparkDieS` 0.3: sparks burst and die on release.
 - `juice.driftPitchSemis` 7: drift tone rises a fifth over three tiers.
 - `juice.boostBandMul` 1.5: band speed multiplier while boosting.
@@ -272,12 +327,19 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `ai.paceMul` [0.9, 0.92, 0.94, 0.96, 0.97, 0.98, 1.0]: per-bot top speed share (bot 1..7), times difficultyMul.
 - `ai.lookAheadS` 0.55: steering aim point this many seconds ahead at the bot's speed.
 - `ai.lookAheadMinM` 8: the aim point is never nearer than this.
-- `ai.steerGain` 2.2: stick = clamp(atan2(right, ahead) x gain).
+- `ai.steerGain` 3: stick = clamp(atan2(right, ahead) x gain).
 - `ai.lineSpreadM` 2.5: each bot keeps its own lateral line within +- this.
 - `ai.lineWanderM` 1.0: slow wander around that line.
 - `ai.lineWanderS` 7: wander period.
 - `ai.cornerCutM` 2.0: lateral pull toward the inside of a bend at full curvature.
 - `ai.openEdgeMarginM` 3.5: bots keep at least this inside an open edge.
+- `ai.routeChance` 0.2: chance per lap a tier 2 bot tries a drop shortcut.
+- `ai.routeLowMul` 0: tier 1 bots roll routeChance times this (0: never).
+- `ai.routeLeadM` 70: a bot starts lining up for the open edge this far before it.
+- `ai.routeAimAheadM` 25: it aims at a point this far past the landing pad (a straight line off the edge).
+- `ai.routeHopEdgeM` 2.2: it hops the kerb once this close to the open edge.
+- `ai.routeHopLeadM` 3: it hops this far before the opening, once the line has it at the kerb.
+- `ai.routeLineM` 2.8: the line runs this far to the open side of the landing pad.
 - `ai.driftCurveDegPerM` 0.5: heading change per metre over the look-ahead that starts a hop drift.
 - `ai.driftMinS` 0.9: a bot drift is held at least this (a tier 1 release).
 - `ai.rubberBehindM` 60: a bot this far behind the player runs rubberUpMul.
@@ -296,7 +358,7 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `ai.itemRangeM` 60: a bot throws only when its target is within this.
 - `ai.resultsWaitS` 10: after the player finishes, results wait at most this for the bots (the rest are placed by distance).
 - `ai.audibleKarts` 3: the nearest this many bot engines are heard.
-- `ai.cornerMargin` 0.8: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
+- `ai.cornerMargin` 0.9: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
 
 ## contact (B1 kart contact and slipstream, sim/contact.js)
 - `contact.radiusM` 0.8: kart contact radius (two karts touch under 2x this).

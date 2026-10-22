@@ -41,6 +41,7 @@ import { createAudio } from './audio/bus.js';
 import { createHud } from './hud/hud.js';
 import { openFeelSheet } from './hud/feelSheet.js';
 import { createSlotFx } from './render/items/slotfx.js';
+import { createGateScreen } from './render/gateScreen.js';
 
 const qs = new URLSearchParams(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
@@ -172,6 +173,9 @@ async function boot() {
   // and the Shadows option turns it on or off in applyOptions
   const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0',
     spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
+  // passing through a spiral gate plays that gate's own Loom over the view (photosafe, Gentle halves it)
+  const gateScreen = createGateScreen(document.body, { feel, photosafe, tier: renderer.tier });
+  bus.on('gate-pass', (g) => { if (state === 'race' && !paused) gateScreen.play(g.params, 1); });
   const cam = createChaseCamera(feel, { bus });   // the kick layer hears the player's bumps and wall hits
   debug.backend = renderer.backend;
   debug.gpu = renderer.gpu;
@@ -204,6 +208,10 @@ async function boot() {
   hud.setRacers(racers.list.map((r) => r.meta));
   hud.setTrack({ xz: centreline(track) });
   const fall = BOT_FALL ? createFallSteer(track, P.st, feel) : null;
+  // dev (?bot=1): the racers and the track for scripted runs (dev drive scripts); not enumerable
+  // debug.hands = { steer, throttle, brake, hop, hopPressed } overrides the AI's hands on the player (hopPressed
+  // lasts one step); null hands the player back to the AI
+  if (BOT) for (const [k, v] of [['racers', racers], ['track', track], ['feel', feel], ['ai', ai]]) Object.defineProperty(debug, k, { value: v, enumerable: false });
 
   const gamepad = createGamepad();
   // the pad's own Start edge (gamepads fire no DOM events); card navigation comes from gamepad.takeNav()
@@ -328,6 +336,10 @@ async function boot() {
   if (BOT) botT = performance.now() + 2500;      // attract: a short look at the menu, then race
 
   let fpsN = 0, fpsT = performance.now(), telT = 0;
+
+  const DIAG = location.port === '8790' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
+
+  let diagT = 0;
   function frame(now) {
     requestAnimationFrame(frame);
     if (!renderer.frameDue(now)) return;                          // the Frame cap option skips this one
@@ -348,7 +360,15 @@ async function boot() {
     if (paused) { hopLatch.clear(); itemLatch.clear(); } else { hopLatch.hold(a); itemLatch.hold(a); }
     const inRace = state === 'race' || state === 'results';
     if (!paused && inRace) for (let i = 0; i < steps; i++) {        // 2. sim
-      if (BOT && !P.finished) { ai.drive(P, aiCtx, clock.dt, a); if (fall) fall.apply(a); }
+      if (BOT && !P.finished) {
+        ai.drive(P, aiCtx, clock.dt, a); if (fall) fall.apply(a);
+        if (debug.hands) {                                      // dev drive scripts (steerAdd leans on the AI's own steer)
+          const h = debug.hands, aiSteer = a.steer;
+          Object.assign(a, h);
+          if (h.steerAdd) a.steer = clamp(aiSteer + h.steerAdd, -1, 1);
+          h.hopPressed = false;
+        }
+      }
       race.update(clock.dt, a, P.st);
       racers.step(clock.dt, a, race, sctx);
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
@@ -357,8 +377,9 @@ async function boot() {
       hopLatch.spent(a); itemLatch.spent(a);
     }
     queue.flush(bus);                                             // 3. events
-    fx.update(frameDt, P.st, race);                               // 4. fx
-    effects.update(frameDt);                                      //    the local screen effect
+    const fxDt = paused ? 0 : frameDt;                            //    the pause card freezes every effect too
+    fx.update(fxDt, P.st, race);                                  // 4. fx
+    effects.update(fxDt);                                         //    the local screen effect
     const fs = fx.state;
     const pst = P.st;
     audio.update(pst[S.speedPct], {                               // 5. audio
@@ -385,7 +406,7 @@ async function boot() {
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
-      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera });
+      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused });
     if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
     renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: paused ? 0 : frameDt });   // 7. render
 
@@ -396,6 +417,7 @@ async function boot() {
     hud.update({ lap: pst[S.lap], laps, timeS: race.timeS, speedPct: pst[S.speedPct], countdown: null,
       sectionIdx: pst[S.sectionIdx], paused, place, count: COUNT, item: holding ? hudItem : null,
       map: mapXz, finished: P.finished, bestLapS: P.bestLapS });
+    gateScreen.update(frameDt, paused);
     slotFx.update(paused ? 0 : frameDt, holding && !P.finished ? hudItem : null, !!feel.get('gentle.on'));
 
     if (state === 'race' && finishAt && now >= finishAt && result) {   // results after the finish swell
@@ -422,6 +444,8 @@ async function boot() {
       debug.sfx = audio.sfx;
       debug.shadowMode = world.shadows ? world.shadows.mode : 'none';
       if (bridge.hosted && now - telT >= 5000) { telT = now; bridge.telemetry({ fps: debug.fps, ...renderer.stats() }); }
+      // dev server only (node dev/serve.mjs prints it): what the tester's own browser actually runs
+      if (DIAG && now - diagT >= 10000) { diagT = now; try { navigator.sendBeacon('/__diag', JSON.stringify({ fps: debug.fps, backend: debug.backend, gpu: debug.gpu, tier: renderer.tier, art: debug.art, colossi: debug.colossi.length, lap: debug.lap, s: Math.round(debug.s || 0), stats: renderer.stats(), w: innerWidth, h: innerHeight, dpr: devicePixelRatio, ua: navigator.userAgent })); } catch { /* best effort */ } }
     }
   }
   requestAnimationFrame(frame);

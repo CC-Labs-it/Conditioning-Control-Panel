@@ -38,14 +38,18 @@ import { createSpeedLines } from './speedlines.js';
 import { buildKarts } from './karts.js';
 import { createWakes } from './wakes.js';
 import { createMotes } from './motes.js';
+import { createSkids } from './skids.js';
 import { kickWobble, moteDensity, bumpCount } from './kartPose.js';
+import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
 
 const FWD = new Vector3();
+const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
 // the SCREENFX lane's item visuals; missing or broken, the race runs without them
 const itemsMod = await import('./items/visuals.js').catch((e) => { console.warn('[glassroad/world] no item visuals: ' + (e && e.message)); return null; });
 // polish 3 layers, loaded the same way: missing or broken, the race runs without them
 const spiralsMod = await import('./spirals3d.js').catch((e) => { console.warn('[glassroad/world] no spiral gates: ' + (e && e.message)); return null; });
+const routesMod = await import('./routes.js').catch((e) => { console.warn('[glassroad/world] no route marks: ' + (e && e.message)); return null; });
 const mediaMod = await import('./media.js').catch((e) => { console.warn('[glassroad/world] no media slots: ' + (e && e.message)); return null; });
 // Threshold is the only track: its gate layout loads with the module so buildWorld stays synchronous
 const SPIRAL_LAYOUTS = new Map();
@@ -166,6 +170,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const particles = createParticles(feel, art), lines = createSpeedLines(feel), wakes = createWakes(feel, count), motes = createMotes(pal, seed);
   add(particles.object); add(lines.object); add(motes.object);
   for (const o of wakes.objects) add(o);
+  // polish 4: glowing skid ribbons under a drift (one pooled draw call for every kart)
+  const skids = createSkids(feel, count);
+  add(skids.object);
   // reactions (REACT lane): bumps, walls, the countdown glance, finishes and the head sprays
   karts.attach({ bus, particles });
   // the lamp's soft shadows: colossi, karts and props onto the road and pads; blobs on the phone tier
@@ -179,8 +186,14 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   }
   // polish 3: the Loom spiral gates across the road and the media slots (placeholders only)
   let spirals = null, media = null;
-  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: spiralLayout, photosafe, feel }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
+  // onPass: the player crossed a gate; boot plays that gate's own Loom on screen
+  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: spiralLayout, photosafe, feel,
+    onPass: (g) => { if (bus) bus.emit('gate-pass', g); } }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
   try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
+  // polish 4: the drop shortcut's rail opening and landing pad (track routes); the ring swells on the player's clean landing
+  let routes = null;
+  try { routes = routesMod ? routesMod.createRoutes(scene, track, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] route marks failed: ' + (e && e.message)); }
+  if (routes && bus) offs.push(bus.on('route-land', (p) => routes.land(p || {})));
   const kartPos = [];
   let itemVis = null;
   try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
@@ -190,8 +203,10 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (bus) {
     const on = (name, fn) => offs.push(bus.on(name, (p) => pending.push(fn(p || {}))));
     on('land', ({ tier = 0 }) => ['land', 0, tier]);
-    on('racer-event', ({ racer = -1, name, p = {} }) => [name, racer, (p && p.tier) || 0]);
-    on('bump', (p) => ['bump', p.a, p.dv || 0, p.p]);
+    // polish 4 drift and trick moments go to the particle layer with their payloads; the player's arrive bare
+    for (const n of P4_EVENTS) on(n, (p) => ['p4', 0, n, p]);
+    on('racer-event', ({ racer = -1, name, p = {} }) => (P4_EVENTS.has(name) ? ['p4', racer, name, p] : [name, racer, (p && p.tier) || 0]));
+    on('bump', (p) => ['bump', p.a, p.dv || 0, p.p, p.b]);
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
     on('item-box', (p) => ['box', p.racer, 0, p.p]);
     on('item-hit', (p) => ['hit', p.victim, p.verdict, p.p, p.kind]);
@@ -199,11 +214,21 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const posOf = (i) => { const o = kartObjs[i]; return o ? [o.position.x, o.position.y, o.position.z] : null; };
   function juice(e, gentle) {
     const [kind, i, a, p, b] = e, k = karts.list[i], obj = kartObjs[i], few = gentle ? 0.6 : 1;
+    if (kind === 'p4') {
+      if (k && obj && obj.visible) {
+        particles.event(obj, k.mem, a, p, { mul: i ? LOOK.botSparkMul : 1 });
+        if (a === 'trick-land') wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[2], { gentle });
+      }
+      return;
+    }
     // squash and stretch on hops and landings belong to the reaction layer (karts.js stepReact)
     if (kind === 'land' && a >= 1 && k && obj.visible) {
       particles.dust(obj, a);
       wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[Math.min(a, 3) - 1], { gentle });
-    } else if (kind === 'bump') particles.burst(p || posOf(i), Math.round(bumpCount(a, LOOK) * few), { colours: LOOK.bumpColours, speed: LOOK.bumpSpeedMps, sparkle: 0.7 });
+    } else if (kind === 'bump') {
+      // near: the player is in it, so the burst sits right under the camera (half the count and the stars)
+      particles.burst(p || posOf(i), Math.round(bumpCount(a, LOOK) * few), { colours: LOOK.bumpColours, speed: LOOK.bumpSpeedMps, sparkle: 0.7, near: i === 0 || b === 0 });
+    }
     else if (kind === 'pop') {
       particles.burst(p || posOf(i), Math.round(LOOK.popCount * few), { colours: LOOK.popColours, speed: LOOK.popSpeedMps, sizeM: LOOK.popSizeM, petal: 0.3, sparkle: 0.3, g: 0.15 });
       if (obj && obj.visible) wakes.ring(p || posOf(i), obj.quaternion, LOOK.ringMaxM[0], { gentle, gain: LOOK.ringGain * 0.6 });
@@ -211,7 +236,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     else if (kind === 'hit' && k) {
       if (a === 'hit') kickWobble(k.pose, LOOK, gentle, b === 'shatter' ? 0.5 : 1);
       // atlas sprays first (frost, stars, drips, glass pops); the plain burst stays the fallback
-      if (particles.hit(p || posOf(i), a === 'hit' ? b : a, { few })) { /* sprayed */ }
+      if (particles.hit(p || posOf(i), a === 'hit' ? b : a, { few, near: i === 0 })) { /* sprayed */ }
       else if (a === 'glass' || a === 'golden' || a === 'decoy') {
         particles.burst(p || posOf(i), Math.round(14 * few), { colours: a === 'golden' ? LOOK.boxColours : LOOK.popColours, speed: 3, sparkle: 0.8 });
       }
@@ -253,10 +278,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     }
     const dt = lastT === null ? 0 : clamp(view.timeS - lastT, 0, 0.1);
     lastT = view.timeS;
+    setLensCamera(view.camera);   // the lens rule's view height (render/lens.js) follows the rendering camera
     const gentle = !!feel.get('gentle.on');
     const scroll = gentle ? feel.get('gentle.scrollMul') : 1, contrast = gentle ? feel.get('gentle.contrastMul') : 1;
     // the road and rail patterns stream toward the player at a speed from the kart (spectrum.js flowMps)
-    pal.drive({ speedMps: Math.max(0, k[S.speedPct] || 0) * feel.get('speed.topMps'), gentle });
+    pal.drive({ speedMps: Math.max(0, k[S.speedPct] || 0) * feel.get('speed.topMps'), gentle, paused: !!view.paused });
 
     // karts: pose every racer, hide the unused slots; distance to the player picks rival LOD and tags
     const topMps = feel.get('speed.topMps');
@@ -269,7 +295,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       const near = i === 0 || d <= Q.kartLodM;
       if (near) particles.kart(kk.root, r.st, kk.mem, dt, { mul: i ? LOOK.botSparkMul : 1, slip: (r.fxv && r.fxv.slip) || 0 });
       wakes.kart(i, kk.root, r.st, dt, near);
+      skids.kart(i, kk.root, r.st, near);
     }
+    skids.update(dt, !!view.paused);
     for (const e of pending) juice(e, gentle);
     pending.length = 0;
 
@@ -330,6 +358,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       if (spirals) spirals.update(dt, { camera: view.camera, karts: kartPos, player: 0, gentle });
       if (media) media.update(dt, { camera: view.camera, gentle, scrollMul: scroll, contrastMul: contrast });
     }
+    if (routes) routes.update(dt, { gentle, paused: !!view.paused, scroll });
     particles.update(dt);
     wakes.update(dt);
     lines.update(dt, k, fx, kart);
@@ -339,13 +368,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
 
   function dispose() {
     for (const o of owned) o.traverse((m) => { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); });
-    particles.dispose(); lines.dispose(); wakes.dispose(); motes.dispose(); karts.dispose();
+    particles.dispose(); skids.dispose(); lines.dispose(); wakes.dispose(); motes.dispose(); karts.dispose();
     if (itemVis) itemVis.dispose();
     if (shadows) shadows.dispose();
     if (colossi && colossi.dispose) colossi.dispose();
     if (spirals) spirals.dispose();
     if (media) media.dispose();
+    if (routes) routes.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, resetReactions: karts.resetReactions };
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media,
+    resetReactions: () => { karts.resetReactions(); skids.clear(); } };   // a restart also wipes the last race's skid marks
 }

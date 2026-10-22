@@ -14,7 +14,7 @@
  */
 import { WebGPURenderer, Group, Mesh, Sprite, PlaneGeometry } from 'three/webgpu';
 import { createPost } from './post.js';
-import { Q, TIERS, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu } from './quality.js';
+import { Q, TIERS, GOVERNOR, setTier, pickTier, createGovernor, createDynRes, dynLines, shortGpu } from './quality.js';
 import { createFrameGate } from '../core/clock.js';
 import { loadOptions, cleanOptions } from '../hud/options.js';
 
@@ -26,8 +26,11 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   let opts = cleanOptions(options || loadOptions());
   // ?quality= wins (dev), then a pinned Quality option, else the auto pick
   const pinOf = () => override ? null : opts.quality !== 'auto' ? opts.quality : null;
-  // ask for the fast GPU on both paths; no adapter means the WebGL2 fallback, with a context made here
-  let webgl2 = force === 'webgl2', gpu = '', context = null;
+  // ask for the fast GPU on both paths; no adapter means the WebGL2 fallback, with a context made here.
+  // Firefox runs WebGL2 unless ?renderer=webgpu: its WebGPU drew every lit prop as a black silhouette for the
+  // owner (polish 4, Firefox 158) while its WebGL2 draws them right; a chosen WebGL2 still starts on high
+  const firefox = !force && !!globalThis.navigator && (navigator.userAgent || '').includes('Firefox/');
+  let webgl2 = force === 'webgl2' || firefox, gpu = '', context = null;
   if (!webgl2) {
     try {
       const ad = globalThis.navigator && navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance', featureLevel: 'compatibility' }) : null;
@@ -36,7 +39,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
     } catch (e) { webgl2 = true; }
   }
   if (webgl2) context = canvas.getContext('webgl2', { antialias: false, alpha: true, depth: true, stencil: false, powerPreference: 'high-performance' });
-  setTier(pinOf() || pickTier({ override, coarse, webgl2 }));
+  setTier(pinOf() || pickTier({ override, coarse, webgl2: webgl2 && !firefox }));
 
   const three = new WebGPURenderer({ canvas, antialias: false, forceWebGL: webgl2, powerPreference: 'high-performance', ...(context ? { context } : {}) });
   await three.init();
@@ -45,9 +48,11 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   if (backend === 'webgl2') {
     try { const gl = three.backend.gl, ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = shortGpu(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)); } catch (e) { /* hidden */ }
   }
-  const autoTier = pickTier({ override, coarse, webgl2: backend === 'webgl2' });
+  const autoTier = pickTier({ override, coarse, webgl2: backend === 'webgl2' && !firefox });
   setTier(pinOf() || autoTier);
-  let gov = pinOf() ? null : createGovernor({ tier: Q.name, ceiling: autoTier });
+  // graceS: boot, art decode and the first shader compiles never cost a tier
+  const govRules = { ...GOVERNOR, graceS: 6 };
+  let gov = pinOf() ? null : createGovernor({ tier: Q.name, ceiling: autoTier, rules: govRules });
   const gate = createFrameGate({ cap: opts.frameCap });
   const dyn = createDynRes();
   const tierFns = new Set();
@@ -78,7 +83,7 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
   }
   function setQuality() {
     const pin = pinOf(), name = pin || autoTier;
-    gov = pin ? null : createGovernor({ tier: name, ceiling: autoTier });
+    gov = pin ? null : createGovernor({ tier: name, ceiling: autoTier, rules: govRules });
     if (name !== Q.name) { setTier(name); retier(); }
   }
 
@@ -143,7 +148,8 @@ export async function createRenderer(canvas, { forceRenderer = null, maxDpr = 2,
         const disp = gate.displayMs, target = gate.targetMs, capped = disp > 0 && gate.capMs >= disp * 1.1;
         // under a cap the governor sees only the time past the cap; dynamic resolution calls a frame slow
         // when it is most of a display interval late (a 144 Hz to 60 cadence alternates 2 and 3 intervals)
-        const step = gov ? gov.sample(capped ? Math.max(0.1, gap - (target - disp)) : gap) : null;
+        // uncapped, the thresholds follow the display interval (a vsynced frame is never under it)
+        const step = gov ? (capped ? gov.sample(Math.max(0.1, gap - (target - disp))) : gov.sample(gap, disp)) : null;
         if (step) { setTier(step); retier(); }
         // dynLines clamps the learnt display interval: a slow GPU never teaches dynres that slow is normal
         const dl = opts.renderScale === 'auto' ? dynLines(disp, gate.capMs) : null;

@@ -81,6 +81,8 @@ export const LOOK = {
   boxCount: 22, boxColours: ['#ffd36b', '#ffffff', '#ff8cc6'],
   wispRate: 60, wispColour: '#e8f6ff', wispSizeM: 0.12, wispSpeedMps: 14, wispLifeS: 0.3,
   // boost ribbon (render/wakes.js): a flat strip behind the saucer, one draw for every kart
+  // fixer: the ribbon fades out between these distances from the eye (the lens rule; the kart rides about 6.5 m out)
+  trailLensM: [2.5, 7],
   trailWidthM: 0.55, trailUpM: 0.12, trailStepM: 0.55, trailAlpha: 0.7, trailFadeTcS: 0.25, padTrail: '#ffd36b', launchTrail: '#ffffff',
   // ambient motes (render/motes.js): a wrapped box around the player; deep sections thicken them
   moteBoxM: [70, 26, 70], moteSizeM: [0.05, 0.16], moteDrift: [0.012, 0.02, 0.012], moteBase: 0.3, moteDeep: 1,
