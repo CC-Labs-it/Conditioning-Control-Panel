@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using NAudio.Wave;
 
 namespace ConditioningControlPanel.Services.Speech
@@ -54,38 +53,21 @@ namespace ConditioningControlPanel.Services.Speech
         }
 
         /// <summary>Directory we expect the Vosk model to live in (drop the unpacked model here).</summary>
-        public static string ModelRoot =>
-            Path.Combine(AppContext.BaseDirectory, "Resources", "Models", "vosk");
+        public static string ModelRoot => SpeechModelFolder.Root;
 
         /// <summary>The model directory under <see cref="ModelRoot"/>, or null.</summary>
         internal static string? ResolveModelDir() => ResolveModelDir(ModelRoot);
 
         /// <summary>
-        /// Resolve the WaveIn device number to open, preferring a match on the saved device NAME (robust
-        /// to NAudio ordinal reshuffling when virtual audio devices appear/disappear — the "voice worked
-        /// yesterday, not today" failure, #441b), then the saved ordinal if still valid, else 0 (Windows
-        /// default). Never throws. Shared by <see cref="SherpaWakeService"/> so both wake engines agree.
+        /// The WaveIn device number to open: the Core <see cref="SpeechEngine.ResolveInputDevice"/>
+        /// rule (saved name, then saved index) over the WaveIn list, else 0 (Windows default).
+        /// Never throws. Shared by <see cref="SherpaWakeService"/> so both wake engines agree.
         /// </summary>
         public static int ResolveDeviceNumber(int savedIndex, string? savedName)
         {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(savedName))
-                {
-                    int count = WaveInEvent.DeviceCount;
-                    for (int i = 0; i < count; i++)
-                    {
-                        string name;
-                        try { name = WaveInEvent.GetCapabilities(i).ProductName; }
-                        catch { name = ""; }
-                        if (string.Equals(name, savedName, StringComparison.OrdinalIgnoreCase))
-                            return i;
-                    }
-                }
-                if (savedIndex >= 0 && savedIndex < WaveInEvent.DeviceCount) return savedIndex;
-            }
-            catch { }
-            return 0; // WaveIn device 0 == Windows default capture device.
+            var devices = new List<SpeechInputDevice>();
+            foreach (var d in EnumerateInputDevices()) devices.Add(new SpeechInputDevice(d.Index, d.Name));
+            return ResolveInputDevice(devices, savedIndex, savedName)?.Index ?? 0; // WaveIn 0 == Windows default.
         }
 
         /// <summary>WaveIn capture, 16 kHz mono s16, 50 ms buffers, on the saved device.</summary>

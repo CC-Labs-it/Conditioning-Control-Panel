@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -30,23 +32,51 @@ public class UiThreadStackCaptureTests
     }
 
     [Fact]
-    public void ASelfSnapshotYieldsTheCallingThreadsManagedFrames()
+    public void ASnapshotYieldsAParkedThreadsManagedFrames()
     {
-        var sw = Stopwatch.StartNew();
-        var text = UiThreadStacks.CaptureWithBudget(Environment.CurrentManagedThreadId, 90_000);
-        sw.Stop();
+        // The target is parked in a kernel wait BEFORE the capture starts, the shape the watchdog
+        // sees (another thread snapshotting a UI thread that is not moving). This used to snapshot
+        // the calling thread itself, which is still running while the worker takes the snapshot:
+        // caught in native code with no transition frame (MRES.Wait's spin phase), the DAC walk
+        // starts at the next explicit frame and every frame above RuntimeMethodHandle.InvokeMethod
+        // vanished. That failed twice on loaded Windows runners (flakes.md, 2026-10-13).
+        using var release = new ManualResetEvent(false);
+        var parked = new Thread(() => ParkedInAKnownFrame(release)) { IsBackground = true, Name = "ParkedTarget" };
+        parked.Start();
+        try
+        {
+            var deadline = Stopwatch.StartNew();
+            while ((parked.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == 0)
+            {
+                Assert.True(deadline.ElapsedMilliseconds < 10_000, "target thread never parked");
+                Thread.Yield();
+            }
 
-        // This test method's own frame must appear: that is a managed stack walk having worked,
-        // not a placeholder string. Every report in the freeze family is missing exactly this.
-        Assert.Contains(nameof(ASelfSnapshotYieldsTheCallingThreadsManagedFrames), text);
-        Assert.Contains("UI thread", text);
+            var sw = Stopwatch.StartNew();
+            var text = UiThreadStacks.CaptureWithBudget(parked.ManagedThreadId, 90_000);
+            sw.Stop();
 
-        // The watchdog runs this on a process that is already in trouble. Measured at ~100ms; the
-        // assert is loose because it shares a machine with the rest of the suite, but a capture
-        // that took seconds would mean the snapshot route regressed into something unshippable.
-        Assert.True(sw.ElapsedMilliseconds < 60_000,
-            $"stack capture took {sw.ElapsedMilliseconds}ms");
+            // The parked method's own frame must appear: that is a managed stack walk having
+            // worked, not a placeholder string. Every report in the freeze family is missing this.
+            Assert.Contains(nameof(ParkedInAKnownFrame), text);
+            Assert.Contains("UI thread", text);
+
+            // The watchdog runs this on a process that is already in trouble. Measured at ~100ms; the
+            // assert is loose because it shares a machine with the rest of the suite, but a capture
+            // that took seconds would mean the snapshot route regressed into something unshippable.
+            Assert.True(sw.ElapsedMilliseconds < 60_000,
+                $"stack capture took {sw.ElapsedMilliseconds}ms");
+        }
+        finally
+        {
+            release.Set();
+            parked.Join();
+        }
     }
+
+    // NoInlining: the assertion names this frame, so the JIT must not fold it into the lambda.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ParkedInAKnownFrame(ManualResetEvent release) => release.WaitOne();
 
     [Fact]
     public void AnUnknownThreadIdDegradesInsteadOfThrowing()

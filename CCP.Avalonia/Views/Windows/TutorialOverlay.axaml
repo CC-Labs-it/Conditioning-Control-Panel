@@ -30,6 +30,7 @@
      in code-behind for exactly that reason. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Windows.TutorialOverlay"
         Title="Tutorial"
         SystemDecorations="None"
@@ -215,7 +216,7 @@
                            Margin="0,0,0,8"/>
 
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
-                    <TextBlock x:Name="TxtIcon" Text="~" FontSize="24" Foreground="{DynamicResource PinkBrush}" FontWeight="Bold" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <fx:IconGlyph x:Name="TxtIcon" Kind="Sparkle" Size="24" Foreground="{DynamicResource PinkBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                     <TextBlock x:Name="TxtTitle"
                                Text="Welcome!"
                                Foreground="{DynamicResource PinkBrush}"

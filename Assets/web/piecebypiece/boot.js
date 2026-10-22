@@ -18,7 +18,8 @@ import { createHotseat } from './game/hotseat.js';
 import { createSolo } from './game/solo.js';
 import { createTurnHandoff } from './ui/turn-handoff.js';
 import { createDirector } from './board/director.js';
-import { createDriverSwitch, startOnlineMatch } from './net/online.js';
+import { createDriverSwitch, startOnlineMatch, startWatchMatch } from './net/online.js';
+import { setWatchPolicy } from './net/api.js';
 import { DEFAULT_MS } from './game/clock.js';
 import { postToHost, onHostMessage, onIdentity, signalReady } from './bridge.js';
 import { createPauseHush } from './ui/pause-hush.js';
@@ -50,6 +51,10 @@ function main() {
   // of keyboard focus the real key never lands here (ui/host-escape.js). Made first, so it hears every real
   // Escape before any part of the page keeps one for itself (the promotion picker, the door).
   const hostEscape = createHostEscape();
+  // The card the page opens on (ui/open-intro.js, about 3 s): over everything, holding nothing. Asked for first,
+  // so it is up before the door; its capture key listener keeps an Escape from the leave below while it is up.
+  // Harness pages that deal at once never get it; ?introAt=<s> pins it at one moment for a screenshot.
+  const openIntro = startOpenIntro();
   const bus = createBus();
   let view;
   try {
@@ -104,6 +109,7 @@ function main() {
   // reducedMotion starts from the player's saved choice: preferences.js ran before PBP existed, so its
   // own first write went nowhere, and every mover reads PBP.settings.
   window.PBP = { bus, game, board, ramp: null, settings: { videoHoldSec: 15, reducedMotion: presentation().reducedMotion } };
+  openIntro.then((intro) => { window.PBP.openIntro = intro; });   // the card's handle, once it is up
   window.PBP.pictures = pictureChoice;   // the picture choice + niche manager (ui/pictures.js)
   board.turnHandoff = createTurnHandoff({ bus, game, board, menuOpen: () => !!window.PBP.door?.isUp() });
   { const dispose = view.dispose; view.dispose = () => { board.turnHandoff.dispose(); dispose(); }; }
@@ -120,19 +126,29 @@ function main() {
    * know the game changed hands.
    */
   window.PBP.startOnline = (match) => startOnlineMatch({ bus, board, hud: dom.hud, game, match });
+  // The stands: watch a public game from "playing now" (net/watch.js), 15 s behind.
+  window.PBP.startWatch = (match) => startWatchMatch({ bus, board, hud: dom.hud, game, match });
+  // "Let people watch my games" (Options): off sends watchable:false when a public game is made.
+  setWatchPolicy(() => presentation().letPeopleWatch);
   // The friends drawer: challenge a friend, or take a friend's challenge up. Heard here, early,
   // because the frame can land before the door exists; it waits for the door.
   onHostMessage((m) => {
     if (!m || m.type !== 'pbp:friend') return;
     Promise.resolve(window.PBP.doorReady).then((door) => { if (door && door.friend) door.friend(m); }).catch(() => {});
   });
+  const spectated = new Set();
   onHostMessage((m) => {
     if (m.type !== 'pbp:settings') return;
     // The envelope's own key is not a setting, and reducedMotion belongs to preferences.js: it folds the
     // host's value in with the saved choice and the OS (they can only add reduction). Copying the raw host
     // value here wrote a false over a ticked "Reduce motion" on every launch.
-    const { type, reducedMotion, ...values } = m;
+    const { type, reducedMotion, spectateMatchId, letPeopleWatch, ...values } = m;
     Object.assign(window.PBP.settings, values);
+    // The desktop Lobby's Watch: the window opens straight into the stands, once per game id.
+    if (spectateMatchId && !spectated.has(String(spectateMatchId))) {
+      spectated.add(String(spectateMatchId));
+      Promise.resolve(window.PBP.doorReady).then((door) => { if (door && door.friend) door.friend({ mode: 'spectate', matchId: String(spectateMatchId) }); }).catch(() => {});
+    }
   });
   // The host names the player from the account (pbp:identity, displayName),
   // and that is the name the server lists in the lobby - so it is the name the
@@ -168,16 +184,26 @@ function main() {
   const updateBase = view.update;
   view.update = (dt) => { feelDt = dt; updateBase(dt); };
   const renderBase = view.render;
+  // The board intro (board/intro.js) lifts the men only for the draw itself.
+  const drawBoard = () => { if (board.intro) board.intro.render(renderBase); else renderBase(); };
   view.render = () => {
     for (const fn of feelLate) fn(feelDt);
-    if (board.juice) { board.juice.update(feelDt); board.juice.render(renderBase); }
-    else renderBase();
+    if (board.juice) { board.juice.update(feelDt); board.juice.render(drawBoard); }
+    else drawBoard();
   };
   import('./board/juice.js').then(m => {
     board.juice = m.createJuice({ bus, camera: view.camera });
     const dispose = view.dispose;
     view.dispose = () => { board.juice.dispose(); dispose(); };
   }).catch(e => console.warn('[pbp] impact camera missing', e));
+  // The clockwork rise when a new game's board comes up. Loaded late and guarded:
+  // without it the men simply stand there, as they always did.
+  import('./board/intro.js').then((m) => {
+    board.intro = m.createIntro({ view, pieces, bus, game, sfx: () => board.sfx, prefs: presentation });
+    feelLate.push((dt) => board.intro.update(dt));
+    const dispose = view.dispose;
+    view.dispose = () => { board.intro.dispose(); dispose(); };
+  }).catch((e) => console.warn('[pbp] board intro missing', e));
   import('./board/outline.js').then((m) => {
     board.outline = m.createOutline({ group: view.pieceGroup, bus });
     feelLate.push((dt) => board.outline.update(dt, view.camera, view.renderer));
@@ -238,9 +264,11 @@ function main() {
       if (saved?.iq) iq.restore(saved.iq);
     });
     bus.on('iq', () => { if (mode === 'solo') patchSoloIq(); });
+    // the stands keep nothing on the shelf (door/door.js does not save a watched game)
     const record = game.record;
     game.record = (...a) => { const r = record.apply(game, a); const fall = iq.record(); return fall ? { ...r, iq: fall } : r; };
     bus.on('gameover', () => {
+      if (mode === 'watch') return;
       const plies = game.plies(), last = game.rules.chess.history().pop(), epoch = iq.epoch();
       iq.settled().then(() => {
         // a rematch or the menu before the last grade came in: the trackers belong to the next game now
@@ -262,6 +290,12 @@ function main() {
     hudL = m.createHud({ bus, game, board, root: document.getElementById('hud'), params });
     board.hud = hudL;
   }).catch((e) => console.warn('[pbp] hud missing', e));
+  // A seat's own Distraction, written down for the stands while anybody watches (net/fxlog.js):
+  // the ramp's ramp-heat / ramp-fired, posted every ~5 s of the turn and once on the move.
+  import('./net/fxlog.js').then((m) => {
+    board.fxlog = m.createFxLog({ bus, game });
+    const dispose = view.dispose; view.dispose = () => { board.fxlog.dispose(); dispose(); };
+  }).catch((e) => console.warn('[pbp] fx log missing', e));
   // --- end L ---
   // --- M: the hand ---
   // A man waiting on his square counts as being in hand for Esc, but he is not
@@ -301,6 +335,12 @@ function main() {
     board.bloom = m.createBloom({ view });
     feelLate.push((dt) => board.bloom.update(dt));
   }).catch((e) => console.warn('[pbp] bloom missing', e));
+  // The players as floating name tags at their ends of the board (board/name-tags.js), seats and stands alike.
+  import('./board/name-tags.js').then((m) => {
+    board.nameTags = m.createNameTags({ view, bus, game, menuUp: () => !!window.PBP.door?.isUp(), own: () => window.PBP.settings.playerName || '' });
+    feelLate.push((dt) => board.nameTags.update(dt));
+    const dispose = view.dispose; view.dispose = () => { board.nameTags.dispose(); dispose(); };
+  }).catch((e) => console.warn('[pbp] name tags missing', e));
   // --- end N ---
   // --- T: the room (floor, dome, and the light that leans to the mover) ---
   // Loaded late and guarded like the rest: without it the board sits in the
@@ -321,33 +361,41 @@ function main() {
     view.dispose = () => { board.turnSpiral.dispose(); dispose(); };
   }).catch(e => console.warn('[pbp] turn spiral missing', e));
   // --- end T ---
-  // Esc on the menu closes the board; Esc in a game pauses it (owner, 2026-09-27). Mid-drag it also puts the
-  // piece back, and never closes the board. A local game holds its clock and the computer's reply; an online
+  // Esc in a game pauses it; on the pause card it resumes. Leaving is a button, never a key.
+  // Mid-drag it also puts the piece back. A local game holds its clock and the computer's reply; an online
   // clock belongs to the server, so the card says it keeps running.
   // The pause is also the first half of a panic press (the panel lets the board keep a first Escape as its
-  // pause; a second within 2 s closes it), so it goes quiet at once (ui/pause-hush.js), and an Escape on the
-  // pause card LEAVES, whatever the gap: Esc, Esc is always the way out. Resume is the focused button.
+  // pause; a second within 2 s is a full panic), so it goes quiet at once (ui/pause-hush.js).
+  // Resume, by button or Escape, brings the effects back through the same hush.
   const pauseCard = document.createElement('div');
   pauseCard.className = 'pbp-pause';
   pauseCard.hidden = true;
   pauseCard.setAttribute('role', 'dialog');
   pauseCard.setAttribute('aria-modal', 'true');
   pauseCard.innerHTML = '<div class="pbp-pause-card"><h2>PAUSED</h2><p class="pbp-pause-note" hidden>Online game: the clock keeps running.</p>'
+    + '<p class="pbp-pause-note pbp-pause-iq">IQ: every move you make is graded against the best move the engine can find. The worse the move, the bigger the drop.</p>'
     + '<button type="button" data-pause="resume">Resume</button><button type="button" data-pause="pictures" hidden>Pictures</button>'
     + '<button type="button" data-pause="leave">Leave the board</button></div>';
   document.body.appendChild(pauseCard);
   let pausedGame = false;
   const onlineSeat = () => !!(window.PBP.game?.current && typeof window.PBP.game.current.offerDraw === 'function');
+  // The stands pause too (owner, 2026-10-14: Escape while watching is the pause card, never the way out).
+  // The watched game is not ours to hold, so nothing stops but this screen's effects and sound.
+  const watchingNow = () => !!window.PBP.game?.isWatch;
   function setGamePaused(p) {
     if (p === pausedGame) return;
     pausedGame = p;
     pauseCard.hidden = !p;
-    const online = onlineSeat();
-    pauseCard.querySelector('.pbp-pause-note').hidden = !online;
-    if (!online) { const clock = window.PBP.game?.clock; if (p) clock?.pause?.(); else clock?.resume?.(); }
+    const online = onlineSeat(), watch = watchingNow();
+    const note = pauseCard.querySelector('.pbp-pause-note');
+    note.hidden = !online && !watch;
+    note.textContent = watch ? 'The game carries on without you.' : 'Online game: the clock keeps running.';
+    pauseCard.querySelector('[data-pause="leave"]').textContent = watch ? 'Back to the tables' : 'Leave the board';
+    if (!online && !watch) { const clock = window.PBP.game?.clock; if (p) clock?.pause?.(); else clock?.resume?.(); }
     pauseHush.set(p);
     // the niche manager is one tap away on the pause card, wherever a host keeps a picture choice
-    pauseCard.querySelector('[data-pause="pictures"]').hidden = !(p && pictureChoice.available() && presentation().experience !== 'classic');
+    const fx = watch ? presentation().watchEffects !== false : presentation().experience !== 'classic';
+    pauseCard.querySelector('[data-pause="pictures"]').hidden = !(p && pictureChoice.available() && fx);
     if (p) pauseCard.querySelector('[data-pause="resume"]').focus();
   }
   const pauseHush = createPauseHush({ board, ramp: () => window.PBP.ramp, isPaused: () => pausedGame });
@@ -360,6 +408,7 @@ function main() {
     if (!b) return;
     if (b.dataset.pause === 'resume') setGamePaused(false);
     else if (b.dataset.pause === 'pictures') pictureChoice.manage({ still: presentation().reducedMotion }).then(() => { if (pausedGame) pauseCard.querySelector('[data-pause="resume"]').focus(); });
+    else if (watchingNow()) { setGamePaused(false); bus.emit('watch-leave'); }   // the stands go back to the tables
     else postToHost({ type: 'pbp:exit' });   // leave hushed, the window closes
   });
   const inGameNow = () => !window.PBP.door?.isUp() && window.PBP.game && !window.PBP.game.isOver();
@@ -370,11 +419,11 @@ function main() {
   window.addEventListener('keydown', (e) => {
     // A held Escape is one press (the panel counts it once too); its key repeats must not leave the pause.
     if (e.key !== 'Escape' || e.repeat) return;
-    if (pausedGame) { postToHost({ type: 'pbp:exit' }); return; }   // still hushed: nothing comes back on the way out
+    // Players and spectators resume alike; only the Leave button leaves the board.
+    if (pausedGame) { setGamePaused(false); return; }
     if (drag.isDragging()) { drag.drop(); window.PBP.escapePause(); return; }
     const inGame = inGameNow();
     if (inGame) setGamePaused(true);
-    else postToHost({ type: 'pbp:exit' });
   });
   // The kept press plays through the listener above (and every other Escape listener), once.
   onHostMessage((m) => { if (m.type === HOST_ESCAPE) hostEscape.kept(); });
@@ -399,7 +448,7 @@ function main() {
     drag.update(dt);
     jiggle.update(dt);   // last: it reads what everything else just decided
     // A paused local game holds the computer's reply too; an online seat keeps talking to the server.
-    if (window.PBP.game && window.PBP.game.update && (!pausedGame || onlineSeat())) window.PBP.game.update(dt);
+    if (window.PBP.game && window.PBP.game.update && (!pausedGame || onlineSeat() || watchingNow())) window.PBP.game.update(dt);
     view.render();
     board.director.afterRender(dt);
     requestAnimationFrame(frame);
@@ -422,6 +471,7 @@ function main() {
     // an online seat is built and switched in by net/online.js; the hotseat's
     // reset-and-start is not what it wants
     if (mode === 'online' && match) { window.PBP.startOnline(match); return; }
+    if (mode === 'watch' && match) { window.PBP.startWatch(match); return; }
     if (mode === 'solo') {
       const solo = createSolo({ bus, board, hud: dom.hud, options, restore });
       game.switchTo(solo);
@@ -467,6 +517,17 @@ function main() {
   // --- end O ---
 }
 
+function startOpenIntro() {
+  const q = new URLSearchParams(location.search);
+  const holdAt = q.has('introAt') ? Math.max(0, Number(q.get('introAt')) || 0) : null;
+  const harness = q.has('hotseat') || Number(q.get('auto')) > 0 || q.get('door') === '0' || q.get('intro') === '0';
+  if (harness && holdAt == null) return Promise.resolve(null);
+  // loaded late and guarded like the rest: without it the page simply opens on the door
+  return import('./ui/open-intro.js')
+    .then((m) => m.createOpenIntro({ prefs: presentation, sfx: () => window.PBP?.board?.sfx, holdAt }))
+    .catch((e) => { console.warn('[pbp] opening intro missing', e); return null; });
+}
+
 /**
  * Attach the effects layer, and give it somewhere to get its pictures from.
  *
@@ -494,7 +555,13 @@ async function pickMedia(params) {
       return media.createFixtureMedia(list);
     }
     if (mode === 'none') return media.createFixtureMedia([]);
-    return media.createHostMedia();
+    const pool = media.createHostMedia();
+    // "via Scrolller" (2026-10-17): one corner mark while an online Distraction picture is up
+    try {
+      const { pageMark } = await import('./ramp/scrolllerMark.js');
+      pool.onOnlineShown = () => pageMark().note();
+    } catch (e) { console.warn('[pbp] no credit mark', e); }
+    return pool;
   } catch (e) {
     console.warn('[pbp] no media source; the ramp runs without pictures', e);
     return undefined;   // attachRamp falls back to an empty pool of its own

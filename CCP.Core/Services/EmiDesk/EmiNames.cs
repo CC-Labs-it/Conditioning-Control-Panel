@@ -97,6 +97,10 @@ internal static class EmiNames
         }
     }
 
+    /// <summary>The head half: WPF <c>EmiTargets.Find(id)?.Label</c>. Null result = not in the
+    /// catalogue. Unset = read <see cref="EmiDoors"/> (the Avalonia head).</summary>
+    public static Func<string, string?>? TargetLabelProbe { get; set; }
+
     /// <summary>A ring target id as a lowercase display name, or null when it is not in the catalogue.</summary>
     /// <remarks>Reads <see cref="EmiDoors"/>, not a head's EmiTargets: the name is the card's label
     /// (<see cref="EmiTarget.Label"/>, so the same fallback) and a door this head hides still has
@@ -105,10 +109,18 @@ internal static class EmiNames
     {
         try
         {
-            if (!EmiDoors.All.Any(d => string.Equals(d.Id, id, StringComparison.Ordinal))) return null;
-            string label;
-            try { label = Loc.Get("emi_desk_target_" + id); }
-            catch { label = id; }
+            string? label;
+            if (TargetLabelProbe is { } probe)
+            {
+                label = probe(id);
+                if (label == null) return null;
+            }
+            else
+            {
+                if (!EmiDoors.All.Any(d => string.Equals(d.Id, id, StringComparison.Ordinal))) return null;
+                try { label = Loc.Get("emi_desk_target_" + id); }
+                catch { label = id; }
+            }
             return Clean(label);
         }
         catch (Exception ex)
