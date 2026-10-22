@@ -151,6 +151,7 @@ public sealed class ModCatalogueShareTests
             Assert.True(share.IsEnabled);
             Assert.Empty(manager.OwnedWindows);
             Assert.Equal(2, fake.Paths.Count);
+            Assert.Contains(shell.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("catalogue_toast_auth_failed"));
         }
         finally
         {
