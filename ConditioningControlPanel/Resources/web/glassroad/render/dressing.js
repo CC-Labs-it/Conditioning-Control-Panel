@@ -15,13 +15,14 @@
  */
 import {
   Group, InstancedMesh, Object3D, Matrix4, Quaternion, Vector3, MeshBasicNodeMaterial, CanvasTexture,
-  SRGBColorSpace, AdditiveBlending, DoubleSide, Color, LOD, InstancedBufferAttribute,
+  SRGBColorSpace, AdditiveBlending, DoubleSide, Color, LOD, InstancedBufferAttribute, BackSide, CylinderGeometry, PlaneGeometry, BufferAttribute,
 } from 'three/webgpu';
-import { uniform, uv, vec2, texture, cos, sin, float, smoothstep, length, positionView, instancedBufferAttribute } from 'three/tsl';
+import { uniform, uv, vec2, vec3, texture, cos, sin, float, smoothstep, length, positionView, instancedBufferAttribute, positionLocal, normalLocal,
+  cameraPosition, clamp, mix, attribute, normalWorld, positionWorld, normalize, abs, dot, pow, max } from 'three/tsl';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
-import { placeScatter, sampleTrack, worldLook, scatterCount, scatterBasis } from './colossiMath.js';
+import { placeScatter, sampleTrack, worldLook, scatterCount, scatterBasis, placeHeroes, heroBasis, heroCount, heroCasters, V3 } from './colossiMath.js';
 import { createSoftMaterial } from './materials/colossus.js';
 
 const M4 = new Matrix4(), V = new Vector3(), SC = new Vector3(), ZB = new Vector3();
@@ -193,6 +194,204 @@ export function buildFinish(art, track, pal) {
   };
 }
 
+/** The slot cabinet's reel screen: three lit reels (spiral, heart, seven) on a deep violet glass. */
+function reelTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, 256);
+  bg.addColorStop(0, '#3a0f5c'); bg.addColorStop(1, '#14052a');
+  g.fillStyle = bg; g.fillRect(0, 0, 256, 256);
+  const cols = ['#ff3fb0', '#19e3ff', '#ffd23a'];
+  for (let i = 0; i < 3; i++) {
+    const x = 14 + i * 80;
+    const rg = g.createLinearGradient(0, 40, 0, 216);
+    rg.addColorStop(0, '#d8c8f0'); rg.addColorStop(0.5, '#fff8fc'); rg.addColorStop(1, '#d8c8f0');
+    g.fillStyle = rg; g.fillRect(x, 40, 68, 176);
+    const cx = x + 34, cy = 128;
+    g.strokeStyle = g.fillStyle = cols[i]; g.lineWidth = 7; g.lineCap = 'round';
+    if (i === 0) {
+      g.beginPath();
+      for (let a = 0; a < Math.PI * 5; a += 0.1) { const r = 2 + a * 1.6; g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+      g.stroke();
+    } else if (i === 1) {
+      g.beginPath(); g.moveTo(cx, cy + 22);
+      g.bezierCurveTo(cx - 40, cy - 6, cx - 18, cy - 34, cx, cy - 14);
+      g.bezierCurveTo(cx + 18, cy - 34, cx + 40, cy - 6, cx, cy + 22); g.fill();
+    } else {
+      g.font = 'bold 64px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('7', cx, cy + 2);
+    }
+  }
+  // the pay line
+  g.fillStyle = '#ff3fb0'; g.fillRect(6, 126, 244, 4);
+  const t = new CanvasTexture(cv); t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
+/** The ink outline: the same mesh drawn back faces only, pushed out along its normals by a width that grows
+ * with distance (about the same pixels near and far). Instancing runs first, so positionLocal is in the
+ * world (the hero group sits at the origin). */
+function outlineMaterial(W) {
+  const m = new MeshBasicNodeMaterial({ side: BackSide });
+  const d = cameraPosition.sub(positionLocal).length();
+  const w = clamp(d.mul(W.heroOutlineK), W.heroOutlineM[0], W.heroOutlineM[1]);
+  m.positionNode = positionLocal.add(normalLocal.normalize().mul(w));
+  const c = new Color(W.heroOutline);
+  m.colorNode = vec3(c.r, c.g, c.b);
+  return m;
+}
+
+/**
+ * The hero set (polish 4 COLOSSAL, owner "way bigger, about 4 or 5 times that, colossal"): the recognisable
+ * props as colossi 30 to 55 m tall, 15 to 90 m off the road (colossiMath.js placeHeroes), each on a glass
+ * plinth with a lit top (a leaning one rises bare out of the void below the road), an ink outline that keeps
+ * its pixel width at any distance, a rim in a contrasting hue and a soft backlight disc, so the silhouette
+ * reads against the busy sky. Chess pieces wear the chess game's pink and white silicone (or cyan glass, or
+ * its violet side), slot cabinets show lit reels and EMI's face, cards and watches keep their own paint,
+ * discs turn the Loom mask. Upright pieces turn slowly; facing pieces swing a little toward the oncoming
+ * camera. The nearest few whose shadow reaches the road (heroCasters) get their own instanced meshes that
+ * cast the lamp's shadow (render/shadows.js casts them on the high tier); nothing else here casts. Nothing
+ * has a time term in its shading, so nothing flickers; Gentle (spinMul) slows or holds the turning.
+ * Returns { object, placed, bodies, casterBodies, update(dt, spinMul) } or null.
+ */
+export function buildHeroes(art, track, seed, { pal = null, avoid = [], samples = null } = {}) {
+  if (!art || !pal) return null;
+  // dev A/B: ?heroes=0 leaves the hero set out (frame cost checks)
+  try { if (new URLSearchParams(globalThis.location ? location.search : '').get('heroes') === '0') return null; } catch { /* no location */ }
+  const W = worldLook();
+  const kinds = (W.heroKinds || []).filter((k) => art.model(k.id) && art.row(k.id));
+  if (!kinds.length) return null;
+  const sectionOf = (s) => { try { const sec = track.sections[track.sectionAt(s)]; return sec ? sec.palette : null; } catch { return null; } };
+  const S = samples || sampleTrack(track, W.stepM);
+  const placed = placeHeroes(track, kinds, (id) => art.row(id), seed, { want: heroCount(Q.name, W), avoid, W, samples: S, sectionOf });
+  if (!placed.length) return null;
+  // the nearest few whose shadow reaches the road cast the lamp's shadow (render/shadows.js casts them on the
+  // high tier only, the scatter path); they get their own instanced meshes so the rest stay out of the map
+  const cast = new Set(heroCasters(placed, LOOK.lightDir, S, W));
+  placed.forEach((x, i) => { x.cast = cast.has(i); });
+
+  const group = new Group(), parts = [], faces = [], C = new Color();
+  group.name = 'hero-props';
+  // dev and shot tours read the layout here (id, s, side, gap, up, height)
+  group.userData.heroes = placed.map((x) => ({ id: x.k.id, s: x.s, side: x.side, gap: x.gap, up: x.up, h: x.h, lean: x.lean, cast: x.cast }));
+  const ink = outlineMaterial(W);
+  let reels = null;
+  const attr3 = (list, get) => {
+    const a = new Float32Array(list.length * 3);
+    list.forEach((x, i) => { C.set(get(x)); a.set([C.r, C.g, C.b], i * 3); });
+    return new InstancedBufferAttribute(a, 3);
+  };
+  for (const key of [...new Set(placed.map((x) => x.k.id + (x.cast ? '|cast' : '')))]) {
+    const mine = placed.filter((x) => x.k.id + (x.cast ? '|cast' : '') === key), id = mine[0].k.id, look = mine[0].k.look, casts = mine[0].cast;
+    const tintA = attr3(mine, (x) => x.look.body), rimA = attr3(mine, (x) => x.look.rim);
+    const chromeA = new InstancedBufferAttribute(new Float32Array(mine.map((x) => x.look.chrome || 0)), 1);
+    const tint = instancedBufferAttribute(tintA, 'vec3'), rim = instancedBufferAttribute(rimA, 'vec3');
+    const chrome = look === 'chess' ? instancedBufferAttribute(chromeA, 'float') : null;
+    const root = art.model(id).scene;
+    root.updateMatrixWorld(true);
+    let big = null, bigN = -1;
+    root.traverse((m) => {
+      if (!m.isMesh || Array.isArray(m.material)) return;
+      const name = m.material && m.material.name;
+      let mat;
+      if (look === 'slot' && name === 'screen') {
+        reels = reels || reelTexture();
+        mat = new MeshBasicNodeMaterial({ map: reels });
+      } else if (look === 'slot' && name === 'emi_screen') mat = emiFace();
+      else if (look === 'slot' && name === 'slot_lamps') {
+        mat = new MeshBasicNodeMaterial(); mat.colorNode = rim.mul(0.6).add(vec3(0.6, 0.35, 0.5));
+      } else if (look === 'disc' && name === 'spiral_mask') {
+        const f = spiralFace(art, tint.mul(1.3));
+        f.uniforms.lit.value = 1; faces.push(f); mat = f.material;
+      } else {
+        mat = createSoftMaterial(m.material, pal, { tint, rim, chrome, tintMix: look === 'paint' ? 0.3 : look === 'chess' ? 1 : null,
+          rimGain: W.heroRimGain, rimPow: W.heroRimPow, haze: 0.5, fill: W.heroFill, ink: look === 'card' }).material;
+      }
+      const im = new InstancedMesh(m.geometry, mat, mine.length);
+      im.frustumCulled = false; im.userData.cast = casts;
+      group.add(im); parts.push({ im, local: m.matrixWorld.clone(), mine });
+      const n = m.geometry.attributes.position.count;
+      if (n > bigN && !(mat.transparent)) { bigN = n; big = im; }
+    });
+    if (big) {
+      const o = new InstancedMesh(big.geometry, ink, mine.length);
+      o.instanceMatrix = big.instanceMatrix;    // the same matrices, written once per frame
+      o.frustumCulled = false; o.userData.noCast = true;
+      group.add(o);
+    }
+  }
+
+  // plinths: a low glass drum, its top edge lit in the hero's rim hue (py: 0 at the top, -1 at the base)
+  const pg = new CylinderGeometry(1, 1.1, 1, 40, 1).translate(0, -0.5, 0);
+  const py = new Float32Array(pg.attributes.position.count);
+  for (let i = 0; i < py.length; i++) py[i] = pg.attributes.position.getY(i);
+  pg.setAttribute('py', new BufferAttribute(py, 1));
+  const rimAll = instancedBufferAttribute(attr3(placed, (x) => x.look.rim), 'vec3');
+  const pm = new MeshBasicNodeMaterial();
+  const yy = attribute('py', 'float');
+  const N = normalize(normalWorld), V = normalize(cameraPosition.sub(positionWorld));
+  const fres = pow(max(float(1).sub(abs(dot(N, V))), 0), 2);
+  const glass = vec3(0.16, 0.07, 0.3).add(rimAll.mul(0.12)).add(rimAll.mul(fres).mul(0.5));
+  const band = smoothstep(-0.22, -0.08, yy);
+  pm.colorNode = mix(glass, rimAll.mul(1.25), band);
+  const plinths = new InstancedMesh(pg, pm, placed.length);
+  plinths.frustumCulled = false;
+  group.add(plinths);
+
+  // backlight: a soft disc in the rim hue behind each piece, square to the oncoming camera (static)
+  const hm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending, side: DoubleSide });
+  const r = length(uv().sub(0.5)).mul(2);
+  const halo = smoothstep(1, 0.45, r).mul(smoothstep(0.05, 0.6, r).mul(0.6).add(0.4));
+  hm.colorNode = rimAll.mul(halo).mul(W.heroHalo);
+  hm.opacityNode = float(1);
+  const halos = new InstancedMesh(new PlaneGeometry(2, 2), hm, placed.length);
+  halos.frustumCulled = false; halos.renderOrder = -0.5; halos.userData.noCast = true;
+  group.add(halos);
+
+  const E = new Object3D(), BX = new Vector3(), BY = new Vector3(), BZ = new Vector3();
+  function basisMatrix(b, p, sx, sy, sz) {
+    M4.makeBasis(BX.set(b.X[0], b.X[1], b.X[2]), BY.set(b.Y[0], b.Y[1], b.Y[2]), BZ.set(b.Z[0], b.Z[1], b.Z[2]));
+    E.quaternion.setFromRotationMatrix(M4);
+    E.position.set(p[0], p[1], p[2]); E.scale.set(sx, sy, sz); E.updateMatrix();
+    return E.matrix;
+  }
+  placed.forEach((x, i) => {
+    const b0 = heroBasis(x, 0, W), Y0 = x.Y0 || x.Y;
+    const PX = V3.norm(V3.cross(Y0, x.F)), PZ = V3.cross(PX, Y0);
+    const pk = x.bare ? 0 : 1;   // a leaning hero rises bare out of the void below the road
+    plinths.setMatrixAt(i, basisMatrix({ X: PX, Y: Y0, Z: PZ }, x.p, x.plinth.r * pk, x.plinth.hM * pk, x.plinth.r * pk));
+    // the disc sits behind the piece (away from the camera), centred a little above its middle
+    const back = (x.rLat || x.plinth.r) + 2, c = [0, 1, 2].map((j) => x.p[j] + x.Y[j] * x.h * 0.55 - x.F[j] * back);
+    const hr = x.h * W.heroHaloR;
+    halos.setMatrixAt(i, basisMatrix({ X: b0.X, Y: b0.Y, Z: x.F }, c, hr, hr, 1));
+  });
+  plinths.instanceMatrix.needsUpdate = true; halos.instanceMatrix.needsUpdate = true;
+
+  function write() {
+    for (const x of placed) x.m = (x.m || new Matrix4()).copy(basisMatrix(heroBasis(x, x.ang, W), x.p, x.scale, x.scale, x.scale));
+    for (const { im, local, mine } of parts) {
+      mine.forEach((x, i) => im.setMatrixAt(i, M4.multiplyMatrices(x.m, local)));
+      im.instanceMatrix.needsUpdate = true;
+    }
+  }
+  write();
+  // only the few casters (above) go into the shadow pass; outlines, plinths, halos and the rest never cast
+  group.traverse((o) => { o.userData.noCast = !o.userData.cast; });
+  return {
+    object: group,
+    placed,
+    bodies: placed.map((x) => x.body),
+    /** the casters' piece capsules ({ B, top, r }), for the phone tier's baked road shadows */
+    casterBodies: placed.filter((x) => x.cast).map((x) => ({ id: x.k.id, B: x.p, top: V3.add(x.p, V3.mul(x.Y, x.h)), r: x.rLat })),
+    /** spinMul: the Gentle scroll share (0 holds them still). */
+    update(dt, spinMul = 1) {
+      if (!spinMul || !dt) return;
+      for (const x of placed) x.ang += x.spin * dt * spinMul;
+      for (const f of faces) f.uniforms.turn.value = (f.uniforms.turn.value + dt * spinMul * 0.6) % (Math.PI * 2);
+      write();
+    },
+  };
+}
+
 /**
  * Seeded scatter of floating props (polish 3: a dense corridor the chase camera sees, colossiMath.js
  * placeScatter). Count per tier from LOOK.world / WORLD_DEFAULTS scatterByTier (the tier picked at boot;
@@ -207,6 +406,10 @@ export function buildScatter(art, track, seed, { pal = null, avoid = [], samples
   const kinds = (W.scatterKinds || LOOK.artScatterKinds).filter((k) => art.model(k.id) && art.row(k.id));
   if (!kinds.length) return null;
   const want = scatterCount(Q.name, W);
+  // polish 4: the hero set first (eye level beside the road); the far scatter keeps clear of it
+  let heroes = null;
+  try { heroes = buildHeroes(art, track, seed, { pal, avoid, samples }); } catch (e) { console.warn('[glassroad/world] hero props failed: ' + (e && e.message)); }
+  if (heroes) avoid = [...avoid, ...heroes.bodies];
   const sectionOf = (s) => { try { const sec = track.sections[track.sectionAt(s)]; return sec ? sec.palette : null; } catch { return null; } };
   const placed = placeScatter(track, kinds, (id) => art.row(id), seed,
     { want, avoid, W, samples: samples || sampleTrack(track, W.stepM), sectionOf });
@@ -217,6 +420,7 @@ export function buildScatter(art, track, seed, { pal = null, avoid = [], samples
   // one InstancedMesh per mesh part of each kind; instance matrix = placement * part matrix; one tint
   // buffer per kind, read per instance by every part's material
   const group = new Group(), parts = [], C = new Color();
+  if (heroes) group.add(heroes.object);
   for (const k of kinds) {
     const mine = placed.filter((x) => x.k === k);
     if (!mine.length) continue;
@@ -258,9 +462,11 @@ export function buildScatter(art, track, seed, { pal = null, avoid = [], samples
     object: group,
     count: placed.length,
     placed,
+    heroes,
     /** spinMul: the Gentle scroll share (0 holds them still). */
     update(dt, spinMul) {
       if (!spinMul) return;
+      if (heroes) heroes.update(dt, spinMul);
       for (const x of placed) {
         x.ang += x.spin * dt * spinMul;
         if (x.pose === 'tumble') { x.rot[1] += x.spin * dt * spinMul; x.rot[0] += x.spin * 0.3 * dt * spinMul; }

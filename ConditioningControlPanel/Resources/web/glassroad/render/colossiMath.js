@@ -38,6 +38,53 @@ export const WORLD_DEFAULTS = Object.freeze({
     { id: 'pocket-watch', w: 2.4, h: [9, 16], spin: 0.3, pose: 'face' }, { id: 'spiral-disc', w: 2, h: [9, 16], spin: 0.45, pose: 'face' },
     { id: 'slot-cabinet-lod0', w: 1.4, h: [10, 16], spin: 0.1, pose: 'upright' }, { id: 'bubble', w: 1, h: [6, 12], spin: 0.15, pose: 'tumble' },
   ]),
+  // hero set (polish 4, owner "I still cannot see any 3d model"): recognisable props on glass plinths, one
+  // kind after another round the lap so every kind shows. Count per tier; heroGapM: the gap off the road edge
+  // (biased near); heroUpM: the plinth top over the road surface; heroTopMinM: the top stands at least this
+  // high over the road; heroKinds: model heights in metres, pose 'upright' (turns slowly) or 'face' (faces the oncoming camera
+  // heroFaceLeadM back and swings by heroSwingRad); look picks the material (chess, slot, own paint, disc).
+  // Two card faces only (each model is two more draws). heroAvoidS: lap windows kept clear (the finish arch and the drop shortcut's take-off and landing).
+  // COLOSSAL (owner 21:40, "way bigger, about 4 or 5 times that, colossal"): 30 to 55 m tall, 15 to 90 m off
+  // the edge, sides alternating; heroLowShare of them stand on plinths far below the road (heroLowUpM) so the
+  // piece rises past it, the rest at about road level (heroUpM); every heroLeanEvery-th leans toward the road
+  // by up to heroLeanDeg (the fitter eases the lean, then steps out, until it clears). heroFarGapM: past this
+  // gap a hero may tower behind a window (only its base s stays out of it). heroCastN: the nearest few whose
+  // shadow reaches the road cast the lamp's shadow (high tier, render/shadows.js scatter path).
+  heroByTier: Object.freeze({ high: 16, mid: 10, phone: 6 }), heroGapM: Object.freeze([15, 90]), heroGapBias: 2.6,
+  heroUpM: Object.freeze([-4, 1]), heroLowShare: 0.3, heroLowUpM: Object.freeze([-18, -8]),
+  heroPlinthM: 1.5, heroPlinthK: 0.07, heroPlinthR: 1.15, heroMarginM: 6, heroAirM: 14, heroGapBetweenM: 8,
+  heroLeanEvery: 3, heroLeanDeg: Object.freeze([22, 34]), heroLeanGapM: Object.freeze([15, 32]), heroLeanStepDeg: 4, heroGapStepM: 6, heroFarGapM: 45, heroTopMinM: 20, heroFitPadM: 2, heroCastN: 3, heroCastR: 0.7, heroCastMinM: 4,
+  heroFaceLeadM: 110, heroEyeM: 2.6, heroSwingRad: 0.35, heroTries: 40,
+  heroAvoidS: Object.freeze([Object.freeze([-28, 28]), Object.freeze([496, 618]), Object.freeze([796, 912])]),
+  heroKinds: Object.freeze([
+    { id: 'chess-king-lod0', h: [50, 55], spin: 0.06, pose: 'upright', look: 'chess' },
+    { id: 'slot-cabinet-lod0', h: [34, 40], spin: 0, pose: 'face', look: 'slot' },
+    { id: 'chess-knight-lod0', h: [42, 48], spin: 0.05, pose: 'upright', look: 'chess' },
+    { id: 'card-drop', h: [38, 44], spin: 0.08, pose: 'face', look: 'card' },
+    { id: 'chess-queen-lod0', h: [48, 54], spin: 0.06, pose: 'upright', look: 'chess' },
+    { id: 'pocket-watch', h: [32, 38], spin: 0.08, pose: 'face', look: 'paint' },
+    { id: 'chess-rook-lod0', h: [38, 44], spin: 0.05, pose: 'upright', look: 'chess' },
+    { id: 'spiral-disc', h: [32, 38], spin: 0.08, pose: 'face', look: 'disc' },
+    { id: 'chess-bishop-lod0', h: [44, 50], spin: 0.06, pose: 'upright', look: 'chess' },
+    { id: 'chess-pawn-lod0', h: [30, 35], spin: 0.05, pose: 'upright', look: 'chess' },
+    { id: 'card-lens', h: [38, 44], spin: 0.08, pose: 'face', look: 'card' },
+    { id: 'chess-knight-lod0', h: [42, 48], spin: 0.05, pose: 'upright', look: 'chess' },
+    { id: 'slot-cabinet-lod0', h: [34, 40], spin: 0, pose: 'face', look: 'slot' },
+    { id: 'chess-queen-lod0', h: [48, 54], spin: 0.06, pose: 'upright', look: 'chess' },
+    { id: 'card-drop', h: [38, 44], spin: 0.08, pose: 'face', look: 'card' },
+    { id: 'chess-king-lod0', h: [50, 55], spin: 0.06, pose: 'upright', look: 'chess' },
+  ]),
+  // hero chess skins, after the chess game's own men (piecebypiece/board/pieces.js SKIN): white silicone with
+  // a pink sheen, pink silicone with a white sheen, vivid cyan glass (chrome mirrored the warm sky into a peach at colossal size), and the violet side; pink and white lead
+  heroChessSkins: Object.freeze([
+    Object.freeze({ body: '#f3eeff', rim: '#ff5fb4', chrome: 0 }), Object.freeze({ body: '#ff3fb8', rim: '#fff4fa', chrome: 0 }),
+    Object.freeze({ body: '#3fd8ff', rim: '#f4fbff', chrome: 0 }), Object.freeze({ body: '#f3eeff', rim: '#ff5fb4', chrome: 0 }),
+    Object.freeze({ body: '#ff3fb8', rim: '#fff4fa', chrome: 0 }), Object.freeze({ body: '#7b5cff', rim: '#ffd6f0', chrome: 0 }),
+  ]),
+  // the ink outline: world width = distance times heroOutlineK (about 5 px at 1440p), clamped wide enough that
+  // a colossus 900 m off keeps the same pixel width
+  heroRimGain: 1.6, heroRimPow: 1.8, heroOutline: '#160626', heroOutlineK: 0.0035, heroOutlineM: Object.freeze([0.06, 3.2]),
+  heroHalo: 0.22, heroHaloR: 0.8, heroFill: 0.55, heroBoardPadM: 4, heroUpright: 0.7,
   // placement corridors (BRIEF-POLISH3 fixed contract, lap fraction f = s / length): spiral gates and the
   // media tunnel keep a 40 m window (half 20 m) clear, each billboard a 15 m window (half 7.5 m)
   corridorGates: Object.freeze([0.14, 0.31, 0.47, 0.69, 0.86, 0.97]), corridorGateHalfM: 20,
@@ -425,6 +472,154 @@ export function placeScatter(track, kinds, rowOf, seed, { want, avoid = [], W = 
     }
   }
   return placed;
+}
+
+/** Hero count for a tier name (high, mid, phone); an unknown tier gets the high count. */
+export function heroCount(tierName, W = WORLD_DEFAULTS) {
+  const t = W.heroByTier || WORLD_DEFAULTS.heroByTier;
+  return t[tierName] ?? t.high;
+}
+
+/** True when s falls in one of the hero avoid windows (heroAvoidS, [from, to] in metres, wrapping). */
+export function heroAvoidHit(s, L, W = WORLD_DEFAULTS, padM = 0) {
+  const sw = ((s % L) + L) % L;
+  for (const [a, b] of W.heroAvoidS || []) {
+    for (const k of [-L, 0, L]) if (sw > a + k - padM && sw < b + k + padM) return true;
+  }
+  return false;
+}
+
+/** A hero's colours: chess skins in turn (never warm, never flesh), else a spectrum colour and a white rim. */
+export function heroLook(kind, i, section, W = WORLD_DEFAULTS) {
+  if (kind.look === 'chess') {
+    const skins = W.heroChessSkins || WORLD_DEFAULTS.heroChessSkins;
+    const sk = skins[((i % skins.length) + skins.length) % skins.length];
+    return { body: sk.body, rim: sk.rim, chrome: sk.chrome };
+  }
+  const c = propColour(i * 3 + 1, section);
+  return { body: c, rim: kind.look === 'slot' || kind.look === 'card' ? '#fff4fa' : c, chrome: 0 };
+}
+
+/**
+ * The hero set (polish 4 COLOSSAL): the recognisable props as colossi, 30 to 55 m tall, each on a glass
+ * plinth. Kinds come round in heroKinds order (filtered to loaded models), one per stretch of the free road
+ * (outside the placement corridors and heroAvoidS; a hero nearer than heroFarGapM also keeps its own reach
+ * clear of them), sides alternating, heroGapM off the road edge. A share stands far below the road
+ * (heroLowUpM) so the piece rises past it, the rest at about road level (heroUpM). Every heroLeanEvery-th
+ * leans toward the road by up to heroLeanDeg: the fitter eases the lean, then steps the hero out, until it
+ * clears. Every body (plinth base to piece top, as a capsule) clears the road tube of every stretch by
+ * heroMarginM across and heroAirM above, and keeps clear of the colossi (avoid) and of each other.
+ * Returns [{ k, p (piece base = plinth top), Y (piece up), Y0 (plinth up), F, scale, h, s, side, gap, up,
+ * lean, bare (a leaning hero: no plinth drawn), rLat, pose, spin, ang, look, body, plinth: { p, r, hM } }].
+ */
+export function placeHeroes(track, kinds, rowOf, seed, { want, avoid = [], W = WORLD_DEFAULTS, samples = sampleTrack(track, W.stepM), sectionOf = null } = {}) {
+  if (!kinds.length) return [];
+  let st = ((seed * 7919 + 13) >>> 0) % 2147483646 + 1;
+  const rnd = (a, b) => { st = (st * 16807) % 2147483647; return a + (st / 2147483647) * (b - a); };
+  const n = want ?? heroCount('high', W), L = track.lengthM, out = [];
+  const Wc = { ...W, sideM: W.heroMarginM, underM: W.heroMarginM, clearM: W.heroAirM };
+  // billboards stand 8 to 14 m off the edge, a colossus past them (gap 15 m and more): its base keeps
+  // heroBoardPadM off a billboard window and towers behind it; a near hero keeps its whole reach off the
+  // gates, the media tunnel and the shortcut windows (nearOk)
+  const Wb = { ...W, corridorBoardHalfM: W.corridorBoardHalfM + (W.heroBoardPadM || 0) };
+  const okS = (s, pad) => !corridorHit(s, L, Wb, pad) && !heroAvoidHit(s, L, W, pad);
+  const nearOk = (s, pad) => { const c = corridorHit(s, L, W, pad); return (c === null || c === 'board') && !heroAvoidHit(s, L, W, pad); };
+  const free = [];
+  let a = null;
+  for (let s = 0; s <= L; s += 1) {
+    const ok = s < L && okS(s, 0);
+    if (ok && a === null) a = s;
+    if (!ok && a !== null) { free.push([a, s]); a = null; }
+  }
+  const freeLen = free.reduce((acc, [x, y]) => acc + y - x, 0);
+  const atFree = (u) => { let x = u * freeLen; for (const [p, q] of free) { if (x <= q - p) return p + x; x -= q - p; } return 0; };
+  const leanStep = (W.heroLeanStepDeg || 4) * Math.PI / 180, lamp = norm(W.heroLampDir || LOOK.lightDir || [0.35, 0.85, 0.4]);
+  for (let i = 0; i < n; i++) {
+    const k = kinds[i % kinds.length], row = rowOf(k.id), sz = (row && row.sizeM) || [1, 1, 1];
+    const leans = W.heroLeanEvery > 0 && i % W.heroLeanEvery === 1;
+    for (let tries = 0; tries < W.heroTries; tries++) {
+      const h = rnd(k.h[0], k.h[1]), scale = h / (sz[1] || 1);
+      const rLat = Math.hypot(sz[0], sz[2]) / 2 * scale, pr = rLat * W.heroPlinthR;
+      const hM = Math.max(W.heroPlinthM, h * (W.heroPlinthK || 0));
+      // the later retries look wider along the road (half a slot either way), so a crowded slot still fills
+      const wide = tries >= W.heroTries / 2 ? 0.5 : 0;
+      const s = atFree(((((i + 0.15 - wide + rnd(0, 0.7 + 2 * wide)) / n) % 1) + 1) % 1);
+      // a leaning hero stands near, on the lamp's side of the road, so its shadow falls across it
+      const gr = leans ? W.heroLeanGapM : (k.gap || W.heroGapM), gap0 = gr[0] + (gr[1] - gr[0]) * Math.pow(rnd(0, 1), W.heroGapBias);
+      if (!okS(s, 2) || (gap0 < W.heroFarGapM && !nearOk(s, pr + 2))) continue;
+      const f = track.frameAt(s);
+      // sides alternate (a leaning hero takes the lamp's side); the later retries try the other side
+      const flip = tries >= W.heroTries / 2 ? -1 : 1;
+      const side = (leans ? (dot(f.b, lamp) >= 0 ? 1 : -1) : ((i % 2) ? 1 : -1)) * flip;
+      // a leaning hero has no plinth: its base sinks far below the road, like the colossi
+      const ur = leans || rnd(0, 1) < W.heroLowShare ? W.heroLowUpM : W.heroUpM;
+      // it towers: the top stands at least heroTopMinM over the road (a short piece rises higher)
+      const up = Math.max(rnd(ur[0], ur[1]), W.heroTopMinM + 2 - h);
+      const lean0 = leans ? rnd(W.heroLeanDeg[0], W.heroLeanDeg[1]) * Math.PI / 180 : 0;
+      // plinths stand mostly upright in the world (a hill or bank only tilts them gently)
+      const Y0 = norm(add(mul(f.n, 1 - W.heroUpright), mul([0, 1, 0], W.heroUpright)));
+      let hit = null;
+      // the fitter: the full lean first, eased step by step, then the hero steps out and tries again
+      for (let g = 0; g < 4 && !hit; g++) {
+        const gap = gap0 + g * (W.heroGapStepM || 6);
+        if (gap > gr[1] + 1e-6 && g > 0) break;
+        const lat = side * (f.w / 2 + gap + pr);
+        const p = [0, 1, 2].map((j) => f.p[j] + f.b[j] * lat + f.n[j] * up);
+        const toRoad = norm(sub(mul(f.b, -side), mul(Y0, dot(mul(f.b, -side), Y0))));
+        for (let lean = lean0; lean > -leanStep + 1e-9; lean -= leanStep) {
+          const lz = Math.max(0, lean);
+          const Y = norm(add(mul(Y0, Math.cos(lz)), mul(toRoad, Math.sin(lz))));
+          const B = sub(p, mul(Y0, hM)), top = add(p, mul(Y, h)), ax = sub(top, B);
+          const body = { B, D: norm(ax), len: len(ax), r: pr, top };
+          // the road test pads the radius (heroFitPadM), so a finer sampling of the same layout still clears
+          if (localOf(top, f).h < W.heroTopMinM || !bodyClear({ ...body, r: pr + W.heroFitPadM }, samples, Wc).ok) { if (lz === 0) break; continue; }
+          if (out.some((x) => !capsulesApart(x.body, body, W.heroGapBetweenM))) { if (lz === 0) break; continue; }
+          if (avoid.some((c) => !capsulesApart(body, c, W.heroMarginM))) { if (lz === 0) break; continue; }
+          hit = { p, Y, gap, lean: lz, body, B };
+          break;
+        }
+      }
+      if (!hit) continue;
+      const { p, Y, body } = hit;
+      const cf = track.frameAt((((s - W.heroFaceLeadM) % L) + L) % L);
+      const eye = add(cf.p, mul(cf.n, W.heroEyeM));
+      let F = sub(eye, add(p, mul(Y, h / 2)));
+      F = sub(F, mul(Y, dot(F, Y)));
+      F = len(F) < 1e-4 ? norm(cross(Y, f.b)) : norm(F);
+      const section = sectionOf ? sectionOf(s) : null;
+      out.push({ k, p, Y, Y0, F, scale, h, s, side, gap: hit.gap, up, lean: hit.lean, bare: leans, rLat, pose: k.pose,
+        spin: (rnd(0, 1) < 0.5 ? -1 : 1) * k.spin, ang: k.pose === 'face' ? 0 : rnd(0, 6.28), look: heroLook(k, i, section, W), body,
+        plinth: { p: hit.B, r: pr, hM } });
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * The heroes that cast the lamp's shadow (heroCastN, high tier): of those whose own body shades at least
+ * heroCastMinM of road (the piece's axis with heroCastR of its half extent, a fair stand-in for the
+ * silhouette; the plinth left out), the nearest to the road edge. dir: toward the lamp.
+ * Returns indices into placed, nearest first.
+ */
+export function heroCasters(placed, dir, samples, W = WORLD_DEFAULTS) {
+  const rows = [];
+  placed.forEach((x, i) => {
+    const axis = { B: x.p, top: add(x.p, mul(x.Y, x.h)), r: (x.rLat ?? x.body.r) * (W.heroCastR ?? 0.55) };
+    let shade = 0;
+    for (const [a, b] of shadeRanges(axis, dir, samples)) shade += b - a;
+    if (shade >= (W.heroCastMinM ?? 6)) rows.push({ i, gap: x.gap, shade });
+  });
+  rows.sort((p, q) => p.gap - q.gap);
+  return rows.slice(0, W.heroCastN ?? 3).map((r) => r.i);
+}
+
+/** Model basis for a hero at turn angle ang: { X, Y, Z } (front -Z faces F at rest). */
+export function heroBasis(x, ang = 0, W = WORLD_DEFAULTS) {
+  const a = x.pose === 'face' ? W.heroSwingRad * Math.sin(ang) : ang;
+  const F = norm(turnAbout(x.F, x.Y, a));
+  const Z = mul(F, -1), Y = x.Y, X = cross(Y, Z);
+  return { X, Y, Z };
 }
 
 /**

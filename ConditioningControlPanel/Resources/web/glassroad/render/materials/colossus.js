@@ -13,7 +13,7 @@
  */
 import { MeshBasicNodeMaterial, Color, DoubleSide } from 'three/webgpu';
 import { vec3, float, vertexColor, normalWorld, positionWorld, cameraPosition, normalize, dot, max, abs, pow, mix, clamp,
-  smoothstep, texture, uv, uniform, faceDirection } from 'three/tsl';
+  smoothstep, texture, uv, uniform, faceDirection, reflect } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { worldLook } from '../colossiMath.js';
 
@@ -35,10 +35,14 @@ export function keepsOwnColour(src) {
 /**
  * src: the glTF material to replace (MeshStandardMaterial / MeshPhysicalMaterial).
  * opts.haze (default 1) scales the aerial haze. opts.tint: a vec3 node (a uniform, or an instanced
- * attribute) the body takes on; opts.rimGain / rimPow override the rim.
+ * attribute) the body takes on; opts.rimGain / rimPow override the rim. Polish 4 (hero props): opts.rim, a
+ * vec3 node for the rim colour (a contrasting sheen, like the chess game's silicone); opts.chrome, a 0..1
+ * float node mixing in a mirror of the sky; opts.tintMix overrides the tint share (0 keeps the paint);
+ * opts.ink (cards): the paint's light becomes a white porcelain face and its dark marks take the tint;
+ * opts.fill lifts the shaded side to at least fill times the base colour (white silicone stays white).
  * Returns { material, uniforms: { haze } }.
  */
-export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = null, rimPow = null } = {}) {
+export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = null, rimPow = null, rim = null, chrome = null, tintMix = null, fill = 0, ink = false } = {}) {
   const W = worldLook();
   const u = { haze: uniform(haze) };
   const c = new Color().copy((src && src.color) || new Color(1, 1, 1));
@@ -47,9 +51,12 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   if (src && src.map) base = base.mul(texture(src.map, uv()).rgb);
   const metal = float(Math.min(1, (src && src.metalness) || 0));
   // the tint keeps the paint's light and dark (symbols, panel lines) and swaps its hue
-  if (tint && !keepsOwnColour(src)) {
+  if (tint && ink && !keepsOwnColour(src)) {
     const lum = dot(base, vec3(0.3, 0.59, 0.11));
-    base = mix(base, tint.mul(lum.mul(W.tintGain).add(W.tintFloor)), W.tintMix);
+    base = mix(tint, vec3(1, 0.97, 0.98), smoothstep(0.3, 0.7, lum));
+  } else if (tint && !keepsOwnColour(src)) {
+    const lum = dot(base, vec3(0.3, 0.59, 0.11));
+    base = mix(base, tint.mul(lum.mul(W.tintGain).add(W.tintFloor)), tintMix ?? W.tintMix);
   }
 
   const N = normalize(normalWorld);
@@ -68,7 +75,10 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   const spec = pow(max(dot(Nf, H), 0), mix(float(W.specPow * 0.4), float(W.specPow), metal)).mul(W.specGain).mul(metal.mul(0.8).add(0.35));
   const edge = max(float(1).sub(abs(dot(Nf, V))), 0);   // never negative under pow (NaN guard)
   let col = lit.add(base.mul(pal.col(1)).mul(sky)).add(vec3(1, 0.95, 0.92).mul(spec));
-  if (tint) {
+  if (fill > 0) col = max(col, base.mul(fill));
+  if (rim) {
+    col = col.add(rim.mul(pow(edge, rimPow ?? W.propRimPow)).mul(rimGain ?? W.propRimGain));
+  } else if (tint) {
     // a bright rim in the body's own hue, lifted toward white: reads against any sky colour
     col = col.add(mix(tint, vec3(1, 1, 1), W.propRimWhite).mul(pow(edge, rimPow ?? W.propRimPow)).mul(rimGain ?? W.propRimGain));
   } else {
@@ -77,6 +87,12 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   if (src && src.emissive) {
     const e = src.emissive, k = src.emissiveIntensity ?? 1;
     if (e.r + e.g + e.b > 0) col = col.add(vec3(e.r * k, e.g * k, e.b * k));
+  }
+  if (chrome && !keepsOwnColour(src)) {
+    // chrome: the sky mirrored about the normal, lifted by the tint and a hard highlight
+    const R = reflect(V.negate(), Nf);
+    const mirror = skyToward(pal, R).mul(1.6).add(base.mul(0.25)).add(vec3(1, 1, 1).mul(pow(max(dot(Nf, H), 0), 60).mul(1.4)));
+    col = mix(col, mirror.add(rim ? rim.mul(pow(edge, 1.5)).mul(0.8) : vec3(0, 0, 0)), clamp(chrome, 0, 1));
   }
   // aerial perspective: nothing inside hazeNearM, a light haze toward the sky beyond it
   const far = smoothstep(W.hazeNearM, W.hazeFarM, dist).mul(W.hazeMax);

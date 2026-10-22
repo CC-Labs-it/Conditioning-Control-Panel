@@ -12,9 +12,17 @@
  * partly recoloured through the same field; stars stay white. The hue clock (pal.hue, halved under
  * Gentle) turns it all slowly; the ramp is luminance-levelled, so nothing flashes. Gentle's contrast
  * still flattens the arms.
+ *
+ * Polish 4 (owner: "muddy red and green blotches"): a dimmed red, orange, yellow or green turns maroon,
+ * brown or olive, so the dome no longer samples the full-spectrum ramp. It runs a clean periodic gradient
+ * (SKY_SPECTRUM.cleanStops: pink, magenta, violet, blue, cyan, violet), tinted a little toward the
+ * section colour, on the same hue clock; the nebula spans half the gradient (a wide smooth wash, no
+ * blotches) and its cloud term only breathes. The warm hues stay on the road, props and spirals.
  */
 import { MeshBasicNodeMaterial, BackSide, Vector3 } from 'three/webgpu';
-import { uniform, positionLocal, normalize, atan, acos, asin, log, sin, mix, smoothstep, clamp, vec2, vec3, dot, texture, float, cameraPosition } from 'three/tsl';
+import { uniform, positionLocal, normalize, atan, acos, asin, log, sin, mix, smoothstep, clamp, vec2, vec3, dot, texture, float, cameraPosition,
+  fract, abs, max, min } from 'three/tsl';
+import { Color } from 'three/webgpu';
 import { LOOK } from '../look.js';
 
 export const SKY_PALETTES = ['dawn', 'deep', 'afterglow'];
@@ -27,12 +35,29 @@ export const SKY_DEPTH = Object.freeze({
 
 /** Polish 3 sky colour numbers; LOOK.skySpectrum overrides. */
 export const SKY_SPECTRUM = Object.freeze({
-  armTurns: 2, armR: 0.06, armGain: 1.25, nebGain: 0.75, nebMix: 0.8, nebCloud: [0.35, 1], hazeRecolour: 0.6, hazeGain: 1.5,
+  armTurns: 2, armR: 0.06, armGain: 1.25, nebGain: 0.75, nebMix: 0.8, nebCloud: [0.35, 1], hazeRecolour: 0.85, hazeGain: 1.5,
+  // polish 4: the clean gradient (periodic), its share of the section tint, the nebula span and cloud breath
+  cleanStops: Object.freeze(['#ff4fb8', '#d43dff', '#7a4dff', '#2f6bff', '#19d3ff', '#8a3dff']), cleanTint: 0.2,
+  nebSpan: 0.5, cloudFloor: 0.75,
 });
+
+/** The clean periodic gradient at x (TSL float, wraps): tent weights over the stops, so it is smooth. */
+export function cleanRamp(stops, x) {
+  const N = stops.length, t = fract(x).mul(N);
+  let out = vec3(0, 0, 0);
+  stops.forEach((hex, i) => {
+    const c = new Color(hex), d = abs(t.sub(i));
+    const w = max(float(1).sub(min(d, float(N).sub(d))), 0);
+    out = out.add(vec3(c.r, c.g, c.b).mul(w));
+  });
+  return out;
+}
 
 export function createSkyMaterial(pal, art = null) {
   const C = { ...SKY_SPECTRUM, ...(LOOK.skySpectrum || {}) };
-  const ramp = pal.ramp ? (x) => pal.ramp(x) : null;
+  // the clean gradient on the palette's hue clock, a little of the section colour mixed in
+  const hueClock = pal.hue || float(0);
+  const ramp = (x) => mix(cleanRamp(C.cleanStops, x.add(hueClock)), pal.col(1), C.cleanTint);
   const u = { turn: uniform(0), twist: uniform(0), contrast: uniform(LOOK.skyContrast), rescue: uniform(0),
     eye: uniform(new Vector3(0, -1, 0)), eyeR: uniform(new Vector3(1, 0, 0)), eyeU: uniform(new Vector3(0, 0, -1)),
     galaxy: uniform(new Vector3(1, 0, 0)) };
@@ -50,7 +75,7 @@ export function createSkyMaterial(pal, art = null) {
   const cloud = smoothstep(C.nebCloud[0], C.nebCloud[1], sin(d.x.mul(3.1).add(d.z.mul(2.2))).mul(sin(d.y.mul(2.7).sub(d.x.mul(1.4)))).mul(0.5).add(0.5)
     .add(sin(d.z.mul(5.3).add(d.y.mul(3.9))).mul(0.15)));
   if (ramp) {
-    const neb = ramp(nx).mul(cloud.mul(0.6).add(0.4)).mul(LOOK.skyDim * LOOK.skyGapDim * C.nebGain * 1.6);
+    const neb = ramp(nx.mul(C.nebSpan)).mul(cloud.mul(1 - C.cloudFloor).add(C.cloudFloor)).mul(LOOK.skyDim * LOOK.skyGapDim * C.nebGain * 1.6);
     ground = mix(ground, neb, C.nebMix);
     bands = ramp(az.div(Math.PI * 2).mul(C.armTurns).add(log(r).mul(C.armR))).mul(LOOK.skyDim * C.armGain);
   }
@@ -66,7 +91,7 @@ export function createSkyMaterial(pal, art = null) {
     });
     if (ramp) {
       const lum = dot(haze, vec3(0.2126, 0.7152, 0.0722));
-      haze = mix(haze, ramp(nx.add(0.35)).mul(lum.mul(C.hazeGain)), C.hazeRecolour);
+      haze = mix(haze, ramp(nx.mul(C.nebSpan).add(0.35)).mul(lum.mul(C.hazeGain)), C.hazeRecolour);
     }
     ground = ground.add(haze.mul(LOOK.artGalaxyGain).mul(u.contrast)).add(stars.mul(LOOK.artStarGain));
     // polish 2: parallax star layers. The dome rides with the kart, so these layers are read as if
@@ -89,7 +114,9 @@ export function createSkyMaterial(pal, art = null) {
         const e = vec2(atan(q.x, q.z).div(Math.PI * 2).add(0.5), float(0.5).sub(asin(clamp(q.y, -1, 1)).div(Math.PI)));
         let far = vec3(0, 0, 0);
         SKY_PALETTES.forEach((id, i) => { const g = art.tex(`sky-${id}-galaxy`); if (g) far = far.add(texture(g, e).rgb.mul(w[i])); });
-        ground = ground.add(far.mul(S.hazeGain).mul(u.contrast));
+        // recoloured through the clean gradient too (the raw galaxy carried the red and green)
+        const farLum = dot(far, vec3(0.2126, 0.7152, 0.0722));
+        ground = ground.add(ramp(nx.mul(C.nebSpan).add(0.6)).mul(farLum.mul(C.hazeGain)).mul(S.hazeGain).mul(u.contrast));
       }
     }
   }

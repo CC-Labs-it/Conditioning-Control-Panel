@@ -29,7 +29,8 @@ const UPV = new Vector3(0, 1, 0), NV = new Vector3(), QT = new Quaternion();
 /** Opaque meshes under root cast (tags, rings and glows stay out of the map). */
 function castFrom(root, on = true) {
   if (!root) return;
-  root.traverse((o) => { if (o.isMesh && !(o.material && o.material.transparent)) o.castShadow = on; });
+  // userData.noCast: outline hulls and glows (the hero props) never cast
+  root.traverse((o) => { if (o.isMesh && !(o.material && o.material.transparent)) o.castShadow = on && !o.userData.noCast; });
 }
 
 function blobMaterial(colour) {
