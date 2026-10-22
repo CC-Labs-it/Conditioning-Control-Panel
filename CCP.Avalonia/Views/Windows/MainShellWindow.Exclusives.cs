@@ -2,12 +2,15 @@
 //
 // Restored in ExclusivesTabView (rows-exclusives): BuildComingSoonCard, ApplyVeilLockBreath, ApplyFreeTodayPulse,
 // RefreshExclusiveTierPlates, Start/StopExclusivesMotion, Restart/AttachExclusiveSheens, VaultLivery.Apply.
+// Restored in ExclusivesTabView/ExclusiveCardRow (mod accent): VaultAccent (Accent), VaultPartner/ShiftHue/
+// VaultPartnerHueShift (Core VaultHue), ExclusiveEdgeDefault, SpotlightEdgeDefault (SpotEdge), AccentGradient,
+// AccentTitleShadow (TitleGlow), RetintVaultChrome (RefreshVault on tab show / ModChanged).
 // ponytail: stub except RefreshExclusivesTab (the roster/gate repaint now lives in ExclusivesTabView). Every member below reaches App.*, a service, a device, a
 // WebView2 or Win32 - none of which this head may touch (see the layer rules: "Do not
 // move services"). The file exists and each member is NAMED so nothing disappears
 // silently; the bodies come back when the services move to Core.
 //
-// Members dropped (48):
+// Members dropped (38):
 //   private sealed class ExclusiveCardUi
 //   private readonly List<ExclusiveCardUi> _exclusiveCards
 //   private readonly List<TextBlock> _exclusiveTeaserMarks
@@ -20,16 +23,7 @@
 //   private static readonly FontFamily FredokaFont
 //   private static readonly Color FreeTodayGold
 //   private static SolidColorBrush Freeze(…)
-//   private static Color VaultAccent(…)
 //   private const byte TeaserMarkAlpha
-//   private const double VaultPartnerHueShift
-//   internal static Color VaultPartner(…)
-//   private static Color VaultPartner(…)
-//   internal static Color ShiftHue(…)
-//   private static SolidColorBrush ExclusiveEdgeDefault(…)
-//   private static SolidColorBrush SpotlightEdgeDefault(…)
-//   private LinearGradientBrush AccentGradient(…)
-//   private DropShadowEffect AccentTitleShadow(…)
 //   private static bool IsExclusiveFreeToday(…)
 //   internal void OpenExclusiveSpotlight(…)
 //   private void EnsureExclusivesBuilt(…)
@@ -39,7 +33,6 @@
 //   private static string TeaserEmoji(…)
 //   private static void OnExclusiveCardHover(…)
 //   internal void RefreshExclusivesTab(…)
-//   private void RetintVaultChrome(…)
 //   private static void TintShadow(…)
 //   private static void TintGradient(…)
 //   private void ApplyExclusiveCardState(…)

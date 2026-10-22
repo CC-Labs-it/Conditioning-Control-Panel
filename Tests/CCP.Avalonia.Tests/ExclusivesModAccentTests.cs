@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
@@ -73,11 +74,16 @@ public sealed class ExclusivesModAccentTests
         var modsProp = typeof(AvApp).GetProperty("Mods", BindingFlags.NonPublic | BindingFlags.Static)!;
         var previousMods = modsProp.GetValue(null);
         modsProp.SetValue(null, null);
+        Window? host = null;
         try
         {
             // A red mod's -59 degree HSV partner is magenta; the old literal stayed violet.
             resources["FxGlowColor"] = Colors.Red;
             var view = new ExclusivesTabView();
+            // Shown so OnLoaded subscribes to CoreMods.ModChanged, the real mod-switch path.
+            host = new Window { Content = view, Width = 1200, Height = 900 };
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
             var shelf = view.FindControl<ItemsControl>("ExclusivesShelf")!;
             var redRows = shelf.Items.OfType<ExclusiveCardRow>().Where(r => r.Tier == 0 && !r.FreeToday).ToArray();
             Assert.NotEmpty(redRows);
@@ -88,9 +94,10 @@ public sealed class ExclusivesModAccentTests
             AssertSpotChrome(view, Colors.Red, Color.FromRgb(255, 0, 251));
             AssertShelfChrome(redRows, Colors.Red, Color.FromRgb(255, 0, 251));
 
-            // RefreshVault is the tab-show / ModChanged path: a green mod must repaint existing shelf slots.
+            // A mod switch (CoreMods.ModChanged -> OnModChanged) must repaint existing shelf slots.
             resources["FxGlowColor"] = Color.FromRgb(0, 255, 0);
-            view.RefreshVault();
+            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+            Dispatcher.UIThread.RunJobs();
             var greenRows = shelf.Items.OfType<ExclusiveCardRow>().Where(r => r.Tier == 0 && !r.FreeToday).ToArray();
             Assert.NotEmpty(greenRows);
             Assert.All(greenRows, r => Assert.Equal(Color.FromArgb(0x4D, 251, 255, 0), ((SolidColorBrush)r.EdgeBrush).Color));
@@ -102,6 +109,7 @@ public sealed class ExclusivesModAccentTests
         }
         finally
         {
+            host?.Close();
             modsProp.SetValue(null, previousMods);
             if (hadLocal) resources["FxGlowColor"] = previous!;
             else resources.Remove("FxGlowColor");
