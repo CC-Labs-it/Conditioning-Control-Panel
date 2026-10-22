@@ -19,6 +19,14 @@ public partial class EnhancementsTabView
     private static IEnumerable<SeasonRecapSnapshot> ReadSnapshots(int count) => SeasonRecapStore.ListSeasonKeys()
         .Take(count).Select(SeasonRecapStore.Load).OfType<SeasonRecapSnapshot>();
     private static string FormatProMinutes(double minutes) => EnhancementAnalytics.FormatMinutes(minutes);
+    /// <summary>WPF's " ▲" / " ▼" trend mark beside the season time, as a glyph (icon guard).</summary>
+    private static Control Trend(IconKind kind, Color ink)
+    {
+        var g = Glyph(kind, IconVariant.Filled, new SolidColorBrush(ink), 9);
+        (g.Margin, g.VerticalAlignment) = (new Thickness(3, 0, 0, 0), VerticalAlignment.Center);
+        return g;
+    }
+
     private void AddProSection(StackPanel parent, string skillId, IconKind icon, string titleLocKey, Func<Control> factory)
     {
         if (!SkillTreeRules.HasSkill(CoreSettings.Current, skillId)) return;
@@ -378,9 +386,9 @@ public partial class EnhancementsTabView
             {
                 var older = rows[i + 1];
                 if (r.Minutes > older.Minutes)
-                    timeStack.Children.Add(new TextBlock { Text = " ▲", Foreground = new SolidColorBrush(Color.FromRgb(100, 255, 150)), FontSize = 9 });
+                    timeStack.Children.Add(Trend(IconKind.ChevronUp, Color.FromRgb(100, 255, 150)));
                 else if (r.Minutes < older.Minutes)
-                    timeStack.Children.Add(new TextBlock { Text = " ▼", Foreground = new SolidColorBrush(Color.FromRgb(255, 110, 110)), FontSize = 9 });
+                    timeStack.Children.Add(Trend(IconKind.ChevronDown, Color.FromRgb(255, 110, 110)));
             }
             AddCell(timeStack, gridRow, 1);
             AddCell(ProValue(r.Sessions.ToString("N0")), gridRow, 2);

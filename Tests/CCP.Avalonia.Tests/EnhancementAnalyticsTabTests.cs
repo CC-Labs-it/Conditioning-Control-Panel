@@ -108,7 +108,8 @@ public sealed class EnhancementAnalyticsTabTests
             Assert.Contains("2035-02 •", Texts(rewind));
             Assert.Contains("2035-01", Texts(rewind));
             Assert.Contains("11", Texts(rewind));
-            Assert.Contains(" ▼", Texts(rewind));
+            Assert.Contains(rewind.GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(),
+                g => g.Kind == FluentIcons.Common.Symbol.ChevronDown);   // WPF " ▼": the season time fell
             var table = rewind.GetLogicalDescendants().OfType<Grid>().Single(g => g.ColumnDefinitions.Count == 8);
             Assert.Equal("—", ((TextBlock)table.Children.Single(c => Grid.GetRow(c) == 2 && Grid.GetColumn(c) == 6)).Text);
             Assert.Equal("—", ((TextBlock)table.Children.Single(c => Grid.GetRow(c) == 2 && Grid.GetColumn(c) == 7)).Text);

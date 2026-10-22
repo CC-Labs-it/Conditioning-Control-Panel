@@ -130,6 +130,24 @@ internal sealed class AchievementEngine
             if (level >= milestone) TryUnlock(id);
     }
 
+    /// <summary>WPF AchievementService.TrackSkillPointsSpent: the lifetime spend (Prestige), window_shopping at 100.</summary>
+    public void TrackSkillPointsSpent(int amount)
+    {
+        if (amount <= 0) return;
+        Progress.LifetimeSkillPointsSpent += amount;
+        _isDirty = true;
+        if (Progress.LifetimeSkillPointsSpent >= AchievementRules.WindowShoppingPointsSpent) TryUnlock("window_shopping");
+    }
+
+    /// <summary>WPF AchievementService.ReconcileLifetimePointsSpent: adopt the server's total, only ever upward.</summary>
+    public void ReconcileLifetimePointsSpent(long serverValue)
+    {
+        if (serverValue <= Progress.LifetimeSkillPointsSpent) return;
+        Progress.LifetimeSkillPointsSpent = serverValue;
+        _isDirty = true;
+        if (Progress.LifetimeSkillPointsSpent >= AchievementRules.WindowShoppingPointsSpent) TryUnlock("window_shopping");
+    }
+
     /// <summary>A bubble-count answer: the correct-answer streak (mathematicians_nightmare) and the totals.</summary>
     public void TrackBubbleCountResult(bool correct)
     {

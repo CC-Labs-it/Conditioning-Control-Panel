@@ -806,6 +806,35 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>WPF ProfileSyncService.PurchaseSkillResponse.</summary>
+        public sealed class PurchaseSkillReply
+        {
+            [JsonProperty("success")] public bool Success { get; set; }
+            [JsonProperty("error")] public string? Error { get; set; }
+            [JsonProperty("skill_points")] public int? SkillPoints { get; set; }
+            [JsonProperty("unlocked_skills")] public System.Collections.Generic.List<string>? UnlockedSkills { get; set; }
+            [JsonProperty("lifetime_points_spent")] public long? LifetimePointsSpent { get; set; }
+        }
+
+        /// <summary>
+        /// WPF ProfileSyncService.PurchaseSkillAsync's request: <c>POST /v2/user/purchase-skill</c> carrying the local
+        /// balance so the server can reconcile it. <c>Merged</c>: the Contract D recovery took the answer. <c>Reply</c> is
+        /// null when the body is not the expected JSON. A connection failure throws; the caller words it, as WPF.
+        /// </summary>
+        public async Task<(HttpStatusCode Status, bool Merged, PurchaseSkillReply? Reply)> PurchaseSkillAsync(string unifiedId, string skillId, int skillPoints)
+        {
+            var body = JsonConvert.SerializeObject(new { unified_id = unifiedId, skill_id = skillId, skill_points = skillPoints });
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/purchase-skill");
+            AddAuthHeader(request);
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+            using var response = await _http.SendAsync(request);
+            var json = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode && await TryHandleMergedAsync(response, json)) return (response.StatusCode, true, null);
+            PurchaseSkillReply? reply = null;
+            try { reply = JsonConvert.DeserializeObject<PurchaseSkillReply>(json); } catch (JsonException) { }
+            return (response.StatusCode, false, reply);
+        }
+
         /// <summary>
         /// Adds the X-Auth-Token header to a V2 API request if an auth token is available.
         /// </summary>

@@ -30,8 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// CreateAnimatedSkillTreeBrush. Ownership, purchasability, multiplier and time come from Core
     /// <c>SkillTreeRules</c>, the same rules WPF SkillTreeService delegates to.
     ///
-    /// <para>Not here (see the parity rows): purchasing (SkillCard_Click / PurchaseSkillAsync is a
-    /// server call behind account auth); the four Ditzy Data PRO analytics expanders are ported in Analytics.cs.</para>
+    /// <para>Purchasing (SkillCard_Click) is in Purchase.cs; the four Ditzy Data PRO analytics expanders in Analytics.cs.</para>
     /// </summary>
     public partial class EnhancementsTabView : UserControl
     {
@@ -448,16 +447,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var prestigeBox = Box(Rgb(52, 44, 28), new Thickness(15, 6, 15, 6), prestige);
             ToolTip.SetTip(prestigeBox, Loc.Get("tooltip_prestige"));
             main.Children.Add(prestigeBox);
+            _prestigeRow = prestigeBox;
 
             if (SkillTreeRules.HasSkill(settings, "ditzy_data"))
                 AddDitzyStats(main, mods?.GetStatsTitle());
 
-            // ponytail: authenticated purchase/click/celebration remains wire-views-tab-enhancements-b;
-            // this coherent slice supplies the four analytics panels without inventing local purchases.
-            AddProSection(main, "ditzy_data_pro", FluentIcons.Common.Symbol.DataTrending, "label_pro_lifetime_title", BuildProLifetimePanel);
-            AddProSection(main, "season_rewind", FluentIcons.Common.Symbol.Rewind, "label_pro_rewind_title", BuildSeasonRewindPanel);
-            AddProSection(main, "bestie_records", FluentIcons.Common.Symbol.Trophy, "label_pro_bestie_title", BuildBestieRecordsPanel);
-            AddProSection(main, "brain_drain_report", FluentIcons.Common.Symbol.Brain, "label_pro_braindrain_title", BuildBrainDrainPanel);
+            AddProSection(main, "ditzy_data_pro", IconKind.DataTrending, "label_pro_lifetime_title", BuildProLifetimePanel);
+            AddProSection(main, "season_rewind", IconKind.Rewind, "label_pro_rewind_title", BuildSeasonRewindPanel);
+            AddProSection(main, "bestie_records", IconKind.Trophy, "label_pro_bestie_title", BuildBestieRecordsPanel);
+            AddProSection(main, "brain_drain_report", IconKind.Brain, "label_pro_braindrain_title", BuildBrainDrainPanel);
 
             // Stats: XP multiplier (+ rush), conditioning time.
             var xp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
@@ -678,6 +676,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             wrapper.Children.Add(node);
 
+            if (canPurchase) MakePurchasable(wrapper, skill.Id);
             wrapper.PointerEntered += (_, _) => ApplyNodeHover(wrapper, true);
             wrapper.PointerExited += (_, _) => ApplyNodeHover(wrapper, false);
 
@@ -814,6 +813,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var card = SecretBorder(owned ? Rgb(40, 30, 50) : canPurchase ? Rgb(50, 30, 60) : Rgb(35, 25, 45),
                 owned ? Rgb(180, 100, 255) : canPurchase ? Rgb(153, 50, 204) : Rgb(100, 70, 130), owned ? 2 : 1, body, opacity: 1);
             card.Tag = skill.Id;
+            if (canPurchase) MakePurchasable(card, skill.Id);
             // The card is a Border, so its glow is its own BoxShadow (WPF DropShadowEffect; P82 rule 3).
             if (owned) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = Color.FromArgb(128, Colors.Purple.R, Colors.Purple.G, Colors.Purple.B) });
             else if (canPurchase) card.BoxShadow = new BoxShadows(new BoxShadow { Blur = 10, Color = Color.FromArgb(102, Colors.MediumPurple.R, Colors.MediumPurple.G, Colors.MediumPurple.B) });
