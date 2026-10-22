@@ -258,7 +258,7 @@
                                            FontWeight="SemiBold"
                                            FontSize="30" Foreground="White">
                                     <TextBlock.Effect>
-                                        <DropShadowEffect Color="#FF69B4" BlurRadius="20"
+                                        <DropShadowEffect Color="{DynamicResource VaultAccentColor}" BlurRadius="20"
                                                           OffsetX="0" OffsetY="0" Opacity="0.5"/>
                                     </TextBlock.Effect>
                                 </TextBlock>
@@ -363,7 +363,7 @@
                                                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
                                                            FontSize="15" Foreground="White">
                                                     <TextBlock.Effect>
-                                                        <DropShadowEffect Color="#FF69B4" BlurRadius="10"
+                                                        <DropShadowEffect Color="{DynamicResource VaultAccentColor}" BlurRadius="10"
                                                                           OffsetX="0" OffsetY="0" Opacity="0.7"/>
                                                     </TextBlock.Effect>
                                                 </TextBlock>
