@@ -45,6 +45,28 @@ public sealed class LobbyPageTests
     });
 
     [Fact]
+    public void EveryLobbyPillHasATemplateAndDrawsAtANonZeroSize() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var window = new Window { Width = 900, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            page.SetNarrow(true);
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            var names = new[] { "BtnHostChess", "BtnHostGoon", "BtnBecomeASubject", "TabOpen", "TabPlaying", "TabFriends", "BtnEmptyHostChess", "BtnEmptyHostGoon" };
+            foreach (var name in names)
+            {
+                var pill = Named<Button>(page, name);
+                Assert.True(pill.Template is not null, name + " has no Template");
+                Assert.True(pill.Bounds.Width > 0 && pill.Bounds.Height > 0, name + " has zero size " + pill.Bounds);
+            }
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
     public void SnapshotPaintsAllThreeListsCountsErrorsAndRemoteGate() => Run(() =>
     {
         var page = new AvailableSubjectsTabView();

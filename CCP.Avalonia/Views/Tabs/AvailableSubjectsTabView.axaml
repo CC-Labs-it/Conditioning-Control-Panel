@@ -13,6 +13,19 @@
    <Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
    <Setter Property="Padding" Value="16,8"/><Setter Property="Margin" Value="0,0,10,8"/>
    <Setter Property="Cursor" Value="Hand"/>
+   <!-- A property-only Button ControlTheme has no Template and draws nothing (CLAUDE.md trap 4). -->
+   <Setter Property="Template">
+    <ControlTemplate TargetType="Button">
+     <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+      <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                        Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+     </Border>
+    </ControlTemplate>
+   </Setter>
+   <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Background" Value="#28FFFFFF"/></Style>
+   <Style Selector="^:pressed /template/ Border#bd"><Setter Property="Opacity" Value="0.8"/></Style>
+   <Style Selector="^:disabled /template/ Border#bd"><Setter Property="Opacity" Value="0.45"/></Style>
   </ControlTheme>
   <ControlTheme x:Key="LobbyColumn" TargetType="Border">
    <Setter Property="CornerRadius" Value="18"/><Setter Property="Padding" Value="12,12,6,8"/>
