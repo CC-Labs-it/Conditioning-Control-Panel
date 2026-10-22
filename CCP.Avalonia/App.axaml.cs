@@ -56,6 +56,20 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
 
+        /// <summary>WPF App.xaml.cs:3060/3067: the funscript follows the mandatory clip's playhead, and the
+        /// connecting edge of a toy fires EMI Desk's <c>hapticsConnected</c> moment. Before the service exists.</summary>
+        internal static void SeedHapticHeadSeams()
+        {
+            Services.Haptics.FunScriptService.SubscribePlaybackTime = h =>
+            {
+                var video = Views.Overlays.MandatoryVideoOverlay.Instance;
+                video.PrimaryPlaybackTimeMsChanged += h;
+                return () => video.PrimaryPlaybackTimeMsChanged -= h;
+            };
+            Services.HapticService.EmiDeskFire = (moment, ctx) =>
+                Views.Windows.EmiDesk.EmiDeskService.Instance.Fire(moment, ctx);
+        }
+
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
         /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
         internal static void StartRichPresence()
@@ -554,9 +568,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // ponytail: no funscript playhead (FunScriptService.
-                // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
                 Views.Overlays.HapticMockToast.Seed();
+                SeedHapticHeadSeams();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
                 StartRichPresence();

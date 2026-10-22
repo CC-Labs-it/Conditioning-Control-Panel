@@ -8,14 +8,6 @@ using Serilog;
 namespace ConditioningControlPanel.Services.EmiDesk;
 
 /// <summary>
-/// A moment: the app telling EMI something happened. Chunk B3 turns these into lines; chunk B1
-/// only fires them, so the wiring exists before there is anything to say.
-/// </summary>
-/// <param name="Id">The moment id, e.g. <c>sessionEnd</c>. Ids are the vocabulary the line pools key off.</param>
-/// <param name="Context">Optional payload (an XP number, a level, a target id). May be null.</param>
-public sealed record EmiMoment(string Id, object? Context);
-
-/// <summary>
 /// EMI Desk's facade: <c>App.EmiDesk</c>. Owns the widget window's lifetime, the summon hotkey,
 /// the moment bus and the avatar-mute arbitration.
 ///

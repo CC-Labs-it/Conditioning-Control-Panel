@@ -18,8 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, dtrh,
     /// intake, spiral (overlay), goon, backroom and justdrop. Each is a host window or overlay no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
-    /// same way an unavailable door does. Also missing: the moments WPF's Pick fires
-    /// (<c>ringPick</c>, <c>lockedCardTapped</c>) - there is no <c>App.EmiDesk.Fire</c> on this head.</para>
+    /// same way an unavailable door does. Picks use the ring moment service, including locked-card feedback.</para>
     /// </summary>
     internal static class EmiTargets
     {
@@ -32,6 +31,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         public static EmiTarget? Find(string? id) =>
             All.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal));
+
+        /// <summary>Every navigation route teaches the same ring as a card pick (WPF NoteTabOpened).</summary>
+        public static void NoteTabOpened(string? tabKey)
+        {
+            try
+            {
+                if (EmiDoors.TargetForTab(tabKey) is { } id) EmiState.NoteUsage(id);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] tab open not counted for {Tab}", tabKey); }
+        }
+
+        /// <summary>A rack open scores its module, never Studio (WPF NoteRackOpened).</summary>
+        public static void NoteRackOpened(string? rackKey)
+        {
+            try
+            {
+                if (EmiDoors.TargetForRack(rackKey) is { } id) EmiState.NoteUsage(id);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] rack open not counted for {Rack}", rackKey); }
+        }
 
         private static (Func<bool> Available, Func<bool> Locked, Action Open) Free(Action open) => (Always, Never, open);
 
@@ -103,13 +122,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     var name = Loc.Get("emi_desk_target_" + id);
                     string? daily = id is "awareness" or "remote" or "takeover" ? id : null;
                     if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
+                    EmiDeskService.Instance.Fire("lockedCardTapped", new { target = id });
                     return;
                 }
                 open();
             }
             catch (Exception ex) { Log.Warning(ex, "[EmiDesk] target {Target} failed to open", id); }
 
-            try { EmiState.NoteUsage(id); }
+            try
+            {
+                EmiState.NoteUsage(id);
+                EmiDeskService.Instance.Fire("ringPick", new { target = id, pickIsTop = EmiSuggester.TopSlotIs(id) });
+            }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] pick bookkeeping failed for {Target}", id); }
         }
     }

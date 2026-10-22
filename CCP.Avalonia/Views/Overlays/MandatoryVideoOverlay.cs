@@ -57,6 +57,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<Target> _targets = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
+        /// <summary>WPF VideoService.PrimaryPlaybackTimeMsChanged: the clip's position in ms, raised on
+        /// LibVLC's thread. FunScriptService follows it (seeded in App.axaml.cs).</summary>
+        public event Action<long>? PrimaryPlaybackTimeMsChanged;
+        internal void RaisePlaybackTimeForTest(long ms) => PrimaryPlaybackTimeMsChanged?.Invoke(ms);
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
@@ -187,7 +191,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
-            _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
+            _player.TimeChanged += (_, e) =>
+            {
+                Interlocked.Exchange(ref _watchedMs, e.Time);
+                // WPF VideoService.cs:3514: the playhead the funscript follows (LibVLC's thread).
+                try { PrimaryPlaybackTimeMsChanged?.Invoke(e.Time); }
+                catch (Exception ex) { Log.Debug("PrimaryPlaybackTimeMsChanged handler error: {Error}", ex.Message); }
+            };
             _player.EndReached += (_, _) =>
             {
                 var len = _player?.Length ?? 0;
