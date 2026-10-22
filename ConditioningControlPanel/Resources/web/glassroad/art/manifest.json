@@ -1722,5 +1722,8 @@
       109,
       61
     ]
-  }
+  },
+  {"id":"menu-results-stage","file":"models/menu-results-stage.glb","kind":"stage","tris":12576,"texBytes":0,"boundRadiusM":5.02,"materialSlots":["stage_glass","stage_trim","podium_surface","spiral_mask"],"palette":"all","draws":11,"sizeM":[10.03,1.444452,6.83],"podiumNodes":{"podium_high":{"baseM":[0,0.41945,0.55],"raisedHeightM":1,"retractOffsetM":-1},"podium_mid":{"baseM":[-2.35,0.41945,0.55],"raisedHeightM":0.65,"retractOffsetM":-0.65},"podium_low":{"baseM":[2.35,0.41945,0.55],"raisedHeightM":0.4,"retractOffsetM":-0.4}},"menuParkM":[0,0.4194522500038147,-1.75],"compression":"meshopt-lossless"},
+  {"id":"key-art","file":"ui/key-art.webp","kind":"ui-image","tris":0,"texBytes":9437184,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":2048,"height":1152,"colorSpace":"srgb","format":"webp","mipLevels":1,"residencyGroup":"menu-backdrop","use":"DOM backdrop; load only current viewport variant; release when leaving menu/results"},
+  {"id":"key-art-phone","file":"ui/key-art-phone.webp","kind":"ui-image","tris":0,"texBytes":8294400,"boundRadiusM":0,"materialSlots":[],"palette":"all","width":1080,"height":1920,"colorSpace":"srgb","format":"webp","mipLevels":1,"residencyGroup":"menu-backdrop","use":"DOM backdrop; load only current viewport variant; release when leaving menu/results"}
 ]

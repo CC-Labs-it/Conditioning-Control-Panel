@@ -739,3 +739,44 @@ and reviewed. The context preview is not baked into runtime art.
 The crown spacing, disc sizes and frame thickness are art assumptions. Engine
 placement, collision decisions and the final membrane shader remain Claude's lane.
 Contact sheets stay in the private archive and PR description, not the game tree.
+
+## Wave 3 menu and results stage model
+
+menu-results-stage.glb is an original 12576-triangle glass balcony with 11 material draws and zero added texture memory. Dimensions are 10.03 x 1.44445 x 6.83 m. Conservative root boundRadiusM is 5.02.
+
+- Metres, Y up, -Z forward; root is the horizontal centre at the underside minimum.
+- balcony_frame is static. The rear glass balustrade leaves the camera-facing edge open.
+- podium_high, podium_mid and podium_low are separate mesh nodes with base-level origins. Their raised heights are 1.0, 0.65 and 0.4 m. Their glTF local bases are [0, 0.41945, 0.55], [-2.35, 0.41945, 0.55] and [2.35, 0.41945, 0.55]. Lower each along local Y by its own height, then hide it for the menu. The engine owns rise timing, easing and visibility.
+- Each podium mesh has a spiral_mask material section with a full 0..1 UV disc. It ships with alpha 0 and no texture. Bind a shared grayscale spiral mask and palette in the host shader; set the desired blending there. No moving spiral is baked.
+- podium_surface uses vertex colours for gold, silver and bronze. stage_glass and stage_trim are shared. No numbers or words are modelled.
+- menu_park is a placement anchor at [0, 0.41945, -1.75]. It fits the approved teacup kart in the open foreground. The kart is a separate runtime asset.
+- Review context shows the approved kart and an existing grayscale mask bound by the preview only. Neither is duplicated in this GLB.
+
+Fresh-import checks verify zero degenerate triangles, matching native-master counts, full mask UVs, transparent default inlays and each podium pivot exactly on its base. The stage is below the 15000-triangle cap. There is no added texture allocation for the model.
+
+## Wave 3 painted key art
+
+ui/key-art.webp is 2048 x 1152; ui/key-art-phone.webp is 1080 x 1920.
+Both are static, text-free sRGB WebP backdrops. The wide scene follows the supplied
+key-art mood reference and the accepted EMI kart. The portrait adaptation extends
+that composition vertically so the whole kart remains visible.
+
+Created with the built-in image generator using the supplied concept as mood and
+the actual W2 kart contact sheet as identity reference. Private prompts, generated
+masters and packing checks remain under glassroad-art/w3/stage. Existing project
+references and the resulting artwork follow the owner's project asset policy.
+No third-party asset, font, real-person image or downloaded texture was added.
+
+Use as a DOM backdrop without mipmaps. Decoded RGBA8 memory is 9 MiB for wide and
+7.910156 MiB for phone. These are mutually exclusive viewport variants in the
+menu-backdrop residency group. Load only the current variant; release it when
+leaving that screen. Do not preload both or upload them as mipmapped race textures.
+The running budget reports these presentation images separately from persistent
+race atlases, since the brief's approximately 25 MiB estimate omits the stills.
+
+Both final WebP files were reopened at their exact dimensions and reviewed.
+The separate desktop launcher tile is prepared at the existing race.png size,
+1024 x 572, and does not enter this art family. Composition and phone reframing
+are art assumptions. No game or launcher code is changed.
+
+Generated source images are 1672 x 941 and 940 x 1672; export resizing produces the requested wide and phone dimensions.
