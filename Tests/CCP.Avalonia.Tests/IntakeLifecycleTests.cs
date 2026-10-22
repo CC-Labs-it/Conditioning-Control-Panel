@@ -23,10 +23,7 @@ public sealed class IntakeLifecycleTests
 {
     private static void Setup()
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        IntakeTestApp.Ensure();
     }
 
     private sealed class SteppedClock : TimeProvider

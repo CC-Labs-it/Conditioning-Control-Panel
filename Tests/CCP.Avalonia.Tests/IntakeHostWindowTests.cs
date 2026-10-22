@@ -22,10 +22,7 @@ public sealed class IntakeHostWindowTests
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            if (Application.Current is null)
-                AppBuilder.Configure<AvApp>().UseSkia()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                    .SetupWithoutStarting();
+            IntakeTestApp.Ensure();
             var service = new SettingsService();
             var prevSettings = CoreSettings.ServiceProvider;
             CoreSettings.ServiceProvider = () => service;

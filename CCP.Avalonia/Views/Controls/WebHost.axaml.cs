@@ -203,6 +203,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly TextBlock _txtReason, _txtSource;
         private readonly NativeWebView? _web;
 
+        internal void FocusPage()
+        {
+            if (_web != null) _web.Focus();
+            else Focus();
+        }
+
         public WebHost()
         {
             AvaloniaXamlLoader.Load(this);

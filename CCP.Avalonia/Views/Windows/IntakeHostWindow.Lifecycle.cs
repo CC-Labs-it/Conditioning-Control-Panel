@@ -31,6 +31,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _pageReady;
         private DispatcherTimer? _heartbeatWatch;
 
+        internal bool IsPageReady => _pageReady && !Run.Exiting && !_closed;
+
+        internal static IntakeHostWindow? InFront()
+        {
+            foreach (var window in Snapshot()) if (window.IsActive) return window;
+            return null;
+        }
+
+        /// <summary>WPF PostKeptEscape: host-escape.js dedupes this against the real keydown.
+        /// Booting pages must never queue a pause that arrives after ready.</summary>
+        internal void PostKeptEscape()
+        {
+            if (!IsPageReady) return;
+            Post(new { type = "kept-escape" });
+            Web.FocusPage();
+        }
+
         private void StartLifecycle()
         {
             Run.Beat(Now);

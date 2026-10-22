@@ -31,6 +31,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private int _panicPressCount;
         private DateTime _lastPanicTime = DateTime.MinValue;
+        private DateTime? _lastIntakeEscape;
+
+        private bool TryKeepIntakeEscape(DateTime now)
+        {
+            var intake = IntakeHostWindow.InFront();
+            var claimed = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
+                intake != null, CoreEngine.IsRunning, LockCardWindow.IsAnyOpen(), _lastIntakeEscape, now);
+            if (!claimed) { _lastIntakeEscape = null; return false; }
+            _lastIntakeEscape = now;
+            // The first press is a pause, before mic cancellation or any panic side effect.
+            if (PanicPolicy.KeptEscapeGoesTo(true, false, false, false, false, false, false,
+                    intakeInFront: true, intakeReady: intake!.IsPageReady) == PanicPolicy.KeptEscapePage.Intake)
+                intake.PostKeptEscape();
+            return true;
+        }
 
         /// <summary>App calls this once on the desktop path (never in tests or renders, so only the
         /// real app ever talks to the portal). False when no global listener is up.</summary>
@@ -64,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
             if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
+            if (TryKeepIntakeEscape(now)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
             // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,

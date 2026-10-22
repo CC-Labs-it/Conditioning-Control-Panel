@@ -27,10 +27,7 @@ public sealed class IntakeBridgeTests
 {
     private static void Setup()
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        IntakeTestApp.Ensure();
     }
 
     private static List<JObject> Capture(IntakeHostWindow host)

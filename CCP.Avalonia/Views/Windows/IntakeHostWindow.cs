@@ -58,7 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 _closed = true;
                 lock (OpenWindows) OpenWindows.Remove(this);
-                StopSpeechBridge("closed", notifyPage: false);
+                ReleaseSpeechMic("closed", notifyPage: false);
                 EndLifecycle();
             };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
