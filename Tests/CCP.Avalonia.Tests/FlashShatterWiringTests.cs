@@ -83,12 +83,6 @@ public sealed class FlashShatterWiringTests
         w.ExitFrame();
         Assert.All(shards, i => Assert.True(((TransformGroup)i.RenderTransform!).Children.OfType<TranslateTransform>().Single().Y > 0));
         Assert.False(closed);
-        w.UpdateLayout();
-        using (var render = new RenderTargetBitmap(PixelSize.FromSize(w.Bounds.Size, 1)))
-        {
-            render.Render(w);
-            render.Save(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-flash-shatter.png"));
-        }
         clock.Now += TimeSpan.TicksPerSecond;
         w.ExitFrame();
         Assert.True(closed);
@@ -159,6 +153,24 @@ public sealed class FlashShatterWiringTests
             Assert.False(s.FlashShatterEnabled);
             Assert.False(note.IsVisible);
             Assert.True(picker.IsEnabled);
+        }
+        finally { host.Close(); }
+    });
+
+    [Theory]
+    [InlineData("", false)]
+    [InlineData(PrizeOwnership.FlashPendulum, true)]
+    [InlineData(PrizeOwnership.FlashDriftBounce, true)]
+    public Task Shatter_row_and_v2_box_show_only_with_a_v2_prize(string owned, bool shown) => OnUi((_, _) =>
+    {
+        PrizeOwnership.IsGranted = id => id == owned;
+        var card = new FlashFeatureControl();
+        var host = new Window { Content = card };
+        host.Show();
+        try
+        {
+            Assert.Equal(shown, card.FindControl<Control>("RowShatter")!.IsVisible);
+            Assert.Equal(shown, card.FindControl<Control>("BoxFlashV2")!.IsVisible);
         }
         finally { host.Close(); }
     });
