@@ -21,10 +21,10 @@ public sealed class ModPickerArtTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().WithInterFont()
+                .WithInterFont()
                 .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
         var dir = Directory.CreateTempSubdirectory("ccp-picker-art-");

@@ -87,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 return null;
             }
         }
+
         private static readonly System.Collections.Generic.Dictionary<string, Bitmap?> WardrobeCache = new();
 
         /// <summary>WPF WardrobeArt.GetImage: a registry item's PNG off disk at 384px (Core

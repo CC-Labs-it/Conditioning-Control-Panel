@@ -190,20 +190,20 @@ public sealed class ModChoiceTests
         var picker = await ReadyPicker(shell);
         var card = PickerCard(picker);
         card.IsSelected = true;
-        var download = picker.BtnDownload_Click();
+        PressDownload(picker);
         try
         {
             await WaitFor(() => server.PackGets == 1);
-            Assert.False(download.IsCompleted);
+            Assert.False(card.IsInstalled);
             Assert.False(picker.FindControl<Button>("BtnDownload")!.IsEnabled);
             Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
             picker.FindControl<Button>(closeButton)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.False(picker.IsVisible);
-            Assert.False(download.IsCompleted);
+            Assert.False(card.IsInstalled);
         }
         finally { release.TrySetResult(); }
 
-        await download.WaitAsync(TimeSpan.FromSeconds(10));
+        await WaitFor(() => card.IsInstalled);
         await WaitFor(() => AvApp.Mods!.ActiveModId == BuiltInMods.BambiSleepId);
         Assert.True(svc.IsInstalled("mod-bambi"));
         Assert.True(card.IsInstalled);
@@ -223,9 +223,9 @@ public sealed class ModChoiceTests
         var picker = await ReadyPicker(shell);
         var card = PickerCard(picker);
         card.IsSelected = true;
-        await picker.BtnDownload_Click();
+        PressDownload(picker);
+        await WaitFor(() => card.State == ModPickerCard.CardState.Failed);
 
-        Assert.Equal(ModPickerCard.CardState.Failed, card.State);
         Assert.True(card.IsSelected);
         Assert.True(card.CanSelect);
         Assert.True(card.StatusOnlyVisible);
@@ -237,14 +237,14 @@ public sealed class ModChoiceTests
 
         server.Handle = original;
         var attempts = server.PackGets;
-        await picker.BtnDownload_Click();
-        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId);
+        PressDownload(picker);
+        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId && card.IsInstalled);
         Assert.Equal(attempts + 1, server.PackGets);
         Assert.True(card.IsInstalled);
         Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_close"),
             picker.FindControl<TextBlock>("TxtDownload")!.Text);
         Assert.Null(PendingModChoice.Pending);
-        await picker.BtnDownload_Click();
+        PressDownload(picker);   // finished: the same button now closes
         Assert.False(picker.IsVisible);
     });
 
@@ -258,7 +258,8 @@ public sealed class ModChoiceTests
         // Earlier catalogue entry finishes first, but an upgrader's intent is still their active mod.
         cards.Single(c => c.ModId == BuiltInMods.DronificationId).IsSelected = false;
         PickerCard(picker).IsSelected = true;
-        await picker.BtnDownload_Click();
+        PressDownload(picker);
+        await WaitFor(() => PickerCard(picker).IsInstalled);
         Assert.True(svc.IsInstalled("mod-bambi"));
         Assert.Equal(BuiltInMods.DronificationId, AvApp.Mods!.ActiveModId);
         Assert.Equal(BuiltInMods.DronificationId, CoreSettings.Current.ActiveModId);
@@ -291,6 +292,10 @@ public sealed class ModChoiceTests
     });
 
     // ---- helpers ----
+
+    /// <summary>A real click on Download (its Click handler, not the method); callers wait on the result.</summary>
+    private static void PressDownload(ModPickerDialog picker) =>
+        picker.FindControl<Button>("BtnDownload")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static async Task<ModPickerDialog> ReadyPicker(MainShellWindow shell, string? preselect = null)
     {
@@ -351,10 +356,10 @@ public sealed class ModChoiceTests
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);   // never the real profile
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().WithInterFont()
+                .WithInterFont()
                 .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var zip = BuildZip();
         var sha = Convert.ToHexString(SHA256.HashData(zip)).ToLowerInvariant();
