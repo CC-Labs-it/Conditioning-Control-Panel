@@ -161,8 +161,10 @@ internal static class AccountSeed
         }
         ProfileAdopt.ApplyCurveEpoch(s, user.CurveEpoch);
         // EntitlementTierSync.SignedInWithV2: a rise only for a V2 account with a token.
-        if (!string.IsNullOrEmpty(s.AuthToken))
-            EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow);
+        // The settings half stays synchronous (the adopt below reads it); the live half (celebration) is posted.
+        if (!string.IsNullOrEmpty(s.AuthToken)
+            && EntitlementTierRule.ApplyRise(s, EntitlementTierRule.ParseTier(user.EffectiveTierRaw), DateTime.UtcNow))
+            EntitlementTierSync.Raised(s.PatreonTier);
         ProfileAdopt.AdoptReadBeforeWrite(s, user);
         CoreSettings.Save();
         Log.Information("Profile load: Level {Level} ({Xp} XP into level) after adopt", s.PlayerLevel, (int)s.PlayerXP);

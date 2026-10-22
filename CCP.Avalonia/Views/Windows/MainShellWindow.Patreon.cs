@@ -274,27 +274,58 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var substar = Platform.AccountSeed.SubscribeStar;
             if (patreon != null) patreon.TierChanged += tier;
             if (substar != null) substar.TierChanged += tier;
+            // WPF InitializePatreonTab (Patreon.cs:1208/1211): the focus refresh and the live rise.
+            System.EventHandler focus = (_, _) => Platform.EntitlementTierSync.OnAppFocused();
+            System.Action<int> rise = OnEntitlementTierRaised;
+            Activated += focus;
+            Platform.EntitlementTierSync.TierRaised += rise;
             Closed += (_, _) =>
             {
                 if (patreon != null) patreon.TierChanged -= tier;
                 if (substar != null) substar.TierChanged -= tier;
+                Activated -= focus;
+                Platform.EntitlementTierSync.TierRaised -= rise;
             };
         }
 
+        /// <summary>Tier of a live rise waiting for the celebration pass, 0 when none (WPF _pendingRiseTier).</summary>
+        private int _pendingRiseTier;
+
+        /// <summary>WPF OnEntitlementTierRaised (Patreon.cs:1177): arms the immediate celebration. ponytail: the
+        /// profile-bubble fanfare (RefreshProfileBubble, FireBurstAt, FlashProfileBubbleGlow) and PremiumSpark's
+        /// Burst are not on this head (lane wire-win-feature-intro-b-next).</summary>
+        private void OnEntitlementTierRaised(int tier) => _pendingRiseTier = tier;
+
+        /// <summary>WPF CanCelebrateNow (Patreon.cs:1166). ponytail: WPF's LauncherHost.AwaitingGame clause has no
+        /// twin here (no game-host park on this head).</summary>
+        private bool CanCelebrateNow()
+            => IsVisible && WindowState != global::Avalonia.Controls.WindowState.Minimized
+               && !CoreSession.IsSessionRunning
+               && !CoreTutorial.IsActive
+               && !Platform.AppUpdater.IsUpdateDialogActive && !IsStartupDialogShowing;
+
         /// <summary>WPF MaybeShowPremiumCelebration (MainWindow.Patreon.cs:1118): the one-time card per tier, re-read from
         /// the combined entitlement, never for an invite week, through the presenter (an Inbox row when quiet). The seen-flag
-        /// is spent at open time. ponytail: no live-rise path (EntitlementTierSync.TierRaised, the immediate card and the
-        /// profile-bubble fanfare) on this head yet, so every grant takes the presenter route.</summary>
+        /// is spent at open time. A live rise (EntitlementTierSync) is celebrated at once unless the user is busy.</summary>
         internal void MaybeShowPremiumCelebration()
         {
+            // A live rise is raised just before TierChanged lands here; consumed on this one pass whatever happens below.
+            var riseTier = _pendingRiseTier;
+            _pendingRiseTier = 0;
             try
             {
                 if (!CoreAccount.HasPremiumAccess) return;
                 var s = CoreSettings.Current;
                 if (ProviderSubscription.IsInviteWeekOnly(Platform.AccountSeed.Patreon, Platform.AccountSeed.SubscribeStar, s)) return;
                 var tier = CoreAccount.HasLabAccess ? 2 : 1;
-                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise: false)) return;
+                var onRise = riseTier > 0;
+                if (!TierCelebration.IsOwed(s.SeenFeatureIntros, tier, onRise)) return;
                 var key = TierCelebration.KeyFor(tier)!;
+                if (onRise && CanCelebrateNow())
+                {
+                    FeatureIntroPopup.ShowCelebrationIfFirstTime(this, key);
+                    return;
+                }
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
                     Key = "intro:" + key,

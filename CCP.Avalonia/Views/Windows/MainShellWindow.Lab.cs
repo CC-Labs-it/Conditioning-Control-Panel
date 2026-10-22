@@ -71,7 +71,7 @@
 //   private void UnhookLockdownRestart(…)
 //   private void OnLockdownTimerRestarted(…)
 //   internal void PreviewShowLockdownActivePanel(…)
-//   private void ShowPossessionRulesIfFirstTime(…)
+//   private void ShowPossessionRulesIfFirstTime(…)   -> MainShellWindow.Lockdown.cs (card + Inbox row; the bark half is not on this head)
 //   private static readonly Color LockdownCrimson
 //   private static readonly Color LockdownDarkRed
 //   private static readonly Color LockdownPanelBg

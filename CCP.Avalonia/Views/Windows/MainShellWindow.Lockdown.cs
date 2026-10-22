@@ -78,6 +78,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ApplyLockdownTheme(LockdownActive);
             });
             void Flash() => global::Avalonia.Threading.Dispatcher.UIThread.Post(PlayLockdownActivationAnimation);
+            // WPF OnLockdownActivated (Lab.cs:690): the warden's rules, first run only.
+            void Rules() => global::Avalonia.Threading.Dispatcher.UIThread.Post(ShowPossessionRulesIfFirstTime);
             // WPF OnLockdownTick (Lab.cs:771) and OnLockdownTimerRestarted (Lab.cs:1039): the badge
             // clock follows the page clock, through the same HideLockdownTimer mask.
             void Tick(System.TimeSpan _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(PaintLockdownBadge);
@@ -86,16 +88,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 ld.LockdownActivated += Refresh;
                 ld.LockdownActivated += Flash;
+                ld.LockdownActivated += Rules;
                 ld.LockdownDeactivated += Refresh;
                 ld.CountdownTick += Tick;
                 ld.TimerRestarted += Restarted;
                 Closed += (_, _) =>
                 {
-                    ld.LockdownActivated -= Refresh; ld.LockdownActivated -= Flash; ld.LockdownDeactivated -= Refresh;
+                    ld.LockdownActivated -= Refresh; ld.LockdownActivated -= Flash; ld.LockdownActivated -= Rules; ld.LockdownDeactivated -= Refresh;
                     ld.CountdownTick -= Tick; ld.TimerRestarted -= Restarted;
                 };
             }
             Refresh();
+        }
+
+        /// <summary>WPF ShowPossessionRulesIfFirstTime (Lab.cs:1100): with possession armed, the rules card once,
+        /// through the presenter (an Inbox row when quiet); the flag is spent when the card opens, not when the row
+        /// is posted. ponytail: WPF also fires App.Bark.NotifyPossessionRules(); there is no bark service on this head.</summary>
+        internal void ShowPossessionRulesIfFirstTime()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (!s.LockdownPossessionEnabled || s.LockdownPossessionIntroSeen) return;
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "intro:possession",
+                    Glyph = "🕶",
+                    Title = "The warden's rules",
+                    Summary = "What possession does before the room starts moving.",
+                    Open = () =>
+                    {
+                        var live = CoreSettings.Current;
+                        if (!live.LockdownPossessionIntroSeen) { live.LockdownPossessionIntroSeen = true; CoreSettings.Save(); }
+                        FeatureIntroPopup.ShowIfFirstTime("possession", this);
+                    },
+                });
+            }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Possession: failed to show the first-run rules"); }
         }
 
         // --- WPF ApplyLockdownTheme / RestoreLockdownTheme (Lab.cs:1147/1203) ----------------

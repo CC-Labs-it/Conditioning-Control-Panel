@@ -132,4 +132,27 @@ public sealed class PremiumCelebrationTests
         Assert.Null(Celebration(opened, TierCelebration.KeyT2));
         Assert.DoesNotContain(TierCelebration.KeyT2, CoreSettings.Current.SeenFeatureIntros);
     });
+    /// <summary>WPF OnEntitlementTierRaised + MaybeShowPremiumCelebration's rise half (Patreon.cs:1132-1142): a tier
+    /// bought on the site (EntitlementTierSync.Offer) is stored, and celebrated AT ONCE, even on an install that holds
+    /// the pre-tier key (a rise is a new purchase); the launch re-check alone would owe nothing there.</summary>
+    [Fact]
+    public void LiveRiseCelebratesAtOnceEvenOverTheLegacyKey() => Run(premiumAtLaunch: false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        s.SeenFeatureIntros.Add(TierCelebration.LegacyKey);
+        s.UnifiedId = "u1";
+        s.AuthToken = "t";
+        grant(true, false);
+        shell.MaybeShowPremiumCelebration();                       // the non-rise route: the legacy key says spent
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(opened.OfType<FeatureIntroPopup>());
+        Assert.False(StartupLadder.Inbox.Contains("intro:" + TierCelebration.KeyT1));
+
+        EntitlementTierSync.Offer(1, "test");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, s.PatreonTier);
+        var card = opened.OfType<FeatureIntroPopup>().SingleOrDefault();   // opened directly, not filed in the Inbox
+        Assert.Equal(FeatureIntros.All[TierCelebration.KeyT1].Title, card?.FindControl<TextBlock>("TxtTitle")?.Text);
+        Assert.Contains(TierCelebration.KeyT1, s.SeenFeatureIntros);
+    });
 }
