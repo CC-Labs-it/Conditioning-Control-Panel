@@ -10,6 +10,7 @@ using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -93,9 +94,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var (code, displayName, shortName) = LocalizationManager.AvailableLanguages[i];
                     var item = new ComboBoxItem
                     {
-                        Content = shortLabels ? $"🌐 {shortName}" : displayName,
                         Tag = code,
                     };
+                    LanguageFlag.Dress(combo, item, code, shortLabels ? shortName : displayName);
                     ToolTip.SetTip(item, displayName);
                     combo.Items.Add(item);
                     if (code == current) selectedIndex = i;
