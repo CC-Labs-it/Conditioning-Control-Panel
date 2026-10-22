@@ -102,7 +102,8 @@ public sealed class VoiceCommandsTests
         var help = shell.VoiceCmds.HelpLine();
         Assert.Contains("take over", help);
         Assert.DoesNotContain("spiral", help);
-        Assert.DoesNotContain("quiz", help);
+        Assert.Equal(CoreEngine.PopQuiz != null, help.Contains("quiz"));   // quiz runs once its seam is seeded
+        Assert.Contains("quieter", help);
         shell.ShowTab("shelistening");
         Dispatcher.UIThread.RunJobs();
         var rows = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell.SheListeningPage!)
@@ -110,7 +111,7 @@ public sealed class VoiceCommandsTests
         Assert.False(rows.Single(t => t.Text!.Contains("Spiral")).IsVisible);
         Assert.True(rows.Single(t => t.Text!.Contains("Takeover")).IsVisible);
         var toys = rows.Single(t => t.Text!.Contains("Quick toys"));   // freeze runs here only if its seam is seeded
-        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name == "freeze_once"), toys.IsVisible);
+        Assert.Equal(shell.VoiceCmds.Available.Any(i => i.Name is "freeze_once" or "count_once"), toys.IsVisible);
         // fluent-icons design ref: hearts Filled + pink, pause Filled.
         var heart = (ConditioningControlPanel.Avalonia.Controls.IconGlyph)rows.Single(t => t.Text!.Contains("Pink filter")).Children[0];
         Assert.Equal(FluentIcons.Common.IconVariant.Filled, heart.Variant);

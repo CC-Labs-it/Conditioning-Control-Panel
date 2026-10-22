@@ -5,8 +5,8 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, shake, deeper,
-// session pause/resume, volume/mute, video pause/resume) are left out of the grammar.
+// seam here (spiral, pink, keyword triggers, shake, deeper, video pause/resume) are left out of
+// the grammar (wire-shell-she-listening-b-next).
 
 using System;
 using System.Linq;
@@ -130,6 +130,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "bouncing_off" when CoreBouncingText.StopAction != null => CoreBouncingText.Stop,
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
+            "wipe_once" when CoreMindWipe.TriggerOnceProvider != null => CoreMindWipe.TriggerOnce,
+            "quiz_once" when CoreEngine.PopQuiz != null => () => CoreEngine.PopQuiz?.Show(),
+            // forceTest: true - Trigger() bails when the engine isn't running (WPF comment).
+            "count_once" when CoreEngine.BubbleCount != null => () => CoreEngine.BubbleCount?.Trigger(forceTest: true),
+            "pause" => PauseSessionFromRemote,
+            "resume" => ResumeSessionFromRemote,
+            // No StopLocked on mute: silencing is not escaping (see the mute intent in Core).
+            "mute" => () => ApplyVoiceMute(true),
+            "unmute" => () => ApplyVoiceMute(false),
+            "louder" => () => AdjustMasterVolume(+15),
+            "quieter" => () => AdjustMasterVolume(-15),
             "takeover_on" => () => Autonomy.Start(),
             "takeover_off" => () => Autonomy.Stop(),
             "stop_listening" => StopVoiceInput,

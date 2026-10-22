@@ -107,25 +107,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (runner.IsPaused)
             {
-                StartEffect(() =>   // effects come back, so the portal panic bind comes first
-                {
-                    if (App.Sessions is not { IsPaused: true } r) return;
-                    r.Resume();
-                    PinkFilterOverlay.Refresh(this);
-                    SpiralOverlay.Refresh(this);
-                    SetPauseButton(false);
-                    OnSessionTick();
-                });
+                ResumeSessionFromRemote();
                 return;
             }
             var confirmed = CoreSettings.Current.SkipPauseXpWarning || await MessageDialog.ConfirmAsync(this,
                 Loc.Get("title_pause_session_confirm"),
                 Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty));
             if (!confirmed || !runner.IsRunning) return;
+            PauseSessionFromRemote();
+        }
+
+        /// <summary>WPF MainWindow.RemoteControl.cs:1340 PauseSessionFromRemote (voice "pause"): pause a
+        /// running, unpaused session with no confirm, as WPF's engine call does.</summary>
+        internal void PauseSessionFromRemote()
+        {
+            if (App.Sessions is not { IsRunning: true, IsPaused: false } runner) return;
             runner.Pause();
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
+        }
+
+        /// <summary>WPF MainWindow.RemoteControl.cs:1353 ResumeSessionFromRemote (voice "resume").</summary>
+        internal void ResumeSessionFromRemote()
+        {
+            if (App.Sessions is not { IsRunning: true, IsPaused: true }) return;
+            StartEffect(() =>   // effects come back, so the portal panic bind comes first
+            {
+                if (App.Sessions is not { IsPaused: true } r) return;
+                r.Resume();
+                PinkFilterOverlay.Refresh(this);
+                SpiralOverlay.Refresh(this);
+                SetPauseButton(false);
+                OnSessionTick();
+            });
         }
 
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>

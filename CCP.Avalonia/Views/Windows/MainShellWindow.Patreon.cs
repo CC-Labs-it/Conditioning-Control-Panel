@@ -9,7 +9,8 @@
 // missing one is a XAML compile error, not a runtime gap.
 //
 // Members dropped (74; BtnGateUnlock_Click, RefreshPremiumGate, EnforceEntitlementLapse, RefreshEntitlementVeils,
-// MaybeShowPremiumCelebration and OnPatreonTierChanged's celebration half restored below; UpdatePatreonUI,
+// MaybeShowPremiumCelebration, OnPatreonTierChanged's celebration half, ApplyVoiceMute and AdjustMasterVolume
+// restored below; UpdatePatreonUI,
 // BtnPatreonLogin/Discord/Link*, UpdateAccountLinkingUI and BtnVisitPatreon live in AccountSettingsSection):
 //   private void UpdatePatreonUI(…)
 //   internal async void BtnPatreonLogin_Click(…)
@@ -75,9 +76,6 @@
 //   private async Task SetBrowserPaused(…)
 //   public void SyncQuickControlsUI(…)
 //   public void SyncWhispersUI(…)
-//   private int _preMuteMasterVolume
-//   public void ApplyVoiceMute(…)
-//   public void AdjustMasterVolume(…)
 //   internal async void BtnRefreshPrompts_Click(…)
 //   internal void BtnDeactivatePrompt_Click(…)
 //   internal async void BtnBrowsePrompts_Click(…)
@@ -315,5 +313,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreSettings.Save();
         }
 
+        private int _preMuteMasterVolume;
+
+        /// <summary>WPF MainWindow.Patreon.cs:2136 ApplyVoiceMute (the "mute"/"unmute" voice commands): master
+        /// to 0 (remembered), whispers and her voice off; unmute restores the remembered level or 70. The
+        /// settings page, whispers box and tube menu repaint from settings, so WPF's manual syncs fold into
+        /// one live-volume push. ponytail: WPF also cuts her clip in flight (StopVoiceLineAudio); the tube
+        /// has no stop for a playing one-shot, so that clip finishes.</summary>
+        internal void ApplyVoiceMute(bool muted)
+        {
+            var s = CoreSettings.Current;
+            if (muted)
+            {
+                if (s.MasterVolume > 0) _preMuteMasterVolume = s.MasterVolume;
+                s.MasterVolume = 0;
+                s.SubAudioEnabled = false;
+                s.AvatarMuted = true;
+            }
+            else
+            {
+                s.MasterVolume = _preMuteMasterVolume > 0 ? _preMuteMasterVolume : 70;
+                s.SubAudioEnabled = true;
+                s.AvatarMuted = false;
+            }
+            PushMasterVolume();
+        }
+
+        /// <summary>WPF AdjustMasterVolume -> SetMasterVolume ("louder"/"quieter", ±15, clamped 0..100).</summary>
+        internal void AdjustMasterVolume(int delta)
+        {
+            CoreSettings.Current.MasterVolume = System.Math.Clamp(CoreSettings.Current.MasterVolume + delta, 0, 100);
+            PushMasterVolume();
+        }
+
+        // The same live push the Settings page's master slider runs (AudioSettingsBinder), then save.
+        private static void PushMasterVolume()
+        {
+            try
+            {
+                Platform.LayeredAudio.Instance?.SetMasterVolumeLive();
+                Overlays.MandatoryVideoOverlay.Instance.UpdateVolume();
+            }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "master volume push failed"); }
+            CoreSettings.Save();
+        }
     }
 }
