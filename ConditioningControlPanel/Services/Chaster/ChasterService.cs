@@ -154,6 +154,19 @@ public sealed partial class ChasterService : IDisposable
         // The file on disk is not trusted, from the very first read (security pass 3).
         if (CircesTab.Sanitise(_tab, (_options() ?? ChasterOptions.Off).Caps))
             App.Logger?.Warning("[Chaster] the tab file held numbers outside its limits; clamped at load");
+        // A push the last run sent and never heard back from (it died mid-call): settled before
+        // anything books, so a credit earned before the first settle is not eaten by it.
+        lock (_gate) ResolveDoubt();
+    }
+
+    // Caller holds _gate. An add nobody answered is counted as landed (CircesTab.ResolvePending)
+    // the moment the doubt is known, before the next booking can see a balance that still holds it.
+    private void ResolveDoubt()
+    {
+        var doubted = CircesTab.ResolvePending(_tab, _utcNow());
+        if (doubted <= 0) return;
+        SaveTab();
+        App.Logger?.Information("[Chaster] an unanswered push of {Seconds}s is counted as landed", doubted);
     }
 
     public bool IsLinked => _tokens.Read() is { RefreshToken.Length: > 0 };
@@ -449,12 +462,7 @@ public sealed partial class ChasterService : IDisposable
                     App.Logger?.Warning("[Chaster] the tab file held numbers outside its limits; clamped");
                 }
                 // An add from last time that was never answered: counted as landed, never resent.
-                var doubted = CircesTab.ResolvePending(_tab, _utcNow());
-                if (doubted > 0)
-                {
-                    SaveTab();
-                    App.Logger?.Information("[Chaster] an unanswered push of {Seconds}s is counted as landed", doubted);
-                }
+                ResolveDoubt();
                 // A wearer link can only add. canRemove stays false until a link exists that can.
                 // Never more than the daily limit reaches the lock in one local day, however big
                 // the balance is.
@@ -499,8 +507,14 @@ public sealed partial class ChasterService : IDisposable
                 lock (_gate) { CircesTab.ClearPending(_tab); SaveTab(); }
                 return IsLinked ? SettleOutcome.TryLater : SettleOutcome.LinkExpired;
             }
-            // No answer at all: the mark stays, and the next settle counts the push as landed.
-            if (added.Status == ChasterStatus.TimedOut) return SettleOutcome.TryLater;
+            // No answer at all: counted as landed NOW, never resent. Left for the next settle (up to
+            // ten minutes away), the balance still held the sent seconds, so a credit booked in
+            // between (a finished session) cancelled them and the doubt then ate the credit.
+            if (added.Status == ChasterStatus.TimedOut)
+            {
+                lock (_gate) { ResolveDoubt(); }
+                return SettleOutcome.TryLater;
+            }
 
             lock (_gate)
             {

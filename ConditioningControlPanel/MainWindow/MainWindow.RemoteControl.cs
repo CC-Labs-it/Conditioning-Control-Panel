@@ -1445,6 +1445,9 @@ namespace ConditioningControlPanel
                 // bark's Panic trigger is raised from the key path only - so without this a remote
                 // panic would leave her chatting.
                 try { App.EmiDesk?.Fire("panicPressed", null); } catch { }
+                // Circe's tab: the voice panic ("red", "safe word") is a way out like the key, so it
+                // opens the same safety hold. Without it the next ten minutes still booked prices.
+                try { App.Chaster?.NoteSafetyExit(); } catch (Exception ex) { Diag.Swallowed(ex); }
                 // Trigger Mode stays quiet too. No pause mark: the controller may resume its own panic.
                 Services.Safety.PanicAftermath.ArmQuiet();
 
