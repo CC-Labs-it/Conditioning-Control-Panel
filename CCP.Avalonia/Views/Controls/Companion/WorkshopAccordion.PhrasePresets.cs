@@ -8,6 +8,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 {
@@ -20,12 +21,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             parts.Triggers.PhrasePresetSelectionChanged += (_, _) =>
             {
                 if (_loadingPhrasePresets || parts.Triggers.FindControl<ComboBox>("CmbPhrasePresets")!.SelectedItem is not PhrasePreset preset) return;
-                var settings = CoreSettings.Current;
-                // A refresh restores the selected ID; it must not reapply an old snapshot over live edits.
-                if (settings.CurrentPhrasePresetId == preset.Id) return;
+                // WPF MainWindow.Assets.cs:1835-1850; a refresh is fenced by _loadingPhrasePresets.
                 preset.ApplyToSettings();
-                settings.CurrentPhrasePresetId = preset.Id;
+                CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
                 CoreSettings.Save();
+                Log.Information("Loaded phrase preset: {Name} ({Count} phrases)", preset.Name, preset.ActivePhraseCount);
             };
             parts.Triggers.SavePhrasePresetRequested += async (_, _) => await SavePhrasePresetAsync();
             parts.Triggers.DeletePhrasePresetRequested += async (_, _) => await DeletePhrasePresetAsync(parts);
@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             CoreSettings.Current.CurrentPhrasePresetId = preset.Id;
             CoreSettings.Save();
             RefreshPhrasePresets();
+            Log.Information("Saved phrase preset: {Name} with {Count} active phrases", preset.Name, preset.ActivePhraseCount);
         }
 
         private async Task DeletePhrasePresetAsync(WorkshopShelfParts parts)
@@ -101,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             CoreSettings.Current.CurrentPhrasePresetId = null;
             CoreSettings.Save();
             RefreshPhrasePresets();
+            Log.Information("Deleted phrase preset: {Name}", preset.Name);
         }
 
         private IBrush Brush(string key) => this.TryFindResource(key, out var value) && value is IBrush brush
