@@ -271,11 +271,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                     // WPF MainWindow.TabNavigation.cs:324-337: spend the tab's seen-flag on any
                     // route in, then the one-time explainer on top of the tab just shown.
-                    // ponytail: no rail pulse to stop on this head (StopProgramsTabPulse).
                     case "programs":
                         if (!CoreSettings.Current.HasSeenProgramsTab)
                         {
                             CoreSettings.Current.HasSeenProgramsTab = true;
+                            StopProgramsTabPulse();
                             CoreSettings.Save();
                         }
                         ProgramsIntroPopup.ShowIfFirstTime(this);

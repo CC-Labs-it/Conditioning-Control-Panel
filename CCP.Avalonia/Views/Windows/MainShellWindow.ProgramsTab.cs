@@ -34,6 +34,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // same answer CoreEntitlement is seeded with): owned premium cards drop the padlock.
                 var locked = premium && !CoreEntitlement.HasPremium;
                 var canEnroll = !locked && svc is { IsReadOnly: false } && svc.CanEnroll(definition, out _);
+                var missing = ProgramService.UnavailableReason(definition, Platform.ProgramCapabilities.IsAvailable);
+                // WPF :623-628: a locked card stays clickable and routes to Settings · Account, never to
+                // enrollment, with the pledge hint - but only when a pledge really would let this head
+                // finish it; one that needs a missing feature keeps saying so (programs-3a decision).
+                var upsell = locked && missing == null;
                 var accent = AccentBrush(definition.AccentColor);
                 // WPF ProgramsTab.cs:633-660. Banner: no default, five cards in the same fallback
                 // strip read as a copy-paste bug. Crest: sigil, else day 1's mood plate; the art is a
@@ -65,13 +70,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     AccentBrush = accent,
                     IsLocked = locked,
                     ActionText = Loc.Get(locked ? "btn_program_locked" : "btn_program_enroll"),
-                    IsActionEnabled = canEnroll,
-                    ActionOpacity = canEnroll ? 1.0 : 0.5,
-                    // A refused card never blames a missing pledge (programs_locked_hint promises a
-                    // pledge unlocks it, and no premium program is finishable here yet); a program
-                    // this head can never finish says what it is missing (programs-3a decision).
-                    ReasonText = canEnroll ? null : ProgramService.UnavailableReason(definition, Platform.ProgramCapabilities.IsAvailable)
-                                 ?? Loc.Get("programs_unavailable"),
+                    IsActionEnabled = canEnroll || upsell,
+                    ActionOpacity = canEnroll || upsell ? 1.0 : 0.5,
+                    // Only the upsell card blames a missing pledge (programs_locked_hint promises a
+                    // pledge unlocks it); a program this head can never finish says what it is
+                    // missing (programs-3a decision).
+                    ReasonText = canEnroll ? null : upsell ? Loc.Get("programs_locked_hint")
+                                 : missing ?? Loc.Get("programs_unavailable"),
                     ReasonVisible = !canEnroll,
                     CardOpacity = locked ? 0.72 : 1.0
                 });
@@ -110,7 +115,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var svc = App.Programs;
                 var def = svc?.Library.FirstOrDefault(p => string.Equals(p.Id, programId, StringComparison.OrdinalIgnoreCase));
-                if (svc == null || def == null || svc.IsReadOnly) return;
+                if (svc == null || def == null) return;
+                // WPF :1980-1985: premium the user can't take is an ad, not an entry point -> Settings · Account
+                // (WPF ShowAppInfoPopup -> ShowAccountSettings). Lockdown refuses the door first (P05).
+                if (def.Tier == ProgramTier.Premium && !CoreEntitlement.HasPremium)
+                {
+                    if (!await ProgramRefusedByLockdown()) OpenAppSettingsSection("account");
+                    return;
+                }
+                if (svc.IsReadOnly) return;
                 if (await ProgramRefusedByLockdown()) return;
                 if (!svc.CanEnroll(def, out var reason))
                 {
