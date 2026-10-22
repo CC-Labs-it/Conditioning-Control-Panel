@@ -2405,3 +2405,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/launcher-edge: +134
 - Rounded launcher (DWM round on Windows, transparent + 8 px clip elsewhere, square when maximised); glint turns in the unit box like WPF RelativeTransform.
 - Edge timing (flare/breath/glint/idle 14 s/focus 4 s/park) covered by 4 fail-proven tests (focus gap on a stepped clock); win-launcher-edge -> wired.
+
+## avalonia-port/v2-get-it-row: +290
+- V2GetItRow ported (Core V2PurchaseRule via git mv); Flashes v2 box shows the Get it row: owned hides it, signed out offers sign-in, signed in reads "Not available" until feat-backroom-counter-buy.
+- ctrl-v2-get-it-row missing -> stub; new row feat-backroom-counter-buy.
