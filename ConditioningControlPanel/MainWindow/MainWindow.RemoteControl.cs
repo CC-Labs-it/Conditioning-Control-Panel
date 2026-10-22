@@ -1485,10 +1485,17 @@ namespace ConditioningControlPanel
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
 
-                // The engine stops, and the scheduler must not start it again: what STOP does.
-                if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
-                    _manuallyStoppedDuringSchedule = true;
-                if (_isRunning) StopEngine();
+                // The engine stops, and the scheduler must not start it again: what STOP does. Only
+                // where the panic key could stop it (hard rule 6): never under Lockdown or with the
+                // panic switched off, where the key stops nothing (VoicePanicReach).
+                if (Services.Safety.VoicePanicReach.StopsEngine(
+                        lockdownActive: App.Lockdown?.IsActive == true,
+                        panicKeyEnabled: App.Settings?.Current?.PanicKeyEnabled == true))
+                {
+                    if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
+                        _manuallyStoppedDuringSchedule = true;
+                    if (_isRunning) StopEngine();
+                }
 
                 Show();
                 WindowState = WindowState.Normal;

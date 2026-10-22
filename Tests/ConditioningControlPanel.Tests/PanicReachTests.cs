@@ -96,6 +96,30 @@ public class PanicReachTests
         Assert.DoesNotContain("_panicPressCount", body);
     }
 
+    [Theory]
+    [InlineData(false, true, true)]    // the key could stop it: so may the voice
+    [InlineData(true, true, false)]    // Lockdown holds every key
+    [InlineData(false, false, false)]  // the player switched panic off
+    [InlineData(true, false, false)]
+    public void The_voice_panic_stops_the_engine_only_where_the_panic_key_could(
+        bool lockdown, bool panicKeyEnabled, bool expected)
+    {
+        // Hard rule 6: a word must never end a Lockdown the panic key cannot touch.
+        Assert.Equal(expected, ConditioningControlPanel.Services.Safety.VoicePanicReach.StopsEngine(lockdown, panicKeyEnabled));
+    }
+
+    [Fact]
+    public void The_voice_panic_asks_the_reach_rule_before_it_stops_the_engine()
+    {
+        var body = Body(RemoteControlSource(), "internal void TriggerPanicFromRemote()");
+        int gate = body.IndexOf("VoicePanicReach.StopsEngine(", StringComparison.Ordinal);
+        Assert.True(gate > 0, "the voice panic must ask VoicePanicReach");
+        Assert.Contains("lockdownActive: App.Lockdown?.IsActive == true", body);
+        Assert.Contains("panicKeyEnabled: App.Settings?.Current?.PanicKeyEnabled == true", body);
+        Assert.True(gate < body.IndexOf("_manuallyStoppedDuringSchedule = true;", StringComparison.Ordinal));
+        Assert.True(gate < body.IndexOf("if (_isRunning) StopEngine();", StringComparison.Ordinal));
+    }
+
     // ---- 4. what came back on its own after a panic ------------------------------------------------
 
     [Fact]
