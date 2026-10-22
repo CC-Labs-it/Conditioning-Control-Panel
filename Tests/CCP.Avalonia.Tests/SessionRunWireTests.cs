@@ -37,6 +37,12 @@ public sealed class SessionRunWireTests
         try
         {
             CoreEngine.StoppedHook = shell.OnEngineStopped;
+            // WPF Presets.cs:1899: the engine alone (no session) shows the running label; Stop clears it.
+            CoreEngine.Start();
+            shell.UpdateStartButton();
+            Assert.Equal(Loc.Get("label_running"), shell.Named<TextBlock>("TxtPresetsStatus")!.Text);
+            CoreEngine.Stop();
+            Assert.Equal("", shell.Named<TextBlock>("TxtPresetsStatus")!.Text);
             CoreSettings.Current.ShowSessionCountdown = true;
             shell.StartSession(new Session { Id = "bar-clock", Name = "Bar clock", DurationMinutes = 10 });
             var status = shell.Named<TextBlock>("TxtPresetsStatus")!;
@@ -54,6 +60,7 @@ public sealed class SessionRunWireTests
         finally
         {
             runner.Stop();
+            CoreEngine.Stop();
             CoreEngine.StoppedHook = previousStopped;
             AvApp.Sessions = previousSessions;
             CoreSettings.Current.ShowSessionCountdown = previousCountdown;
