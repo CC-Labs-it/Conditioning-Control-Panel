@@ -217,7 +217,9 @@ namespace ConditioningControlPanel
         private DateTime _conditioningStartTime;
         private double _conditioningBaselineMinutes; // TotalConditioningMinutes at session start (avoids double-counting)
         private DispatcherTimer? _conditioningTimeSyncTimer; // Server sync every 15 minutes
-        private int _conditioningTimeSecondCounter; // Count seconds for minute-based saves
+        private int _conditioningTimeSecondCounter; // Ticks, for the debug line only
+        private double _conditioningPendingSeconds; // Real seconds not yet credited (ConditioningClock)
+        private DateTime _conditioningLastTickUtc;
 
         public MainWindow()
         {
@@ -2088,12 +2090,13 @@ namespace ConditioningControlPanel
                 App.BrainDrain?.Stop();
                 App.LockCard?.Stop(dismissOpenCards: true);   // panic: the card on screen is the point
 
-                // Clear the settings flags so a running reconcile loop won't recreate them, then
-                // stop the windows directly — voice/Deeper start spiral & pink ad-hoc (no reconcile
-                // loop), so RefreshOverlays() (gated on the service's IsRunning) can't see them.
-                EnablePinkFilter(false);
-                EnableSpiral(false);
-                App.Overlay?.RefreshOverlays();
+                // Stop the overlay service (no reconcile tick can repaint while it is stopped), then
+                // the windows directly: voice/Deeper start spiral & pink ad-hoc. Never
+                // EnablePinkFilter(false)/EnableSpiral(false) here: those are the user's SAVED
+                // switches, and this runs on every idle panic press and on the double-press exit,
+                // so each one left Spiral and Pink Filter off for every later run (same rule as
+                // PanicStopEverySurface).
+                App.Overlay?.Stop();
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
             }

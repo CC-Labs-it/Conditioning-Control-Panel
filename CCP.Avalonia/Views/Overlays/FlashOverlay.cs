@@ -193,7 +193,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var k = scaling > 0 ? scaling : 1.0;
             int monW = (int)(screen.Width / k), monH = (int)(screen.Height / k);
-            var (w, h) = FlashPlacement.FitSize(imgW, imgH, monW, monH, (size ?? s.ImageScale) / 100.0);
+            // A named size wins; none, or 0 (an AI flash that left the field out), is the player's
+            // Image Scale (FlashScaleRule, main 4dcdb625f).
+            var (w, h) = FlashPlacement.FitSize(imgW, imgH, monW, monH, FlashScaleRule.Resolve(size, s.ImageScale));
 
             PixelRect ToPx(int x, int y) => new(screen.X + (int)(x * k), screen.Y + (int)(y * k), (int)(w * k), (int)(h * k));
             var others = occupied.Select(r => (r.X, r.Y, r.Width, r.Height)).ToList();

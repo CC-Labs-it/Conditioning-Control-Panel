@@ -169,6 +169,9 @@ namespace ConditioningControlPanel
                 // Restore any active session's settings before persisting (else the overridden
                 // pools get saved and the message sets look wiped next launch).
                 EnsureSessionRestoredForExit();
+                // ...then every other borrowed value (ramp, Takeover pulse, remote controller),
+                // AFTER the session like a normal stop: the final save must hold the user's own.
+                SettleTemporarySettingsForExit();
 
                 // The Companion drawers are viewmodel state, written into CompanionSectionOpen on a
                 // tab-hide transition. Quitting while still sitting on the Companion tab is not one,
@@ -383,6 +386,25 @@ namespace ConditioningControlPanel
             // after the first X press (#446).
             if (_exitRequested)
                 base.OnClosing(e);
+        }
+
+        /// <summary>
+        /// Exit while something still holds a TEMPORARY value in the saved settings: hand each one
+        /// back before the last save, the way its own stop would (main bafe52cfc). The final saves
+        /// (SaveSettings here, SaveImmediate in App.OnExit) used to write them as the user's own, and
+        /// the restores that run later in teardown (Autonomy.Dispose, the remote's Dispose) are never
+        /// saved: the intensity ramp, a Takeover spiral / pink pulse (30 s), and a connected remote
+        /// controller's strict lock, Brain Drain and eased opacities.
+        /// Called again from App.OnExit for a shutdown that skips this window's close. Idempotent.
+        /// </summary>
+        internal void SettleTemporarySettingsForExit()
+        {
+            try { if (_rampTimer != null) StopRampTimer(); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Exit: ramp restore failed"); }
+            try { App.Autonomy?.CancelActivePulses(); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Exit: Takeover pulse restore failed"); }
+            try { App.RemoteControl?.ReleaseHoldingsForExit(); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Exit: remote holdings release failed"); }
         }
 
         protected override void OnDpiChanged(System.Windows.DpiScale oldDpi, System.Windows.DpiScale newDpi)
