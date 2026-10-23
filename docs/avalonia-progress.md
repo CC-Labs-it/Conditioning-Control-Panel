@@ -2710,3 +2710,6 @@ Premium room canvas enrolled in the shell ambient registry under `premium` (WPF 
 
 Presets tab row views-tab-presets goes from stub to wired: the corner-GIF option panel, the session corner GIF in Core SessionRunner with a CornerGifOverlay session slot, the card sheen, and the rack hover reveal (out of the Tab order at rest). Fix round: a Fluent Folder icon on Select GIF, and gate fixes in ContentHitTest and ShellMemory. Fail-proofs: ~/ccp-port/evidence/review-wire-views-tab-presets/failproof.log.
 - Round 2: ContentHitTest skip narrowed to `.rackActions` (fail-proven).
+
+## avalonia-port/wire-views-tab-remote-control: +762
+Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), title-bar pill, share-media-sources row, tube emote bubble, hero art; Core RemoteRelay opt-in + re-publish (in-flight opt-in across a stop dropped). Row views-tab-remote-control: wired. Tests RemoteDirectoryTabTests, RemoteDirectoryOptInTests (fail-proven). Gate: rgate run 38563034446 GATE-OK; the fix round (run 39689830908) has Linux green and only unrelated Windows failures (P94).
