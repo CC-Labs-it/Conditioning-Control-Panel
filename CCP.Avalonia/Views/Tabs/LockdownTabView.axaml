@@ -27,8 +27,9 @@
                                           transform cannot be an animation target - same call
                                           Theme/Styles.xaml's ToggleStyle already made)
        DropShadowEffect ShadowDepth/Direction -> OffsetX/OffsetY; the two named effects
-                                          (EEGlow, LockdownImageGlow) lose their x:Name for the
-                                          same AVLN2000 reason; EEGlow is reached via its Border EEPlate
+                                          lose their x:Name for the same AVLN2000 reason: EEGlow is
+                                          reached via its Border EEPlate; LockdownImageGlow is now a
+                                          sibling Border carrying a BoxShadow, pulsed by the shell
        RadiusX="1.05"                 ->  RadiusX="105%" (a bare RelativeScalar is absolute px)
        x:FieldModifier="internal"     ->  dropped; no host re-publishes these fields on this head.
                                           x:Names are kept so the wiring is a one-line change.
@@ -600,10 +601,9 @@
 
                         <!-- SIDE ART = the lockdown plate, moved out of the card body. It keeps its
                              own pink border instead of the velvet outline because on WPF
-                             StartLockdownPulse animates LockdownImageBorderBrush and
-                             LockdownImageGlow directly. The Avalonia glow is a sibling BoxShadow border
-                             (no animated Effect), and the plate ships without its
-                             Image child until the art moves to avares://. -->
+                             StartLockdownPulse animates its border and glow directly. The Avalonia
+                             glow is a sibling BoxShadow border so the plate's contents need no
+                             animated effect layer. The art migration is owned by the Lockdown tab lane. -->
                         <Grid Grid.Column="1" Margin="10,0,0,10" MinHeight="200" MaxHeight="520">
                             <Border x:Name="LockdownImageGlow" CornerRadius="12" IsHitTestVisible="False"
                                     BoxShadow="0 0 14 0 #FF1493" Opacity="0.7"/>
