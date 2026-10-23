@@ -422,4 +422,28 @@ internal sealed class JackpotRemixBuilder : IDisposable
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    /* ---------------------------------------------------------- memory -----*/
+
+    /// <summary>Free physical memory per GlobalMemoryStatusEx; ulong.MaxValue when the call fails (never a false gate).
+    /// The director's memory seam (it moved to CCP.Core; this probe is Windows-only).</summary>
+    internal static ulong AvailablePhysicalBytes()
+    {
+        try
+        {
+            var s = new MEMORYSTATUSEX { dwLength = (uint)System.Runtime.InteropServices.Marshal.SizeOf<MEMORYSTATUSEX>() };
+            return GlobalMemoryStatusEx(ref s) ? s.ullAvailPhys : ulong.MaxValue;
+        }
+        catch { return ulong.MaxValue; }
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MEMORYSTATUSEX
+    {
+        public uint dwLength, dwMemoryLoad;
+        public ulong ullTotalPhys, ullAvailPhys, ullTotalPageFile, ullAvailPageFile, ullTotalVirtual, ullAvailVirtual, ullAvailExtendedVirtual;
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX lpBuffer);
 }

@@ -1,140 +1,129 @@
-using System.Collections.Generic;
+using System;
 using System.Globalization;
+using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Lobby;
 
-namespace ConditioningControlPanel.Avalonia.Views.Tabs
+namespace ConditioningControlPanel.Avalonia.Views.Tabs;
+
+/// <summary>WPF's Lobby frame and narrow-column switcher. The old sample subject roster is gone.</summary>
+public partial class AvailableSubjectsTabView : UserControl
 {
-    /// <summary>
-    /// PORTED from ConditioningControlPanel/Views/Tabs/AvailableSubjectsTabView.xaml.cs.
-    ///
-    /// <para>The WPF code-behind owns no logic of its own: every handler looks up the hosting
-    /// MainWindow and forwards. Two of those forwards ARE ported, because what they forwarded to
-    /// is canvas tuning rather than a service - the ambient fog's layers and intensity, copied
-    /// from MainWindow.SubjectsFx (two puffs, 0.40). The rest are stubs.</para>
-    ///
-    /// <para>Dropped: AvailableSubjectsScroller_PreviewMouseWheel. It existed only to turn a
-    /// vertical wheel notch into horizontal scrolling on a scroller whose vertical axis is
-    /// disabled; Avalonia's ScrollViewer already does that, so there is nothing to undo.</para>
-    /// </summary>
-    public partial class AvailableSubjectsTabView : UserControl
+    internal bool IsNarrow { get; private set; }
+    internal int SelectedColumn { get; private set; }
+    internal Func<LobbyGates> ReadGates = () => LobbyGates.From(Platform.FriendsHead.Identity() != null,
+        TierGate.HasPremium, TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote").Allowed);
+    private LobbySnapshot _snapshot = LobbySnapshot.Empty;
+
+    public AvailableSubjectsTabView()
     {
-        /// <summary>Sparse on purpose - MainWindow.SubjectsFx: the air behind a roster you read
-        /// must never compete with a name.</summary>
-        private const int SubjectsFogPuffs = 2;
-        private const double SubjectsFogIntensity = 0.40;
-
-        private readonly AmbientFxCanvas _ambientFx;
-
-        public AvailableSubjectsTabView()
+        InitializeComponent();
+        Repaint();
+        SizeChanged += (_, e) => SetNarrow(LobbyPageRules.IsNarrowWidth(e.NewSize.Width));
+        // The shell hides tabs with IsVisible, so Loaded fires once; WPF redraws on every open
+        // (MainWindow.Lobby.cs:84), which picks up sign-in, Remote gate and language changes.
+        PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && IsVisible) Repaint(); };
+        Loaded += (_, _) =>
         {
-            AvaloniaXamlLoader.Load(this);
-
-            _ambientFx = this.FindControl<AmbientFxCanvas>("SubjectsAmbientFx")!;
-
-            LoadPlaceholderRoster();
-
-            // WPF hooked IsVisibleChanged and let MainWindow start/park the canvas through
-            // RegisterTabFx. There is no tab host on this head, so the view starts its own fog
-            // and stops it on unload - the canvas self-gates on motion and window focus anyway.
-            Loaded += OnTabLoaded;
-            Unloaded += OnTabUnloaded;
-        }
-
-        private void OnTabLoaded(object? sender, RoutedEventArgs e)
-            => _ambientFx.StartLayers(new AmbientFxConfig
-            {
-                Layers = AmbientFxLayers.FogDrift,
-                FogPuffs = SubjectsFogPuffs,
-                Intensity = SubjectsFogIntensity,
-            });
-
-        private void OnTabUnloaded(object? sender, RoutedEventArgs e) => _ambientFx.Stop();
-
-        // ------------------------------------------------------------------
-        // Placeholder roster
-        // ------------------------------------------------------------------
-
-        /// <summary>
-        /// Four sample subjects, one per branch the card template carries: a plain row, one with
-        /// status text, one with tags, and a claimed row (dimmed to 0.6 with a disabled "Taken"
-        /// button) - so the render proof exercises the markup rather than one happy path.
-        ///
-        /// ponytail: needs AvailableSubjectsService + DirectoryEntry, both pinned to the WPF head
-        /// (the service polls over App.Http and marshals onto System.Windows.Application).
-        /// Wired when they move to Core; SubjectRow mirrors DirectoryEntry's shape so the swap is
-        /// a rename.
-        /// </summary>
-        private void LoadPlaceholderRoster()
-        {
-            var rows = new List<SubjectRow>
-            {
-                new() { UnifiedId = "u1", DisplayName = "velvet_hush", Level = 41, Tier = "full",
-                        StatusText = "Deep in a spiral session. Say hello.",
-                        Tags = new List<string> { "obedient", "voice", "long sessions" } },
-                new() { UnifiedId = "u2", DisplayName = "Nyx", Level = 27, Tier = "standard",
-                        Tags = new List<string> { "haptics", "mantras" } },
-                new() { UnifiedId = "u3", DisplayName = "spiral.doll", Level = 19, Tier = "light",
-                        StatusText = "Taking it slow today.", Claimed = true },
-                new() { UnifiedId = "u4", DisplayName = "blink", Level = 8, Tier = "light" },
-            };
-
-            this.FindControl<ItemsControl>("AvailableSubjectsList")!.ItemsSource = rows;
-        }
-
-        // ------------------------------------------------------------------
-        // Stubs for what MainWindow owned
-        // ------------------------------------------------------------------
-        // ponytail: BtnBecomeASubject_Click is MainWindow.RemoteControl.cs:496 - a BRANCH, not a
-        // launch: App.Patreon.HasPremiumAccess or DailyFreeService.IsFreeToday("remote") goes to
-        // the Remote Control tab, everyone else to the Patreon page. DailyFreeService is in Core;
-        // App.Patreon is not, and there is no premium seam to stand in for it - so half the
-        // predicate is unreadable and the half that IS readable would send a paying subscriber to
-        // a payment page. Inert beats that.
-        // BtnConnectSubject_Click needs ConditioningControlPanel/Services/AvailableSubjectsService.cs
-        // (TryClaimAsync) plus the shell's ShowTab; the service polls over App.Http and marshals
-        // onto System.Windows.Application, so it does not move as-is.
-
-        private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e) { }
-
-        private void BtnConnectSubject_Click(object? sender, RoutedEventArgs e) { }
-    }
-
-    /// <summary>
-    /// One roster card's data. The Avalonia-side stand-in for
-    /// Services.AvailableSubjectsService.DirectoryEntry, whose derived members - TierLabel,
-    /// HasTags, HasStatusText, IsConnectEnabled, ConnectButtonText, CardOpacity - are copied
-    /// verbatim, including the two hard-coded English strings ("Connect"/"Taken"): they are
-    /// literals in the original, not loc keys, and inventing keys for them here would put a
-    /// string in the catalogue that the real model cannot use.
-    /// </summary>
-    public sealed class SubjectRow
-    {
-        public string UnifiedId { get; set; } = "";
-        public string DisplayName { get; set; } = "Anonymous";
-        public int Level { get; set; }
-        public List<string> Tags { get; set; } = new();
-        public string StatusText { get; set; } = "";
-        public string Tier { get; set; } = "light";
-        public bool Claimed { get; set; }
-
-        /// <summary>The level as text, so the "Lv " Run pair needs no converter.</summary>
-        public string LevelDisplay => Level.ToString(CultureInfo.CurrentCulture);
-
-        public string TierLabel => Tier switch
-        {
-            "light" => "LIGHT",
-            "standard" => "STANDARD",
-            "full" => "FULL",
-            _ => Tier.ToUpperInvariant()
+            Repaint();
+            SubjectsAmbientFx.StartLayers(new AmbientFxConfig
+                { Layers = AmbientFxLayers.FogDrift, FogPuffs = 2, Intensity = 0.40 });
         };
-
-        public bool HasTags => Tags != null && Tags.Count > 0;
-        public bool HasStatusText => !string.IsNullOrEmpty(StatusText);
-        public bool IsConnectEnabled => !Claimed;
-        public string ConnectButtonText => Claimed ? "Taken" : "Connect";
-        public double CardOpacity => Claimed ? 0.6 : 1.0;
+        Unloaded += (_, _) => SubjectsAmbientFx.Stop();
     }
+
+    private void Repaint()
+    {
+        var gates = ReadGates();
+        PaintSnapshot(_snapshot with { SignedIn = gates.SignedIn }, gates);
+    }
+
+    internal void SetNarrow(bool narrow)
+    {
+        IsNarrow = narrow;
+        LobbyTabStrip.IsVisible = narrow;
+        var columns = new Control[] { LobbyOpenColumn, LobbyPlayingSection, LobbyFriendsSection };
+        for (var i = 0; i < columns.Length; i++)
+        {
+            var column = columns[i];
+            column.IsVisible = !narrow || i == SelectedColumn;
+            Grid.SetColumn(column, narrow ? 0 : i);
+            Grid.SetColumnSpan(column, narrow ? 3 : 1);
+            column.Margin = narrow ? new Thickness(0) : new Thickness(i == 0 ? 0 : i == 1 ? 4 : 8, 0, i == 0 ? 8 : i == 1 ? 4 : 0, 0);
+        }
+        var tabs = new[] { TabOpen, TabPlaying, TabFriends };
+        for (var i = 0; i < tabs.Length; i++) tabs[i].Opacity = i == SelectedColumn ? 1 : 0.6;
+    }
+
+    internal void SelectColumn(int index)
+    {
+        SelectedColumn = LobbyPageRules.Column(index);
+        SetNarrow(IsNarrow);
+    }
+
+    private void LobbyTab_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control c && int.TryParse(c.Tag?.ToString(), out var index)) SelectColumn(index);
+    }
+
+    internal void PaintSnapshot(LobbySnapshot snapshot, LobbyGates gates, bool error = false)
+    {
+        _snapshot = snapshot;
+        AvailableSubjectsList.ItemsSource = snapshot.Open.Select(r => new LobbyCardView(r, gates)).ToList();
+        LobbyPlayingList.ItemsSource = snapshot.Playing.Select(r => new LobbyCardView(r, gates)).ToList();
+        LobbyFriendsList.ItemsSource = snapshot.Friends.Select(r => new LobbyCardView(r, gates)).ToList();
+        LobbyOpenCount.Text = snapshot.Open.Count.ToString(CultureInfo.InvariantCulture);
+        LobbyPlayingCount.Text = snapshot.Playing.Count.ToString(CultureInfo.InvariantCulture);
+        LobbyFriendsCount.Text = snapshot.Friends.Count.ToString(CultureInfo.InvariantCulture);
+        LobbyPlayingEmpty.IsVisible = snapshot.Playing.Count == 0;
+        LobbyFriendsEmpty.IsVisible = snapshot.Friends.Count == 0;
+        TxtLobbyEmpty.Text = Loc.Get(snapshot.SignedIn ? "lobby_empty_open" : "lobby_signed_out");
+        AvailableSubjectsEmptyPanel.IsVisible = snapshot.Open.Count == 0;
+        AvailableSubjectsErrorPanel.IsVisible = error;
+        TxtLobbyCount.Text = snapshot.OpenCount > 0 ? Loc.GetF("lobby_open_count", snapshot.OpenCount) : Loc.Get("desc_available_subjects");
+        TabOpen.Content = Loc.Get("lobby_list_open") + "  " + snapshot.Open.Count;
+        TabPlaying.Content = Loc.Get("lobby_list_playing") + "  " + snapshot.Playing.Count;
+        TabFriends.Content = Loc.Get("lobby_list_friends") + "  " + snapshot.Friends.Count;
+        RemoteHostLock.IsVisible = !gates.CanHost(LobbyGame.Remote);
+        BtnBecomeASubject.Opacity = gates.CanHost(LobbyGame.Remote) ? 1 : 0.7;
+        TxtBecomeASubjectSubtitle.IsVisible = gates.SignedIn && !gates.CanHost(LobbyGame.Remote);
+        // ponytail: Chess/Goon host and all row Join flows wait for the Lobby service/hosts in the b-lane.
+        // Keep those destinations disabled instead of constructing a made-up game or remote claim flow.
+    }
+
+    private void BtnBecomeASubject_Click(object? sender, RoutedEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is not MainShellWindow shell) return;
+        if (!ReadGates().SignedIn) { _ = shell.OpenUnifiedLoginDialog(); return; }
+        var gate = TierGate.RequiresPremium(Loc.Get("tab_remote_control"), "remote");
+        if (!gate.Allowed) { TierGate.ShowDenied(gate); return; }
+        shell.ShowTab("remotecontrol"); // WPF hosting enters Remote's consent/opt-in page; it does not start a session.
+    }
+}
+
+public sealed class LobbyCardView
+{
+    public LobbyCardView(LobbyRow row, LobbyGates gates)
+    {
+        Title = LobbyPageRules.Title(row, Loc.Get);
+        Line = LobbyPageRules.Line(Loc.Get(LobbyPageRules.LabelKey(row.Game)), LobbySummary.For(row, Loc.Get));
+        Friend = row.Friend;
+        HasButton = LobbyPageRules.HasButton(row);
+        Locked = LobbyPageRules.Locked(row, gates);
+        ButtonText = Loc.Get(row.CanJoin ? "lobby_btn_join" : "lobby_btn_watch");
+        ButtonOpacity = LobbyPageRules.ButtonOpacity(Locked);
+    }
+    public string Title { get; }
+    public string Line { get; }
+    public bool Friend { get; }
+    public bool HasButton { get; }
+    public bool Locked { get; }
+    public string ButtonText { get; }
+    public double ButtonOpacity { get; }
 }
