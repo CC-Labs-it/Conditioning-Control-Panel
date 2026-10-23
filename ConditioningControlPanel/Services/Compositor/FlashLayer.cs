@@ -416,11 +416,11 @@ public sealed class FlashLayer : BaseLayer
                 var glowAlpha = item.GlowOpacity;
                 if (item.LuckyPulse)
                 {
-                    // 400ms auto-reverse: radius base->x1.6, opacity 0.7->1.0 (legacy anim).
-                    var tri = Math.Abs(item.ElapsedSec % 0.8 / 0.4 - 1.0);   // 1..0..1 triangle
-                    tri = 1.0 - tri;                                          // 0..1..0
-                    sigma *= (float)(1.0 + 0.6 * tri);
-                    glowAlpha = 0.7 + 0.3 * tri;
+                    // 400ms auto-reverse: radius base->x1.6, opacity 0.7->1.0 (legacy anim), the Core
+                    // curve the Avalonia head pulses with too.
+                    var (pulsed, pulseAlpha) = FlashFxRules.LuckyPulseAt(sigma, item.ElapsedSec);
+                    sigma = (float)pulsed;
+                    glowAlpha = pulseAlpha;
                 }
                 // Rebuild the mask filter only when the quantized sigma moves (blur filters
                 // are expensive to churn per frame; lucky pulses quantize to 0.5px steps).

@@ -250,8 +250,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal int ApplyGlow(FlashGlowLook look, double scaling)
         {
             if (!look.HasGlow) return 0;
-            var c = Color.FromArgb((byte)Math.Clamp(look.Opacity * 255, 0, 255), (byte)(look.Rgb >> 16), (byte)(look.Rgb >> 8), (byte)look.Rgb);
-            _glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = look.BlurRadius, Color = c });
+            _look = look;
+            SetGlow(look.BlurRadius, look.Opacity);
             _glow.Background = Brushes.Black;
             var pad = look.BlurRadius / 2;
             _card.Margin = new Thickness(pad);
@@ -261,10 +261,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Pixels the glow added on each edge of the picture (0 without a glow).</summary>
         internal int GlowPadPx { get; private set; }
 
+        private FlashGlowLook _look;
+        private ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _pulse;
+
+        private void SetGlow(double blur, double opacity)
+        {
+            var c = Color.FromArgb((byte)Math.Clamp(opacity * 255, 0, 255), (byte)(_look.Rgb >> 16), (byte)(_look.Rgb >> 8), (byte)_look.Rgb);
+            _glow.BoxShadow = new BoxShadows(new BoxShadow { Blur = blur, Color = c });
+        }
+
+        /// <summary>WPF FlashService.cs:1995-2008 (FlashLayer.cs:417 on the compositor): a lucky flash's
+        /// gold glow pulses, blur r..1.6r and opacity 0.7..1.0, 400 ms autoreverse, until it closes.
+        /// Core <see cref="FlashFxRules.LuckyPulseAt"/> is the curve, on the shared BeatLoop.</summary>
+        internal void StartLuckyPulse()
+        {
+            if (!_look.LuckyPulse || _pulse != null) return;
+            _pulse = new ConditioningControlPanel.Avalonia.Helpers.BeatLoop(_glow, t =>
+            {
+                var (blur, opacity) = FlashFxRules.LuckyPulseAt(_look.BlurRadius, t);
+                SetGlow(blur, opacity);
+            });
+            _pulse.Start();   // the shared 30 fps beat; it stops itself when the window closes
+        }
+
+        internal bool Pulsing => _pulse?.IsRunning == true;
+
+        /// <summary>The corner radius (DIPs) from Core <see cref="FlashCorners"/>: WPF rounds the glow card
+        /// and clips the picture to it (FlashService.cs:1956-1966, 2020-2028, ApplyCornerClip :2404).</summary>
+        internal double CornerRadiusDip { get; private set; }
+
+        internal void ApplyCorners(double radius)
+        {
+            CornerRadiusDip = radius;
+            _glow.CornerRadius = new CornerRadius(radius);
+            ClipCorners();
+        }
+
+        /// <summary>The clip follows the letterboxed picture, not the Image's box.</summary>
+        private void ClipCorners()
+        {
+            if (CornerRadiusDip <= 0 || _image.Source is not { } src || _image.Bounds.Width <= 0 || _image.Bounds.Height <= 0)
+            {
+                _image.Clip = null;
+                return;
+            }
+            var box = _image.Bounds.Size;
+            var fit = Stretch.Uniform.CalculateSize(box, src.Size);
+            var r = Math.Min(CornerRadiusDip, Math.Min(fit.Width, fit.Height) / 2);
+            _image.Clip = new RectangleGeometry(new Rect((box.Width - fit.Width) / 2, (box.Height - fit.Height) / 2, fit.Width, fit.Height), r, r);
+        }
+
         /// <summary>Test seams: the picture's current transform (null before an exit), the glow, the
         /// whiten, the glitch slices and the sparks.</summary>
         internal Transform? PictureTransform => _card.RenderTransform as Transform;
         internal BoxShadows GlowShadow => _glow.BoxShadow;
+        internal Geometry? PictureClip => _image.Clip;
         internal double WhitenOpacity => _whiten.Opacity;
         internal Panel? Slices => _slices;
         internal Canvas? Sparks => _sparks;
@@ -299,6 +350,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Focusable = false;
             IsHitTestVisible = false;
             _image = new Image { Source = picture, Stretch = Stretch.Uniform };
+            _image.SizeChanged += (_, _) => ClipCorners();
             _glow = new Border { IsHitTestVisible = false };
             _whiten = new Border { Background = Brushes.White, Opacity = 0, IsHitTestVisible = false };
             // Centred, so the card is the letterboxed picture, not the window (as the bare Image was).

@@ -14,8 +14,9 @@
 //     purchasable nodes draw their WPF state but do not take a click.
 //   AddProSection + the Ditzy Data PRO panels (BuildProLifetimePanel, BuildSeasonRewindPanel,
 //     BuildBestieRecordsPanel, BuildBrainDrainPanel, the season/sparkline/heatmap charts).
-//   OnLuckyProc / EnsureLuckyToast / PlaceLuckyToast / CloseLuckyToast - nothing raises a lucky
-//     proc on this head (RollLuckyFlash/RollLuckyBubble are SkillTreeService, head-side in WPF).
+//   OnLuckyProc / EnsureLuckyToast / PlaceLuckyToast / CloseLuckyToast live in
+//     Views/Overlays/LuckyToastWindow.cs, raised by a lucky flash (FlashOverlay.Show); a lucky
+//     bubble (Core AmbientBubbles.Pop) does not raise it yet.
 //   The prestige rank-up burst (_prestigeRowBorder) rides on the purchase above.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
