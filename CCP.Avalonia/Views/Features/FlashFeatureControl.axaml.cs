@@ -187,19 +187,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             var row = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal };
             row.Children.Add(new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get(key), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center });
-            if (v2)
-                row.Children.Add(new Border
-                {
-                    Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(6, 2, 7, 3), CornerRadius = new CornerRadius(7),
-                    Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
-                    BorderBrush = V2Brush, BorderThickness = new Thickness(1), IsHitTestVisible = false,
-                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
-                    Child = new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get("badge_v2"), Foreground = V2Brush, FontSize = 9, FontWeight = FontWeight.Bold },
-                });
+            if (v2) row.Children.Add(NewV2Badge(new Thickness(8, 0, 0, 0)));
             CmbMotion.Items.Add(new ComboBoxItem { Content = row, Tag = style });
         }
 
         private static readonly IBrush V2Brush = new SolidColorBrush(Color.Parse("#FFE08A"));
+
+        /// <summary>WPF FeatureCard.NewV2Badge: the champagne v2 pill for other surfaces (this
+        /// picker, the Studio rack rows). <paramref name="compact"/> is the rack/rail size.</summary>
+        internal static Border NewV2Badge(Thickness margin, bool compact = false) => new()
+        {
+            Margin = margin,
+            Padding = compact ? new Thickness(3, 0, 4, 1) : new Thickness(6, 2, 7, 3),
+            CornerRadius = new CornerRadius(compact ? 5 : 7),
+            Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
+            BorderBrush = V2Brush, BorderThickness = new Thickness(1), IsHitTestVisible = false,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            Child = new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get("badge_v2"), Foreground = V2Brush, FontSize = compact ? 7 : 9, FontWeight = FontWeight.Bold },
+        };
 
         private void CmbMotion_Changed(object? sender, SelectionChangedEventArgs e)
         {

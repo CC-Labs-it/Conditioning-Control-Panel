@@ -19,6 +19,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         /// <summary>Core <see cref="PrizeGrants.FlashDriftBounce"/>.</summary>
         internal const string FlashDriftBounce = PrizeGrants.FlashDriftBounce;
+        internal const string FlashPendulum = PrizeGrants.FlashPendulum;
+        internal const string JackpotRemix = PrizeGrants.JackpotRemix;
+        internal const string BubbleRain = PrizeGrants.BubbleRain;
+        internal const string BubbleSpiralIn = PrizeGrants.BubbleSpiralIn;
 
         /// <summary>The DEBUG override spec, read once; always null in Release.</summary>
         internal static readonly string? OverrideSpec = OwnershipService.ReadDebugOverride();
@@ -55,6 +59,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
         internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
+
+        /// <summary>WPF V2Badges.FlashOwned: any flashes v2 prize (both motions or Jackpot Remix).</summary>
+        internal static bool FlashV2Owned() =>
+            IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum) || IsGranted(JackpotRemix);
+
+        /// <summary>WPF V2Badges.BubbleOwned: either ambient bubble motion.</summary>
+        internal static bool BubbleV2Owned() => IsGranted(BubbleRain) || IsGranted(BubbleSpiralIn);
 
         /// <summary>Core OwnershipService's override rules over one comma list.</summary>
         internal static bool Matches(string? spec, string id) =>
