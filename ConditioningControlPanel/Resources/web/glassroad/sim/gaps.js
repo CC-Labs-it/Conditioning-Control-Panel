@@ -4,7 +4,7 @@
  * Each default is a slice starting point, reported to the integrator as a contract gap.
  */
 const GAPS = {
-  'kart.radiusM': 0.7,        // saucer radius: rail contact distance (camera note: 6.5 m is ~9 radii)
+  'kart.radiusM': 0.5,        // saucer radius: rail contact distance (polish 6: the kart is drawn at 0.68, saucer ~0.51 m)
   'kart.gripTcS': 0.05,       // lateral velocity bleeds into the heading with this time constant (grip turn)
   'kart.alignTcS': 0.08,      // kart up slerps to the road normal with this time constant
   'kart.snapM': 0.35,         // a grounded kart sticks to the road within this height (crests, sags)
@@ -23,9 +23,15 @@ const GAPS = {
   'route.cleanAmount': 0.15,  // clean landing boost: share of top over top, when the catch ends
   'route.cleanHoldS': 0.6,
   'route.kickUpMps': 2.5,     // EDGES lane: the opening's kicker lip throws a kart driving off it up this fast
+  'route.holdSteer': 0.25,    // polish 6: a grounded kart turning away from the opening this hard is held like the rail
   'route.airPull': 1,         // in the air over the landing road: drift back to its middle at this many m/s per metre off
   'route.airMaxMps': 5,       // at most this fast
   'route.airAccel': 6,        // changing by at most this many m/s per second
+  // polish 6 THE LOOP (sim/kart.js): on a magnet stretch the road carries the kart round
+  'loop.guideTcS': 0.15,      // the nose eases toward its own line up the road with this time constant
+  'loop.guideAheadS': 0.25,   // aiming this many seconds of speed ahead (at least 4 m)
+  'loop.carryPct': 0.4,       // a forward engine floor, as a share of top
+  'loop.carryMps2': 14,       // reached at this rate (no jolt)
 };
 
 // feel.get throws on a missing key and a feel never gains keys (set refuses them), so a miss is remembered

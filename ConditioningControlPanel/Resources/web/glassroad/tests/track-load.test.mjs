@@ -16,7 +16,8 @@ test('track: length and node arc lengths', () => {
   assert.equal(tr.nodeS[0], 0);
   assert.equal(tr.nodeS[N], tr.lengthM);
   for (let i = 0; i < N; i++) assert.ok(tr.nodeS[i + 1] > tr.nodeS[i] + 5, 'node ' + i);
-  assert.ok(tr.lengthM > 1330 && tr.lengthM < 1380, 'length ' + tr.lengthM);
+  // polish 6: the stacked course, within +-25% of the 1350 m ring it replaced
+  assert.ok(tr.lengthM > 1150 && tr.lengthM < 1650, 'length ' + tr.lengthM);
   for (let i = 0; i < N; i++) assert.ok(dist(tr.frameAt(tr.nodeS[i]).p, json.nodes[i].p) < 1e-6, 'passes node ' + i);
 });
 
@@ -36,7 +37,9 @@ test('track: frames orthonormal and continuous, no flips', () => {
     const f = tr.frameAt(s), lim = Math.cos((s > j.s && s < j.landS + 0.25 ? 12 : 3) * DEG);
     for (const v of [f.t, f.n, f.b]) assert.ok(Math.abs(Math.hypot(...v) - 1) < 1e-9);
     assert.ok(Math.abs(dot(f.t, f.n)) < 1e-9 && Math.abs(dot(f.t, f.b)) < 1e-9 && Math.abs(dot(f.n, f.b)) < 1e-9);
-    assert.ok(f.n[1] > 0.6, 'road faces up at s ' + s);
+    // a vertical loop (magnet) turns the road over; everywhere else it faces up
+    const loop = [-1, 0, 1].some((d) => tr.nodeFlags(f.seg + d).includes('magnet'));
+    if (!loop) assert.ok(f.n[1] > 0.6, 'road faces up at s ' + s);
     if (prev) {
       assert.ok(dot(prev.t, f.t) > lim, 'tangent jump at s ' + s);
       assert.ok(dot(prev.n, f.n) > lim, 'normal jump at s ' + s);
@@ -68,13 +71,12 @@ test('track: derived lists', () => {
   tr.checklines.forEach((c, i) => { assert.equal(c.idx, i); assert.equal(c.s, tr.nodeS[c.node]); assert.ok(c.w > 0); });
   assert.equal(tr.sections.length, 3);
   assert.equal(tr.sectionAt(0), 0);
-  assert.equal(tr.sectionAt(tr.nodeS[50]), 1);
-  assert.equal(tr.sectionAt(tr.nodeS[100]), 2);
+  for (const [k, sec] of json.sections.entries()) assert.equal(tr.sectionAt(tr.nodeS[Math.floor((sec.from + sec.to) / 2)]), k);
   assert.equal(tr.sectionAt(tr.lengthM + 1), 0);
   assert.equal(tr.boosts[0].s, tr.nodeS[json.boosts[0].node]);
   const j = tr.jumps[0];
-  assert.equal(j.s, tr.nodeS[101]);
-  assert.equal(j.landS, tr.nodeS[102]);
+  assert.equal(j.s, tr.nodeS[json.jumps[0].node]);
+  assert.equal(j.landS, tr.nodeS[json.jumps[0].node + 1]);
   assert.equal(tr.limits.fallY, json.limits.fallY);
   assert.deepEqual(tr.nodeFlags(N + 1), json.nodes[1].flags);
 });
@@ -89,6 +91,28 @@ test('track: spawn poses on the grid, facing travel', () => {
     const [x, y, z, w] = sp.q;
     const fwd = [-(2 * (x * z + w * y)), -(2 * (y * z - w * x)), -(1 - 2 * (x * x + y * y))];
     assert.ok(dot(fwd, tr.frameAt(sp.s).t) > 0.9999);
+  }
+});
+
+test('track: a vertical loop turns the road over and back, square across the wheel (polish 6)', () => {
+  const loops = [];
+  for (let i = 0; i < N; i++) if (json.nodes[i].flags.includes('magnet') && !json.nodes[(i - 1 + N) % N].flags.includes('magnet')) loops.push(i);
+  assert.ok(loops.length >= 1, 'at least one loop');
+  for (const i0 of loops) {
+    let i1 = i0;
+    while (json.nodes[(i1 + 1) % N].flags.includes('magnet')) i1++;
+    const s0 = tr.nodeS[i0], s1 = tr.nodeS[i1 + 1];
+    let minNy = 1, maxBy = 0, maxY = -Infinity;
+    for (let s = s0; s <= s1; s += 0.5) {
+      const f = tr.frameAt(s);
+      minNy = Math.min(minNy, f.n[1]); maxBy = Math.max(maxBy, Math.abs(f.b[1])); maxY = Math.max(maxY, f.p[1]);
+    }
+    assert.ok(minNy < -0.95, 'upside down at the top of the loop at node ' + i0 + ': ' + minNy);
+    assert.ok(maxBy < 0.35, 'the road stays square across the wheel (no roll): ' + maxBy);
+    assert.ok(maxY - json.nodes[i0].p[1] > 24, 'the wheel stands tall');
+    const a = tr.frameAt(s0 - 2), b = tr.frameAt(s1 + 2);
+    assert.ok(a.n[1] > 0.95 && b.n[1] > 0.95, 'level in and out');
+    assert.ok(Math.hypot(a.p[0] - b.p[0], a.p[2] - b.p[2]) > 16, 'the exit sits a road width aside');
   }
 });
 

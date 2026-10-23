@@ -22,7 +22,7 @@ import { uniform, uv, vec2, vec3, texture, cos, sin, float, smoothstep, length, 
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { LOOK } from './look.js';
 import { Q } from './quality.js';
-import { placeScatter, sampleTrack, worldLook, scatterCount, scatterBasis, placeHeroes, heroBasis, heroCount, heroCasters, V3 } from './colossiMath.js';
+import { placeScatter, sampleTrack, worldLook, scatterCount, scatterBasisInto, placeHeroes, heroBasis, heroBasisInto, heroCount, heroCasters, V3 } from './colossiMath.js';
 import { createSoftMaterial } from './materials/colossus.js';
 
 const M4 = new Matrix4(), V = new Vector3(), SC = new Vector3(), ZB = new Vector3();
@@ -366,10 +366,12 @@ export function buildHeroes(art, track, seed, { pal = null, avoid = [], samples 
   });
   plinths.instanceMatrix.needsUpdate = true; halos.instanceMatrix.needsUpdate = true;
 
+  // per frame: one kept basis, plain loops (polish 6 PERF: no arrays or closures per frame)
+  const HB = { X: [0, 0, 0], Y: [0, 0, 0], Z: [0, 0, 0] };
   function write() {
-    for (const x of placed) x.m = (x.m || new Matrix4()).copy(basisMatrix(heroBasis(x, x.ang, W), x.p, x.scale, x.scale, x.scale));
+    for (const x of placed) x.m = (x.m || new Matrix4()).copy(basisMatrix(heroBasisInto(x, x.ang, W, HB), x.p, x.scale, x.scale, x.scale));
     for (const { im, local, mine } of parts) {
-      mine.forEach((x, i) => im.setMatrixAt(i, M4.multiplyMatrices(x.m, local)));
+      for (let i = 0; i < mine.length; i++) im.setMatrixAt(i, M4.multiplyMatrices(mine[i].m, local));
       im.instanceMatrix.needsUpdate = true;
     }
   }
@@ -439,8 +441,9 @@ export function buildScatter(art, track, seed, { pal = null, avoid = [], samples
     });
   }
   const E = new Object3D(), BX = new Vector3(), BY = new Vector3(), BZ = new Vector3();
+  const SB = { X: [0, 0, 0], Y: [0, 0, 0], Z: [0, 0, 0] };   // kept basis: place() runs per frame
   function place(x) {
-    const b = scatterBasis(x, x.ang, W);
+    const b = scatterBasisInto(x, x.ang, W, SB);
     if (b) {
       M4.makeBasis(BX.set(b.X[0], b.X[1], b.X[2]), BY.set(b.Y[0], b.Y[1], b.Y[2]), BZ.set(b.Z[0], b.Z[1], b.Z[2]));
       E.quaternion.setFromRotationMatrix(M4);
@@ -453,7 +456,7 @@ export function buildScatter(art, track, seed, { pal = null, avoid = [], samples
   function write() {
     for (const x of placed) place(x);
     for (const { im, local, mine } of parts) {
-      mine.forEach((x, i) => im.setMatrixAt(i, M4.multiplyMatrices(x.m, local)));
+      for (let i = 0; i < mine.length; i++) im.setMatrixAt(i, M4.multiplyMatrices(mine[i].m, local));
       im.instanceMatrix.needsUpdate = true;
     }
   }

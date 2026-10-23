@@ -20,10 +20,10 @@ test('threshold is a closed loop', () => {
   assert.ok(track.nodes[0].flags.includes('start'));
 });
 
-test('threshold length is 1.2 to 1.6 km', () => {
+test('threshold length is 1.15 to 1.65 km (polish 6: the stacked course, +-25% of the old ring)', () => {
   let L = 0;
   for (let i = 0; i < N; i++) L += dist(P[i], P[(i + 1) % N]);
-  assert.ok(L >= 1200 && L <= 1600, 'length ' + L);
+  assert.ok(L >= 1150 && L <= 1650, 'length ' + L);
 });
 
 test('threshold carries the Phase A features', () => {

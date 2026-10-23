@@ -23,7 +23,7 @@ export const WORLD_DEFAULTS = Object.freeze({
   // beside the road, a share crossing overhead, and the no-clip margins
   scatter: 70, scatterByTier: Object.freeze({ high: 70, mid: 45, phone: 25 }), scatterScaleMul: 1, scatterSpinMul: 0.5,
   scatterSideM: [10, 120], scatterSideBias: 1.6, scatterUpM: [-12, 55], scatterOverShare: 0.2, scatterOverUpM: [4, 34],
-  scatterMarginM: 6, scatterAirM: 16, scatterGapM: 4, scatterTries: 30,
+  scatterMarginM: 6, scatterAirM: 16, scatterGapM: 4, scatterTries: 30, scatterFitPadM: 1.5,
   scatterUpright: Object.freeze(['chess-', 'slot-cabinet']), scatterTiltRad: 0.3,
   // poses: cards, watches and discs face a camera scatterFaceLeadM back down the road and swing about it;
   // upright pieces lean their top toward that camera (more when they float above the eye) and turn slowly
@@ -50,12 +50,15 @@ export const WORLD_DEFAULTS = Object.freeze({
   // by up to heroLeanDeg (the fitter eases the lean, then steps out, until it clears). heroFarGapM: past this
   // gap a hero may tower behind a window (only its base s stays out of it). heroCastN: the nearest few whose
   // shadow reaches the road cast the lamp's shadow (high tier, render/shadows.js scatter path).
-  heroByTier: Object.freeze({ high: 16, mid: 10, phone: 6 }), heroGapM: Object.freeze([15, 90]), heroGapBias: 2.6,
+  heroByTier: Object.freeze({ high: 16, mid: 10, phone: 6 }), heroGapM: Object.freeze([15, 110]), heroGapBias: 2.6,
   heroUpM: Object.freeze([-4, 1]), heroLowShare: 0.3, heroLowUpM: Object.freeze([-18, -8]),
-  heroPlinthM: 1.5, heroPlinthK: 0.07, heroPlinthR: 1.15, heroMarginM: 6, heroAirM: 14, heroGapBetweenM: 8,
-  heroLeanEvery: 3, heroLeanDeg: Object.freeze([22, 34]), heroLeanGapM: Object.freeze([15, 32]), heroLeanStepDeg: 4, heroGapStepM: 6, heroFarGapM: 45, heroTopMinM: 20, heroFitPadM: 2, heroCastN: 3, heroCastR: 0.7, heroCastMinM: 4,
-  heroFaceLeadM: 110, heroEyeM: 2.6, heroSwingRad: 0.35, heroTries: 40,
-  heroAvoidS: Object.freeze([Object.freeze([-28, 28]), Object.freeze([496, 618]), Object.freeze([796, 912])]),
+  heroPlinthM: 1.5, heroPlinthK: 0.07, heroPlinthR: 1.15, heroMarginM: 6, heroAirM: 14, heroGapBetweenM: 6,
+  heroLeanEvery: 2, heroLeanDeg: Object.freeze([22, 34]), heroLeanGapM: Object.freeze([15, 45]), heroLeanStepDeg: 4, heroGapStepM: 6, heroFarGapM: 45, heroTopMinM: 20, heroFitPadM: 2, heroCastN: 3, heroCastR: 0.7, heroCastMinM: 4,
+  // polish 6: the stacked course leaves fewer clear slots, so more tries (90, was 40), a late pass for a boxed-in slot, every 2nd hero leans (was 3rd) and a leaner may stand up to 45 m off (was 32), any hero up to 110 m (was 90) and 6 m from the next (was 8)
+  heroFaceLeadM: 110, heroEyeM: 2.6, heroSwingRad: 0.35, heroTries: 90,
+  // polish 6: the finish arch and the whole coil (the dare's take-off on its outer turn, the landing on its inner
+  // one; a hero beside a turn that tight could never face the oncoming camera)
+  heroAvoidS: Object.freeze([Object.freeze([-28, 28]), Object.freeze([900, 1200])]),
   heroKinds: Object.freeze([
     { id: 'chess-king-lod0', h: [50, 55], spin: 0.06, pose: 'upright', look: 'chess' },
     { id: 'slot-cabinet-lod0', h: [34, 40], spin: 0, pose: 'face', look: 'slot' },
@@ -86,10 +89,13 @@ export const WORLD_DEFAULTS = Object.freeze({
   heroRimGain: 1.6, heroRimPow: 1.8, heroOutline: '#160626', heroOutlineK: 0.0035, heroOutlineM: Object.freeze([0.06, 3.2]),
   heroHalo: 0.22, heroHaloR: 0.8, heroFill: 0.55, heroBoardPadM: 4, heroUpright: 0.7,
   // placement corridors (BRIEF-POLISH3 fixed contract, lap fraction f = s / length): spiral gates and the
-  // media tunnel keep a 40 m window (half 20 m) clear, each billboard a 15 m window (half 7.5 m)
-  corridorGates: Object.freeze([0.14, 0.31, 0.47, 0.69, 0.86, 0.97]), corridorGateHalfM: 20,
-  corridorTunnel: Object.freeze([0.55, 0.61]), corridorTunnelPadM: 20,
-  corridorBoards: Object.freeze([0.06, 0.2, 0.25, 0.38, 0.42, 0.52, 0.64, 0.76, 0.8, 0.92]), corridorBoardHalfM: 7.5,
+  // media tunnel keep a 40 m window (half 20 m) clear, each billboard a 15 m window (half 7.5 m). Polish 6 refit
+  // to the stacked course (tracks/threshold.spirals.json and threshold.media.json carry the same fractions)
+  corridorGates: Object.freeze([0.09, 0.17, 0.315, 0.785, 0.965]), corridorGateHalfM: 20,
+  corridorTunnel: Object.freeze([0.89, 0.93]), corridorTunnelPadM: 20,
+  // the wheel and the hoop (vertical loops, polish 6): nothing stands in a loop window (padM either side)
+  corridorLoops: Object.freeze([Object.freeze([0.388, 0.451]), Object.freeze([0.481, 0.536])]), corridorLoopPadM: 12,
+  corridorBoards: Object.freeze([0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]), corridorBoardHalfM: 7.5,
   // soft shading (materials/colossus.js): wrap, floor, rim, sheen, aerial haze (polish 3: full colour inside
   // hazeNearM, no low haze) and the prop tint: a saturated hue over the paint's luminance, mixed in whole
   // (tintMix 1) with a high floor so the sculpted paint never shows through as a skin tone
@@ -105,7 +111,7 @@ export const WORLD_DEFAULTS = Object.freeze({
   shadowAheadM: 30, shadowDistM: 900, shadowFarM: 1900, shadowRadius: 20, shadowBlurSamples: 12, shadowBias: -0.0001, shadowNormalBias: 0.03,
   shadowOpacity: 0.5, shadowColour: '#2a1450', scatterCasts: true,
   // contact blobs and the phone tier's projected colossus shadows
-  blobR: 1.5, blobAlpha: 0.55, blobMapAlpha: 0.4, blobFadeUpM: 4, spotAlpha: 0.38, spotStepM: 1.5, spotCols: 8,
+  blobR: 1.0, blobAlpha: 0.55, blobMapAlpha: 0.4, blobFadeUpM: 4, spotAlpha: 0.38, spotStepM: 1.5, spotCols: 8,
 });
 
 export function worldLook() {
@@ -119,7 +125,7 @@ export function scatterCount(tierName, W = WORLD_DEFAULTS) {
 }
 
 /**
- * Which placement corridor s falls in ('gate', 'tunnel', 'board') or null. padM widens every window
+ * Which placement corridor s falls in ('gate', 'tunnel', 'loop', 'board') or null. padM widens every window
  * (a body's own reach along the road). Distances wrap round the lap.
  */
 export function corridorHit(s, L, W = WORLD_DEFAULTS, padM = 0) {
@@ -130,6 +136,10 @@ export function corridorHit(s, L, W = WORLD_DEFAULTS, padM = 0) {
     const a = tn[0] * L - W.corridorTunnelPadM - padM, b = tn[1] * L + W.corridorTunnelPadM + padM;
     const sw = ((s % L) + L) % L;
     if (sw > a && sw < b) return 'tunnel';
+  }
+  for (const [a, b] of W.corridorLoops || []) {
+    const sw = ((s % L) + L) % L, p = (W.corridorLoopPadM || 0) + padM;
+    if (sw > a * L - p && sw < b * L + p) return 'loop';
   }
   for (const f of W.corridorBoards || []) if (d(f) < W.corridorBoardHalfM + padM) return 'board';
   return null;
@@ -221,14 +231,31 @@ const norm = (a) => { const l = len(a) || 1; return [a[0] / l, a[1] / l, a[2] / 
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 export const V3 = Object.freeze({ sub, add, mul, dot, cross, len, norm });
 
-/** Road samples every stepM metres: plain copies of frameAt, so callers can keep them. */
-export function sampleTrack(track, stepM = 4) {
-  const n = Math.max(8, Math.ceil(track.lengthM / stepM)), out = [];
-  for (let i = 0; i < n; i++) {
-    const s = (i * track.lengthM) / n, f = track.frameAt(s);
-    out.push({ s, p: [...f.p], t: [...f.t], n: [...f.n], b: [...f.b], w: f.w });
+/** Polish 6: true when s (or anything within padM of it, plus LOOP_PAD_M) lies on a vertical loop (magnet). */
+export const LOOP_PAD_M = 12, LOOP_SAMPLE_DIV = 4;
+export function onLoop(track, s, padM = 0) {
+  if (!track.nodeFlags) return false;
+  for (const d of [-padM - LOOP_PAD_M, 0, padM + LOOP_PAD_M]) {
+    const L = track.lengthM, f = track.frameAt(((s + d) % L + L) % L);
+    if (track.nodeFlags(f.seg).includes('magnet')) return true;
   }
-  out.stepM = track.lengthM / n;
+  return false;
+}
+
+/**
+ * Road samples every stepM metres: plain copies of frameAt, so callers can keep them. On a vertical loop
+ * (polish 6) the samples run LOOP_SAMPLE_DIV times denser, so a tube test cannot slip between them where
+ * the road bends round the wheel.
+ */
+export function sampleTrack(track, stepM = 4) {
+  const n = Math.max(8, Math.ceil(track.lengthM / stepM)), out = [], step = track.lengthM / n;
+  const push = (s) => { const f = track.frameAt(s); out.push({ s, p: [...f.p], t: [...f.t], n: [...f.n], b: [...f.b], w: f.w }); };
+  for (let i = 0; i < n; i++) {
+    const s = i * step;
+    push(s);
+    if (track.nodeFlags && track.nodeFlags(track.frameAt(s).seg).includes('magnet')) for (let k = 1; k < LOOP_SAMPLE_DIV; k++) push(s + (k * step) / LOOP_SAMPLE_DIV);
+  }
+  out.stepM = step;
   return out;
 }
 
@@ -428,7 +455,7 @@ export function placeScatter(track, kinds, rowOf, seed, { want, avoid = [], W = 
       // the lateral reach scatterBody gives this pose (a tumbling piece is its bound sphere)
       const rLat = k.pose === 'tumble' ? (row.boundRadiusM || Math.max(...sz)) * scale : Math.hypot(sz[0], sz[2]) / 2 * scale;
       const s = atFree((i + rnd(0, 1)) / n);
-      if (corridorHit(s, L, W, rLat)) continue;
+      if (corridorHit(s, L, W, rLat) || onLoop(track, s, rLat)) continue;
       const f = track.frameAt(s), over = rnd(0, 1) < W.scatterOverShare;
       let lat, up, side;
       if (over) {
@@ -458,7 +485,8 @@ export function placeScatter(track, kinds, rowOf, seed, { want, avoid = [], W = 
       let F = sub(toCam, mul(Y, dot(toCam, Y)));
       F = len(F) < 1e-4 ? norm(cross(Y, f.b)) : norm(F);
       const body = scatterBody(k.pose, p, Y, row, scale);
-      if (!bodyClear(body, samples, Wc).ok) continue;
+      // polish 6: padded like the colossi (scatterFitPadM), so the tight bends of the stacked course still clear at a finer sampling
+      if (!bodyClear({ ...body, r: body.r + (W.scatterFitPadM || 0) }, samples, Wc).ok) continue;
       if (placed.some((x) => !capsulesApart(x.body, body, W.scatterGapM))) continue;
       if (avoid.some((c) => !capsulesApart(body, c, W.scatterMarginM))) continue;
       const R = (row.boundRadiusM || 1) * scale;
@@ -522,7 +550,7 @@ export function placeHeroes(track, kinds, rowOf, seed, { want, avoid = [], W = W
   // heroBoardPadM off a billboard window and towers behind it; a near hero keeps its whole reach off the
   // gates, the media tunnel and the shortcut windows (nearOk)
   const Wb = { ...W, corridorBoardHalfM: W.corridorBoardHalfM + (W.heroBoardPadM || 0) };
-  const okS = (s, pad) => !corridorHit(s, L, Wb, pad) && !heroAvoidHit(s, L, W, pad);
+  const okS = (s, pad) => !corridorHit(s, L, Wb, pad) && !heroAvoidHit(s, L, W, pad) && !onLoop(track, s, pad);
   const nearOk = (s, pad) => { const c = corridorHit(s, L, W, pad); return (c === null || c === 'board') && !heroAvoidHit(s, L, W, pad); };
   const free = [];
   let a = null;
@@ -534,16 +562,24 @@ export function placeHeroes(track, kinds, rowOf, seed, { want, avoid = [], W = W
   const freeLen = free.reduce((acc, [x, y]) => acc + y - x, 0);
   const atFree = (u) => { let x = u * freeLen; for (const [p, q] of free) { if (x <= q - p) return p + x; x -= q - p; } return 0; };
   const leanStep = (W.heroLeanStepDeg || 4) * Math.PI / 180, lamp = norm(W.heroLampDir || LOOK.lightDir || [0.35, 0.85, 0.4]);
-  for (let i = 0; i < n; i++) {
+  // polish 6: a hero whose slot is boxed in by the decks gets one late pass, anywhere on the free road, upright
+  const order = [];
+  for (let i = 0; i < n; i++) order.push([i, false]);
+  for (let qi = 0; qi < order.length; qi++) {
+    const [i, late] = order[qi], had = out.length;
     const k = kinds[i % kinds.length], row = rowOf(k.id), sz = (row && row.sizeM) || [1, 1, 1];
-    const leans = W.heroLeanEvery > 0 && i % W.heroLeanEvery === 1;
-    for (let tries = 0; tries < W.heroTries; tries++) {
+    const leanSlot = W.heroLeanEvery > 0 && i % W.heroLeanEvery === 1, tryN = late ? W.heroTries * 4 : W.heroTries;
+    for (let tries = 0; tries < tryN; tries++) {
+      // a leaner that finds no room near the road (decks below it) stands upright for its last tries
+      const leans = leanSlot && tries < W.heroTries * 0.8;
       const h = rnd(k.h[0], k.h[1]), scale = h / (sz[1] || 1);
       const rLat = Math.hypot(sz[0], sz[2]) / 2 * scale, pr = rLat * W.heroPlinthR;
       const hM = Math.max(W.heroPlinthM, h * (W.heroPlinthK || 0));
       // the later retries look wider along the road (half a slot either way), so a crowded slot still fills
-      const wide = tries >= W.heroTries / 2 ? 0.5 : 0;
-      const s = atFree(((((i + 0.15 - wide + rnd(0, 0.7 + 2 * wide)) / n) % 1) + 1) % 1);
+      // polish 6: on a stacked course whole slots can be boxed in by the decks, so the last quarter of the
+      // tries look anywhere on the free road
+      const wide = tries >= W.heroTries / 2 ? 0.5 : 0, anywhere = late || tries >= W.heroTries * (leans ? 0.3 : 0.5);
+      const s = atFree(anywhere ? rnd(0, 1) : ((((i + 0.15 - wide + rnd(0, 0.7 + 2 * wide)) / n) % 1) + 1) % 1);
       // a leaning hero stands near, on the lamp's side of the road, so its shadow falls across it
       const gr = leans ? W.heroLeanGapM : (k.gap || W.heroGapM), gap0 = gr[0] + (gr[1] - gr[0]) * Math.pow(rnd(0, 1), W.heroGapBias);
       if (!okS(s, 2) || (gap0 < W.heroFarGapM && !nearOk(s, pr + 2))) continue;
@@ -567,7 +603,8 @@ export function placeHeroes(track, kinds, rowOf, seed, { want, avoid = [], W = W
         const p = [0, 1, 2].map((j) => f.p[j] + f.b[j] * lat + f.n[j] * up);
         const toRoad = norm(sub(mul(f.b, -side), mul(Y0, dot(mul(f.b, -side), Y0))));
         for (let lean = lean0; lean > -leanStep + 1e-9; lean -= leanStep) {
-          const lz = Math.max(0, lean);
+          // polish 6: an eased lean under heroLeanMinDeg reads as a mistake, so it stands upright instead
+          const lz = lean < (W.heroLeanMinDeg ?? 15) * Math.PI / 180 ? 0 : lean;
           const Y = norm(add(mul(Y0, Math.cos(lz)), mul(toRoad, Math.sin(lz))));
           const B = sub(p, mul(Y0, hM)), top = add(p, mul(Y, h)), ax = sub(top, B);
           const body = { B, D: norm(ax), len: len(ax), r: pr, top };
@@ -592,6 +629,7 @@ export function placeHeroes(track, kinds, rowOf, seed, { want, avoid = [], W = W
         plinth: { p: hit.B, r: pr, hM } });
       break;
     }
+    if (out.length === had && !late) order.push([i, true]);
   }
   return out;
 }
@@ -612,6 +650,36 @@ export function heroCasters(placed, dir, samples, W = WORLD_DEFAULTS) {
   });
   rows.sort((p, q) => p.gap - q.gap);
   return rows.slice(0, W.heroCastN ?? 3).map((r) => r.i);
+}
+
+/**
+ * The per-frame form of scatterBasis / heroBasis (polish 6 PERF: no arrays per call): writes the basis for
+ * front F turned about Y by angle a into out = { X, Y, Z } (three-element arrays the caller keeps) and
+ * returns out. Same numbers as norm(turnAbout(F, Y, a)), Z = -F, X = Y x Z.
+ */
+export function turnBasisInto(F, Y, a, out) {
+  const c = Math.cos(a), sn = Math.sin(a);
+  let fx = F[0] * c + (Y[1] * F[2] - Y[2] * F[1]) * sn;
+  let fy = F[1] * c + (Y[2] * F[0] - Y[0] * F[2]) * sn;
+  let fz = F[2] * c + (Y[0] * F[1] - Y[1] * F[0]) * sn;
+  const l = Math.hypot(fx, fy, fz) || 1;
+  fx /= l; fy /= l; fz /= l;
+  const Z = out.Z, X = out.X, O = out.Y;
+  Z[0] = -fx; Z[1] = -fy; Z[2] = -fz;
+  O[0] = Y[0]; O[1] = Y[1]; O[2] = Y[2];
+  X[0] = Y[1] * Z[2] - Y[2] * Z[1]; X[1] = Y[2] * Z[0] - Y[0] * Z[2]; X[2] = Y[0] * Z[1] - Y[1] * Z[0];
+  return out;
+}
+
+/** scatterBasis into out (null for a tumbling piece), allocation free. */
+export function scatterBasisInto(x, ang, W, out) {
+  if (x.pose === 'tumble') return null;
+  return turnBasisInto(x.F, x.Y, x.pose === 'face' ? W.scatterSwingRad * Math.sin(ang) : ang, out);
+}
+
+/** heroBasis into out, allocation free. */
+export function heroBasisInto(x, ang, W, out) {
+  return turnBasisInto(x.F, x.Y, x.pose === 'face' ? W.heroSwingRad * Math.sin(ang) : ang, out);
 }
 
 /** Model basis for a hero at turn angle ang: { X, Y, Z } (front -Z faces F at rest). */

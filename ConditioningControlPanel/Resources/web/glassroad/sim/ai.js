@@ -42,6 +42,9 @@ const GAPS = {
   'ai.routeAimAheadM': 25,    // aims at a point this far past the landing pad: a straight line off the open edge
   'ai.routeHopEdgeM': 2.2,     // hops the open edge's kerb once this close to it
   'ai.routeLineM': 2.8,          // the line runs this far to the open side of the landing pad
+  'ai.trickOpenM': 120,        // polish 6: no trick (its landing boost) with an open edge this close ahead
+  'ai.padRiskM': 140,          // polish 6: a pad with an open bend this close after it
+  'ai.padRiskPct': 0.85,       // that bend's planned speed under this share of top: the bots steer round the pad
 };
 // feel.get throws on a missing key, and a feel never gains keys (set refuses them), so a miss is
 // remembered per feel: no throw per bot per tick.
@@ -97,9 +100,10 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     for (let k = 0; k < N; k++) {
       const s = k * STEP;
       track.frameAt(s - W / 2, A); track.frameAt(s + W / 2, B);
-      const d = clamp(A.t[0] * B.t[0] + A.t[1] * B.t[1] + A.t[2] * B.t[2], -1, 1);
+      // the turn in the road's own plane (polish 6): a loop or a crest pitches the road but is no bend to steer or brake for
+      const d = A.t[0] * B.t[0] + A.t[1] * B.t[1] + A.t[2] * B.t[2];
       const side = B.t[0] * A.b[0] + B.t[1] * A.b[1] + B.t[2] * A.b[2];
-      bend[k] = (Math.acos(d) * 180 / Math.PI / W) * (side >= 0 ? 1 : -1);
+      bend[k] = Math.atan2(side, Math.abs(d)) * 180 / Math.PI / W;
       const f = track.frameAt(s, A), fl = f.flags || [];
       half[k] = f.w / 2; roll[k] = f.roll || 0;
       const rail = fl.includes('rail');
@@ -112,6 +116,19 @@ export function createAi(track, feel, { seed = 1 } = {}) {
   const lips = (track.jumps || []).map((j) => j.s);
   const lipAhead = (s, m) => lips.some((ls) => wrap(ls - s, L) <= m);
   const openAhead = (s, m) => { for (let d = 0; d <= m; d += STEP) { const k = at(s + d); if (openL[k] || openR[k]) return true; } return false; };
+  // boost pads followed (within ai.padRiskM) by an open bend tighter than ai.padRiskPct of top: the bots skip them
+  const padRisk = (track.boosts || []).map((pd) => {
+    let risky = false;
+    if (typeof track.frameAt === 'function') {
+      yawParams(feel, YP);
+      const lim = fg(feel, 'ai.padRiskPct') * feel.get('speed.topMps');
+      for (let d = 0; d <= fg(feel, 'ai.padRiskM') && !risky; d += STEP) {
+        const k = at(pd.s + d);
+        if ((openL[k] || openR[k]) && bendSpeed(bend[k], YP, fg(feel, 'ai.cornerMargin')) < lim) risky = true;
+      }
+    }
+    return { s: pd.s, x: pd.x, w: pd.w, risky };
+  });
 
   const bots = new Map();
 
@@ -213,6 +230,13 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       if (wrap(t.s - s, L) > avoidM * 1.5) continue;
       if (Math.abs(t.x - target) < shift) target = t.x + (target >= t.x ? shift : -shift);
     }
+    // polish 6: a boost pad that would carry the kart into a bend it cannot take (an open one most of all) is left alone
+    for (let k = 0; k < padRisk.length; k++) {
+      const pd = padRisk[k];
+      if (!pd.risky || wrap(pd.s - s, L) > avoidM * 1.5) continue;
+      const edge = pd.w / 2 + shift * 0.5;
+      if (Math.abs(target - pd.x) < edge) target = pd.x + (target >= pd.x ? edge : -edge);
+    }
     lineLimits(s, la * 1.5, LIM);
     target = clamp(target, LIM.lo, LIM.hi);
 
@@ -274,7 +298,8 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     } else b.stuckT = 0;
 
     driftLogic(r, b, dt, out, s, lat, speed, la, nearLip, blind);
-    if (st[S.airborne] > 0 && st[S.airTime] > 0 && st[S.airTime] <= 0.1 && !b.trickRolled) { b.trickRolled = true; if (b.rand() < feel.get('trick.botChance')) out.hopPressed = true; } else if (st[S.grounded] > 0) b.trickRolled = false;
+    // a trick pays a boost on landing: never into an open edge ahead (polish 6: a boost cannot brake for an open bend)
+    if (st[S.airborne] > 0 && st[S.airTime] > 0 && st[S.airTime] <= 0.1 && !b.trickRolled) { b.trickRolled = true; if (b.rand() < feel.get('trick.botChance') && !openAhead(s, fg(feel, 'ai.trickOpenM'))) out.hopPressed = true; } else if (st[S.grounded] > 0) b.trickRolled = false;
     if (r.item) itemLogic(r, b, ctx, dt, out);
   }
 
@@ -293,6 +318,8 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       if (st[S.respawnPhase] !== RESPAWN.NONE || (st[S.grounded] > 0 && past > 3 && past < L / 2)) b.route = null;
     } else if (b.routeLap !== lap) {
       for (const rt of rs) {
+        // polish 6: a gap route (the dare) needs a drift-in cut of 50+ deg at speed; the bots leave it to people
+        if (rt.kind === 'gap') continue;
         const d = wrap(rt.fromS - s, L);
         if (d <= lead || d > lead + 40) continue;
         b.routeLap = lap;

@@ -35,14 +35,17 @@ test('props: scatter counts per tier (about 70 high, 45 mid, 25 phone) and every
 
 test('props: the corridor windows match the brief and nothing sits in one', () => {
   const f = (x) => x * L;
-  for (const g of [0.14, 0.31, 0.47, 0.69, 0.86]) {
+  // polish 6: refit to the stacked course
+  for (const g of [0.09, 0.17, 0.315, 0.785, 0.965]) {
     assert.equal(corridorHit(f(g), L, W), 'gate');
     assert.equal(corridorHit(f(g) + 19, L, W), 'gate');
   }
-  assert.equal(corridorHit(f(0.58), L, W), 'tunnel');
-  assert.equal(corridorHit(f(0.55) - 15, L, W), 'tunnel');
-  for (const b of [0.06, 0.2, 0.25, 0.38, 0.42, 0.52, 0.64, 0.76, 0.8, 0.92]) assert.equal(corridorHit(f(b) + 7, L, W), 'board');
-  assert.equal(corridorHit(f(0.1), L, W), null);
+  assert.equal(corridorHit(f(0.91), L, W), 'tunnel');
+  assert.equal(corridorHit(f(0.89) - 15, L, W), 'tunnel');
+  assert.equal(corridorHit(f(0.42), L, W), 'loop');
+  assert.equal(corridorHit(f(0.51), L, W), 'loop');
+  for (const b of [0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]) assert.equal(corridorHit(f(b) + 7, L, W), 'board');
+  assert.equal(corridorHit(f(0.13), L, W), null);
   // windows wrap round the line
   assert.equal(corridorHit(L - 1, L, { ...W, corridorGates: [0.005] }), 'gate');
   assert.equal(corridorHit(3, L, { ...W, corridorGates: [0.999] }), 'gate');
@@ -196,14 +199,14 @@ test('heroes: every tier fills its count and the high tier shows every prop kind
   assert.ok(phone.size >= 5, 'phone kinds ' + phone.size);
 });
 
-test('heroes: colossal (30 to 55 m tall, 15 to 90 m off the edge, rising past the road, a few leaning toward it)', () => {
+test('heroes: colossal (30 to 55 m tall, 15 to 110 m off the edge (polish 6: was 90, the stacked course is denser), rising past the road, a few leaning toward it)', () => {
   for (const seed of [1, 7, 4242]) {
     const h = heroes('high', seed);
     let leaning = 0;
     for (const x of h) {
       const f = tr.frameAt(x.s), q = localOf(x.p, f);
       const gap = Math.abs(q.l) - f.w / 2 - x.plinth.r;
-      assert.ok(gap >= 15 - 1e-6 && gap <= 90 + 1e-6, x.k.id + ' gap ' + gap.toFixed(1));
+      assert.ok(gap >= 15 - 1e-6 && gap <= 110 + 1e-6, x.k.id + ' gap ' + gap.toFixed(1));
       assert.ok(q.h >= W.heroLowUpM[0] - 1e-6 && q.h <= W.heroUpM[1] + 1e-6, x.k.id + ' base ' + q.h.toFixed(1));
       assert.ok(x.h >= 30 && x.h <= 55, x.k.id + ' height ' + x.h.toFixed(1));
       assert.ok(Math.abs(x.h - rowOf(x.k.id).sizeM[1] * x.scale) < 1e-6);
@@ -270,8 +273,8 @@ test('heroes: clear of every stretch, the corridors, the billboards, the drop sh
     for (const s of sc) for (const x of h) assert.ok(capsulesApart(s.body, x.body, W.scatterMarginM - 1e-6), s.k.id + ' over a hero');
     assert.ok(sc.length >= Math.floor(scatterCount(tier, W) * 0.85), 'scatter still fills: ' + sc.length);
   }
-  // the drop shortcut take-off (helix top) and landing (lower straight) stay open
-  for (const s of [520, 560, 600, 820, 860, 900]) assert.ok(heroAvoidHit(s, L, W), 'avoid ' + s);
+  // the dare's take-off (the coil's outer turn) and landing (its inner turn) stay open (polish 6)
+  for (const s of [945, 975, 1005, 1145, 1170, 1190]) assert.ok(heroAvoidHit(s, L, W), 'avoid ' + s);
   assert.ok(heroAvoidHit(L - 5, L, W) && heroAvoidHit(5, L, W), 'the finish arch');
 });
 
@@ -313,4 +316,20 @@ test('sky: the clean gradient has no muddy band (no red, orange, yellow or green
     assert.ok(c.s >= 0.6 && c.v >= 0.8, s + ' clean and bright');
   }
   assert.ok(!/ramp\(nx\)\.mul\(cloud\.mul\(0\.6\)/.test(src), 'the old full-spectrum blotch field is gone');
+});
+
+import { scatterBasisInto, heroBasisInto, WORLD_DEFAULTS as WD } from '../render/colossiMath.js';
+test('props: the per-frame basis writers match scatterBasis and heroBasis and allocate nothing new', () => {
+  const out = { X: [0, 0, 0], Y: [0, 0, 0], Z: [0, 0, 0] };
+  const Y = [0.1, 0.98, 0.17], yl = Math.hypot(...Y), Yn = Y.map((v) => v / yl);
+  const F0 = [1, 0, 0], d = F0[0] * Yn[0], Fp = [F0[0] - Yn[0] * d, -Yn[1] * d, -Yn[2] * d], fl = Math.hypot(...Fp), F = Fp.map((v) => v / fl);
+  for (const pose of ['face', 'upright']) for (const ang of [0, 0.7, 2.9, -1.3]) {
+    const x = { pose, F, Y: Yn };
+    const a = scatterBasis(x, ang, WD), b = scatterBasisInto(x, ang, WD, out);
+    assert.equal(b, out);
+    for (const k of ['X', 'Y', 'Z']) for (let j = 0; j < 3; j++) assert.ok(Math.abs(a[k][j] - b[k][j]) < 1e-12, pose + ' ' + k);
+    const h = heroBasis(x, ang, WD), hi = heroBasisInto(x, ang, WD, out);
+    for (const k of ['X', 'Y', 'Z']) for (let j = 0; j < 3; j++) assert.ok(Math.abs(h[k][j] - hi[k][j]) < 1e-12, 'hero ' + pose + ' ' + k);
+  }
+  assert.equal(scatterBasisInto({ pose: 'tumble', F, Y: Yn }, 0, WD, out), null);
 });

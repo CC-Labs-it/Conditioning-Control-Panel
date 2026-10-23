@@ -53,8 +53,10 @@ export function lipAhead(track, s, lateral, distM, feel) {
     if (d <= distM && Math.abs(lateral - p.x) <= p.w / 2) return { at: 'pad', d };
   }
   if (typeof track.frameAt === 'function') {
-    const a = pitchOf(track.frameAt(s, FA).t), b = pitchOf(track.frameAt(s + distM + 2, FB).t);
-    if ((a - b) * 180 / Math.PI >= feel.get('trick.crestDeg')) return { at: 'crest', d: distM };
+    const fa = track.frameAt(s, FA), fb = track.frameAt(s + distM + 2, FB);
+    const loop = (fa.flags && fa.flags.indexOf('magnet') >= 0) || (fb.flags && fb.flags.indexOf('magnet') >= 0);   // a loop's far side is no crest
+    const a = pitchOf(fa.t), b = pitchOf(fb.t);
+    if (!loop && (a - b) * 180 / Math.PI >= feel.get('trick.crestDeg')) return { at: 'crest', d: distM };
   }
   return null;
 }

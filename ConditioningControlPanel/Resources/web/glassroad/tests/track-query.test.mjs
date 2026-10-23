@@ -13,6 +13,15 @@ const place = (s, lat, h) => {
 };
 // deterministic pseudo random
 let seed = 7;
+// polish 6: a flat railed node past the grid (no roll, no grade), the first open node (the open corner),
+// and two nodes stacked in plan at least 12 m apart (the column climb ends over its own start)
+const FLAT = json.nodes.findIndex((n, i) => i > 20 && n.roll === 0 && n.flags.length === 1 && n.flags[0] === 'rail' && Math.abs(tr.frameAt(tr.nodeS[i] + 3).t[1]) < 0.01);
+const OPEN = json.nodes.findIndex((n) => n.flags.includes('open'));
+let UP = -1, LOW = -1;
+for (let i = 0; i < json.nodes.length && UP < 0; i++) for (let j = 0; j < json.nodes.length; j++) {
+  const a = json.nodes[i].p, b = json.nodes[j].p;
+  if (Math.hypot(a[0] - b[0], a[2] - b[2]) < 0.5 && a[1] - b[1] > 12 && !json.nodes[i].flags.includes('magnet')) { UP = i; LOW = j; break; }
+}
 const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
 test('query: round trips frameAt points to s, lateral and height', () => {
@@ -32,26 +41,27 @@ test('query: round trips frameAt points to s, lateral and height', () => {
 });
 
 test('query: segT and surface data match frameAt', () => {
-  const f = tr.frameAt(tr.nodeS[40] + 3);
-  const q = tr.query(f.p[0], f.p[1] + 0.5, f.p[2], 40);
-  assert.equal(q.seg, 40);
+  const n = FLAT;
+  const f = tr.frameAt(tr.nodeS[n] + 3);
+  const q = tr.query(f.p[0], f.p[1] + 0.5, f.p[2], n);
+  assert.equal(q.seg, n);
   assert.ok(Math.abs(q.segT - f.segT) < 1e-3);
   assert.equal(q.surface, 'glass');
-  assert.deepEqual(q.flags, json.nodes[40].flags);
+  assert.deepEqual(q.flags, json.nodes[n].flags);
   assert.ok(Math.abs(q.normal[0] - f.n[0]) < 1e-3 && Math.abs(q.normal[1] - f.n[1]) < 1e-3);
 });
 
 test('query: past the edge, open sides and rails', () => {
-  const railS = tr.nodeS[20] + 4, openS = tr.nodeS[90] + 4;
+  const railS = tr.nodeS[20] + 4, openS = tr.nodeS[OPEN] + 4;
   for (const side of [-1, 1]) {
     const w = tr.frameAt(railS).w;
     let q = tr.query(...place(railS, side * (w / 2 - 0.5), 0.3).P, 20);
     assert.equal(q.onRoad, true); assert.equal(q.railed, true);
     q = tr.query(...place(railS, side * (w / 2 + 1), 0.3).P, 20);
     assert.equal(q.onRoad, false); assert.ok(Math.abs(q.edgeDist + 1) < 1e-3); assert.equal(q.railed, true);
-    q = tr.query(...place(openS, side * (w / 2 + 1), -2).P, 90);
+    q = tr.query(...place(openS, side * (w / 2 + 1), -2).P, OPEN);
     assert.equal(q.onRoad, false); assert.equal(q.railed, false); assert.ok(q.height < -1.9);
-    q = tr.query(...place(openS, 0, 0.2).P, 90);
+    q = tr.query(...place(openS, 0, 0.2).P, OPEN);
     assert.equal(q.onRoad, true); assert.equal(q.railed, false);
   }
 });
@@ -77,12 +87,12 @@ test('query: the jump gap has no road', () => {
 });
 
 test('query: stacked spiral passes resolve to the nearer one', () => {
-  // node 51 enters the spiral straight over node 78, where it leaves 14 m lower
-  const up = tr.frameAt(tr.nodeS[51]), low = tr.frameAt(tr.nodeS[78]);
+  assert.ok(UP >= 0, 'a stacked pass exists');
+  const up = tr.frameAt(tr.nodeS[UP]), low = tr.frameAt(tr.nodeS[LOW]);
   assert.ok(Math.hypot(up.p[0] - low.p[0], up.p[2] - low.p[2]) < 0.5 && up.p[1] - low.p[1] > 12, 'passes stacked');
-  for (const [hu, hl] of [[-1, -1], [50, 79]]) {
-    assert.ok(sDiff(tr.query(up.p[0] + up.n[0] * 0.5, up.p[1] + up.n[1] * 0.5, up.p[2] + up.n[2] * 0.5, hu).s, tr.nodeS[51]) < 1e-3, 'upper, hint ' + hu);
-    assert.ok(sDiff(tr.query(low.p[0] + low.n[0] * 0.5, low.p[1] + low.n[1] * 0.5, low.p[2] + low.n[2] * 0.5, hl).s, tr.nodeS[78]) < 1e-3, 'lower, hint ' + hl);
+  for (const [hu, hl] of [[-1, -1], [UP - 1, LOW + 1]]) {
+    assert.ok(sDiff(tr.query(up.p[0] + up.n[0] * 0.5, up.p[1] + up.n[1] * 0.5, up.p[2] + up.n[2] * 0.5, hu).s, tr.nodeS[UP]) < 1e-3, 'upper, hint ' + hu);
+    assert.ok(sDiff(tr.query(low.p[0] + low.n[0] * 0.5, low.p[1] + low.n[1] * 0.5, low.p[2] + low.n[2] * 0.5, hl).s, tr.nodeS[LOW]) < 1e-3, 'lower, hint ' + hl);
   }
 });
 

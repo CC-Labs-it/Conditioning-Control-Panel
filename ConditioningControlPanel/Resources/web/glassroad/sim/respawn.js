@@ -1,7 +1,8 @@
 /* sim/respawn.js - the rescue timeline after a drop (plan section 6, CONTRACT.md section 4).
  *
  * Anchor: node latchSeg (latched at TAKE-OFF), or the first landing node when that node is a jump lip
- * or inside a gap. The kart faces respawn.aheadNodes nodes further on. PULL draws it to a hover point
+ * or inside a gap; never inside a vertical loop (the node before its magnet run). The kart faces respawn.aheadNodes
+ * nodes further on. PULL draws it to a hover point
  * above the anchor, arriving exactly at pullS; HOVER holds; RELEASE lowers it to the road and lets it
  * go at releasePct x top; GRACE (no drop, no wall cancel) runs while kart.step drives again.
  */
@@ -25,6 +26,9 @@ export function anchorNode(st, track) {
       break;
     }
   }
+  // polish 6: never inside a vertical loop (magnet run): back to the last node before the run, on the entry straight
+  const mag = (k) => { const f = track.nodeFlags ? track.nodeFlags(k) : null; return !!f && f.indexOf('magnet') >= 0; };
+  for (let k = 0; k < n && mag(i); k++) i = (i - 1 + n) % n;
   return i;
 }
 

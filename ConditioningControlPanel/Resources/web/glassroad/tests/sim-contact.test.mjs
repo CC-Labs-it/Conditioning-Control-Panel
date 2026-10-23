@@ -70,7 +70,9 @@ test('open edge: a push may carry a kart off, never under Gentle or the assist; 
   const tr = fakeTrack({ flags: () => [] });             // open both sides, w 14
   const shove = (feel, assist) => {
     const c = createContact(tr, feel, recorder());
-    const a = racer(0, tr, feel, { s: 100, lateral: 5.9, speed: 20 }), b = racer(1, tr, feel, { s: 100, lateral: 6.8, speed: 20 });
+    // a deep overlap at the edge (sized by contact.radiusM: VIEW shrank the karts in polish 6)
+    const r2 = 2 * feel.get('contact.radiusM');
+    const a = racer(0, tr, feel, { s: 100, lateral: 6.8 - r2 * 0.4, speed: 20 }), b = racer(1, tr, feel, { s: 100, lateral: 6.8, speed: 20 });
     if (assist) b.feel.over['gentle.on'] = true;
     c.update(DT, [a, b], RACING);
     return tr.query(b.st[S.posX], b.st[S.posY], b.st[S.posZ]).lateral;

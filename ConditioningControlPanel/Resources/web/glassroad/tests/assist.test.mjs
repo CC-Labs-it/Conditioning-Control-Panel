@@ -71,7 +71,8 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
     assert.equal(r.events('launch-boost').length, 0, mode + ': never takes the launch boost');
     assert.equal(r.events('drift-start').length, 0, mode + ': never drifts');
     const lapS = r.t;
-    assert.ok(lapS < 80, mode + ': rolls with the song, lap in ' + lapS.toFixed(1) + ' s');
+    const capS = 80 * Math.max(1, L / 1350);           // 80 s on the 1350 m ring; polish 6 courses run longer
+    assert.ok(lapS < capS, mode + ': rolls with the song, lap in ' + lapS.toFixed(1) + ' s (cap ' + capS.toFixed(0) + ')');
     // nothing at all before go plus cruiseAfterS
     const cruiseAt = r.trace.find((x) => x.cruise > 0);
     const goT = r.feel.get('juice.countdownPulses') * 60 / r.feel.get('clock.bpm');
@@ -129,10 +130,21 @@ test('any input takes over the same step: autopilot and cruise drop to zero at o
 });
 
 test('the centre pull: Strong pulls harder than Light, Off not at all; it grows past a third of the half width', () => {
-  // the straightest stretch of Threshold (s 200 to 350, railed, 14 m wide): a kart placed off centre at 20 m/s,
-  // nose along the road, throttle held and no steer for 1.5 s (before the autopilot at 2 s)
+  // the straightest railed, level 150 m of Threshold (found, so a new course keeps the test): a kart placed off
+  // centre at 20 m/s, nose along the road, throttle held and no steer for 1.5 s (before the autopilot at 2 s)
   const track = threshold(), feel = makeFeel();
-  const S0 = 200, f = track.frameAt(S0, { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] }), h = f.w / 2;
+  let S0 = 0, bestTurn = Infinity;
+  for (let s0 = 0; s0 < track.lengthM; s0 += 10) {
+    let turn = 0, ok = true;
+    const a0 = track.frameAt(s0);
+    for (let d = 10; d <= 150 && ok; d += 10) {
+      const fb = track.frameAt(s0 + d);
+      ok = (fb.flags || []).includes('rail') && Math.abs(fb.t[1]) < 0.05 && Math.abs(fb.roll) < 0.05;
+      turn = Math.max(turn, Math.acos(Math.min(1, a0.t[0] * fb.t[0] + a0.t[1] * fb.t[1] + a0.t[2] * fb.t[2])));
+    }
+    if (ok && turn < bestTurn) { bestTurn = turn; S0 = s0; }
+  }
+  const f = track.frameAt(S0, { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] }), h = f.w / 2;
   const st = createState(), q = { normal: [0, 0, 0], p: [0, 0, 0] };
   const place = (lat) => {
     st.fill(0);

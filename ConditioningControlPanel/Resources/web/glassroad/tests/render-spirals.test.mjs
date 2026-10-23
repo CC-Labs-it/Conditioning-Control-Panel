@@ -19,7 +19,7 @@ const hexOf = (rgb) => toHex(rgb);
 test('spirals: the layout sits in the brief corridors, one Loom source per gate, every gate different', () => {
   assert.deepEqual(checkLayout(layout), []);
   assert.equal(layout.track, 'threshold');
-  assert.deepEqual(layout.gates.map((g) => g.f), [0.14, 0.31, 0.47, 0.69, 0.86]);
+  assert.deepEqual(layout.gates.map((g) => g.f), [0.09, 0.17, 0.315, 0.785, 0.965]);   // polish 6: the stacked course (GEO)
   const keys = layout.gates.map((g) => JSON.stringify(gateParams(g, loom)));
   assert.equal(new Set(keys).size, keys.length);
   assert.ok(layout.gates.some((g) => g.depthM > 0) && layout.gates.some((g) => !g.depthM), 'portals and helix tunnels');

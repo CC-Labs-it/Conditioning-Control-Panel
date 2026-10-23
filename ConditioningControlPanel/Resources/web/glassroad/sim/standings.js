@@ -1,7 +1,7 @@
 /* sim/standings.js - places, gaps and the race result (CONTRACT-B1.md section 3).
  *
  * progressM = lap * lengthM + d, d = distance past the start line (negative for karts still behind it on
- * the grid). Finished racers rank by finishS ahead of every unfinished one; unfinished ones by progressM.
+ * the grid, or dropped back past it by a fall onto an earlier deck). Finished racers rank by finishS ahead of every unfinished one; unfinished ones by progressM.
  * The order is re-sorted from last tick's order with adjacent swaps only when the lead is real
  * (ai.placeHystM), so two karts side by side never flicker places and ties stay stable.
  * The Result is final once the player finished AND (all finished OR ai.resultsWaitS passed); racers still
@@ -14,7 +14,7 @@ const GAPS = { 'ai.placeHystM': 0.5 };   // feel gap: lead needed to swap two pl
 const fg = (feel, k) => { try { return feel.get(k); } catch (e) { return GAPS[k]; } };
 
 export function createStandings(track, feel, events) {
-  const L = track.lengthM, startS = track.checklines && track.checklines.length ? track.checklines[0].s : 0;
+  const L = track.lengthM, lines = track.checklines || [], startS = lines.length ? lines[0].s : 0;
   let order = [], places = [], prog = [], clockS = 0, waitS = 0, sent = false;
   const st = { order, update, placeOf, progressOf, gapToLeader, result: null, reset };
 
@@ -25,7 +25,10 @@ export function createStandings(track, feel, events) {
   function progressM(r) {
     const s = r.st;
     let d = wrap(s[S.s] - startS, L);
-    if ((s[S.checkpoint] | 0) === 0 && d > L / 2) d -= L;
+    // behind the start line: on the grid, or (polish 6) a fall back onto an earlier deck past the lap line;
+    // judged from the last line passed, so a kart at line k is never read a lap ahead
+    const k = s[S.checkpoint] | 0, line = lines.length ? lines[k % lines.length] : null;
+    if (d > (line ? wrap(line.s - startS, L) : 0) + L / 2) d -= L;
     return (s[S.lap] | 0) * L + d;
   }
 

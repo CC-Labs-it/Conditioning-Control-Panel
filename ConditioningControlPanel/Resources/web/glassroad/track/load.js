@@ -20,7 +20,7 @@ export function loadTrack(json, { validate = true } = {}) {
   const nodes = json.nodes.map((n) => ({ p: n.p.slice(), roll: n.roll * DEG, w: n.w, flags: n.flags.slice(), speed: n.speed, surface: n.surface }));
   const N = nodes.length;
   const sp = createSpline(nodes.map((n) => n.p), nodes.map((n) => n.flags.includes('jump')));
-  const refN = buildRefNormals(sp);
+  const refN = buildRefNormals(sp, nodes.map((n) => n.flags.includes('magnet')));
   const rollAt = createScalar(nodes.map((n) => n.roll));
   const widthAt = createScalar(nodes.map((n) => n.w));
   const { nodeS, lengthM } = sp;

@@ -7,7 +7,8 @@
  * Visuals or the player's steering assist): then it is held inside the road.
  * Ghosts never touch: the first contact.ghostS after go, and the whole rescue incl. its 1.5 s grace.
  * Slipstream: sit slipMinM..slipMaxM behind a kart, inside slipWidthM, both fast and grounded, for
- * slipChargeS and a small boost fires (sim/grant.js), then slipCooldownS. No three.js.
+ * slipChargeS and a small boost fires (sim/grant.js), then slipCooldownS; on an open stretch the charge holds
+ * full and fires once the road is railed again (polish 6). No three.js.
  */
 import { S, RESPAWN, BOOST } from './state.js';
 import { wrap, clamp } from '../core/math.js';
@@ -24,6 +25,11 @@ export function createContact(track, feel, events) {
   const slip = [];                 // per racer { charge, cool, inWake }
 
   function reset() { cool.clear(); slip.length = 0; }
+  /** A kart on a stretch with an open side (no rail there). */
+  function openAt(st) {
+    const f = track.nodeFlags ? track.nodeFlags(st[S.seg] | 0) : null;
+    return !!f && f.indexOf('rail') < 0 && !(f.indexOf('railL') >= 0 && f.indexOf('railR') >= 0) && f.indexOf('jump') < 0;
+  }
 
   function weight(r) {
     const st = r.st, v = Math.hypot(st[S.velX], st[S.velY], st[S.velZ]);
@@ -121,7 +127,9 @@ export function createContact(track, feel, events) {
       if (wake) {
         if (!w.inWake) { w.inWake = true; events.emit('slipstream', { racer: r.i, state: 'in' }); }
         w.charge += dt;
-        if (w.charge >= chargeS) {
+        // polish 6: the boost waits for railed road (a slipstream kick on an open bend throws the kart off it)
+        if (w.charge >= chargeS && openAt(r.st)) w.charge = chargeS;
+        else if (w.charge >= chargeS) {
           const ok = grantBoost(r.st, feel.get('contact.slipAmount'), feel.get('contact.slipHoldS'), 'slip', r.feel, r.events || events);
           events.emit('slipstream', { racer: r.i, state: ok ? 'fire' : 'out' });
           w.charge = 0; w.inWake = false; w.cool = feel.get('contact.slipCooldownS');
