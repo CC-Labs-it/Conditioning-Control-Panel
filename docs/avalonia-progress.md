@@ -2683,3 +2683,7 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
 ## avalonia-port/settings-migration-test: +616
 - Settings migration test over a real WPF profile (local only; CI runs a synthetic variant): 768 keys and 9568 files survive startup+shutdown.
 - It found and fixed 3 losses: Companion drawers reset on exit, built-in preset action ids re-minted each load, Circe-neutral voice lines reverted (LockedMod/overrides now ship).
+
+## avalonia-port/linux-package-wired: +28
+- linux-package -> wired: the installed tarball reaches the First run window under kwin --virtual (splash 0.46 s, wizard 5.80 s, 749 MiB installed); AUR test-local passes.
+- Hand-install steps for the tarball added to docs/avalonia-linux-install.md (the .desktop Exec needs a PATH launcher).
