@@ -9,6 +9,7 @@
 import { S, RESPAWN, getPos, getQuat, setPos, setQuat, setVel } from './state.js';
 import { v3, q4, v3sub, v3norm, v3reject, v3addScaled, v3lerp, v3scale, qslerp, qlook, smoothstep } from '../core/math.js';
 import { gap } from './gaps.js';
+import { courtRescueNode } from './court-paths.js';
 
 const fOut = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });
 const A = fOut(), B = fOut(), F = v3(), H = v3(), P = v3(), Q = q4(), QC = q4(), V = v3(), ZERO = [0, 0, 0];
@@ -29,7 +30,7 @@ export function anchorNode(st, track) {
   // polish 6: never inside a vertical loop (magnet run): back to the last node before the run, on the entry straight
   const mag = (k) => { const f = track.nodeFlags ? track.nodeFlags(k) : null; return !!f && f.indexOf('magnet') >= 0; };
   for (let k = 0; k < n && mag(i); k++) i = (i - 1 + n) % n;
-  return i;
+  return courtRescueNode(track, i);
 }
 
 export function updateRespawn(st, track, feel, dt, events) {

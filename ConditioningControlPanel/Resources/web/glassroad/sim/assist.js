@@ -25,6 +25,7 @@ import { S, RESPAWN, BOOST } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { bendSpeed, yawParams, calmOf } from './steer.js';
 import { gap } from './gaps.js';
+import { createCourtPaths } from './court-paths.js';
 
 /** The option values in the order the Options card cycles them (the first is the default). */
 export const ASSIST_MODES = Object.freeze(['light', 'strong', 'off']);
@@ -46,6 +47,8 @@ const EASE_SHARE = 1, EASE_LOOK_S = 1.6, EASE_LIFT_MPS = 3, EASE_BRAKE = 0.15;
 const YP = {};
 
 export function createAssist(track, feel, { mode = 'light' } = {}) {
+  const courts = createCourtPaths(track);
+  let courtRoute = null, courtCommitted = false;
   const L = track.lengthM, N = Math.ceil(L / STEP);
   // per 2 m: signed bend (deg/m, + right) and half width (the bots build the same table, sim/ai.js)
   const bend = new Float32Array(N), half = new Float32Array(N);
@@ -84,7 +87,7 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
   const view = { auto: 0, cruise: 0, pull: 0, steerIdleS: 0, idleS: 0, active: false };
   let m = MODE[assistMode(mode)], modeId = assistMode(mode);
 
-  function reset() { view.auto = 0; view.cruise = 0; view.pull = 0; view.steerIdleS = 0; view.idleS = 0; view.active = false; }
+  function reset() { view.auto = 0; view.cruise = 0; view.pull = 0; view.steerIdleS = 0; view.idleS = 0; view.active = false; courtRoute = null; }
 
   /** The nose against the road (+ = right of travel), forward and right axes of the kart. */
   const AX = { fx: 0, fy: 0, fz: 0, rx: 0, ry: 0, rz: 0 };
@@ -117,6 +120,12 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     const owned = ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE;
     const top = feel.get('speed.topMps');
     const s = st[S.s], lat = st[S.lateral];
+    const court = courts.at(s);
+    if (!court || steerIn || owned || (courtRoute && courtRoute.plan !== court)) courtRoute = null;
+    if (court && !courtRoute) { courtRoute = courts.choose(court, 0, 0, 0, lat); courtCommitted = s >= court.court.fromS + 1; }
+    if (courtRoute && !courtCommitted && s >= court.court.fromS + 1) {
+      courtRoute = courts.choose(court, 0, 0, 0, lat); courtCommitted = true;
+    }
     const ax = axes(st);
     const fwdV = st[S.velX] * ax.fx + st[S.velY] * ax.fy + st[S.velZ] * ax.fz;
     const speed = Math.max(0, fwdV);
@@ -179,7 +188,9 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     const h = half[at(s)];
     // PULL: past pullFromHalf of the half width, back toward the centre
     const free = g('pullFromHalf') * h, ex = clamp((Math.abs(lat) - free) / Math.max(0.5, h - free), 0, 1);
-    const pull = -Math.sign(lat) * ex * g('pull') * m.pull;
+    const courtLine = courtRoute ? courts.target(courtRoute, s, 0) : 0;
+    const pull = courtRoute ? clamp((courtLine - lat) / 4, -1, 1) * g('pull') * m.pull
+      : -Math.sign(lat) * ex * g('pull') * m.pull;
     // and a little heading alignment with the road a short way ahead (so it leans into a bend, never against it)
     const fa = track.frameAt(s + Math.max(4, speed * g('alignLeadS')), FA);
     const at2 = ax.fx * fa.t[0] + ax.fy * fa.t[1] + ax.fz * fa.t[2], ab = ax.fx * fa.b[0] + ax.fy * fa.b[1] + ax.fz * fa.b[2];
@@ -190,7 +201,8 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     let steer = help;
     if (view.auto > 0) {
       // AUTO: pure pursuit on the drive line, the centre with a small cut to the inside of a bend
-      const la = Math.max(feel.get('ai.lookAheadMinM'), speed * feel.get('ai.lookAheadS'));
+      let la = Math.max(feel.get('ai.lookAheadMinM'), speed * feel.get('ai.lookAheadS'));
+      if (courtRoute && s >= court.court.fromS) la = Math.min(la, 12);
       const k = at(s + la), bk = bend[k];
       const cutK = clamp(Math.abs(bk) / feel.get('ai.driftCurveDegPerM'), 0, 1);
       const band = g('lineBandHalf') * Math.min(h, half[k]);
@@ -200,6 +212,7 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
         if (!pd.risky || wrap(pd.s - s, L) > Math.max(la * 2, PAD_LOOK_M) || Math.abs(target - pd.x) >= edge) continue;
         target = clamp(pd.x + (target >= pd.x ? edge : -edge), -(Math.min(h, half[k]) - PAD_RAIL_M), Math.min(h, half[k]) - PAD_RAIL_M);
       }
+      if (courtRoute) target = courts.target(courtRoute, s, la, target);
       const f = track.frameAt(s + la, FA);
       const tx = f.p[0] + f.b[0] * target - st[S.posX], ty = f.p[1] + f.b[1] * target - st[S.posY], tz = f.p[2] + f.b[2] * target - st[S.posZ];
       const x = tx * ax.rx + ty * ax.ry + tz * ax.rz, z = tx * ax.fx + ty * ax.fy + tz * ax.fz;

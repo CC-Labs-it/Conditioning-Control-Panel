@@ -16,6 +16,7 @@ import { applyBoost } from './boost.js';
 import { gap } from './gaps.js';
 import { ITEMS } from './itemTable.js';
 import { bendSpeed, yawParams, calmOf } from './steer.js';
+import { createCourtPaths } from './court-paths.js';
 
 const YP = {};                       // steering law numbers, read once per bot per tick
 
@@ -91,6 +92,7 @@ function trapsOf(items) {
 }
 
 export function createAi(track, feel, { seed = 1 } = {}) {
+  const courts = createCourtPaths(track);
   const L = track.lengthM, N = Math.ceil(L / STEP);
   // per 2 m: signed bend (deg/m, + right), half width, open left / right, gap
   const bend = new Float32Array(N), half = new Float32Array(N), openL = new Uint8Array(N), openR = new Uint8Array(N), gapAt = new Uint8Array(N), roll = new Float32Array(N);
@@ -169,6 +171,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     b.t += dt;
     const ph = st[S.respawnPhase];
     if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) {
+      b.courtRoute = null;
       b.driftT = -1; b.reverseT = 0; b.stuckT = 0; out.throttle = 1; return;
     }
 
@@ -195,8 +198,21 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     const top = r.feel.get('speed.topMps');
     const s = st[S.s], lat = st[S.lateral];
     const speed = Math.max(0, st[S.speedPct]) * top;
-    const la = Math.max(feel.get('ai.lookAheadMinM'), speed * feel.get('ai.lookAheadS'));
+    let la = Math.max(feel.get('ai.lookAheadMinM'), speed * feel.get('ai.lookAheadS'));
     const p = b.persona, blind = r.mods ? clamp(r.mods.blind, 0, 1) : 0;
+    const court = courts.at(s), lap = st[S.lap] | 0;
+    if (court && s >= court.court.fromS) la = Math.min(la, 12);
+    if (court && (!b.courtRoute || b.courtRoute.plan !== court || b.courtLap !== lap)) {
+      b.courtRoute = courts.choose(court, seed, r.i, lap, s >= court.first - 15 ? lat : null); b.courtLap = lap;
+      b.courtCommitted = s >= court.first - 15;
+    } else if (!court) b.courtRoute = null;
+    // The preceding bend or a boost may prevent the planned approach. Commit to the line
+    // actually reached before the first opening, rather than crossing an aperture to chase a preference.
+    if (b.courtRoute && !b.courtCommitted && s >= court.court.fromS + 1) {
+      const side = track.frameAt(s, FR0).b;
+      const lateralV = st[S.velX] * side[0] + st[S.velY] * side[1] + st[S.velZ] * side[2];
+      b.courtRoute = courts.choose(court, seed, r.i, lap, lat + clamp(lateralV * 0.6, -4, 4)); b.courtCommitted = true;
+    }
     const nearLip = lipAhead(s, fg(feel, 'ai.jumpGuardM'));
 
     // polish 4: a drop shortcut, rolled once a lap as the bot nears its open edge
@@ -208,7 +224,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     const cutK = clamp(Math.abs(bendLa) / feel.get('ai.driftCurveDegPerM'), 0, 1);
     let target = b.line * feel.get('ai.lineSpreadM') * p.spread + wander + Math.sign(bendLa) * feel.get('ai.cornerCutM') * p.cut * cutK;
     if (nearLip) target *= 0.3;
-    const wide = driftSetup(b, s, speed, la, nearLip);
+    const wide = driftSetup(b, s, speed, la, nearLip || !!court);
     if (wide !== null) target = wide;
 
     // around slower karts and live traps ahead
@@ -237,7 +253,9 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       const edge = pd.w / 2 + shift * 0.5;
       if (Math.abs(target - pd.x) < edge) target = pd.x + (target >= pd.x ? edge : -edge);
     }
-    lineLimits(s, la * 1.5, LIM);
+    const limitLook = court && s < court.last + 3 ? Math.min(la * 1.5, court.last + 3 - s) : la * 1.5;
+    lineLimits(s, limitLook, LIM);
+    if (b.courtRoute) target = courts.target(b.courtRoute, s, la, target);
     target = clamp(target, LIM.lo, LIM.hi);
 
     // steer: pure pursuit on the target point
@@ -279,6 +297,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       const v = bendSpeed(bend[at(s + d)], YP, share);
       vmax = Math.min(vmax, Math.sqrt(v * v + 2 * coast * d));
     }
+    if (b.courtRoute && b.courtRoute.band.x !== 0 && s < court.first + 3 && Math.abs(lat - b.courtRoute.band.x) > 1) vmax = Math.min(vmax, 20);
     out.throttle = 1;
     if (!nearLip && speed > vmax) {
       out.throttle = 0;
@@ -297,7 +316,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       if (b.stuckT > fg(feel, 'ai.stuckS')) { b.stuckT = 0; b.reverseT = fg(feel, 'ai.reverseS'); }
     } else b.stuckT = 0;
 
-    driftLogic(r, b, dt, out, s, lat, speed, la, nearLip, blind);
+    driftLogic(r, b, dt, out, s, lat, speed, la, nearLip || !!court, blind);
     // a trick pays a boost on landing: never into an open edge ahead (polish 6: a boost cannot brake for an open bend)
     if (st[S.airborne] > 0 && st[S.airTime] > 0 && st[S.airTime] <= 0.1 && !b.trickRolled) { b.trickRolled = true; if (b.rand() < feel.get('trick.botChance') && !openAhead(s, fg(feel, 'ai.trickOpenM'))) out.hopPressed = true; } else if (st[S.grounded] > 0) b.trickRolled = false;
     if (r.item) itemLogic(r, b, ctx, dt, out);
