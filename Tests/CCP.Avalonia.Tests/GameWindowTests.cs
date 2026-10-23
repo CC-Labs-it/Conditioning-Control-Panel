@@ -25,7 +25,7 @@ namespace CCP.Avalonia.Tests;
 /// <summary>The shared game host (WPF LauncherHost.LaunchGame -> BreakoutHostService.LaunchDemo ->
 /// ChaosWebViewHost): the launcher's Play opens it after the leash check, the page protocol answers
 /// ready with init and media-request with a deal, exit-done closes it, and the panic registry closes it.</summary>
-public sealed class GameWindowTests
+public sealed partial class GameWindowTests
 {
     private static void Run(Action<MainShellWindow, LauncherWindow> body)
     {
@@ -842,6 +842,7 @@ public sealed class GameWindowTests
     [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]
+    [InlineData(GameWindow.GlassroadId, "Glassroad", "kept-escape")]
     [InlineData(GameWindow.FypId, "None", null)]
     [InlineData(GameWindow.JustDropId, "None", null)]
     public void EveryHostedGame_KnowsItsKeptEscapePage(string id, string page, string? frame) => Run((_, launcher) =>

@@ -46,7 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF LauncherEntry.IsRevealed: a race without a track is WPF's mystery card pointing at the
         /// Back Room counter. Neither exists on this head, so the unrevealed tile is left out.</summary>
         private static bool Revealed(string id) =>
-            !string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) || Services.Race.RacingAccess.CanLaunch;
+            !string.Equals(id, "race", StringComparison.OrdinalIgnoreCase) || Services.Race.RacingAccess.CanLaunch
+            || Games.GameWindow.GlassroadDoorOpen();   // WPF revealed: GlassroadRules.DoorOpenNow() || CanLaunch
 
         /// <summary>WPF LauncherCatalogue.Find(id)?.Available: a game.* palette row is listed only
         /// when this head can start it (seeded as SettingsPaletteIndex.GameAvailableProvider).</summary>

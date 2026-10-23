@@ -160,7 +160,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PanicPolicy.KeptEscapePage Route(bool claimed) => PanicPolicy.KeptEscapeGoesTo(claimed,
                     In(PanicPolicy.KeptEscapePage.Race), ready, In(PanicPolicy.KeptEscapePage.Board), ready,
                     In(PanicPolicy.KeptEscapePage.Breakout), ready, In(PanicPolicy.KeptEscapePage.Dtrh), ready,
-                    intakeInFront: intake != null, intakeReady: intakeReady);
+                    intakeInFront: intake != null, intakeReady: intakeReady,
+                    glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
                     gameInFront: game != null || intake != null, engineRunning: CoreEngine.IsRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now,

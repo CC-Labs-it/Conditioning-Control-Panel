@@ -26,6 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             PbpId => PanicPolicy.KeptEscapePage.Board,
             "breakoutdemo" or "breakout" => PanicPolicy.KeptEscapePage.Breakout,
             DtrhId => PanicPolicy.KeptEscapePage.Dtrh,
+            GlassroadId => PanicPolicy.KeptEscapePage.Glassroad,
             _ => PanicPolicy.KeptEscapePage.None,
         };
 
