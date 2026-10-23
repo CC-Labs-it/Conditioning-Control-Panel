@@ -29,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         GlowBreath = 1 << 4,
         /// <summary>Warm motes rising from the bottom edge on a slow sine sway, budgeted by the tier.</summary>
         Embers = 1 << 5,
+        VaultMotes = 1 << 6,
     }
 
     /// <summary>Per-surface tuning for <see cref="AmbientFxCanvas.StartLayers(AmbientFxConfig)"/>.</summary>
@@ -118,7 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// SkiaSharp into this project and of only working on the Skia backend; not worth it until the
     /// owner says the bloom is missed.</para>
     /// </summary>
-    public class AmbientFxCanvas : Decorator
+    public partial class AmbientFxCanvas : Decorator
     {
         private const int MaxBurstParticles = 150;
         private const int FaultLimit = 5;
@@ -334,6 +335,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             _burstN = 0;
             _dustN = 0;
             _emberN = 0;
+            _vault.Clear();
             InvalidateVisual();
         }
 
@@ -612,6 +614,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
 
         private void Reseed()
         {
+            _vault.Clear(); _vaultT = 0;
             int puffs = Math.Clamp(_config.FogPuffs, 2, 4);
             _puffs = new Puff[puffs];
             for (int i = 0; i < puffs; i++)
@@ -743,7 +746,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (!oneShotLive)
             {
                 if (_targetFps <= 0) return false;
-                if (!Env.AllowAmbientLoops) return false;
+                if (!Env.AllowAmbientLoops && !ReducedVaultMayRun) return false;
             }
             var w = _window;
             if (w != null)
@@ -788,6 +791,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if (!_sheenDone) _sheenT += dt;
                 StepDust(dt);
                 StepEmbers(dt);
+                StepVault(dt);
                 StepBurst(dt);
                 StepTokens(dt);
 
@@ -1031,6 +1035,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 if ((layers & AmbientFxLayers.FogDrift) != 0) DrawFog(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.GlowBreath) != 0) DrawGlowBreath(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.DustField) != 0) DrawDust(context, w, h, min, intensity);
+                if (!_fogOnly && (layers & AmbientFxLayers.VaultMotes) != 0) DrawVault(context, w, h);
                 if (!_fogOnly && (layers & AmbientFxLayers.Embers) != 0) DrawEmbers(context, w, h, min, intensity);
                 if (!_fogOnly && (layers & AmbientFxLayers.SheenSweep) != 0) DrawSheen(context, w, h, intensity);
                 DrawBurst(context, w, h, min);
@@ -1309,23 +1314,14 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 _ => 24,
             };
 
-            // FxTheme's colours are read, not computed: it writes four Color keys into the app
-            // resources from the mod palette and every consumer reads them back. Theme/Colors.xaml
-            // already carries the keys, so this is that same read path - and nothing on this head
-            // writes them yet, which means the CCP default accent until an FxTheme twin lands.
+            // FxTheme publishes these keys at mod startup and on each mod switch.
             public static Color MistColor => ThemeColor("FxMistColor");
             public static Color ParticleColor => ThemeColor("FxParticleColor");
             public static Color GlowColor => ThemeColor("FxGlowColor");
             public static Color FlashTintColor => ThemeColor("FxFlashTintColor");
 
-            /// <summary>
-            /// FxTheme.MistOpacity. ponytail: the WPF original reads
-            /// <c>App.Mods.GetMistOpacity()</c>; <see cref="CoreMods"/> exposes no mist-opacity
-            /// provider, so there is nothing to call here yet - adding one is a Core change.
-            /// 1.0 is what the WPF call answers with no mod loaded, so this is the no-mod value
-            /// rather than an invented default.
-            /// </summary>
-            public static double MistOpacity => 1.0;
+            /// <summary>WPF FxTheme.MistOpacity: the active mod's authored multiplier.</summary>
+            public static double MistOpacity => App.Mods?.GetMistOpacity() ?? 1.0;
 
             /// <summary>FxTheme.Read's Avalonia twin: the same key out of the app resources.</summary>
             private static Color ThemeColor(string key)

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -35,6 +36,52 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class ExclusivesTabView : UserControl
     {
         private readonly AmbientFxCanvas _ambientFx;
+        private bool _plansMode, _contentLifted, _plansActive;
+        private IDisposable? _clickVisibilityWatch;
+        internal Controls.Invites.InvitePanel? InvitesPanel { get; private set; }
+
+        /// <summary>WPF PlansMode: header, tier plates, Premium link and invites, inside Settings' scroller.</summary>
+        public bool PlansMode
+        {
+            get => _plansMode;
+            set
+            {
+                _plansMode = value;
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !value;
+                this.FindControl<Border>("SpotlightCard")!.IsVisible = !value;
+                this.FindControl<Button>("BtnSeePremium")!.IsVisible = value;
+                this.FindControl<Border>("InvitesWrap")!.IsVisible = value;
+                if (value && InvitesPanel == null)
+                    this.FindControl<ContentControl>("InvitesSlot")!.Content = InvitesPanel = new Controls.Invites.InvitePanel();
+                this.FindControl<Image>("VaultBackdrop")!.IsVisible = !value;
+                BindLoc("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title");
+                BindLoc("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub");
+                var scroll = this.FindControl<ScrollViewer>("ContentScroll")!;
+                if (value && !_contentLifted && scroll.Parent is Panel host && scroll.Content is Control content)
+                {
+                    int at = host.Children.IndexOf(scroll);
+                    scroll.Content = null;
+                    host.Children.RemoveAt(at);
+                    host.Children.Insert(at, content);
+                    _contentLifted = true;
+                }
+                RefreshVault();
+                UpdateMotion();
+            }
+        }
+
+        private void BindLoc(string name, string key) => this.FindControl<TextBlock>(name)!
+            .Bind(TextBlock.TextProperty, (Binding)new Localization.StrExtension(key).ProvideValue(null!));
+
+        internal void SetPlansActive(bool active)
+        {
+            _plansActive = active;
+            if (active) { RefreshVault(); _ = InvitesPanel?.RefreshAsync(); }
+            UpdateMotion();
+        }
+
+        private void SeePremium_Click(object? sender, RoutedEventArgs e) =>
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("premium");
 
         public ExclusivesTabView()
         {
@@ -55,7 +102,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
             // Main bf57cecdf: columns follow the width, cards stretch to fill the row (Core ExclusiveShelfFit).
-            this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
+            this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); QueueVaultZones(); };
+            this.FindControl<ScrollViewer>("ContentScroll")!.ScrollChanged += (_, _) => QueueVaultZones();
+            _ambientFx.SizeChanged += (_, _) => QueueVaultZones();
         }
 
         public static readonly StyledProperty<double> CardWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardWidth), Services.UI.ExclusiveShelfFit.BaseWidth);
@@ -80,11 +129,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            _clickVisibilityWatch = EffectiveVisibility.Watch(this, () => { if (!IsEffectivelyVisible) CancelPendingClicks(); });
             CoreMods.ModChanged += OnModChanged;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
-            AmbientFxCanvas.Env.MotionGateChanged += UpdateMotion;
-            StartAmbient();
-            UpdateMotion();
+            AmbientFxCanvas.Env.MotionGateChanged += OnMotionGate;
+            OnMotionGate();
         }
 
         /// <summary>ModChanged may be raised off the UI thread; marshal before touching the Image.</summary>
@@ -103,16 +152,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void StartAmbient()
             => _ambientFx.StartLayers(new AmbientFxConfig
             {
-                Layers = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash,
-                Intensity = 0.55,
+                Layers = PlansMode ? RoomLayers : AmbientFxCanvas.Env.Level == MotionLevel.Full ? RoomLayers | AmbientFxLayers.VaultMotes : AmbientFxLayers.VaultMotes,
+                Intensity = PlansMode ? 0.55 : 0.75,
                 FogPuffs = 3,
             });
 
+        private const AmbientFxLayers RoomLayers = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash;
+        private void OnMotionGate() { StartAmbient(); UpdateMotion(); }
+
         private void OnUnloaded(object? sender, RoutedEventArgs e)
         {
+            _clickVisibilityWatch?.Dispose(); _clickVisibilityWatch = null;
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
-            AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
+            AmbientFxCanvas.Env.MotionGateChanged -= OnMotionGate;
             _ambientFx.Stop();
             UpdateMotion();
         }
@@ -129,17 +182,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void RefreshVault()
         {
             RetintVaultChrome();
+            ApplyHeroArt();
+            _ = App.DailyFree?.RefreshAsync();
+            foreach (var sheen in _sheens.Values) sheen?.Start();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
             var rows = new List<object>();
-            var cards = ExclusiveFeature.All.Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
+            var cards = (PlansMode ? Enumerable.Empty<ExclusiveFeature>() : ExclusiveFeature.All).Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
             {
                 rows.Add(new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count));
                 rows.AddRange(items);
             }
-            this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = rows;
+            this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = PlansMode ? Array.Empty<object>() : rows;
 
             var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
             this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
@@ -173,8 +229,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ToolTip.SetTip(open, spot.UnavailableTip);
             ToolTip.SetShowOnDisabled(open, true);
             RefreshTierPlates();
+            QueueVaultZones();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+        }
+
+        /// <summary>WPF ModTileVariant: built-in fork first; external mods override the base path.</summary>
+        private void ApplyHeroArt()
+        {
+            var suffix = CoreMods.ActiveModId switch
+            {
+                BuiltInMods.BambiSleepId => "_bambi", BuiltInMods.SissyHypnoId => "_sissy",
+                BuiltInMods.DronificationId => "_drone", BuiltInMods.LockedId => "_locked", _ => "",
+            };
+            var art = ModArt.FirstOf(new[] { $"features/vault{suffix}.png", "features/vault.png" }, 480);
+            var plate = this.FindControl<Border>("VaultHeroPlate")!;
+            if (art != null)
+            {
+                if (plate.Background is not ImageBrush brush) plate.Background = brush = new ImageBrush { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right, Opacity = 0.9 };
+                brush.Source = art;
+                if (plate.Child != null) plate.Child.IsVisible = false;
+            }
+            // WPF's pack images: commerce art never resolves through a mod override.
+            for (int i = 1; i <= 2; i++)
+            {
+                var tierPlate = this.FindControl<Border>($"TierPlate{i}")!;
+                if (tierPlate.Child is Image) continue;
+                try
+                {
+                    using var stream = global::Avalonia.Platform.AssetLoader.Open(new Uri($"avares://CCP.Avalonia/Resources/Patreon tier{i}.png"));
+                    tierPlate.Child = new Image { Source = Bitmap.DecodeToWidth(stream, 160), Stretch = Stretch.Uniform };
+                    tierPlate.Width = double.NaN;
+                    tierPlate.Background = tierPlate.BorderBrush = null;
+                    tierPlate.BorderThickness = default;
+                }
+                catch (Exception ex) { Serilog.Log.Debug("Vault tier plate art: {E}", ex.Message); }
+            }
         }
 
         // WPF RetintVaultChrome: only decor follows the mod; gold free-day and tier commerce do not.
@@ -237,7 +327,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            _ambientFx.IsVisible = !PlansMode || _plansActive;
+            bool want = IsVisible && (!PlansMode || _plansActive) && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
@@ -258,6 +349,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (LitPlate != null) LitPlate.Opacity = 1;
             }
             foreach (var part in _fxParts) Dress(part);
+            UpdateFlair();
         }
 
         /// <summary>One frame of every loop, read from <see cref="FxAdorner.Time"/> so tests step it.</summary>
@@ -339,6 +431,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void FxPart_Loaded(object? sender, RoutedEventArgs e)
         {
             if (sender is not Control part) return;
+            if (part.Name is "ExCard" or "GroupHead") AddCardMotion(part);
             if (part.Name == "ExCard") { if (!_sheens.ContainsKey(part)) _sheens[part] = _motion == null ? null : CardSheenAdorner.Attach(part, 12); return; }
             if (_fxParts.Add(part)) Dress(part);
         }
@@ -348,6 +441,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (sender is not Control part) return;
             if (_sheens.Remove(part, out var sheen)) CardSheenAdorner.Detach(sheen);
             _fxParts.Remove(part);
+            _cards.Remove(part);
         }
 
         /// <summary>"Resources/features/x.png" -> "features/x.png", the name ModArt resolves.</summary>
@@ -365,7 +459,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void Card_PointerReleased(object? sender, PointerReleasedEventArgs e)
         {
             if (e.InitialPressMouseButton == MouseButton.Left && (sender as Control)?.DataContext is ExclusiveCardRow row)
-                Open(row.Feature);
+                ClickCard((Control)sender!, row);
         }
 
         /// <summary>
@@ -385,10 +479,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF OnExclusiveCardHover: the shared hover pop on the art, driven from the card.
-        /// ponytail: no MotionFx.HoverLift or glow bloom on this head yet.</summary>
-        private void Card_PointerEntered(object? sender, PointerEventArgs e) => HoverPop.Enter(CardArt(sender));
+        /// The card and its art have independent transforms, as on WPF.</summary>
+        private void Card_PointerEntered(object? sender, PointerEventArgs e) { if (sender is Control c) HoverCard(c, true); }
 
-        private void Card_PointerExited(object? sender, PointerEventArgs e) => HoverPop.Leave(CardArt(sender));
+        private void Card_PointerExited(object? sender, PointerEventArgs e) { if (sender is Control c) HoverCard(c, false); }
 
         private static Control? CardArt(object? card) =>
             (card as Control)?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "CardArt");
@@ -427,6 +521,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             : Loc.Get(Feature.TitleLocKey));
         public string Tagline => Loc.Get(Feature.TaglineLocKey);
         public string Emoji => Feature.Emoji;
+
+        public bool IsMine => State is ExclusiveGateState.Unlocked or ExclusiveGateState.PassReady || FreeToday;
+        public Color Hue => Services.UI.PremiumShelfOrder.GroupOf(Feature.Key, Tier) switch
+        {
+            Services.UI.PremiumGroup.Basic => Color.FromRgb(0xFF, 0xC8, 0x5A),
+            Services.UI.PremiumGroup.Prime => Color.FromRgb(0x6F, 0xE8, 0xFF),
+            _ => Color.FromRgb(0xB7, 0x9C, 0xFF),
+        };
+        public IBrush AuraBrush => new SolidColorBrush(Color.FromArgb(0xC8, Hue.R, Hue.G, Hue.B));
+        public BoxShadows AuraShadow => new(new BoxShadow { Color = Color.FromArgb(0x40, Hue.R, Hue.G, Hue.B), Blur = 14, Spread = 2 });
 
         public bool HasBadge => Feature.BadgeLocKey != null;
         public string BadgeText => Feature.BadgeLocKey == null ? "" : Loc.Get(Feature.BadgeLocKey);

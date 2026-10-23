@@ -97,6 +97,10 @@ public sealed class ExclusivesAccentTests
             Dispatcher.UIThread.RunJobs();
             var target = startId == BuiltInMods.InfectionControlId ? BuiltInMods.CCPDefaultId : BuiltInMods.InfectionControlId;
             var before = (Color)view.Resources["VaultAccentColor"]!;
+            var hero = view.FindControl<Border>("VaultHeroPlate")!;
+            var heroBrush = hero.Background;
+            var mask = hero.OpacityMask;
+            var tierArt = view.FindControl<Border>("TierPlate1")!.Child;
             mods.ActivateMod(target);
             Assert.Equal(target, mods.ActiveModId);
             Dispatcher.UIThread.RunJobs();
@@ -104,6 +108,11 @@ public sealed class ExclusivesAccentTests
             var glow = Color.FromRgb(r, g, b);
             Assert.NotEqual(before, glow);
             Assert.Equal(glow, (Color)view.Resources["VaultAccentColor"]!);
+            Assert.Equal(glow, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.GlowColor);
+            Assert.Same(heroBrush, hero.Background);
+            Assert.Same(mask, hero.OpacityMask);
+            Assert.Same(tierArt, view.FindControl<Border>("TierPlate1")!.Child);
+            Assert.Same(ConditioningControlPanel.Avalonia.Helpers.ModArt.FirstOf(new[] { "features/vault.png" }, 480), ((ImageBrush)hero.Background!).Source);
             var p = global::ConditioningControlPanel.Services.UI.VaultColor.ShiftHue(r, g, b,
                 global::ConditioningControlPanel.Services.UI.VaultColor.PartnerHueShift);
             Assert.Equal(Color.FromRgb(p.R, p.G, p.B), (Color)view.Resources["VaultPartnerColor"]!);

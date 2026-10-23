@@ -1,43 +1,5 @@
-<!-- PORTED from ConditioningControlPanel/Views/Tabs/ExclusivesTabView.xaml.
-     Structure, ordering, spacing, every x:Name and every loc key are preserved so the two diff
-     directly. Deviations, all forced by real WPF/Avalonia differences:
-
-       Style="{StaticResource X}"        ->  Theme="{StaticResource X}"  (keyed styles are ControlThemes)
-       Visibility="Collapsed"            ->  IsVisible="False"
-       Panel.ZIndex                      ->  ZIndex
-       MouseLeftButtonUp                 ->  PointerReleased  (house precedent)
-       Content="{loc:Str ...}" on Button ->  a <TextBlock> child (trap 1: "_" is an access key)
-       DropShadowEffect ShadowDepth="0"  ->  OffsetX="0" OffsetY="0" (Avalonia defaults to 3.5)
-       LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%": Avalonia gradient points are
-                                             absolute pixels unless a percentage is written, so
-                                             the WPF form would draw a one-pixel gradient
-       RenderTransformOrigin="0.5,0.5"   ->  "50%,50%"  (same reason)
-       x:FieldModifier="internal"        ->  dropped; the x:Names are kept and reached with FindControl
-       x:Name on a Brush / Transform     ->  dropped (AVLN2000: only a StyledElement can be named).
-                                             VaultHeroBrush, SpotBadgeFill, SpotVeilPillFill and
-                                             SpotArtScale are gone; the Borders around them keep theirs.
-       FontFamily="/Fonts/#Fredoka, …"   ->  dropped; the head ships Inter (Leaderboard precedent)
-
-     Dropped, each for a reason that is not a shortcut:
-       every pack:// image - the vault backdrop, the hero's vault.png plate, the spotlight art and
-         the two Patreon tier plates. This head ships no Resources/ art (DeeperTabView precedent).
-         The room keeps its scrim and its ambient canvas, the hero and the spotlight get the page's
-         own glyph huge and nearly transparent (SystemFeatureControl:221 idiom), and the tier plates
-         become the small vector plates TierBadge already uses in place of its own PNGs. Re-add as
-         avares:// bitmaps when the art moves.
-       Border.OpacityMask on the hero plate - moot once the art under it is gone.
-       RoundClipOnResize(SpotArtHost, 12) - WPF's ClipToBounds is rectangular, so a rounded host
-         needed clip geometry tracked against every resize. An Avalonia Border clips its child to
-         its own CornerRadius, so the helper has nothing left to do and is not ported.
-       the Ken Burns ScaleTransform on the spotlight art - the drift is started by
-         MainWindow.Exclusives.cs and there is no art to drift.
-
-     The shelf: WPF leaves the WrapPanel empty and MainWindow.Exclusives.cs builds every card in
-     code from ExclusiveFeature.All. That builder is MainWindow's, not the view's, so the panel is
-     an ItemsControl over a WrapPanel here and the cards are a DataTemplate fed placeholder rows
-     from the code-behind - six features covering tier 1, tier 2, untiered, a NEW badge, a BETA
-     badge, no badge, a locked veil and both entitlement chips. The three "coming soon" teaser
-     silhouettes (BuildComingSoonCard) are likewise MainWindow's and are not reproduced. -->
+<!-- WPF ExclusivesTabView: the Premium shelf and the inline Account & Plans copy.
+     Cards use the existing roster, mod art resolver, tier livery and shared FX clock. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -45,7 +7,6 @@
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
-             xmlns:inv="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Invites"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.ExclusivesTabView"
              mc:Ignorable="d"
              d:DesignHeight="620" d:DesignWidth="1460">
@@ -104,7 +65,7 @@
             <fx:AmbientFxCanvas x:Name="ExclusivesAmbientFx"/>
 
             <!-- 2 + 3. Content -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto"
+            <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="26,20,26,22">
 
@@ -124,14 +85,20 @@
                             <Border Background="{StaticResource TabHueWashBrush}" CornerRadius="14"/>
                             <!-- The hero's face. vault.png is WPF-head art, so the plate carries the
                                  vault's own glyph instead, huge and nearly transparent. -->
-                            <Border CornerRadius="0,14,14,0" Width="240" HorizontalAlignment="Right">
+                            <Border x:Name="VaultHeroPlate" CornerRadius="0,14,14,0" Width="240" HorizontalAlignment="Right">
+                                <Border.OpacityMask>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                        <GradientStop Color="#00000000" Offset="0"/>
+                                        <GradientStop Color="#E6000000" Offset="0.55"/>
+                                    </LinearGradientBrush>
+                                </Border.OpacityMask>
                                 <fx:IconGlyph Kind="Diamond" Variant="Filled" Foreground="{DynamicResource IconGemBrush}" Size="46" Opacity="0.16"
                                            HorizontalAlignment="Right" VerticalAlignment="Center"
                                            Margin="0,0,18,0"/>
                             </Border>
                             <StackPanel VerticalAlignment="Center" Margin="18,0,0,0">
-                                <TextBlock Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
-                                <TextBlock Text="{loc:Str premium_page_sub}"
+                                <TextBlock x:Name="TxtVaultTitle" Theme="{StaticResource Type.CardTitle}" Text="{loc:Str premium_page_title}"/>
+                                <TextBlock x:Name="TxtVaultSub" Text="{loc:Str premium_page_sub}"
                                            FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}"
                                            Margin="0,1,0,0" MaxWidth="620" HorizontalAlignment="Left"
                                            TextTrimming="CharacterEllipsis"/>
@@ -164,6 +131,11 @@
                             </Border>
                         </Grid>
                     </Border>
+
+                    <Button x:Name="BtnSeePremium" IsVisible="False" Theme="{StaticResource SecondaryButton}"
+                            HorizontalAlignment="Left" Margin="0,-8,0,18" Padding="18,7" Click="SeePremium_Click">
+                        <TextBlock Text="{loc:Str plans_see_premium}"/>
+                    </Button>
 
                     <!-- Spotlight: the newest exclusive, hero-sized -->
                     <Border x:Name="SpotlightCard"
@@ -336,6 +308,12 @@
                                         PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited"
                                         PointerReleased="Card_PointerReleased">
                                   <Grid>
+                                    <Border Name="HoverGlow" IsHitTestVisible="False" CornerRadius="12"/>
+                                    <fx:IconGlyph Name="OwnedGlint" Kind="Sparkle" Variant="Filled" Size="26" Foreground="White"
+                                                  Opacity="0" IsHitTestVisible="False" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-10,-10,0" ZIndex="9"/>
+                                    <Border Name="OwnedRim" IsHitTestVisible="False" IsVisible="{Binding IsMine}"
+                                            CornerRadius="12" BorderThickness="1.5" BorderBrush="{Binding AuraBrush}"
+                                            BoxShadow="{Binding AuraShadow}" Opacity="0.6" ZIndex="8"/>
                                     <!-- Everything that must respect the card's corners lives in
                                          this inner clip. The card itself does NOT clip: the tier
                                          sign hangs over the corner (WPF clipped only artHost and
@@ -461,14 +439,24 @@
                             <!-- WPF VaultGroupHead (polish 12): tier sign, the plan's name and one line,
                                  "n of m yours", a hairline in the plan's colour. FitShelf gives it the row. -->
                             <DataTemplate DataType="tabs:ExclusiveGroupRow">
-                                <Border Name="GroupHead" Padding="2,0,2,10" Margin="{Binding Margin}"
+                                <Border Name="GroupHead" Loaded="FxPart_Loaded" Unloaded="FxPart_Unloaded" Padding="2,0,2,10" Margin="{Binding Margin}"
                                         Width="{Binding $parent[tabs:ExclusivesTabView].GroupHeadWidth}"
                                         BorderBrush="{Binding Rule}" BorderThickness="0,0,0,1.5"
                                         AutomationProperties.Name="{Binding Title}">
                                     <Grid ColumnDefinitions="Auto,*,Auto">
-                                        <Image Source="{Binding Sign}" IsVisible="{Binding HasSign}" Height="44"
-                                               Stretch="Uniform" Margin="0,0,14,0" VerticalAlignment="Center"
-                                               RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                                        <Grid IsVisible="{Binding HasSign}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <Image Source="{Binding Sign}" Height="44" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                                            <Rectangle Name="GroupSignSheen" IsHitTestVisible="False">
+                                                <Rectangle.OpacityMask><ImageBrush Source="{Binding Sign}" Stretch="Uniform"/></Rectangle.OpacityMask>
+                                                <Rectangle.Fill>
+                                                    <LinearGradientBrush StartPoint="-120%,0%" EndPoint="-20%,35%">
+                                                        <GradientStop Color="#00FFFFFF" Offset="0.30"/><GradientStop Color="#D8FFFFFF" Offset="0.47"/>
+                                                        <GradientStop Color="#F0FFFFFF" Offset="0.50"/><GradientStop Color="#D8FFFFFF" Offset="0.53"/>
+                                                        <GradientStop Color="#00FFFFFF" Offset="0.70"/>
+                                                    </LinearGradientBrush>
+                                                </Rectangle.Fill>
+                                            </Rectangle>
+                                        </Grid>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Title}"
                                                        FontSize="22" FontWeight="SemiBold" Foreground="{Binding HueBrush}"/>
@@ -489,7 +477,9 @@
 
                     <!-- Invites (WPF Controls/Invites/InvitePanel, InvitesHost). Hidden until the
                          server answers /v2/invites/mine; read on every show of the tab. -->
-                    <inv:InvitePanel x:Name="InvitesHost" Margin="0,18,0,0"/>
+                    <Border x:Name="InvitesWrap" IsVisible="False" Margin="0,18,0,0">
+                        <ContentControl x:Name="InvitesSlot"/>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

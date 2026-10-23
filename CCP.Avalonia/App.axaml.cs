@@ -174,7 +174,13 @@ namespace ConditioningControlPanel.Avalonia
             Mods = new ModService();
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
+            CoreMods.ModChanged -= Controls.FxTheme.ModChanged;
+            CoreMods.ModChanged += Controls.FxTheme.ModChanged;
+            Controls.FxTheme.ApplyForActiveMod();
         }
+
+        /// <summary>The rotation shared by TierGate and the vault's opportunistic repaint check.</summary>
+        internal static DailyFreeService? DailyFree { get; set; }
 
         /// <summary>The cclabs catalogue client (WPF App.Catalogue): the same Core client and inputs as WPF's
         /// CatalogueService. Settable so a test can hand in a fake-handler client.</summary>
@@ -291,6 +297,7 @@ namespace ConditioningControlPanel.Avalonia
         internal static void ResetReleaseContent()
         {
             ReleaseContent = null;
+            CoreMods.ModChanged -= Controls.FxTheme.ModChanged;
             Mods = null;
             _exiting = false;
         }
@@ -545,7 +552,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:490/2549: the ? box's daily-free rotation that TierGate ORs in.
                 // Pure ctor; the override fetch is fire-and-forget and falls back to the seeded pick.
                 // A sandbox never reaches the real proxy (the SkipStartupFetch rule); the seeded pick still works.
-                var dailyFree = new DailyFreeService(
+                var dailyFree = DailyFree = new DailyFreeService(
                     fetchOverride: string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
                 _ = dailyFree.RefreshAsync();
                 CoreEntitlement.IsFreeTodayProvider = dailyFree.IsFreeToday;
