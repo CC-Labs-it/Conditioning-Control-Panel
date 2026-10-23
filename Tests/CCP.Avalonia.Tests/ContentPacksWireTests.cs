@@ -104,6 +104,22 @@ public sealed class ContentPacksWireTests : IDisposable
         Assert.True(store.IsPackInstalled("p1"));   // a deactivated pack stays installed
     }
 
+    [Fact]
+    public void NoVideosMessage_CountsInstalledAndActivePacks_FromTheStore()
+    {
+        var store = StoreWithPack(("a.png", "image"));
+        ContentPackStore.Current = store;
+        var s = new MandatoryVideoScheduler(MandatoryVideoOverlay.Instance, library: Array.Empty<string>);
+        string Expected(int installed, int active) => NoVideosReason.Message(Path.Combine(CorePaths.EffectiveAssets, "videos"),
+            s.LastFunnelEnabled, s.LastFunnelDuration, CoreSettings.Current.VideoMinDurationSeconds,
+            CoreSettings.Current.VideoMaxDurationSeconds, installed, active);
+
+        Assert.Equal(Expected(1, 1), MandatoryVideoOverlay.NoVideosMessage(s));   // active pack without videos
+        store.DeactivatePack("p1");
+        Assert.Equal(Expected(1, 0), MandatoryVideoOverlay.NoVideosMessage(s));   // installed, none active
+        Assert.NotEqual(Expected(1, 1), Expected(1, 0));
+    }
+
     private static string Root([System.Runtime.CompilerServices.CallerFilePath] string here = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
 }
