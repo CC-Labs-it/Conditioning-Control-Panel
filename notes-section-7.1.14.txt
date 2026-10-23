@@ -6,4 +6,3 @@ ONLINE MEDIA
 - the "Media from Scrolller" line now sits on the Assets card and on the wallpaper credit.
 - a Scrolller picture is never left behind as your Windows wallpaper. a plain one takes its place when the wallpaper switches off.
 - bug reports no longer carry which online posts you looked at.
-
