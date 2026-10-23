@@ -59,6 +59,11 @@ internal sealed class ScrolllerSource : IFeedSource
     private const int PageLimit = 30;
     private const int NullStrikesBeforeDead = 3;   // a null answer is a bad minute until it repeats
     private const int MaxSourceWidth = 1920;          // don't stream 4K into a feed tile
+    // Clips cap at 720p by the SHORT side (portrait and landscape alike). Scrolller's
+    // bandwidth, not ours: they asked (2026-10-16). HD posts usually carry only 1080p +
+    // 480p, so in practice an HD clip now plays its 480p rendition. The server can lower it
+    // further (GET /config/scrolller, ScrolllerPolicy), never raise it.
+    private static int MaxClipShortSide => ScrolllerPolicy.MaxClipShortSide;
     private const int MaxPosterWidth = 960;           // a poster is a placeholder, not the media
     private const int MaxSmallClipWidth = 640;        // Entry.SmallUrl: a card-sized clip (the web port's cap)
     private const int MaxSmallStillWidth = 1280;      // Entry.SmallUrl: a card-sized still (idem)
@@ -80,13 +85,16 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     private static readonly SemaphoreSlim RequestGate = new(1, 1);
     private static DateTime _lastRequestUtc = DateTime.MinValue;
 
-    private static HttpClient CreateClient()
+    /// <summary>The app says who it is to Scrolller: no browser user-agent, no scrolller.com
+    /// Origin or Referer (owner, 2026-10-17; Scrolller had noticed the app posing as their own
+    /// site). Probed the same day: the API answers 200 and the CDN 206 with this alone.</summary>
+    internal static string HonestUserAgent =>   // read per use: the head seeds the version at startup
+        $"ConditioningControlPanel/{CoreReleaseContent.AppVersion} (+https://cclabs.app)";
+
+    internal static HttpClient CreateClient()
     {
         var c = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
-        c.DefaultRequestHeaders.TryAddWithoutValidation("Origin", "https://scrolller.com");
-        c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
+        c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", HonestUserAgent);
         return c;
     }
 
@@ -154,7 +162,7 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
             foreach (var item in items)
             {
                 if (_nonExplicitOnly && (bool?)item["isNsfw"] != false) continue;
-                var e = MapItem(item, channel.Name, stills);
+                var e = MapItem(item, channel.Name, stills, filter);
                 if (e != null) entries.Add(e);
             }
         }
@@ -285,14 +293,18 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     /// lets clip-viewed reports attribute dwell back to the channel.</summary>
     /// <param name="stills">true for a PICTURE page (map to a static "image" entry),
     /// false for VIDEO/GIF (map to a "video" entry with a poster).</param>
-    private static FypAssetManifest.Entry? MapItem(JToken item, string sub, bool stills)
+    /// <param name="filter">The page's filter (VIDEO, GIF, PICTURE): labels the urls for the
+    /// device cache (<see cref="ScrolllerReuse.Label"/>) so a cached file can be reused by niche.
+    /// A GIF post is always taken as its webm/mp4 rendition or its static poster, never as a
+    /// real .gif (<see cref="RemoteMediaFormats"/> admits none).</param>
+    internal static FypAssetManifest.Entry? MapItem(JToken item, string sub, bool stills, string? filter = null)
     {
         var sources = item["mediaSources"] as JArray;
         if (sources == null || sources.Count == 0) return null;
 
         var best = stills
             ? PickSource(sources, RemoteMediaFormats.IsRemoteImage, MaxSourceWidth)
-            : PickSource(sources, RemoteMediaFormats.IsRemoteVideo, MaxSourceWidth);
+            : PickSource(sources, RemoteMediaFormats.IsRemoteVideo, MaxClipShortSide, shortSide: true);
         if (best == null) return null;
 
         long postId = (long?)item["id"] ?? 0;
@@ -338,6 +350,8 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
             Log.Debug("[FYP online] dropped r/{Sub} post {Post}: {Reason}", sub, postId, reason);
             return null;
         }
+        ScrolllerReuse.Label(entry, sub, ScrolllerReuse.LabelFor(filter, stills),
+            smallUrl != null ? (int?)small?["width"] : null, smallUrl != null ? (int?)small?["height"] : null);
         return entry;
     }
 
@@ -350,8 +364,11 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     /// preview loop rather than the clip, and on the still side it's a grid thumbnail that
     /// would look like a downscale bug at flash size. (Divergence from the mobile port,
     /// whose <c>pickPosterUrl</c> neither skips thumbs nor is order-independent.)
+    ///
+    /// <paramref name="shortSide"/> measures each source by min(width, height) instead of
+    /// width, so the cap reads as "720p" for a portrait clip too.
     /// </summary>
-    private static JToken? PickSource(JArray sources, Func<string?, bool> accept, int maxWidth)
+    internal static JToken? PickSource(JArray sources, Func<string?, bool> accept, int maxWidth, bool shortSide = false)
     {
         JToken? best = null;
         int bestWidth = -1;
@@ -361,6 +378,8 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
             if (string.IsNullOrEmpty(url)) continue;
             if (!accept(url) || url.Contains("_thumb", StringComparison.OrdinalIgnoreCase)) continue;
             int w = (int?)s["width"] ?? 0;
+            int h = (int?)s["height"] ?? 0;
+            if (shortSide && h > 0 && h < w) w = h;
             bool better = best == null
                 || (w <= maxWidth && (bestWidth > maxWidth || w > bestWidth))
                 || (w > maxWidth && bestWidth > maxWidth && w < bestWidth);
@@ -373,6 +392,9 @@ query SubredditQuery($url: String!, $iterator: String, $sortBy: GallerySortBy, $
     /// "data" object, or null on transport/HTTP/GraphQL-error failure (logged).</summary>
     private static async Task<JObject?> RequestGraphQlAsync(string query, JObject variables, CancellationToken ct)
     {
+        // Licence switch off: answer exactly like a failed request, so every caller falls back
+        // the way it already does when the network is down. Nothing leaves the machine.
+        if (!ScrolllerPolicy.Enabled) return null;
         await RequestGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {

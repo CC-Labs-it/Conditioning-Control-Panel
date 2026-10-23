@@ -33,6 +33,12 @@ namespace ConditioningControlPanel
             LoadRandomCard();
             ApplyLog(log);
 
+            // Proposal 7, session end: the engine has stopped and the result is on screen. The live
+            // end only (playSound is false for a recap reopened from history), no tier, completed.
+            if (Services.Startup.Conversion.ConversionRules.SessionTasteLine(log.Completed, playSound,
+                    App.Patreon?.HasPremiumAccess == true))
+                TxtTasteLine.Visibility = Visibility.Visible;
+
             if (playSound && log.Completed)
             {
                 PlayCompletionSound();

@@ -13,7 +13,7 @@ Thanks for helping. This page is the short version of how work lands in this rep
 ### Build and run
 
 ```bash
-git clone https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF.git
+git clone https://github.com/CC-Labs-it/Conditioning-Control-Panel.git
 cd Conditioning-Control-Panel---CSharp-WPF
 dotnet build ConditioningControlPanel.sln -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
 dotnet run --project ConditioningControlPanel

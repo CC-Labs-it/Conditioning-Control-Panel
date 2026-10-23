@@ -53,6 +53,19 @@ public interface IFriendsService
     Task<SendResult> SendWatchAsync(string friendId, WatchRef watch);
 
     Task<AddResult> AddByCodeAsync(string code);
+
+    // ---- friend links (CONTRACT.md "Links"). Defaults know nothing, for fakes ----
+
+    /// <summary>The account's live link, from the cache until it nears its end, else one call.
+    /// Null when signed out or the server cannot be reached (Copy link then copies the code).</summary>
+    Task<FriendLink?> GetLinkAsync() => Task.FromResult<FriendLink?>(null);
+
+    /// <summary>Retires the live link and returns a fresh one. Null when either step failed.</summary>
+    Task<FriendLink?> NewLinkAsync() => Task.FromResult<FriendLink?>(null);
+
+    /// <summary>Claims a pasted link or bare token: instant mutual friends on <see cref="ClaimResult.Friends"/>.</summary>
+    Task<ClaimResult> ClaimLinkAsync(string linkOrToken) => Task.FromResult(ClaimResult.TryLater);
+
     // The list changes. Each answers what the server said, so a surface only cheers on Done.
     Task<ActResult> AcceptAsync(string requesterId);
     Task<ActResult> DeclineAsync(string requesterId);
