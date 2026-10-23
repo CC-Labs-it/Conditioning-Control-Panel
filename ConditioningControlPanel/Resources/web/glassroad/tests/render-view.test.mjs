@@ -9,26 +9,48 @@ import { onLoop } from '../render/colossiMath.js';
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
 const feel = createFeel(feelJson);
 const cam = feelJson.camera;
-const BEFORE = { eyeUpM: 2.2, eyeBackM: 6.5, lookAheadM: 8, lookUpM: 0.6 };   // polish 5 camera
+const BEFORE = { eyeUpM: 1.5, eyeBackM: 4.1, lookAheadM: 9, lookUpM: 0.3 };   // P6 preview camera
+const BEFORE_SCALE = 0.68;
 const ASPECTS = { desk: 16 / 9, portrait: 390 / 844, landscape: 844 / 390 };
 
-test('view: the chase camera sits closer and lower than polish 5', () => {
-  assert.ok(cam.eyeBackM < BEFORE.eyeBackM - 1, 'closer');
-  assert.ok(cam.eyeUpM < BEFORE.eyeUpM - 0.3, 'lower');
-  assert.ok(cam.eyeUpM > 1.2 && cam.eyeBackM > 3.4, 'still a chase view, never inside the kart');
+test('view: the owner framing brings the chase closer and lower while retaining the road ahead', () => {
+  assert.ok(cam.eyeBackM / BEFORE.eyeBackM >= 0.75 && cam.eyeBackM / BEFORE.eyeBackM <= 0.85, 'modestly closer');
+  assert.ok(cam.eyeUpM / BEFORE.eyeUpM >= 0.75 && cam.eyeUpM / BEFORE.eyeUpM <= 0.85, 'proportionately lower');
+  assert.ok(cam.eyeBackM > KART_VIEW.modelRadiusM * KART_VIEW.scale * 4, 'eye stays well behind the vessel');
+  assert.equal(cam.lookAheadM, BEFORE.lookAheadM, 'keep the same road focus');
+  assert.equal(cam.lookUpM, BEFORE.lookUpM);
+  assert.equal(feel.get('fov.baseVDeg'), 60, 'size comes from framing, not a narrower FOV');
 });
 
-test('view: the kart is smaller against the world and holds its size on screen', () => {
-  const was = chaseFraming(BEFORE, 60, ASPECTS.desk, { scale: 1 });
+test('view: EMI is more readable, with the complete rest model visible at desktop and phone ratios', () => {
+  const was = chaseFraming(BEFORE, 60, ASPECTS.desk, { scale: BEFORE_SCALE });
   const now = chaseFraming(cam, feel.get('fov.baseVDeg'), ASPECTS.desk);
-  // world scale: the kart shrank more than the camera came in, relative to road and props
-  const worldGain = BEFORE.eyeBackM / cam.eyeBackM;
-  assert.ok(KART_VIEW.scale < 0.85 && KART_VIEW.scale >= 0.6, 'a clear shrink that keeps the rider readable');
-  assert.ok(KART_VIEW.scale / worldGain < 0.6, 'kart against the world');
-  // on screen: about the same width (never more than 15% larger), lower in frame, under the horizon
-  assert.ok(now.kartW <= was.kartW * 1.15 && now.kartW >= was.kartW * 0.8, 'width ' + now.kartW + ' vs ' + was.kartW);
-  assert.ok(now.kartY > was.kartY, 'lower in frame');
-  assert.ok(now.horizonY < now.kartY - 0.15, 'road ahead between horizon and kart');
+  assert.ok(KART_VIEW.scale / BEFORE_SCALE >= 1.1 && KART_VIEW.scale / BEFORE_SCALE <= 1.2, 'modest whole-racer enlargement');
+  assert.ok(now.kartW >= was.kartW * 1.3 && now.kartW <= was.kartW * 1.5, 'readable screen width ' + now.kartW);
+  assert.ok(now.kartY > 0.6 && now.kartY < 0.72, 'player stays in the lower centre');
+  assert.ok(now.horizonY < now.kartY - 0.17, 'road ahead between horizon and kart');
+
+  // This shipped R4 mesh has identity mesh ancestors and float POSITION bounds. Project all eight
+  // rest-box corners, including the handle and antenna; the saucer-centre metric alone is smaller.
+  const bytes = readFileSync(new URL('../art/models/emi-teacup-kart.glb', import.meta.url));
+  const gltf = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString('utf8'));
+  const positions = gltf.meshes.flatMap((m) => m.primitives.map((p) => gltf.accessors[p.attributes.POSITION]));
+  positions.forEach((a) => assert.ok(a.componentType === 5126 && !a.normalized, 'use decoded float bounds'));
+  const lo = [0, 1, 2].map((i) => Math.min(...positions.map((a) => a.min[i])));
+  const hi = [0, 1, 2].map((i) => Math.max(...positions.map((a) => a.max[i])));
+  const pitch = Math.atan2(cam.eyeUpM - cam.lookUpM, cam.eyeBackM + cam.lookAheadM);
+  for (const [name, a] of Object.entries({ ...ASPECTS, wide: 21 / 9 })) {
+    const th = Math.tan(chaseFraming(cam, 60, a).vFov * Math.PI / 360);
+    for (const x of [lo[0], hi[0]]) for (const y of [lo[1], hi[1]]) for (const z of [lo[2], hi[2]]) {
+      const dy = y * KART_VIEW.scale - cam.eyeUpM, dz = cam.eyeBackM - z * KART_VIEW.scale;
+      const depth = dz * Math.cos(pitch) - dy * Math.sin(pitch);
+      const up = dy * Math.cos(pitch) + dz * Math.sin(pitch);
+      const sx = 0.5 + x * KART_VIEW.scale / depth / th / a / 2, sy = 0.5 - up / depth / th / 2;
+      assert.ok(depth > 2, name + ' clear of the near plane');
+      assert.ok(sx > 0.25 && sx < 0.75, name + ' room beside the whole kart');
+      assert.ok(sy > 0.45 && sy < 0.92, name + ' whole kart visible with lower-frame margin: ' + sy);
+    }
+  }
 });
 
 test('view: phones keep the kart readable and inside the frame', () => {

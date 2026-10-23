@@ -1,11 +1,11 @@
 /* render/viewMath.js - the VIEW lane numbers (polish 6): kart visual scale, the chase framing check and the
  * near roadside cue plan. Pure (no three.js, no DOM), so node tests read it.
  *
- * Owner (2026-10-23, with feel references): the chase camera sits closer and lower and the kart is smaller
- * against the world, so the world feels bigger and the player more in control. The camera numbers live in
+ * Owner follow-up (2026-10-23): bring the chase camera closer and make every racer slightly larger so EMI
+ * reads clearly during play. The camera numbers live in
  * feel.json "camera"; the kart's world size lives here (KART_VIEW.scale, applied on every kart root by
  * render/karts.js, so the pose, sparks, wakes, skids, ring and aura all follow it). The sim's collision sizes
- * follow the same factor (feel.json contact.radiusM, sim/gaps.js kart.radiusM).
+ * retain the accepted P6 values (feel.json contact.radiusM, sim/gaps.js kart.radiusM).
  *
  * The near cues (render/nearDressing.js): lamp posts just outside a railed edge, a banner on every other
  * post, streaming past the kart at a steady rhythm. They give the eye speed and a human scale next to the
@@ -16,12 +16,12 @@ import { SPECTRUM_BASE, sectionKey } from './spectrum.js';
 import { onLoop } from './colossiMath.js';
 
 /**
- * Kart look scale. modelRadiusM / modelUpM are the teacup GLB's saucer radius and its visual centre height at
- * scale 1 (art/models/emi-teacup-kart.glb bounds: saucer +-0.75 m, cup top 1.1 m, EMI above it).
+ * Kart look scale. modelRadiusM / modelUpM are conservative framing dimensions at scale 1, including
+ * a little room around the R4 saucer's measured 0.72 m radius and the different vehicle silhouettes.
  * keepSprites: the name tag and head mark keep their world size (they are read at range), only their height
  * follows the kart.
  */
-export const KART_VIEW = Object.freeze({ scale: 0.68, modelRadiusM: 0.75, modelUpM: 0.62, keepSprites: true });
+export const KART_VIEW = Object.freeze({ scale: 0.78, modelRadiusM: 0.75, modelUpM: 0.62, keepSprites: true });
 
 /** Collision radius that matches a visual radius change: the old radius times the scale, rounded to cm. */
 export const scaledRadius = (radiusM, scale = KART_VIEW.scale) => Math.round(radiusM * scale * 100) / 100;
