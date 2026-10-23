@@ -141,7 +141,9 @@ public sealed class WebAssetServer : IDisposable
         if (queryToken)
             res.Headers.Add("Set-Cookie", $"{CookieName}={Token}; Path=/; HttpOnly; SameSite=Strict");
         res.ContentType = Types.GetValueOrDefault(Path.GetExtension(path), "application/octet-stream");
-        res.Headers.Add("Cache-Control", "no-cache");
+        // A Scrolller copy (DtRH's .temp/ccp_temp_remote_*) is no-store: the engine's disk cache must never keep a
+        // second copy that outlives the copy's 24 h or the off switch (licence 3.4).
+        res.Headers.Add("Cache-Control", CacheControlFor(path));
         res.Headers.Add("X-Content-Type-Options", "nosniff");
         res.Headers.Add("Referrer-Policy", "no-referrer");
         res.Headers.Add("Accept-Ranges", "bytes");
@@ -168,6 +170,9 @@ public sealed class WebAssetServer : IDisposable
             left -= n;
         }
     }
+
+    /// <summary>The Cache-Control a served file gets: no-store for a remote copy, else no-cache.</summary>
+    internal static string CacheControlFor(string path) => DtrhRemoteMedia.IsCopyFile(path) ? "no-store" : "no-cache";
 
     /// <summary>A single byte range, clamped to the file; (-1,-1) = unsatisfiable; null = absent or not one range.</summary>
     internal static (long From, long To)? ParseRange(string? header, long length)
