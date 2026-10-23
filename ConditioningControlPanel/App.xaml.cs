@@ -254,6 +254,18 @@ namespace ConditioningControlPanel
             // Chaos bubble payloads are Core data; what firing one does is this head's.
             Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
+            // Goon Game seams (CCP.Core/Services/GoonGame): the Scrolller downloader and the
+            // Discord link both live in this head.
+            Services.GoonGame.GoonOnlineMedia.Materialize = (url, ct) => Services.Fyp.Online.RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true);
+            Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = Services.Fyp.Online.RemoteMediaCache.ReleaseTempFile;
+            Services.GoonGame.GoonAvatarCache.OwnDiscordProvider = () =>
+                Discord is { IsAuthenticated: true } d ? (true, d.Avatar, d.GetAvatarUrl(128)) : (false, null, null);
+            // Own-media transfer (CCP.Core/Services/Media/Transfer): the library walk, the webp
+            // header check and the WinRT video engine are this head's.
+            Services.Transfer.AssetCompressionPlanner.ActivePool = Services.Chaos.DtrhAssetManifest.EnumerateActive;
+            Services.Transfer.AssetCompressionPlanner.IsAnimatedWebp = Services.AnimatedWebp.IsAnimated;
+            Services.Transfer.WinRtVideoTranscoder.Install();
+
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.
             // These run lazily on every read, so the mod system coming up after localization is
@@ -400,6 +412,26 @@ namespace ConditioningControlPanel
             // Goon signaling moved to Core with its transports; its 409-merged recovery stays here.
             Services.GoonGame.GoonSignalingClient.MergedAccountHook = Services.MergedAccountRecovery.TryHandle;
             Services.MergedAccountRecoveryHead.Seed();
+            // The 401 path lives in Core too (AuthRecovery, ex ProfileSyncService.HandleUnauthorizedAsync). Its hooks
+            // run off the UI thread, so both hop back: a recovery restarts the heartbeat; the re-validate is
+            // Patreon first, then Discord (invite-code / email sessions have no provider to mint from).
+            Services.AuthRecovery.Recovered = () => Current?.Dispatcher.BeginInvoke(() => ProfileSync?.StartHeartbeat());
+            Services.AuthRecovery.ProviderRevalidate = () => Current?.Dispatcher.InvokeAsync(async () =>
+            {
+                if (Patreon?.IsAuthenticated == true)
+                {
+                    Logger?.Information("[Auth] Re-validating Patreon to have the server re-issue the auth token");
+                    await Patreon.ValidateSubscriptionAsync(forceRefresh: true);
+                    return true;
+                }
+                if (Discord?.IsAuthenticated == true)
+                {
+                    Logger?.Information("[Auth] Re-validating Discord to have the server re-issue the auth token");
+                    await Discord.ValidateAndRefreshUserAsync(forceRefresh: true);
+                    return true;
+                }
+                return false;
+            }).Task.Unwrap() ?? Task.FromResult(false);
             Services.Arcademy.ArcademySyncService.MergedRecovery = Services.MergedAccountRecovery.TryHandle;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
             Services.ProviderSubscription.PrizesSink = Services.ProfileSyncService.ApplyValidatePrizes;

@@ -530,7 +530,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 // The compression cache's own feed. Attached AFTER the manifest so the page has its
                 // pool before the first cache-state lands. (The inbox needs no prune here anymore -
                 // the ephemeral wipe above already emptied it.)
-                GoonCacheBridge.Attach(_host);
+                GoonCacheBridge.Attach(_host == null ? null : _host.Post);
 
                 // Online pictures: only a pick made in THIS session fetches (a page reload inside
                 // one window keeps it); a fresh window waits for the flavour card.
@@ -829,7 +829,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 {
                     var disp = Application.Current?.Dispatcher;
                     if (disp == null || disp.HasShutdownStarted) break;
-                    disp.BeginInvoke(() => GoonShareCard.Handle(o, _host?.Window,
+                    disp.BeginInvoke(() => GoonShareCardHandler.Handle(o, _host?.Window,
                         frame => { try { _host?.Post(frame); } catch { } }));
                     break;
                 }
