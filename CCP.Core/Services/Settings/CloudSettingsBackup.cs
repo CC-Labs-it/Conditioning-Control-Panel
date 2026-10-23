@@ -142,21 +142,29 @@ namespace ConditioningControlPanel.Services
                 if (IsExcludedFromBackup(key) || AbsolutePathFields.Contains(key, StringComparer.OrdinalIgnoreCase))
                     obj.Remove(key);
             }
-            foreach (var item in obj.SelectTokens("AudioLayers[*]").OfType<JObject>())
+            foreach (var item in Items(obj, nameof(AppSettings.AudioLayers)))
             {
-                item.Remove(nameof(AudioLayerTrack.Path));
-                item.Remove(nameof(AudioLayerTrack.DisplayName)); // computed from Path, not persisted meaningfully
+                Drop(item, nameof(AudioLayerTrack.Path));
+                Drop(item, nameof(AudioLayerTrack.DisplayName)); // computed from Path, not persisted meaningfully
             }
-            foreach (var item in obj.SelectTokens("CornerGifOverlays[*]").OfType<JObject>())
-                item.Remove(nameof(CornerGifOverlaySetting.GifPath));
-            foreach (var item in obj.SelectTokens("KeywordTriggers[*]").OfType<JObject>())
+            foreach (var item in Items(obj, nameof(AppSettings.CornerGifOverlays)))
+                Drop(item, nameof(CornerGifOverlaySetting.GifPath));
+            var triggers = Items(obj, nameof(AppSettings.KeywordTriggers))
+                .Concat(Items(obj, nameof(AppSettings.KeywordTriggerPresets)).SelectMany(p => Items(p, "triggers")));
+            foreach (var item in triggers)
             {
-                item.Remove(nameof(KeywordTrigger.AudioFilePath)); // legacy dispatch fallback
-                foreach (var action in item.SelectTokens("Actions[*]").OfType<JObject>())
-                    if ((string?)action["type"] == "PlayAudio") action.Remove("filePath");
+                Drop(item, nameof(KeywordTrigger.AudioFilePath)); // legacy dispatch fallback
+                foreach (var action in Items(item, nameof(KeywordTrigger.Actions)))
+                    if (string.Equals((string?)action.GetValue("type", StringComparison.OrdinalIgnoreCase), "PlayAudio", StringComparison.OrdinalIgnoreCase))
+                        Drop(action, "filePath");
             }
             return obj;
         }
+
+        // Case-insensitive: a serializer naming policy must not let a path slip through.
+        private static IEnumerable<JObject> Items(JObject o, string list) =>
+            (o.GetValue(list, StringComparison.OrdinalIgnoreCase) as JArray)?.OfType<JObject>() ?? Enumerable.Empty<JObject>();
+        private static void Drop(JObject o, string name) => o.Property(name, StringComparison.OrdinalIgnoreCase)?.Remove();
 
         /// <summary>
         /// What a restore keeps from this machine: WPF's manual-restore identity/progression list
@@ -199,15 +207,41 @@ namespace ConditioningControlPanel.Services
             else for (var i = 0; i < restored.CornerGifOverlays.Count; i++)
                 restored.CornerGifOverlays[i].GifPath = current.CornerGifOverlays.ElementAtOrDefault(i)?.GifPath ?? "";
             if (Missing(nameof(AppSettings.KeywordTriggers))) restored.KeywordTriggers = new(current.KeywordTriggers);
-            else foreach (var trigger in restored.KeywordTriggers)
+            else RestoreTriggerPaths(restored.KeywordTriggers, current.KeywordTriggers);
+            if (Missing(nameof(AppSettings.KeywordTriggerPresets))) restored.KeywordTriggerPresets = new(current.KeywordTriggerPresets);
+            else for (var i = 0; i < restored.KeywordTriggerPresets.Count; i++)
+                RestoreTriggerPaths(restored.KeywordTriggerPresets[i].Triggers,
+                    ById(restored.KeywordTriggerPresets, i, current.KeywordTriggerPresets, p => p.Id)?.Triggers ?? new());
+        }
+
+        private static void RestoreTriggerPaths(List<KeywordTrigger> restored, List<KeywordTrigger> current)
+        {
+            for (var i = 0; i < restored.Count; i++)
             {
-                // Both trigger and action ids survive renames/reordering; never guess by path.
-                var local = current.KeywordTriggers.FirstOrDefault(t => !string.IsNullOrEmpty(trigger.Id) && t.Id == trigger.Id);
+                var trigger = restored[i];
+                var local = ById(restored, i, current, t => t.Id);
                 trigger.AudioFilePath = local?.AudioFilePath ?? "";
-                foreach (var audio in trigger.Actions.OfType<PlayAudioAction>())
-                    audio.FilePath = local?.Actions.OfType<PlayAudioAction>()
-                        .FirstOrDefault(a => !string.IsNullOrEmpty(audio.Id) && a.Id == audio.Id)?.FilePath ?? "";
+                // Action ids are not stable (every edit runs RebuildActionsFromFlatFields, which mints new
+                // ones), so a miss falls back to the local PlayAudio at the same position, then AudioFilePath.
+                var localAudio = local?.Actions.OfType<PlayAudioAction>().ToList() ?? new();
+                var restoredAudio = trigger.Actions.OfType<PlayAudioAction>().ToList();
+                for (var j = 0; j < restoredAudio.Count; j++)
+                    restoredAudio[j].FilePath = local == null ? ""
+                        : (ById(restoredAudio, j, localAudio, a => a.Id) ?? localAudio.ElementAtOrDefault(j))?.FilePath
+                          ?? local.AudioFilePath ?? "";
             }
+        }
+
+        /// <summary>The local twin of restored[i] by id. A duplicated id is ambiguous on either side, so it
+        /// only matches the local item at the same position carrying the same id.</summary>
+        private static T? ById<T>(IList<T> restored, int i, IList<T> local, Func<T, string?> id) where T : class
+        {
+            var key = id(restored[i]);
+            if (string.IsNullOrEmpty(key)) return null;
+            if (restored.Count(x => id(x) == key) == 1 && local.Count(x => id(x) == key) == 1)
+                return local.First(x => id(x) == key);
+            var same = local.ElementAtOrDefault(i);
+            return same != null && id(same) == key ? same : null;
         }
 
         // ---- the server (WPF BackupSettingsAsync / GetSettingsBackupInfoAsync / RestoreSettingsFromCloudAsync) ----
