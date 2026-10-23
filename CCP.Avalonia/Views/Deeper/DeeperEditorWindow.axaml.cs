@@ -60,41 +60,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// built trigger/action fields, the haptic curve editor, and validation via
     /// <see cref="EnhancementValidator"/>. All of that runs off Core models, so it ports whole.</para>
     ///
-    /// <para><b>What is stubbed, and why.</b> Each site carries a <c>ponytail:</c> comment.</para>
-    /// <list type="bullet">
-    ///   <item><b>Media playback.</b> LOCAL VIDEO is real, without LibVLC: <see cref="InitializeVideo"/>
-    ///         navigates the same <c>WebHost</c> the remote preview uses at the file, behind a gate
-    ///         pinned to that one path, and the engine's own media document supplies the
-    ///         &lt;video&gt; element that <see cref="PollBrowserTimeAsync"/> already reads and
-    ///         drives - so duration, playhead, play/pause and seek describe the file. LOCAL AUDIO
-    ///         is not: <see cref="InitializeAudioAsync"/> still needs a decoder (NAudio, or
-    ///         whatever replaces it) for both the waveform peaks and a duration, and until one
-    ///         lands the transport REFUSES on that branch rather than miming a clock.</item>
-    ///   <item><b>The browser preview.</b> Real: the https pre-flight, a per-navigation host
-    ///         fence, and the page's own &lt;video&gt; driven and read back through
-    ///         <c>WebHost.InvokeScriptAsync</c>, so duration, playhead, play/pause and seek
-    ///         describe the video rather than a free-running timer. One thing WPF had is NOT
-    ///         reproduced and it WIDENS what it allowed: there is no per-instance user-data
-    ///         folder, so the preview shares a cookie jar with every other WebHost. Stubbed because NativeWebView has no counterpart at
-    ///         all: ZoomFactor, ContainsFullScreenElementChanged (and the fullscreen reparent it
-    ///         drove), and AddScriptToExecuteOnDocumentCreatedAsync.</item>
-    ///   <item><b>Win32.</b> <c>WindowChromeHelper.ApplyDarkTitleBar</c> (DwmSetWindowAttribute),
-    ///         <c>RestoreOwnerOnClose</c>, <c>System.Windows.Forms.Screen.FromHandle</c> +
-    ///         <c>WindowInteropHelper</c> (the borderless-fullscreen preview window).
-    ///         <c>VisualTreeHelper.GetDpi</c> is NOT one of these any more: TopLevel.RenderScaling
-    ///         is its twin and the gaze picker uses it - see BeginGazePick in the RuleEditor
-    ///         partial.</item>
-    ///   <item><b>App services.</b> None left: Preview opens the shell's one player and Test
-    ///         fires through CoreHaptics. GazePickerWindow is NOT one - it is ported, beside this file, and now wired.
-    ///         App.Tutorial is the CoreTutorial seam and TutorialOverlay is ported; the manual editor coachmarks are wired through
-    ///         that seam - see
-    ///         <see cref="StartEditorTutorial"/>. App.EnhancementLibrary is
-    ///         head-only too, but the five members the editor needs from it are inlined in the
-    ///         file-ops region, so Save / Save As / Export / Swap / Change media / drag-drop are
-    ///         real, and the unsaved-changes guard on swap, drop-load and close asks
-    ///         Save / Discard / Cancel through <see cref="UnsavedChangesDialog"/> at the foot of
-    ///         this file.</item>
-    /// </list>
+    /// <para>Local audio uses LibVLC and Core waveform peaks. Local/remote video uses the fenced
+    /// WebHost and its script channel. DeeperPageBridge supplies page zoom and fullscreen signals;
+    /// the Preview partial reparents only the browser pane, retaining the native adapter.</para>
+    /// <para>Remaining gaps are recorded in docs/cloud/fin-views-deeper-editor-window.md and the
+    /// parity ledger; this surface remains a stub until they are reachable through the UI.</para>
     /// </summary>
     public partial class DeeperEditorWindow : Window
     {
@@ -213,7 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// browser branch and WebHost's fallback panel draws. Required by <c>--render-all</c>,
         /// which only discovers parameterless constructors.
         /// </summary>
-        internal DeeperEditorWindow() : this(SampleEnhancement(), "/home/sample/deep-dive.ccpenh.json")
+        internal DeeperEditorWindow() : this(SampleEnhancement(), IOPath.Combine(CorePaths.UserData, "deep-dive.ccpenh.json"))
         {
             _totalSeconds = 180;
             _currentSeconds = 42;
@@ -229,11 +199,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
 
-            // ponytail: needs WindowChromeHelper.ApplyDarkTitleBar (DwmSetWindowAttribute) and
-            // RestoreOwnerOnClose. The title-bar tint has no Linux equivalent short of
-            // SystemDecorations="None" plus a hand-drawn bar, which would cost this resizable
-            // window its native move/resize/maximize for a colour. Left native and untinted.
-            Closed += (_, _) => { try { (Owner as Window)?.Activate(); } catch { } };
+            Platform.WindowChrome.ApplyDarkTitleBar(this);
+            Platform.WindowChrome.RestoreOwnerOnClose(this);
+            BrowserPreview.WindowsUserDataFolder = IOPath.Combine(CorePaths.UserData, "browser_data_deeper_editor");
+            _previewBridge = new DeeperPageBridge(BrowserPreview, on =>
+            {
+                if (on) EnterPreviewFullscreen(); else ExitPreviewFullscreen();
+            });
+            Closed += (_, _) => _previewBridge.Dispose();
             Opened += (_, _) => s_open.Add(this);
             Closed += (_, _) => s_open.Remove(this);
             Closed += (_, _) =>
@@ -705,29 +678,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 || source.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>
-        /// Remote https preview. WPF built a WebView2 environment in its own user-data folder,
-        /// gated navigation on <c>DeeperConfig.PreviewHostAllowlist</c>, injected a
-        /// document-created script that posted the &lt;video&gt;'s currentTime back over
-        /// WebMessage, and handled fullscreen. Two of those four cross.
-        ///
-        /// <para><b>The fence crosses.</b> <c>WebHost.AllowNavigation</c> runs for every navigation
-        /// the engine starts - the first hop and every redirect, link and script-driven hop after
-        /// it - which is what NavigationStarting was for, and it applies the same rule
-        /// (<see cref="DeeperPreview.IsAllowedPreviewHost"/>).</para>
-        ///
-        /// <para><b>The profile does not.</b> WPF gave this preview its own
-        /// <c>browser_data_deeper_editor</c> folder so a hostile page could not read the main
-        /// browser tab's signed-in cookies. NativeWebView takes no per-instance data directory, so
-        /// the preview shares the process cookie jar with every other WebHost on this head. There
-        /// is no line of code here to point at; it is a capability the wrapper does not have.</para>
-        ///
-        /// <para><b>The time source crosses.</b> No document-created injection exists, but
-        /// <c>WebHost.InvokeScriptAsync</c> does, so <see cref="PollBrowserTimeAsync"/> reads
-        /// currentTime/duration/paused off the page on the playhead timer instead of receiving them
-        /// over WebMessage. Fullscreen and zoom do not - see the stub region at the foot of the
-        /// file.</para>
-        /// </summary>
+        /// <summary>Remote https preview, fenced on every navigation. Windows uses WPF's separate
+        /// browser_data_deeper_editor profile. NativeWebView time is polled through the script
+        /// channel; the page bridge reapplies zoom and listeners after each navigation.
+        /// ponytail: Linux WebKit still shares its store; native browser-settings hardening and
+        /// injection before page scripts run need additional adapter capabilities.</summary>
         private Task InitializeBrowserAsync(string url)
         {
             if (_browserInitInFlight) return Task.CompletedTask;
@@ -871,6 +826,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// </summary>
         private void StopBrowserPreview()
         {
+            _previewBridge.LeaveFullscreen();
             if (!_browserNavigated) return;
             _browserNavigated = false;
             // Cleared with the page, not left armed: a swap from a video to a URL would otherwise
@@ -1274,18 +1230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void BtnPreviewZoomIn_Click(object? sender, RoutedEventArgs e) => AdjustPreviewZoom(+0.10);
         private void BtnPreviewZoomOut_Click(object? sender, RoutedEventArgs e) => AdjustPreviewZoom(-0.10);
 
-        /// <summary>
-        /// ponytail: NativeWebView genuinely has no zoom factor - one of the three CoreWebView2
-        /// members with no counterpart at all, and NOT a missing script channel, since
-        /// InvokeScriptAsync works and everything else in this region uses it. CSS <c>zoom</c>
-        /// through that channel is the obvious substitute and is not one: it is per-document, so it
-        /// is lost on the next navigation, and it does not scale a fullscreened video. So WPF's
-        /// +/-10% clamped to [0.25, 5.0] stays lost, and these two buttons only log.
-        /// </summary>
-        private void AdjustPreviewZoom(double delta)
-        {
-            Log.Debug("DeeperEditor: preview zoom {Delta:+0.00;-0.00} ignored; NativeWebView has no zoom", delta);
-        }
+        private void AdjustPreviewZoom(double delta) => _previewBridge.Adjust(delta);
 
         private void TimelineScroll_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
         {
@@ -3219,8 +3164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// environment; WebHost owns its control's lifetime, so the page is blanked instead. The
         /// blank matters on a media swap, not on close - without it a swap away from a URL leaves
         /// the old page's audio running behind whatever replaces it.
-        /// ponytail: exiting preview fullscreen first has nothing to exit - see the stub region at
-        /// the foot of the file.</summary>
+        /// Fullscreen is unwound before blanking the page.</summary>
         private void TeardownPreview()
         {
             StopBrowserPreview();
@@ -3245,75 +3189,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private bool _playbackDisposed;
 
-        // ---------------------------------------------------------------------------------
-        // Preview fullscreen / audio-player surface
-        //
-        // What is left here after the browser preview was wired and local video joined it: the
-        // fullscreen reparent, and ONE player callback - the audio one. It is kept named and typed
-        // against a portable signature rather than deleted, so the layer that brings an audio
-        // decoder has an exact place to fill in. The framework-typed parameter (StoppedEventArgs)
-        // becomes EventArgs, since naming it would require the very package this head must not
-        // reference.
-        //
-        // The FULLSCREEN half is stubbed for one reason and it is not a missing wrapper method:
-        // ContainsFullScreenElementChanged has no counterpart in NativeWebView, so nothing on this
-        // head can tell that the page went fullscreen. Without that signal every member below is
-        // unreachable, whatever else were built. HT's video.requestFullscreen() therefore just
-        // expands the video to fill the small preview cell, with the timeline still visible behind
-        // it - degraded, but not a lie: no control here claims fullscreen is on.
-        //
-        // Two members that were stubbed for a WebView2 reason are GONE rather than stubbed, because
-        // the gate in InitializeBrowserAsync now does their job (DeeperPreview.IsAllowedPreviewHost).
-        // ---------------------------------------------------------------------------------
-
-        // The preview's own state. _fsTransitionInFlight and _isPreviewFullscreen are read by
-        // PollBrowserTimeAsync / OnBrowserTimeChanged and written only by the fullscreen members
-        // below, so they are permanently false until those are real - which is the honest state.
         private bool _browserInitInFlight;
         private bool _browserNavigated;
         private bool _browserPollInFlight;
         private bool _browserPollDisabled;
-        /// <summary>Armed by <see cref="InitializeVideo"/> only: pause a LOCAL clip's media
-        /// document once, the first time the poll sees it running, so the editor opens on a still
-        /// frame the way WPF's one-shot Playing handler made it.</summary>
         private bool _pauseLocalPreviewOnce;
         private bool _isPreviewFullscreen;
         private bool _fsTransitionInFlight;
         private Window? _previewFullscreenWindow;
-
-        /// <summary>ponytail: WPF's page-side bridge posted 'ccp_exit_fullscreen' / 'ccp_zoom_in' /
-        /// 'ccp_zoom_out' from a document-created script. NativeWebView HAS WebMessageReceived, but
-        /// it has no AddScriptToExecuteOnDocumentCreatedAsync to install the sender, and both of the
-        /// three messages' destinations (the fullscreen exit, the page zoom) are themselves stubs -
-        /// so a bridge would carry messages nobody could act on.</summary>
-        private void OnPreviewWebMessageReceived(object? sender, EventArgs e) { }
-
-        /// <summary>ponytail: needs ContainsFullScreenElementChanged, which NativeWebView does not
-        /// have. This is the signal the whole reparent hangs off.</summary>
-        private void OnPreviewFullscreenChanged(object? sender, EventArgs e) { }
-
-        /// <summary>ponytail: part of the fullscreen reparent - detached the WebView2 from whichever
-        /// panel/decorator currently owned it before re-hosting it in the fullscreen window.</summary>
-        private static bool TryDetachFromUiParent(Control child) { _ = child; return false; }
-
-        /// <summary>ponytail: needs Forms.Screen.FromHandle + WindowInteropHelper + a borderless
-        /// topmost window. On Linux the Avalonia parts exist (Screens.ScreenFromVisual,
-        /// SystemDecorations="None", Topmost, ShowInTaskbar=false) and WebHost is an ordinary
-        /// control that could be moved between them, but nothing calls this: see
-        /// <see cref="OnPreviewFullscreenChanged"/>.</summary>
-        private void EnterPreviewFullscreen() { }
-
-        /// <summary>ponytail: the recovery half of the reparent - put BrowserPreview back into
-        /// PreviewHost if the fullscreen window died without an orderly exit.</summary>
-        private void SafeRestoreBrowserPreviewToHost() { }
-
-        /// <summary>ponytail: the orderly half of the reparent.</summary>
-        private void ExitPreviewFullscreen() { }
-
-        /// <summary>ponytail: asked the page itself to leave fullscreen so the site's own player
-        /// chrome stayed consistent. The script channel for this DOES exist now
-        /// (WebHost.InvokeScriptAsync); what does not is anything that would call it.</summary>
-        private void ExitPreviewFullscreenViaScript() { }
+        private readonly DeeperPageBridge _previewBridge;
+        internal DeeperPageBridge PreviewBridge => _previewBridge;
 
         /// <summary>
         /// Time report from the browser preview, fed by <see cref="PollBrowserTimeAsync"/>. The

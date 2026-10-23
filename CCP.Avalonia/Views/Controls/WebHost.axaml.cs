@@ -159,6 +159,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool HasEngine => _web is not null;
 
+        // Keep the native adapter/page alive while the editor moves it between windows.
+        internal IDisposable? BeginReparenting() => _web?.BeginReparenting();
+
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
         /// The stand-in for <c>CoreWebView2.ExecuteScriptAsync</c>.
@@ -203,6 +206,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly TextBlock _txtReason, _txtSource;
         private readonly NativeWebView? _web;
 
+        // Set before attaching the native view. Adapted from parity/trunk 89258c5c4877e14415d39c9481ad8612fec2c84c.
+        // ponytail: only WebView2 exposes a profile directory; Linux still shares its WebKit store.
+        internal string? WindowsUserDataFolder { get; set; }
+
+        internal void ConfigureEnvironment(WebViewEnvironmentRequestedEventArgs e)
+        {
+            if (e is WindowsWebView2EnvironmentRequestedEventArgs win && WindowsUserDataFolder is { } folder)
+                win.UserDataFolder = folder;
+        }
+
         public WebHost()
         {
             AvaloniaXamlLoader.Load(this);
@@ -218,6 +231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 try
                 {
                     _web = new NativeWebView();
+                    _web.EnvironmentRequested += (_, e) => ConfigureEnvironment(e);
                     // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
                     // throws EntryPointNotFoundException in an async void, which takes the whole app down.
                     if (LinuxChoice != "wpe")
