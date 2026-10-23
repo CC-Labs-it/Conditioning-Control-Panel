@@ -115,14 +115,7 @@ public sealed class WindowDropTests
         Assert.True(File.Exists(media));
     });
 
-    [Fact]
-    public Task EnhancementDropSaysTheLibraryIsNotReady() => Run(async (shell, root, _) =>
-    {
-        var enh = Path.Combine(root, "wave.ccpenh.json");
-        File.WriteAllText(enh, "{\"$schema\":\"" + ConditioningControlPanel.Models.Deeper.Enhancement.SchemaTag + "\"}");
-        Drop(shell, enh);
-        await WaitFor(() => Toast(shell, Loc.Get("deeper_import_library_not_ready")));
-    });
+    // Enhancement drops: DeeperImportTests (wire-shell-file-dialogs-b).
 
     [Fact]
     public Task UnrecognisedDropToastsAndShowsNoOverlay() => Run(async (shell, root, _) =>

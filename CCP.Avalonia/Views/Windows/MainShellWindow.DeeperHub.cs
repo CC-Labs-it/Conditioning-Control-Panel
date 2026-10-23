@@ -4,8 +4,8 @@
 // card's demo/tour buttons). The index, filter and sort live in DeeperTabViewModel over Core
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
-// Still out (see docs/avalonia-parity.md shell-deeper-hub): import (EnhancementLibrary
-// FindDuplicateOf/PromoteToLibrary + RevealDeeperLibraryRow's flash), the bundled-demo seeding, the
+// Import and RevealDeeperLibraryRow's flash are in MainShellWindow.DeeperImport.cs.
+// Still out (see docs/avalonia-parity.md shell-deeper-hub): the bundled-demo seeding, the
 // library FileSystemWatcher (LibraryChanged), the duration probe, and the Deeper tutorial.
 
 using System;

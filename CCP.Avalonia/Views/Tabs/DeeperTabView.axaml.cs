@@ -27,8 +27,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The WPF code-behind is a pure relay: every handler is
     /// <c>if (Window.GetWindow(this) is MainWindow mw) mw.&lt;same name&gt;(...)</c>, plus the
     /// mod-aware feature art and the FX lifecycle hook. Library rows, the welcome card, player,
-    /// folder and catalogue relay to MainShellWindow.DeeperHub.cs; import, tutorial and the webcam
-    /// card are still stubs (see docs/avalonia-parity.md). The FEATURE ART is real: Helpers.ModArt.TryLoad plus CoreMods.ModChanged is the same
+    /// folder and catalogue relay to MainShellWindow.DeeperHub.cs, import to DeeperImport.cs; the
+    /// tutorial and the webcam card are still stubs (see docs/avalonia-parity.md). The FEATURE ART is real: Helpers.ModArt.TryLoad plus CoreMods.ModChanged is the same
     /// answer WPF's ModResourceResolver gives, and Assets/features/deeper.png is linked here.
     /// </summary>
     public partial class DeeperTabView : UserControl
@@ -137,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
-        private void ScrollToRow(int index)
+        internal void ScrollToRow(int index)
         {
             if (index >= 0) this.FindControl<ItemsControl>("DeeperLibraryList")?.ContainerFromIndex(index)?.BringIntoView();
         }
@@ -153,8 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void BtnDeeperCatalogue_Click(object? sender, RoutedEventArgs e)
             => _ = Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), MainShellWindow.DeeperCatalogueUrl);
-        // ponytail: import needs EnhancementLibrary.FindDuplicateOf/PromoteToLibrary (Core); no head instance yet.
-        private void BtnDeeperImport_Click(object? sender, RoutedEventArgs e) { }
+        private void BtnDeeperImport_Click(object? sender, RoutedEventArgs e) => Owner?.BtnDeeperImport_Click();
         private void BtnDeeperNewEnhancement_Click(object? sender, RoutedEventArgs e)
             => Owner?.BtnDeeperNewEnhancement_Click(sender, e);
         private void BtnDeeperOpenLibraryFolder_Click(object? sender, RoutedEventArgs e) => Owner?.OpenDeeperLibraryFolder();
@@ -285,6 +284,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public bool ShowLibraryError => _libraryError;
         public string LibraryErrorText => Loc.Get("deeper_import_library_not_ready");
         public bool ShowLibraryEmpty => !_libraryError && FilteredEntries.Count == 0;
+        /// <summary>WPF UpdateDeeperEmptyState: the New / Import / Catalogue actions only while the
+        /// library has no files at all (MainWindow.DeeperHub.cs:383).</summary>
+        public bool ShowLibraryEmptyActions => !_libraryError && _allEntries.Count == 0;
         public string LibraryEmptyText => Loc.Get(_allEntries.Count == 0 ? "deeper_library_empty" : "deeper_hub_empty_filtered");
         public string LibraryCountText => FilteredEntries.Count == _allEntries.Count
             ? Loc.GetF("deeper_library_count_fmt", _allEntries.Count)
@@ -319,6 +321,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal Dictionary<string, long> PendingDeletes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         private string? _selectedPath;
+        private string? _highlightedPath;
+
+        /// <summary>WPF RevealDeeperLibraryRow (MainWindow.DeeperHub.cs:746): flash the row an import
+        /// landed on; a rebuild keeps the flash until <see cref="ClearHighlight"/>. Returns the index or -1.</summary>
+        internal int Highlight(string path)
+        {
+            var index = -1;
+            for (var i = 0; i < FilteredEntries.Count; i++)
+                if (PathsEqual(FilteredEntries[i].Entry.FilePath, path)) { index = i; break; }
+            if (index < 0) return -1;
+            _highlightedPath = path;
+            FilteredEntries[index].IsHighlighted = true;
+            return index;
+        }
+
+        internal void ClearHighlight(string path)
+        {
+            if (PathsEqual(_highlightedPath, path)) _highlightedPath = null;
+            foreach (var row in FilteredEntries)
+                if (PathsEqual(row.Entry.FilePath, path)) row.IsHighlighted = false;
+        }
 
         /// <summary>Rebuilds the rows without a rescan - a submission badge changed.</summary>
         public void Refresh() => ApplyFilter();
@@ -411,9 +434,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var row = BuildRow(entry);
                 row.IsSelected = PathsEqual(entry.FilePath, _selectedPath);
+                row.IsHighlighted = PathsEqual(entry.FilePath, _highlightedPath);
                 FilteredEntries.Add(row);
             }
-            Notify(nameof(LibraryCountText), nameof(ShowLibraryEmpty), nameof(LibraryEmptyText),
+            Notify(nameof(LibraryCountText), nameof(ShowLibraryEmpty), nameof(ShowLibraryEmptyActions), nameof(LibraryEmptyText),
                 nameof(PillAllCount), nameof(PillVideoCount), nameof(PillAudioCount),
                 nameof(PillHapticsCount), nameof(PillWebcamCount), nameof(ShowLibraryError),
                 nameof(SortDirectionGlyph));
@@ -554,6 +578,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (_isSelected == value) return;
                 _isSelected = value;
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+            }
+        }
+
+        private bool _isHighlighted;
+
+        /// <summary>The post-import flash (WPF DataTrigger IsHighlighted).</summary>
+        public bool IsHighlighted
+        {
+            get => _isHighlighted;
+            set
+            {
+                if (_isHighlighted == value) return;
+                _isHighlighted = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHighlighted)));
             }
         }
 

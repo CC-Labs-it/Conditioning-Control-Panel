@@ -25,9 +25,8 @@
 // Play/Edit) live in MainShellWindow.SessionIO.cs via ShowOrActivateDeeperPlayer/OpenDeeperEditor.
 // STILL OUT, and why:
 //   OpenDeeperEditorFromPlayer,
-//   HandlePendingFileOpen (file-association entry points), OnDeeperLibraryChanged (no watcher),
-//   BtnDeeperImport_Click / ImportEnhancementFiles (EnhancementLibrary.FindDuplicateOf /
-//   PromoteToLibrary are in Core now; this head has no EnhancementLibrary instance yet).
+//   HandlePendingFileOpen (file-association entry points), OnDeeperLibraryChanged (no watcher).
+//   (Not out any more: BtnDeeperImport_Click / ImportEnhancementFiles, in MainShellWindow.DeeperImport.cs.)
 //   The browser half - OnDeeperBrowserBound/Unbound, RefreshBrowserWebcamButton,
 //   BtnWebcamTracking_Click, MaybePromptBrowserWebcamForEnhancement, OnBrowserEnhanceMatchChanged,
 //   ChkForceShowBambiCloud_Changed, ToggleEnhanceIfPossible_Changed. WebView2 plus WebcamTrackingState.
@@ -40,8 +39,6 @@
 //   The rail pulse - StartDeeperTabPulse / StopDeeperTabPulse, a WPF storyboard on BtnDeeper.
 //   (Not out any more: the catalogue. The submit half is in MainShellWindow.DeeperSubmissions.cs
 //   (U3); the lookup -> toast -> picker -> download -> player chain is at the bottom of this file.)
-//   IsImportableEnhancementPath is pure and would compile, and is held back with
-//   ImportEnhancementFiles, its only caller.
 //   MaybePromptMandatoryVideoEnhancement (with its "Don't ask again" fold).
 //
 // NOT BLOCKED, RESTORED: BtnDeeperNewEnhancement_Click. It used to be listed on the line above with

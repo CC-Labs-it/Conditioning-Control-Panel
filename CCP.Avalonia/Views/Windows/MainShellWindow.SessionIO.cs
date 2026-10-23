@@ -41,7 +41,7 @@
 //   UpdateDropOverlay, HandleAssetDropAsync, over Core DropRules (the DetectDropType lift both
 //   heads call). Session/preset drops go to PresetsTabView; .ccpmod to HandleModDropAsync
 //   (MainShellWindow.ModCatalogue.cs). Single-media Play/Edit/Library choices are restored.
-//   Enhancement import still reports library-not-ready; see wire-shell-file-dialogs-b.
+//   Enhancement drops import through ImportEnhancementFiles (MainShellWindow.DeeperImport.cs).
 //
 //   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
 //   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,
@@ -174,8 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Named<Tabs.PresetsTabView>("PresetsTab")?.HandlePresetDrop(files[0]);
                     break;
                 case DropType.Enhancement:
-                    // WPF ImportEnhancementFiles with no App.EnhancementLibrary (DeeperTab.cs:819).
-                    App.Notifications.Show(Loc.Get("deeper_import_library_not_ready"), Helpers.NotificationType.Warning);
+                    ImportEnhancementFiles(files);   // MainShellWindow.DeeperImport.cs
                     break;
                 case DropType.Mod:
                     await HandleModDropAsync(files[0]);
