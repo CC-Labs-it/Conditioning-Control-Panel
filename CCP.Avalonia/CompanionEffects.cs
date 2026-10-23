@@ -24,7 +24,6 @@ namespace ConditioningControlPanel.Avalonia
     /// whose surface this head lacks (spiral: no spiral overlay port) stays unseeded, so Core refuses
     /// it as "didn't fire" - never a pretend success. An overlay surface also refuses where
     /// click-through windows are impossible (X11Overlay unavailable), as the overlays themselves do.
-    /// ponytail: no Live actions panel on this head, so AiCommandService.LiveActionSink stays unseeded.
     /// </summary>
     internal static class CompanionEffects
     {
@@ -64,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia
 
         internal static void Seed()
         {
+            AiCommandService.LiveActionSink = App.AppendAiLiveAction;
             CompanionBrain.CommandExecutor = commands =>
             {
                 Commands.BeginBatch();

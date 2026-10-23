@@ -1,9 +1,9 @@
 using System;
 using ConditioningControlPanel.Services;
 using Xunit;
-using static ConditioningControlPanel.Services.VideoService;
+using static ConditioningControlPanel.Services.VideoWedgeLadder;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// #600 — a video output that appears then VANISHES mid-clip (white screen partway through) went
