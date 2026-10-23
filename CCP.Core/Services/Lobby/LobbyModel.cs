@@ -280,7 +280,7 @@ public readonly record struct LobbyGates(
     bool RemoteHost, bool RemoteJoin)
 {
     /// <summary>
-    /// <paramref name="goonHosting"/> = <c>GoonHostService.HostingAllowed()</c> (patrons);
+    /// <paramref name="goonHosting"/> = <c>GoonHostRules.HostingAllowed()</c> (patrons);
     /// <paramref name="remoteHosting"/> = premium or the ? box's "remote" free day (the old
     /// "Become a subject" rule). Chess is free with an account; every join needs an account.
     /// </summary>
