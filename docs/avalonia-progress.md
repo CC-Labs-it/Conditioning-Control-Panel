@@ -2843,3 +2843,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-settings-performance-b: +215
 - Lockdown tab pulse (shared Core LockdownPulse timeline) starts on Lockdown entry, stops on leave / motion below Full, as WPF; start, Off-stop and close-stop each fail-proven.
 - Ledger row views-settings-performance stays stub; unified overlay compositor left to lane -c.
+
+## avalonia-port/wire-shell-multi-monitor: +141
+- Bubble Count result windows: map before monitor enumeration, place on the reported primary or fallback, read-only mirrors on other screens (MultiMonitorResultTests).
+- Review fixes: primary positioned once, Skia test setup; ledger states X11 multi-head not run live; row stays stub.
