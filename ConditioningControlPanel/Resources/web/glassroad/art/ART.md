@@ -1778,3 +1778,16 @@ The selected design must stay under 2,000 triangles, use metres, +Y up and -Z fo
 The rig's head attachment is `head_attach` under `EMI_root`; a hand-held prop uses the existing `shoulderL` or `shoulderR` palm transform. There are no joints literally named head or hand. Do not add bones. Umbrellas are authored open; host-owned morph or the permitted single child handles open/close, and a non-bone rotor child handles beanie spin. Screen, face pixels and antenna remain unchanged. Fit checks after selection must cover every accepted action, antenna sweep, palm contact and the low rear chase camera.
 
 Runtime manifest rows: none until a selected mesh is exported and measured. Added runtime triangles: 0. Added runtime `texBytes`: 0.
+
+## W4 selected glide props: propeller beanies
+
+Six original propeller beanies follow the accepted W3 concepts: Threshold porcelain/rose with three petal blades; Boudoir satin/bow with two fan blades; The Keep iron/velvet with three angular blades and a lock hub; Mainframe graphite/cable with four angular blades; Quarantine white/teal with two capsule blades; Switchboard enamel/brass with a dial cuff and three brass blades.
+
+- Runtime files: `art/models/glide-{track}-beanie.glb`. Metres, +Y up, -Z forward, required meshopt compression.
+- Attach the loaded root with identity local transform to the accepted `head_attach` under `EMI_root`. No new skeleton, skin, bone, or animation is supplied. The immutable base SHA256 is `7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1`; reject a mismatch before attaching.
+- The root is the mounted cap. Its one child `spin` is the rotor, local pivot `[0, 0.225, 0.155]` m. The host rotates its local Y and scales that child uniformly from 0 to 1. The cap and rear bearing stay mounted.
+- Simple named PBR material slots (`cap`, `cuff`, `trim`, `blade`, `accent`) can be tinted by the host. Texture residency is zero. Materials are opaque; the Boudoir ribbon alone is double-sided.
+- The crown has a real opening around the original animated antenna; the raised rear bearing clears it. All 26 original actions were sampled at exported keys plus 120 Hz (4,083 poses): no sampled cap/antenna intersections, with at least 57.5 mm vertical separation from every rotating blade to the animated antenna. Full rotation fits the manifest radius, including the off-centre pivot.
+- Packed glTF validation: zero errors or warnings; meshopt decoded and fresh-imported in Blender 5.2.1, then the editable native masters were independently reopened. Final six-view, fitted, low rear, stowed/spin and 26-action sheets are linked in the PR body.
+- Sources and `.blend` masters stay private under `C:/Projects/glassroad-art/glide/beanies/`. All prop geometry is original CC Labs work. Concept-sheet material grain is intentionally expressed with broad geometry/material slots under the 2,000-triangle contract.
+- This is an art delivery with an isolated Three.js fit review. Game-side glide integration and controller feel are not exercised here. Dense animation sampling is not a continuous collision proof between samples.
