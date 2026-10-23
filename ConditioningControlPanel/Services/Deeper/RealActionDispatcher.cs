@@ -43,10 +43,6 @@ namespace ConditioningControlPanel.Services.Deeper
             public ToyRole? Target;
         }
 
-        public void ResetOverlayBands() => App.Overlay?.ResetDeeperOverlayBands();
-        public void StopOneShotFlashes() => App.Flash?.StopOneShotFlashes();
-        public void StopOneShotSubliminals() => App.Subliminal?.StopOneShotSubliminals();
-
         public async Task DispatchAsync(EnhancementAction action, EnhancementDispatchContext ctx, CancellationToken ct = default)
         {
             if (ct.IsCancellationRequested) return;
