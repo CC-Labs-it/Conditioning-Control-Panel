@@ -441,6 +441,7 @@ internal static class X11Overlay
 
     private static int OnXError(IntPtr display, IntPtr errorEvent)
     {
+        X11DesktopCapture.OnError(display);
         _xErrored = true;
         // Xlib's default handler exits the process. An overlay destroyed between reading its
         // handle and the call above is normal churn, not a reason to take the app down.

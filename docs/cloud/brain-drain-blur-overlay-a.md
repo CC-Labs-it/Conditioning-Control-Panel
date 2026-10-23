@@ -1,0 +1,27 @@
+- Add a platform-only capture seam: XComposite desktop reconstruction excludes every Brain Drain window; Windows GDI uses required capture exclusion and opaque BGR pixels. No Core or WPF changes.
+- Add per-screen worker capture/blur/melt, an immutable latest-frame mailbox, live inputs, monitor retargeting, three-second freshness checks, and idempotent engine/panic/exit cleanup without joining workers.
+- Display FirstShow's flat 70/255 milky veil with an explicit UI/log notice while waiting or when capture fails. Native Wayland makes no capture attempt; without safe global transparent click-through windows the veil and notice stay inside the app.
+- Adapt GDI ownership and blur/alpha concepts from `parity/trunk` commit `11c20f4ef3d96b06386a69e655d4307406a5f7fe`; fetched trunk tip `a4ee52d40cd347d288dcf7fdaa8445b79f8e5038`. Existing base files were merged, never replaced.
+- Both parity ledger rows remain **stub**. Slice B owns user-facing settings handlers and keep-clear ordering; this slice makes no Media Log/audio changes.
+
+## Verification limits
+
+- SDK: .NET `10.0.402`. All commands used Release; test runs set `DiffEngine_Disabled=true`.
+- `dotnet build CCP.Core/CCP.Core.csproj -c Release` and `dotnet build CCP.Avalonia/CCP.Avalonia.csproj -c Release`: exit 0, **0 errors** (includes the Windows GDI seam).
+- Built every Linux test project listed in `.github/workflows/build.yml`: `CCP.Core.Tests`, `CCP.Core.Settings.Tests`, `CCP.Core.Content.Tests`, `CCP.Avalonia.Tests`, `CCP.Avalonia.CatalogueStartup.Tests`, `CCP.Avalonia.Consent.Tests`, `CCP.Avalonia.GeneralSettings.Tests`, `CCP.Avalonia.Language.Tests`, `CCP.Avalonia.Report.Tests`, `CCP.Avalonia.Scheduler.Tests`, `CCP.Avalonia.Snapshot.Tests`: all exit 0, **0 errors**. Shared-output collisions during initial overlapping builds were resolved by serial builds (`-m:1`).
+- `dotnet build Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release -m:1 -p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false`: exit 0, **559 warnings, 0 errors**. Windows/WPF compiled, **not run**.
+- `bash .github/scripts/core-guards.sh`: exit 0, `All Core guards passed.`
+- `dotnet test Tests/CCP.Core.Tests -c Release --no-build`: exit 0, **3339 passed, 5 skipped, 0 failed**. The existing Vosk tests skip because the model download is unavailable (environment's documented 403); no test was changed or disabled.
+- `dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build --filter '(FullyQualifiedName~BrainDrainCaptureTests|FullyQualifiedName~PanicSurfacesTests)&FullyQualifiedName!~EachPanicRouteCallsStopAllExactlyOnce'`: exit 0, **13 passed, 0 skipped, 0 failed**. Includes actual visual bitmap replacement/failure clearing, Wayland's visible fallback, active panic cleanup, ownership/disposal, latest replacement, target changes, stalled-worker stop, freshness, melt and native alpha/channel correctness.
+- `bash .github/scripts/brain-drain-x11-check.sh`: exit 0, **1 passed, 0 skipped, 0 failed**. Requires Xorg with its dummy driver, xcompmgr, Python 3 and a built test assembly. It refuses an existing `:99`, starts its own desktop/compositor and cleans up only its children. This cloud run unpacked xcompmgr locally without root/apt. Native test content proves BGR colours, blur blending, target crop/downscale and exclusion of a covering green window; including that window must produce green. Also passed separately without a compositor and with server-side composition.
+- Fail-before-fix evidence: the native integration test first failed on pixmap masks, then depth-24 coverage/undefined alpha. These were fixed in capture, preserving the colour/blur/exclusion assertions; the final run passes. Explicit opaque-BGR conversion also protects the compile-only GDI path.
+- `git diff --check`: exit 0. Core and frozen WPF source are unchanged.
+- Not run: Windows native capture/runtime, WPF tests, a native Wayland desktop, physical multi-monitor/end-to-end shell rendering, or the existing font-dependent Avalonia UI suites (including the full panic-route window test). The new focused headless tests avoid text layout and ran successfully; the wider font-sensitive suite remains for supervisor rcheck.
+- Both ledger rows remain **stub**, not wired/verified. X11 validation is scoped to the isolated dummy server and xcompmgr; unsupported desktop reconstruction explicitly falls back.
+
+## Assumptions
+
+- Reuse the head's `AmbientFxCanvas.Env.CurrentTier` (its PerformanceProfile counterpart); keep WPF's 30/20/15 fps caps and 4/8 downscale. A high-refresh request remains capped by the active tier, as in WPF.
+- X11 supports 64-bit true-colour window pixmaps, fully covered desktop backgrounds, and rectangular windows. Unsupported formats/shapes, desktop coverage gaps, capture errors, or entirely black/empty captures deliberately select the visible veil. Conservative black-frame rejection can also reject a legitimately all-black desktop.
+- Native Wayland cannot provide the existing global click-through overlay guarantees; the fallback is explicitly app-local. No portal capture or speculative settings are added.
+- No new settings UI, keep-clear ordering, audio routing, or ad-hoc timed-effect routing in slice A. Existing engine/session starts activate persisted visual settings; live settings are polled while that engine/session runs.
