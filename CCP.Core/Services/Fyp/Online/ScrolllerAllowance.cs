@@ -43,10 +43,33 @@ internal sealed class ScrolllerLedger
     public bool Roll(DateTime local)
     {
         var day = DayOf(local);
-        if (string.CompareOrdinal(day, Day) <= 0) return false;
+        var order = string.CompareOrdinal(day, Day);
+        if (order < 0 && HeldDayIsAClockError(local)) { Restamp(day, local); return false; }
+        if (order <= 0) return false;
         Day = day;
         Used = 0;
         return true;
+    }
+
+    /// <summary>A clock this far behind the ledger's day was wrong before (a PC that ran days
+    /// ahead, then synced). Without this the later day was kept, so the share never reset at a
+    /// real midnight until the PC's clock caught up with the wrong date (main 251b60807).
+    /// A day or two back (travel west, a clock nudged back) still keeps the later day.</summary>
+    public static readonly TimeSpan ClockErrorBack = TimeSpan.FromDays(2);
+
+    private bool HeldDayIsAClockError(DateTime local)
+        => DateTime.TryParseExact(Day, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+               System.Globalization.DateTimeStyles.None, out var held)
+           && held - local.Date > ClockErrorBack;
+
+    /// <summary>Moves the ledger back to today with its used bytes (winding the clock still never
+    /// buys a fresh share), so the next real midnight resets it. A first day stamped in the wrong
+    /// future moves with it, or reads as already past.</summary>
+    private void Restamp(string day, DateTime local)
+    {
+        if (FirstDay != null && string.CompareOrdinal(FirstDay, day) > 0)
+            FirstDay = FirstDay == Day ? day : DayOf(local.Date.AddDays(-1));
+        Day = day;
     }
 
     public void Charge(long bytes, DateTime local)

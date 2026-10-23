@@ -257,7 +257,7 @@ internal static class RemoteMediaCache
             {
                 try
                 {
-                    if (now - File.GetCreationTimeUtc(file) < age) continue;
+                    if (!TempCopyDue(File.GetCreationTimeUtc(file), now, age)) continue;
                     File.Delete(file);
                     deleted++;
                 }
@@ -268,6 +268,12 @@ internal static class RemoteMediaCache
         if (deleted > 0) App.Logger?.Information("[remote media] {Count} temp file(s) past the day limit deleted", deleted);
         return deleted;
     }
+
+    /// <summary>The day limit on one temp copy (Core <see cref="ScrolllerDiskCache.TempCopyDue"/>, shared with
+    /// the Avalonia head): due at <paramref name="age"/>, always for age zero, and when the creation time is
+    /// more than an hour AHEAD of now (the clock went back).</summary>
+    internal static bool TempCopyDue(DateTime createdUtc, DateTime nowUtc, TimeSpan age)
+        => ScrolllerDiskCache.TempCopyDue(createdUtc, nowUtc, age);
 
     /// <summary>When the in-memory copy of <paramref name="url"/> was downloaded, or null.</summary>
     private static DateTime? DownloadedUtcOfMemory(string url)
