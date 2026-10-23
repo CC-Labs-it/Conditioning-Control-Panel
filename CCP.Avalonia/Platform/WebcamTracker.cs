@@ -123,6 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>The last start failed only because a Stop (panic, revoke) overtook it: WPF's Stopped
         /// state, which closes the splash instead of showing an error.</summary>
         internal bool StartWasStopped { get; private set; }
+        /// <summary>Start found no camera, rather than an engine fault (FYP's no-camera status).</summary>
+        internal bool StartFoundNoCamera { get; private set; }
         private void Progress(double p, string status) => Dispatcher.UIThread.Post(() => OnStartupProgress?.Invoke(p, status));
 
         /// <summary>The saved calibration (WPF's file in the profile folder), read once on first use
@@ -198,6 +200,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 LastError = null;
                 StartWasStopped = false;
+                StartFoundNoCamera = false;
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current)) { LastError = "Webcam consent is not current."; return false; }
                 // WPF #743: a loop a timed-out Stop gave up on may still hold the camera.
                 if (IsClosing)
@@ -230,10 +233,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Progress(0.55, "Opening camera…");
                 run.Source = SourceFactory();
-                bool opened;
-                try { opened = run.Source.Open(); } catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
+                bool opened, openThrew = false;
+                try { opened = run.Source.Open(); } catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; openThrew = true; }
                 if (!opened)
                 {
+                    StartFoundNoCamera = !openThrew;
                     LastError = "No camera could be opened. Check that a webcam is connected and not in use by another app.";
                     run.Release();
                     return false;

@@ -30,7 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
-            // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
+            // WPF GameSurfaces.cs:53-55: every web game, including the feed and its owned
+            // webcam consent/calibration dialogs. Closing FYP also releases its camera subscriptions.
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             new("voice-capture", sh => sh?.CancelVoicePrompt()),

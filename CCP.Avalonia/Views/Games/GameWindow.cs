@@ -93,7 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
-            Closing += (_, _) => _closing = true;
+            Closing += (_, _) => { _closing = true; if (Spec.Id == FypId) DisableFypEyeControl(); };
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
         }

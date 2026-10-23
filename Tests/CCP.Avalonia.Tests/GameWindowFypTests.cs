@@ -50,6 +50,8 @@ public sealed class GameWindowFypTests
                 CoreEntitlement.ShowDeniedHandler, CorePaths.EffectiveAssetsProvider, CoreProgression.AddXPProvider);
             GameWindow.Server = () => server;
             CorePaths.EffectiveAssetsProvider = () => lib;
+            var oldConsent = GameWindow.FypEyeConsent;
+            GameWindow.FypEyeConsent = _ => Task.FromResult(false);
             var shell = new MainShellWindow();
             try
             {
@@ -61,6 +63,7 @@ public sealed class GameWindowFypTests
             {
                 GameWindow.CloseAllForPanic();
                 shell.Close();
+                GameWindow.FypEyeConsent = oldConsent;
                 (GameWindow.Server, CoreEntitlement.HasPremiumProvider, CoreEntitlement.ShowDeniedHandler) = (oldServer, oldPremium, oldDenied);
                 (CorePaths.EffectiveAssetsProvider, CoreProgression.AddXPProvider) = (oldAssets, oldXp);
                 CoreSettings.ServiceProvider = null;
@@ -166,9 +169,9 @@ public sealed class GameWindowFypTests
         Assert.False(shell.IsVisible);
     });
 
-    /// <summary>WPF OnPageMessage: init on this window's asset gate, WPF's own ghost/eye refusals, clip XP.</summary>
+    /// <summary>WPF OnPageMessage: init on this window's asset gate, ghost refusal and camera consent, clip XP.</summary>
     [Fact]
-    public void Frames_InitRefusalsAndXp() => Run((_, lib) =>
+    public void Frames_InitGhostAndConsentRefusalsAndXp() => Run((_, lib) =>
     {
         CoreEntitlement.HasPremiumProvider = () => true;
         Directory.CreateDirectory(Path.Combine(lib, "videos"));
@@ -182,7 +185,8 @@ public sealed class GameWindowFypTests
         w.HandleMessage("{\"type\":\"ready\"}");
         var init = sent.Single();
         Assert.Equal("init", (string?)init["type"]);
-        Assert.False((bool)init["settings"]!["eyeControl"]!);
+        Assert.True((bool)init["settings"]!["eyeControl"]!);
+        Wait(w.FypEyeTask);
         Assert.EndsWith("/ccp.assets/videos/clip.mp4", (string?)init["assets"]!.Single()["url"]);
         Assert.Equal(new Uri((string)init["assets"]![0]!["url"]!).Authority, w.PageUrl!.Authority);
         sent.Clear();
@@ -191,10 +195,11 @@ public sealed class GameWindowFypTests
         Assert.False((bool)sent[0]["on"]!);
         sent.Clear();
         w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"eyeControl\",\"value\":true}");
+        Wait(w.FypEyeTask);
         Assert.False(CoreSettings.Current.FypEyeControl);
         Assert.Equal("eyeStatus", (string?)sent.Single()["type"]);
         Assert.False((bool)sent[0]["enabled"]!);
-        Assert.Equal("unsupported", (string?)sent[0]["reason"]);   // the camera exists; this host does not drive it
+        Assert.Equal("consent", (string?)sent[0]["reason"]);
         w.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"muted\",\"value\":true}");
         Assert.True(CoreSettings.Current.FypMuted);
         w.HandleMessage("{\"type\":\"clip-viewed\",\"segId\":\"videos/clip.mp4\"}");
