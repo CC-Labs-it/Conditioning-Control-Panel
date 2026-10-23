@@ -22,8 +22,9 @@ internal static class ScrolllerAwayWatcher
     /// <summary>POWERBROADCAST_SETTING: a GUID (16 bytes), DataLength (4), then Data.</summary>
     private const int DataOffset = 20;
 
-    /// <summary>GUID_CONSOLE_DISPLAY_STATE values.</summary>
-    internal const int DisplayOff = 0, DisplayOn = 1, DisplayDimmed = 2;
+    /// <summary>GUID_CONSOLE_DISPLAY_STATE values (Core <see cref="ScrolllerAwayRule"/>, shared with the Avalonia head).</summary>
+    internal const int DisplayOff = ScrolllerAwayRule.DisplayOff, DisplayOn = ScrolllerAwayRule.DisplayOn,
+        DisplayDimmed = ScrolllerAwayRule.DisplayDimmed;
 
     private static int _started;
     private static volatile bool _locked;
@@ -31,8 +32,8 @@ internal static class ScrolllerAwayWatcher
     private static HwndSource? _sink;
     private static IntPtr _notify;
 
-    /// <summary>The rule, pure: away = locked, or the display is off. Dimmed is not away.</summary>
-    internal static bool IsAway(bool locked, int displayState) => locked || displayState == DisplayOff;
+    /// <summary>The rule, pure (Core <see cref="ScrolllerAwayRule.IsAway"/>): away = locked, or the display is off. Dimmed is not away.</summary>
+    internal static bool IsAway(bool locked, int displayState) => ScrolllerAwayRule.IsAway(locked, displayState);
 
     public static void Start()
     {
