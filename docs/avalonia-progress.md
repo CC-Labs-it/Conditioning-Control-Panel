@@ -2640,3 +2640,10 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
 ## avalonia-port/tester-test-plan: +675
 - docs/avalonia-test-plan.md: tester steps per ledger area (open/click/expect, WPF file:line, row ids), the live queue rewritten in plain words, safety steps flagged for an agent live check before the shipping switch.
 - Every ledger row id is listed with its WPF reference. Only tester reports move a row to verified.
+
+## avalonia-port/video-core-f: +113
+- Moved six video memory-render helpers (`DisplayAspectFrom`, `FitToAspect`, `StagingBytesFor`, `ComputeSnapshotDims`,
+  `IsSnapshotFrame`, `IsRebuildCurrent`) from WPF `VideoService` into `CCP.Core/Services/Video/VideoRenderMath.cs`, unchanged.
+  WPF calls them through `using static`.
+- `BlurSurfaceFrameTests` (24 cases) moved to `Tests/CCP.Core.Tests`, so they now run on Linux CI.
+- Review accepted (side-by-side equal). The two P3s were left as they are, with reasons given in the body.
