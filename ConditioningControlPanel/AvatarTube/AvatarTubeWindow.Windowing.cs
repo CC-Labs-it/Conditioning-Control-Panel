@@ -2082,7 +2082,9 @@ namespace ConditioningControlPanel
                 }
 
                 art ??= Services.ModResourceResolver.ResolveImage(tubeName);
-                ImgTubeFrame.Source = art;
+                // A layered window takes the mouse on every pixel with alpha above zero, so haze
+                // nobody can see in a mod's cut-out blocked clicks beside the companion (#1400).
+                ImgTubeFrame.Source = AvatarTubeLayout.TubeArtAlpha.Scrub(art);
                 _tubeArtFlipped = false;
                 ImgTubeFrame.RenderTransform = Transform.Identity;
                 // New art, new painted bounds: re-dock once layout has the new image.

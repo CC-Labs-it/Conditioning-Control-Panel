@@ -37,9 +37,11 @@ namespace ConditioningControlPanel.Services.Quiz
         /// Why speech cannot start right now, or <c>null</c> when it can. Order matters and mirrors
         /// how the rest of the app reports the mic (She's Listening, Takeover, the lock card):
         /// consent first (the user's choice trumps hardware), then hardware, then the model, then
-        /// whether someone else already holds the mic. The bridge never evicts another mic owner —
-        /// the wake-word loop, push-to-talk and a running spoken mantra all keep what they have and
-        /// the page drops to typed input instead.
+        /// whether someone else already holds the mic. The wake word and push-to-talk are not
+        /// "someone else": the bridge borrows the mic from them for the spoken answer and gives it
+        /// back (<see cref="IntakeMicBorrow"/>), so the caller passes <paramref name="micHeldElsewhere"/>
+        /// as it reads AFTER the borrow. A lock card or a running spoken mantra keeps what it has
+        /// and the page drops to typed input instead.
         /// </summary>
         public static string? Unavailability(bool consentGiven, bool hasCaptureDevice, SpeechModelStatus model, bool micHeldElsewhere)
         {
