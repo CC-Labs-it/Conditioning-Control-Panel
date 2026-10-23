@@ -17,6 +17,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -67,15 +68,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// are Core's (ModManifest / ModPackage) and the active mod comes from the CoreMods seam, which
     /// answers "the built-in default" on a head with no mod layer, so the ctor touches no disk.
     ///
-    /// Audio PREVIEW plays for real through <see cref="CoreAudio"/> - see
-    /// <see cref="ToggleAudioPreview"/>, which keeps only the half the seam can honestly do.
-    ///
-    /// Stubbed, all with a ponytail marker at the call site: everything reaching App.*, a service,
-    /// or one of the remaining per-panel partial classes
-    /// (Pools, Personalities and Advanced are ported partials here; .Barks.cs, .Mantras.cs,
-    /// .EventAudio.cs, .Portraits.cs, .Emotes.cs, .UiArt.cs, .ArtFraming.cs), which are their own
-    /// port layers. Their sidebar entries stay - they are part of this view's chrome - and each
-    /// draws a "ported in a later layer" panel rather than a dead click.
+    /// Audio previews use CoreAudio's stoppable handle. UI Art and Event Audio are live;
+    /// ponytail: Mantras, Portraits, Animated Emotes and the crop editor remain deferred.
     /// </summary>
     public partial class ModCreatorWindow : Window
     {
@@ -323,13 +317,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <c>Tours.TutorialHead.Seed</c> backs the seam; if <c>Start</c> is refused (another tour
         /// running) <c>IsActive</c> answers for that tour, never an empty coach-mark card.</para>
         ///
-        /// <para>ponytail: the step-rewriting half cannot be done through the seam. WPF walks
-        /// <c>App.Tutorial.CurrentSteps</c> and replaces each <c>step.OnActivate</c> so a step
-        /// tagged <c>RequiresTab="mod:&lt;section&gt;"</c> calls <see cref="NavigateToSection"/>.
-        /// <c>CoreTutorial</c> deliberately exposes only a per-step SNAPSHOT (no step list, no
-        /// OnActivate) because activation is head navigation - so until the seam grows a
-        /// step-activation callback, a Modding tour spotlights sections this window does not
-        /// navigate to. NavigateToSection is ready for it.</para>
         /// </summary>
         private void LaunchTutorial()
         {
@@ -338,6 +325,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreTutorial.Start("Modding");
             if (!CoreTutorial.IsActive) return;
 
+            foreach (var step in Tours.TutorialHead.Service.CurrentSteps)
+                if (step.RequiresTab?.StartsWith("mod:", StringComparison.Ordinal) == true)
+                {
+                    var sectionKey = step.RequiresTab.Substring(4);
+                    step.OnActivate = () => NavigateToSection(sectionKey);
+                }
+            Tours.TutorialHead.Service.CurrentStep?.OnActivate?.Invoke();
             _tutorialOverlay = new TutorialOverlay(this);
             _tutorialOverlay.Closed += (_, _) => _tutorialOverlay = null;
             _tutorialOverlay.Show();
@@ -432,16 +426,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildPhrasesSection();
             BuildReplacementsSection();
 
-            // The nine newer content types are one partial-class file per panel in the WPF head
-            // and one port layer each here. Their sidebar entries stay, so each gets a panel
-            // saying so rather than a button that does nothing.
-            BuildDeferredSection("uiart", "UI Art", "ModCreatorWindow.UiArt.cs / .ArtFraming.cs");
+            BuildUiArtSection();
             BuildPoolsSection();
             BuildPersonalitiesSection();
             BuildAdvancedSection();
             BuildBarksSection();
             BuildDeferredSection("mantras", "Mantras", "ModCreatorWindow.Mantras.cs");
-            BuildDeferredSection("eventaudio", "Event Audio", "ModCreatorWindow.EventAudio.cs");
+            BuildEventAudioSection();
             BuildDeferredSection("portraits", "Portraits", "ModCreatorWindow.Portraits.cs");
             BuildDeferredSection("emotes", "Animated Emotes", "ModCreatorWindow.Emotes.cs");
         }
@@ -464,9 +455,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // ─── Side-file seams ─────────────────────────────────────
         // Export writes each panel's side files into the .ccpmod resources tree, load repopulates
         // the panels from an extracted tree, reset clears them (WPF ModCreatorWindow.xaml.cs:377-402).
-        // ponytail: Mantras/EventAudio/Portraits/Emotes join these hooks as their partials are ported.
+        // ponytail: Mantras/Portraits/Emotes join these hooks as their partials are ported.
         private async Task WriteSideFilesTo(string resourcesDir)
         {
+            WriteEventAudioTo(resourcesDir);
             var badConditions = WriteBarksTo(resourcesDir);
             if (badConditions.Count > 0)
                 await MessageDialog.ShowAsync(this, "Barks - invalid conditions",
@@ -475,15 +467,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     "\n\nThose rules were exported without the invalid conditions.");
         }
 
-        private void LoadSideFilesFrom(string resourcesDir) => LoadBarksFrom(resourcesDir);
+        private void LoadSideFilesFrom(string resourcesDir)
+        {
+            StopAudioPreview();
+            LoadBarksFrom(resourcesDir);
+            LoadEventAudioFrom(resourcesDir);
+        }
 
-        private void ClearSideFileState() => ClearBarksSection();
+        private void ClearSideFileState()
+        {
+            ClearBarksSection();
+            ClearEventAudioSection();
+        }
 
         private void ApplyPanelSectionsToManifest(ModManifest manifest)
         {
             ApplyPoolsToManifest(manifest);
             ApplyPersonalitiesToManifest(manifest);
             ApplyAdvancedToManifest(manifest);
+            manifest.ArtFraming = ModArtFramingRules.BuildManifestSection(_artFraming, _imageSlots);
         }
 
         private void PopulatePanelSectionsFromManifest(ModManifest manifest)
@@ -491,6 +493,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PopulatePoolsFromManifest(manifest);
             PopulatePersonalitiesFromManifest(manifest);
             PopulateAdvancedFromManifest(manifest);
+            _artFraming.Clear();
+            foreach (var (path, surfaces) in ModArtFramingRules.ReadManifestSection(manifest.ArtFraming))
+            {
+                var key = _imageSlots.Keys.FirstOrDefault(k => string.Equals(k, path, StringComparison.OrdinalIgnoreCase));
+                if (key != null) _artFraming[key] = surfaces;
+            }
         }
 
         private void ClearPanelSections()
@@ -498,6 +506,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ClearPoolsSection();
             ClearPersonalitiesSection();
             ClearAdvancedSection();
+            _artFraming.Clear();
         }
 
         private Border CreateSectionPanel(string key)
@@ -1217,7 +1226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// The WPF version reached the row through label.Parent and matched buttons by their
         /// Content glyph. The row is created here, so it is looked up by key; the glyph match
-        /// stays, because the play button's Content flips between ▶ and ⏹ in WPF (play-only here, see ToggleAudioPreview).
+        /// stays, because the play button toggles between play and stop (see ToggleAudioPreview).
         /// </summary>
         private void SetAudioRowButtons(string key, bool visible)
         {
@@ -1304,34 +1313,59 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _voiceLinesPanel?.Children.Add(row);
         }
 
-        /// <summary>
-        /// Preview an author-picked clip. WPF resolves the same two shapes - a fixed slot key, or a
-        /// voice line's direct path - and plays the file raw, at its own level, NOT scaled by the
-        /// master volume: this is the author checking what they just picked, not the app talking.
-        ///
-        /// <para>ponytail: this is PLAY only, and the method name is now a half-truth. WPF's other
-        /// half is a stop - the button becomes ⏹, a second click stops it, and StopAudioPreview
-        /// kills it on Reset All and on close. <see cref="CoreAudio"/> carries PlayOneShot / Duck /
-        /// Unduck and NOTHING that stops or cancels a one-shot, so a ⏹ glyph here would be a
-        /// button that cannot do what it shows. Dropped rather than mimed; the cost is that two fast
-        /// clicks overlap two previews and a preview outlives this window. Wiring it needs a
-        /// cancel on CCP.Core/CoreAudio.cs, which this layer does not own.</para>
-        /// </summary>
+        // WPF's single preview, raw volume, stopped by a second click, replacement, reset or close.
+        private static readonly HashSet<ModCreatorWindow> PreviewWindows = new();
+        private Button? _activePlayButton;
+        private Action? _stopPreview;
+        private long _previewGeneration;
+
         private void ToggleAudioPreview(string keyOrPath, Button playBtn)
         {
-            var filePath = _audioSlots.TryGetValue(keyOrPath, out var slotPath) ? slotPath : keyOrPath;
-            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
-
-            CoreAudio.PlayOneShot(filePath, 1f, "modcreator-preview");
+            var wasPlaying = _activePlayButton == playBtn;
+            StopAudioPreview();
+            if (wasPlaying) return;
+            var path = _audioSlots.TryGetValue(keyOrPath, out var slotPath) ? slotPath : keyOrPath;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+            var generation = _previewGeneration;
+            _activePlayButton = playBtn;
+            PreviewWindows.Add(this);
+            SetPreviewButton(playBtn, true);
+            var stop = CoreAudio.PlayStoppable(path, 1f, "modcreator-preview", onFinished: () =>
+            {
+                void Finish()
+                {
+                    if (_previewGeneration != generation) return;
+                    _stopPreview = null;
+                    StopAudioPreview();
+                }
+                if (Dispatcher.UIThread.CheckAccess()) Finish();
+                else Dispatcher.UIThread.Post(Finish);
+            });
+            if (_previewGeneration == generation) _stopPreview = stop;
         }
 
-        /// <summary>
-        /// ponytail: nothing to stop - see <see cref="ToggleAudioPreview"/>. Kept as the call site
-        /// WPF has (OnClosed, Reset All) so the stop lands in one place the day
-        /// CCP.Core/CoreAudio.cs grows a cancel.
-        /// </summary>
+        private static void SetPreviewButton(Button button, bool playing)
+        {
+            button.Content = new IconGlyph { Kind = playing ? IconKind.Stop : IconKind.Play, Size = 10 };
+            button.Foreground = new SolidColorBrush(playing ? Color.FromRgb(255, 100, 100) : Color.FromRgb(100, 200, 100));
+            ToolTip.SetTip(button, playing ? "Stop preview" : "Play preview");
+            AutomationProperties.SetName(button, playing ? "Stop preview" : "Play preview");
+        }
+
         private void StopAudioPreview()
         {
+            ++_previewGeneration; // a late completion must never reset a newer preview
+            if (_activePlayButton != null) SetPreviewButton(_activePlayButton, false);
+            _activePlayButton = null;
+            PreviewWindows.Remove(this);
+            var stop = _stopPreview;
+            _stopPreview = null;
+            stop?.Invoke();
+        }
+
+        internal static void StopPreviewsForPanic()
+        {
+            foreach (var window in PreviewWindows.ToArray()) window.StopAudioPreview();
         }
 
         private void LoadAudioFromResources(string resourcesDir)
@@ -1939,8 +1973,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_imageControls.ContainsKey(key)) return;
 
-            if (validate && !PassesImageSlotChecks(key, filePath)) return;
-
             // A framing describes ONE picture. An author swapping a different file into the same
             // slot must not inherit the crop they chose for the old one -- that is invisible in the
             // editor and only shows up as a mis-framed chip in the app. Programmatic fills are
@@ -1973,31 +2005,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch { /* invalid image file */ }
         }
 
-        /// <summary>
-        /// ponytail: NOT blocked on a message box - this head ships Views/Dialogs/MessageDialog.
-        /// Two other things block it. First, the rules: ModImageSlotRules is pure C# (Path,
-        /// FileInfo, invariant formatting) but is declared inside
-        /// ConditioningControlPanel/Windows/ModCreatorWindow.UiArt.cs, a WPF partial, so reaching it
-        /// means moving that type to Core - not copying it here, which is the duplication this split
-        /// exists to prevent. Second, half of the WPF gate is a CONFIRM ("this is 6.2 MB, use it
-        /// anyway?") and MessageDialog is async, so this synchronous bool cannot carry it; the
-        /// caller chain from the Browse handler down through SetImageSlot has to become async first.
-        /// The hard-reject half alone would be honest, but it still needs the rules type.
-        /// </summary>
-        private bool PassesImageSlotChecks(string key, string filePath) => true;
+        private async Task SetPickedImageSlot(string key, string filePath)
+        {
+            var mismatch = ModImageSlotRules.DescribeExtensionMismatch(key, filePath);
+            if (mismatch != null)
+            {
+                await MessageDialog.ShowAsync(this, "Wrong file type", mismatch);
+                return;
+            }
+            long size = 0;
+            try { size = new FileInfo(filePath).Length; } catch { /* WPF permits unreadable size */ }
+            if (ModImageSlotRules.IsOversized(size) && !await MessageDialog.ConfirmAsync(this, "Large image",
+                $"\"{Path.GetFileName(filePath)}\" is {ModImageSlotRules.FormatSize(size)}.\n\n" +
+                "Large art bloats your .ccpmod and costs memory every time the app decodes it. " +
+                "Most of these slots are 1376x768 or smaller, which is well under 4 MB as a PNG.\n\n" +
+                "Use it anyway?")) return;
+            SetImageSlot(key, filePath);
+        }
 
-        /// <summary>
-        /// WPF drops the crop stored for a slot whose image just changed or was cleared - left
-        /// behind, it silently re-attaches to whatever the author picks next, and to a manifest that
-        /// no longer ships the file it was measured against.
-        ///
-        /// <para>ponytail: correctly empty TODAY rather than blocked. The framing dictionary lives in
-        /// ConditioningControlPanel/Windows/ModCreatorWindow.ArtFraming.cs and there is no port of it
-        /// here, so nothing in this window holds a crop to drop - ApplyPanelSectionsToManifest never
-        /// writes ModManifest.ArtFraming either. The body arrives with that panel; the call sites
-        /// (SetImageSlot, ClearImageSlot) are already in the WPF places.</para>
-        /// </summary>
-        private void DropArtFraming(string key) { }
+        // ponytail: retain loaded crops until the full framing editor is ported.
+        private readonly Dictionary<string, Dictionary<string, ModArtFraming>> _artFraming = new(StringComparer.OrdinalIgnoreCase);
+        private void DropArtFraming(string key) => _artFraming.Remove(key);
 
         private void ClearImageSlot(string key)
         {
@@ -2033,14 +2061,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var files = await PickFilesAsync($"Select image for {Path.GetFileName(key)}", patterns, multiple: false);
             if (files.Count > 0)
-                SetImageSlot(key, files[0]);
+                await SetPickedImageSlot(key, files[0]);
         }
 
-        private void HandleImageDrop(string key, DragEventArgs e)
+        private async void HandleImageDrop(string key, DragEventArgs e)
         {
             var file = e.DataTransfer.TryGetValue(DataFormat.File)?.TryGetLocalPath();
             if (!string.IsNullOrEmpty(file))
-                SetImageSlot(key, file!);
+                await SetPickedImageSlot(key, file!);
         }
 
         /// <summary>
@@ -2567,6 +2595,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             try
             {
+                StopAudioPreview();
                 CleanupTempDir();
                 _loadedTempDir = Path.Combine(Path.GetTempPath(), $"ccpmod_load_{Guid.NewGuid():N}");
                 CcpmodArchive.Extract(picked[0], _loadedTempDir);
