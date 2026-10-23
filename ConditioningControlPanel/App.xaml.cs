@@ -41,6 +41,7 @@ namespace ConditioningControlPanel
         [STAThread]
         public static void Main(string[] args)
         {
+            PerfBench.SinceMain.Start(); // first line of Main, shared benchmark definition
             var app = new App();
             app.InitializeComponent();
             app.Run();
@@ -1949,6 +1950,15 @@ namespace ConditioningControlPanel
 #endif
         protected override void OnStartup(StartupEventArgs e)
         {
+            var perfIndex = Array.IndexOf(e.Args, "--perf-bench");
+            var perfBench = perfIndex >= 0;
+            if (perfBench)
+            {
+                if (perfIndex + 1 >= e.Args.Length || e.Args[perfIndex + 1].StartsWith("--")
+                    || !Path.IsPathRooted(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
+                    Environment.Exit(2); // benchmark requires an explicit sandbox and output path
+                IsUnattendedRig = true;
+            }
 #if DEBUG
             if (e.Args.Contains("--first-show-preview"))
             {
@@ -2001,7 +2011,7 @@ namespace ConditioningControlPanel
             // one click marked it "Not Responding". On a dedicated thread it stays
             // responsive and animating for the whole load. Null if creation failed;
             // every use below is ?. so startup proceeds splash-less in that case.
-            _splash = SplashScreen.ShowOnOwnThread();
+            _splash = perfBench ? null : SplashScreen.ShowOnOwnThread();
             var splash = _splash;
             splash?.SetProgress(0.0, "Starting...");
 
@@ -2349,6 +2359,7 @@ namespace ConditioningControlPanel
             DispatcherUnhandledException += (s, args) =>
             {
                 LogCrashDetails("DISPATCHER", args.Exception);
+                if (perfBench) Environment.Exit(1); // unattended benchmark must never wait on an error dialog
 
                 // GDI / desktop-heap quota exhaustion while WPF shows a layered window
                 // (heavy effect load, esp. many full-screen subliminal/flash surfaces on a
@@ -2465,6 +2476,7 @@ namespace ConditioningControlPanel
 
             // Initialize services
             Settings = new SettingsService();
+            if (perfBench) PerfBench.PrepareSettings(Settings.Current);
 
             // THE STARTUP LADDER. Built here, before a single service that might want to interrupt
             // and long before MainWindow exists, because MainWindow's constructor is the first
@@ -2472,6 +2484,7 @@ namespace ConditioningControlPanel
             // allowed to open - the failed-update report, the wizard, What's New, the season
             // recap, the mod picker, the enhance nudge, the update dialog - now asks this.
             StartupLadder = new Services.Startup.StartupPresenter(Current?.Dispatcher ?? System.Windows.Threading.Dispatcher.CurrentDispatcher);
+            if (perfBench) StartupLadder.Hold(); // no modal startup cards on an unattended runner
 
             // One-shot settings migrations. Must run before anything reads
             // the migrated fields (Flash UI, GazeFocusService, etc.).
@@ -3520,6 +3533,16 @@ namespace ConditioningControlPanel
             // Same problem hits anywhere code does `Application.Current.MainWindow as MainWindow`
             // — popups, feature controls, etc. Expose a stable static reference.
             MainWindowRef = mainWindow;
+
+            if (perfBench)
+            {
+                // Real services and shell; bypass only splash/launcher routing and modal onboarding.
+                var tabsIndex = Array.IndexOf(e.Args, "--perf-bench-tabs");
+                var tabs = tabsIndex >= 0 && tabsIndex + 1 < e.Args.Length
+                    ? e.Args[tabsIndex + 1].Split(',') : PerfBench.TabPanels;
+                _ = PerfBench.Run(mainWindow, e.Args[perfIndex + 1], tabs);
+                return;
+            }
 
             // Boot surface. Decided here and not earlier because the first-run wizard rides the
             // panel's constructor: ShouldRunAndClaim latched Welcomed = true a moment ago, so the
