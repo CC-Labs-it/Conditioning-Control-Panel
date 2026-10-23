@@ -1758,3 +1758,23 @@ Material roles are surface, lip, underside and detail (Keep uses three roles). M
 Validation: all twelve packed and decompressed GLBs pass the Khronos validator with zero errors. Actual packed-accessor coordinates are finite, there are no degenerate triangles, all bounds and pivot/parenting gates pass, and every model has zero textures. Fresh Blender reimport verifies all twelve exports. Fixed front/back/left/right/top/perspective plus low-behind and underside renders come from the packed artifacts after decompression.
 
 Private editable masters, deterministic source, manifest fragment, detailed validation and contact sheets stay under C:/Projects/glassroad-art/stones/. Contact sheets belong in the PR body only. No game files changed by this family.
+## Wave 3: glide concept choice
+
+Six original concept sheets compare an umbrella and a propeller beanie for every track. The sheets are attached in the PR body and stay outside the runtime tree. Owner selection is pending; this family adds no runtime meshes, animations or textures.
+
+| Track | Umbrella | Propeller beanie |
+|---|---|---|
+| Threshold | Porcelain/lemonade bubble dome, pawn finial | Rose cuff, porcelain cap, three petal blades |
+| Boudoir | Scalloped satin parasol, pearl ends, rose bow | Satin cap, side bow, two fan blades |
+| The Keep | Peaked iron and magenta velvet canopy, padlock | Iron cap, velvet cuff, three angular blades |
+| Mainframe | Smoked octagonal panels, green data ribs | Graphite cap, cable cuff, four angular blades |
+| Quarantine | Saline-blue dome, white hem, capsule finial | White cap, teal cuff, two capsule blades |
+| Switchboard | Brass ribs, ivory coolant panels, enamel border | Enamel cap, brass dial cuff, three brass blades |
+
+Source: original concept generation for this project, no external image inputs. Construction diagrams and material finishes are proposals, not validated runtime geometry. Illustrated material grain is not a request for texture maps.
+
+The selected design must stay under 2,000 triangles, use metres, +Y up and -Z forward, and ship as meshopt GLB. Preserve the accepted R4 base SHA256 `7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1`, all 15 joints, their inverse binds and all 26 existing animations.
+
+The rig's head attachment is `head_attach` under `EMI_root`; a hand-held prop uses the existing `shoulderL` or `shoulderR` palm transform. There are no joints literally named head or hand. Do not add bones. Umbrellas are authored open; host-owned morph or the permitted single child handles open/close, and a non-bone rotor child handles beanie spin. Screen, face pixels and antenna remain unchanged. Fit checks after selection must cover every accepted action, antenna sweep, palm contact and the low rear chase camera.
+
+Runtime manifest rows: none until a selected mesh is exported and measured. Added runtime triangles: 0. Added runtime `texBytes`: 0.
