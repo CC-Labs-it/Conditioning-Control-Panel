@@ -281,6 +281,28 @@ public sealed class RemoteRelayTests
     }
 
     [Fact]
+    public async Task Relay_LegacyBoolCallback_LeashCutForcesAndNormalEndDoesNot()
+    {
+        var forced = new List<bool>();
+        var f = new FakeRelay();
+        var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var answer = f.Answer;
+        f.Answer = path =>
+        {
+            if (path == "/v2/remote/stop") sent.TrySetResult();
+            return answer(path);
+        };
+        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, forced.Add, f) { AutoPoll = false };
+        await r.StartAsync("full");
+        r.EndSessionNow();
+        Assert.True(Assert.Single(forced));   // LeashCut: everything stops, never the SessionEnded rule
+        await sent.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await r.StartAsync("full");
+        await r.StopAsync();
+        Assert.False(forced[1]);
+    }
+
+    [Fact]
     public async Task Relay_PreservesLeashCutAndNormalEndAsDistinctCauses()
     {
         var causes = new List<ConditioningControlPanel.Services.Remote.RemoteEndCause>();

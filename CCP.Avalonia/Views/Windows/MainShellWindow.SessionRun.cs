@@ -160,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Named<Tabs.PresetsTabView>("PresetsTab")?.SetSessionButtonLabel(SessionClockLabel.StopButton(
                 remaining, showCountdown, Loc.Get("btn_stop_session_0_1"), Loc.Get("btn_stop_session_2"), pauseMark));
 
+            if (!CoreEngine.IsRunning) return;   // WPF RefreshSessionClocks never paints BtnStart; UpdateStartButton does
             var mName = session.GetModeAwareName();
             var nameMax = showCountdown ? 14 : 22;
             var name = mName.Length > nameMax ? mName.Substring(0, nameMax - 3) + "..." : mName;

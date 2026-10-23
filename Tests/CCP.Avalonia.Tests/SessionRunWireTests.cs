@@ -53,7 +53,11 @@ public sealed class SessionRunWireTests
                 Assert.True(runner.IsRunning && runner.IsPaused);
                 Assert.Equal(1, runner.PauseCount);
                 Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning);
-                Assert.Contains("[" + Loc.Get("label_paused") + "]", shell.Named<TextBlock>("TxtStartLabel")!.Text!);
+                // WPF StartStop.cs:1006-1023: the stopped engine gets the plain ▶ Start back (pressing it
+                // resumes); the paused clock lives only on BtnStartSession, and a late tick keeps it so.
+                shell.OnSessionTick();
+                Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
+                Assert.Equal("\u25B6", shell.Named<TextBlock>("TxtStartIcon")!.Text);
                 Assert.Contains("[" + Loc.Get("label_paused") + "]", Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text!);
                 Assert.True(shell.IsSessionFeatureLockActive);
                 var pause = shell.Named<Button>("BtnPauseSession")!;

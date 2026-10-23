@@ -71,10 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>Only explicit user START paths resume a session parked by panic.</summary>
-        internal void StartEngineFromUser()
-        {
-            if (!RemoteControllerConnected) StartEngine(fromUser: true);
-        }
+        internal void StartEngineFromUser() => StartEngine(fromUser: true);   // WPF gates only BtnStart (:43)
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
         internal void StartEngine(bool fromUser = false)
@@ -135,7 +132,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!force && RemoteControllerConnected) return;   // WPF :941 keeps the remote label
             OnSessionTick();
-            if (App.Sessions is { IsRunning: true }) return;
+            // WPF StartStop.cs:1006-1023: the session clock rides BtnStart only while the engine runs;
+            // a panic-parked session gets the plain ▶ Start back, its clock stays on BtnStartSession.
+            if (CoreEngine.IsRunning && App.Sessions is { IsRunning: true }) return;
             var running = CoreEngine.IsRunning;
             if (Named<Button>("BtnStart") is { } b)
             {

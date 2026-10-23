@@ -93,7 +93,8 @@ namespace ConditioningControlPanel.Services
             Action<RemoteEndCause>? stopEffectsByCause = null)
         {
             (_token, _unifiedId, _execute) = (token, unifiedId, execute);
-            _stopEffects = stopEffectsByCause ?? (cause => stopEffects(cause == RemoteEndCause.Panic));
+            // A bool-only caller cannot say LeashCut; its rule is "everything stops", so it maps to force like Panic.
+            _stopEffects = stopEffectsByCause ?? (cause => stopEffects(cause != RemoteEndCause.SessionEnded));
             _baseUrl = handler != null ? RealBaseUrl : ResolveBaseUrl(
                 Environment.GetEnvironmentVariable("CCP_REMOTE_BASE_URL"),
                 !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
