@@ -806,7 +806,7 @@
                                                 <Button HorizontalAlignment="Left" Margin="16,6,0,0"
                                                         Padding="8,3" FontSize="10"
                                                         Theme="{StaticResource OutlineButton}"
-                                                        Click="BtnOpenDeviceSettings_Click">
+                                                        x:Name="BtnDeeperDeviceSettings" Click="BtnOpenDeviceSettings_Click">
                                                     <TextBlock Text="{loc:Str set2_configure_in_settings}"/>
                                                 </Button>
                                             </StackPanel>
@@ -863,12 +863,12 @@
                                         <WrapPanel Orientation="Horizontal">
                                             <Button Theme="{StaticResource OutlineButton}"
                                                     Padding="10,4" Margin="0,0,6,6" FontSize="10"
-                                                    Click="BtnDeeperWebcamCalibrate_Click">
+                                                    x:Name="BtnDeeperWebcamCalibrate" Click="BtnDeeperWebcamCalibrate_Click">
                                                 <TextBlock Text="{loc:Str blink_trainer_calibration_btn}"/>
                                             </Button>
                                             <Button Theme="{StaticResource OutlineButton}"
                                                     Padding="10,4" Margin="0,0,6,6" FontSize="10"
-                                                    Click="BtnDeeperWebcamQuickRecal_Click">
+                                                    x:Name="BtnDeeperWebcamQuickRecal" Click="BtnDeeperWebcamQuickRecal_Click">
                                                 <TextBlock Text="{loc:Str blink_trainer_calibration_quick}"/>
                                             </Button>
                                             <!-- Start/Stop tracker. Required to actually calibrate: the
