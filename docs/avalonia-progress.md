@@ -2815,3 +2815,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-win-feature-intro: +75
 - Feature-intro cards wait in the Inbox while the first-run wizard, welcome-back offer or an update dialog is up; the card now looks like WPF's and scrolls on small screens.
 - Manually opened What's New or a pending manual update check no longer holds cards (as in WPF).
+
+## avalonia-port/wire-views-companion-hero-card: +105
+- The Companion hero Tutorial chip starts the Companion tour; a headless click test (fail-proven in rcheck 39688790545) covers it, including panic abandonment.
+- Review fixes: overlay accessor instead of reflection, v2-pages precondition and fail-proof run cited in the parity row.
