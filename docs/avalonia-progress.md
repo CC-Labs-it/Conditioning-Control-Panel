@@ -2629,3 +2629,7 @@ EmiChains data/rules and EmiNudges moved to CCP.Core (git mv); WPF keeps the Dis
 - Cloud session, local review (ACCEPT) + gate.
 - AudioWaveformCache (DPK2 cache + bucket rule) moved to Core behind a Decoder seam; WPF NAudio decoder registered at startup; 10 Core tests.
 - Review fixes: withdrew unbacked pass counts from Verification limits; WPF sample provider built lazily again (pre-move parity). rgate GATE-OK.
+
+## avalonia-port/stakes-core: +112
+- Stake wire, bridge and settlement maths (plus V2WalletAdoption) moved into CCP.Core with git mv. The WPF App gates are now in StakeAppHooks, seeded at startup. StakeTests (25) run in CCP.Core.Tests and are fail-proven.
+- feat-stakes missing -> stub. Next lane is stakes-host: route the Avalonia GameWindow `stake-*` frames to StakeBridge.ForApp and seed the head gates.
