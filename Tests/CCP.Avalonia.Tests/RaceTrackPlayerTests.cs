@@ -72,6 +72,48 @@ public sealed class RaceTrackPlayerTests
         }
     }
 
+    /// <summary>A pre-cancelled request keeps its cancellation token and reports no progress,
+    /// even without libvlc or a valid source file.</summary>
+    [Fact]
+    public void DecodeRefusesPreCancelledTokenBeforeOpeningTheFile()
+    {
+        var token = new CancellationToken(true);
+        var missing = Path.Combine(Path.GetTempPath(), "ccp-race-missing-" + Guid.NewGuid().ToString("N"));
+        var reports = new List<double>();
+        var error = Assert.Throws<OperationCanceledException>(() =>
+            RaceTrackPlayer.Decode(missing, new SyncProgress(reports.Add), token));
+        Assert.Equal(token, error.CancellationToken);
+        Assert.Empty(reports);
+    }
+
+    /// <summary>Cancel on the synchronous terminal report: the native decode has already ended,
+    /// so a cancellation check only inside the polling loop cannot catch this ordering.</summary>
+    [Fact]
+    public void DecodeRefusesCancellationAtCompletion()
+    {
+        NeedVlc();
+        var dir = Directory.CreateTempSubdirectory("ccp-race-completion-").FullName;
+        var src = Path.Combine(dir, "short.wav");
+        File.WriteAllBytes(src, Wav(16000, 1, new short[1600]));
+        using var cts = new CancellationTokenSource();
+        int caller = Environment.CurrentManagedThreadId;
+        bool completionReported = false;
+        var progress = new SyncProgress(value =>
+        {
+            // PositionChanged runs on libvlc's thread; only the final Report(1) is on this caller.
+            if (value != 1 || Environment.CurrentManagedThreadId != caller) return;
+            completionReported = true;
+            cts.Cancel();
+        });
+        try
+        {
+            var error = Assert.Throws<OperationCanceledException>(() => RaceTrackPlayer.Decode(src, progress, cts.Token));
+            Assert.True(completionReported);
+            Assert.Equal(cts.Token, error.CancellationToken);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
     /// <summary>The WAV reader: a header the muxer never patched reads to the end; anything not 16 kHz mono
     /// 16-bit (or not a WAV at all) is refused with the page's "would not decode" message.</summary>
     [Fact]

@@ -53,6 +53,38 @@ public class RaceCoreSeamsTests
         Assert.Throws<ArgumentOutOfRangeException>(() => PrizeGrants.RacingTrack(PrizeGrants.RacingTrackMax + 1));
     }
 
+    /// <summary>Even a head that finishes synchronously must not publish cancelled PCM.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DecoderRejectsCancellationBeforeAndAfterTheHead(bool cancelBeforeDecode)
+    {
+        var saved = TrackDecoder.DecodeProvider;
+        var file = Path.GetTempFileName();
+        using var cts = new CancellationTokenSource();
+        int calls = 0;
+        try
+        {
+            TrackDecoder.DecodeProvider = (_, _, token) =>
+            {
+                Assert.Equal(cts.Token, token);
+                calls++;
+                cts.Cancel();
+                return new float[TrackPcm.SampleRate];
+            };
+            if (cancelBeforeDecode) cts.Cancel();
+
+            var error = Assert.Throws<OperationCanceledException>(() => TrackDecoder.Decode(file, null, cts.Token));
+            Assert.Equal(cts.Token, error.CancellationToken);
+            Assert.Equal(cancelBeforeDecode ? 0 : 1, calls);
+        }
+        finally
+        {
+            TrackDecoder.DecodeProvider = saved;
+            File.Delete(file);
+        }
+    }
+
     [Fact]
     public void DecoderRunsTheSeededHeadDecodeAndKeysTheFile()
     {
