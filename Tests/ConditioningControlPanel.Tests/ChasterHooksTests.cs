@@ -106,7 +106,7 @@ public class ChasterHooksTests
     }
 
     [Theory]
-    [InlineData("MainWindow/MainWindow.RemoteControl.cs", "internal void TriggerPanicFromRemote()")]
+    [InlineData("MainWindow/MainWindow.RemoteControl.cs", "internal bool TriggerPanicFromRemote()")]
     [InlineData("MainWindow/MainWindow.xaml.cs", "private void HandlePanicKeyPress()")]
     [InlineData("MainWindow/MainWindow.xaml.cs", "private void RunEmergencyPanicTeardown()")]
     [InlineData("Services/RemoteControlService.cs", "private void StopAllRemoteEffects(RemoteEndCause cause)")]

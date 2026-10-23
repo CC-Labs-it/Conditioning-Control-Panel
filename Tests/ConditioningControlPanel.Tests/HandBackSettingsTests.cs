@@ -17,7 +17,7 @@ public class HandBackSettingsTests
 
     [Theory]
     [InlineData("MainWindow.xaml.cs", "private void StopAdHocEffects()")]
-    [InlineData("MainWindow.RemoteControl.cs", "internal void TriggerPanicFromRemote()")]
+    [InlineData("MainWindow.RemoteControl.cs", "internal bool TriggerPanicFromRemote()")]
     public void Panic_never_writes_the_users_spiral_or_pink_switch(string file, string signature)
     {
         var body = CodeOnly(Body(Source("MainWindow", file), signature));
@@ -63,7 +63,7 @@ public class HandBackSettingsTests
         var body = Body(Source("Services", "Remote", "RemoteControlService.V2.cs"), "public void ReleaseHoldingsForExit()");
         int gate = body.IndexOf("if (!IsActive) return;", StringComparison.Ordinal);
         Assert.True(gate > 0);
-        foreach (var call in new[] { "RestoreRemoteBrainDrainSetting();", "ReleaseRemoteSafetyState();", "RestoreEasedOpacities();" })
+        foreach (var call in new[] { "HandBackWearerVisuals();", "ReleaseRemoteSafetyState();", "DropWearerSnapshot();" })
             Assert.True(body.IndexOf(call, StringComparison.Ordinal) > gate, call);
     }
 
