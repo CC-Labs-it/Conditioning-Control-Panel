@@ -110,6 +110,17 @@
                                 <CheckBox Grid.Column="1" x:Name="ChkStrict"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
+
+                            <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_bubble_count_pause_effects}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str setting_bubble_count_pause_effects}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkPauseEffects"
+                                          Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
+                            </Grid>
                         </StackPanel>
                     </Grid>
                 </Border>

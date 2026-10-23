@@ -27,6 +27,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string FypId = "fyp";
 
+        // WPF FeedOwnsTheScreen. Ghost mode is unavailable on this head, so every visible feed counts.
+        internal static bool IsForYouOnScreen()
+        {
+            lock (Open) return Open.Any(w => w.Spec.Id == FypId && w.IsVisible);
+        }
+
         private FypMetaStore? _fypMeta;
         private bool _fypHooked;
         private int _fypRemoteInFlight;   // 0/1 via Interlocked
