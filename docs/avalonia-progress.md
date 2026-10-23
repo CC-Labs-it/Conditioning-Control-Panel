@@ -2827,3 +2827,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-win-emi-options: +251
 - Emi options panel folds on Windows via non-consuming WH_MOUSE_LL/WH_KEYBOARD_LL hooks (WPF parity); X11 keeps the 30 ms poll; 3 fail-proven tests.
 - Duplicate win-emi-options ledger row collapsed (stays stub).
+
+## avalonia-port/wire-feat-subliminal: +207
+- Advanced Steals Focus now reaches subliminal cards: passive show, then a focus request that keeps clicks passing through.
+- Review fixes: the test drives the real setting, and a refused X11 focus request is retried once after the map, then warned (both fail-proven).
