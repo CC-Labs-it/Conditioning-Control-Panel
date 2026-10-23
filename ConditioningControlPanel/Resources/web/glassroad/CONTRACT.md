@@ -266,6 +266,9 @@ Escape only pauses; the page never sends `exit` on Escape.
 | `lap` | `{ lap, lapTimeS, timeS }` | progress | hud, audio |
 | `finish` | `{ timeS }` | progress | fx (flashLevel swell, orbit), audio, hud, boot (finish card) |
 | `pause` | `{ on }` | boot | audio, hud, fx |
+| `surface` | `{ kind, from }` (ground surface kind changed: glass, grip, haze, stream, pool) | kart | fx (fov lift entering stream) |
+| `splash` | `{ s, x, speed, down }` (landing onto a pool, down = vertical m/s, positive down) | kart | fx (fov dip, white ring), audio |
+| `chute` | `{ s }` (first drive onto a stream node steeper than water.chuteGradeDeg) | kart | fx (fov lean, lip spray) |
 
 ## 9. Frame loop (boot.js, every requestAnimationFrame)
 

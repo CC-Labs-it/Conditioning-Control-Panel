@@ -80,6 +80,19 @@ in Light and Strong. A steer the player makes always wins: an agreeing assist ad
 ## offroad
 - `offroad.hazeThrustLoss` 0.35: thrust lost on `haze` surface; skipped during any boost.
 
+## water (wave 1 WATER: `stream`, chute and `pool` surfaces, `sim/flow.js` + `sim/kart.js`; SIM owns these keys)
+A stream node's `flow = [along, lat]` (m/s, road frame, lat + = right) is a moving floor: the kart drives relative to the
+water and the current is added on top. A chute is a stream steeper than `water.chuteGradeDeg`. A pool is still water.
+- `water.flowBlendTcS` 0.4: the applied current eases toward the node's flow with this time constant, in and out, so entering or leaving a stream never jerks (held while airborne).
+- `water.streamGripMul` 1.8: the grip time constant (`kart.gripTcS`) is multiplied by this on a stream; more sideways slide.
+- `water.streamSlideMul` 1.5: the drift slide time constant (`drift.slideTcS`) multiplied by this on a stream.
+- `water.streamThrustMul` 0.95: thrust and the engine cap on a stream, as `offroad.hazeThrustLoss` does on haze; skipped during any boost (the boost keeps its floor).
+- `water.chuteSteerMul` 0.6: steering yaw on a chute; gravity along the kart's downhill forward feeds the engine there (no magnet), capped at `speed.maxPct` of top.
+- `water.chuteGradeDeg` 25: a stream node whose road grade (from the frame tangent) is steeper than this is a chute; `chute { s }` fires once per entry.
+- `water.poolLandMul` 0.75: a landing on a pool keeps this share of its speed (velocity and engine, once per landing); the vertical speed is absorbed with no bounce; `splash { s, x, speed, down }` fires once.
+- `water.poolThrustMul` 0.85: thrust and the engine cap on a pool; skipped during any boost.
+- `water.poolDragTcS` 1.2: on a pool an engine above its cap is dragged toward it with this time constant, on top of the coast; never while boosting.
+
 ## wall (railed edges)
 - `wall.normalKeep` 0.4: share of the into-wall speed bounced back out; tangential speed kept; drift and boost cancelled.
 - `wall.engineLoss` 0.12: engineV fraction lost per wall hit.

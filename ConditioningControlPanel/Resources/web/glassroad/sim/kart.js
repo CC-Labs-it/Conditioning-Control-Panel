@@ -13,6 +13,13 @@
  * speed; in the air there gravity is minus the road normal. The road also carries the kart round: the nose eases
  * toward its own line a little way up the road (loop.guideTcS, loop.guideAheadS) and the engine keeps a forward floor (loop.carryPct of top, reached at
  * loop.carryMps2), so nobody stalls upside down at the top.
+ * Wave 1 WATER (sim/flow.js): a stream node's current is a moving floor. The kart drives relative to the water
+ * and the water's velocity (eased over water.flowBlendTcS) is added on top; grip and drift slide loosen and thrust
+ * drops a little there. A chute (a stream steeper than water.chuteGradeDeg) scales steering down and lets gravity
+ * along the slope feed the engine (no magnet). A landing on a pool has no bounce, loses a share of speed once and
+ * emits `splash`; on the pool thrust is capped and the engine is dragged toward that cap. Events `surface { kind,
+ * from }` (once per ground surface change) and `chute { s }` (once per chute entry). Per-kart water memory lives
+ * in a WeakMap on the state array (the state layout is frozen).
  * No three.js; every tuning number comes from feel each tick (sim/gaps.js for the few it lacks).
  */
 import { S, BOOST, RESPAWN, getPos, getVel, getQuat, setPos, setVel, setQuat } from './state.js';
@@ -26,8 +33,18 @@ import { takeoff, land } from './air.js';
 import { baseYaw, gripYaw } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
+import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
 
 export { applyBoost };
+
+// wave 1 WATER: per-kart memory (the state layout is frozen): the applied current [along, lat] in the road frame,
+// the last ground surface kind and whether the kart is on a chute (for the once-per-entry events)
+const WATER = new WeakMap();
+const waterMem = (st) => { let m = WATER.get(st); if (!m) { m = { cur: [0, 0], kind: null, chute: false }; WATER.set(st, m); } return m; };
+/** Forget a kart's water state (spawn, drop). */
+export function resetWater(st) { const m = WATER.get(st); if (m) { m.cur[0] = 0; m.cur[1] = 0; m.kind = null; m.chute = false; } }
+const W = waterOut(), WV = v3(), FW = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
+const PUSH_EPS = 1e-3;
 
 const P = v3(), V = v3(), Q = q4(), F = v3(), U = v3(), N = v3(), FP = v3(), RP = v3(), QY = q4();
 // out objects pre-shaped: the track fills arrays in place (CONTRACT.md Frame, Query)
@@ -46,7 +63,7 @@ export function spawn(st, track, feel, slot = 0) {
   st[S.seg] = pose.seg; st[S.latchSeg] = pose.seg; st[S.s] = pose.s; st[S.lateral] = pose.lateral;
   st[S.grounded] = 1; st[S.hopT] = 1e3;          // the last hop was long ago
   st[S.sectionIdx] = track.sectionAt(pose.s);
-  resetRoute(st); resetFall(st);
+  resetRoute(st); resetFall(st); resetWater(st);
   return st;
 }
 
@@ -65,6 +82,19 @@ export function step(st, a, track, feel, dt, ev) {
   if (st[S.stalled] > 0) st[S.stalled] = Math.max(0, st[S.stalled] - dt);
   const stalled = st[S.stalled] > 0;
 
+  // wave 1 WATER: what the ground does this tick (sim/flow.js). The road frame is read on a stream, or while an
+  // old current is still easing out; the grade comes from its tangent (positive = a descent).
+  const wm = waterMem(st);
+  const wet = wasGround && (qa.surface === 'stream' || Math.abs(wm.cur[0]) > PUSH_EPS || Math.abs(wm.cur[1]) > PUSH_EPS);
+  if (wet) track.frameAt(qa.s, FW);
+  waterAt(wasGround ? qa : null, wet && qa.surface === 'stream' ? gradeDeg(FW.t) : 0, feel, W);
+  if (wasGround) {
+    if (wm.kind === null) wm.kind = W.kind;
+    else if (W.kind !== wm.kind) { ev.emit('surface', { kind: W.kind, from: wm.kind }); wm.kind = W.kind; }
+    if (W.chute && !wm.chute) ev.emit('chute', { s: qa.s });
+    wm.chute = W.chute;
+  }
+
   // steering: slew toward the stick (quicker near centre), then the yaw law
   const slewTc = lerp(feel.get('steer.slewCentreS'), feel.get('steer.slewFullS'), Math.abs(st[S.steerSlew]));
   const steer = (st[S.steerSlew] = damp(st[S.steerSlew], stalled ? 0 : clamp(a.steer, -1, 1), slewTc, dt));
@@ -75,6 +105,7 @@ export function step(st, a, track, feel, dt, ev) {
   // grip: the calmed law (sim/steer.js); a drift keeps the uncalmed base, so it stays the strong turn
   let yaw = st[S.driftDir] ? driftYaw(st, steer, feel, baseYaw(fwd0, feel)) : steer * gripYaw(fwd0, feel) * (fwd0 < 0 ? -1 : 1);
   if (stalled) yaw = 0;
+  yaw *= W.steerMul;                               // a chute steers less (wave 1 WATER)
   st[S.yawRate] = yaw;
   qrotate(F, qaxis(QY, U, -yaw * dt), F);         // + yaw turns right: clockwise seen from above
   const loop = wasGround && has(qa.flags, 'magnet');
@@ -96,18 +127,29 @@ export function step(st, a, track, feel, dt, ev) {
     applyBoost(st, BOOST.PAD, 0, feel, ev, { amount: gap(feel, 'route.cleanAmount'), holdS: gap(feel, 'route.cleanHoldS') });
     ev.emit('route-boost', {});
   }
-  engine(st, a, feel, dt, top, wasGround && qa.surface === 'haze', ev, typeof cc === 'number' ? cc : 1, loop);
+  // a chute: gravity along the kart's own downhill forward feeds the engine (no magnet holds it)
+  const slope = W.chute ? feel.get('hop.gravityMps2') * -F[1] : 0;
+  engine(st, a, feel, dt, top, wasGround && qa.surface === 'haze', ev, typeof cc === 'number' ? cc : 1, loop, W.thrustMul, W.dragTcS, slope);
 
   // on the ground: forward speed chases engineV, lateral bleeds into the heading, slip costs engineV
   let slipDeg = 0;
   if (wasGround) {
     v3copy(N, qa.normal);
     v3norm(FP, v3reject(FP, F, N)); v3cross(RP, FP, N);
-    let f = v3dot(V, FP), l = v3dot(V, RP);
+    // wave 1 WATER: the current is a moving floor. It eases toward the ground's push, the kart drives relative to
+    // it (chase, grip, slip) and the water's velocity goes back on top, so neither entering nor leaving jerks.
+    blendPush(wm.cur, W.push, dt, feel.get('water.flowBlendTcS'));
+    const carry = Math.abs(wm.cur[0]) > PUSH_EPS || Math.abs(wm.cur[1]) > PUSH_EPS;
+    if (carry) {                                   // wet held: a current only grows on a stream, where FW was read
+      v3scale(WV, FW.t, wm.cur[0]); v3addScaled(WV, WV, FW.b, wm.cur[1]); v3reject(WV, WV, N);
+    } else { wm.cur[0] = 0; wm.cur[1] = 0; WV[0] = 0; WV[1] = 0; WV[2] = 0; }
+    let f = v3dot(V, FP) - v3dot(WV, FP), l = v3dot(V, RP) - v3dot(WV, RP);
     f += (st[S.engineV] - f) * Math.min(1, dt / feel.get('engine.chaseTcS'));
-    l *= Math.exp(-dt / gap(feel, st[S.driftDir] ? 'drift.slideTcS' : 'kart.gripTcS'));
+    const tc = st[S.driftDir] ? gap(feel, 'drift.slideTcS') * W.slideMul : gap(feel, 'kart.gripTcS') * W.gripMul;
+    l *= Math.exp(-dt / tc);
     slipDeg = Math.atan2(Math.abs(l), Math.max(Math.abs(f), 1)) * RAD2DEG;
     v3scale(V, FP, f); v3addScaled(V, V, RP, l);
+    if (carry) { V[0] += WV[0]; V[1] += WV[1]; V[2] += WV[2]; }
     if (st[S.boostKind] === BOOST.NONE && st[S.engineV] > 0) {
       const cost = feel.get(st[S.driftDir] ? 'steer.slipCostDriftPerDegS' : 'steer.slipCostGripPerDegS');
       st[S.engineV] -= st[S.engineV] * cost * slipDeg * dt;
@@ -153,7 +195,15 @@ export function step(st, a, track, feel, dt, ev) {
     (air ? qb.height <= 0 && vn <= 0 : qb.height <= snap);
   if (ground) {
     v3addScaled(P, P, n, -qb.height); v3reject(V, V, n);
+    const arrive = Math.hypot(V[0], V[1], V[2]);   // ground speed at touch-down (the splash payload)
     if (air) land(st, a, feel, ev, V, n, speed, dt);
+    // wave 1 WATER: a pool catches the kart: no bounce back up, the water takes its share of speed once, splash
+    if (air && surfaceKind(qb.surface) === 'pool') {
+      if (st[S.airborne]) { st[S.airborne] = 0; st[S.grounded] = 1; v3reject(V, V, n); }
+      const m = feel.get('water.poolLandMul');
+      v3scale(V, V, m); st[S.engineV] *= m;
+      ev.emit('splash', { s: qb.s, x: qb.lateral, speed: arrive, down: Math.max(0, -vn) });
+    }
     if (air && under && onLanding(track, st, qb) === under) landRoute(track, st, under, qb, F, feel, ev, prevS);
     else if (air && fall && qb === QD) fallLand(track, st, qb, ev);
     else if (air) resetFall(st);
@@ -205,7 +255,7 @@ export function step(st, a, track, feel, dt, ev) {
   const drop = !grace && (fell || st[S.edgeT] >= (holeFall ? Math.min(HOLE_GRACE_S, feel.get('drop.edgeGraceS')) : feel.get('drop.edgeGraceS')));
   if (drop) {
     if (wasEdge || past) ev.emit('edge-exit', { to: 'drop' });
-    cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st); resetFall(st);
+    cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st); resetFall(st); resetWater(st);
     st[S.respawnPhase] = RESPAWN.PULL; st[S.respawnT] = 0; st[S.edgeT] = 0;
     HOLE_FALL.delete(st);
     ev.emit('drop', { seg: qb.seg, cause: fell ? 'fallY' : holeFall ? 'hole' : 'edge' });
@@ -231,10 +281,14 @@ export function step(st, a, track, feel, dt, ev) {
 }
 
 /* Engine value: five-band ramp under throttle (crawl floor speed.minMps), brake then reverse, coast.
- * Haze cuts thrust and the cap unless a boost runs; a running boost holds its floor (sim/boost.js). */
-function engine(st, a, feel, dt, top, haze, ev, capMul = 1, loop = false) {
+ * Haze cuts thrust and the cap unless a boost runs; a running boost holds its floor (sim/boost.js).
+ * Wave 1 WATER: waterMul scales thrust and the cap the same way (a boost keeps its floor as on haze); dragTcS > 0
+ * (a pool) drags an engine above the cap toward it on top of the coast; slopeMps2 (a chute) is gravity along the
+ * kart's downhill forward, capped at speed.maxPct of top. */
+function engine(st, a, feel, dt, top, haze, ev, capMul = 1, loop = false, waterMul = 1, dragTcS = 0, slopeMps2 = 0) {
   const boosting = st[S.boostKind] !== BOOST.NONE;
-  const mul = (haze && !boosting ? 1 - feel.get('offroad.hazeThrustLoss') : 1) * (st[S.stalled] > 0 ? feel.get('stall.thrustMul') : 1);
+  const mul = (haze && !boosting ? 1 - feel.get('offroad.hazeThrustLoss') : 1) * (boosting ? 1 : waterMul) *
+    (st[S.stalled] > 0 ? feel.get('stall.thrustMul') : 1);
   const cap = top * mul * capMul, brakeR = feel.get('engine.brakeMps2'), coast = feel.get('engine.coastMps2') * dt;
   let e = st[S.engineV];
   if (a.brake > 0 && a.brake >= a.throttle) e = Math.max(-feel.get('speed.reverseMps'), e - brakeR * a.brake * dt);
@@ -252,6 +306,8 @@ function engine(st, a, feel, dt, top, haze, ev, capMul = 1, loop = false) {
   const floor = boostFloor(st, feel, top, dt, ev);
   if (boosting) e = e > cap ? Math.max(cap, floor) : Math.max(e, floor);
   else if (e > cap) e = Math.max(cap, e - coast);
+  if (dragTcS > 0 && !boosting && e > cap) e = cap + (e - cap) * Math.exp(-dt / dragTcS);   // the pool's drag
+  if (slopeMps2 && st[S.stalled] <= 0) e = clamp(e + slopeMps2 * dt, -feel.get('speed.reverseMps'), top * feel.get('speed.maxPct'));
   if (loop && e >= 0) {                             // the loop carries the kart through (never stalls inside it)
     const carry = gap(feel, 'loop.carryPct') * top;
     if (e < carry) e = Math.min(carry, e + gap(feel, 'loop.carryMps2') * dt + (a.brake > 0 ? brakeR * a.brake * dt : 0));
