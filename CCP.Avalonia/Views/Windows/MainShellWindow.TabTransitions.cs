@@ -1,8 +1,9 @@
 // WPF MainWindow.ChromeFx.cs:204-460; finite tab entrances and first-visit door pulses.
-// The outgoing image preserves the 100 ms fade without reactivating a hidden view's services.
+// NOT ported: WPF's 100 ms outgoing fade (FadeOutgoingTab). It re-shows the tab just left, and here
+// every tab's timers and FX follow IsVisible (P01); a snapshot fade cost a full-scale render per switch
+// on the UI thread (fin-shell-tab-navigation review P1). The leaving tab is cut; named under Missing.
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,12 +11,11 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
-using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -24,46 +24,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        private DispatcherTimer? _tabTransitionTimer;
-        private readonly Stopwatch _tabTransitionTime = new();
+        private FrameClock? _tabTransitionTimer; // frame-locked like WPF's compositor, not a 16 ms timer
+        private long _tabTransitionStart;
         private Control? _enteringTab;
         private TranslateTransform? _tabSlide;
         private (double X, double Y) _tabOffset;
         private readonly List<(Control Card, TranslateTransform? Slide)> _tabCards = new();
-        private Image? _outgoingTabImage;
-        private RenderTargetBitmap? _outgoingTabBitmap;
         internal Control? EnteringTab => _enteringTab;
 
-        // Called BEFORE hiding panels. Native browser tabs cut immediately, exactly as WPF.
-        private void PrepareTabTransition(Control? incoming)
-        {
-            CompleteTabTransition();
-            if (!AmbientFxCanvas.Env.AllowTransitions || ChromeFxNav.IsAirspaceTab(CurrentTab)
-                || !TabPanels.TryGetValue(CurrentTab, out var name)
-                || Named<Control>(name) is not { IsVisible: true, Parent: Panel host } outgoing
-                || outgoing == incoming || outgoing.Bounds.Width <= 0 || outgoing.Bounds.Height <= 0) return;
-            try
-            {
-                var size = outgoing.Bounds.Size;
-                var scale = RenderScaling;
-                _outgoingTabBitmap = new RenderTargetBitmap(
-                    new PixelSize((int)Math.Ceiling(size.Width * scale), (int)Math.Ceiling(size.Height * scale)),
-                    new Vector(96 * scale, 96 * scale));
-                _outgoingTabBitmap.Render(outgoing);
-                // ponytail: snapshot rather than re-showing the real tab; IsVisible owns service teardown here.
-                _outgoingTabImage = new Image
-                {
-                    Source = _outgoingTabBitmap, Width = size.Width, Height = size.Height,
-                    Margin = outgoing.Margin, HorizontalAlignment = HorizontalAlignment.Left,
-                    VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false,
-                };
-                host.Children.Add(_outgoingTabImage);
-            }
-            catch (Exception ex) { ClearOutgoingTabImage(); Log.Debug("Tab snapshot: {E}", ex.Message); }
-        }
+        /// <summary>P08/P40 seam: the entrance reads real elapsed time from this clock; tests step it.</summary>
+        internal TimeProvider TabClock { get; set; } = TimeProvider.System;
 
         private void AnimateTabIn(Control? tab, string key)
         {
+            CompleteTabTransition();
             if (tab == null) return;
             tab.IsHitTestVisible = true;
             tab.Opacity = 1;
@@ -76,14 +50,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var card in FindStaggerTargets(tab)) _tabCards.Add((card, EnsureTabTranslate(card)));
             }
             StepTabTransition(0);
-            _tabTransitionTime.Restart();
-            _tabTransitionTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render,
-                (_, _) => StepTabTransition(_tabTransitionTime.Elapsed.TotalMilliseconds));
+            _tabTransitionStart = TabClock.GetTimestamp();
+            if (_tabTransitionTimer == null)
+            {
+                _tabTransitionTimer = new FrameClock(this) { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+                _tabTransitionTimer.Tick += (_, _) => TickTabTransition();
+            }
             _tabTransitionTimer.Start();
         }
 
         // P08: pointer tests settle the actual entrance before reading hit geometry. No wall-clock sleeps.
         internal void CompleteTabTransition() => StepTabTransition(620);
+
+        /// <summary>One frame of the entrance at the clock's real elapsed time (the timer's tick).</summary>
+        internal void TickTabTransition() => StepTabTransition(TabClock.GetElapsedTime(_tabTransitionStart).TotalMilliseconds);
 
         internal void StepTabTransition(double ms)
         {
@@ -91,11 +71,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var t = Math.Clamp(elapsed / duration, 0, 1);
                 return 1 - (1 - t) * (1 - t);
-            }
-            if (_outgoingTabImage != null)
-            {
-                _outgoingTabImage.Opacity = Math.Clamp(1 - ms / 100, 0, 1);
-                if (ms >= 100) ClearOutgoingTabImage();
             }
             if (_enteringTab != null) _enteringTab.Opacity = Ease(ms, 200);
             if (_tabSlide != null)
@@ -114,19 +89,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (ms < 620) return; // WPF cleanup: 6*40 + 260 + 120 ms
             _tabTransitionTimer?.Stop();
-            _tabTransitionTime.Stop();
             _tabCards.Clear();
             _tabSlide = null;
             _enteringTab = null;
-        }
-
-        private void ClearOutgoingTabImage()
-        {
-            if (_outgoingTabImage?.Parent is Panel host) host.Children.Remove(_outgoingTabImage);
-            if (_outgoingTabImage != null) _outgoingTabImage.Source = null;
-            _outgoingTabImage = null;
-            _outgoingTabBitmap?.Dispose();
-            _outgoingTabBitmap = null;
         }
 
         private static TranslateTransform? EnsureTabTranslate(Control control)

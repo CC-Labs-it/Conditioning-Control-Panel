@@ -173,29 +173,44 @@ public sealed class TabTransitionsTests
     });
 
     [Fact]
-    public Task OutgoingFadeDoesNotReshowTheLeavingViewAndRapidReturnIsClickable() => Run(shell =>
+    public Task LeavingTabIsCutWithoutASnapshotAndRapidReturnIsClickable() => Run(shell =>
     {
         shell.ShowTab("quests");
         Step(shell, 620);
-        shell.UpdateLayout();
-        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
         var quests = shell.Named<Control>("QuestsTab")!;
-        var shownAgain = 0;
-        quests.PropertyChanged += (_, e) => { if (e.Property == Visual.IsVisibleProperty && quests.IsVisible) shownAgain++; };
-        shell.ShowTab("achievements");
         var host = (Panel)quests.Parent!;
-        var fade = Assert.Single(host.Children.OfType<Image>());
-        Assert.False(fade.IsHitTestVisible);
+        var children = host.Children.Count;
+        shell.ShowTab("achievements");
+        // Review P1: no outgoing snapshot render; the leaving tab is cut, as on base.
         Assert.False(quests.IsVisible);
+        Assert.Equal(children, host.Children.Count);
+        Assert.Empty(host.Children.OfType<Image>());
         Step(shell, 50);
-        Assert.Equal(0.5, fade.Opacity, 5);
-        shell.ShowTab("quests"); // previous snapshot must not win a late completion
+        shell.ShowTab("quests"); // an unfinished entrance never wins a late completion
         Step(shell, 620);
-        Assert.Equal(1, shownAgain);
         Assert.True(quests.IsVisible);
         Assert.True(quests.IsHitTestVisible);
-        Assert.Empty(host.Children.OfType<Image>());
         Assert.Equal(1, quests.Opacity);
+        Assert.Equal(1, shell.Named<Control>("AchievementsTab")!.Opacity);
+    });
+
+    [Fact]
+    public Task EntranceFramesReadElapsedTimeFromTheTabClock() => Run(shell =>
+    {
+        var time = new SteppedTime();
+        shell.TabClock = time;
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        shell.ShowTab("quests");
+        shell.ShowTab("achievements");
+        var tab = shell.Named<Control>("AchievementsTab")!;
+        Assert.Equal(0, tab.Opacity);
+        time.Now = TimeSpan.FromMilliseconds(100).Ticks;
+        shell.TickTabTransition();
+        Assert.Equal(0.75, tab.Opacity, 5); // QuadraticEaseOut at half of 200 ms
+        time.Now = TimeSpan.FromMilliseconds(620).Ticks;
+        shell.TickTabTransition();
+        Assert.Equal(1, tab.Opacity);
+        Assert.Null(shell.EnteringTab);
     });
 
     [Fact]
@@ -356,6 +371,8 @@ public sealed class TabTransitionsTests
             Assert.Equal(before + 1, state.Usage["sessions"]);
             shell.ShowTab("not-a-tab");
             Assert.Equal(before + 1, state.Usage["sessions"]);
+            ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiTargets.NoteTabOpened("Presets"); // WPF OrdinalIgnoreCase
+            Assert.Equal(before + 2, state.Usage["sessions"]);
         }
         finally
         {

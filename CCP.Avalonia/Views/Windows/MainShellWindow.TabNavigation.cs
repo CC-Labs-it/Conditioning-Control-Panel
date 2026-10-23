@@ -173,7 +173,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :306: the Lockdown plate's breath stops on every navigation; its case restarts it.
             StopLockdownPulse();
 
-            PrepareTabTransition(Named<Control>(target));
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);

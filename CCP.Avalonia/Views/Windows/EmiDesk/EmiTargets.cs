@@ -73,7 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // WPF EmiTargets.cs:140-178: all entry routes score the same destination.
         internal static void NoteTabOpened(string tab)
         {
-            var id = tab switch
+            var id = tab?.ToLowerInvariant() switch // WPF matches OrdinalIgnoreCase
             {
                 "presets" => "sessions", "companion" => "companion", "awareness" => "awareness",
                 "remotecontrol" => "remote", "bambitakeover" => "takeover", "lockdown" => "lockdown",
