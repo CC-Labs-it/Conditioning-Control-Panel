@@ -117,7 +117,8 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{loc:Str setting_bubble_count_pause_effects}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkPauseEffects"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                             </Grid>
