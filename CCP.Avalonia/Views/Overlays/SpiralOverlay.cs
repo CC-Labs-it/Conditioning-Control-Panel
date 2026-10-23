@@ -200,7 +200,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// pixels (the corner GIF decodes to the pixels its overlay occupies, WPF CornerGifMedia).</param>
         /// <param name="maxFrames">When &gt; 0, at most this many frames are kept, strided across the whole
         /// animation (the chaos wash keeps 40, WPF ChaosFlashOverlay.cs:222 after the #476 OOM).</param>
-        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0)
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
+            List<TimeSpan>? frameDurations = null)
         {
             var frames = new List<Bitmap>();
             try
@@ -226,13 +227,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var full = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var canvas = new SKBitmap(full);
                 using var scaled = new SKBitmap(new SKImageInfo(plan.Width, plan.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
-                for (var i = 0; i < count && frames.Count < plan.Frames; i++)
+                for (var i = 0; i < count && (frameDurations != null
+                    ? i < (long)plan.Frames * plan.Step : frames.Count < plan.Frames); i++)
                 {
                     // canvas holds frame i-1. Reuse it only when that is the frame i builds on; otherwise
                     // (restore-previous disposal) the codec decodes the required frame itself.
                     var required = i < info.Length ? info[i].RequiredFrame : -1;
                     var r = codec.GetPixels(full, canvas.GetPixels(), new SKCodecOptions(i, required == i - 1 ? i - 1 : -1));
                     if (r != SKCodecResult.Success && r != SKCodecResult.IncompleteInput) break;
+                    if (frameDurations != null)
+                    {
+                        // A sampled frame holds for the sum of the source frames it replaces.
+                        // Unlike ambient spirals, round GIFs keep long holds and unequal delays.
+                        if (i % plan.Step == 0) frameDurations.Add(TimeSpan.Zero);
+                        var ms = i < info.Length ? info[i].Duration : 100;
+                        frameDurations[^1] += TimeSpan.FromMilliseconds(ms > 0 ? ms : 100);
+                    }
                     if (i % plan.Step != 0) continue;
                     canvas.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.None));
                     frames.Add(new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Premul, scaled.GetPixels(),

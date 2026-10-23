@@ -16,6 +16,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -49,9 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
     ///    re-test of <c>_gameRunning</c> after it).
     ///  - <c>FolderBrowserDialog</c> -> <c>StorageProvider.OpenFolderPickerAsync</c>.
     ///  - Mouse* -> Pointer*; Avalonia 12's <c>DoDragDropAsync</c> only takes a
-    ///    <see cref="PointerPressedEventArgs"/>, so the drag starts on press and the WPF
-    ///    drag-threshold arming (<c>_dragStart</c> / <c>_dragArmed</c>) is gone, as in
-    ///    SessionEditorWindow. <c>DataObject</c> -> <c>DataTransfer</c> + a typed
+    ///    <see cref="PointerPressedEventArgs"/>; retain that press until movement crosses the
+    ///    platform's mouse gesture threshold. <c>DataObject</c> -> <c>DataTransfer</c> + a typed
     ///    <see cref="DataFormat"/>.
     ///  - Storyboards -> transitions plus awaited delays; the shake is literally its nine
     ///    40ms keyframes written as a loop.
@@ -408,6 +408,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
 
             // Drag to (re)assign.
             card.PointerPressed += Card_PointerPressed;
+            card.PointerMoved += Card_PointerMoved;
+            card.PointerReleased += (_, _) => _dragPress = null;
             return card;
         }
 
@@ -421,20 +423,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         };
 
         // ── Drag source ──
-        // WPF armed a flag on PreviewMouseLeftButtonDown and called DoDragDrop from
-        // PreviewMouseMove once the drag threshold was passed. Avalonia 12's DoDragDropAsync
-        // only accepts a PointerPressedEventArgs, so the drag starts on press and the
-        // threshold arming is gone (same trade SessionEditorWindow made).
-        private async void Card_PointerPressed(object? sender, PointerPressedEventArgs e)
+        private PointerPressedEventArgs? _dragPress;
+        private Point _dragStart;
+        internal Func<PointerPressedEventArgs, IDataTransfer, DragDropEffects, Task<DragDropEffects>> DragPack =
+            DragDrop.DoDragDropAsync;
+
+        private void Card_PointerPressed(object? sender, PointerPressedEventArgs e)
         {
+            _dragPress = null;
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            _dragStart = e.GetPosition(this);
+            _dragPress = e;
+        }
+
+        private async void Card_PointerMoved(object? sender, PointerEventArgs e)
+        {
+            if (_dragPress is not { } press) return;
+            if (e.Pointer != press.Pointer || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            {
+                _dragPress = null;
+                return;
+            }
+            var pos = e.GetPosition(this);
+            // ponytail: Avalonia exposes its platform tap tolerance, not WPF SystemParameters.
+            var threshold = this.GetPlatformSettings()?.GetTapSize(e.Pointer.Type) ?? new Size(4, 4);
+            if (Math.Abs(pos.X - _dragStart.X) < threshold.Width &&
+                Math.Abs(pos.Y - _dragStart.Y) < threshold.Height) return;
+            _dragPress = null; // one drag per press, including while the native drag is awaited
             if (sender is not Border card || card.Tag is not string path) return;
 
             var data = new DataTransfer();
             data.Add(DataTransferItem.Create(DragFormat, path));
             e.Handled = true;
 
-            try { await DragDrop.DoDragDropAsync(e, data, DragDropEffects.Move); }
+            try { await DragPack(press, data, DragDropEffects.Move); }
             catch (Exception ex) { Log.Warning(ex, "GazeMinigame: drag failed"); }
         }
 
@@ -1131,7 +1153,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                         if (_settings.VibrationMode == GazeVibrationMode.OnCorrect) FireVibration("reward");
                         DisposeCurrentRoundPlayers();
                         PlayJingle();
-                        await ShowFullscreenFeedbackAsync("GOOD GIRL", Color.FromRgb(0xFF, 0x69, 0xB4));
+                        await ShowFullscreenFeedbackAsync(
+                            App.Mods?.GetGazeCorrectMessage() ?? "GOOD", Color.FromRgb(0xFF, 0x69, 0xB4));
                         break;
                     case RoundOutcome.Wrong:
                         if (_settings.VibrationMode == GazeVibrationMode.OnWrong) FireVibration("punish");

@@ -8,6 +8,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using CCP.Avalonia.Testing;
@@ -17,6 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Lab.GazeMinigame;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using OpenCvSharp;
@@ -148,7 +151,7 @@ public sealed class GazeMinigameTests
                 win.RoundTicker_Tick(null, EventArgs.Empty);
                 tracker.RaiseGazeSideForTest(correct);
                 for (int i = 0; i < 60; i++) { clock.Now += TimeSpan.FromMilliseconds(50); win.RoundTicker_Tick(null, EventArgs.Empty); }
-                Assert.Equal("GOOD GIRL", win.FindControl<TextBlock>("TxtFeedback")!.Text);
+                Assert.Equal("GOOD", win.FindControl<TextBlock>("TxtFeedback")!.Text);
                 Assert.Equal(new[] { "bell.wav", "chime.wav" }, clips.Select(c => Path.GetFileName(c.Path)));
                 Assert.All(clips, c =>
                 {
@@ -188,6 +191,95 @@ public sealed class GazeMinigameTests
             try { dir.Delete(true); } catch { }
         }
     });
+
+    [Theory]
+    [InlineData(false, BuiltInMods.CCPDefaultId, null, "GOOD")]
+    [InlineData(true, BuiltInMods.CCPDefaultId, null, "GOOD")]
+    [InlineData(true, BuiltInMods.DronificationId, null, "COMPLIANT")]
+    [InlineData(true, BuiltInMods.DronificationId, "ROUND WON", "ROUND WON")]
+    [InlineData(true, BuiltInMods.DronificationId, "", "GOOD")]
+    public void CorrectRound_ResolvesLiveModPraise_WithNeutralFallback(
+        bool initializeMods, string modId, string? message, string expected) =>
+        RunRewardRound(GazeRewardEffect.None, (win, _, score, _) =>
+        {
+            Assert.Null(AvApp.Mods);
+            using var mods = new CoreModsSnapshot();
+            var oldProvider = CoreSettings.ServiceProvider;
+            var settings = new SettingsService(); // assembly sandbox; no real profile
+            ModMessages? messages = null;
+            string? previous = null;
+            try
+            {
+                CoreSettings.ServiceProvider = () => settings;
+                if (initializeMods)
+                {
+                    AvApp.StartMods();
+                    AvApp.Mods!.ActivateMod(modId); // switch AFTER the round began
+                    messages = AvApp.Mods.ActiveMod.Manifest.Messages!;
+                    previous = messages.GazeCorrect;
+                    if (message != null) messages.GazeCorrect = message;
+                }
+                score();
+                Assert.Equal(expected, win.FindControl<TextBlock>("TxtFeedback")!.Text);
+            }
+            finally
+            {
+                if (messages != null) messages.GazeCorrect = previous;
+                settings.SealForReset();
+                CoreSettings.ServiceProvider = oldProvider;
+                AvApp.ResetReleaseContent();
+            }
+        }, expected);
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PackDrag_WaitsForMovement_AndRequiresAHeldLeftPress(bool horizontal) =>
+        RunRewardRound(GazeRewardEffect.None, (win, _, _, _) =>
+        {
+            var card = win.FindControl<WrapPanel>("FocusPanel")!.Children.OfType<Border>().Single();
+            var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+            var calls = 0;
+            PointerPressedEventArgs? pressed = null;
+            win.DragPack = (press, _, effects) =>
+            {
+                Assert.Same(pressed, press); // retained original press, as Avalonia requires
+                Assert.Equal(DragDropEffects.Move, effects);
+                calls++;
+                return Task.FromResult(DragDropEffects.Move);
+            };
+            void Press(RawInputModifiers button = RawInputModifiers.LeftMouseButton)
+            {
+                pressed = new PointerPressedEventArgs(card, pointer, win, new global::Avalonia.Point(100, 100), 0,
+                    new PointerPointProperties(button, button == RawInputModifiers.LeftMouseButton
+                        ? PointerUpdateKind.LeftButtonPressed : PointerUpdateKind.RightButtonPressed), KeyModifiers.None);
+                card.RaiseEvent(pressed);
+            }
+            void Move(double distance, bool held = true) => card.RaiseEvent(new PointerEventArgs(
+                InputElement.PointerMovedEvent, card, pointer, win,
+                new global::Avalonia.Point(100 + (horizontal ? distance : 0), 100 + (horizontal ? 0 : distance)), 0,
+                new PointerPointProperties(held ? RawInputModifiers.LeftMouseButton : RawInputModifiers.None,
+                    PointerUpdateKind.Other), KeyModifiers.None));
+
+            Press();
+            Assert.Equal(0, calls);
+            Move(1);
+            Assert.Equal(0, calls);
+            Move(100);
+            Assert.Equal(1, calls);
+            Move(200);
+            Assert.Equal(1, calls);
+            Press();
+            Move(1, held: false); // releasing before the threshold disarms it
+            Move(100);
+            Assert.Equal(1, calls);
+            Press(RawInputModifiers.RightMouseButton);
+            Move(100);
+            Assert.Equal(1, calls);
+            Press();
+            Move(-100);
+            Assert.Equal(2, calls);
+        });
 
     [Fact]
     public void FlashReward_ReachesHeadWhileScheduleSuspended_PanicDropsShownAndQueuedFlashes() =>
@@ -439,7 +531,7 @@ public sealed class GazeMinigameTests
     }
 
     private static void RunRewardRound(GazeRewardEffect effect,
-        Action<GazeMinigameWindow, SteppedClock, Action, Action> check) => AvaloniaTestDispatcher.Run(() =>
+        Action<GazeMinigameWindow, SteppedClock, Action, Action> check, string expectedPraise = "GOOD") => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();
         var s = CoreSettings.Current;
@@ -490,7 +582,7 @@ public sealed class GazeMinigameTests
                     clock.Now += TimeSpan.FromMilliseconds(50);
                     win.RoundTicker_Tick(null, EventArgs.Empty);
                 }
-                Assert.Equal("GOOD GIRL", win.FindControl<TextBlock>("TxtFeedback")!.Text);
+                Assert.Equal(expectedPraise, win.FindControl<TextBlock>("TxtFeedback")!.Text);
             }
             void Panic()
             {
@@ -551,6 +643,80 @@ public sealed class GazeMinigameTests
         finally
         {
             image?.Dispose();
+            GazeMinigameWindow.Clock = oldClock;
+            dir.Delete(true);
+        }
+    });
+
+    [Theory]
+    [InlineData(1, 3)]
+    [InlineData(1, 0)]
+    [InlineData(41, 3)] // 123 source frames: the shared budget samples every second frame
+    public Task GifFrames_PreserveUnequalDelays_LongHolds_AndLoopBoundary(int repeats, int firstDelayCs) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var dir = Directory.CreateTempSubdirectory("gaze-gif-timing-");
+        var clock = new SteppedClock();
+        var oldClock = GazeMinigameWindow.Clock;
+        GazeMinigameWindow.Clock = clock;
+        try
+        {
+            var bytes = Convert.FromBase64String(Gif);
+            var delays = new[] { firstDelayCs, 7, 80 }; // GIF centiseconds
+            var firstMs = firstDelayCs > 0 ? firstDelayCs * 10 : 100;
+            var loopMs = firstMs + 70 + 800;
+            var frame = 0;
+            for (var i = 0; i < bytes.Length - 7; i++)
+                if (bytes[i] == 0x21 && bytes[i + 1] == 0xF9 && bytes[i + 2] == 4)
+                {
+                    bytes[i + 4] = (byte)delays[frame++];
+                    bytes[i + 5] = 0;
+                }
+            Assert.Equal(3, frame);
+            if (repeats > 1)
+            {
+                // Skip the NETSCAPE loop extension; repeat just the three image/control blocks.
+                var firstFrame = Enumerable.Range(0, bytes.Length - 2).First(i =>
+                    bytes[i] == 0x21 && bytes[i + 1] == 0xF9 && bytes[i + 2] == 4);
+                bytes = bytes.Take(firstFrame).Concat(Enumerable.Range(0, repeats)
+                    .SelectMany(_ => bytes.Skip(firstFrame).Take(bytes.Length - firstFrame - 1)))
+                    .Append((byte)0x3B).ToArray();
+            }
+            var path = Path.Combine(dir.FullName, "timed.gif");
+            File.WriteAllBytes(path, bytes);
+            using var image = new GazeRoundImage(path);
+            await image.Decoding;
+            var first = image.Source;
+            if (repeats > 1)
+            {
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs + 69));
+                Assert.Same(first, image.Source); // sampled frame holds for 30 + 70ms
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs + 70));
+                Assert.NotSame(first, image.Source);
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(repeats * loopMs - 1));
+                Assert.NotSame(first, image.Source);
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(repeats * loopMs));
+                Assert.Same(first, image.Source); // final sampled frame includes the full tail hold
+                return;
+            }
+            image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs));
+            var second = image.Source;
+            Assert.NotSame(first, second);
+            image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs + 69));
+            Assert.Same(second, image.Source);
+            image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs + 70));
+            var third = image.Source;
+            Assert.NotSame(second, third);
+            Assert.NotSame(first, third);
+            image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(loopMs - 1));
+            Assert.Same(third, image.Source);
+            image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(loopMs));
+            Assert.Same(first, image.Source);
+            image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(2 * loopMs + firstMs));
+            Assert.Same(second, image.Source); // late ticks retain the absolute loop phase
+        }
+        finally
+        {
             GazeMinigameWindow.Clock = oldClock;
             dir.Delete(true);
         }
