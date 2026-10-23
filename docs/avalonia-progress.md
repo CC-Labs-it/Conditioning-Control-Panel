@@ -2701,3 +2701,7 @@ Premium room canvas enrolled in the shell ambient registry under `premium` (WPF 
 ## avalonia-port/wire-views-tab-haptics: +315
 - views-tab-haptics: stub/wired duplicate rows merged into one row, now wired. The Tier-1 side-art column is back (WPF HapticsTabView.xaml:901), using a head port of AdaptiveSideArt and the #1321 rule moved to Core SideArtCollapse, which WPF now delegates to.
 - Trunk HC10 haptics part: page Test/Play stop on rack module switch (unlike WPF) and HapticService.PanicStop also cancels a per-toy test; tests fail-proven, no wide render of the plate yet.
+
+## avalonia-port/wire-win-mantra: +71
+- win-mantra stub -> wired: Programs Mantra door click-through test; StartMantraSession failure dialog ported (WPF text).
+- Review fixes: ledger names the kept-enrollment blocker (shell-programs-tab); test waits bounded by wall time (P73). rgate 39688519974 green except known RaceTrackPlayer flake.
