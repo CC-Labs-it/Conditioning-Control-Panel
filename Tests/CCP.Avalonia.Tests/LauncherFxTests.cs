@@ -135,13 +135,143 @@ public sealed class LauncherFxTests
         Assert.Contains("launcher-hover", cues);
         Step(launcher, 0.5);
         Assert.Equal(1.02, scale.ScaleX, 3);
-        Assert.Equal(0.7, ((DropShadowEffect)tile.Effect!).Opacity, 3);
+        Assert.Null(tile.Effect);
+        var shadow = tile.GetVisualDescendants().OfType<Border>().Single(b => Equals(b.Tag, "tile-shadow"));
+        Assert.InRange(shadow.BoxShadow[0].Color.A / 255.0, 0.69, 0.71);
         Assert.Equal(0.45, glow.Opacity, 3);
 
         launcher.TileHover(tile, false);
         Step(launcher, 0.5);
         Assert.Equal(1, scale.ScaleX, 3);
         Assert.Equal(0.28, glow.Opacity, 3);
+    });
+
+    [Fact]
+    public void CursorParallax_FollowsDepth_SettlesAndParks() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        w.OnFxActivated(true);
+        w.MouseMove(new Point(w.Bounds.Width - 20, w.Bounds.Height - 20));
+        Step(w, 0.3);
+        var glow = (TranslateTransform)w.FindControl<Border>("GlowLayer")!.RenderTransform!;
+        var spiral = ((TransformGroup)w.FindControl<Panel>("SpiralLayer")!.RenderTransform!).Children.OfType<TranslateTransform>().Single();
+        Assert.InRange(glow.X, 17, 18);
+        Assert.InRange(spiral.X, -12, -11);
+        w.OnFxActivated(false);
+        Step(w, 0.3);
+        Assert.Equal(0, glow.X);
+        Assert.Equal(0, spiral.X);
+    });
+
+    [Fact]
+    public void Art_Drifts_PopsOnHover_AndTileArtSlidesAgainstTilt() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        w.OnFxActivated(true);
+        var panelArt = w.FindControl<Image>("PanelArt")!;
+        var drift = (ScaleTransform)panelArt.RenderTransform!;
+        Step(w, 7);
+        Assert.InRange(drift.ScaleX, 1.03, 1.04);
+        w.MouseMove(panelArt.TranslatePoint(new Point(panelArt.Bounds.Width / 2, panelArt.Bounds.Height / 2), w)!.Value);
+        Dispatcher.UIThread.RunJobs();
+        Assert.IsType<TransformGroup>(panelArt.RenderTransform); // real pointer wrapped the drift with HoverPop's rig
+        double held = drift.ScaleX;
+        Step(w, 1);
+        Assert.Equal(held, drift.ScaleX);
+        var tile = Tile(w);
+        w.MouseMove(tile.TranslatePoint(new Point(tile.Bounds.Width - 2, 2), w)!.Value);
+        Step(w, 0.2);
+        var slide = tile.GetVisualDescendants().OfType<Panel>().Select(p => p.RenderTransform).OfType<TranslateTransform>().Single();
+        Assert.InRange(slide.X, -7, -6);
+        Assert.InRange(slide.Y, 6, 7);
+        w.TileHover(tile, false);
+        Step(w, 0.2);
+        Assert.Equal(0, slide.X);
+        Assert.Equal(0, slide.Y);
+        double parked = drift.ScaleX;
+        w.OnFxActivated(false);
+        Step(w, 1);
+        Assert.Equal(parked, drift.ScaleX);
+    });
+
+    [Fact]
+    public void HoverTitle_TintsAndRestores() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var tile = Tile(w);
+        var title = tile.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 19);
+        var rest = ((ISolidColorBrush)title.Foreground!).Color;
+        w.TileHover(tile, true);
+        Step(w, 0.2);
+        Assert.NotEqual(rest, ((ISolidColorBrush)title.Foreground!).Color);
+        w.TileHover(tile, false);
+        Step(w, 0.2);
+        Assert.Equal(rest, ((ISolidColorBrush)title.Foreground!).Color);
+    });
+
+    [Fact]
+    public void Stats_CountUpAndRetarget_WhileWordmarkDriftsAndBadgeWobbles() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        w.OnFxActivated(true);
+        Step(w, 2);
+        CoreSettings.Current.PlayerLevel = 8;
+        CoreSettings.Current.SkillPoints = 200;
+        CoreSettings.Current.PlayerXP = 100;
+        w.RefreshStats();
+        Step(w, 0.2);
+        Assert.NotEqual("8", w.FindControl<TextBlock>("StatLevel")!.Text);
+        Step(w, 1.2);
+        Assert.Equal("8", w.FindControl<TextBlock>("StatLevel")!.Text);
+        Assert.Equal("200", w.FindControl<TextBlock>("StatSparkles")!.Text);
+        Assert.True(w.FindControl<Border>("XpFill")!.Width > 0);
+        var badge = w.FindControl<Image>("TierBadge")!;
+        badge.IsVisible = true;
+        bool wobbled = false;
+        for (int i = 0; i < 450; i++) { w.StepFx(0.02); wobbled |= ((RotateTransform)badge.RenderTransform!).Angle != 0; }
+        Assert.True(((ScaleTransform)w.FindControl<StackPanel>("Wordmark")!.RenderTransform!).ScaleX > 1);
+        Assert.True(wobbled);
+        badge.Source = w.FindControl<Image>("PanelArt")!.Source;
+        w.UpdateLayout();
+        w.MouseMove(badge.TranslatePoint(new Point(badge.Bounds.Width / 2, badge.Bounds.Height / 2), w)!.Value);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(w.FindControl<Popup>("TierBadgePopup")!.IsOpen);
+        var big = (ScaleTransform)w.FindControl<Image>("TierBadgeBig")!.RenderTransform!;
+        Assert.InRange(big.ScaleX, 0.35, 0.5);
+        Step(w, 0.3);
+        Assert.Equal(1, big.ScaleX, 3);
+        w.Hide();
+        Assert.Equal(0, ((RotateTransform)badge.RenderTransform!).Angle);
+    });
+
+    [Fact]
+    public void RunningDot_BreathesOnlyWithAmbientMotion_AndIdleDims() => Run(MotionLevel.Full, (shell, w, _) =>
+    {
+        try
+        {
+            CoreSettings.Current.FlashEnabled = true;
+            shell.StartEngine();
+            w.OnFxActivated(true);
+            var dot = w.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("RunningDot")!;
+            Step(w, 0.1);
+            Assert.InRange(dot.Opacity, 0.55, 0.6);
+            Step(w, 2.4);
+            Assert.InRange(dot.Opacity, 0.95, 1);
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            w.StepFx(0.02);
+            Assert.Equal(1, dot.Opacity);
+            CoreEngine.Stop();
+            w.StepFx(0.02);
+            Assert.Equal(0.35, dot.Opacity);
+        }
+        finally { CoreEngine.Stop(); }
+    });
+
+    [Fact]
+    public void MotionOff_NoArtOrWordmarkDrift_StatsSnap() => Run(MotionLevel.Off, (_, w, _) =>
+    {
+        Step(w, 20);
+        Assert.Equal(1, ((ScaleTransform)w.FindControl<Image>("PanelArt")!.RenderTransform!).ScaleX);
+        Assert.Equal(1, ((ScaleTransform)w.FindControl<StackPanel>("Wordmark")!.RenderTransform!).ScaleX);
+        CoreSettings.Current.PlayerLevel = 6;
+        w.RefreshStats();
+        Assert.Equal("6", w.FindControl<TextBlock>("StatLevel")!.Text);
     });
 
     [Fact]

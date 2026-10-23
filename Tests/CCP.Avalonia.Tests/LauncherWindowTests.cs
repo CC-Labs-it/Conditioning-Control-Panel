@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -62,6 +63,185 @@ public sealed class LauncherWindowTests
 
     private static string?[] Texts(Control c) =>
         c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToArray();
+
+    [Fact]
+    public void Grants_RebuildOnlyOnRevealFlip_AndWaitWhileHidden() => Run(shell =>
+    {
+        var oldGrants = ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider;
+        bool owns = false;
+        try
+        {
+            ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = _ => owns;
+            LauncherWindow.BackToLauncher(shell);
+            Dispatcher.UIThread.RunJobs();
+            var w = LauncherWindow.Instance!;
+            Assert.DoesNotContain("race", Tiles(w));
+            var grid = w.FindControl<UniformGrid>("GamesGrid")!;
+            var first = grid.Children[0];
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Assert.Same(first, grid.Children[0]);
+            owns = true;
+            // The service may notify from a sync thread.
+            System.Threading.Tasks.Task.Run(ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged).GetAwaiter().GetResult();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("race", Tiles(w));
+            owns = false;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Assert.DoesNotContain("race", Tiles(w));
+            w.Hide();
+            first = grid.Children[0];
+            owns = true;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Assert.Same(first, grid.Children[0]);
+            w.Show();
+            Assert.Contains("race", Tiles(w));
+        }
+        finally { ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = oldGrants; }
+    });
+
+    [Fact]
+    public void WhatsNew_OpensCurrentNotesOverLauncher_AndPanicClosesIt() => Run(shell =>
+    {
+        var oldVersion = CoreReleaseContent.AppVersionProvider;
+        var oldNotes = CoreReleaseContent.PatchNotesProvider;
+        try
+        {
+            CoreReleaseContent.AppVersionProvider = () => "7.1.5";
+            CoreReleaseContent.PatchNotesProvider = () => "Launcher release notes";
+            LauncherWindow.BackToLauncher(shell);
+            Dispatcher.UIThread.RunJobs();
+            var w = LauncherWindow.Instance!;
+            Raise(w, "WhatsNewLink");
+            Dispatcher.UIThread.RunJobs();
+            var notes = Assert.Single(w.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.WhatsNewDialog>());
+            Assert.Equal("What's New in v7.1.5", notes.FindControl<TextBlock>("TxtTitle")!.Text);
+            Assert.Equal("Launcher release notes", notes.FindControl<TextBlock>("TxtNotes")!.Text);
+            Assert.False(shell.IsVisible);
+            PanicSurfaces.All.Single(s => s.Id == "launcher-notes").Stop(shell);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(notes.IsVisible);
+        }
+        finally { CoreReleaseContent.AppVersionProvider = oldVersion; CoreReleaseContent.PatchNotesProvider = oldNotes; }
+    });
+
+    [Fact]
+    public void FileDrop_WakesPanelAndUsesItsImporter_EmptyDropDoesNothing() => Run(shell =>
+    {
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        Assert.True(DragDrop.GetAllowDrop(w));
+        w.OpenPanelWithDrop(Array.Empty<string>());
+        Assert.True(w.IsVisible);
+        var path = System.IO.Path.Combine(CorePaths.UserData, "launcher.unrecognised");
+        System.IO.File.WriteAllText(path, "test");
+        var file = w.StorageProvider.TryGetFileFromPathAsync(path).GetAwaiter().GetResult()!;
+        var data = new DataTransfer();
+        data.Add(DataTransferItem.CreateFile(file));
+        w.DragDrop(new Point(400, 300), global::Avalonia.Input.Raw.RawDragEventType.DragEnter, data, DragDropEffects.Copy, RawInputModifiers.None);
+        w.DragDrop(new Point(400, 300), global::Avalonia.Input.Raw.RawDragEventType.Drop, data, DragDropEffects.Copy, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(w.IsVisible);
+        Assert.True(shell.IsVisible);
+        Assert.Contains(Loc.Get("drop_not_recognised"), Texts(shell.FindControl<Panel>("NotificationHost")!));
+        System.IO.File.Delete(path);
+    });
+
+    [Fact]
+    public void FriendsChip_OpensDrawer_SettingsWakePanel_AndPanicFoldsIt() => Run(shell =>
+    {
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        var chip = w.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.FriendsRailChip>("FriendsChip")!;
+        chip.Toggle();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(chip.IsOpen);
+        PanicSurfaces.All.Single(s => s.Id == "launcher-friends").Stop(shell);
+        Assert.False(chip.IsOpen);
+        chip.Toggle();
+        Dispatcher.UIThread.RunJobs();
+        chip.Drawer.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Tag, "friends-settings"))
+            .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(chip.IsOpen);
+        Assert.False(w.IsVisible);
+        Assert.True(shell.IsVisible);
+        Assert.Equal("appsettings", shell.CurrentTab);
+    });
+
+    [Fact]
+    public void FriendsDrawer_SignInStaysOverLauncher_InvitesOpenPanel() => Run(shell =>
+    {
+        CoreAccount.IsLoggedInProvider = () => false;
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        var chip = w.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.FriendsRailChip>("FriendsChip")!;
+        chip.Toggle();
+        Dispatcher.UIThread.RunJobs();
+        chip.Drawer.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Tag, "friends-sign-in"))
+            .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(LoginOpen(w));
+        Assert.False(chip.IsOpen);
+        Assert.False(shell.IsVisible);
+        foreach (var dialog in w.OwnedWindows.ToArray()) dialog.Close();
+        Dispatcher.UIThread.RunJobs();
+        chip.Toggle();
+        Dispatcher.UIThread.RunJobs();
+        // The subscriber-only link exists in the drawer's add box; its handler uses the same route.
+        chip.Drawer.GetVisualDescendants().OfType<Button>().Single(b => Equals(b.Tag, "friends-invite-link"))
+            .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(chip.IsOpen);
+        Assert.False(w.IsVisible);
+        Assert.True(shell.IsVisible);
+        Assert.Equal("premium", shell.CurrentTab);
+    });
+
+    [Fact]
+    public void LockedTile_HasTierBand_SignedOutTileDoesNot() => Run(shell =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreEntitlement.HasLabProvider = () => false;
+        var oldPass = CoreEntitlement.IntakePassAvailableProvider;
+        try
+        {
+            CoreEntitlement.IntakePassAvailableProvider = () => false;
+            LauncherWindow.BackToLauncher(shell);
+            Dispatcher.UIThread.RunJobs();
+            var w = LauncherWindow.Instance!;
+            var tile = (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
+            Assert.True(global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.HasBand(tile));
+            CoreAccount.IsLoggedInProvider = () => false;
+            w.BuildTiles();
+            Dispatcher.UIThread.RunJobs();
+            tile = (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
+            Assert.False(global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.HasBand(tile));
+        }
+        finally { CoreEntitlement.IntakePassAvailableProvider = oldPass; }
+    });
+
+    [Fact]
+    public void SignIn_RepeatedPressesKeepOneDialog() => Run(shell =>
+    {
+        CoreAccount.IsLoggedInProvider = () => false;
+        LauncherWindow.BackToLauncher(shell);
+        Dispatcher.UIThread.RunJobs();
+        var w = LauncherWindow.Instance!;
+        Raise(w, "SignInPill");
+        Raise(w, "SignInPill");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(w.OwnedWindows.Where(o => o is ConditioningControlPanel.Avalonia.Views.Dialogs.LoginDialog));
+        foreach (var dialog in w.OwnedWindows.ToArray()) dialog.Close();
+        Dispatcher.UIThread.RunJobs();
+        Raise(w, "SignInPill");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(LoginOpen(w));
+        foreach (var dialog in w.OwnedWindows.ToArray()) dialog.Close();
+    });
 
     [Fact]
     public void BackToLauncher_TucksThePanel_AndIntakeOpensItOnTheTab() => Run(shell =>

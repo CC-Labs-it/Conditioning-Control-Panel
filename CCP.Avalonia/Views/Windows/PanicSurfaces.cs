@@ -74,6 +74,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("chaos-skia-fx", _ => Chaos.ChaosSkiaFxOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosSkiaFxOverlay.CloseActive; also outside a run
             new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
+            new("launcher-notes", _ => LauncherWindow.CloseNotesForPanic()),
+            new("launcher-friends", _ => LauncherWindow.CloseFriendsForPanic()),
             new("camera", _ => MainShellWindow.StopCameraForPanic()),     // decision C: last, fire-and-forget
         };
 

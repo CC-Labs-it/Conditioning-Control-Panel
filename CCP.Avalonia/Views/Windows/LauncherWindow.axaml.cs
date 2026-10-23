@@ -76,11 +76,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             XpTrack.SizeChanged += (_, _) => RefreshStats();
             _statusTimer.Tick += (_, _) => { RefreshStatus(); RefreshStats(); RefreshSpReadout(); };
             CoreMods.ModChanged += OnModChanged;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
             Closed += (_, _) =>
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
                 CoreMods.ModChanged -= OnModChanged;
+                ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
             };
             // WPF OnIsVisibleChanged -> OnShown / OnHidden.
             PropertyChanged += (_, e) =>
@@ -369,7 +371,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF TierBadge_MouseEnter/Leave: the big copy in a popup under the badge.
-        /// ponytail: WPF's 8 s wobble and the popup's pop-in scale are launcher-fx.</summary>
+        /// The wobble and popup scale share the launcher's frame clock.</summary>
         private void TierBadge_PointerEntered(object? sender, PointerEventArgs e)
         {
             if (TierBadge.Source is not { } src) return;
@@ -377,12 +379,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             double bigWidth = src.Size.Height > 0 ? TierBadgeBig.Height * src.Size.Width / src.Size.Height : TierBadgeBig.Height;
             TierBadgePopup.HorizontalOffset = (TierBadge.Bounds.Width - bigWidth) / 2 - TierBadgeBig.Margin.Left;
             TierBadgePopup.IsOpen = true;
+            _badgePopT = global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions ? 0 : -1;
+            _tierBigScale.ScaleX = _tierBigScale.ScaleY = _badgePopT == 0 ? 0.35 : 1;
+            EnsureFxClock();
         }
 
         private void TierBadge_PointerExited(object? sender, PointerEventArgs e) => TierBadgePopup.IsOpen = false;
 
         /// <summary>WPF RefreshStats: level, Sparkle Points, time under and the XP bar.
-        /// ponytail: WPF odometers the numbers and tweens the bar; they snap here until launcher-fx.</summary>
+        /// The odometers and bar use the launcher's frame clock.</summary>
         internal void RefreshStats()
         {
             try
@@ -394,13 +399,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { need = ConditioningControlPanel.Services.XpCurve.GetXPForLevel(level, ConditioningControlPanel.Services.XpCurve.EpochOf(s)); } catch { }
                 double minutes = Math.Max(0, s.TotalConditioningMinutes);
 
-                StatLevel.Text = level.ToString("0");
-                StatSparkles.Text = Math.Max(0, s.SkillPoints).ToString("N0");
+                int sparkles = Math.Max(0, s.SkillPoints);
                 int hours = (int)(minutes / 60), mins = (int)(minutes % 60);
                 StatTime.Text = hours > 0 ? $"{hours}h {mins:00}m" : $"{mins}m";
 
                 double ratio = need > 0 ? Math.Clamp(xp / need, 0, 1) : 0;
-                XpFill.Width = XpTrack.Bounds.Width * ratio;
+                TweenStats(level, sparkles, XpTrack.Bounds.Width > 0 ? XpTrack.Bounds.Width * ratio : -1);
                 XpCaption.Text = Loc.GetF("launcher_stat_xp", ((int)xp).ToString("N0"), ((int)need).ToString("N0"));
             }
             catch (Exception ex) { Log.Debug(ex, "[Launcher] RefreshStats failed"); }
@@ -414,20 +418,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF OnModChanged: the pill at once, the tiles a dispatcher turn later (ccp-bugs #1292).
-        /// ponytail: WPF also redraws on PrizeGrants.GrantsChanged; no grant service or grant-revealed
-        /// card exists on this head yet (launcher-games slice).</summary>
+        /// The dispatcher turn lets the mod finish applying before art is read again.</summary>
         private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
         {
             RefreshMod();
             RefreshTiles(LauncherTileTrigger.ModChanged);
         });
 
+        private void OnGrantsChanged()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(OnGrantsChanged); return; }
+            RefreshTiles(LauncherTileTrigger.GrantsChanged);
+        }
+
         /// <summary>WPF RefreshTiles: redraw when Core's LauncherTileRefresh says the event changed a tile.</summary>
         internal void RefreshTiles(LauncherTileTrigger trigger)
         {
             try
             {
-                var now = VisibleCards.Select(c => new KeyValuePair<string, bool>(c.Id, true));
+                var now = LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id))
+                    .Select(c => new KeyValuePair<string, bool>(c.Id, Revealed(c.Id)));
                 if (!LauncherTileRefresh.ShouldRebuild(trigger, IsVisible, _revealedAtBuild, now)) return;
                 Log.Information("[Launcher] {Trigger} redrawing tiles", trigger);
                 BuildTiles();
@@ -537,12 +547,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF LauncherWindow.OpenSignIn: the panel's login dialog, owned by the launcher.</summary>
-        private async void OpenSignIn()
+        private bool _signingIn;
+        internal async void OpenSignIn()
         {
+            if (_signingIn || MainShellWindow.LockdownActive) return;
             var panel = Panel;
             if (panel == null) { Log.Warning("[Launcher] sign-in with no main window"); return; }
+            _signingIn = true;
             try { await panel.OpenUnifiedLoginDialog(this); }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] sign-in dialog failed"); }
+            finally { _signingIn = false; }
             RefreshAccount();
             RefreshStats();
             BuildTiles();
@@ -551,8 +565,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void BuildTiles()
         {
             GamesGrid.Children.Clear();
+            _artMotion.RemoveAll(a => !ReferenceEquals(a.Art, PanelArt));
             _revealedAtBuild.Clear();
-            foreach (var card in VisibleCards) { GamesGrid.Children.Add(CreateTile(card)); _revealedAtBuild[card.Id] = true; }
+            foreach (var card in LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id)))
+            {
+                bool revealed = Revealed(card.Id);
+                _revealedAtBuild[card.Id] = revealed;
+                if (revealed) GamesGrid.Children.Add(CreateTile(card));
+            }
             SeatGrid();
         }
 
@@ -612,7 +632,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 BorderBrush = locked ? Res("Tier2DiamondBorderBrush") : RimBrush(hue),
                 BorderThickness = new Thickness(LauncherGridLayout.TileBorder),
                 Margin = new Thickness(LauncherGridLayout.TileMargin),
-                ClipToBounds = true,
+                ClipToBounds = false,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Tag = card.Id,
             };
@@ -621,11 +641,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // --- the art plate: the mod's art, else the hue plate with the glyph ---
             // ponytail: WPF's glyph plate also draws a radial hue and a road (no art-less card shows yet).
-            var plate = new Panel { MinHeight = LauncherGridLayout.MinArtHeight, Background = new SolidColorBrush(hue, 0.35) };
+            var plate = new Panel { ClipToBounds = true, MinHeight = LauncherGridLayout.MinArtHeight, Background = new SolidColorBrush(hue, 0.35) };
+            var artHost = new Panel { Margin = new Thickness(-7) };
+            plate.Children.Add(artHost);
             if (ModArt.TryLoad(card.ArtPath, 640) is { } art)
-                plate.Children.Add(new Image { Source = art, Stretch = Stretch.UniformToFill });
+            {
+                var image = new Image { Source = art, Stretch = Stretch.UniformToFill };
+                artHost.Children.Add(image);
+                DecorateArt(image);
+            }
             else
-                plate.Children.Add(new TextBlock
+                artHost.Children.Add(new TextBlock
                 {
                     Text = card.Glyph, FontSize = 64, Foreground = Brushes.White, Opacity = 0.95,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
@@ -662,13 +688,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Height = LauncherGridLayout.TextHeight - LauncherGridLayout.TextPadTop - LauncherGridLayout.TextPadBottom,
             };
             Grid.SetRow(text, 1);
-            text.Children.Add(new TextBlock
+            var title = new TextBlock
             {
                 Text = Loc.Get(card.TitleKey), FontFamily = new FontFamily("Fredoka, Segoe UI"), FontSize = 19,
                 FontWeight = FontWeight.SemiBold, Foreground = Res("TextLightBrush"),
                 Height = LauncherGridLayout.TitleHeight, VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-            });
+            };
+            text.Children.Add(title);
             text.Children.Add(new TextBlock
             {
                 Text = Loc.Get(card.BlurbKey), FontSize = 14, Margin = new Thickness(0, LauncherGridLayout.BlurbGap, 0, 0),
@@ -696,7 +723,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
 
             tile.Child = body;
-            DecorateTileFx(tile, hue);
+            DecorateTileFx(tile, hue, artHost, title);
+            if (locked)
+            {
+                global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.SetRimThickness(tile, tile.BorderThickness.Left);
+                global::ConditioningControlPanel.Avalonia.Controls.TierFxBorder.SetTier(tile, 2);
+            }
             return tile;
         }
 

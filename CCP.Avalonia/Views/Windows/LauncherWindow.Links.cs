@@ -1,6 +1,7 @@
 // WPF 7.1.5 LauncherWindow.xaml.cs: Media pill (BtnGear_Click :222), shortcut link (:498/:504, timer :34/:49),
 // tile shortcut button (Tiles.cs :163/:241/:250). Click cues outside the grid: LauncherWindow.Fx.cs.
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -8,6 +9,7 @@ using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -32,7 +34,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _shortcutTextTimer.Tick += (_, _) => ResetShortcutLink();
             Closed += (_, _) => _shortcutTextTimer.Stop();
             ResetShortcutLink();
+            DragDrop.SetAllowDrop(this, true);
+            AddHandler(DragDrop.DragOverEvent, (_, e) =>
+            {
+                e.DragEffects = e.DataTransfer.TryGetFiles()?.Any() == true ? DragDropEffects.Copy : DragDropEffects.None;
+                e.Handled = true;
+            });
+            AddHandler(DragDrop.DropEvent, (_, e) =>
+            {
+                var files = e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToArray();
+                if (files == null || files.Length == 0) return;
+                e.Handled = true;
+                OpenPanelWithDrop(files);
+            });
         }
+
+        /// <summary>WPF LauncherHost.OpenPanelWithDrop: wake the panel, then use its import path.</summary>
+        internal void OpenPanelWithDrop(string[] files)
+        {
+            if (files.Length == 0 || MainShellWindow.LockdownActive || Panel == null) return;
+            OpenPanel(async p =>
+            {
+                try { await p.ImportDroppedFilesAsync(files); }
+                catch (Exception ex) { Log.Warning(ex, "[Launcher] dropped files failed to import"); }
+            });
+        }
+
+        private Dialogs.WhatsNewDialog? _whatsNew;
+
+        private async void WhatsNew_Click(object? sender, RoutedEventArgs e)
+        {
+            if (MainShellWindow.LockdownActive || _whatsNew != null) return;
+            try
+            {
+                _whatsNew = new Dialogs.WhatsNewDialog("What's New in v" + CoreReleaseContent.AppVersion,
+                    CoreReleaseContent.PatchNotes);
+                await _whatsNew.ShowDialogSafe(this);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "[Launcher] What's New dialog failed; falling back to the settings tab");
+                OpenPanel(p => p.ShowTab("settings"));
+            }
+            finally { _whatsNew = null; }
+        }
+
+        internal static void CloseNotesForPanic() => Instance?._whatsNew?.Close();
+        internal static void CloseFriendsForPanic() => Instance?.FriendsChip.CloseDrawer();
 
         internal void ResetShortcutLink()
         {
