@@ -54,8 +54,66 @@ public sealed class ExclusivesRefreshTests(ITestOutputHelper output)
         return Task.CompletedTask;
     });
 
+    private static ExclusiveCardRow Fyp(ItemsControl shelf) => shelf.Items.OfType<ExclusiveCardRow>().Single(r => r.Feature.Key == "fyp");
+
     [Fact]
-    public Task RefreshStillObservesGatesRosterLanguageAndSameIdModReload() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task RefreshStillObservesGatesAndRoster() => WithVault((view, shelf, _) =>
+    {
+        Assert.True(Fyp(shelf).IsLocked);
+        CoreEntitlement.IsFreeTodayProvider = key => key == "fyp";
+        view.RefreshVault();
+        Assert.True(Fyp(shelf).FreeToday);
+        Assert.False(view.FindControl<Border>("SpotVeil")!.IsVisible);
+        CoreEntitlement.HasPremiumProvider = () => true;
+        view.RefreshVault();
+        Assert.False(Fyp(shelf).FreeToday);
+        Assert.False(Fyp(shelf).IsLocked);
+        ExclusiveFeature.ArcademyDoorProvider = () => true;
+        view.RefreshVault();
+        Assert.Contains(shelf.Items.OfType<ExclusiveCardRow>(), r => r.Feature.Key == "arcademy");
+    });
+
+    [Fact]
+    public Task RefreshStillObservesLanguage() => WithVault((view, shelf, language) =>
+    {
+        var before = shelf.ItemsSource;
+        LocalizationManager.Instance.SetLanguage(language == "de" ? "en" : "de");
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotSame(before, shelf.ItemsSource);
+    });
+
+    [Fact]
+    public Task SameIdModReloadRepaints() => WithVault((view, shelf, _) =>
+    {
+        var before = shelf.ItemsSource;
+        var art = Fyp(shelf).Art;
+        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest { Id = CoreMods.ActiveModId }, null, true));
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotSame(before, shelf.ItemsSource);
+        Assert.NotNull(art);
+        Assert.NotSame(art, Fyp(shelf).Art);
+        before = shelf.ItemsSource;
+        view.RefreshVault();
+        Assert.Same(before, shelf.ItemsSource);
+    });
+
+    [Fact]
+    public Task SameIdModReloadWhileDetachedRepaintsOnNextShow() => WithVault((view, shelf, _) =>
+    {
+        var host = (Window)view.Parent!;
+        var before = shelf.ItemsSource;
+        host.Content = null;
+        Dispatcher.UIThread.RunJobs();
+        CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest { Id = CoreMods.ActiveModId }, null, true));
+        Dispatcher.UIThread.RunJobs();
+        host.Content = view;
+        Dispatcher.UIThread.RunJobs();
+        view.RefreshVault();
+        Assert.NotSame(before, shelf.ItemsSource);
+    });
+
+    /// <summary>A shown vault with every gate shut; restores the providers and language afterwards.</summary>
+    private static Task WithVault(Action<ExclusivesTabView, ItemsControl, string> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureAvalonia();
         var premium = CoreEntitlement.HasPremiumProvider;
@@ -71,34 +129,7 @@ public sealed class ExclusivesRefreshTests(ITestOutputHelper output)
         {
             host.Show();
             Dispatcher.UIThread.RunJobs();
-            var shelf = view.FindControl<ItemsControl>("ExclusivesShelf")!;
-            ExclusiveCardRow Fyp() => shelf.Items.OfType<ExclusiveCardRow>().Single(r => r.Feature.Key == "fyp");
-            Assert.True(Fyp().IsLocked);
-            CoreEntitlement.IsFreeTodayProvider = key => key == "fyp";
-            view.RefreshVault();
-            Assert.True(Fyp().FreeToday);
-            Assert.False(view.FindControl<Border>("SpotVeil")!.IsVisible);
-            CoreEntitlement.HasPremiumProvider = () => true;
-            view.RefreshVault();
-            Assert.False(Fyp().FreeToday);
-            Assert.False(Fyp().IsLocked);
-            ExclusiveFeature.ArcademyDoorProvider = () => true;
-            view.RefreshVault();
-            Assert.Contains(shelf.Items.OfType<ExclusiveCardRow>(), r => r.Feature.Key == "arcademy");
-            var before = shelf.ItemsSource;
-            LocalizationManager.Instance.SetLanguage(language == "de" ? "en" : "de");
-            Dispatcher.UIThread.RunJobs();
-            Assert.NotSame(before, shelf.ItemsSource);
-            before = shelf.ItemsSource;
-            var art = Fyp().Art;
-            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest { Id = CoreMods.ActiveModId }, null, true));
-            Dispatcher.UIThread.RunJobs();
-            Assert.NotSame(before, shelf.ItemsSource);
-            Assert.NotNull(art);
-            Assert.NotSame(art, Fyp().Art);
-            before = shelf.ItemsSource;
-            view.RefreshVault();
-            Assert.Same(before, shelf.ItemsSource);
+            body(view, view.FindControl<ItemsControl>("ExclusivesShelf")!, language);
         }
         finally
         {

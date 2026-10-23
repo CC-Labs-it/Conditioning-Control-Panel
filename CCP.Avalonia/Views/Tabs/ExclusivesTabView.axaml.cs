@@ -114,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged -= OnModChanged;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             AmbientFxCanvas.Env.MotionGateChanged -= UpdateMotion;
+            _vaultState = null;   // detached: a same-id mod reload goes unheard, so repaint on the next show
             _ambientFx.Stop();
             UpdateMotion();
         }
