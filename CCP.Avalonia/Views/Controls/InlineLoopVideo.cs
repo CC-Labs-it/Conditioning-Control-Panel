@@ -22,8 +22,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// WPF resumed a paused player. Fail-soft like WPF: no clip or no LibVLC leaves it blank.</para>
     ///
     /// <para>Only this control's own IsVisible pauses it: a hidden ANCESTOR leaves it decoding (P01).
-    /// Today it only lives in the HelpPopover, which detaches on close, so that cannot happen yet; a
-    /// host that hides a parent instead must call <see cref="Pause"/>/<see cref="Resume"/> itself.</para>
+    /// HelpPopover detaches on close; GazeMinigame removes both panes before feedback and on close.
+    /// Other hosts that hide a parent must call <see cref="Pause"/>/<see cref="Resume"/> themselves.</para>
     /// </summary>
     public sealed class InlineLoopVideo : Image
     {
@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         /// <summary>A player exists (attached, clip found, LibVLC loaded).</summary>
+        internal string? ClipPath => _path;
         internal bool HasPlayer => _player != null;
         internal bool IsPlaying => _player?.IsPlaying == true;
         internal long Time => _player?.Time ?? -1;
