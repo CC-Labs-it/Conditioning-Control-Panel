@@ -101,7 +101,8 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// One bubble's dwell: fed every <see cref="TickMs"/>. The on-target decision runs on the
+        /// One bubble's dwell: fed about every <see cref="TickMs"/>, credited by the real time between
+        /// ticks (TickStep). The on-target decision runs on the
         /// ROLLING MEAN of the (locked) gaze inside the dwell ellipse, so one wobble frame outside does
         /// not drop the target; leaving decays the dwell instead of resetting it. Residual math uses the
         /// pre-lock point so the lock-on never flatters the measurement.
@@ -114,6 +115,9 @@ namespace ConditioningControlPanel.Services
             private readonly Queue<(double X, double Y)> _avg = new();
 
             public Dwell(double cx, double cy) { _cx = cx; _cy = cy; }
+
+            /// <summary>The last tick's clock (elapsed ms since the bubble showed).</summary>
+            private long _lastMs;
 
             public double DwellMs { get; private set; }
             public double Progress => DwellMs / DwellNeededMs;
@@ -138,8 +142,11 @@ namespace ConditioningControlPanel.Services
                     double ey = (_avg.Average(q => q.Y) - _cy) / PopRadiusY;
                     onTarget = Math.Sqrt(ex * ex + ey * ey);
                 }
-                if (onTarget <= 1.0) { DwellMs += TickMs; _inside.Add(raw); }
-                else DwellMs = Math.Max(0, DwellMs - TickMs);
+                // Real time since the last lap, not TickMs: Task.Delay(33) lands every ~47 ms or later,
+                // so counting laps made the 700 ms dwell take ~1 s of the timeout (main a4a5aa43b).
+                var stepMs = Services.Timing.TickStep.Ms(ref _lastMs, nowMs, Services.Timing.TickStep.DwellMaxStepMs);
+                if (onTarget <= 1.0) { DwellMs += stepMs; _inside.Add(raw); }
+                else DwellMs = Math.Max(0, DwellMs - stepMs);
             }
 
             /// <summary>The recal sample of a popped bubble: the median pre-lock point while on it.</summary>

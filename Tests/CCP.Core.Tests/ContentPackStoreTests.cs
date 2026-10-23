@@ -103,6 +103,22 @@ public sealed class ContentPackStoreTests : IDisposable
         Assert.Equal(new[] { "p1" }, store.GetActivePackIds());
     }
 
+    /// <summary>PACK DECRYPT TRAP (ccp-bugs #1441/#1442): a temp decrypt (a pack video) streams to disk
+    /// through PackEncryptionService.DecryptFileToFile, never a whole-file byte array. The round trip
+    /// below runs on that default path.</summary>
+    [Fact]
+    public void DecryptToTemp_StreamsToDisk_NeverTheWholeFileInMemory()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "CCP.Core"))) dir = dir.Parent;
+        var src = File.ReadAllText(Path.Combine(dir!.FullName, "CCP.Core", "Services", "Content", "ContentPackStore.cs"));
+        var at = src.IndexOf("public string? GetPackFileTempPath(", StringComparison.Ordinal);
+        var body = src.Substring(at, src.IndexOf("public void DeleteTempFile(", at, StringComparison.Ordinal) - at);
+        Assert.Contains("_decryptFileToFile(encrypted, temp);", body);
+        Assert.DoesNotContain("WriteAllBytes", body);
+        Assert.Contains("? PackEncryptionService.DecryptFileToFile", src);
+    }
+
     [Fact]
     public void DecryptToTemp_IsAFreshPathEachTime_ButOneSourceIdentity()
     {

@@ -125,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         private const int GraceMs = 1000;
         private double _correctMs;
         private double _wrongMs;
+        private DateTime _lastRoundTickUtc; // the dwell counts real time between ticks (TickStep)
         private GameSide _currentSide = GameSide.None;
         private bool _faceLost;
         private DispatcherTimer? _roundTicker;
@@ -1054,6 +1055,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         private void StartRoundTicker()
         {
             _roundTicker?.Stop();
+            _lastRoundTickUtc = Clock.GetUtcNow().UtcDateTime;
             _roundTicker = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
             _roundTicker.Tick += RoundTicker_Tick;
             _roundTicker.Start();
@@ -1068,6 +1070,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         internal void RoundTicker_Tick(object? sender, EventArgs e)
         {
             if (!_gameRunning) return;
+            // The real time since the last tick, not a fixed 50 ms: this timer lands every ~62 ms or
+            // later (two videos play), so counting ticks made the 3 s pass take ~3.75 s of a 4 s
+            // window (main a4a5aa43b).
+            var stepMs = ConditioningControlPanel.Services.Timing.TickStep.Ms(ref _lastRoundTickUtc,
+                Clock.GetUtcNow().UtcDateTime, ConditioningControlPanel.Services.Timing.TickStep.DwellMaxStepMs);
             // Round-start grace: pause BOTH gaze accumulation and the duration timeout. The
             // duration is the visible-and-decisional window — the ~1s warm-up shouldn't eat
             // into it.
@@ -1080,12 +1087,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
 
             // Accumulate time on whichever side the gaze is currently on. Pause both
             // accumulators if the face is lost — camera glitches shouldn't penalize the user.
-            const double tickMs = 50;
             bool tickedWrong = false;
             if (!_faceLost)
             {
-                if (_currentSide == spec.CorrectSide) _correctMs += tickMs;
-                else if (_currentSide != GameSide.None) { _wrongMs += tickMs; tickedWrong = true; }
+                if (_currentSide == spec.CorrectSide) _correctMs += stepMs;
+                else if (_currentSide != GameSide.None) { _wrongMs += stepMs; tickedWrong = true; }
             }
 
             // Decision thresholds.
