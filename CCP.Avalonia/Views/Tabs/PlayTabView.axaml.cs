@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // The hero plates, and the repaint that keeps them honest across a mod switch. Not
             // deferred to attach: a card that draws its scrim first and its art a frame later flickers.
             RefreshHeroArt();
+            RefreshWebcamStatus();
         }
 
         // Subscribed ONCE PER ATTACH, off on every detach (P41). WPF repaints the wall on arrival
@@ -54,6 +55,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
+            RefreshWebcamStatus();
             CoreMods.ModChanged += OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged += OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged += OnIntakePassStateChanged;
@@ -62,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             CoreMods.ModChanged -= OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged -= OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged -= OnIntakePassStateChanged;
@@ -73,6 +77,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnPropertyChanged(change);
             if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null) RefreshPlayCards();
+        }
+
+        internal void RefreshWebcamStatus()
+        {
+            var state = Platform.WebcamTracker.Instance.State;
+            WebcamStatusPresentation.Paint(this, "WebcamStatusChipPlayDot", "TxtWebcamStatusChipPlay", state);
+            bool live = WebcamStatus.IsLive(state);
+            PlayGazeCard.Opacity = PlayFocusCard.Opacity = live ? 1.0 : 0.62;
+            PlayGazeNeedsTracker.IsVisible = PlayFocusNeedsTracker.IsVisible = !live;
         }
 
         // The pass is spent (or entitlement lands) off the UI thread.

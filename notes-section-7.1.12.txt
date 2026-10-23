@@ -1,0 +1,18 @@
+NEW IN 7.1.12
+- mandatory videos have a small mute button and a close X in the top right. the X is hidden on strict videos and in Lockdown, and neither shows during a Down the Rabbit Hole run.
+- floating videos open with a short animation, and only once the picture is ready: no more black or empty frame. they no longer clear your flashes, and the "via" card now shows over the end of the clip instead of after it.
+- online media meter: a pill in the title bar and a card on the Assets page show how much of today's online media you have used. it is counted per account, and a new ? button explains how the daily share and the cache work.
+- online pictures and clips are kept on your PC once seen, so watching them again costs nothing from your daily share.
+- companion: a new switch keeps idle lines silent while the engine is off. on by default. the bubble still shows.
+
+FIXES IN 7.1.12
+- panic: nothing comes back on its own after a panic. a remote controller can no longer resume or restart your session, Trigger Mode stays quiet, your companion stays quiet, and Lockdown no longer restarts the engine. pressing START yourself brings everything back and resumes your session.
+- GIFs keep animating round after round in flashes, and GIFs saved for later stay animated instead of turning into stills.
+- Escape keeps working in every game: it pauses Arcademy, Goon, the Back Room and Intake, and pause cards in chess and Breakout resume properly.
+- capped clips start at a random point instead of always at the beginning.
+- floating mandatory videos no longer overlap now and then.
+- Down the Rabbit Hole: a clip on the tube's stage now leaves with the descent.
+- Circe's Tab: the Locktober banner and the lock calendar agree on your counted days, and they clear when you sign out or switch accounts.
+- the Sign in button at the top right opens the sign-in dialog.
+- the dashboard logo has rounded corners, and the patron achievements note says what is locked.
+- smaller fixes: sparkle cleanup, remote video stop, gaze monitors, Italian wording.

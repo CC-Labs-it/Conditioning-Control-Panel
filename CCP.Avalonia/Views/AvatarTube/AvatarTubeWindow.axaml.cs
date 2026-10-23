@@ -123,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // actually loaded never starts the timer, which is the WPF rule verbatim.
         private readonly DispatcherTimer _poseTimer;
         private int _currentPoseIndex;
-        private readonly int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
+        private int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
         private Bitmap?[] _avatarPoses = new Bitmap?[4];
 
         // The bubble's auto-hide. One timer, replaced per bubble; the hover hold re-arms it at 1s.
@@ -559,6 +559,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         /// <summary>Gets the current avatar set number</summary>
         public int CurrentAvatarSet => _currentAvatarSet;
+
+        /// <summary>The picker card's look label for a set: the companion's name or the legacy title,
+        /// mod-aware and NOT upper-cased (WPF AvatarTubeWindow.Avatar.cs:940-941). The tube's own
+        /// caption (UpdateTitleDisplay) upper-cases the companion branch of this.</summary>
+        internal static string AvatarSetTitle(int setNumber)
+        {
+            if (CompanionForAvatarSet(setNumber) is { } companionId)
+                return CoreMods.MakeModAware(CompanionDefinition.GetById(companionId)
+                    .GetDisplayName(CoreSettings.Current.SlutModeEnabled));
+            return CoreMods.MakeModAware(Loc.Get(AvatarTitleKeys[Math.Clamp(setNumber - 1, 0, AvatarTitleKeys.Length - 1)]));
+        }
 
         /// <summary>
         /// True while ANY speech bubble (AI or ordinary "Preset" bark/chatter) is currently being
@@ -1092,9 +1103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var companionId = CompanionForAvatarSet(_currentAvatarSet);
             if (companionId.HasValue)
             {
-                var def = CompanionDefinition.GetById(companionId.Value);
-                var name = def.GetDisplayName(CoreSettings.Current.SlutModeEnabled);
-                _txtAvatarTitle.Text = CoreMods.MakeModAware(name).ToUpperInvariant();
+                _txtAvatarTitle.Text = AvatarSetTitle(_currentAvatarSet).ToUpperInvariant();
 
                 CoreSettings.Current.CompanionProgressData.TryGetValue((int)companionId.Value, out var progress);
                 _txtAvatarLevel.IsVisible = true;
@@ -1104,8 +1113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 return;
             }
 
-            int titleIndex = Math.Clamp(_currentAvatarSet - 1, 0, AvatarTitleKeys.Length - 1);
-            _txtAvatarTitle.Text = CoreMods.MakeModAware(Loc.Get(AvatarTitleKeys[titleIndex]));
+            _txtAvatarTitle.Text = AvatarSetTitle(_currentAvatarSet);
             // Sets 1-2 are generic sprites: showing a level there reads as a PERSONA level and is
             // the confusion WPF hides it for.
             _txtAvatarLevel.IsVisible = false;
@@ -1124,6 +1132,27 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             "avatar_title_platinum_puppet",       // Set 6
             "avatar_title_bambi_cow",             // Set 7
         };
+
+        /// <summary>WPF SwitchToCompanionAvatar (AvatarTubeWindow.Avatar.cs:819) + the static branch of
+        /// SwitchToAvatarSet (:395): a roster switch puts the companion's set on the tube and saves it,
+        /// globally and per mod. The companion itself is already switched by the caller, so the
+        /// set->companion coupling is not re-fired. All sets are unlocked (WPF IsAvatarSetUnlocked).
+        /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
+        public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
+        {
+            // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
+            // so the mapping lives once. No set -> set 1 (BambiSprite's default).
+            int set = 1;
+            for (int n = 3; n <= 7; n++)
+                if (CompanionForAvatarSet(n) == companionId) { set = n; break; }
+            _currentAvatarSet = set;
+            var s = CoreSettings.Current;
+            s.SelectedAvatarSet = set;
+            ConditioningControlPanel.Services.Companion.ModAvatarLooks.Store(s.ModAvatarSet, CoreMods.ActiveModId, set);
+            CoreSettings.Save();
+            _poseTimer.Stop();
+            ApplyAvatarSet();
+        });
 
         /// <summary>The persona an avatar set belongs to; null for sets 1-2, which are generic
         /// sprites with no companion behind them. From AvatarTubeWindow.Avatar.cs.</summary>

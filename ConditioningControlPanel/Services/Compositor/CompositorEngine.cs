@@ -269,7 +269,10 @@ public class CompositorEngine : IDisposable
 
         foreach (var layer in layers)
         {
-            bool active = layer.IsActive;
+            // Gentle visuals: a hidden layer keeps drawing (IsRendering) while it fades away, and
+            // a moving fade is a repaint. Off: no fade, IsRendering == IsActive.
+            bool fadeMoved = layer.AdvanceVisibility(delta);
+            bool active = layer.IsRendering;
             if (_lastActiveState.TryGetValue(layer, out var was) && was != active)
             {
                 _lastActiveState[layer] = active;
@@ -305,7 +308,7 @@ public class CompositorEngine : IDisposable
             }
 
             // Read Dirty AFTER Update so this frame's advance/opacity change counts.
-            if (layer.Dirty) { if (excluded) anyExcludedDirty = true; else anyMainDirty = true; }
+            if (layer.Dirty || fadeMoved) { if (excluded) anyExcludedDirty = true; else anyMainDirty = true; }
         }
 
         var nowUtc = DateTime.UtcNow;
@@ -322,7 +325,7 @@ public class CompositorEngine : IDisposable
         // an inactive layer re-marks itself dirty when it next activates.
         foreach (var layer in layers)
         {
-            if (!layer.IsActive) continue;
+            if (!layer.IsRendering) continue;
             try { layer.ClearDirty(); }
             catch (Exception ex) { App.Logger?.Error(ex, "CompositorEngine: ClearDirty failed ({Layer})", layer.GetType().Name); }
         }
@@ -492,10 +495,20 @@ public class CompositorEngine : IDisposable
     {
         foreach (var layer in layers) // already z-sorted; lower draws first
         {
-            if (!layer.IsActive || layer.ExcludeFromCapture != excludedSurface) continue;
+            if (!layer.IsRendering || layer.ExcludeFromCapture != excludedSurface) continue;
             // Per-monitor opt-out (e.g. fullscreen fill layers honoring DualMonitorEnabled). The
             // host exists on every screen; a gated-out host just records an empty (transparent) frame.
             if (!layer.ShouldRenderOnScreen(screenBoundsPx)) continue;
+            // Gentle visuals: a fading layer draws through one alpha layer. Off: alpha is 1, so
+            // there is no SaveLayer and the draw is exactly today's.
+            double fade = layer.VisibilityAlpha;
+            if (fade <= 0) continue;
+            int fadeRestore = -1;
+            if (fade < 1)
+            {
+                using var fadePaint = new SKPaint { Color = SKColors.White.WithAlpha((byte)Math.Round(fade * 255)) };
+                fadeRestore = canvas.SaveLayer(fadePaint);
+            }
             try
             {
                 if (layer.WorldSpacePx)
@@ -522,6 +535,7 @@ public class CompositorEngine : IDisposable
             {
                 App.Logger?.Error(ex, "CompositorEngine: layer Render failed ({Layer})", layer.GetType().Name);
             }
+            if (fadeRestore >= 0) canvas.RestoreToCount(fadeRestore);
         }
     }
 

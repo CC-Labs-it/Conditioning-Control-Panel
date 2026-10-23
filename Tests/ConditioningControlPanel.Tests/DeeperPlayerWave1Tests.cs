@@ -37,6 +37,19 @@ public class DeeperPlayerWave1Tests
         Assert.Equal(expected, EnhancementAudioPlayer.ClampVolume(set));
     }
 
+    // Desk run 2026-10-13: an MP3 stops 1055 bytes short of the reported length, so the old
+    // 1024-byte margin never saw the end and the playlist never moved to track two.
+    [Theory]
+    [InlineData(false, 3530976L, 3532031L, 88200, true)]   // the measured MP3: clean stop, 1055 short
+    [InlineData(false, 100L, 3532031L, 88200, true)]       // a clean stop is the end wherever it lands
+    [InlineData(true, 3530976L, 3532031L, 88200, true)]    // error inside the last half second
+    [InlineData(true, 1000000L, 3532031L, 88200, false)]   // device pulled mid-track
+    [InlineData(false, -1L, 0L, 0, false)]                 // nothing loaded
+    public void NaturalEnd_IsACleanStop_NotAByteCount(bool hadError, long position, long length, int bytesPerSecond, bool expected)
+    {
+        Assert.Equal(expected, EnhancementAudioPlayer.IsNaturalEnd(hadError, position, length, bytesPerSecond));
+    }
+
     [Fact]
     public void Volume_SurvivesStop()
     {

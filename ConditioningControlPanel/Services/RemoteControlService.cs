@@ -343,7 +343,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!IsActive) return;
             var unifiedId = App.UnifiedUserId;
-            CleanupSession();
+            CleanupSession(RemoteEndCause.LeashCut);
             App.Logger?.Information("[RemoteControl] Session ended locally (leash cut)");
             if (string.IsNullOrEmpty(unifiedId)) return;
             _ = Task.Run(async () =>
@@ -360,7 +360,7 @@ namespace ConditioningControlPanel.Services
             });
         }
 
-        private void CleanupSession()
+        private void CleanupSession(RemoteEndCause cause = RemoteEndCause.SessionEnded)
         {
             _pollTimer?.Stop();
             _pollTimer = null;
@@ -385,7 +385,7 @@ namespace ConditioningControlPanel.Services
             // Stop all effects that were triggered by the remote controller. force:false — the
             // remote session ending is not a controller verb, so a session the SUBJECT started
             // is left alone (#878 followup).
-            DispatcherHelper.RunOnUISync(() => StopAllRemoteEffects(force: false));
+            DispatcherHelper.RunOnUISync(() => StopAllRemoteEffects(cause));
 
             // Reset overlay level bypass when remote session ends
             if (App.Overlay != null)
@@ -939,8 +939,11 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Tears down everything a controller could have started.
         /// </summary>
-        /// <param name="force">
-        /// True only for <c>trigger_panic</c> — an explicit controller verb that means "stop
+        /// <param name="cause">
+        /// SessionEnded over a run the subject started themselves stops nothing of that run
+        /// (<see cref="RemoteEndRule"/>, ccp-bugs #1405); a leash cut keeps the full teardown.
+        /// Panic is the old <c>force</c>:
+        /// true only for <c>trigger_panic</c> — an explicit controller verb that means "stop
         /// EVERYTHING", so it takes the subject's session down no matter who started it.
         /// False for the CleanupSession path, where the remote session merely ended (server-side
         /// expiry, 3× 401, or the subject unticking Remote Control). None of those is a
@@ -949,9 +952,11 @@ namespace ConditioningControlPanel.Services
         /// stopped, TrackSessionAbandoned'd and its bonus XP forfeited the moment the server
         /// expired the unused remote session.
         /// </param>
-        private void StopAllRemoteEffects(bool force)
+        private void StopAllRemoteEffects(RemoteEndCause cause)
         {
+            var force = cause == RemoteEndCause.Panic;
             if (force) MainWindow.CancelPendingAi();   // a remote panic cancels pending AI follow-ups too
+            if (LeavesLocalRun(cause)) { ReleaseRemoteHoldings(); return; }
             try
             {
                 App.Logger?.Information("[RemoteControl] Stopping all remote effects (force={Force})", force);
@@ -1104,6 +1109,35 @@ namespace ConditioningControlPanel.Services
             App.Logger?.Information("[RemoteControl] Controller left: panic key back on, controller's strict lock released");
         }
 
+        private bool LeavesLocalRun(RemoteEndCause cause)
+            => RemoteEndRule.LeavesLocalRun(cause,
+                MainWindowRef?.IsEngineRunning == true,
+                MainWindowRef?.IsSessionRemoteStarted == true);
+
+        /// <summary>
+        /// The remote session ended over a run the subject started for themselves (ccp-bugs #1405).
+        /// Hands back only what the controller holds and leaves the engine, its services, its
+        /// overlays, its audio and its queue exactly as they are. What the controller changed in
+        /// the run stays as the controller left it, the same as the default on a disconnect.
+        /// </summary>
+        private void ReleaseRemoteHoldings()
+        {
+            try
+            {
+                App.Logger?.Information("[RemoteControl] Remote ended over the subject's own run - leaving it running");
+                StopRemoteHaptics();
+                MainWindowRef?.StopBrowserVideoFromRemote();
+                if (_remoteTurnedOnBrainDrain) SetRemoteBrainDrain(false);
+                ReleaseRemoteSafetyState();
+                MainWindowRef?.RestoreFromTrayForRemote();
+                MainWindowRef?.ShowAvatarTube();
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Error(ex, "[RemoteControl] Failed to release what the controller held");
+            }
+        }
+
         private void HandleControllerDisconnectCleanup()
         {
             ReleaseRemoteSafetyState();
@@ -1113,6 +1147,7 @@ namespace ConditioningControlPanel.Services
 
         private void StopRemoteTriggeredEffects()
         {
+            if (LeavesLocalRun(RemoteEndCause.SessionEnded)) { ReleaseRemoteHoldings(); return; }
             try
             {
                 App.Logger?.Information("[RemoteControl] Controller disconnected — cleaning up remote effects only");
@@ -1365,6 +1400,7 @@ namespace ConditioningControlPanel.Services
 
                         case "stop_video":
                             App.Video?.Stop();
+                            MainWindowRef?.StopBrowserVideoFromRemote();
                             break;
 
                         case "play_hypnotube":
@@ -1479,6 +1515,13 @@ namespace ConditioningControlPanel.Services
                             break;
 
                         case "start_session":
+                            // A new session would stop the run a LOCAL panic paused (completed:false, its XP
+                            // lost) and restart everything: refused, like resume_session (PanicAftermath).
+                            if (MainWindowRef?.LocalPanicHoldsSession == true)
+                            {
+                                ReportCommandRefused(action, "panic", "Not allowed");
+                                break;
+                            }
                             // Look up requested session by ID, fall back to generic
                             var sessionId = parameters?["session_id"]?.ToString();
                             Models.Session? session = null;
@@ -1539,8 +1582,9 @@ namespace ConditioningControlPanel.Services
                             break;
 
                         case "resume_session":
-                            MainWindowRef
-                                ?.ResumeSessionFromRemote();
+                            // A session a local panic paused stays paused: say so, not a silent ok.
+                            if (MainWindowRef?.ResumeSessionFromRemote() == false)
+                                ReportCommandRefused(action, "panic", "Not allowed");
                             break;
 
                         case "stop_session":
@@ -1594,7 +1638,7 @@ namespace ConditioningControlPanel.Services
                         case "trigger_panic":
                             // Explicit "stop everything" verb — the one path that is allowed to
                             // end a session the subject started for themselves.
-                            StopAllRemoteEffects(force: true);
+                            StopAllRemoteEffects(RemoteEndCause.Panic);
                             break;
 
                         default:
