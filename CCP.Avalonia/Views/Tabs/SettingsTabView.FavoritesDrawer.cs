@@ -185,7 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         };
 
         /// <summary>Motes, glow breath and twinkle run only while Home is attached AND visible (P01).</summary>
-        private void SyncFavoritesDrawerFx()
+        internal void SyncFavoritesDrawerFx()
         {
             if (!IsVisible || VisualRoot == null || !_hostShown) { StopFavoritesDrawerFx(); return; }
             try

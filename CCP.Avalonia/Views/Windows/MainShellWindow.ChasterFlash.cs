@@ -19,6 +19,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private ChasterBookedPop? _chasterPop;
         private long? _chasterCapShownMs;
 
+        /// <summary>Clock for the coalescing window and the cap throttle; tests step it (P08).</summary>
+        internal static TimeProvider ChasterClock = TimeProvider.System;
+
+        private static long ChasterNowMs() => ChasterClock.GetElapsedTime(0).Ticks / TimeSpan.TicksPerMillisecond;
+
         /// <summary>Wire the figure to the service App built (WPF calls this from the ctor).</summary>
         internal void InitializeChasterFlash(ChasterService chaster)
         {
@@ -44,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var (figure, isNew) = BookedFlashPlan.Merge(_chasterFigure, seconds, eventId, Environment.TickCount64);
+                var (figure, isNew) = BookedFlashPlan.Merge(_chasterFigure, seconds, eventId, ChasterNowMs());
                 _chasterFigure = figure;
                 var level = AmbientFxCanvas.Env.Level;
                 var look = BookedFlashPlan.For(figure, level);
@@ -86,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                var now = Environment.TickCount64;
+                var now = ChasterNowMs();
                 if (CapNotice.Throttled(_chasterCapShownMs, now)) return;
                 if (BookedPopLayout.ResolveOrigin(Valid(causePx), ChasterBookedPop.Cursor()) is not { } at) return;
                 var motion = AmbientFxCanvas.Env.Level;

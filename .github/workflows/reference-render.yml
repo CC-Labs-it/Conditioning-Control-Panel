@@ -7,7 +7,7 @@ name: reference-render
 on:
   workflow_dispatch:
   push:
-    branches: ['avalonia-port/**']
+    branches: ['avalonia-port/**', '!avalonia-port/cloud-**', '!avalonia-port/gate-**']
     paths:
       - 'ConditioningControlPanel/**'
       - 'CCP.Avalonia/**'

@@ -29,6 +29,10 @@ public sealed class BackRoomBridge
     public const int ForceCloseMs = 800;
     public const int MinReqIdLength = 16;
 
+    /// <summary>Head hook for the page's <c>funnel</c> message (WPF Funnel.FunnelPageMessage.Handle:
+    /// counted, a plan cta opens that plan's checkout; the bool is "may open"). Unseeded: dropped.</summary>
+    public static volatile Action<JObject, bool>? FunnelMessage;
+
     /// <summary>A little past the relay's own 5 s budget and under the page's 6 s one, so the host
     /// always answers before the page gives up, even if a relay implementation hangs.</summary>
     public static readonly TimeSpan ReplyGuard = TimeSpan.FromMilliseconds(5500);
@@ -237,6 +241,12 @@ public sealed class BackRoomBridge
                 // 10.14: the room's Options. Anything but the three known shapes is dropped.
                 if (!IsClosing && ReadRoomOption(m) is { } option) Guard(() => _d.SetOption?.Invoke(option));
                 else _d.Log?.Invoke("room-option dropped");
+                break;
+            case "funnel":   // WPF Funnel.FunnelPageMessage.Type
+                // Contract C10 end cards (Breakout demo end, bank cash-out): counted, and a
+                // cta_clicked naming a plan opens that plan's checkout - never while closing or
+                // suspended. The page never supplies the url.
+                FunnelMessage?.Invoke(m, !Quiet);
                 break;
             default:
                 _d.Log?.Invoke("unhandled message '" + type + "'");
