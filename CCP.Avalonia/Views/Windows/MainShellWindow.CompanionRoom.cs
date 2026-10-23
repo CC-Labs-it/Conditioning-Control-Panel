@@ -99,17 +99,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// Mute/unmute her voice - the old ChkMuteAvatar_Changed body.
         ///
-        /// <para>The setting is written and persisted; the live
-        /// <c>AvatarTubeWindow.SetMuteAvatar</c> call is dropped because that method is in the
-        /// tube's Speech.cs partial, which did not cross. Nothing on this head speaks yet, so the
-        /// stored value is the whole of the behaviour there is to have - and it is the value the
-        /// speech pipeline will read the moment it lands.</para>
+        /// <para>The setting is written and persisted, then the live tube is told (WPF
+        /// CompanionRoom.cs:99 <c>SetMuteAvatar</c>). Called after the write, so it also drops a
+        /// quiz's temporary mute override instead of re-arming it.</para>
         /// </summary>
         internal void SetAvatarMuted(bool muted)
         {
             if (_roomLoading) return;
             CoreSettings.Current.AvatarMuted = muted;
             CoreSettings.Save();
+            _avatarTubeWindow?.SetMuteAvatar(muted);
         }
 
         // =====================================================================================

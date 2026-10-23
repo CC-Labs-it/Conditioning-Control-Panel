@@ -25,7 +25,8 @@
 //                            CompanionTabView re-publishes none of the room's cell controls
 //                            (MainShellWindow.CompanionTab.cs says why), so there is no accessor
 //                            path to it. A future wiring reaches it through the hero card.
-//   the mute half         - AvatarTubeWindow.SetMuteAvatar and Giggle are in the WPF Speech.cs
+//   the mute half         - AvatarTubeWindow.SetMuteAvatar now exists (in-memory override,
+//                            avatar-mute-quiz); Giggle is still in the WPF Speech.cs
 //                            partial that did not cross. Detach/Attach did (the tube's
 //                            Windowing.cs partial), and OnShellStateForTube below drives them.
 //
