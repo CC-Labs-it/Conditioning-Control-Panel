@@ -38,7 +38,8 @@ internal sealed class DeeperPageBridge : IDisposable
     }
 
     // ponytail: no document-created hook or native zoom. Reapply CSS zoom and install listeners
-    // after each navigation. WPF's click-pair + dblclick exit also survives lost HTML5 state.
+    // after each navigation. WPF's native dblclick exit (no click-pair detector, WPF :576) also
+    // survives lost HTML5 state.
     internal static string Script(double zoom) =>
         "(function(){document.documentElement.style.zoom='" + zoom.ToString("0.##", CultureInfo.InvariantCulture) + "';"
         + "if(window.__ccpDeeperBridge)return;window.__ccpDeeperBridge=1;"
@@ -49,8 +50,7 @@ internal sealed class DeeperPageBridge : IDisposable
         + "document.addEventListener('fullscreenchange',fs);document.addEventListener('webkitfullscreenchange',fs);"
         + "var exit=function(){if(!document.fullscreenElement&&!document.webkitFullscreenElement&&!window._ccpForcedFs)return;"
         + "try{if(document.exitFullscreen)document.exitFullscreen();else if(document.webkitExitFullscreen)document.webkitExitFullscreen();}catch(e){}"
-        + "post('" + ExitFullscreen + "');};var last=0;"
-        + "document.addEventListener('click',function(e){if(e.button!==0)return;var now=Date.now();if(now-last<350){last=0;exit();}else last=now;},true);"
+        + "post('" + ExitFullscreen + "');};"
         + "document.addEventListener('dblclick',exit,true);"
         + "document.addEventListener('keydown',function(e){if(e.key==='Escape'||e.key==='F11')exit();},true);fs();})()";
 

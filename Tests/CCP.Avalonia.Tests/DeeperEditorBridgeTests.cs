@@ -33,6 +33,9 @@ public sealed class DeeperEditorBridgeTests
         host.OnWebMessage("unrelated");
         Assert.Equal(1.1, bridge.Zoom, 9);
         Assert.Contains("style.zoom='1.1'", scripts[^1]);
+        // WPF :576 exits on the native dblclick only; a click-pair detector would fire on scrub + play.
+        Assert.Contains("addEventListener('dblclick'", scripts[^1]);
+        Assert.DoesNotContain("addEventListener('click'", scripts[^1]);
         host.OnWebMessage("ccp_fullscreen_on");
         host.OnWebMessage("ccp_fullscreen_on");
         Assert.True(bridge.PageFullscreen);

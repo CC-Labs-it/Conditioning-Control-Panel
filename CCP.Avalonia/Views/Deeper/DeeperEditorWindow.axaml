@@ -580,6 +580,12 @@
                                     <Line x:Name="PlayheadLine" StartPoint="0,0" EndPoint="0,0"
                                           Stroke="{DynamicResource DeeperAccentBrush}" StrokeThickness="2"
                                           ZIndex="100"/>
+                                    <!-- Hover time readout (m:ss.ff), follows the cursor; see UpdateHoverTimeTip -->
+                                    <Border x:Name="HoverTimeTip" IsVisible="False" IsHitTestVisible="False"
+                                            ZIndex="200" Background="#D0101020" CornerRadius="3" Padding="4,1">
+                                        <TextBlock x:Name="TxtHoverTime" Foreground="{DynamicResource TextLightBrush}"
+                                                   FontSize="10" FontFamily="Consolas, Courier New, monospace"/>
+                                    </Border>
                                 </Canvas>
                             </ScrollViewer>
                         </Grid>

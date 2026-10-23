@@ -295,6 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // -- Timeline canvas + scroller
             TimelineCanvas.PointerPressed += TimelineCanvas_PointerPressed;
             TimelineCanvas.PointerMoved += TimelineCanvas_PointerMoved;
+            TimelineCanvas.PointerExited += (_, _) => HoverTimeTip.IsVisible = false;
             TimelineCanvas.PointerReleased += TimelineCanvas_PointerReleased;
             TimelineCanvas.PointerCaptureLost += TimelineCanvas_PointerCaptureLost;
             TimelineCanvas.SizeChanged += TimelineCanvas_SizeChanged;
@@ -1307,6 +1308,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void TimelineCanvas_PointerMoved(object? sender, PointerEventArgs e)
         {
+            UpdateHoverTimeTip(e);
             if (_dragMode == DragMode.RubberBand)
             {
                 UpdateRubberBand(e.GetPosition(TimelineCanvas));
@@ -1531,6 +1533,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             var w = TimelineCanvas.Bounds.Width;
             if (w <= 0) return;
             SeekToFraction(pt.X / w);
+        }
+
+        // Small m:ss.ff readout that trails the cursor over the timeline (WPF UpdateHoverTimeTip :1793).
+        private void UpdateHoverTimeTip(PointerEventArgs e)
+        {
+            if (_totalSeconds <= 0) { HoverTimeTip.IsVisible = false; return; }
+            var pt = e.GetPosition(TimelineCanvas);
+            TxtHoverTime.Text = FormatHoverTime(MouseToSeconds(e));
+            HoverTimeTip.IsVisible = true;
+            double x = pt.X + 12;
+            double tipW = HoverTimeTip.Bounds.Width;
+            if (tipW > 0 && x + tipW > TimelineCanvas.Bounds.Width) x = pt.X - tipW - 4;
+            Canvas.SetLeft(HoverTimeTip, Math.Max(0, x));
+            Canvas.SetTop(HoverTimeTip, RulerStripHeight + 2);
         }
 
         private double MouseToSeconds(PointerEventArgs e)
@@ -2244,7 +2260,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void MarkDirty()
         {
             if (_suppressDirty) return;
-            _isDirty = true;
+            if (!_isDirty)
+            {
+                _isDirty = true;
+                ApplyWindowTitle();
+            }
             TxtDirty.IsVisible = true;
             // Lane counts piggyback here (cheap) so the chrome stays in sync with any
             // add/remove/edit that touches the data model.
@@ -2642,12 +2662,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void MenuClose_Click(object? sender, RoutedEventArgs e) => Close();
 
+        // OS window title carries the unsaved marker so the taskbar / Alt+Tab shows it (WPF :4641).
+        private void ApplyWindowTitle()
+        {
+            var name = string.IsNullOrEmpty(_enhancement.Metadata.Name)
+                ? Loc.Get("deeper_editor_untitled") : _enhancement.Metadata.Name;
+            Title = $"Deeper - {name}{(_isDirty ? "*" : "")}";
+        }
+
         private void UpdateTitle()
         {
             var name = string.IsNullOrEmpty(_enhancement.Metadata.Name)
                 ? Loc.Get("deeper_editor_untitled") : _enhancement.Metadata.Name;
             TxtTitle.Text = name;
-            Title = $"Deeper — {name}";
+            ApplyWindowTitle();
             // Linked-files strip shows the file path; keep it in sync.
             RefreshLinkedFilesUi();
             // Metadata drawer subtitle ("Metadata · {name}") shown when collapsed.

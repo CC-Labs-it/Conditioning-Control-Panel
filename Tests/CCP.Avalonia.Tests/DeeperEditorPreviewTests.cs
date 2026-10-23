@@ -118,6 +118,38 @@ public sealed class DeeperEditorPreviewTests
     });
 
     [Fact]
+    public void TitleCarriesTheDirtyMarkerAndTheTimelineShowsAHoverTime() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var editor = new DeeperEditorWindow(); // sample project, 180 s timeline
+        try
+        {
+            editor.Width = 1400; editor.Height = 900;
+            editor.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.False(editor.Title!.EndsWith('*'));
+            Assert.StartsWith("Deeper - ", editor.Title);
+            Invoke(editor, "MarkDirty"); // every edit funnels through MarkDirty (WPF :4307)
+            Assert.EndsWith("*", editor.Title);
+
+            editor.UpdateLayout();
+            var canvas = editor.TimelineCanvas;
+            double x = editor.TimelineScroll.Bounds.Width / 2; // visible part, scroll offset 0
+            var inside = canvas.TranslatePoint(new Point(x, 30), editor)!.Value;
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick(); // hit testing reads the last rendered frame
+            editor.MouseMove(inside);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(editor.HoverTimeTip.IsVisible);
+            var parts = editor.TxtHoverTime.Text!.Split(':'); // m:ss.ff
+            double shown = int.Parse(parts[0]) * 60 + double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+            Assert.InRange(shown, x / canvas.Bounds.Width * 180 - 0.02, x / canvas.Bounds.Width * 180 + 0.01);
+            editor.MouseMove(new Point(2, 2));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(editor.HoverTimeTip.IsVisible);
+        }
+        finally { editor.ForceClose(); }
+    });
+
+    [Fact]
     public void EditorUsesSeparateWindowsProfileBeforeNativeAttachment() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
