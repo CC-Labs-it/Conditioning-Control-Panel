@@ -15,7 +15,7 @@
 //   ApplyXpMeniscusPulse), PopLevelChip, the level-up burst (FireBurstAt) and THE BANK hold
 //   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
 //   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
-//   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
+//   (BtnStart_Click and the settings-save half are stubs).
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
 
@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 FlashLevelUp(); UpdateLevelDisplay();
                 Platform.OsNotifications.Show(Loc.Get("toast_level_up_title"), Loc.GetF("toast_level_up_body", level));
+                PlayLevelUpSound();
             });
             Action<Models.CompanionId, int> companionLevelUp = (id, level) => Dispatcher.UIThread.Post(() => NotifyCompanionLevelUp(id, level));
             ProgressionBank.Awarded += awarded;
@@ -110,7 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OnCompanionLevelUp (MainWindow.Companion.cs:48): an OS notification at max level and every
         /// tenth level, with the mod-aware companion name (#325). Literal English titles, as WPF.
-        /// ponytail: the milestone sound and companion cards refresh (MainWindow.Companion.cs:74) are not here.</summary>
+        /// ponytail: companion cards refresh belongs to the companion-tab runtime.</summary>
         internal static void NotifyCompanionLevelUp(Models.CompanionId id, int level)
         {
             var raw = Models.CompanionDefinition.GetById(id).Name;
@@ -119,6 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Platform.OsNotifications.Show("MAX LEVEL!", $"{name} has reached maximum level!");
             else if (level % 10 == 0)
                 Platform.OsNotifications.Show("Companion Level Up!", $"{name} reached Level {level}!");
+            if (level % 10 == 0 || level == Models.CompanionProgress.MaxLevel) PlayLevelUpSound();
         }
 
         /// <summary>CelebrateLevelUp's FlashOverlay(XPBarFlashOverlay): 0 -> 1 over 250ms, auto-reversed.</summary>

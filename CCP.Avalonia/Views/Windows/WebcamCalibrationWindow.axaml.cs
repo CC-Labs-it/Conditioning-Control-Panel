@@ -350,6 +350,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 ShowError("Couldn't save the calibration. See logs/app.log for details.");
                 return;
             }
+            App.Notifications.Dismiss("recalibrate-multimonitor"); // WPF: only after calibration was saved
             _saved = true;
             CoreSettings.Current.WebcamCalibrated = true;
             CoreSettings.Current.WebcamCalibrationMode = "SixteenPoint";

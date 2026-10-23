@@ -18,7 +18,7 @@
 //   OnCompanionXPDrained     and UpdateCompanionCardsUI, which is itself blocked twice over -
 //   OnCompanionSwitched      see MainShellWindow.CompanionTab.cs. The level-up OS notification is
 //                            real (MainShellWindow.HeroFx.cs NotifyCompanionLevelUp); its milestone
-//                            sound is not ported.
+//                            sound is now wired.
 //   FlashXpBarOnDrain      - restored for the HEADER bar only. Its second overlay,
 //                            CompanionTab.PrgCompanion0FlashOverlay, lives inside
 //                            CCP.Avalonia/Views/Controls/Companion/CompanionHeroCard.axaml and

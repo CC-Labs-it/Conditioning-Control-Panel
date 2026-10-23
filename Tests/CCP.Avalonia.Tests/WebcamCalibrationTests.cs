@@ -167,19 +167,37 @@ public sealed class WebcamCalibrationTests
     [Fact]
     public void FullRun_SavesTheWpfProfileFile_AndGoesLive() => WithTracker(start: true, (tracker, sentinel) =>
     {
-        var win = OpenAndContinue();
-        var verify = win.FindControl<Border>("VerifyPanel")!;
-        Assert.True(Gaze(win, () => verify.IsVisible), win.FindControl<TextBlock>("TxtErrorDetail")!.Text);
+        var notices = AvApp.Notifications;
+        var host = new StackPanel();
+        notices.AttachHost(host);
+        var oldRemove = notices.RemoveLater;
+        notices.RemoveLater = (a, _) => a();
+        notices.ShowSticky("recalibrate-multimonitor", "legacy calibration");
+        Assert.Single(host.Children);
+        try
+        {
+            var win = OpenAndContinue();
+            var verify = win.FindControl<Border>("VerifyPanel")!;
+            Assert.True(Gaze(win, () => verify.IsVisible), win.FindControl<TextBlock>("TxtErrorDetail")!.Text);
 
-        var saved = WebcamCalibrationData.Load();
-        Assert.NotNull(saved);
-        Assert.Equal("SixteenPoint", saved!.Mode);
-        Assert.Equal(7, saved.Polynomial!.Y.Length);
-        Assert.Equal(3, saved.Homography!.Length);
-        Assert.Equal("SixteenPoint", tracker.Calibration!.Mode);
-        Assert.True(CoreSettings.Current.WebcamCalibrated);
-        win.FindControl<Button>("BtnVerifyDone")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert.False(win.IsVisible);
+            var saved = WebcamCalibrationData.Load();
+            Assert.NotNull(saved);
+            Assert.Equal("SixteenPoint", saved!.Mode);
+            Assert.Equal(7, saved.Polynomial!.Y.Length);
+            Assert.Equal(3, saved.Homography!.Length);
+            Assert.Equal("SixteenPoint", tracker.Calibration!.Mode);
+            Assert.True(CoreSettings.Current.WebcamCalibrated);
+            win.FindControl<Button>("BtnVerifyDone")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(win.IsVisible);
+            Assert.Empty(host.Children);
+            Assert.DoesNotContain("recalibrate-multimonitor", CoreSettings.Current.DismissedNotificationKeys);
+        }
+        finally
+        {
+            notices.Dismiss("recalibrate-multimonitor");
+            notices.RemoveLater = oldRemove;
+            notices.AttachHost(new StackPanel());
+        }
     });
 
     [Theory]
