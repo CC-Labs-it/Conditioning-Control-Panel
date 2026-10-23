@@ -18,7 +18,7 @@ public sealed class RaceModContentTests : IDisposable
     public RaceModContentTests() => CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "race-mod", Name = "Race" }, _dir, false);
     private string Write(string rel, string data = "x")
     {
-        var path = Path.Combine(Root, rel);
+        var path = Path.GetFullPath(Path.Combine(Root, rel));   // Windows normalises "/" the way the server does
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, data);
         return path;

@@ -52,14 +52,23 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_GracefulExitWatchdogClosesASilentPage() => RunRace("rt.original.03", (_, _, _) =>
     {
-        var w = GameWindow.Launch("race")!;
-        w.HandleMessage("{\"type\":\"ready\"}");
-        w.CloseRaceGracefully();
-        Assert.True(GameWindow.IsAnyOpen());
-        Thread.Sleep(1300);
-        Dispatcher.UIThread.RunJobs();
-        Assert.False(GameWindow.IsAnyOpen());
-        Assert.False(w.RaceWatchRunning);
+        var oldRunOnce = GameWindow.RaceRunOnce;
+        var armed = new List<(Action Fire, TimeSpan Delay)>();
+        GameWindow.RaceRunOnce = (fire, delay) => armed.Add((fire, delay));
+        try
+        {
+            var w = GameWindow.Launch("race")!;
+            w.HandleMessage("{\"type\":\"ready\"}");
+            w.CloseRaceGracefully();
+            Assert.True(GameWindow.IsAnyOpen());
+            var watchdog = Assert.Single(armed);
+            Assert.Equal(TimeSpan.FromMilliseconds(1200), watchdog.Delay);
+            watchdog.Fire();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(w.RaceWatchRunning);
+        }
+        finally { GameWindow.RaceRunOnce = oldRunOnce; }
     });
 
     [Fact]
@@ -76,10 +85,10 @@ public sealed partial class GameWindowTests
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         var now = new DateTime(2026, 1, 1, 12, 0, 0);
-        MainShellWindow.Current!.HandlePanicKeyPress(now);
+        _raceShell!.HandlePanicKeyPress(now);
         Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
         Assert.True(GameWindow.IsAnyOpen());
-        MainShellWindow.Current.HandlePanicKeyPress(now.AddSeconds(1));
+        _raceShell.HandlePanicKeyPress(now.AddSeconds(1));
         Assert.Equal("exit-request", (string?)sent.Last()["type"]);
         w.HandleMessage("{\"type\":\"exit-done\"}");
         Assert.False(GameWindow.IsAnyOpen());
@@ -135,6 +144,11 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_FavoritesSfxAndAudioPayloadUseExistingStores() => RunRace("rt.original.03", (_, _, _) =>
     {
+        // P02: the store is process-wide; snapshot its in-memory map (the sandbox json is restored by TestIsolation).
+        var statsField = typeof(DtrhAssetStatsStore).GetField("_stats", BindingFlags.NonPublic | BindingFlags.Static)!;
+        DtrhAssetStatsStore.TopAssets(0);
+        var oldStats = (System.Collections.IDictionary)statsField.GetValue(null)!;
+        var statsCopy = Activator.CreateInstance(oldStats.GetType(), oldStats, StringComparer.OrdinalIgnoreCase)!;
         DtrhAssetStatsStore.Merge(JObject.Parse("{\"stats\":[{\"name\":\"race-favorite.gif\",\"grabs\":100}]}"));
         var cue = Path.Combine(ContentLocator.ContentRoot, "Resources", "sounds", "chaos", "race_fin_test.mp3");
         Directory.CreateDirectory(Path.GetDirectoryName(cue)!);
@@ -170,6 +184,7 @@ public sealed partial class GameWindowTests
             CoreAudio.PlayOneShotProvider = oldAudio;
             CoreSubliminal.ShowProvider = oldShow;
             File.Delete(cue);
+            statsField.SetValue(null, statsCopy);
         }
     });
 

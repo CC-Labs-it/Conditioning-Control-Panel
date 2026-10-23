@@ -108,7 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     {
                         var report = new Windows.BugReportWindow();
                         Closed += (_, _) => report.Close();
-                        _ = report.ShowDialog(this);
+                        _ = report.ShowDialogSafe(this);
                     });
                     return true;
                 case "run-started":
@@ -263,8 +263,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!RaceReady) { Close(); return; }
             _raceExiting = true;
             Post(new { type = "exit-request" });
-            DispatcherTimer.RunOnce(() => { if (!_raceDisposed) Close(); }, TimeSpan.FromMilliseconds(1200));
+            RaceRunOnce(() => { if (!_raceDisposed) Close(); }, TimeSpan.FromMilliseconds(1200));
         }
+
+        // Test seam for the watchdog (P08): tests capture and fire it instead of sleeping.
+        internal static Action<Action, TimeSpan> RaceRunOnce = (a, d) => DispatcherTimer.RunOnce(a, d);
 
         private void RaceQueue(Action action) => Dispatcher.UIThread.Post(() =>
         {

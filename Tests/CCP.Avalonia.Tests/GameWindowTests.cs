@@ -314,8 +314,12 @@ public sealed partial class GameWindowTests
     // ---- Racing Thoughts (WPF Services/Chaos/CaucusHostService.cs) ----
 
     /// <summary>Signed in, owning <paramref name="owned"/> (null = nothing); XP and Sparks go to lists.</summary>
-    private static void RunRace(string? owned, Action<LauncherWindow, List<double>, List<double>> body) => Run((_, launcher) =>
+    // The headless lifetime has no MainWindow, so MainShellWindow.Current is null here; race tests use this.
+    private static MainShellWindow? _raceShell;
+
+    private static void RunRace(string? owned, Action<LauncherWindow, List<double>, List<double>> body) => Run((shell, launcher) =>
     {
+        _raceShell = shell;
         var (oldOwns, oldBank, oldXp, oldAssets, oldClock) = (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.RaceUtcNow);
         var lib = Directory.CreateTempSubdirectory("race-lib-").FullName;
         var xp = new List<double>();
@@ -378,7 +382,11 @@ public sealed partial class GameWindowTests
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Where(o => (string?)o["type"] != "favorites").Select(o => (string?)o["type"]));
+        // WPF order: init, manifest, favorites (only when the stats store has any), loom-list.
+        var expected = DtrhAssetStatsStore.TopAssets(12).Count > 0
+            ? new[] { "init", "manifest", "favorites", "loom-list" }
+            : new[] { "init", "manifest", "loom-list" };
+        Assert.Equal(expected, sent.Select(o => (string?)o["type"]));
         Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
