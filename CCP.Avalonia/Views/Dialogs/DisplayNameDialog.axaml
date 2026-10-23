@@ -88,7 +88,7 @@
                        FontSize="11" Margin="0,5,60,0" TextWrapping="Wrap" HorizontalAlignment="Left" VerticalAlignment="Top"/>
             <Button x:Name="BtnClose" Grid.Row="0" IsVisible="False" Background="Transparent" Padding="0"
                     HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-12,-8,0" Cursor="Hand"
-                    ToolTip.Tip="{loc:Str name_ask_close_tip}">
+                    ToolTip.Tip="{loc:Str name_ask_close_tip}" AutomationProperties.Name="{loc:Str name_ask_close_tip}">
                 <fx:IconGlyph Kind="Dismiss" Size="18"/>
             </Button>
         </Grid>

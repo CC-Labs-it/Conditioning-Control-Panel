@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             _tierCard = this.FindControl<Border>("AccountTierCard")!;
             _tierCard.PointerReleased += async (_, e) =>
             {
-                if (e.InitialPressMouseButton != MouseButton.Left || CoreAccount.IsLoggedIn) return;
+                if (e.InitialPressMouseButton != MouseButton.Left || CoreAccount.IsLoggedIn || AccountSeed.SandboxWhitelisted) return;
                 e.Handled = true;
                 if (Shell is { } shell) await shell.OpenUnifiedLoginDialog();
             };
@@ -106,7 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         {
             try
             {
-                _tierCard.Cursor = CoreAccount.IsLoggedIn ? null : new Cursor(StandardCursorType.Hand);
+                _tierCard.Cursor = CoreAccount.IsLoggedIn || AccountSeed.SandboxWhitelisted ? null : new Cursor(StandardCursorType.Hand);
                 if (!CoreAccount.IsLoggedIn && !AccountSeed.SandboxWhitelisted)
                 {
                     _txtName.Text = Loc.Get("account_chip_sign_in");

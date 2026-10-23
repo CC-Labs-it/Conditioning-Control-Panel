@@ -188,7 +188,8 @@ public sealed class AccountOnboardingTests
 
     private static async Task PumpUntil(Func<bool> done)
     {
-        for (var i = 0; i < 300 && !done(); i++) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+        var sw = System.Diagnostics.Stopwatch.StartNew(); // bounded by time, not turns (P73)
+        while (!done() && sw.Elapsed < TimeSpan.FromSeconds(10)) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
         Assert.True(done());
     }
 

@@ -10,7 +10,7 @@ namespace CCP.Core.Tests;
 /// <summary>
 /// The display name is required (onboarding owner call, 2026-10-20): a signed-in account with no
 /// name is asked after sign-in and at the next launch; an anonymous install never is. Plus the
-/// prefill, the shape check that mirrors the server, and the new copy in all ten languages.
+/// prefill and the shape check that mirrors the server. (Copy of the WPF suite's rule tests; WPF is frozen, so not a move.)
 /// </summary>
 public class NeedsDisplayNameRuleTests
 {
