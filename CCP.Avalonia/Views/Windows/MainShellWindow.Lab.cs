@@ -59,19 +59,19 @@
 //   private void LockdownBadge_Click(…)                RESTORED
 //   internal void TxtLockdownTimer_Click(…)
 //   internal void TxtLockdownExit_KeyDown(…)
-//   private Action<PossessionRung>? _possessionRungHandler
-//   private static readonly Color PossessionEmber
-//   private static readonly Color PossessionEmberDim
-//   private void HookPossessionReadout(…)
-//   private void DetachPossessionRungHandler(…)
-//   private void UnhookPossessionReadout(…)
-//   private void UpdatePossessionReadout(…)
+//   private Action<PossessionRung>? _possessionRungHandler RESTORED (LockdownTabView)
+//   private static readonly Color PossessionEmber RESTORED (LockdownTabView)
+//   private static readonly Color PossessionEmberDim RESTORED (LockdownTabView)
+//   private void HookPossessionReadout(…) RESTORED -> LockdownTabView.PaintPossessionReadout + InitializePossessionReadout
+//   private void DetachPossessionRungHandler(…) RESTORED -> LockdownTabView.PaintPossessionReadout + InitializePossessionReadout
+//   private void UnhookPossessionReadout(…) RESTORED -> LockdownTabView.PaintPossessionReadout + InitializePossessionReadout
+//   private void UpdatePossessionReadout(…) RESTORED -> LockdownTabView.PaintPossessionReadout + InitializePossessionReadout
 //   private Action<string>? _lockdownRestartHandler
-//   private void HookLockdownRestart(…)
-//   private void UnhookLockdownRestart(…)
-//   private void OnLockdownTimerRestarted(…)
+//   private void HookLockdownRestart(…) RESTORED -> LockdownTabView TimerRestarted + MainShellWindow.Lockdown.cs
+//   private void UnhookLockdownRestart(…) RESTORED -> LockdownTabView TimerRestarted + MainShellWindow.Lockdown.cs
+//   private void OnLockdownTimerRestarted(…) RESTORED -> LockdownTabView TimerRestarted + MainShellWindow.Lockdown.cs
 //   internal void PreviewShowLockdownActivePanel(…)
-//   private void ShowPossessionRulesIfFirstTime(…)
+//   private void ShowPossessionRulesIfFirstTime(…) RESTORED
 //   private static readonly Color LockdownCrimson
 //   private static readonly Color LockdownDarkRed
 //   private static readonly Color LockdownPanelBg
@@ -81,6 +81,10 @@
 //   private void PlayLockdownActivationAnimation(…)
 
 using System;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Possession;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -109,6 +113,64 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex)
             {
                 Log.Warning(ex, "Lockdown: badge navigation failed");
+            }
+        }
+
+        // --- Possession readout + first-run rules (WPF Lab.cs:867-986, 1100) ---------------
+        // LockdownTabView paints the readout (Settle at activation, cleared at exit, Settle on a timer
+        // restart); the shell owns the director, so the rung MOVES are relayed from here.
+
+        private void InitializePossessionReadout()
+        {
+            void Rung(PossessionRung rung) => Dispatcher.UIThread.Post(() =>
+            {
+                // WPF's handler only exists between HookPossessionReadout and UnhookPossessionReadout.
+                if (_possessionClosed || !LockdownActive || !CoreSettings.Current.LockdownPossessionEnabled) return;
+                Named<LockdownTabView>("LockdownTab")?.PaintPossessionReadout(rung);
+            });
+            void Activated() => Dispatcher.UIThread.Post(() => { if (!_possessionClosed) ShowPossessionRulesIfFirstTime(); });
+            if (PossessionDirector is { } director) director.RungChanged += Rung;
+            if (LockdownService.Current is { } ld) ld.LockdownActivated += Activated;
+            Closed += (_, _) =>
+            {
+                if (PossessionDirector is { } d) d.RungChanged -= Rung;
+                if (LockdownService.Current is { } l) l.LockdownActivated -= Activated;
+            };
+        }
+
+        /// <summary>WPF ShowPossessionRulesIfFirstTime (Lab.cs:1100): card AND bark on the first armed
+        /// lockdown. Through the presenter, so a quiet window makes it an Inbox row; the flag is spent
+        /// when the card OPENS, never when the row is posted.</summary>
+        internal void ShowPossessionRulesIfFirstTime()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (!s.LockdownPossessionEnabled || s.LockdownPossessionIntroSeen) return;
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "intro:possession",
+                    // WPF's row glyph is an emoji; the icon guard forbids a new one, so the row reuses
+                    // the possession intro card's own glyph.
+                    Glyph = FeatureIntros.All["possession"].Glyph,
+                    Title = "The warden's rules",
+                    Summary = "What possession does before the room starts moving.",
+                    Open = () =>
+                    {
+                        var live = CoreSettings.Current;
+                        if (!live.LockdownPossessionIntroSeen)
+                        {
+                            live.LockdownPossessionIntroSeen = true;
+                            CoreSettings.Save();
+                        }
+                        FeatureIntroPopup.ShowIfFirstTime("possession", this);
+                    },
+                });
+                Platform.BarkHead.Engine?.Raise(PossessionBarkTriggers.Rules, guaranteed: true);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Possession: failed to show the first-run rules");
             }
         }
     }

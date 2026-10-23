@@ -2329,3 +2329,14 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/goongame-core-c: +208
 - Cloud session unit (goongame-core-c); reviewed and gated locally.
+
+## avalonia-port/compositor-core-b: +33
+- Cloud session unit (compositor-core-b); reviewed and gated locally. GlyphFallback font tests skip visibly without a covering font.
+
+## avalonia-port/chaos-effect-banner: +556
+- Chaos effect-banner strip ported: Core `ChaosEffectBannerStrip` (order, de-dup, fade/throb timing) and a click-through Avalonia window, created and closed by ChaosRunHost at the WPF lifecycle points.
+- No banner without a compositor, or when the platform refuses the window. The refusal is remembered per run (one Warning, no rebuild on each Show).
+- Row chaos-effect-banner changed from missing to stub: no effect calls Show on this head yet.
+
+## avalonia-port/companion-transcript: +81
+- Her Room History transcript: panic closes it (PanicSurfaces "companion-transcript"), stored-dialogue + panic tests (fail-proven), ledger row missing -> wired.

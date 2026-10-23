@@ -45,6 +45,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             InitializeComponent();
 
             LoadPossessionSettings();
+            global::ConditioningControlPanel.Avalonia.Possession.PossessionTree.SetRole(TxtLockdownTimer, PossessionRole.Timer);
+            global::ConditioningControlPanel.Avalonia.Possession.PossessionTree.SetName(TxtLockdownTimer, "the timer");
+            global::ConditioningControlPanel.Avalonia.Possession.PossessionTree.SetExclude(TxtLockdownExit, true);
+            global::ConditioningControlPanel.Avalonia.Possession.PossessionTree.SetExclude(BtnEmergencyExit, true);
             UpdateQuestHint();
 
             // Tabs are shown and hidden rather than rebuilt, so the first attach fires once.
@@ -81,7 +85,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ld.LockdownActivated += () => Dispatcher.UIThread.Post(ShowLockdownState);
                 ld.LockdownDeactivated += () => Dispatcher.UIThread.Post(ShowLockdownState);
                 ld.CountdownTick += r => Dispatcher.UIThread.Post(() => TxtLockdownTimer.Text = Clock(r));
-                ld.TimerRestarted += _ => Dispatcher.UIThread.Post(() => TxtLockdownTimer.Text = Clock(ld.Remaining));
+                // WPF OnLockdownTimerRestarted (Lab.cs:1031): the clock and the room reset together.
+                ld.TimerRestarted += _ => Dispatcher.UIThread.Post(() =>
+                {
+                    TxtLockdownTimer.Text = Clock(ld.Remaining);
+                    if (ld.IsActive && CoreSettings.Current.LockdownPossessionEnabled) PaintPossessionReadout(PossessionRung.Settle);
+                });
                 ShowLockdownState();
             }
         }
@@ -269,6 +278,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static string Clock(TimeSpan remaining) =>
             SessionClockLabel.LockdownClock(remaining, CoreSettings.Current.HideLockdownTimer);
 
+        private static readonly IBrush PossessionEmber = new SolidColorBrush(Color.Parse("#FF8A5C"));
+        private static readonly IBrush PossessionEmberDim = new SolidColorBrush(Color.Parse("#33FF8A5C"));
+
+        /// <summary>WPF UpdatePossessionReadout (Lab.cs:958): the rung word and pips 0..rung lit; null is
+        /// WPF UnhookPossessionReadout (blank text, dim pips, both collapsed).</summary>
+        internal void PaintPossessionReadout(PossessionRung? rung)
+        {
+            var index = rung is { } r ? (int)r : -1;
+            TxtPossessionRung.Text = rung == null ? ""
+                : Loc.GetF("lockdown_poss_readout_fmt", Loc.Get("lockdown_poss_rung_" + index));
+            TxtPossessionRung.IsVisible = rung != null;
+            PossessionPips.IsVisible = rung != null;
+            for (int i = 0; i < PossessionPips.Children.Count; i++)
+                if (PossessionPips.Children[i] is Border pip) pip.Background = i <= index ? PossessionEmber : PossessionEmberDim;
+        }
+
         /// <summary>WPF OnLockdownActivated / OnLockdownDeactivated, the panel half: swap Setup and
         /// Active, seed the clock, reset the secret exit and the slab notice.</summary>
         internal void ShowLockdownState()
@@ -281,10 +306,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtLockdownExit.IsVisible = false;
             TxtLockdownExit.Text = "";
             TxtEmergencyExitNotice.IsVisible = false;
-            // Readout is Possession's; with no director on this head it stays collapsed (WPF hides it
-            // too whenever Possession is off).
-            TxtPossessionRung.IsVisible = false;
-            PossessionPips.IsVisible = false;
+            // WPF HookPossessionReadout / UnhookPossessionReadout (Lab.cs:880/934): every lockdown with
+            // Possession on starts the readout at Settle (the director only raises when the rung MOVES).
+            PaintPossessionReadout(active && CoreSettings.Current.LockdownPossessionEnabled ? PossessionRung.Settle : null);
             UpdateEmergencyExitPulse();
             // WPF ApplyLockdownTheme / RestoreLockdownTheme (Lab.cs:1188/1211): the card goes crimson
             // on #1A0A0A; the override is dropped on exit, which leaves the XAML gradients (the values
@@ -321,7 +345,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper,
-        /// Possession: none run here; system keys off Windows, where nothing blocks them) and with the
+        /// full Possession theatre: only transform effects run; system keys off Windows) and with the
         /// platform's safety valve.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
@@ -338,6 +362,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
+            if (cfg.LockdownPossessionEnabled)   // WPF MainWindow.Lab.cs:94-104; no fake-crash line: no scares here yet
+                warn.Append("\n- Possession is ON (").Append(cfg.LockdownPossessionIntensity switch
+                    {
+                        0 => "Gentle",
+                        2 => "Full Doki",
+                        _ => "Eerie",
+                    })
+                    .Append("): the app's own UI will misbehave, on purpose.\n")
+                    .Append("  Ember glow = it was Lockdown, not a bug. Nothing you see is real damage.");
             return warn.ToString();
         }
 
