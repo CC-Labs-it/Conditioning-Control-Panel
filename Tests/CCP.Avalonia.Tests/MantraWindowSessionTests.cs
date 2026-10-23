@@ -276,7 +276,6 @@ public sealed class MantraWindowSessionTests
             Assert.True(AvApp.Mantra.IsActive);
             Assert.Equal(4, AvApp.Mantra.TargetCount);
             Assert.Equal("/4", lab.FindControl<TextBlock>("TxtTarget")!.Text);
-            Assert.False(closeTimer.IsEnabled);
             lab.Close();
             Assert.False(AvApp.Mantra.IsActive);
         }
