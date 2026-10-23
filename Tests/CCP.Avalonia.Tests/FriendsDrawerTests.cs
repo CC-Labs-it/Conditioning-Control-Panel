@@ -133,6 +133,38 @@ public sealed class FriendsDrawerTests
         Assert.Null(d.OpenPicker);
     });
 
+    /// <summary>WPF FriendsSfx on the card: an action button clicks (FriendsDrawer.cs:714), a sent poke pops and a
+    /// refused one is denied (ShowResult, :1144), through the landing's Sfx (same files, levels and tags).</summary>
+    [Fact]
+    public Task TheCardsActionsAndSendResultsSoundLikeWpf() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var d = new FriendsRailChip(svc).Drawer;
+        await svc.RefreshAsync();
+        d.Toggle("u_on");
+        var cues = new List<string>();
+        var (oldAudio, oldGate, oldVolume) = (ConditioningControlPanel.CoreAudio.PlayOneShotProvider, FriendsLanding.SfxGate, ConditioningControlPanel.CoreSettings.Current.MasterVolume);
+        ConditioningControlPanel.CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => cues.Add(tag);
+        ConditioningControlPanel.CoreSettings.Current.MasterVolume = 50;
+        try
+        {
+            FriendsLanding.SfxGate = new();   // the 130 ms cue gap would eat a cue that follows the last one
+            Click(d, "friends-action:poke");
+            Assert.Equal(new[] { "friends-click" }, cues);
+            FriendsLanding.SfxGate = new();
+            Assert.Equal(SendResult.Sent, await d.PokeAsync("u_on", PokeSet.Shipped[0]));
+            FriendsLanding.SfxGate = new();
+            Assert.Equal(SendResult.TooFast, await d.PokeAsync("u_on", PokeSet.Shipped[1]));
+            Assert.Equal(new[] { "friends-click", "friends-sent", "friends-denied" }, cues);
+        }
+        finally
+        {
+            ConditioningControlPanel.CoreAudio.PlayOneShotProvider = oldAudio;
+            FriendsLanding.SfxGate = oldGate;
+            ConditioningControlPanel.CoreSettings.Current.MasterVolume = oldVolume;
+        }
+    });
+
     /// <summary>WPF ShowResult: a send answered after the drawer folded says so outside, over the rail chip's
     /// window (the drawer itself sits in a popup root, then detached). Driven from the rail chip's click.</summary>
     [Fact]

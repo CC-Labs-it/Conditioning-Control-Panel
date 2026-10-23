@@ -280,10 +280,11 @@ internal static class FriendsLanding
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
     }
 
-    private static readonly FriendsSfxGate SfxGate = new();
+    /// <summary>The cue gaps (a test swaps in a fresh gate so its cues are not eaten by an earlier one).</summary>
+    internal static FriendsSfxGate SfxGate = new();
 
     /// <summary>WPF FriendsSfx.Play: master volume, the 1.5 s incoming gap, half level in a session.</summary>
-    private static void Sfx(string rel, float scale, string tag, bool incoming = false)
+    internal static void Sfx(string rel, float scale, string tag, bool incoming = false)
     {
         try
         {
