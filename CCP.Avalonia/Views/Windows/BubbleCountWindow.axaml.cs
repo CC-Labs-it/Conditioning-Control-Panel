@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Video.Browser;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Avalonia;
 using Avalonia.Controls;
@@ -46,8 +49,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///         <c>Screen.Scaling</c>. The division by DPI that the original does on Left/Top also
     ///         goes: WPF's Left/Top are DIPs, Avalonia's <c>Window.Position</c> is a PixelPoint in
     ///         PHYSICAL pixels, which is what <c>Screen.WorkingArea</c> already is.</item>
-    ///   <item><c>NoClickRaiseHook</c> (an HwndSource hook returning MA_NOACTIVATE for
-    ///         WM_MOUSEACTIVATE) has NO equivalent - see the stub below for what is lost.</item>
+    ///   <item><c>NoClickRaiseHook</c> -> Avalonia's Win32 WndProc hook returns MA_NOACTIVATE.
+    ///         Owned bubble windows retain their stacking relationship on other backends too.</item>
     ///   <item><c>DisableProcessWindowsGhosting</c>-class calls: none in this file to drop.</item>
     /// </list>
     ///
@@ -113,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The global panic listener can stop the game right now (as MandatoryVideoOverlay). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
         internal static VlcFrameSink? Sink => _sink;
+        internal static Action<MediaPlayer> RouteAudio = LibVlcAudio.ApplyPreferredDevice;
 
         // Multi-monitor support - static shared state
         private static readonly object _cleanupLock = new();
@@ -192,6 +196,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // Load bubble image
             LoadBubbleImage();
+
+            // Installed before Show: clicks retain focus and cannot raise the game over its bubbles.
+            // The Avalonia API is a no-op on platforms without a Win32 window implementation.
+            Win32Properties.AddWndProcHookCallback(this, Win32Overlay.PreventClickRaise);
 
             // Key handler
             KeyDown += OnKeyDown;
@@ -372,13 +380,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // wedge watchdog before the first window existed. Both are VideoService, and both only
             // guard an in-process LibVLC decoder - browser mode never armed them at all.
 
-            // ponytail: the WPF original installed an HwndSource hook returning MA_NOACTIVATE for
-            // WM_MOUSEACTIVATE. LOST BEHAVIOUR, no X11 equivalent in the head today: a click on
-            // the game window will raise it inside the keep-above band, and the count bubbles -
-            // separate topmost windows - can disappear behind it until the next spawn restacks
-            // them. Needs an X11Overlay capability (deny focus-on-click / _NET_WM_USER_TIME), and
-            // this layer may not edit X11Overlay.cs, so it is its own change.
-
             try
             {
                 // Nothing was seen: a missing clip is a skip, including in strict mode.
@@ -464,6 +465,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!_isPrimary || _closed || _gameCompleted || _videoEnded) return;
             switch (message.GetProperty("type").GetString())
             {
+                case "error":
+                    if (message.TryGetProperty("code", out var error) && error.TryGetInt32(out var code)
+                        && (code is >= 1 and <= 4 or 100 or 101))
+                        BrowserUnsafeVideoCache.Add(_videoPath, "bubble-count media error");
+                    break;
                 case "meta":
                     if (message.TryGetProperty("durationMs", out var d) && d.TryGetDouble(out var ms)) AdoptRealDuration(ms / 1000);
                     break;
@@ -504,6 +510,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
             player.Volume = Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100);
             _player = player;
+            var routed = 0;
+            player.Playing += (_, _) =>
+            {
+                if (Interlocked.Exchange(ref routed, 1) != 0) return;
+                _ = Task.Run(() =>
+                {
+                    // Serialize with disposal: the queued route must never touch a released player.
+                    lock (player)
+                        if (ReferenceEquals(player, _player)) RouteAudio(player);
+                });
+            };
             _sink = new VlcFrameSink(player, () => _media,
                 bmp => { foreach (var w in _allWindows) w._videoImage.Source = bmp; },
                 () => { foreach (var w in _allWindows) w._videoImage.InvalidateVisual(); });
@@ -533,8 +550,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _player = null;
             if (player != null)
             {
-                try { player.Stop(); } catch { }
-                try { player.Dispose(); } catch { }
+                lock (player)
+                {
+                    try { player.Stop(); } catch { }
+                    try { player.Dispose(); } catch { }
+                }
             }
             try { _media?.Dispose(); } catch { }
             _media = null;
@@ -842,6 +862,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            Win32Properties.RemoveWndProcHookCallback(this, Win32Overlay.PreventClickRaise);
             _allWindows.Remove(this); // Do not recursively close this window while resolving a native close.
             if (!_gameCompleted && !_isCleaningUp && _isPrimary) SkipGame();
             _closed = true;
@@ -962,7 +983,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Content = _imageElement
             };
 
-            _window.Show();
+            // Native ownership keeps a live bubble above its game even when the WM raises the
+            // owner on a click. It also makes owner teardown close any bubble still in flight.
+            _window.Show(owner);
 
             // IsHitTestVisible only silences Avalonia's own hit testing; the compositor would still
             // send the click here. This is the WS_EX_TRANSPARENT the original got implicitly.

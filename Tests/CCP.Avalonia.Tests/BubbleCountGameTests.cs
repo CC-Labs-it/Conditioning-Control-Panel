@@ -155,8 +155,44 @@ public sealed class BubbleCountGameTests
         return Task.CompletedTask;
     });
 
-    private static void Send(BrowserVideoSurface surface, string type, double durationMs = 0) =>
-        surface.View.OnWebMessage(JsonSerializer.Serialize(new { session = surface.SessionId, type, durationMs }));
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(4, true)]
+    [InlineData(100, true)]
+    [InlineData(101, true)]
+    [InlineData(102, false)]
+    [InlineData(103, false)]
+    [InlineData(0, false)]
+    public Task Browser_only_primary_media_failures_make_the_file_unsafe(int code, bool unsafeFile) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            _ => game.Completed++, () => game.Skipped++);
+        var primary = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = primary.Browser!;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        var secondary = new BubbleCountWindow(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            _ => game.Completed++, isPrimary: false);
+        typeof(BubbleCountWindow).GetField("_useBrowser", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(secondary, true);
+        secondary.Show();
+        secondary.Browser!.View.OnNavigationCompleted(new Uri("about:blank"));
+        Send(secondary.Browser, "error", code: code);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.False(BrowserUnsafeVideoCache.Contains(game.Clip));
+        Assert.True(primary.IsVisible);
+        Send(browser, "error", code: code);
+        Send(browser, "error", code: code); // duplicate terminal reports still resolve just once
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(unsafeFile, BrowserUnsafeVideoCache.Contains(game.Clip));
+        Assert.Equal(1, game.Skipped);
+        Assert.Equal(0, game.Completed);
+        Assert.Empty(BubbleCountResultWindow.OpenWindows);
+        return Task.CompletedTask;
+    });
+
+    private static void Send(BrowserVideoSurface surface, string type, double durationMs = 0, int code = 0) =>
+        surface.View.OnWebMessage(JsonSerializer.Serialize(new { session = surface.SessionId, type, durationMs, code }));
 
     private static void EnsureApp()
     {
@@ -235,6 +271,9 @@ public sealed class BubbleCountGameTests
             var real = host.Scheduler;
             var prevEngine = CoreEngine.BubbleCount;
             var listener = BubbleCountWindow.PanicListenerLive;
+            var routeAudio = BubbleCountWindow.RouteAudio;
+            var audioRoutes = 0;
+            BubbleCountWindow.RouteAudio = player => { routeAudio(player); System.Threading.Interlocked.Increment(ref audioRoutes); };
             host.Scheduler = b;
             CoreEngine.BubbleCount = b;
             try
@@ -250,6 +289,7 @@ public sealed class BubbleCountGameTests
                     async Task<BubbleCountWindow> Open(bool strict)
                     {
                         s.BubbleCountStrictLock = strict;
+                        var routesBefore = System.Threading.Volatile.Read(ref audioRoutes);
                         b.Trigger(forceTest: true);
                         Assert.True(b.IsBusy);
                         Assert.Empty(BubbleCountWindow.OpenWindows);        // the 800 ms lead-in
@@ -258,6 +298,8 @@ public sealed class BubbleCountGameTests
                         Assert.True(BubbleCountWindow.Sink!.FrameCount >= 3, "frames decoded");
                         Assert.Same(BubbleCountWindow.Sink.Bitmap, w.VideoImage.Source);
                         Assert.True(w.Topmost && w.IsVisible);
+                        for (var i = 0; i < 40 && System.Threading.Volatile.Read(ref audioRoutes) == routesBefore; i++) await Task.Delay(25);
+                        Assert.Equal(routesBefore + 1, System.Threading.Volatile.Read(ref audioRoutes));
                         return w;
                     }
 
@@ -301,6 +343,7 @@ public sealed class BubbleCountGameTests
                 host.Scheduler = real;
                 CoreEngine.BubbleCount = prevEngine;
                 BubbleCountWindow.PanicListenerLive = listener;
+                BubbleCountWindow.RouteAudio = routeAudio;
                 CoreProgression.AddXPProvider = prevXp;
                 (s.PanicKeyEnabled, s.PanicKey, s.BubbleCountStrictLock, s.DualMonitorEnabled) = saved;
             }

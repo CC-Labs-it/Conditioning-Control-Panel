@@ -97,7 +97,6 @@ internal sealed class BrowserVideoSurface : IDisposable
             var result = await _execute(BuildScript(_url, Volume, _id));
             if (_closed) return;
             if (result != "true") { Fail(); return; }
-            if (!Playing && _startup != null) _startup.Interval = TimeSpan.FromSeconds(10);
         }
         catch { if (!_closed) Fail(); }
     }
@@ -113,7 +112,7 @@ internal sealed class BrowserVideoSurface : IDisposable
             switch (message.GetProperty("type").GetString())
             {
                 case "playing": Playing = true; _startup?.Stop(); break;
-                case "error": Fail(); return;
+                case "error": Message?.Invoke(message); Fail(); return;
             }
             Message?.Invoke(message);
         }
@@ -163,10 +162,18 @@ internal sealed class BrowserVideoSurface : IDisposable
         v.muted=c.volume===0; v.volume=c.volume; document.body.replaceChildren(v);
         const meta=()=>send({type:'meta',durationMs:Number.isFinite(v.duration)?v.duration*1000:0});
         v.onloadedmetadata=meta; v.ondurationchange=meta;
-        v.onplaying=()=>send({type:'playing'}); v.onended=()=>send({type:'ended'});
-        v.onerror=()=>send({type:'error'});
+        let started=false, lastTime=0, lastAdvance=performance.now();
+        v.onplaying=()=>{started=true; lastAdvance=performance.now(); send({type:'playing'});};
+        v.onended=()=>send({type:'ended'});
+        v.onerror=()=>send({type:'error',code:v.error?.code||0});
+        setTimeout(()=>{if(!started) send({type:'error',code:101});},10000);
+        const watchdog=setInterval(()=>{
+          if(!started||v.paused||v.ended) return;
+          if(v.currentTime!==lastTime){lastTime=v.currentTime; lastAdvance=performance.now();}
+          else if(performance.now()-lastAdvance>=10000){clearInterval(watchdog); send({type:'error',code:100});}
+        },1000);
         window.addEventListener('keydown',e=>{e.preventDefault(); if(!e.repeat)
           send({type:'key',key:e.key,alt:e.altKey});},true);
-        v.src=c.url; v.play().catch(()=>send({type:'error'})); return true;
+        v.src=c.url; v.play().catch(()=>send({type:'error',code:v.error?.code||0})); return true;
         """ + "})(" + JsonSerializer.Serialize(new { url, volume, id }) + ");";
 }
