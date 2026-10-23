@@ -98,16 +98,18 @@ namespace ConditioningControlPanel.Services
                 case "haptic_stop": RemoteHaptics.Stop(); return null;
                 case "duck_audio": CoreAudio.Duck(80); return null;
                 case "unduck_audio": CoreAudio.Unduck(); return null;
-                case "enable_strict_lock": s.StrictLockEnabled = true; CoreSettings.Save(); return null;
-                case "disable_strict_lock": s.StrictLockEnabled = false; CoreSettings.Save(); return null;
+                // Noted before it lands: every end path hands the wearer's own value back (RemoteWearer).
+                case "enable_strict_lock": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.StrictLock, 1); s.StrictLockEnabled = true; CoreSettings.Save(); return null;
+                case "disable_strict_lock": Remote.RemoteWearer.NoteWrite(Remote.RemoteHeld.StrictLock, 0); s.StrictLockEnabled = false; CoreSettings.Save(); return null;
                 case "enable_panic": s.PanicKeyEnabled = true; CoreSettings.Save(); SyncPanicUi(); return null;
                 case "trigger_panic": StopEffects(force: true); return null;
                 default: return NotOnThisBuild;
             }
         }
 
-        /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops; strict off, panic
-        /// key on. Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
+        /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops and the wearer's own
+        /// values come back (RemoteWearer: their strict lock, panic on unless a running Lockdown holds it off).
+        /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).</summary>
         public static void StopEffects(bool force)
         {
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
@@ -122,16 +124,11 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
-            // As WPF, Lockdown or not: this only reduces restraint, and LockdownService.Deactivate restores
-            // the pre-lockdown values when the timer ends.
-            var s = CoreSettings.Current;
-            if (s.StrictLockEnabled || !s.PanicKeyEnabled)
-            {
-                s.StrictLockEnabled = false;
-                s.PanicKeyEnabled = true;
-                CoreSettings.Save();
-                SyncPanicUi();
-            }
+            // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
+            // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
+            // comes back on except while a running Lockdown holds it off; its own end restores it.
+            Remote.RemoteWearer.HandBackAllButStrict();
+            Remote.RemoteWearer.ReleaseSafetyState();
         }
 
         private static void SyncPanicUi() { try { LockdownService.PanicKeyUiSync?.Invoke(); } catch { } }

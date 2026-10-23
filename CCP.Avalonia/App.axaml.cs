@@ -460,6 +460,11 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
                 LockdownService.RecoverIfNeeded();
+                // WPF App.xaml.cs (main 4adc4c476): a Remote Control session the app died in hands the
+                // controller's strict lock (and any held value) back to the wearer's own. After Lockdown's
+                // recovery, which can put a controller's strict lock back first (RemoteHoldings).
+                try { ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.

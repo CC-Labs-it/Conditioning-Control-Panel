@@ -37,6 +37,10 @@ public sealed class RemoteRelayTests
     private readonly List<string> _ran = new();
     private readonly List<bool> _stops = new();
 
+    // RemoteWearer is one static session per app: a test that started a relay and never ended it must not
+    // hand a stale snapshot to the next one.
+    public RemoteRelayTests() => ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+
     private RemoteRelay Relay(FakeRelay f) => new(() => "tok", () => "uid-1", "9.9.9",
         (a, _) => { _ran.Add(a); return null; }, force => _stops.Add(force), f) { AutoPoll = false };
 
@@ -97,6 +101,43 @@ public sealed class RemoteRelayTests
         Assert.NotNull(RemoteCommandGate.Screen("disable_panic", lockdownActive: true));
     }
 
+    // WPF ExecuteCommand's LeashRemoteRule door (owner 2026-09-26) and RemoteHoldings.RefusesStrictOff
+    // (owner 2026-10-22), on the head that runs through RemoteCommandGate.
+    [Fact]
+    public void A_leash_refuses_strict_on_and_a_lockdowns_forced_lock_refuses_strict_off()
+    {
+        Assert.Equal("not while on a leash", RemoteCommandGate.Screen("enable_strict_lock", false, leashed: true));
+        Assert.Equal("the panic key stays on", RemoteCommandGate.Screen("disable_panic", false, leashed: true));
+        foreach (var a in new[] { "disable_strict_lock", "trigger_panic", "start_flash", "enable_panic" })
+            Assert.Null(RemoteCommandGate.Screen(a, false, leashed: true));
+        Assert.Equal("the Lockdown holds the strict lock",
+            RemoteCommandGate.Screen("disable_strict_lock", lockdownActive: true, lockdownForcedStrict: true));
+        Assert.Null(RemoteCommandGate.Screen("disable_strict_lock", lockdownActive: true, lockdownForcedStrict: false));
+        Assert.Null(RemoteCommandGate.Screen("disable_strict_lock", lockdownActive: false, lockdownForcedStrict: true));
+    }
+
+    [Fact]
+    public async Task A_leashed_account_never_runs_enable_strict_lock_from_any_session()
+    {
+        var leashed = ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed;
+        try
+        {
+            ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed = () => true;
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"enable_strict_lock\"},{\"id\":\"2\",\"action\":\"start_flash\"}]}");
+            await r.PollOnceAsync();
+            Assert.Equal(new[] { "start_flash" }, _ran);
+            var status = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["last_executed"]!;
+            Assert.Equal("start_flash", (string?)status["action"]);
+        }
+        finally { ConditioningControlPanel.Services.Leash.LeashGuard.IsLeashed = leashed; }
+    }
+
+    // Owner, 2026-10-22 (main 4adc4c476, 2a712d9da): a controller's panic during a Lockdown that forced
+    // strict lock and switched the panic key off leaves both as Lockdown holds them; its own end restores.
+    // Restraint-reducing verbs still run and never touch the timer.
     [Fact]
     public void Restraint_reducing_verbs_run_under_Lockdown_keep_its_timer_and_it_still_restores_on_end()
     {
@@ -110,14 +151,12 @@ public sealed class RemoteRelayTests
             ld.Activate(TimeSpan.FromMinutes(30));
             Assert.True(s.StrictLockEnabled);
             Assert.False(s.PanicKeyEnabled);
+            Assert.True(ld.ForcedStrictLock && ld.DisabledPanicKey);
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
-            Assert.True(s.PanicKeyEnabled);       // WPF StopAllRemoteEffects, Lockdown or not
-            Assert.False(s.StrictLockEnabled);
-            (s.StrictLockEnabled, s.PanicKeyEnabled) = (true, false);
+            Assert.False(s.PanicKeyEnabled);      // the Lockdown holds it off
+            Assert.True(s.StrictLockEnabled);     // the Lockdown forced it
             Assert.Null(RemoteCommands.Execute("enable_panic", null));
-            Assert.Null(RemoteCommands.Execute("disable_strict_lock", null));
             Assert.True(s.PanicKeyEnabled);
-            Assert.False(s.StrictLockEnabled);
             Assert.True(ld.IsActive);             // the timer was not ended
             Assert.Equal(0, ld.RestartCount);     // nor restarted
             s.PanicKeyEnabled = false;            // whatever the controller left behind...
@@ -179,8 +218,10 @@ public sealed class RemoteRelayTests
         Assert.True(r.ControllerConnected);
     }
 
+    // Owner, 2026-10-22: a controller's panic restores the panic key but never switches off a strict lock
+    // the wearer set themselves (main used to write it off); one the controller set goes.
     [Fact]
-    public void Panic_stop_restores_the_panic_key_and_drops_strict_lock()
+    public void Panic_stop_restores_the_panic_key_and_only_the_controllers_strict_lock_goes()
     {
         var s = CoreSettings.Current;
         var (strict, panic) = (s.StrictLockEnabled, s.PanicKeyEnabled);
@@ -188,11 +229,97 @@ public sealed class RemoteRelayTests
         {
             (s.StrictLockEnabled, s.PanicKeyEnabled) = (true, false);
             Assert.Null(RemoteCommands.Execute("trigger_panic", null));
-            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.StrictLockEnabled);
             Assert.True(s.PanicKeyEnabled);
             Assert.Equal(RemoteCommands.NotOnThisBuild, RemoteCommands.Execute("play_hypnotube", null));
+
+            s.StrictLockEnabled = false;
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            Assert.True(s.StrictLockEnabled);
+            Assert.Null(RemoteCommands.Execute("trigger_panic", null));
+            Assert.False(s.StrictLockEnabled);
         }
-        finally { (s.StrictLockEnabled, s.PanicKeyEnabled) = (strict, panic); }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.StrictLockEnabled, s.PanicKeyEnabled) = (strict, panic);
+        }
+    }
+
+    // Owner, 2026-10-22: the controller leaving during a Lockdown that switched the panic key off leaves it
+    // off; a strict lock the controller set before the Lockdown is corrected in Lockdown's record.
+    [Fact]
+    public async Task Controller_leave_mid_lockdown_never_rearms_panic_and_fixes_lockdowns_strict_record()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.StopEffectsOnRemoteDisconnect);
+        var prev = LockdownService.Current;
+        var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.StopEffectsOnRemoteDisconnect) =
+                (false, true, true, true, false);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"enable_strict_lock\"}]}");
+            await r.PollOnceAsync();
+            Assert.True(s.StrictLockEnabled);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Assert.True(ld.RecordedStrictLock);     // the controller's, recorded as the wearer's own
+            Assert.False(s.PanicKeyEnabled);
+
+            Poll(f, "{\"controller_connected\":false}");
+            await r.PollOnceAsync();
+            Assert.False(s.PanicKeyEnabled);        // the Lockdown holds it off
+            Assert.True(s.StrictLockEnabled);       // the Lockdown forced it
+            Assert.False(ld.RecordedStrictLock);    // ...and will put the wearer's own back
+
+            await r.StopAsync();                    // the session end asks the same rule
+            Assert.False(s.PanicKeyEnabled);
+            ld.Deactivate();
+            Assert.True(s.PanicKeyEnabled);
+            Assert.False(s.StrictLockEnabled);
+        }
+        finally
+        {
+            ld.Deactivate();
+            ld.Dispose();
+            LockdownService.Current = prev;
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.LockdownForceStrictLock, s.LockdownDisablePanicKey, s.StopEffectsOnRemoteDisconnect) = saved;
+        }
+    }
+
+    // A crash mid-session: the recovery file hands the controller's strict lock back at the next launch.
+    [Fact]
+    public void A_crash_mid_session_heals_the_controllers_strict_lock_at_launch()
+    {
+        var s = CoreSettings.Current;
+        var strict = s.StrictLockEnabled;
+        var dir = ConditioningControlPanel.Services.Remote.RemoteWearer.Dir;
+        var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-remote-wearer-" + Guid.NewGuid().ToString("N"));
+        System.IO.Directory.CreateDirectory(tmp);
+        try
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Dir = () => tmp;
+            s.StrictLockEnabled = false;
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Take();
+            Assert.Null(RemoteCommands.Execute("enable_strict_lock", null));
+            Assert.True(System.IO.File.Exists(System.IO.Path.Combine(tmp, ConditioningControlPanel.Services.Remote.RemoteHoldings.FileName)));
+            // the app dies here; the next launch:
+            Assert.Equal(1, ConditioningControlPanel.Services.Remote.RemoteWearer.HealOnLaunch());
+            Assert.False(s.StrictLockEnabled);
+            Assert.False(System.IO.File.Exists(System.IO.Path.Combine(tmp, ConditioningControlPanel.Services.Remote.RemoteHoldings.FileName)));
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Drop();
+            ConditioningControlPanel.Services.Remote.RemoteWearer.Dir = dir;
+            s.StrictLockEnabled = strict;
+            System.IO.Directory.Delete(tmp, true);
+        }
     }
     // main 71cfc4185 (ccp-bugs #1340): the controller leaving hands back the panic key and the strict
     // lock IT switched on; a strict lock the subject set stays.
