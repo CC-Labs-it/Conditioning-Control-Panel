@@ -1646,8 +1646,9 @@ namespace ConditioningControlPanel
             try { App.Chaster?.NoteSafetyExit(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // A leash video window goes down with a panic like everything else (panic always works);
-            // the punishment stays pending and the gate stands back for ten minutes.
-            try { LeashOnPanicPress(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // the punishment stays pending and the gate stands back for ten minutes. Only a real key
+            // press may be the Escape that closes the Ctrl+K palette; a Stop / Panic button never is.
+            try { LeashOnPanicPress(panicRuns: true, fromKey: !_panicFromStopButton); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             VideoDiag.Log("PANIC", $"handling panic press (engineRunning={_isRunning}, uiStall={VideoDiag.UiStallMs}ms)");
 
