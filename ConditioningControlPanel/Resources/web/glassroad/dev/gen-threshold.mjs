@@ -121,9 +121,34 @@ const ROUTES = [
 // sweepF: the open corner keeps only its inside open (its outside railed: a boosted kart off the jump cannot
 // slide off it, SIM 16:23)
 const FALLS = [
-  { piece: 'bridge', side: 'both', from: 0.4, to: 0.55 },
   { piece: 'sweepF', side: 'L', from: 0, to: 1 },
 ];
+// Stepping-stone fields (stones wave, BRIEF-STONES.md): from `from` to `to` of `piece` the deck is gone and the kart
+// drives on stones over the void (the old bridge FALLS entry became this field; the start straight lies beneath).
+// Three staggered lanes of stoneM-long stones with gapM between them (period stoneM + gapM), lane k's regular
+// stones starting k * staggerM past the field start, so every s of the field has a stone in some lane. Every lane
+// starts with a LEAD stone from the field start to its first regular stone's end (the deck hands over to a stone
+// on every lane, root 2026-10-23: an entry void on a lane the kick cannot reach was a fall) and ends with a
+// CLOSING stone that reaches FIELD_END_GAP_M before the deck (an exit void longer than a gap was a fall too), so
+// stone lengths run FIELD_LEN_M (render tiles the 5 m model along a longer stone). The road eases to widthM
+// over FIELD_RAMP_M before the field and back after it. Nodes inside carry `open` (no rails: the lips are the edges).
+export const FIELDS = [
+  // `to` 0.66, not the brief's 0.71: the bridge node at u 0.667 sits 11 m over the court (L4d, about 1000 m ahead
+  // in the lap), and an open edge over a road ahead is a shortcut the P6.2 check refuses; the field ends at that node
+  { id: 'bridge-stones', piece: 'bridge', from: 0.40, to: 0.66, lanes: [-7, 0, 7], stoneM: 5, gapM: 4, staggerM: 3, widthM: 21 },
+];
+const FIELD_RAMP_M = 20, FIELD_END_GAP_M = 2, FIELD_SPARE_M = 0.5, FIELD_GAP_M = [3.5, 4.5], FIELD_PAD_LEAD_M = 6;
+/** Stone length range: a lead or closing stone may run longer than the 5 m model (render tiles it). */
+const FIELD_LEN_M = [3, 12];
+/** One lane of stones as [start, end] pairs from 0 (the field start) to lenM - FIELD_END_GAP_M (the closing edge). */
+export function laneStones(lenM, phaseM, stoneM, gapM, endGapM = FIELD_END_GAP_M, lenRange = FIELD_LEN_M) {
+  const end = lenM - endGapM, out = [[0, phaseM + stoneM]];
+  for (let s = phaseM + stoneM + gapM; s + stoneM <= end + 1e-9; s += stoneM + gapM) out.push([s, s + stoneM]);
+  const last = out[out.length - 1];
+  if (end - last[1] >= gapM + lenRange[0]) out.push([last[1] + gapM, end]);      // a closing stone fits after one more gap
+  else last[1] = end;                                                             // else the last stone reaches the closing edge
+  return out.map(([a, b]) => [+a.toFixed(2), +b.toFixed(2)]);
+}
 const ROUTE_DROP_M = [10, 16];
 /** A road counts as beneath an open edge when it lies this far below (metres). */
 const BENEATH_M = [3, 40];
@@ -222,11 +247,14 @@ export function build(pieces = PIECES) {
       const flags = p.jump ? ['jump'] : p.open ? ['open'] : p.loop ? ['rail', 'magnet'] : ['rail'];
       // Aperture Court opens out on the flat return, then gathers before the launch ramp.
       const courtWidth = p.id === 'L4d' ? W + (34 - W) * Math.min(1, d / 17, (L - d) / 20) : 0;
+      // stones: the road widens to the field's width over FIELD_RAMP_M before it and narrows back after it
+      const field = FIELDS.find((f) => f.piece === p.id);
+      const fieldWidth = field ? W + (field.widthM - W) * Math.max(0, Math.min(1, (d - (field.from * L - FIELD_RAMP_M)) / FIELD_RAMP_M, (field.to * L + field.gapM + FIELD_RAMP_M - d) / FIELD_RAMP_M)) : 0;
       // water: a piece-wide surface (`surface`, optional `flow`) or a stream from `stream.from` with a ramped flow
       const onStream = p.stream && u >= p.stream.from - 1e-9;
       const surface = onStream ? 'stream' : p.surface || 'glass';
       const flow = onStream ? p.stream.flow.slice() : surface === 'stream' && p.flow ? p.flow.slice() : null;
-      nodes.push({ p: [r2(x), r2(y), r2(z)], roll: r2(roll), w: r2(courtWidth || p.w || W), flags, speed: p.speed || 1.0, surface, ...(flow ? { flow } : {}) });
+      nodes.push({ p: [r2(x), r2(y), r2(z)], roll: r2(roll), w: r2(courtWidth || fieldWidth || p.w || W), flags, speed: p.speed || 1.0, surface, ...(flow ? { flow } : {}) });
       meta.push({ piece: pi, u, s: sAcc + d, sec: p.sec, ramp: !!onStream });
     }
     sAcc += L; y0 = y1;
@@ -297,6 +325,23 @@ export function build(pieces = PIECES) {
       nodes[i].flags = nodes[i].flags.map((f) => (f !== 'rail' ? f : fl.side === 'both' ? 'open' : fl.side === 'L' ? 'railR' : 'railL'));
     });
   }
+  // stepping-stone fields: the field's nodes go open, stones anchored to the last field node at or before them
+  const fields = FIELDS.map((fd) => {
+    const pi = pieceIdx(fd.piece);
+    const idxs = meta.map((m, i) => (m.piece === pi && m.u >= fd.from - 1e-9 && m.u < fd.to ? i : -1)).filter((i) => i >= 0);
+    for (const i of idxs) nodes[i].flags = nodes[i].flags.map((f) => (f === 'rail' ? 'open' : f));
+    const from = idxs[0], to = idxs[idxs.length - 1] + 1, fromS = meta[from].s, toS = meta[to].s;
+    const stones = [];
+    fd.lanes.forEach((x, li) => {
+      laneStones(toS - fromS, li * fd.staggerM, fd.stoneM, fd.gapM).forEach(([a, b], k) => {
+        const s = fromS + a;
+        let node = from;
+        while (node + 1 < to && meta[node + 1].s <= s + 1e-9) node++;
+        stones.push({ id: fd.id + '-' + li + '-' + k, node, ds: r2(s - meta[node].s), x, w: fd.stoneM, len: r2(b - a) });
+      });
+    });
+    return { id: fd.id, from, to, lanes: fd.lanes.slice(), stones };
+  });
 
   // checkpoints near the quarter marks, never on a jump or inside a loop
   const checkpoints = [0, 0.25, 0.5, 0.75].map((f) => {
@@ -325,7 +370,7 @@ export function build(pieces = PIECES) {
     sections: sectionRows,
     checkpoints,
     spawn: { node: 0, grid: [[-4, -5], [4, -9], [-4, -13], [4, -17], [-4, -21], [4, -25], [-4, -29], [4, -33]] },
-    items, boosts, jumps, routes, courts, hazards: [], media: [],
+    items, boosts, jumps, routes, courts, fields, hazards: [], media: [],
     ai: { lines: [], pace: [1.0, 1.05, 1.1] },
     beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: Math.floor(minY - 25), edgeGraceM: 1.2, edgeGraceS: 0.8 },
@@ -507,6 +552,67 @@ export function checks({ track, closure, lengthM, lipPiece, meta, pieces }) {
     routeInfo.push(rt.id + ': nodes ' + rt.from + '..' + (rt.to - 1) + ' side ' + rt.side + ', s ' + meta[rt.from].s.toFixed(0) + '..' + meta[rt.to].s.toFixed(0) +
       ' -> land s ' + meta[rt.land.from].s.toFixed(0) + '..' + meta[rt.land.to].s.toFixed(0) + ', pad s ' + (meta[rt.pad.node].s + rt.pad.ds).toFixed(0) + ' (skip ' + skip.toFixed(0) + ' m, ' + (100 * skip / lengthM).toFixed(0) + '% of a lap)');
   }
+  // stepping-stone fields: stones inside the road with spare, lane gaps in range, never a wall, stones from the
+  // field start, the last stone short of the deck, no item or pad inside, the pad before it clear, open nodes,
+  // and what lies beneath the field (a fall through the void lands there)
+  const fieldInfo = [];
+  for (const fd of track.fields || []) {
+    const cfg = FIELDS.find((c) => c.id === fd.id) || { gapM: 4 }, fromS = meta[fd.from].s, toS = meta[fd.to].s;
+    const stones = fd.stones.map((h) => ({ ...h, s: meta[h.node].s + (h.ds || 0) }));
+    for (let i = fd.from; i < fd.to; i++) if (!track.nodes[i].flags.includes('open')) errs.push('field ' + fd.id + ' node ' + i + ' is not open');
+    for (const h of stones) {
+      const half = Math.min(track.nodes[h.node].w, track.nodes[Math.min(h.node + 1, N - 1)].w) / 2;
+      if (Math.abs(h.x) + h.w / 2 + FIELD_SPARE_M > half) errs.push('field ' + fd.id + ' stone ' + h.id + ' leaves the road (half width ' + half + ')');
+      if (h.s < fromS - 1e-6 || h.s + h.len > toS - FIELD_END_GAP_M + 1e-6) errs.push('field ' + fd.id + ' stone ' + h.id + ' outside the field or short of the end gap');
+      if (h.len < FIELD_LEN_M[0] || h.len > FIELD_LEN_M[1]) errs.push('field ' + fd.id + ' stone ' + h.id + ' len ' + h.len + ' outside ' + FIELD_LEN_M.join('..'));
+    }
+    const counts = [];
+    fd.lanes.forEach((x) => {
+      const lane = stones.filter((h) => h.x === x).sort((a, b) => a.s - b.s);
+      counts.push(lane.length);
+      // every lane starts at the deck's edge and ends at the closing edge (no entry void, an exit void of one short coast)
+      if (lane.length && Math.abs(lane[0].s - fromS) > 0.1) errs.push('field ' + fd.id + ' lane ' + x + ' first stone ' + (lane[0].s - fromS).toFixed(2) + ' m past the field start');
+      if (lane.length && Math.abs(lane[lane.length - 1].s + lane[lane.length - 1].len - (toS - FIELD_END_GAP_M)) > 0.1)
+        errs.push('field ' + fd.id + ' lane ' + x + ' last stone ends ' + (toS - lane[lane.length - 1].s - lane[lane.length - 1].len).toFixed(2) + ' m before the deck');
+      for (let k = 1; k < lane.length; k++) {
+        const gap = lane[k].s - (lane[k - 1].s + lane[k - 1].len);
+        if (gap < FIELD_GAP_M[0] || gap > FIELD_GAP_M[1]) errs.push('field ' + fd.id + ' lane ' + x + ' gap ' + gap.toFixed(2) + ' m before stone ' + lane[k].id);
+      }
+    });
+    if (!stones.length) errs.push('field ' + fd.id + ' has no stones');
+    else {
+      const first = Math.min(...stones.map((h) => h.s)), last = Math.max(...stones.map((h) => h.s + h.len));
+      if (first - fromS > 1) errs.push('field ' + fd.id + ' first stone ' + (first - fromS).toFixed(1) + ' m past the field start');
+      for (let s = fromS; s < toS; s += 0.25) {
+        if (stones.some((h) => s >= h.s && s <= h.s + h.len)) continue;
+        if (toS - s > cfg.gapM + 0.5) { errs.push('field ' + fd.id + ' is a wall at s ' + s.toFixed(1)); break; }
+      }
+      fieldInfo.push(fd.id + ': nodes ' + fd.from + '..' + (fd.to - 1) + ', s ' + fromS.toFixed(0) + '..' + toS.toFixed(0) + ' (' + (toS - fromS).toFixed(0) + ' m), w ' +
+        track.nodes[fd.from].w + ', lanes ' + fd.lanes.join('/') + ' stones ' + counts.join('/') + ', first s ' + first.toFixed(1) + ', last ends s ' + last.toFixed(1) +
+        ' (' + (toS - last).toFixed(1) + ' m before the deck)');
+    }
+    for (const it of track.items) { const s = meta[it.node].s + (it.ds || 0); if (s >= fromS && s < toS) errs.push('field ' + fd.id + ' has an item inside at node ' + it.node); }
+    let lead = null;
+    for (const b of track.boosts) {
+      const bs = meta[b.node].s;
+      if (bs + b.len > fromS && bs < toS) errs.push('field ' + fd.id + ' has a pad inside at node ' + b.node);
+      if (bs < fromS && (lead === null || bs > lead)) lead = bs;
+    }
+    if (lead === null || fromS - lead < FIELD_PAD_LEAD_M) errs.push('field ' + fd.id + ' pad before it is under ' + FIELD_PAD_LEAD_M + ' m ahead');
+    // beneath: the road straight under each field node (the fall through the void lands there), and the open-edge rows
+    const beneath = new Map();
+    for (let i = fd.from; i < fd.to; i++) {
+      const a = P[i];
+      for (const q of densePts(track, meta, L)) {
+        const dy = a[1] - q[1];
+        if (dy < BENEATH_M[0] || dy > BENEATH_M[1] || Math.hypot(q[0] - a[0], q[2] - a[2]) > q[3] / 2) continue;
+        const id = pieces[meta[q[4]].piece].id, prev = beneath.get(id);
+        beneath.set(id, prev ? [Math.min(prev[0], dy), Math.max(prev[1], dy), prev[2] || q[5] > meta[i].s] : [dy, dy, q[5] > meta[i].s]);
+      }
+    }
+    const under = [...beneath].map(([id, [d0, d1, ahead]]) => id + ' dy ' + d0.toFixed(1) + '..' + d1.toFixed(1) + (ahead ? ' (ahead)' : ' (behind)'));
+    fieldInfo.push(fd.id + ' beneath: ' + (under.length ? under.join(', ') : 'nothing (edge drop and rescue)'));
+  }
   // the schema the loader enforces (track/schema.js), errors and warnings both
   const sv = validate(JSON.parse(JSON.stringify(track)));
   for (const m of [...sv.errors, ...sv.warnings]) errs.push('schema: ' + m);
@@ -514,7 +620,7 @@ export function checks({ track, closure, lengthM, lipPiece, meta, pieces }) {
   const edges = openEdgeReport(track, meta, L);
   for (const e of edges) if (e.ahead >= 0 && !e.route) errs.push('open edge at node ' + e.node + ' side ' + e.side + ' over road ' + e.ahead.toFixed(0) + ' m ahead has no route');
   const over = edges.filter((e) => e.under >= 0);
-  return { errs, info: { nodes: N, lengthM: Math.round(lengthM), routes: routeInfo, spacing: [r2(minGap), r2(maxGap)], minOverlapSepM: r2(minSep),
+  return { errs, info: { nodes: N, lengthM: Math.round(lengthM), routes: routeInfo, fields: fieldInfo, spacing: [r2(minGap), r2(maxGap)], minOverlapSepM: r2(minSep),
     levels, crossings: crossings.map((c) => c.map(Math.round)),
     openOver: over.map((e) => e.node + e.side + (e.ahead >= 0 ? '>' + e.route : '<behind') + ' dy ' + e.dy).join(' '),
     lipPitchDeg: r2(pitch / DEG), jumpLand: report.join(' '),

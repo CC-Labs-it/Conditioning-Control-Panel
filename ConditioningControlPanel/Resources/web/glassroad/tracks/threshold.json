@@ -48,14 +48,14 @@
     {"p":[63,10.19,47.4],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[63,10.42,36.6],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[63,10.7,25.8],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[63,11.04,15],"roll":0,"w":17.5,"flags":["rail","boost"],"speed":1,"surface":"glass"},
-    {"p":[63,11.41,4.2],"roll":0,"w":17.5,"flags":["open"],"speed":1,"surface":"glass"},
-    {"p":[63,11.8,-6.6],"roll":0,"w":17.5,"flags":["open"],"speed":1,"surface":"glass"},
-    {"p":[63,12.2,-17.4],"roll":0,"w":17.5,"flags":["open"],"speed":1,"surface":"glass"},
-    {"p":[63,12.59,-28.2],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[63,12.96,-39],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[63,13.3,-49.8],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[63,13.58,-60.6],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[63,11.04,15],"roll":0,"w":19.11,"flags":["rail","boost"],"speed":1,"surface":"glass"},
+    {"p":[63,11.41,4.2],"roll":0,"w":21,"flags":["open"],"speed":1,"surface":"glass"},
+    {"p":[63,11.8,-6.6],"roll":0,"w":21,"flags":["open"],"speed":1,"surface":"glass"},
+    {"p":[63,12.2,-17.4],"roll":0,"w":21,"flags":["open"],"speed":1,"surface":"glass"},
+    {"p":[63,12.59,-28.2],"roll":0,"w":21,"flags":["open"],"speed":1,"surface":"glass"},
+    {"p":[63,12.96,-39],"roll":0,"w":21,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[63,13.3,-49.8],"roll":0,"w":19.62,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[63,13.58,-60.6],"roll":0,"w":17.73,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[63,13.81,-71.4],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[63,13.95,-82.2],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[63,14,-93],"roll":0,"w":16.25,"flags":["rail"],"speed":0.92,"surface":"glass"},
@@ -242,6 +242,29 @@
       "holes": [
         {"id":"aperture-left","node":131,"ds":27,"x":-7.25,"w":6,"len":8},
         {"id":"aperture-right","node":131,"ds":46,"x":7.25,"w":6,"len":8}
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "id": "bridge-stones",
+      "from": 32,
+      "to": 36,
+      "lanes": [-7,0,7],
+      "stones": [
+        {"id":"bridge-stones-0-0","node":32,"ds":0,"x":-7,"w":5,"len":5},
+        {"id":"bridge-stones-0-1","node":32,"ds":9,"x":-7,"w":5,"len":5},
+        {"id":"bridge-stones-0-2","node":33,"ds":7.2,"x":-7,"w":5,"len":5},
+        {"id":"bridge-stones-0-3","node":34,"ds":5.4,"x":-7,"w":5,"len":5},
+        {"id":"bridge-stones-0-4","node":35,"ds":3.6,"x":-7,"w":5,"len":5.2},
+        {"id":"bridge-stones-1-0","node":32,"ds":0,"x":0,"w":5,"len":8},
+        {"id":"bridge-stones-1-1","node":33,"ds":1.2,"x":0,"w":5,"len":5},
+        {"id":"bridge-stones-1-2","node":33,"ds":10.2,"x":0,"w":5,"len":5},
+        {"id":"bridge-stones-1-3","node":34,"ds":8.4,"x":0,"w":5,"len":11.2},
+        {"id":"bridge-stones-2-0","node":32,"ds":0,"x":7,"w":5,"len":11},
+        {"id":"bridge-stones-2-1","node":33,"ds":4.2,"x":7,"w":5,"len":5},
+        {"id":"bridge-stones-2-2","node":34,"ds":2.4,"x":7,"w":5,"len":5},
+        {"id":"bridge-stones-2-3","node":35,"ds":0.6,"x":7,"w":5,"len":8.2}
       ]
     }
   ],

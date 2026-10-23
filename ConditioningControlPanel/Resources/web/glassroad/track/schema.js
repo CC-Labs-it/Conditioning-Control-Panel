@@ -187,6 +187,30 @@ export function validate(t) {
     }
   }
 
+  // stones wave: fields of stepping stones (track/courts.js buildFields); a stone is anchored like a hole
+  if (t.fields !== undefined) {
+    if (!Array.isArray(t.fields)) err('fields must be an array');
+    else {
+      const ids = new Set();
+      t.fields.forEach((c, i) => {
+        const at = 'fields[' + i + ']';
+        if (!c || !isStr(c.id) || ids.has(c.id)) { err(at + ' needs a unique id'); return; }
+        ids.add(c.id);
+        if (!inRange(c.from) || !isInt(c.to) || c.to <= c.from || c.to > N) { err(at + ' needs from < to within nodes'); return; }
+        if (!Array.isArray(c.lanes) || !c.lanes.length || !c.lanes.every(isNum) || c.lanes.some((x, k) => k && x <= c.lanes[k - 1])) err(at + '.lanes must be sorted numbers');
+        if (!Array.isArray(c.stones)) { err(at + '.stones must be an array'); return; }
+        const stones = new Set();
+        for (const h of c.stones) {
+          if (!h || !isStr(h.id) || stones.has(h.id)) { err(at + ' stones need unique ids'); continue; }
+          stones.add(h.id);
+          if (!inRange(h.node) || h.node < c.from || h.node >= c.to || !isNum(h.x) || !isNum(h.w) || h.w < 3 || h.w > 8 || !isNum(h.len) || h.len < 3 || h.len > 12 ||
+              (h.ds !== undefined && (!isNum(h.ds) || h.ds < 0))) { err(at + ' stone ' + h.id + ' needs an in-field node, x, w in 3..8, len in 3..12 and ds >= 0'); continue; }
+          if (Math.abs(h.x) + h.w / 2 > nodes[h.node].w / 2) err(at + ' stone ' + h.id + ' leaves the road footprint');
+        }
+      });
+    }
+  }
+
   if (!t.ai || typeof t.ai !== 'object' || !Array.isArray(t.ai.lines) || !Array.isArray(t.ai.pace)) err('ai must have lines[] and pace[]');
   else {
     t.ai.lines.forEach((l, i) => { if (!l || !inRange(l.node) || !isNum(l.x)) err('ai.lines[' + i + '] needs node and x'); });

@@ -19,7 +19,8 @@ test('width: expanded surface and rails agree with the ground probe, including j
     if (f.w > 14 && f.w < 16) tapered++;
   }
   assert.ok(widened > 500 && tapered > 10);
-  for (const s of [30, 120, 260, 400, track.jumps[0].landS + 3]) {
+  // stones wave: 400 sat inside the bridge's stone field (no deck there), the probe moved to the railed deck after it
+  for (const s of [30, 120, 260, 450, track.jumps[0].landS + 3]) {
     const f = track.frameAt(s);
     for (const side of [-1, 1]) {
       for (const inset of [0.25, -0.25]) {

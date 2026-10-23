@@ -9,7 +9,7 @@ import { buildRefNormals, frameAtSegU, makeFrame } from './frames.js';
 import { createQuery, flowAt } from './query.js';
 import { buildDriveline, buildChecklines } from './driveline.js';
 import { buildMeshes } from './mesh.js';
-import { buildCourts } from './courts.js';
+import { buildCourts, buildFields } from './courts.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
 export function loadTrack(json, { validate = true } = {}) {
@@ -57,6 +57,8 @@ export function loadTrack(json, { validate = true } = {}) {
   });
   const lm = json.limits;
   const courts = buildCourts(json.courts, nodeS, frameAt);
+  // stones wave: fields of stepping stones ([] when the track has none), each stone with its s like a hole
+  const fields = buildFields(json.fields, nodeS, frameAt);
   // B1 (CONTRACT-B1.md section 9): item boxes and pickup bubbles, s = node s + ds, wrapped
   const items = (json.items || []).map((e) => ({ kind: e.kind, node: e.node, x: e.x, ds: e.ds || 0, s: wrap(nodeS[e.node] + (e.ds || 0), lengthM) }));
 
@@ -71,7 +73,7 @@ export function loadTrack(json, { validate = true } = {}) {
 
   const track = {
     id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS,
-    sections, sectionAt, boosts, jumps, items, routes, courts,
+    sections, sectionAt, boosts, jumps, items, routes, courts, fields,
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
     nodeFlags: (i) => nodes[((i % N) + N) % N].flags,
@@ -79,7 +81,7 @@ export function loadTrack(json, { validate = true } = {}) {
     /** Water flow at (seg, segT) into out, see track/query.js flowAt. */
     flowAt: (seg, segT, out) => flowAt(nodes, ((seg % N) + N) % N, segT, out),
     frameAt,
-    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts),
+    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields),
     checklines: null,
   };
   track.checklines = buildChecklines(track, json.checkpoints);

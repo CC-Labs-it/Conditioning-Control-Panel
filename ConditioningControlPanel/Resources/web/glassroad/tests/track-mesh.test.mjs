@@ -62,6 +62,9 @@ test('mesh: rails only on railed sides, decals on the road', () => {
   const r = M.rails;
   for (let v = 0; v < r.positions.length / 3; v++) {
     const q = tr.query(r.positions[v * 3], r.positions[v * 3 + 1], r.positions[v * 3 + 2]);
+    // stones wave: the court's rail under the bridge resolves to the (open) field deck 10 m above it; the court probe
+    // keeps the ribbon for a point outside the court's edge (the outer rail face), so judge only a rail on its own road
+    if (Math.abs(q.height) > 2.5) continue;
     const fl = tr.nodeFlags(q.seg);
     assert.ok(!fl.includes('open') || q.segT < 1e-3 || q.segT > 1 - 1e-3, 'rail vertex on an open segment ' + q.seg);
     assert.ok(r.uvs[v * 2] >= 0 && r.uvs[v * 2] <= 1.2001);   // u = metres up, the rail is 1.2 m (EDGES lane)

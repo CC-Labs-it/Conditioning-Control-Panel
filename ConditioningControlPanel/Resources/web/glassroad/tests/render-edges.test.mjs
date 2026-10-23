@@ -28,7 +28,7 @@ test('edges: the rail is a 1.2 m barrier and the render reads the same height', 
 
 test('edges: the hazard strip and lip lie on the road along open edges only, never beside a rail', () => {
   const v = verts(M.edgeStrip);
-  assert.ok(v.length > 100);
+  assert.ok(v.length > 60);   // the stone field (wave 2) paints no strip along its 43 m: the lips are the edges there
   let openRun = 0;
   for (const [x, y, z, u] of v) {
     const q = track.query(x, y, z);

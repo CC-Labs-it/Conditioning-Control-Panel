@@ -17,12 +17,15 @@
  * lands on it (sim/kart.js); nothing beneath keeps the edge drop and rescue.
  */
 import { makeFrame, frameAtSegU } from './frames.js';
-import { holeAt, holeDistance } from './courts.js';
+import { holeAt, holeDistance, fieldAt, stoneIn, stoneDistance } from './courts.js';
 
 const WINDOW = 4, FAR_M = 25, BELOW_UP = 0.5, BELOW_PASS_M = 1.5, BELOW_END_M = 0.5;
 
+/* Stones wave: inside a field (track/courts.js) a result over a stone is on road as usual and carries `stone` (the
+ * stone row); over the void onRoad is false, `hole` is the field's one shared void object ({ id, field, lip: true })
+ * and holeDist is minus the distance to the nearest stone edge. Outside every field `stone` is null. */
 export function makeQuery() {
-  return { seg: 0, segT: 0, s: 0, lateral: 0, height: 0, normal: [0, 1, 0], onRoad: false, edgeDist: 0, hole: null, holeDist: Infinity, surface: 'glass', flags: null, railed: false, flow: [0, 0], p: [0, 0, 0] };
+  return { seg: 0, segT: 0, s: 0, lateral: 0, height: 0, normal: [0, 1, 0], onRoad: false, edgeDist: 0, hole: null, holeDist: Infinity, stone: null, surface: 'glass', flags: null, railed: false, flow: [0, 0], p: [0, 0, 0] };
 }
 
 /**
@@ -40,7 +43,7 @@ export function flowAt(nodes, seg, segT, out = [0, 0]) {
   return out;
 }
 
-export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = []) {
+export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], fields = []) {
   const { N, SUB, samplePos: S } = sp;
   // bounding sphere per segment over its samples
   const centre = new Float64Array(N * 3), radius = new Float64Array(N);
@@ -120,6 +123,14 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = []) {
     out.edgeDist = half - Math.abs(lat);
     out.hole = holeAt(courts, out.s, lat);
     out.holeDist = out.hole ? holeDistance(out.hole, out.s, lat) : Infinity;
+    out.stone = null;
+    if (fields.length && !out.hole) {
+      const fd = fieldAt(fields, out.s);
+      if (fd) {
+        out.stone = stoneIn(fd, out.s, lat);
+        if (!out.stone) { out.hole = fd.void; out.holeDist = -stoneDistance(fd, out.s, lat); }
+      }
+    }
     out.onRoad = !gap && !out.hole && out.edgeDist >= 0;
     out.surface = fr.surface;
     out.flags = fl;
@@ -187,7 +198,7 @@ export function copyQuery(o, a) {
   o.seg = a.seg; o.segT = a.segT; o.s = a.s; o.lateral = a.lateral; o.height = a.height;
   o.normal[0] = a.normal[0]; o.normal[1] = a.normal[1]; o.normal[2] = a.normal[2];
   o.onRoad = a.onRoad; o.edgeDist = a.edgeDist; o.surface = a.surface; o.flags = a.flags; o.railed = a.railed;
-  o.hole = a.hole; o.holeDist = a.holeDist;
+  o.hole = a.hole; o.holeDist = a.holeDist; o.stone = a.stone || null;
   if (!o.flow) o.flow = [0, 0];
   if (a.flow) { o.flow[0] = a.flow[0]; o.flow[1] = a.flow[1]; } else { o.flow[0] = 0; o.flow[1] = 0; }
   o.p[0] = a.p[0]; o.p[1] = a.p[1]; o.p[2] = a.p[2];

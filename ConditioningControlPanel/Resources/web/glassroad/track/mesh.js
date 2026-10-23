@@ -75,6 +75,15 @@ export function buildMeshes(track, dl) {
   const courtHoles = (track.courts || []).flatMap((c) => c.holes);
   const row = (q) => q % Q;              // row index of the start of quad q (wrapped)
   const rowS = (q) => dl.s[row(q)] + Math.floor(q / Q) * L;
+  // stones wave: inside a field the deck is gone (no road, no hazard strip; RENDER places the stones), so the
+  // road and the open-edge runs break at the field's ends. With no fields every run is as before.
+  const fields = track.fields || [];
+  const inField = (q) => {
+    if (!fields.length) return false;
+    const sm = (((rowS(q) + rowS(q + 1)) / 2) % L + L) % L;
+    for (let i = 0; i < fields.length; i++) if (sm >= fields[i].fromS && sm < fields[i].toS) return true;
+    return false;
+  };
 
   // road (water: every road vertex of a row carries its node's surface id and the flow lerped at that row)
   const road = builder(true), fw = [0, 0];
@@ -83,7 +92,7 @@ export function buildMeshes(track, dl) {
     track.flowAt(seg, k / dl.rows, fw);
     return surfaceId(track.nodeSurface(seg));
   };
-  for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q])) {
+  for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q] && !inField(q))) {
     const top = [], bot = [], el = [], er = [];
     for (let k = 0; k <= nq; k++) {
       const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);
@@ -175,7 +184,7 @@ export function buildMeshes(track, dl) {
     strip(jumps, j.s - LIP_M, LIP_M, 0, w, false);
   }
   const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
-  const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS);
+  const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField);
   return { road: road.done(), rails: rails.done(), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
 }
 
@@ -233,11 +242,11 @@ function courtWalls(m, track) {
 
 /* EDGES lane: the open edges read "you can fall here" (a hazard strip and a lip, a haze falling away below it)
  * and every rail run ends in a tall post, so a railed edge and an open one differ in shape, not colour alone. */
-function buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS) {
+function buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField = () => false) {
   const E = EDGE_MESH, Q = dl.quads, L = track.lengthM;
   const strip = builder(), haze = builder(), caps = builder();
   for (const side of [-1, 1]) {
-    for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q] && !railed(q, side))) {
+    for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q] && !railed(q, side) && !inField(q))) {
       const sr = [], hr = [];
       for (let k = 0; k <= nq; k++) {
         const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);
