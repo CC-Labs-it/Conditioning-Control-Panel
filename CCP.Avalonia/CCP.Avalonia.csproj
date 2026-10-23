@@ -199,6 +199,8 @@
     <AvaloniaResource Include="..\Assets\BlinkTrainer\Demo\*.png"
                       Link="Resources\BlinkTrainer\Demo\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\app.ico" Link="Resources\app.ico" />
+    <!-- Header Sparkle wallet's croupier EMI (WPF SparkleWallet.xaml:34-39). -->
+    <AvaloniaResource Include="..\Assets\emi\wallet_croupier_*.png" Link="Resources\emi\%(Filename)%(Extension)" />
     <!-- WPF EmiFace.PixelFont's shipped Press Start 2P (Resources/emi/fonts), for the ring cards. -->
     <AvaloniaResource Include="..\Assets\emi\fonts\*.ttf" Link="Resources\emi\fonts\%(Filename)%(Extension)" />
     <!-- App fonts (Platform/AppFonts.cs, distro-check F1/F4): WPF's display face Fredoka (OFL) and a
@@ -212,6 +214,10 @@
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\Assets\*.png"
                       Link="Resources\%(Filename)%(Extension)" />
+    <!-- The animated dashboard logo (WPF ConditioningControlPanel.csproj:272) and its renderer, one
+         SkiaSharp source compiled into both heads rather than a second copy. -->
+    <AvaloniaResource Include="..\Assets\branding\ccp-logo.jpg" Link="Resources\branding\ccp-logo.jpg" />
+    <Compile Include="..\ConditioningControlPanel\Controls\DashboardLogoRenderer.cs" Link="Controls\DashboardLogoRenderer.cs" />
 
     <AvaloniaResource Include="..\Assets\achievements\*.png"
                       Link="Resources\achievements\%(Filename)%(Extension)" />
@@ -232,6 +238,12 @@
          assets/sessions output path so Core's loader sees the same files on every head. -->
     <Content Include="..\Assets\sessions\*.session.json"
              Link="assets\sessions\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <!-- The banner line pool (Core BannerPoolService reads Resources/banner/lines.<lang>.json), as WPF csproj:661. -->
+    <Content Include="..\Assets\banner\*.json" Link="Resources\banner\%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>

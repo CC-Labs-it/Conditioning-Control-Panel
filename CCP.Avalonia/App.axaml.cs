@@ -449,6 +449,10 @@ namespace ConditioningControlPanel.Avalonia
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
+                // P31: WPF seeds EffectPayloadFiring. ponytail: no chaos payload effects on this head yet
+                // (next lane chaos-bubble-field-b); log so a fired payload is never silently dropped.
+                Services.Chaos.EffectPayload.Firer = p =>
+                    Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
@@ -590,11 +594,14 @@ namespace ConditioningControlPanel.Avalonia
                         if (amount > 0 && Sessions?.IsRunning != true) sync.Nudge($"xp:{source}");
                     };
                     Platform.AccountSeed.RestoreSession();
+                    // WPF CheckCloudSettingsRestoreAsync: a fresh settings file arms the welcome-back sheet.
+                    Platform.WelcomeBackOffer.Arm(CoreSettings.Service?.WasSettingsFileMissing == true, CorePaths.UserData);
                     Dispatcher.UIThread.Post(async () =>
                     {
                         await Platform.AccountSeed.InitializeAsync();
                         await Platform.AccountSeed.ValidateRestoredSessionAsync();
                         (desktop.MainWindow as Views.Windows.MainShellWindow)?.UpdateQuickLoginUI();
+                        await Platform.WelcomeBackOffer.TryOfferAsync("startup");
                     });
                 }
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
@@ -619,6 +626,9 @@ namespace ConditioningControlPanel.Avalonia
                     if (friends != null)
                     {
                         Platform.FriendsHead.Service = friends;
+                        // WPF App.xaml.cs:2979: the feed listens to the service from startup on.
+                        try { Platform.FriendsHead.Feed = global::ConditioningControlPanel.Services.Friends.FriendsFeed.CreateForApp(friends, () => Platform.FriendsHead.Identity()?.UnifiedId); }
+                        catch (Exception exFeed) { Serilog.Log.Debug("[Friends] feed failed to start: {E}", exFeed.Message); }
                         CoreAccount.UnifiedIdentityChanged += (_, _) => friends.Kick();
                         friends.Start(new Platform.FriendsHead.Timer());
                         // WPF App.xaml.cs:2991 LEASH: rides the friends poll (report out, block in, 20 s while leashed).
@@ -628,10 +638,15 @@ namespace ConditioningControlPanel.Avalonia
                                 Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
                         }
                         catch (Exception exLeash) { Serilog.Log.Warning(exLeash, "[Leash] service could not be built"); }
+                        // WPF App.xaml.cs:3160: what a delivery does when it lands (the knock card).
+                        Platform.FriendsLanding.Start();
                     }
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
                 Platform.LeashHead.StartDemoIfAsked();   // Debug + sandbox only (WPF CCP_LEASH_DEMO)
+                // WPF App.xaml.cs:3010-3013: the task runner the gate's action starts.
+                try { Platform.LeashTaskHost.Start(Platform.LeashHead.Service as ConditioningControlPanel.Services.Leash.LeashService); }
+                catch (Exception exRunner) { Serilog.Log.Warning(exRunner, "[Leash] task runner could not be built"); }
                 // WPF App.xaml.cs:2940-2968. EnsureBaselineAsync keeps WPF's rules: no-op on a full
                 // install, under a debugger, in offline mode, or when nothing is missing. A Linux dev
                 // build never reads as a full install (flashes_audio is not shipped here), so an
@@ -894,6 +909,7 @@ namespace ConditioningControlPanel.Avalonia
                     CoreEngine.Stop();
                     StopDesktopOverlays();
                     Views.Overlays.CornerGifOverlay.StopAll();   // WPF CornerGifService.OnMainWindowClosing / OnExit
+                    Views.Overlays.SpeakCueOverlay.CloseActive();   // a topmost window must not outlive the shell
                     Views.Windows.LockCardWindow.ForceCloseAll();
                 };
                 // WPF App.xaml.cs:2602: restore at ApplicationIdle, once startup has settled (#709).
@@ -959,7 +975,9 @@ namespace ConditioningControlPanel.Avalonia
                 // (docs/avalonia-linux-install.md). dlopen off the UI thread; nothing when all load.
                 Dispatcher.UIThread.Post(async () =>
                 {
-                    if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(null, audioFailed: Platform.LibVlcAudio.Shared is null)) is not { } missing) return;
+                    if (await System.Threading.Tasks.Task.Run(() => LinuxDependencies.Check(
+                        // CCP_LINUX_WEBVIEW=off: web view packages are not missing, they are not wanted.
+                        Views.Controls.WebHost.LinuxChoice == "off" ? LinuxDependencies.All.Except(LinuxDependencies.WebViews) : null, audioFailed: Platform.LibVlcAudio.Shared is null)) is not { } missing) return;
                     Serilog.Log.Warning("Missing Linux dependencies: {Text}", missing.Text);
                     var command = missing.Command;
                     Notifications.Show(missing.Text, Helpers.NotificationType.Warning, TimeSpan.FromSeconds(20),
@@ -981,6 +999,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SubliminalWhisperShow.StopAll();
             Views.Overlays.SubliminalOverlay.CloseAll();
             Views.Overlays.BouncingTextOverlay.Stop();
+            Views.Overlays.ChaosFlashOverlay.CloseActive();
             Views.Overlays.SpiralOverlay.CloseAll();   // WPF StopEngine -> App.Overlay.Stop(); panic and exit too
         }
 
@@ -1172,8 +1191,10 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
+            try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
