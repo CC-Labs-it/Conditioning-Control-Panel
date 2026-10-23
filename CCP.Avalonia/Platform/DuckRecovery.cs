@@ -90,31 +90,45 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var restored = 0;
             try
             {
-                var live = ParseSinkInputs(pactl("-f json list sink-inputs")).Where(s => s.Pid != ownPid).ToList();
-                var names = new Dictionary<int, string>();
-                foreach (var s in live) if (s.Pid != 0) names.TryAdd(s.Pid, s.Name);
-                var done = new HashSet<int>();
-                foreach (var (index, stream) in owed)
-                {
-                    var target = DuckRecoveryRule.Match(stream.Pid, stream.Name, names, ownPid);
-                    // The app's streams; the very stream when it is still there. Pulse sometimes names no
-                    // PID: then only the same index under the same name.
-                    var hits = target != null
-                        ? live.Where(s => s.Pid == target).ToList()
-                        : live.Where(s => s.Pid == 0 && s.Index == index && s.Name.Length > 0 && s.Name == stream.Name).ToList();
-                    if (hits.Any(s => s.Index == index)) hits = hits.Where(s => s.Index == index).ToList();
-                    foreach (var s in hits)
-                    {
-                        if (!done.Add(s.Index)) continue;
-                        try { pactl($"set-sink-input-volume {s.Index} {VolumeArgs(stream.Volumes, s.Volumes.Length)}"); restored++; }
-                        catch { /* the stream ended meanwhile */ }
-                    }
-                }
+                restored = RestorePulse(owed, pactl, ownPid).Count;
                 Log.Information("Restored {Count} audio streams from crash recovery", restored);
             }
             catch (Exception ex) { Log.Warning("Failed to recover ducking state: {Error}", ex.Message); }
             SavePulse(path, new Dictionary<int, PulseStream>());
             return restored;
+        }
+
+        /// <summary>
+        /// Hands each owed stream its volume back on a live sink-input: the same PID and name, else the same
+        /// app by name (DuckRecoveryRule.Match), never our own process nor a sink-input in
+        /// <paramref name="busy"/> (one we hold ducked right now). Returns the owed keys that landed.
+        /// </summary>
+        internal static HashSet<int> RestorePulse(IReadOnlyDictionary<int, PulseStream> owed, Func<string, string> pactl, int ownPid,
+            ISet<int>? busy = null)
+        {
+            var landed = new HashSet<int>();
+            var live = ParseSinkInputs(pactl("-f json list sink-inputs"))
+                .Where(s => s.Pid != ownPid && (busy == null || !busy.Contains(s.Index))).ToList();
+            var names = new Dictionary<int, string>();
+            foreach (var s in live) if (s.Pid != 0) names.TryAdd(s.Pid, s.Name);
+            var done = new HashSet<int>();
+            foreach (var (index, stream) in owed)
+            {
+                var target = DuckRecoveryRule.Match(stream.Pid, stream.Name, names, ownPid);
+                // The app's streams; the very stream when it is still there. Pulse sometimes names no
+                // PID: then only the same index under the same name.
+                var hits = target != null
+                    ? live.Where(s => s.Pid == target).ToList()
+                    : live.Where(s => s.Pid == 0 && s.Index == index && s.Name.Length > 0 && s.Name == stream.Name).ToList();
+                if (hits.Any(s => s.Index == index)) hits = hits.Where(s => s.Index == index).ToList();
+                foreach (var s in hits)
+                {
+                    if (!done.Add(s.Index)) continue;
+                    try { pactl($"set-sink-input-volume {s.Index} {VolumeArgs(stream.Volumes, s.Volumes.Length)}"); landed.Add(index); }
+                    catch { /* the stream ended meanwhile */ }
+                }
+            }
+            return landed;
         }
 
         /// <summary>pactl takes one volume per channel or one for all: a restarted stream may have a different layout.</summary>
