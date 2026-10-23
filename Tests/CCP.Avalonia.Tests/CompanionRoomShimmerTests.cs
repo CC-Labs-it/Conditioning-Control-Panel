@@ -20,6 +20,8 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class CompanionRoomShimmerTests
 {
+    // Only the `false` case proves the State branch (fail-proven by removing it): with `true`, OnLoaded replays the
+    // shimmer on reload, so that case guards the unloaded-view check, not the late-entry restore.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
