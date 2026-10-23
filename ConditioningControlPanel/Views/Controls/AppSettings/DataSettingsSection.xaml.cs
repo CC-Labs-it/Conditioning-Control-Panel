@@ -223,10 +223,15 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             // SealForReset waited out any write already in flight, so this sweep is the last word.
             Services.FactoryResetSweep.Delete(dir, LogSweep);
 
-            // Hard exit on purpose - see the method docs. Serilog buffers, so flush first or the
-            // whole [RESET] trail above is lost exactly when it matters.
+            // The window stays up for the exit's few seconds: nothing in it may be pressed meanwhile.
+            try { if (Window.GetWindow(this) is { } host) host.IsEnabled = false; } catch { }
+
+            // Serilog buffers, so flush first or the whole [RESET] trail above is lost exactly when
+            // it matters. Then leave OFF this thread (UiThreadExit, ccp-bugs #1468): Environment.Exit
+            // here froze the app, since ProcessExit's SystemEvents.Shutdown waits on a Send to the
+            // UI thread. Settings stay sealed for the whole exit window, so nothing writes them back.
             try { App.Logger?.Information("[RESET] flushing log before exit"); Serilog.Log.CloseAndFlush(); } catch { }
-            Environment.Exit(0);
+            Services.Diagnostics.UiThreadExit.Begin(0);
         }
 
         /// <summary>
