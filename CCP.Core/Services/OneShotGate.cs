@@ -26,6 +26,16 @@ namespace ConditioningControlPanel.Services
             => dispatchGeneration is int gen && gen != currentGeneration;
 
         /// <summary>
+        /// May a subliminal show that has just arrived go on screen? The ambient scheduler's own
+        /// cards need it running; a legacy one-shot needs the latch; a point-fired show carrying a
+        /// dispatch generation is admitted on that alone (the caller has already dropped a retired
+        /// one). The latch is a single bool, so two shows waiting behind the same haptic head
+        /// start used to share it and the second was lost (ccp-bugs #1421).
+        /// </summary>
+        internal static bool AdmitsShow(bool ambientRunning, bool oneShotLatch, int? dispatchGeneration)
+            => ambientRunning || oneShotLatch || dispatchGeneration.HasValue;
+
+        /// <summary>
         /// Should a cancel take the subliminal card currently on screen down?
         /// Unlike flashes there is no per-card window to tag: the service reuses one keep-alive
         /// window per screen, so the caller remembers which generation put the visible card up

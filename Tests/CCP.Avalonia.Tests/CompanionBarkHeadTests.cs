@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Bark;
 using Xunit;
@@ -71,6 +72,41 @@ public sealed class CompanionBarkHeadTests
         {
             shell.Close();
             (BarkHead.Engine, s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll) = old;
+        }
+    });
+
+    [Fact]   // WPF BarkService.cs:728-733: a bouncing-text wall bounce and a corner hit each raise their bark
+    public void ABounceAndACornerHitEachRaiseTheirBark() => WithSeamsRestored(_ =>
+    {
+        var old = (BarkHead.Engine, BouncingTextOverlay.CornerHit);
+        var eng = BouncingTextOverlay.Engine;
+        try
+        {
+            BouncingTextOverlay.CornerHit = () => { };
+            BouncingTextOverlay.Stop();
+            eng.SetBounds(0, 0, 1000, 800);
+            eng.Measure = (_, _) => (200, 60);
+            eng.Start(new ConditioningControlPanel.Models.AppSettings());
+            var l = eng.Logos[0];
+
+            BarkHead.Engine = Seeded(Rule("BouncingTextBounce", "boing"), out var spoken);
+            (l.PosX, l.PosY, l.VelX, l.VelY) = (400, 300, 100, 100);
+            BouncingTextOverlay.Advance(0.05);                       // mid-screen: no bounce, no bark
+            Assert.Null(spoken());
+            (l.PosX, l.PosY, l.VelX, l.VelY) = (2, 300, -100, 0);
+            BouncingTextOverlay.Advance(0.05);                       // left wall
+            Assert.Equal("boing", spoken());
+
+            BarkHead.Engine = Seeded(Rule("BouncingTextCorner", "corner!"), out spoken);   // fresh engine: the 60 s gap is per engine
+            (l.PosX, l.PosY, l.VelX, l.VelY) = (2, 2, -100, -100);
+            BouncingTextOverlay.Advance(0.05);                       // both walls: a corner hit
+            Assert.Equal("corner!", spoken());
+        }
+        finally
+        {
+            BouncingTextOverlay.Stop();
+            eng.Measure = null;
+            (BarkHead.Engine, BouncingTextOverlay.CornerHit) = old;
         }
     });
 
