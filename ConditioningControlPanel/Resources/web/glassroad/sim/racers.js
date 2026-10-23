@@ -5,6 +5,9 @@
  * racer-event { racer, name, p }. Both sinks record lap and finish on the racer first. Item effects reach
  * the sim without a kart.js edit: `act` is the input after mods, and each racer reads feel through its own
  * overlay (grip, slide, top speed, soft rails for the steering assist). No three.js.
+ * Online (B2, `net` option, NET.md): one racer per seat at that seat's grid slot, racer 0 = this client's seat.
+ * A racer of kind 'remote' runs no sim: racers.remote(r, dt) (net/remote.js) writes its state each tick. The
+ * bot seats this client keeps are kind 'local' bots; setKind moves a seat between the two (bot keeper).
  */
 import { S, BOOST, RESPAWN, createState, copyState, lerpState } from './state.js';
 import { spawn, step as kartStep } from './kart.js';
@@ -33,21 +36,24 @@ export const identityMods = (m = {}) => Object.assign(m, { steerMul: 1, steerAdd
 
 function newActions() { return Object.assign(createActions(), { item: false, back: false }); }
 
-export function createRacers(track, feel, queue, { count = 8, seed = 1 } = {}) {
+export function createRacers(track, feel, queue, { count = 8, seed = 1, net = null } = {}) {
   const list = [];
+  if (net) count = net.length;
   const grid = () => {
     const ps = clamp(feel.get('ai.playerSlot') | 0, 0, count - 1), slots = [ps];
     for (let k = 0; slots.length < count; k++) if (k !== ps) slots.push(k);
     return slots;
   };
-  const slots = grid();
+  const slots = net ? net.map((x) => x.seat) : grid();
   for (let i = 0; i < count; i++) list.push(makeRacer(i, slots[i]));
-  const racers = { list, player: list[0], clockS: 0, seed, place, step, interpolate, setAssist, nearby };
+  const racers = { list, player: list[0], clockS: 0, seed, place, step, interpolate, setAssist, nearby, setKind, remote: null };
 
   function makeRacer(i, slot) {
-    const isBot = i > 0;
+    const n = net && net[i], isBot = n ? n.kind === 'bot' : i > 0;
     const r = {
-      i, meta: { i, id: isBot ? 'bot' + i : 'you', name: isBot ? 'EMI bot' : 'You', isBot, tint: i, slot },
+      i, kind: n && i > 0 && !n.local ? 'remote' : 'local',
+      meta: n ? { i, id: 'seat' + n.seat, name: i === 0 ? 'You' : n.name, isBot, tint: n.seat, slot, seat: n.seat, look: n.look, left: false, paused: false }
+        : { i, id: isBot ? 'bot' + i : 'you', name: isBot ? 'EMI bot' : 'You', isBot, tint: i, slot },
       st: createState(), prev: createState(), view: createState(),
       input: newActions(), act: newActions(), feel: createFeelOverlay(feel), mods: identityMods(),
       item: { id: null, rolling: false, rollT: 0, heldT: 0 },
@@ -64,7 +70,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1 } = {}) {
           r.bestLapS = r.bestLapS > 0 ? Math.min(r.bestLapS, p.lapTimeS) : p.lapTimeS;
         } else if (name === 'finish') { r.finished = true; r.finishS = p.timeS; }
         else if (name === 'drop') r.falls++;
-        if (isBot) queue.emit('racer-event', { racer: i, name, p });
+        if (i > 0) queue.emit('racer-event', { racer: i, name, p });   // online, a remote person is not the player either
         else queue.emit(name, p);
       },
     };
@@ -105,6 +111,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1 } = {}) {
     const base = basePace();
     for (const r of list) {
       copyState(r.prev, r.st);
+      if (r.kind === 'remote') { if (racers.remote) racers.remote(r, dt); continue; }
       if (r.meta.isBot) {
         const v = r.raceView;
         if (v.phase !== 'finished') v.phase = live ? 'racing' : race.phase;
@@ -146,6 +153,9 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1 } = {}) {
     const d = muls[clamp(feel.get('ai.difficulty') | 0, 0, muls.length - 1)];
     return pace.map((p) => p * d);
   }
+
+  /** Online: 'remote' (state written by net) or 'local' (a kept bot simulated here). */
+  function setKind(i, kind) { list[i].kind = kind === 'remote' ? 'remote' : 'local'; }
 
   function interpolate(alpha) { for (const r of list) lerpState(r.view, r.prev, r.st, alpha); }
 
