@@ -13,9 +13,12 @@
  */
 import { MeshBasicNodeMaterial, Color, DoubleSide } from 'three/webgpu';
 import { vec3, float, vertexColor, normalWorld, positionWorld, cameraPosition, normalize, dot, max, abs, pow, mix, clamp,
-  smoothstep, texture, uv, uniform, faceDirection, reflect } from 'three/tsl';
+  smoothstep, texture, uv, uniform, faceDirection, reflect, attribute, positionLocal } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { worldLook } from '../colossiMath.js';
+import { currentArt } from '../art.js';
+import { surfaceFinish } from '../materialDetailMath.js';
+import { VERTEX_SHADE_ATTRIBUTE } from '../vertexShadeMath.js';
 
 /** The sky's colour toward world direction d (a cheap stand-in for the dome under the haze). */
 export function skyToward(pal, d) {
@@ -50,6 +53,12 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   if (src && src.vertexColors) base = base.mul(vertexColor().rgb);
   if (src && src.map) base = base.mul(texture(src.map, uv()).rgb);
   const metal = float(Math.min(1, (src && src.metalness) || 0));
+  const finish = surfaceFinish(src || {});
+  // Only validated source primitives carry this attribute. Dynamic faces remain neutral.
+  const vertexShade = src?.userData?.ccpVertexShade ? attribute(VERTEX_SHADE_ATTRIBUTE, 'vec2') : null;
+  const ao = vertexShade ? vertexShade.x : float(1);
+  const curve = vertexShade ? clamp(vertexShade.y.mul(255).sub(128).div(127), -1, 1) : float(0);
+  const cavity = mix(float(0.55), float(1), ao);
   // the tint keeps the paint's light and dark (symbols, panel lines) and swaps its hue
   if (tint && ink && !keepsOwnColour(src)) {
     const lum = dot(base, vec3(0.3, 0.59, 0.11));
@@ -69,13 +78,18 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   // the shaded side cools toward a fixed violet (a palette colour can be cream, which would lift it)
   const st = new Color(W.shadeTint);
   const shadeTint = mix(vec3(1, 1, 1), vec3(st.r, st.g, st.b).mul(1.5), 0.6);
-  const lit = mix(base.mul(shadeTint).mul(W.shadeFloor), base, diffuse);
+  const lit = mix(base.mul(shadeTint).mul(W.shadeFloor), base, diffuse).mul(curve.mul(0.06).add(1));
   const sky = Nf.y.mul(0.5).add(0.5).mul(0.12);                          // a little sky fill from above
   const H = normalize(Lv.add(V));
-  const spec = pow(max(dot(Nf, H), 0), mix(float(W.specPow * 0.4), float(W.specPow), metal)).mul(W.specGain).mul(metal.mul(0.8).add(0.35));
+  const wearMap = finish.metalness > 0.5 ? currentArt()?.detail('detail-gold-wear') : null;
+  // Source-local scalar variation needs no UV changes on the immutable watch/chess models.
+  const wear = wearMap ? texture(wearMap, positionLocal.xy.div(0.22)).r : float(0);
+  const specPower = float(finish.exponent).mul(wear.mul(-0.22).add(1));
+  const spec = pow(max(dot(Nf, H), 0), specPower).mul(W.specGain * finish.gain).mul(wear.mul(-0.15).add(1));
   const edge = max(float(1).sub(abs(dot(Nf, V))), 0);   // never negative under pow (NaN guard)
-  let col = lit.add(base.mul(pal.col(1)).mul(sky)).add(vec3(1, 0.95, 0.92).mul(spec));
+  let col = lit.add(base.mul(pal.col(1)).mul(sky));
   if (fill > 0) col = max(col, base.mul(fill));
+  col = col.mul(cavity).add(mix(vec3(1, 0.95, 0.92), base, metal.mul(0.65)).mul(spec).mul(ao.mul(0.3).add(0.7)));
   if (rim) {
     col = col.add(rim.mul(pow(edge, rimPow ?? W.propRimPow)).mul(rimGain ?? W.propRimGain));
   } else if (tint) {

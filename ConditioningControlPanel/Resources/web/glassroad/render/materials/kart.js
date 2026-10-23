@@ -7,9 +7,10 @@
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, Color, Vector3 } from 'three/webgpu';
 import {
   vertexColor, normalWorld, normalView, normalize, dot, max, vec3, abs, uniform, attribute, texture, float, mix, pow,
-  materialColor, materialEmissive, positionViewDirection,
+  materialColor, materialEmissive, materialRoughness, positionViewDirection, uv, clamp,
 } from 'three/tsl';
 import { LOOK } from '../look.js';
+import { currentArt } from '../art.js';
 
 export function shade(colour) {
   const L = normalize(vec3(...LOOK.lightDir));
@@ -48,6 +49,15 @@ export function createKartSurface(src, look, R) {
   const tintBy = (name, mul) => mix(vec3(1, 1, 1), mul, attribute(name, 'float').mul(keep));
   m.colorNode = materialColor.rgb.mul(tintBy('_cup_tint', u.cup)).mul(tintBy('_saucer_tint', u.saucer));
   m.opacityNode = float(1);
+  // Glaze detail only on the existing cup/saucer masks. Face pixels, EMI and ornament stay untouched.
+  const glaze = currentArt()?.detail('detail-porcelain-roughness');
+  if (glaze) {
+    const ceramic = clamp(attribute('_cup_tint', 'float').add(attribute('_saucer_tint', 'float')).mul(keep), 0, 1);
+    const rough = clamp(texture(glaze, uv().mul(6)).r, 0.2, 0.65);
+    m.roughnessNode = mix(materialRoughness, rough, ceramic.mul(0.65));
+    m.clearcoatNode = mix(float(src.clearcoat || 0), float(0.32), ceramic);
+    m.clearcoatRoughnessNode = mix(float(src.clearcoatRoughness || 0.1), float(0.24), ceramic);
+  }
   const fres = pow(float(1).sub(abs(normalView.dot(positionViewDirection))), R.rimPow);
   m.emissiveNode = materialEmissive.add(u.rim.mul(fres.mul(R.rimGain)));
   if (look) { u.cup.value.fromArray(look.cupMul); u.saucer.value.fromArray(look.saucerMul); u.rim.value.fromArray(look.rimLin); }

@@ -8,6 +8,8 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { Q } from './quality.js';
+import { attachVertexShade } from './vertexShade.js';
+import { MATERIAL_DETAIL_IDS, materialDetailId } from './materialDetailMath.js';
 
 const BASE = new URL('../art/', import.meta.url);
 const TRANSCODER = new URL('../vendor/three/addons/libs/basis/', import.meta.url).href;
@@ -44,6 +46,9 @@ export const currentArt = () => current;
  * onProgress(done, total) runs as each id settles (arrived or failed), for the warming card. */
 export async function loadArt(renderer, { want = WANT, onProgress = null } = {}) {
   const rows = new Map(), tex = new Map(), models = new Map(), failed = [];
+  const materialTier = Q.name;
+  const requested = [...new Set([...want, ...MATERIAL_DETAIL_IDS.map((id) => materialDetailId(id, materialTier))])];
+  const vertexShading = { applied: [], skipped: [] };
   let manifest = [];
   try {
     const res = await fetch(new URL('manifest.json', BASE));
@@ -59,8 +64,8 @@ export async function loadArt(renderer, { want = WANT, onProgress = null } = {})
   const gltf = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
 
   let settled = 0;
-  const tick = () => { settled++; if (onProgress) { try { onProgress(settled, want.length); } catch { /* the card only */ } } };
-  await Promise.all(want.map(async (id) => {
+  const tick = () => { settled++; if (onProgress) { try { onProgress(settled, requested.length); } catch { /* the card only */ } } };
+  await Promise.all(requested.map(async (id) => {
     try { await loadOne(id); } finally { tick(); }
   }));
   async function loadOne(id) {
@@ -77,7 +82,22 @@ export async function loadArt(renderer, { want = WANT, onProgress = null } = {})
         t.needsUpdate = true;
         tex.set(id, t);
       } else {
-        models.set(id, await gltf.loadAsync(url));
+        const sidecar = manifest.find((x) => x.kind === 'vertex-data' && x.sourceFile === r.file);
+        if (!sidecar) models.set(id, await gltf.loadAsync(url));
+        else {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error('model HTTP ' + response.status);
+          const source = await response.arrayBuffer();
+          const model = await gltf.parseAsync(source, new URL('.', url).href);
+          // Optional shading never turns an intact model into a missing asset.
+          let applied = false;
+          try {
+            const shade = await fetch(new URL(sidecar.file, BASE));
+            if (shade.ok) applied = await attachVertexShade(model, sidecar, source, await shade.arrayBuffer());
+          } catch { /* missing or incompatible detail keeps the accepted model */ }
+          vertexShading[applied ? 'applied' : 'skipped'].push(id);
+          models.set(id, model);
+        }
       }
     } catch (e) {
       failed.push(id);
@@ -85,10 +105,12 @@ export async function loadArt(renderer, { want = WANT, onProgress = null } = {})
     }
   }
   ktx2.dispose();
-  const wanted = want.filter((id) => rows.has(id) || !LATER.has(id)).length;
+  const wanted = requested.filter((id) => rows.has(id) || !LATER.has(id)).length;
   return current = {
     loaded: tex.size + models.size,
     wanted,
+    vertexShading,
+    detail: (id) => tex.get(materialDetailId(id, materialTier)) || null,
     tex: (id) => tex.get(id) || null,
     model: (id) => models.get(id) || null,
     row: (id) => rows.get(id) || null,
