@@ -68,6 +68,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     return;
                 }
                 if (IsOut) return;
+                // WPF :339-340: how she was summoned rides into the greeting's ctx.
+                _summonVia = string.Equals(why, "hotkey", StringComparison.OrdinalIgnoreCase) ? "hotkey" : "rail";
+                _summonTouring = string.Equals(why, "tour", StringComparison.OrdinalIgnoreCase);
 
                 var win = EnsureWindow();
                 if (win == null) return;

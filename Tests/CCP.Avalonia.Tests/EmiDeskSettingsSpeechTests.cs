@@ -26,7 +26,8 @@ public sealed class EmiDeskSettingsSpeechTests
           "panicPressed":{"hold":true,"holdMs":6000,"pools":["quiet"]},
           "dismissed":{"hold":true,"holdMs":6000,"pools":["sulk"]},
           "wordless":{"priority":3,"pools":["face"]}},
-         "pools":{"greeting":[{"id":"hello","t":"hello","spice":0}],
+         "pools":{"greeting":[{"id":"hello","t":"hello","spice":0,"when":["!touring"]},
+                              {"id":"tourhi","t":"tour hello","spice":0,"when":["touring","via:rail"]}],
                   "boot":[{"id":"boot","t":"desktop hello","spice":0}],
                   "spicy":[{"id":"spicy","t":"high spice","spice":2,"face":"^_~"}],
                   "quiet":[{"id":"quiet","t":"","spice":0}],
@@ -34,7 +35,7 @@ public sealed class EmiDeskSettingsSpeechTests
                   "face":[{"id":"face","t":"","spice":0,"face":"o_o"}]}}
         """;
 
-    private static Task InDesk(Func<EmiDeskService, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task InDesk(Func<EmiDeskService, Task> body, string? why = null) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -50,7 +51,7 @@ public sealed class EmiDeskSettingsSpeechTests
         {
             CoreSettings.Current.EmiDeskEnabled = true;
             CoreSettings.Current.EmiDeskMuteAvatar = false;
-            await desk.Summon();
+            await desk.Summon(why);
             await body(desk);
         }
         finally
@@ -129,6 +130,16 @@ public sealed class EmiDeskSettingsSpeechTests
         Assert.Null(desk.Window.BubbleText);
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task TourSummonGreetsWithTouringInItsContext() => InDesk(desk =>
+    {
+        // WPF EmiDeskService.cs:339-340/932: Summon("tour") greets with via=rail, touring=true.
+        desk.GreetingDue();
+        for (int i = 0; i < 3; i++) desk.Window!.AdvanceSpeech();
+        Assert.Equal("tour hello", desk.Window!.BubbleText);
+        return Task.CompletedTask;
+    }, "tour");
 
     [Fact]
     public Task HoldShowsQuietFaceThenRevertsToRest() => InDesk(desk =>

@@ -124,12 +124,21 @@ public sealed class ShellSettingsWiringTests
 
     private const string TourLines = """
         {"version":1,"moments":{
-          "tourStarted":{"priority":3,"pools":["p"],"limit":{"per":"ever","max":1}},
-          "tour.welcome":{"priority":3,"pools":["p"],"limit":{"per":"ever","max":1}},
-          "tourStep":{"priority":3,"pools":["p"],"limit":{"per":"ever","max":1}},
-          "tourSkipped":{"priority":3,"pools":["p"],"limit":{"per":"ever","max":1}}},
-         "pools":{"p":[{"id":"l","t":"line","spice":0}]}}
+          "tourStarted":{"priority":3,"pools":["s"],"limit":{"per":"ever","max":1}},
+          "tour.welcome":{"priority":3,"pools":["w"],"limit":{"per":"ever","max":1}},
+          "tourStep":{"priority":3,"pools":["g"],"limit":{"per":"ever","max":1}},
+          "tourSkipped":{"priority":3,"pools":["k"],"limit":{"per":"ever","max":1}}},
+         "pools":{"s":[{"id":"s","t":"start","spice":0}],"w":[{"id":"w","t":"welcome","spice":0}],
+                  "g":[{"id":"g","t":"step","spice":0}],"k":[{"id":"k","t":"skipped","spice":0}]}}
         """;
+
+    // Typing dots, then the line itself: what the bubble actually shows.
+    private static string? Landed(EmiDeskService desk)
+    {
+        Assert.Equal(".", desk.Window!.BubbleText);
+        for (int i = 0; i < 3; i++) desk.Window.AdvanceSpeech();
+        return desk.Window.BubbleText;
+    }
 
     [Fact]
     public Task ShellTourSummonsEmiAndNarratesEachStepUntilTheOverlayCloses() => Run(async (shell, service) =>
@@ -148,11 +157,14 @@ public sealed class ShellSettingsWiringTests
             Assert.True(desk.LineEngine.EverSpent("tourStarted"));
             Assert.True(desk.LineEngine.EverSpent("tour.welcome"));   // the first card's own pool
             Assert.False(desk.LineEngine.EverSpent("tourStep"));
+            Assert.Equal("welcome", Landed(desk));                    // the step line won the bubble
             CoreTutorial.Next();                                      // avatar_intro: no pool, generic step
             Assert.True(desk.LineEngine.EverSpent("tourStep"));
+            Assert.Equal("step", Landed(desk));
             PanicSurfaces.All.Single(s => s.Id == "tour").Stop(shell);
             Dispatcher.UIThread.RunJobs();
             Assert.True(desk.LineEngine.EverSpent("tourSkipped"));
+            Assert.Equal("skipped", Landed(desk));
             Assert.Null(EmiTourNarrator.Active);                      // detached with the overlay
         }
         finally
@@ -184,7 +196,9 @@ public sealed class ShellSettingsWiringTests
         else
         {
             Assert.True(tick.Opacity > 0.5, $"tick opacity {tick.Opacity}");
-            Assert.True(ripple.Opacity > 0.1, $"ripple opacity {ripple.Opacity}");
+            // The ripple fades 0.75 -> 0 in 520ms of wall clock; a slow runner reads it late (0.097 seen
+            // in rgate 39872884951), so only "it started" is stable. Off stays exactly 0.
+            Assert.True(ripple.Opacity > 0, $"ripple opacity {ripple.Opacity}");
         }
         (await Dialog<MessageDialog>(shell)).Close();
     });

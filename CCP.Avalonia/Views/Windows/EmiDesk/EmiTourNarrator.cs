@@ -1,6 +1,6 @@
 using System;
-using System.Linq;
 using ConditioningControlPanel.Avalonia.Tours;
+using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
@@ -16,9 +16,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 /// </summary>
 internal sealed class EmiTourNarrator : IDisposable
 {
-    public const string StepMomentPrefix = "tour.";
-    public const string StepFallbackMoment = "tourStep";
-
     private readonly TutorialService _service;
     private bool _disposed;
     private bool _narrating;
@@ -71,7 +68,7 @@ internal sealed class EmiTourNarrator : IDisposable
             // Summon FIRST, then speak: a moment nobody is out for is dropped. Summon sets IsOut
             // before its first await, so the line below already finds her out.
             if (!desk.IsOut && CoreSettings.Current.EmiDeskEnabled) _ = desk.Summon("tour");
-            desk.Fire("tourStarted");
+            desk.Fire(EmiTourMoments.Started);
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] tourStarted narration failed"); }
     }
@@ -81,11 +78,9 @@ internal sealed class EmiTourNarrator : IDisposable
         if (_disposed || !_narrating) return;
         try
         {
-            var id = step?.Id;
-            if (string.IsNullOrWhiteSpace(id)) return;
             var desk = EmiDeskService.Instance;
-            var moment = StepMomentPrefix + id;
-            desk.Fire(HasMoment(desk, moment) ? moment : StepFallbackMoment);
+            var moment = EmiTourMoments.Step(step?.Id, desk.LineEngine.MomentIds);
+            if (moment != null) desk.Fire(moment);
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] step narration failed for {Step}", step?.Id); }
     }
@@ -97,13 +92,7 @@ internal sealed class EmiTourNarrator : IDisposable
         // says the ending is ours; a narrator unsubscribed before the ending never gets here.
         if (!_narrating) return;
         _narrating = false;
-        try { EmiDeskService.Instance.Fire(e.Completed ? "tourFinished" : "tourSkipped"); }
+        try { EmiDeskService.Instance.Fire(EmiTourMoments.Ending(e.Completed)); }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] tour ending narration failed"); }
-    }
-
-    private static bool HasMoment(EmiDeskService desk, string momentId)
-    {
-        try { return desk.LineEngine.MomentIds.Contains(momentId, StringComparer.Ordinal); }
-        catch { return false; }
     }
 }

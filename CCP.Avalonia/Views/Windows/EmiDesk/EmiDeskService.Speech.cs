@@ -8,6 +8,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 internal sealed partial class EmiDeskService
 {
     private DispatcherTimer? _greetingTimer;
+    private string _summonVia = "rail";
+    // WPF EmiDeskService.cs:804: a tour summon greets with touring=true, so a firstContact offer
+    // gated `!touring` never offers the tour she is already giving.
+    private bool _summonTouring;
     internal EmiLineEngine LineEngine { get; set; } = EmiLineEngine.Instance;
 
     // WPF Fire/Speak: the Core engine owns spice, cadence, limits and holds. The window owns pixels.
@@ -54,9 +58,11 @@ internal sealed partial class EmiDeskService
     internal void GreetNow()
     {
         CancelGreeting();
+        bool touring = _summonTouring;
+        _summonTouring = false;
         if (!IsOut) return;
         var moment = EmiSpeechCadence.Greeting(LineEngine.EverSpent("firstContact"), LineEngine.EverSpent("desktopFirstBoot"));
-        Fire(moment, new { via = "rail", minutes = 0, touring = false });
+        Fire(moment, new { via = _summonVia, minutes = 0, touring });
     }
 
     private void CancelGreeting()
