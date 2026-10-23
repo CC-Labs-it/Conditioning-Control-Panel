@@ -2787,3 +2787,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-profile-privacy-panel: +512
 - Profile privacy dialog: the six audience switches save and push per-field, account-owned consent via Core SyncPush (scoped, unlike WPF's all-six push; decision 2026-10-13, oracle-deep pending). The Discord button runs the real Account settings link flow.
 - Row stays stub: link-notice CTA, post-link achievement-sharing offer, own-card DM button and the privacy-sync scope go to lane -b.
+
+## avalonia-port/wire-shell-profile-bubble: +459
+- Header bubble shows avatar presets, the WPF tier-badge hover enlargement and 8 s one-shot wobble, a level-up burst on the shared EventBurstLayer, and the copy-link prompt when the browser won't open (skipped in a sandbox).
+- Review fixes: no idle frame clock for the wobble, sandbox-refused link never writes the clipboard, menu-restack tested, ledger row no longer claims Core FxBurstAnchorRules. Fail-proven; rgate green apart from two listed flakes.
