@@ -141,7 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// ShowTab("haptics") selects the same row itself, so the landing is identical.</para>
         ///
         /// <para>Like WPF, every rack route teaches EMI's ring through NoteRackOpened;
-        /// opening Flashes scores Flashes rather than the Studio.</para>
+        /// opening Flashes scores Flashes rather than the Studio through Core EmiDoors.TargetForRack.</para>
         /// </summary>
         internal void OpenStudioModule(string rackKey)
         {
