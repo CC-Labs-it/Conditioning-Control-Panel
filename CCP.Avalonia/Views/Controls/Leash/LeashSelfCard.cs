@@ -23,6 +23,7 @@ public sealed class LeashSelfCard : Border
     private readonly Func<ILeashService?> _service;
     private readonly StackPanel _body = new();
     private MyLeash _me;
+    private bool _preview;
 
     // RenderProof constructs every control in Views with a no-argument sample constructor.
     internal LeashSelfCard() : this(new MyLeash(new LeashPerson("sample", "Juno", null),
@@ -41,7 +42,7 @@ public sealed class LeashSelfCard : Border
         Padding = new Thickness(12);
         Margin = new Thickness(0, 4, 0, 6);
         Child = _body;
-        // ponytail: holder preview, sticker artwork, help and LeashFx need the remaining drawer lane.
+        // ponytail: help, the WPF sticker/chain artwork and LeashFx remain in the parity ledger.
         Render();
     }
 
@@ -102,6 +103,35 @@ public sealed class LeashSelfCard : Border
         cap.Committed += m => _ = SetVideoMaxAsync(m);
         _body.Children.Add(cap);
         // ponytail: do not advertise WPF's panic-key hold-to-cut until this head owns that route.
+        if (_me.Stickers.Count > 0)
+        {
+            var shelf = new StackPanel { Margin = new Thickness(0, 10, 0, 0), Tag = "leash-shelf" };
+            shelf.Children.Add(Caption(Loc.GetF("leash_self_shelf", _me.Stickers.Count)));
+            var discs = new WrapPanel();
+            foreach (var sticker in _me.Stickers.Reverse().Take(14))
+            {
+                var kind = sticker.Id switch { "heart" => IconKind.Heart, "pet" => IconKind.AnimalCat, "wow" => IconKind.Sparkle, "star" => IconKind.Star, _ => IconKind.ThumbLike };
+                var disc = new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(13), Background = LeashHolderCard.Shade,
+                    Margin = new Thickness(0, 0, 5, 5), Tag = "leash-sticker:" + sticker.Id,
+                    Child = new IconGlyph { Kind = kind, Size = 18, Foreground = F.Gold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+                ToolTip.SetTip(disc, Loc.GetF("leash_sticker_from", sticker.From.Name));
+                discs.Children.Add(disc);
+            }
+            shelf.Children.Add(discs); _body.Children.Add(shelf);
+        }
+        var toggle = Button(Loc.GetF(_preview ? "leash_self_preview_hide" : "leash_self_preview", _me.Holder.Name), "leash-preview-toggle", Brushes.Transparent, F.Lilac, IconKind.Eye);
+        toggle.Click += (_, _) => { _preview = !_preview; Render(); };
+        _body.Children.Add(toggle);
+        if (_preview)
+        {
+            // WPF App.xaml.cs:3019: the same last report sent to the holder, never guessed week cells.
+            DayReport? report = null;
+            try { report = (_service() as LeashService)?.LastReport; } catch { }
+            var held = new HeldLeash(new LeashPerson("me", Loc.Get("leash_you"), null), true, _me.Intensity, _me.Since, _me.Day,
+                _me.DndUntil, report, Array.Empty<WeekDay>(), _me.Pending, _me.Assignment, 0);
+            _body.Children.Add(new LeashHolderCard(held, () => null, readOnly: true) { Tag = "leash-preview", IsHitTestVisible = false, Opacity = 0.92, Margin = new Thickness(0, 8, 0, 0) });
+            _body.Children.Add(Label(Loc.GetF("leash_self_preview_note", _me.Holder.Name), 10.5, F.Dim));
+        }
     }
 
     internal async Task CutAsync()

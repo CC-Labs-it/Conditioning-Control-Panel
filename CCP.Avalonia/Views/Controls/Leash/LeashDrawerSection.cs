@@ -1,7 +1,9 @@
 // PORTED from WPF Controls/Leash/LeashDrawerSection.cs: offer rows and the own card, shared by the
 // Social > Leash page and the friends drawer popup (WPF LeashTabView.xaml.cs:32, FriendsDrawer.cs:52/:395).
-// ponytail: holder cards (LeashHolderCard), the receipts repaint and the friend card's Offer chip are wire-views-tab-leash-b-next.
+// ponytail: the friend card Offer chip and remaining artwork/help are tracked in the parity ledger.
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -15,12 +17,13 @@ using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 
 /// <summary>An incoming offer ("Juno wants to hold your leash", Look opens the ask card), then the
-/// leashed side's own card. Keeps its own card between repaints so its state survives a poll.</summary>
+/// leashed side's own card and one card per account held. Keeps its own card between repaints so its state survives a poll.</summary>
 public sealed class LeashDrawerSection : StackPanel
 {
     private readonly Func<ILeashService?> _resolve;
     private ILeashService? _svc;
     private LeashSelfCard? _self;
+    private readonly Dictionary<string, LeashHolderCard> _cards = new();
     private bool _subscribed;
 
     /// <summary>Raised after every repaint (the page swaps its empty state on it).</summary>
@@ -40,6 +43,7 @@ public sealed class LeashDrawerSection : StackPanel
 
     internal ILeashService? Service => _svc;
     internal LeashSelfCard? SelfCard => _self;
+    internal IReadOnlyCollection<LeashHolderCard> HolderCards => _cards.Values;
 
     /// <summary>The host is on screen: pick up the current service, repaint, report what is seen.</summary>
     internal void OnShown()
@@ -55,13 +59,19 @@ public sealed class LeashDrawerSection : StackPanel
         if (ReferenceEquals(next, _svc) && _subscribed) return;
         Unsubscribe();
         _svc = next;
-        if (_svc != null) { _svc.SnapshotChanged += OnSnapshot; _subscribed = true; }
+        if (_svc != null) { _svc.SnapshotChanged += OnSnapshot; _svc.ReceiptsChanged += OnReceipts; _subscribed = true; }
     }
 
     internal void Unsubscribe()
     {
-        if (_svc != null && _subscribed) _svc.SnapshotChanged -= OnSnapshot;
+        if (_svc != null && _subscribed) { _svc.SnapshotChanged -= OnSnapshot; _svc.ReceiptsChanged -= OnReceipts; }
         _subscribed = false;
+    }
+
+    private void OnReceipts()
+    {
+        try { foreach (var card in _cards.Values.ToArray()) card.Render(); }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] receipts repaint failed: {E}", ex.Message); }
     }
 
     private void OnSnapshot(LeashSnapshot _)
@@ -99,6 +109,16 @@ public sealed class LeashDrawerSection : StackPanel
             Children.Add(_self);
         }
         else _self = null;
+        var keep = new HashSet<string>();
+        foreach (var held in snap.Holding)
+        {
+            keep.Add(held.Who.Id);
+            if (!_cards.TryGetValue(held.Who.Id, out var card))
+                _cards[held.Who.Id] = card = new LeashHolderCard(held, () => _svc);
+            else card.Update(held);
+            Children.Add(card);
+        }
+        foreach (var gone in _cards.Keys.Where(k => !keep.Contains(k)).ToArray()) _cards.Remove(gone);
         IsVisible = Children.Count > 0;
         Changed?.Invoke();
         NoteOnScreen(snap);
