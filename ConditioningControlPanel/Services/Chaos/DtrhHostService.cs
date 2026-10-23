@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Chaos;
 /// input-receiving WebView2 window (via <see cref="ChaosWebViewHost"/>), the virtual-host
 /// mappings (ccp.game -> Resources/web, ccp.assets -> the user's active preset), and the
 /// bridge protocol (v1):
-///   - fire-payload -> the REAL desktop conditioning effects (EffectPayloadFactory)
+///   - fire-payload -> desktop audio payloads only (EffectPayloadFactory; DtrhNativePayloadRule refuses video)
 ///   - meta-command -> <see cref="DtrhMetaBridge"/> (chaos_meta.json stays C#-owned)
 ///   - run-started/run-ended -> crash sentinel, barks, XP payout + payout-result reply
 ///   - payload-state (video) -> page pauses while a mandatory video covers it; focus returns after
@@ -79,6 +79,52 @@ internal static class DtrhHostService
         : (DateTime.UtcNow - _runStartedUtc).TotalSeconds;
 
     public static bool IsActive => _host != null;
+
+    private static void PostManifest()
+    {
+        var m = DtrhAssetManifest.Build();
+        DtrhModContent.MergeMedia(m);   // creator mods: mix/replace descent media
+        _host?.Post(new
+        {
+            type = "manifest",
+            images = m.Images.Select(e => new { name = e.Name, url = e.Url }),
+            videos = m.Videos.Select(e => new { name = e.Name, url = e.Url }),
+            skipped = m.Skipped,
+            truncated = m.Truncated,
+        });
+    }
+
+    private static void OnRemoteCopiesReady()
+    {
+        try
+        {
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { if (_host != null && _host.IsReady && !_exiting) PostManifest(); }
+                catch (Exception ex) { App.Logger?.Debug("DtrhHost: manifest re-post failed: {E}", ex.Message); }
+            }));
+        }
+        catch (Exception ex) { App.Logger?.Debug("DtrhHost: copies-ready dispatch failed: {E}", ex.Message); }
+    }
+
+    /// <summary>The game window is up AND in front: the panic key's Escape is the game's pause then
+    /// (PanicPolicy.GameClaimsEscapeAsPause), as it is for the race and the chess board.</summary>
+    public static bool IsInFront => _host?.IsForeground == true;
+
+    /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+    public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+    /// <summary>Hand the page an Escape the panel kept as its pause (engine/scene.js plays it once
+    /// unless the real key reached it too), and give it the keyboard back.</summary>
+    public static void PostKeptEscape()
+    {
+        try
+        {
+            _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+            _host?.FocusWeb();
+        }
+        catch (Exception ex) { App.Logger?.Debug("DtrhHost: kept Escape post failed: {E}", ex.Message); }
+    }
 
     /// <summary>A DtRH descent is currently running (between run-started and run-ended). Used to
     /// cheaply gate optional per-run telemetry off the global bark/audio paths.</summary>
@@ -235,6 +281,8 @@ internal static class DtrhHostService
                 type = "init",
                 protocol = Protocol,
                 settings = new { masterVolume = SafeMasterVolume() },
+                // The player's Motion setting (full / reduced / off) for shared/motion.js.
+                motionLevel = DtrhMotionWire.Current(),
                 // Active persona (builtin-bambisleep / builtin-sissyhypno / builtin-locked):
                 // the page's VN portrait picks the matching portrait set + tint.
                 modId = SafeActiveModId(),
@@ -245,20 +293,19 @@ internal static class DtrhHostService
                 // M5: the page boots into the Warren hub; a run's config is dealt
                 // per-descent by request-run. init carries the SAVED run setup so
                 // the hub's Descent tab opens on the user's own choices.
-                runSetup = BuildRunSetup(),
+                runSetup = DtrhRunWire.RunSetup(App.Settings?.Current),
                 m2Test = _testMode,
+                // The plan list (contract C1, PlanCatalog) for the run summary's end card. The
+                // page shows a price only when this is present.
+                plans = Vault.PlanCatalog.ToWire(Vault.PlanCatalog.Current),
             });
+            _ = Vault.PlanCatalog.GetAsync();   // warm the cache for the next launch; never awaited here
             if (_meta != null) _host?.Post(_meta.SnapshotMessage());
-            var m = DtrhAssetManifest.Build();
-            DtrhModContent.MergeMedia(m);   // creator mods: mix/replace descent media
-            _host?.Post(new
-            {
-                type = "manifest",
-                images = m.Images.Select(e => new { name = e.Name, url = e.Url }),
-                videos = m.Videos.Select(e => new { name = e.Name, url = e.Url }),
-                skipped = m.Skipped,
-                truncated = m.Truncated,
-            });
+            PostManifest();
+            // Online media copied to this machine after this frame reaches the page as a fresh
+            // manifest (the page replaces its pools), so the tube fills without a relaunch.
+            DtrhAssetManifest.RemoteCopiesReady -= OnRemoteCopiesReady;
+            DtrhAssetManifest.RemoteCopiesReady += OnRemoteCopiesReady;
             PostLoomList();   // THE LOOM: seed the page's saved-spiral pool
             // THE BIOMES (S3 read-back): the cumulative engagement ranking, so the
             // page can bias toward the media the user actually likes (the exact
@@ -404,6 +451,11 @@ internal static class DtrhHostService
             case "pong":
                 _lastHeartbeatUtc = DateTime.UtcNow;
                 break;
+            case Funnel.FunnelPageMessage.Type:   // the run summary's end card (contract C10)
+                // Counted always (aggregate only); a checkout never opens over a running descent
+                // or from the capture rig.
+                if (!_testMode) Funnel.FunnelPageMessage.Handle(o, mayOpen: !_runActive && !_exiting);
+                break;
         }
     }
 
@@ -481,93 +533,25 @@ internal static class DtrhHostService
     {
         try
         {
-            if (o["setup"] is JObject setup) PersistRunSetup(setup);
-            bool force = !_testMode && ChaosMeta.State.ForceScriptedRun;
-            bool scripted = !_testMode && (ChaosMeta.State.RunsCompleted == 0 || force);
-            var cfg = scripted ? ChaosHappyPath.BuildFirstRunConfig() : ChaosRunConfig.FromSettings();
-            if (force)
+            if (o["setup"] is JObject setup) DtrhRunWire.PersistRunSetup(setup, App.Settings?.Current);
+            var (cfg, scripted, forceSpent) = DtrhRunWire.Deal(_testMode);
+            if (forceSpent)
             {
-                // One-shot spent at DEAL time: the recap's "fall again" re-requests a config,
-                // and a run-end clear has too many exit paths (watchdog, crash) - any missed
-                // one would deal a second classroom. Persist + rebroadcast so JS agrees.
-                ChaosMeta.State.ForceScriptedRun = false;
-                ChaosMeta.Save();
+                // Persist + rebroadcast so JS agrees (the one-shot was spent at deal time).
                 try { _meta?.Rebroadcast(); } catch (Exception ex) { Diag.Swallowed(ex); }
             }
-            _host?.Post(new { type = "run-config", runConfig = BuildRunConfig(cfg) });
+            _host?.Post(new { type = "run-config", runConfig = DtrhRunWire.RunConfig(cfg, App.Settings?.Current) });
             App.Logger?.Information("DtrhHost: dealt run config (diff={D}, scripted={S})", cfg.Difficulty, scripted);
         }
         catch (Exception ex) { App.Logger?.Warning("DtrhHost.OnRequestRun: {E}", ex.Message); }
     }
 
-    /// <summary>The web-relevant subset of ChaosHubWindow.SaveToSettings. Absent fields are
-    /// left untouched; the reveal clamps stay C#-side (FromSettings), so a stale page can
-    /// never write itself past a gate.</summary>
-    private static void PersistRunSetup(JObject setup)
-    {
-        var s = App.Settings?.Current;
-        if (s == null) return;
-        if (setup["difficulty"] != null) s.ChaosDifficulty = (string?)setup["difficulty"] ?? s.ChaosDifficulty;
-        if (setup["durationSec"] != null)
-        {
-            // The Hourglass unlock lifts the ceiling to 2h; without it the preset ceiling holds.
-            int durMax = ChaosMeta.IsOwned("custom_duration") ? 7200 : 1200;
-            s.ChaosRunDurationSec = Math.Clamp((int?)setup["durationSec"] ?? 960, 60, durMax);
-        }
-        if (setup["waveCount"] != null) s.ChaosWaveCount = Math.Clamp((int?)setup["waveCount"] ?? 5, 1, 12);
-        // The Bottomless Fall: the endless toggle only sticks for owners (a stale page can't
-        // arm it without the unlock); FromSettings re-checks ownership at deal time too.
-        if (setup["endless"] != null) s.ChaosEndless = ((bool?)setup["endless"] ?? false) && ChaosMeta.IsOwned("endless_mode");
-        if (setup["motion"] != null) s.ChaosMotionMode = (string?)setup["motion"] ?? s.ChaosMotionMode;
-        if (setup["enabledVariants"] != null)
-        {
-            s.ChaosEnabledVariants = setup["enabledVariants"]!.Type == JTokenType.Null
-                ? null
-                : setup["enabledVariants"]!.ToObject<List<string>>();
-        }
-        if (setup["effectIntensity"] != null) s.ChaosEffectIntensity = Math.Clamp((double?)setup["effectIntensity"] ?? 0.85, 0.2, 1.5);
-        if (setup["colorFlashes"] != null) s.ChaosColorFlashesEnabled = (bool?)setup["colorFlashes"] ?? true;
-        if (setup["boonDraftEnabled"] != null) s.ChaosBoonDraftEnabled = (bool?)setup["boonDraftEnabled"] ?? true;
-        if (setup["allowCurses"] != null) s.ChaosAllowCurses = (bool?)setup["allowCurses"] ?? true;
-        if (setup["dartersEnabled"] != null) s.ChaosDartersEnabled = (bool?)setup["dartersEnabled"] ?? true;
-        if (setup["key1"] != null) s.ChaosAccessoryKey1 = (string?)setup["key1"] ?? s.ChaosAccessoryKey1;
-        if (setup["key2"] != null) s.ChaosAccessoryKey2 = (string?)setup["key2"] ?? s.ChaosAccessoryKey2;
-    }
-
-    /// <summary>The saved Descent-tab choices for the hub's setup UI (raw settings, NOT the
-    /// clamped run values - the hub applies its own reveal gating visually, and FromSettings
-    /// clamps again at deal time).</summary>
-    private static object BuildRunSetup()
-    {
-        try
-        {
-            var s = App.Settings?.Current;
-            return new
-            {
-                difficulty = s?.ChaosDifficulty ?? "Easy",
-                durationSec = s?.ChaosRunDurationSec ?? 180,
-                endless = s?.ChaosEndless ?? false,
-                waveCount = s?.ChaosWaveCount ?? 5,
-                motion = s?.ChaosMotionMode ?? "Mixed",
-                enabledVariants = s?.ChaosEnabledVariants,
-                effectIntensity = s?.ChaosEffectIntensity ?? 0.85,
-                colorFlashes = s?.ChaosColorFlashesEnabled ?? true,
-                boonDraftEnabled = s?.ChaosBoonDraftEnabled ?? true,
-                allowCurses = s?.ChaosAllowCurses ?? true,
-                dartersEnabled = s?.ChaosDartersEnabled ?? true,
-                key1 = s?.ChaosAccessoryKey1 ?? "Q",
-                key2 = s?.ChaosAccessoryKey2 ?? "E",
-            };
-        }
-        catch { return new { difficulty = "Easy", durationSec = 180, waveCount = 5 }; }
-    }
-
     /// <summary>fire-payload {kind, strength?, durationMult?} -> a native effect.
     /// Since the 2026-07 hard cutover the browser game renders every VISUAL effect in-world
     /// (dtrh/game/payloadFx.js) - no more native WPF layered windows over the game surface.
-    /// Only the two non-visual / native-by-necessity kinds still ride this bridge:
-    ///   - video: a mandatory covering video window (in-world port is separate future work)
-    ///   - audio: a one-shot whisper on the native audio path
+    /// Only audio still rides this bridge: a one-shot whisper on the native audio path. The
+    /// video card is in-world too, and a native video here would outlive the run
+    /// (<see cref="DtrhNativePayloadRule"/>, ccp-bugs #1470).
     /// Any other kind arriving here means a page/host version mismatch - log and ignore.</summary>
     private static void FirePayload(JObject o)
     {
@@ -576,20 +560,15 @@ internal static class DtrhHostService
             var kindStr = (string?)o["kind"];
             if (string.IsNullOrWhiteSpace(kindStr)) return;
 
-            EffectPayload payload;
-            if (string.Equals(kindStr, "video", StringComparison.OrdinalIgnoreCase))
-                payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Video);
-            else if (string.Equals(kindStr, "audio", StringComparison.OrdinalIgnoreCase))
-            {
-                payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Audio);
-                if (_runActive) _runSubliminalsHeard++;   // native whisper = a subliminal heard
-            }
-            else
+            if (!DtrhNativePayloadRule.Accepts(kindStr))
             {
                 // Visual effects are in-world now; the page should never send them here.
                 App.Logger?.Warning("DtrhHost: payload kind '{K}' is in-world since the cutover - ignored", kindStr);
                 return;
             }
+
+            EffectPayload payload = EffectPayloadFactory.Build(EffectBubblePayloadKind.Audio);
+            if (_runActive) _runSubliminalsHeard++;   // native whisper = a subliminal heard
 
             payload.Strength = Math.Clamp((int?)o["strength"] ?? 60, 0, 100);
             payload.DurationMult = Math.Clamp((double?)o["durationMult"] ?? 1.0, 0.1, 10.0);
@@ -598,6 +577,14 @@ internal static class DtrhHostService
         }
         catch (Exception ex) { App.Logger?.Warning("DtrhHost.FirePayload: {E}", ex.Message); }
     }
+
+    /// <summary>
+    /// Whether a finished run was opened by the Daily Gift: today's server-named free key is
+    /// <c>dtrh</c> and the account holds no Prime grant of its own. The capture rig never counts.
+    /// Drives the <c>plan</c> / <c>daily_gift</c> fields of payout-result (contract C10).
+    /// </summary>
+    internal static bool RunCameFromDailyGift(bool testMode, bool hasLabAccess, bool dtrhFreeToday)
+        => !testMode && !hasLabAccess && dtrhFreeToday;
 
     /// <summary>run-ended -> XP payout (C#-owned formula, identical to the WPF EndRun) +
     /// meta banking via the shared AwardRunRewards, answered with payout-result.</summary>
@@ -625,25 +612,11 @@ internal static class DtrhHostService
         }
         try
         {
-            double score = (double?)o["score"] ?? 0;
-            double configuredSec = Math.Max(1, (double?)o["durationSec"] ?? 60);
-            double elapsedSec = Math.Clamp((double?)o["elapsedSec"] ?? configuredSec, 0, configuredSec * 2);
-            double diffMult = Math.Clamp((double?)o["difficultyMult"] ?? 1.0, 0.5, 5.0);
-            double sparkGainMult = Math.Clamp((double?)o["sparkGainMult"] ?? 1.0, 0.5, 5.0);
-            string diff = (string?)o["difficulty"] ?? "Gentle";
-
             // A descent that was LEFT is paid for the seconds it really fell, and only counts as
-            // a run once it lasted a minute. Both because AwardRunRewards scales its Spark floor
-            // off the CONFIGURED length: an endless run is dealt 720s, so without this a
-            // hold-Escape one second in mints the fully maxed floor, repeatably. The seconds
-            // themselves come from the page, so they are bounded by the host's own clock.
-            bool abandoned = (bool?)o["abandoned"] ?? false;
-            var payout = DtrhRunPayoutRule.For(abandoned, configuredSec, elapsedSec, hostElapsed);
-            double durationSec = Math.Max(1, payout.PaidDurationSec);
-
-            double durMin = durationSec / 60.0;
-            double capBase = 250.0 * durMin * diffMult;
-            double baseXp = Math.Min(score, capBase);
+            // a run once it lasted a minute (DtrhRunWire.Book / DtrhRunPayoutRule).
+            var booking = DtrhRunWire.Book(o, hostElapsed);
+            string diff = booking.Difficulty;
+            double baseXp = booking.BaseXp;
             double skillMult = App.SkillTree?.GetTotalXpMultiplier() ?? 1.0;
             double finalXp = baseXp * skillMult;
 
@@ -652,17 +625,7 @@ internal static class DtrhHostService
             int sparksEarned = 0;
             if (_meta != null)
             {
-                sparksEarned = _meta.AwardRun(new ChaosMeta.ChaosRunRewardInput(
-                    RunDurationSec: durationSec,
-                    DifficultyMult: diffMult,
-                    SparkGainMult: sparkGainMult,
-                    Score: score,
-                    TrickleDrops: (double?)o["trickleDrops"] ?? 0,
-                    DripFeedMaxed: (bool?)o["dripFeedMaxed"] ?? false,
-                    BestCombo: (int?)o["bestCombo"] ?? 0,
-                    Defused: (int?)o["defused"] ?? 0,
-                    ElapsedSec: elapsedSec),
-                    payout.CountsAsRun);
+                sparksEarned = _meta.AwardRun(booking.RewardInput(o), booking.Payout.CountsAsRun);
             }
 
             ChaosRank? rankUp = null;
@@ -725,6 +688,8 @@ internal static class DtrhHostService
             }
             catch (Exception ex) { App.Logger?.Debug("DtrhHost session-metrics record: {E}", ex.Message); }
 
+            bool dailyGift = RunCameFromDailyGift(_testMode, App.Patreon?.HasLabAccess == true,
+                App.DailyFree?.IsFreeToday("dtrh") == true);
             _host?.Post(new
             {
                 type = "payout-result",
@@ -735,6 +700,10 @@ internal static class DtrhHostService
                 previousBest,
                 rankUp = rankUp?.ToString(),
                 dryRun = _testMode,
+                // End card (contract C10): a run opened by the Daily Gift, not by a Prime grant,
+                // gets "Open today. Prime keeps it open." under the result.
+                plan = dailyGift ? "prime" : null,
+                daily_gift = dailyGift,
             });
             App.Logger?.Information(
                 "DtrhHost: web run complete: base {Base:0} x skill {Mult:0.0} = {Final:0} XP, {Sparks} sparks{T}",
@@ -1117,129 +1086,6 @@ internal static class DtrhHostService
         App.Logger?.Information("DtrhHostService: closed");
         }
         finally { _disposing = false; }
-    }
-
-    /// <summary>
-    /// The run knobs the page's game brain needs, snapshotted from the SAME
-    /// <see cref="ChaosRunConfig.FromSettings"/> the WPF game uses - so rank clamps
-    /// (difficulty/variants) and owned-upgrade multipliers (fuse/base/spark/spawn-rate)
-    /// carry over and the two games score identically at identical settings.
-    ///
-    /// M4: the LOADOUT is pre-applied here exactly like the WPF BeginRun - a
-    /// <see cref="ChaosRunState"/> is built and <see cref="ChaosMeta.ApplyLifetimeBoons"/>
-    /// runs over it, then the resulting knob values are snapshotted. The page never
-    /// re-implements a boon's Apply lambda, so the math can never drift.
-    /// </summary>
-    private static object BuildRunConfig(ChaosRunConfig cfg)
-    {
-        try
-        {
-            // Grab-in-the-tube rework: the run no longer ships a pre-applied loadout. Every
-            // accessory/charm/toy is discovered + grabbed in the fall and applied there (JS
-            // game/boonPassives.js), so this only ships each item's current LEVEL + the
-            // consumable-slot count. Habits stay always-on and arrive as cfg.* knobs below.
-            var s = App.Settings?.Current;
-            var meta = ChaosMeta.State;
-
-            // Intrusive Thoughts' phrase pool (the user's enabled bouncing-text lines).
-            var thoughts = new List<string>();
-            try
-            {
-                var pool = s?.BouncingTextPool;
-                if (pool != null)
-                    foreach (var kv in pool) if (kv.Value) thoughts.Add(kv.Key);
-            }
-            catch (Exception ex) { Diag.Swallowed(ex); }
-
-            return new
-            {
-                difficulty = cfg.Difficulty.ToString(),
-                difficultyMult = cfg.DifficultyMult,
-                durationSec = cfg.DurationSec,
-                waveCount = cfg.WaveCount,
-                endless = cfg.Endless,   // The Bottomless Fall: no clock; regions loop + deepen until wake
-                effectIntensity = cfg.EffectIntensity,
-                enabledVariants = cfg.EnabledVariants,
-                motionOverride = cfg.MotionOverride?.ToString(),
-                fuseTimeMult = cfg.FuseTimeMult,
-                baseMult = cfg.BaseMult,   // golden_touch writes Config.BaseMult during Apply
-                sparkGainMult = cfg.SparkGainMult,
-                spawnRateMult = cfg.SpawnRateMult,
-                colorFlashes = cfg.ColorFlashesEnabled,
-                screenShake = cfg.ScreenShakeEnabled,
-                shakeIntensity = cfg.ShakeIntensity,   // 0..1 amplitude for the page's shake (game/screenShake.js)
-
-                // ---- M4: run-shape knobs ----
-                boonDraftEnabled = cfg.BoonDraftEnabled,
-                allowCurses = cfg.AllowCurses,
-                dartersEnabled = cfg.DartersEnabled,
-                draftChoices = cfg.DraftChoices,
-                draftAutoResumeSec = cfg.DraftAutoResumeSec,
-                sinChance = cfg.SinChance,
-                scriptedFirstRun = cfg.ScriptedFirstRun,
-                hitboxScale = cfg.HitboxScale,
-                magnetEnabled = cfg.MagnetEnabled,
-                popupHeartEnabled = cfg.PopupHeartEnabled,
-                pendulumSwing = cfg.PendulumSwing,
-                // The persistent habits (Warren upgrades) that actually shape this run,
-                // surfaced in the left-rail HUD (the drafted modifiers already ride the
-                // top ribbon). extreme_tier only unlocks a difficulty tier - no in-run
-                // effect - so it's filtered out.
-                ownedHabitIds = meta.PurchasedUpgrades
-                    .Where(id => ChaosMeta.IsUpgradeActive(id)
-                                 && id != "extreme_tier"
-                                 && id != "custom_duration"   // setup-shape unlocks, no in-run
-                                 && id != "endless_mode"      // effect -> keep them off the HUD rail
-                                 && ChaosUpgrades.ById(id) != null)
-                    .ToList(),
-                rankIndex = (int)ChaosMeta.RankIndex,
-                runsCompleted = meta.RunsCompleted,
-                equippedStartBoon = meta.EquippedStartBoon,
-                thoughtTexts = thoughts,
-
-                // ---- grab-in-the-tube rework: per-item level + consumable-slot count.
-                // A grab applies the item at its current dollhouse level (min 1). ----
-                levels = meta.LifetimeBoonLevels ?? new Dictionary<string, int>(),
-                consumableSlots = meta.ConsumableSlots,
-                // Seeds the in-run first-discovery ledger so lesson cards fire once EVER,
-                // not once per app-session (the JS `discovered` set is otherwise empty on boot).
-                discoveredCodexIds = (meta.DiscoveredCodexIds ?? new HashSet<string>()).ToList(),
-
-                // ---- crafting Part 2: the run reads its crafted kit from cfg, not live
-                // meta, so a mid-run craft never retro-applies to the fall in progress ----
-                craftedItems = meta.CraftedItems ?? new Dictionary<string, int>(),
-                pinnedBoonId = meta.PinnedBoon,
-                denialArmed = meta.DenialArmed,
-
-                // ---- M4: seen-once flags (debuts + teaches), mirrored back one-way via set-flag ----
-                flags = new
-                {
-                    seenDefuseTutorial = meta.SeenDefuseTutorial,
-                    seenFocusTip = meta.SeenFocusTip,
-                    seenHeatTeach = meta.SeenHeatTeach,
-                    seenRippleTeach = meta.SeenRippleTeach,
-                    seenEcho = meta.SeenEcho,
-                    seenChaperone = meta.SeenChaperone,
-                    seenTease = meta.SeenTease,
-                    seenBound = meta.SeenBound,
-                    seenBrittle = meta.SeenBrittle,
-                    seenGoldFirst = meta.SeenGoldFirst,
-                    seenBarkDefuseFirst = meta.SeenBarkDefuseFirst,
-                    seenBarkDefuseNoFocus = meta.SeenBarkDefuseNoFocus,
-                    seenBarkDefuseRelease = meta.SeenBarkDefuseRelease,
-                    seenBarkClickDetonate = meta.SeenBarkClickDetonate,
-                    // M5: happy-path beats (run 2 debut + the run-4 rigged first sin + duo demo)
-                    seenBraindrain = meta.SeenBraindrain,
-                    seenFirstSin = meta.SeenFirstSin,
-                    seenDuoDemo = meta.SeenDuoDemo,
-                },
-            };
-        }
-        catch (Exception ex)
-        {
-            App.Logger?.Debug("DtrhHost.BuildRunConfig: {E}", ex.Message);
-            return new { difficulty = "Easy", difficultyMult = 1.0, durationSec = 180, waveCount = 5, effectIntensity = 0.85 };
-        }
     }
 
     private static int SafeMasterVolume()

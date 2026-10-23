@@ -65,9 +65,6 @@ public sealed class LeashGateCard : Grid
         Children.Add(_card);
     }
 
-    /// <summary>False while this head has no task runner: the card then also offers "Not now".</summary>
-    public bool CanStartTasks { get; init; } = true;
-
     public bool IsUp => IsVisible;
     public string? Pid => _p?.Pid;
     public bool ShowsUnplayable => IsUp && _unplayable;
@@ -154,12 +151,6 @@ public sealed class LeashGateCard : Grid
             go.IsEnabled = !_running;
             go.Click += (_, _) => { if (_p != null) StartRequested?.Invoke(_p); };
             _body.Children.Add(go);
-            if (!CanStartTasks)
-            {
-                var later = Chunky(Loc.Get("leash_gate_later"), pink: false, null, 14, "leash-gate-later", 8);
-                later.Click += (_, _) => LaterRequested?.Invoke();
-                _body.Children.Add(later);
-            }
         }
 
         if (_pardons > 0)

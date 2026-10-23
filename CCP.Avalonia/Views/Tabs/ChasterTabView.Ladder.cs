@@ -78,6 +78,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (!RenderProof.Rendering || ChasterHead.Service != null) return;
             AddedRow.IsVisible = true;
+            HeroTitle.Text = Loc.Get("chaster_hero_title");
+            HeroTitle.IsVisible = true;
             PaintAddedClock(5 * 3600 + 42 * 60);
             TxtAddedMonth.Text = Loc.GetF("chaster_added_month", ChasterLadder.FormatClock(3 * 3600));
             PaintScrap(new LadderBoard("2026-10", new[] { new LadderRow(1, "Alpha", true, 9000, false), new LadderRow(2, "Locked 1A", false, 5000, false) },
@@ -91,6 +93,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // Circe's mood meter and a line of hers on the page
             MoodMeter.Apply(new CircesMood(MoodLevel.Hot));
             PageSays.Say(Loc.Get(CirceLines.Key(CirceMoment.Popped, 1)));
+            // the menu with the how-it-works card open, the reset link and an open price box
+            MenuPanel.IsVisible = HowItWorksCard.IsVisible = true;
+            ApplyPriceToggles();
+            foreach (var lit in new[] { "attention", "typo", "session" }) { _priceToggles[lit].IsChecked = true; PaintRowLit(lit, true); }
+            BtnResetPrices.IsVisible = true;
+            BeginPriceEdit(TabPageText.Split(TabPrices.All).Item1.First(p => TabPriceEdit.Editable(p.Id)).Id);
+            // the menu sits below the 780 px frame: scroll its top in once laid out
+            AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => PageScroll.Offset = new Vector(0, MenuPanel.Bounds.Top), DispatcherPriority.Background);
         }
 
         /// <summary>WPF LadderOnShown + ScrapOnShown: a page open re-reads the card and the board.</summary>
