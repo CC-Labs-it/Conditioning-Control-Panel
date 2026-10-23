@@ -15,9 +15,9 @@
 // image thumbnails, pack checks/counts and preview live in AssetsTabView.Packs.cs, using ContentPackStore.
 //
 // The rest, by blocker:
-//   App.ContentPacks - RefreshPacksAsync, BtnRefreshPacks_Click, BtnPackDownload_Click,
-//     BtnPackActivate_Click, BtnPackUpgrade_Click, BtnDeleteDownloadedPacks_Click, and the four
-//     OnPack* progress/auth/rate-limit callbacks.
+//   Dead in WPF (PacksSectionEnabled=false; see svc-content-packs row in docs/avalonia-parity.md) -
+//     RefreshPacksAsync, BtnRefreshPacks_Click, BtnPackDownload_Click, BtnPackActivate_Click,
+//     BtnPackUpgrade_Click, BtnDeleteDownloadedPacks_Click, and the four OnPack* callbacks.
 //   Pack video thumbnails - WPF Windows shell thumbnailer needs a portable replacement.
 //   The OS - BtnCreatorDiscord_Click, BtnPackPatreon_Click (pack cards only).
 //   Pack preview rotation - StartPackPreviewRotation, StopPackPreviewRotation, LoadPreviewImagesFromUrlsAsync,
