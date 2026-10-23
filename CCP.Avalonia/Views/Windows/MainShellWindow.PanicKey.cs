@@ -81,6 +81,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (TryGamePauseOnEscape(now)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
             CancelPendingAi();   // every press, even one a lock card or the palette consumes
+            // WPF MainWindow.xaml.cs:1620: Circe's Tab safety hold, armed up here because the lock-card, palette and
+            // grace-pause rungs below return before the stop pass ("chaster-hold"). A game's pause above is no panic.
+            PanicChasterHold.Open("panic key");
             // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
             // or a Lines task reopens the card the press just dismissed.
             try { Platform.LeashTaskHost.OnPanicPress(this); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
