@@ -115,6 +115,9 @@ namespace ConditioningControlPanel.Services
             if (force) Commands.AiCommandService.CancelAll();   // a remote panic cancels pending AI follow-ups too
             // A controller's panic is a way out like the key: Circe's Tab opens its safety hold (PanicChasterHold).
             if (force) Safety.PanicChasterHold.Open("remote panic");
+            // WPF RemoteControlService.StopAllRemoteEffects: the controller's panic arms the post-panic quiet too
+            // (PanicAftermath). It only ever refuses; no pause mark, so the controller may still resume.
+            if (force) Safety.PanicAftermath.ArmQuiet();
             if (force) StopHaptics(); else RemoteHaptics.Stop();
             try { CoreHaptics.Service?.PanicStop(); } catch { }
             CoreAudio.Unduck();

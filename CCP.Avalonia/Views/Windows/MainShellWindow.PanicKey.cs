@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal bool StartPanicKey()
         {
             _portalAllowed = true;
+            SeedPanicAftermath();
             // WPF EscapeClaim surfaces (TAB-8 / DESK-3): the focus snapshot the hook thread reads.
             EscapeClaim.MarkType(typeof(Views.Controls.FriendsDrawer));
             EscapeClaim.StartTracking();
@@ -92,6 +93,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 && SettingsPaletteWindow.TryConsumeEscape();
             var rung = PanicPolicy.Decide(lockCardOpen, paletteClaimed, PanicPolicy.OverrideEnabled(s));
             Serilog.Log.Information("Panic key pressed ({Rung})", rung);
+            // WPF MainWindow.xaml.cs:1662: the post-panic quiet (PanicAftermath), armed before any rung can return
+            // (lock card, grace pause). Not for an Escape that only closed the Ctrl+K palette: it stops nothing.
+            if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal
@@ -123,6 +127,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Serilog.Log.Information("Double panic! Exiting application...");
                 ExitWithoutBill();   // WPF MainWindow.xaml.cs:1841 shuts down directly, no bill
             }
+        }
+
+        /// <summary>WPF App.AiEffects.cs:19-20: the AI command gate reads the post-panic quiet and the panic count
+        /// (Core PanicAftermath, armed by every panic route on this head). Desktop path only, like the listener.</summary>
+        internal static void SeedPanicAftermath()
+        {
+            ConditioningControlPanel.Services.Commands.AiCommandService.PanicQuietProvider = () => PanicAftermath.TriggersSilenced();
+            ConditioningControlPanel.Services.Commands.AiCommandService.PanicCountProvider = () => PanicAftermath.PanicCount;
         }
 
         /// <summary>WPF LeashPanicKeyWhilePanicOff (MainWindow.Leash.cs): the panic key while leashed when the

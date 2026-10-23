@@ -12,8 +12,8 @@ namespace ConditioningControlPanel.Services.Safety
     /// (local or remote) now arms a QUIET window, the same five minutes EMI keeps silent after a
     /// panic, measured on the monotonic tick count. Trigger Mode skips its tick and any queued
     /// trigger inside it, haptics included, muted or not. Only the user's own START ends it early
-    /// (MainWindow.StartEngineFromUser): the scheduler, auto-start, a remote or program session
-    /// start and the Lockdown keeper never do.</para>
+    /// (WPF MainWindow.StartEngineFromUser; Avalonia the Start button, Start normally and Jump right
+    /// in): the scheduler, auto-start, a remote or program session start and the Lockdown keeper never do.</para>
     ///
     /// <para>2. A remote "resume" (or the voice "resume", same path) resumed a session a LOCAL panic
     /// had paused, and ResumeSession restarts flashes, video and subliminals even with the engine
@@ -22,6 +22,11 @@ namespace ConditioningControlPanel.Services.Safety
     /// the controller may resume its own panic). Any later pause is a normal one again.</para>
     ///
     /// Pure rules plus one process-wide quiet stamp. Never weakens a panic: both only ever refuse.
+    ///
+    /// <para>In Core since the 7.2 port (same namespace, so the WPF callers are unchanged). The Avalonia
+    /// head arms it from its panic key, the PanicSurfaces stop pass (tray, voice, leash gate), the
+    /// PanicWatchdog fallback and a controller's trigger_panic (RemoteCommands.StopEffects), and seeds
+    /// AiCommandService.PanicQuietProvider / PanicCountProvider in MainShellWindow.StartPanicKey.</para>
     /// </summary>
     public static class PanicAftermath
     {

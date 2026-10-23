@@ -108,6 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (runner.IsPaused)
             {
+                // WPF BtnPauseSession_Click: the user's own Resume ends the post-panic quiet (PanicAftermath).
+                ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
                 StartEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;

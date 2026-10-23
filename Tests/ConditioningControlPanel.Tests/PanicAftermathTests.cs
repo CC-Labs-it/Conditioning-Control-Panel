@@ -27,7 +27,10 @@ public class PanicAftermathTests
         Assert.False(PanicAftermath.IsQuiet(Panic + 300_000, until));
         Assert.False(PanicAftermath.IsQuiet(Panic, 0));                 // never armed
 
-        var src = Source("Services", "Safety", "PanicAftermath.cs");
+        // In Core since the 7.2 port: one quiet for both heads.
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Safety", "PanicAftermath.cs"));
+        Assert.False(File.Exists(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Safety", "PanicAftermath.cs")),
+            "a second PanicAftermath in the WPF head would split the quiet in two");
         Assert.Contains("Environment.TickCount64", src);
         Assert.DoesNotContain("UtcNow", src);
     }
