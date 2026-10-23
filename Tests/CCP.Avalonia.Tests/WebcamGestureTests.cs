@@ -13,6 +13,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Localization;
 using OpenCvSharp;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
@@ -148,10 +149,51 @@ public sealed class WebcamGestureTests
         finally { owner.Close(); }
     });
 
+    /// <summary>The status pill carries {loc:Str rf_webcam_stopped}; the live state is a bound key, so a
+    /// language change shows the current state in the new language, not a frozen or reverted text.</summary>
     [Fact]
-    public void CalibrationMouthPromptsCompleteFromRealDetector() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public void DevicesStatusFollowsTheLanguageWhileTracking() => WebcamCalibrationTests.WithTracker(start: true, (tracker, _) =>
+    {
+        var section = new DevicesSettingsSection();
+        var owner = new global::Avalonia.Controls.Window { Content = section };
+        owner.Show();
+        var status = section.FindControl<TextBlock>("TxtWebcamDebugStatus")!;
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tracker.IsRunning);
+            Assert.Equal(Loc.Get("rf_webcam_tracking"), status.Text);
+            LocalizationManager.Instance.SetLanguage("ja");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("追跡中", status.Text);
+        }
+        finally { LocalizationManager.Instance.SetLanguage("en"); owner.Close(); }
+    });
+
+    /// <summary>WPF :1505: a panic while the camera is still opening abandons the open; the failed
+    /// start reads as stopped, not as "no camera".</summary>
+    [Fact]
+    public void PanicDuringCameraOpenReadsAsStoppedNotNoCamera() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
+    {
+        WebcamTracker.SourceFactory = () => new PanicOnOpen(tracker);
+        Assert.False(tracker.Start());
+        Assert.True(tracker.StartWasStopped);
+        Assert.Equal("Webcam tracking was stopped before the camera finished opening.", tracker.LastError);
+    });
+
+    private sealed class PanicOnOpen(WebcamTracker tracker) : IFrameSource
+    {
+        public bool Open() { tracker.Stop(); return false; }   // panic mid-open bumps the generation
+        public bool Read(Mat bgr) => false;
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void CalibrationMouthPromptsCompleteFromRealDetector() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
+        var clock = new WebcamCalibrationTests.ManualClock();
+        WebcamCalibrationWindow.Time = clock;   // the 5 s timeouts only pass when the test steps them
         var window = new WebcamCalibrationWindow();
         var phase = typeof(WebcamCalibrationWindow).GetMethod("RunValidationPhaseAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var tracker = WebcamTracker.Instance;
@@ -164,14 +206,17 @@ public sealed class WebcamGestureTests
             var task = (Task)phase.Invoke(window, null)!;
             var prompt = window.FindControl<TextBlock>("TxtValidationPrompt")!;
             var detail = window.FindControl<TextBlock>("TxtValidationDetail")!;
-            async Task WaitFor(Func<bool> condition)
-            {
-                for (int i = 0; i < 300 && !condition(); i++) await Task.Delay(10);
-                Assert.True(condition());
-            }
-            await WaitFor(() => prompt.Text == "Blink a couple of times");
+            // Window time never moves here, so this only waits out a gesture's thread-pool hop
+            // (RunContinuationsAsynchronously), never a timeout; no sleep.
+            void Until(Func<bool> condition) =>
+                Assert.True(SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return condition(); }, TimeSpan.FromSeconds(10)));
+            Until(() => prompt.Text == "Get ready…");
+            clock.Advance(1400);
+            Until(() => prompt.Text == "Blink a couple of times");
             tracker.RaiseBlinkForTest(); tracker.RaiseBlinkForTest();
-            await WaitFor(() => prompt.Text == "Open your mouth wide");
+            Until(() => detail.Text == "Detected.");
+            clock.Advance(700);
+            Until(() => prompt.Text == "Open your mouth wide");
             var now = DateTime.UtcNow.AddMinutes(-2); // leave singleton cooldowns in the past for later tests
             void OpenMouth()
             {
@@ -181,16 +226,22 @@ public sealed class WebcamGestureTests
                 now = now.AddSeconds(10);
             }
             OpenMouth();
-            await WaitFor(() => detail.Text == "Detected."); // success, before the 5 s timeout
-            await WaitFor(() => prompt.Text == "Open your mouth wide again");
+            Until(() => detail.Text == "Detected.");   // the detector, not the timeout (window time is still 0 s in)
+            clock.Advance(700);
+            Until(() => detail.Text == "Good — close, and once more in a moment…");
+            clock.Advance(1000);
+            Until(() => prompt.Text == "Open your mouth wide again");
             OpenMouth();
-            await WaitFor(() => detail.Text == "Detected.");
-            await task;
+            Until(() => detail.Text == "Detected.");
+            clock.Advance(700);
+            Until(() => task.IsCompleted);
+            Assert.True(task.IsCompletedSuccessfully);
         }
         finally
         {
+            WebcamCalibrationWindow.Time = TimeProvider.System;
             (CoreSettings.Current.WebcamSensitivity, CoreSettings.Current.MasterVolume) = saved;
             window.Close();
         }
-    }).GetAwaiter().GetResult();
+    });
 }

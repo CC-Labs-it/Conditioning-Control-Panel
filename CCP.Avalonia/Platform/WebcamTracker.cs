@@ -69,6 +69,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Tests: no test may open a real camera. Open fails as "no camera".</summary>
         internal static bool Disabled;
 
+        /// <summary>Set by Start: true once a Stop/panic bumped the generation (WPF _openGeneration).</summary>
+        internal Func<bool> Abandoned = () => false;
+
         public bool Open()
         {
             if (Disabled) return false;
@@ -83,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             foreach (var (api, fourcc) in WindowsAttempts)
             {
+                if (Abandoned()) return false;
                 VideoCapture? cap = null;
                 try
                 {
@@ -119,14 +123,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <summary>Slow drivers hand back empty frames right after the handle opens (WPF ProbeWarmupMs):
         /// poll briefly before calling the backend dead. The probe frame is dropped, never kept.</summary>
-        private static bool Warm(VideoCapture cap)
+        private bool Warm(VideoCapture cap)
         {
             using var probe = new Mat();
-            var until = DateTime.UtcNow.AddMilliseconds(2500);
+            var until = DateTime.UtcNow.AddMilliseconds(3000);   // WPF ProbeWarmupMs
             while (DateTime.UtcNow < until)
             {
+                if (Abandoned()) return false;   // WPF :1505: a panic mid-open drops the camera at once
                 if (cap.Read(probe) && !probe.Empty()) return true;
-                Thread.Sleep(30);
+                Thread.Sleep(200);                // WPF ProbeReadIntervalMs
             }
             return false;
         }
@@ -293,8 +298,16 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Progress(0.55, "Opening camera…");
                 run.Source = SourceFactory();
+                if (run.Source is OpenCvFrameSource cv) cv.Abandoned = () => Volatile.Read(ref _gen) != gen;
                 bool opened;
                 try { opened = run.Source.Open(); } catch (Exception ex) { Log.Warning(ex, "[Webcam] open threw"); opened = false; }
+                if (!opened && Volatile.Read(ref _gen) != gen)
+                {
+                    LastError = "Webcam tracking was stopped before the camera finished opening.";
+                    StartWasStopped = true;
+                    run.Release();
+                    return false;
+                }
                 if (!opened)
                 {
                     LastError = "No camera could be opened. Check that a webcam is connected and not in use by another app.";

@@ -38,6 +38,7 @@ public sealed class WebcamDevicePickerTests
         try
         {
             V4l2Cameras.Root = root;
+            CameraList.Override = V4l2Cameras.Enumerate;   // the fake tree on every OS (Windows lists DirectShow)
             CoreWebcam.IsAvailableProvider = () => true;
             s.WebcamDeviceIndex = 2;
             await AvaloniaTestDispatcher.RunAsync(() =>
@@ -83,6 +84,7 @@ public sealed class WebcamDevicePickerTests
         finally
         {
             V4l2Cameras.Root = oldRoot;
+            CameraList.Override = null;
             CoreWebcam.IsAvailableProvider = oldAvail;
             s.WebcamDeviceIndex = oldIdx; s.WebcamDeviceName = oldName;
             CoreSettings.SaveImmediate();   // cancels the pick's 500 ms debounced write so it cannot land in a later test (P02)

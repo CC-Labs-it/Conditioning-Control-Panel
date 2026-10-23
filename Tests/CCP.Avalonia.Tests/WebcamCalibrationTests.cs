@@ -75,7 +75,7 @@ public sealed class WebcamCalibrationTests
         { AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
     }
 
-    private static void WithTracker(bool start, Action<WebcamTracker, WebcamCalibrationData> body) => AvaloniaTestDispatcher.Run(() =>
+    internal static void WithTracker(bool start, Action<WebcamTracker, WebcamCalibrationData> body) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>().UseSkia()
@@ -120,7 +120,7 @@ public sealed class WebcamCalibrationTests
 
     /// <summary>The window's clock, stepped by the test: a wait ends exactly when the test advances past it,
     /// whatever the machine load, so the flow never depends on wall-clock time.</summary>
-    private sealed class ManualClock : TimeProvider
+    internal sealed class ManualClock : TimeProvider
     {
         private long _now;
         private readonly List<(long Due, TimerCallback Cb, object? State)> _timers = new();
