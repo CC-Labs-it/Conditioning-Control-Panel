@@ -2289,15 +2289,13 @@ namespace ConditioningControlPanel
         {
             _remoteFineTuneOpen = open;
             var tab = AssetsTab;
-            if (tab == null) return;
-            if (tab.RemoteFineTuneScroll != null)
-                tab.RemoteFineTuneScroll.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-            // One decision at a time: the browser steps aside while the list is open, which is
-            // also the only way the list fits on a page that never scrolls (desk run 4).
-            if (tab.AssetBrowserSection != null)
-                tab.AssetBrowserSection.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
-            if (tab.TxtRemoteFineTuneChevron != null)
-                tab.TxtRemoteFineTuneChevron.Text = open ? "" : "";
+            if (tab?.RemoteFineTuneScroll == null) return;
+            // One decision at a time: the browser steps aside while the list is open and the
+            // list takes the height the page has left (#1410). On "My own assets" the list is
+            // not on the page at all, so the browser always comes back (#1409).
+            var remote = !string.Equals(App.Settings?.Current?.MediaSource ?? MediaSrcLocal,
+                MediaSrcLocal, StringComparison.Ordinal);
+            tab.ApplyFineTuneLayout(open, remote);
         }
 
         /// <summary>Own assets / Reddit / Both, as the segments of one rounded bar
@@ -2390,6 +2388,8 @@ namespace ConditioningControlPanel
                 PaintRemotePickerChrome(settings);
                 RebuildRemoteCustomSubChips(settings);
                 SetRemoteFineTuneOpen(_remoteFineTuneOpen);
+                // The online media card and the title bar pill follow the source.
+                RefreshOnlineMeter();
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "Remote media picker refresh failed"); }
             finally { _remotePickerSyncing = false; }
