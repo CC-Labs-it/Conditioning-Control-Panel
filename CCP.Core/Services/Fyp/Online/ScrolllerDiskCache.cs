@@ -281,18 +281,14 @@ internal static class ScrolllerDiskCache
         try { File.SetLastWriteTimeUtc(path, bornUtc); } catch { }
     }
 
-    /// <summary>A copy's download time as <see cref="StampBorn"/> left it, on every OS: the EARLIER of its creation and
-    /// last-write times (an unstamped file reads its creation, a Linux file its stamped last write). Reading older
-    /// only ever deletes sooner.</summary>
-    internal static DateTime BornUtcOf(string path)
-    {
-        var created = File.GetCreationTimeUtc(path);
-        var written = File.GetLastWriteTimeUtc(path);
-        return written < created ? written : created;
-    }
+    /// <summary>A copy is due when EITHER of its times says so (<see cref="StampBorn"/> wrote the download time into both;
+    /// Linux keeps it only in the last-write time, an unstamped file has it in its creation time, and a time far ahead
+    /// still means the clock went back). Reading both only ever deletes sooner, on every OS.</summary>
+    internal static bool CopyDue(string path, Func<DateTime, bool> dueAt)
+        => dueAt(File.GetCreationTimeUtc(path)) || dueAt(File.GetLastWriteTimeUtc(path));
 
     /// <summary>Deletes every file in <paramref name="dirs"/> whose name starts with <paramref name="prefix"/> and
-    /// whose download time (<see cref="BornUtcOf"/>) is due by <see cref="TempCopyDue"/> (a file still held is left for the next sweep).
+    /// whose stamps are due by <see cref="TempCopyDue"/> (<see cref="CopyDue"/>; a file still held is left for the next sweep).
     /// Returns how many went; never throws. The Avalonia head's sweep of its own copies (WPF RemoteMediaCache
     /// keeps its own walk over the same rule).</summary>
     internal static int SweepTempCopies(IEnumerable<string?> dirs, string prefix, TimeSpan age)
@@ -308,7 +304,7 @@ internal static class ScrolllerDiskCache
             {
                 try
                 {
-                    if (!TempCopyDue(BornUtcOf(file), now, age)) continue;
+                    if (!CopyDue(file, t => TempCopyDue(t, now, age))) continue;
                     File.Delete(file);
                     deleted++;
                 }

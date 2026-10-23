@@ -65,6 +65,20 @@ public sealed class ScrolllerCopyAgeTests : IDisposable
         var born = DateTime.UtcNow - TimeSpan.FromHours(23);
         ScrolllerDiskCache.StampBorn(path, born);
         Assert.Equal(born, File.GetLastWriteTimeUtc(path), TimeSpan.FromSeconds(2));
-        Assert.Equal(born, ScrolllerDiskCache.BornUtcOf(path), TimeSpan.FromSeconds(2));
+        Assert.Equal(born, File.GetCreationTimeUtc(path), TimeSpan.FromSeconds(2));   // Windows keeps both; Linux the write time
+        Assert.False(ScrolllerDiskCache.CopyDue(path, t => DateTime.UtcNow - t >= TimeSpan.FromHours(24)));
+        Assert.True(ScrolllerDiskCache.CopyDue(path, t => DateTime.UtcNow - t >= TimeSpan.FromHours(22)));
+    }
+
+    [Fact]
+    public void A_creation_time_far_ahead_still_counts_as_the_clock_going_back()
+    {
+        // Either stamp may say due: a copy whose creation reads 72 h AHEAD (the clock went back) goes even though its
+        // last write reads now (the ScrolllerHeadTests case).
+        var path = Path.Combine(_dir, ScrolllerDiskCache.TempPrefix + "ahead.jpg");
+        File.WriteAllBytes(path, new byte[] { 1 });
+        File.SetCreationTimeUtc(path, DateTime.UtcNow + TimeSpan.FromHours(72));
+        Assert.Equal(1, ScrolllerDiskCache.SweepTempCopies(new[] { _dir }, ScrolllerDiskCache.TempPrefix,
+            ScrolllerDiskCache.MaxAge - ScrolllerDiskCache.SweepPeriod));
     }
 }

@@ -261,13 +261,13 @@ namespace ConditioningControlPanel.Services.Chaos
         }
 
         /// <summary>The day limit on one copy (WPF DtrhAssetManifest.DropStaleCopy): a file whose download time
-        /// (<see cref="ScrolllerDiskCache.BornUtcOf"/>, right on Linux too) is a day old at <paramref name="nowUtc"/>
+        /// (either stamp, <see cref="ScrolllerDiskCache.CopyDue"/>: right on Linux too) is a day old at <paramref name="nowUtc"/>
         /// leaves the map and is released. True when it went.</summary>
         private static bool DropStaleCopy(string url, string path, DateTime nowUtc, Action<string> release)
         {
-            DateTime born;
-            try { born = ScrolllerDiskCache.BornUtcOf(path); } catch { born = DateTime.MinValue; }
-            if (!ScrolllerCacheBook.IsExpiredAt(born, nowUtc)) return false;
+            bool due;
+            try { due = ScrolllerDiskCache.CopyDue(path, t => ScrolllerCacheBook.IsExpiredAt(t, nowUtc)); } catch { due = true; }
+            if (!due) return false;
             if (LocalCopies.TryRemove(new KeyValuePair<string, string>(url, path))) release(path);
             return true;
         }
