@@ -27,6 +27,23 @@ Locking a row: a `verified`/`improved` row must have a snapshot, or the gate fai
 through the RenderProof setup (Inter, Skia, Motion off, throwaway profile) with the bundled Noto Emoji pinned as the fallback font, so it matches on ubuntu-latest, and compares by SSIM 0.995. Accept a new
 or changed baseline only with the WPF side-by-side image path in the commit message.
 
+The WPF image comes from the **`wpf-render` artifact of a specific `build` workflow run**
+(Windows job). Cite both the run URL and file in the baseline commit message, for example
+`https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/runs/<run-id>` +
+`wpf-render/release-content-mod-manager-rows.png`. Download the artifact to compare it beside
+`Snapshots/release-content-mod-manager-rows.verified.png`; a local-only image path is insufficient.
+`Tests/ConditioningControlPanel.Tests/VerifiedRowRenderTests.cs` renders offscreen with a disposable
+profile and fails if a row cannot render. Its `Rows` table mirrors the Avalonia snapshot table:
+`win-layered-audio.png` (480×660, no tracks, master off, 70%) and
+`release-content-mod-manager-rows.png` (700×500, CCP Default selected, no release-content service).
+Both current rows can be constructed headlessly; **no verified snapshot rows are excluded**.
+The frozen WPF Mod Manager has its current Customise/Companion layout, so differences from the
+Avalonia baseline remain visible for review. When adding a snapshot row, add its WPF factory and
+size to that table (one line); document any row that needs a live platform service instead.
+Locally on Windows, run the test with `--filter FullyQualifiedName~VerifiedRowRenderTests`;
+`WPF_RENDER_OUT` selects the output directory, defaulting to `TestResults/wpf-render` relative to
+the test process working directory. Rendering never shows a window or starts the WPF application.
+
 Starting totals (2026-09-28): 362 rows: 59 missing, 247 stub, 56 wired, 0 verified.
 
 Notes carry what is stubbed or missing, platform-specific parts, existing evidence and, where it
