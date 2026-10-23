@@ -1470,6 +1470,13 @@
             </TextBlock.RenderTransform>
           </TextBlock>
         </Canvas>
+        <!-- WPF SettingsTabView.xaml:2089 MarqueeRead: the interlude stage, empty and invisible until
+             SettingsTabView.MarqueeReads.cs takes the ticker off stage. -->
+        <Grid x:Name="MarqueeRead" Opacity="0" IsHitTestVisible="False" ClipToBounds="True">
+          <Grid.RenderTransform>
+            <TranslateTransform/>
+          </Grid.RenderTransform>
+        </Grid>
       </Grid>
     </Border>
   </Grid>
