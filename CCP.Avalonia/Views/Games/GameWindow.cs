@@ -64,7 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF LauncherHost.LaunchGame -> each host's LaunchCore: one live window per game, focused
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
-        internal static GameWindow? Launch(string id)
+        internal static GameWindow? Launch(string id, Windows.MainShellWindow? panel = null)
         {
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
@@ -75,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
-            if (id == JustDropId && Windows.MainShellWindow.Current is { } shell) window.AttachJustDropOwner(shell);
+            if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell) window.AttachJustDropOwner(shell);
             return window;
         }
 
@@ -86,7 +86,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             // EnvironmentRequested may fire on visual attachment; options must precede Content.
-            Web = new WebHost { AdditionalBrowserArguments = spec.Id == JustDropId ? JustDropBrowserArguments : null };
+            Web = spec.Id == JustDropId
+                ? new WebHost { AdditionalBrowserArguments = JustDropBrowserArguments, UserDataFolderName = "browser_data_justdrop" }
+                : new WebHost();
             Title = Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;

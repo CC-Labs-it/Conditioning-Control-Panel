@@ -102,12 +102,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Per-host Chromium startup flags; ignored by non-Chromium adapters.</summary>
         internal string? AdditionalBrowserArguments { get; set; }
 
+        /// <summary>WebView2 user data folder under <see cref="CorePaths.UserData"/> (WPF UserDataFolderName). A host
+        /// with its own flags needs its own folder: WebView2 refuses a second environment with different
+        /// options on a folder another WebHost already opened.</summary>
+        internal string? UserDataFolderName { get; set; }
+
         internal void ConfigureEnvironment(WebViewEnvironmentRequestedEventArgs e)
         {
             if (e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe && LinuxChoice != "wpe")
                 wpe.PreferWebKitGtkInstead = true;
-            if (e is WindowsWebView2EnvironmentRequestedEventArgs windows && AdditionalBrowserArguments is { } arguments)
-                windows.AdditionalBrowserArguments = arguments;
+            if (e is not WindowsWebView2EnvironmentRequestedEventArgs windows) return;
+            if (AdditionalBrowserArguments is { } arguments) windows.AdditionalBrowserArguments = arguments;
+            if (UserDataFolderName is { } folder) windows.UserDataFolder = System.IO.Path.Combine(CorePaths.UserData, folder);
         }
 
         /// <summary>Requests <see cref="RequestHeader"/> actually stamped (the engine accepted the header; never the value).</summary>

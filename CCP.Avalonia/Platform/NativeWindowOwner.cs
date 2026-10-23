@@ -37,6 +37,15 @@ internal static class NativeWindowOwner
             // WPF WS_EX_APPWINDOW: ownership must not take away the player's taskbar entry.
             SetWindowLong(handle.Handle, -20, (GetWindowLong(handle.Handle, -20) | 0x40000) & ~0x80);
             SetWindowPos(handle.Handle, IntPtr.Zero, 0, 0, 0, 0, 0x37); // frame changed, no move/size/z/activation
+            // WPF EnsureTaskbarButton (ChaosWebViewHost.cs:1013,1831): re-owning a SHOWN window drops its button.
+            if (OperatingSystem.IsWindows()) AddTaskbarButton(handle.Handle);
+            if (parent != IntPtr.Zero)
+            {
+                // WPF ApplyNativeOwner (ChaosWebViewHost.cs:1041): ownership rules the future, not the present;
+                // slot above the panel now (no move/size/activation, no owner reorder), keeping Topmost.
+                SetWindowPos(handle.Handle, parent, 0, 0, 0, 0, 0x213);
+                if (window.Topmost) SetWindowPos(handle.Handle, new IntPtr(-1), 0, 0, 0, 0, 0x213); // HWND_TOPMOST
+            }
             return true;
         }
         catch (Exception ex)
@@ -45,6 +54,31 @@ internal static class NativeWindowOwner
             return false;
         }
     }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static void AddTaskbarButton(IntPtr hwnd)
+    {
+        try
+        {
+            var list = (ITaskbarList)new TaskbarListCoClass();
+            list.HrInit();
+            list.AddTab(hwnd);
+        }
+        catch (Exception ex) { Log.Debug("Taskbar button unavailable: {Kind}", ex.GetType().Name); }
+    }
+
+    [ComImport, Guid("56FDF342-FD6D-11d0-958A-006097C9A090"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface ITaskbarList
+    {
+        void HrInit();
+        void AddTab(IntPtr hwnd);
+        void DeleteTab(IntPtr hwnd);
+        void ActivateTab(IntPtr hwnd);
+        void SetActiveAlt(IntPtr hwnd);
+    }
+
+    [ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
+    private class TaskbarListCoClass { }
 
     internal static void RepairVisibility(Window window)
     {

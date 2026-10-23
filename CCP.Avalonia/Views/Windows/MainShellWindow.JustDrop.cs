@@ -59,6 +59,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF ShowTab("justdrop") -> JustDropHostService.LaunchShop. The window's gate
         /// (GameWindow.JustDropDoorOpen) refuses an unavailable door as a no-op; a live one is refocused.</summary>
-        internal GameWindow? OpenJustDrop() => GameWindow.Launch(GameWindow.JustDropId);
+        internal GameWindow? OpenJustDrop() => GameWindow.Launch(GameWindow.JustDropId, this);
     }
 }

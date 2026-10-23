@@ -80,12 +80,15 @@ public sealed class TakeawayShelfTests
         Assert.NotEqual(WindowState.FullScreen, shop.WindowState);
         Assert.True(shop.JustDropOwnerLinked);
         Assert.Same(shell, owners[^1]);
+        shop.WindowState = WindowState.Maximized;
         shell.WindowState = WindowState.Minimized;
+        shop.WindowState = WindowState.Minimized; // the native owner cascade the repair undoes
         Dispatcher.UIThread.RunJobs();
         Assert.False(shop.JustDropOwnerLinked);
         Assert.Null(owners[^1]);
         Assert.True(shop.IsVisible);
-        Assert.NotEqual(WindowState.Minimized, shop.WindowState);
+        Assert.Equal(WindowState.Maximized, shop.WindowState); // back to its last un-minimized state
+        shop.WindowState = WindowState.Normal;
         shell.WindowState = WindowState.Normal;
         Assert.True(shop.JustDropOwnerLinked);
         shell.Hide();
@@ -181,17 +184,18 @@ public sealed class TakeawayShelfTests
             }
             Assert.Null(row.RenderTransform);
             Assert.Null(more.RenderTransform);
-            var pink = (IBrush)Application.Current!.Resources["PinkBrush"]!;
+            var pink = (IBrush)shell.FindResource("PinkBrush")!; // theme dictionaries: the indexer misses merged resources
             Assert.Equal(pink, ((TextBlock)more.Child!).Foreground);
             Assert.Equal(pink, ((StackPanel)door.Child!).Children.OfType<TextBlock>().Single().Foreground);
             Assert.Equal(pink, ((StackPanel)door.Child!).Children.OfType<IconGlyph>().Single().Foreground);
             Assert.Equal(FluentIcons.Common.Symbol.Options, ((Grid)row.Child!).Children.OfType<IconGlyph>().First().Kind);
             // Keyboard copy is a nested affordance: focus must reveal its stroke and full opacity.
             var copy = receipt.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "TakeawayCopy");
+            shell.Activate(); Dispatcher.UIThread.RunJobs(); // keyboard focus needs the active window
             Assert.True(copy.Focus(NavigationMethod.Tab));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, copy.Opacity);
-            Assert.Equal(Application.Current.Resources["TransparentPink40Brush"], copy.BorderBrush);
+            Assert.Equal(shell.FindResource("TransparentPink40Brush"), copy.BorderBrush);
         }
         finally { CoreSettings.Current.MotionLevel = motion; }
     });
@@ -208,12 +212,15 @@ public sealed class TakeawayShelfTests
         shop.Web.ConfigureEnvironment(windows);
         Assert.Equal("--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows",
             windows.AdditionalBrowserArguments);
+        // WPF JustDropHostService.cs:111: its own folder, so differing flags never clash with another WebHost.
+        Assert.Equal(System.IO.Path.Combine(CorePaths.UserData, "browser_data_justdrop"), windows.UserDataFolder);
         var ordinary = new GameWindow();
         try
         {
             var defaults = EnvironmentArgs<WindowsWebView2EnvironmentRequestedEventArgs>();
             ordinary.Web.ConfigureEnvironment(defaults);
             Assert.True(string.IsNullOrEmpty(defaults.AdditionalBrowserArguments));
+            Assert.True(string.IsNullOrEmpty(defaults.UserDataFolder));
             // The Linux adapter has no matching knobs; it must still configure without throwing.
             shop.Web.ConfigureEnvironment(EnvironmentArgs<GtkWebViewEnvironmentRequestedEventArgs>());
         }
