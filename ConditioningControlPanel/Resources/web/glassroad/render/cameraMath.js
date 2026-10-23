@@ -21,7 +21,9 @@ export const KICK_DEFAULTS = Object.freeze({
   hz: 3.6, zeta: 0.6, gentleMul: 0.5, gentleZeta: 1, maxM: 0.8, maxFovDeg: 9,
   bumpM: 0.45, bumpUpM: 0.16, bumpFovDeg: 2.5, bumpMinMps: 1.5, bumpFullMps: 9,
   landM: Object.freeze([0.16, 0.3, 0.46]), landFovDeg: 1.2, landMinFallMps: 3,
-  boostFovDeg: Object.freeze({ drift1: 2.5, drift2: 3.5, drift3: 5, pad: 4, launch: 5.5 }),
+  // polish 5 (J1): the held boost kick is the ladder (fov.kickByTierDeg via fx/cues.js boostLadder); this is
+  // only the snap on its IN, small so the peak stays near the ladder (2.5 / 3.5 / 5 / 4 / 5.5 before)
+  boostFovDeg: Object.freeze({ drift1: 0.7, drift2: 1.5, drift3: 3, pad: 1.6, launch: 2 }),
   // the fallback bump detector: a horizontal velocity jump past turning and engine can explain
   velBumpMps: 3, velAccelMps2: 30,
 });

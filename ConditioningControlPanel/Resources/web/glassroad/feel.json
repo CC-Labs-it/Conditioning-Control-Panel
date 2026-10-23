@@ -116,8 +116,8 @@
     "driftBiasOutDeg": 11,
     "driftBiasEaseS": 0.3
   },
-  "fov": { "baseVDeg": 60, "boostKickDeg": 8, "kickInS": 0.12, "kickOutS": 0.45 },
-  "shake": { "hitAmpM": 0.12, "boostAmpM": 0.35, "periodS": 0.1, "repeatMul": 0.85, "stopBelowM": 0.05 },
+  "fov": { "baseVDeg": 60, "kickByTierDeg": [2, 4, 6, 9], "kickInS": 0.12, "kickOutS": 0.45 },
+  "shake": { "hitAmpM": 0.12, "boostAmpM": 0.35, "periodS": 0.1, "repeatMul": 0.85, "boostRepeatMul": 0.6, "tier2Mul": 0.55, "stopBelowM": 0.05 },
   "stall": { "durationS": 1.2, "yawSteps": 3, "thrustMul": 0.4 },
   "juice": {
     "countdownPulses": 3,
@@ -140,6 +140,7 @@
     "padBandPeak": 0.6,
     "releasePulse": 0.25,
     "edgeGlowRefused": 0.3,
+    "linesByTier": [0.5, 0.7, 0.85, 1],
     "rumbleByTier": [0.35, 0.65, 1],
     "rumbleMs": 120
   },

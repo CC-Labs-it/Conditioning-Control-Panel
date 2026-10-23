@@ -7,7 +7,9 @@
  * kart's real speed, so it only ever moves OUTWARD on screen and leaves past the edge before it nears the
  * lens; a near fade covers the rest. Three kinds in one draw call: tapered streaks (bright head, thin tail,
  * bent by the track's curve), small twinkling glitter, and big faint orbs. Different birth depths give the
- * parallax. Density and streak length grow with speed and the eased boost (a drift tier boost by its tier);
+ * parallax. Density and streak length grow with speed and the eased boost (a drift tier boost by its tier;
+ * polish 5: with an fx state the boost size is its speedLines, which climbs the boost ladder of fx/cues.js, mini
+ * to tier 3; without one, atlas.js boostTarget by kind);
  * the boost tints the field in its colour (drift tiers blue, orange, pink). Each element has a seed and shows
  * when its seed is under the density, so density changes the count and never flickers one.
  * Photosafe: thin, small-area elements at the screen sides, the boost eases in over boostRiseS (no step).
@@ -99,7 +101,7 @@ export function createSpeedLines(feel = null) {
   function update(dt, kart, fx, obj) {
     const gentle = !!(feel && feel.get && feel.get('gentle.on')), pct = Math.max(0, kart[S.speedPct] || 0), mps = pct * top();
     const bk = kart[S.boostKind] | 0, rescue = kart[S.respawnPhase] > 0;
-    const want = rescue ? 0 : Math.max(Math.min(1, Math.max(0, (fx && fx.speedLines) || 0)), boostTarget(bk, BOOST));
+    const want = rescue ? 0 : fx ? Math.min(1, Math.max(0, fx.speedLines || 0)) : boostTarget(bk, BOOST);
     if (dt > 0) boost += (want - boost) * (1 - Math.exp(-dt / (want > boost ? P.boostRiseS : P.boostFallS)));
     if (bk) u.boostCol.value.set(bk >= BOOST.DRIFT1 && bk <= BOOST.DRIFT3 ? tierColour(bk - BOOST.DRIFT1 + 1, P) : bk === BOOST.LAUNCH ? '#ffffff' : LOOK.padTrail);
     const flow = gentle ? ((feel && feel.get('gentle.scrollMul')) || 0.5) : 1;

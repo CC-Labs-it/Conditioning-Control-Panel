@@ -208,13 +208,15 @@ take-off, on a pad up to padLateS after entering it, or on the ground up to earl
 
 ## fov
 - `fov.baseVDeg` 60: vertical fov at 16:9, through the lifted viewport law for other aspects.
-- `fov.boostKickDeg` 8: boost kick (none under Gentle).
+- `fov.kickByTierDeg` [2, 4, 6, 9]: held boost fov kick by ladder step: mini-turbo, drift tier 1, 2, 3 (polish 5, was one `fov.boostKickDeg` 8 for every boost). A launch takes boost.launchTier, a trick its grade, Surge step 2; pads, bubbles, slipstreams and the clean landing sit on the ladder by amount (fx/cues.js boostLadder). The camera adds a small snap on the IN (render/cameraMath.js boostFovDeg). None under Gentle.
 - `fov.kickInS` 0.12: kick in time.
 - `fov.kickOutS` 0.45: kick out time.
 
 ## shake (off under Gentle)
 - `shake.hitAmpM` 0.12: vertical hit amplitude.
-- `shake.boostAmpM` 0.35: forward-axis boost amplitude.
+- `shake.boostAmpM` 0.35: forward-axis boost amplitude (drift tier 3, launch). Polish 5: boosts shake only from ladder step 2 and on launch; pads, bubbles and slipstreams never.
+- `shake.tier2Mul` 0.55: share of boostAmpM a step 2 boost (drift tier 2, great trick, Surge) shakes with (added).
+- `shake.boostRepeatMul` 0.6: repeat share of a boost shake, so it dies in 0.4 s instead of 1.2 s (added).
 - `shake.periodS` 0.1: one parabola `a*t - b*t^2` lasts this long (added).
 - `shake.repeatMul` 0.85: each repeat is this much of the last.
 - `shake.stopBelowM` 0.05: repeats stop under this amplitude.
@@ -233,6 +235,7 @@ take-off, on a pad up to padLateS after entering it, or on the ground up to earl
 - `juice.sparkDieS` 0.3: sparks burst and die on release.
 - `juice.driftPitchSemis` 7: drift tone rises a fifth over three tiers.
 - `juice.boostBandMul` 1.5: band speed multiplier while boosting.
+- `juice.linesByTier` [0.5, 0.7, 0.85, 1]: speed line strength by boost ladder step (mini-turbo, tier 1, 2, 3; polish 5, added).
 - `juice.landGoneS` 0.25: landing squash and dust are gone in this.
 - `juice.edgeGlowFadeS` 0.3: edge glow fade on return.
 - `juice.duckLiftS` 0.5: audio duck lift after a rescue.

@@ -14,6 +14,47 @@ const rise = (fx) => j(fx, 'riseS');                                       // ge
 const tail = (fx) => j(fx, 'tailTcs') * fx.feel.get('boost.tailTcS');     // an exponential tail is ~95% gone in 3 tc
 const rumbleOf = (fx, tier) => j(fx, 'rumbleByTier')[Math.min(Math.max(tier, 1), 3) - 1];
 
+/** Piecewise linear lookup of ys at x along ascending xs (clamped at both ends). */
+function along(xs, ys, x) {
+  if (x <= xs[0]) return ys[0];
+  for (let i = 1; i < xs.length; i++) if (x <= xs[i]) return ys[i - 1] + (ys[i] - ys[i - 1]) * (x - xs[i - 1]) / Math.max(xs[i] - xs[i - 1], 1e-9);
+  return ys[ys.length - 1];
+}
+
+/**
+ * Polish 5 (J1), the boost camera ladder: a boost-start payload -> { step, fovDeg, lines, shakeM, shakeMul }.
+ * Steps 0..3 = mini-turbo, drift tier 1, 2, 3 (fov.kickByTierDeg, juice.linesByTier). A drift uses its tier,
+ * a launch boost.launchTier (or the tier it carries), a trick its grade, Surge tier 2. Pads, pickup bubbles,
+ * slipstreams and the clean landing are sized by amount on the same ladder (boost.miniAmount, boost.tierAmount),
+ * a bubble under the mini-turbo shrinking toward 0.3 of it. Shake only from step 2 and on launch: step 2 at
+ * shake.tier2Mul of shake.boostAmpM, step 3 and launch the whole of it, every boost run dying at
+ * shake.boostRepeatMul. Amount-sized kinds never shake. Gentle is applied by the caller (gentle.kick, shake).
+ */
+export function boostLadder(feel, { kind = 'drift', tier = 0, amount = 0 } = {}) {
+  const fovs = feel.get('fov.kickByTierDeg'), lines = feel.get('juice.linesByTier');
+  const steps = [0, 1, 2, 3];
+  let step, scale = 1, shakes = false;
+  if (kind === 'drift') { step = Math.min(Math.max(tier | 0, 0), 3); shakes = step >= 2; }
+  else if (kind === 'launch') { step = Math.min(Math.max((tier | 0) || feel.get('boost.launchTier'), 1), 3); shakes = true; }
+  else if (kind === 'trick') { step = Math.min(Math.max(tier | 0, 1), 3); shakes = step >= 2; }
+  else if (kind === 'surge') { step = 2; shakes = true; }
+  else {
+    const amounts = [feel.get('boost.miniAmount'), ...feel.get('boost.tierAmount')];
+    const a = amount > 0 ? amount : feel.get('pad.amount');
+    step = along(amounts, steps, a);
+    if (a < amounts[0]) scale = Math.max(0.3, a / amounts[0]);
+  }
+  const full = feel.get('shake.boostAmpM');
+  const shakeM = !shakes ? 0 : kind === 'launch' || step >= 3 ? full : full * feel.get('shake.tier2Mul');
+  return {
+    step,
+    fovDeg: along(steps, fovs, step) * scale,
+    lines: along(steps, lines, step) * scale,
+    shakeM,
+    shakeMul: feel.get('shake.boostRepeatMul'),
+  };
+}
+
 export const FX_CUES = {
   // 1. countdown: bands brighten and bloom steps up per pulse; go releases both
   countdown(fx, { n = 3 }) {
@@ -49,15 +90,16 @@ export const FX_CUES = {
     fx.release('rumble', rise(fx));
   },
   // 4. boost fire: fov kick, speed lines, bands x boostBandMul; all ease back over the tail
-  // B1 grants: a pickup bubble or a slipstream kicks the fov in proportion to its size (vs a pad)
-  // and never shakes; Surge shakes like a drift boost
-  'boost-start'(fx, { kind, amount = 0 }) {
+  // Polish 5: fov kick, speed lines and shake climb the boost ladder (boostLadder above); B1 grants
+  // (pickup bubble, slipstream) keep their band speed in proportion to their size against a pad
+  'boost-start'(fx, p) {
+    const { kind, amount = 0 } = p, L = boostLadder(fx.feel, p);
     const small = kind === 'bubble' || kind === 'slip';
     const size = small ? Math.min(1, Math.max(0.3, amount / fx.feel.get('pad.amount'))) : 1;
-    fx.hold('fov', fx.gentle.kick(fx.feel.get('fov.boostKickDeg') * size), fx.feel.get('fov.kickInS'));
-    fx.hold('lines', size, fx.feel.get('boost.riseS'));
+    fx.hold('fov', fx.gentle.kick(L.fovDeg), fx.feel.get('fov.kickInS'));
+    fx.hold('lines', L.lines, fx.feel.get('boost.riseS'));
     fx.hold('bandSpeed', fx.gentle.scroll((j(fx, 'boostBandMul') - 1) * size), fx.feel.get('boost.riseS'));
-    if (kind !== 'pad' && !small) fx.shake.kick('boost');
+    if (L.shakeM > 0) fx.shake.kick('boost', L.shakeM, L.shakeMul);
   },
   'boost-end'(fx) {
     fx.release('fov', fx.feel.get('fov.kickOutS'));

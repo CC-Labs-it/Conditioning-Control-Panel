@@ -62,12 +62,12 @@ test('countdown steps bloom up per pulse, go releases it over goReleaseS', () =>
 test('boost: fov kick and band speed in, all eased back after boost-end; Gentle removes the kick', () => {
   const { bus, fx, run } = rig();
   bus.emit('boost-start', { kind: 'drift', tier: 2, amount: 0.18, holdS: 0.9 }); run(0.2);
-  assert.ok(Math.abs(fx.state.fovKick - 8) < 1e-6);
+  assert.ok(Math.abs(fx.state.fovKick - 6) < 1e-6, 'tier 2 sits on the ladder');
   assert.ok(Math.abs(fx.state.bandSpeedMul - 1.5) < 1e-6);
-  assert.equal(fx.state.speedLines, 1);
+  assert.equal(fx.state.speedLines, 0.85);
   assert.ok(Math.hypot(...fx.state.shake) > 0);
   bus.emit('boost-end', { kind: 'drift' }); run(0.2);
-  assert.ok(fx.state.fovKick > 0 && fx.state.fovKick < 8);
+  assert.ok(fx.state.fovKick > 0 && fx.state.fovKick < 6);
   run(2);
   assert.equal(fx.state.fovKick, 0); assert.equal(fx.state.bandSpeedMul, 1); assert.equal(fx.state.speedLines, 0);
 
