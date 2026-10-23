@@ -242,7 +242,7 @@ internal sealed partial class FirstShowStageWindow : Window
         try
         {
             File.Copy(cached, path);
-            File.SetCreationTimeUtc(path, ScrolllerDiskCache.DownloadedUtcOf(url) ?? info.CreationTimeUtc);
+            ScrolllerDiskCache.StampBorn(path, ScrolllerDiskCache.DownloadedUtcOf(url) ?? ScrolllerDiskCache.BornUtcOf(cached));
             return path;
         }
         catch (IOException) { Release(path); return null; }

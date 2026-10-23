@@ -269,8 +269,30 @@ internal static class ScrolllerDiskCache
            || createdUtc - nowUtc > TimeSpan.FromHours(1)
            || nowUtc - createdUtc >= age;
 
+    /// <summary>
+    /// Stamps a copy with the time its bytes were downloaded, in BOTH the creation and the last-write time. Linux has
+    /// no settable creation time: .NET's SetCreationTimeUtc there moves the last-write time, while GetCreationTimeUtc
+    /// reads the file's real birth (statx), the moment the COPY was made. A copy made 20 h after its download would then
+    /// read 20 h younger than it is and outlive the day limit. Never throws.
+    /// </summary>
+    internal static void StampBorn(string path, DateTime bornUtc)
+    {
+        try { File.SetCreationTimeUtc(path, bornUtc); } catch { }
+        try { File.SetLastWriteTimeUtc(path, bornUtc); } catch { }
+    }
+
+    /// <summary>A copy's download time as <see cref="StampBorn"/> left it, on every OS: the EARLIER of its creation and
+    /// last-write times (an unstamped file reads its creation, a Linux file its stamped last write). Reading older
+    /// only ever deletes sooner.</summary>
+    internal static DateTime BornUtcOf(string path)
+    {
+        var created = File.GetCreationTimeUtc(path);
+        var written = File.GetLastWriteTimeUtc(path);
+        return written < created ? written : created;
+    }
+
     /// <summary>Deletes every file in <paramref name="dirs"/> whose name starts with <paramref name="prefix"/> and
-    /// whose creation time is due by <see cref="TempCopyDue"/> (a file still held is left for the next sweep).
+    /// whose download time (<see cref="BornUtcOf"/>) is due by <see cref="TempCopyDue"/> (a file still held is left for the next sweep).
     /// Returns how many went; never throws. The Avalonia head's sweep of its own copies (WPF RemoteMediaCache
     /// keeps its own walk over the same rule).</summary>
     internal static int SweepTempCopies(IEnumerable<string?> dirs, string prefix, TimeSpan age)
@@ -286,7 +308,7 @@ internal static class ScrolllerDiskCache
             {
                 try
                 {
-                    if (!TempCopyDue(File.GetCreationTimeUtc(file), now, age)) continue;
+                    if (!TempCopyDue(BornUtcOf(file), now, age)) continue;
                     File.Delete(file);
                     deleted++;
                 }

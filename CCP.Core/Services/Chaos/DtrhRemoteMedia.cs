@@ -260,12 +260,13 @@ namespace ConditioningControlPanel.Services.Chaos
             });
         }
 
-        /// <summary>The day limit on one copy (WPF DtrhAssetManifest.DropStaleCopy): a file whose creation time (its
-        /// download time) is a day old at <paramref name="nowUtc"/> leaves the map and is released. True when it went.</summary>
+        /// <summary>The day limit on one copy (WPF DtrhAssetManifest.DropStaleCopy): a file whose download time
+        /// (<see cref="ScrolllerDiskCache.BornUtcOf"/>, right on Linux too) is a day old at <paramref name="nowUtc"/>
+        /// leaves the map and is released. True when it went.</summary>
         private static bool DropStaleCopy(string url, string path, DateTime nowUtc, Action<string> release)
         {
             DateTime born;
-            try { born = File.GetCreationTimeUtc(path); } catch { born = DateTime.MinValue; }
+            try { born = ScrolllerDiskCache.BornUtcOf(path); } catch { born = DateTime.MinValue; }
             if (!ScrolllerCacheBook.IsExpiredAt(born, nowUtc)) return false;
             if (LocalCopies.TryRemove(new KeyValuePair<string, string>(url, path))) release(path);
             return true;
@@ -476,7 +477,7 @@ namespace ConditioningControlPanel.Services.Chaos
                 path = Path.Combine(dir, $"{CopyPrefix}{Guid.NewGuid():N}{ScrolllerDiskCache.ExtensionOf(url)}");
                 File.Copy(cached, path);
                 var born = ScrolllerDiskCache.DownloadedUtcOf(url) ?? info.CreationTimeUtc;
-                File.SetCreationTimeUtc(path, born);
+                ScrolllerDiskCache.StampBorn(path, born);
                 return path;
             }
             catch (Exception ex)
