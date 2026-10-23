@@ -155,8 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         ///
         /// <para>Every string is hard-coded English here BECAUSE IT IS ON WPF TOO - this page's
         /// status copy never got loc keys, and inventing one would produce a plausible key that
-        /// resolves to nothing. The button's Content is a TextBlock (Avalonia parses `_` in a bare
-        /// string Content as an access key), so the label is written through it.</para>
+        /// resolves to nothing. The button uses the existing Fluent IconLabel; icon and text repaint together.</para>
         /// </summary>
         internal void RefreshSheListeningStatus()
         {
@@ -168,8 +167,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var armed = available && MicIsArmed();
 
             tab.BtnSL_MicMaster.IsEnabled = available;
-            if (tab.BtnSL_MicMaster.Content is TextBlock label)
-                label.Text = armed ? "■  Stop listening" : "▶  Start listening";
+            if (tab.BtnSL_MicMaster.Content is global::ConditioningControlPanel.Avalonia.Controls.IconLabel label)
+            {
+                label.Kind = armed ? IconKind.Stop : IconKind.Play;
+                label.Text = armed ? "Stop listening" : "Start listening";
+            }
             tab.BtnSL_MicMaster.Foreground = armed
                 ? new SolidColorBrush(Color.FromRgb(0xFF, 0xB0, 0xB0))
                 : new SolidColorBrush(Color.FromRgb(0x90, 0xEE, 0x90));
