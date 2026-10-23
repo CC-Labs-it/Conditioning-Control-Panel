@@ -8,11 +8,11 @@
  * which never comes while its WebView2 is out of keyboard focus (the title bar
  * clicked), so a kept press used to pause nothing and panic nothing. A focused
  * board hears the real key as well, in either order, and one press is handled
- * once (twice would pause and then leave):
+ * once (twice would pause and then resume):
  *   A  unfocused: the frame alone plays one Escape through the page's listeners.
  *   B  focused, the key first (the usual order): the frame is dropped.
  *   C  focused, the frame first: it waits, the key lands, the frame is dropped.
- *   D  on the pause card a later kept press leaves, once, focused or not.
+ *   D  on the pause card a later kept press resumes, once, focused or not.
  *   E  a part of the page that keeps the real key for itself (the promotion
  *      picker, the door) does not hide it from the dedupe.
  *   F  the played Escape: its target, its shape, a duplicate frame, dispose.
@@ -86,12 +86,12 @@ function makePage() {
     win, doc, now: () => t, later, cancel,
     makeEvent: () => new FakeKey('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true, isTrusted: false }),
   });
-  // boot.js's own Escape: pause a game, and an Escape on the pause card leaves.
+  // boot.js's own Escape: pause a game, and an Escape on the pause card resumes.
   const acts = [];
   let paused = false;
   win.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (paused) { acts.push('leave'); return; }
+    if (paused) { paused = false; acts.push('resume'); return; }
     paused = true;
     acts.push('pause');
   });
@@ -135,7 +135,7 @@ function makePage() {
   r.advance(LOOK_BACK_MS);
   r.hostEscape.kept();
   r.advance(LOOK_AHEAD_MS);
-  expect(r.acts.join() === 'pause,leave', 'a frame past the look-back plays');
+  expect(r.acts.join() === 'pause,resume', 'a frame past the look-back plays');
   expect(LOOK_BACK_MS < 2000, 'the look-back stays inside the panel\'s 2 s double tap');
 }
 
@@ -148,7 +148,7 @@ function makePage() {
   expect(p.acts.join() === 'pause', 'the real key lands inside the wait and pauses');
   expect(p.timers.size === 0, 'and the waiting frame is let go');
   p.advance(5000);
-  expect(p.acts.join() === 'pause', 'one press, one pause: never pause and then leave');
+  expect(p.acts.join() === 'pause', 'one press, one pause: never pause and then resume');
 }
 
 /* ---- D: the pause card -------------------------------------------------------- */
@@ -159,14 +159,14 @@ function makePage() {
   p.advance(2500);                              // the next press is past the double tap
   p.hostEscape.kept();
   p.advance(LOOK_AHEAD_MS);
-  expect(p.acts.join() === 'pause,leave', 'unfocused: Escape on the pause card leaves');
+  expect(p.acts.join() === 'pause,resume', 'unfocused: Escape on the pause card resumes');
   p.advance(5000);
-  expect(p.acts.join() === 'pause,leave', 'once');
+  expect(p.acts.join() === 'pause,resume', 'once');
 
   const q = makePage();
   q.realKey(); q.advance(10); q.hostEscape.kept(); q.advance(2500);
   q.realKey(); q.advance(10); q.hostEscape.kept(); q.advance(5000);
-  expect(q.acts.join() === 'pause,leave', 'focused: pause, then leave, each press once');
+  expect(q.acts.join() === 'pause,resume', 'focused: pause, then resume, each press once');
 }
 
 /* ---- E: a part of the page keeps the real key -------------------------------- */

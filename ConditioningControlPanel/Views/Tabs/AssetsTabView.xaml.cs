@@ -22,6 +22,31 @@ namespace ConditioningControlPanel.Views.Tabs
                 mw.OnAssetsTabVisibilityChanged(IsVisible);
         }
 
+        // ---- FINE-TUNE LAYOUT (#1409, #1410) ------------------------------------------------
+
+        /// <summary>The Fine-tune list only exists while remote media is in play. With the
+        /// source on "My own assets" its row is hidden, so an open flag left over from Both
+        /// must not keep the Asset Browser collapsed with no way to bring it back (#1409).</summary>
+        internal static bool FineTuneShows(bool open, bool remoteInPlay) => open && remoteInPlay;
+
+        /// <summary>
+        /// One place decides who owns the page's height. Closed (or local source): the media
+        /// block hugs its content and the browser takes the rest, with its 260 px floor. Open:
+        /// the browser steps aside, its row gives up the floor too (a RowDefinition MinHeight
+        /// holds even when its content is collapsed), and the media row takes the star, so the
+        /// list scrolls inside the page and the r/ add field stays reachable (#1410).
+        /// </summary>
+        internal void ApplyFineTuneLayout(bool open, bool remoteInPlay)
+        {
+            var shows = FineTuneShows(open, remoteInPlay);
+            RemoteFineTuneScroll.Visibility = shows ? Visibility.Visible : Visibility.Collapsed;
+            AssetBrowserSection.Visibility = shows ? Visibility.Collapsed : Visibility.Visible;
+            RowMediaSource.Height = shows ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+            RowAssetBrowser.MinHeight = shows ? 0 : 260;
+            RowAssetBrowser.Height = shows ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            TxtRemoteFineTuneChevron.Text = shows ? "" : "";
+        }
+
         // ---- LIBRARY > FOLDERS (nav rework 2026-10-06) --------------------------------------
 
         /// <summary>Zone keys the Library section strip reaches (nav rework).</summary>
@@ -61,6 +86,9 @@ namespace ConditioningControlPanel.Views.Tabs
             }
             catch (Exception ex) { App.Logger?.Debug("PaintAssetsFolder: {E}", ex.Message); }
         }
+
+        /// <summary>The online-source credit line's scrolller.com link (refused under any lock).</summary>
+        private void ScrolllerLink_Click(object sender, RoutedEventArgs e) => Services.Video.ScrolllerCredit.OpenHome();
 
         private void BtnPickAssetsFolder_Click(object sender, RoutedEventArgs e)
         {
