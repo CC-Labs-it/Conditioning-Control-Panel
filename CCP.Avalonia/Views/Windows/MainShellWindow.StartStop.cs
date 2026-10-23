@@ -2,9 +2,10 @@
 // BtnStartMenu_Click, MenuStartNormal_Click, StartEngine (:294), StopEngine (:444) and
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
-// ponytail: remaining start integration: Relapse achievements, brain-drain/autonomy starts,
-// ramp/scheduler lifecycle and hero FX. Remote gate, TotalSessions and other Core-driven services
-// are already real; empty local flash notices and the running label are now wired here.
+// Relapse (TrackPanicPressed/CheckRelapse), the Takeover start/stop rule and the scheduler's manual-stop
+// flag are here; ramp in Core CoreIntensityRamp, scheduler in MainShellWindow.Scheduler.cs.
+// ponytail: brain-drain start (no BrainDrain service on this head) and the Start hero FX
+// (MainWindow.HeroFx.cs) remain: row shell-start-stop names wire-shell-start-stop-b-next.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using System;
@@ -38,11 +39,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning) ManualStop();
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
-            else StartEngine();
+            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); ManualStop(); }
+            else
+            {
+                Scheduler.ManuallyStopped = false;   // WPF StartStop.cs:111
+                StartEngine();
+            }
+        }
+
+        /// <summary>WPF StartStop.cs:98-106: the user's own Stop stamps Relapse and holds the schedule off.</summary>
+        private void ManualStop()
+        {
+            App.Achievements?.TrackPanicPressed();
+            Scheduler.OnManualToggle(CoreSettings.Current, DateTime.Now, stopping: true);
+            StopEngine();
+        }
+
+        /// <summary><see cref="CoreEngine.StartedHook"/>: WPF StartEngine's Relapse check (:248, also
+        /// SessionEngine TrackSessionStart) and Takeover start (:336), for every engine start.</summary>
+        internal void OnEngineStarted()
+        {
+            App.Achievements?.CheckRelapse();
+            Autonomy.Start();   // starts only when AutonomyScheduler.CanStart (entitled, enabled, consented)
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -122,6 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            // WPF StartStop.cs:451: Takeover the user armed outlives the engine; anything else stops.
+            if (!AutonomyScheduler.CanStart(CoreSettings.Current)) Autonomy.Stop();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);

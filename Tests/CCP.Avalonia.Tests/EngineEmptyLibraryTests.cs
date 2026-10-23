@@ -48,6 +48,9 @@ public sealed class EngineEmptyLibraryTests
         {
             shell.Show(); Dispatcher.UIThread.RunJobs();
             AvApp.Notifications.AttachHost(host);
+            // Toasts an earlier test left queued while no host was attached land on attach (P02): drop them.
+            foreach (var old in host.Children.OfType<Border>()) (old.Tag as DispatcherTimer)?.Stop();
+            host.Children.Clear();
             CoreEngine.StoppedHook = shell.OnEngineStopped;
             shell.Named<Button>("BtnStart")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True(CoreEngine.IsRunning);

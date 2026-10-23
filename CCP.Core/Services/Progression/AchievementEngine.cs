@@ -194,6 +194,20 @@ internal sealed class AchievementEngine
         TryUnlock("corner_hit");
     }
 
+    /// <summary>WPF AchievementService.TrackPanicPressed (:669): a deliberate stop/panic stamp for Relapse.</summary>
+    public void TrackPanicPressed(DateTime? now = null)
+    {
+        Progress.LastPanicPressTime = now ?? DateTime.Now;
+        _isDirty = true;
+    }
+
+    /// <summary>WPF AchievementService.CheckRelapse (:695): a start within 10 s of that stamp unlocks relapse.</summary>
+    public void CheckRelapse(DateTime? now = null)
+    {
+        if (Progress.LastPanicPressTime is { } last && ((now ?? DateTime.Now) - last).TotalSeconds <= 10)
+            TryUnlock("relapse");
+    }
+
     /// <summary>WPF TrackAttentionCheckPassed: totals and eyes_front.</summary>
     public void TrackAttentionCheckPassed(bool isVideo = false)
     {

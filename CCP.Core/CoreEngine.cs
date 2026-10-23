@@ -29,6 +29,10 @@ namespace ConditioningControlPanel
         /// cards, the pink tint). Runs after every Stop, running or not.</summary>
         public static volatile Action? StoppedHook;
 
+        /// <summary>The head's half of StartEngine that Core cannot do (Relapse check, Takeover start).
+        /// Runs after every Start, button or session.</summary>
+        public static volatile Action? StartedHook;
+
         /// <summary>The head's pop-quiz scheduler (it owns the <see cref="IPopQuizHost"/>); null
         /// on a head with no pop-quiz window.</summary>
         public static volatile PopQuizScheduler? PopQuiz;
@@ -65,11 +69,14 @@ namespace ConditioningControlPanel
                 CoreMindWipe.Start(s.MindWipeFrequency, s.MindWipeVolume / 100.0);
                 if (s.MindWipeLoop) CoreMindWipe.StartLoop(s.MindWipeVolume / 100.0);
             }
+            if (s.IntensityRampEnabled) CoreIntensityRamp.Start();   // WPF StartStop.cs:348
 
             _running = true;
             StartedUtc = DateTime.UtcNow;
             Log.Information("Engine started - Flash: {Flash}, Subliminal: {Sub}, LockCard: {Lock}, BouncingText: {Bt}",
                 s.FlashEnabled, s.SubliminalEnabled, s.LockCardEnabled, s.BouncingTextEnabled);
+            try { StartedHook?.Invoke(); }
+            catch (Exception ex) { Log.Warning(ex, "Engine start hook failed"); }
         }
 
         /// <summary>WPF StopEngine: stop every driven service whether or not the engine ran (panic
@@ -90,6 +97,7 @@ namespace ConditioningControlPanel
                 LockCardScheduler.Instance.Stop();
                 PopQuiz?.Stop();   // closes an open quiz (WPF StartStop.cs:492)
                 CoreMindWipe.Stop();   // WPF StartStop.cs:489, also ends the loop
+                CoreIntensityRamp.Stop();   // WPF StartStop.cs:487, restores the ramped values
                 _running = false;
                 StartedUtc = null;
                 try { StoppedHook?.Invoke(); }
