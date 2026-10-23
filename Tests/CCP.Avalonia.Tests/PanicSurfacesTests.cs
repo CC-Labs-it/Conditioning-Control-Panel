@@ -105,6 +105,10 @@ public sealed class PanicSurfacesTests
         ("chaos", "engine", "WPF GameSurfaces.cs:50 'chaos' closes before the tail"),
         // WPF :1808 KillAllAudio (App.xaml.cs:1780 Mantra.Dispose) runs before StopEngine (:1827).
         ("mantra", "engine", "audio killed before the engine stop"),
+        // WPF App.xaml.cs:1841-1844 KillAllAudio: Mantra?.Dispose() then MantraChant?.StopAndDisarm(), then Autonomy.Stop.
+        ("mantra", "mantra-chant", "mantra lab audio before the chant"),
+        ("mantra-chant", "takeover", "chant disarmed before autonomy stops"),
+        ("mantra-chant", "engine", "audio killed before the engine stop"),
         // WPF :1786 remote haptics and :1992 haptics PanicStop come before StopEngine (:1827).
         ("haptics", "engine", "toys to zero before the engine stop"),
         ("remote-haptics", "engine", "toys to zero before the engine stop"),

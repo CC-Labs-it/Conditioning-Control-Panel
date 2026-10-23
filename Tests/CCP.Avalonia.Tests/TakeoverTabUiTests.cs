@@ -206,4 +206,16 @@ public sealed class TakeoverTabUiTests
         return Task.CompletedTask;
     });
 
+    /// <summary>Each lock refuses the Scrolller credit on its own: Strict Lock, Lockdown, a Chaos run, a DtRH descent.</summary>
+    [Theory]
+    [InlineData(true, false, false, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, false, false, true)]
+    public void WallpaperCreditRefusedUnderEachLock(bool strict, bool lockdown, bool chaos, bool dtrh)
+    {
+        Assert.True(global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView.WallpaperCreditRefused(strict, lockdown, chaos, dtrh));
+        Assert.False(global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView.WallpaperCreditRefused(false, false, false, false));
+    }
+
 }

@@ -50,6 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// during InitializeComponent, before settings are read.</summary>
         private bool _isLoading = true;
         internal Func<string, Task<bool>>? WallpaperCreditOpenerForTests;
+        /// <summary>No browser opens under Strict Lock, Lockdown, a Chaos run or a DtRH descent.</summary>
+        internal static bool WallpaperCreditRefused(bool strict, bool lockdown, bool chaos, bool dtrh) => strict || lockdown || chaos || dtrh;
 
         public BambiTakeoverTabView()
         {
@@ -66,8 +68,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnCompanionPermissions.Click += (_, _) => Shell?.ShowTab("permissions");
             BtnWallpaperCredit.Click += async (_, _) =>
             {
-                if (CoreSettings.Current.StrictLockEnabled || Windows.MainShellWindow.LockdownActive
-                    || Chaos.ChaosRunHost.IsActive || Games.GameWindow.IsDtrhRunning) return;
+                if (WallpaperCreditRefused(CoreSettings.Current.StrictLockEnabled, Windows.MainShellWindow.LockdownActive,
+                        Chaos.ChaosRunHost.IsActive, Games.GameWindow.IsDtrhRunning)) return;
                 await (WallpaperCreditOpenerForTests?.Invoke("https://scrolller.com")
                     ?? Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), "https://scrolller.com"));
             };

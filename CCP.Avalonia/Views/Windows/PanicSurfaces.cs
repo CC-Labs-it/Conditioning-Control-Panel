@@ -38,8 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:1726: standalone Lab minigames first; the engine stop never reaches them.
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
-            new("mantra-chant", _ => Platform.MantraChantService.Instance.StopAndDisarm()),
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
+            new("mantra-chant", _ => Platform.MantraChantService.Instance.StopAndDisarm()),   // WPF App.xaml.cs:1844, after Mantra
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             new("chaos-intro", _ => Chaos.ChaosIntroWindow.CloseForPanic()),   // the modal first-run card (WPF left it up)
             // WPF PanicStopEverySurface (:1992): the toys go to zero, bypassing throttles and gates.
