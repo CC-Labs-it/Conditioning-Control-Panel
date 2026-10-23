@@ -74,6 +74,7 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern IntPtr XGetSelectionOwner(IntPtr display, IntPtr selection);
     [DllImport(LibX11)] private static extern int XDefaultScreen(IntPtr display);
     [DllImport(LibX11)] private static extern int XRaiseWindow(IntPtr display, IntPtr window);
+    [DllImport(LibX11)] private static extern int XUnmapWindow(IntPtr display, IntPtr window);
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
 
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
@@ -286,6 +287,22 @@ internal static class X11Overlay
             XFlush(_display);
             return true;
         }
+    }
+
+    /// <summary>The mandatory video's wedge escape hatch on X11 (WPF RunWedgeEscapeHatch's ShowWindowAsync(SW_HIDE)):
+    /// unmap a cached XID on this class's OWN display connection, so it works from a worker while the UI thread
+    /// is hung. A bounded wait on the lock: a UI thread wedged inside another call here must not hang the hatch.</summary>
+    internal static bool UnmapOffThread(IntPtr xid)
+    {
+        if (xid == IntPtr.Zero || !System.Threading.Monitor.TryEnter(Gate, 1000)) return false;
+        try
+        {
+            if (!EnsureDisplay()) return false;
+            XUnmapWindow(_display, xid);
+            XFlush(_display);
+            return true;
+        }
+        finally { System.Threading.Monitor.Exit(Gate); }
     }
 
     /// <summary>Whole-window alpha applied by the COMPOSITOR (<c>_NET_WM_WINDOW_OPACITY</c>), the X11

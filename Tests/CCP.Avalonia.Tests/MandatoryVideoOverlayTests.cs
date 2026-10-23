@@ -117,6 +117,36 @@ public sealed class MandatoryVideoOverlayTests
                     Assert.Empty(o.Windows);
                     Assert.False(w.IsVisible);
 
+                    // The wedge failure path (WPF #765-#767): the UI thread stalls 9 s on a strict clip whose native
+                    // Stop never returns. Rung 1 gives up on the Stop after its budget, the strict close veto stands
+                    // down, and the teardown quarantines the player with its media and frame buffer, undisposed.
+                    w = await Open(strict: true);
+                    using (var stuck = new System.Threading.ManualResetEventSlim(false))
+                    {
+                        var realStop = MandatoryVideoOverlay.StopPlayer;
+                        var quarantined = MandatoryVideoOverlay.QuarantinedCount;
+                        var sink = o.Sink!;
+                        try
+                        {
+                            MandatoryVideoOverlay.StopPlayer = p => { stuck.Wait(); p.Stop(); };
+                            var stalled = DateTime.UtcNow.Ticks + TimeSpan.FromSeconds(9).Ticks;
+                            MandatoryVideoOverlay.WedgeNow = () => stalled;
+                            o.Wedge!.Tick();                              // the threadpool tick; the UI thread is not draining
+                            Assert.Equal((1, true), (o.Wedge.Rung, o.Wedge.StallSeen));
+                            w.Close();                                    // a strict close is no longer refused
+                            Assert.False(v.IsPlaying, "a stalled strict clip can be closed");
+                            Assert.Empty(o.Windows);
+                            Assert.Equal(quarantined + 1, MandatoryVideoOverlay.QuarantinedCount);
+                            Assert.False(sink.Freed, "a wedged decoder may still write its frame buffer");
+                        }
+                        finally
+                        {
+                            stuck.Set();                                  // the stuck Stop returns and stops the quarantined player
+                            MandatoryVideoOverlay.StopPlayer = realStop;
+                            MandatoryVideoOverlay.WedgeNow = () => DateTime.UtcNow.Ticks;
+                        }
+                    }
+
                     // Strict with NO live listener (#875): the panic key must escape, not trap.
                     MandatoryVideoOverlay.PanicListenerLive = () => false;
                     w = await Open(strict: true);
@@ -127,7 +157,7 @@ public sealed class MandatoryVideoOverlayTests
                     // Non-strict: Esc dismisses and the watched seconds are credited.
                     credited = 0;
                     w = await Open(strict: false);
-                    Assert.True((ducks, unducks) == (3, 2), $"one duck ref per open, released by each close ({ducks}/{unducks})");
+                    Assert.True((ducks, unducks) == (4, 3), $"one duck ref per open, released by each close ({ducks}/{unducks})");
 
                     // WPF blurred fill: the 16:9 clip leaves bars on the 4:3 headless window, so the fill shows a
                     // small, non-black copy of the frame under the scrim.
@@ -159,6 +189,10 @@ public sealed class MandatoryVideoOverlayTests
                     o.Step(s.AttentionLifespan + 0.01, 0);
                     Assert.Equal(0, o.LiveTargets);
                     Assert.Equal(1, v.AttentionHits);
+
+                    // The wedge watchdog is armed for the clip on screen and has not seen a stall.
+                    Assert.NotNull(o.Wedge);
+                    Assert.Equal((0, false), (o.Wedge!.Rung, o.Wedge.StallSeen));
                     await Task.Delay(1200);
 
                     // WPF #735 grace pause: the clip's first Esc pauses it behind the card (guards asleep);
@@ -188,7 +222,7 @@ public sealed class MandatoryVideoOverlayTests
                     Assert.Empty(o.Windows);
                     Assert.True(o.Sink == null, "frame buffer freed");
                     Assert.True(credited >= 1, $"credited {credited}s");
-                    Assert.True((ducks, unducks) == (3, 3), $"every close releases its duck ({ducks}/{unducks})");
+                    Assert.True((ducks, unducks) == (4, 4), $"every close releases its duck ({ducks}/{unducks})");
 
                     // The pink pill by mouse (0.85 hover, 0.7 pressed, click resumes), then the 60 s auto-resume
                     // on the next clip; neither stops the clip.
