@@ -238,6 +238,8 @@
          SkiaSharp source compiled into both heads rather than a second copy. -->
     <AvaloniaResource Include="..\Assets\branding\ccp-logo.jpg" Link="Resources\branding\ccp-logo.jpg" />
     <Compile Include="..\ConditioningControlPanel\Controls\DashboardLogoRenderer.cs" Link="Controls\DashboardLogoRenderer.cs" />
+    <!-- The relay path gate (WPF Services/Safety/HostNetPathRule.cs, pure): one copy judges the Glassroad relay too. -->
+    <Compile Include="..\ConditioningControlPanel\Services\Safety\HostNetPathRule.cs" Link="Services\Safety\HostNetPathRule.cs" />
 
     <AvaloniaResource Include="..\Assets\achievements\*.png"
                       Link="Resources\achievements\%(Filename)%(Extension)" />

@@ -52,6 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
             // WPF DtrhHostService.cs:196 StartUrl behind the Lab door (GameWindow.Dtrh.cs).
             [DtrhId] = new(DtrhId, "launcher_game_dtrh_title", "dtrh/index.html", DtrhGate),
+            // WPF GlassroadHostService (feat/glassroad-a): the 3D race behind CCP_GLASSROAD=1 (GameWindow.Glassroad.cs).
+            [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
         };
 
         private static readonly List<GameWindow> Open = new();
@@ -69,6 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// rather than relaunched (a second click mid-match must never restart it). Null when refused.</summary>
         internal static GameWindow? Launch(string id)
         {
+            id = ResolveDoor(id);   // the Racing Thoughts door opens Glassroad while CCP_GLASSROAD=1
             if (!Games.TryGetValue(id, out var spec)) { Log.Warning("[Game] no game {Id}", id); return null; }
             GameWindow? live;
             lock (Open) live = Open.FirstOrDefault(w => string.Equals(w.Spec.Id, spec.Id, StringComparison.OrdinalIgnoreCase));
@@ -100,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Closing += (_, _) => _closing = true;
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); };
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
+            if (spec.Id == GlassroadId) Opened += (_, _) => OpenGlassroad();
         }
 
         private WebAssetServer? _server;
@@ -134,6 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == PbpId && HandlePbp(o)) return;
             if (IsRace && HandleRace(o)) return;
             if (IsDtrh && HandleDtrh(o)) return;
+            if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
                 case "ready":
