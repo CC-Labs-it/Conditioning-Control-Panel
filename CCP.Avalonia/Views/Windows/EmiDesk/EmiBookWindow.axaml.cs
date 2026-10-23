@@ -1055,7 +1055,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         ///
         /// <para>ponytail: the OWNER is here now, so this is one member away. What is missing is
         /// <c>EmiDeskWindow.SpeakLine</c> and the <c>LineDraw</c> record, and those are blocked on
-        /// <c>EmiLineEngine</c> + <c>EmiChains.Player</c>.
+        /// <c>EmiLineEngine</c> + <c>EmiChainPlayer</c> (WPF head).
         /// EmiLineEngine is in Core now (CCP.Core/Services/EmiDesk, WPF seeds its ask probes;
         /// unset here means no offers);
         /// EmiChains is still WPF-only, its whole head coupling is Player's DispatcherTimer, one
