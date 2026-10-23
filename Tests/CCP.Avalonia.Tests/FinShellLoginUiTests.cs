@@ -11,6 +11,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Xunit;
 using App = ConditioningControlPanel.Avalonia.App;
@@ -51,6 +52,10 @@ public sealed partial class LoginAchievementOfferTests
         s.HasLinkedDiscord = false;
         shell.ShowTab("appsettings");
         var section = shell.AppSettingsPage!.FindControl<AccountSettingsSection>("SectionAccount")!;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(shell, TopLevel.GetTopLevel(section));   // the offer is owned by the shell the section sits in
+        Assert.True(shell.IsVisible && shell.WindowState != WindowState.Minimized, $"visible={shell.IsVisible} state={shell.WindowState}");
+        Assert.False(PanicSurfaces.AnyOwnsTheScreen());
         var wire = new LinkWire(success);
         AccountSeed.NewV2 = () => new V2AuthService(() => s, wire);
         var oldProbe = LoginDialog.ProxyReachable;
@@ -63,7 +68,8 @@ public sealed partial class LoginAchievementOfferTests
             var linking = section.LinkAsync("discord", section.FindControl<Button>("BtnLinkDiscord")!, "TxtBtnLinkDiscord");
             if (success)
             {
-                await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any());
+                await WaitFor(() => linking.IsCompleted || shell.OwnedWindows.OfType<MessageDialog>().Any());
+                if (linking.IsCompleted) await linking;   // surface a fault instead of a timeout
                 Assert.True(s.HasLinkedDiscord);
                 Assert.False(s.DiscordShareAchievements);
                 Assert.Single(shell.OwnedWindows.OfType<MessageDialog>()).Close(true);
@@ -111,23 +117,27 @@ public sealed partial class LoginAchievementOfferTests
         var wire = new PrivacyWire(); var now = DateTime.UtcNow;
         var sync = AccountSeed.Sync = new SyncPush(() => Array.Empty<string>(), () => false, wire) { UtcNow = () => now };
         sync.MarkLoaded(Array.Empty<string>());
-        void Toggle(string name, bool value)
-        { now = now.AddSeconds(31); panel.FindControl<CheckBox>(name)!.IsChecked = value; }
-        Toggle("ChkDiscordTabAllowDm", false); Toggle("ChkDiscordTabAllowDm", true);
-        Toggle("ChkDiscordTabSharePfp", false); Toggle("ChkDiscordTabSharePfp", true);
-        Toggle("ChkPublicShareRealAvatar", true); Toggle("ChkPublicShareRealAvatar", false);
-        Toggle("ChkDiscordTabShowOnline", true); Toggle("ChkDiscordTabShowOnline", false);
-        Toggle("ChkGoonShareAvatar", false); Toggle("ChkGoonShareAvatar", true);
-        Toggle("ChkGoonShareDiscordDm", true); Toggle("ChkGoonShareDiscordDm", false);
-        await WaitFor(() => wire.Bodies.Count > 0 && wire.Bodies.Last().Value<bool?>("goon_share_dm") == false);
-        var body = wire.Bodies.Last();
-        Assert.True((bool)body["allow_discord_dm"]!);
-        Assert.True((bool)body["share_profile_picture"]!);
-        Assert.False((bool)body["public_share_avatar"]!);
-        Assert.False((bool)body["show_online_status"]!);
-        Assert.True((bool)body["goon_share_avatar"]!);
-        Assert.False((bool)body["goon_share_dm"]!);
-        Assert.True(CoreSettings.Service!.HasPendingSave);
+        try
+        {
+            void Toggle(string name, bool value)
+            { now = now.AddSeconds(31); panel.FindControl<CheckBox>(name)!.IsChecked = value; }
+            Toggle("ChkDiscordTabAllowDm", false); Toggle("ChkDiscordTabAllowDm", true);
+            Toggle("ChkDiscordTabSharePfp", false); Toggle("ChkDiscordTabSharePfp", true);
+            Toggle("ChkPublicShareRealAvatar", true); Toggle("ChkPublicShareRealAvatar", false);
+            Toggle("ChkDiscordTabShowOnline", true); Toggle("ChkDiscordTabShowOnline", false);
+            Toggle("ChkGoonShareAvatar", false); Toggle("ChkGoonShareAvatar", true);
+            Toggle("ChkGoonShareDiscordDm", true); Toggle("ChkGoonShareDiscordDm", false);
+            await WaitFor(() => wire.Bodies.Count > 0 && wire.Bodies.Last().Value<bool?>("goon_share_dm") == false);
+            var body = wire.Bodies.Last();
+            Assert.True((bool)body["allow_discord_dm"]!);
+            Assert.True((bool)body["share_profile_picture"]!);
+            Assert.False((bool)body["public_share_avatar"]!);
+            Assert.False((bool)body["show_online_status"]!);
+            Assert.True((bool)body["goon_share_avatar"]!);
+            Assert.False((bool)body["goon_share_dm"]!);
+            Assert.True(CoreSettings.Service!.HasPendingSave);
+        }
+        finally { sync.Reset(); }   // a skipped push falls back to Nudge's real delay; Loaded=false disarms it (P56)
     });
     [Fact]
     public Task LogoutKeepsQuestProgressForSameAccountButNextAccountClearsIt() => Run(async (shell, s) =>

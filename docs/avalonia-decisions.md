@@ -1216,3 +1216,20 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Not in this layer (row shell-login, `wire-shell-login-b-next`): stats, consents, companion progress, quest logs, the first web XP
   claim toast, and the provider-link achievement-sharing caller.
 - Tests: `Tests/CCP.Avalonia.Tests/SyncPushSkillsTests.cs` (fail-proven).
+
+## 2026-10-23: The push grows to consents, read-back stats, companion progress, minutes and quest acks (avalonia-port/fin-shell-login)
+- Question: the 2026-10-22 entry held any payload wider than skills/points/loadout/web-XP ack for owner confirmation (P44);
+  `fin-shell-login` ports the rest of WPF's ProfileSyncService body and response merge.
+- Decision (worker, recorded at review request; owner confirmation still open): port WPF 1:1 but echo only what this session read.
+  - Consents (`allow_discord_dm`, `show_online_status`, `share_profile_picture`, `public_share_avatar`, `goon_share_avatar`,
+    `goon_share_dm`) are in `SyncPush.Sent` from the first push, as WPF; privacy-control toggles push (or Nudge on cooldown) so a
+    revocation reaches the server.
+  - `stats` carries only keys a response this session returned under `user.stats` (plus `feature_day_log`), so a fresh install
+    never overwrites the cloud with local zeroes; `companion_progress` and `total_conditioning_minutes` likewise only after the
+    server sent them; `reset_daily_quest`/`reset_weekly_quest`/`force_streak_override` acks only after a response carried them.
+    Logout (`Reset`) disarms all of it.
+  - The response merge (quest flags, stats/quest-history/companion/minutes adopt, day-log rebaseline, silent achievement restore,
+    saves) runs through `CoreDispatch.Post`: a `Nudge` push answers on the thread pool and quest/achievement state is UI-thread
+    only (QuestService.cs:53-54), as WPF ran it on its dispatcher.
+- Tests: `Tests/CCP.Core.Tests/FinShellLoginTests.cs` (incl. `CloudProgressMergeHopsToTheUiThread`, fail-proven),
+  `Tests/CCP.Avalonia.Tests/FinShellLoginUiTests.cs`.

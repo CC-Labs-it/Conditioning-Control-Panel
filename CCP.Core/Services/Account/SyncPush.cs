@@ -272,15 +272,8 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
-                    CloudSyncProgress.QuestFlags(s, reply, _quests?.Invoke());
                     if (AdoptFromResponse(s, reply)) _adopted = true;
                     ClaimWebXp(s, reply);
-                    var previousStats = CloudSyncProgress.Body(s, _progress?.Invoke(), null);
-                    var previousMinutes = s.TotalConditioningMinutes;
-                    CloudSyncProgress.Adopt(s, reply, _progress?.Invoke(), _quests?.Invoke());
-                    if (previousMinutes != s.TotalConditioningMinutes || !JToken.DeepEquals(JObject.FromObject(previousStats),
-                        JObject.FromObject(CloudSyncProgress.Body(s, _progress?.Invoke(), null))))
-                        _dayLog?.Invoke()?.Rebaseline("v2 cloud merge");
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     if (_quests?.Invoke() != null)
                     {
@@ -292,12 +285,28 @@ namespace ConditioningControlPanel.Services
                     _knownCompanions |= reply["companion_progress"] is JObject;
                     _knownMinutes |= reply["total_conditioning_minutes"]?.Type is JTokenType.Float or JTokenType.Integer;
                     if (reply["user"]?["achievements"] is JArray earned)
-                    {
                         _serverAchievements = (_serverAchievements ?? Array.Empty<string>()).Union(earned.Values<string>().OfType<string>()).ToArray();
-                        if (_progress?.Invoke() is { } progress)
-                            foreach (var a in _serverAchievements) if (!progress.IsUnlocked(a)) progress.Unlock(a);
-                    }
-                    _saveProgress?.Invoke();
+                    var restore = reply["user"]?["achievements"] is JArray ? _serverAchievements : null;
+                    // Quests and achievements are only ever touched on the UI thread (QuestService.cs:53-54); a Nudge push
+                    // answers on the thread pool, so the merge hops there (WPF ran it on its dispatcher).
+                    CoreDispatch.Post(() =>
+                    {
+                        try
+                        {
+                            CloudSyncProgress.QuestFlags(s, reply, _quests?.Invoke());
+                            var previousStats = CloudSyncProgress.Body(s, _progress?.Invoke(), null);
+                            var previousMinutes = s.TotalConditioningMinutes;
+                            CloudSyncProgress.Adopt(s, reply, _progress?.Invoke(), _quests?.Invoke());
+                            if (previousMinutes != s.TotalConditioningMinutes || !JToken.DeepEquals(JObject.FromObject(previousStats),
+                                JObject.FromObject(CloudSyncProgress.Body(s, _progress?.Invoke(), null))))
+                                _dayLog?.Invoke()?.Rebaseline("v2 cloud merge");
+                            if (restore != null && _progress?.Invoke() is { } progress)
+                                foreach (var a in restore) if (!progress.IsUnlocked(a)) progress.Unlock(a);
+                            _saveProgress?.Invoke();
+                            CoreSettings.Save();   // the merge also writes minutes and companion progress
+                        }
+                        catch (Exception ex) { Log.Warning(ex, "V2 Sync: cloud progress merge failed"); }
+                    });
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
                     Descent.DescentMigrationAck.Apply(s, reply);

@@ -15,6 +15,7 @@ using Xunit;
 
 namespace CCP.Core.Tests;
 
+[Collection(SessionStatics.Name)] // CoreSettings.ServiceProvider and CoreDispatch.PostProvider are process-global
 public sealed class FinShellLoginTests : IDisposable
 {
     private readonly Func<SettingsService?>? _oldSettings = CoreSettings.ServiceProvider;
@@ -95,6 +96,36 @@ public sealed class FinShellLoginTests : IDisposable
         Assert.True(await sync.PushAsync("relogin"));
         Assert.Null(wire.Bodies[2]["stats"]);
         Assert.Null(wire.Bodies[2]["companion_progress"]);
+    }
+
+    [Fact]
+    public async Task CloudProgressMergeHopsToTheUiThread()
+    {
+        var p = new AchievementProgress { TotalFlashImages = 7 };
+        using var quests = new QuestService(null, _dir);
+        var wire = new Wire { Reply = """{"user":{"stats":{"total_flashes":12},"achievements":["cloud-earned"]},"total_conditioning_minutes":30}""" };
+        var saves = 0;
+        var posted = new List<Action>();
+        var oldPost = CoreDispatch.PostProvider;
+        CoreDispatch.PostProvider = posted.Add;   // a Nudge push answers on the pool; nothing may touch progress there
+        try
+        {
+            var sync = new SyncPush(() => p.UnlockedAchievements, () => false, wire,
+                progress: () => p, quests: () => quests, saveProgress: () => saves++);
+            sync.MarkLoaded(Array.Empty<string>());
+            Assert.True(await sync.PushAsync("nudge"));
+            Assert.Equal(7, p.TotalFlashImages);
+            Assert.False(p.IsUnlocked("cloud-earned"));
+            Assert.Equal(10, _s.TotalConditioningMinutes);
+            Assert.Equal(0, saves);
+            Assert.Single(posted);
+            posted[0]();
+            Assert.Equal(12, p.TotalFlashImages);
+            Assert.True(p.IsUnlocked("cloud-earned"));
+            Assert.Equal(30, _s.TotalConditioningMinutes);
+            Assert.Equal(1, saves);
+        }
+        finally { CoreDispatch.PostProvider = oldPost; }
     }
 
     [Fact]
