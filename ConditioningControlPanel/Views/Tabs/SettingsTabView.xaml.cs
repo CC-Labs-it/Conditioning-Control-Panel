@@ -24,6 +24,10 @@ namespace ConditioningControlPanel.Views.Tabs
         public SettingsTabView()
         {
             InitializeComponent();
+            // The logo plate is rounded but its well bands and wordmark are square: ClipToBounds
+            // clips to the rectangle, so they painted dark corners past the curve. 11 = the plate's
+            // 12 px radius less its 1 px bevel.
+            ExclusivesTabView.RoundClipOnResize(LogoFaceClip, 11);
             // Esc in the click-choice popup closes it, it is not the panic key's press (TAB-8).
             Services.Safety.EscapeClaim.Mark(ClickChoiceBody);
             _clickChoiceClose.Tick += (_, _) =>

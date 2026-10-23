@@ -642,10 +642,11 @@
                   </TransformGroup>
                 </Rectangle.RenderTransform>
               </Rectangle>
+              <!-- WPF's gesture caption: the logo is the wall's shared explanation, never a hit target. -->
               <TextBlock x:Name="DashToggleHint" Text="{loc:Str dash_toggle_hint}"
-                         VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="12,0,12,8"
-                         FontSize="10" Foreground="{DynamicResource TextMutedBrush}" TextAlignment="Center"
-                         TextWrapping="Wrap" IsHitTestVisible="False"/>
+                         VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                         Margin="12,0,12,8" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"
+                         TextAlignment="Center" TextWrapping="Wrap" IsHitTestVisible="False"/>
             </Grid>
           </Border>
 
@@ -1496,6 +1497,13 @@
             </TextBlock.RenderTransform>
           </TextBlock>
         </Canvas>
+        <!-- WPF SettingsTabView.xaml:2089 MarqueeRead: the interlude stage, empty and invisible until
+             SettingsTabView.MarqueeReads.cs takes the ticker off stage. -->
+        <Grid x:Name="MarqueeRead" Opacity="0" IsHitTestVisible="False" ClipToBounds="True">
+          <Grid.RenderTransform>
+            <TranslateTransform/>
+          </Grid.RenderTransform>
+        </Grid>
       </Grid>
     </Border>
   </Grid>

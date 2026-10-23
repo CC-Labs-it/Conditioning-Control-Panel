@@ -61,6 +61,10 @@ public sealed class DashboardClickChoiceTests
             Assert.Equal(Loc.Get("dash_click_swapped"), F<TextBlock>("DashToggleHint").Text);
             service.Current.DashboardInvertClicks = false; shell.RefreshFavoritesRail();
             Assert.False(F<CheckBox>("InvertDashboardClicks").IsChecked); // profile/language rail refresh follows truth
+            service.Current.DashboardInvertClicks = true;
+            shell.RefreshDashboardToggleHint(); // the incoming restore/counter refresh must honor the saved gesture
+            Assert.True(F<CheckBox>("InvertDashboardClicks").IsChecked);
+            Assert.Equal(Loc.Get("dash_click_swapped"), F<TextBlock>("DashToggleHint").Text);
             F<CheckBox>("InvertDashboardClicks").IsChecked = true;
             if (Environment.GetEnvironmentVariable("CCP_SETTINGS_RENDER_DIR") is { Length: > 0 } output)
             {

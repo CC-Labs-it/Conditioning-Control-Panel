@@ -69,6 +69,18 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// What <see cref="AppSettings.ServerTierSeen"/> becomes after a reading: the server tier on
+        /// a Lower verdict, null once the server agrees again or rose, unchanged on no signal. The
+        /// lapse rows read it; access never does.
+        /// </summary>
+        public static int? ServerTierSeenAfter(EntitlementVerdict verdict, int? serverTier, int? current) => verdict switch
+        {
+            EntitlementVerdict.Lower => serverTier,
+            EntitlementVerdict.Same or EntitlementVerdict.Rise => null,
+            _ => current,
+        };
+
+        /// <summary>
         /// The 14-day grace stamps for a server-confirmed tier. Premium at tier 1+, the Lab stamp
         /// only at tier 2. Never shortens an existing longer window. The ONE copy of this rule:
         /// <see cref="ProfileAdopt.ApplyUserData"/> calls it too.
