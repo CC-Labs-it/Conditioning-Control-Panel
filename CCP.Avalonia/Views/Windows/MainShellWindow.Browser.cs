@@ -91,6 +91,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _ = BrowserView?.InvokeScriptAsync(BrowserFullscreenScript);
         }
 
+        /// <summary>WPF InitializeBrowserAsync: the first load prompt uses the mod's exact default URL.
+        /// Explicit site clicks and Reload still use the radio's homepage.</summary>
+        internal void LoadInitialBrowserHome()
+        {
+            if (BrowserBlockedOffline()) return;
+            RevealDashboardBrowser("browser-init");
+            NavigateBrowser(App.Mods?.GetDefaultBrowserUrl() ?? BambiCloudHome);
+        }
+
         /// <summary>Back to the selected site's homepage. Shared by the reload button and the
         /// remote video-stop path, exactly as on WPF.</summary>
         private void NavigateBrowserToCurrentSiteHome()

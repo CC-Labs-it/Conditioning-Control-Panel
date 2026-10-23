@@ -57,7 +57,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private void OnBrowserCardTrackerChanged() => Dispatcher.UIThread.Post(RefreshBrowserWebcamButton);
-        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(SyncBrowserCard);
+        private void OnBrowserCardModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(() =>
+        {
+            SyncBrowserCard();
+            // WPF OnModChanged (MainWindow.xaml.cs:3147): a mod that does not use BambiCloud
+            // navigates to its own default even if the user override keeps the radio visible.
+            if (App.Mods is { } mods && !mods.ShowBambiCloudOption()
+                && BrowserWebHost.Source != null && !CoreSettings.Current.OfflineMode)
+                BrowserWebHost.Navigate(new Uri(mods.GetDefaultBrowserUrl()));
+        });
 
         /// <summary>The saved state into the row: the mute glyph, the webcam pill, the BambiCloud override and the prompt.</summary>
         internal void SyncBrowserCard()
@@ -153,18 +161,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ApplyBambiCloudVisibility(navigateIfHidden: true);
         }
 
-        /// <summary>The radio shows when the mod wants it OR the user forces it. Hidden while selected, the dot moves to
-        /// HypnoTube and, on a user change, the page follows (WPF SyncSiteRadiosToActiveMod(navigateIfChanged: true)).</summary>
+        /// <summary>The radio shows when the mod wants it OR the user forces it. Selection follows the mod's own
+        /// site independently of that offer (WPF SyncSiteRadiosToActiveMod(navigateIfChanged: true)).</summary>
         private void ApplyBambiCloudVisibility(bool navigateIfHidden)
         {
-            bool modWants = true;
-            try { modWants = App.Mods?.ShowBambiCloudOption() ?? true; }
-            catch (Exception ex) { Log.Debug("ShowBambiCloudOption: {E}", ex.Message); }
-            bool show = modWants || CoreSettings.Current.ForceShowBambiCloud;
-            RbBambiCloud.IsVisible = show;
-            if (show || RbBambiCloud.IsChecked != true) return;
-            RbHypnoTube.IsChecked = true;
-            if (navigateIfHidden) Shell?.BrowserSiteToggle_Click(RbHypnoTube, new RoutedEventArgs());
+            bool modWants = App.Mods?.ShowBambiCloudOption() ?? true;
+            RbBambiCloud.IsVisible = modWants || CoreSettings.Current.ForceShowBambiCloud;
+            SyncSiteRadiosToActiveMod(navigateIfHidden);
+        }
+
+        /// <summary>WPF SyncSiteRadiosToActiveMod (#867): visibility is an offer; the mod default
+        /// chooses the site. Preserve a live known-site readout when the mod offers BambiCloud.</summary>
+        private void SyncSiteRadiosToActiveMod(bool navigateIfChanged)
+        {
+            bool modWants = App.Mods?.ShowBambiCloudOption() ?? true;
+            var current = BrowserWebHost.CurrentUrl?.AbsoluteUri;
+            if (modWants && current != null &&
+                (current.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase)
+                 || current.Contains("hypnotube.com", StringComparison.OrdinalIgnoreCase))) return;
+            var home = App.Mods?.GetDefaultBrowserUrl() ?? "https://bambicloud.com/";
+            bool onBambi = modWants && home.Contains("bambicloud.com", StringComparison.OrdinalIgnoreCase);
+            var target = onBambi ? RbBambiCloud : RbHypnoTube;
+            bool moved = target.IsChecked != true;
+            target.IsChecked = true;
+            if (moved && navigateIfChanged && !CoreSettings.Current.OfflineMode)
+                Shell?.BrowserSiteToggle_Click(target, new RoutedEventArgs());
         }
 
         // ------------------------------------------------------------------ the load prompt
@@ -187,11 +208,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserWebHost.IsVisible = popped || !prompt;
         }
 
-        /// <summary>WPF BrowserLoadingText_Click: load the selected site. The shell's reload is exactly that, behind the
-        /// offline gate (WPF #867).</summary>
+        /// <summary>WPF BrowserLoadingText_Click: initially load the mod's default. Subsequent Reload uses the selected
+        /// site's home, behind the offline gate (WPF #867).</summary>
         internal void OnBrowserPromptClick()
         {
             if (Shell?.IsBrowserPoppedOut == true) Shell.BtnPopOutBrowser_Click(this, new RoutedEventArgs());
+            else if (BrowserWebHost.Source == null) Shell?.LoadInitialBrowserHome();
             else Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
         }
 

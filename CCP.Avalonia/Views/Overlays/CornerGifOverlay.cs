@@ -31,6 +31,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class CornerGifOverlay
     {
+        // WPF OverlayService #1041: a newly raised topmost browser can bury an already-topmost effect.
+        internal static void RaiseForBrowserFullscreen()
+        {
+            foreach (var w in Windows.Values) X11Overlay.Raise(w.Window);
+        }
+
         internal static bool SkipPlatformChecksForTests;
         /// <summary>Tests step frames with <see cref="Advance(int)"/>; the real-time frame timer would tick
         /// whenever the test dispatcher yields (P08).</summary>

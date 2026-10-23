@@ -59,9 +59,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 };
                 page.SyncBrowserPopout();
                 popout.Show(); // unowned as WPF :2711, so it survives minimising the shell
-                // WPF's first pop-out lazily initializes the browser and selected homepage.
+                // WPF's first pop-out lazily initializes the browser at the mod's default URL.
                 // Existing pages are moved without a reload, preserving media position.
-                if (host.Source == null) NavigateBrowser(SiteHomeUrl());
+                if (host.Source == null) LoadInitialBrowserHome();
             }
             catch (Exception ex)
             {
@@ -89,6 +89,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 popout.Activate();
                 return;
             }
+            // WPF RestoreWindowForBrowserSurface (#1138): Activate cannot reveal a hidden/minimized shell.
+            if (!IsVisible) ShowFromTray();
+            else if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
             ShowTab("settings");
             RevealDashboardBrowser("focus-surface");
             Activate();

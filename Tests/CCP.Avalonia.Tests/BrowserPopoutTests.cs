@@ -114,6 +114,19 @@ public sealed class BrowserPopoutTests
         Assert.Same(popout, shell.BrowserPopoutWindow);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task EmbeddedLinkRestoresAHiddenOrMinimizedShell(bool hidden) => WithShell((shell, page, host) =>
+    {
+        if (hidden) shell.Hide();
+        else shell.WindowState = WindowState.Minimized;
+        Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/visible"));
+        Assert.True(shell.IsVisible);
+        Assert.Equal(WindowState.Normal, shell.WindowState);
+        Assert.Equal("/visible", host.Source!.AbsolutePath);
+    });
+
     [Fact]
     public Task PanicLeavesTheUsersOwnPageAndPopoutAlone() => WithShell((shell, page, host) =>
     {

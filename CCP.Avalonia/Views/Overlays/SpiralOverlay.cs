@@ -32,6 +32,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class SpiralOverlay
     {
+        // WPF OverlayService #1041: a newly raised topmost browser can bury an already-topmost effect.
+        internal static void RaiseForBrowserFullscreen()
+        {
+            foreach (var w in Windows) X11Overlay.Raise(w);
+        }
+
         /// <summary>Headless tests have no X11 window to make click-through; this lets them drive the
         /// real show/animate/close path. Never set outside tests.</summary>
         internal static bool SkipPlatformChecksForTests;

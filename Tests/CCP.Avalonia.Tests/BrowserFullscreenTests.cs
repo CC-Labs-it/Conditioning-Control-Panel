@@ -22,7 +22,10 @@ namespace CCP.Avalonia.Tests;
 public sealed class BrowserFullscreenTests
 {
     private static Task WithShell(Action<MainShellWindow, SettingsTabView, WebHost> check) =>
-        AvaloniaTestDispatcher.RunAsync(() =>
+        WithShell((shell, page, host) => { check(shell, page, host); return Task.CompletedTask; });
+
+    private static Task WithShell(Func<MainShellWindow, SettingsTabView, WebHost, Task> check) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
@@ -40,7 +43,7 @@ public sealed class BrowserFullscreenTests
                 var page = shell.Named<SettingsTabView>("SettingsTab")!;
                 var host = page.FindControl<WebHost>("BrowserWebHost")!;
                 host.ScriptOverride = _ => Task.FromResult<string?>(PageHoldsFullscreen);   // WebView2 shape: a JSON literal
-                check(shell, page, host);
+                await check(shell, page, host);
             }
             finally
             {
@@ -50,7 +53,6 @@ public sealed class BrowserFullscreenTests
                 CoreSettings.Current.OfflineMode = offline;
                 Dispatcher.UIThread.RunJobs();
             }
-            return Task.CompletedTask;
         });
 
     private static string? PageHoldsFullscreen = "true";
@@ -77,6 +79,7 @@ public sealed class BrowserFullscreenTests
 
         fs.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
         Assert.False(shell.IsBrowserFullscreen);
+        Assert.False(shell.BrowserOverlayReasserting);
         Assert.False(fs.IsVisible);
         Assert.Null(shell.BrowserPopoutWindow);
         Assert.Contains(host, Container(page).Children);
@@ -102,6 +105,7 @@ public sealed class BrowserFullscreenTests
 
         host.OnWebMessage(MainShellWindow.BrowserExitFullscreenMessage);
         Assert.False(shell.IsBrowserFullscreen);
+        Assert.False(shell.BrowserOverlayReasserting);
         Assert.True(popout.IsVisible);
         Assert.Same(host, popout.Content);
         Assert.Equal(WindowState.Normal, popout.WindowState);
@@ -115,9 +119,33 @@ public sealed class BrowserFullscreenTests
         host.OnWebMessage(MainShellWindow.BrowserFullscreenOnMessage);
         popout.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.F11 });
         Assert.False(shell.IsBrowserFullscreen);
+        Assert.False(shell.BrowserOverlayReasserting);
         var esc = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape };
         popout.RaiseEvent(esc);
         Assert.False(esc.Handled);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FullscreenRefreshesOverlayOrderAndStopsRefreshingOnExitOrClose(bool popout) => WithShell(async (shell, page, host) =>
+    {
+        var passes = 0;
+        shell.ReassertBrowserOverlays = () => passes++;
+        if (popout) page.FindControl<Button>("BtnPopOutBrowser")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(shell.BrowserOverlayReasserting);
+        host.OnWebMessage(MainShellWindow.BrowserFullscreenOnMessage);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.BrowserOverlayReasserting);
+        Assert.True(passes > 0);
+        var initial = passes;
+        await Task.Delay(650);
+        Assert.True(passes > initial); // a real dispatcher timer pass, beyond the immediate notification
+        shell.BrowserPopoutWindow!.Close();
+        Assert.False(shell.BrowserOverlayReasserting);
+        var after = passes;
+        await Task.Delay(650);
+        Assert.Equal(after, passes);
     });
 
     [Fact]
@@ -129,6 +157,7 @@ public sealed class BrowserFullscreenTests
         Assert.True(shell.IsBrowserFullscreen);
         CoreEngine.Stop();
         Assert.False(shell.IsBrowserFullscreen);
+        Assert.False(shell.BrowserOverlayReasserting);
         Assert.Null(shell.BrowserPopoutWindow);
         Assert.Contains(host, Container(page).Children);
     });
@@ -140,6 +169,7 @@ public sealed class BrowserFullscreenTests
         PageHoldsFullscreen = "false";
         host.OnWebMessage(MainShellWindow.BrowserFullscreenOnMessage);
         Assert.False(shell.IsBrowserFullscreen);
+        Assert.False(shell.BrowserOverlayReasserting);
         Assert.Null(shell.BrowserPopoutWindow);
         Assert.False(shell.ReadLeashWorld(true).FullscreenEffect);
 

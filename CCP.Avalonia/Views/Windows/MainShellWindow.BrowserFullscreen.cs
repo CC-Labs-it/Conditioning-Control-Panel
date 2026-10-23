@@ -10,6 +10,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -83,6 +85,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private (WindowDecorations Decorations, bool CanResize, WindowState State, PixelPoint Position,
             double Width, double Height, bool Topmost) _popoutPreFs;
         private Window? _browserFsEscapeTarget;
+        private DispatcherTimer? _browserOverlayTimer;
+        internal bool BrowserOverlayReasserting => _browserOverlayTimer?.IsEnabled == true;
+
+        // WPF BrowserService:563 / OverlayService:121 (#1041): force a pass after raising the
+        // browser, then every 500 ms while it is fullscreen. No native desktop access in tests.
+        internal Action ReassertBrowserOverlays { get; set; } = () =>
+        {
+            PinkFilterOverlay.RaiseForBrowserFullscreen();
+            SpiralOverlay.RaiseForBrowserFullscreen();
+            CornerGifOverlay.RaiseForBrowserFullscreen();
+        };
+
+        private void ReassertBrowserOverlayOrder()
+        {
+            if (!_isBrowserFullscreen) return;
+            try { ReassertBrowserOverlays(); }
+            catch (Exception ex) { Log.Debug("Browser overlay z-order refresh failed: {Error}", ex.Message); }
+        }
 
         internal bool IsBrowserFullscreen => _isBrowserFullscreen;
 
@@ -123,10 +143,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             window.Deactivated += OnBrowserFsDeactivated;
             window.Activated += OnBrowserFsActivated;
             window.AddHandler(KeyDownEvent, OnBrowserFsKeyDown, RoutingStrategies.Tunnel);
+            _browserOverlayTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(500),
+                DispatcherPriority.Background, (_, _) => ReassertBrowserOverlayOrder());
+            _browserOverlayTimer.Start();
+            Dispatcher.UIThread.Post(ReassertBrowserOverlayOrder);
         }
 
         private void DisarmFullscreenEscapes()
         {
+            _browserOverlayTimer?.Stop();
             var window = _browserFsEscapeTarget;
             _browserFsEscapeTarget = null;
             if (window == null) return;
@@ -142,7 +167,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnBrowserFsActivated(object? sender, EventArgs e)
         {
-            if (_isBrowserFullscreen && _browserFsEscapeTarget is { } w) w.Topmost = true;
+            if (_isBrowserFullscreen && _browserFsEscapeTarget is { } w)
+            {
+                w.Topmost = true;
+                Dispatcher.UIThread.Post(ReassertBrowserOverlayOrder);
+            }
         }
 
         private void OnBrowserFsKeyDown(object? sender, KeyEventArgs e)

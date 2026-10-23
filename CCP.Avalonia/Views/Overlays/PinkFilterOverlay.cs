@@ -33,6 +33,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class PinkFilterOverlay
     {
+        // WPF OverlayService #1041: a newly raised topmost browser can bury an already-topmost effect.
+        internal static void RaiseForBrowserFullscreen()
+        {
+            foreach (var w in Windows) X11Overlay.Raise(w);
+        }
+
         /// <summary>A Takeover pulse holds the tint up with the engine off (WPF: the pulse starts
         /// OverlayService, #1180). MainShellWindow.Autonomy.cs sets and releases it.</summary>
         internal static bool PulseHold;
