@@ -23,6 +23,7 @@ import { uniform, uv, sin, fract, mix, smoothstep, float, vec2, vec3, texture, n
 import { LOOK } from '../look.js';
 import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
 import { ROAD_AA } from '../roadAaMath.js';
+import { createMusicTiles } from './musicTiles.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -80,7 +81,8 @@ export const ROAD_EDGE = Object.freeze({
 function musicUniforms() {
   return { t: uniform(0), kartS: uniform(0), vib: uniform(0), melody: uniform(0), bassW: uniform(0),
     ripAge: uniform(9), ripAmp: uniform(0), waveD: uniform(0), waveAmp: uniform(0), shatter: uniform(0), flash: uniform(0),
-    echoL: uniform(0), echoR: uniform(0), calm: uniform(0), big: uniform(0), eFps: uniform(25), eW: uniform(1) };
+    echoL: uniform(0), echoR: uniform(0), calm: uniform(0), big: uniform(0), eFps: uniform(25), eW: uniform(1),
+    tileBeat: uniform(0), tileBar: uniform(0), tileOn: uniform(0), tileGentle: uniform(0) };
 }
 
 // one silent texel until a song arrives
@@ -240,6 +242,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const laneM = float(S.edgeLaneM).mul(mu.bassW.add(1));
   // the true edge never moves (no vibration, no melody): the lane's outer stretch stays lane colour there
   const trueEdge = half.sub(abs(uRaw));
+  const tiles = createMusicTiles({ track, p, trueEdge, music: mu, view: V, distance: dist });
   const edgeW = max(float(1).sub(smoothstep(laneM.mul(0.6), laneM, toEdge)), float(1).sub(smoothstep(E.laneHoldM[0], E.laneHoldM[1], trueEdge)));
   // the edge line: a crisp bright line ON the true edge with a dark gutter inside it, the same in every palette
   // and music mode; its width grows to at least a pixel and its light shrinks to match, so far off it never
@@ -321,11 +324,17 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // A broad quiet shoulder gives the clear edge a darker neighbour. The music and glitter remain
   // above it; there are no extra stripes or time-driven luminance changes near the kart.
   const shoulder = smoothstep(0.28, 0.6, trueEdge).mul(float(1).sub(smoothstep(1.15, 1.85, trueEdge)));
-  const glassBody = surface.add(deepCol).mul(float(1).sub(shoulder.mul(0.17)));
+  // Solid panes keep their joints and colour when the surrounding ribbon streams or flashes.
+  // The steady centre and all separate word/pad markings remain above this restrained surface.
+  const tileBody = tiles.colour.mul(tiles.relief).mul(haze).mul(LOOK.roadGain)
+    .add(vec3(1, 0.96, 0.98).mul(tiles.glaze).mul(u.sheen))
+    .add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)).mul(LOOK.roadGain));
+  const glassBody = mix(surface.add(deepCol), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   const litCol = glassBody.add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish).mul(float(1).sub(gutter.mul(E.gutterDark)));
   const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);
-  m.opacityNode = max(clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
-    .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)).add(gutter.mul(E.gutterAlpha)), 0, 1), edgeLine);
+  const ribbonAlpha = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
+    .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)).add(gutter.mul(E.gutterAlpha)), 0, 1);
+  m.opacityNode = max(mix(ribbonAlpha, max(tiles.opacity, schlick.mul(0.08).add(tiles.opacity)), tiles.mask), edgeLine);
   return { material: m, uniforms: u };
 }

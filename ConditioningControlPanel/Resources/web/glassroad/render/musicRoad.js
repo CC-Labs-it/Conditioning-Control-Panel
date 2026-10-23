@@ -45,6 +45,12 @@ export function createMusicRoad({ road, rails = null, track, pal, photosafe = nu
   function update(s, tS, { kartS = 0, gentle = false } = {}) {
     setSong(s);
     musicFrame(s, tS, { gentle }, mf);
+    if (mu.tileBeat) {
+      mu.tileBeat.value = mf.beatIndex + mf.beatPhase;
+      mu.tileBar.value = mf.barIndex + mf.barPhase;
+      mu.tileOn.value = mf.on ? 1 : 0;
+      mu.tileGentle.value = gentle ? 1 : 0;
+    }
     mu.t.value = mf.tS; mu.kartS.value = kartS;
     mu.vib.value = mf.vibM; mu.melody.value = mf.melodyM;
     mu.bassW.value = mf.on ? mf.bass * 0.7 * (1 - mf.calm * 0.5) * (gentle ? 0.5 : 1) : 0;
