@@ -66,6 +66,7 @@ Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush
 Views/Tabs/BlinkTrainerTabView.axaml :: <Path Stroke="{DynamicResource PinkBrush}" StrokeThickness="1.6" :: path: D6 art - illustrative blink eye, lashes
 Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edge, top card
 Views/Tabs/ChasterTabView.axaml :: <Path Fill="#FFF3EAD9" Stretch="Fill" Height="9" :: path: D6 art - Chaster torn paper edge, second card
+Views/Tabs/ChasterTabView.axaml :: <Path x:Name="SpiralPath" :: path: D6 art - Chaster ground spiral watermark (WPF BuildSpiral)
 Views/Tabs/DiscordTabView.axaml :: <Path HorizontalAlignment="Left" VerticalAlignment="Top" :: path: D6 art - faucet spout
 Views/Tabs/DiscordTabView.axaml :: <Path x:Name="ProfileVatChargeArc" :: path: D6 art - vat charge arc
 Views/Tabs/SpiralTabView.axaml :: <Path x:Name="SplashGlyph" :: path: D6 art - spiral splash glyph

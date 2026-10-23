@@ -31,13 +31,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void TrailerInit()
         {
-            _trailerOpen.Tick += (_, _) => { _trailerOpen.Stop(); OpenTrailer(); };
-            _trailerClose.Tick += (_, _) => { _trailerClose.Stop(); if (!_overTrailer) HideTrailer(); };
+            _trailerOpen.Tick += (_, _) => TrailerOpenElapsed();
+            _trailerClose.Tick += (_, _) => TrailerCloseElapsed();
             // WPF (:99): a page that leaves the screen takes its trailer with it.
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) HideTrailer(); };
             DetachedFromVisualTree += (_, _) => HideTrailer();
             Trailer.Closed += (_, _) => HideTrailer();
         }
+
+        // Stepped-timer seams for the tests (PLAYBOOK P08): which wait is armed, and what it does when it runs out.
+        internal (TimeSpan Open, TimeSpan Close) TrailerDelays
+        {
+            get => (_trailerOpen.Interval, _trailerClose.Interval);
+            set => (_trailerOpen.Interval, _trailerClose.Interval) = value;
+        }
+        internal bool TrailerOpenPending => _trailerOpen.IsEnabled;
+        internal bool TrailerClosePending => _trailerClose.IsEnabled;
+        internal void TrailerOpenElapsed() { _trailerOpen.Stop(); OpenTrailer(); }
+        internal void TrailerCloseElapsed() { _trailerClose.Stop(); if (!_overTrailer) HideTrailer(); }
 
         private void Row_PointerEntered(object? sender, PointerEventArgs e)
         {

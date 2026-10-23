@@ -44,7 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             InitializeComponent();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
-            SlowTick.Tick += (_, _) => { RefreshHero(); RefreshLimits(); RefreshNumbers(); };
+            // WPF :93: the hero and the day meter only; an open receipt is not repainted on a timer.
+            SlowTick.Tick += (_, _) => { RefreshHero(); RefreshDay(); };
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
             AttachedToVisualTree += (_, _) => { _attached = true; Subscribe(IsVisible); };
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
@@ -114,7 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (ChasterHead.Service?.IsLinked == true) RefreshNumbers();
             PaintStamps();
         });
-        private void OnRaffleChanged() => Dispatcher.UIThread.Post(() => { PaintLadder(); MarkRaffleDays(); });
+        private void OnRaffleChanged() => Dispatcher.UIThread.Post(PaintLadder); // PaintLadder marks the raffle days
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() =>
         {
             RefreshHero(); RefreshAdded(); RefreshNumbers();

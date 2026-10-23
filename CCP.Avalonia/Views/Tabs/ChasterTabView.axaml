@@ -303,7 +303,7 @@
                                    Margin="12,0,0,12" Foreground="{DynamicResource TextMutedBrush}"/>
                     </StackPanel>
                     <TextBlock x:Name="TxtHeroEnds" FontSize="13" Margin="0,2,0,0" IsVisible="False" Foreground="{DynamicResource TextSecondaryBrush}"/>
-                    <TextBlock x:Name="SetupHint" IsVisible="False" FontSize="16" FontWeight="SemiBold" Foreground="White"
+                    <TextBlock x:Name="SetupHint" IsVisible="False" Background="Transparent" FontSize="16" FontWeight="SemiBold" Foreground="White"
                                TextWrapping="Wrap" MaxWidth="480" HorizontalAlignment="Left" Margin="0,8,0,12"/>
                     <WrapPanel x:Name="HeroPills" Margin="0,10,0,0"/>
                     <StackPanel x:Name="LockRow" Orientation="Horizontal" Margin="0,8,0,0" IsVisible="False">
@@ -659,25 +659,25 @@
                 <WrapPanel x:Name="FootRow" Margin="0,14,-8,0">
                     <Border Background="#10FFFFFF" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,7" Margin="0,0,8,8">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="PANIC" FontFamily="Fredoka, Segoe UI" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextLightBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="PANIC" FontFamily="Fredoka, Segoe UI" FontWeight="Bold" FontSize="11" Foreground="#FF6B8A" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <TextBlock Text="{loc:Str chaster_fact_panic}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border Background="#10FFFFFF" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,7" Margin="0,0,8,8">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="LIVE" FontFamily="Fredoka, Segoe UI" FontWeight="Bold" FontSize="11" Foreground="{DynamicResource TextLightBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="LIVE" FontFamily="Fredoka, Segoe UI" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TextLightBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <TextBlock Text="{loc:Str chaster_fact_push_launch}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border Background="#10FFFFFF" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,7" Margin="0,0,8,8">
                         <StackPanel Orientation="Horizontal">
-                            <fx:IconGlyph Kind="ArrowCounterclockwise" Size="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="ArrowCounterclockwise" Size="12" Foreground="#5FFFD0" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <TextBlock Text="{loc:Str chaster_fact_floor_long}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border Background="#10FFFFFF" BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12,7" Margin="0,0,8,8">
                         <StackPanel Orientation="Horizontal">
-                            <fx:IconGlyph Kind="LinkDismiss" Size="12" Foreground="{DynamicResource TextSecondaryBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <fx:IconGlyph Kind="LinkDismiss" Size="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                             <TextBlock Text="{loc:Str chaster_fact_unlink}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>

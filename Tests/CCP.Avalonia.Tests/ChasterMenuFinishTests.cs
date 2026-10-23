@@ -92,6 +92,7 @@ public sealed partial class ChasterMenuTests
         Assert.True(tab.BeginPriceEdit("typo"));
         tab.PriceEditor!.Text = "2";
         tab.CommitPriceEdit();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();   // the reset link just appeared; clicks hit-test the last rendered frame
         Assert.Contains("+2:00", tab.FindControl<TextBlock>("TxtTrailerFigure")!.Text);
         Assert.Equal(TabMenuCopy.Why("typo", Loc.Get, 120), tab.FindControl<TextBlock>("TxtTrailerWhy")!.Text);
         Click(w, tab.FindControl<Button>("BtnResetPrices")!);
@@ -111,20 +112,30 @@ public sealed partial class ChasterMenuTests
     {
         var row = tab.PriceRows["typo"];
         var p = row.TranslatePoint(new Point(10, 10), w)!.Value;
+        // Stepped timers (P08): assert which wait is armed, then run it out by hand.
+        Assert.Equal((TimeSpan.FromMilliseconds(150), TimeSpan.FromMilliseconds(140)), tab.TrailerDelays);
+        tab.TrailerDelays = (TimeSpan.FromHours(1), TimeSpan.FromHours(1));   // headless input runs due timers; nothing may come due by itself
+        w.MouseMove(new Point(0, 0));
+        tab.HideTrailer();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
         w.MouseMove(p);
         Assert.Null(tab.TrailerId);
-        for (var i = 0; i < 100 && tab.TrailerId == null; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+        Assert.True(tab.TrailerOpenPending);
+        tab.TrailerOpenElapsed();
         Assert.Equal("typo", tab.TrailerId);
         w.MouseMove(new Point(0, 0));
         Assert.Equal("typo", tab.TrailerId);
+        Assert.True(tab.TrailerClosePending);
         var card = tab.FindControl<Border>("TrailerCard")!;
         card.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, card, null!, w, default, 0, PointerPointProperties.None, KeyModifiers.None));
-        await Task.Delay(180);
-        Dispatcher.UIThread.RunJobs();
+        Assert.False(tab.TrailerClosePending);
+        tab.TrailerCloseElapsed();   // a grace already in flight must not close a card the pointer is on
         Assert.Equal("typo", tab.TrailerId);
         card.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, card, null!, w, default, 0, PointerPointProperties.None, KeyModifiers.None));
-        for (var i = 0; i < 100 && tab.TrailerId != null; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+        Assert.True(tab.TrailerClosePending);
+        tab.TrailerCloseElapsed();
         Assert.Null(tab.TrailerId);
+        await Task.CompletedTask;
     }));
 
     [Fact]
@@ -193,13 +204,20 @@ public sealed partial class ChasterMenuTests
         Assert.Equal(CircesTab.Format(chaster.BalanceSeconds), balance.Text);
         CoreSettings.Current.ChasterPrices = new();
         tab.RefreshHero();
-        w.Height = 700;
+        tab.Height = 700;   // a short page: the keys sit below the fold (a headless window may not resize after Show)
         Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();   // lay out and render the new hint and viewport before the click hit-tests
+        var scroll = tab.FindControl<ScrollViewer>("PageScroll")!;
+        Assert.True(tab.FindControl<UniformGrid>("PresetRow")!.TranslatePoint(default, scroll)!.Value.Y > scroll.Viewport.Height);
         var hint = tab.FindControl<TextBlock>("SetupHint")!;
         Assert.Equal(Loc.Get("chaster_setup_nothing"), hint.Text);
         Assert.NotNull(hint.Cursor);
+        var released = 0;
+        hint.AddHandler(InputElement.PointerReleasedEvent, (_, _) => released++, global::Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
         Click(w, hint);
-        Assert.True(tab.FindControl<ScrollViewer>("PageScroll")!.Offset.Y > 0);
+        Assert.Equal(1, released);   // the click landed on the hint, gaps between its letters included (WPF hit-tests a TextBlock's whole box)
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();   // the scroll lands on the next layout pass
+        Assert.True(scroll.Offset.Y > 0);
     }));
 
     [Fact]

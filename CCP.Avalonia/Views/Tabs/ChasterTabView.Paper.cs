@@ -23,7 +23,7 @@ public partial class ChasterTabView
         HeroArtPlate.SizeChanged += (_, _) => PaintHeroArtFade();
         ActualThemeVariantChanged += (_, _) => PaintHeroArtFade();
         PaperTag.PointerReleased += (_, _) => ToggleBill();
-        Calendar.LayoutUpdated += (_, _) => PlaceCalendarTag();
+        Calendar.SizeChanged += (_, _) => PlaceCalendarTag(); // WPF :105
         CalendarTag.SizeChanged += (_, _) => PlaceCalendarTag();
         PaintHeroArtFade();
     }

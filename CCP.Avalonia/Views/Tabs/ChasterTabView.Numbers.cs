@@ -30,7 +30,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtBalance.Text = balance == 0 ? CircesTab.Format(0, signed: false) : CircesTab.Format(balance);
             TxtBalance.Foreground = FigureBrush(balance);
             TxtBalanceCaption.Text = Loc.Get(balance < 0 ? "chaster_credit_caption" : "chaster_balance_caption");
+            RefreshDay();
 
+            var net = chaster.Bill().NetSeconds;
+            TxtRun.Text = net == 0 ? CircesTab.Format(0, signed: false) : CircesTab.Format(net);
+            TxtRun.Foreground = FigureBrush(net);
+            if (_billOpen) Receipt.Show(chaster.Bill());
+        }
+
+        /// <summary>WPF RefreshDay (:848): today's added time against the cap.</summary>
+        internal void RefreshDay()
+        {
+            var chaster = ChasterHead.Service;
+            if (chaster == null) return;
             var today = chaster.TodayAddedSeconds;
             var capSeconds = chaster.Caps.DailySeconds;
             var cap = CircesTab.Format(capSeconds, signed: false);
@@ -39,11 +51,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtTodaySub.Text = Loc.GetF("chaster_stat_today_sub", cap);
             _capFraction = TabPageText.CapFraction(today, capSeconds);
             LayoutCap();
-
-            var net = chaster.Bill().NetSeconds;
-            TxtRun.Text = net == 0 ? CircesTab.Format(0, signed: false) : CircesTab.Format(net);
-            TxtRun.Foreground = FigureBrush(net);
-            if (_billOpen) Receipt.Show(chaster.Bill());
         }
 
         private void LayoutCap() => CapFill.Width = System.Math.Max(0, CapTrack.Bounds.Width * _capFraction);
