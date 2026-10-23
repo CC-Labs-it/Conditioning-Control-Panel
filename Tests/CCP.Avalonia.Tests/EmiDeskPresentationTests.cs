@@ -38,6 +38,8 @@ public sealed class EmiDeskPresentationTests
         desk.MouseMove(point + new Point(40, 0));
         Assert.Same(body, pointer!.Captured);
         var home = desk.Position;
+        bool moved = false;
+        desk.Moved += (_, _) => moved = true;
         var saved = (EmiState.Current.WinLeftPx, EmiState.Current.WinTopPx);
         bool stopped = false;
         desk.BeginPresentation(() => stopped = true);
@@ -69,6 +71,10 @@ public sealed class EmiDeskPresentationTests
         Assert.Equal("^_^", desk.Face);
         // Releasing the old press after the hand-off cannot count as a drop or a pat.
         desk.MouseUp(point, MouseButton.Left);
+        Assert.False(moved);
+        Assert.Null(Field<ITimer?>(desk, "_landFace"));
+        Assert.Null(Field<CancellationTokenSource?>(desk, "_squashAnim"));
+        Assert.Equal(saved, (EmiState.Current.WinLeftPx, EmiState.Current.WinTopPx));
         await Task.CompletedTask;
     });
 
@@ -91,60 +97,66 @@ public sealed class EmiDeskPresentationTests
     });
 
     [Fact]
-    public Task PendingSummonCannotOverwriteThePresenter() => Run(async desk =>
+    public Task PendingSummonCannotOverwriteThePresenter() => Run(desk =>
     {
         desk.RunSummon();
         desk.BeginPresentation(() => { });
         desk.PresentAt(new Point(500, 400), 0, 0, "idle", "^w^");
-        await Task.Delay(850);   // past both WPF smoke (380) and CRT (220 + 20) steps
+        Clock.Advance(850);   // past both WPF smoke (380) and CRT (220 + 20) steps
         Assert.Equal("^w^", desk.Face);
         Assert.True(desk.FindControl<Grid>("BodyRoot")!.IsVisible);
         AssertFullSize(desk);
+        return Task.CompletedTask;
     });
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task PendingDismissCannotHideHerDuringOrAfterTheShow(bool endShow) => Run(async desk =>
+    public Task PendingDismissCannotHideHerDuringOrAfterTheShow(bool endShow) => Run(desk =>
     {
         desk.RunDismiss();
         desk.BeginPresentation(() => { });
         if (endShow) desk.EndPresentation();
-        await Task.Delay(1400);   // WPF CRT-off (230), then particle lifetime (900)
+        Clock.Advance(1400);   // WPF CRT-off (230), then particle lifetime (900)
         Assert.True(desk.IsVisible);
         AssertFullSize(desk);
+        return Task.CompletedTask;
     });
 
     [Fact]
-    public Task EndingDuringEntranceCancelsItsDelayedSteps() => Run(async desk =>
+    public Task EndingDuringEntranceCancelsItsDelayedSteps() => Run(desk =>
     {
         desk.BeginPresentation(() => { });
         desk.RunPresentationEntrance();
         Assert.True(desk.PresentationArriving);
         desk.EndPresentation();
-        await Task.Delay(850);
+        Clock.Advance(850);
         Assert.False(desk.PresentationArriving);
         Assert.False(desk.InputLocked);
         Assert.Equal("^_^", desk.Face);
         AssertFullSize(desk);
+        return Task.CompletedTask;
     });
 
     [Fact]
-    public Task ThePresentationsOwnEntranceCompletesAndAcceptsFrames() => Run(async desk =>
+    public Task ThePresentationsOwnEntranceCompletesAndAcceptsFrames() => Run(desk =>
     {
         desk.BeginPresentation(() => { });
         desk.RunPresentationEntrance();
         Assert.True(desk.PresentationArriving);
         desk.PresentAt(new Point(500, 400), 5, 8, "celebration", "^w^");
         Assert.NotEqual("^w^", desk.Face);   // the entrance owns pose/face, but position follows the stage
-        var deadline = DateTime.UtcNow.AddSeconds(4);
-        while (desk.PresentationArriving && DateTime.UtcNow < deadline) await Task.Delay(20);
+        Clock.Advance(379);
+        Assert.False(desk.FindControl<Grid>("BodyRoot")!.IsVisible);   // still the smoke lead
+        Clock.Advance(850);
         Assert.False(desk.PresentationArriving);
         Assert.False(desk.InputLocked);
-        AssertFullSize(desk);
+        Assert.True(desk.FindControl<Grid>("BodyRoot")!.IsVisible);
+        // The CRT power-on tween itself runs on real dispatcher ticks, so its end size is not asserted here.
         desk.PresentAt(new Point(500, 400), 5, 8, "celebration", "^w^");
         Assert.Equal("^w^", desk.Face);
         Assert.Equal("celebration", Field<string>(desk, "_pose"));
+        return Task.CompletedTask;
     });
 
     [Fact]
@@ -214,6 +226,8 @@ public sealed class EmiDeskPresentationTests
         var oldWidth = CoreSettings.Current.EmiDeskWidth;
         var state = EmiState.Current;
         var home = (state.WinLeftPx, state.WinTopPx, state.Monitor);
+        Clock = new SteppedClock();
+        EmiDeskWindow.FxClock = Clock;
         var desk = new EmiDeskWindow();
         try
         {
@@ -228,12 +242,46 @@ public sealed class EmiDeskPresentationTests
             desk.EndPresentation();
             desk.ShutDown();
             EmiDeskWindow.TossClock = TimeProvider.System;
+            EmiDeskWindow.FxClock = TimeProvider.System;
             CoreSettings.Current.MotionLevel = oldMotion;
             CoreSettings.Current.MasterVolume = oldVolume;
             CoreSettings.Current.EmiDeskWidth = oldWidth;
             (state.WinLeftPx, state.WinTopPx, state.Monitor) = home;
         }
     });
+
+    private static SteppedClock Clock = new();
+
+    /// <summary>Fires due FX timers in time order and drains each step's dispatcher post before the next.</summary>
+    private sealed class SteppedClock : TimeProvider
+    {
+        private readonly System.Collections.Generic.List<(long Due, TimerCallback Callback, object? State)> _due = new();
+        private long _nowMs;
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch.AddMilliseconds(_nowMs);
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            _due.Add((_nowMs + (long)dueTime.TotalMilliseconds, callback, state));
+            return new ManualClock.NoTimer();
+        }
+        public void Advance(long ms)
+        {
+            long end = _nowMs + ms;
+            Dispatcher.UIThread.RunJobs();
+            while (true)
+            {
+                int next = -1;
+                for (int i = 0; i < _due.Count; i++)
+                    if (_due[i].Due <= end && (next < 0 || _due[i].Due < _due[next].Due)) next = i;
+                if (next < 0) break;
+                var t = _due[next];
+                _due.RemoveAt(next);
+                _nowMs = Math.Max(_nowMs, t.Due);
+                t.Callback(t.State);
+                Dispatcher.UIThread.RunJobs();
+            }
+            _nowMs = end;
+        }
+    }
 
     private sealed class ManualClock : TimeProvider
     {
@@ -242,11 +290,11 @@ public sealed class EmiDeskPresentationTests
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
             (_callback, _state) = (callback, state);
-            return new Timer();
+            return new NoTimer();
         }
         // Deliberately deliver even a disposed timer: an already-posted callback must be harmless too.
         public void Fire() => _callback?.Invoke(_state);
-        private sealed class Timer : ITimer
+        internal sealed class NoTimer : ITimer
         {
             public bool Change(TimeSpan dueTime, TimeSpan period) => true;
             public void Dispose() { }

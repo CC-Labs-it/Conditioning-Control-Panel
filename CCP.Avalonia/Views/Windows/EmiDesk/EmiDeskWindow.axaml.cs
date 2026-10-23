@@ -2520,15 +2520,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <c>Application.Current.Dispatcher.HasShutdownStarted</c>, and <c>_closingForGood</c> is
         /// this head's twin of it - ShutDown and the Closed handler both set it.
         /// </summary>
+        internal static TimeProvider FxClock = TimeProvider.System;   // tests step it
+        private readonly HashSet<ITimer> _fxTimers = new();           // roots each pending step
+
         private void After(int ms, Action act, bool presentation = false)
         {
             int epoch = _presentationEpoch;
             try
             {
-                DispatcherTimer.RunOnce(() =>
+                ITimer? timer = null;
+                timer = FxClock.CreateTimer(_ => Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
+                        if (timer == null || !_fxTimers.Remove(timer)) return;   // already delivered
+                        timer.Dispose();
                         if (_closingForGood) return;
                         // WPF Fx.cs:447: old FX cannot take the body back from the stage or its return.
                         if (epoch != _presentationEpoch || (PresentationActive && !presentation)) return;
@@ -2538,7 +2544,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     {
                         Log.Debug(ex, "[EmiDesk] deferred FX step failed");
                     }
-                }, TimeSpan.FromMilliseconds(Math.Max(1, ms)), DispatcherPriority.Background);
+                }, DispatcherPriority.Background), null,
+                    TimeSpan.FromMilliseconds(Math.Max(1, ms)), Timeout.InfiniteTimeSpan);
+                _fxTimers.Add(timer);
             }
             catch (Exception ex)
             {

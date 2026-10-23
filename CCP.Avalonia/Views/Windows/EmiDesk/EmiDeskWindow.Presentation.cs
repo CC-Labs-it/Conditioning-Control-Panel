@@ -26,7 +26,8 @@ public partial class EmiDeskWindow
             FinishSummon(); CancelChain(); CloseRing(); CloseOptionsPanel(); CloseBook();
             StopIdleBeats(); DisarmPet(); CancelLandFace();
             var pointer = _dragPointer;
-            EndDragHold(); pointer?.Capture(null);
+            EndDragHold();
+            if (pointer?.Captured == _bodyRoot) pointer.Capture(null);   // WPF releases only BodyRoot's own
             SweepFx(all: true); TearDownReactions();
         }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] presentation setup step failed"); }
