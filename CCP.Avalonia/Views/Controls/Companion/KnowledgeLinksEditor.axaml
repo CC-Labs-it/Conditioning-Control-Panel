@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:models="clr-namespace:ConditioningControlPanel.Models;assembly=CCP.Core"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.KnowledgeLinksEditor">
+    <!-- WPF KnowledgeLinksEditor: shared by the immediate-save page and staged-save prompt dialog. -->
+    <UserControl.Styles>
+        <Style Selector="Button">
+            <Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="#33FFFFFF"/>
+            <Setter Property="BorderThickness" Value="0"/><Setter Property="CornerRadius" Value="6"/><Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#55FF69B4"/></Style>
+        <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#77FF69B4"/></Style>
+    </UserControl.Styles>
+    <StackPanel>
+        <Border Background="#1AFFFFFF" CornerRadius="6" Padding="8" Margin="0,0,0,8">
+            <Grid>
+                <ListBox x:Name="LstKnowledgeLinks" MinHeight="120" MaxHeight="320"
+                         Background="Transparent" BorderThickness="0" Foreground="White" FontSize="12"
+                         SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="models:KnowledgeBaseLink">
+                            <StackPanel Margin="0,3">
+                                <TextBlock Text="{Binding Title}" Foreground="#FF69B4" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Url}" Foreground="#909090" FontSize="10.5" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding Description}" Foreground="#B0B0C0" FontSize="11" TextWrapping="Wrap"
+                                           IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock x:Name="TxtKnowledgeLinksEmpty" Text="{loc:Str companion_page_links_known_empty}"
+                           Foreground="#909090" FontSize="12" VerticalAlignment="Center" HorizontalAlignment="Center" IsHitTestVisible="False"/>
+            </Grid>
+        </Border>
+        <StackPanel Orientation="Horizontal">
+            <Button x:Name="BtnAddKnowledgeLink" Padding="12,6" Click="AddKnowledgeLink_Click"><TextBlock Text="{loc:Str btn_add_link}"/></Button>
+            <Button x:Name="BtnRemoveKnowledgeLink" Padding="12,6" Margin="8,0,0,0" Click="RemoveKnowledgeLink_Click"><TextBlock Text="{loc:Str btn_remove_selected}"/></Button>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

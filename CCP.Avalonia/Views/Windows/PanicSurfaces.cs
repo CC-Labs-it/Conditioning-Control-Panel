@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using Avalonia.Controls;
 using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -70,6 +71,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence()),
             new("lock-cards", _ => MainShellWindow.StopLockCards()),      // WPF LockCardService.Stop(dismissOpenCards: true)
             new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
+            new("companion-conversation", sh => sh?.Named<Tabs.CompanionTabView>("CompanionTab")?.FindControl<Controls.Companion.V2.ConversationPage>("Conversation")?.StopForPanic()),
+            new("companion-knowledge-editor", _ => Dialogs.KnowledgeLinkEditorDialog.CloseForPanic()),
+            new("companion-perk-picker", _ => Controls.Companion.PerkPicker.CloseForPanic()),
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)

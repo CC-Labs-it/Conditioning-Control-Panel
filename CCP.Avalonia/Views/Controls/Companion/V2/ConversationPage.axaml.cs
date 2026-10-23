@@ -28,6 +28,11 @@ public partial class ConversationPage : UserControl
     public ConversationPage()
     {
         InitializeComponent();
+        StageDust.StartLayers(new ConditioningControlPanel.Avalonia.Controls.AmbientFxConfig
+        {
+            Layers = ConditioningControlPanel.Avalonia.Controls.AmbientFxLayers.DustField, Intensity = 0.8, DustDensity = 0.65,
+            Tint = global::Avalonia.Media.Color.FromRgb(244, 134, 211)
+        });
         Vm = new ConversationPageVm(() => Room?.HeroZone.ViewModel, () => Room?.EngineZone.DataContext as EngineRoomVm);
         Vm.Turns.CollectionChanged += TurnsChanged;
         Composer.AddHandler(KeyDownEvent, Composer_KeyDown, RoutingStrategies.Tunnel);
@@ -36,8 +41,9 @@ public partial class ConversationPage : UserControl
             if (Math.Abs(e.ExtentDelta.Y) < .1) _followBottom = Transcript.Offset.Y >= Transcript.ScrollBarMaximum.Y - 24;
         };
     }
-    internal void Resume() => Vm.Resume();
-    internal void Park() => Vm.Detach();
+    internal void Resume() { StageDust.Resume(); Vm.Resume(); }
+    internal void Park() { StageDust.Pause(); Vm.Detach(); }
+    internal void StopForPanic() { Vm.Stop(); StageDust.Pause(); }
     // A closed shell does not detach its tree (MainShellWindow unsubscribes statics on Closed), so
     // both edges release the static subscriptions (CoreAccount, the ask service, the brain's session).
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e) { Release(); base.OnDetachedFromVisualTree(e); }
@@ -54,6 +60,7 @@ public partial class ConversationPage : UserControl
     private void Release()
     {
         if (_window != null) { _window.Closed -= WindowClosed; _window = null; }
+        StageDust.Pause();
         Vm.Stop();
         Vm.Detach();
         Services.Companion.Asks.CompanionAskService.Instance.FocusChatRequested -= FocusComposer;

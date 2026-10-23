@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System;
 using System.Threading.Tasks;
 using Avalonia;
@@ -18,6 +20,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         internal const double LockedRowOpacity = 0.45;
         internal static double RowOpacity(bool unlocked) => unlocked ? 1.0 : LockedRowOpacity;
 
+        private static readonly HashSet<Window> OpenDialogs = new();
+        internal static void CloseForPanic()
+        {
+            foreach (var dialog in OpenDialogs.ToArray()) dialog.Close();
+        }
+
         internal static Window Build()
         {
             var s = CoreSettings.Current;
@@ -30,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 Background = new SolidColorBrush(Color.FromRgb(27, 18, 37)), Foreground = Brushes.White,
                 Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto },
             };
+            window.Opened += (_, _) => OpenDialogs.Add(window);
+            window.Closed += (_, _) => OpenDialogs.Remove(window);
             panel.Children.Add(new TextBlock { Text = window.Title, FontSize = 24, Margin = new Thickness(0, 0, 0, 8) });
             panel.Children.Add(new TextBlock { Text = Loc.Get("companion_perk_hint"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14) });
             foreach (var type in Enum.GetValues<CompanionBonusType>())
