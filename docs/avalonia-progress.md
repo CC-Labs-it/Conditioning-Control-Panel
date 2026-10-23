@@ -2697,3 +2697,7 @@ Premium room canvas enrolled in the shell ambient registry under `premium` (WPF 
 ## avalonia-port/wire-dialogs-username-picker: +93
 - Headless tests pin the already-ported UsernamePickerDialog (length rules, colours, Cancel); not wired: WPF has no live caller.
 - Remote gate green (run 38714794266); row stays `stub`.
+
+## avalonia-port/wire-views-tab-haptics: +315
+- views-tab-haptics: stub/wired duplicate rows merged into one row, now wired. The Tier-1 side-art column is back (WPF HapticsTabView.xaml:901), using a head port of AdaptiveSideArt and the #1321 rule moved to Core SideArtCollapse, which WPF now delegates to.
+- Trunk HC10 haptics part: page Test/Play stop on rack module switch (unlike WPF) and HapticService.PanicStop also cancels a per-toy test; tests fail-proven, no wide render of the plate yet.
