@@ -123,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Loc.GetF("msg_pause_session_body", runner.XPPenalty, runner.XPPenalty + SessionXp.PausePenalty));
             if (!confirmed || !runner.IsRunning) return;
             runner.Pause();
+            Named<Tabs.ProgramsTabView>("ProgramsTab")?.UpdateLiveSession();
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
@@ -144,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// and both clock labels. Runs on the UI thread (the runner ticks through CoreDispatch).</summary>
         internal void OnSessionTick()
         {
+            Named<Tabs.ProgramsTabView>("ProgramsTab")?.UpdateLiveSession();
             RefreshSessionFeatureLock(force: false);
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)

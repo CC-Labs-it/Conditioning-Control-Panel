@@ -225,6 +225,204 @@ public sealed class ProgramIgnitionTests
         Assert.DoesNotContain(tab.FindControl<ItemsControl>("ProgramDayStrip")!.Items.Cast<ProgramDayPip>(), pip => pip.Ignite);
     });
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public void TaskCardAndTickPopOnlyAfterAnObservedCompletion(MotionLevel motion) => WithRun(false, (_, tab, svc, _) =>
+    {
+        CoreSettings.Current.MotionLevel = motion;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        var task = svc.Today!.Tasks.First();
+        svc.TodayRecord!.CompletedTaskIds.Add(task.Id);
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var card = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(tab)
+            .OfType<Border>().Single(b => b.Name == "TaskCard" && b.DataContext is ProgramTaskItem t && t.TaskId == task.Id);
+        var chip = global::Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(card)
+            .OfType<Border>().Single(b => b.Name == "TaskDoneChip");
+        var scale = (ScaleTransform)card.RenderTransform!;
+        var tick = (ScaleTransform)chip.RenderTransform!;
+        Assert.Equal(motion == MotionLevel.Off ? 1 : .93, scale.ScaleX, 3);
+        Assert.Equal(motion == MotionLevel.Off ? 1 : .2, tick.ScaleX, 3);
+        Step(.3);
+        if (motion != MotionLevel.Off) Assert.True(scale.ScaleX > 1); // WPF BackEase overshoot
+        Step(.12);
+        Assert.Equal(1, scale.ScaleX, 3);
+        Assert.Equal(1, tick.ScaleX, 3);
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(BeatLoop.Running, b => b.Owner is Border { Name: "TaskCard" or "TaskDoneChip" });
+    });
+
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    [InlineData(MotionLevel.Off)]
+    public void DayBannerSpringsOnceAndParksOnHide(MotionLevel motion) => WithRun(false, (_, tab, svc, _) =>
+    {
+        CoreSettings.Current.MotionLevel = motion;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        var banner = tab.FindControl<Border>("TodayCompleteBanner")!;
+        var scale = (ScaleTransform)banner.RenderTransform!;
+        Assert.Equal(motion == MotionLevel.Off ? 1 : .9, scale.ScaleX, 3);
+        Step(.3);
+        if (motion != MotionLevel.Off) Assert.True(scale.ScaleX > 1);
+        tab.IsVisible = false;
+        Assert.Equal(1, scale.ScaleX, 3);
+        Assert.DoesNotContain(BeatLoop.Running, b => b.Owner == banner);
+        tab.IsVisible = true;
+        Assert.DoesNotContain(BeatLoop.Running, b => b.Owner == banner);
+    });
+
+    [Fact]
+    public void SealUsesWpfBackLandingAndCollapsesAtOnePointSixSeconds() => WithRun(false, (_, tab, svc, program) =>
+    {
+        svc.ActiveEnrollment!.CompletedChapterIds.Add(program.Chapters[0].Id);
+        tab.RefreshPrograms();
+        var host = tab.FindControl<Grid>("ProgramsSealHost")!;
+        var stamp = tab.FindControl<StackPanel>("ProgramsSealStamp")!;
+        var scale = (ScaleTransform)stamp.RenderTransform!;
+        Assert.Equal(1.35, scale.ScaleX, 3);
+        Step(.22);
+        Assert.Equal(1, host.Opacity, 3);
+        Assert.True(scale.ScaleX < 1); // WPF BackEase(.5), not a linear landing
+        Step(.08);
+        Assert.Equal(1, scale.ScaleX, 3);
+        Step(1.3);
+        Assert.Equal(1.06, scale.ScaleX, 3);
+        Assert.False(host.IsVisible);
+        Assert.Equal(0, host.Opacity);
+    });
+
+    [Fact]
+    public void SessionTickUpdatesOnlyTheLiveStripAndSheenObeysGates() => WithRun(true, (shell, tab, svc, _) =>
+    {
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var old = AvApp.Sessions;
+        var provider = CoreSession.IsSessionRunningProvider;
+        var runner = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
+        void Set(string name, object value) => typeof(ConditioningControlPanel.Services.SessionRunner)
+            .GetField(name, flags)!.SetValue(runner, value);
+        var session = new Session { Id = "program-fx-test", DurationMinutes = 60 };
+        Set("<CurrentSession>k__BackingField", session);
+        Set("<IsRunning>k__BackingField", true);
+        Set("_startTime", DateTime.Now);
+        Set("_pausedElapsed", TimeSpan.FromMinutes(15));
+        typeof(ProgramService).GetField("_expectedSessionId", flags)!.SetValue(svc, session.Id);
+        AvApp.Sessions = runner;
+        try
+        {
+            tab.RefreshPrograms();
+            tab.UpdateLayout();
+            shell.OnSessionTick();
+            var tasks = tab.FindControl<ItemsControl>("TodayTaskList")!.ItemsSource;
+            var bar = tab.FindControl<ProgressBar>("TodaySessionProgressBar")!;
+            var row = tab.FindControl<Grid>("TodaySessionProgressRow")!;
+            var text = tab.FindControl<TextBlock>("TxtTodaySessionProgress")!;
+            var sheen = tab.FindControl<Rectangle>("SessionSheen")!;
+            Assert.True(row.IsVisible);
+            Assert.InRange(bar.Value, 25, 25.1);
+            Assert.Equal(Loc.GetF("programs_session_progress", "15:00", "1:00:00"), text.Text);
+            Assert.Equal(1, sheen.Opacity);
+            var slide = (TranslateTransform)sheen.RenderTransform!;
+            Step(.5);
+            Assert.True(slide.X > -160);
+            Set("<IsPaused>k__BackingField", true);
+            shell.OnSessionTick();
+            Assert.Equal(Loc.GetF("programs_session_progress_paused",
+                Loc.GetF("programs_session_progress", "15:00", "1:00:00")), text.Text);
+            Assert.Equal(0, sheen.Opacity);
+            Set("<IsPaused>k__BackingField", false);
+            shell.OnSessionTick();
+            Assert.Equal(1, sheen.Opacity);
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.Equal(0, sheen.Opacity);
+            Assert.True(row.IsVisible);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            shell.WindowState = WindowState.Minimized;
+            Assert.Equal(0, sheen.Opacity);
+            shell.WindowState = WindowState.Normal;
+            Assert.Equal(1, sheen.Opacity);
+            Assert.Same(tasks, tab.FindControl<ItemsControl>("TodayTaskList")!.ItemsSource);
+            session.Id = "foreign-session";
+            shell.OnSessionTick();
+            Assert.False(row.IsVisible);
+            Assert.Equal(0, bar.Value);
+            Assert.Equal(0, sheen.Opacity);
+        }
+        finally
+        {
+            Set("<IsRunning>k__BackingField", false);
+            AvApp.Sessions = old;
+            CoreSession.IsSessionRunningProvider = provider;
+        }
+    });
+
+    [Fact]
+    public void TaskSealAndGraduationBurstOnceAndPanicStopsTheNewSurface() => WithRun(true, (shell, tab, svc, program) =>
+    {
+        // Off consumes completion without sparks; returning to Full must not replay it.
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        svc.TodayRecord!.CompletedTaskIds.Add(svc.Today!.Tasks.First().Id);
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, tab.CompletionBursts);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        var next = svc.Today.Tasks.Skip(1).First();
+        svc.TodayRecord.CompletedTaskIds.Add(next.Id);
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, tab.CompletionBursts);
+        svc.ActiveEnrollment!.CompletedChapterIds.Add(program.Chapters[0].Id);
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, tab.CompletionBursts);
+        var panic = PanicSurfaces.All.Single(s => s.Id == "programs-fx");
+        panic.Stop(shell);
+        Assert.False(tab.FindControl<Grid>("ProgramsSealHost")!.IsVisible);
+        Assert.DoesNotContain(BeatLoop.Running, b => b.Owner == tab ||
+            global::Avalonia.VisualTree.VisualExtensions.IsVisualAncestorOf(tab, b.Owner));
+        svc.ActiveEnrollment.State = ProgramEnrollmentState.Graduated;
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, tab.CompletionBursts);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(3, tab.CompletionBursts);
+    });
+
+    [Fact]
+    public void DayCompletionUsesItsOwnBannerBurstAndCancelsPendingBurstsOnHide() => WithRun(false, (_, tab, svc, _) =>
+    {
+        svc.TodayRecord!.DayCompleted = true;
+        tab.RefreshPrograms();
+        tab.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, tab.CompletionBursts);
+        tab.RefreshPrograms();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, tab.CompletionBursts);
+        // A different task completion queued immediately before hiding may not leak onto another tab.
+        svc.TodayRecord.CompletedTaskIds.Add(svc.Today!.Tasks.First().Id);
+        tab.RefreshPrograms();
+        tab.IsVisible = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, tab.CompletionBursts);
+    });
+
     /// <summary>40 beats of stepped time, time-bounded (P73); returns how many distinct values each loop showed:
     /// edge opacity, the border brush's rotation, the counter ink's X offset and the comet's X offset.</summary>
     private static (int Edge, int Angle, int Shimmer, int Comet) Frames(string phase, StringBuilder log, ProgramsTabView tab)

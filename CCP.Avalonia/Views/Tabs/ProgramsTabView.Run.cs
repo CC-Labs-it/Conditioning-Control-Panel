@@ -146,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ToolTip.SetTip(Find<Button>("BtnProgramRestart"), restartBlocked);
                 Find<Button>("BtnProgramDismissGraduated").IsEnabled = !readOnly;
                 // WPF :540: the edge glow is a sibling of the whole view; leaving the run parks it.
-                if (!run) { StopIgnitionLoops(); _ignitionEnrollment = null; }
+                if (!run) { StopIgnitionLoops(); StopSessionSheen(); _ignitionEnrollment = null; }
             }
         }
 
@@ -221,12 +221,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BuildDayStrip(program, enrollment, accent, stale);
             BuildTodayPanel(svc, program, enrollment, accent, stale);
             ApplyIgnition(enrollment);
-            if (_dayJustCompleted) PlayDayCompleteMoment(svc.Today);
+            UpdateLiveSession();
+            if (_dayJustCompleted)
+            {
+                Pop(Find<Border>("TodayCompleteBanner"), .9, .35, .6);
+                QueueProgramBurst(Find<Border>("TodayCompleteBanner"), 90); // WPF EventFx.ProgramDayBurstCount (theme colour).
+                PlayDayCompleteMoment(svc.Today);
+            }
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
-        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged), never per tick (P07).
-        /// ponytail: the live clock, progress bar and sheen while our session runs are programs slice 5.</summary>
+        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged); live strip writes are separate.</summary>
         private void UpdateSessionRow(ProgramService svc, ProgramEnrollment enrollment, ProgramDayRecord record,
                                       IBrush accent, IBrush muted)
         {
@@ -454,6 +459,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                                   && !complete && !isBlocked && !paused,
                 };
 
+                var seenKey = $"{RunKey(enrollment)}:{enrollment.CurrentDay}:{task.Id}";
+                if (complete) item.JustCompleted = _tasksSeenIncomplete.Remove(seenKey);
+                else _tasksSeenIncomplete.Add(seenKey);
+
                 var icon = ModArt.TryLoad(TaskIconPath(task));
                 if (icon != null)
                 {
@@ -481,6 +490,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
 
             Find<ItemsControl>("TodayTaskList").ItemsSource = items;
+            if (items.Any(item => item.JustCompleted)) CelebrateTasks(items);
             Find<TextBlock>("TxtTodayNoTasks").IsVisible = items.Count == 0;
             Find<TextBlock>("TxtRitualPrivacyNote").IsVisible = hasRitual;
             Find<Grid>("TaskArcGrid").ColumnDefinitions[0].MaxWidth = Math.Clamp(items.Count, 1, 3) * 370;

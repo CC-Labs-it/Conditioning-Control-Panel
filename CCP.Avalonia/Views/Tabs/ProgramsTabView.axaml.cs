@@ -350,7 +350,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// True only on the rebuild immediately after the task flipped to complete. On WPF this
-        /// drove the card's pop storyboard, which is dropped here.
+        /// drives the card and done-chip springs on the shared beat here.
         /// </summary>
         public bool JustCompleted { get; set; }
 
