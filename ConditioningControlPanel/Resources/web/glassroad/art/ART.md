@@ -1778,3 +1778,30 @@ The selected design must stay under 2,000 triangles, use metres, +Y up and -Z fo
 The rig's head attachment is `head_attach` under `EMI_root`; a hand-held prop uses the existing `shoulderL` or `shoulderR` palm transform. There are no joints literally named head or hand. Do not add bones. Umbrellas are authored open; host-owned morph or the permitted single child handles open/close, and a non-bone rotor child handles beanie spin. Screen, face pixels and antenna remain unchanged. Fit checks after selection must cover every accepted action, antenna sweep, palm contact and the low rear chase camera.
 
 Runtime manifest rows: none until a selected mesh is exported and measured. Added runtime triangles: 0. Added runtime `texBytes`: 0.
+
+## W4 Threshold stream bank trims
+
+Two original meshopt trims, left and right, each exactly 8 m long along local Z. Units
+are metres, Y up, forward -Z. Base-centre origin is the road-edge anchor. Left trim
+faces the water on +X; right trim mirrors it toward -X. Place at 8 m intervals without
+rescaling. Both use the same end profiles; do not reverse only one end of a segment.
+
+Each has a glazed lemonade-colour rim, a soft foam lip and a dark submerged seat.
+bank_glass is a flat tintable PBR BLEND material at alpha 0.58, without transmission
+or image maps. Foam and seat remain opaque. Host owns the tint and placement. No
+animated geometry, physics or new effects are embedded. Reuse pool-ripple-mask for
+the landing splash decal; there is no duplicate splash texture.
+
+Each trim uses three draws, is about 0.60 m wide and 0.36 m tall. texBytes
+is 0 for both. Base, glass and foam use matching full end profiles at local Z +/-4 m. Foam rings lie entirely in those planes and carry identical periodic endpoint normals; tile-seam-validation.json verifies the packed result.
+
+Original procedural geometry, no third-party pixels. Packed and decoded GLBs pass
+Khronos validation, finite bounds and zero-degenerate checks. Fresh imports and final
+front, three-quarter, low rear, top and underside views inspected. Game placement is
+not tested. Private masters and evidence stay in C:/Projects/glassroad-art/banks/;
+the shared deterministic entry script is hazards/build_hazards_banks.py beside it.
+
+| Model | Tris | Draws | boundRadiusM | texBytes |
+|---|---:|---:|---:|---:|
+| bank-threshold-left | 1132 | 3 | 4.02 | 0 |
+| bank-threshold-right | 1132 | 3 | 4.02 | 0 |
