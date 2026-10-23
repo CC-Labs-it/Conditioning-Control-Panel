@@ -109,7 +109,8 @@ namespace ConditioningControlPanel.Services
             // BrainDrainPulse, SpiralPulse and BubbleCount are deliberately never candidates (WPF).
             if (s.AutonomyCanTriggerBubbles) c.Add((AutonomyActionType.StartBubbles, 15));
             if (s.AutonomyCanComment) c.Add((AutonomyActionType.Comment, 20));
-            if (s.AutonomyCanTriggerMindWipe) c.Add((AutonomyActionType.MindWipe, 15));
+            // Takeover may Mind Wipe only while Mind Wipe itself is on (WPF AutonomyService.MayMindWipe, #1458).
+            if (s.AutonomyCanTriggerMindWipe && s.MindWipeEnabled) c.Add((AutonomyActionType.MindWipe, 15));
             if (s.AutonomyCanTriggerLockCard) c.Add((AutonomyActionType.LockCard, 10));
             if (s.AutonomyCanTriggerPinkFilter) c.Add((AutonomyActionType.PinkFilterPulse, 20));
             if (s.AutonomyCanTriggerBouncingText) c.Add((AutonomyActionType.BouncingText, 15));

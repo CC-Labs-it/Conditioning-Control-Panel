@@ -121,3 +121,16 @@ test('late mask cannot restart departed slide; revisit reuses decoded mask', asy
   assert.equal(f.images.length, 1); assert.equal(starts, 1);
   lab.destroy();
 });
+
+test('camera feeds undo the campus wide-window pillarbox (no half-tile shift)', async () => {
+  const web = new URL('../../ConditioningControlPanel/Resources/web/arcademy/', import.meta.url);
+  const campus = await readFile(new URL('styles.css', web), 'utf8');
+  const cams = await readFile(new URL('annex/cams.css', web), 'utf8');
+  // the campus rule the feeds inherit through `campus-plan`
+  assert.match(campus, /min-aspect-ratio:16\/9[^}]*svg\.campus-plan\s*\{[^}]*translateX\(-50%\)/);
+  const rule = cams.match(/\.cam-tile svg\.campus-plan\s*\{([^}]*)\}/);
+  assert.ok(rule, 'cams.css sizes the feed svg');
+  assert.match(rule[1], /transform:\s*none/);
+  assert.match(rule[1], /aspect-ratio:\s*auto/);
+  assert.match(rule[1], /inset:\s*0/);
+});

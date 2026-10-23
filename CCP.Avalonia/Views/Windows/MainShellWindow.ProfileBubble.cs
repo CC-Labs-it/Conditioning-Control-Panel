@@ -9,11 +9,9 @@
 // (UpdateQuickLoginUI) and tier changes (App RepaintVeils). XP / level-up / achievement events
 // pulse and glow the bubble (WPF OnBubble*).
 //
-// ponytail: still missing vs WPF - the equipped preset bust (CosmeticsCatalog is WPF-only, row
-// shell-profile-cosmetics), the tier badge's hover blow-up (MainWindow.ProfileBubbleTierFx.cs),
-// the level-up spark burst (FireBurstAt, shell-event-fx), the flash wobble and subliminal shimmer
+// ponytail: still missing vs WPF - the flash wobble and subliminal shimmer
 // (no FlashDisplayed / SubliminalDisplayed event on this head), the spiral row (shell-profile-spiral,
-// no DescentService here) and BrowserLauncher's copy-the-link prompt when the browser cannot open.
+// no DescentService here).
 // PlaceProfileBubblePopup is dropped: Placement="BottomEdgeAlignedRight" is the same result.
 //
 // Controls are reached with Named<T>(name): the window loads with AvaloniaXamlLoader.Load.
@@ -54,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DispatcherTimer? _profileBubbleOpenTimer;
         private DispatcherTimer? _profileBubbleCloseTimer;
         private bool _profileBubbleWatchersOn;
+        internal readonly EventBurstLayer _profileBubbleBurst = new();
 
         private Popup? ProfileBubblePopupHost => Named<Popup>("ProfileBubblePopup");
 
@@ -270,14 +269,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF OpenPublicProfilePage: the dashboard's sharing page, never /u/&lt;slug&gt; (the app holds
         /// no slug). Shared by the menu row and the Trainer Card's Share Profile button.</summary>
-        internal void OpenPublicProfilePage()
+        internal async void OpenPublicProfilePage()
         {
-            try { OpenProfileLink(ProfileSharingUrl); }
+            try
+            {
+                // A sandbox refuses the link; never fall through to the real desktop clipboard (LoginDialog.OpenBrowserAsync).
+                if (!ProfileLinkAllowed(ProfileSharingUrl)) return;
+                bool opened;
+                try { opened = OpenProfileLink(ProfileSharingUrl); }
+                catch { opened = false; }
+                if (!opened) await Dialogs.MessageDialog.ShowLinkCopiedAsync(this, ProfileSharingUrl, "open your public profile");
+            }
             catch (Exception ex) { Log.Warning(ex, "OpenPublicProfilePage failed"); }
         }
 
         /// <summary>Test seam: the sandbox guard refuses web links under test.</summary>
         internal static Func<string, bool> OpenProfileLink = ExternalOpener.Open;
+
+        /// <summary>Test seam for the sandbox check (SandboxNet.Active is process-global).</summary>
+        internal static Func<string, bool> ProfileLinkAllowed = url => ExternalOpener.Allowed(url);
 
         /// <summary>WPF MainWindow.TabNavigation.cs:676.</summary>
         internal const string ProfileSharingUrl = "https://app.cclabs.app/dashboard/profile-sharing";
@@ -341,6 +351,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 initials.Text = loggedIn ? LeaderboardEntryData.BuildInitials(name) : "?";
                 fill.Fill = loggedIn ? Tabs.LeaderboardRow.BuildAvatarBrush(name) : ProfileBubbleNeutralBrush;
                 initials.IsVisible = true;
+                var bust = Helpers.ModArt.AvatarPreset(CoreSettings.Current.ProfileCosmetics?.AvatarId);
+                if (bust != null) PaintBubblePhoto(new ImageBrush(bust) { Stretch = Stretch.UniformToFill });
 
                 string? url = null;
                 if (CoreSettings.Current.ShareProfilePicture && AccountSeed.Discord?.IsAuthenticated == true)
@@ -365,6 +377,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var art = tier > 0 ? TierBadge.TierArt(tier) : null;
             img.Source = art;
             img.IsVisible = art != null;
+            if (art != null) EnsureProfileTierFx();
+            else HideProfileTierBig();
+            SyncProfileTierMotion();
         }
 
         private void PaintBubblePhoto(IBrush brush)
@@ -405,6 +420,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             PulseProfileBubble(1.35, 560);
             FlashProfileBubbleGlow();
+            // WPF OnBubbleLevelUp's second, smaller FireBurstAt(BtnProfileBubble, count: 45).
+            if (Named<Button>("BtnProfileBubble") is { } bubble) _profileBubbleBurst.Fire(bubble, 45);
             if (ProfileBubblePopupHost?.IsOpen == true) RefreshProfileMenu();
         }
 
