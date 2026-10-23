@@ -1,5 +1,5 @@
 using System;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Compositor;
 using ConditioningControlPanel.Services.Safety;
 
@@ -11,7 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 internal static class OverlayPulse
 {
     internal static TimeProvider Clock = TimeProvider.System;
-    private static DispatcherTimer? _timer;
+    private static BeatLoop? _timer;   // rides an overlay window's shared beat; parks (and cancels) when it hides
     private static DateTimeOffset _started;
     private static bool _pink, _spiral, _gentle;
     private static double _riseMs, _fadeMs;
@@ -32,8 +32,9 @@ internal static class OverlayPulse
         _fadeMs = GentleVisuals.FadeMs(0);
         _riseMs = GentleVisuals.RiseMs((int)_fadeMs);
         _started = Clock.GetUtcNow();
-        _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
-        _timer.Tick += (_, _) => Tick();
+        global::Avalonia.Controls.Window owner = pink ? PinkFilterOverlay.Shown[0] : SpiralOverlay.Shown[0];
+        var loop = _timer = new BeatLoop(owner, _ => Tick()) { OnParked = Cancel };
+        owner.Closed += (_, _) => { if (_timer == loop) Cancel(); };   // a closed owner beats no more: restore the other overlay now
         Apply(_gentle ? 0 : 1);
         _timer.Start();
     }

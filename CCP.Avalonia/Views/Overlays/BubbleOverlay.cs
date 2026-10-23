@@ -231,7 +231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.HoldChaos = false;
             _chaosPopped = null;
             Field.Bubbles.RemoveAll(b => b.Spec != null);
-            if (_chaosOpenedWindows) { Stop(); return; }
+            if (_chaosOpenedWindows || (_oneShotWindows && Field.Bubbles.Count == 0)) { Stop(); return; }
             foreach (var w in Windows) w.Sync();
         }
 

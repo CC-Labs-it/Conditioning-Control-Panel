@@ -284,6 +284,14 @@ public sealed class GazeMinigameTests
             BubbleOverlay.OnFrame(TimeSpan.Zero);
             Assert.Empty(BubbleOverlay.Field.Bubbles);
             Assert.Empty(BubbleOverlay.Shown);
+            // A chaos run started over one-shot windows keeps them; ending it on an empty field releases them.
+            BubbleOverlay.SpawnOnce(win);
+            BubbleOverlay.BeginChaos(win, _ => { });
+            foreach (var bubble in BubbleOverlay.Field.Bubbles) bubble.Y = -100000;
+            BubbleOverlay.OnFrame(TimeSpan.Zero);
+            Assert.NotEmpty(BubbleOverlay.Shown);
+            BubbleOverlay.EndChaos();
+            Assert.Empty(BubbleOverlay.Shown);
             BubbleOverlay.SpawnOnce(win);
             var windows = BubbleOverlay.Shown.ToArray();
             BubbleOverlay.Start(win);
@@ -358,7 +366,7 @@ public sealed class GazeMinigameTests
                 File.Delete(gif);
             });
             CoreSession.IsEngineRunningProvider = () => true;
-            (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath, s.GentleVisuals) = (true, 60, true, 80, gif, false);
+            (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath, s.GentleVisuals) = (true, 50, true, 80, gif, false);
             PinkFilterOverlay.SkipPlatformChecksForTests = SpiralOverlay.SkipPlatformChecksForTests = true;
             OverlayPulse.Clock = clock;
             PinkFilterOverlay.Refresh(win);
@@ -367,9 +375,9 @@ public sealed class GazeMinigameTests
             var tint = (SolidColorBrush)((Border)PinkFilterOverlay.Shown[0].Content!).Background!;
             score();
             Assert.True(OverlayPulse.IsPulsing);
-            Assert.Equal(255, tint.Color.A); // 60% doubled, clamped to 100%
+            Assert.Equal(255, tint.Color.A); // 50% (the setting's max) doubled to 100%
             Assert.Equal(Math.Min(SpiralFrames.Paint(0.8) * 2, 1), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
-            Assert.Equal(60, s.PinkFilterOpacity); // pulse must never write settings
+            Assert.Equal(50, s.PinkFilterOpacity); // pulse must never write settings
             Assert.Equal(80, s.SpiralOpacity);
             s.PinkFilterOpacity = 25;
             s.SpiralOpacity = 40;
