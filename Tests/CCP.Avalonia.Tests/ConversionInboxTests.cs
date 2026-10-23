@@ -32,12 +32,15 @@ public sealed class ConversionInboxTests
         s.UnifiedId = "conversion-sandbox"; s.PatreonTier = 0; s.ServerTierSeen = null;
         s.PatreonPremiumValidUntil = s.PatreonLabValidUntil = null; s.PatreonMember = false;
         s.InboxStamps = new Dictionary<string, string>();
+        var answered = AccountSeed.ServerAnsweredThisRun;
+        AccountSeed.ServerAnsweredThisRun = true;
         var shell = new MainShellWindow();
         try { body(shell); }
         finally
         {
             InboxNoticeCard.CloseForPanic(); shell.Close();
             (s.UnifiedId, s.PatreonTier, s.ServerTierSeen, s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, s.PatreonMember, s.InboxStamps) = old;
+            AccountSeed.ServerAnsweredThisRun = answered;
             StartupLadder.ResetForTests(); Dispatcher.UIThread.RunJobs();
         }
         return Task.CompletedTask;
@@ -50,6 +53,12 @@ public sealed class ConversionInboxTests
         int opened = 0;
         shell.ConversionCheckout = _ => { opened++; return true; };
         s.PatreonTier = 1; s.ServerTierSeen = 0; s.PatreonPremiumValidUntil = DateTime.UtcNow.AddDays(2);
+        // A stored lower reading with no server answer this run never posts (WPF Inbox.cs:178).
+        AccountSeed.ServerAnsweredThisRun = false;
+        shell.MaybePostConversionRows();
+        Assert.Empty(StartupLadder.Inbox.Items);
+        Assert.Empty(s.InboxStamps);
+        AccountSeed.ServerAnsweredThisRun = true;
         shell.MaybePostConversionRows(); shell.MaybePostConversionRows();
         var row = Assert.Single(StartupLadder.Inbox.Items);
         Assert.Equal("conv:lapse_warn_3", row.Key);

@@ -38,6 +38,8 @@ public partial class MainShellWindow
 
     private bool MaybePostLapseRow(AppSettings s)
     {
+        // WPF MainWindow.Inbox.cs:177-178: never from memory alone; the server must have answered this run.
+        if (!AccountSeed.ServerAnsweredThisRun) return false;
         var reading = ConversionRules.DecideLapse(s.PatreonTier, s.ServerTierSeen,
             s.PatreonPremiumValidUntil, s.PatreonLabValidUntil, DateTime.UtcNow, false);
         if (reading.Row == LapseRow.None || LiveCovers(reading.Tier)) return false;

@@ -28,6 +28,8 @@ public sealed class AccountSeedConversionTests
         var secrets = new Dictionary<string, string?>();
         CoreSecrets.RetrieveProvider = key => secrets.GetValueOrDefault(key);
         CoreSecrets.StoreProvider = (key, value) => secrets[key] = value;
+        var answered = AccountSeed.ServerAnsweredThisRun;
+        AccountSeed.ServerAnsweredThisRun = false;
         var old = (s.UnifiedId, s.AuthToken, s.OfflineMode, s.PatreonTier, s.ServerTierSeen, s.PatreonMember, s.ServerPaidUntil, s.PostGrants, s.PatreonPremiumValidUntil);
         try
         {
@@ -37,6 +39,7 @@ public sealed class AccountSeedConversionTests
             using var reply = new Reply("{\"success\":true,\"user\":{\"effective_tier\":0,\"patreon_member\":true,\"paid_until\":null,\"post_grants\":{\"voice\":\"2030-01-01T00:00:00Z\"}}}");
             Assert.True(await AccountSeed.LoadProfileAsync(new V2AuthService(() => s, reply)));
             Assert.Equal(0, s.ServerTierSeen);
+            Assert.True(AccountSeed.ServerAnsweredThisRun);
             Assert.True(s.PatreonMember);
             Assert.True(s.PostGrants.ContainsKey("voice"));
             Assert.Equal(1, s.PatreonTier);
@@ -45,6 +48,7 @@ public sealed class AccountSeedConversionTests
         finally
         {
             (s.UnifiedId, s.AuthToken, s.OfflineMode, s.PatreonTier, s.ServerTierSeen, s.PatreonMember, s.ServerPaidUntil, s.PostGrants, s.PatreonPremiumValidUntil) = old;
+            AccountSeed.ServerAnsweredThisRun = answered;
             CoreSecrets.RetrieveProvider = oldGet;
             CoreSecrets.StoreProvider = oldSet;
         }

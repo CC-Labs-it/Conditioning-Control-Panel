@@ -87,24 +87,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SyncInviteWobble();
         }
 
-        /// <summary>The wobble runs only while the ticket is up AND the window is shown.</summary>
+        /// <summary>WPF MainWindow.InviteTicket.cs:113-150: one notice per claim or subscription, told once,
+        /// through the presenter. Never throws.</summary>
         private void PostInviteNews(InviteMine? mine)
         {
-            var s = CoreSettings.Current;
-            var news = InviteClaimNotice.Decide(mine, s.UnifiedId, s.InboxStamps, out bool changed);
-            if (changed) CoreSettings.Save();
-            foreach (var item in news)
+            try
             {
-                bool subscribed = item.Kind == InviteNewsKind.Subscribed;
-                var name = item.Name ?? Loc.Get("invites_news_someone");
-                var title = subscribed ? (item.Name == null ? Loc.Get("invites_news_subscribed_plain") : Loc.GetF("invites_news_subscribed", name))
-                    : Loc.GetF("invites_news_claimed", name);
-                var body = Loc.Get(subscribed ? "invites_news_subscribed_body" : "invites_news_claimed_body");
-                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = item.Key, Title = title, Summary = body,
-                    Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, Loc.Get("invites_news_see"), OpenInvitesCard) });
+                var s = CoreSettings.Current;
+                var news = InviteClaimNotice.Decide(mine, s.UnifiedId, s.InboxStamps, out bool changed);
+                if (changed) CoreSettings.Save();
+                foreach (var item in news)
+                {
+                    bool subscribed = item.Kind == InviteNewsKind.Subscribed;
+                    var name = item.Name ?? Loc.Get("invites_news_someone");
+                    var title = subscribed ? (item.Name == null ? Loc.Get("invites_news_subscribed_plain") : Loc.GetF("invites_news_subscribed", name))
+                        : Loc.GetF("invites_news_claimed", name);
+                    var body = Loc.Get(subscribed ? "invites_news_subscribed_body" : "invites_news_claimed_body");
+                    Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem { Key = item.Key, Title = title, Summary = body,
+                        Open = () => Dialogs.InboxNoticeCard.Present(this, title, body, Loc.Get("invites_news_see"), OpenInvitesCard) });
+                }
             }
+            catch (Exception ex) { Log.Debug("[Invites] news failed: {E}", ex.GetType().Name); }
         }
 
+        /// <summary>The wobble runs only while the ticket is up AND the window is shown.</summary>
         private void SyncInviteWobble()
         {
             if (_inviteTicketWobble == null) return;

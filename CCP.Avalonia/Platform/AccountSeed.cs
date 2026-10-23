@@ -146,6 +146,10 @@ internal static class AccountSeed
     internal static event Action? ProfileLoaded;
     internal static event Action? ConversionApplied;
 
+    /// <summary>WPF EntitlementTierSync.ServerAnsweredThisRun: true once the server answered with a tier THIS run.
+    /// The lapse row waits for it: a remembered lower reading says nothing about someone who renewed since.</summary>
+    internal static bool ServerAnsweredThisRun { get; set; }
+
     private static DateTime _lastConversionCheckUtc = DateTime.MinValue;
     private static bool _conversionInFlight;
 
@@ -172,16 +176,15 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         if (node == null || string.IsNullOrEmpty(s.AuthToken) || string.IsNullOrEmpty(s.UnifiedId)) return false;
         var tier = EntitlementTierRule.ParseTier(node["effective_tier"]);
+        bool firstAnswer = tier.HasValue && !ServerAnsweredThisRun;
+        if (tier.HasValue) ServerAnsweredThisRun = true;
         var seen = EntitlementTierRule.ServerTierSeenAfter(EntitlementTierRule.Decide(s.PatreonTier, tier), tier, s.ServerTierSeen);
         bool dirty = seen != s.ServerTierSeen;
         s.ServerTierSeen = seen;
         dirty |= EntitlementTierRule.ApplyRise(s, tier, DateTime.UtcNow);
         dirty |= Services.Startup.Conversion.ProfileExtras.Apply(s, Services.Startup.Conversion.ProfileExtras.Parse(node));
-        if (dirty)
-        {
-            App.DailyFree?.NotifyInputsChanged();
-            ConversionApplied?.Invoke();
-        }
+        if (dirty) App.DailyFree?.NotifyInputsChanged();
+        if (dirty || firstAnswer) ConversionApplied?.Invoke();
         return dirty;
     }
 
