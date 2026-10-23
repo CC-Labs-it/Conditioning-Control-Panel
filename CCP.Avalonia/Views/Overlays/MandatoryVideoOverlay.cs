@@ -67,6 +67,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool _healUsed, _strict;
         private string _path = "";
         private readonly Stopwatch _sinceFrame = new();
+        /// <summary>Max-length cap seconds this clip spent before its one heal replay.</summary>
+        private double _capSpent;
+        /// <summary>Test seam (like <see cref="FrameTs"/>): seconds added to this play's clip clock; reset per play.</summary>
+        internal double PlayedSkew { get; set; }
         private DateTime _lastGraceUtc, _gracePausedAt;
         /// <summary>The grace pause's wall clock (dedup, countdown, auto-resume); tests step it.</summary>
         internal TimeProvider Time { get; set; } = TimeProvider.System;
@@ -110,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
+            _capSpent = 0;
             Play(path, strict);
         });
 
@@ -119,6 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
             _sinceFrame.Reset();
+            PlayedSkew = 0;
             FirstFrameMs = -1;
             _watchedMs = 0;
             FillMs = FillCount = 0;
@@ -263,13 +269,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var s = CoreSettings.Current;
                 var live = s.PanicKeyEnabled && PanicListenerLive();
-                if (MandatoryVideoScheduler.GraceKey(strict, e.Key.ToString(), s.PanicKeyEnabled, s.PanicKey, live) is { } fromPanic
+                var panicKey = HotkeyNames.Canonical(s.PanicKey);   // "Enter" prints as "Return"
+                if (MandatoryVideoScheduler.GraceKey(strict, e.Key.ToString(), s.PanicKeyEnabled, panicKey, live) is { } fromPanic
                     && TryGracePause(fromPanic))
                 {
                     e.Handled = true;
                     return;
                 }
-                switch (MandatoryVideoScheduler.KeyAction(strict, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt), s.PanicKeyEnabled, s.PanicKey,
+                switch (MandatoryVideoScheduler.KeyAction(strict, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt), s.PanicKeyEnabled, panicKey,
                     s.PanicKeyEnabled && PanicListenerLive()))
                 {
                     case VideoKeyAction.Dismiss: e.Handled = true; Scheduler.End(); break;
@@ -283,7 +290,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.AddHandler(InputElement.KeyDownEvent, (_, e) =>
             {
                 var s = CoreSettings.Current;
-                if (!s.PanicKeyEnabled || e.Key.ToString() != s.PanicKey) return;
+                if (!s.PanicKeyEnabled || !HotkeyNames.Matches(e.Key, s.PanicKey)) return;
                 OnKey(e);
                 e.Handled = true;
             }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
@@ -443,16 +450,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
             var framed = FirstFrameMs >= 0;
-            var why = MandatoryVideoScheduler.Guard(Elapsed, framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed, framed,
+            var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
+            var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
                 (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
-                Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds);
+                Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent);
             if (why == null) return;
             if (MandatoryVideoScheduler.GuardHeals(why, _healUsed))
             {
                 // WPF DispatchVoutHeal(retry): the same clip once more, same strictness.
                 Log.Warning("VideoService: clip guard fired ({Why}) after {Sec:F1}s - replaying the clip once", why, Elapsed);
                 Scheduler.NoteReplay();
+                var spent = _capSpent + played;
                 Play(_path, _strict);
+                _capSpent = spent;   // the replay continues the clip's max-length cap (BUG-7NAKK79CZ2)
                 _healUsed = true;
                 return;
             }

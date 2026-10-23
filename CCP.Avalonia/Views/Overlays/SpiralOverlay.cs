@@ -188,7 +188,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// frames are correct), the kept ones scaled to the <see cref="SpiralFrames.Plan"/> size.</summary>
         /// <param name="fitLongSide">When &gt; 0, frames are scaled further so the long side is at most this many
         /// pixels (the corner GIF decodes to the pixels its overlay occupies, WPF CornerGifMedia).</param>
-        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0)
+        /// <param name="maxFrames">When &gt; 0, at most this many frames are kept, strided across the whole
+        /// animation (the chaos wash keeps 40, WPF ChaosFlashOverlay.cs:222 after the #476 OOM).</param>
+        internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0)
         {
             var frames = new List<Bitmap>();
             try
@@ -204,6 +206,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var k = fitLongSide / (double)Math.Max(plan.Width, plan.Height);
                     plan.Width = Math.Max(1, (int)Math.Round(plan.Width * k));
                     plan.Height = Math.Max(1, (int)Math.Round(plan.Height * k));
+                }
+                if (maxFrames > 0 && plan.Frames > maxFrames)
+                {
+                    var step = (int)Math.Ceiling(count / (double)maxFrames);
+                    plan.DelayMs = plan.DelayMs / plan.Step * step;
+                    (plan.Frames, plan.Step) = (maxFrames, step);
                 }
                 var full = new SKImageInfo(codec.Info.Width, codec.Info.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
                 using var canvas = new SKBitmap(full);
