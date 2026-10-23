@@ -106,6 +106,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Eyes held shut past BlinkDetector.EyesClosedLongMs (WPF OnEyesClosedLong).</summary>
         public event Action? OnEyesClosedLong;
         public event Action? StateChanged;
+        private volatile WebcamTrackingState _state = WebcamTrackingState.Stopped;
+        public WebcamTrackingState State => _state;
+
+        internal void SetTrackingState(WebcamTrackingState state)
+        {
+            lock (_gate)
+            {
+                // A frame finishing after Stop must not relight any capture indicator.
+                if (WebcamStatus.IsLive(state) && !IsRunning) return;
+                if (!WebcamStatus.IsLive(state) && IsRunning) return;
+                if (_state == state) return;
+                _state = state;
+            }
+            Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+        }
         public event Action? OnFaceLost;
         public event Action? OnFaceFound;
         /// <summary>Median-filtered iris vector, what calibration samples (WPF OnRawIris).</summary>
@@ -194,11 +209,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (IsRunning) return true;
             if (Interlocked.Exchange(ref _busy, 1) != 0) return false;
             var run = new Run();
+            bool began = false;
             try
             {
                 LastError = null;
                 StartWasStopped = false;
+                // WPF WebcamTrackingService.cs:838-843 refuses before any state change: no consent stays Stopped.
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current)) { LastError = "Webcam consent is not current."; return false; }
+                SetTrackingState(WebcamTrackingState.Starting);
+                began = true;
                 // WPF #743: a loop a timed-out Stop gave up on may still hold the camera.
                 if (IsClosing)
                 {
@@ -255,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     return false;
                 }
                 Progress(0.92, "Starting capture…");
+                SetTrackingState(WebcamTrackingState.Tracking);
                 run.Thread.Start();
                 Progress(1.0, "Ready");
                 Log.Information("[Webcam] tracking started");
@@ -263,6 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 Interlocked.Exchange(ref _busy, 0);
+                if (began && !IsRunning) SetTrackingState(StartWasStopped ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
                 Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
             }
         }
@@ -291,6 +312,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             Run? run;
             lock (_gate) { _gen++; run = Interlocked.Exchange(ref _run, null); }
+            SetTrackingState(WebcamTrackingState.Stopped);
             if (run == null) return;
             run.Stop = true;
             // WPF Stop: bounded join; a wedged driver must not hang the caller forever. The loop
@@ -332,7 +354,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 run.Release();
                 // Ended on its own (read failures, revoke): no longer running.
                 if (Interlocked.CompareExchange(ref _run, null, run) == run)
+                {
+                    SetTrackingState(LastError == null ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
                     Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+                }
             }
         }
 
@@ -378,7 +403,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (r.Width < 16 || r.Height < 16) { NoFace(); return; }
             var lm = run.Mesh!.Detect(bgr, r);
             if (lm == null) { NoFace(); return; }
-            if (_gaze.FaceSeen()) Dispatcher.UIThread.Post(() => OnFaceFound?.Invoke());
+            if (_gaze.FaceSeen())
+            {
+                SetTrackingState(WebcamTrackingState.Tracking);
+                Dispatcher.UIThread.Post(() => OnFaceFound?.Invoke());
+            }
             if (HeadPose(_gaze, lm, bgr.Width, bgr.Height) is { } pose)
                 Dispatcher.UIThread.Post(() => OnHeadPose?.Invoke(pose.Yaw, pose.Pitch));
             var left = run.Iris!.Detect(bgr, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], isRightEye: false);
@@ -434,7 +463,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private void NoFace()
         {
-            if (_gaze.FaceMissing()) Dispatcher.UIThread.Post(() => OnFaceLost?.Invoke());
+            if (_gaze.FaceMissing())
+            {
+                SetTrackingState(WebcamTrackingState.FaceLost);
+                Dispatcher.UIThread.Post(() => OnFaceLost?.Invoke());
+            }
             _blink.CancelClosure();
         }
     }

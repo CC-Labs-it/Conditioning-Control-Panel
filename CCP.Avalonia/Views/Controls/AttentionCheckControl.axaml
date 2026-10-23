@@ -13,10 +13,9 @@
        RenderTransformOrigin="0.5,0.5" ->  "50%,50%"                (Avalonia parses bare numbers as
                                            ABSOLUTE pixels; only a % is relative. Same origin, and
                                            it is also Avalonia's default)
-       ShadowDepth="0"                 ->  OffsetX="0" OffsetY="0"  (Avalonia's DropShadowEffect
-                                           takes offsets, not depth+direction; same as the
-                                           AchievementsTabView port)
-       Storyboard (StartPulse)         ->  an Avalonia Animation in the code-behind -->
+       DropShadowEffect                ->  sibling rounded Border BoxShadow layers (no live
+                                           blur under the animated ring)
+       Storyboard (StartPulse)         ->  the shared 30 Hz BeatLoop in the code-behind -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.AttentionCheckControl"
@@ -30,6 +29,15 @@
     <Grid>
         <Ellipse x:Name="DotRingBg" Width="84" Height="84"
                  Stroke="#33FFFFFF" StrokeThickness="3"/>
+        <!-- Ring glow: WPF's DropShadowEffect sat on DotRingFg, so it was absent at progress 0 and
+             pulsed with the ring. Opacity follows progress and the pulse scales it (code-behind);
+             it is still a full halo, not traced along the arc. -->
+        <Border x:Name="DotRingGlow" Width="84" Height="84" CornerRadius="42" Background="Transparent"
+                BoxShadow="0 0 14 0 #B3FF69B4" Opacity="0" RenderTransformOrigin="50%,50%">
+            <Border.RenderTransform>
+                <ScaleTransform ScaleX="1" ScaleY="1"/>
+            </Border.RenderTransform>
+        </Border>
         <Ellipse x:Name="DotRingFg" Width="84" Height="84"
                  Stroke="#FFFF69B4" StrokeThickness="4"
                  StrokeDashArray="0,10000" StrokeLineCap="Round"
@@ -40,10 +48,9 @@
                     <ScaleTransform ScaleX="1" ScaleY="1"/>
                 </TransformGroup>
             </Ellipse.RenderTransform>
-            <Ellipse.Effect>
-                <DropShadowEffect Color="#FF69B4" BlurRadius="14" OffsetX="0" OffsetY="0" Opacity="0.7"/>
-            </Ellipse.Effect>
         </Ellipse>
+        <Border Width="44" Height="44" CornerRadius="22" Background="Transparent"
+                BoxShadow="0 0 30 0 #E6FF69B4"/>
         <Ellipse Width="44" Height="44">
             <Ellipse.Fill>
                 <RadialGradientBrush>
@@ -52,9 +59,6 @@
                     <GradientStop Color="#FFC71585" Offset="1"/>
                 </RadialGradientBrush>
             </Ellipse.Fill>
-            <Ellipse.Effect>
-                <DropShadowEffect Color="#FF69B4" BlurRadius="30" OffsetX="0" OffsetY="0" Opacity="0.9"/>
-            </Ellipse.Effect>
         </Ellipse>
     </Grid>
 </UserControl>
