@@ -1318,3 +1318,31 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+## 2026-10-23: Scrolller web gate = a loopback relay, the same on Windows and Linux (port72/scrolller-2)
+- Question: WPF 7.1.14 gates every Scrolller request a page makes inside WebView2 (ScrolllerWebGate: honest
+  user-agent, answers from the device cache, refuses uncached media when the share is spent or the switch is off,
+  charges real bytes, clears Chromium's disk cache under the 24 h rule). The licence makes that an obligation on
+  every OS. Avalonia.Controls.WebView 12.1 cannot answer a request on WebKitGTK (no `webkit_uri_scheme_request_finish`,
+  see "web-assets-host" above), and its per-request headers are not reliable there either.
+- Options: (a) WebResourceRequested gate on Windows only, nothing on Linux; (b) set the whole web view's user-agent
+  and let pages fetch the CDN; (c) the host never hands a page a Scrolller url: it rewrites them to a loopback relay
+  path the app answers itself.
+- Choice: (c), identical on both OSes. `GameWindow.Post`, `IntakeHostWindow.Post` and `WebHost.PostJsonAsync` pass
+  every frame through Core `ScrolllerRelay.RewriteJson`: each Scrolller MEDIA url (a `*.scrolller.com` CDN host, not
+  api/www, with a media extension) becomes `/scrolller-media/<sub>/<path>`, the Discord Activity's shape, so every
+  page's "via Scrolller" mark (`isScrolllerUrl` knows that path) still shows. `WebAssetServer` answers that path
+  (same token cookie, loopback, GET/HEAD) through `ScrolllerRelay.Decide`: switch off = 403; a cached copy is served
+  from `ScrolllerDiskCache` with Range; else, only when `ScrolllerPolicyService.MayFetchFresh`, the device cache
+  downloads it whole (honest user-agent, charged by the bytes that arrive, born at download for the 24 h sweep) and
+  it is served; else 403 and the page falls back. Every relayed answer is `no-store` (no engine copy, licence 3.4).
+  The relay maps back only onto Scrolller media: it is never an open proxy. A top-level navigation to a Scrolller
+  host is refused in every web host while the switch is off.
+- Trade-off vs WPF: a clip is fetched whole before it plays (WPF passes clips through to the network and charges
+  them by DevTools byte counts). The download is single-flight per url and charged as bytes arrive; the clip is then
+  cached and plays from disk, so a replay is free. A clip the user skips before it lands is still paid in full.
+- Not covered: a page that fetches Scrolller ITSELF from script. None of the pages this head hosts does (fyp, intake,
+  dtrh incl. race, piecebypiece, breakout demo, first-show; race/feedGroup.js is web-only and inert here, the host
+  sends no remoteCatalog); `ScrolllerRelayServerTests.No_page_this_head_hosts_fetches_scrolller_itself` fails if one starts. Goon and Arcademy (which do) have
+  no host on this head yet: their hosts must keep this rule. The in-app browser loading scrolller.com while the
+  switch is on is the user's own browsing (no app fetch); owner call if that must change.
+- Advisor: lane D (fix wave 2026-10-23); owner rule "Scrolller on par with WPF 7.1.14 on Windows and Linux".

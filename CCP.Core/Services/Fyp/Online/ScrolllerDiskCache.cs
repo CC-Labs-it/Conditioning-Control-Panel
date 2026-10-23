@@ -260,6 +260,44 @@ internal static class ScrolllerDiskCache
     /// (WPF RemoteMediaCache.TempPrefix forwards here).</summary>
     internal const string TempPrefix = "ccp_temp_remote_";
 
+    /// <summary>The day limit on one temp copy, pure (main bc63c247d): due once its creation time (its
+    /// download time) is <paramref name="age"/> old, always for age zero (the off switch), and also when the
+    /// creation time is more than an hour AHEAD of now (the clock went back, or was wrong when the copy was
+    /// made): the same guard as <see cref="ScrolllerCacheBook.IsExpiredAt"/>.</summary>
+    internal static bool TempCopyDue(DateTime createdUtc, DateTime nowUtc, TimeSpan age)
+        => age <= TimeSpan.Zero
+           || createdUtc - nowUtc > TimeSpan.FromHours(1)
+           || nowUtc - createdUtc >= age;
+
+    /// <summary>Deletes every file in <paramref name="dirs"/> whose name starts with <paramref name="prefix"/> and
+    /// whose creation time is due by <see cref="TempCopyDue"/> (a file still held is left for the next sweep).
+    /// Returns how many went; never throws. The Avalonia head's sweep of its own copies (WPF RemoteMediaCache
+    /// keeps its own walk over the same rule).</summary>
+    internal static int SweepTempCopies(IEnumerable<string?> dirs, string prefix, TimeSpan age)
+    {
+        int deleted = 0;
+        try
+        {
+            var now = UtcNow();
+            foreach (var dir in dirs.Where(d => !string.IsNullOrEmpty(d) && Directory.Exists(d))
+                         .Select(d => Path.GetFullPath(d!).TrimEnd(Path.DirectorySeparatorChar))
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
+            foreach (var file in Directory.GetFiles(dir, prefix + "*"))
+            {
+                try
+                {
+                    if (!TempCopyDue(File.GetCreationTimeUtc(file), now, age)) continue;
+                    File.Delete(file);
+                    deleted++;
+                }
+                catch { /* still open: the next sweep */ }
+            }
+        }
+        catch (Exception ex) { Log.Debug("[scrolller cache] temp copy sweep failed: {E}", ex.Message); }
+        if (deleted > 0) Log.Information("[scrolller cache] {Count} temp copies past the day limit deleted", deleted);
+        return deleted;
+    }
+
     /// <summary>The WebView2 cache-clear stamp file in the cache root (WPF ScrolllerWebGate.ClearsFileName).</summary>
     internal const string WebViewClearsFileName = "webview-clears.json";
 

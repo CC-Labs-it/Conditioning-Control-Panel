@@ -292,6 +292,15 @@
                      directory-listing status + camera-active indicator. -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal"
                             HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <!-- Online media today (WPF MainWindow.xaml:227-240): "Online 42%", visible while online media is in
+                         the source, consented and switched on. Painted in MainShellWindow.OnlineMeter.cs. -->
+                    <Border x:Name="OnlineMeterPill" IsVisible="False" CornerRadius="11" Padding="9,3,11,3"
+                            Margin="0,0,8,0" VerticalAlignment="Center" Cursor="Hand" Background="#251A38">
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="OnlineMeterPillDot" Width="8" Height="8" Fill="#FF69B4" Margin="0,0,7,0" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="TxtOnlineMeterPill" Foreground="White" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Directory listing status — Listed / Private only / Claimed.
                          Visible only while a remote-control session is active. Text,
