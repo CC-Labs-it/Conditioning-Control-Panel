@@ -12,12 +12,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class MainShellWindow
 {
     private static Action? _stopLevelUpSound;
+    private bool _calibrationNoticeChecked;
 
     private void InitializeShellNotifications()
     {
-        // WPF MainWindow_Loaded: the host is attached before the saved-calibration check.
+        // WPF MainWindow_Loaded: once per launch (Opened re-fires on every tray Hide/Show).
         Opened += (_, _) =>
         {
+            if (_calibrationNoticeChecked) return;
+            _calibrationNoticeChecked = true;
             try
             {
                 OfferLegacyCalibrationNotice(WebcamTracker.Instance.Calibration, App.Notifications, async () =>

@@ -333,7 +333,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The monitor calibration ran on (WPF Screen.FromHandle), for calibrated-screen placement.
             if (Screens.ScreenFromWindow(this) is { } sc)
             {
-                data.MonitorBounds!.DeviceName = sc.DisplayName;
+                // Some platforms report no DisplayName; an empty name would re-raise the legacy notice forever.
+                data.MonitorBounds!.DeviceName = string.IsNullOrEmpty(sc.DisplayName)
+                    ? $"Display at {sc.Bounds.X},{sc.Bounds.Y}" : sc.DisplayName;
                 data.MonitorBounds.X = sc.Bounds.X;
                 data.MonitorBounds.Y = sc.Bounds.Y;
             }

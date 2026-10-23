@@ -118,8 +118,16 @@ public sealed class ShellCalibrationNotificationTests
         {
             tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord() };
             shell.Show();
-            Assert.Contains(host.Children, c => c.GetLogicalDescendants().OfType<TextBlock>()
+            // Other shell-open notices (e.g. empty library) share the host: match the calibration toast only.
+            bool Legacy() => host.Children.Any(c => c.GetLogicalDescendants().OfType<TextBlock>()
                 .Any(t => t.Text == "Your calibration needs updating for multi-monitor support."));
+            Assert.True(Legacy());
+            notices.Dismiss("recalibrate-multimonitor"); // user acted, then cancelled the calibration
+            Assert.False(Legacy());
+            shell.Hide(); // tray minimise + restore re-fires Opened; WPF checks once per launch
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(Legacy());
             MainShellWindow.PlayLevelUpSound();
             shell.Close();
             Assert.Equal(1, stopped);
