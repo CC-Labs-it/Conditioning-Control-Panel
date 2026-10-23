@@ -21,8 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// (TriggerSubliminalWithHapticPattern :563).</para>
     /// <para>A new whisper cuts the previous one, and <see cref="StopAll"/> (Stop, tray Stop everything)
     /// silences one mid-play and drops a card still waiting behind it (WPF StopAudio + the
-    /// ShowSubliminalVisuals arrival guard). ponytail: no MarkWhisperAudio (no bark engine on this
-    /// head); no deferred Reset (only mandatory video defers).</para>
+    /// ShowSubliminalVisuals arrival guard). ponytail: no deferred Reset (only mandatory video defers).</para>
     /// </summary>
     internal static class SubliminalWhisperShow
     {
@@ -117,16 +116,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (s.AudioDuckingEnabled) CoreAudio.Duck(s.DuckingLevel);
             var gen = CoreAudio.DuckGeneration;
             Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // WPF PlayWhisperAudio: StopAudio first
+            // Reserve the floor during spin-up; the actual clip length extends it in onStarted.
+            Platform.BarkHead.Engine?.MarkWhisperAudio((SubliminalWhisper.HapticLeadMs + SubliminalWhisper.VisualAfterHapticMs) / 1000.0);
             _stopWhisper = CoreAudio.PlayStoppable(path, SubliminalWhisper.Volume(s.MasterVolume, s.SubAudioVolume), "whisper",
+                onStarted: duration => Platform.BarkHead.Engine?.MarkWhisperAudio(duration.TotalSeconds),
                 onFinished: () => After(SubliminalWhisper.UnduckDelayMs, () => CoreAudio.Unduck(gen)));
             if (Volatile.Read(ref _gen) != entry) Interlocked.Exchange(ref _stopWhisper, null)?.Invoke();   // Stop raced the start
             Log.Debug("Playing subliminal audio: {Path}", Path.GetFileName(path));
             Later(SubliminalWhisper.HapticLeadMs, () =>
             {
                 _ = CoreHaptics.Service?.TriggerSubliminalPatternAsync(text);
-                Later(SubliminalWhisper.VisualAfterHapticMs, () => Draw(text), entry);
+                Later(SubliminalWhisper.VisualAfterHapticMs, () => DrawPhrase(text), entry);
             }, entry);
             return true;
+        }
+
+        private static void DrawPhrase(string text)
+        {
+            Draw(text);
+            Platform.BarkHead.Engine?.Raise("SubliminalDisplayed"); // WPF ShowSubliminalVisuals: after the whisper/haptic lead-in
         }
 
         /// <summary>WPF TriggerSubliminalWithHapticPattern: haptic first, the card after the provider's
@@ -136,8 +144,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var haptics = CoreHaptics.Service;
             _ = haptics?.TriggerSubliminalPatternAsync(text);
             var anticipationMs = haptics?.SubliminalAnticipationMs ?? 0;
-            if (anticipationMs > 0) Later(anticipationMs, () => Draw(text));
-            else Draw(text);
+            if (anticipationMs > 0) Later(anticipationMs, () => DrawPhrase(text));
+            else DrawPhrase(text);
         }
     }
 }

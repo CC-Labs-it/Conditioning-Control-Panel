@@ -53,6 +53,47 @@ public sealed class SubliminalWhisperShowTests
     }
 
     [Fact]
+    public void SubliminalBarkWaitsForTheVisualAndWhisperFloorAndStopDropsIt() => With(audible: true, roll: 1, run =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine;
+        var s = CoreSettings.Current;
+        var settings = (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs);
+        var rule = new ConditioningControlPanel.Services.Bark.BarkRule { Id = "test-sub", Trigger = "SubliminalDisplayed",
+            VariantPool = new() { new("line") } };
+        var said = 0;
+        var e = new ConditioningControlPanel.Services.Bark.BarkEngine(() => new(new[] { rule })) { Speak = _ => said++ };
+        e.Start();
+        ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = e;
+        CoreAudio.PlayStoppableProvider = (_, _, _, started, _) => { started?.Invoke(TimeSpan.FromSeconds(5)); return () => { }; };
+        try
+        {
+            (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs) = (true, 50, 0);
+            SubliminalWhisperShow.Phrase("reset");
+            Assert.Equal(0, said);
+            Fire(run, 50); Fire(run, 250);
+            Assert.Contains("card reset", run.Log);
+            Assert.Equal(0, said); // the card arrived, but the clip still owns the floor
+            s.SubAudioMuted = true;
+            var clock = new SubClock(); e.Clock = clock; // well past the real clock's whisper hold
+            SubliminalWhisperShow.Phrase("unlinked");
+            Assert.Equal(1, said); // text-only visual reaches the same source
+            s.SubAudioMuted = false;
+            SubliminalWhisperShow.Phrase("reset");
+            SubliminalWhisperShow.StopAll();
+            foreach (var timer in run.Timers.ToArray()) timer.Then();
+            Assert.Equal(1, said);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine = old;
+            (s.AvatarEnabled, s.MasterVolume, s.BarkChatSuppressionMs) = settings;
+        }
+    });
+
+    private sealed class SubClock : TimeProvider
+    { public override DateTimeOffset GetUtcNow() => new(2090, 1, 1, 0, 0, 0, TimeSpan.Zero); }
+
+    [Fact]
     public void Freeze_whispers_then_card_then_reset() => With(audible: true, roll: 0.9, run =>
     {
         CoreSubliminal.TriggerBambiFreeze();

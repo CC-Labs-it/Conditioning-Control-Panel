@@ -110,6 +110,106 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Theory]
+    [InlineData("flash", "FlashDisplayed")]
+    [InlineData("bubbles", "BubblePopped")]
+    public void FeatureEventsReachTheMouthAndStopUnsubscribes(string feature, string trigger) => WithSeamsRestored(_ =>
+    {
+        var rule = Rule(trigger, "reaction"); rule.ClassRaw = "safety";
+        var e = Seeded(rule, out var spoken);
+        var count = 0;
+        e.Speak = _ => count++;
+        try
+        {
+            BarkHead.WireSources(e);
+            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(feature);
+            Assert.Equal("reaction", spoken());
+            Assert.Equal(1, count);
+            BarkHead.Stop();
+            e.ReloadRules();
+            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(feature);
+            Assert.Equal(1, count);
+        }
+        finally { BarkHead.Stop(); }
+    });
+
+    [Fact]
+    public void ServiceEventsCarryTheWpfPayloadAndEverySubscriptionIsRemoved() => WithSeamsRestored(s =>
+    {
+        var app = typeof(global::ConditioningControlPanel.Avalonia.App);
+        var achProp = app.GetProperty("Achievements", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var old = (achProp.GetValue(null), global::ConditioningControlPanel.Avalonia.App.Quests,
+            ConditioningControlPanel.Services.LockdownService.Current, CoreEngine.Video, CoreEngine.BubbleCount, s.PlayerXP);
+        var patProp = typeof(AccountSeed).GetProperty("Patreon", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldPat = patProp.GetValue(null);
+        using var q = new ConditioningControlPanel.Services.QuestService();
+        using var ld = new ConditioningControlPanel.Services.LockdownService();
+        var ach = new ConditioningControlPanel.Services.AchievementEngine(new ConditioningControlPanel.Services.AchievementStore(
+            Path.Combine(TestUserDataProfile.Root, "bark-achievements.json")));
+        var pat = new ConditioningControlPanel.Services.ProviderSubscription("patreon", () => s);
+        var video = new ConditioningControlPanel.Services.MandatoryVideoScheduler(null!);
+        var bubbles = new ConditioningControlPanel.Services.BubbleCountScheduler(null!);
+        var mantra = global::ConditioningControlPanel.Avalonia.App.Mantra;
+        var sources = new List<(System.Type Type, object? Owner, string Event, object?[] Args, string Trigger, string Text)>
+        {
+            (typeof(ProgressionBank), null, "LevelUp", new object?[] { 42 }, "LevelUp", "level {level}"),
+            (typeof(ProgressionBank), null, "Awarded", new object?[] { 1d, "Test" }, "XPChanged", "xp {xp}"),
+            (typeof(ConditioningControlPanel.Services.Companion.CompanionCore), null, "LevelUp", new object?[] { (ConditioningControlPanel.Models.CompanionId)0, 3 }, "CompanionLevelUp", "level {level}"),
+            (ach.GetType(), ach, "Unlocked", new object?[] { ach, new ConditioningControlPanel.Models.Achievement { Id = "sandbox" } }, "AchievementUnlocked", "id {achievement}"),
+            (q.GetType(), q, "QuestCompleted", new object?[] { q, null }, "QuestCompleted", "done"),
+            (q.GetType(), q, "QuestProgressChanged", new object?[] { q, null }, "QuestProgressChanged", "progress"),
+            (q.GetType(), q, "QuestsRefreshed", new object?[] { q, System.EventArgs.Empty }, "QuestsRefreshed", "refreshed"),
+            (mantra.GetType(), mantra, "MantraCompleted", new object?[] { }, "MantraCompleted", "mantra"),
+            (mantra.GetType(), mantra, "StreakChanged", new object?[] { 3 }, "MantraStreakChanged", "streak {streak}"),
+            (mantra.GetType(), mantra, "StreakBroken", new object?[] { }, "MantraStreakBroken", "broken"),
+            (ld.GetType(), ld, "LockdownActivated", new object?[] { }, "LockdownActivated", "locked"),
+            (ld.GetType(), ld, "LockdownDeactivated", new object?[] { }, "LockdownDeactivated", "free"),
+            (ld.GetType(), ld, "CountdownTick", new object?[] { System.TimeSpan.FromSeconds(12) }, "LockdownCountdownTick", "left {remaining_sec}"),
+            (video.GetType(), video, "VideoAboutToStart", new object?[] { }, "VideoAboutToStart", "before"),
+            (video.GetType(), video, "VideoStarted", new object?[] { }, "VideoStarted", "video"),
+            (video.GetType(), video, "VideoEnded", new object?[] { }, "VideoEnded", "after"),
+            (bubbles.GetType(), bubbles, "GameCompleted", new object?[] { }, "BubbleCountCompleted", "counted"),
+            (bubbles.GetType(), bubbles, "GameFailed", new object?[] { }, "BubbleCountFailed", "missed"),
+            (typeof(ConditioningControlPanel.Services.AIService.LocalAiService), null, "PersistentMemoryRecalled", new object?[] { null, System.EventArgs.Empty }, "PersistentMemoryRecalled", "memory"),
+            (global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.Service.GetType(), global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.Service, "TutorialCompleted", new object?[] { null, System.EventArgs.Empty }, "TutorialCompleted", "tour"),
+            (pat.GetType(), pat, "TierChanged", new object?[] { pat, ConditioningControlPanel.Models.PatreonTier.Level1 }, "PatreonTierChanged", "tier {tier} {tier_up}"),
+        };
+        var said = new List<string>();
+        var rules = new List<BarkRule>();
+        foreach (var src in sources) { var r = Rule(src.Trigger, src.Text); r.ClassRaw = "safety"; rules.Add(r); }
+        var engine = new BarkEngine(() => new BarkRuleSet(rules)) { Speak = line => said.Add(line.Text) };
+        engine.Start();
+        void EmitAll()
+        {
+            foreach (var src in sources)
+            {
+                var field = src.Type.GetField(src.Event, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance)!;
+                (field.GetValue(src.Owner) as System.Delegate)?.DynamicInvoke(src.Args);
+            }
+        }
+        try
+        {
+            achProp.SetValue(null, ach);
+            patProp.SetValue(null, pat);
+            global::ConditioningControlPanel.Avalonia.App.Quests = q;
+            ConditioningControlPanel.Services.LockdownService.Current = ld;
+            CoreEngine.Video = video; CoreEngine.BubbleCount = bubbles; s.PlayerXP = 19;
+            BarkHead.WireSources(engine);
+            EmitAll();
+            Assert.Equal(new[] { "level 42", "xp 19", "level 3", "id sandbox", "done", "progress", "refreshed", "mantra", "streak 3", "broken", "locked", "free", "left 12", "before", "video", "after", "counted", "missed", "memory", "tour", "tier Level1 True" }, said);
+            BarkHead.Stop();
+            EmitAll();
+            Assert.Equal(sources.Count, said.Count);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            achProp.SetValue(null, old.Item1); patProp.SetValue(null, oldPat);
+            (global::ConditioningControlPanel.Avalonia.App.Quests, ConditioningControlPanel.Services.LockdownService.Current,
+                CoreEngine.Video, CoreEngine.BubbleCount, s.PlayerXP) = (old.Item2, old.Item3, old.Item4, old.Item5, old.Item6);
+        }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },

@@ -204,6 +204,9 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF OnGameComplete.</summary>
+        public event Action? GameCompleted;
+        public event Action? GameFailed;
+
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
@@ -220,6 +223,7 @@ namespace ConditioningControlPanel.Services
                     Log.Information("Bubble count game completed! +{Xp} XP", xp);
                 }
                 CoreProgression.TrackBubbleCountCompleted();
+                GameCompleted?.Invoke();
                 return;
             }
             var s = CoreSettings.Current;
@@ -227,6 +231,7 @@ namespace ConditioningControlPanel.Services
             {
                 _retryCount = 0;
                 Idle();
+                GameFailed?.Invoke();
                 Log.Information("Bubble count game failed");
                 return;
             }
@@ -234,7 +239,7 @@ namespace ConditioningControlPanel.Services
             if (_retryCount >= s.MercyAfterFails && s.MercySystemEnabled)   // #1145: 2..10, default 3
             {
                 Log.Information("Bubble count mercy after {Retries} retries", _retryCount);
-                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { _retryCount = 0; Idle(); });
+                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (!IsBusy) return; _retryCount = 0; Idle(); GameFailed?.Invoke(); });
                 return;
             }
             Log.Information("Bubble count retry {Count} (mercy at {Mercy})", _retryCount, s.MercyAfterFails);

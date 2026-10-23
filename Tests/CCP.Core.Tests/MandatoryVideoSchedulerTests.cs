@@ -83,6 +83,28 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Fact]
+    public void BarkLifecycleOrdersPrerollStartAndEndAndPanicCancelsThePendingStart() => With(20, false, () =>
+    {
+        var clock = new FakeClock();
+        var v = new MandatoryVideoScheduler(new Host(), clock, () => Clips);
+        var events = new List<string>();
+        v.VideoAboutToStart += () => events.Add("before");
+        v.VideoStarted += () => events.Add("started");
+        v.VideoEnded += () => events.Add("ended");
+        Assert.True(v.Trigger());
+        Assert.Equal(new[] { "before" }, events);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        v.End();
+        v.End(); // duplicate teardown is silent
+        Assert.Equal(new[] { "before", "started", "ended" }, events);
+        events.Clear();
+        v.Trigger();
+        v.ForceCleanup();
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(new[] { "before", "ended" }, events);
+    });
+
+    [Fact]
     public void ForceCleanup_does_not_rearm_and_cancels_a_pending_pre_roll() => With(20, true, () =>
     {
         var clock = new FakeClock(); var host = new Host();

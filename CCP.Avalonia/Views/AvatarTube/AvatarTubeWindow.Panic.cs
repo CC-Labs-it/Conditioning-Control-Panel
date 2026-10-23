@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _stopSpoken = static () => { };
             try { StopThinkingAnimation(); } catch { }
             try { _speechTimer?.Stop(); } catch { }
+            try { _idleTimer?.Stop(); } catch { }
             try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
             try { _listeningDotsTimer?.Stop(); _listeningDotsTimer = null; } catch { }
             _isWaitingForAi = false;

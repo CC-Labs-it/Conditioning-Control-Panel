@@ -4,14 +4,15 @@ using System.Reflection;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.AIService;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
 /// The head half of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>: one Core <see cref="BarkEngine"/>, its
 /// mouth (the tube), and the seams WPF App.xaml.cs:313/336-346/604/2826 points at its BarkService.
-/// ponytail: the rest of WireSubscriptions (:660-925) is the next unit (line cap): flash / subliminal / bubble,
-/// video, level-ups, achievements, quests, mantra and lockdown have sources here already.
+/// ponytail: the remaining WPF sources are tracked in docs/cloud/fin-feat-companion-barks.md.
 /// </summary>
 internal static class BarkHead
 {
@@ -23,6 +24,7 @@ internal static class BarkHead
         var e = Engine = new BarkEngine();
         Seed(e);
         e.Start();
+        WireSources(e);
         App.Brain?.AttachBarkSource(h => e.BarkSpoken += h, h => e.BarkSpoken -= h);   // App.xaml.cs:2826, the echo
         // The two WireSubscriptions the engine's own state needs: chat suppression (:806) and, on a mod switch,
         // the switch bark off the OLD set then the new mod's manifest (:903).
@@ -43,6 +45,8 @@ internal static class BarkHead
     /// <summary>Drops the engine and the two subscriptions Start made (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        foreach (var undo in Unsubscribe) undo();
+        Unsubscribe.Clear();
         App.UserMessageSent -= _onUserMessage;
         if (_mods != null) _mods.ModChanged -= _onModChanged;
         (_onUserMessage, _onModChanged, _mods, Engine) = (null, null, null, null);
@@ -52,6 +56,7 @@ internal static class BarkHead
     internal static void Seed(BarkEngine e)
     {
         e.Speak = Speak;
+        e.CurrentTier = () => AccountSeed.Patreon?.CurrentTier.ToString() ?? "None";
         e.IsSpeaking = () => Views.AvatarTube.AvatarTubeWindow.Live?.IsSpeaking == true;
         e.IsCompanionBusy = ms => Views.AvatarTube.AvatarTubeWindow.Live?.IsCompanionBusy(ms) == true;
         e.EmiDeskAvatarMuted = () => Views.Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted;
@@ -84,16 +89,86 @@ internal static class BarkHead
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
     }
 
-    /// <summary>WPF Speak (:1985): preempting barks through GigglePriority, the clip as her voice.
-    /// ponytail: an ordinary VOICED bark goes the same way (this tube's Giggle takes no clip); the gate has
-    /// already dropped it if she was speaking, so it never cuts a line off.</summary>
-    internal static void Speak(BarkSpeech s)
+    /// <summary>WPF Speak: ordinary voiced lines keep the preset queue and its post-line gap.</summary>
+    internal static void Speak(BarkSpeech s) => Speak(s, Views.AvatarTube.AvatarTubeWindow.Live);
+    internal static void Speak(BarkSpeech s, Views.AvatarTube.AvatarTubeWindow? tube)
     {
-        var tube = Views.AvatarTube.AvatarTubeWindow.Live;
         if (tube == null) return;
-        if (s.SilentEgg || (!s.Priority && s.AudioPath == null)) { tube.Giggle(s.Text); return; }
+        if (s.SilentEgg || !s.Priority) { tube.Giggle(s.Text, s.AudioPath, s.AudioPath != null, s.Mood, s.Unprompted); return; }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
-            phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood);
+            phraseAudioPath: s.AudioPath, barkVoice: s.AudioPath != null, mood: s.Mood, unprompted: s.Unprompted);
+    }
+
+    private static readonly List<Action> Unsubscribe = new();
+    private static void Wire<T>(Action<T> add, Action<T> remove, T handler) where T : Delegate
+    { add(handler); Unsubscribe.Add(() => remove(handler)); }
+
+    /// <summary>Adapted from trunk abc82671e; named teardown follows WPF Stop (no duplicate subscriptions).</summary>
+    internal static void WireSources(BarkEngine e)
+    {
+        Wire<Action<string>>(h => App.FeatureUsed += h, h => App.FeatureUsed -= h, f =>
+        {
+            var trigger = f switch
+            {
+                global::ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash => "FlashDisplayed",
+                global::ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles => "BubblePopped",
+                _ => null,
+            };
+            if (trigger != null) e.Raise(trigger);
+        });
+        if (CoreEngine.Video is { } video)
+        {
+            Wire<Action>(h => video.VideoStarted += h, h => video.VideoStarted -= h, () => e.Raise("VideoStarted"));
+            Wire<Action>(h => video.VideoAboutToStart += h, h => video.VideoAboutToStart -= h, () => e.Raise("VideoAboutToStart"));
+            Wire<Action>(h => video.VideoEnded += h, h => video.VideoEnded -= h, () => e.Raise("VideoEnded"));
+        }
+        if (CoreEngine.BubbleCount is { } count)
+        {
+            Wire<Action>(h => count.GameCompleted += h, h => count.GameCompleted -= h, () => e.Raise("BubbleCountCompleted"));
+            Wire<Action>(h => count.GameFailed += h, h => count.GameFailed -= h, () => e.Raise("BubbleCountFailed"));
+        }
+        Wire<Action<int>>(h => ProgressionBank.LevelUp += h, h => ProgressionBank.LevelUp -= h,
+            level => e.Raise("LevelUp", c => c.Set("level", level)));
+        Wire<Action<double, string>>(h => ProgressionBank.Awarded += h, h => ProgressionBank.Awarded -= h,
+            (_, _) => e.Raise("XPChanged", c => c.Set("xp", CoreSettings.Current.PlayerXP)));
+        Wire<Action<CompanionId, int>>(h => CompanionCore.LevelUp += h, h => CompanionCore.LevelUp -= h,
+            (_, level) => e.Raise("CompanionLevelUp", c => c.Set("level", level)));
+        if (App.Achievements is { } ach)
+            Wire<EventHandler<Achievement>>(h => ach.Unlocked += h, h => ach.Unlocked -= h,
+                (_, a) => e.Raise("AchievementUnlocked", c => c.Set("achievement", a?.Id ?? "")));
+        if (App.Quests is { } q)
+        {
+            Wire<EventHandler<QuestCompletedEventArgs>>(h => q.QuestCompleted += h, h => q.QuestCompleted -= h, (_, _) => e.Raise("QuestCompleted"));
+            Wire<EventHandler<QuestProgressEventArgs>>(h => q.QuestProgressChanged += h, h => q.QuestProgressChanged -= h, (_, _) => e.Raise("QuestProgressChanged"));
+            Wire<EventHandler>(h => q.QuestsRefreshed += h, h => q.QuestsRefreshed -= h, (_, _) => e.Raise("QuestsRefreshed"));
+        }
+        Wire<Action>(h => App.Mantra.MantraCompleted += h, h => App.Mantra.MantraCompleted -= h, () => e.Raise("MantraCompleted"));
+        Wire<Action<int>>(h => App.Mantra.StreakChanged += h, h => App.Mantra.StreakChanged -= h,
+            streak => e.Raise("MantraStreakChanged", c => c.Set("streak", streak)));
+        Wire<Action>(h => App.Mantra.StreakBroken += h, h => App.Mantra.StreakBroken -= h, () => e.Raise("MantraStreakBroken"));
+        if (LockdownService.Current is { } ld)
+        {
+            Wire<Action>(h => ld.LockdownActivated += h, h => ld.LockdownActivated -= h, () => e.Raise("LockdownActivated"));
+            Wire<Action>(h => ld.LockdownDeactivated += h, h => ld.LockdownDeactivated -= h, () => e.Raise("LockdownDeactivated"));
+            Wire<Action<TimeSpan>>(h => ld.CountdownTick += h, h => ld.CountdownTick -= h,
+                ts => e.Raise("LockdownCountdownTick", c => c.Set("remaining_sec", ts.TotalSeconds)));
+        }
+        Wire<EventHandler>(h => LocalAiService.PersistentMemoryRecalled += h, h => LocalAiService.PersistentMemoryRecalled -= h,
+            (_, _) => e.Raise("PersistentMemoryRecalled"));
+        if (AccountSeed.Patreon is { } patreon)
+        {
+            var lastTier = patreon.CurrentTier;
+            Wire<EventHandler<PatreonTier>>(h => patreon.TierChanged += h, h => patreon.TierChanged -= h, (_, tier) =>
+            {
+                if (ProviderSubscription.IsInviteWeekOnly(patreon, AccountSeed.SubscribeStar, CoreSettings.Current)) return;
+                if (tier == PatreonTier.None && lastTier == PatreonTier.None) return;
+                var up = tier > lastTier;
+                lastTier = tier;
+                e.Raise("PatreonTierChanged", c => c.Set("tier", tier.ToString()).Set("tier_up", up));
+            });
+        }
+        var tours = Tours.TutorialHead.Service;
+        Wire<EventHandler>(h => tours.TutorialCompleted += h, h => tours.TutorialCompleted -= h, (_, _) => e.Raise("TutorialCompleted"));
     }
 
     private static readonly Dictionary<string, PropertyInfo?> SettingProps = new(StringComparer.Ordinal);
@@ -102,6 +177,7 @@ internal static class BarkHead
     internal static void OnSettingChanged(BarkEngine e, string? name)
     {
         if (string.IsNullOrEmpty(name)) return;
+        if (name == nameof(AppSettings.IdleGiggleIntervalSeconds)) Views.AvatarTube.AvatarTubeWindow.Live?.RestartIdleTimer();
         PropertyInfo? pi;
         lock (SettingProps)
             if (!SettingProps.TryGetValue(name!, out pi)) SettingProps[name!] = pi = typeof(AppSettings).GetProperty(name!);

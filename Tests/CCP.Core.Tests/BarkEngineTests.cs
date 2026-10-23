@@ -35,6 +35,26 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void DryRunExercisesTheGateWithoutSpeakingOrPersisting()
+    {
+        var old = Environment.GetEnvironmentVariable("CCP_BARK_DRYRUN");
+        var r = Rule("T", "dry");
+        (r.Repeatable, r.ScopeRaw) = (false, "lifetime");
+        try
+        {
+            Environment.SetEnvironmentVariable("CCP_BARK_DRYRUN", "1");
+            var e = Engine(r);
+            Assert.False(e.Raise("T"));
+            Assert.Empty(_said);
+            Assert.False(_s.IsBarkFired(r.Id));
+            Assert.False(_s.BarkVariantRotation.ContainsKey(r.Id));
+            Environment.SetEnvironmentVariable("CCP_BARK_DRYRUN", null);
+            Assert.True(Engine(r).Raise("T"));
+        }
+        finally { Environment.SetEnvironmentVariable("CCP_BARK_DRYRUN", old); }
+    }
+
+    [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
         var high = Rule("T", "level {level} in {0}");
@@ -117,6 +137,99 @@ public sealed class BarkEngineTests : IDisposable
         Assert.False(e.Raise("AttentionCheckFail"));
         clock.Advance(TimeSpan.FromSeconds(0.2));
         Assert.True(e.Raise("AttentionCheckFail"));
+    }
+
+    [Fact]
+    public void IdleRulesRotateAcrossLaunchesAndRecycleWithoutImmediateRepeat()
+    {
+        var old = _s.BarkIdleRotation;
+        try
+        {
+            _s.BarkIdleRotation = new();
+            var a = Rule("Idle", "a");
+            var b = Rule("Idle", "b");
+            var c = Rule("Idle", "c");
+            Engine(a, b, c).DispatchIdle();
+            Engine(a, b, c).DispatchIdle();
+            var e = Engine(a, b, c);
+            var clock = new PopQuizSchedulerTests.FakeClock();
+            e.Clock = clock;
+            e.DispatchIdle();
+            Assert.Equal(3, _said.Select(x => x.Text).Distinct().Count());
+            var last = _said[^1].Text;
+            clock.Advance(TimeSpan.FromSeconds(61));
+            e.DispatchIdle();
+            Assert.NotEqual(last, _said[^1].Text);
+        }
+        finally { _s.BarkIdleRotation = old; }
+    }
+
+    private sealed class GatedRandom : Random
+    {
+        public override double NextDouble() => 0.34;
+        public override int Next(int maxValue) => 0;
+    }
+
+    [Fact]
+    public void IdlePrefersEligibleGatedRulesAndNeverSpendsWhileMutedSpeakingOrDry()
+    {
+        var a = Rule("Idle", "plain");
+        var gated = Rule("Idle", "gated");
+        gated.Conditions = new() { ["player_level_gte"] = 0 };
+        var e = new BarkEngine(() => new BarkRuleSet(new[] { a, gated }), new GatedRandom()) { Speak = _said.Add };
+        e.Start();
+        _s.MasterVolume = 0;
+        e.DispatchIdle();
+        _s.MasterVolume = 50;
+        e.IsSpeaking = () => true;
+        e.DispatchIdle();
+        Assert.Empty(_said);
+        e.IsSpeaking = () => false;
+        e.DispatchIdle();
+        Assert.Equal("gated", Assert.Single(_said).Text);
+        e.DispatchIdle(); // min gap: no second line
+        Assert.Single(_said);
+        var old = _s.BarkIdleRotation.ToArray();
+        var dry = Engine(a);
+        dry.DryRun = true;
+        dry.DispatchIdle();
+        Assert.Equal(old, _s.BarkIdleRotation);
+        Assert.Single(_said);
+    }
+
+    [Fact]
+    public void WhisperFloorExtendsThroughTheTailWithOnlyTheWpfBypasses()
+    {
+        var panic = Rule("Panic", "safe");
+        panic.ClassRaw = "safety";
+        var e = Engine(panic, Rule("AttentionCheckFail", "eyes"), Rule("PossessionEffect", "haunt"), Rule("EmergencyExitVerdict", "door"));
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        e.Clock = clock;
+        e.MarkWhisperAudio(10);
+        e.MarkWhisperAudio(1); // cannot shorten an audible clip
+        e.MarkWhisperAudio(double.NaN);
+        Assert.False(e.Raise("AttentionCheckFail")); // global-gap exemption does not bypass the whisper
+        Assert.True(e.Raise("PossessionEffect"));
+        Assert.True(e.Raise("EmergencyExitVerdict"));
+        Assert.True(e.Raise("Panic"));
+        clock.Advance(TimeSpan.FromSeconds(10.24));
+        Assert.False(e.Raise("AttentionCheckFail"));
+        clock.Advance(TimeSpan.FromSeconds(0.02));
+        Assert.True(e.Raise("AttentionCheckFail"));
+        e.MarkWhisperAudio(5);
+        Assert.True(e.Raise("AttentionCheckFail", guaranteed: true));
+    }
+
+    [Fact]
+    public void TierLatchesPersistUnderTheActualTierAndRearmOnANewLaunchAtAnotherTier()
+    {
+        var r = Rule("T", "tier");
+        (r.Repeatable, r.ScopeRaw) = (false, "tier");
+        BarkEngine At(string tier) { var e = Engine(r); e.CurrentTier = () => tier; return e; }
+        Assert.True(At("Level1").Raise("T"));
+        Assert.True(_s.IsBarkFired(r.Id + "@Level1"));
+        Assert.False(At("Level1").Raise("T", guaranteed: true));
+        Assert.True(At("Level2").Raise("T"));
     }
 
     [Fact]

@@ -73,6 +73,8 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
+        public event Action? VideoAboutToStart;
+        public event Action? VideoEnded;
 
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
@@ -322,6 +324,7 @@ namespace ConditioningControlPanel.Services
             }
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
+            try { VideoAboutToStart?.Invoke(); } catch (Exception ex) { Log.Debug(ex, "VideoAboutToStart handler failed"); }
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
             CoreFlash.Stop();   // WPF PlayVideo: App.Flash?.Stop()
@@ -423,6 +426,7 @@ namespace ConditioningControlPanel.Services
             _ = CoreHaptics.Service?.StopVideoBackgroundVibeAsync();
             try { CoreHaptics.Service?.FunScript.OnVideoStopped(); }
             catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
+            try { VideoEnded?.Invoke(); } catch (Exception ex) { Log.Debug(ex, "VideoEnded handler failed"); }
             return true;
         }
 

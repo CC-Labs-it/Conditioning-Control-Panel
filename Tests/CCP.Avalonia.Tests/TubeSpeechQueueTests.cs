@@ -191,6 +191,80 @@ public sealed class TubeSpeechQueueTests
     });
 
     [Fact]
+    public Task OrdinaryVoicedBarksWaitThePresetGapAndPlayTheirClipOnlyOnTheImmediatePath() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var old = (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted);
+        var provider = CoreAudio.PlayStoppableProvider;
+        var clip = Path.GetTempFileName();
+        var played = new List<string>();
+        CoreAudio.PlayStoppableProvider = (path, _, _, _, _) => { played.Add(path); return () => { }; };
+        (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted) = (80, false, false);
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            var delays = CaptureDelays(tube);
+            var clock = new Clock(); tube.SpeechClock = clock;
+            var speech = new ConditioningControlPanel.Services.Bark.BarkSpeech("voiced", clip, false, null, false);
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Speak(speech, tube);
+            Assert.Equal(clip, Assert.Single(played));
+            tube.EndSpeechBubble();
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Speak(speech with { Text = "next" }, tube);
+            Assert.Single(delays); // GigglePriority would have replaced immediately
+            Assert.Single(played);
+            delays[0].Fire();
+            Assert.Equal("next", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+            Assert.Single(played); // WPF deliberately drops the clip on a delayed preset
+        }
+        finally
+        {
+            tube.Close(); CoreAudio.PlayStoppableProvider = provider;
+            (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted) = old;
+            File.Delete(clip);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task IdleBeatUsesTheSliderAndStopsOnTheRegisteredPanicPathAndClose() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var old = (s.AvatarEnabled, s.IdleGiggleIntervalSeconds, s.CompanionSpeaksIdleWhenEngineOff);
+        s.AvatarEnabled = true; s.IdleGiggleIntervalSeconds = 180; s.CompanionSpeaksIdleWhenEngineOff = false;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            var tube = shell.Tube!;
+            Assert.True(tube.IdleTimerRunning);
+            Assert.Equal(System.TimeSpan.FromSeconds(180), tube.IdleInterval);
+            s.IdleGiggleIntervalSeconds = 240;
+            tube.IdleTick();
+            Assert.Equal(System.TimeSpan.FromSeconds(240), tube.IdleInterval);
+            Assert.False(AvatarTubeWindow.ShouldVoice(true));
+            Assert.True(AvatarTubeWindow.ShouldVoice(false));
+            s.CompanionSpeaksIdleWhenEngineOff = true;
+            Assert.True(AvatarTubeWindow.ShouldVoice(true));
+            PanicSurfaces.All.Single(x => x.Id == "tube-speech").Stop(shell);
+            Assert.False(tube.IdleTimerRunning);
+            tube.IdleTick();
+            Assert.False(tube.IsSpeaking);
+            tube.RestartIdleTimer();
+            tube.Close();
+            Assert.False(tube.IdleTimerRunning);
+        }
+        finally
+        {
+            shell.Close();
+            (s.AvatarEnabled, s.IdleGiggleIntervalSeconds, s.CompanionSpeaksIdleWhenEngineOff) = old;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PanicClearsTheQueueSoNothingSpeaksAfterIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();

@@ -14,9 +14,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// source has no producer on this head (no trigger loop), so it is not here.</summary>
         internal enum SpeechSource { Preset, AI }
 
-        // WPF Speech.cs:35: a QUEUED line carries text only - its clip is dropped, as WPF ("audio is
-        // still text-only on this delayed path", Speech.cs:283).
-        private readonly Queue<string> _speechQueue = new();
+        // WPF's delayed preset drops its clip, but keeps the unprompted flag for the voice hold.
+        private readonly Queue<(string Text, bool Unprompted)> _speechQueue = new();
         private DateTime _lastSpeechEndTime = DateTime.MinValue;
         private SpeechSource _lastSpeechSource = SpeechSource.Preset;
         private int _lastSpeechLength;
@@ -83,8 +82,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>WPF ShowSpeechBySource for a Preset: the giggle cue on every fifth.</summary>
-        private void ShowQueuedPreset(string text) =>
-            ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+        private void ShowQueuedPreset((string Text, bool Unprompted) next) =>
+            ShowSpeech(next.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: next.Unprompted);
 
         /// <summary>WPF GigglePriority / PanicSilence: drop every waiting line and the pending gap.</summary>
         private void ClearSpeechQueue()

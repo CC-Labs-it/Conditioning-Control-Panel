@@ -44,6 +44,42 @@ public sealed class BubbleCountSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void BarkOutcomesFireOnSuccessOrFinalFailureButNotOnARetryOrAfterPanic() => With(true, true, true, () =>
+    {
+        var host = new Host();
+        var clock = new FakeClock();
+        var game = new BubbleCountScheduler(host, clock, () => new[] { "clip.mp4" });
+        var done = 0; var failed = 0;
+        game.GameCompleted += () => done++;
+        game.GameFailed += () => failed++;
+        game.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        game.OnComplete(false);
+        Assert.Equal(0, failed); // a retry has not released the interaction
+        game.OnComplete(true);
+        Assert.Equal(1, done);
+        game.OnComplete(true);
+        Assert.Equal(1, done);
+        game.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        game.OnComplete(false);
+        game.OnComplete(false);
+        game.OnComplete(false);
+        Assert.Equal(0, failed); // mercy message still owns the screen
+        host.Messages[^1].Then();
+        Assert.Equal(1, failed);
+        game.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        game.OnComplete(false); game.OnComplete(false); game.OnComplete(false);
+        var pendingMercy = host.Messages[^1].Then;
+        game.Stop();
+        game.ForceCleanup(); // the engine panic path follows Stop with surface cleanup
+        pendingMercy();
+        game.OnComplete(false);
+        Assert.Equal(1, failed);
+    });
+
+    [Fact]
     public void Rules_match_wpf()
     {
         Assert.Equal(360, BubbleCountScheduler.NextIntervalSeconds(100, 0.5));    // clamped to 10/h
