@@ -581,9 +581,11 @@ namespace ConditioningControlPanel.Avalonia
                     // MainWindow OnLevelUp -> sync, ProfileSyncService.AttachXpNudge outside sessions).
                     var sync = Platform.AccountSeed.Sync = new SyncPush(
                         () => Achievements?.Progress?.UnlockedAchievements, () => Sessions?.IsRunning == true,
-                        sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe)
+                        sanitizeCosmetics: Views.Windows.MainShellWindow.SanitizeOwnWardrobe,
+                        progress: () => Achievements?.Progress, quests: () => Quests, saveProgress: () => Achievements?.Save(), dayLog: () => FeatureDayLog)
                         { Countdown = DescentCountdown };
                     CoreProgression.AddXPProvider = ProgressionBank.Add;
+                    ProgressionBank.Claimed += OnWebXpClaimed;
                     ProgressionBank.LevelUp += level => sync.PushAsync($"level-up {level}");
                     ProgressionBank.Awarded += (amount, source) =>
                     {

@@ -24,7 +24,9 @@ namespace ConditioningControlPanel.Services
     public sealed class SyncPush
     {
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
-            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
+            | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements | SyncBody.Field.AllowDiscordDm
+            | SyncBody.Field.ShowOnlineStatus | SyncBody.Field.ShareProfilePicture | SyncBody.Field.PublicShareAvatar
+            | SyncBody.Field.GoonShareAvatar | SyncBody.Field.GoonShareDm;
         /// <summary>Sent only once a sync response this session carried the server's skill_points and unlocked_skills and
         /// they were adopted (MergeMax / union): a fresh install never pushes its defaults before it has read them.</summary>
         public const SyncBody.Field AfterAdopt = SyncBody.Field.UnlockedSkills | SyncBody.Field.SkillPoints;
@@ -43,6 +45,13 @@ namespace ConditioningControlPanel.Services
         private int _nudgePending;
         private readonly Func<ProfileCosmetics?, ProfileCosmetics>? _sanitizeCosmetics;
         private volatile bool _pendingCosmeticsClear;
+        private readonly Func<AchievementProgress?>? _progress;
+        private readonly Func<QuestService?>? _quests;
+        private readonly Action? _saveProgress;
+        private readonly HashSet<string> _knownStats = new(StringComparer.Ordinal);
+        private bool _knownCompanions, _knownMinutes;
+        private SyncBody.Field _questAcks;
+        private readonly Func<FeatureDayLogService?>? _dayLog;
         private volatile bool _adopted;   // WPF _hasLoadedProfile for the skills and the empty-loadout send
 
         /// <summary>A response this session carried the server's skills and they were adopted.</summary>
@@ -86,8 +95,10 @@ namespace ConditioningControlPanel.Services
         /// <param name="handler">Test seam; null is the real network.</param>
         /// <param name="sanitizeCosmetics">The head's SanitizeOwn (registry + your unlocks); null never sends cosmetics.</param>
         public SyncPush(Func<IEnumerable<string>?> localAchievements, Func<bool> inSession, HttpMessageHandler? handler = null,
-            Func<ProfileCosmetics?, ProfileCosmetics>? sanitizeCosmetics = null)
+            Func<ProfileCosmetics?, ProfileCosmetics>? sanitizeCosmetics = null,
+            Func<AchievementProgress?>? progress = null, Func<QuestService?>? quests = null, Action? saveProgress = null, Func<FeatureDayLogService?>? dayLog = null)
         {
+            (_progress, _quests, _saveProgress, _dayLog) = (progress, quests, saveProgress, dayLog);
             (_localAchievements, _inSession, _handler, _sanitizeCosmetics) = (localAchievements, inSession, handler, sanitizeCosmetics);
             _http = V2AuthService.Configure(new HttpClient(handler ?? new ServerClockHandler()));   // learns the server clock (release/6.11.5)
         }
@@ -105,6 +116,9 @@ namespace ConditioningControlPanel.Services
             StopHeartbeat();
             Loaded = false;
             _adopted = false;
+            _knownStats.Clear();
+            _questAcks = SyncBody.Field.None;
+            _knownCompanions = _knownMinutes = false;
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
             LastSyncTime = null;
@@ -125,6 +139,12 @@ namespace ConditioningControlPanel.Services
                     | (adopted ? AfterAdopt : SyncBody.Field.None)
                     | (adopted && s.PendingSkillsResetAck ? SyncBody.Field.ForceSkillsReset : SyncBody.Field.None)
                     | (s.LastWebXpClaimId == null ? SyncBody.Field.None : SyncBody.Field.WebXpClaimAck),
+            AllowDiscordDm = s.AllowDiscordDm,
+            ShowOnlineStatus = s.ShowOnlineStatus,
+            ShareProfilePicture = s.ShareProfilePicture,
+            PublicShareAvatar = s.PublicShareRealAvatar,
+            GoonShareAvatar = s.GoonShareAvatar,
+            GoonShareDm = s.GoonShareDiscordDm,
             WebXpClaimAck = s.LastWebXpClaimId,
             UnlockedSkills = s.UnlockedSkills?.ToList() ?? new List<string>(),
             SkillPoints = s.SkillPoints,
@@ -187,7 +207,16 @@ namespace ConditioningControlPanel.Services
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
-                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, _adopted));
+                _dayLog?.Invoke()?.Flush();
+                var payload = Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, _adopted);
+                var stats = CloudSyncProgress.Body(s, _progress?.Invoke(), _quests?.Invoke()?.Progress);
+                payload.Stats = stats.Where(kv => _knownStats.Contains(kv.Key)).ToDictionary(kv => kv.Key, kv => kv.Value);
+                if (_dayLog?.Invoke() is { } log) payload.Stats["feature_day_log"] = log.BuildWirePayload(400);
+                payload.Known |= _questAcks;
+                if (payload.Stats.Count > 0) payload.Known |= SyncBody.Field.Stats;
+                if (_knownCompanions) { payload.Known |= SyncBody.Field.CompanionProgress; payload.CompanionProgress = s.CompanionProgressData; }
+                if (_knownMinutes) { payload.Known |= SyncBody.Field.TotalConditioningMinutes; payload.TotalConditioningMinutes = s.TotalConditioningMinutes; }
+                var body = JsonConvert.SerializeObject(payload);
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -243,9 +272,32 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    CloudSyncProgress.QuestFlags(s, reply, _quests?.Invoke());
                     if (AdoptFromResponse(s, reply)) _adopted = true;
-                    ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     ClaimWebXp(s, reply);
+                    var previousStats = CloudSyncProgress.Body(s, _progress?.Invoke(), null);
+                    var previousMinutes = s.TotalConditioningMinutes;
+                    CloudSyncProgress.Adopt(s, reply, _progress?.Invoke(), _quests?.Invoke());
+                    if (previousMinutes != s.TotalConditioningMinutes || !JToken.DeepEquals(JObject.FromObject(previousStats),
+                        JObject.FromObject(CloudSyncProgress.Body(s, _progress?.Invoke(), null))))
+                        _dayLog?.Invoke()?.Rebaseline("v2 cloud merge");
+                    ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
+                    if (_quests?.Invoke() != null)
+                    {
+                        if (reply["reset_daily_quest"] != null) _questAcks |= SyncBody.Field.ResetDailyQuest;
+                        if (reply["reset_weekly_quest"] != null) _questAcks |= SyncBody.Field.ResetWeeklyQuest;
+                        if (reply["force_streak_override"] != null) _questAcks |= SyncBody.Field.ForceStreakOverride;
+                    }
+                    if (reply["user"]?["stats"] is JObject cloudStats) _knownStats.UnionWith(cloudStats.Properties().Select(p => p.Name));
+                    _knownCompanions |= reply["companion_progress"] is JObject;
+                    _knownMinutes |= reply["total_conditioning_minutes"]?.Type is JTokenType.Float or JTokenType.Integer;
+                    if (reply["user"]?["achievements"] is JArray earned)
+                    {
+                        _serverAchievements = (_serverAchievements ?? Array.Empty<string>()).Union(earned.Values<string>().OfType<string>()).ToArray();
+                        if (_progress?.Invoke() is { } progress)
+                            foreach (var a in _serverAchievements) if (!progress.IsUnlocked(a)) progress.Unlock(a);
+                    }
+                    _saveProgress?.Invoke();
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
                     Descent.DescentMigrationAck.Apply(s, reply);

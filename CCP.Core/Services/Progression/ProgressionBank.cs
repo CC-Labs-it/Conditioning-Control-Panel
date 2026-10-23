@@ -21,6 +21,9 @@ namespace ConditioningControlPanel
         /// <summary>Amount and source after the award (WPF XPAwarded; the sync nudge listens).</summary>
         public static event Action<double, string>? Awarded;
 
+        /// <summary>A settled web claim, for the head's one-time explanatory toast.</summary>
+        public static event Action<double>? Claimed;
+
         public static void Add(double amount, string source)
         {
             var s = CoreSettings.Current;
@@ -49,7 +52,7 @@ namespace ConditioningControlPanel
         }
 
         /// <summary>WPF ProgressionService.AddClaimedXP: web XP the server already earned - the login gate and the level
-        /// loop, no multipliers, no companion share. ponytail: no first-claim toast (AnnounceFirstWebXpClaim).</summary>
+        /// loop, no multipliers, no companion share.</summary>
         public static void AddClaimed(double amount)
         {
             var s = CoreSettings.Current;
@@ -62,6 +65,8 @@ namespace ConditioningControlPanel
             s.PlayerXP += amount;
             Log.Information("Web XP claim applied: +{Amount} (now {Now})", amount, s.PlayerXP);
             SpendAndRaise(s, amount, null);   // not Awarded: WPF counts no quest for it (AddClaimedXP has no TrackXPEarned)
+            try { Claimed?.Invoke(amount); }
+            catch (Exception ex) { Log.Warning(ex, "Web XP notice failed to show"); }
         }
 
         private static void SpendAndRaise(Models.AppSettings s, double amount, string? source)

@@ -26,7 +26,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public sealed class LoginAchievementOfferTests
+public sealed partial class LoginAchievementOfferTests
 {
     private static Task Run(Func<MainShellWindow, AppSettings, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {

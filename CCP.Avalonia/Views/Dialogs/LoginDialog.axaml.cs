@@ -794,6 +794,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             {
                 ProgressionClear.Apply(CoreSettings.Current);
                 App.Achievements?.Reset();
+                App.Quests?.ResetProgress(generateQuests: false);
                 AccountSeed.Sync?.Reset();
             }
         }

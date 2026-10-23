@@ -153,6 +153,7 @@ internal static class AccountSeed
         var s = CoreSettings.Current;
         var id = s.UnifiedId;
         if (s.OfflineMode || string.IsNullOrEmpty(id)) return false;
+        App.Quests?.EnsureOwnedBy(id);
         var user = await v2.GetUserProfileAsync(id);
         if (user == null)
         {
@@ -172,6 +173,7 @@ internal static class AccountSeed
             sync.StartHeartbeat();
             await sync.PushAsync("after load");
         }
+        App.Quests?.CheckAndGenerateQuests();
         return true;
     }
 
@@ -202,6 +204,7 @@ internal static class AccountSeed
         Patreon?.Logout();
         Discord?.Logout();
         SubscribeStar?.Logout();
+        if (!accountDeleted) App.Quests?.StampOwner(CoreAccount.UnifiedUserId ?? CoreSettings.Current.UnifiedId);
         CoreAccount.UnifiedUserId = null;
         var s = CoreSettings.Current;
         s.UnifiedId = null;

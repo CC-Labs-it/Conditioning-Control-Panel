@@ -7,34 +7,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// <summary>
     /// The Profile tab's "Privacy &amp; Sharing" body, ported from the WPF head.
     ///
-    /// Presence and achievement sharing switches are wired (WirePresence / WireAchievementSharing). The rest: the refusal STANDS - but not for the reason first written. The
-    /// original note blamed MainWindow being a <c>System.Windows.Window</c>; that is stale. Every
-    /// flag those toggles write (PublicShareRealAvatar,
-    /// GoonShareAvatar, GoonShareDiscordDm, GoonRichPresence, ...) is on <c>CoreSettings.Current</c>
-    /// today, so the SETTINGS half is trivially reachable.
-    ///
-    /// ponytail: what actually blocks it is that the settings half is not the whole handler, and on
-    /// a consent surface the missing half is the one that matters. Read
-    /// ConditioningControlPanel/MainWindow/MainWindow.Patreon.cs:855-925 and
-    /// MainWindow.AccountShell.cs:279-300:
-    ///  - <c>ChkPublicShareRealAvatar</c>, <c>ChkGoonShareAvatar</c> and <c>ChkGoonShareDiscordDm</c>
-    ///    each PUSH to the server on change (<c>App.ProfileSync.SyncProfileAsync</c>), precisely so a
-    ///    REVOKE lands before the next duel instead of waiting for a scheduled sync. Writing the
-    ///    local flag alone gives a knob that reads "not shared" over an avatar the server still
-    ///    holds - a consent gate degraded into a label.
-    ///  - <c>ChkDiscordRichPresence</c> refuses to arm at all unless
-    ///    <c>Current.HasLinkedDiscord</c>, and snaps itself back when it does. That gate is a
-    ///    settings read and IS portable; it is listed here only so the next pass wires it with the
-    ///    push, not without.
-    ///    (Now wired: <c>WirePresence</c>, with ChkDiscordTabShowLevel.)
-    ///  - <c>ChkAllowDiscordDm</c> also needs the profile push.
-    /// The unblocking symbol is a profile-sync seam in CCP.Core (an equivalent of
-    /// ConditioningControlPanel/Services/Profile/ProfileSyncService.cs), not a host. Until then the
-    /// toggles render and animate and persist nothing, which is visibly inert rather than quietly
-    /// wrong. The x:Names are preserved, so each handler is a few lines once that seam exists.
-    ///
-    /// NOTE the x:Name hazard if you wire this: the ctor uses <c>AvaloniaXamlLoader.Load</c>, so the
-    /// generated fields are null. Switch to <c>InitializeComponent()</c> or use <c>FindControl</c>.
+    /// Local choices are painted before handlers attach. Avatar/DM/online consent changes use the
+    /// existing profile push, as WPF MainWindow.Patreon.cs:910-985; each flag stays independent.
     /// </summary>
     public partial class ProfilePrivacyPanel : UserControl
     {
@@ -44,6 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             DataContext = new ProfilePrivacyPanelViewModel();
             WirePresence();
             WireAchievementSharing();
+            WireCloudPrivacy();
         }
 
         // WPF ChkShareAchievements_Changed (MainWindow.Patreon.cs:884): this choice is local,
@@ -60,6 +35,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 CoreSettings.Save();
             };
             AttachedToVisualTree += (_, _) => sharing.IsChecked = CoreSettings.Current.DiscordShareAchievements;
+        }
+
+        private bool _paintingPrivacy;
+
+        private void WireCloudPrivacy()
+        {
+            var s = CoreSettings.Current;
+            var paint = new System.Collections.Generic.List<System.Action>();
+            void Bind(string name, System.Func<bool> get, System.Action<bool> set, bool cloud = true)
+            {
+                if (this.FindControl<CheckBox>(name) is not { } box) return;
+                paint.Add(() => box.IsChecked = get());
+                box.IsChecked = get();
+                box.IsCheckedChanged += async (_, _) =>
+                {
+                    if (_paintingPrivacy || get() == (box.IsChecked == true)) return;
+                    set(box.IsChecked == true);
+                    CoreSettings.Save();
+                    if (cloud && Platform.AccountSeed.Sync is { } sync)
+                    {
+                        // WPF's sync cooldown still applies; preserve the change until the next allowed push.
+                        if (!await sync.PushAsync("privacy")) sync.Nudge("privacy");
+                    }
+                };
+            }
+            Bind("ChkDiscordTabAllowDm", () => s.AllowDiscordDm, v => s.AllowDiscordDm = v);
+            Bind("ChkDiscordTabShowOnline", () => s.ShowOnlineStatus, v => s.ShowOnlineStatus = v);
+            Bind("ChkDiscordTabSharePfp", () => s.ShareProfilePicture, v => s.ShareProfilePicture = v);
+            Bind("ChkPublicShareRealAvatar", () => s.PublicShareRealAvatar, v => s.PublicShareRealAvatar = v);
+            Bind("ChkGoonShareAvatar", () => s.GoonShareAvatar, v => s.GoonShareAvatar = v);
+            Bind("ChkGoonShareDiscordDm", () => s.GoonShareDiscordDm, v => s.GoonShareDiscordDm = v);
+            Bind("ChkGoonRichPresence", () => s.GoonRichPresence, v => s.GoonRichPresence = v, cloud: false);
+            Bind("ChkDiscordTabShareLevelUps", () => s.DiscordShareLevelUps, v => s.DiscordShareLevelUps = v, cloud: false);
+            AttachedToVisualTree += (_, _) =>
+            {
+                _paintingPrivacy = true;
+                try { foreach (var refresh in paint) refresh(); }
+                finally { _paintingPrivacy = false; }
+            };
         }
 
         private bool _paintingPresence;

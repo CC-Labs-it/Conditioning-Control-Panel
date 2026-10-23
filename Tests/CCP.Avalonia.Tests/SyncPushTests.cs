@@ -23,7 +23,8 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed partial class AccountSeedTests
 {
-    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements" };
+    private static readonly string[] Allowed = { "unified_id", "xp", "level", "descent_epoch", "achievements",
+        "allow_discord_dm", "show_online_status", "share_profile_picture", "public_share_avatar", "goon_share_avatar", "goon_share_dm" };
 
     /// <summary>Records every request with its body; profile GET answers <see cref="Profile"/> (500 when null).</summary>
     private sealed class SyncWire : HttpMessageHandler
@@ -136,9 +137,11 @@ public sealed partial class AccountSeedTests
 
         var body = Assert.Single(wire.Syncs);
         Assert.All(body.Properties(), p => Assert.Contains(p.Name, Allowed));
-        foreach (var k in new[] { "stats", "allow_discord_dm", "public_share_avatar", "web_xp_claim_ack", "install_date",
+        foreach (var k in new[] { "stats", "web_xp_claim_ack", "install_date",
                      "reset_weekly_quest", "reset_daily_quest", "force_streak_override", "force_skills_reset", "cosmetics" })
             Assert.Null(body[k]);
+        Assert.Equal(CoreSettings.Current.AllowDiscordDm, (bool)body["allow_discord_dm"]!);
+        Assert.Equal(CoreSettings.Current.PublicShareRealAvatar, (bool)body["public_share_avatar"]!);
         Assert.Equal("u1", (string?)body["unified_id"]);
         Assert.True((int)body["xp"]! >= L40Xp, $"xp {body["xp"]} < {L40Xp}");
         Assert.Equal(40, (int)body["level"]!);
