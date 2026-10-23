@@ -21,6 +21,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
 using IconKind = FluentIcons.Common.Symbol;
+using IconVariant = FluentIcons.Common.IconVariant;
 
 namespace CCP.Avalonia.Tests;
 
@@ -167,6 +168,7 @@ public sealed class ModCreatorFinishTests
             var a = buttons[^2]; var b = buttons[^1];
             Click(a); Assert.Equal(IconKind.Stop, ((IconGlyph)a.Content!).Kind);
             Click(a); Assert.Equal(1, stops);
+            var g = (IconGlyph)a.Content!; Assert.Equal((IconKind.Play, IconVariant.Filled, 12d), (g.Kind, g.Variant, g.Size));
             Click(a); Click(b); Assert.Equal(2, stops);
             finished[1](); Dispatcher.UIThread.RunJobs();
             Assert.Equal(IconKind.Stop, ((IconGlyph)b.Content!).Kind);

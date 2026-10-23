@@ -1346,7 +1346,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static void SetPreviewButton(Button button, bool playing)
         {
-            button.Content = new IconGlyph { Kind = playing ? IconKind.Stop : IconKind.Play, Size = 10 };
+            // Swap Kind only, so each button keeps its own Variant/Size (voice line + audio slot are Filled, 12).
+            if (button.Content is IconGlyph glyph) glyph.Kind = playing ? IconKind.Stop : IconKind.Play;
+            else button.Content = new IconGlyph { Kind = playing ? IconKind.Stop : IconKind.Play, Variant = IconVariant.Filled, Size = 12 };
             button.Foreground = new SolidColorBrush(playing ? Color.FromRgb(255, 100, 100) : Color.FromRgb(100, 200, 100));
             ToolTip.SetTip(button, playing ? "Stop preview" : "Play preview");
             AutomationProperties.SetName(button, playing ? "Stop preview" : "Play preview");
