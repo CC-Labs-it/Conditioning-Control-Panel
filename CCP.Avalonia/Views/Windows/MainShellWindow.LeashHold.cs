@@ -7,9 +7,8 @@
 // while the key is down (a repeat by LeashHoldToCut.RepeatGap), and each tick ends the hold unless the key
 // is physically down (XQueryKeymap), so a lost key-up never asks. Windows has real repeats and no clock.
 // Like WPF, it works with the panic key switched off and under Lockdown (panic always works on a leash).
-// ponytail: no tick sound (WPF LeashFx.Tick; no leash sfx on this head yet); the GlobalShortcuts portal
-// path reports no key-up, so a native-Wayland-only press cannot hold; the Yes does not close a punish
-// window (WPF LeashPunishWindow.CloseNow; lands with leash-punish).
+// The portal supplies Activated/Deactivated instead of physical X11 key state. Its existing effects-only
+// binding policy stays intact; a hold that started while bound keeps the session until release.
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -28,6 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly LeashHoldFlow _leashHold = new();
         private DispatcherTimer? _leashHoldClock;
+        private bool _leashHoldFromPortal;
 
         private static bool LeashHoldLeashed
         {
@@ -38,7 +38,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _leashHoldClock = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _leashHoldClock.Tick += (_, _) => LeashHoldClockTick();
-            Action released = () => Dispatcher.UIThread.Post(LeashHoldReleased);
+            // XWayland synthesizes releases when native Wayland focus takes over. Only the portal's
+            // Deactivated can end a portal hold; its compositor may also have rebound the key.
+            Action released = () => Dispatcher.UIThread.Post(() => { if (!_leashHoldFromPortal) LeashHoldReleased(); });
             X11PanicKey.PanicReleased = released;
             Action<int, string?> winDown = (vk, _) => { if (vk != 0 && vk == Win32PanicKey.BoundVirtualKey) Dispatcher.UIThread.Post(LeashHoldPressed); };
             Action<int, string?> winUp = (vk, _) => { if (vk != 0 && vk == Win32PanicKey.BoundVirtualKey) released(); };
@@ -62,21 +64,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The held clock (250 ms): the key is still down. Off the leash, the hold ends (WPF :49-53).</summary>
         internal void LeashHoldClockTick()
         {
-            if (!_leashHold.Held || !LeashHoldLeashed || LeashHoldKeyDown() == false) { LeashHoldReleased(); return; }
+            if (!_leashHold.Held || !LeashHoldLeashed || (!_leashHoldFromPortal && LeashHoldKeyDown() == false)) { LeashHoldReleased(); return; }
             ApplyLeashHold(_leashHold.Down(LeashHoldTime.GetUtcNow().UtcDateTime, true));
         }
 
         /// <summary>The panic key came up: the hold ends, the ring goes, nothing is asked or cut.</summary>
         internal void LeashHoldReleased()
         {
+            _leashHoldFromPortal = false;
             _leashHoldClock?.Stop();
             ApplyLeashHold(_leashHold.Up());
         }
+
+        internal void OnPortalPanicPressed()
+        {
+            HandlePanicKeyPress(DateTime.Now);
+            _leashHoldFromPortal = true;
+            LeashHoldPressed();
+        }
+
+        internal void OnPortalPanicReleased() => LeashHoldReleased();
 
         private void ApplyLeashHold(LeashHoldStep step)
         {
             if (step.Dismiss) LeashHoldRing.Dismiss();
             if (step.Ring is { } held) LeashHoldRing.ShowHeld(held);
+            if (step.Tick != null) LeashSound.Tick(LeashHoldTime.GetUtcNow().UtcDateTime);
             if (step.Ask) AskToCutFromHold();
         }
 
@@ -86,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             string? holder = null;
             try { holder = LeashHead.Service?.Snapshot.Me?.Holder.Name; } catch { }
             Serilog.Log.Information("Leash: panic key held 5 s, asking to cut");
-            LeashCutConfirmWindow.Ask(holder, () => _ = CutLeashAsync());   // the gate's cut path (leash-punish renamed CutFromLeashGateAsync)
+            LeashCutConfirmWindow.Ask(holder, () => _ = CutLeashAsync());   // EndTask closes the punish window before the cut
         }
     }
 }

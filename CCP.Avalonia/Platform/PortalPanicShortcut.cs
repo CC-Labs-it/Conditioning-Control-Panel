@@ -8,7 +8,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>
 /// The panic key for NATIVE Wayland windows: org.freedesktop.portal.GlobalShortcuts (CreateSession,
-/// BindShortcuts, Activated), raw over Tmds.DBus.Protocol like the tray probe. X11 focus is
+/// BindShortcuts, Activated/Deactivated), raw over Tmds.DBus.Protocol like the tray probe. X11 focus is
 /// <see cref="X11PanicKey"/>'s job; this covers the rest.
 ///
 /// <para><b>Unlike the X11 listener this CONSUMES the key desktop-wide</b> - it is a compositor
@@ -22,7 +22,10 @@ internal static class PortalPanicShortcut
     private const string Iface = "org.freedesktop.portal.GlobalShortcuts", Id = "panic";
 
     private static string? _session;
-    private static IDisposable? _activated;
+    private static IDisposable? _activated, _deactivated;
+    private static Action? _onReleased;
+    private static volatile bool _held;
+    internal static bool IsHeld => _held;
     private static DBusConnection? _bus;
 
     internal static bool IsBound => !string.IsNullOrEmpty(_session);
@@ -31,9 +34,10 @@ internal static class PortalPanicShortcut
     /// "panic" shortcut. <paramref name="onActivated"/> runs on a D-Bus thread. Returns the trigger
     /// the compositor actually assigned (the user may have changed it; "" if it did not say), or
     /// null when the portal is absent, the user refused, or anything failed - never throws.</summary>
-    internal static async Task<string?> BindAsync(string key, string description, Action onActivated)
+    internal static async Task<string?> BindAsync(string key, string description, Action onActivated, Action onDeactivated)
     {
         if (!OperatingSystem.IsLinux() || _session != null) return null;
+        _onReleased = onDeactivated;
         _session = "";   // claimed: a second caller while this one waits gets null, not a second session
         try
         {
@@ -60,7 +64,18 @@ internal static class PortalPanicShortcut
                 (Message m, object? _) => { var r = m.GetBodyReader(); return (r.ReadObjectPathAsString(), r.ReadString()); },
                 (Exception? ex, (string Session, string Id) a, object? _, object? _) =>
                 {
-                    if (ex == null && a.Session == session && a.Id == Id) onActivated();
+                    if (ex == null) Route(a.Session, a.Id, true, onActivated, onDeactivated);
+                    else Release();
+                },
+                null, null, false, ObserverFlags.None);
+
+            _deactivated = await bus.AddMatchAsync(
+                new MatchRule { Type = MessageType.Signal, Interface = Iface, Member = "Deactivated", Path = DesktopPath },
+                (Message m, object? _) => { var r = m.GetBodyReader(); return (r.ReadObjectPathAsString(), r.ReadString()); },
+                (Exception? ex, (string Session, string Id) a, object? _, object? _) =>
+                {
+                    if (ex == null) Route(a.Session, a.Id, false, onActivated, onDeactivated);
+                    else Release();
                 },
                 null, null, false, ObserverFlags.None);
 
@@ -95,6 +110,27 @@ internal static class PortalPanicShortcut
             Log.Warning("Panic key: GlobalShortcuts portal unavailable ({Why}); native Wayland windows rely on the tray", why);
             return null;
         }
+    }
+
+    // Ignore other sessions/shortcuts and duplicate activations: one physical press is one panic.
+    internal static bool Route(string session, string id, bool pressed, Action down, Action up)
+    {
+        if (string.IsNullOrEmpty(_session) || session != _session || id != Id) return false;
+        if (pressed)
+        {
+            if (_held) return true;
+            _held = true;
+            down();
+        }
+        else if (_held) { _held = false; up(); }
+        return true;
+    }
+
+    private static void Release()
+    {
+        var held = _held;
+        _held = false;
+        if (held) _onReleased?.Invoke();
     }
 
     /// <summary>`--portal-check`: CreateSession, expect Response 0 with a session_handle, then
@@ -168,6 +204,10 @@ internal static class PortalPanicShortcut
         if (session == "") session = null;
         _activated?.Dispose();
         _activated = null;
+        _deactivated?.Dispose();
+        _deactivated = null;
+        Release();
+        _onReleased = null;
         var bus = _bus;
         _bus = null;
         if (bus == null) return;
