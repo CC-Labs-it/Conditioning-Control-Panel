@@ -22,6 +22,7 @@ public partial class App
             catch (Exception ex) { Serilog.Log.Warning(ex, "Session quest credit failed"); }
         };
         // Raised only after the relay's gate and execution succeed, including quiet verbs.
+        // Differs from WPF (RemoteControlService.cs:657-659), which credits refused commands too.
         relay.CommandReceived += (_, _) =>
         {
             try { Quests?.TrackRemoteCommand(); }
