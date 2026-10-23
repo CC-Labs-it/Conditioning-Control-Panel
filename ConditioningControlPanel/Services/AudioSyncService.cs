@@ -85,10 +85,27 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// The video length the page reported in its audioSyncVideoDetected message, or null
+        /// when it sent none (0, null for NaN/Infinity, missing). Pure (#1475).
+        /// </summary>
+        internal static TimeSpan? ParseReportedDuration(string? message)
+        {
+            if (string.IsNullOrEmpty(message)) return null;
+            var m = System.Text.RegularExpressions.Regex.Match(message, "\"duration\":([0-9]+(?:\\.[0-9]+)?)");
+            if (!m.Success) return null;
+            if (!double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+                return null;
+            // Ignore nonsense: nothing, or past a day (a live stream reports huge values).
+            if (seconds <= 0 || seconds > 86400) return null;
+            return TimeSpan.FromSeconds(seconds);
+        }
+
+        /// <summary>
         /// Called when a video URL is detected in WebView2
         /// Starts the download and analysis process
         /// </summary>
-        public async Task OnVideoDetectedAsync(string videoUrl)
+        public async Task OnVideoDetectedAsync(string videoUrl, TimeSpan? duration = null)
         {
             if (!_settings.Enabled || !_hapticService.IsConnected)
             {
@@ -124,7 +141,7 @@ namespace ConditioningControlPanel.Services
                 _chunkManager.ChunkLoadingStarted += OnChunkLoadingStarted;
 
                 // Initialize and start first chunk
-                _chunkManager.Initialize(videoUrl);
+                _chunkManager.Initialize(videoUrl, duration);
                 await _chunkManager.StartFirstChunkAsync();
 
                 // Wait for first chunk to be ready (with timeout)

@@ -94,6 +94,10 @@ jobs:
       # Core/session roots, so it must keep its own testhost and process-global App state.
       - name: Test Avalonia catalogue startup fallback
         run: dotnet test Tests/CCP.Avalonia.CatalogueStartup.Tests/CCP.Avalonia.CatalogueStartup.Tests.csproj -c Release
+      # One real desktop startup + shutdown over a copied WPF profile (synthetic fixture in CI;
+      # CCP_MIGRATION_PROFILE runs a real profile locally only). Own testhost: UserData is per process.
+      - name: Test Avalonia settings migration
+        run: dotnet test Tests/CCP.Avalonia.Migration.Tests/CCP.Avalonia.Migration.Tests.csproj -c Release
       # CCP.Avalonia.Tests (sharded, one testhost per shard) runs in the avalonia-linux matrix job below.
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release
@@ -179,6 +183,10 @@ jobs:
         run: dotnet test Tests/CCP.Avalonia.Language.Tests/CCP.Avalonia.Language.Tests.csproj -c Release
       - name: Test Avalonia catalogue startup fallback
         run: dotnet test Tests/CCP.Avalonia.CatalogueStartup.Tests/CCP.Avalonia.CatalogueStartup.Tests.csproj -c Release
+      # One real desktop startup + shutdown over a copied WPF profile (synthetic fixture in CI;
+      # CCP_MIGRATION_PROFILE runs a real profile locally only). Own testhost: UserData is per process.
+      - name: Test Avalonia settings migration
+        run: dotnet test Tests/CCP.Avalonia.Migration.Tests/CCP.Avalonia.Migration.Tests.csproj -c Release
       # CCP.Avalonia.Tests (sharded, one testhost per shard) runs in the avalonia-windows matrix job below.
       - name: Test Avalonia scheduler gesture
         run: dotnet test Tests/CCP.Avalonia.Scheduler.Tests/CCP.Avalonia.Scheduler.Tests.csproj -c Release

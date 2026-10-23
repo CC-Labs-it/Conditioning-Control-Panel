@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
@@ -102,8 +106,7 @@ internal sealed class KnockCard : Window
         DockPanel.SetDock(clock, Dock.Right);
 
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        // ponytail: initials only, like the drawer; WPF LandingChrome.Avatar also fetched the proxy picture.
-        top.Children.Add(FriendsDrawer.Avatar(item.FromName, 28, null));
+        top.Children.Add(BuildAvatar(item.FromName, item.FromAvatarUrl, 28));
         var words = new StackPanel { Margin = new Thickness(8, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center };
         var head = new DockPanel();
         head.Children.Add(clock);
@@ -156,6 +159,7 @@ internal sealed class KnockCard : Window
         NotNowButton.Click += (_, _) => Fold(KnockOutcome.NotNow);
         buttons.Children.Add(NotNowButton);
         stack.Children.Add(buttons);
+        foreach (var b in new[] { GoButton, NotNowButton, LaterButton }) if (b != null) HoverLift(b);
 
         _card = new Border
         {
@@ -174,6 +178,58 @@ internal sealed class KnockCard : Window
         PointerExited += (_, _) => { _hovered = false; ApplyTuck(); };
         SizeChanged += (_, _) => Restack();
         UpdateCountdown(now);
+    }
+
+    /// <summary>Fetches a proxy picture's bytes; tests swap it (no network).</summary>
+    internal static Func<string, Task<byte[]>> FetchPicture { get; set; } = url => Http.GetByteArrayAsync(url);
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+
+    /// <summary>The proxy picture laid over the initials once it loads; null while it has not (or never will).</summary>
+    internal Ellipse? AvatarFace { get; private set; }
+
+    /// <summary>WPF LandingChrome.Avatar :35: initials on lilac, the server picture over them when it loads.
+    /// Only a first-party proxy path ("/...") is fetched; anything else keeps the initials.</summary>
+    private Control BuildAvatar(string name, string? avatarPath, double size)
+    {
+        var grid = new Grid { Width = size, Height = size };
+        grid.Children.Add(FriendsDrawer.Avatar(name, size, null));
+        if (string.IsNullOrEmpty(avatarPath) || !avatarPath.StartsWith('/')) return grid;
+        var face = new Ellipse { Width = size, Height = size, Opacity = 0 };
+        grid.Children.Add(face);
+        _ = LoadFace(face, ProviderSubscription.ProxyBaseUrl + avatarPath, (int)Math.Ceiling(size * 2));
+        return grid;
+    }
+
+    private async Task LoadFace(Ellipse face, string url, int width)
+    {
+        try
+        {
+            var bytes = await FetchPicture(url);
+            using var ms = new System.IO.MemoryStream(bytes);
+            face.Fill = new ImageBrush(Bitmap.DecodeToWidth(ms, width)) { Stretch = Stretch.UniformToFill };
+            face.Opacity = 1;
+            AvatarFace = face;
+        }
+        catch (Exception ex) { Log.Debug("[Friends] avatar load: {E}", ex.Message); }
+    }
+
+    /// <summary>WPF MotionFx.HoverLift (MakeButton :210): 1.02 over 150 ms quad-out, snapped at Motion Off.</summary>
+    private static void HoverLift(Button b)
+    {
+        var scale = new ScaleTransform(1, 1);
+        b.RenderTransform = scale;   // Avalonia's origin is already the centre (WPF set 0.5,0.5)
+        void Lift(bool on)
+        {
+            var d = TimeSpan.FromMilliseconds(AmbientFxCanvas.Env.Level == MotionLevel.Off ? 0 : 150);
+            scale.Transitions = d == TimeSpan.Zero ? null : new Transitions
+            {
+                new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = d, Easing = new QuadraticEaseOut() },
+                new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = d, Easing = new QuadraticEaseOut() },
+            };
+            scale.ScaleX = scale.ScaleY = on ? 1.02 : 1;
+        }
+        b.PointerEntered += (_, _) => Lift(true);
+        b.PointerExited += (_, _) => Lift(false);
     }
 
     private static Bitmap? Picture(string resourcePath)

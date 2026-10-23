@@ -48,8 +48,10 @@ namespace ConditioningControlPanel
         public enum AdvanceTrigger { Manual, OnButtonClick, OnTextEquals, OnSelectionEquals, OnSliderAtLeast, OnEvent }
 
         /// <summary>
-        /// One card's worth of tour, as data. A SNAPSHOT: the head may project a fresh instance on
-        /// every read, so compare steps by <see cref="CurrentStepIndex"/>, never by reference.
+        /// One card's worth of tour, as data. A SNAPSHOT: a head may project a fresh instance on
+        /// every read, so compare by <see cref="CurrentStepIndex"/> unless that head caches one
+        /// instance per step. The Avalonia head does (<c>TutorialHead.Project</c>), and its overlay
+        /// relies on that for its reference checks.
         /// </summary>
         public sealed class Step
         {
