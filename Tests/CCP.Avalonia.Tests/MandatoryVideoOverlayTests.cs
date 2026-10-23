@@ -234,7 +234,7 @@ public sealed class MandatoryVideoOverlayTests
                     w.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, "");
                     Assert.True(o.GracePaused && resume.IsFocused, "paused, Resume focused");
                     clock.Step(1);
-                    s.PanicKey = Key.Enter.ToString();
+                    s.PanicKey = "Enter";   // stored by its alias: Avalonia prints Key.Enter as "Return"
                     w.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
                     s.PanicKey = "F12";
                     Assert.False(v.IsPlaying, "panic key Enter stops the clip instead of resuming");

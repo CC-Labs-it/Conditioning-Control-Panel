@@ -80,13 +80,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 _faceSource = desk;
                 if (desk != null) desk.FaceChanged += OnFaceChanged;
             }
-            _miniFace.Text = desk?.Face ?? RestFace;
+            _miniFace.Text = desk?.Face ?? ConditioningControlPanel.Services.EmiDesk.EmiChains.RestFace;
         }
 
         private void OnFaceChanged(object? sender, string face) => _miniFace.Text = face;
-
-        /// <summary>EmiChains.RestFace.</summary>
-        private const string RestFace = "0_0";
 
         private void OnChipClick(object? sender, RoutedEventArgs e)
         {

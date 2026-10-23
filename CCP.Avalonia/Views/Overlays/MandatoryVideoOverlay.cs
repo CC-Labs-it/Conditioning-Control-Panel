@@ -267,13 +267,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var s = CoreSettings.Current;
                 var live = s.PanicKeyEnabled && PanicListenerLive();
-                if (MandatoryVideoScheduler.GraceKey(strict, e.Key.ToString(), s.PanicKeyEnabled, s.PanicKey, live) is { } fromPanic
+                var panicKey = HotkeyNames.Canonical(s.PanicKey);   // "Enter" prints as "Return"
+                if (MandatoryVideoScheduler.GraceKey(strict, e.Key.ToString(), s.PanicKeyEnabled, panicKey, live) is { } fromPanic
                     && TryGracePause(fromPanic))
                 {
                     e.Handled = true;
                     return;
                 }
-                switch (MandatoryVideoScheduler.KeyAction(strict, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt), s.PanicKeyEnabled, s.PanicKey,
+                switch (MandatoryVideoScheduler.KeyAction(strict, e.Key.ToString(), e.KeyModifiers.HasFlag(KeyModifiers.Alt), s.PanicKeyEnabled, panicKey,
                     s.PanicKeyEnabled && PanicListenerLive()))
                 {
                     case VideoKeyAction.Dismiss: e.Handled = true; Scheduler.End(); break;
@@ -287,7 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.AddHandler(InputElement.KeyDownEvent, (_, e) =>
             {
                 var s = CoreSettings.Current;
-                if (!s.PanicKeyEnabled || e.Key.ToString() != s.PanicKey) return;
+                if (!s.PanicKeyEnabled || !HotkeyNames.Matches(e.Key, s.PanicKey)) return;
                 OnKey(e);
                 e.Handled = true;
             }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);

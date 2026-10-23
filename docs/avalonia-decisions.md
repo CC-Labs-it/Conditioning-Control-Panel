@@ -1110,14 +1110,15 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `MainShellWindow.UiUpdates.cs`. With B, every day CCP was open would read 0 minutes and be charged as idle on the
   user's real lock, which WPF never does. Switch to B in the same lane that ports the tracker.
 - Test: `ChasterMinutesTests.IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource` (fail-proven: wiring B turns it red).
+
 ## 2026-10-13: Hybrid remote gate: Windows jobs on GitHub, Linux half local (avalonia-port/ci-hybrid-gate)
 - Question: every rgate run took ~15 GitHub jobs (5 Linux + 5 Windows Avalonia shards, core-linux, core-guards, coverage),
   so two lanes gating at once exhausted the Free plan's 20-job pool. How do lane gates free that pool?
 - Options: (A) keep every gate fully remote; (B) gate fully locally again; (C) hybrid: GitHub runs only what Linux cannot
   (the Windows jobs) and the Linux half runs locally (`bin/gate`, already the CI-equivalent Linux gate) in parallel.
 - Choice: C (advised by: user + main session). `build.yml` gains a `workflow_dispatch` input `scope` (all | windows, default
-  all). With `scope=windows` every ubuntu job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is skipped;
-  `windows`, `avalonia-windows` and the Windows coverage entry always run (coverage keeps `!cancelled()`, so a skipped
+  all). With `scope=windows` every Linux-side job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is
+  skipped; `windows`, `avalonia-windows` and the Windows coverage entry (itself on `ubuntu-latest`) always run (coverage keeps `!cancelled()`, so a skipped
   avalonia-linux does not skip it). Push and pull_request runs have no inputs, so they stay full. `bin/rgate` dispatches
   `scope=windows` when it sees the input; `RGATE_FULL=1` forces the old all-remote run.
 - Choice (chaster-minutes): A, because the input WPF relies on was missing here: the day log's minutes come from
@@ -1201,6 +1202,69 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
 
+## 2026-10-13: push-triggered port workflows skip cloud-* and gate-* branches (avalonia-port/ci-skip-cloud)
+- Question: the GitHub Free plan shares 20 concurrent jobs between rgate (build.yml dispatched on `avalonia-port/gate-*`),
+  PR CI and push-triggered workflows. Each push of a throwaway `avalonia-port/cloud-*` (Claude cloud session) branch
+  also starts distro-check, reference-render (3 jobs) and snapshot-lock, ~5 jobs nobody reads. rgate's `gate-*` snapshot
+  commits already carry `[skip ci]`, so for them the exclusion is only a second safeguard.
+  Should those workflows keep running on them?
+- Options: (A) keep `branches: ['avalonia-port/**']`; (B) exclude both prefixes with negative patterns in the same list;
+  (C) drop the push trigger and run them only by hand.
+- Choice: B: `['avalonia-port/**', '!avalonia-port/cloud-**', '!avalonia-port/gate-**']` in distro-check.yml,
+  reference-render.yml and snapshot-lock.yml. `workflow_dispatch` stays. Cloud branches are reviewed locally and re-pushed
+  as normal `avalonia-port/<slug>` PR branches, which still get the full push CI. rgate only dispatches build.yml
+  (`gh workflow run build.yml --ref avalonia-port/gate-...`) and never waits on these push runs.
+- Constraint: `cloud-` and `gate-` are reserved prefixes. A real lane slug must not start with either, or its pushes
+  silently lose distro-check, reference-render and snapshot-lock.
+- Advised: main session.
+## 2026-10-22: One Core bark engine: main's BarkEngine + BarkHead, companion-barks' second engine dropped (main-sync #7 merge)
+- Question: the main-sync #7 tip (`avalonia-port/main-20261015-compat`) already carries a Core `BarkEngine` hosted by
+  `CCP.Avalonia/Platform/BarkHead.cs` (companion lane, b0aa1083e/8485a6665/661745d7a). Lane companion-barks added a different,
+  API-incompatible `BarkEngine` at the same path plus `Views/AvatarTube/BarkHost.cs`, also started from App startup: two engines
+  would double-fire every bark.
+- Options: A) keep main's engine + BarkHead, drop ours, re-point our callers; B) keep ours, delete main's (breaks CompanionCore,
+  CoreBark, CompanionBarkHeadTests); C) merge both engines in one sync (too large for a merge).
+- Choice: A, advised by the supervisor. The bouncing-text triggers now raise on `BarkHead.Engine`; the panic `barks` surface
+  (a P06 floor hold WPF does not have) is dropped, main's ladder-mode `Raise("Panic")` stays; `BarkRuleLoader` stays in the WPF head.
+- Behaviour WPF has and this engine lacks goes to follow-up lane companion-barks-b (listed with WPF lines in the parity row
+  `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
+  barks queued through Giggle. Lane barks-wpf gets the same rule.
+## 2026-10-14: final verification moves to alpha/beta testers; proposed goal-text replacement
+- Question (user decision, 2026-10-14): final verification is done by alpha/beta testers. Done means the Avalonia app
+  runs and looks/works the same as WPF or better. Do the goal's phase 4 and done criteria still fit?
+- Finding: no. Two parts assume we verify every row ourselves:
+  - Phase 4 ends with "one side-by-side verification pass at the end, area by area" (Keincheck run + WPF side-by-side
+    per row), and its live batches cover all native surfaces (web views, games, overlays, tray, hotkeys, audio/video).
+  - Done criterion 1 needs every ledger row "verified" or "improved" with linked evidence. Our standing rule is that
+    agents never mark rows verified, so this criterion can only be met by testers, and the goal cannot end on our side.
+- Options: (A) keep the text, run the full agent side-by-side pass anyway (weeks of live runs, duplicates the testers);
+  (B) agents bring every row to "wired" or better with test/render evidence, testers set "verified"; agent live checks
+  stay only for safety surfaces; (C) drop live checks entirely (rejected: user said keep panic/lockdown).
+- Choice: B (advised by: user decision; supervisor drafted the text). Until the goal text is changed, lanes prioritise
+  stub -> wired and the release phases (settings migration test, Linux package, installer switch, WPF retirement) over
+  live-check batches. Live panic/lockdown/stop/lock checks continue, batched by area. Live-queue files
+  (`~/ccp-port/evidence/live-queue/<area>.md`) become the tester checklist.
+- Proposed replacement for "### 4. Verify on Linux" (whole section):
+  > ### 4. Verify
+  > Verification policy:
+  > - Per branch: build, tests and the headless render-all check only. No per-branch live Keincheck run.
+  > - Agent live Keincheck checks only for safety surfaces (panic, lockdown, stop and lock paths), batched by area.
+  >   They must pass before the shipping switch.
+  > - Final verification is done by alpha/beta testers. For each area the agents keep a tester checklist
+  >   (docs/avalonia-test-plan.md, built from the live-queue files and ledger rows: what to open, what to click, what
+  >   WPF does) and turn tester reports into ledger fixes. Only tester reports (or the safety checks above) move a row
+  >   to "verified".
+  > - Where performance matters, add a repeatable measurement: startup to the first interactive window, tab-switch
+  >   latency, memory after warm-up.
+- Proposed replacement for "## Done criteria (all required)", first bullet:
+  > - Every ledger row is "wired", "verified" or "improved", with linked evidence (tests, headless render, or a WPF
+  >   side-by-side render for visual rows). No "missing", "stub" or "blocked" rows remain. "Verified" comes from
+  >   tester reports, not from agents.
+- Proposed new done-criterion bullets (added after the first):
+  > - The live safety checks (panic, lockdown, stop and lock paths) pass on the Linux build that ships.
+  > - docs/avalonia-test-plan.md lists every area with tester steps and the WPF behaviour to compare against.
+- Unchanged: performance, settings-migration test, Linux package, Windows installer ships Avalonia only, WPF kept as
+  compiling reference, CI green, stack PR rules, decisions log.
 ## 2026-10-14: The user's max video length also ends app-started web videos (avalonia-port/video-max-cap-links)
 - Bug BUG-7NAKK79CZ2 (= WPF ccp-bugs #1438): a 25-minute web video played under a 20m 3s "Duration filter" max. Every
   mandatory-video path already armed the cap; the uncapped path was the browser web-video takeover (autonomy WebVideo, AI
