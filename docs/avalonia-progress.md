@@ -2823,3 +2823,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-companion-keyword-triggers: +159
 - Keyword drawer reveal: 24px header alignment and a two-cycle pink pulse on the shared beat (Motion Off suppresses it, detach clears it); tests click the real Awareness link, scroll + pulse fail-proven.
 - Row stays stub and names follow-up lane -b (OCR interval push, highlight overlay, service lifecycle); shell row left to its lane.
+
+## avalonia-port/wire-win-emi-options: +251
+- Emi options panel folds on Windows via non-consuming WH_MOUSE_LL/WH_KEYBOARD_LL hooks (WPF parity); X11 keeps the 30 ms poll; 3 fail-proven tests.
+- Duplicate win-emi-options ledger row collapsed (stays stub).
