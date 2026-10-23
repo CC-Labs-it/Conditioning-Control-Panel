@@ -1779,6 +1779,40 @@ The rig's head attachment is `head_attach` under `EMI_root`; a hand-held prop us
 
 Runtime manifest rows: none until a selected mesh is exported and measured. Added runtime triangles: 0. Added runtime `texBytes`: 0.
 
+## W4 hazard skins: pawn stamp and Keep portcullis
+
+Two meshopt GLBs, metres, Y up, -Z forward, origin at base centre. Every visible mesh
+is under the single child `move` of hazard_root. Translate move along local Y to drop
+or lift the entire hazard. No physics, clips, bones or warning timing are baked in.
+
+The pawn stamp is 9.55 m tall and fits its 6 x 6 m footprint. It retains the approved
+project pawn sculpt with a legal LOD reduction and white tint. It is not a new sculpt.
+The original iron portcullis grille is 14 m wide, 8 m tall, with attached rails, rivets
+and pointed lower teeth. The Keep dressing arch is a separate static asset.
+
+Footprint KTX2s are linear R masks, clamp both axes, full mips, ETC1S. The circular pawn
+decal maps to 6 x 6 m; the grille border maps to 14 x 3 m. Host supplies colour,
+warn/move/hold/clear states, fade and Gentle Visuals behavior. Load one texture tier.
+
+| Mask | Desktop texBytes | Phone texBytes |
+|---|---:|---:|
+| hazard-pawn-footprint | 1398100 | 21844 |
+| hazard-keep-footprint | 349532 | 5468 |
+
+Conservative decoded RGBA8 including mips: desktop 1,747,632 bytes; phone 27,312 bytes.
+After W3, the phone catalog with one menu backdrop reaches 127.915356 MiB before Keep
+replacement, below 128 MiB. Render targets and browser staging are excluded. No texture
+bytes are added by either mesh. Original procedural masks, no third-party pixels or text.
+
+Packed and decoded GLBs pass Khronos validation; complete move ancestry, finite geometry,
+nondegenerate triangles and fresh Blender import verified. Decoded mask and final front,
+three-quarter, low rear and diagnostic views inspected. Runtime integration is not tested.
+Sources, native masters, checks and contact sheets stay in C:/Projects/glassroad-art/hazards/.
+
+| Model | Tris | Draws | boundRadiusM | texBytes |
+|---|---:|---:|---:|---:|
+| hazard-keep-portcullis | 2214 | 3 | 10.584 | 0 |
+| hazard-pawn-stamp | 3560 | 1 | 9.552 | 0 |
 ## W4 unlockable umbrella glide props
 
 Six original umbrella alternatives follow the W3 concept family: Threshold porcelain and rose panels with a pawn; Boudoir satin scallops and bow; The Keep iron/velvet with a padlock; Mainframe smoked octagonal panels; Quarantine saline dome and capsule; Switchboard ivory panels and brass ribs. Each model is a standalone meshopt GLB in metres, +Y up, forward -Z, with no textures, skin, bones, morphs or animation clips. `kind: "glide"`, `variant: "umbrella"`, `unlock: true`.
