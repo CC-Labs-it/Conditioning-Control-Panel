@@ -36,8 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    <c>RenderProof.Rendering</c>, where it draws the in-memory state and writes nothing.
     ///    Still sample data: mantras and the codex (ChaosBoonPool / ChaosBubbleVariants are
     ///    run-engine, head-side). ponytail: <c>ChaosArt</c> returns
-    ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; unlock
-    ///    and capstone cards, ChaosSfx cues and lesson/script-locked row dressing are not ported.
+    ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the hub's
+    ///    ChaosSfx cues and lesson/script-locked row dressing are not ported. Unlock cards are
+    ///    (<see cref="ChaosUnlockCardLayer"/>).
     ///  - The four partials the WPF class spans (Bench / Reveals / Lessons / Debug) are NOT in
     ///    this layer. <c>BuildBench</c> is inlined here over Core <c>ChaosBench</c>; reveal
     ///    flashes, the lesson panel and the CCP_CHAOS_DEBUG strip are dropped, so pills and
@@ -99,6 +100,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private readonly Slider _sldShake, _sldEffect, _sldBackdropOpacity;
         private readonly ComboBox _cmbAccKey1, _cmbAccKey2;
 
+        /// <summary>The non-clickable unlock-card layer every purchase announces itself on.</summary>
+        internal ChaosUnlockCardLayer UnlockCards { get; }
+
         private T Part<T>(string name) where T : Control => this.FindControl<T>(name)
             ?? throw new InvalidOperationException($"ChaosHubWindow: no '{name}' in the XAML");
 
@@ -110,6 +114,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             AvaloniaXamlLoader.Load(this);
 
             _dollhouseView = Part<Grid>("DollhouseView");
+            UnlockCards = new ChaosUnlockCardLayer(Part<Grid>("UnlockCardLayer"));
+            Closed += (_, _) => UnlockCards.Stop();
             _menuView = Part<Grid>("MenuView");
             _menuLeftCol = Part<Grid>("MenuLeftCol");
             _panelImprove = Part<Grid>("PanelImprove");
@@ -627,19 +633,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         };
 
-        /// <summary>WPF xaml.cs:503. ponytail: the unlock card, reveal flashes and ChaosSfx cues
-        /// are head services not on this head yet; the purchase itself is real.</summary>
+        /// <summary>WPF xaml.cs:503. ponytail: reveal flashes are not on this head yet; the
+        /// purchase, its unlock card and the ui_denied cue are real.</summary>
         private void Buy_Click(object? sender, RoutedEventArgs e)
         {
             var id = (sender as Button)?.Tag?.ToString();
             if (string.IsNullOrEmpty(id)) return;
-            if (!ChaosMeta.TryPurchase(id!)) { Log.Debug("ChaosHub: train {Id} denied", id); return; }
+            if (!ChaosMeta.TryPurchase(id!)) { ChaosOverlayWindow.ChaosSfx.Play("ui_denied", 0.45f); return; }
             if (id == "extreme_tier") ApplyExtremeGate();
             BuildHabits();
             BuildLoadoutTiles();
             RefreshTopBar();
             RefreshStats();
             RevealService.Sync("purchase");
+            UnlockCards.Show(ChaosUnlockCardRules.ForHabit(id!));
         }
 
         private void HabitToggle_Click(object? sender, RoutedEventArgs e)
@@ -869,16 +876,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             AfterBoonChange();
         }
 
-        /// <summary>WPF xaml.cs:832/846 (unlock / deepen). ponytail: unlock + capstone cards and
-        /// ChaosSfx cues are head services not on this head yet.</summary>
+        /// <summary>WPF xaml.cs:832/846 (unlock / deepen): cards, ui_denied and ui_deepen cues.</summary>
         private void BoonUnlock_Click(object? sender, RoutedEventArgs e)
         {
-            if ((sender as Button)?.Tag is string id && ChaosMeta.TryUnlockBoon(id)) AfterBoonChange();
+            if ((sender as Button)?.Tag is not string id) return;
+            if (!ChaosMeta.TryUnlockBoon(id)) { ChaosOverlayWindow.ChaosSfx.Play("ui_denied", 0.45f); return; }
+            AfterBoonChange();
+            UnlockCards.Show(ChaosUnlockCardRules.ForBoonUnlock(id));   // after the unlock: reads auto-equip state
         }
 
         private void BoonUpgrade_Click(object? sender, RoutedEventArgs e)
         {
-            if ((sender as Button)?.Tag is string id && ChaosMeta.TryUpgradeBoon(id)) AfterBoonChange();
+            if ((sender as Button)?.Tag is not string id) return;
+            if (!ChaosMeta.TryUpgradeBoon(id)) { ChaosOverlayWindow.ChaosSfx.Play("ui_denied", 0.45f); return; }
+            AfterBoonChange();
+            // Only the final level gets a card (it stings itself); mid levels keep the quiet deepen cue.
+            var card = ChaosUnlockCardRules.ForUpgrade(id);
+            if (card != null) UnlockCards.Show(card);
+            else ChaosOverlayWindow.ChaosSfx.Play("ui_deepen", 0.5f);
         }
 
         /// <summary>WPF Bench.cs BenchBuy_Click: Core prices, gates, the gift and the save.</summary>
@@ -892,6 +907,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             BuildLoadoutTiles();
             RefreshTopBar();
             RefreshStats();
+            UnlockCards.Show(ChaosUnlockCardRules.ForBench(id));   // pockets only (WPF Bench.cs:234)
         }
 
         private void AfterBoonChange()

@@ -176,7 +176,8 @@ namespace ConditioningControlPanel.Services
         // handling was already shared here; the ADMISSION rule belongs here too, for the same
         // reason: a rule applied in only one of the two places is the bug all over again.
         //
-        // Pure and static so both call sites - and the tests - reach the same answer.
+        // Pure and static so both call sites - and the tests - reach the same answer. The rules
+        // themselves live in Core (CornerGifPlanner) so the Avalonia head reads the same answer.
 
         /// <summary>
         /// Does a session's corner overlay draw a SPIRAL? True when the template names no usable art
@@ -189,11 +190,7 @@ namespace ConditioningControlPanel.Services
         /// admission rule and the thing about to be drawn can never disagree.</para>
         /// </summary>
         internal static bool SessionCornerArtIsSpiral(string? cornerGifPath)
-        {
-            if (string.IsNullOrWhiteSpace(cornerGifPath)) return true;
-            try { return !File.Exists(cornerGifPath); }
-            catch { return true; }
-        }
+            => CornerGifPlanner.SessionCornerArtIsSpiral(cornerGifPath);
 
         /// <summary>
         /// May a SESSION (or a 28-day program day) raise its corner GIF right now?
@@ -223,10 +220,8 @@ namespace ConditioningControlPanel.Services
             bool artIsSpiral,
             bool userSpiralAllowed,
             bool spiralOverlayActive)
-            => templateEnabled
-               && userAllowed
-               && !standaloneOverlayActive
-               && (!artIsSpiral || (userSpiralAllowed && !spiralOverlayActive));
+            => CornerGifPlanner.AllowSessionCornerGif(templateEnabled, userAllowed, standaloneOverlayActive,
+                   artIsSpiral, userSpiralAllowed, spiralOverlayActive);
 
         /// <summary>
         /// May a STANDALONE corner-GIF slot realize right now? The mirror of
@@ -243,6 +238,6 @@ namespace ConditioningControlPanel.Services
         /// refreshes the slots when the engine starts and closes them when it stops.</para>
         /// </summary>
         internal static bool AllowStandaloneCornerGif(bool slotEnabled, bool sessionCornerGifActive, bool engineRunning)
-            => slotEnabled && engineRunning && !sessionCornerGifActive;
+            => engineRunning && CornerGifPlanner.AllowStandaloneCornerGif(slotEnabled, sessionCornerGifActive);
     }
 }
