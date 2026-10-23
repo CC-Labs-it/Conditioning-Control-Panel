@@ -220,6 +220,7 @@ async function boot() {
   const gateScreen = createGateScreen(document.body, { feel, photosafe, tier: renderer.tier });
   bus.on('gate-pass', (g) => { if (state === 'race' && !paused) gateScreen.play(g.params, 1); });
   const cam = createChaseCamera(feel, { bus });   // the kick layer hears the player's bumps and wall hits
+  if (BOT) globalThis.__glassroadCamera = cam.camera;   // dev capture: observe the real chase projection
   debug.backend = renderer.backend;
   debug.gpu = renderer.gpu;
   // the HUD item slot's orbit and roll shuffle (FXPOLISH lane)

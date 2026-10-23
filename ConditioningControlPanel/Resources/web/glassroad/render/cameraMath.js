@@ -14,10 +14,13 @@
  * leans far from world up) the rig blends into ROAD mode: eye behind and above the kart in its own smoothed
  * frame, camera up = the kart's smoothed up. The blend weight eases in and out, so the horizon follows the road
  * up through the loop with no roll snap, and stays level everywhere else.
+ * Screen framing: the eye keeps that smooth orbit, then its aim holds the actual racer centre below the
+ * middle of the viewport. A small eased airborne excursion preserves the hop. Shake and kicks follow it.
  */
 import { S, BOOST, RESPAWN } from '../sim/state.js';
 import { clamp, damp, angleDiff, qrotate, rad, smoothstep } from '../core/math.js';
 import { LOOK } from './look.js';
+import { RACER_FRAMING } from './framing.js';
 
 // ---- the kick layer (polish 3) ----
 
@@ -154,16 +157,39 @@ export function loopTarget(upY, magnet, L = LOOP_CAM) {
   return magnet ? 1 : smoothstep(L.upNone, L.upFull, upY);
 }
 
+/**
+ * Aim from an already composed eye so anchor projects to x=0.5 and screenY. The eye and road-up do not
+ * change. Rotating the centre ray upward by atan((2*y-1)*tan(vFov/2)) gives the requested vertical offset
+ * under perspective, including phone and boost FOV. `out` is the old look point and keeps its range.
+ */
+export function aimAtAnchor(out, eye, up, anchor, vFov, screenY = RACER_FRAMING.screenY) {
+  const ax = anchor[0] - eye[0], ay = anchor[1] - eye[1], az = anchor[2] - eye[2];
+  const distance = Math.hypot(ax, ay, az);
+  if (distance < 1e-6) return out;
+  const dx = ax / distance, dy = ay / distance, dz = az / distance;
+  let rx = dy * up[2] - dz * up[1], ry = dz * up[0] - dx * up[2], rz = dx * up[1] - dy * up[0];
+  const side = Math.hypot(rx, ry, rz);
+  if (side < 1e-6) return out; // a degenerate external pose keeps the previous finite aim
+  rx /= side; ry /= side; rz /= side;
+  const ux = ry * dz - rz * dy, uy = rz * dx - rx * dz, uz = rx * dy - ry * dx;
+  const beta = Math.atan((2 * screenY - 1) * Math.tan(vFov * DEG / 2)), c = Math.cos(beta), s = Math.sin(beta);
+  const reach = Math.max(1, Math.hypot(out[0] - eye[0], out[1] - eye[1], out[2] - eye[2]));
+  out[0] = eye[0] + (dx * c + ux * s) * reach;
+  out[1] = eye[1] + (dy * c + uy * s) * reach;
+  out[2] = eye[2] + (dz * c + uz * s) * reach;
+  return out;
+}
+
 /** @returns {CamRig} { eye, look, up, vFov, yaw, pitch, bias, update(kart, fx, dt, aspect), snap(kart, aspect) } */
 export function createCamRig(feel) {
   const rig = { eye: [0, 0, 0], look: [0, 0, -1], up: [0, 1, 0], vFov: 60, yaw: 0, pitch: 0, bias: 0,
     focus: [0, 0, 0], update, snap, hit, kick: null, watch: {}, useVel: true,
-    loop: 0, rf: [0, 0, -1], ru: [0, 1, 0] };
+    loop: 0, rf: [0, 0, -1], ru: [0, 1, 0], anchor: [0, 0, 0], airScreen: 0 };
   const KL = kickNumbers(LOOK);
   rig.kick = createKick(KL);
   /** A bus kick (camera.js): kind 'bump' | 'wall', mag = closing m/s, side +1 = the hit came from the right. */
   function hit(kind, mag, side) { return rig.kick.hit(kind, mag, side, !!feel.get('gentle.on')); }
-  const q = [0, 0, 0, 1], f = [0, 0, 0], u = [0, 1, 0], d = [0, 0, -1];
+  const q = [0, 0, 0, 1], f = [0, 0, 0], u = [0, 1, 0], d = [0, 0, -1], lastPosition = [0, 0, 0];
 
   function heading(kart) {
     q[0] = kart[S.quatX]; q[1] = kart[S.quatY]; q[2] = kart[S.quatZ]; q[3] = kart[S.quatW];
@@ -198,7 +224,7 @@ export function createCamRig(feel) {
     UU[0] = B[1] * R[2] - B[2] * R[1]; UU[1] = B[2] * R[0] - B[0] * R[2]; UU[2] = B[0] * R[1] - B[1] * R[0];       // back x right
   }
 
-  function compose(fx, aspect) {
+  function compose(kart, fx, aspect, dt = 0) {
     const c = (k) => feel.get('camera.' + k);
     // finish orbit: fx.orbit 0..1 of juice.finishOrbitDeg (a partial turn, under the fast yaw cap)
     const y = rig.yaw + (fx ? fx.orbit || 0 : 0) * feel.rad('juice.finishOrbitDeg'), cp = Math.cos(rig.pitch);
@@ -217,6 +243,8 @@ export function createCamRig(feel) {
       }
       const l = Math.hypot(up[0], up[1], up[2]) || 1; up[0] /= l; up[1] /= l; up[2] /= l;
     } else { up[0] = 0; up[1] = 1; up[2] = 0; }
+    const K = rig.kick.out;
+    rig.vFov = vFovForAspect(feel.get('fov.baseVDeg') + (fx ? fx.fovKick || 0 : 0) + K.fov, aspect);
     if (fx) {
       const push = fx.camPush || 0;
       if (push) {
@@ -224,6 +252,18 @@ export function createCamRig(feel) {
         const l = Math.hypot(ex, ey, ez) || 1;
         rig.eye[0] += ex / l * push; rig.eye[1] += ey / l * push; rig.eye[2] += ez / l * push;
       }
+    }
+    // Anchor the actual racer, not the lagging orbit focus. The kart's own up carries its centre through
+    // slopes and loops, while rig.up retains the existing smooth horizon. FOV/push are settled first.
+    const centre = RACER_FRAMING.centerUpM * RACER_FRAMING.scale, A = rig.anchor;
+    A[0] = kart[S.posX] + u[0] * centre; A[1] = kart[S.posY] + u[1] * centre; A[2] = kart[S.posZ] + u[2] * centre;
+    const lagUp = (kart[S.posX] - F[0]) * up[0] + (kart[S.posY] - F[1]) * up[1] + (kart[S.posZ] - F[2]) * up[2];
+    const anchorDistance = Math.max(0.5, Math.hypot(A[0] - rig.eye[0], A[1] - rig.eye[1], A[2] - rig.eye[2]));
+    const airTo = kart[S.airborne] > 0.5
+      ? clamp(-lagUp * 0.65 / (2 * anchorDistance * Math.tan(rig.vFov * DEG / 2)), -RACER_FRAMING.airScreenMax, RACER_FRAMING.airScreenMax) : 0;
+    rig.airScreen = damp(rig.airScreen, airTo, kart[S.airborne] > 0.5 ? 0.08 : 0.14, dt);
+    aimAtAnchor(rig.look, rig.eye, up, A, rig.vFov, RACER_FRAMING.screenY + rig.airScreen);
+    if (fx) {
       const sh = fx.shake;
       if (sh && (sh[0] || sh[1] || sh[2])) {
         // camera-local: x right, y up, z back (toward the eye)
@@ -235,7 +275,6 @@ export function createCamRig(feel) {
       }
     }
     // polish 3 kick: the eye takes the whole offset, the look point half (the view dips and leans a little)
-    const K = rig.kick.out;
     if (K.x || K.y || K.z) {
       basis();
       for (let i = 0; i < 2; i++) {
@@ -243,7 +282,6 @@ export function createCamRig(feel) {
         for (let k = 0; k < 3; k++) o[k] += (R[k] * K.x + UU[k] * K.y + B[k] * K.z) * s;
       }
     }
-    rig.vFov = vFovForAspect(feel.get('fov.baseVDeg') + (fx ? fx.fovKick || 0 : 0) + K.fov, aspect);
   }
 
   function update(kart, fx, dt, aspect, track = null) {
@@ -276,13 +314,18 @@ export function createCamRig(feel) {
     rig.loop = damp(rig.loop, lt, lt > rig.loop ? LOOP_CAM.inTcS : LOOP_CAM.outTcS, dt);
     if (rig.loop < 1e-3 && lt === 0) rig.loop = 0;
     easeFrame(1 - Math.exp(-dt / LOOP_CAM.frameTcS));
-    F[0] = damp(F[0] + kart[S.velX] * dt, px, tcH, dt);
-    F[2] = damp(F[2] + kart[S.velZ] * dt, pz, tcH, dt);
-    F[1] = damp(F[1] + kart[S.velY] * dt * rig.loop, py, tcV, dt);   // round the loop the height is predicted too
+    // Rescue moves the rendered pose while the sim reports zero velocity. Predict that displacement
+    // directly, keeping the existing eased error. Otherwise a fast pull overtakes the chase eye and
+    // the exact anchor aim swings backward. Ordinary driving and hops retain their velocity law.
+    const rescue = kart[S.respawnPhase] !== RESPAWN.NONE && kart[S.respawnPhase] !== RESPAWN.GRACE;
+    F[0] = damp(F[0] + (rescue ? px - lastPosition[0] : kart[S.velX] * dt), px, tcH, dt);
+    F[2] = damp(F[2] + (rescue ? pz - lastPosition[2] : kart[S.velZ] * dt), pz, tcH, dt);
+    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * dt * rig.loop), py, tcV, dt);
+    lastPosition[0] = px; lastPosition[1] = py; lastPosition[2] = pz;
     const gentle = !!feel.get('gentle.on');
     for (const [kind, mag, side] of kickEdges(rig.watch, kart, dt, KL, rig.useVel)) rig.kick.hit(kind, mag, side, gentle);
     rig.kick.update(dt, gentle);
-    compose(fx, aspect);
+    compose(kart, fx, aspect, dt);
     return rig;
   }
 
@@ -292,9 +335,11 @@ export function createCamRig(feel) {
     rig.loop = loopTarget(u[1], magnetAt(kart, track));
     easeFrame(1);
     rig.bias = 0;
+    rig.airScreen = 0;
     rig.kick.reset(); rig.watch = {};
     rig.focus[0] = kart[S.posX]; rig.focus[1] = kart[S.posY]; rig.focus[2] = kart[S.posZ];
-    compose(fx, aspect);
+    lastPosition[0] = kart[S.posX]; lastPosition[1] = kart[S.posY]; lastPosition[2] = kart[S.posZ];
+    compose(kart, fx, aspect);
     return rig;
   }
   return rig;

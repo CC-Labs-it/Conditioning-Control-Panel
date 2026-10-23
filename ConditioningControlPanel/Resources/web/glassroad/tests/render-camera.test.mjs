@@ -23,13 +23,14 @@ test('render: viewport law keeps the base fov at 16:9 and clamps a tall phone', 
   close(vFovForAspect(60, 390 / 844), 102);
 });
 
-test('render: snap puts the eye eyeBack behind and eyeUp above, looking lookAhead ahead', () => {
+test('render: snap keeps the eye offsets and look range when the racer aim is corrected', () => {
   const f = feel(), rig = createCamRig(f);
   rig.snap(kartAt(0), 16 / 9);
   close(rig.eye[2], f.get('camera.eyeBackM'));
   close(rig.eye[1], f.get('camera.eyeUpM'));
-  close(rig.look[2], -f.get('camera.lookAheadM'));
-  close(rig.look[1], f.get('camera.lookUpM'));
+  close(rig.look[0], 0);
+  close(Math.hypot(...rig.look.map((v, i) => v - rig.eye[i])),
+    Math.hypot(f.get('camera.eyeBackM') + f.get('camera.lookAheadM'), f.get('camera.eyeUpM') - f.get('camera.lookUpM')));
   close(rig.vFov, f.get('fov.baseVDeg'));
 });
 

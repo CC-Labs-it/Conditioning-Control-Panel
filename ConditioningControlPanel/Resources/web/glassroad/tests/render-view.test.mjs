@@ -5,6 +5,7 @@ import { createFeel } from '../core/feel.js';
 import { loadTrack } from '../track/load.js';
 import { KART_VIEW, scaledRadius, chaseFraming, nearCuePlan, basisMatrix, NEAR_LOOK } from '../render/viewMath.js';
 import { onLoop } from '../render/colossiMath.js';
+import { RACER_FRAMING } from '../render/framing.js';
 
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
 const feel = createFeel(feelJson);
@@ -13,9 +14,9 @@ const BEFORE = { eyeUpM: 1.5, eyeBackM: 4.1, lookAheadM: 9, lookUpM: 0.3 };   //
 const BEFORE_SCALE = 0.68;
 const ASPECTS = { desk: 16 / 9, portrait: 390 / 844, landscape: 844 / 390 };
 
-test('view: the owner framing brings the chase closer and lower while retaining the road ahead', () => {
+test('view: the reference framing keeps a close chase with a clear view over the racer', () => {
   assert.ok(cam.eyeBackM / BEFORE.eyeBackM >= 0.75 && cam.eyeBackM / BEFORE.eyeBackM <= 0.85, 'modestly closer');
-  assert.ok(cam.eyeUpM / BEFORE.eyeUpM >= 0.75 && cam.eyeUpM / BEFORE.eyeUpM <= 0.85, 'proportionately lower');
+  assert.ok(cam.eyeUpM >= 1.65 && cam.eyeUpM <= 2, 'eye high enough to see the road over the racer');
   assert.ok(cam.eyeBackM > KART_VIEW.modelRadiusM * KART_VIEW.scale * 4, 'eye stays well behind the vessel');
   assert.equal(cam.lookAheadM, BEFORE.lookAheadM, 'keep the same road focus');
   assert.equal(cam.lookUpM, BEFORE.lookUpM);
@@ -23,11 +24,10 @@ test('view: the owner framing brings the chase closer and lower while retaining 
 });
 
 test('view: EMI is more readable, with the complete rest model visible at desktop and phone ratios', () => {
-  const was = chaseFraming(BEFORE, 60, ASPECTS.desk, { scale: BEFORE_SCALE });
   const now = chaseFraming(cam, feel.get('fov.baseVDeg'), ASPECTS.desk);
   assert.ok(KART_VIEW.scale / BEFORE_SCALE >= 1.1 && KART_VIEW.scale / BEFORE_SCALE <= 1.2, 'modest whole-racer enlargement');
-  assert.ok(now.kartW >= was.kartW * 1.3 && now.kartW <= was.kartW * 1.5, 'readable screen width ' + now.kartW);
-  assert.ok(now.kartY > 0.6 && now.kartY < 0.72, 'player stays in the lower centre');
+  assert.ok(now.kartW >= 0.14 && now.kartW <= 0.18, 'readable screen width ' + now.kartW);
+  assert.ok(Math.abs(now.kartY - 0.6) < 1e-6, 'player centre matches the reference');
   assert.ok(now.horizonY < now.kartY - 0.17, 'road ahead between horizon and kart');
 
   // This shipped R4 mesh has identity mesh ancestors and float POSITION bounds. Project all eight
@@ -38,9 +38,10 @@ test('view: EMI is more readable, with the complete rest model visible at deskto
   positions.forEach((a) => assert.ok(a.componentType === 5126 && !a.normalized, 'use decoded float bounds'));
   const lo = [0, 1, 2].map((i) => Math.min(...positions.map((a) => a.min[i])));
   const hi = [0, 1, 2].map((i) => Math.max(...positions.map((a) => a.max[i])));
-  const pitch = Math.atan2(cam.eyeUpM - cam.lookUpM, cam.eyeBackM + cam.lookAheadM);
   for (const [name, a] of Object.entries({ ...ASPECTS, wide: 21 / 9 })) {
     const th = Math.tan(chaseFraming(cam, 60, a).vFov * Math.PI / 360);
+    const pitch = Math.atan2(cam.eyeUpM - KART_VIEW.modelUpM * KART_VIEW.scale, cam.eyeBackM)
+      - Math.atan((RACER_FRAMING.screenY * 2 - 1) * th);
     for (const x of [lo[0], hi[0]]) for (const y of [lo[1], hi[1]]) for (const z of [lo[2], hi[2]]) {
       const dy = y * KART_VIEW.scale - cam.eyeUpM, dz = cam.eyeBackM - z * KART_VIEW.scale;
       const depth = dz * Math.cos(pitch) - dy * Math.sin(pitch);
@@ -48,7 +49,7 @@ test('view: EMI is more readable, with the complete rest model visible at deskto
       const sx = 0.5 + x * KART_VIEW.scale / depth / th / a / 2, sy = 0.5 - up / depth / th / 2;
       assert.ok(depth > 2, name + ' clear of the near plane');
       assert.ok(sx > 0.25 && sx < 0.75, name + ' room beside the whole kart');
-      assert.ok(sy > 0.45 && sy < 0.92, name + ' whole kart visible with lower-frame margin: ' + sy);
+      assert.ok(sy > 0.35 && sy < 0.85, name + ' whole kart visible with lower-frame margin: ' + sy);
     }
   }
 });
@@ -58,7 +59,7 @@ test('view: phones keep the kart readable and inside the frame', () => {
     const f = chaseFraming(cam, feel.get('fov.baseVDeg'), a);
     assert.ok(f.kartW > 0.07 && f.kartW < 0.3, name + ' width ' + f.kartW);
     assert.ok(f.kartBottomY < 0.95, name + ' kart bottom inside the frame ' + f.kartBottomY);
-    assert.ok(f.horizonY > 0.25 && f.horizonY < 0.5, name + ' horizon ' + f.horizonY);
+    assert.ok(f.horizonY > 0.15 && f.horizonY < 0.5, name + ' horizon ' + f.horizonY);
   }
 });
 

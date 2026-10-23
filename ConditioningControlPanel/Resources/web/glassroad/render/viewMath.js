@@ -2,8 +2,8 @@
  * near roadside cue plan. Pure (no three.js, no DOM), so node tests read it.
  *
  * Owner follow-up (2026-10-23): bring the chase camera closer and make every racer slightly larger so EMI
- * reads clearly during play. The camera numbers live in
- * feel.json "camera"; the kart's world size lives here (KART_VIEW.scale, applied on every kart root by
+ * reads clearly during play, held below the middle to match the supplied reference. The camera distances
+ * live in feel.json "camera"; shared size and composition live in framing.js (KART_VIEW.scale, applied on every kart root by
  * render/karts.js, so the pose, sparks, wakes, skids, ring and aura all follow it). The sim's collision sizes
  * retain the accepted P6 values (feel.json contact.radiusM, sim/gaps.js kart.radiusM).
  *
@@ -14,6 +14,7 @@
 import { vFovForAspect } from './cameraMath.js';
 import { SPECTRUM_BASE, sectionKey } from './spectrum.js';
 import { onLoop } from './colossiMath.js';
+import { RACER_FRAMING } from './framing.js';
 
 /**
  * Kart look scale. modelRadiusM / modelUpM are conservative framing dimensions at scale 1, including
@@ -21,7 +22,7 @@ import { onLoop } from './colossiMath.js';
  * keepSprites: the name tag and head mark keep their world size (they are read at range), only their height
  * follows the kart.
  */
-export const KART_VIEW = Object.freeze({ scale: 0.78, modelRadiusM: 0.75, modelUpM: 0.62, keepSprites: true });
+export const KART_VIEW = Object.freeze({ scale: RACER_FRAMING.scale, modelRadiusM: 0.75, modelUpM: RACER_FRAMING.centerUpM, keepSprites: true });
 
 /** Collision radius that matches a visual radius change: the old radius times the scale, rounded to cm. */
 export const scaledRadius = (radiusM, scale = KART_VIEW.scale) => Math.round(radiusM * scale * 100) / 100;
@@ -33,8 +34,9 @@ export const scaledRadius = (radiusM, scale = KART_VIEW.scale) => Math.round(rad
  */
 export function chaseFraming(cam, baseVDeg, aspect, { scale = KART_VIEW.scale, radiusM = KART_VIEW.modelRadiusM, upM = KART_VIEW.modelUpM } = {}) {
   const vFov = vFovForAspect(baseVDeg, aspect), th = Math.tan(vFov * Math.PI / 360), tw = th * aspect;
-  // camera space: eye at (0, eyeUp, back) looking at (0, lookUp, -ahead); pitch about the X axis
-  const pitch = Math.atan2(cam.eyeUpM - cam.lookUpM, cam.eyeBackM + cam.lookAheadM);
+  // Aim above the visual centre by its screen offset, matching the moving chase rig's composition.
+  const pitch = Math.atan2(cam.eyeUpM - upM * scale, cam.eyeBackM)
+    - Math.atan((RACER_FRAMING.screenY * 2 - 1) * th);
   const proj = (y, z) => {
     // a point at height y, z metres ahead of the kart (negative = behind)
     const dy = y - cam.eyeUpM, dz = z + cam.eyeBackM;
