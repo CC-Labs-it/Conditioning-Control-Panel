@@ -80,11 +80,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             base.OnPropertyChanged(change);
             if (change.Property != IsVisibleProperty) return;
             if (!IsVisible || VisualRoot is null) { SyncIgnition(); StopSessionSheen(); return; }
+            _programFxSuppressed = false;
             var enrollment = AvApp.Programs?.ActiveEnrollment;
             var boundaryCrossed = _builtStale is { } built && enrollment != null &&
                                   built != IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
             if (_refreshPending || boundaryCrossed) RefreshPrograms();
             RefreshProgramSessionRow();
+            if (Find<StackPanel>("ProgramsRunPanel").IsVisible) StartRunEntrance();
             SyncIgnition();   // WPF :1661: clocks stop behind a hidden tab and re-arm on the way back
         }
 
@@ -99,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _refreshPending = false;
             SubscribePrograms();
 
+            var runWasVisible = Find<StackPanel>("ProgramsRunPanel").IsVisible;
             var svc = AvApp.Programs;
             var enrollment = svc?.ActiveEnrollment;
             var program = svc?.ActiveProgram;
@@ -147,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Find<Button>("BtnProgramDismissGraduated").IsEnabled = !readOnly;
                 // WPF :540: the edge glow is a sibling of the whole view; leaving the run parks it.
                 if (!run) { StopIgnitionLoops(); StopSessionSheen(); _ignitionEnrollment = null; }
+                if (run && !runWasVisible && IsVisible) StartRunEntrance();
             }
         }
 
@@ -291,6 +295,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     pip.IsCurrent = true;
                     pip.GlowBrush = glow;
                     pip.GlowVisible = true;
+                    pip.Breathe = _tier >= ConditioningControlPanel.Helpers.ProgramHeatTier.Warm;
                     tip = Loc.GetF(stale ? "programs_pip_last_saved" : "programs_pip_today", i);
                 }
                 else if (record?.DayCompleted == true)
@@ -325,6 +330,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     tip = Loc.GetF("programs_pip_locked", i);
                 }
 
+                pip.Ignite = _dayJustCompleted && i == enrollment.CurrentDay && AmbientFxCanvas.Env.AllowTransitions;
+                if (pip.Ignite) pip.IgniteBrush = MainShellWindow.ProgramRadialGlowBrush(accent, 220);
                 if (milestone) pip.NodeSize += 6;
                 pip.Tip = day != null && !string.IsNullOrWhiteSpace(day.Title) ? $"{tip} · {day.Title}" : tip;
                 pips.Add(pip);
@@ -332,6 +339,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             var rail = Find<Grid>("ProgramDayRail");
             Find<ItemsControl>("ProgramDayStrip").ItemsSource = pips;
+            QueuePipIgnition(pips);
             var railColumns = ((Grid)rail.Parent!).ColumnDefinitions;
             railColumns[0].MaxWidth = program.LengthDays <= 14 ? 840 : double.PositiveInfinity;
             railColumns[1].Width = program.LengthDays <= 14 ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
@@ -466,6 +474,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     item.BarVisible = true;
                 }
 
+                var seenKey = $"{RunKey(enrollment)}:{enrollment.CurrentDay}:{task.Id}";
+                if (complete) item.JustCompleted = _tasksSeenIncomplete.Remove(seenKey);
+                else _tasksSeenIncomplete.Add(seenKey);
+
                 var badge = isBlocked ? "programs_task_locked"
                     : task.OutsideSession ? "programs_task_outside_session"
                     : task.Optional ? "programs_task_optional" : null;
@@ -475,6 +487,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
 
             Find<ItemsControl>("TodayTaskList").ItemsSource = items;
+            QueueTaskCompletions(items);
             Find<TextBlock>("TxtTodayNoTasks").IsVisible = items.Count == 0;
             Find<TextBlock>("TxtRitualPrivacyNote").IsVisible = hasRitual;
             Find<Grid>("TaskArcGrid").ColumnDefinitions[0].MaxWidth = Math.Clamp(items.Count, 1, 3) * 370;

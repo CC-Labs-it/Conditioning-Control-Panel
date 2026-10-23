@@ -27,8 +27,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// the tab is visible and attached, Motion allows them and the shell is not minimised (WPF
     /// ProgramsFx.cs:818; focus loss only parks the particle canvas, which watches IsActive itself) (P01); all of them hang off one
     /// CancellationTokenSource, stopped on hide and on detach (P65). Display only: nothing is written.
-    /// ponytail: FireBurstAt sparks (task tick, seal, graduation), the rail-node ignite, today's pip
-    /// pulse, the banner spring have no Avalonia twin yet.
     /// </summary>
     public partial class ProgramsTabView
     {
@@ -100,6 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _momentCts?.Cancel();
             _momentCts?.Dispose();
             _momentCts = null;
+            FinishProgramMoments();
+            _programBurst.Stop();
         }
 
         private void OnFxWindowProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -113,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void SyncIgnition()
         {
             SyncSessionSheen();
+            if (!Env.AllowTransitions || Shell is { WindowState: WindowState.Minimized }) StopMoments();
             if (!IsVisible || VisualRoot is null) { StopIgnitionLoops(); StopMoments(); return; }
             if (_ignitionEnrollment != null && Find<StackPanel>("ProgramsRunPanel").IsVisible)
                 ApplyIgnition(_ignitionEnrollment);
@@ -123,6 +124,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var key = enrollment == null ? null : RunKey(enrollment);
             if (string.Equals(key, _runKeySeen, StringComparison.Ordinal)) return;
+            StopMoments();
+            _tasksSeenIncomplete.Clear();
+            _programFxSuppressed = false;
             _runKeySeen = key;
             _dayCompletePopped = _chapterSealed = _chapterBaselineRun = _graduationCelebrated = null;
         }
@@ -184,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             try
             {
+                if (_programFxSuppressed) return;
                 _ignitionEnrollment = enrollment;
                 var ambient = AmbientOn;
                 var accent = AccentNow;
@@ -207,6 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     panel.BorderBrush = _borderBrush;
                     panel.BorderThickness = new Thickness(2);
                 }
+                QueuePipBreathing();
                 if (!rearm) return;
 
                 // Clocks only exist when ambient motion is allowed; otherwise every surface below is static.
@@ -369,6 +375,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// the signature re-arms it on the next pass.</summary>
         private void StopIgnitionLoops()
         {
+            StopPipBreathing();
             _fxSignature = null;
             _cometAttempts = 0;
             _particles?.Stop();
@@ -400,6 +407,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF PlayProgramDayCompleteMoment: an accent wave across the band and the day's real XP.</summary>
         private void PlayDayCompleteMoment(ProgramDay? day)
         {
+            var banner = Find<Border>("TodayCompleteBanner");
+            PopScale(banner, 0.9, 0.35, 0.6);
+            QueueProgramBurst(banner, 90); // WPF EventFx.cs:412: theme colour, fixed count
             var wave = Find<Rectangle>("TodayWave");
             var xp = Find<TextBlock>("TxtTodayXpFloat");
             if (!Env.AllowTransitions || _waveBrush == null) { wave.Opacity = 0; xp.Opacity = 0; return; }
@@ -459,11 +469,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var token = (_momentCts ??= new CancellationTokenSource()).Token;
             _ = Run(Keys(SealSeconds, OpacityProperty, (0, 0.0), (0.22, 1.0), (1.15, 1.0), (SealSeconds, 0.0)), host, token,
                 () => { host.Opacity = 0; host.IsVisible = false; });
-            // WPF eases the landing with BackEase; per-keyframe easing is a KeySpline here, so linear segments.
-            var stamp = Keys(SealSeconds, ScaleTransform.ScaleXProperty, (0, 1.35), (0.3, 1.0), (SealSeconds, 1.06));
-            foreach (var (frame, value) in new[] { (0, 1.35), (1, 1.0), (2, 1.06) })
-                stamp.Children[frame].Setters.Add(new Setter(ScaleTransform.ScaleYProperty, value));
-            _ = Run(stamp, Find<StackPanel>("ProgramsSealStamp"), token);
+            var stamp = Find<StackPanel>("ProgramsSealStamp");
+            Moment(stamp, SealSeconds, t =>
+            {
+                var value = t <= 0.3 ? 1.35 - 0.35 * BackOut(t / 0.3, 0.5)
+                    : 1 + 0.06 * (t - 0.3) / (SealSeconds - 0.3);
+                SetScale(stamp, value);
+            }, () => SetScale(stamp, 1.06));
+            QueueProgramBurst(Find<Border>("ProgramsSealRing"), ProgramHeat.BurstCount(1), accent);
             Serilog.Log.Information("[FX] program chapter sealed: {Chapter}", chapter.Name);
         }
 
@@ -479,6 +492,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (already) return;
             _runAccentTarget = GraduationGold;
             FadeAccent(GraduationGold);
+            if (Env.AllowTransitions)
+                QueueProgramBurst(Find<Border>("ProgramsGraduatedCard"), ProgramHeat.BurstCount(1), GraduationGold);
             Serilog.Log.Information("[FX] program graduation celebrated");
         }
 

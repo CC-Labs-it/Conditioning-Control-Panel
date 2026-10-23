@@ -17,6 +17,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private const double Box = 560;
         private AmbientFxCanvas? _layer;
 
+        /// <summary>Cancel live sparks on hide, detach or panic.</summary>
+        internal void Stop() => _layer?.Stop();
+
         /// <summary>Bursts fired (test hook).</summary>
         internal int Count { get; private set; }
 

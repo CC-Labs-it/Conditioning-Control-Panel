@@ -187,13 +187,13 @@ public sealed class ProgramIgnitionTests
 
     private static SteppedTime _time = new();
 
-    private static void Step(double seconds)
+    internal static void Step(double seconds)
     {
         _time.Advance(TimeSpan.FromSeconds(seconds));
         BeatLoop.StepAll();
     }
 
-    private static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body) =>
+    internal static void WithRun(bool lastDay, Action<MainShellWindow, ProgramsTabView, ProgramService, ProgramDefinition> body) =>
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)

@@ -269,19 +269,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Today's node. Drives the node's size/colour treatment only.</summary>
         public bool IsCurrent { get; set; }
 
-        /// <summary>
-        /// Today's node AND motion allowed. On WPF a DataTrigger read this once to start the
-        /// breathing-glow storyboard; the storyboards are dropped on this head, so nothing reads it
-        /// yet - kept so the carrier still matches the original one for one.
-        /// </summary>
+        /// <summary>Today's node at Warm heat or above; the view also checks live motion gates.</summary>
         public bool Breathe { get; set; }
         public IBrush GlowBrush { get; set; } = Brushes.Transparent;
         public bool GlowVisible { get; set; }
 
-        /// <summary>
-        /// One-shot: this day just flipped to complete, so its node flares. Same story as
-        /// <see cref="Breathe"/> - the flare Ellipse is still in the template, unanimated.
-        /// </summary>
+        /// <summary>One-shot: this day just flipped to complete, so its node flares.</summary>
         public bool Ignite { get; set; }
 
         /// <summary>Fill of the ignite flare. The program accent as a radial, built in code.</summary>
@@ -351,8 +344,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public IBrush DoneChipForeground { get; set; } = Brushes.White;
 
         /// <summary>
-        /// True only on the rebuild immediately after the task flipped to complete. On WPF this
-        /// drove the card's pop storyboard, which is dropped here.
+        /// True only on the rebuild immediately after a task seen incomplete flips to complete.
+        /// Drives the card, done chip and spark burst together.
         /// </summary>
         public bool JustCompleted { get; set; }
 

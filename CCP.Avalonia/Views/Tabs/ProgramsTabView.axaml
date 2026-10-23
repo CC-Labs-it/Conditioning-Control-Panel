@@ -42,18 +42,8 @@
      WPF (Content = Loc.Get("btn_program_pause"/"..._resume")), and a Button Content string carrying
      a snake_case loc key is exactly trap 1, so the caption is a named TextBlock inside the button.
 
-     DROPPED, and the only real losses:
-       DataTemplate.Triggers + Storyboard  - the today-node breathing halo, the day-complete node
-         ignite and the task-card completion pop. WPF DataTriggers with BeginStoryboard have no
-         Avalonia equivalent worth hand-rolling from a template, and every one of them is
-         decoration on top of a state the static markup already shows (the halo Ellipse, the
-         ignite Ellipse and the done chip all still draw, they just do not animate).
-         ponytail: no node breathe / ignite / card pop, restore with Avalonia animations when the
-         program services move to Core and the run view is live.
-
-     The browse panel is the only visible state in this layer. It reads Core's BuiltInPrograms.All()
-     catalogue, lets the user select a definition for read-only details, and keeps all execution
-     panels hidden until the later enrollment/session layer supplies real state. -->
+     Template interactions and run entrances live in ProgramsTabView.Moments.cs on the shared beat.
+     The service selects browse, run, lapsed or graduated state through RefreshPrograms. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -577,9 +567,7 @@
                                                 <ColumnDefinition Width="0*"/>
                                                 <ColumnDefinition Width="1*"/>
                                             </Grid.ColumnDefinitions>
-                                            <!-- The grow-in entrance animation on this transform is
-                                                 dropped with the rest of the storyboards; it rests
-                                                 at 1, which is what it rested at on WPF too. -->
+                                            <!-- First-reveal / tab-entry grow-in, left anchored as WPF. -->
                                             <Border x:Name="RailProgressFill"
                                                     Grid.Column="0" CornerRadius="2.5"
                                                     RenderTransformOrigin="0%,50%">
@@ -628,10 +616,7 @@
                                                         <Ellipse Width="{Binding NodeSize}" Height="{Binding NodeSize}"
                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                  Fill="{DynamicResource ElevatedSurfaceBrush}"/>
-                                                        <!-- Today's halo. On WPF a DataTrigger breathed it
-                                                             from 0.35 to 0.95; here it rests at its static
-                                                             mid value, so today's node still reads as
-                                                             today. -->
+                                                        <!-- Today's halo breathes on the shared beat at Warm+. -->
                                                         <Ellipse x:Name="PipGlow" Width="52" Height="52" Opacity="0.65"
                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                  IsHitTestVisible="False"
@@ -642,10 +627,7 @@
                                                                 <ScaleTransform ScaleX="1" ScaleY="1"/>
                                                             </Ellipse.RenderTransform>
                                                         </Ellipse>
-                                                        <!-- The day-complete IGNITE flare. Kept as its own
-                                                             element (never folded into the halo above) so
-                                                             the two can be re-animated apart when the
-                                                             storyboards come back. Rests invisible. -->
+                                                        <!-- One-shot day-complete flare. -->
                                                         <Ellipse x:Name="PipIgnite" Width="52" Height="52" Opacity="0"
                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                  IsHitTestVisible="False"
@@ -880,8 +862,7 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- Day-complete banner. The scale pop is dropped with the rest
-                                         of the storyboards; it rested at 1. -->
+                                    <!-- Day-complete banner settles once per completed day. -->
                                     <Border x:Name="TodayCompleteBanner" IsVisible="False"
                                             Padding="14,10" CornerRadius="10" Margin="0,14,0,0"
                                             HorizontalAlignment="Left"
@@ -1066,7 +1047,7 @@
                                     </ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate x:DataType="tabs:ProgramTaskItem">
-                                            <Border Width="360" MinHeight="92" Margin="0,0,10,10" Padding="14,12"
+                                            <Border x:Name="TaskCard" Width="360" MinHeight="92" Margin="0,0,10,10" Padding="14,12"
                                                     CornerRadius="12"
                                                     Opacity="{Binding RowOpacity}"
                                                     Background="{DynamicResource SurfaceBgBrush}"
@@ -1119,7 +1100,7 @@
                                                          (DoneChipForeground), not from a fixed near-white:
                                                          a pale program accent rendered the tick white on
                                                          white. -->
-                                                    <Border Grid.Column="2" Width="22" Height="22" CornerRadius="11"
+                                                    <Border x:Name="TaskDoneChip" Grid.Column="2" Width="22" Height="22" CornerRadius="11"
                                                             VerticalAlignment="Top" HorizontalAlignment="Right"
                                                             IsVisible="{Binding DoneChipVisible}"
                                                             Background="{Binding StatusBrush}"

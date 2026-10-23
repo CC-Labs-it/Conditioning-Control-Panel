@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // bubbles, pink filter), pop quizzes and open lock cards.
             // programs 3a (P06, docs/avalonia-decisions.md): today's program session ENDS, not pauses, so
             // a panic never leaves a program run holding the screen; foreign sessions stay paused below.
+            new("program-moments", sh => sh?.Named<Tabs.ProgramsTabView>("ProgramsTab")?.StopProgramMomentsForPanic()),
             new("program-session", sh => { if (sh != null) sh.EndProgramSessionQuietly("panic"); else App.Programs?.StopProgramSessionIfRunning("panic"); }),
             new("engine", _ => MainShellWindow.StopEngine()),
             new("pink-rush", _ => PinkRushHost.Stop()),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
