@@ -191,6 +191,32 @@ public class PromptCharBudgetTests : IDisposable
     }
 
     /// <summary>
+    /// The switch on an ordinary preset: SlutModeBite rides every non-explicit preset in full
+    /// (one block since the owner's desk run of 2026-10-16), so the Bambi worst case plus a quiz
+    /// has to stay under the proxy hard cap for each of them. Over the soft ceiling Compose sheds
+    /// the tail and the request still goes through; at the hard cap every cloud call 400s.
+    /// </summary>
+    [Fact]
+    public void BambiWithTheSwitchOnAnyPreset_StaysUnderTheProxyHardRejectCap()
+    {
+        UseMod(BuiltInMods.BambiSleep, WorstCaseBambiPool());
+        _settings.SlutModeEnabled = true;
+        _settings.LatestQuizScorePercentage = 87;
+        _settings.LatestQuizArchetype = "Eager Bimbo";
+        _settings.LatestQuizProfileText = new string('x', 400);
+
+        var over = new List<string>();
+        foreach (var presetId in BuiltInPresetIds)
+        {
+            var length = PrefixLengthFor(presetId);
+            _out.WriteLine($"bambi + switch on + quiz {presetId,-16} {length,6}");
+            if (length >= PromptAssembler.ProxyHardRejectCap) over.Add($"{presetId}={length}");
+        }
+        Assert.True(over.Count == 0,
+            $"prefix at or over the {PromptAssembler.ProxyHardRejectCap}-char proxy cap with the switch on: {string.Join(", ", over)}");
+    }
+
+    /// <summary>
     /// The block that carried the bloat, pinned directly so a future edit to the Bambi media
     /// section cannot quietly re-inflate the whole prefix.
     /// </summary>

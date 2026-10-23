@@ -174,6 +174,11 @@ namespace ConditioningControlPanel.Services
             [JsonProperty("display_name")]
             public string? DisplayName { get; set; }
 
+            // Onboarding contract (2026-10-20): true while the account has no name. Absent on
+            // older servers; NeedsDisplayNameRule then reads the empty name instead.
+            [JsonProperty("needs_display_name")]
+            public bool? NeedsDisplayName { get; set; }
+
             [JsonProperty("discord_id")]
             public string? DiscordId { get; set; }
 
@@ -211,6 +216,11 @@ namespace ConditioningControlPanel.Services
 
             [JsonProperty("patreon_is_active")]
             public bool PatreonIsActive { get; set; }
+
+            // When the server last saw an ACTIVE Patreon reading (webhook, reconcile, validate), or
+            // absent. Raw token: read through InviteRules.ParseUtc, never a throw (PatreonActiveRule).
+            [JsonProperty("patreon_confirmed_at")]
+            public JToken? PatreonConfirmedAtRaw { get; set; }
 
             [JsonProperty("patreon_is_whitelisted")]
             public bool PatreonIsWhitelisted { get; set; }

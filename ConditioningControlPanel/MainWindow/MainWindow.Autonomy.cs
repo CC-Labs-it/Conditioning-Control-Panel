@@ -378,6 +378,7 @@ namespace ConditioningControlPanel
             var s = App.Settings?.Current;
             if (tab == null || s == null) return;
 
+            tab.RefreshWallpaperCredit();
             if (tab.TxtWallpaperFolder != null)
             {
                 tab.TxtWallpaperFolder.Text = string.IsNullOrWhiteSpace(s.WallpaperSourceFolder)
