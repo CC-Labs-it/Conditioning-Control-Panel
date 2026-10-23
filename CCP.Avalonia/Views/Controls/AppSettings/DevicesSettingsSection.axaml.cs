@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             _lockdown = LockdownService.Current;
             if (_lockdown != null) { _lockdown.LockdownActivated += OnLockdownChanged; _lockdown.LockdownDeactivated += OnLockdownChanged; }
             ApplyLockdownHold();
+            SubscribeWebcamEvents(true);
         }
 
         private LockdownService? _lockdown;
@@ -95,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            SubscribeWebcamEvents(false);
             if (_lockdown != null) { _lockdown.LockdownActivated -= OnLockdownChanged; _lockdown.LockdownDeactivated -= OnLockdownChanged; _lockdown = null; }
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             base.OnDetachedFromVisualTree(e);
@@ -248,10 +250,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// Platform/WebcamTracker). Privacy info, Start tracking and Revoke are live.
         ///
         /// Quick Recal and Tracker Test are live over the tracker's gaze feed.
-        /// The camera picker is live over <see cref="Platform.V4l2Cameras"/>.
+        /// The camera picker is live over <see cref="Platform.CameraList"/>.
         /// <para>ponytail: the monitor combo and the debug cursor stay DISABLED with a
-        /// stated reason: calibration follows its own window's screen and the cursor overlay is not ported. The status pill stays
-        /// at its <c>rf_webcam_stopped</c> literal for the same reason (no OnTrackingStateChanged).</para>
+        /// stated reason: calibration follows its own window's screen and the cursor overlay is not ported. Status and gesture diagnostics subscribe while this section is visible.</para>
         /// </summary>
         private void RefreshWebcamAvailability()
         {
@@ -277,11 +278,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         private bool _webcamDevicePopulating;   // Items.Clear()/SelectedItem raise SelectionChanged
 
-        /// <summary>WPF PopulateWebcamCombo (MainWindow.LabTab.cs:1372), over sysfs instead of DirectShow.
+        /// <summary>WPF PopulateWebcamCombo (MainWindow.LabTab.cs:1372), over the platform camera list.
         /// Selection matches the saved /dev/videoN number, since V4L2 numbers are not contiguous.</summary>
         private int PopulateWebcamDevices()
         {
-            var devices = Platform.V4l2Cameras.Enumerate();
+            var devices = Platform.CameraList.Enumerate();
             _webcamDevicePopulating = true;
             try
             {

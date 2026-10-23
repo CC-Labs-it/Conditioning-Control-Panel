@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// Same timing, retries, messages and gesture checks as WPF. Deviations: Escape, a tracker stop
     /// (panic, revoke) or the X before the save restores the previously live calibration (WPF leaves the
-    /// unsaved candidate live); the mouth prompts always time out (no MAR detector yet); the redo prompt
+    /// unsaved candidate live); the redo prompt
     /// is ConfirmAsync (Yes / Cancel); Close(bool) for DialogResult; Screens.ScreenFromWindow for the monitor.
     /// Verify's live cursor is a pink dot in this window (WPF: GazeDebugCursorService's overlay, minus its trail).
     /// ponytail: the bubble test (WPF RunBubbleTestAsync, gaze attractor, auto-fix) is not ported: it only places a bubble.
@@ -374,12 +374,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             await RunGestureCheckAsync(IconKind.Eye, "Blink a couple of times", 2, h => Tracker.OnBlink += h, h => Tracker.OnBlink -= h);
             if (_cancelled) return;
-            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide", 1, null, null);
+            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide", 1, h => Tracker.OnMouthOpen += h, h => Tracker.OnMouthOpen -= h);
             if (_cancelled) return;
             _txtValidationDetail.Text = "Good — close, and once more in a moment…";
             await Delay(1000);
             if (_cancelled) return;
-            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide again", 1, null, null);
+            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide again", 1, h => Tracker.OnMouthOpen += h, h => Tracker.OnMouthOpen -= h);
         }
 
         /// <summary>WPF RunGestureCheckAsync + WaitFor*Async: up to 5 s for <paramref name="needed"/>
