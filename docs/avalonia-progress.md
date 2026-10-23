@@ -2939,3 +2939,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-win-webcam-calibration-b: +493
 - Calibration mouth prompts fire from real capture (Core MouthOpenDetector, WPF order) and verify/bubble cursors draw the shared Core GazeCursorTrail comet.
 - Review fixes: frame-run-tagged mouth events, cached trail paints, all 10 new tests fail-proven remotely.
+
+## avalonia-port/companion-v2-pages-b: +678
+- Companion v2: room collapsed; Personality/Permissions/Links pages adopt the live zones; Awareness tab hosts the privacy card.
+- Cell->page map, Takeover<->Permissions links; Personality Advanced row opens the prompt editor; rest -> companion-v2-pages-c.
