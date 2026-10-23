@@ -1769,6 +1769,7 @@ namespace ConditioningControlPanel
                 // Standalone Lab minigames run outside the engine, so the tail below never reaches
                 // them; the override mode's stop pass stops them by hand for the same reason.
                 try { App.BlinkTrainer?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                PanicStopOffEngineHosts();
                 RunPanicStopTail(advanceExitLadder: false);
                 return;
             }
@@ -1799,6 +1800,7 @@ namespace ConditioningControlPanel
             // Stop standalone Lab minigames first — they run independently of
             // the main engine, so the rest of the panic flow won't touch them.
             App.BlinkTrainer?.Stop();
+            PanicStopOffEngineHosts();
 
             RunPanicStopTail(advanceExitLadder: true);
         }
@@ -2002,6 +2004,11 @@ namespace ConditioningControlPanel
             Step("bouncing text", () => App.BouncingText?.Stop());
             Step("mind wipe", () => App.MindWipe?.Stop());
             Step("brain drain", () => App.BrainDrain?.Stop());
+            // The two media hosts outside VideoService. A Takeover web video (or any page video in
+            // the built-in browser) kept playing, fullscreen and topmost with the engine off; the
+            // Deeper player kept playing and its timeline re-fired effects at the next cue.
+            Step("web video", PanicEndBrowserMedia);
+            Step("Deeper player", Views.Deeper.EnhancementPlayerWindow.PanicPauseAll);
 
             // --- overlays ---
             // Stop() already clears _isRunning and calls StopPinkFilter/StopSpiral/StopBrainDrainBlur,
@@ -2066,6 +2073,26 @@ namespace ConditioningControlPanel
             VideoDiag.Log("PANIC", "stop-all pass complete");
         }
 
+        /// <summary>Ends a browser takeover and pauses every page video, fullscreen dropped. The
+        /// synchronous body, so the queue slot is free before the pass resets the queue.</summary>
+        private static void PanicEndBrowserMedia()
+        {
+            if (App.BrowserMedia != null) App.BrowserMedia.ForceEndCore("panic");
+            else App.MainWindowRef?.EndWebVideoTakeover();
+        }
+
+        /// <summary>
+        /// The legacy ladder (PanicOverridesAll off) never runs <see cref="PanicStopEverySurface"/>,
+        /// and its tail only reached what the engine owns: the toy kept vibrating, a Takeover web
+        /// video and the Deeper player kept playing. The three it missed, before its stop tail.
+        /// </summary>
+        private void PanicStopOffEngineHosts()
+        {
+            try { App.Haptics?.PanicStop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { PanicEndBrowserMedia(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Views.Deeper.EnhancementPlayerWindow.PanicPauseAll(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        }
+
         /// <summary>
         /// Stops every "ad-hoc" effect that can be live without the engine running — i.e. effects
         /// fired by voice commands ("She's Listening"), dashboard one-shots, or Deeper. The normal
@@ -2077,6 +2104,9 @@ namespace ConditioningControlPanel
         {
             try
             {
+                // A Takeover pulse writes its boost into the saved spiral/pink settings; settle it
+                // now, as the stop-all pass does, instead of leaving it there for up to 30 s.
+                App.Autonomy?.CancelActivePulses();
                 App.KillAllAudio();
                 App.Video?.Stop();
                 App.Flash?.Stop();

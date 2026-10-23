@@ -77,7 +77,7 @@ public class PanicAftermathTests
         Assert.Equal(1, key.Split("PanicAftermath.ArmQuiet(").Length - 1);
 
         // A remote panic arms it too (quiet is harmless; owner, 2026-10-19).
-        var remote = Body(Source("MainWindow", "MainWindow.RemoteControl.cs"), "internal void TriggerPanicFromRemote()");
+        var remote = Body(Source("MainWindow", "MainWindow.RemoteControl.cs"), "internal bool TriggerPanicFromRemote()");
         Assert.Contains("PanicAftermath.ArmQuiet();", remote);
     }
 
@@ -177,8 +177,8 @@ public class PanicAftermathTests
         Assert.False(PanicAftermath.RemoteResumeRefused(noMark, s, 1, sessionPaused: true, pauseCount: 1));
 
         var rc = Source("MainWindow", "MainWindow.RemoteControl.cs");
-        Assert.DoesNotContain("NoteLocalPanicPause();", Body(rc, "internal void TriggerPanicFromRemote()"));
-        Assert.DoesNotContain("_panicPause =", Body(rc, "internal void TriggerPanicFromRemote()"));
+        Assert.DoesNotContain("NoteLocalPanicPause();", Body(rc, "internal bool TriggerPanicFromRemote()"));
+        Assert.DoesNotContain("_panicPause =", Body(rc, "internal bool TriggerPanicFromRemote()"));
     }
 
     [Fact]

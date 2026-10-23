@@ -26,6 +26,10 @@ namespace ConditioningControlPanel.Services.Speech
         public Func<IReadOnlyList<string>, RecognizeOptions, Task<PhraseResult>> Recognize = (_, _) => Task.FromResult(PhraseResult.NotAvailable);
         /// <summary>Intent name -> the head's action; null = this head cannot run it (left out of the grammar).</summary>
         public Func<string, Action?> ActionFor = _ => null;
+        /// <summary>In place of <see cref="ActionFor"/> for an intent that applies its own safety rule
+        /// (WPF 769373c28, the voice panic): false = it did nothing on purpose (the panic key could not
+        /// run either), so no confirmation is spoken. Null = use <see cref="ActionFor"/>.</summary>
+        public Func<string, Func<bool>?> RunFor = _ => null;
         public Func<VoiceGuard, bool> IsBlocked = _ => false;
         /// <summary>A refused command: the lockdown escape tripwire (EscapeKinds.Stop).</summary>
         public Action OnRefused = () => { };
@@ -175,7 +179,9 @@ namespace ConditioningControlPanel.Services.Speech
         public static IReadOnlyList<VoiceCommandIntent> Intents => _voiceCommandIntents ??= new()
         {
             // ── Safety ────────────────────────────────────────────────────────────
-            // Routes to the exact panic-key teardown. A false positive just stops things.
+            // Routes to the exact panic-key teardown. A false positive just stops things. Where the
+            // panic key cannot run (Lockdown, panic off) it says nothing and stops nothing bar a leash
+            // task (hard rule 6, VoicePanicReach): each head hands it in through RunFor.
             new VoiceCommandIntent
             {
                 Name = "panic",
@@ -849,7 +855,7 @@ namespace ConditioningControlPanel.Services.Speech
         /// <summary>The intents this head can run: it has an action for them, or they need none
         /// (help, "again"). A head without spoken mantras returns no action for "mantra".</summary>
         public IEnumerable<VoiceCommandIntent> Available
-            => Intents.Where(i => i.IsReplay || i.Name == "help" || Host.ActionFor(i.Name) != null);
+            => Intents.Where(i => i.IsReplay || i.Name == "help" || Host.ActionFor(i.Name) != null || Host.RunFor(i.Name) != null);
 
         /// <summary>The closed command grammar (every alias this head can act on).</summary>
         public List<string> Grammar() => Available.SelectMany(i => i.Aliases).Distinct().ToList();
@@ -1178,8 +1184,20 @@ namespace ConditioningControlPanel.Services.Speech
                 return;
             }
 
-            try { Host.ActionFor(intent.Name)?.Invoke(); }
-            catch (Exception ex) { Log.Warning(ex, "AutonomyService: voice command '{Name}' execute failed", intent.Name); }
+            var run = Host.RunFor(intent.Name);
+            if (run != null)
+            {
+                bool ran = true;
+                try { ran = run(); }
+                catch (Exception ex) { Log.Warning(ex, "AutonomyService: voice command '{Name}' run failed", intent.Name); }
+                // Refused by its own safety rule: no line claims it worked.
+                if (!ran) return;
+            }
+            else
+            {
+                try { Host.ActionFor(intent.Name)?.Invoke(); }
+                catch (Exception ex) { Log.Warning(ex, "AutonomyService: voice command '{Name}' execute failed", intent.Name); }
+            }
 
             // Utility verbs get a short, text-only ack. Feature verbs prefer the voiced manifest variant
             // (text + matching clip for the active mod), falling back to the inline per-mod text.
