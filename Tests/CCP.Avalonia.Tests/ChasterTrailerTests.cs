@@ -145,30 +145,48 @@ public sealed class ChasterTrailerTests
     }
 
     [Fact]
-    public Task HoverWaitsThenRetargetsImmediatelyAndClosesAfterTheGrace() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) =>
+    public Task HoverWaitsThenRetargetsImmediatelyAndClosesAfterTheGrace() => AvaloniaTestDispatcher.RunAsync(() => WithTab((tab, w) =>
     {
         void Hover(Control row) => w.MouseMove(row.TranslatePoint(new Point(20, row.Bounds.Height / 2), w)!.Value);
+        var open = tab.TrailerOpenTimer;
+        var close = tab.TrailerCloseTimer;
+        Assert.Equal(TimeSpan.FromMilliseconds(150), open.Interval); // WPF ChasterTabView.xaml.cs open delay
+        Assert.Equal(TimeSpan.FromMilliseconds(140), close.Interval); // WPF close grace
+        // A slow first layout inside MouseMove can outlast 150 ms on CI and fire a real tick: park the
+        // timers so only the explicit ticks below advance the state (P08).
+        open.Interval = close.Interval = TimeSpan.FromHours(1);
         Hover(tab.PriceRows["typo"]);
         Assert.Null(tab.TrailerId);
+        Assert.True(open.IsEnabled);
         w.MouseMove(new Point(2, 2));
-        await Task.Delay(220); Dispatcher.UIThread.RunJobs();
-        Assert.Null(tab.TrailerId); // a brief pass over a row never opens the card
+        Assert.False(open.IsEnabled); // a brief pass over a row never opens the card
+        Assert.True(close.IsEnabled);
+        tab.TrailerCloseTick();
+        Assert.Null(tab.TrailerId);
         Hover(tab.PriceRows["typo"]);
-        await Task.Delay(220); Dispatcher.UIThread.RunJobs();
+        Assert.True(open.IsEnabled);
+        tab.TrailerOpenTick();
         Assert.Equal("typo", tab.TrailerId);
         Hover(tab.PriceRows["session"]);
         Assert.Equal("session", tab.TrailerId);
+        Assert.False(open.IsEnabled); // an open card switches rows without the delay
         w.MouseMove(new Point(2, 2));
         Assert.Equal("session", tab.TrailerId);
+        Assert.True(close.IsEnabled);
         var card = tab.FindControl<Border>("TrailerCard")!;
-        card.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, card, null!, w, default, 0, PointerPointProperties.None, KeyModifiers.None));
-        await Task.Delay(210); Dispatcher.UIThread.RunJobs();
-        Assert.Equal("session", tab.TrailerId); // crossing the gap onto the card cancels close
-        card.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, card, null!, w, default, 0, PointerPointProperties.None, KeyModifiers.None));
-        await Task.Delay(210); Dispatcher.UIThread.RunJobs();
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        card.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, card, pointer, w, default, 0, PointerPointProperties.None, KeyModifiers.None));
+        Assert.False(close.IsEnabled); // crossing the gap onto the card cancels close
+        tab.TrailerCloseTick(); // even a tick already queued keeps the card while the pointer is on it
+        Assert.Equal("session", tab.TrailerId);
+        card.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, card, pointer, w, default, 0, PointerPointProperties.None, KeyModifiers.None));
+        Assert.True(close.IsEnabled);
+        Assert.Equal("session", tab.TrailerId);
+        tab.TrailerCloseTick();
         Assert.Null(tab.TrailerId);
         Assert.False(tab.TrailerFigureTicking);
         Assert.False(tab.TrailerDrifting);
+        return Task.CompletedTask;
     }));
 
     [Fact]

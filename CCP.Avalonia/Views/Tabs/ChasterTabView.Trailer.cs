@@ -16,6 +16,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
 
@@ -33,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _overTrailer;
         private IDisposable? _trailerPark;
         private static readonly List<WeakReference<ChasterTabView>> TrailerOwners = new();
-        private FrameClock? _trailerDrift;
+        private BeatLoop? _trailerDrift;
         private readonly Stopwatch _trailerTime = new();
         private readonly ScaleTransform _trailerScale = new();
         private readonly TranslateTransform _trailerPan = new();
@@ -41,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private TabPrice? _trailerPrice;
         private readonly DispatcherTimer _trailerFigure = new() { Interval = TimeSpan.FromMilliseconds(1700) };
         internal bool TrailerFigureTicking => _trailerFigure.IsEnabled;
-        internal bool TrailerDrifting => _trailerDrift?.IsEnabled == true;
+        internal bool TrailerDrifting => _trailerDrift?.IsRunning == true;
 
         private void TrailerInit()
         {
@@ -51,8 +52,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _trailerFigure.Tick += (_, _) => TrailerFigure();
             TrailerWeb.Ready += (_, _) => TrailerWeb.IsVisible = _trailerShown;
             TrailerWeb.Failed += (_, _) => TrailerWeb.IsVisible = false;
-            _trailerOpen.Tick += (_, _) => { _trailerOpen.Stop(); OpenTrailer(); };
-            _trailerClose.Tick += (_, _) => { _trailerClose.Stop(); if (!_overTrailer) HideTrailer(); };
+            _trailerOpen.Tick += (_, _) => TrailerOpenTick();
+            _trailerClose.Tick += (_, _) => TrailerCloseTick();
             // WPF (:99): a page that leaves the screen takes its trailer with it.
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty && !IsVisible) HideTrailer(); };
             AttachedToVisualTree += (_, _) => AmbientFxCanvas.Env.MotionGateChanged += RefreshTrailerMotion;
@@ -65,6 +66,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _trailerPark = null;
             };
         }
+
+        // Test seams (P08): tests step the timers instead of sleeping on them.
+        internal DispatcherTimer TrailerOpenTimer => _trailerOpen;
+        internal DispatcherTimer TrailerCloseTimer => _trailerClose;
+        internal void TrailerOpenTick() { _trailerOpen.Stop(); OpenTrailer(); }
+        internal void TrailerCloseTick() { _trailerClose.Stop(); if (!_overTrailer) HideTrailer(); }
 
         private void Row_PointerEntered(object? sender, PointerEventArgs e)
         {
@@ -167,11 +174,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (_trailerShown && AmbientFxCanvas.Env.AllowAmbientLoops)
             {
-                if (_trailerDrift == null)
-                {
-                    _trailerDrift = new FrameClock(TrailerArt) { Interval = TimeSpan.FromMilliseconds(50) };
-                    _trailerDrift.Tick += (_, _) => AdvanceTrailerDrift(_trailerTime.Elapsed.TotalSeconds);
-                }
+                // The window's shared 30 fps beat (AmbientBeatLoopsTests); the phase stays on the card's own clock.
+                _trailerDrift ??= new BeatLoop(TrailerArt, _ => AdvanceTrailerDrift(_trailerTime.Elapsed.TotalSeconds));
                 _trailerDrift.Start();
             }
             else
