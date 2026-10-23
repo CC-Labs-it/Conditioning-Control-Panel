@@ -318,7 +318,11 @@ export function createRoadMaterial(pal, art = null, track = null) {
     .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze).mul(LOOK.roadGain);
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
   // the edge line sits over everything; the gutter darkens what is inside it, so the line reads against any hue
-  const litCol = surface.add(deepCol).add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish).mul(float(1).sub(gutter.mul(E.gutterDark)));
+  // A broad quiet shoulder gives the clear edge a darker neighbour. The music and glitter remain
+  // above it; there are no extra stripes or time-driven luminance changes near the kart.
+  const shoulder = smoothstep(0.28, 0.6, trueEdge).mul(float(1).sub(smoothstep(1.15, 1.85, trueEdge)));
+  const glassBody = surface.add(deepCol).mul(float(1).sub(shoulder.mul(0.17)));
+  const litCol = glassBody.add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish).mul(float(1).sub(gutter.mul(E.gutterDark)));
   const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);
   m.opacityNode = max(clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))

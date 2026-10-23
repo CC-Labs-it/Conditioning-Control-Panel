@@ -30,6 +30,7 @@ import { createPadMaterial } from './materials/pads.js';
 import { createSkyMaterial, SKY_PALETTES } from './materials/sky.js';
 import { buildCountdown, buildFinish, buildScatter } from './dressing.js';
 import { buildColossi } from './colossi.js';
+import { buildShowcaseDressing } from './showcaseDressing.js';
 import { buildShadows, CATCH_LAYER } from './shadows.js';
 import { sampleTrack } from './colossiMath.js';
 import { createPropMaterial } from './materials/kart.js';
@@ -142,6 +143,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   skyMesh.renderOrder = -1; skyMesh.frustumCulled = false;
   const road = createRoadMaterial(pal, art, track);
   const roadMesh = add(meshFrom(track.meshes.road, road.material));
+  // Built before warmup: shared static construction gives the glass road depth.
+  const showcaseDressing = buildShowcaseDressing(track, pal, art);
+  scene.add(showcaseDressing.group);
   const rails = createRailMaterial(pal, art);
   add(meshFrom(track.meshes.rails, rails.material));
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
@@ -415,6 +419,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (wordFx) wordFx.dispose();
     if (roadWords) roadWords.dispose();
     if (wordRush) wordRush.dispose();
+    showcaseDressing.dispose();
     for (const off of offs) off();
   }
   return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush,

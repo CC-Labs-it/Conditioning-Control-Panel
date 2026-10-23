@@ -57,7 +57,10 @@ export function createRailMaterial(pal, art = null) {
   const coreCol = mix(avg, ramp(x), contrast);
   const wallCol = ramp(x.add(0.5)).mul(LOOK.skyDim * 1.4).add(pal.col(0).mul(0.15));
   const glint = pow(max(sin(a.div(glintM).mul(Math.PI * 2)), 0), T.glintPow).mul(T.glintGain).mul(facing).mul(contrast);
-  m.colorNode = coreCol.mul(core.mul(T.coreGain).add(0.2))
+  // A continuous shaded waist makes this read as glass around a core, with a lamp on its upper
+  // edge. It remains steady in track space and never changes the existing barrier opacity.
+  const waist = smoothstep(0.24, 0.4, h).mul(float(1).sub(smoothstep(0.62, 0.72, h)));
+  m.colorNode = coreCol.mul(core.mul(T.coreGain).add(0.2)).mul(float(1).sub(waist.mul(0.22)))
     .add(wallCol.mul(wall).mul(T.wallGain))
     .add(vec3(1, 0.97, 0.99).mul(streak.add(low).add(glint))).mul(u.pulse.add(1));
   // the barrier: a bright top line, a solid foot and posts every postM (fitted to the lap so the wrap is seamless)

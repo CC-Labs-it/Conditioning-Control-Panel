@@ -24,7 +24,7 @@ export const SKIES = {
 export const FALLBACK_SKY = 'spiral-slow';
 
 export const LOOK = {
-  snapM: 20, nearM: 0.1, farM: 6000, skyRadiusM: 3000, skyArms: 7, skyContrast: 0.8, skyDim: 0.55, skyGapDim: 0.72,
+  snapM: 20, nearM: 0.1, farM: 6000, skyRadiusM: 3000, skyArms: 7, skyContrast: 0.64, skyDim: 0.44, skyGapDim: 0.55,
   skyEyeTiltDeg: 68, skyEyeTcS: 2, rescueWhite: 0.45,
   // road bands (u = lateral metres, v = s metres)
   bandLenM: 14, bandWarpPerM: 0.35, bandWarpAmp: 0.15, bandScrollMps: 6, roadAlpha: 0.72,
@@ -52,7 +52,14 @@ export const LOOK = {
   tendrilColour: '#fff6e6', tendrilM: 60, tendrilGain: 0.45, ringColour: '#ffd36b', ringMaxM: 4,
   // wave 1 art (render/art.js, render/dressing.js; art/ART.md for tile sizes and bound radii)
   artRoadTileM: [12, 16], artBandSpan: 0.999, artHaze: 0.06, artHazeTileM: 4, artRailCore: 0.6, artRailCoreAlpha: 0.35,
-  artChevronM: 6, artChevronWideM: 4, artChevronFloor: 0.25, artGalaxyGain: 0.9, artStarGain: 0.7,
+  artChevronM: 6, artChevronWideM: 4, artChevronFloor: 0.25, artGalaxyGain: 0.54, artStarGain: 0.7,
+  // A deeper colour field leaves room for the bright road, stars and accepted giant silhouettes.
+  skySpectrum: { armGain: 1, nebGain: 0.58, hazeGain: 1.15 },
+  skySeparation: { horizonGain: 0.7, zenithGain: 0.9, horizonBand: 0.42 },
+  // Keep the musical colour and glitter; distinguish glass highlights from its luminous pattern.
+  roadPolish: { depthGain: 0.1, rimGain: 0.17, reflGain: 0.46, reflF0: 0.055 },
+  roadSpectrum: { edgeGain: 0.34, lineGain: 0.5 },
+  railTube: { coreGain: 0.78, wallGain: 0.72, streakGain: 0.82, lowGain: 0.16 },
   artRingAheadM: [12, 22, 32], artRingScale: 1, artRingRiseS: 0.12, artRingOpenS: 0.35, artRingHideS: 1.2,
   artRingTurnRadps: 0.8, artGentleFace: 0.5, artFinishFace: 0.3, artFinishClearM: 1.5,
   artLight: { sky: '#ffe3f1', ground: '#2a1640', hemi: 1.6, sun: 1.4 },

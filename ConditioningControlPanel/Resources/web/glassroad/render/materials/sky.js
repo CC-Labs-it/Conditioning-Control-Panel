@@ -125,7 +125,11 @@ export function createSkyMaterial(pal, art = null) {
       }
     }
   }
-  const col = mix(ground, bands, arm.mul(u.contrast));
+  // Atmospheric distance is a static broad value shape, not another moving overlay. Keep the
+  // horizon behind the road dark enough for the next bend and giant silhouettes to separate.
+  const depth = { horizonGain: 0.7, zenithGain: 0.9, horizonBand: 0.42, ...(LOOK.skySeparation || {}) };
+  const separation = mix(float(depth.horizonGain), float(depth.zenithGain), smoothstep(0, depth.horizonBand, abs(d.y)));
+  const col = mix(ground, bands, arm.mul(u.contrast)).mul(separation);
   const eye = smoothstep(0, 1.2, r).oneMinus();
   const m = new MeshBasicNodeMaterial({ side: BackSide, depthWrite: false, fog: false });
   m.colorNode = mix(col, vec3(1, 1, 1), u.rescue.mul(eye.mul(0.5).add(LOOK.rescueWhite)));
