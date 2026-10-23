@@ -60,9 +60,12 @@ export const MIX = {
 
 /** @returns {number} feel 'audio.<key>' when it exists, else MIX[key]. */
 export function mixGet(feel, key) {
-  try { const v = feel?.get('audio.' + key); if (v !== undefined) return v; } catch (e) { /* feel gap */ }
+  if (feel) { try { const v = feel.get(audioKey(key)); if (v !== undefined) return v; } catch (e) { /* feel gap */ } }
   return MIX[key];
 }
+// polish 6: the joined 'audio.<key>' strings are made once (mixGet runs many times a frame)
+const AUDIO_KEYS = new Map();
+function audioKey(key) { let s = AUDIO_KEYS.get(key); if (s === undefined) AUDIO_KEYS.set(key, s = 'audio.' + key); return s; }
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
@@ -102,14 +105,13 @@ export function allocVoices(slots, rivals, n = slots.length) {
 
 /** One rival voice's targets: { gain, hz, detune, cutHz, pan }. */
 export function rivalVoice(r, feel) {
-  const g = (k) => mixGet(feel, k);
-  const lvl = distanceLevel(r.distM, g('rivalNearM'), g('rivalFarM'));
+  const lvl = distanceLevel(r.distM, mixGet(feel, 'rivalNearM'), mixGet(feel, 'rivalFarM'));
   const p = clamp01(Math.max(0, r.speedPct || 0));
-  const cut = (g('rivalCutLowHz') + (g('rivalCutHighHz') - g('rivalCutLowHz')) * p) * (r.boosting ? g('rivalBoostCutMul') : 1);
+  const cut = (mixGet(feel, 'rivalCutLowHz') + (mixGet(feel, 'rivalCutHighHz') - mixGet(feel, 'rivalCutLowHz')) * p) * (r.boosting ? mixGet(feel, 'rivalBoostCutMul') : 1);
   return {
-    gain: g('rivalGain') * lvl,
-    hz: g('rivalIdleHz') * Math.pow(2, p * g('rivalRangeOct')),
-    detune: racerDetuneCents(r.i, g('rivalDetuneCents')),
+    gain: mixGet(feel, 'rivalGain') * lvl,
+    hz: mixGet(feel, 'rivalIdleHz') * Math.pow(2, p * mixGet(feel, 'rivalRangeOct')),
+    detune: racerDetuneCents(r.i, mixGet(feel, 'rivalDetuneCents')),
     cutHz: cut,
     pan: Math.max(-1, Math.min(1, r.pan || 0)),
   };

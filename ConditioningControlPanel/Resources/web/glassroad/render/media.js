@@ -26,7 +26,7 @@ import {
 } from 'three/tsl';
 import { Q } from './quality.js';
 import {
-  mediaLook, tierOf, roadSamples, placeBillboard, haloSlots, tunnelLayout, spinSafeCrop, fitCover,
+  mediaLook, tierOf, roadSamples, placeBillboard, haloSlots, haloPoseInto, tunnelLayout, spinSafeCrop, fitCover,
   createUploadBudget, urlAllowed, creditText, colourOf, slotColour,
 } from './mediaMath.js';
 import { createPlaceholder, programFor, spinOf, warpOf, releaseLoom, PROGRAMS } from './mediaPlaceholders.js';
@@ -360,8 +360,8 @@ export function createMediaSlots(scene, track, opts = {}) {
     // the halo orbits (its slot objects are updated in place so ids and indices hold)
     if (haloSpec && haloSlotsOf.length) {
       orbit = (orbit + dt * (haloSpec.orbitRadps ?? 0.05) * scroll) % TAU;
-      const fresh = haloSlots(haloSpec, haloFrame, haloN, orbit, M);
-      haloSlotsOf.forEach((sl, k) => { sl.C = fresh[k].C; sl.X = fresh[k].X; sl.Y = fresh[k].Y; sl.Z = fresh[k].Z; placeSlot(sl); });
+      // in place (perf, polish 6): a fresh haloSlots() a frame was steady race garbage
+      for (let k = 0; k < haloSlotsOf.length; k++) placeSlot(haloPoseInto(haloSpec, haloFrame, haloN, orbit, k, haloSlotsOf[k]));
     }
     if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length) flush();
 

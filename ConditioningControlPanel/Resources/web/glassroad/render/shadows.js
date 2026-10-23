@@ -19,6 +19,7 @@ import {
 } from 'three/webgpu';
 import { uv, vec3, float, smoothstep, length, uniform, vertexColor } from 'three/tsl';
 import { LOOK } from './look.js';
+import { makeQuery } from '../track/query.js';
 import { worldLook, shadowFit, shadowMode, shadowSize, capsuleShade, shadeRanges, sampleTrack, V3 } from './colossiMath.js';
 
 /** Catchers live on this layer. r186 copies the view camera's layers to the shadow camera, so they still land in the
@@ -29,6 +30,8 @@ export const CATCH_LAYER = 2;
 export const SHADOW_DEPTH = Object.freeze({ aboveM: 400, belowM: 100, biasM: 0.3 });
 
 const UPV = new Vector3(0, 1, 0), NV = new Vector3(), QT = new Quaternion();
+// one query record for the blobs (perf, polish 6: a fresh record per kart per frame was steady race garbage)
+const QO = makeQuery();
 
 /** Opaque meshes under root cast (tags, rings and glows stay out of the map). */
 function castFrom(root, on = true) {
@@ -185,7 +188,7 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
       const k = karts[i], p = k.position;
       let s = 0;
       if (k.visible) {
-        const q = track.query(p.x, p.y, p.z, hints[i]);
+        const q = track.query(p.x, p.y, p.z, hints[i], QO);
         hints[i] = q.seg;
         const up = Math.max(0, q.height);
         s = q.edgeDist >= -0.5 ? W.blobR * Math.max(0, 1 - up / W.blobFadeUpM) : 0;

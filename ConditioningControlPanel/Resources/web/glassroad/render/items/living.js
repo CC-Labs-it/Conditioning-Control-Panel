@@ -3,6 +3,9 @@
  * spiral turns, the drop bobs, the static slides, copies leave the middle). Only cells drawn this
  * frame are redrawn, at the tier's icon fps, so all bubbles share one texture and one draw call.
  * Slow, nothing strobes; Gentle = half the speed and smaller moves.
+ * Polish 6: fps may be a function (read each tick: webgl2 caps it, render/items/fxmath.js iconFps); a cell
+ * animates only while a live (on screen, big enough) bubble wears it, a far one gets its first still drawing
+ * once, and nothing is drawn or uploaded while no cell needs it.
  */
 import { CanvasTexture, SRGBColorSpace } from 'three/webgpu';
 import { ITEMS } from '../../sim/itemTable.js';
@@ -37,7 +40,7 @@ export function createLivingIcons({ px = 256, fps = 30 } = {}) {
     img.src = new URL('../../' + file, import.meta.url).href;
     return e;
   });
-  const want = new Set();
+  const want = new Set(), still = new Uint8Array(CELLS.length);
   let acc = 0;
 
   // the sprite's middle, redrawn moved: darken the still copy, add the moved one as light
@@ -109,13 +112,14 @@ export function createLivingIcons({ px = 256, fps = 30 } = {}) {
 
   return {
     texture: tex,
-    /** Mark a cell as on screen this frame. */
-    use(id) { want.add(cellOf(id)); },
+    /** Mark a cell as worn this frame; live = false (far or behind) only asks for its first still drawing. */
+    use(id, live = true) { const i = cellOf(id); if (live || !still[i]) want.add(i); },
     /** Redraw the marked cells at the tier fps. timeS already runs at the Gentle rate (the caller
      *  slows its clock), so gentle only shrinks the moves here. */
     tick(dt, timeS, gentle) {
       acc += dt;
-      if (acc < 1 / fps || !want.size) { want.clear(); return; }
+      const rate = typeof fps === 'function' ? fps() : fps;
+      if (acc < 1 / rate || !want.size) { want.clear(); return; }
       acc = 0;
       const m = gentle ? 0.4 : 1, t = timeS, k = px / S;
       let drew = false;
@@ -127,7 +131,7 @@ export function createLivingIcons({ px = 256, fps = 30 } = {}) {
         ctx.clearRect(0, 0, S, S);
         ctx.save(); ctx.beginPath(); ctx.rect(0, 0, S, S); ctx.clip();
         try { draw(CELLS[i], e.img, t + i * 3.7, m); } catch (_) { /* the still sprite stays */ }
-        ctx.restore(); drew = true;
+        ctx.restore(); drew = true; still[i] = 1;
       }
       want.clear();
       if (drew) tex.needsUpdate = true;

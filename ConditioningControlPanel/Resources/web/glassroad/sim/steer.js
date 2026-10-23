@@ -17,11 +17,11 @@ const ease = (s, a, b, ma, mb) => ma + (mb - ma) * smooth((s - a) / Math.max(1e-
 
 /** Every steering-law number, read once. @returns {object} out */
 export function yawParams(feel, out = {}) {
-  const g = (k) => feel.get('steer.' + k);
-  out.rate = g('yawRateDegps') * DEG; out.ref = g('yawSpeedRefMps');
-  out.v0 = g('calmFromMps'); out.v1 = g('cruiseMps'); out.v2 = g('topCalmMps'); out.v3 = g('boostCalmMps');
-  out.m1 = g('cruiseYawMul'); out.m2 = g('topYawMul'); out.m3 = g('boostYawMul');
-  out.user = g('userMul');
+  // polish 6: whole literal keys, no closure (the bots read this every tick: no garbage per call)
+  out.rate = feel.get('steer.yawRateDegps') * DEG; out.ref = feel.get('steer.yawSpeedRefMps');
+  out.v0 = feel.get('steer.calmFromMps'); out.v1 = feel.get('steer.cruiseMps'); out.v2 = feel.get('steer.topCalmMps'); out.v3 = feel.get('steer.boostCalmMps');
+  out.m1 = feel.get('steer.cruiseYawMul'); out.m2 = feel.get('steer.topYawMul'); out.m3 = feel.get('steer.boostYawMul');
+  out.user = feel.get('steer.userMul');
   return out;
 }
 
@@ -39,7 +39,7 @@ export const baseOf = (v, p) => p.rate / (1 + Math.abs(v) / p.ref);
 /** Grip yaw rate at |v| m/s and full lock, rad/s: base x calm x userMul. */
 export const gripOf = (v, p) => baseOf(v, p) * calmOf(v, p) * p.user;
 
-const P = {};
+const P = {}, BP = {};   // BP: bendSpeed's record when handed a feel (filled and read inside one call)
 /** Base yaw at |v| m/s, full lock, rad/s. */
 export function baseYaw(v, feel) {
   return feel.get('steer.yawRateDegps') * DEG / (1 + Math.abs(v) / feel.get('steer.yawSpeedRefMps'));
@@ -55,7 +55,7 @@ export function gripYaw(v, feel) { return gripOf(v, yawParams(feel, P)); }
  * unique; bisection over 0..maxV. `p` is a yawParams record (or a feel, read once here).
  */
 export function bendSpeed(kDeg, p, share = 1, maxV = 80) {
-  if (p && typeof p.get === 'function') p = yawParams(p, {});
+  if (p && typeof p.get === 'function') p = yawParams(p, BP);
   const k = Math.abs(kDeg) * DEG;
   if (k < 1e-5) return Infinity;
   if (k * maxV <= share * gripOf(maxV, p)) return Infinity;

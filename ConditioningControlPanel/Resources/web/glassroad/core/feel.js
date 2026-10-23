@@ -27,11 +27,18 @@ export function createFeel(data) {
   const base = JSON.parse(JSON.stringify(data || {}));
   let cur = JSON.parse(JSON.stringify(base));
   const subs = new Set();
+  // resolved paths (perf, polish 6): get() runs thousands of times a frame, and walk() split the path into a fresh
+  // array each call (about 8 MB of garbage a second, collected in race-time GC pauses). A set or reset clears it.
+  const at = new Map(), missing = new Map();
 
   function get(path) {
-    const [o, k] = walk(cur, path);
+    let r = at.get(path);
+    if (r === undefined) { r = walk(cur, path); at.set(path, r); }
+    const o = r[0], k = r[1];
     const v = o == null ? undefined : o[k];
-    if (v === undefined) throw new Error('[feel] missing key ' + path);
+    // a missing key throws one Error per path, made once: callers that probe with try (audio/mix.js mixGet, every
+    // frame) used to build an Error and its stack per call, the biggest share of the race garbage
+    if (v === undefined) { let e = missing.get(path); if (!e) { e = new Error('[feel] missing key ' + path); missing.set(path, e); } throw e; }
     return v;
   }
   function rad(path) {
@@ -42,6 +49,7 @@ export function createFeel(data) {
     const [o, k] = walk(cur, path);
     if (o == null || !(k in o)) return false;
     o[k] = value;
+    at.clear();
     for (const fn of subs) { try { fn(path, value); } catch (e) { console.warn('[feel]', e); } }
     return true;
   }
@@ -49,6 +57,7 @@ export function createFeel(data) {
   function toJSON() { return JSON.parse(JSON.stringify(cur)); }
   function reset() {
     cur = JSON.parse(JSON.stringify(base));
+    at.clear();
     for (const fn of subs) { try { fn('*', null); } catch (e) { console.warn('[feel]', e); } }
   }
   return { get, rad, set, subscribe, toJSON, reset };

@@ -182,6 +182,20 @@ export function nearCapR(R, d, vFovDeg, frac = ITEM_LOOK.nearMaxFrac) {
   return Math.min(R, d * Math.sin(half));
 }
 
+/** Polish 6: the living icon atlas redraw rate. A whole-atlas canvas upload is costly on webgl2 (Firefox reads the
+ *  canvas back), so webgl2 runs at most ICON_FPS_GL2; the tier rate otherwise. */
+export const ICON_FPS_GL2 = 15;
+export const iconFps = (tierFps, backend) => (backend === 'webgl2' ? Math.min(tierFps, ICON_FPS_GL2) : tierFps);
+
+/** Polish 6: a bubble of radius R at distance d whose icon is worth animating: not behind the camera (along =
+ *  cosine to the view direction) and at least minFrac of the view's half height tall. Unknown camera: live. */
+export const ICON_LIVE_FRAC = 0.012;
+export function iconLive(R, d, along, vFovDeg, minFrac = ICON_LIVE_FRAC) {
+  if (!(d > 0) || !(vFovDeg > 0)) return true;
+  if (d > R && along < -0.2) return false;
+  return R / (d * Math.tan((vFovDeg * Math.PI) / 360)) >= minFrac;
+}
+
 /**
  * True when an impact at (dx, dy, dz) from the camera is near (under maxM) and in front, inside the
  * horizontal field of view plus a small margin; (fx, fy, fz) is the unit view direction. Only these

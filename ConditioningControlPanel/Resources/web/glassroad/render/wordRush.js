@@ -83,6 +83,10 @@ export function rushLook(tMs, tier = 'small', gentle = false, R = RUSH, out = {}
 const REST_POS = ',0 0,.11em .07em,0 .19em,.23em .3em,0 0';
 // the sticker build: a plum UNDER copy wears the thick outline, the hard drop and the halo; the GHOSTS split off it
 // on the way out; the WORD on top is the shiny fill alone (a stroke on the fill itself eats thin serifs)
+// polish 6 (PERF2): the drop and the halo are text-shadows (the drop sits lower: a text-shadow is cast by the fill, not
+// the stroke) and the ghosts blend normally. A filter: drop-shadow chain
+// and mix-blend-mode over the WebGL canvas made Firefox re-rasterise the scaled word offscreen every frame: about
+// 2 s of 40 ms frames per hero rush (dev/hitch-check.mjs, s16 break and the finish)
 const CSS = `
 .gr-rush{position:fixed;inset:0;z-index:9;pointer-events:none;overflow:hidden;display:none}
 .gr-rush-box{position:absolute;left:50%;top:${RUSH.topPct}%;transform:translate(-50%,-50%) scale(.6);opacity:0;will-change:transform,opacity;
@@ -98,9 +102,9 @@ const CSS = `
   background-size:300% 100%,100% 100%,.53em .41em,.29em .37em,.71em .23em,100% 100%;background-position:120% 0${REST_POS};
   background-repeat:no-repeat,no-repeat,repeat,repeat,repeat,no-repeat;-webkit-background-clip:text;background-clip:text}
 .gr-rush-under{position:absolute;inset:0;color:${BT.plum};-webkit-text-fill-color:${BT.plum};-webkit-text-stroke:.11em ${BT.plum};
-  filter:drop-shadow(0 .06em 0 #16020f) drop-shadow(0 0 .2em rgba(255,64,170,.6))}
-.gr-rush[data-tier=hero] .gr-rush-under{filter:drop-shadow(0 .06em 0 #16020f) drop-shadow(0 0 .18em rgba(255,64,170,.8)) drop-shadow(0 0 .55em rgba(255,150,215,.5))}
-.gr-rush-ghost{position:absolute;inset:0;opacity:0;mix-blend-mode:screen}
+  text-shadow:0 .12em 0 #16020f,0 .07em .03em #16020f,0 0 .3em rgba(255,64,170,.8),0 0 .6em rgba(255,64,170,.35)}
+.gr-rush[data-tier=hero] .gr-rush-under{text-shadow:0 .12em 0 #16020f,0 .07em .03em #16020f,0 0 .28em rgba(255,64,170,.9),0 0 .75em rgba(255,150,215,.55)}
+.gr-rush-ghost{position:absolute;inset:0;opacity:0}
 .gr-rush-ghost.r{color:#ff3d8f;-webkit-text-fill-color:#ff3d8f}.gr-rush-ghost.b{color:#5fb0ff;-webkit-text-fill-color:#5fb0ff}
 `;
 
