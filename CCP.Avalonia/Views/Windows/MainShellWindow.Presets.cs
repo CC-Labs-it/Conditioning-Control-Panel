@@ -98,14 +98,14 @@
 //   private void OnSessionStopped(…)               RESTORED in SessionRun.cs
 //   private void BtnStopSession_Click(…)           RESTORED in SessionRun.cs
 //   private void BtnPauseSession_Click(…)         RESTORED in SessionRun.cs
-//   public void ApplySessionSettings(…)
-//   public void UpdateSpiralOpacity(…)
-//   public void EnablePinkFilter(…)
-//   public void EnableSpiral(…)
-//   public void UpdatePinkFilterOpacity(…)
-//   public void EnableBrainDrain(…)
-//   public void UpdateBrainDrainIntensity(…)
-//   public void SetBubblesActive(…)
+//   public void ApplySessionSettings(…)            not needed: Studio controls repaint from AppSettings.PropertyChanged
+//   public void UpdateSpiralOpacity(…)             RESTORED as SessionRunner.SpiralOpacity + SpiralOverlay.PaintedOpacity
+//   public void EnablePinkFilter(…)                RESTORED in SessionRunner.Tick + OnSessionTick
+//   public void EnableSpiral(…)                    RESTORED in SessionRunner.Tick + OnSessionTick
+//   public void UpdatePinkFilterOpacity(…)         RESTORED as SessionRunner.PinkOpacity
+//   public void EnableBrainDrain(…)                (no BrainDrain service on this head)
+//   public void UpdateBrainDrainIntensity(…)       (no BrainDrain service on this head)
+//   public void SetBubblesActive(…)                RESTORED as SessionRunner.HandleIntermittentBubbles
 //   private void HandleHyperlinkClick(…)
 //   private void LoadPreset(…)                      RESTORED in PresetsTabView
 //   private void ReconcileRunningServices(…)        RESTORED as CoreEngine.Reconcile

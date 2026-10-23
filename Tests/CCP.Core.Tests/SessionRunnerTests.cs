@@ -373,6 +373,88 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Equal(25, _runner.PinkOpacity!.Value, 2);
     }
 
+    [Fact]
+    public void Spiral_StartsAtItsRandomisedMinute_RampsWithoutWritingTheSetting_AndIsHandedBack()
+    {
+        var s = CoreSettings.Current;
+        s.SpiralEnabled = false; s.SpiralOpacity = 33;
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        session.Settings.RampCurve = RampCurve.Linear;
+        session.Settings.SpiralEnabled = true;
+        session.Settings.SpiralStartMinute = 4;
+        session.Settings.SpiralOpacity = 10;
+        session.Settings.SpiralOpacityEnd = 40;
+        _runner.Start(session);
+        var at = _runner.SpiralStartMinute;
+        Assert.InRange(at, 1.0, 7.0);
+        Assert.False(s.SpiralEnabled);
+
+        _runner.Tick(TimeSpan.FromMinutes(at - 0.01));
+        Assert.False(s.SpiralEnabled);
+        Assert.Null(_runner.SpiralOpacity);
+        _runner.Tick(TimeSpan.FromMinutes(at + 1e-4));
+        Assert.True(s.SpiralEnabled);
+        _runner.Tick(TimeSpan.FromMinutes((at + 10) / 2));
+        Assert.Equal(25, _runner.SpiralOpacity!.Value, 2);
+        Assert.Equal(33, s.SpiralOpacity);   // #897: the ramp never lands in settings.json
+
+        _runner.Stop();
+        Assert.False(s.SpiralEnabled);
+        Assert.Null(_runner.SpiralOpacity);
+    }
+
+    [Fact]
+    public void Bubbles_DelayedStartRampsEveryFiveMinutes_IntermittentBurstsStartAndEnd_PauseStops()
+    {
+        int starts = 0, stops = 0;
+        CoreBubbles.StartAction = () => starts++;
+        CoreBubbles.StopAction = () => stops++;
+        try
+        {
+            var s = CoreSettings.Current;
+            var session = OneMinute();
+            session.DurationMinutes = 20;
+            session.Settings.BubblesEnabled = true;
+            session.Settings.BubblesStartMinute = 2;
+            session.Settings.BubblesFrequency = 4;
+            _runner.Start(session);
+            Assert.False(s.BubblesEnabled);   // delayed: the session owns the field from t=0
+            starts = 0;
+            _runner.Tick(TimeSpan.FromMinutes(2.01));
+            Assert.True(s.BubblesEnabled);
+            Assert.Equal(1, starts);
+            _runner.Tick(TimeSpan.FromMinutes(12.1));
+            Assert.Equal(6, s.BubblesFrequency);   // 4 + two 5-minute steps
+            stops = 0;
+            _runner.Pause();
+            Assert.Equal(1, stops);
+            _runner.Stop();
+
+            session = OneMinute();
+            session.DurationMinutes = 40;
+            session.Settings.BubblesEnabled = true;
+            session.Settings.BubblesIntermittent = true;
+            session.Settings.BubblesBurstCount = 3;
+            session.Settings.BubblesPerBurst = 3;
+            session.Settings.BubblesGapMin = 5; session.Settings.BubblesGapMax = 5;
+            _runner.Start(session);
+            var bursts = _runner.BubbleBursts.ToList();
+            Assert.Equal(3, bursts.Count);
+            Assert.InRange(bursts[0], 2, 4);
+            Assert.Equal(new[] { bursts[0] + 5, bursts[0] + 10 }, bursts.Skip(1));
+            Assert.False(s.BubblesEnabled);
+            starts = stops = 0;
+            _runner.Tick(TimeSpan.FromMinutes(bursts[0] + 0.01));
+            Assert.True(s.BubblesEnabled);
+            Assert.Equal((1, 6), (starts, s.BubblesFrequency));   // burst rate = per burst x 2
+            _runner.Tick(TimeSpan.FromMinutes(bursts[0] + 3));   // a burst lasts 1-2 minutes
+            Assert.False(s.BubblesEnabled);
+            Assert.Equal(1, stops);
+        }
+        finally { CoreBubbles.StartAction = CoreBubbles.StopAction = null; }
+    }
+
     private static string Fixture([CallerFilePath] string here = "") =>
         Path.Combine(Path.GetDirectoryName(here)!, "Fixtures", "session_log_runner_wpf.json");
 }

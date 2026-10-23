@@ -50,6 +50,19 @@ namespace ConditioningControlPanel.Services
         /// with it directly (SetSustainedOverlayOpacity) and never writes PinkFilterOpacity (#471).</summary>
         public double? PinkOpacity { get; private set; }
 
+        /// <summary>SessionEngine._randomizedSpiralStartMinute (SessionEngine.cs:936).</summary>
+        public double SpiralStartMinute { get; private set; }
+
+        /// <summary>The ramped spiral opacity (0-100) while the session ramps it; the head paints it
+        /// directly (WPF SetSustainedOverlayOpacity) and never writes SpiralOpacity (#897).</summary>
+        public double? SpiralOpacity { get; private set; }
+
+        // SessionEngine._scheduledBubbleBursts / _bubbleBurstIndex / _bubbleBurstEndTime (minutes, not wall clock).
+        private readonly System.Collections.Generic.List<double> _bubbleBursts = new();
+        private int _bubbleBurstIndex;
+        private double? _bubbleBurstEnd;
+        internal System.Collections.Generic.IReadOnlyList<double> BubbleBursts => _bubbleBursts;
+
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
 
@@ -90,9 +103,11 @@ namespace ConditioningControlPanel.Services
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
+            SpiralStartMinute = RandomizedStart(session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute, _random);
+            ScheduleBubbleBursts(session);
             _startTime = DateTime.Now;
             _stopwatch.Restart();
 
@@ -163,6 +178,30 @@ namespace ConditioningControlPanel.Services
             }
 
             s.LockCardEnabled = ss.LockCardEnabled;
+            // SessionEngine.cs:1384 spiral: a delayed start stays off until its randomised minute (Tick).
+            s.SpiralEnabled = ss.SpiralEnabled && ss.SpiralStartMinute == 0;
+            if (s.SpiralEnabled) s.SpiralOpacity = ss.SpiralOpacity;
+
+            // SessionEngine.cs:1418 bubbles: delayed or intermittent owns the field from t=0.
+            if (ss.BubblesEnabled)
+            {
+                s.BubblesFrequency = ss.BubblesFrequency;
+                s.BubblesClickable = ss.BubblesClickable;
+                s.BubblesEnabled = ss.BubblesStartMinute == 0 && !ss.BubblesIntermittent;
+                if (s.BubblesEnabled) { CoreBubbles.Start(); CoreBubbles.RefreshFrequency(); }
+                else CoreBubbles.Stop();
+            }
+            else { s.BubblesEnabled = false; CoreBubbles.Stop(); }
+
+            // SessionEngine.cs:1447 mandatory videos.
+            s.MandatoryVideosEnabled = ss.MandatoryVideosEnabled;
+            if (ss.MandatoryVideosEnabled)
+            {
+                if (ss.VideosPerHour.HasValue) s.VideosPerHour = ss.VideosPerHour.Value;
+                StartAt("mandatory videos", ss.MandatoryVideosStartMinute, () => CoreEngine.Video?.Start(), () => CoreEngine.Video?.Stop());
+            }
+            else CoreEngine.Video?.Stop();
+
             if (ss.LockCardEnabled)
             {
                 if (ss.LockCardFrequency.HasValue) s.LockCardFrequency = ss.LockCardFrequency.Value;
@@ -176,6 +215,15 @@ namespace ConditioningControlPanel.Services
             if (s.PopQuizEnabled) CoreEngine.PopQuiz?.Start();
             else CoreEngine.PopQuiz?.Stop();
 
+            // SessionEngine.cs:1510 bubble count.
+            s.BubbleCountEnabled = ss.BubbleCountEnabled;
+            if (ss.BubbleCountEnabled)
+            {
+                if (ss.BubbleCountFrequency.HasValue) s.BubbleCountFrequency = ss.BubbleCountFrequency.Value;
+                StartAt("bubble count", ss.BubbleCountStartMinute, () => CoreEngine.BubbleCount?.Start(), () => CoreEngine.BubbleCount?.Stop());
+            }
+            else CoreEngine.BubbleCount?.Stop();
+
             // SessionEngine.cs:1479: a delayed tint stays off until its randomised minute (Tick).
             s.PinkFilterEnabled = ss.PinkFilterEnabled && ss.PinkFilterStartMinute == 0;
             if (s.PinkFilterEnabled) s.PinkFilterOpacity = ss.PinkFilterStartOpacity;
@@ -185,6 +233,24 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         internal static double RandomizedStart(bool enabled, int minute, Random random) =>
             enabled && minute > 0 ? Math.Max(0, minute + random.NextDouble() * 6 - 3) : minute;
+
+        /// <summary>SessionEngine.ScheduleBubbleBursts (SessionEngine.cs:942): first burst at 2-4 min,
+        /// then a random gap, none in the last 2 minutes.</summary>
+        private void ScheduleBubbleBursts(Session session)
+        {
+            _bubbleBursts.Clear();
+            _bubbleBurstIndex = 0;
+            _bubbleBurstEnd = null;
+            var ss = session.Settings;
+            if (!ss.BubblesEnabled || !ss.BubblesIntermittent) return;
+            double t = _random.Next(2, 5);
+            for (int i = 0; i < ss.BubblesBurstCount && t < session.DurationMinutes - 2; i++)
+            {
+                _bubbleBursts.Add(t);
+                t += _random.Next(ss.BubblesGapMin, ss.BubblesGapMax + 1);
+            }
+            Log.Information("Scheduled {Count} bubble bursts", _bubbleBursts.Count);
+        }
 
         /// <summary>SessionEngine.PauseSession (SessionEngine.cs:499): freeze the clock, count the pause,
         /// stop the driven services. The lock-card scheduler only - an open card stays (#875).
@@ -199,9 +265,12 @@ namespace ConditioningControlPanel.Services
             _timer?.Change(Timeout.Infinite, Timeout.Infinite);
             CoreFlash.Stop();
             CoreSubliminal.Stop();
+            CoreBubbles.Stop();   // SessionEngine.cs:506
             LockCardScheduler.Instance.Stop();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
+            CoreEngine.BubbleCount?.Stop();
             CoreBouncingText.Stop();
+            CoreEngine.Video?.Stop();   // SessionEngine.cs:516; the head hides the spiral (WPF App.Overlay.Stop())
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
 
@@ -217,9 +286,14 @@ namespace ConditioningControlPanel.Services
             var ss = session.Settings;
             if (ss.FlashEnabled && !_deferred.IsPending("flash")) CoreFlash.Start();
             if (ss.SubliminalEnabled && !_deferred.IsPending("subliminal")) CoreSubliminal.Start();
+            // SessionEngine.cs:553 restarts bubbles whenever the session has them, even a delayed or
+            // intermittent schedule; kept as WPF does it.
+            if (ss.BubblesEnabled) CoreBubbles.Start();
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
-            if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
+            if (ss.BubbleCountEnabled && !_deferred.IsPending("bubble count")) CoreEngine.BubbleCount?.Start();
+            if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
+            if (ss.MandatoryVideosEnabled && !_deferred.IsPending("mandatory videos")) CoreEngine.Video?.Start();
             Log.Information("Session resumed");
         }
 
@@ -256,6 +330,23 @@ namespace ConditioningControlPanel.Services
                 s.PinkFilterEnabled = true;
                 Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
             }
+            // Spiral delayed start (SessionEngine.cs:823). This head always has a spiral (the shipped
+            // one is the fallback), so WPF's "no spiral files" skip never applies.
+            var ss = session.Settings;
+            if (ss.SpiralEnabled && !s.SpiralEnabled && minutes >= SpiralStartMinute)
+            {
+                if (ss.SpiralOpacity == ss.SpiralOpacityEnd) s.SpiralOpacity = ss.SpiralOpacity;
+                s.SpiralEnabled = true;
+                Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
+            }
+            // Bubbles delayed start (SessionEngine.cs:853).
+            if (ss.BubblesEnabled && !s.BubblesEnabled && ss.BubblesStartMinute > 0 && !ss.BubblesIntermittent
+                && minutes >= ss.BubblesStartMinute)
+            {
+                s.BubblesEnabled = true;
+                CoreBubbles.Start();
+            }
+            HandleIntermittentBubbles(ss, minutes);
             Ticked?.Invoke();
         }
 
@@ -281,6 +372,50 @@ namespace ConditioningControlPanel.Services
                 var pink = RampCurves.ApplyCurve((minutes - PinkStartMinute) / (total - PinkStartMinute), curve);
                 PinkOpacity = Lerp(ss.PinkFilterStartOpacity, ss.PinkFilterEndOpacity, pink);
             }
+
+            // Spiral ramp: ramp-only, like the flash ramp (SessionEngine.cs:731, #897).
+            if (ss.SpiralEnabled && ss.SpiralOpacity != ss.SpiralOpacityEnd && minutes >= SpiralStartMinute)
+            {
+                var spiral = RampCurves.ApplyCurve((minutes - SpiralStartMinute) / (total - SpiralStartMinute), curve);
+                SpiralOpacity = Lerp(ss.SpiralOpacity, ss.SpiralOpacityEnd, spiral);
+            }
+
+            // Bubble frequency ramp: +1/min every 5 minutes after a delayed start (SessionEngine.cs:742).
+            if (ss.BubblesEnabled && !ss.BubblesIntermittent && ss.BubblesStartMinute > 0 && minutes >= ss.BubblesStartMinute)
+            {
+                var freq = ss.BubblesFrequency + (int)((minutes - ss.BubblesStartMinute) / 5);
+                if (CoreSettings.Current.BubblesFrequency != freq)
+                {
+                    CoreSettings.Current.BubblesFrequency = freq;
+                    CoreBubbles.RefreshFrequency();
+                }
+            }
+        }
+
+        /// <summary>SessionEngine.HandleIntermittentBubbles (SessionEngine.cs:968) + MainWindow.SetBubblesActive
+        /// (MainWindow.Presets.cs:2138). The burst end counts session minutes, so a pause does not eat it.</summary>
+        private void HandleIntermittentBubbles(SessionSettings ss, double minutes)
+        {
+            if (!ss.BubblesEnabled || !ss.BubblesIntermittent) return;
+            var s = CoreSettings.Current;
+            if (_bubbleBurstEnd is { } end && minutes >= end)
+            {
+                _bubbleBurstEnd = null;
+                CoreBubbles.Stop();
+                s.BubblesEnabled = false;
+                Log.Information("Bubble burst ended");
+            }
+            if (_bubbleBurstEnd == null && _bubbleBurstIndex < _bubbleBursts.Count && minutes >= _bubbleBursts[_bubbleBurstIndex])
+            {
+                var duration = _random.Next(1, 3);   // 1-2 minutes
+                _bubbleBurstEnd = minutes + duration;
+                _bubbleBurstIndex++;
+                s.BubblesEnabled = true;
+                s.BubblesFrequency = ss.BubblesPerBurst * 2;   // higher frequency during a burst
+                CoreBubbles.Start();   // a no-op when already spawning ...
+                CoreBubbles.RefreshFrequency();   // ... so the burst rate is applied either way
+                Log.Information("Bubble burst started, duration: {Duration}min", duration);
+            }
         }
 
         private static double Lerp(double a, double b, double t) => a + (b - a) * Math.Clamp(t, 0, 1);
@@ -302,7 +437,8 @@ namespace ConditioningControlPanel.Services
 
             var s = CoreSettings.Current;
             s.ClearSessionFlashRamp();   // SessionEngine.cs:390, ahead of the restore
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;
+            _bubbleBurstEnd = null;
             _snapshot?.RestoreTo(s);
             _snapshot = null;
             _custody?.Restore(s);

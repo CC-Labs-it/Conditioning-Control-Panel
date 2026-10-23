@@ -66,8 +66,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return CoreModArt.SpiralOverridePath() ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
 
-        /// <summary>The painted alpha: the slider through WPF's #722 curve.</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0);
+        /// <summary>The painted alpha: the slider (or a session's ramp, which never writes it, #897)
+        /// through WPF's #722 curve.</summary>
+        internal static double PaintedOpacity => SpiralFrames.Paint((App.Sessions?.SpiralOpacity ?? CoreSettings.Current.SpiralOpacity) / 100.0);
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
