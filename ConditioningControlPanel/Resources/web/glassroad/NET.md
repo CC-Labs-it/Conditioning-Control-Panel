@@ -313,3 +313,30 @@ online door answers a `preview` refusal with "Online racing is in a closed previ
 lobby card claims it; seated goes straight into the room, `waiting` shows "Waiting for <host> to open a room." and
 polls until seated or Cancel, `tier` "Racing a friend needs Prime.", `gone` "This link has expired.", `full` "That
 race is full.". After the first claim answer `r` leaves the address bar (history.replaceState).
+
+## 14. Race songs from our own storage (2026-10-23; brief `C:/wt-glassroad-run/BRIEF-PUBLIC.md` lane SONGS)
+
+Songs live in a Cloudflare R2 bucket (`glassroad-songs`, binding `SONGS`) on the room worker; the lobby hands any
+signed-in player short-lived signed urls, so desktop, phone and web all get the same song.
+
+| Route | 200 | Who |
+|---|---|---|
+| GET /v2/race/songs (lobby) | `{ songs: [{ id, title, chartUrl, exp }] }` | signed in, both doors, preview gate applies |
+| GET\|HEAD /song/<id>/<file>?exp=<ms>&sig=<b64url> (room) | the R2 object `<id>/<file>` (file = `chart.json` or the mp3 the chart names) | anyone holding a live signed url |
+
+- `chartUrl = <RACE_ROOM_HTTP>/song/<id>/chart.json?exp=<ms>&sig=<b64url>`. sig = HMAC-SHA256 over
+  `song:<id>:<file>:<exp>` with kSong = HMAC-SHA256(RACE_ROOM_SECRET, `glassroad-song-v1`); exp at most 6 h ahead (the
+  lobby puts it on a 10 minute grid, so a repeat ask gives the same url and the browser cache keeps the mp3).
+  `RACE_ROOM_HTTP` = env, else `RACE_ROOM_WS` with wss -> https. The list is env `RACE_SONGS` (`id:Title,id:Title`),
+  default `pink-road:Pink Road`. Song id `/^[a-z0-9][a-z0-9-]{0,47}$/`.
+- Room: verifies exp (ahead, at most 6 h + 5 min) and sig (RACE_ROOM_SECRET, or RACE_ROOM_SECRET_PREV during a
+  rotation); 400 bad, 403 expired or forged, 404 missing, 503 unconfigured. chart.json goes out with its `audio`
+  field REWRITTEN to the absolute signed mp3 url on the room origin (same exp; a relative url would lose the query).
+  The mp3 honours a single `Range` (206 + Content-Range, 416 past the end). CORS `*` (GET, HEAD, OPTIONS),
+  `Cache-Control: private, max-age=3600`.
+- Owner-run upload: `rooms/scripts/upload-song.sh <id> <dir>` puts the mp3 the chart names, then `chart.json`.
+- Client: when nothing named a chart (no `?chart`, not the dev host, no valid host `caps.songs`) and the lobby link
+  exists, boot asks `lobbyApi.songs()` once; `host/bridge.js` `lobbySongCharts` keeps only chartUrls on the room
+  origin (`ROOM_ORIGIN`, https; a local lobby passes `&room=http://127.0.0.1:<port>`), path `/song/<id>/chart.json`,
+  exp ahead, a 43 char sig, at most 8. A refusal (preview, dark, offline) leaves no song. Solo and online song timing
+  are unchanged (the same CHARTS list feeds both).

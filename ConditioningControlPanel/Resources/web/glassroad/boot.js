@@ -18,7 +18,7 @@
  * ?lobby=http://127.0.0.1:8811&uid=<id>&name=<n> talks to a local race-local.mjs lobby with the fake identity
  * (&tier=N also goes to the lobby as x-dev-tier). ?r=<token>: a friend's race link, claimed on the lobby card.
  */
-import { createBridge, songCharts } from './host/bridge.js';
+import { createBridge, songCharts, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -439,6 +439,17 @@ async function boot() {
   }
   const link = lobbyLink();
   const lobbyApi = link ? createLobbyApi(link.transport) : null;
+  // race songs from our own storage (NET.md section 14): nothing named a chart and the lobby is there, so ask it once
+  // for signed chart urls on the room origin (a local lobby names its room with &room=http://127.0.0.1:<port>). A
+  // refusal (preview, dark, offline) leaves no song; a race that starts before the answer lands runs without one.
+  if (lobbyApi && wantLobbySongs({ search: location.search, charts: CHARTS })) {
+    const devLobby = LOCAL_URL.test(qs.get('lobby') || '') && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+    const roomOrigin = !devLobby ? ROOM_ORIGIN : (LOCAL_URL.test(qs.get('room') || '') ? qs.get('room') : null);
+    lobbyApi.songs().then((r) => {
+      const list = lobbySongCharts(r && r.songs, { roomOrigin });
+      if (list.length && !CHARTS.length) CHARTS = list;
+    }).catch(() => { /* no lobby songs: none */ });
+  }
   const platform = init.caps.platform === 'desktop' || init.caps.platform === 'phone' ? init.caps.platform : 'web';
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
   /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
