@@ -20,6 +20,7 @@ using LibVLCSharp.WPF;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Video.Browser;
+using static ConditioningControlPanel.Services.VideoRenderMath;
 using Application = System.Windows.Application;
 using Screen = System.Windows.Forms.Screen;
 
@@ -221,13 +222,6 @@ namespace ConditioningControlPanel.Services
         /// latched the guard shut".</summary>
         private DateTime _triggerStartedUtc = DateTime.MinValue;
 
-        /// <summary>How long a trigger may sit between claiming <see cref="_triggerInProgress"/> and
-        /// reaching PlayVideo before the next trigger declares it dead and takes over. Generously
-        /// past the real path (an off-thread clip selection, which for a content-pack clip decrypts
-        /// the whole file, plus the 800ms freeze delay) and far short of the InteractionQueue's
-        /// 5-minute stuck detector, which is what used to be the only way out.</summary>
-        internal static readonly TimeSpan TriggerStallCeiling = TimeSpan.FromSeconds(45);
-
         // ---- a video the descent asked for (ccp-bugs #1201) ------------------------------
         // A chaos video is REQUESTED when the bubble detonates and only reaches the screen much
         // later: clip selection runs off the UI thread, the freeze delay adds another 800ms, and
@@ -243,14 +237,6 @@ namespace ConditioningControlPanel.Services
         private int _chaosVideoToken;             // last token handed out; 0 is never a token
         private int _chaosVideoCancelledThrough;  // every token <= this one has been cancelled
 
-        /// <summary>
-        /// The pure rule behind the cancellation, extracted so a test can pin it without LibVLC
-        /// behind it (the same seam <see cref="EvaluateTriggerGuard"/> uses). A request is
-        /// abandoned only when it carries a token AND a cancel has swept through that token, so a
-        /// video requested AFTER the cancel - the next run's, or the user's own - still plays.
-        /// </summary>
-        internal static bool ShouldAbandonVideoRequest(int requestToken, int cancelledThrough)
-            => requestToken != 0 && requestToken <= cancelledThrough;
 
         /// <summary>
         /// Take a token for a video a descent run is about to fire. Claimed at DETONATION time,
@@ -278,7 +264,7 @@ namespace ConditioningControlPanel.Services
         }
 
         private bool IsChaosVideoRequestCancelled(int requestToken)
-            => ShouldAbandonVideoRequest(requestToken, Volatile.Read(ref _chaosVideoCancelledThrough));
+            => VideoTriggerRules.ShouldAbandonVideoRequest(requestToken, Volatile.Read(ref _chaosVideoCancelledThrough));
 
         /// <summary>
         /// The shared abandon step for a cancelled chaos request. It also hands the InteractionQueue
@@ -2002,7 +1988,7 @@ namespace ConditioningControlPanel.Services
         /// whether a trigger stood down for the feed owes the user a toast. Only a press the user
         /// just made does. The ambient scheduler deferring is not news, and a video EARNED by a
         /// bubble pop never defers at all (it plays over the feed), so it has nothing to announce.
-        /// Extracted so the rule is testable without LibVLC, like EvaluateTriggerGuard.
+        /// Extracted so the rule is testable without LibVLC, like VideoTriggerRules.EvaluateTriggerGuard.
         /// </summary>
         internal static bool ShouldAnnounceFeedDefer(bool feedOwnsTheScreen, bool userInitiated, bool userEarned)
             => feedOwnsTheScreen && userInitiated && !userEarned;
@@ -2141,31 +2127,6 @@ namespace ConditioningControlPanel.Services
             App.Logger?.Information("VideoService: deferring mandatory video until the For You feed leaves the screen");
         }
 
-        /// <summary>What a fresh TriggerVideo call should do about the in-progress guard.</summary>
-        internal enum TriggerGuardDecision
-        {
-            /// <summary>Nothing in flight - claim the guard and go.</summary>
-            Proceed,
-            /// <summary>A trigger really is mid-flight; this one is a genuine overlap and is dropped.</summary>
-            Skip,
-            /// <summary>The in-flight trigger is older than anything real can be: it died on the way
-            /// to PlayVideo and latched the guard. Clear it and let this trigger through.</summary>
-            ClearStaleAndProceed
-        }
-
-        /// <summary>
-        /// Pure decision for the <see cref="_triggerInProgress"/> guard, extracted so the escape
-        /// hatch is unit-testable without LibVLC (the seam pattern EvaluateGraceRequest already uses).
-        /// The escape exists because the guard could latch forever and silently eat every later
-        /// video: the #1135 "video bubbles do nothing" report.
-        /// </summary>
-        internal static TriggerGuardDecision EvaluateTriggerGuard(bool triggerInProgress, TimeSpan sinceTriggerStarted)
-        {
-            if (!triggerInProgress) return TriggerGuardDecision.Proceed;
-            return sinceTriggerStarted < TriggerStallCeiling
-                ? TriggerGuardDecision.Skip
-                : TriggerGuardDecision.ClearStaleAndProceed;
-        }
 
         /// <param name="silentIfEmpty">
         /// When true, an empty videos folder is logged and ignored instead of popping the
@@ -2225,7 +2186,7 @@ namespace ConditioningControlPanel.Services
             // the flag indefinitely: a trigger that has not reached PlayVideo within
             // TriggerStallCeiling is declared dead and this one takes over.
             var triggerAge = DateTime.UtcNow - _triggerStartedUtc;
-            switch (EvaluateTriggerGuard(_triggerInProgress, triggerAge))
+            switch (VideoTriggerRules.EvaluateTriggerGuard(_triggerInProgress, triggerAge))
             {
                 case TriggerGuardDecision.Skip:
                     App.Logger?.Information("VideoService: TriggerVideo skipped - trigger already in progress ({Sec:F1}s ago)",
@@ -2234,7 +2195,7 @@ namespace ConditioningControlPanel.Services
 
                 case TriggerGuardDecision.ClearStaleAndProceed:
                     App.Logger?.Warning("VideoService: clearing a STALE in-progress trigger ({Sec:F0}s old, ceiling {Ceiling:F0}s) - the previous trigger never reached PlayVideo; this one proceeds",
-                        triggerAge.TotalSeconds, TriggerStallCeiling.TotalSeconds);
+                        triggerAge.TotalSeconds, VideoTriggerRules.TriggerStallCeiling.TotalSeconds);
                     _triggerInProgress = false;
                     // The dead trigger claimed the queue's Video slot and will never release it. Only
                     // release when nothing is actually on screen - a live video's claim is its own.
@@ -3132,6 +3093,7 @@ namespace ConditioningControlPanel.Services
             _safetyTimer?.Stop();
             _fallbackSafetyTimer?.Stop();
             _fallbackSafetyTimer = null;
+            if (!isVoutRetry) CarryMaxLenCap(replay: false);   // a new clip starts a fresh cap; a vout heal carried its own
             _maxLenCapTimer?.Stop();
             _maxLenCapTimer = null;
 
@@ -3960,9 +3922,9 @@ namespace ConditioningControlPanel.Services
             // EnableHardwareDecoding=false above) to dodge the LibVLC white-screen/wedge on the
             // hardware path (#533/#537/#540). Skipped only when the user has explicitly opted into
             // GPU decode, in which case we honour their choice and leave the HW path enabled.
-            if (!(App.Settings?.Current?.VideoForceHardwareDecoding ?? false))
+            if (MandatoryVideoScheduler.SoftwareDecodeOption(App.Settings?.Current?.VideoForceHardwareDecoding ?? false) is { } swDecode)
             {
-                media.AddOption(":avcodec-hw=none");
+                media.AddOption(swDecode);
             }
 
             // Everything that needs a live aout hangs off Playing, and the handler is subscribed
@@ -4129,99 +4091,11 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// True DISPLAY aspect (w/h) of a video track: the coded frame size corrected by the sample
-        /// aspect ratio, and transposed when the track carries a 90°/270° rotation (LibVLC rotates
-        /// the vmem buffer for us via video_format_ApplyRotation, but the track still reports the
-        /// pre-rotation size). Returns 0 when the numbers can't describe a real frame.
-        ///
-        /// #786: the vmem format callback hands us the CODED size with the SAR already dropped, so
-        /// an anamorphic clip (non-square pixels) arrived as, say, 640x368 when its real display
-        /// shape is much taller — and rendering that buffer at its own pixel aspect stretched the
-        /// picture sideways until it filled the screen. Never derive the on-screen shape from the
-        /// buffer when the track can tell us the truth. Pure — unit-tested.
-        /// </summary>
-        internal static double DisplayAspectFrom(uint width, uint height, uint sarNum, uint sarDen, bool transposed)
-        {
-            if (width == 0 || height == 0) return 0;
-            double num = width * (sarNum > 0 ? sarNum : 1u);
-            double den = height * (sarDen > 0 ? sarDen : 1u);
-            if (den <= 0) return 0;
-            double aspect = num / den;
-            if (transposed) aspect = 1.0 / aspect;
-            if (double.IsNaN(aspect) || double.IsInfinity(aspect) || aspect <= 0) return 0;
-            // Sanity fence: real clips live well inside 16:1 .. 1:16. Anything outside is a garbage
-            // SAR and must fall back to the buffer aspect rather than produce a sliver of video.
-            if (aspect > 16.0 || aspect < 1.0 / 16.0) return 0;
-            return aspect;
-        }
-
-        /// <summary>
-        /// Largest rect of <paramref name="aspect"/> (w/h) that fits inside the container —
-        /// i.e. letterbox or pillarbox, never stretch. Returns (0,0) when there is nothing sane to
-        /// fit yet. Pure — unit-tested.
-        /// </summary>
-        internal static (double W, double H) FitToAspect(double containerW, double containerH, double aspect)
-        {
-            if (containerW <= 0 || containerH <= 0 || aspect <= 0 ||
-                double.IsNaN(aspect) || double.IsInfinity(aspect)) return (0, 0);
-
-            double w = containerW;
-            double h = containerW / aspect;
-            if (h > containerH)
-            {
-                h = containerH;
-                w = containerH * aspect;
-            }
-            return (w, h);
-        }
-
-        /// <summary>
         /// Whether the blurred fill is worth paying for: bars only appear when the video's display
         /// aspect differs from the screen's by more than the tolerance. Pure — unit-tested.
         /// </summary>
         internal static bool NeedsBlurFill(double videoAspect, double screenAspect)
             => MandatoryVideoScheduler.NeedsBlurFill(videoAspect, screenAspect);
-
-        /// <summary>
-        /// Byte size of one BGRA frame of the given geometry, or 0 if the geometry is absurd
-        /// (overflow / zero side). A bogus format callback must make the blit SKIP the frame, never
-        /// allocate or copy on a garbage length. Pure — unit-tested.
-        /// </summary>
-        internal static int StagingBytesFor(uint w, uint h)
-        {
-            if (w == 0 || h == 0) return 0;
-            if (w > 65535 || h > 65535) return 0; // no real decoded frame is this big; keeps the product in range
-            long bytes = (long)w * h * 4;
-            if (bytes > int.MaxValue) return 0;
-            return (int)bytes;
-        }
-
-        /// <summary>
-        /// Geometry of the small snapshot that feeds the blurred fill: the frame divided down, floored
-        /// at 8px a side so a tiny clip can't degenerate to a 0-wide bitmap. Pure — unit-tested.
-        /// </summary>
-        internal static (int W, int H) ComputeSnapshotDims((uint W, uint H) buffer, int divisor)
-        {
-            int d = Math.Max(1, divisor);
-            int sw = Math.Max(8, (int)buffer.W / d);
-            int sh = Math.Max(8, (int)buffer.H / d);
-            return (sw, sh);
-        }
-
-        /// <summary>
-        /// Whether this frame index should refresh the blurred fill's snapshot. The fill sits behind a
-        /// radius-48 Gaussian, so it does not need per-frame freshness. Pure — unit-tested.
-        /// </summary>
-        internal static bool IsSnapshotFrame(int frameIndex, int everyN)
-            => everyN <= 1 || (frameIndex % everyN) == 0;
-
-        /// <summary>
-        /// Whether a bitmap rebuild posted with <paramref name="postedGeneration"/> is still the newest
-        /// one (#687: three format callbacks landed within 15ms and an older rebuild ran last, pinning
-        /// the bitmap at a size that no longer matched the buffer). Pure — unit-tested.
-        /// </summary>
-        internal static bool IsRebuildCurrent(int postedGeneration, int currentGeneration)
-            => postedGeneration == currentGeneration;
 
         /// <summary>
         /// PER-SURFACE liveness watchdog for the blurred-background (memory-render) path. Cheaper
@@ -6949,6 +6823,9 @@ namespace ConditioningControlPanel.Services
 
             var maxSec = App.Settings?.Current?.VideoMaxDurationSeconds ?? 0;
             _cutClock = maxSec > 0 ? new Video.VideoPlaybackClock() : null;
+            var carriedMs = _cutCarriedMs;   // a replay of the same clip keeps what it already played (BUG-7NAKK79CZ2)
+            _cutCarriedMs = 0;
+            _cutBaseMs = maxSec > 0 ? carriedMs : 0;
             if (maxSec <= 0) return;
 
             var capRun = _videoRunId;
@@ -6984,7 +6861,7 @@ namespace ConditioningControlPanel.Services
                 }
                 var playedMs = _browserActive ? Browser.PlayedMs
                     : _cutClock?.PlayedMs ?? 0;
-                if (!Video.VideoLengthCap.Reached(maxSec, playedMs)) return;
+                if (!Video.VideoLengthCap.Reached(maxSec, carriedMs + playedMs)) return;
                 _maxLenCapTimer?.Stop();
                 _maxLenCapTimer = null;
                 if (_videoPlaying)
@@ -6999,7 +6876,20 @@ namespace ConditioningControlPanel.Services
             _maxLenArm.Interval = _maxLenCapTimer.Interval;
             _maxLenArm.Remaining = TimeSpan.Zero;
 
-            App.Logger?.Debug("VideoService: Max video-length cap timer started for {Max}s", maxSec);
+            App.Logger?.Debug("VideoService: Max video-length cap timer started for {Max}s ({Carried:F0}s already played)", maxSec, carriedMs / 1000.0);
+        }
+
+        /// <summary>Played milliseconds of the current clip carried into its next replay (vout heal,
+        /// browser-to-LibVLC fallback), consumed by the next <see cref="StartMaxLengthCapTimer"/> so the
+        /// replay gets only what is left of the user's max, not a fresh allowance (BUG-7NAKK79CZ2).</summary>
+        private long _cutCarriedMs;
+        /// <summary>The carry the running cap started from, so a second replay keeps both runs.</summary>
+        private long _cutBaseMs;
+
+        private void CarryMaxLenCap(bool replay)
+        {
+            var playedMs = _browserActive ? Browser.PlayedMs : _cutClock?.PlayedMs ?? 0;
+            _cutCarriedMs = replay && _cutClock != null ? _cutBaseMs + playedMs : 0;
         }
 
         /// <summary>
@@ -7300,6 +7190,7 @@ namespace ConditioningControlPanel.Services
                         _fallbackSafetyTimer?.Stop();
                         _fallbackSafetyTimer = null;
                         _videoPlaying = false;
+                        CarryMaxLenCap(replay: true);   // before CloseAll drops the clock: the replay continues the clip's cap
                         CloseAll(reason: "vout self-heal");
                         App.InteractionQueue?.ExtendTimeout(300, InteractionQueueService.InteractionType.Video);
                         App.Logger?.Information("VideoService: vout self-heal - replaying {File} on a fresh LibVLC instance",

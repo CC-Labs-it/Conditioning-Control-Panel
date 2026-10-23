@@ -78,3 +78,30 @@ Evidence: ~/ccp-port/evidence/package-verify/.
   libXi, libpulse, ICU and `parec`; it lacks libvlc and the WPE trio (`flatpak-runtime-libs.txt`).
 - **Desktop/metainfo:** `desktop-file-validate` clean; `appstreamcli validate --pedantic` passes with two pedantic notes
   (uppercase in the component id, which is the fixed app id, and no `<releases>`) (`validate.txt`).
+
+## Installing the tarball by hand
+The tarball's `.desktop` runs `conditioning-control-panel` from `PATH`, so extracting it alone gives a menu entry that
+does not start. Lay it out the way the AUR package does (any prefix; `~/.local` needs no root). The last line points the
+menu entry at the launcher's absolute path, since `~/.local/bin` is often not on the desktop session's `PATH`:
+```bash
+mkdir -p ~/.local/opt ~/.local/bin
+tar -xzf ConditioningControlPanel-<ver>-linux-x64.tar.gz -C ~/.local/opt
+mv ~/.local/opt/ConditioningControlPanel ~/.local/opt/conditioning-control-panel
+printf '#!/bin/sh\nexec %s "$@"\n' ~/.local/opt/conditioning-control-panel/CCP.Avalonia > ~/.local/bin/conditioning-control-panel
+chmod 755 ~/.local/bin/conditioning-control-panel
+cp -r ~/.local/opt/conditioning-control-panel/share/. ~/.local/share/
+sed -i "s|^Exec=.*|Exec=$HOME/.local/bin/conditioning-control-panel|" ~/.local/share/applications/io.github.CodeBambi.ConditioningControlPanel.desktop
+```
+Remove: delete `opt/conditioning-control-panel`, `bin/conditioning-control-panel` and the
+`io.github.CodeBambi.ConditioningControlPanel.*` files under `share/applications`, `share/icons/hicolor/*/apps`,
+`share/metainfo`.
+
+## Installed run (avalonia-port/linux-package-wired, 7.1.5)
+Evidence: ~/ccp-port/evidence/linux-package-wired/ (scripts `install-run.sh`, `window-run.sh`, `wmclose.py` alongside).
+The CI tarball built locally, installed as above into a temp prefix, the `.desktop` `Exec` resolved through `PATH`, then:
+`--smoke` with the bundled model required passes; a real start in a throwaway `kwin_wayland --virtual --xwayland`
+(no Xvfb/weston on the box) maps the splash after 0.46 s and the interactive "First run" wizard after 5.80 s (also the
+main shell, Avatar Tube, Free Feature card; WM_CLASS = the app id); closing the wizard with `WM_DELETE_WINDOW` shuts the
+app down through the age-gate path, exit 0 (`install/first-window.txt`, `install/window-*.png`). Installed size 749 MiB
+(778,236,559 bytes; tarball 534 MB). `packaging/aur/test-local.sh` passes. Every library `ldd` resolves for the bundled `.so` files belongs to the `pactree` closure of `depends=`
+(zlib-ng-compat via its zlib provide; `ldd-outside-depends.txt`).

@@ -204,6 +204,10 @@ internal static class Win32PanicKey
         // She's Listening push-to-talk rides the same hook (WPF GlobalKeyboardHook), as on X11.
         if (X11PanicKey.PushToTalk is { } ptt && vk == VirtualKeys.Of(X11PanicKey.PushToTalkKey?.Invoke()) && vk != _boundVk)
             ptt();
+        // Chaos toy keybinds ride the same hook, after panic (X11PanicKey.ToyKeys).
+        if (X11PanicKey.ToyKey is { } toy && X11PanicKey.ToyKeys?.Invoke() is { } toyKeys)
+            foreach (var k in toyKeys)
+                if (vk != 0 && vk == VirtualKeys.Of(k.Length == 1 && char.IsDigit(k[0]) ? "D" + k : k)) { toy(k); break; }   // hub offers "1"-"4"
     }
 
     /// <summary>One key-up on the listener thread.</summary>
