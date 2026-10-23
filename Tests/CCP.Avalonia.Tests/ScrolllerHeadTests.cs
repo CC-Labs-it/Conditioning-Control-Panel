@@ -85,6 +85,22 @@ public sealed class ScrolllerHeadTests : IDisposable
     }
 
     [Fact]
+    public void This_heads_own_webview2_profile_is_swept_too()
+    {
+        // Lane E (port72/shell) puts every Avalonia WebView2 profile on Windows in UserData\browser_data_avalonia.
+        var own = Path.Combine(_dir, LegacyWebViewCaches.OwnProfileFolderName, "EBWebView", "Default", "Cache");
+        Directory.CreateDirectory(own);
+        LegacyWebViewCaches.RootsProvider = () => new[] { _dir };
+        Assert.Equal(1, LegacyWebViewCaches.SweepAll());
+        Assert.False(Directory.Exists(own));
+        Assert.Equal(new[] { ConditioningControlPanel.CorePaths.UserData }, _roots());   // the real root: WebViewProfile's parent
+        // Once WebViewProfile lands beside this, its FolderName must stay this constant.
+        var profileSrc = Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "WebViewProfile.cs");
+        if (File.Exists(profileSrc))
+            Assert.Contains($"FolderName = \"{LegacyWebViewCaches.OwnProfileFolderName}\"", File.ReadAllText(profileSrc));
+    }
+
+    [Fact]
     public void A_remote_copy_is_served_no_store()
     {
         Assert.Equal("no-store", WebAssetServer.CacheControlFor(Path.Combine(_dir, ".temp", "ccp_temp_remote_ab.jpg")));

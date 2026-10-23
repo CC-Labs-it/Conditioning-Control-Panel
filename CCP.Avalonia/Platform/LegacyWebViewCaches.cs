@@ -13,9 +13,17 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// sweep runs hourly and on the off switch, and a folder already empty costs one directory listing. A cache a running
 /// browser still holds is refused and retried next hour. Only the Cache folder goes: a page's localStorage and
 /// IndexedDB stay. A Linux profile has no EBWebView folder, so this is a no-op there.
+/// <para>This head's OWN Windows profile (<see cref="OwnProfileFolderName"/>, lane E's Platform/WebViewProfile.Folder =
+/// <c>CorePaths.UserData\browser_data_avalonia</c>) is a child of the same root, so the same sweep reaches it: its cache
+/// goes at the first sweep of a launch (before a web view holds it) and at every hourly retry. Scrolller bytes reach
+/// this head's pages only through the no-store relay, so the engine should never hold one; this is the belt.</para>
 /// </summary>
 internal static class LegacyWebViewCaches
 {
+    /// <summary>This head's WebView2 profile folder name (mirrors WebViewProfile.FolderName, port72/shell #2709;
+    /// pinned by ScrolllerHeadTests so the two never drift).</summary>
+    internal const string OwnProfileFolderName = "browser_data_avalonia";
+
     /// <summary>Folders whose children are WebView2 user data folders. Replaceable by tests.</summary>
     internal static Func<IEnumerable<string>> RootsProvider = () => new[] { CorePaths.UserData };
 
