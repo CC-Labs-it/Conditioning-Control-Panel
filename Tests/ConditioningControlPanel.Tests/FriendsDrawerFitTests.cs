@@ -44,7 +44,7 @@ public partial class FriendsDrawerTests
                 var d = NewDrawer(new FakeFriends(snap));
                 Layout(d);
 
-                foreach (var tag in new[] { "friends-my-code", "friends-copy", "friends-add-open", "friends-settings" })
+                foreach (var tag in new[] { "friends-my-code", "friends-copy", "friends-copy-link", "friends-add-open", "friends-settings" })
                     AssertWhole(d, Find(d, tag), $"{lang} {tag}");
                 AssertNotTrimmed((TextBlock)Find(d, "friends-my-code")!, $"{lang} code");
 

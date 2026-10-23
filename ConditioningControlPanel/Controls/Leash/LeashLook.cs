@@ -78,7 +78,7 @@ internal static class LeashLook
             ic.HorizontalAlignment = HorizontalAlignment.Center;
             sp.Children.Add(ic);
         }
-        sp.Children.Add(new TextBlock
+        var label = new TextBlock
         {
             Text = text,
             FontFamily = FriendsLook.Display,
@@ -88,9 +88,14 @@ internal static class LeashLook
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
-        });
+        };
+        // A stacked button sits in a four-wide row on the holder card, too narrow for "Reward"
+        // (ticket, 2026-10-15) or "Récompenser": the word shrinks to fit instead of trimming.
+        sp.Children.Add(stacked
+            ? new Viewbox { Child = label, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly }
+            : label);
         var b = FriendsLook.Pill(sp, body, ink, FriendsLook.Frozen(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)), 11,
-            new Thickness(8, stacked ? 8 : 7, 8, stacked ? 7 : 7), body);
+            stacked ? new Thickness(5, 8, 5, 7) : new Thickness(8, 7, 8, 7), body);
         if (tone != Tone.Ghost) b.Effect = FriendsLook.Glow(bottom, 12, 0.35);
         return b;
     }
