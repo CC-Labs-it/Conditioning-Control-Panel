@@ -71,6 +71,9 @@ namespace ConditioningControlPanel.Services
         internal bool AutoPoll = true;
 
         public bool IsActive { get; private set; }
+        /// <summary>WPF RemoteControlService.LastEndedUtc: when the last session ended, so Circe's Tab keeps the
+        /// remote cap for <c>ChasterService.RemoteGrace</c> after it (ChasterService.RemoteCounts).</summary>
+        public DateTime? LastEndedUtc { get; private set; }
         public string? SessionCode { get; private set; }
         public string? ConnectPin { get; private set; }
         public string? Tier { get; private set; }
@@ -185,6 +188,7 @@ namespace ConditioningControlPanel.Services
             _loop?.Cancel();
             _loop = null;
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
+            LastEndedUtc = DateTime.UtcNow;   // WPF RemoteControlService.cs:379
             (_remoteSetStrictLock, _pollBackedOff, _lastControllerCommand) = (false, false, DateTime.MinValue);
             // StopAsync and the poll loop land here off the UI thread, and the stops close windows: run
             // them on the UI like ControllerLeft, posted if a stalled UI cancels the Invoke.

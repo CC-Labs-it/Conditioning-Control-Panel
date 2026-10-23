@@ -144,6 +144,7 @@ public sealed class RemoteRelayTests
         await r.PollOnceAsync();
         await r.PollOnceAsync();
         Assert.Equal(20, r.PollInterval);
+        Assert.Null(r.LastEndedUtc);
 
         var ended = 0;
         r.SessionEnded += (_, _) => ended++;
@@ -152,6 +153,7 @@ public sealed class RemoteRelayTests
         Assert.False(r.IsActive);
         Assert.Null(r.SessionCode);
         Assert.Equal(1, ended);
+        Assert.NotNull(r.LastEndedUtc);   // WPF LastEndedUtc: Circe's remote grace starts here
         Assert.Equal(new[] { false }, _stops);   // the subject's own run survives (#878)
     }
 
