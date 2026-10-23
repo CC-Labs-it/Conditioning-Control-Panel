@@ -2779,3 +2779,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-shell-lab-tab: +250
 - Shared webcam state chips (Devices, Play, Blink Trainer, Deeper) driven by Core WebcamStatus; Play Eyes cards dim while capture is off.
 - Review fixes: consent refusal stays Stopped like WPF; live-capture Play cards tested; Skia headless setup and ledger corrected.
+
+## avalonia-port/wire-theme-controls: +312
+- Shared rounded Deeper themes app-wide; Action/Secondary/Outline get WPF 80ms press / 150ms BackEase(0.3) release, sampled on a stepped clock in tests.
+- theme-controls stays stub; HudPlank and ToggleStyle timings left for wire-theme-controls-b.
