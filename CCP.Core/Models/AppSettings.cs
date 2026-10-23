@@ -1456,10 +1456,8 @@ namespace ConditioningControlPanel.Models
             set { _strictLockEnabled = value; OnPropertyChanged(); }
         }
 
-        // Video duration filter (seconds). 0 = no limit. Applied when refilling
-        // the video queue; videos outside the [min, max] range are excluded so
-        // a session can be pinned to short clips or long ones without
-        // shuffling content packs.
+        // Video duration limits (seconds). 0 = no limit. The minimum skips shorter
+        // clips in the queue; the maximum cuts playback after that much played time.
         private int _videoMinDurationSeconds = 0;
         public int VideoMinDurationSeconds
         {
@@ -1472,6 +1470,13 @@ namespace ConditioningControlPanel.Models
         {
             get => _videoMaxDurationSeconds;
             set { _videoMaxDurationSeconds = Math.Max(0, value); OnPropertyChanged(); }
+        }
+
+        private bool _videoCutRandomStart = true;
+        public bool VideoCutRandomStart
+        {
+            get => _videoCutRandomStart;
+            set { _videoCutRandomStart = value; OnPropertyChanged(); }
         }
 
         private bool _forceVideoOnLaunch = false;
@@ -2611,6 +2616,92 @@ namespace ConditioningControlPanel.Models
             set { _videoTargetMonitor = value; OnPropertyChanged(); }
         }
 
+        private bool _mandatoryVideoFloating;
+        /// <summary>How a mandatory video appears: false (default) = full screen, as always; true = a
+        /// floating topmost window about a third of the screen, placed like a flash image, with its own
+        /// sound (player request 2026-10-10: usable while gaming). Every stop rule is the same, and a
+        /// strict video, a Lockdown and a Chaos run stay full screen
+        /// (Services/Video/MandatoryVideoPresentation.ShouldFloat).</summary>
+        public bool MandatoryVideoFloating
+        {
+            get => _mandatoryVideoFloating;
+            set { _mandatoryVideoFloating = value; OnPropertyChanged(); }
+        }
+
+        private int _mandatoryVideoFloatingSizePercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.DefaultSizePercent;
+        /// <summary>Floating window WIDTH as a percent of the work-area width of the monitor it
+        /// opens on, 15 to 60, default 33. Read when the next window opens.</summary>
+        public int MandatoryVideoFloatingSizePercent
+        {
+            get => _mandatoryVideoFloatingSizePercent;
+            set { _mandatoryVideoFloatingSizePercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampSizePercent(value); OnPropertyChanged(); }
+        }
+
+        /// <summary>RETIRED small / medium / large choice. Read once from an old settings file and
+        /// carried into <see cref="MandatoryVideoFloatingSizePercent"/> (25 / 33 / 50); it reads
+        /// back as null, so it is never the source again.</summary>
+        public string? MandatoryVideoFloatingSize
+        {
+            get => null;
+            set
+            {
+                var carried = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.LegacySizePercent(value);
+                if (carried.HasValue) MandatoryVideoFloatingSizePercent = carried.Value;
+            }
+        }
+
+        private int _mandatoryVideoFloatingSpeedPercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.DefaultSpeedPercent;
+        /// <summary>How fast a thrown floating window travels, 10 to 100 percent of flash-image
+        /// speed, default 35 (a lazy drift). Live: IFloatingVideoSurface.MotionSpeed = value / 100.</summary>
+        public int MandatoryVideoFloatingSpeedPercent
+        {
+            get => _mandatoryVideoFloatingSpeedPercent;
+            set { _mandatoryVideoFloatingSpeedPercent = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampSpeedPercent(value); OnPropertyChanged(); }
+        }
+
+        private int _mandatoryVideoFloatingCount = 1;
+        /// <summary>The MOST floating windows that may be on screen at once, 1 (default) to 4.
+        /// One trigger opens one window; at the limit a trigger is skipped. Only one window
+        /// carries the sound (Services/Video/FloatingAudioFocus).</summary>
+        public int MandatoryVideoFloatingCount
+        {
+            get => _mandatoryVideoFloatingCount;
+            set { _mandatoryVideoFloatingCount = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampCount(value); OnPropertyChanged(); }
+        }
+
+        private bool _mandatoryVideoFloatingTogether;
+        /// <summary>"Pop up together" (owner promise 2026-10-20): one trigger opens every free
+        /// floating window at once, up to <see cref="MandatoryVideoFloatingCount"/>, each with its own
+        /// clip where the pool allows, and nothing joins the run later. Default off = one window per
+        /// trigger, the next one joins on the join delay (MandatoryVideoPresentation.WindowsToOpen).</summary>
+        public bool MandatoryVideoFloatingTogether
+        {
+            get => _mandatoryVideoFloatingTogether;
+            set { _mandatoryVideoFloatingTogether = value; OnPropertyChanged(); }
+        }
+
+        private bool _mandatoryVideoFloatingKeepSound;
+        /// <summary>"Keep sound on the video I'm watching" (owner promise 2026-10-20): a floating
+        /// window that opens while another has the sound joins muted and the current one keeps it.
+        /// Default off = the newest window takes the sound (Services/Video/FloatingAudioFocus.Join).</summary>
+        public bool MandatoryVideoFloatingKeepSound
+        {
+            get => _mandatoryVideoFloatingKeepSound;
+            set { _mandatoryVideoFloatingKeepSound = value; OnPropertyChanged(); }
+        }
+
+        private bool _mandatoryVideoReplayAfterFailedCheck = true;
+        /// <summary>"Replay after a failed check" (owner promise 2026-10-20), default ON = as always:
+        /// a failed attention check, or the surprise replay after a pass, plays another video. Off =
+        /// a failed check still counts as failed (achievements, companion penalty) but the video just
+        /// ends. A strict video and a Lockdown always replay
+        /// (MandatoryVideoPresentation.ReplaysAfterCheck).</summary>
+        public bool MandatoryVideoReplayAfterFailedCheck
+        {
+            get => _mandatoryVideoReplayAfterFailedCheck;
+            set { _mandatoryVideoReplayAfterFailedCheck = value; OnPropertyChanged(); }
+        }
+
         private bool _fillAllMonitorsWithVideo;
         /// <summary>
         /// On 3+ monitors, give every secondary screen its own video decoder. Each LibVLC
@@ -3264,6 +3355,80 @@ namespace ConditioningControlPanel.Models
         [Newtonsoft.Json.JsonIgnore]
         [System.Text.Json.Serialization.JsonIgnore]
         public bool HasInviteGrant => _inviteGrantUntil.HasValue && DateTime.UtcNow < _inviteGrantUntil.Value;
+
+        private int? _serverTierSeen = null;
+        /// <summary>
+        /// The last server <c>effective_tier</c> that read LOWER than <see cref="PatreonTier"/>
+        /// (EntitlementTierSync). Null when the server agrees or rose. The grace stamps above still
+        /// decide access; this only tells the lapse rows that the window is really closing
+        /// (Services/Startup/Conversion/ConversionRules). Machine-local.
+        /// </summary>
+        [JsonProperty("server_tier_seen")]
+        public int? ServerTierSeen
+        {
+            get => _serverTierSeen;
+            set { _serverTierSeen = value; OnPropertyChanged(); }
+        }
+
+        private int? _lastKnownEffectiveTier = null;
+        /// <summary>
+        /// The effective tier (0..2) this install last knew, for the "Your Prime is on" card
+        /// (<see cref="Services.TierOnNotice"/>). Null until the first reading. Machine-local.
+        /// </summary>
+        [JsonProperty("last_known_effective_tier")]
+        public int? LastKnownEffectiveTier
+        {
+            get => _lastKnownEffectiveTier;
+            set { _lastKnownEffectiveTier = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, string> _inboxStamps = new(StringComparer.Ordinal);
+        /// <summary>
+        /// One stamp per conversion Inbox row key (lapse_warn_7, companion_cap, ...): the value that
+        /// row was last posted for (a local date, or the grace end it warned about). Keeps each row
+        /// to once a day, or once per lapse. Machine-local, never a sync field.
+        /// </summary>
+        [JsonProperty("inbox_stamps", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, string> InboxStamps
+        {
+            get => _inboxStamps;
+            set { _inboxStamps = value ?? new(StringComparer.Ordinal); OnPropertyChanged(); }
+        }
+
+        private bool _patreonMember;
+        /// <summary>
+        /// The server's <c>patreon_member</c> off <c>/v2/user/profile</c> (brief C2): a Patreon free
+        /// member or an active patron. With no tier it buys the second Daily Gift and the post code
+        /// row; it never opens a tier door by itself. Machine-local mirror of a server field.
+        /// </summary>
+        [JsonProperty("patreon_member")]
+        public bool PatreonMember
+        {
+            get => _patreonMember;
+            set { _patreonMember = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, string> _postGrants = new(StringComparer.OrdinalIgnoreCase);
+        /// <summary>
+        /// Post code grants (brief C6): Daily Gift key -> ISO end time, from a redeem reply or the
+        /// profile's <c>post_grants</c>. DailyFreeService ORs an unexpired one into IsFreeToday.
+        /// </summary>
+        [JsonProperty("post_grants", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, string> PostGrants
+        {
+            get => _postGrants;
+            set { _postGrants = value ?? new(StringComparer.OrdinalIgnoreCase); OnPropertyChanged(); }
+        }
+
+        private DateTime? _serverPaidUntil;
+        /// <summary>The server's <c>paid_until</c> (brief C2): a PayPal / Stripe period end, null for
+        /// Patreon until its webhook stores one. Shown, never a gate.</summary>
+        [JsonProperty("server_paid_until")]
+        public DateTime? ServerPaidUntil
+        {
+            get => _serverPaidUntil;
+            set { _serverPaidUntil = value; OnPropertyChanged(); }
+        }
 
         #endregion
 
@@ -4563,6 +4728,16 @@ namespace ConditioningControlPanel.Models
             set { _remoteMediaConsented = value; OnPropertyChanged(); }
         }
 
+        private bool _scrolllerOfficialNoteSeen = false;
+        /// <summary>"Nice" was pressed on the one-time "Online media is official" note in the
+        /// Assets tab (owner, 2026-10-19). Machine-local: left out of the cloud backup and kept
+        /// across a restore (ProfileSyncService).</summary>
+        public bool ScrolllerOfficialNoteSeen
+        {
+            get => _scrolllerOfficialNoteSeen;
+            set { _scrolllerOfficialNoteSeen = value; OnPropertyChanged(); }
+        }
+
         /// <summary>True when the user has agreed to see remote content anywhere. Read THIS,
         /// not the raw flag: users who already accepted the FYP feed's consent card agreed to
         /// exactly this, and asking them a second time in different words would read as the
@@ -4892,6 +5067,18 @@ namespace ConditioningControlPanel.Models
         {
             get => _bubbleCountStrictLock;
             set { _bubbleCountStrictLock = value; OnPropertyChanged(); }
+        }
+
+        /// <summary>
+        /// "Pause other effects during Bubble Count" (#1418). Off by default. On: while a round
+        /// runs, flashes, spirals, the pink overlay and the bouncing text hold the way they do
+        /// during a mandatory video (BubbleCountService.EnterEffectsHold) and come back after.
+        /// </summary>
+        private bool _bubbleCountPauseEffects = false;
+        public bool BubbleCountPauseEffects
+        {
+            get => _bubbleCountPauseEffects;
+            set { _bubbleCountPauseEffects = value; OnPropertyChanged(); }
         }
 
         #endregion
@@ -5276,6 +5463,34 @@ namespace ConditioningControlPanel.Models
         {
             get => _motionLevel;
             set { _motionLevel = value; OnPropertyChanged(); }
+        }
+
+        private bool _gentleVisuals;
+        /// <summary>
+        /// Gentle visuals (renardeau's photosensitivity ask, 2026-10-14): every overlay fades in and
+        /// out over <see cref="GentleFadeSeconds"/>, GIFs / spirals / videos play at
+        /// <see cref="GentleSpeed"/>, brightness jumps ease in and flicker becomes a fade. A pure
+        /// global preference like the motion level: never in SessionSettings, Preset or the remote
+        /// generators, so no session can switch it off. Read through Services/Safety/GentleVisuals.
+        /// </summary>
+        public bool GentleVisuals
+        {
+            get => _gentleVisuals;
+            set { _gentleVisuals = value; OnPropertyChanged(); }
+        }
+
+        private double _gentleFadeSeconds = Services.Safety.GentleVisuals.DefaultFadeSeconds;
+        public double GentleFadeSeconds
+        {
+            get => _gentleFadeSeconds;
+            set { _gentleFadeSeconds = Services.Safety.GentleVisuals.ClampFade(value); OnPropertyChanged(); }
+        }
+
+        private double _gentleSpeed = Services.Safety.GentleVisuals.DefaultSpeed;
+        public double GentleSpeed
+        {
+            get => _gentleSpeed;
+            set { _gentleSpeed = Services.Safety.GentleVisuals.ClampSpeed(value); OnPropertyChanged(); }
         }
 
         private Services.BackRoom.BackRoomFxIntensity _backRoomFxIntensity = Services.BackRoom.BackRoomFxIntensity.Normal;
@@ -5849,6 +6064,32 @@ namespace ConditioningControlPanel.Models
         {
             get => _companionVoiceLinesMuted;
             set { _companionVoiceLinesMuted = value; OnPropertyChanged(); }
+        }
+
+        private bool _companionSpeaksIdleWhenEngineOff = false;
+        /// <summary>
+        /// ccp-bugs #1468: false (default) keeps the idle-timer lines quiet while neither the engine
+        /// nor a session runs; the bubble and text still show. True speaks them as before. Lines that
+        /// answer a player action are never affected. Rule: Services.Companion.CompanionIdleVoice.
+        /// </summary>
+        [JsonProperty]
+        public bool CompanionSpeaksIdleWhenEngineOff
+        {
+            get => _companionSpeaksIdleWhenEngineOff;
+            set { _companionSpeaksIdleWhenEngineOff = value; OnPropertyChanged(); }
+        }
+
+        private int _companionVoiceLevel = Services.CompanionVoiceGain.DefaultLevel;
+        /// <summary>
+        /// The companion's own voice level (0-100), on top of MasterVolume. The default reproduces
+        /// the loudness from before the slider existed; higher lifts the voice over the engine,
+        /// 0 is silent (the mute flags still work on their own). Math: CompanionVoiceGain.
+        /// </summary>
+        [JsonProperty]
+        public int CompanionVoiceLevel
+        {
+            get => _companionVoiceLevel;
+            set { _companionVoiceLevel = Math.Clamp(value, 0, 100); OnPropertyChanged(); }
         }
 
         // Persisted avatar-tube (companion window) placement (#669). Restored on startup so a
@@ -8370,6 +8611,13 @@ namespace ConditioningControlPanel.Models
             set { _goonShareDiscordDm = value; OnPropertyChanged(); }
         }
 
+        // Machine-local consent ownership: a fresh install must never send defaults for an audience
+        // it has not chosen. Each bit belongs to the account that explicitly changed that switch.
+        [JsonProperty("consentOwnedAccount")]
+        public string? ConsentOwnedAccount { get; set; }
+        [JsonProperty("consentOwnedFields")]
+        public long ConsentOwnedFields { get; set; }
+
         private bool _goonRichPresence = false;
         /// <summary>
         /// Show Goon Game activity in Discord Rich Presence (fixed strings only — never the
@@ -8516,6 +8764,39 @@ namespace ConditioningControlPanel.Models
         {
             get => _pbpMediaChosen;
             set { _pbpMediaChosen = value; OnPropertyChanged(); }
+        }
+
+        private bool _pbpLetPeopleWatch = true;
+        /// <summary>"Let people watch my games" (owner, 2026-10-05): default on. Off = this player's
+        /// public matches are never watchable (the page sends <c>watchable:false</c> on lobby enter,
+        /// quick and join). Friend-invite matches are never watchable either way.</summary>
+        [JsonProperty("pbpLetPeopleWatch")]
+        public bool PbpLetPeopleWatch
+        {
+            get => _pbpLetPeopleWatch;
+            set { _pbpLetPeopleWatch = value; OnPropertyChanged(); }
+        }
+
+        private bool _pbpWatchEffects = true;
+        /// <summary>Distraction effects in the stands (spectate v2, owner 2026-10-14): default on.
+        /// A spectator sees the turn player's heat and effects at the moments they fired, drawn
+        /// from the SPECTATOR's own media; nothing of the player's media ever travels. Written by
+        /// the page's watch Options (<c>pbp:setting watchEffects</c>).</summary>
+        [JsonProperty("pbpWatchEffects")]
+        public bool PbpWatchEffects
+        {
+            get => _pbpWatchEffects;
+            set { _pbpWatchEffects = value; OnPropertyChanged(); }
+        }
+
+        private string _pbpWatchAmount = "normal";
+        /// <summary>The stands' amount dial: the game's own values (less, normal, more). Anything
+        /// else reads as normal.</summary>
+        [JsonProperty("pbpWatchAmount")]
+        public string PbpWatchAmount
+        {
+            get => _pbpWatchAmount;
+            set { _pbpWatchAmount = global::ConditioningControlPanel.Services.PieceByPiece.PbpWatchRules.CleanAmount(value); OnPropertyChanged(); }
         }
 
         #endregion
@@ -9587,6 +9868,53 @@ namespace ConditioningControlPanel.Models
         {
             get => _deeperPlayerWindowHeight;
             set { _deeperPlayerWindowHeight = value; OnPropertyChanged(); }
+        }
+
+        // The audio player with a playlist. All four are this machine's own (whole file paths):
+        // ProfileSyncService keeps every AudioPlaylist* property out of the cloud backup and
+        // carries it across a restore.
+        private List<string> _audioPlaylistPaths = new();
+        /// <summary>The playlist, whole paths in the player's order.</summary>
+        [JsonProperty]
+        public List<string> AudioPlaylistPaths
+        {
+            get => _audioPlaylistPaths;
+            set { _audioPlaylistPaths = value ?? new List<string>(); OnPropertyChanged(); }
+        }
+
+        private int _audioPlaylistVolume = 80;
+        /// <summary>The playlist player's own level (0..100), scaled by MasterVolume when it plays.</summary>
+        [JsonProperty]
+        public int AudioPlaylistVolume
+        {
+            get => _audioPlaylistVolume;
+            set { _audioPlaylistVolume = Math.Max(0, Math.Min(100, value)); OnPropertyChanged(); }
+        }
+
+        private int _audioPlaylistLoop;
+        /// <summary>0 off, 1 all, 2 one (Services.AudioPlayer.AudioPlaylistLoop).</summary>
+        [JsonProperty]
+        public int AudioPlaylistLoop
+        {
+            get => _audioPlaylistLoop;
+            set { _audioPlaylistLoop = Math.Max(0, Math.Min(2, value)); OnPropertyChanged(); }
+        }
+
+        private bool _audioPlaylistShuffle;
+        [JsonProperty]
+        public bool AudioPlaylistShuffle
+        {
+            get => _audioPlaylistShuffle;
+            set { _audioPlaylistShuffle = value; OnPropertyChanged(); }
+        }
+
+        private bool _audioPlaylistEnhancements = true;
+        /// <summary>A track's Deeper enhancement runs with it (Services.Deeper.PlaylistEnhancementBridge). On by default.</summary>
+        [JsonProperty]
+        public bool AudioPlaylistEnhancements
+        {
+            get => _audioPlaylistEnhancements;
+            set { _audioPlaylistEnhancements = value; OnPropertyChanged(); }
         }
 
         private bool _companionAsksEnabled = true;
