@@ -463,7 +463,12 @@ namespace ConditioningControlPanel.Services
         {
             try
             {
-                if (CompanionVoiceFiles.MigrateLegacyIds(App.Settings?.Current, sortedFiles)) App.Settings?.Save();
+                if (CompanionVoiceFiles.MigrateLegacyIds(App.Settings?.Current, sortedFiles))
+                {
+                    App.Settings?.Save();
+                    App.Logger?.Information(
+                        "CompanionPhraseService: migrated positional VoiceLine phrase ids to filename-based ids");
+                }
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "CompanionPhraseService: failed to migrate legacy VoiceLine phrase ids"); }
         }

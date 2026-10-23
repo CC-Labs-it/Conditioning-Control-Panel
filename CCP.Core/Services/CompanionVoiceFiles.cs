@@ -45,11 +45,12 @@ public static class CompanionVoiceFiles
     public static bool MigrateLegacyIds(AppSettings? settings, IReadOnlyList<string> sortedFiles)
     {
         if (settings == null || sortedFiles.Count == 0) return false;
-        var currentIds = sortedFiles.Select(CompanionPhraseIds.VoiceLineId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        HashSet<string>? currentIds = null;   // built only when a legacy id exists: the common call allocates nothing
         var changed = false;
         foreach (var set in new[] { settings.DisabledPhraseIds, settings.RemovedPhraseIds })
         {
-            if (set == null || set.Count == 0) continue;
+            if (set == null || !set.Any(IsLegacyId)) continue;
+            currentIds ??= sortedFiles.Select(CompanionPhraseIds.VoiceLineId).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var old in set.Where(IsLegacyId).ToArray())
             {
                 if (currentIds.Contains(old)) continue;

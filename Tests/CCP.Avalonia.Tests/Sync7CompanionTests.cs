@@ -31,7 +31,7 @@ public sealed class Sync7CompanionTests
     }
 
     [Fact]
-    public Task VoiceSliderSeedsPersistsAndRefreshes() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public void VoiceSliderSeedsPersistsAndRefreshes() => AvaloniaTestDispatcher.Run(() =>
     {
         EnsureApp();
         var provider = CoreSettings.ServiceProvider;
@@ -46,17 +46,9 @@ public sealed class Sync7CompanionTests
             Assert.Equal(37, slider.Value);
             slider.Value = 91;
             Assert.Equal(91, service.Current.CompanionVoiceLevel);
-            // Save is debounced: wait for its real disk write, without flushing it ourselves.
-            var settingsFile = Path.Combine(CorePaths.UserData, "settings.json");
-            for (var tries = 0; tries < 100; tries++)
-            {
-                if (File.Exists(settingsFile))
-                {
-                    using var saved = System.Text.Json.JsonDocument.Parse(File.ReadAllText(settingsFile));
-                    if (saved.RootElement.TryGetProperty("CompanionVoiceLevel", out var level) && level.GetInt32() == 91) break;
-                }
-                await Task.Delay(50);
-            }
+            // The slider must request a (debounced) save; flush it here instead of waiting on a real timer (P08).
+            Assert.True(service.HasPendingSave);
+            service.SaveImmediate();
             Assert.Equal(91, new SettingsService().Current.CompanionVoiceLevel);
             Assert.Equal("91", cell.FindControl<TextBlock>("TxtVoiceLevelCompanion")!.Text);
             service.Current.CompanionVoiceLevel = 22;
