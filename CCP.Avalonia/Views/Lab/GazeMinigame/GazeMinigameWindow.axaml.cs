@@ -20,6 +20,7 @@ using ConditioningControlPanel.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services;
 using Serilog;
+using InlineLoopVideo = ConditioningControlPanel.Avalonia.Views.Controls.InlineLoopVideo;
 
 namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
 {
@@ -40,8 +41,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
     ///    calibration check, then OnGazeSide / OnFaceLost / OnFaceFound drive the rounds.
     ///    <c>App.Flash</c> suspend/resume -> <c>CoreFlash</c>; <c>App.Haptics</c> -> <c>CoreHaptics</c>.
     ///  - Panic closes the game (PanicSurfaces "gaze-minigame"): panic also closes the camera here.
-    ///  - ponytail: still missing - video rounds (no pane player; not built, see
-    ///    <c>VideoRoundsPlayable</c>), animated GIFs (first frame only), the Flashes / Bubbles /
+    ///  - LibVLC <c>VideoView</c> panes -> <see cref="InlineLoopVideo"/> played once, muted, from a
+    ///    random offset in the first half (WPF StartVideo).
+    ///  - ponytail: still missing - animated GIFs (first frame only), the Flashes / Bubbles /
     ///    MindWipe / OverlayPulse reward effects, and the reward clip folder (not linked).
     ///  - <c>MessageBox.Show</c> -> this head's <c>Views/Dialogs/MessageDialog.ConfirmAsync</c>,
     ///    so the mid-run "quit the session?" confirmation is raised again (awaited, hence the
@@ -493,10 +495,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         /// <summary>The camera engine (WPF App.Webcam). Its OnGazeSide is the game's only input.</summary>
         private static Platform.WebcamTracker Tracker => Platform.WebcamTracker.Instance;
 
-        /// <summary>ponytail: no side-by-side video player on this head yet (the panes would show a
-        /// 🎬 glyph, a round nobody can play), so video rounds are not built and video-only
-        /// selections are refused with the shared-content message. True once the panes play video.</summary>
-        private const bool VideoRoundsPlayable = false;
+        private InlineLoopVideo? _leftVideo, _rightVideo;
 
         private void RefreshSetupState()
         {
@@ -511,7 +510,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 // Both buckets must be able to supply at least one shared content
                 // type, or the round builder dead-ends.
                 bool sharedImages = focus.ImageCount > 0 && ignore.Any(p => p.ImageCount > 0);
-                bool sharedVideos = VideoRoundsPlayable && focus.VideoCount > 0 && ignore.Any(p => p.VideoCount > 0);
+                bool sharedVideos = focus.VideoCount > 0 && ignore.Any(p => p.VideoCount > 0);
                 if (!sharedImages && !sharedVideos)
                     reason = "Focus and Ignore don't share a content type — pick sets that both have images, or both have videos.";
             }
@@ -887,7 +886,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 throw new InvalidOperationException("Both round counts are 0. Set at least one image or video round in Advanced settings (or pick a difficulty).");
 
             bool imagesViable = correct.ImageCount > 0 && noise.Any(p => p.ImageCount > 0);
-            bool videosViable = VideoRoundsPlayable && correct.VideoCount > 0 && noise.Any(p => p.VideoCount > 0);
+            bool videosViable = correct.VideoCount > 0 && noise.Any(p => p.VideoCount > 0);
             int imageRounds = imagesViable ? _settings.ImageCount : 0;
             int videoRounds = videosViable ? _settings.VideoCount : 0;
 
@@ -996,18 +995,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             }
             else
             {
-                // ponytail: video rounds need a player CCP.Avalonia does not have. LibVLCSharp is
-                // not a Core move - it is a package reference this head lacks, and adding one is a
-                // .csproj change. This head's actual video path is the WebHost control (a real
-                // Avalonia WebView playing a file:// page's <video>), which DeeperEditorWindow
-                // proves for ONE pane; two side-by-side WebHosts are untested. A glyph holds the
-                // pane meanwhile; video rounds are not built (VideoRoundsPlayable).
-                var leftView = GlyphBlock(IconKind.Video);
-                var rightView = GlyphBlock(IconKind.Video);
-                _leftPane.Children.Add(leftView);
-                _rightPane.Children.Add(rightView);
-                AnimateAssetIn(leftView);
-                AnimateAssetIn(rightView);
+                // WPF StartVideo: muted, played once, jumping to a random point in the first half.
+                _leftVideo = BuildVideoView(leftPath);
+                _rightVideo = BuildVideoView(rightPath);
+                _leftPane.Children.Add(_leftVideo);
+                _rightPane.Children.Add(_rightVideo);
+                AnimateAssetIn(_leftVideo);
+                AnimateAssetIn(_rightVideo);
             }
 
             // Reset per-round state.
@@ -1042,14 +1036,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             return img;
         }
 
+        private static InlineLoopVideo BuildVideoView(string path) =>
+            new(path, loop: false, startPosition: (float)(Random.Shared.NextDouble() * 0.5))
+            {
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+            };
+
         /// <summary>
-        /// WPF tore down two LibVLC players here with the hard-won STOP → DETACH → DISPOSE
-        /// ordering and message-pump waits between each step. Nothing to tear down until
-        /// video playback exists on this head.
-        /// ponytail: nothing to restore until this head has a video player at all - see
-        /// AdvanceRound's video branch for what that would be.
+        /// WPF's STOP → DETACH → DISPOSE: removing each video from its pane detaches it, and
+        /// InlineLoopVideo's teardown stops the player (joining the decoder thread) before it
+        /// disposes it, so no frame callback outlives the round. Always synchronous here;
+        /// <paramref name="synchronous"/> is kept for WPF's call sites.
         /// </summary>
-        private void DisposeCurrentRoundPlayers(bool synchronous = false) { }
+        private void DisposeCurrentRoundPlayers(bool synchronous = false)
+        {
+            if (_leftVideo != null) _leftPane.Children.Remove(_leftVideo);
+            if (_rightVideo != null) _rightPane.Children.Remove(_rightVideo);
+            _leftVideo = _rightVideo = null;
+        }
 
         private void StartRoundTicker()
         {

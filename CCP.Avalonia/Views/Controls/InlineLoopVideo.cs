@@ -28,6 +28,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     public sealed class InlineLoopVideo : Image
     {
         private readonly string? _path;
+        private readonly bool _loop;
+        private readonly float _startPosition;
         private MediaPlayer? _player;
         private Media? _media;
         private VlcFrameSink? _sink;
@@ -35,11 +37,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Render-proof constructor: no clip, a blank surface.</summary>
         public InlineLoopVideo() : this(null) { }
 
-        public InlineLoopVideo(string? clipPath)
+        /// <param name="loop">false plays the clip once and holds its last frame (WPF Gaze VideoView).</param>
+        /// <param name="startPosition">0..1: jump there once playback starts (WPF Gaze's random offset).</param>
+        public InlineLoopVideo(string? clipPath, bool loop = true, float startPosition = 0f)
         {
             _path = clipPath;
+            _loop = loop;
+            _startPosition = startPosition;
             Stretch = Stretch.UniformToFill;
         }
+
+        internal string? ClipPath => _path;
+        internal bool Loops => _loop;
+        internal float StartPosition => _startPosition;
 
         /// <summary>A player exists (attached, clip found, LibVLC loaded).</summary>
         internal bool HasPlayer => _player != null;
@@ -94,10 +104,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 _player = player;
                 System.Threading.Interlocked.Increment(ref LivePlayers);
                 _sink = new VlcFrameSink(player, () => _media, bmp => Source = bmp, () => { InvalidateVisual(); FrameShown?.Invoke(); });
-                // EndReached re-play is WPF's fallback in case :input-repeat isn't honoured.
-                player.EndReached += OnEndReached;
                 _media = new Media(vlc, _path, FromType.FromPath);
-                _media.AddOption(":input-repeat=65535"); // loop natively
+                if (_loop)
+                {
+                    // EndReached re-play is WPF's fallback in case :input-repeat isn't honoured.
+                    player.EndReached += OnEndReached;
+                    _media.AddOption(":input-repeat=65535"); // loop natively
+                }
+                if (_startPosition > 0f) player.Playing += OnPlayingSeek;
                 _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);           // muted; Mute would silence every player
                 player.Play(_media);
             }
@@ -119,6 +133,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             });
         }
 
+        private void OnPlayingSeek(object? sender, EventArgs e)
+        {
+            // LibVLC thread; seek on the UI thread only while this player is still ours (WPF's alive flag).
+            var player = sender as MediaPlayer;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (player == null || !ReferenceEquals(player, _player)) return;
+                player.Playing -= OnPlayingSeek;
+                try { player.Position = _startPosition; } catch { /* short videos may reject Position */ }
+            });
+        }
+
         /// <summary>Stop joins the decoder thread, so after it no callback touches the frame buffer
         /// (the BubbleCountWindow / MiniPlayerWindow teardown order).</summary>
         private void Teardown()
@@ -128,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (player != null)
             {
                 player.EndReached -= OnEndReached;
+                player.Playing -= OnPlayingSeek;
                 try { player.Stop(); } catch { }
                 try { player.Dispose(); } catch { }
                 System.Threading.Interlocked.Decrement(ref LivePlayers);

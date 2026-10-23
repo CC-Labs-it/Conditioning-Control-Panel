@@ -10,6 +10,7 @@ using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Lab.GazeMinigame;
@@ -98,6 +99,80 @@ public sealed class GazeMinigameTests
             PanicSurfaces.All.Single(x => x.Id == "gaze-minigame").Stop(null);
             Assert.False(win.IsVisible);
             Assert.False(GazeMinigameWindow.IsAnyRunning());
+        }
+        finally
+        {
+            win?.Close();
+            tracker.Stop();
+            tracker.Calibration = oldCal;
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory) = old;
+            (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay) = (oldClock, oldDelay);
+            try { File.Delete(Path.Combine(CorePaths.UserData, GazeMinigameSettings.FileName)); } catch { }
+            try { dir.Delete(true); } catch { }
+        }
+    });
+
+    /// <summary>WPF StartVideo: video-only Focus/Ignore sets start a game, and each pane plays its
+    /// clip once (no loop), muted, from a random point in the first half; ending the round frees both.</summary>
+    [Fact]
+    public void VideoOnlySets_StartAVideoRound_PanesPlayOnceFromARandomOffset() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory);
+        var tracker = WebcamTracker.Instance;
+        var oldCal = tracker.Calibration;
+        var (oldClock, oldDelay) = (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay);
+        var dir = Directory.CreateTempSubdirectory("gaze-video-test-");
+        GazeMinigameWindow? win = null;
+        try
+        {
+            s.WebcamConsentGiven = true;
+            s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            WebcamTracker.SourceFactory = () => new BlankSource();
+            tracker.Calibration = new WebcamCalibrationData();
+            var clock = new SteppedClock();
+            GazeMinigameWindow.Clock = clock;
+            GazeMinigameWindow.Delay = _ => Task.CompletedTask;
+
+            string Pack(string name)
+            {
+                var p = Directory.CreateDirectory(Path.Combine(dir.FullName, name)).FullName;
+                File.WriteAllBytes(Path.Combine(p, "1.mp4"), new byte[] { 0 });   // never decoded to a frame
+                return p;
+            }
+            var saved = new GazeMinigameSettings { ImageCount = 2, VideoCount = 1, PassTimeSec = 3, VideoMaxDurationSec = 5, WrongHoldMs = 2000 };
+            saved.Packs.Add(new GazePackRef { Path = Pack("focus"), Role = GazePackRole.Focus });
+            saved.Packs.Add(new GazePackRef { Path = Pack("noise"), Role = GazePackRole.Ignore });
+            saved.Save();
+
+            win = new GazeMinigameWindow();
+            win.Show();
+            var start = win.FindControl<Button>("BtnStartGame")!;
+            Assert.True(start.IsEnabled, "video-only sets were refused");
+            start.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(SpinUntil(() => win.FindControl<Grid>("GameplayScreen")!.IsVisible), "game did not start");
+
+            InlineLoopVideo PaneVideo(string pane) =>
+                Assert.IsType<InlineLoopVideo>(Assert.Single(win.FindControl<Grid>(pane)!.Children));
+            var videos = new[] { PaneVideo("LeftPane"), PaneVideo("RightPane") };
+            Assert.Equal(new[] { "focus", "noise" },
+                videos.Select(v => Path.GetFileName(Path.GetDirectoryName(v.ClipPath))).OrderBy(n => n));
+            Assert.All(videos, v =>
+            {
+                Assert.False(v.Loops);
+                Assert.InRange(v.StartPosition, 0f, 0.5f);
+            });
+
+            clock.Now += TimeSpan.FromMilliseconds(1100);
+            win.RoundTicker_Tick(null, EventArgs.Empty);
+            tracker.RaiseGazeSideForTest(win.CorrectIsLeftForTest ? GazeSide.Left : GazeSide.Right);
+            for (int i = 0; i < 60; i++) { clock.Now += TimeSpan.FromMilliseconds(50); win.RoundTicker_Tick(null, EventArgs.Empty); }
+            Assert.Equal("GOOD GIRL", win.FindControl<TextBlock>("TxtFeedback")!.Text);
+            Assert.All(videos, v => Assert.False(v.HasPlayer));
         }
         finally
         {

@@ -113,6 +113,29 @@ public sealed class InlineLoopVideoTests
         });
     }
 
+    /// <summary>The Gaze pane mode (WPF StartVideo): no loop, so the clip ends and holds its last
+    /// frame; the start offset skips most of it (a 1 s clip at 25 fps from 0.6 shows ~10 frames, not 25).</summary>
+    [Fact]
+    public async Task PlayOnceFromAnOffsetEndsEarlyAndKeepsTheLastFrame()
+    {
+        await WithClip(async clip =>
+        {
+            var video = new InlineLoopVideo(clip, loop: false, startPosition: 0.6f) { Width = 320, Height = 180 };
+            var host = new Window { Width = 400, Height = 300, Content = video };
+            host.Show();
+            try
+            {
+                Assert.True(await OnFrames(video, () => video.FrameCount > 0, 5000), "no first frame");
+                var sw = Stopwatch.StartNew();
+                while (video.IsPlaying && sw.ElapsedMilliseconds < 5000) { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
+                Assert.False(video.IsPlaying, "kept playing: looped instead of ending");
+                Assert.InRange(video.FrameCount, 1, 18);
+                Assert.NotNull(video.Source);
+            }
+            finally { host.Close(); Dispatcher.UIThread.RunJobs(); }
+        });
+    }
+
     private static async Task WithClip(Func<string, Task> body)
     {
         var dir = Directory.CreateTempSubdirectory("ccp-inline-video-").FullName;
