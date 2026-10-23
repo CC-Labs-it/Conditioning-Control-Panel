@@ -410,6 +410,110 @@ public sealed class FriendsDrawerTests
         Tagged<Button>(d, "friends-invite-link")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(1, asked);
     });
+    // ---- open goon tables (WPF FriendsDrawer.Tables.cs; ConditioningControlPanel.Tests/FriendsDrawerTablesTests) ----
+
+    private static global::ConditioningControlPanel.Services.GoonGame.OpenTablesReply ZedHosting() =>
+        global::ConditioningControlPanel.Services.GoonGame.GoonOpenTablesApi.Parse(
+            """{"ok":true,"tables":[{"code":"ZEDD42","name":"Zed","friend":true,"friendId":"u_off","cardSec":60}]}""");
+
+    private static string[] RowIds(Control d) => d.GetLogicalDescendants().OfType<Border>()
+        .Select(b => b.Tag as string).Where(t => t != null && t.StartsWith("friends-row:")).Select(t => t!.Substring(12)).ToArray();
+
+    [Fact]
+    public Task AHostingFriendFloatsToTheTopWithJoin() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        d.Render();
+        Assert.Equal(new[] { "u_on", "u_off" }, RowIds(d));
+        d.Tables = ZedHosting;
+        d.CanJoinTables = () => true;
+        d.Render();
+        // Zed is offline, but the listing says they are at a table: they lead, pink, with Join.
+        Assert.Equal(new[] { "u_off", "u_on" }, RowIds(d));
+        var row = Tagged<Border>(d, "friends-row:u_off")!;
+        Assert.NotNull(Tagged<TextBlock>(row, "friends-table-hosting"));
+        Assert.Null(Tagged<TextBlock>(row, "friends-activity"));
+        Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(row.Background);
+        Assert.Null(Tagged<Button>(Tagged<Border>(d, "friends-row:u_on")!, "friends-table-join"));
+        // No Goon host on this head: Join words it in the row and the drawer stays open.
+        int closed = 0;
+        d.CloseRequested += () => closed++;
+        Click(row, "friends-table-join");
+        Assert.Equal(Loc.Get("exclusives_not_on_this_build"), Tagged<TextBlock>(d, "friends-result")!.Text);
+        Assert.Equal(0, closed);
+        // With a host, Join sits down with the table's code and folds the drawer (WPF PressJoin).
+        var joined = new List<string>();
+        d.JoinTable = joined.Add;
+        Click(Tagged<Border>(d, "friends-row:u_off")!, "friends-table-join");
+        Assert.Equal(new[] { "ZEDD42" }, joined);
+        Assert.Equal(1, closed);
+    });
+
+    [Fact]
+    public Task ASignedOutDrawerSeesALockThatNeverLaunches() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var d = new FriendsDrawer(svc) { Tables = ZedHosting, CanJoinTables = () => false };
+        var joined = new List<string>();
+        d.JoinTable = joined.Add;
+        await svc.RefreshAsync();
+        d.Render();
+        var row = Tagged<Border>(d, "friends-row:u_off")!;
+        Assert.Null(Tagged<Button>(row, "friends-table-join"));
+        Click(row, "friends-table-locked");
+        Assert.Empty(joined);
+        Assert.Null(Tagged<TextBlock>(d, "friends-result"));
+    });
+
+    [Fact]
+    public Task TheTablesPollRunsOnlyWhileTheDrawerIsOpen() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var tables = global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.Fetch;
+        global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.ResetForTests();
+        global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.Fetch = _ => Task.FromResult(ZedHosting());
+        try
+        {
+            var (svc, _) = Service();
+            var d = new FriendsDrawer(svc) { CanJoinTables = () => true };
+            await svc.RefreshAsync();
+            d.OnOpened();
+            Assert.True(d.TablesPolling);
+            Assert.Equal(FriendsDrawer.TablesPoll, TimeSpan.FromSeconds(30));
+            // The listing lands through GoonOpenTables.Changed and repaints the open drawer.
+            await Until(() => Tagged<TextBlock>(d, "friends-table-hosting") != null);
+            Assert.NotNull(Tagged<Button>(d, "friends-table-join"));
+            d.OnClosed();
+            Assert.False(d.TablesPolling);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.ResetForTests();
+            global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.Fetch = tables;
+        }
+    });
+    /// <summary>WPF App.xaml.cs:459: the open-tables listing rides the friends proxy and door; a sandbox
+    /// reaches only a loopback address, else GoonOpenTablesApi has no address and asks nothing.</summary>
+    [Fact]
+    public void TheOpenTablesWireIsSeededWithTheFriendsDoor()
+    {
+        var w = global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultIdentity;
+        var u = global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultBaseUrl;
+        var (iw, iu) = (global::ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity, global::ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl);
+        try
+        {
+            FriendsHead.SeedInvites("/tmp/sandbox", "http://127.0.0.1:3001/");
+            Assert.Equal("http://127.0.0.1:3001", global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultBaseUrl());
+            FriendsHead.SeedInvites("/tmp/sandbox", null);
+            Assert.Null(global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultBaseUrl());
+        }
+        finally
+        {
+            (global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultIdentity, global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultBaseUrl) = (w, u);
+            (global::ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity, global::ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl) = (iw, iu);
+        }
+    }
 
     /// <summary>WPF FriendsDrawer.Feed.cs + FriendsRailChip UpdateBadge: the chip's pink badge counts unread feed
     /// lines; opening the drawer shows "What happened" newest first, reads what it shows (badge drops, dots stay
