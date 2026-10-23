@@ -101,7 +101,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var rewards = WardrobeCatalog.AchievementRewards();
             var free = this.FindControl<WrapPanel>("AchievementGrid")!;
             var patron = this.FindControl<WrapPanel>("PatronAchievementGrid")!;
-            var theme = this.FindResource("AchievementCard") as ControlTheme;
+            // Shared theme lives in Styles.xaml; a detached view misses it (FindResource returns UnsetValue, not null).
+            var theme = this.FindResource("AchievementCard") as ControlTheme ?? Application.Current?.FindResource("AchievementCard") as ControlTheme;
             foreach (var a in Achievement.All.Values)
             {
                 if (a.IsHidden) continue; // parked: no reachable unlock path
@@ -324,7 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var host = this.FindControl<WrapPanel>("AchievementFilters")!;
             if (host.Children.Count > 0) return;
-            var theme = this.FindResource("AchievementFilterChip") as ControlTheme;
+            var theme = this.FindResource("AchievementFilterChip") as ControlTheme ?? Application.Current?.FindResource("AchievementFilterChip") as ControlTheme;
             foreach (var (key, locKey) in new[] { (FilterAll, "achv_filter_all"), (FilterUnlocked, "achv_filter_unlocked"), (FilterLocked, "achv_filter_locked"), (FilterRewards, "achv_filter_rewards") })
             {
                 var chip = new ToggleButton { Theme = theme, Tag = key, IsChecked = key == Filter,

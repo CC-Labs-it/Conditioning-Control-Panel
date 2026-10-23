@@ -2240,9 +2240,9 @@
 
                     <!-- Custom textbox row, centered, max width 400. Reuses
                          EmoteCustomTextBoxStyle; bumped FontSize/Padding for the
-                         bigger surface. Watermark uses the same EmoteHelper
-                         attached properties — independent ghost state from the
-                         small picker because it's a different TextBox instance. -->
+                         bigger surface. WPF EmoteHelper watermark -> native
+                         TextBox.Watermark (MainWindow.xaml:2627); independent
+                         ghost state from the small picker (different TextBox). -->
                     <Grid HorizontalAlignment="Center" MaxWidth="400" Width="400">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -2252,6 +2252,7 @@
                                  Theme="{StaticResource EmoteCustomTextBoxStyle}"
                                  FontSize="16" Padding="12,10"
                                  Margin="0,0,8,0"
+                                 Watermark="{loc:Str watermark_emote_custom}"
                                  KeyDown="TxtEmoteCustomBig_KeyDown"/>
                         <Button Grid.Column="1" x:Name="BtnEmoteCustomSendBig"
                                 Content="{loc:Str btn_emote_send}"

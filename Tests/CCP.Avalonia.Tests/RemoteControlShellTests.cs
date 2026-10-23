@@ -138,6 +138,7 @@ public sealed class RemoteControlShellTests
             // Enter in the big custom box sends it too, clears the box and keeps it as the ghost (WPF :362).
             emoteNow = emoteNow.AddSeconds(1);
             var box = shell.Named<TextBox>("TxtEmoteCustomBig")!;
+            Assert.Equal(Loc.Get("watermark_emote_custom"), box.Watermark); // WPF MainWindow.xaml:2627
             box.Text = "  on my way ";
             box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
             await WaitFor(() => f.Paths.Count(x => x == "/v2/remote/emote") == 2);

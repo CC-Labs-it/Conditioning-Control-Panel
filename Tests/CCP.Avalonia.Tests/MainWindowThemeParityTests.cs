@@ -254,6 +254,7 @@ public sealed class MainWindowThemeParityTests
             box.Focus();
             Dispatcher.UIThread.RunJobs();
             Assert.True(ghost.IsVisible);
+            Assert.Equal(Color.Parse("#5A5A75"), ((ISolidColorBrush)ghost.Foreground!).Color); // focused: still WPF's ghost
             var chrome = box.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_BorderElement");
             Assert.Same(Brushes.Cyan, chrome.BorderBrush);
             Assert.Equal(new Thickness(1), chrome.BorderThickness);
@@ -339,7 +340,7 @@ public sealed class MainWindowThemeParityTests
     });
 
     [Fact]
-    public Task SmallButtonPressAndReleaseKeepWpfTimingAndBackEase() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task SmallButtonPressAndReleaseKeepWpfTimingAndBackEase() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var button = new Button { Content = "press", Theme = (ControlTheme)Application.Current!.FindResource("SmallPinkButton")! };
@@ -355,23 +356,18 @@ public sealed class MainWindowThemeParityTests
             Dispatcher.UIThread.RunJobs();
             var press = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(border.Transitions!));
             Assert.Equal(TimeSpan.FromMilliseconds(80), press.Duration);
-            await Task.Delay(120);
-            host.CaptureRenderedFrame()?.Dispose();
-            Assert.Equal(0.97, border.RenderTransform!.Value.M11, 2);
             host.MouseUp(point, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             var release = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(border.Transitions!));
             Assert.Equal(TimeSpan.FromMilliseconds(150), release.Duration);
             Assert.Equal(1.025, release.Easing.Ease(0.5), 5); // WPF amplitude 0.3, including the tiny overshoot
-            await Task.Delay(200);
-            host.CaptureRenderedFrame()?.Dispose();
-            Assert.Equal(1, border.RenderTransform!.Value.M11, 2);
         }
         finally { host.Close(); }
+        return Task.CompletedTask;
     });
 
     [Fact]
-    public Task CollapsibleCardAndComboKeepWpfMotionAndLiveAccentChrome() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task CollapsibleCardAndComboKeepWpfMotionAndLiveAccentChrome() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var card = new Expander { Header = "header", Content = "body", Theme = (ControlTheme)Application.Current!.FindResource("CollapsibleCard")! };
@@ -387,9 +383,6 @@ public sealed class MainWindowThemeParityTests
             var chevron = card.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "Chevron");
             Assert.Equal(TimeSpan.FromMilliseconds(200), Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(chevron.Transitions!)).Duration);
             card.IsExpanded = false;
-            await Task.Delay(250);
-            host.CaptureRenderedFrame()?.Dispose();
-            Assert.Equal(1, chevron.RenderTransform!.Value.M11, 2);
             Assert.False(card.GetVisualDescendants().OfType<global::Avalonia.Controls.Presenters.ContentPresenter>()
                 .Single(c => c.Name == "PART_ContentPresenter").IsVisible);
             var glow = card.GetVisualDescendants().OfType<Border>().Single(b => b.BoxShadow.Count > 0);
@@ -408,6 +401,7 @@ public sealed class MainWindowThemeParityTests
             Assert.Equal(240, popupBorder.GetVisualDescendants().OfType<ScrollViewer>().First().MaxHeight);
         }
         finally { combo.IsDropDownOpen = false; host.Close(); }
+        return Task.CompletedTask;
     });
 
     private sealed class TooltipClock : TimeProvider

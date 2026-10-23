@@ -102,7 +102,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         private ControlTheme? TabTheme(string key) =>
-            this.FindResource(key) as ControlTheme;
+            // Styles.xaml: a detached view misses it (FindResource returns UnsetValue, not null).
+            this.FindResource(key) as ControlTheme ?? Application.Current?.FindResource(key) as ControlTheme;
 
         // ---- REROLLS (MainWindow.QuestsTab.cs:41/:59) ------------------------------
 
