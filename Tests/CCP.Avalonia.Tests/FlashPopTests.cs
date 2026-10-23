@@ -94,6 +94,22 @@ public sealed class FlashPopTests
     });
 
     [Fact]
+    public Task A_right_click_pops_the_flash_even_when_draggable() => OnUi((s, _) =>
+    {
+        // WPF FlashService.cs:4798-4807: right-click always pops; only the left press may start a drag.
+        var drag = s.FlashDraggable;
+        s.FlashDraggable = true;
+        try
+        {
+            var w = Shown(clickable: true);
+            w.MouseDown(new Point(200, 150), MouseButton.Right);
+            Assert.DoesNotContain(FlashOverlay.Active, e => e.Window == w);
+            Assert.Contains(w, FlashOverlay.Exiting);
+        }
+        finally { s.FlashDraggable = drag; }
+    });
+
+    [Fact]
     public Task A_pop_buzzes_the_flash_click_haptic() => OnUi((s, _) =>
     {
         var hs = new HapticSettings { Enabled = true, FlashClickEnabled = true };

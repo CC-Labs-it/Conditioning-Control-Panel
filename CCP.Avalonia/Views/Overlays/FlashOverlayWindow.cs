@@ -87,9 +87,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             double NowMs() => FlashOverlay.Clock.GetElapsedTime(0).TotalMilliseconds;
             PointerPressed += (_, e) =>
             {
-                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
                 e.Handled = true;
-                if (!CoreSettings.Current.FlashDraggable || !FlashOverlay.OwnsMotion) { onPop(); return; }
+                // WPF FlashService.cs:4798-4807: a right (or any non-left) press always pops; only left may drag.
+                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+                    || !CoreSettings.Current.FlashDraggable || !FlashOverlay.OwnsMotion) { onPop(); return; }
                 var m = FlashOverlay.MotionForDrag(this);
                 var p = this.PointToScreen(e.GetPosition(this));
                 FlashDrag.Begin(m, p.X, p.Y, NowMs());
