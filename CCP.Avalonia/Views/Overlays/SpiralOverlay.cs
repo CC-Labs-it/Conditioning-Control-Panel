@@ -254,6 +254,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             catch (Exception ex)
             {
                 Log.Warning("Spiral: failed to decode {Path}: {E}", path, ex.Message);
+                // A duration is recorded before its bitmap; drop it if that bitmap threw.
+                if (frameDurations?.Count > frames.Count)
+                    frameDurations.RemoveRange(frames.Count, frameDurations.Count - frames.Count);
                 return (frames, TimeSpan.FromMilliseconds(50));
             }
         }
