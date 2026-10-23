@@ -25,6 +25,29 @@ namespace CCP.Avalonia.Tests;
 public sealed class QuestsTabStreakFixTests
 {
     [Fact]
+    public Task CalendarConnectorsStayBelowDays_AndShieldsAboveFixRings() => RunAsync((tab, quests, settings) =>
+    {
+        settings.StreakShieldUsedDates = new List<DateTime> { new(DateTime.Today.Year, DateTime.Today.Month, 1) };
+        settings.UnifiedId = "calendar-test";
+        settings.StreakFixCharges = 1;
+        tab.RefreshQuestUI();
+        Dispatcher.UIThread.RunJobs();
+        var canvas = tab.FindControl<Canvas>("StreakCalendarCanvas")!;
+        var nodes = canvas.Children.OfType<Border>().Where(node => node.Child is TextBlock).ToList();
+        Assert.Equal(DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month), nodes.Count);
+        Assert.All(nodes, node => Assert.Equal(1, node.ZIndex));
+        Assert.All(canvas.Children.OfType<global::Avalonia.Controls.Shapes.Line>(), line => Assert.Equal(0, line.ZIndex));
+        Assert.Equal(4, Assert.Single(canvas.Children.OfType<IconGlyph>()).ZIndex);
+        if (DateTime.Today.Day > 1)
+        {
+            tab.FindControl<Button>("BtnFixStreak")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.NotEmpty(tab.FixHighlights);
+            Assert.All(tab.FixHighlights, ring => Assert.Equal(3, ring.ZIndex));
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task FixDaySpendsOnTheServerAppliesTheBalanceAndAllowsOneSpendAtATime() => RunAsync(async (tab, quests, settings) =>
     {
         settings.UnifiedId = "u1";

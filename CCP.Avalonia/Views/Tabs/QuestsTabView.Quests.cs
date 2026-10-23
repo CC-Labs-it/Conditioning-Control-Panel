@@ -272,6 +272,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     });
                 var node = new Border
                 {
+                    ZIndex = 1, // WPF keeps all connectors underneath every day node
                     Width = size, Height = size, CornerRadius = new CornerRadius(size / 2),
                     Background = done ? accent : panel,
                     BorderBrush = isToday ? Gold : Grey, BorderThickness = new Thickness(isToday ? 2 : 1),
@@ -288,6 +289,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (shielded.Contains(day))
                 {
                     var shield = IconGlyph.Of(IconKind.Shield, IconVariant.Filled, null, 10);
+                    shield.ZIndex = 4;
                     Canvas.SetLeft(shield, x - 6);
                     Canvas.SetTop(shield, centerY - size / 2 - 12);
                     StreakCalendarCanvas.Children.Add(shield);

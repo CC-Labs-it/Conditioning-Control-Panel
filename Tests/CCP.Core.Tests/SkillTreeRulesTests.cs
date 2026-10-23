@@ -6,6 +6,50 @@ namespace CCP.Core.Tests;
 
 public class SkillTreeRulesTests
 {
+    [Theory]
+    [InlineData(7, 3000)]
+    [InlineData(14, 6000)]
+    [InlineData(21, 3000)]
+    [InlineData(28, 3000)]
+    [InlineData(30, 10000)]
+    [InlineData(35, 3000)]
+    [InlineData(8, 0)]
+    public void PerfectWeekPaysScaledMilestonesOnce_GrantBeforeLatch(int streak, int baseXp)
+    {
+        var s = new AppSettings { DailyQuestStreak = streak, PlayerLevel = 10 };
+        var paid = new List<int>();
+        var saves = 0;
+        void Grant(int xp) { Assert.Equal(0, s.LastPerfectWeekStreakAwarded); paid.Add(xp); }
+        void Save() => saves++;
+        Assert.Equal(0, SkillTreeRules.CheckPerfectWeekBonus(s, Grant, Save)); // skill is required
+        s.UnlockedSkills.Add("perfect_bimbo_week");
+        var expected = (int)System.Math.Round(baseXp * 1.2);
+        Assert.Equal(expected, SkillTreeRules.CheckPerfectWeekBonus(s, Grant, Save));
+        Assert.Equal(baseXp > 0 ? new[] { expected } : System.Array.Empty<int>(), paid);
+        Assert.Equal(baseXp > 0 ? streak : 0, s.LastPerfectWeekStreakAwarded);
+        Assert.Equal(baseXp > 0 ? 1 : 0, saves);
+        Assert.Equal(0, SkillTreeRules.CheckPerfectWeekBonus(s, Grant, Save));
+        Assert.Equal(baseXp > 0 ? 1 : 0, paid.Count);
+    }
+
+    [Fact]
+    public void PerfectWeekResetsLatchOnBreak_AndDoesNotLatchFailedGrant()
+    {
+        var s = new AppSettings { DailyQuestStreak = 2, LastPerfectWeekStreakAwarded = 30 };
+        s.UnlockedSkills.Add("perfect_bimbo_week");
+        var saves = 0;
+        Assert.Equal(0, SkillTreeRules.CheckPerfectWeekBonus(s, _ => Assert.Fail("not a milestone"), () => saves++));
+        Assert.Equal(0, s.LastPerfectWeekStreakAwarded);
+        Assert.Equal(1, saves); // persist the reset even when no award is due
+        s.DailyQuestStreak = 7;
+        Assert.Throws<System.InvalidOperationException>(() => SkillTreeRules.CheckPerfectWeekBonus(s,
+            _ => throw new System.InvalidOperationException(), () => saves++));
+        Assert.Equal(0, s.LastPerfectWeekStreakAwarded);
+        Assert.Equal(1, saves);
+        Assert.True(SkillTreeRules.CheckPerfectWeekBonus(s, _ => { }, () => saves++) > 0);
+        Assert.Equal(7, s.LastPerfectWeekStreakAwarded);
+    }
+
     [Fact]
     public void OwnershipQueriesReadUnlockedSkills()
     {

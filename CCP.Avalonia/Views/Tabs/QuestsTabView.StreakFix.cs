@@ -70,6 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             double hs = size + 4;
             var ring = new Border
             {
+                ZIndex = 3, // WPF: above the day nodes, below shield markers
                 Width = hs, Height = hs, CornerRadius = new CornerRadius(hs / 2),
                 Background = Brushes.Transparent, BorderBrush = accent, BorderThickness = new Thickness(2),
                 Cursor = new Cursor(StandardCursorType.Hand), Focusable = true, Tag = day,

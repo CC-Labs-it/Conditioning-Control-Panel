@@ -48,6 +48,27 @@ namespace ConditioningControlPanel.Models
         public static double GetRerollBonusMultiplier(AppSettings settings) =>
             HasSkill(settings, "better_quests") ? 1.25 : 1.0;
 
+        /// <summary>WPF SkillTreeService.CheckPerfectWeekBonus: grant before persisting the paid-once latch.
+        /// The caller owns the popup. Kept here so heads share the milestone and reset rules.</summary>
+        public static int CheckPerfectWeekBonus(AppSettings settings, Action<int> grant, Action save)
+        {
+            if (!HasSkill(settings, "perfect_bimbo_week")) return 0;
+            var streak = settings.DailyQuestStreak;
+            if (streak < settings.LastPerfectWeekStreakAwarded)
+            {
+                settings.LastPerfectWeekStreakAwarded = 0;
+                save(); // WPF persists a broken-streak reset even without a milestone
+            }
+            int baseXp = streak == 30 ? 10000 : streak == 14 ? 6000
+                : streak >= 7 && streak % 7 == 0 ? 3000 : 0;
+            if (baseXp == 0 || settings.LastPerfectWeekStreakAwarded == streak) return 0;
+            int xp = (int)Math.Round(baseXp * (1 + settings.PlayerLevel * 0.02));
+            grant(xp); // grant first: a failed grant must not burn the milestone
+            settings.LastPerfectWeekStreakAwarded = streak;
+            save();
+            return xp;
+        }
+
         /// <summary>Streak Power: 0.5% per streak day, max 15%.</summary>
         private static double StreakBonus(AppSettings settings) => Math.Min(settings.CurrentStreak * 0.005, 0.15);
 

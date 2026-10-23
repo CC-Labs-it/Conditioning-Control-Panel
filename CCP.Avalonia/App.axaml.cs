@@ -99,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>WPF App.xaml.cs:2527-2536 plus the CoreQuests seeds of :398-421. Seeded where this
         /// head has the service. The streak shield is WPF SkillTreeService.UseStreakShield (:378) over
-        /// Core settings; the perfect-week bonus stays unseeded (the WPF "service is null" answer).
+        /// Core settings; perfect-week rewards use the shared WPF milestone rules.
         /// Programs (TrackVerifier) is seeded next to the ProgramService below.</summary>
         private static void StartQuests()
         {
@@ -114,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia
                 CoreSettings.Save();
                 return true;
             };
+            SeedPerfectWeekBonus();
             CoreQuests.PlayCompletionEffectsProvider = PlayQuestCompletionEffects;
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
@@ -125,6 +126,8 @@ namespace ConditioningControlPanel.Avalonia
             var definitions = QuestDefinitions = new QuestDefinitionService();
             _ = definitions.InitializeAsync(); // cache first, then the server, as WPF
             Quests = new QuestService(definitions);
+            if (Sessions is { } runner) WireQuestProgress(runner, Views.Tabs.RemoteControlTabView.Relay.Value,
+                Achievements?.Progress.ConsecutiveDays ?? 0);
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
             definitions.QuestDefinitionsUpdated += () => Quests?.CheckAndGenerateQuests();
             // WPF ProgressionService.AddXP:120 feeds every award to the "earn X XP" quests.
