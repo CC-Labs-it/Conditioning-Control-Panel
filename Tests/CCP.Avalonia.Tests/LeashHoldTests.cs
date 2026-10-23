@@ -208,6 +208,16 @@ public sealed class LeashHoldTests
         try
         {
             shell = new MainShellWindow();
+            // A portal that has never sent Deactivated: the hold falls back to X11 key state (here: up),
+            // so a press with no release can never ask.
+            PortalPanicShortcut.SetSessionForTests("/test/session", null);
+            shell.OnPortalPanicPressed();
+            for (int t = 250; t <= 6000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+            Assert.Null(LeashCutConfirmWindow.Current);
+            Assert.False(LeashHoldRing.IsShown);
+            // The compositor proves it reports release: from now on only Deactivated ends a portal hold.
+            PortalPanicShortcut.Route("/test/session", "panic", false, () => { }, () => { });
+            clock.Now += TimeSpan.FromSeconds(2);
             shell.OnPortalPanicPressed();
             for (int t = 250; t <= 2000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
             X11PanicKey.PanicReleased?.Invoke(); // focus transfer synthesizes an XWayland release
@@ -231,6 +241,7 @@ public sealed class LeashHoldTests
             LeashCutConfirmWindow.Current?.Close();
             LeashHoldRing.Dismiss();
             shell?.Close();
+            PortalPanicShortcut.SetSessionForTests(null, null);
             (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (oldSvc, oldClock, oldKey);
             CoreSettings.ServiceProvider = oldSettings;
         }

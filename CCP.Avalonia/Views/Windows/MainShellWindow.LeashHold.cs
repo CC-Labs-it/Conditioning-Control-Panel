@@ -8,7 +8,9 @@
 // is physically down (XQueryKeymap), so a lost key-up never asks. Windows has real repeats and no clock.
 // Like WPF, it works with the panic key switched off and under Lockdown (panic always works on a leash).
 // The portal supplies Activated/Deactivated instead of physical X11 key state. Its existing effects-only
-// binding policy stays intact; a hold that started while bound keeps the session until release.
+// binding policy stays intact; a hold that started while bound keeps the session until release. A portal
+// hold skips the X11 key check only once that compositor has proven it sends Deactivated; until then a
+// portal press is timed like an X11 press, so a portal that never reports release never asks.
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -76,10 +78,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             ApplyLeashHold(_leashHold.Up());
         }
 
+        /// <summary>A new portal press (PortalPanicShortcut.Route already dropped repeats): always a panic.
+        /// A hold still running here lost its Deactivated, so it ends before the new one starts.</summary>
         internal void OnPortalPanicPressed()
         {
+            if (_leashHold.Held) LeashHoldReleased();
             HandlePanicKeyPress(DateTime.Now);
-            _leashHoldFromPortal = true;
+            _leashHoldFromPortal = PortalPanicShortcut.ReportsRelease;
             LeashHoldPressed();
         }
 

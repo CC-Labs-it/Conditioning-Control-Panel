@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Serilog;
+using ConditioningControlPanel.Services.Leash;
 using Tmds.DBus.Protocol;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -24,8 +25,17 @@ internal static class PortalPanicShortcut
     private static string? _session;
     private static IDisposable? _activated, _deactivated;
     private static Action? _onReleased;
-    private static volatile bool _held;
+    private static volatile bool _held, _reportsRelease;
+    private static DateTime _lastDown;
     internal static bool IsHeld => _held;
+    /// <summary>This compositor has sent a Deactivated for our shortcut, so a hold can trust its release.</summary>
+    internal static bool ReportsRelease => _reportsRelease;
+
+    /// <summary>Test seam: a bound session without D-Bus.</summary>
+    internal static void SetSessionForTests(string? session, Action? onReleased)
+    {
+        (_session, _onReleased, _held, _reportsRelease) = (session, onReleased, false, false);
+    }
     private static DBusConnection? _bus;
 
     internal static bool IsBound => !string.IsNullOrEmpty(_session);
@@ -38,6 +48,7 @@ internal static class PortalPanicShortcut
     {
         if (!OperatingSystem.IsLinux() || _session != null) return null;
         _onReleased = onDeactivated;
+        _reportsRelease = false;
         _session = "";   // claimed: a second caller while this one waits gets null, not a second session
         try
         {
@@ -112,17 +123,26 @@ internal static class PortalPanicShortcut
         }
     }
 
-    // Ignore other sessions/shortcuts and duplicate activations: one physical press is one panic.
-    internal static bool Route(string session, string id, bool pressed, Action down, Action up)
+    // Ignore other sessions/shortcuts. An Activated within LeashHoldToCut.RepeatGap of the last one while
+    // held is a repeat (WPF MainWindow.Leash.cs:310-357); after the gap it is a new press even if a
+    // Deactivated was lost, so the panic key never goes dead.
+    internal static bool Route(string session, string id, bool pressed, Action down, Action up, DateTime? now = null)
     {
         if (string.IsNullOrEmpty(_session) || session != _session || id != Id) return false;
+        var t = now ?? DateTime.UtcNow;
         if (pressed)
         {
-            if (_held) return true;
+            var repeat = _held && t - _lastDown <= LeashHoldToCut.RepeatGap && t >= _lastDown;
+            _lastDown = t;
+            if (repeat) return true;
             _held = true;
             down();
         }
-        else if (_held) { _held = false; up(); }
+        else
+        {
+            _reportsRelease = true;
+            if (_held) { _held = false; up(); }
+        }
         return true;
     }
 
