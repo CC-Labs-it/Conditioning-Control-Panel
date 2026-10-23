@@ -30,6 +30,7 @@ public sealed class BubbleMotionPickerTests
         var seam = PrizeOwnership.IsGranted;
         var saved = CoreSettings.Current.BubbleMotionStyle;
         ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow? shell = null;
+        Window? host = null;
         try
         {
             // Nothing owned: WPF collapses the whole box.
@@ -50,6 +51,19 @@ public sealed class BubbleMotionPickerTests
             cmb.SelectedIndex = 1;
             Assert.Equal(BubbleMotionStyle.SpiralIn, CoreSettings.Current.BubbleMotionStyle);
 
+            // A setting changed elsewhere moves the picker (WPF watch list :201), and a settings
+            // tick only reselects: the items are the same instances (WPF SelectMotion).
+            // (Hosted in its own window: the settings hook lives while the card is attached.)
+            var live = new BubblePopFeatureControl();
+            host = new Window { Content = live };
+            host.Show();
+            var liveCmb = live.FindControl<ComboBox>("CmbMotion")!;
+            var firstItem = liveCmb.Items[0];
+            CoreSettings.Current.BubbleMotionStyle = BubbleMotionStyle.Mix;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(BubbleMotionStyle.Mix, (BubbleMotionStyle)((ComboBoxItem)liveCmb.SelectedItem!).Tag!);
+            Assert.Same(firstItem, liveCmb.Items[0]);
+
             ConditioningControlPanel.CoreSession.IsSessionRunningProvider = () => true;
             shell.RefreshSessionFeatureLock();
             Assert.False(cmb.IsEnabled);
@@ -63,6 +77,7 @@ public sealed class BubbleMotionPickerTests
             PrizeOwnership.IsGranted = seam;
             CoreSettings.Current.BubbleMotionStyle = saved;
             shell?.Close();
+            host?.Close();
             Dispatcher.UIThread.RunJobs();
         }
         return Task.CompletedTask;

@@ -150,7 +150,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 var ids = s.BubbleTriggerVariants ?? new List<string>();
                 foreach (var box in TriggerTypeBoxes())
                     box.IsChecked = box.Tag is string id && ids.Contains(id);
-                RebuildMotionPicker(s.BubbleMotionStyle);
+                // WPF builds the items on GrantsChanged and only calls SelectMotion on a settings tick.
+                if (CmbMotion.Items.Count == 0) RebuildMotionPicker();
+                SelectMotion(s.BubbleMotionStyle);
                 UpdateAmbientXpBudgetLine();
             }
             finally { _isLoading = false; }
@@ -162,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         /// <summary>Float up always; Rain / Spiral In only when owned (each with its v2 pill); Mix once
         /// any v2 style is owned. With nothing owned the box stays hidden. Caller holds _isLoading.</summary>
-        private void RebuildMotionPicker(BubbleMotionStyle current)
+        private void RebuildMotionPicker()
         {
             bool rain = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleRain);
             bool spiral = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleSpiralIn);
@@ -174,6 +176,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (rain) AddMotionChoice(BubbleMotionStyle.Rain, "bubble_motion_rain", v2: true);
             if (spiral) AddMotionChoice(BubbleMotionStyle.SpiralIn, "bubble_motion_spiral_in", v2: true);
             if (rain || spiral) AddMotionChoice(BubbleMotionStyle.Mix, "bubble_motion_mix", v2: false);
+        }
+
+        private void SelectMotion(BubbleMotionStyle current)
+        {
             // An unowned (absent) style shows as Float up, which is how it plays.
             CmbMotion.SelectedItem = CmbMotion.Items.OfType<ComboBoxItem>()
                 .FirstOrDefault(i => i.Tag is BubbleMotionStyle t && t == current) ?? CmbMotion.Items[0];
@@ -230,7 +236,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.BubbleGazePopEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleTriggersEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleTriggerChance) ||
-                e.PropertyName == nameof(AppSettings.BubbleTriggerVariants))
+                e.PropertyName == nameof(AppSettings.BubbleTriggerVariants) ||
+                e.PropertyName == nameof(AppSettings.BubbleMotionStyle))
             {
                 Dispatcher.UIThread.Post(LoadFromSettings);
             }
