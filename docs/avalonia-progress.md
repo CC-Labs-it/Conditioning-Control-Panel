@@ -2713,3 +2713,7 @@ Presets tab row views-tab-presets goes from stub to wired: the corner-GIF option
 
 ## avalonia-port/wire-views-tab-remote-control: +762
 Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), title-bar pill, share-media-sources row, tube emote bubble, hero art; Core RemoteRelay opt-in + re-publish (in-flight opt-in across a stop dropped). Row views-tab-remote-control: wired. Tests RemoteDirectoryTabTests, RemoteDirectoryOptInTests (fail-proven). Gate: rgate run 38563034446 GATE-OK; the fix round (run 39689830908) has Linux green and only unrelated Windows failures (P94).
+
+## avalonia-port/wire-shell-roadmap: +116
+- shell-roadmap: the photo-confirm/submit and locked-track tests prove the ported WPF roadmap flow, and the stale duplicate stub row is gone.
+- The photo-submit test now resets the static roadmap and removes its diary photo (review P02, fail-proven). Photo test stubs the chime; ledger no longer over-claims fail-proof.
