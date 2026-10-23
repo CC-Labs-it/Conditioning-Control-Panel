@@ -6,7 +6,6 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
-using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -14,6 +13,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Companion;
@@ -23,43 +23,52 @@ using ConditioningControlPanel.Views.Controls.Companion;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 {
-    /// <summary>
-    /// Z2 — the chat threshold surface, ported from the WPF head. See the XAML header for the spec.
-    ///
-    /// <para>The behaviour is deliberately thin: Enter-to-send, keeping the thread pinned to its
-    /// newest line, and the dormant state's one-shot shimmer. The "she's thinking" dot pulse is a
-    /// class-gated Style animation in the XAML, so the two Storyboards the WPF code-behind cloned
-    /// (<c>CmpThinkingDotsStoryboard</c>, <c>CmpShimmerSweepStoryboard</c>) have no counterpart
-    /// here; the shimmer is a <see cref="DoubleTransition"/> exactly as <see cref="MakeHerYoursView"/>
-    /// does it.</para>
-    ///
-    /// <para>WPF's CompanionWheelRelay is not ported: the thread's ScrollViewer keeps Avalonia's
-    /// default IsScrollChainingEnabled, which already hands a spent notch to the page. Live
-    /// assistant turns resolve sanctioned watch chips through the Core index.</para>
-    ///
-    /// <para>Sending is the viewmodel's. The WPF <c>IChatThresholdVm</c> is routed through
-    /// <c>CompanionBrain.ChatAsync</c>; <see cref="ChatThresholdViewModel.CreateLive"/> sends through
-    /// the same brain, while the default viewmodel remains an isolated artboard.</para>
-    /// </summary>
+    /// <summary>Z2: WPF's Enter-to-send, newest-line pinning, delayed dormant shimmer and
+    /// staggered thinking dots. Motion shares the window's frame source and parks off screen.</summary>
     public partial class ChatThresholdView : UserControl
     {
         private INotifyCollectionChanged? _watchedTurns;
         private bool _shimmerPlayed;
         private ChatThresholdViewModel? _vm;
+        private BeatLoop? _thinkingLoop, _shimmerLoop;
+        private static readonly CubicEaseInOut ShimmerEase = new();
 
         public ChatThresholdView()
         {
             InitializeComponent();
-            DataContext = _vm = new ChatThresholdViewModel();
             DataContextChanged += (_, _) =>
             {
-                // A replaced viewmodel stops listening to the brain's turn log (WPF Detach on teardown).
                 if (!ReferenceEquals(_vm, DataContext)) _vm?.Detach();
-                _vm = DataContext as ChatThresholdViewModel;
+                Observe(DataContext as ChatThresholdViewModel);
                 WatchTurns(_vm?.Turns);
+                SyncThinking();
+                ScrollThreadToEnd();
+                PlayDormantShimmer();
             };
+            DataContext = new ChatThresholdViewModel();
             Loaded += OnLoaded;
-            Unloaded += (_, _) => WatchTurns(null);
+            Unloaded += (_, _) =>
+            {
+                StopThinking();
+                _shimmerLoop?.Stop();
+                _vm?.Detach();
+                Observe(null);
+                WatchTurns(null);
+            };
+        }
+
+        private void Observe(ChatThresholdViewModel? vm)
+        {
+            if (ReferenceEquals(_vm, vm)) return;
+            if (_vm != null) _vm.PropertyChanged -= OnVmChanged;
+            _vm = vm;
+            if (_vm != null) _vm.PropertyChanged += OnVmChanged;
+        }
+
+        private void OnVmChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ChatThresholdViewModel.IsThinking)) SyncThinking();
+            if (e.PropertyName == nameof(ChatThresholdViewModel.State)) PlayDormantShimmer();
         }
 
         /// <summary>Convenience for hosts that hand in a viewmodel rather than setting DataContext.</summary>
@@ -71,7 +80,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
+            Observe(ViewModel);
+            ViewModel?.Sync();
             WatchTurns(ViewModel?.Turns);
+            SyncThinking();
             ScrollThreadToEnd();
             PlayDormantShimmer();
 
@@ -123,22 +135,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             var shift = group.Children.OfType<TranslateTransform>().FirstOrDefault();
             if (shift is null) return;
 
-            // One-time Bounds read at Loaded - a value, not a binding, so nothing thrashes.
             double travel = DormantHost.Bounds.Width > 1 ? DormantHost.Bounds.Width + 90 : 480;
-            shift.Transitions = null;
-            shift.X = -90;
-            shift.Transitions = new Transitions
-            {
-                new DoubleTransition
-                {
-                    Property = TranslateTransform.XProperty,
-                    Duration = TimeSpan.FromSeconds(1.4),
-                    Easing = new CubicEaseInOut()
-                }
-            };
             DormantShimmer.Opacity = 1;
-            shift.X = travel;
             _shimmerPlayed = true;
+            _shimmerLoop = new BeatLoop(DormantShimmer, seconds =>
+            {
+                double progress = Math.Clamp((seconds - 0.25) / 1.4, 0, 1);
+                shift.X = -90 + (travel + 90) * ShimmerEase.Ease(progress);
+                if (progress >= 1) _shimmerLoop!.Stop();
+            });
+            _shimmerLoop.Start();
+        }
+
+        public void SyncThinking()
+        {
+            if (!IsLoaded || !IsEffectivelyVisible || ViewModel?.IsThinking != true)
+            {
+                StopThinking();
+                return;
+            }
+            _thinkingLoop ??= new BeatLoop(ThinkingDots, seconds =>
+            {
+                Dot1.Opacity = DotOpacity(seconds * 1000, 0);
+                Dot2.Opacity = DotOpacity(seconds * 1000, 150);
+                Dot3.Opacity = DotOpacity(seconds * 1000, 300);
+            });
+            _thinkingLoop.Start();
+            ScrollThreadToEnd();
+        }
+
+        public void StopThinking()
+        {
+            _thinkingLoop?.Stop();
+            Dot1.Opacity = Dot2.Opacity = Dot3.Opacity = 1;
+        }
+
+        private static double DotOpacity(double elapsedMs, double delayMs)
+        {
+            // WPF repeats each cloned storyboard including its child's BeginTime.
+            double phase = elapsedMs % (900 + delayMs) - delayMs;
+            if (phase < 0) return 1;
+            return Math.Clamp(0.25 + 0.75 * (1 - Math.Abs(phase / 450 - 1)), 0, 1);
         }
 
         /// <summary>Enter sends; Shift+Enter is left alone so a future multi-line box still works.</summary>

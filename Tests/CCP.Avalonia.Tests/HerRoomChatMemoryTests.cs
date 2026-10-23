@@ -132,6 +132,43 @@ public sealed class HerRoomChatMemoryTests
     });
 
     [Fact]
+    public Task ChatUnloadDetachesTheSessionAndReloadReattaches() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var (previousAi, previousBrain) = (AvApp.Ai, AvApp.Brain);
+        var (brain, directory) = Setup("http://127.0.0.1:9");
+        var vm = ChatThresholdViewModel.CreateLive();
+        var view = new ChatThresholdView { ViewModel = vm };
+        var window = new Window { Content = view, Width = 700, Height = 600 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(vm.IsAttached);
+            window.Content = null;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(vm.IsAttached);
+            // No stale session subscription may paint a detached threshold.
+            brain.Session.Append(TurnKind.UserChat, "while away");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(vm.Turns);
+            window.Content = view;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(vm.IsAttached);
+            Assert.Equal("while away", Assert.Single(vm.Turns).Text);
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+            vm.Detach();
+            brain.Dispose();
+            (AvApp.Ai, AvApp.Brain) = (previousAi, previousBrain);
+            Directory.Delete(directory, recursive: true);
+        }
+    });
+
+    [Fact]
     public Task DiaryForgetAndForgetEverythingDeleteFromMemoryJson() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var (previousAi, previousBrain) = (AvApp.Ai, AvApp.Brain);

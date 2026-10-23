@@ -40,7 +40,6 @@ public sealed class AmbientBeatLoopsTests
     private static readonly string[] NotYetMoved =
     {
         "Views/Controls/AttentionCheckControl.axaml.cs",
-        "Views/Controls/Companion/ChatThresholdView.axaml",
         "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/SeasonRecapCard.axaml.cs",
         "Views/Tabs/BlinkTrainerTabView.axaml",

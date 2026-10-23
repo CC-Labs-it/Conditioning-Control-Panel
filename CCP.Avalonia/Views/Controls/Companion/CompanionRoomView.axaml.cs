@@ -172,10 +172,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 HeroZone.GetLogicalDescendants().OfType<RelationshipConstellation>().FirstOrDefault()?.PlayIntro();
                 // WPF UpdateCompanionCardsUI runs on the same show: the roster's levels and ring.
                 (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
-                // ponytail: WPF also calls ChatZone.SyncThinking() here. This head's
-                // ChatThresholdView has no thinking clock to sync - WPF's dots are three
-                // RepeatBehavior=Forever Storyboards (CmpThinkingDotsStoryboard) and the port
-                // draws the dots static. Add the call when that animation exists here.
+                ChatZone.SyncThinking();
             }
             catch (InvalidOperationException)
             {
@@ -190,6 +187,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 HeroZone.StopAmbientLoop();
                 AwarenessZone.StopCursorBlink();
                 AwarenessZone.StopRefresh();
+                ChatZone.StopThinking();
             }
             catch (InvalidOperationException) { /* already torn down */ }
         }
