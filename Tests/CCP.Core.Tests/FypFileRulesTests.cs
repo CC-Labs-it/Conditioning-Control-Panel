@@ -2,31 +2,40 @@ using System.IO;
 using ConditioningControlPanel.Services.Fyp;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>Just For You right-click "Open file" / "Show in folder" (ccp-bugs #1290).</summary>
-public class FypFileMenuTests
+public class FypFileRulesTests
 {
     private static readonly string Root = Path.Combine(Path.GetTempPath(), "ccp-fyp-root");
 
     [Fact]
     public void LibraryId_ResolvesUnderTheRoot()
     {
-        var path = FypFileMenu.ResolveLocal(Root, "videos/sub dir/clip one.mp4");
+        var path = FypFileRules.ResolveLocal(Root, "videos/sub dir/clip one.mp4");
         Assert.Equal(Path.Combine(Root, "videos", "sub dir", "clip one.mp4"), path);
     }
 
     [Fact]
     public void LibraryGif_ResolvesUnderTheRoot()
     {
-        var path = FypFileMenu.ResolveLocal(Root, "images/a/b.gif");
+        var path = FypFileRules.ResolveLocal(Root, "images/a/b.gif");
         Assert.Equal(Path.Combine(Root, "images", "a", "b.gif"), path);
+    }
+
+    [Theory]
+    [InlineData("videos\\sub dir\\clip.webm", "videos/sub dir/clip.webm")]
+    [InlineData("images\\sub dir\\clip.gif", "images/sub dir/clip.gif")]
+    public void WindowsSeparators_ResolveOnEitherHead(string id, string expected)
+    {
+        Assert.Equal(Path.Combine(Root, expected.Replace('/', Path.DirectorySeparatorChar)),
+            FypFileRules.ResolveLocal(Root, id));
     }
 
     [Fact]
     public void OnlineId_HasNoFile()
     {
-        Assert.Null(FypFileMenu.ResolveLocal(Root, "scrolller/sissyhypno/abc"));
+        Assert.Null(FypFileRules.ResolveLocal(Root, "scrolller/sissyhypno/abc"));
     }
 
     [Theory]
@@ -45,13 +54,13 @@ public class FypFileMenuTests
     [InlineData(null)]
     public void UnsafeIds_AreRefused(string? id)
     {
-        Assert.Null(FypFileMenu.ResolveLocal(Root, id));
+        Assert.Null(FypFileRules.ResolveLocal(Root, id));
     }
 
     [Fact]
     public void SiblingFolderWithTheSamePrefix_IsRefused()
     {
         // "ccp-fyp-root2" starts with "ccp-fyp-root"; the separator check must catch it.
-        Assert.Null(FypFileMenu.ResolveLocal(Root, "../ccp-fyp-root2/x.mp4"));
+        Assert.Null(FypFileRules.ResolveLocal(Root, "../ccp-fyp-root2/x.mp4"));
     }
 }
