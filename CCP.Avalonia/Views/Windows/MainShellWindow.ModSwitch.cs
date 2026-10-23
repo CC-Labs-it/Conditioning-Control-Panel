@@ -266,6 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 res["SecondaryBrush"] = new SolidColorBrush(secondary);
                 res["AccentGradientBrush"] = mods.IsCCPDefault && this.TryFindResource("BrandGradient", out var brand) && brand is IBrush b
                     ? b : new SolidColorBrush(accent);
+                ApplyStartHeroState();
             }
             catch (Exception ex)
             {

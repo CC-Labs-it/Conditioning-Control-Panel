@@ -2,9 +2,7 @@
 // BtnStartMenu_Click, MenuStartNormal_Click, StartEngine (:294), StopEngine (:444) and
 // UpdateStartButton (:944), for the features Core drives (CoreEngine). The session half of
 // BtnStart_Click (stop-session dialog) is ConfirmStopSession (MainShellWindow.SessionRun.cs).
-// ponytail: remaining start integration: Relapse achievements, brain-drain/autonomy starts,
-// ramp/scheduler lifecycle and hero FX. Remote gate, TotalSessions and other Core-driven services
-// are already real; empty local flash notices and the running label are now wired here.
+// ponytail: Brain Drain runtime and mandatory-video enhancement prompts remain dependencies.
 // MenuJumpRightIn_Click / RandomizeAndStart (:132) are ported.
 
 using System;
@@ -31,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private async void BtnStart_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
+            FlashStartIgnition();
             if (RemoteControllerConnected) return;   // WPF StartStop.cs:43: a controller drives
             if ((CoreEngine.IsRunning || App.Sessions?.IsRunning == true) && RefuseStopUnderLockdown()) return;
             // WPF MainWindow.StartStop.cs:58: a running session asks first; declining keeps everything on.
@@ -38,11 +37,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Serilog.Log.Information("Start button: asking to stop the running session");
                 await ConfirmStopSession("dialog_stop_session_title", "dialog_stop_session_body");
-                if (!App.Sessions.IsRunning) StopEngine();
+                if (!App.Sessions.IsRunning) { NoteManualEngineStop(); StopEngine(); }
                 return;
             }
-            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
-            else StartEngine();
+            if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); NoteManualEngineStop(); StopEngine(); }
+            else { Scheduler.NoteManualStart(); StartEngine(); }
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -78,7 +77,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
+                App.Achievements?.CheckRelapse();
                 CoreEngine.Start();
+                StartEngineLifecycle();
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
@@ -106,6 +107,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug(ex, "[empty-state] flash library check failed"); }
         }
 
+        internal void WarnIfWallpaperLibraryEmpty()
+        {
+            try
+            {
+                if (!LocalMediaLibrary.WallpaperIsEmpty(CoreSettings.Current, CorePaths.EffectiveAssets)) return;
+                App.Notifications.Show(
+                    string.Format(Loc.Get("msg_no_wallpaper_images"), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
+                    Helpers.NotificationType.Warning, TimeSpan.FromSeconds(18),
+                    actionLabel: Loc.Get("btn_open_media_manager"), action: () => ShowTab("assets"),
+                    secondaryActionLabel: Loc.Get("btn_get_packs"),
+                    secondaryAction: () => Platform.ExternalOpener.Open(DiscordLinks.PackCatalogue));
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "[empty-state] wallpaper library check failed"); }
+        }
+
+        private void NoteManualEngineStop()
+        {
+            App.Achievements?.TrackPanicPressed();
+            Scheduler.NoteManualStop(CoreSettings.Current, EngineNow());
+        }
+
         /// <summary>WPF StopEngine. Saved flags are left alone; <see cref="OnEngineStopped"/> clears the screen.
         /// A running session is paused first, not ended (panic, tray Stop): WPF MainWindow.xaml.cs:1726.</summary>
         internal static void StopEngine()
@@ -122,6 +144,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            StopRampTimer();
+            var s = CoreSettings.Current;
+            if (!(AutonomyScheduler.HasEntitlement && s.AutonomyModeEnabled && s.AutonomyConsentGiven)) Autonomy.Stop();
+            if (!s.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
+            Platform.LibVlcAudio.Instance?.ForceUnduck();
+            EngineCrashSentinel.Clear();
             PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
             StopConditioningTimeTracker();         // WPF StartStop.cs:540
             App.StopDesktopOverlays(final: false);
@@ -140,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF UpdateStartButton: red ■ Stop while running, the accent ▶ Start otherwise.</summary>
         internal void UpdateStartButton(bool force = false)
         {
-            if (!force && RemoteControllerConnected) return;   // WPF :941 keeps the remote label
+            if (!force && RemoteControllerConnected) { ApplyStartHeroState(); return; }   // WPF :941 keeps the remote label
             var running = CoreEngine.IsRunning;
             if (Named<Button>("BtnStart") is { } b)
             {
@@ -155,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (running) status.Bind(TextBlock.TextProperty, (Binding)new StrExtension("label_running").ProvideValue(null!));
                 else status.Text = "";
             }
+            ApplyStartHeroState();
         }
     }
 }

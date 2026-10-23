@@ -54,7 +54,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (gen != _engineGen || App.Sessions is not { IsRunning: false } runner) return;
                 try
                 {
+                    App.Achievements?.CheckRelapse();
                     runner.Start(session);
+                    StartEngineLifecycle();
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
                     StartConditioningTimeTracker();   // ... and StartEngine :423
@@ -163,6 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Source = SessionClockLabel.StartButton(name, remaining, showCountdown, "", Loc.Get("label_0_1_2_3"))
             });
+            ApplyStartHeroState();
         }
 
         /// <summary>WPF OnSessionLogReady + ShowSessionSummaryWhenClear: the recap opens by itself,
