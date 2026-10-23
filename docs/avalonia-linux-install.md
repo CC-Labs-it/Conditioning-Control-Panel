@@ -73,8 +73,8 @@ Evidence: ~/ccp-port/evidence/package-verify/.
   zlib-ng-compat's provide); only `liblttng-ust.so.0` (optional .NET tracing) is unresolved (`aur-native-deps.txt`).
   A clean-container proof of `depends=` sufficiency is still owed: the host has far more than the closure installed.
 - **Flatpak:** built with flatpak-builder (org.flatpak.Builder) on org.gnome.Sdk//50 and installed to the user
-  installation 2026-10-23 (~/ccp-port/evidence/flatpak-first-build/); not launched yet (`--smoke`, window, tray, panic key
-  and overlays are queued in evidence/live-queue/packaging.md). Earlier substitute proof: the extracted tarball run inside the installed `org.gnome.Platform//50` runtime (`flatpak run
+  installation 2026-10-23 (~/ccp-port/evidence/flatpak-first-build/), then launched: `--smoke`, window, tray, X11 panic
+  key, portal session, click-through overlays and video pass (~/ccp-port/evidence/flatpak-live-2026-10-23/README.md). Earlier substitute proof: the extracted tarball run inside the installed `org.gnome.Platform//50` runtime (`flatpak run
   --command=...`) passes every smoke check except LibVLC (`libvlc` absent), which is exactly the module the manifest
   bundles (`flatpak-runtime-smoke.log`). The runtime has webkit2gtk-4.1, javascriptcoregtk-4.1, soup-3, libsecret, libX11,
   libXi, libpulse, ICU and `parec`; it lacks libvlc and the WPE trio (`flatpak-runtime-libs.txt`).

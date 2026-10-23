@@ -1,6 +1,7 @@
 # Flatpak for the own-repo channel (docs/avalonia-linux-install.md). Consumes the tarball from
 # packaging/linux/build-tarball.sh: copy it next to this file as ConditioningControlPanel-linux-x64.tar.gz.
 # A release swaps `path:` for `url:` + `sha256:` of the uploaded asset. Not submitted to Flathub.
+# Swapping the local tarball? Add its `sha256:` too: without one flatpak-builder keys the cache on the path and reuses the old build.
 # GNOME 50 already ships webkit2gtk-4.1, libsecret, libXi and libpulse; libVLC is bundled below.
 # WPE WebKit is NOT bundled: WebHost defaults to WebKitGTK (runtime has webkit2gtk-4.1 + autoaudiosink) and takes
 # WPE only on CCP_LINUX_WEBVIEW=wpe when libWPEWebKit exists, else falls back to GTK (docs/avalonia-decisions.md 2026-10-23).
