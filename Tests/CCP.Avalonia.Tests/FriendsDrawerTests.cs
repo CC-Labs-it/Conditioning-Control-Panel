@@ -116,11 +116,11 @@ public sealed class FriendsDrawerTests
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"flavour\"") && s.Contains("\"id\":\"trance\""));
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"ht\"") && s.Contains("\"id\":\"" + FriendsDrawerRules.NormaliseHtId("ht-1234!") + "\""));
 
-        // The Goon room and the chess board are not hosted on this head: those tiles are shut and say why.
+        // Goon still waits for its host; chess challenges use the board host.
         Click(d, "friends-action:invite");
         Assert.Equal("invite", d.OpenPicker);
-        foreach (var shut in new[] { InviteDestination.Goon, InviteDestination.Chess })
-            Assert.False(Tagged<Button>(d, "friends-invite:" + shut)!.IsEnabled);
+        Assert.False(Tagged<Button>(d, "friends-invite:" + InviteDestination.Goon)!.IsEnabled);
+        Assert.True(Tagged<Button>(d, "friends-invite:" + InviteDestination.Chess)!.IsEnabled);
         Click(d, "friends-invite:" + InviteDestination.BackRoom);
         Assert.Equal(SendResult.Sent, await d.InviteAsync("u_on", InviteDestination.Ramp, null));
         Assert.Contains(wire.Sends, s => s.Contains("\"kind\":\"invite\"") && s.Contains("\"destination\":\"backroom\""));
@@ -131,6 +131,27 @@ public sealed class FriendsDrawerTests
         d.OpenPickerFor("u_on", "poke");
         d.Toggle("u_on");
         Assert.Null(d.OpenPicker);
+    });
+
+    [Fact]
+    public Task ChessPickerWaitsForTheChallengeBeforeSendingItsInvite() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var old = FriendsInviteCodes.ChallengeFriend;
+        var ready = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (svc, wire) = Service();
+        try
+        {
+            FriendsInviteCodes.ChallengeFriend = (id, timeout) => { Assert.Equal("u_on", id); Assert.Equal(TimeSpan.FromSeconds(45), timeout); return ready.Task; };
+            var d = new FriendsRailChip(svc).Drawer;
+            await svc.RefreshAsync(); d.Toggle("u_on");
+            Click(d, "friends-action:invite"); Click(d, "friends-invite:chess");
+            Assert.Empty(wire.Sends);
+            ready.SetResult("c_0123456789abcdef");
+            await Until(() => wire.Sends.Count > 0);
+            Assert.Contains("\"destination\":\"chess\"", wire.Sends.Single());
+            Assert.Contains("c_0123456789abcdef", wire.Sends.Single());
+        }
+        finally { FriendsInviteCodes.ChallengeFriend = old; svc.Dispose(); }
     });
 
     /// <summary>WPF ShowResult: a send answered after the drawer folded says so outside, over the rail chip's

@@ -1,8 +1,7 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
-// this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), PvP stakes (Core StakeBridge.ForApp
-// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// this is the window glue. Online pictures and friend invites are in the Media/Friends partials.
+// Not here yet: PvP stakes (stakes-host), Lobby intents (feat-lobby), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -18,6 +17,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.PieceByPiece.Media;
 using ConditioningControlPanel.Services.Quiz;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -81,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _pbpWatch.Tick += (_, _) => CheckPbpWatch(DateTime.UtcNow);
             _pbpWatch.Start();
+            StartPbpProbe();
             try { FriendsHead.Service?.EnterActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: launched");
         }
@@ -93,6 +94,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpOpen = false;
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
+            _pbpOnline?.Dispose();
+            _pbpOnline = null;
+            _pbpFriendIntent = null;
+            _pbpChallenge?.TrySetResult(null);
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
             Log.Information("PieceByPieceHost: closed");
         }
@@ -124,6 +129,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "pbp:media-request":
                         OnPbpMediaRequest(o);
                         return true;
+                    case "pbp:media-flavour": OnPbpMediaFlavour(o); return true;
+                    case "pbp:media-more": _pbpOnline?.More(); return true;
+                    case "pbp:friend-challenge": OnPbpFriendChallenge(o); return true;
+                    case "pbp:setting":
+                        if (PbpWatchRules.TryRead(o, out var key, out var value) && PbpWatchRules.Apply(CoreSettings.Current, key, value)) CoreSettings.Save();
+                        return true;
                     case "pbp:net":
                         OnPbpNetRequest(o);
                         return true;
@@ -145,11 +156,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _pbpLastBeatUtc = _pbpLastProgressUtc = DateTime.UtcNow;
             _pbpPinged = false;
             try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            _pbpSessionOptIn = PbpMediaRules.SavedOptIn(CoreSettings.Current.PbpMediaOnline, CoreSettings.Current.PbpMediaFlavour);
             if (!_pbpSettingsPosted)
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, PbpWhispers()));
+                Post(PbpWatchRules.SettingsFrame(PbpHostRules.VideoHoldSec(s.VideoMinDurationSeconds), s.MotionLevel != MotionLevel.Full, PbpWhispers(), s, PbpMediaAvailable(), null));
             }
             if (!_pbpIdentityPosted)
             {
@@ -157,6 +169,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                     CoreSettings.Current.UserDisplayName, CoreReleaseContent.AppVersion));
             }
+            PostPbpMediaState();
+            StartPbpOnlineMedia();
+            PostPbpFriendIntent();
         }
 
         /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>

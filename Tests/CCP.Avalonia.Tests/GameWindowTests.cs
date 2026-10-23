@@ -255,7 +255,7 @@ public sealed class GameWindowTests
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.Web.OnNavigationCompleted(w.PageUrl);
             w.Web.OnWebMessage("\"{\\\"type\\\":\\\"ready\\\"}\"");   // the string carrier's JSON-quoted frame
-            Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+            Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state" }, sent.Select(o => (string?)o["type"]));
             Assert.Equal(15, (int)sent[0]["videoHoldSec"]!);
             Assert.Equal("tok", (string?)sent[1]["net"]!["authToken"]);
 
@@ -430,6 +430,149 @@ public sealed class GameWindowTests
         {
             (CorePaths.EffectiveAssetsProvider, GameWindow.Server, CoreMods.ActiveModIdProvider) = (oldAssets, oldServer, oldMod);
             Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_MediaChoicePersists_NoAppConsent_AndEmptyLibraryRefreshes() => RunBoard(() =>
+    {
+        var assets = Directory.CreateTempSubdirectory("pbp-media-").FullName;
+        var old = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            CorePaths.EffectiveAssetsProvider = () => assets;
+            var s = CoreSettings.Current;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.False((bool)sent.Single(o => (string?)o["type"] == "pbp:media-state")["chosen"]!);
+            Assert.True(w.PbpProbe.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False((bool)sent.Last(o => (string?)o["type"] == "pbp:media-state")["mediaAvailable"]!);
+            Assert.Equal("off", (string?)sent.Last(o => (string?)o["type"] == "pbp:online-media")["state"]);
+            w.HandleMessage(new JObject { ["type"] = "pbp:media-flavour", ["flavour"] = " PINK ", ["subs"] = new JArray("r/Valid_Sub", "valid_sub", 9, "../bad"), ["custom"] = new JObject { ["mine"] = true }, ["online"] = false }.ToString());
+            Assert.True(s.PbpMediaChosen);
+            Assert.Equal("pink", s.PbpMediaFlavour);
+            Assert.Equal("Valid_Sub", s.PbpMediaSubs);
+            Assert.Equal("{\"mine\":true}", s.PbpMediaCustom);
+            Assert.False(s.HasRemoteMediaConsent);
+            Assert.Equal("local", s.MediaSource);
+            w.Close();
+            CoreSettings.SaveImmediate(); // flush the debounced writer, as shutdown does
+            var stored = JObject.Parse(File.ReadAllText(Path.Combine(CorePaths.UserData, "settings.json")));
+            Assert.True((bool)stored["pbpMediaChosen"]!);
+            w = GameWindow.Launch(GameWindow.PbpId)!;
+            sent.Clear();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.True((bool)sent.Last(o => (string?)o["type"] == "pbp:media-state")["chosen"]!);
+            w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"watchAmount\",\"value\":\"more\"}");
+            w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"watchEffects\",\"value\":false}");
+            w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"letPeopleWatch\",\"value\":false}");
+            w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"MediaSource\",\"value\":\"online\"}");
+            Assert.Equal("more", s.PbpWatchAmount);
+            Assert.False(s.PbpWatchEffects);
+            Assert.False(s.PbpLetPeopleWatch);
+            Assert.Equal("local", s.MediaSource);
+            w.Close();
+            w = GameWindow.Launch(GameWindow.PbpId)!;
+            sent.Clear(); w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Equal("more", (string?)sent[0]["watchAmount"]);
+            Assert.False((bool)sent[0]["watchEffects"]!);
+            Assert.False((bool)sent[0]["letPeopleWatch"]!);
+        }
+        finally { CorePaths.EffectiveAssetsProvider = old; Directory.Delete(assets, true); }
+    });
+
+    [Fact]
+    public void PieceByPiece_FriendChallenge_QueuesAfterIdentity_Reuses_Replaces_Timeouts_AndPanic() => RunBoard(() =>
+    {
+        const string challenge = "c_0123456789abcdef";
+        Assert.True(ConditioningControlPanel.Avalonia.Views.Controls.FriendsInviteCodes.HostsChess());
+        var pending = ConditioningControlPanel.Avalonia.Views.Controls.FriendsInviteCodes.ChallengeFriend("friend", TimeSpan.FromSeconds(45));
+        Assert.Same(pending, GameWindow.ChallengePbpFriend("friend", TimeSpan.FromSeconds(45)));
+        var w = GameWindow.OpenForTests(GameWindow.PbpId)!;
+        var sent = new List<JObject>(); w.Posted += json => sent.Add(JObject.Parse(json));
+        Assert.False(pending.IsCompleted);
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.True(sent.FindIndex(o => (string?)o["type"] == "pbp:friend") > sent.FindIndex(o => (string?)o["type"] == "pbp:identity"));
+        Assert.Equal("friend", (string?)sent.Last()["friendId"]);
+        w.HandleMessage("{\"type\":\"pbp:friend-challenge\",\"challengeId\":\"" + challenge + "\"}");
+        Assert.Equal(challenge, pending.Result);
+        pending = GameWindow.ChallengePbpFriend("other", TimeSpan.FromSeconds(45));
+        Assert.Equal("other", (string?)sent.Last()["friendId"]);
+        var next = GameWindow.ChallengePbpFriend("third", TimeSpan.FromSeconds(45));
+        Assert.Null(pending.Result);
+        w.HandleMessage("{\"type\":\"pbp:friend-challenge\",\"challengeId\":\"bad\"}");
+        Assert.Null(next.Result);
+        var timeout = GameWindow.ChallengePbpFriend("timeout", TimeSpan.Zero);
+        Assert.True(timeout.Wait(TimeSpan.FromSeconds(5))); Assert.Null(timeout.Result);
+        GameWindow.JoinPbpChallenge(challenge);
+        Assert.Equal("accept", (string?)sent.Last()["mode"]);
+        Assert.Equal(challenge, (string?)sent.Last()["challengeId"]);
+        Assert.True(FriendsLanding.CanJoin(new("invite", ConditioningControlPanel.Services.Friends.SendKind.Invite, "friend", "Friend", null, null, "chess", challenge, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(1))));
+        Assert.False(FriendsLanding.CanJoin(new("invite", ConditioningControlPanel.Services.Friends.SendKind.Invite, "friend", "Friend", null, null, "chess", "bad", null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(1))));
+        pending = GameWindow.ChallengePbpFriend("panic", TimeSpan.FromSeconds(45));
+        GameWindow.CloseAllForPanic();
+        Assert.Null(pending.Result);
+        GameWindow.JoinPbpChallenge("bad"); Assert.False(GameWindow.IsAnyOpen());
+        FriendsLanding.OnKnockDone(new("invite", ConditioningControlPanel.Services.Friends.SendKind.Invite, "friend", "Friend", null, null, "chess", challenge, null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(1)), ConditioningControlPanel.Avalonia.Views.Overlays.KnockOutcome.Go);
+        w = GameWindow.OpenForTests(GameWindow.PbpId)!;
+        sent.Clear(); w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal("accept", (string?)sent.Last()["mode"]);
+    });
+
+    [Fact]
+    public void PieceByPiece_OnlineMediaIsServed_RefillsAndReleasesOnPanic() => RunBoard(() =>
+    {
+        var assets = Directory.CreateTempSubdirectory("pbp-online-").FullName;
+        var (oldAssets, oldFetch, oldCopy, oldRelease) = (CorePaths.EffectiveAssetsProvider,
+            ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.Fetch,
+            ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.Materialize,
+            ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.ReleaseFile);
+        int id = 0;
+        try
+        {
+            CorePaths.EffectiveAssetsProvider = () => assets;
+            using var server = new WebAssetServer(assets) { AssetsRoot = () => assets };
+            GameWindow.Server = () => server;
+            var s = CoreSettings.Current;
+            s.PbpMediaFlavour = "pink"; s.PbpMediaSubs = "Valid_Sub";
+            ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.Fetch = (_, _, kind, _) => Task.FromResult((new List<ConditioningControlPanel.Services.Fyp.FypAssetManifest.Entry>
+            { new() { Id = "scrolller/Sub/" + Interlocked.Increment(ref id), Url = "https://media.example/" + id + (kind == ConditioningControlPanel.Services.Fyp.Online.FeedMediaKind.GifStill ? ".jpg" : ".mp4"),
+                Type = kind == ConditioningControlPanel.Services.Fyp.Online.FeedMediaKind.GifStill ? "image" : "video" } }, (string?)null));
+            ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.Materialize = (url, _) =>
+            {
+                var dir = Directory.CreateDirectory(Path.Combine(assets, ".temp")).FullName;
+                var path = Path.Combine(dir, "ccp_temp_remote_" + Guid.NewGuid().ToString("N") + Path.GetExtension(new Uri(url).AbsolutePath));
+                File.WriteAllBytes(path, new byte[] { 1 }); return Task.FromResult<string?>(path);
+            };
+            ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.ReleaseFile = File.Delete;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>(); w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.True(w.PbpOnlinePending.Wait(TimeSpan.FromSeconds(10))); Dispatcher.UIThread.RunJobs();
+            var frame = sent.Last(o => (string?)o["type"] == "pbp:online-media");
+            Assert.Equal("ready", (string?)frame["state"]); Assert.Equal(70, (int)frame["share"]!);
+            Assert.Equal(24, frame["images"]!.Count()); Assert.Equal(12, frame["clips"]!.Count());
+            var url = (string)frame["images"]!.First()!;
+            using var http = new System.Net.Http.HttpClient();
+            Assert.Equal(new byte[] { 1 }, http.GetByteArrayAsync(url + "?ccp_t=" + server.Token).GetAwaiter().GetResult());
+            Assert.False(s.HasRemoteMediaConsent);
+            w.HandleMessage("{\"type\":\"pbp:media-more\"}");
+            Assert.True(w.PbpOnlinePending.Wait(TimeSpan.FromSeconds(10))); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(48, sent.Last(o => (string?)o["type"] == "pbp:online-media")["images"]!.Count());
+            GameWindow.CloseAllForPanic(); Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            (CorePaths.EffectiveAssetsProvider, ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.Fetch,
+                ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.Materialize, ConditioningControlPanel.Services.GoonGame.Online.GoonOnlineMedia.ReleaseFile) = (oldAssets, oldFetch, oldCopy, oldRelease);
+            Directory.Delete(assets, true);
         }
     });
 
