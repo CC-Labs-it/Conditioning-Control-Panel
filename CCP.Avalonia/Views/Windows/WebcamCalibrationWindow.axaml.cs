@@ -333,7 +333,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The monitor calibration ran on (WPF Screen.FromHandle), for calibrated-screen placement.
             if (Screens.ScreenFromWindow(this) is { } sc)
             {
-                data.MonitorBounds!.DeviceName = sc.DisplayName;
+                data.MonitorBounds!.DeviceName = Platform.WebcamScreens.Name(sc);
                 data.MonitorBounds.X = sc.Bounds.X;
                 data.MonitorBounds.Y = sc.Bounds.Y;
             }
@@ -445,15 +445,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return final;
         }
 
-        /// <summary>WPF App.ApplyCalibrationScreenPlacement: start on the monitor the last calibration
-        /// ran on (matched by pixel origin) so Maximized lands there; unknown monitor: leave it.</summary>
-        internal static void PlaceOnCalibratedScreen(Window window)
-        {
-            if (Tracker.Calibration?.MonitorBounds is not { } mb || window.Screens is not { } screens) return;
-            if (screens.All.FirstOrDefault(s => s.Bounds.X == mb.X && s.Bounds.Y == mb.Y) is not { } sc) return;
-            window.WindowStartupLocation = WindowStartupLocation.Manual;
-            window.Position = sc.Bounds.Position;
-        }
+        /// <summary>WPF: calibration, Quick Recal and tracker test all use the user's monitor choice.</summary>
+        internal static void PlaceOnCalibratedScreen(Window window) => Platform.WebcamScreens.Place(window);
 
         /// <summary>WPF: the live cursor for 15 s (re-click restarts the countdown), on the window's clock.</summary>
         private async void BtnVerifyAccuracy_Click()

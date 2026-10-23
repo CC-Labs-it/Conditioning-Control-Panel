@@ -35,6 +35,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private Canvas? _sparks;
         private Panel? _slices;
         private double _alpha = 1;
+        private DispatcherTimer? _lifetimeTimer;
+        private TimeSpan _fade;
+        private long _expiresAt;
+        internal long ExpiresAt => _expiresAt;
+        internal bool IsFadingOut { get; private set; }
+        internal double DwellScale => (_card.RenderTransform as ScaleTransform)?.ScaleX ?? 1;
+        internal void SetGazeDwellProgress(double progress)
+        {
+            if (IsFadingOut || Exit != null) return;
+            var scale = 1 + Math.Clamp(progress, 0, 1) * 0.10;
+            if (_card.RenderTransform is ScaleTransform st) st.ScaleX = st.ScaleY = scale;
+            else _card.RenderTransform = new ScaleTransform(scale, scale);
+        }
+        internal void BoostLifetime(int extraMs)
+        {
+            if (extraMs <= 0 || IsFadingOut || Exit != null || _lifetimeTimer == null) return;
+            var deadline = FlashOverlay.Clock.GetTimestamp() + (long)(extraMs / 1000.0 * FlashOverlay.Clock.TimestampFrequency);
+            if (deadline <= _expiresAt) return; // WPF: never shorten a stay-until-popped lifetime
+            _expiresAt = deadline;
+            ScheduleExpiry();
+        }
+        private void ScheduleExpiry()
+        {
+            _lifetimeTimer?.Stop();
+            var remaining = FlashOverlay.Clock.GetElapsedTime(FlashOverlay.Clock.GetTimestamp(), _expiresAt);
+            _lifetimeTimer = new DispatcherTimer(remaining > TimeSpan.Zero ? remaining : TimeSpan.FromMilliseconds(1), DispatcherPriority.Normal, (_, _) => Expire());
+            _lifetimeTimer.Start();
+        }
+        internal void Expire()
+        {
+            _lifetimeTimer?.Stop(); _lifetimeTimer = null;
+            IsFadingOut = true;
+            Fade(_alpha, 0, _fade, Close);
+        }
         private DispatcherTimer? _exitTimer;
         private long _lastExitTick;
         private ScaleTransform? _exitScale;
@@ -58,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (Exit != null) return;
             Exit = exit;
+            _lifetimeTimer?.Stop(); _lifetimeTimer = null;
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);
             GrowForExit();
@@ -232,7 +267,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => picture.Dispose();
+            Closed += (_, _) => { _lifetimeTimer?.Stop(); _lifetimeTimer = null; picture.Dispose(); };
         }
 
         /// <summary>
@@ -243,8 +278,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public void Run(double alpha, TimeSpan fade, TimeSpan lifetime)
         {
             _alpha = alpha;
+            _fade = fade;
+            _expiresAt = FlashOverlay.Clock.GetTimestamp() + (long)(lifetime.TotalSeconds * FlashOverlay.Clock.TimestampFrequency);
             Fade(0, alpha, fade);
-            DispatcherTimer.RunOnce(() => Fade(alpha, 0, fade, Close), lifetime);
+            ScheduleExpiry();
         }
 
         /// <summary>WPF's heartbeat ramp - linear, alpha written in 1/32 steps (FADE_ALPHA_EPSILON) -

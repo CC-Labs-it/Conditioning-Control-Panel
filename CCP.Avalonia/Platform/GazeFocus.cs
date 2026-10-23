@@ -17,9 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// or blinking while looking near it, pops it through the bubble's own pop pipeline (sound, XP,
     /// quests, haptics). Follows the camera, never powers it (WPF EvaluateDesiredState).
     ///
-    /// <para>Not here yet (wire-shell-lab-tab-b-next): flash and video targets (no gaze seam on this
-    /// head's FlashOverlay / video attention targets), the two-stage refine overlay, the gaze-lock
-    /// attractor and debug cursor, and the RestrictGazeContentToCalibratedScreen clamp.</para>
+    /// <para>ponytail: the two-stage refine overlay and gaze-lock attractor/debug cursor remain unported.</para>
     ///
     /// <para>Coordinates: OnGazeMove is GAZE space (DIPs local to the calibrated monitor); bubbles are
     /// global DIPs (screen px / scaling). The conversion is the calibrated monitor's origin, a pure
@@ -47,6 +45,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private DateTimeOffset _dwellStartedAt;
         private DateTimeOffset _cooldownUntil = DateTimeOffset.MinValue;
         private AmbientBubble? _currentBubble;
+        private FlashOverlayWindow? _currentFlash;
+        private MandatoryVideoOverlay.Target? _currentVideo;
+        private DateTimeOffset _lastLingerBoost = DateTimeOffset.MinValue;
         private AppSettings? _settings;
 
         public bool IsActive { get; private set; }
@@ -193,9 +194,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 var now = Clock.GetUtcNow();
                 if (now < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) return;
-                if (FindBestBubble(p) is not { } b) return;
+                var target = FindBestTarget(p);
+                if (target is not AmbientBubble && target is not FlashOverlayWindow) return; // WPF: blinks never click video
                 ClearTarget();
-                Pop(b);
+                if (target is AmbientBubble b) Pop(b);
+                else if (CoreSettings.Current.FlashGazePopEnabled) FlashOverlay.Pop((FlashOverlayWindow)target, fromGaze: true);
                 _cooldownUntil = now.AddMilliseconds(CooldownMs);
             }
             catch (Exception ex) { Log.Debug("GazeFocus blink handler error: {Error}", ex.Message); }
@@ -209,29 +212,89 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 if (Clock.GetUtcNow() < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) { ClearTarget(); return; }
-                if (FindBestBubble(p) is not { } b) { ClearTarget(); return; }
-                AdvanceBubbleDwell(b);
+                var target = FindBestTarget(p);
+                if (target == null) { ClearTarget(); return; }
+                if (target is AmbientBubble b) AdvanceBubbleDwell(b);
+                else AdvanceOtherDwell(target);
             }
             catch (Exception ex) { Log.Debug("GazeFocus tick error: {Error}", ex.Message); }
         }
 
-        /// <summary>WPF FindBestTarget over bubbles (WPF CanGazePop: live, clickable, not popping;
-        /// hit square = the sprite for a plain bubble). Sticky bonus keeps the held target.</summary>
-        private AmbientBubble? FindBestBubble(Point p)
+        /// <summary>WPF FindBestTarget: topmost first within each type, geometry + type prior + sticky.</summary>
+        private object? FindBestTarget(Point p)
         {
-            if (!BubblesGazeEnabled) return null;
-            AmbientBubble? best = null;
+            object? best = null;
             double bestScore = ScoreThreshold;
-            var bubbles = BubbleOverlay.Field.Bubbles;
-            for (int i = bubbles.Count - 1; i >= 0; i--)
+            void Consider(object target, Rect r, bool flash, bool sticky)
             {
-                var b = bubbles[i];
-                if (!b.Clickable || b.Popping) continue;
-                var score = BubbleBaseScore(DistanceFromRectEdge(b.X, b.Y, b.Size, b.Size, p.X, p.Y));
-                if (ReferenceEquals(_currentBubble, b)) score += StickyBonus;
-                if (score > bestScore) { bestScore = score; best = b; }
+                if (r.Width <= 0 || r.Height <= 0 || !TargetOnCalibratedScreen(r)) return;
+                var d = DistanceFromRectEdge(r.X, r.Y, r.Width, r.Height, p.X, p.Y);
+                var score = (flash ? FlashBaseScore(d) : BubbleBaseScore(d)) + (sticky ? StickyBonus : 0);
+                if (score > bestScore) { bestScore = score; best = target; }
             }
+            var s = CoreSettings.Current;
+            if (s.FlashGazePopEnabled || s.FlashGazeLingerEnabled)
+                for (int i = FlashOverlay.Active.Count - 1; i >= 0; i--)
+                {
+                    var (w, r) = FlashOverlay.Active[i];
+                    if (w.IsFadingOut || w.Exit != null) continue;
+                    var k = w.DesktopScaling > 0 ? w.DesktopScaling : 1;
+                    Consider(w, new Rect(r.X / k, r.Y / k, r.Width / k, r.Height / k), true, ReferenceEquals(_currentFlash, w));
+                }
+            if (BubblesGazeEnabled)
+                for (int i = BubbleOverlay.Field.Bubbles.Count - 1; i >= 0; i--)
+                {
+                    var b = BubbleOverlay.Field.Bubbles[i];
+                    if (b.Clickable && !b.Popping) Consider(b, new Rect(b.X, b.Y, b.Size, b.Size), false, ReferenceEquals(_currentBubble, b));
+                }
+            if (s.VideoGazeClickEnabled)
+                foreach (var t in MandatoryVideoOverlay.Instance.GazeTargets)
+                    Consider(t, t.GazeBounds, false, ReferenceEquals(_currentVideo, t));
             return best;
+        }
+
+        // WPF defensive gaze-read clamp: use the target centre; no calibration means fail open.
+        internal static bool TargetOnCalibratedScreen(Rect r)
+        {
+            if (!CoreSettings.Current.RestrictGazeContentToCalibratedScreen || WebcamTracker.Instance.Calibration?.MonitorBounds?.DeviceName is not { } name) return true;
+            // WPF GetCalibratedScreen: an unplugged/unknown calibration fails open.
+            foreach (var screen in WebcamScreens.Enumerate())
+                if (string.Equals(WebcamScreens.Name(screen), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    var b = screen.Bounds; var k = screen.Scaling;
+                    return new Rect(b.X / k, b.Y / k, b.Width / k, b.Height / k).Contains(r.Center);
+                }
+            return true;
+        }
+
+        private void AdvanceOtherDwell(object target)
+        {
+            var now = Clock.GetUtcNow();
+            if (!ReferenceEquals(_currentFlash, target) && !ReferenceEquals(_currentVideo, target))
+            {
+                ClearTarget();
+                _currentFlash = target as FlashOverlayWindow;
+                _currentVideo = target as MandatoryVideoOverlay.Target;
+                _dwellStartedAt = now;
+            }
+            var elapsed = (now - _dwellStartedAt).TotalMilliseconds;
+            if (_currentFlash is { } flash)
+            {
+                var s = CoreSettings.Current;
+                if (s.FlashGazeLingerEnabled && (now - _lastLingerBoost).TotalMilliseconds >= 250)
+                {
+                    flash.BoostLifetime(s.FlashGazeLingerExtensionMs);
+                    _lastLingerBoost = now;
+                }
+                if (!s.FlashGazePopEnabled) return; // linger alone never inflates or dismisses
+                flash.SetGazeDwellProgress(elapsed / DwellMs);
+            }
+            if (elapsed < DwellMs) return;
+            var f = _currentFlash; var v = _currentVideo;
+            ClearTarget();
+            if (f != null) FlashOverlay.Pop(f, fromGaze: true);
+            else v?.Hit();
+            _cooldownUntil = now.AddMilliseconds(CooldownMs);
         }
 
         private void AdvanceBubbleDwell(AmbientBubble b)
@@ -257,6 +320,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 PopBubble(b);
                 GazePopped?.Invoke();
+                BarkHead.Engine?.Raise("GazePopped"); // WPF BarkService.WireSubscriptions
                 App.Achievements?.TrackGazePop();   // WPF GamificationBridge.OnGazePopped
             }
             catch (Exception ex) { Log.Debug("Gaze bubble pop failed: {Error}", ex.Message); }
@@ -266,6 +330,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (_currentBubble is { Popping: false } b) b.Scale = 1;
             _currentBubble = null;
+            _currentFlash?.SetGazeDwellProgress(0);
+            _currentFlash = null;
+            _currentVideo = null;
+            _lastLingerBoost = DateTimeOffset.MinValue;
         }
     }
 }

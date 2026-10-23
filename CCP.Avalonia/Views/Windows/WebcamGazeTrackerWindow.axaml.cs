@@ -34,6 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public WebcamGazeTrackerWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            WebcamCalibrationWindow.PlaceOnCalibratedScreen(this);
 
             _dotCanvas = this.FindControl<Canvas>("DotCanvas")!;
             _dot = this.FindControl<Ellipse>("Dot")!;

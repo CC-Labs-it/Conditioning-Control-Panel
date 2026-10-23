@@ -159,6 +159,26 @@ public sealed class MandatoryVideoOverlayTests
                     o.Step(s.AttentionLifespan + 0.01, 0);
                     Assert.Equal(0, o.LiveTargets);
                     Assert.Equal(1, v.AttentionHits);
+                    // WPF gaze-click uses the same one-hit batch path. Blinks never click video.
+                    var oldGaze = s.VideoGazeClickEnabled;
+                    var gaze = new ConditioningControlPanel.Avalonia.Platform.GazeFocus { CanRun = () => true, DwellMs = 0 };
+                    try
+                    {
+                        s.VideoGazeClickEnabled = true;
+                        o.Spawn(0);
+                        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                        var target = System.Linq.Enumerable.First(o.GazeTargets);
+                        gaze.EvaluateDesiredState();
+                        gaze.HandleGazeMove(target.GazeBounds.Center);
+                        gaze.HandleBlink();
+                        Assert.Equal(1, v.AttentionHits);
+                        gaze.Tick();
+                        Assert.Equal(2, v.AttentionHits);
+                        Assert.Equal(0, o.LiveTargets);
+                        target.Hit();
+                        Assert.Equal(2, v.AttentionHits);
+                    }
+                    finally { gaze.Stop(); s.VideoGazeClickEnabled = oldGaze; }
                     await Task.Delay(1200);
 
                     // WPF #735 grace pause: the clip's first Esc pauses it behind the card (guards asleep);
