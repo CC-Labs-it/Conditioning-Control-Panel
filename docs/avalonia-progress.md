@@ -2679,3 +2679,7 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
 - Daily quest card gets WPF MotionFx motion: bar fill tween (0.6 s QuadOut, resize snaps), hover lift 1.02/150 ms, gold BoxShadow glow (blur 18, 0.5) fading out; MotionLevel.Off snaps and skips the glow.
 - Test: DailyQuestCardMotionTests (Full + Off, stepped clock), fail-proven. Ledger views-daily-quest-card: stub -> wired.
 - Not run: real-pointer desktop feel.
+
+## avalonia-port/settings-migration-test: +616
+- Settings migration test over a real WPF profile (local only; CI runs a synthetic variant): 768 keys and 9568 files survive startup+shutdown.
+- It found and fixed 3 losses: Companion drawers reset on exit, built-in preset action ids re-minted each load, Circe-neutral voice lines reverted (LockedMod/overrides now ship).
