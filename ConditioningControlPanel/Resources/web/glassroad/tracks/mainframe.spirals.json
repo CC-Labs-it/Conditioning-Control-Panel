@@ -1,0 +1,8 @@
+{
+  "track": "mainframe",
+  "gates": [
+    {"id":"boot-cursor","f":0.09,"radiusM":23,"depthM":12,"helixTurns":0.1,"upM":3.5,"loom":{"schema":2,"speed":2,"layer":{"arms":4,"turns":1.25,"duty":0.4,"style":"log","direction":1,"colors":["#17f78b","#bbffe0","#04251a"],"bandMode":"hard","speedMul":1},"layer2":{"enabled":false},"glow":0.35,"pulse":{"amp":0.04,"cycles":1},"wobble":{"amp":0,"freq":3,"cycles":1},"hueCycles":0}},
+    {"id":"memory-coil","f":0.46,"radiusM":25,"depthM":24,"helixTurns":0.18,"taper":0.2,"upM":3.5,"loom":{"schema":2,"speed":2,"layer":{"arms":3,"turns":1.5,"duty":0.45,"style":"arch","direction":1,"colors":["#39ff9b","#d9ffee","#053122"],"bandMode":"gradient","speedMul":1},"layer2":{"enabled":false},"glow":0.35,"pulse":{"amp":0.03,"cycles":1},"wobble":{"amp":0,"freq":3,"cycles":1},"hueCycles":0}},
+    {"id":"surge-release","f":0.86,"radiusM":25,"depthM":14,"helixTurns":-0.1,"upM":3.5,"loom":{"schema":2,"speed":2,"layer":{"arms":4,"turns":1,"duty":0.4,"style":"log","direction":1,"colors":["#b8ffda","#28f697","#083e2a"],"bandMode":"hard","speedMul":1},"layer2":{"enabled":false},"glow":0.3,"pulse":{"amp":0.03,"cycles":1},"wobble":{"amp":0,"freq":3,"cycles":1},"hueCycles":0}}
+  ]
+}

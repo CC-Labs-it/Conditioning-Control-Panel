@@ -1,0 +1,51 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { buildMainframe } from '../dev/gen-mainframe.mjs';
+import { validate } from '../track/schema.js';
+import { loadTrack } from '../track/load.js';
+import { stoneIn } from '../track/courts.js';
+import { makeRace } from './sim-racers-harness.mjs';
+import { S } from '../sim/state.js';
+
+const built = buildMainframe(), json = JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8'));
+const track = loadTrack(json);
+test('Mainframe is reproducible, closed, spacious and has three distinct acts', () => {
+  assert.deepEqual(json, built.track);
+  assert.deepEqual(validate(json), { ok: true, errors: [], warnings: [] });
+  assert.ok(track.lengthM >= 1100 && track.lengthM <= 1500);
+  assert.equal(track.sections.length, 3);
+  assert.ok(json.nodes.every(n => n.w >= 24));
+  assert.ok(Math.max(...json.nodes.map(n => n.p[1])) >= 22);
+  assert.ok(json.nodes.some(n => n.roll >= 18));
+  const water = json.nodes.map((n, i) => n.surface === 'stream' ? i : -1).filter(i => i >= 0);
+  assert.ok(water.length >= 8 && water.at(-1) < json.fields[0].from);
+});
+test('Mainframe scan halls have level straight approaches and dry safe shoulders', () => {
+  for (const hall of built.scanHalls) {
+    const from = track.nodeS[hall.from], to = track.nodeS[hall.to], start = track.frameAt(from);
+    assert.ok(to - from >= 59);
+    for (let s = from - 40; s <= to + 20; s += 5) {
+      const frame = track.frameAt(s);
+      assert.ok(frame.w >= 24 && Math.abs(frame.p[1] - start.p[1]) < 0.01);
+      assert.ok(frame.t.reduce((sum, value, i) => sum + value * start.t[i], 0) > 0.999);
+      assert.equal(track.nodeSurface(frame.seg), 'glass');
+      assert.ok(!track.fields.some(f => s >= f.fromS && s <= f.toS));
+    }
+  }
+});
+test('Mainframe memory tiles start supported in every lane and meet the exit deck', () => {
+  const field = track.fields[0];
+  for (const x of field.lanes) {
+    assert.ok(stoneIn(field, field.fromS + 0.1, x));
+    const lane = field.stones.filter(stone => stone.x === x).sort((a, b) => a.s - b.s);
+    assert.ok(Math.abs(field.toS - (lane.at(-1).s + lane.at(-1).len)) <= 0.01);
+    for (let i = 1; i < lane.length; i++) assert.ok(lane[i].s - lane[i - 1].s - lane[i - 1].len <= 4.01);
+  }
+});
+for (const seed of [1, 241023, 20261024]) test('Mainframe full starting grid finishes all three laps, seed ' + seed, () => {
+  const run = makeRace({ track, seed });
+  run.run(220, () => run.racers.list.every(racer => racer.finished));
+  assert.ok(run.racers.list.every(racer => racer.finished && racer.st[S.lap] === 3), JSON.stringify(run.racers.list.map(r => ({ i: r.i, s: r.st[S.s], lap: r.st[S.lap], falls: r.falls }))));
+  assert.ok(run.racers.list.every(r => r.falls === 0), 'no rescues needed by the starting grid');
+});
