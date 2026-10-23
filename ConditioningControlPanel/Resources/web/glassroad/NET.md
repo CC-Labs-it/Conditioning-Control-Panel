@@ -95,11 +95,18 @@ Client render rule (B2-c): remote karts 100 ms in the past, dead reckoning up to
 
 ## 4. JSON messages (text frames)
 
-One object per frame, `{ "t": "<name>", ...fields }`, at most 2048 bytes. Unknown `t`, a missing or mistyped field,
+One object per frame, `{ "t": "<name>", ...fields }`, at most 2048 characters client-to-room and 4096 room-to-client.
+The larger welcome bound accommodates eight full garage appearances and seat metadata. Unknown `t`, a missing or mistyped field,
 or an extra field the table does not list = malformed (`error { code: 'bad' }`; three in 10 s closes 4002).
 `?` = optional. `seat?` on a client message = act for a bot seat this client keeps (default: own seat).
 Types: `seat` int 0..7, `u8`/`u16`/`u32` ints, `num` finite number, `unit` 0..1, `item` one of `WIRE_ITEMS`,
 `mode` one of `throw lob wide drop self`, `code` /^[a-z0-9-]{1,24}$/, `lookId` /^[a-z0-9-]{1,48}$/ or null.
+
+Garage `skinCode` is exactly 37 lowercase characters: six RGB hex colors without `#`, in shell, accent,
+antenna, hands, shoes and face order, then one pattern digit 0..3. The original skin omits the field.
+No labels or arbitrary strings travel with a skin. The client, lobby and room share the updated cosmetic
+catalog; legacy Lab IDs normalize to Builder. Deploy the server companion and use matching updated clients
+for skin sharing; older clients with the two-field look decoder need to reload the updated game.
 
 Client -> room:
 
@@ -109,7 +116,7 @@ Client -> room:
 | `ping` | `c: num` | at most 2 per s |
 | `ready` | `on: bool` | lobby phase |
 | `start` | | host only, lobby phase, at least one human |
-| `look` | `outfit: lookId, vehicle: lookId` | lobby phase; unknown ids become the default look |
+| `look` | `outfit: lookId, vehicle: lookId, skin?: skinCode` | lobby phase; unknown ids become the default look |
 | `pickup` | `box: u16, tick: u32, seat?` | touched item box `track.items[box]`; the room rolls or refuses |
 | `fire` | `id: u16, item, mode, tick: u32, s: num, x: num, seat?` | use the held item; `id` = sender's shot id |
 | `cp` | `idx: u8, lap: u8, tick: u32, seat?` | checkpoint crossed (idx 0 with lap = laps completed) |
@@ -141,7 +148,7 @@ Room -> client:
 - `phase`: `lobby | countdown | racing | done`. `resume`: hex of the seat's own last record (reconnect mid-race).
 - `cfg` (from the ticket, identical for every seat): `{ track, laps: 1..9, seats: 2..8, mode: 'open'|'friends',
   laneKeeper: bool, staked: bool, botFill: bool, autoStartS: u16 }` (0 = only the host or a full ready grid starts).
-- Seat: `{ seat, kind: 'human'|'bot'|'empty', name, platform: 'desktop'|'web'|'phone'|null, look: { outfit, vehicle },
+- Seat: `{ seat, kind: 'human'|'bot'|'empty', name, platform: 'desktop'|'web'|'phone'|null, look: { outfit, vehicle, skin? },
   host, ready, idle, left }`. Names come from tickets (bots: `EMI bot`); no uid ever reaches another client.
 - Abort reasons: `hello ticket expired replay version config full started closed server`. Close codes: 4000 race
   over, 4001 hello, 4002 bad, 4003 ticket / expired / replay / version / config, 4004 full / started, 4009 replaced
