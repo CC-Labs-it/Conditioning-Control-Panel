@@ -8,6 +8,10 @@ import math
 import statistics
 import sys
 
+# Startup scope differs (WPF includes its full service init, Avalonia starts after SetupWithoutStarting),
+# so startup rows are reported but never gate.
+INFO = ('startup_ms', 'startup_since_process_ms')
+
 
 def number(value):
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
@@ -48,7 +52,7 @@ def compare(avalonia, wpf):
     for key in groups[1][0]:
         a, w = (statistics.median(run[key] for run in group) for group in groups)
         limit = w * 1.10 + (0 if key == 'working_set_mb' else 20)
-        rows.append((key, w, a, limit, a <= limit))
+        rows.append((key, w, a, limit, key in INFO or a <= limit))
     return rows
 
 
@@ -56,7 +60,8 @@ def markdown(rows):
     lines = ['| metric | Windows WPF | Windows Avalonia | limit | verdict |',
              '|---|---:|---:|---:|---|']
     for key, w, a, limit, passed in rows:
-        lines.append(f'| {key} | {w:.2f} | {a:.2f} | {limit:.2f} | {"pass" if passed else "FAIL"} |')
+        verdict = 'info' if key in INFO else 'pass' if passed else 'FAIL'
+        lines.append(f'| {key} | {w:.2f} | {a:.2f} | {limit:.2f} | {verdict} |')
     return '\n'.join(lines)
 
 
@@ -87,7 +92,8 @@ def self_test():
         bad = copy.deepcopy(good)
         target = bad['tabs'][0] if key in ('median_ms', 'p95_ms') else bad
         target[key] *= 1.5
-        assert not all(row[-1] for row in compare([bad], [baseline])), key
+        # startup is informational (different scope per head); every other metric must fail
+        assert all(row[-1] for row in compare([bad], [baseline])) == (key in INFO), key
     edge = copy.deepcopy(good)
     edge.update(startup_ms=130, working_set_mb=110)
     assert all(row[-1] for row in compare([edge], [baseline]))  # inclusive thresholds
@@ -105,7 +111,7 @@ def self_test():
             pass
         else:
             raise AssertionError(f'{head}: missing tab passed')
-    print('self-test: PASS (50% regressions, thresholds, medians, tab order and missing tabs)')
+    print('self-test: PASS (50% regressions, startup informational, thresholds, medians, tab order and missing tabs)')
 
 
 def main():

@@ -198,15 +198,16 @@ jobs:
         run: |
           dotnet publish CCP.Avalonia/CCP.Avalonia.csproj -c Release -p:PublishProfile=win-x64
           if ($LASTEXITCODE -ne 0) { throw 'Avalonia publish failed' }
-          dotnet build ConditioningControlPanel/ConditioningControlPanel.csproj -c Release
-          if ($LASTEXITCODE -ne 0) { throw 'WPF build failed' }
+          # Publish, not build: WPF ships ReadyToRun single-file, so a JIT build would skew every number.
+          dotnet publish ConditioningControlPanel/ConditioningControlPanel.csproj -c Release -o perf-wpf
+          if ($LASTEXITCODE -ne 0) { throw 'WPF publish failed' }
       - name: Five back-to-back pairs on the same runner
         timeout-minutes: 45
         run: |
           New-Item -ItemType Directory -Force perf-results | Out-Null
           $heads = [ordered]@{
             avalonia = 'CCP.Avalonia\bin\publish\win-x64\CCP.Avalonia.exe'
-            wpf = 'ConditioningControlPanel\bin\Release\net10.0-windows10.0.19041.0\win-x64\ConditioningControlPanel.exe'
+            wpf = 'perf-wpf\ConditioningControlPanel.exe'
           }
           function Bench($head, $run, $tabs = '') {
             $env:CCP_USERDATA_DIR = Join-Path $env:RUNNER_TEMP "perf-$head-$run"
@@ -215,6 +216,7 @@ jobs:
             $arguments = "--perf-bench `"$out`""
             if ($tabs) { $arguments += " --perf-bench-tabs $tabs" }
             $p = Start-Process -FilePath $heads[$head] -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput "perf-results/$head-$run.out" -RedirectStandardError "perf-results/$head-$run.err"
+            $null = $p.Handle # cache the handle now, or ExitCode can read back empty after exit
             if (!$p.WaitForExit(240000)) {
               taskkill /PID $p.Id /T /F | Out-Host
               throw "$head run $run timed out"

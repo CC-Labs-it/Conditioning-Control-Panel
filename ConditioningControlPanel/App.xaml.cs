@@ -1956,7 +1956,10 @@ namespace ConditioningControlPanel
             {
                 if (perfIndex + 1 >= e.Args.Length || e.Args[perfIndex + 1].StartsWith("--")
                     || !Path.IsPathRooted(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
-                    Environment.Exit(2); // benchmark requires an explicit sandbox and output path
+                {
+                    Console.Error.WriteLine("usage: --perf-bench <out.json> [--perf-bench-tabs A,B] (needs an absolute CCP_USERDATA_DIR sandbox)");
+                    PerfBench.Exit(2);
+                }
                 IsUnattendedRig = true;
             }
 #if DEBUG
@@ -2359,7 +2362,7 @@ namespace ConditioningControlPanel
             DispatcherUnhandledException += (s, args) =>
             {
                 LogCrashDetails("DISPATCHER", args.Exception);
-                if (perfBench) Environment.Exit(1); // unattended benchmark must never wait on an error dialog
+                if (perfBench) PerfBench.Exit(1); // unattended benchmark must never wait on an error dialog
 
                 // GDI / desktop-heap quota exhaustion while WPF shows a layered window
                 // (heavy effect load, esp. many full-screen subliminal/flash surfaces on a

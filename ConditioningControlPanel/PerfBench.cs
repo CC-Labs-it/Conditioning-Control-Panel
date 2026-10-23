@@ -52,7 +52,7 @@ internal static class PerfBench
                     if (!window.ShowPerfBenchTab(tabs[i]))
                     {
                         Console.Error.WriteLine($"perf-bench: tab {tabs[i]} is missing or did not show");
-                        Environment.Exit(3);
+                        Exit(3);
                         return;
                     }
                     var ms = await NextFrame(window, clock);
@@ -80,8 +80,21 @@ internal static class PerfBench
         catch (TimeoutException) { Console.Error.WriteLine("perf-bench: frame timeout"); code = 4; }
         catch (Exception ex) { Console.Error.WriteLine("perf-bench: " + ex); }
         // App.OnExit hard-terminates with 0; preserve benchmark failure codes by exiting here.
-        Environment.Exit(code);
+        Exit(code);
     }
+
+    // Not Environment.Exit: in WPF its ProcessExit teardown can crash with 0xE0434352 and lose the code
+    // (see App.OnExit). Flush, then hard-terminate with the benchmark's own code.
+    internal static void Exit(int code)
+    {
+        Console.Out.Flush();
+        Console.Error.Flush();
+        TerminateProcess(GetCurrentProcess(), (uint)code);
+        Environment.Exit(code); // unreachable fallback if TerminateProcess is refused
+    }
+
+    [DllImport("kernel32.dll")] private static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] private static extern bool TerminateProcess(IntPtr hProcess, uint uExitCode);
 
     private static async Task<double> NextFrame(Window window, Stopwatch clock)
     {

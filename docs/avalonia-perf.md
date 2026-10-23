@@ -13,6 +13,8 @@ with no WPF number is a gap, not a pass.
   then shows the real main window directly. It uses `CompositionTarget.Rendering`, sampling after that Render-priority
   pass returns. Splash, launcher routing and modal onboarding are bypassed only under the flag; the WPF startup ladder
   is held and the sandbox represents an onboarded offline user. `startup_since_process_ms` adds the runtime's own start-up (process start time to the same frame).
+  **Startup is informational, not a gate:** the scopes differ (WPF includes its full service init, Avalonia does not),
+  so `perf-compare.py` reports both startup rows with verdict `info` and never fails on them.
 - **Tab switch**: `ShowTab` (the call every rail handler makes) to the next rendered frame, for every panel in
   `NavCheck.TabPanels`, 21 cycles with the first discarded; median (middle pair averaged) and p95 (nearest rank) per tab.
 - **Memory**: working set after the cycles and two `GC.Collect` + `WaitForPendingFinalizers` passes.
@@ -27,7 +29,7 @@ JSON shape `ccp-perf-bench/1` (the WPF twin writes the same shape, `head: "wpf"`
 ```
 
 CI: `perf-bench-linux` (xvfb, artifact `perf-bench-linux`) and `perf-bench-windows` (artifact `perf-bench-windows`)
-in `.github/workflows/build.yml`. Windows publishes Avalonia with the shipped win-x64 profile, builds WPF Release,
+in `.github/workflows/build.yml`. Windows publishes both heads as they ship (Avalonia win-x64 profile, WPF ReadyToRun single-file),
 and runs five Avalonia/WPF pairs sequentially on the same runner, with a fresh `CCP_USERDATA_DIR` per process.
 WPF requires that absolute sandbox path (exit 2 otherwise). The job is report-only until three consecutive stable
 runs have been reviewed; no automatic promotion is implied. Each process has a four-minute outer timeout, in
@@ -53,8 +55,8 @@ Until Windows runs on GitHub, explicit pending values keep the unmeasured WPF ba
 
 | metric | Windows WPF | Windows Avalonia | limit | verdict |
 |---|---:|---:|---:|---|
-| startup_ms | pending Windows CI | pending Windows CI | pending baseline | gap |
-| startup_since_process_ms | pending Windows CI | pending Windows CI | pending baseline | gap |
+| startup_ms | pending Windows CI | pending Windows CI | pending baseline | info |
+| startup_since_process_ms | pending Windows CI | pending Windows CI | pending baseline | info |
 | working_set_mb | pending Windows CI | pending Windows CI | pending baseline | gap |
 | SettingsTab median_ms | pending Windows CI | pending Windows CI | pending baseline | gap |
 | SettingsTab p95_ms | pending Windows CI | pending Windows CI | pending baseline | gap |
