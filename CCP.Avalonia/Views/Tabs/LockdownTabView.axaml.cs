@@ -59,12 +59,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // P01: a minimised window draws nothing, so the breath stops with it.
                 _host = TopLevel.GetTopLevel(this) as Window;
                 if (_host != null) _host.PropertyChanged += OnHostChanged;
+                _possessionDirector = Windows.MainShellWindow.PossessionDirector;
+                if (_possessionDirector != null) _possessionDirector.RungChanged += OnPossessionRung;
+                PaintPossessionReadout(_possessionDirector?.CurrentRung ?? PossessionRung.Settle);
                 UpdateEmergencyExitPulse();
             };
             DetachedFromVisualTree += (_, _) =>
             {
                 if (_host != null) _host.PropertyChanged -= OnHostChanged;
                 _host = null;
+                if (_possessionDirector != null) _possessionDirector.RungChanged -= OnPossessionRung;
+                _possessionDirector = null;
                 StopEmergencyExitPulse();
             };
             PropertyChanged += (_, e) =>
@@ -257,7 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ponytail: ported: premium gate, double warning, Activate, panel swap, clock, the secret
         // phrase, the Emergency Exit breath; the title-bar badge, blood-red theme and activation flash
         // are MainShellWindow.Lockdown.cs; the Strict toggles grey themselves (HoldWhileLockdown).
-        // Not on this head: the Possession haunt/readout (no director yet), the Dose keeper and
+        // Still not on this head: the Dose keeper and
         // the system-key hook (Linux has none, so the warning does not promise it).
 
         /// <summary>The head's live Lockdown (null in renders and tests that set none).</summary>
@@ -281,10 +286,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtLockdownExit.IsVisible = false;
             TxtLockdownExit.Text = "";
             TxtEmergencyExitNotice.IsVisible = false;
-            // Readout is Possession's; with no director on this head it stays collapsed (WPF hides it
-            // too whenever Possession is off).
-            TxtPossessionRung.IsVisible = false;
-            PossessionPips.IsVisible = false;
+            PaintPossessionReadout(_possessionDirector?.CurrentRung ?? PossessionRung.Settle);
             UpdateEmergencyExitPulse();
             // WPF ApplyLockdownTheme / RestoreLockdownTheme (Lab.cs:1188/1211): the card goes crimson
             // on #1A0A0A; the override is dropped on exit, which leaves the XAML gradients (the values
@@ -301,6 +303,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 foreach (var d in _cardHolds) d.Dispose();
                 _cardHolds.Clear();
             }
+        }
+
+        private PossessionDirector? _possessionDirector;
+        private void OnPossessionRung(PossessionRung rung) => Dispatcher.UIThread.Post(() => PaintPossessionReadout(rung));
+        internal void PaintPossessionReadout(PossessionRung rung)
+        {
+            bool on = Lockdown?.IsActive == true && CoreSettings.Current.LockdownPossessionEnabled;
+            TxtPossessionRung.IsVisible = PossessionPips.IsVisible = on;
+            TxtPossessionRung.Text = on ? Loc.GetF("lockdown_poss_readout_fmt", Loc.Get("lockdown_poss_rung_" + (int)rung)) : "";
+            for (int i = 0; i < PossessionPips.Children.Count; i++)
+                if (PossessionPips.Children[i] is Border pip)
+                    pip.Background = new SolidColorBrush(Color.Parse(i <= (int)rung ? "#FF8A5C" : "#33FF8A5C"));
         }
 
         private readonly List<IDisposable> _cardHolds = new();
@@ -321,7 +335,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper,
-        /// Possession: none run here; system keys off Windows, where nothing blocks them) and with the
+        /// system keys off Windows, where nothing blocks them) and with the
         /// platform's safety valve.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
@@ -338,6 +352,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
+            if (cfg.LockdownPossessionEnabled)
+            {
+                var intensity = cfg.LockdownPossessionIntensity switch { 0 => "Gentle", 2 => "Full Doki", _ => "Eerie" };
+                warn.Append("\n- Possession is ON (").Append(intensity).Append("): the app's own UI will misbehave, on purpose.\n")
+                    .Append("  Ember glow = it was Lockdown, not a bug. Nothing you see is real damage.");
+                // ponytail: no fake-crash promise until the Full Doki dialog effects are ported.
+            }
             return warn.ToString();
         }
 

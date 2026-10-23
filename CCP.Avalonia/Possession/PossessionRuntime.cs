@@ -11,16 +11,9 @@
 // Panic: every live runtime registers itself; PanicSurfaces "possession" calls UndoAllLive, which
 // returns every touched control's own transform and origin at once.
 //
-// Still WPF-only (later slices):
-//   possession-head-b: the shell host (MainWindow.Possession.cs walk: Possession.Role opt-in,
-//     InferLeafRole, size/placement filter, display names, the two overlay canvases), the Lockdown
-//     lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
-//     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, PossessionPointer, Warden,
-//     PossessionAudio, PossessionRemember, bark naming of IsBig effects.
-//   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,
-//     drop, fall, ghost cursor, glitch portrait, glyphrot, melt, misroute, relabel, reorder doors,
-//     retitle, rewrite, room warp, scroll hijack, slider creep, steal card, swap, toast, toggle lie,
-//     typo, xp drain (opacity effects clamp to [0,1], P82).
+// The live shell now adapts these four effects to Core's PossessionDirector via
+// PossessionDirectorEffect (including attribution); this standalone runtime remains the tested
+// frame-timestamp host. Remaining WPF gaps are tracked in docs/avalonia-parity.md, shell-possession.
 
 using System;
 using System.Collections.Generic;

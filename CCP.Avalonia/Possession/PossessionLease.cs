@@ -130,6 +130,15 @@ namespace ConditioningControlPanel.Avalonia.Possession
     {
         private PossessionTree() { }
 
+        public static readonly AttachedProperty<PossessionRole> RoleProperty =
+            AvaloniaProperty.RegisterAttached<PossessionTree, Control, PossessionRole>("Role");
+        public static PossessionRole GetRole(Control c) => c.GetValue(RoleProperty);
+        public static void SetRole(Control c, PossessionRole v) => c.SetValue(RoleProperty, v);
+        public static readonly AttachedProperty<string?> NameProperty =
+            AvaloniaProperty.RegisterAttached<PossessionTree, Control, string?>("Name");
+        public static string? GetName(Control c) => c.GetValue(NameProperty);
+        public static void SetName(Control c, string? v) => c.SetValue(NameProperty, v);
+
         public const int MaxDepth = 16;
 
         /// <summary>Keeps a control and its subtree out of the haunt (WPF Possession.Exclude).</summary>
@@ -151,7 +160,11 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 {
                     if (node is not Control c) continue;
                     if (GetExclude(c)) return true;
-                    if (PossessionOffLimits.IsReservedName(c.Name)) return true;
+                    if (PossessionOffLimits.IsReservedName(c.Name)
+                        && !(el.Name == "TxtLockdownTimer" && GetRole(el) == PossessionRole.Timer
+                            && c.Name?.Contains("lockdown", StringComparison.OrdinalIgnoreCase) == true
+                            && !c.Name.Contains("emergency", StringComparison.OrdinalIgnoreCase)
+                            && !c.Name.Contains("secret", StringComparison.OrdinalIgnoreCase))) return true;
                 }
             }
             catch { return true; }

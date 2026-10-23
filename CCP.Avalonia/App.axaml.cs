@@ -461,6 +461,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
                 var lockdown = LockdownService.Current;
+                Views.Windows.MainShellWindow.InstallPossession(lockdown);
                 lockdown.LockdownDeactivated += () =>
                 {
                     try { Quests?.TrackLockdownCompleted(lockdown.LastActiveDuration); }
@@ -1162,6 +1163,7 @@ namespace ConditioningControlPanel.Avalonia
             // WPF App.OnExit:5965: haptics FIRST and synchronously (bounded ~2 s). A Lovense level has no
             // server-side watchdog, so a toy not countermanded here keeps running after the app is gone.
             try { CoreHaptics.Service?.ShutdownStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
+            Views.Windows.MainShellWindow.DisposePossession();
 
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 

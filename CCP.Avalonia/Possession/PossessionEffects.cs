@@ -7,8 +7,8 @@
 // runtime calls it from the window's frame clock. Same curves (cubic ease out/in, sine ping-pong),
 // no Animation objects (P82).
 //
-// Not ported (possession-head-b/c): the ember charge + attribution (EmberAttribution, Ghost) and the
-// remaining effects - see PossessionRuntime.cs.
+// PossessionDirectorEffect adds ember attribution for the live shell; the remaining effects
+// are listed in docs/avalonia-parity.md (shell-possession).
 
 using System;
 using System.Collections.Generic;
