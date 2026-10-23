@@ -273,6 +273,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 skip();
                 return;
             }
+            // WPF (:318) checks the poison cooldown before any window exists; browser games bypass it.
+            if (NativeSafety.CoolingDown && !ConditioningControlPanel.Services.Video.Browser.BrowserVideoGate.ShouldUseBrowser(videoPath)) { skip(); return; }
             _sharedBubbleCount = 0;
             _sharedTargetCount = 0;
 
@@ -539,10 +541,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!ReferenceEquals(native, _native) || _closed || native.Lifetime.Expired) return false;
             native.Lifetime.Heartbeat();
             _nativeHeartbeat = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _nativeHeartbeat.Tick += (_, _) =>
-            {
-                if ((native.Sink?.FrameCount ?? 0) > 0) native.Lifetime.Heartbeat();
-            };
+            // Beats while the UI thread runs, like WPF's watchdog: a slow first frame is not a stall.
+            _nativeHeartbeat.Tick += (_, _) => native.Lifetime.Heartbeat();
             _nativeHeartbeat.Start();
             return true;
         }
@@ -553,7 +553,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_closed || _gameCompleted || _videoEnded) return;
             foreach (var window in _allWindows)
-                foreach (var bubble in window._activeBubbles) bubble.RestackAbove(this);
+                foreach (var bubble in window._activeBubbles) bubble.RestackAbove(window); // each stays above its OWN game
         }
 
         private void CalculateTargetBubbles() =>

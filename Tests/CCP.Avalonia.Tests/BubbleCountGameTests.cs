@@ -290,8 +290,9 @@ public sealed class BubbleCountGameTests
                 window.MouseDown(new Point(50, 50), MouseButton.Left);
                 window.MouseUp(new Point(50, 50), MouseButton.Left);
             }
-            Assert.Equal(new[] { (first.Window as TopLevel, clicked as TopLevel),
-                (second.Window as TopLevel, clicked as TopLevel), (third.Window as TopLevel, clicked as TopLevel) }, calls);
+            // Each bubble is pinned above its OWN game window, whichever window was clicked.
+            Assert.Equal(new[] { (first.Window as TopLevel, window as TopLevel),
+                (second.Window as TopLevel, window as TopLevel), (third.Window as TopLevel, secondary as TopLevel) }, calls);
             Assert.True(window.IsHitTestVisible);
             window.Close();
             calls.Clear();
