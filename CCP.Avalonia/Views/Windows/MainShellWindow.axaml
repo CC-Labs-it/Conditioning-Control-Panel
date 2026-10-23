@@ -1359,7 +1359,7 @@
                          bounce+burst, flash wobble, achievement glow. All logic lives in
                          MainWindow.ProfileBubble.cs; the visuals are named here so that partial
                          can paint and animate them without template digging. -->
-                    <Button x:Name="BtnProfileBubble" Width="34" Height="34" Margin="8,0,0,0"
+                    <Button x:Name="BtnProfileBubble" Width="34" Height="34" Margin="8,0,0,0" ClipToBounds="False"
                             Click="BtnProfileBubble_Click" Cursor="Hand"
                             PointerEntered="ProfileBubble_MouseEnter" PointerExited="ProfileBubble_MouseLeave">
                         <Button.Template>
@@ -1395,11 +1395,19 @@
                                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                    Margin="0,0,-13,-6" IsVisible="False"
                                    RenderOptions.BitmapInterpolationMode="HighQuality"
-                                   RenderTransformOrigin="0.5,0.5">
+                                   RenderTransformOrigin="0.5,0.5"
+                                   PointerEntered="ProfileTierBadge_MouseEnter" PointerExited="ProfileTierBadge_MouseLeave">
                                 <Image.RenderTransform>
                                     <RotateTransform Angle="-12"/>
                                 </Image.RenderTransform>
                             </Image>
+                            <!-- WPF tier hover: left of the badge, above the account menu, never a hit target. -->
+                            <Popup x:Name="ProfileTierBadgePopup" PlacementTarget="{Binding #ProfileBubbleTierBadge}"
+                                   Placement="Left" IsLightDismissEnabled="False" IsHitTestVisible="False" Focusable="False">
+                                <Image x:Name="ProfileTierBadgeBig" Height="72" Margin="12"
+                                       RenderOptions.BitmapInterpolationMode="HighQuality"
+                                       RenderTransformOrigin="100%,50%" IsHitTestVisible="False"/>
+                            </Popup>
                         </Grid>
                     </Button>
                     <!-- The bubble's account menu. StaysOpen + manual close-grace timers, same

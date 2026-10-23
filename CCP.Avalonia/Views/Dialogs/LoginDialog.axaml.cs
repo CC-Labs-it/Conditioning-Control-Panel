@@ -381,10 +381,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // A sandbox never opens a real provider page unless a loopback override points it home (ExternalOpener).
             if (!ExternalOpener.Allowed(url)) return;
             if (await ExternalOpener.OpenAsync(this, url)) return;
-            try { if (Clipboard is { } c) await c.SetTextAsync(url); } catch { /* clipboard may be locked by another app */ }
             if (_closed) return;
-            await MessageDialog.ShowAsync(this, Loc.Get("title_open_link_in_browser"),
-                Loc.GetF("msg_browser_no_default_for", purpose) + Loc.GetF("msg_browser_link_copied", url));
+            await MessageDialog.ShowLinkCopiedAsync(this, url, purpose);
         }
 
         /// <summary>Also the shell's pending registration (MainShellWindow.PendingRegistration.cs), as WPF shares it.</summary>
