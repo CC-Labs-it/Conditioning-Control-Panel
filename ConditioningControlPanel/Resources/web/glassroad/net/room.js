@@ -223,7 +223,7 @@ export function createRoomSession({ track, feel, lobby = null, platform = 'web',
     },
     ready: (on2 = true) => send({ t: 'ready', on: !!on2 }),
     start: () => send({ t: 'start' }),
-    setLook(l) { look = normLook(l); return send({ t: 'look', outfit: look.outfit, vehicle: look.vehicle }); },
+    setLook(l) { look = normLook(l); return send({ t: 'look', ...look }); },
     emote(code, poseId = 0) { if (poseId) uplink.pose(st.seat, poseId, now()); return send({ t: 'emote', code }); },
     /** The music road: a word bubble popped (pulse) and the race total (record pops). */
     wordPop(total) { uplink.event(st.seat, 'word-pop', {}); if (Number.isFinite(total)) uplink.setPops(st.seat, total); },

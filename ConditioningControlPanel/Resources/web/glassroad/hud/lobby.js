@@ -599,6 +599,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   return {
     /** hud/cards.js calls this from show('lobby', data). data.view: 'results' or 'home' to jump there; data.claim: a link token (boot's ?r=). */
     show(data = {}) {
+      if(!st.room){const selected=deps().garageLook?.();if(selected)st.look=normLook(selected);}
       injectCss();
       if (data.claim && !st.room) startClaim(data.claim);
       else if (data.view === 'home' && !st.room) { st.view = 'home'; st.msg = ''; }

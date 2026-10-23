@@ -60,11 +60,11 @@
       "headAccessory": "Navy varsity cap"
     },
     {
-      "id": "emi-outfit-labcoat",
-      "label": "Lab coat",
-      "file": "models/emi-outfit-labcoat.glb",
-      "source": "Arcademy labcoat outfit, white coat and pockets",
-      "headAccessory": "Folded lab cap"
+      "id": "emi-outfit-builder",
+      "label": "Builder",
+      "file": "models/emi-outfit-builder.glb",
+      "source": "Orange workwear and reflective straps",
+      "headAccessory": "Yellow hard hat"
     },
     {
       "id": "emi-outfit-cheer",
@@ -95,5 +95,5 @@
       "headAccessory": "Knit cap and pom"
     }
   ],
-  "wardrobeRevision": 2
+  "wardrobeRevision": 3
 }

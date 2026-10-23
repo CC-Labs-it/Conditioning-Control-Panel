@@ -30,8 +30,10 @@ export const WANT = [
   // polish 2: Astra's wave 3 face atlas for emi_screen (render/faces.js draws the same 16 ids until it lands)
   'emi-faces',
   // ART5: the bot wardrobe and the two vehicle variants on the R4 kart rig (render/wardrobe.js)
-  'emi-outfit-croupier', 'emi-outfit-pool', 'emi-outfit-varsity', 'emi-outfit-labcoat', 'emi-outfit-cheer', 'emi-outfit-swim',
+  'emi-outfit-croupier', 'emi-outfit-pool', 'emi-outfit-varsity', 'emi-outfit-builder', 'emi-outfit-cheer', 'emi-outfit-swim',
   'emi-outfit-drone-protocol', 'emi-outfit-snow-day', 'emi-vehicle-petal', 'emi-vehicle-trinket',
+  'emi-vehicle-pendulum','emi-vehicle-reverie','emi-vehicle-house-edge','emi-vehicle-checkmate',
+  'emi-vehicle-lovebomb','emi-vehicle-feedback','emi-vehicle-velvet-lock','emi-vehicle-undertow',
   // Starting terrace: the delivered cabinet rows, selected by the current quality tier.
   'threshold-slot-row-lod0', 'threshold-slot-row-lod1',
   // wave 2 stepping stones (render/stones.js): Astra's static Threshold platform, one clone per stone

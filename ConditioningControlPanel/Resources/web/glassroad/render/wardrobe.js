@@ -79,6 +79,13 @@ function cutGeometry(mesh) {
   return out;
 }
 
+/** A menu rider shares the accepted rig but leaves the original vessel on the carousel. */
+export function riderOnly(model) {
+  const mesh=kartSurface(model),geometry=mesh&&cutGeometry(mesh);
+  if(!geometry)return false;
+  mesh.geometry=geometry;return true;
+}
+
 /** Four components per vertex as plain floats (getX..getW undo normalisation and interleaving, as meshopt packs them). */
 function flat(a) {
   const f = new Float32Array(a.count * 4);

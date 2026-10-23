@@ -169,6 +169,54 @@
       "boundRadiusM": 0.898,
       "assembledTrianglesBeforeWardrobe": 6760,
       "assembledDrawsBeforeWardrobe": 4
+    },
+    {
+      "id": "emi-vehicle-pendulum",
+      "label": "Pendulum",
+      "file": "models/emi-vehicle-pendulum.glb",
+      "sha256": "619d5eed18b5d328c26f8bbe1de771a9d6ac0f737771215d3ff3d6a8156a1e52"
+    },
+    {
+      "id": "emi-vehicle-reverie",
+      "label": "Reverie",
+      "file": "models/emi-vehicle-reverie.glb",
+      "sha256": "ecffe68feb4dbe5427ba20452083d3d7aea4d72a542b0817bcafe29d9ebfade1"
+    },
+    {
+      "id": "emi-vehicle-house-edge",
+      "label": "House Edge",
+      "file": "models/emi-vehicle-house-edge.glb",
+      "sha256": "f2c8c8dc40b25c639d34787ec72caed2d48cd80ded8f763e96e7e59d454ad587"
+    },
+    {
+      "id": "emi-vehicle-checkmate",
+      "label": "Checkmate",
+      "file": "models/emi-vehicle-checkmate.glb",
+      "sha256": "b480aee658519704e40c32492c6f47870c789e0bf780b5b4d388d164dc2dfc8a"
+    },
+    {
+      "id": "emi-vehicle-lovebomb",
+      "label": "Lovebomb",
+      "file": "models/emi-vehicle-lovebomb.glb",
+      "sha256": "043edf6b0c0140ecb0330fcdfecf5d77e9ae1c2b41b725b5fb88aa0fd14032a9"
+    },
+    {
+      "id": "emi-vehicle-feedback",
+      "label": "Feedback",
+      "file": "models/emi-vehicle-feedback.glb",
+      "sha256": "6d4fde1d385deeec65d84d7031f76ed3ef637bcccd02d18d4f0d9c8bcd908bd3"
+    },
+    {
+      "id": "emi-vehicle-velvet-lock",
+      "label": "Velvet Lock",
+      "file": "models/emi-vehicle-velvet-lock.glb",
+      "sha256": "fa6aa4467c73bb003e88deb534cfdd8e2505800ae924f75cac8db48d3521499a"
+    },
+    {
+      "id": "emi-vehicle-undertow",
+      "label": "Undertow",
+      "file": "models/emi-vehicle-undertow.glb",
+      "sha256": "13d9d63f2cb71ad2e8c65b85ebd367c397d0f36c1f388ed6e36fa5b8dbbf594d"
     }
   ],
   "maximumReviewedAssembly": {
