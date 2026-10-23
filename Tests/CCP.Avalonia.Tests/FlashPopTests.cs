@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using ConditioningControlPanel.Services.Haptics.Core;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -97,16 +98,18 @@ public sealed class FlashPopTests
     public Task A_right_click_pops_the_flash_even_when_draggable() => OnUi((s, _) =>
     {
         // WPF FlashService.cs:4798-4807: right-click always pops; only the left press may start a drag.
-        var drag = s.FlashDraggable;
+        var (drag, granted) = (s.FlashDraggable, PrizeOwnership.IsGranted);
         s.FlashDraggable = true;
         try
         {
+            PrizeOwnership.IsGranted = _ => true;   // owned motion: the only case where a press can drag
+            Assert.True(FlashOverlay.OwnsMotion);
             var w = Shown(clickable: true);
             w.MouseDown(new Point(200, 150), MouseButton.Right);
             Assert.DoesNotContain(FlashOverlay.Active, e => e.Window == w);
             Assert.Contains(w, FlashOverlay.Exiting);
         }
-        finally { s.FlashDraggable = drag; }
+        finally { (s.FlashDraggable, PrizeOwnership.IsGranted) = (drag, granted); }
     });
 
     [Fact]
