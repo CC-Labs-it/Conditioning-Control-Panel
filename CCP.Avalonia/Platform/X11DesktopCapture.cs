@@ -12,6 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class X11DesktopCapture : IDesktopCapture
 {
     private readonly IntPtr _display, _root;
+    private SKSurface? _surface; // reused; the pump disposes each snapshot before the next capture
+    private SKImageInfo _info;
     private static readonly ConcurrentDictionary<IntPtr, bool> Errors = new();
     internal static void OnError(IntPtr display) { if (Errors.ContainsKey(display)) Errors[display] = true; }
 
@@ -42,55 +44,71 @@ internal sealed class X11DesktopCapture : IDesktopCapture
     public SKImage Capture(PixelRect bounds, int downscale, IntPtr[] excluded)
     {
         Errors[_display] = false;
-        using var surface = SKSurface.Create(new SKImageInfo(Math.Max(1, bounds.Width / downscale),
-            Math.Max(1, bounds.Height / downscale), SKColorType.Bgra8888, SKAlphaType.Premul));
-        surface.Canvas.Clear(SKColors.Transparent);
-        surface.Canvas.Scale(1f / downscale);
-        surface.Canvas.Translate(-bounds.X, -bounds.Y);
-        using var missing = new SKRegion(new SKRectI(bounds.X, bounds.Y, bounds.Right, bounds.Bottom));
-        var wallpaper = Property(_root, "_XROOTPMAP_ID");
-        if (wallpaper is { } wall && wall != IntPtr.Zero)
-        {
-            using var image = Read(wall, out var width, out var height, out _);
-            surface.Canvas.DrawImage(image, 0, 0);
-            missing.Op(new SKRectI(0, 0, width, height), SKRegionOperation.Difference);
-        }
+        var info = new SKImageInfo(Math.Max(1, bounds.Width / downscale), Math.Max(1, bounds.Height / downscale),
+            SKColorType.Bgra8888, SKAlphaType.Premul);
+        if (_surface == null || _info != info) { _surface?.Dispose(); _surface = SKSurface.Create(info); _info = info; }
+        var canvas = _surface.Canvas;
+        canvas.ResetMatrix();
+        canvas.Clear(SKColors.Transparent);
+        canvas.Scale(1f / downscale);
+        canvas.Translate(-bounds.X, -bounds.Y);
+        var screen = new SKRectI(bounds.X, bounds.Y, bounds.Right, bounds.Bottom);
+        using var covered = new SKRegion();
         if (XQueryTree(_display, _root, out _, out _, out var children, out var count) == 0)
             throw new InvalidOperationException("X11 window enumeration failed");
         var attrs = Marshal.AllocHGlobal(136); // XWindowAttributes LP64; backend refuses other ABIs.
         try
         {
-            for (var i = 0; i < count; i++)
+            // Top-down: read only the on-screen part not hidden by opaque windows above, and
+            // composite it beneath what is already drawn (DstOver == bottom-up SrcOver).
+            for (var i = count - 1; i >= 0; i--)
             {
                 var window = Marshal.ReadIntPtr(children, i * IntPtr.Size);
                 if (Array.IndexOf(excluded, window) >= 0) continue;
                 if (XGetWindowAttributes(_display, window, attrs) == 0) continue;
                 if (Marshal.ReadInt32(attrs, 92) != 2 || Marshal.ReadInt32(attrs, 40) == 2) continue; // viewable, InputOutput
-                int x = Marshal.ReadInt32(attrs), y = Marshal.ReadInt32(attrs, 4);
-                int w = Marshal.ReadInt32(attrs, 8), h = Marshal.ReadInt32(attrs, 12);
-                if (!bounds.Intersects(new PixelRect(x, y, w, h))) continue;
+                int x = Marshal.ReadInt32(attrs), y = Marshal.ReadInt32(attrs, 4), border = 2 * Marshal.ReadInt32(attrs, 16);
+                var rect = new SKRectI(x, y, x + Marshal.ReadInt32(attrs, 8) + border, y + Marshal.ReadInt32(attrs, 12) + border);
+                if (Visible(covered, rect, screen) is not { } src) continue;
                 // Shaped frames need a shape-aware compositor. Never claim a rectangular reconstruction is correct.
                 XShapeQueryExtents(_display, window, out var shaped, out _, out _, out _, out _, out _, out _, out _, out _, out _);
                 if (shaped != 0) throw new InvalidOperationException("Shaped X11 windows need capture support");
+                var opacity = Property(window, "_NET_WM_WINDOW_OPACITY");
+                var alpha = opacity == null ? (byte)255 : (byte)((ulong)opacity.Value >> 24);
                 var pixmap = XCompositeNameWindowPixmap(_display, window);
                 try
                 {
-                    using var image = Read(pixmap, out w, out h, out var depth);
-                    var opacity = Property(window, "_NET_WM_WINDOW_OPACITY");
-                    using var paint = new SKPaint { Color = SKColors.White.WithAlpha(opacity == null ? (byte)255 : (byte)((ulong)opacity.Value >> 24)) };
-                    surface.Canvas.DrawImage(image, x, y, paint);
-                    using var pixels = image.PeekPixels();
-                    if ((depth == 24 || pixels.ComputeIsOpaque()) && paint.Color.Alpha == 255)
-                        missing.Op(new SKRectI(x, y, x + w, y + h), SKRegionOperation.Difference);
+                    if (Draw(canvas, pixmap, rect, src, Marshal.ReadInt32(attrs, 20), alpha) && alpha == 255)
+                        covered.Op(rect, SKRegionOperation.Union);
                 }
                 finally { if (pixmap != IntPtr.Zero) XFreePixmap(_display, pixmap); }
             }
+            var wallpaper = Property(_root, "_XROOTPMAP_ID");
+            if (wallpaper is { } wall && wall != IntPtr.Zero &&
+                XGetGeometry(_display, wall, out _, out _, out _, out var width, out var height, out _, out var depth) != 0)
+            {
+                var rect = new SKRectI(0, 0, checked((int)width), checked((int)height));
+                if (Visible(covered, rect, screen) is { } src) Draw(canvas, wall, rect, src, (int)depth, 255);
+                covered.Op(rect, SKRegionOperation.Union);
+            }
             XSync(_display, false);
             Check();
+            using var missing = new SKRegion(screen);
+            missing.Op(covered, SKRegionOperation.Difference);
             if (!missing.IsEmpty) throw new InvalidOperationException("X11 desktop background is not capturable");
-            return surface.Snapshot();
+            return _surface.Snapshot();
         }
         finally { Marshal.FreeHGlobal(attrs); if (children != IntPtr.Zero) XFree(children); }
+    }
+
+    /// <summary>Bounding box of the part of <paramref name="rect"/> on screen and not covered, or null.</summary>
+    internal static SKRectI? Visible(SKRegion covered, SKRectI rect, SKRectI screen)
+    {
+        var clip = SKRectI.Intersect(rect, screen);
+        if (clip.IsEmpty) return null;
+        using var visible = new SKRegion(clip);
+        visible.Op(covered, SKRegionOperation.Difference);
+        return visible.IsEmpty ? null : visible.Bounds;
     }
 
     private void Check() { if (Errors[_display]) throw new InvalidOperationException("X11 capture changed or was refused"); }
@@ -101,28 +119,27 @@ internal sealed class X11DesktopCapture : IDesktopCapture
         try { return format == 32 && count != 0 && data != IntPtr.Zero ? Marshal.ReadIntPtr(data) : null; }
         finally { if (data != IntPtr.Zero) XFree(data); }
     }
-    private SKImage Read(IntPtr drawable, out int w, out int h, out uint depth)
+    // src is in root coordinates, inside rect (the drawable's root rectangle). Returns whether opaque.
+    private bool Draw(SKCanvas canvas, IntPtr drawable, SKRectI rect, SKRectI src, int depth, byte alpha)
     {
-        if (IntPtr.Size != 8 || XGetGeometry(_display, drawable, out _, out _, out _, out var width, out var height, out _, out depth) == 0)
-            throw new InvalidOperationException("Unsupported X11 drawable");
-        w = checked((int)width); h = checked((int)height);
-        var ptr = XGetImage(_display, drawable, 0, 0, width, height, nuint.MaxValue, 2);
+        if (depth is not (24 or 32)) throw new InvalidOperationException("Unsupported X11 pixel format");
+        var ptr = XGetImage(_display, drawable, src.Left - rect.Left, src.Top - rect.Top, (uint)src.Width, (uint)src.Height, nuint.MaxValue, 2);
         if (ptr == IntPtr.Zero) throw new InvalidOperationException("X11 returned no pixels");
         try
         {
             // Pixmap XImages have no visual: their masks are zero. Validate the display visual
             // above, then the actual storage here (XImage LP64 offsets).
-            if (depth is not (24 or 32) || Marshal.ReadInt32(ptr, 48) != 32 || Marshal.ReadInt32(ptr, 24) != 0)
+            if (Marshal.ReadInt32(ptr, 48) != 32 || Marshal.ReadInt32(ptr, 24) != 0)
                 throw new InvalidOperationException("Unsupported X11 pixel format");
-            var data = Marshal.ReadIntPtr(ptr, 16); int stride = Marshal.ReadInt32(ptr, 44);
-            return depth == 24 ? DesktopCapture.OpaqueBgr(data, w, h, stride)
-                : SKImage.FromPixelCopy(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul), data, stride);
+            return DesktopCapture.DrawBgr(canvas, Marshal.ReadIntPtr(ptr, 16), src.Width, src.Height,
+                Marshal.ReadInt32(ptr, 44), depth == 24, src.Left, src.Top, alpha);
         }
         finally { XDestroyImage(ptr); }
     }
     public void Dispose()
     {
         if (!Errors.ContainsKey(_display)) return;
+        _surface?.Dispose();
         XCompositeUnredirectSubwindows(_display, _root, 0);
         XCloseDisplay(_display);
         Errors.TryRemove(_display, out _);

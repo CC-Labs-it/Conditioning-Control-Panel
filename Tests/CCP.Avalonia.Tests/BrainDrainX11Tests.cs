@@ -46,6 +46,9 @@ public sealed class BrainDrainX11Tests
             using var included = capture.Capture(input.Bounds, 1, Array.Empty<IntPtr>());
             using var coverPixels = SKBitmap.FromImage(included);
             Assert.Equal(SKColors.Lime, coverPixels.GetPixel(10, 32)); // proves exclusion changes actual native pixels
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            for (var i = 0; i < 30; i++) capture.Capture(input.Bounds, 4, input.Excluded).Dispose();
+            TestContext.Current.TestOutputHelper?.WriteLine($"brain-drain-x11: {clock.Elapsed.TotalMilliseconds / 30:F2} ms/frame (128x64, downscale 4)");
         }
         finally { XDestroyWindow(d, cover); XDestroyWindow(d, background); XCloseDisplay(d); }
     }

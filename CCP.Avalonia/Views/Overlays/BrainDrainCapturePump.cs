@@ -23,8 +23,9 @@ internal sealed class BrainDrainCapturePump : IDisposable
     private volatile string? _failure;
     internal SKImage? PendingImageForTest => (Volatile.Read(ref _pending) as Frame)?.Image;
     internal bool Stopped => ReferenceEquals(Volatile.Read(ref _pending), Closed);
-    internal string? Notice => _failure ?? (_now() - Volatile.Read(ref _lastFrame) >= 3
-        ? "Brain Drain: no fresh desktop frame. Showing a flat veil, not blur." : null);
+    // Like WPF, one bad frame keeps the last blur; a failure shows only once no frame is fresh (3 s).
+    internal string? Notice => _factory == null ? _failure : _now() - Volatile.Read(ref _lastFrame) < 3 ? null
+        : _failure ?? "Brain Drain: no fresh desktop frame. Showing a flat veil, not blur.";
     internal BrainDrainCapturePump(Input input, Func<IDesktopCapture>? factory, Func<double>? now = null, bool start = true)
     {
         _input = input; _factory = factory; _now = now ?? (() => Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency);

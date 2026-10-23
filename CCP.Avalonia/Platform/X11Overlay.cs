@@ -442,7 +442,7 @@ internal static class X11Overlay
     private static int OnXError(IntPtr display, IntPtr errorEvent)
     {
         X11DesktopCapture.OnError(display);
-        _xErrored = true;
+        if (display == _display) _xErrored = true; // capture connection errors are its own
         // Xlib's default handler exits the process. An overlay destroyed between reading its
         // handle and the call above is normal churn, not a reason to take the app down.
         Log.Debug("X11Overlay: X error on the overlay display, ignored");

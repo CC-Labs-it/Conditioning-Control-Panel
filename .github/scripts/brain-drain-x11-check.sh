@@ -52,4 +52,4 @@ cpid=$!
 sleep 1
 kill -0 "$cpid"
 dotnet test Tests/CCP.Avalonia.Tests/CCP.Avalonia.Tests.csproj -c Release --no-build \
-  --filter FullyQualifiedName~BrainDrainX11Tests
+  --filter FullyQualifiedName~BrainDrainX11Tests --logger "console;verbosity=detailed"

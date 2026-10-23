@@ -52,6 +52,34 @@ public sealed class BrainDrainCaptureTests
         finally { Marshal.FreeHGlobal(data); }
     }
     [Fact]
+    public void X11DepthTwentyFourDrawsInPlaceBeneathWithoutSwappingRedAndBlue()
+    {
+        var data = Marshal.AllocHGlobal(8);
+        try
+        {
+            Marshal.Copy(new byte[] { 0, 0, 255, 0, 255, 0, 0, 77 }, 0, data, 8);
+            using var surface = SKSurface.Create(new SKImageInfo(2, 1));
+            surface.Canvas.Clear(SKColors.Transparent);
+            Assert.True(DesktopCapture.DrawBgr(surface.Canvas, data, 2, 1, 8, true, 0, 0, 255));
+            using var top = new SKPaint { Color = SKColors.Lime };
+            surface.Canvas.Clear(SKColors.Transparent); surface.Canvas.DrawPoint(1, 0, top);
+            DesktopCapture.DrawBgr(surface.Canvas, data, 2, 1, 8, true, 0, 0, 255);
+            using var image = surface.Snapshot(); using var pixels = SKBitmap.FromImage(image);
+            Assert.Equal(SKColors.Red, pixels.GetPixel(0, 0));
+            Assert.Equal(SKColors.Lime, pixels.GetPixel(1, 0)); // lower window never paints over the upper one
+        }
+        finally { Marshal.FreeHGlobal(data); }
+    }
+    [Fact]
+    public void X11ReadsOnlyTheOnScreenUncoveredPart()
+    {
+        var screen = new SKRectI(0, 0, 100, 100);
+        using var covered = new SKRegion(new SKRectI(0, 0, 100, 50));
+        Assert.Equal(new SKRectI(10, 50, 100, 100), X11DesktopCapture.Visible(covered, new SKRectI(10, 20, 300, 400), screen));
+        Assert.Null(X11DesktopCapture.Visible(covered, new SKRectI(10, 0, 60, 50), screen)); // fully covered: no read
+        Assert.Null(X11DesktopCapture.Visible(covered, new SKRectI(200, 0, 300, 100), screen)); // off screen: no read
+    }
+    [Fact]
     public void LatestFrameReplacesOwnedImageAndStopRetiresMailbox()
     {
         using var capture = new FakeCapture();
@@ -100,10 +128,11 @@ public sealed class BrainDrainCaptureTests
         Assert.Contains("no fresh desktop frame", pump.Notice);
         pump.CaptureOnce(capture); Assert.Null(pump.Notice);
         capture.Fail = true; pump.CaptureOnce(capture);
-        Assert.Null(pump.Take()); Assert.Contains("flat veil", pump.Notice);
+        Assert.Null(pump.Take()); Assert.Null(pump.Notice); // one bad frame keeps the last blur
+        now = 6; Assert.Contains("fake capture failure", pump.Notice);
         capture.Fail = false; capture.Black = true; pump.CaptureOnce(capture);
         Assert.Null(pump.Take()); Assert.Contains("black/empty", pump.Notice);
-        capture.Black = false; pump.CaptureOnce(capture); now = 7;
+        capture.Black = false; pump.CaptureOnce(capture); now = 10;
         Assert.Null(pump.Take()); Assert.Contains("no fresh", pump.Notice);
     }
     [Fact]
@@ -163,13 +192,16 @@ public sealed class BrainDrainCaptureTests
         if (Application.Current == null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        double now = 0;
         using var capture = new FakeCapture();
         using var visual = new BrainDrainVisual();
-        visual.Start(Input(), () => capture, startWorker: false);
+        visual.Start(Input(), () => capture, startWorker: false, () => now);
         visual.Pump!.CaptureOnce(capture); visual.Step();
         var image = Assert.Single(visual.Children.OfType<Image>());
         Assert.NotNull(image.Source); Assert.False(visual.Veil.IsVisible); Assert.False(visual.Notice.IsVisible);
         capture.Fail = true; visual.Pump.CaptureOnce(capture); visual.Step();
+        Assert.NotNull(image.Source); Assert.False(visual.Veil.IsVisible); // no flicker on one bad frame
+        now = 3; visual.Step();
         Assert.Null(image.Source); Assert.True(visual.Veil.IsVisible);
         Assert.Contains("fake capture failure", visual.Notice.Text);
     });

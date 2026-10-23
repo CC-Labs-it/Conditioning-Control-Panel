@@ -132,10 +132,10 @@ internal sealed class BrainDrainVisual : Grid, IDisposable
         Children.Add(_image); Children.Add(Veil); Children.Add(Notice);
         _tick.Tick += (_, _) => Step();
     }
-    internal void Start(BrainDrainCapturePump.Input input, Func<IDesktopCapture>? factory, bool startWorker = true)
+    internal void Start(BrainDrainCapturePump.Input input, Func<IDesktopCapture>? factory, bool startWorker = true, Func<double>? now = null)
     {
         Dispose();
-        Pump = new(input, factory, start: startWorker);
+        Pump = new(input, factory, now, startWorker);
         Update(input);
         SetNotice(Pump.Notice ?? "Brain Drain: waiting for desktop capture. Showing a flat veil.");
         // Unsupported backend is static: no timer or worker to keep composition alive.
