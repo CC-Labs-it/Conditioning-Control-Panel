@@ -2763,3 +2763,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-tab-available-subjects: +500
 - Lobby tab ports the current Open/Playing/Friends frame with Core LobbyPageRules, narrow switcher and gated Remote host; pills get an explicit template; redraws on every tab open.
 - Still stub: live discovery, Chess/Goon host and Join flows (follow-up wire-views-tab-available-subjects-b).
+
+## avalonia-port/wire-shell-tab-fx-takeover-lab-status: +261
+- Status dots breathe on effect-free sibling BoxShadow layers with motion/perf/visibility gates; Haptics glow on arrival fail-proven.
+- Review fixes: redundant seed dropped, ratchet trimmed, padlock/Env gaps moved to owning rows; row stays stub; last rgate 39701865337 red only on listed P108 flake.

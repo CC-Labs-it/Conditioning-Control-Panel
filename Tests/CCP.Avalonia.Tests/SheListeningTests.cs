@@ -58,7 +58,8 @@ public sealed class SheListeningTests
                 // WPF UpdateMicPill / SetSheListeningStatusPulse: the pill lights and the disc breathes.
                 var pill = shell.FindControl<Border>("MicActivePill")!;
                 Assert.True(pill.IsVisible);
-                Assert.IsType<global::Avalonia.Media.DropShadowEffect>(tab.SL_StatusDot.Effect);
+                Assert.Null(tab.SL_StatusDot.Effect);
+                Assert.True(tab.FindControl<Border>("SL_StatusGlow")!.IsVisible);
                 Assert.False(tab.BtnSL_OpenModels.IsVisible);
 
                 // The pill is the privacy stop, by mouse and by keyboard (P17).
@@ -69,6 +70,7 @@ public sealed class SheListeningTests
                 Assert.False(s.SpeechWakeWordEnabled);
                 Assert.False(pill.IsVisible);
                 Assert.Null(tab.SL_StatusDot.Effect);
+                Assert.False(tab.FindControl<Border>("SL_StatusGlow")!.IsVisible);
                 Assert.Equal("Mic off", tab.SL_StatusTitle.Text);
                 Master();
                 Assert.True(pill.IsVisible);
@@ -120,6 +122,7 @@ public sealed class SheListeningTests
                 Assert.Equal("Microphone not ready", tab.SL_StatusTitle.Text);
                 Assert.True(tab.BtnSL_OpenModels.IsVisible);
                 Assert.Null(tab.SL_StatusDot.Effect);
+                Assert.False(tab.FindControl<Border>("SL_StatusGlow")!.IsVisible);
 
                 CoreSpeech.HasCaptureDeviceProvider = () => false;
                 shell.RefreshSheListeningTab();

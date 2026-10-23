@@ -153,6 +153,7 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <Grid Grid.Column="0" Width="64" Height="64" VerticalAlignment="Center">
+                                        <Border x:Name="SL_StatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
                                         <Ellipse x:Name="SL_StatusDot" Width="64" Height="64" Fill="#3A3A52"
                                                  Stroke="{StaticResource SectionHueStudioBorderBrush}" StrokeThickness="2"/>
                                         <fx:IconGlyph Kind="Mic" Size="24" Foreground="{StaticResource TextLightBrush}"
