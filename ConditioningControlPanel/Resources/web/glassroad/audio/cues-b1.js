@@ -200,4 +200,10 @@ export const UI_CUES = {
   'menu-back'(syn) { syn.tone(syn.semis(12), { type: 'sine', dur: 0.08, vol: 0.05, glide: syn.semis(7) }); },
   'menu-toggle'(syn) { syn.tone(syn.semis(16), { type: 'square', dur: 0.03, vol: 0.03 }); },
   'menu-deny'(syn) { syn.tone(syn.semis(-5), { type: 'square', dur: 0.05, vol: 0.03 }); },
+  // polish 5 (S4): the online lobby (audio/sfxmap.js plays the shipped menu files when they decoded)
+  'seat-in'(syn) { syn.tone(syn.semis(12), { type: 'sine', dur: 0.08, vol: 0.05 }); syn.tone(syn.semis(16), { type: 'sine', dur: 0.1, vol: 0.04, at: 0.05 }); },
+  'seat-out'(syn) { syn.tone(syn.semis(12), { type: 'sine', dur: 0.1, vol: 0.04, glide: syn.semis(5) }); },
+  'ready-on'(syn) { syn.tone(syn.semis(16), { type: 'sine', dur: 0.07, vol: 0.05 }); syn.tone(syn.semis(23), { type: 'sine', dur: 0.12, vol: 0.05, at: 0.05 }); },
+  'ready-off'(syn) { syn.tone(syn.semis(14), { type: 'sine', dur: 0.08, vol: 0.04, glide: syn.semis(9) }); },
+  'lobby-tick'(syn) { syn.tone(syn.semis(-3), { type: 'sine', dur: 0.1, vol: 0.07 }); },
 };

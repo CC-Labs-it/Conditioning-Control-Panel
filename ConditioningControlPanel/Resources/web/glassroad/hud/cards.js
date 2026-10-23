@@ -14,6 +14,7 @@
  * Throttle dismisses it (boot.js passes a throttle press as nav('throttle')), so the card teaches the launch;
  * the Go button does the same for a tap or Enter. ?howto=0 skips it, and so does ?bot=1 unless ?howto=1.
  * Options gains Steer assist (Light, Strong, Off; sim/assist.js); the old assist toggle reads Soft rails.
+ * Polish 5 (S4): every move, confirm, back, toggle and refusal emits `sound` { name } (hud/sounds.js); boot plays it.
  */
 import { formatTime, ordinal, pauseLine, resultRows } from './format.js';
 import { howtoHtml } from './howto.js';
@@ -21,6 +22,7 @@ import { cleanOptions, loadOptions, saveOptions, stepOption, cycleOption, choice
 import { controlRows, deviceView, pauseHint } from './labels.js';
 import { PROFILES, nextProfile } from '../input/padmap.js';
 import { createLobby } from './lobby.js';
+import { actSound } from './sounds.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
@@ -44,6 +46,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   if (old) old.remove();
 
   let kind = 'start', data = {}, ready = false, waitNote = note?.textContent || '';
+  const sound = (name) => { if (name) emit('sound', { name }); };
   let opts = loadOptions(), host = { gentle: false };
   const load = { p: 0 };
   function paintLoad() {
@@ -205,7 +208,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function act(el) {
     if (!el) return;
     const a = el.dataset.act;
-    if (a.startsWith('lb-')) { lobby.act(el); return; }
+    if (a.startsWith('lb-')) { lobby.act(el); return; }   // the lobby picks its own sound (it knows a refusal)
+    if (!(a === 'back' && BACKS.includes(kind))) sound(actSound(a));   // back() plays its own
     if (a === 'toggle') {
       const key = el.dataset.key, on = !(opts[key]);
       setOption(key, on);
@@ -270,6 +274,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   }
 
   function back() {
+    sound('menu-back');
     const prev = stack[kind] || { kind: data.from || 'menu', data: {} };
     const from = kind;
     show(prev.kind, prev.data);
@@ -293,7 +298,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function nav(dir) {
     if (card.hidden) return;
     if (kind === 'lobby' && lobby.nav(dir)) return;   // back, and left / right on the lobby's form rows
-    if (dir === 'throttle') { if (kind === 'howto') howtoGo(); return; }   // boot.js: a throttle press on a card
+    if (dir === 'throttle') { if (kind === 'howto' && !leaving) { sound('menu-ok'); howtoGo(); } return; }   // boot.js: a throttle press on a card
     if (dir === 'back') { if (BACKS.includes(kind)) back(); return; }
     const list = focusables();
     if (!list.length) return;
@@ -304,13 +309,16 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       return;
     }
     if ((dir === 'left' || dir === 'right') && cur && cur.type === 'range') {
+      const was = cur.value;
       cur.value = String(stepOption(cur.dataset.key, Number(cur.value), dir === 'left' ? -1 : 1));
+      sound(cur.value === was ? 'menu-deny' : 'menu-move');   // a slider at its end says no
       setOption(cur.dataset.key, Number(cur.value));
       return;
     }
-    if ((dir === 'left' || dir === 'right') && cur && cur.dataset && cur.dataset.act === 'cycle') { cycle(cur, dir === 'left' ? -1 : 1); return; }
+    if ((dir === 'left' || dir === 'right') && cur && cur.dataset && cur.dataset.act === 'cycle') { sound('menu-toggle'); cycle(cur, dir === 'left' ? -1 : 1); return; }
     const step = dir === 'up' || dir === 'left' ? -1 : 1;
     const next = list[i < 0 ? 0 : (i + step + list.length) % list.length];
+    if (next !== cur) sound('menu-move');
     next.focus?.({ preventScroll: true });
     if (kind === 'options') next.scrollIntoView?.({ block: 'nearest' });   // the options list scrolls in the card
   }
@@ -320,7 +328,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     if (e.key === 'Escape') { if (BACKS.includes(kind)) back(); else if (kind === 'lobby') lobby.back(); return; }   // never swallowed
     if (kind === 'start') {
       if (e.repeat || e.key === 'Shift' || e.key === 'Tab' || e.key === 'CapsLock') return;
-      e.preventDefault(); if (ready) emit('start', {}); return;
+      e.preventDefault(); if (ready) { sound('menu-ok'); emit('start', {}); } else sound('menu-deny'); return;
     }
     if (kind === 'finish') { if (e.key === 'Enter' && !e.repeat) { e.preventDefault(); emit('restart', {}); } return; }
     const onRange = doc.activeElement && doc.activeElement.type === 'range';

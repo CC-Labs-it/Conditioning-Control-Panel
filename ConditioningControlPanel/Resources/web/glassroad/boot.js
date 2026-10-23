@@ -44,6 +44,7 @@ import { createPhotosafe } from './fx/photosafe.js';
 import { createFx } from './fx/reactions.js';
 import { createEffects } from './fx/effects.js';
 import { createAudio } from './audio/bus.js';
+import { goDownbeat } from './audio/music.js';
 import { createHud } from './hud/hud.js';
 import { createWordRun } from './sim/words.js';
 import { createWordCount } from './hud/words.js';
@@ -56,9 +57,13 @@ import { createRoomSession } from './net/room.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { configureLobby } from './hud/lobby.js';
 import { poseOf } from './hud/presets.js';
+import { createDevHook, devAllowed } from './dev/hook.js';
+import { chipAlpha, kartPoint } from './hud/countdown.js';
 
 const qs = new URLSearchParams(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
+// ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
+const DEV = devAllowed(location.search);
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
 // server (port 8790) tries the private song folder it mounts at /private-audio/. Nothing ships a chart yet.
 const DEV_HOST = location.port === '8790' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
@@ -260,6 +265,10 @@ async function boot() {
   // dev (?bot=1): the racers and the track for scripted runs (dev drive scripts); not enumerable
   // debug.hands = { steer, throttle, brake, hop, hopPressed } overrides the AI's hands on the player (hopPressed
   // lasts one step); null hands the player back to the AI
+  // ?dev=1 (dev/hook.js): tier 3 drift on the next bend, the drop shortcut; never built without the query
+  const devHook = DEV ? createDevHook({ track, feel, bus, player: () => P, race: () => race, emit: (n, p) => queue.emit(n, p),
+    onPlace: () => { racers.interpolate(1); cam.snap(P.view, track, renderer.aspect); }, refuse: () => (online ? 'online' : null) }) : null;
+  if (devHook) Object.defineProperty(debug, 'dev', { value: devHook.api, enumerable: false });
   if (BOT) {
     for (const [k, v] of [['track', track], ['feel', feel]]) Object.defineProperty(debug, k, { value: v, enumerable: false });
     Object.defineProperty(debug, 'racers', { get: () => racers, enumerable: false });
@@ -337,13 +346,16 @@ async function boot() {
     } else words.reset(seed);
     wordCount.show(true);
   }
-  /** Start the race song from the top: the first chart in CHARTS that loads. */
+  /**
+   * Start the race song: the first chart in CHARTS that loads. align(song) -> the song position to hear now, so
+   * go lands on a bar downbeat (S3): the song is offset against go, go never moves.
+   */
   let songToken = 0;
-  async function playSong() {
+  async function playSong(align = null) {
     const my = ++songToken;
     for (const url of CHARTS) {
       if (my !== songToken || !audio.music) return;
-      if (await audio.music.playChart(url)) {
+      if (await audio.music.playChart(url, { align })) {
         if (my !== songToken) return;
         debug.chart = url;
         armWords();
@@ -379,7 +391,9 @@ async function boot() {
   }
   function startRace() {
     const started = audio.start(); unpause(); resetAll(); begin();
-    if (CHARTS.length) Promise.resolve(started).then(playSong).catch((e) => console.warn('[glassroad] song', e));
+    // solo: the song would start with the count; it waits (or starts part way in) so go is a downbeat
+    const align = (song) => goDownbeat(song, goS) - race.goInS;
+    if (CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
   function toMenu() {
     if (online && lobbyUi) lobbyUi.leave();       // quit mid-race online: leave the room (online-left tears down)
@@ -439,6 +453,8 @@ async function boot() {
     leave: (roomId) => lobbyApi.leave({ roomId }),
   } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id });
   hud.on('online', (e) => { lobbyUi = (e && e.lobby) || lobbyUi; });
+  // polish 5 (S4): the one hud-to-audio hook: card and lobby sounds (hud/sounds.js names, audio/cues-b1.js UI_CUES)
+  hud.on('sound', (e) => { if (e && e.name) audio.cue(e.name); });
 
   /** The room said start (or we joined mid-race): build the run from the session, the lobby card counts down. */
   function startOnline(ctx) {
@@ -461,8 +477,11 @@ async function boot() {
     state = 'race';
     hud.setCard(null);
     canvas.focus({ preventScroll: true });
-    const started = audio.start();
-    if (CHARTS.length) Promise.resolve(started).then(playSong).catch((e) => console.warn('[glassroad] song', e));
+    const started = audio.start(), s = online.s;
+    // the song's 0 s is countAt and go is startAt for every seat: the same chart gives everyone the same offset
+    // (a late joiner lands part way in)
+    const align = (song) => goDownbeat(song, (s.startAt - s.countAt) / 1000) - (s.startAt - s.serverNow()) / 1000;
+    if (CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
     bridge.runStarted({ track: track.id, laps });
   }
   /** Back to the solo run (left, closed or aborted). showLobby: put the lobby card back when no card is up. */
@@ -505,6 +524,7 @@ async function boot() {
   bus.on('bump', ({ a, b, dv = 0 }) => { if (a === 0 || b === 0) { debug.bumpMeAt = performance.now(); debug.bumpDv = Math.round(dv * 10) / 10; } });
   bus.on('item-fire', ({ racer, id, mode }) => { if (mode === 'throw' || mode === 'lob') { debug.fireAt = performance.now(); debug.fire = { racer, id, mode }; } });
   bus.on('lap', () => { debug.laps++; });
+  bus.on('go', () => { goAt = performance.now(); });
   bus.on('drop', () => { debug.drops++; });
   bus.on('rescue-release', () => { debug.rescues++; });
   bus.on('finish', ({ timeS }) => {
@@ -554,6 +574,21 @@ async function boot() {
   const DIAG = (location.port === '8790' || location.port === '8792') && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
 
   let diagT = 0, cardThrottle = false;
+  // polish 5 (J2): rival name chips hide through the count and fade back after go; the Go burst sits on your kart
+  let goAt = -1;
+  const kartV = world.kart ? world.kart.position.clone() : null, kartAt = { x: 0.5, y: 0.66 };
+  function dimChips(a) {
+    for (let i = 1; i < world.karts.length; i++) {
+      const root = world.karts[i];
+      if (!root) continue;
+      for (const o of root.children) {
+        // the name tag (render/karts.js tagSprite): a canvas sprite at renderOrder 4; pose() set its opacity this frame
+        if (!o.isSprite || o.renderOrder !== 4 || !o.material || !o.material.map || !o.material.map.isCanvasTexture) continue;
+        o.material.opacity *= a;
+        if (o.material.opacity <= 0.01) o.visible = false;
+      }
+    }
+  }
   function frame(now) {
     requestAnimationFrame(frame);
     if (!renderer.frameDue(now)) return;                          // the Frame cap option skips this one
@@ -577,6 +612,8 @@ async function boot() {
     const inRace = state === 'race' || state === 'results';
     // online: go lands on the room's startAt (race.start() runs the local count of goS); the sim never pauses
     if (online && state === 'race' && !online.go && online.s.serverNow() >= online.s.raceStartAt(goS)) { online.go = true; race.start(); syncAssist(); }
+    // online the count keeps server time (bells and go on the room's clock, even through a slow frame)
+    if (online && online.go && race.phase === 'countdown') race.syncCount((online.s.serverNow() - online.s.raceStartAt(goS)) / 1000 - steps * clock.dt);
     const simOn = inRace && (online ? online.go : !paused);
     if (simOn) for (let i = 0; i < steps; i++) {                    // 2. sim
       if (BOT && !P.finished) {
@@ -593,6 +630,7 @@ async function boot() {
       const coast = online && paused;
       if (coast) { a.steer = 0; a.throttle = 0; a.brake = 0; a.hop = false; a.hopPressed = false; a.item = false; }
       const pa = BOT && !debug.assistOn && !coast ? a : assist.apply(a, P.st, clock.dt, race.phase);
+      if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
       racers.step(clock.dt, pa, race, sctx);
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
@@ -647,6 +685,16 @@ async function boot() {
     }
     if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
     if (BOT && world.roadWords) debug.roadWords = world.roadWords.stats();   // dev only: the painted road words
+    const rph = state === 'race' ? race.phase : null;              //    J2: chips off through the count, back after go
+    const chipA = rph ? chipAlpha(rph, goAt < 0 ? 0 : (now - goAt) / 1000, feel.get('gentle.on') ? 1.2 : 0.6) : 1;
+    if (chipA < 1) dimChips(chipA);
+    let goPoint = null;
+    if (kartV && rph && (rph === 'countdown' || rph === 'ready' || (goAt > 0 && now - goAt < 1500))) {
+      kartV.copy(world.kart.position); kartV.y += 0.9;
+      kartV.project(cam.camera);
+      const k = kartPoint(kartV.x, kartV.y, kartV.z);
+      if (k) { kartAt.x = k.x; kartAt.y = k.y; goPoint = kartAt; }
+    }
     renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
     renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
 
@@ -656,7 +704,7 @@ async function boot() {
     if (holding) { hudItem.id = it.id; hudItem.rolling = it.rolling; hudItem.rollT = it.rollT; hudItem.rollS = feel.get('items.rollS'); }
     hud.update({ lap: pst[S.lap], laps, timeS: race.timeS, speedPct: pst[S.speedPct], countdown: null,
       sectionIdx: pst[S.sectionIdx], paused, place, count: racers.list.length, item: holding ? hudItem : null,
-      map: mapXz, finished: P.finished, bestLapS: P.bestLapS });
+      map: mapXz, finished: P.finished, bestLapS: P.bestLapS, kartAt: goPoint });
     gateScreen.update(frameDt, paused);
     slotFx.update(paused ? 0 : frameDt, holding && !P.finished ? hudItem : null, !!feel.get('gentle.on'));
 

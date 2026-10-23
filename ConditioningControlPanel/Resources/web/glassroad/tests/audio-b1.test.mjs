@@ -109,7 +109,9 @@ test('every B1 cue is a CONTRACT-B1 event; bots echo only one-shot Phase A cues'
   for (const k of Object.keys(B1_CUES)) assert.ok(B1_EVENTS.includes(k) || AUDIO_CUES[k], k);
   for (const k of BOT_ECHO) assert.ok(AUDIO_CUES[k], k);
   assert.ok(!BOT_ECHO.includes('edge-enter') && !BOT_ECHO.includes('drop'));
-  assert.ok(Object.keys(UI_CUES).every((k) => k.startsWith('menu-')));
+  // polish 5: the lobby sounds join the menu blips; none of them is a bus event name
+  assert.ok(Object.keys(UI_CUES).every((k) => k.startsWith('menu-') || ['seat-in', 'seat-out', 'ready-on', 'ready-off', 'lobby-tick'].includes(k)));
+  for (const k of Object.keys(UI_CUES)) assert.ok(!B1_EVENTS.includes(k) && !AUDIO_CUES[k] && !B1_CUES[k], k);
 });
 
 test('audio B1: events for the player play, far bots stay silent, near bots play, effects duck', async () => {

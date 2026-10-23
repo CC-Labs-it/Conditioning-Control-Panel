@@ -9,6 +9,10 @@
  * Music road (handoff-1022/MUSIC-ROAD-BRIEF.md): `song` is the normalised chart (audio/chart.js) and
  * `songS` the position the player HEARS (context time minus outputLatency), the one clock every music
  * visual reads. A chart's decoded audio is kept, so playing the same chart again restarts it at once.
+ * Polish 5 (S3): playChart(url, { align }) lands Go on a bar downbeat. align(song) answers the song position the
+ * player should hear NOW (goDownbeat(song, goInS) less the seconds left to Go, the countdown's own clock);
+ * the source is scheduled later (a short silence) or started part way in to match. Go itself never moves
+ * (online shares it through the room's startAt). No align, or a picked file: the song starts at once, as before.
  */
 import { mixGet } from './mix.js';
 import { normalizeChart } from './chart.js';
@@ -19,6 +23,36 @@ export function beatAt(chart, tS) {
   const pos = ((Number(tS) || 0) - ((chart && Number(chart.downbeatS)) || 0)) * bpm / 60;
   const index = Math.floor(pos);
   return { bpm, phase: pos - index, index };
+}
+
+/**
+ * The bar downbeat Go should land on when the song would naturally start goInS seconds before Go: the last
+ * downbeat at or before goInS (the song waits under a bar, its pickup leads into Go), else the first one
+ * (the song starts that far in). Downbeats from the chart list, else every four beats from downbeatS.
+ */
+export function goDownbeat(song, goInS) {
+  const go = Math.max(0, Number(goInS) || 0);
+  const list = song && song.downbeats && song.downbeats.length ? song.downbeats : null;
+  if (list) {
+    let d = list[0];
+    for (let i = 0; i < list.length && list[i] <= go + 1e-9; i++) d = list[i];
+    return d;
+  }
+  const bpm = song && song.bpm > 0 ? song.bpm : 96, bar = 240 / bpm, first = Math.max(0, (song && Number(song.downbeatS)) || 0);
+  return go < first ? first : first + Math.floor((go - first) / bar + 1e-9) * bar;
+}
+
+/**
+ * When to start the source for an aligned song: the song position heard at context time `now` must be posNow.
+ * startT = the context time the song's 0 s left the source (songTime's base). @returns {{ startT, when, offset }}
+ * (source.start(when, offset)); a future startT waits, a past one starts now that far in (wrapped on durS).
+ */
+export function alignStart(now, latency, posNow, durS = 0) {
+  const startT = now - Math.max(0, latency || 0) - (Number(posNow) || 0);
+  if (startT >= now) return { startT, when: startT, offset: 0 };
+  let offset = now - startT;
+  if (durS > 0) offset %= durS;
+  return { startT, when: now, offset };
 }
 
 /** Index of the chart section playing at tS (the last one started), 0 before any. */
@@ -77,15 +111,22 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     } catch (e) { try { s.stop(); } catch (e2) { /* gone */ } }
   }
 
-  function start(buffer, c, b) {
+  function start(buffer, c, b, align = null) {
     stopSrc(g('musicFadeOutS'));
     const s = ctx.createBufferSource();
     s.buffer = buffer; s.loop = true;
     s.connect(gain);
     const t = ctx.currentTime;
-    s.start(t);
-    src = s; startT = t; durS = buffer && buffer.duration > 0 ? buffer.duration : 0;
+    durS = buffer && buffer.duration > 0 ? buffer.duration : 0;
     chart = c; bpm = b; song = c ? (cached && cached.chart === c ? cached.song : normalizeChart(c)) : null;
+    let pos = null;
+    if (song && typeof align === 'function') { try { pos = align(song); } catch (e) { pos = null; } }
+    if (Number.isFinite(pos)) {
+      const a = alignStart(t, latency(), pos, durS);
+      s.start(a.when, a.offset);
+      startT = a.startT;
+    } else { s.start(t); startT = t; }
+    src = s;
     gain.gain.cancelScheduledValues(t);
     gain.gain.setValueAtTime(0, t);
     gain.gain.setTargetAtTime(volume, t, Math.max(g('musicFadeInS') / 3, 0.01));
@@ -101,11 +142,14 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   }
 
   return {
-    /** Load and loop a chart's track. false when anything is missing (no chart ships in B1). */
-    async playChart(chartUrl) {
+    /**
+     * Load and loop a chart's track. false when anything is missing (no chart ships in B1).
+     * opts.align(song) -> the song position to hear now (see goDownbeat), asked once the audio is decoded.
+     */
+    async playChart(chartUrl, { align = null } = {}) {
       const my = ++token;
       try {
-        if (cached && cached.url === String(chartUrl)) return start(cached.buffer, cached.chart, cached.chart.bpm);
+        if (cached && cached.url === String(chartUrl)) return start(cached.buffer, cached.chart, cached.chart.bpm, align);
         if (typeof fetchFn !== 'function') return false;
         const r = await fetchFn(chartUrl);
         if (!r || !r.ok) return false;
@@ -116,7 +160,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
         const buf = await decode(await a.arrayBuffer());
         if (my !== token) return false;           // a later play or stop won
         cached = { url: String(chartUrl), buffer: buf, chart: c, song: normalizeChart(c) };
-        return start(buf, c, c.bpm);
+        return start(buf, c, c.bpm, align);
       } catch (e) { console.warn('[music] chart', e); return false; }
     },
     /** Play a File the player picked. The beat runs at opts.bpm (default the game's clock.bpm). */

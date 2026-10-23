@@ -85,9 +85,41 @@
 .hud-toast.on { opacity: 1; transform: translate(-50%, 0); }
 .hud.gentle .hud-toast { transition: opacity 0.4s; transform: translate(-50%, 0); }
 
-.hud-count { position: absolute; top: 34%; left: 0; right: 0; text-align: center; font-size: 72px; font-weight: 800; }
-.hud-count.pulse { animation: hud-pulse 0.4s ease-out; }
-@keyframes hud-pulse { from { transform: scale(1.18); } to { transform: scale(1); } }
+/* polish 5 (J2): each bell stamps a big digit in and shrinks it out over one beat; Go bursts at your kart */
+.hud-count { position: absolute; top: 24%; left: 0; right: 0; text-align: center; font: 900 clamp(110px, 24vh, 270px)/1 var(--font);
+  color: #fff4fa; text-shadow: 0 5px 0 var(--paper-pink), 0 10px 0 var(--shade); --beat: 0.625s; }
+.hud-count span { opacity: 0; }
+.hud-count.stamp span { animation: hud-stamp var(--beat) linear both; }
+@keyframes hud-stamp {
+  0% { opacity: 0; transform: scale(1.9); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.25); }
+  18% { opacity: 1; transform: scale(0.94); }
+  26% { opacity: 1; transform: scale(1); }
+  68% { opacity: 1; transform: scale(1); animation-timing-function: ease-in; }
+  100% { opacity: 0; transform: scale(0.45); }
+}
+@keyframes hud-fade-beat { 0% { opacity: 0; } 28% { opacity: 1; } 66% { opacity: 1; } 100% { opacity: 0; } }
+.hud.gentle .hud-count.stamp span { animation-name: hud-fade-beat; }
+.hud-go { position: absolute; left: 50%; top: 66%; width: 0; height: 0; visibility: hidden; }
+.hud-go.on { visibility: visible; }
+.hud[data-screen="menu"] .hud-go, .hud.paused .hud-go { visibility: hidden; }
+.hud-go span { position: absolute; left: 0; bottom: 0.35em; font: 900 clamp(72px, 15vh, 170px)/1 var(--font); color: #fff4fa;
+  text-shadow: 0 5px 0 var(--paper-pink), 0 10px 0 var(--shade); white-space: nowrap; opacity: 0; transform: translateX(-50%); }
+.hud-go.on span { animation: hud-go var(--go-s, 0.72s) linear both; }
+@keyframes hud-go {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.35); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+  20% { opacity: 1; transform: translateX(-50%) scale(1.12); }
+  38% { opacity: 1; transform: translateX(-50%) scale(1); animation-timing-function: ease-in; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-0.45em) scale(1.7); }
+}
+@keyframes hud-fade-go { 0% { opacity: 0; } 25% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }
+.hud-go-ring { position: absolute; left: -70px; top: -42px; width: 140px; height: 84px; border-radius: 50%; border: 6px solid var(--pink);
+  box-sizing: border-box; opacity: 0; }
+.hud-go-ring.r2 { border-color: var(--gold); border-width: 4px; }
+.hud-go.on .hud-go-ring { animation: hud-go-ring var(--go-s, 0.72s) cubic-bezier(0.15, 0.7, 0.3, 1) both; }
+.hud-go.on .hud-go-ring.r2 { animation-delay: 0.09s; }
+@keyframes hud-go-ring { 0% { opacity: 0.95; transform: scale(0.2); } 70% { opacity: 0.35; } 100% { opacity: 0; transform: scale(3.6); } }
+.hud.gentle .hud-go.on span { animation-name: hud-fade-go; }
+.hud.gentle .hud-go-ring { display: none; }
 .hud-credit { position: absolute; right: 16px; bottom: max(52px, calc(env(safe-area-inset-bottom) + 40px)); font-size: 12px; color: var(--ink-dim); }
 .hud-credit:empty { display: none; }
 .hud.paused .hud-count { visibility: hidden; }
@@ -100,7 +132,7 @@
 .hud-note.on { opacity: 1; transform: translate(-50%, 0); }
 .hud.gentle .hud-note { transition: opacity 0.4s; transform: translate(-50%, 0); }
 .hud-count span { display: block; }
-.hud-count-flag { display: block; width: 72px; height: auto; margin: 0 auto 4px; }
+.hud-count-flag { display: block; width: clamp(72px, 9vh, 112px); height: auto; margin: 0 auto 6px; }
 .hud-count-flag[hidden] { display: none; }
 
 /* the SVG HUD kit (hud/kit.js): each kit-* class lands only when its files loaded; without it the plain look above stays */
@@ -126,7 +158,7 @@
 .hud-place.art sup { top: 10px; }
 
 /* Gentle: no spin, no bob, no scale pops (fades only) */
-.hud.gentle .hud-item-ring, .hud.gentle .hud-item img, .hud.gentle .hud-count.pulse { animation: none; }
+.hud.gentle .hud-item-ring, .hud.gentle .hud-item img { animation: none; }
 
 /* phone: the place numeral goes top right, left of the touch pause button; the map tucks under the time */
 @media (max-width: 640px) {
@@ -245,7 +277,10 @@
 .c-rows .t.est { color: var(--paper-dim); }
 
 @media (prefers-reduced-motion: reduce) {
-  .hud-count.pulse, #card .card-body.in, .hud-item-ring, .hud-item img, .hud-item.land, .hud-place.pop, .hud-place.pop b { animation: none; }
+  #card .card-body.in, .hud-item-ring, .hud-item img, .hud-item.land, .hud-place.pop, .hud-place.pop b { animation: none; }
+  .hud-count.stamp span { animation-name: hud-fade-beat; }
+  .hud-go.on span { animation-name: hud-fade-go; }
+  .hud-go-ring { display: none; }
 }
 
 /* feel sheet (?feel=1) */

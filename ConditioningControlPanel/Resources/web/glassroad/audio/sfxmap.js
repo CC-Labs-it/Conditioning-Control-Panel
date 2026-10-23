@@ -180,6 +180,12 @@ export function sfxPlan(name, p = {}, o = {}) {
     case 'menu-toggle': return [one('menu-move', 0.9, 1.12)];
     case 'menu-ok': return [one('menu-ok')];
     case 'menu-back': return [one('menu-back')];
+    // polish 5 (S4): the online lobby on the same shipped menu sounds; the grid count on a low, quiet bell
+    case 'seat-in': return [one('menu-ok', 0.7, 1.12)];
+    case 'seat-out': return [one('menu-back', 0.7, 0.9)];
+    case 'ready-on': return [one('menu-ok', 0.85, 1.26)];
+    case 'ready-off': return [one('menu-back', 0.6, 1.06)];
+    case 'lobby-tick': return [one('countdown', 0.45, 0.84)];
     default: return null;
   }
 }

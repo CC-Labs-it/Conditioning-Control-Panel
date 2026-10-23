@@ -8,6 +8,9 @@
  * Polish 1: Astra's SVG kit (hud/kit.js) dresses the place numeral, item slot, drift pips, lap
  * divider, minimap frame and the countdown flag once it loads; the DOM look is the fallback and
  * all text stays in the DOM. A short note says when a controller connects or leaves.
+ * Polish 5 (J2): each bell stamps its digit in big and shrinks it out over one beat (IN and OUT); Go bursts at
+ * the player's kart (update's kartAt, view fractions from boot) with two rings, then lifts away. Gentle and
+ * reduced motion keep only the fades.
  */
 import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS } from './format.js';
 import { createMinimap } from './minimap.js';
@@ -35,12 +38,13 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
       '<div class="hud-toast" role="status"></div>' +
     '</div>' +
     '<div class="hud-count" aria-hidden="true"><img class="hud-count-flag" alt="" draggable="false" hidden><span></span></div>' +
+    '<div class="hud-go" aria-hidden="true"><i class="hud-go-ring"></i><i class="hud-go-ring r2"></i><span>Go</span></div>' +
     '<div class="hud-note" role="status"></div>' +
     '<div class="hud-credit" data-slot="credit"></div>';
   const $ = (sel) => root.querySelector(sel);
   const el = {
     lap: $('.hud-lap'), time: $('.hud-time'), best: $('.hud-best'), count: $('.hud-count'), countN: $('.hud-count span'),
-    flag: $('.hud-count-flag'), speed: $('.hud-speed b'),
+    flag: $('.hud-count-flag'), speed: $('.hud-speed b'), go: $('.hud-go'),
     pips: [...root.querySelectorAll('.hud-pips i')], item: $('.hud-item'), icon: $('.hud-item img'),
     place: $('.hud-place'), placeArt: $('.hud-place-art'), placeN: $('.hud-place b'), placeSuf: $('.hud-place sup'), placeOf: $('.hud-place small'),
     toast: $('.hud-toast'), note: $('.hud-note'),
@@ -89,11 +93,20 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   const nameOf = (i) => labels[i] || (i === 0 ? 'You' : 'Bot ' + i);
 
   const offs = [
+    // one stamp per bell, one beat long (in, hold, shrink out); Gentle swaps the keyframes for a plain fade
     bus.on('countdown', ({ n }) => {
       countN = n;
-      if (!gentleOn()) { el.count.classList.remove('pulse'); void el.count.offsetWidth; el.count.classList.add('pulse'); }
+      el.count.style.setProperty('--beat', (60 / feel.get('clock.bpm')).toFixed(3) + 's');
+      put('count', el.countN, n > 0 ? String(n) : '');
+      el.count.classList.remove('stamp'); void el.count.offsetWidth; el.count.classList.add('stamp');
     }),
-    bus.on('go', () => { countN = 0; goUntil = now() + feel.get('juice.goReleaseS') * 1000; }),
+    bus.on('go', () => {
+      countN = 0;
+      const s = Math.max(0.3, feel.get('juice.goReleaseS') * (gentleOn() ? 1.6 : 1.2));
+      goUntil = now() + s * 1000;
+      el.go.style.setProperty('--go-s', s.toFixed(3) + 's');
+      el.go.classList.remove('on'); void el.go.offsetWidth; el.go.classList.add('on');
+    }),
     bus.on('drift-tier', ({ tier }) => pips(tier)),
     bus.on('drift-release', () => pips(0)),
     bus.on('drift-cancel', () => pips(0)),
@@ -164,7 +177,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
    * racer), finished, bestLapS (optional).
    */
   function update({ lap = 0, laps: L = 1, timeS = 0, speedPct = 0, countdown = null, paused = false,
-    place = 0, count = 0, item = null, map: xz = null, finished = false, bestLapS = 0 } = {}) {
+    place = 0, count = 0, item = null, map: xz = null, finished = false, bestLapS = 0, kartAt = null } = {}) {
     laps = L;
     const gentle = gentleOn();
     root.classList.toggle('gentle', gentle);
@@ -173,8 +186,14 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     put('best', el.best, bestLapS > 0 ? 'best ' + formatTime(bestLapS) : '');
     put('speed', el.speed, String(Math.round(Math.max(0, speedPct) * feel.get('speed.topMps') * 3.6)));
     const n = countdown || countN;
-    const countText = n > 0 ? String(n) : now() < goUntil ? 'Go' : '';
+    const countText = n > 0 ? String(n) : '';
     put('count', el.countN, countText);
+    // the Go burst sits on the player's kart (polish 5): view fractions, written only on a change
+    if (kartAt) {
+      const kx = (Math.round(kartAt.x * 400) / 4).toFixed(2) + '%', ky = (Math.round(kartAt.y * 400) / 4).toFixed(2) + '%';
+      if (last.kx !== kx || last.ky !== ky) { last.kx = kx; last.ky = ky; el.go.style.left = kx; el.go.style.top = ky; }
+    }
+    if (goUntil && now() >= goUntil) { goUntil = 0; el.go.classList.remove('on'); }
     const flagOn = !!countText && kit.ok('flag-start');
     if (flagOn !== last.flag) { last.flag = flagOn; if (flagOn && !el.flag.src) el.flag.src = kit.url('flag-start'); el.flag.hidden = !flagOn; }
     root.classList.toggle('paused', !!paused);

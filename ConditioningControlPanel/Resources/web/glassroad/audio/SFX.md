@@ -49,7 +49,9 @@ so repeats never sound stamped.
 | `item-hit` | `item-hit` (victim; thrower quieter); `bubble-pop` for far hits | Glass, golden, decoy, mercy verdicts stay synth |
 | `bubble-pop` | `bubble-pop` climbing the pentatonic ladder in a streak (capped at an octave) | |
 | `overtake` | `overtake` | being passed stays the synth fall |
-| `menu-move` / `-ok` / `-back` / `-toggle` | `menu-move`, `menu-ok`, `menu-back` | `menu-deny` synth |
+| `menu-move` / `-ok` / `-back` / `-toggle` | `menu-move`, `menu-ok`, `menu-back` | `menu-deny` synth; every card and lobby press through the hud `sound` event (hud/sounds.js) |
+| `seat-in` / `seat-out` / `ready-on` / `ready-off` | `menu-ok`, `menu-back` at other rates | the online room while it waits (polish 5) |
+| `lobby-tick` | `countdown`, lower and quieter | the grid count, each whole second on server time |
 | `edge-*`, `drop`, `rescue-release`, `section`, `effect-*`, `slipstream`, `place-change`, `race-result`, `item-refused` | synth | held tones, beds and chords |
 
 ## Engine
@@ -73,3 +75,5 @@ by their own speedPct, detuned a fixed few cents per racer, panned, quieter with
 
 Music (`audio/music.js`): `playChart(url)` loads a chart.json and loops its audio; `playFile(file)`
 plays a picked local file at a set bpm (default `clock.bpm`). `beat` reads off the context clock.
+Polish 5: with a chart, boot passes `playChart(url, { align })` so go lands on a bar downbeat (`goDownbeat`): the song
+waits under a bar or starts part way in; go itself never moves (online shares it through the room startAt).

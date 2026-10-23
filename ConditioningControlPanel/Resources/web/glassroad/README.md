@@ -37,6 +37,22 @@ stick down + X drops, Start; the d-pad, A and B work the cards). Touch: tap the 
 
 Escape only pauses. Losing focus pauses too (not under `?bot=1`).
 
+### Dev hook (`?dev=1`)
+
+`?dev=1` (with or without `?bot=1`) builds `dev/hook.js` and hangs its scripted drives on `window.__glassroad.dev`
+(not enumerable). Without the query the hook is never built and the sim is untouched; online it refuses. Each call
+works only while racing (`status.reason` says why not) and returns `dev.status`.
+
+| Call | What the player does |
+|---|---|
+| `__glassroad.dev.drift()` | put on the outside lane at the next bend ahead, drifting into it at tier 2, tier 3 a few ticks later; hop held about 1 s, then let go: a tier 3 drift boost. `{ holdS }` sets the hold; `{ release: false }` ends the script with the slide still charged |
+| `__glassroad.dev.drop()` | put 36 m before the drop shortcut on its open side and steered over the kicker lip: kicker, flight, the catch on the lower road. `{ leadM, speedPct }` |
+| `__glassroad.dev.stop()` | hands back at once |
+| `__glassroad.dev.status` | `{ kind, phase (placed, drifting, approach, flight, boost, held, caught, missed, cancel ..., timeout, refused), ok, reason, s, tier, land: { clean, skipM }, events }` |
+
+A placement keeps the lap, takes the last checkpoint before the new spot (no lap credit for the jump) and snaps the
+camera. Under `?bot=1` the AI gets the hands back when the script ends.
+
 ## Checks
 
 ```bash

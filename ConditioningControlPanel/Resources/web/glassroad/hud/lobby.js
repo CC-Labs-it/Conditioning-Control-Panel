@@ -26,6 +26,7 @@ import {
 } from './lobbyMath.js';
 import { PRESETS, presetOf, poseOf, poseHoldS, emoteAllowed, EMOTE_GAP_MS, EMOTE_SHOW_MS } from './presets.js';
 import { normLook } from '../net/protocol.js';
+import { actSound, seatSound, nextGridBell } from './sounds.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
@@ -86,7 +87,9 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     lastEmote: -Infinity, myPose: null, bubbles: {}, friends: null, sent: new Set(),
     quickT: 0, quickOn: false, autoAt: 0, gen: 0,
   };
-  let ticker = 0, lastCount = '';
+  let ticker = 0, lastCount = '', bellT = 0;
+  // polish 5 (S4): menu sounds through the hud's `sound` event (hud/sounds.js); refusals say no
+  const say = (name) => { if (name) emit('sound', { name }); };
 
   function injectCss() {
     if (doc.getElementById('gr-lobby-css')) return;
@@ -317,8 +320,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (!room || st.join !== join) { if (room && st.join !== join) room.close?.(); if (st.join === join) { st.msg = errorCopy('net'); st.view = 'msg'; st.join = null; paint(); } return; }
     st.room = room;
     const on = (t, fn) => { const off = room.on(t, fn); if (typeof off === 'function') st.offs.push(off); };
-    on('welcome', onWelcome); on('seats', (m) => { st.seats = applySeats(m.seats, st.seats); seatsChanged(); });
-    on('seat', (m) => { st.seats = applySeat(st.seats, m); seatsChanged(m.seat); });
+    on('welcome', onWelcome); on('seats', (m) => { const was = st.seats; st.seats = applySeats(m.seats, st.seats); seatSay(was); seatsChanged(); });
+    on('seat', (m) => { const was = st.seats; st.seats = applySeat(st.seats, m); seatSay(was); seatsChanged(m.seat); });
     on('start', onStart); on('emote', onEmote); on('finish', onFinish); on('abort', onAbort); on('error', onError); on('close', onClose);
   }
 
@@ -330,12 +333,22 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   function onWelcome(m) {
     st.welcome = m; st.seenAt = localNow(); st.seat = m.seat; st.phase = m.phase; st.cfg = m.cfg; st.seed = m.seed; st.keep = m.keep || [];
     st.seats = applySeats(m.seats, null);
-    if (m.countAt > 0 && m.startAt > 0) st.start = { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick, seed: m.seed };
+    if (m.countAt > 0 && m.startAt > 0) { st.start = { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick, seed: m.seed }; armBell(); }
     st.view = 'room'; st.msg = ''; paint();
     if (m.phase === 'countdown' || m.phase === 'racing') {
       emit('online-start', { ...ctx(), resume: m.resume || null });
       if (srv() >= st.start.countAt) { st.raced = true; emit('online-race', ctx()); }
     }
+  }
+  /** Someone sat down, left or got ready while the room waits: one sound (never in a race). */
+  function seatSay(was) { if (st.phase === 'lobby') say(seatSound(was, st.seats)); }
+  /** The grid count's bells on server time: each whole second before countAt (the race bells take over after). */
+  function armBell() {
+    if (bellT) { win.clearTimeout(bellT); bellT = 0; }
+    if (!st.start || st.phase === 'done') return;
+    const b = nextGridBell(srv(), st.start.countAt);
+    if (!b) return;
+    bellT = win.setTimeout(() => { bellT = 0; if (!st.start) return; say('lobby-tick'); paintCount(); armBell(); }, b.waitMs);
   }
   function seatsChanged(seatNo) {
     if (st.view === 'room') paint();
@@ -344,6 +357,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   function onStart(m) {
     st.start = { countAt: m.countAt, startAt: m.startAt, goTick: m.goTick, seed: m.seed };
     st.seed = m.seed; st.phase = 'countdown'; st.raced = false; st.autoAt = 0;
+    if (srv() < st.start.countAt) say('lobby-tick');
+    armBell();
     emit('online-start', ctx());
     if (st.view === 'room') paint();
   }
@@ -383,6 +398,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     const r = st.room; st.room = null;
     if (r) { st.leaving = true; try { r.close?.(); } catch (e) { /* already closed */ } }
     st.join = null; st.welcome = null; st.start = null; st.autoAt = 0; st.bubbles = {}; st.myPose = null;
+    if (bellT) { win.clearTimeout(bellT); bellT = 0; }
   }
 
   /** Leave on purpose: tell the room and the lobby, then back to the tables. */
@@ -404,13 +420,18 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   // ---- input ---------------------------------------------------------------------------------
 
+  /** A lobby button: its sound (hud/sounds.js), or a no when the press is refused. */
   function act(el) {
+    const r = actOn(el);
+    say(r === false ? 'menu-deny' : actSound(el.dataset.act));
+  }
+  function actOn(el) {
     const a = el.dataset.act, id = el.dataset.id, key = el.dataset.key;
     if (a === 'lb-quick') { quick(); return; }
     if (a === 'lb-refresh') { st.listAt = -1e9; refresh(); return; }
     if (a === 'lb-join') {
       const row = st.rows.find((r) => r.roomId === id), api = deps().api;
-      if (!row || row.full || !api) return;
+      if (!row || row.full || !api) return false;
       const g = ++st.gen;
       st.busy = true; st.view = 'joining'; paint();
       call(() => api.join(row.roomId, normLook(st.look))).then((j) => { st.busy = false; if (g !== st.gen) { late(j); return; } if (j) seat(j, row.raw); else { st.view = 'home'; paint(); } });
@@ -418,14 +439,14 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     }
     if (a === 'lb-host') {
       const gate = hostGate(ident());
-      if (gate[id] !== 'ok') { st.msg = errorCopy(gate[id] === 'locked' ? 'tier' : 'auth'); paint(); return; }
+      if (gate[id] !== 'ok') { st.msg = errorCopy(gate[id] === 'locked' ? 'tier' : 'auth'); paint(); return false; }
       st.host = cleanHost({ ...st.host, mode: id }); st.msg = ''; st.view = 'host'; paint(); return;
     }
     if (a === 'lb-hstep') { step(el, 1); return; }
     if (a === 'lb-lstep') { step(el, 1); return; }
     if (a === 'lb-open') {
       const api = deps().api;
-      if (!api) return;
+      if (!api) return false;
       const g = ++st.gen;
       st.busy = true; st.view = 'joining'; paint();
       call(() => api.open(hostBody(st.host, st.look, track()))).then((j) => { st.busy = false; if (g !== st.gen) { late(j); return; } if (j) seat(j, null); else { st.view = 'host'; paint(); } });
@@ -433,10 +454,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     }
     if (a === 'lb-look') { st.view = 'look'; st.msg = ''; paint(); return; }
     if (a === 'lb-ready') { const me = st.seats[st.seat]; send({ t: 'ready', on: !(me && me.ready) }); return; }
-    if (a === 'lb-start') { if (canStart(st.seats, st.seat, st.phase)) send({ t: 'start' }); return; }
+    if (a === 'lb-start') { if (!canStart(st.seats, st.seat, st.phase)) return false; send({ t: 'start' }); return; }
     if (a === 'lb-emote') {
       const now = localNow();
-      if (!presetOf(id) || !emoteAllowed(st.lastEmote, now)) return;
+      if (!presetOf(id) || !emoteAllowed(st.lastEmote, now)) return false;
       st.lastEmote = now; st.chatOff = true;
       st.myPose = { pose: poseOf(id), until: now + poseHoldS(id) * 1000 };
       send({ t: 'emote', code: id });
@@ -445,7 +466,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (a === 'lb-invite') { openInvite(); return; }
     if (a === 'lb-send') {
       const i = Number(id), f = st.friends && st.friends[i], api = deps().api;
-      if (!f || !st.join || !api) return;
+      if (!f || !st.join || !api) return false;
       st.sent.add(i); paint();
       call(() => api.invite(f.uid, st.join.roomId)).then((r) => { if (!r) { st.sent.delete(i); } if (st.view === 'invite') paint(); });
       return;
@@ -453,7 +474,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (a === 'lb-leave') { leave(); st.view = 'home'; st.msg = ''; st.listAt = -1e9; paint(); return; }
     if (a === 'lb-again') { leave(); quick(); return; }
     if (a === 'lb-home') { leave(); st.view = 'home'; st.msg = ''; st.listAt = -1e9; paint(); return; }
-    if (a === 'lb-back') { back(); return; }
+    if (a === 'lb-back') { back(true); return; }
     if (a === 'lb-exit') { leave(); stopTicker(); exit(); }
   }
 
@@ -475,8 +496,9 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   }
 
   /** Escape or pad back: up one view. In a room it moves focus to Leave and never leaves by itself. */
-  function back() {
+  function back(quiet = false) {
     const v = st.view;
+    if (!quiet) say(v === 'room' || v === 'joining' ? 'menu-move' : 'menu-back');
     if (v === 'quick') { stopQuick(); st.view = 'home'; st.msg = ''; paint(); return; }
     if (v === 'host' || v === 'look' || v === 'invite') { st.view = st.room ? 'room' : 'home'; st.msg = ''; paint(); return; }
     if (v === 'room' || v === 'joining') { extra.querySelector('[data-act="lb-leave"]')?.focus?.({ preventScroll: true }); return; }
@@ -489,7 +511,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     if (dir === 'back') { back(); return true; }
     const cur = doc.activeElement;
     if ((dir === 'left' || dir === 'right') && cur && card.contains(cur) && (cur.dataset.act === 'lb-hstep' || cur.dataset.act === 'lb-lstep')) {
-      if (!cur.disabled) step(cur, dir === 'left' ? -1 : 1);
+      if (!cur.disabled) { say('menu-toggle'); step(cur, dir === 'left' ? -1 : 1); }
       return true;
     }
     return false;
