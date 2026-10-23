@@ -31,6 +31,9 @@ namespace ConditioningControlPanel.Services
         private volatile bool _browserActive;
 
         private string? _browserPath;
+        /// <summary>The clip whose "via Scrolller" link was pressed mid-video: it opens once that
+        /// clip ends on its own (a fullscreen video is topmost, a browser opened now would land behind it).</summary>
+        private string? _creditLinkQueuedFor;
         private bool _browserStrict;
         private long _browserTimeMs = -1;
         /// <summary>Pause state of the session, the answer behind IsPrimaryMediaPlaying for a browser
@@ -57,11 +60,15 @@ namespace ConditioningControlPanel.Services
         /// twice (Infinity at loadedmetadata, the real value at durationchange) and a second seek
         /// would yank the user back mid-clip.</summary>
         private bool _browserSegmentSeeked;
+        /// <summary>The clip carries a "via ..." end card, and the page was told to show it over the
+        /// clip's last seconds (CreditOutroTiming). Once per clip.</summary>
+        private bool _browserHasCredit;
+        private bool _browserOutroSent;
 
         /// <summary>True while a browser video session owns the screen. Read by AudioService so the
         /// duck sweep never lowers the app's OWN video audio (LibVLC audio is in-process and
         /// structurally un-duckable, so this is what keeps the two engines at parity).</summary>
-        public bool IsBrowserSessionActive => _browserActive;
+        public bool IsBrowserSessionActive => _browserActive || HasFloatingInstances;   // a floating instance is WebView2 audio too
 
         /// <summary>Aspect ratio (w/h) of the clip in the live browser session, or 0 when unknown /
         /// no browser session. The page's video element is contain-fit over the full window, so this
@@ -84,6 +91,8 @@ namespace ConditioningControlPanel.Services
                     engine.Clicked += OnBrowserClicked;
                     engine.KeyPressed += OnBrowserKey;
                     engine.AttentionClicked += OnBrowserAttentionClicked;
+                    engine.CreditClicked += OnBrowserCreditClicked;
+                    engine.MediaEnded += OnBrowserMediaEnded;
                     engine.AttentionMoved += OnBrowserAttentionMoved;
                     engine.WindowDropped += OnBrowserWindowDropped;
                 }
@@ -104,13 +113,14 @@ namespace ConditioningControlPanel.Services
             {
                 // Global "Show content on" picker, not every screen: one picked monitor means
                 // one browser window, on that monitor.
-                var screens = VideoScreens().ToList();
+                var screens = PlaybackScreens().ToList();   // the one floating screen, or every target
                 if (screens.Count == 0) return false;   // LibVLC path owns the no-screens end
                 var primary = screens.FirstOrDefault(s => s.Primary) ?? screens[0];
                 var secondaries = screens.Where(s => s.DeviceName != primary.DeviceName).ToList();
                 if (!ShouldFillSecondaryMonitors(screens.Count)) secondaries.Clear();
 
                 _browserPath = path;
+                _creditLinkQueuedFor = null;   // a press belongs to the clip it was made on
                 _browserStrict = strict;
                 _browserTimeMs = -1;
                 _browserPaused = false;
@@ -119,6 +129,8 @@ namespace ConditioningControlPanel.Services
                 _browserFallbackDone = false;
                 _browserStartedFired = false;
                 _browserSegmentSeeked = false;
+                _browserHasCredit = Video.ScrolllerCredit.For(path) != null;
+                _browserOutroSent = false;
 
                 // Chaos random-segment mode: the LibVLC path seeks from LengthChanged, but the page
                 // takes a start offset directly. The fraction needs the duration, which only arrives
@@ -128,6 +140,7 @@ namespace ConditioningControlPanel.Services
                     Path = path,
                     PrimaryScreen = primary,
                     SecondaryScreens = secondaries,
+                    FloatingBounds = IsFloating ? _floatBounds : null,
                     Volume = GetEffectiveVolume() / 100.0,
                     Muted = GetEffectiveVolume() <= 0,
                     BlurBackground = App.Settings?.Current?.VideoBlurredBackgroundEnabled == true,
@@ -135,10 +148,16 @@ namespace ConditioningControlPanel.Services
                     // that swallows the cursor while the rest of the app still shows one reads as a
                     // frozen machine, and attention targets are clicked over this surface.
                     HideCursor = false,
+                    // Gentle visuals: slowed playback + a fade in from black inside the page.
+                    PlaybackRate = _playRate,
+                    FadeInMs = Safety.GentleVisuals.On ? (int)Math.Round(Safety.GentleVisuals.FadeSeconds * 1000) : 0,
                     // The SAME flag SetupStrictHandlers is given below, not the live IsStrictActive
                     // probe: the page wants one fixed answer at load time, and this is the value the
                     // whole run is locked to.
                     Strict = strict,
+                    // "via Scrolller" badge + end card; under any lock the badge shows but takes no press.
+                    Credit = Video.ScrolllerCredit.PagePayload(path, Video.ScrolllerCredit.CanOpenLink(
+                        strict, App.Lockdown?.IsActive == true, LockedChaosRun())),
                     IsHostPaused = () => _gracePaused,
                     // Lock Card / Lockdown / Possession: every screen is covered on purpose, so a
                     // dead mirror is left black rather than uncovered mid-clip (the engine asks
@@ -194,7 +213,7 @@ namespace ConditioningControlPanel.Services
                 StopWedgeWatchdog();
 
                 App.Bubbles?.PauseAndClear();
-                if (App.Settings.Current.AttentionChecksEnabled) SetupAttention();
+                if (Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating)) SetupAttention();
 
                 VideoDiag.Log("VIDEO", $"browser session on screen ({_windows.Count} window(s)) - {Path.GetFileName(path)}");
                 return true;
@@ -206,7 +225,8 @@ namespace ConditioningControlPanel.Services
                 // Closing veto would refuse to close the windows this throw is trying to clean up
                 // and strand fullscreen surfaces on screen forever. Same clear/restore dance as the
                 // runtime fallback, strict bridge included.
-                try { StopBrowserSessionForHandoff(); } catch { }
+                CarryMaxLenCap(replay: true);   // read Browser.PlayedMs before the handoff: the LibVLC replay continues the clip's cap
+            try { StopBrowserSessionForHandoff(); } catch { }
                 // The disarm above already ran if the throw came after it; the LibVLC attempt this
                 // false return triggers must not build its windows unguarded (that window creation
                 // is where the historic freeze strikes). Pre-roll re-arm, same as FallbackToLibVlc.
@@ -464,6 +484,15 @@ namespace ConditioningControlPanel.Services
             // durationchange) - last one wins, so the guillotine is simply re-armed.
             StartSafetyTimer(_duration);
 
+            if (!_browserSegmentSeeked && !SegmentArmed)
+            {
+                _browserSegmentSeeked = true;
+                var offset = App.Settings?.Current?.VideoCutRandomStart == true
+                    ? Video.VideoLengthCap.StartOffsetMs(App.Settings.Current.VideoMaxDurationSeconds, durationMs, _random) : 0;
+                var cutRun = _videoRunId;
+                if (offset > 0) PostAfterPageMessage(() => { if (cutRun == _videoRunId && BrowserEventIsCurrent()) Browser.Seek(offset); });
+            }
+
             // Free duration metadata: the selection-time min/max filter improves with every browser
             // play, with no LibVLC parse (and no preparse crash surface, #750-#753).
             try
@@ -535,6 +564,8 @@ namespace ConditioningControlPanel.Services
                 if (!BrowserEventIsCurrent()) return;
                 VideoStarted?.Invoke(this, EventArgs.Empty);
                 App.SessionLog?.RecordVideo(LastVideoPath);
+                // Mute and close, once the page's own fade from black has run (VideoService.Controls.cs).
+                ShowVideoControls(_browserStrict, Safety.GentleVisuals.On ? (int)Math.Round(Safety.GentleVisuals.FadeSeconds * 1000) : 0);
                 _ = App.Haptics?.StartVideoBackgroundVibeAsync();
                 try { App.Haptics?.FunScript?.OnVideoStarted(_browserPath ?? ""); }
                 catch (Exception ex) { App.Logger?.Debug("FunScript start hook failed: {Error}", ex.Message); }
@@ -552,7 +583,14 @@ namespace ConditioningControlPanel.Services
             // cached page HTML that predates the field; leave the PausePrimary/PlayPrimary edges
             // to answer, which is the pre-#874 behaviour minus the blind clear.
             if (paused.HasValue) _browserPaused = paused.Value;
-            _lastWatchPositionMs = ms;   // watch-time crediting (#447), same field the LibVLC path feeds
+            _lastWatchPositionMs = Browser.PlayedMs;
+            // The end card lays over the clip while it ends: the file's end, or the cut's on a capped clip.
+            if (_browserHasCredit && !_browserOutroSent && paused != true && Video.CreditOutroTiming.ShouldStart(ms, Browser.PlayedMs,
+                    (long)Math.Round(_duration * 1000), (App.Settings?.Current?.VideoMaxDurationSeconds ?? 0) * 1000L, Video.ScrolllerCredit.OutroMs))
+            {
+                _browserOutroSent = true;
+                PostAfterPageMessage(() => { if (BrowserEventIsCurrent()) Browser.ShowCreditOutro(); });
+            }
             try { PrimaryPlaybackTimeMsChanged?.Invoke(ms); }
             catch (Exception ex) { App.Logger?.Debug("PrimaryPlaybackTimeMsChanged handler error: {Error}", ex.Message); }
         }
@@ -583,6 +621,68 @@ namespace ConditioningControlPanel.Services
             // Window-level PreviewMouseDown never fires over a WebView2 child HWND, so this message
             // is what keeps the attention targets clickable on top of the video.
             BringTargetsToFront();
+            // The page posts this on pointerdown, so the button is still held: a floating window
+            // moves with it. Queued, never run inside the WebView2 message callback.
+            if (IsFloating)
+                Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+                {
+                    if (_primarySurface != null) OnFloatingTouched(_primarySurface);   // a press takes the sound
+                    BeginFloatingDrag(_primaryVideoWindow);
+                }));
+        }
+
+        /// <summary>The "via Scrolller" badge was pressed. Floating: the link opens now. Fullscreen:
+        /// it waits for the clip's natural end (see <see cref="OnBrowserMediaEnded"/>). Under any
+        /// lock nothing happens (the page already shows the badge as not pressable).</summary>
+        private void OnBrowserCreditClicked()
+        {
+            if (!_browserActive) return;
+            var path = _browserPath;
+            if (Video.ScrolllerCredit.For(path) == null) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
+            if (IsFloating)
+            {
+                Application.Current?.Dispatcher?.BeginInvoke(new Action(() => Video.ScrolllerCredit.Open(path)));
+                return;
+            }
+            _creditLinkQueuedFor = path;
+            Browser.MarkCreditQueued();
+        }
+
+        /// <summary>
+        /// The primary's picture reached its end and only the "via Scrolller" end card is left
+        /// before the page reports <c>ended</c>. Nothing may judge the clip during the card: the
+        /// longest-video cap stands down (it would cut a clip that finished and skip its natural
+        /// end) and no further attention target spawns (the ones already up stay pressable).
+        ///
+        /// A link pressed during THIS clip opens here, re-checked against every lock. It is the only
+        /// place it opens: a panic or stop closes the window before the picture ends, and every new
+        /// session starts with nothing queued, so a press can never surface in a later run.
+        /// </summary>
+        private void OnBrowserMediaEnded()
+        {
+            if (!_browserActive) return;
+            _maxLenCapTimer?.Stop();
+            _maxLenCapTimer = null;
+            _spawnTimes.Clear();
+            OpenQueuedCreditLink();
+        }
+
+        /// <summary>A link pressed on this clip's badge or end card opens now: at the picture's end,
+        /// or when the longest-video limit cuts the clip the end card was laid over. Checked against
+        /// every lock now, while the run's lock state is still this clip's, and again when it opens.</summary>
+        private void OpenQueuedCreditLink()
+        {
+            if (!_browserActive) return;
+            var queued = _creditLinkQueuedFor;
+            _creditLinkQueuedFor = null;
+            if (queued == null || !string.Equals(queued, _browserPath, StringComparison.Ordinal)) return;
+            if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
+            Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+            {
+                if (!Video.ScrolllerCredit.CanOpenLink(IsStrictActive, App.Lockdown?.IsActive == true, LockedChaosRun())) return;
+                Video.ScrolllerCredit.Open(queued);
+            }));
         }
 
         /// <summary>

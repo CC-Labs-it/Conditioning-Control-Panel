@@ -456,7 +456,7 @@ namespace ConditioningControlPanel.Services.Deeper
             int webcamRules = blinkRules + gazeRules + mouthRules + attentionRules;
             if (webcamRules > 0 && _webcam == null)
             {
-                Diag($"⚠ {webcamRules} webcam rule(s) but no webcam service — they will never fire.");
+                Diag($"⚠ {webcamRules} webcam rule(s) but no webcam tracker is attached — they will never fire.");
             }
             else if (webcamRules > 0)
             {
@@ -648,7 +648,12 @@ namespace ConditioningControlPanel.Services.Deeper
                     if (!_running) break;
                     _lastFiredIndex++;
                     var entry = _timeline[_lastFiredIndex];
-                    if (entry.OwnerItem != null && !PassesRuleGate(entry.OwnerItem, t)) continue;
+                    // Gate at the entry's OWN time, not the tick's (ccp-bugs #1421). The playhead
+                    // crossed this entry between the last tick and this one; asking whether the
+                    // tick itself still sits inside the item's [Start, Start+Duration) dropped
+                    // every short subliminal the player reported late for, which a sparse
+                    // LibVLC clock did all the time and the Deeper player's 100 ms poll rarely.
+                    if (entry.OwnerItem != null && !PassesRuleGate(entry.OwnerItem, entry.Time)) continue;
                     DispatchSafely(entry.Action, t);
                     RecordTriggerFired(entry.OwnerItem?.Trigger);
                 }
@@ -840,6 +845,7 @@ namespace ConditioningControlPanel.Services.Deeper
         private void OnMouthOpen() => MarshalToUi(_onMouthOpenCore);
         private void OnGazeMove(double x, double y)
         {
+            // Capture by value to avoid sharing the struct across threads.
             var p = new PlaybackPoint(x, y);
             MarshalToUi(() => OnGazeMoveCore(p));
         }

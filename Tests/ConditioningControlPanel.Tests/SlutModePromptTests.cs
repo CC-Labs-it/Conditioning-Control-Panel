@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.AIService;
+using ConditioningControlPanel.Services.Companion.Brain;
 using ConditioningControlPanel.Services.Moderation;
 using Xunit;
 
@@ -150,17 +154,112 @@ public class SlutModePromptTests : IDisposable
     }
 
     [Fact]
-    public void SpiceOn_KeepsTheDeflectionForPresetsWithNoSlutVariant()
+    public void SpiceOn_BitesAPresetThatShipsNoSlutVariant()
     {
-        // Bimbo Coach ships no SlutModePersonality, so the toggle changes nothing about it and
-        // its [DITZY DEFLECTION] must survive. The fix is scoped to "the user switched THIS persona
-        // into its explicit variant", not to "the toggle is on".
+        // Bimbo Coach ships no SlutModePersonality. Until 2026-10-16 the toggle changed nothing
+        // about it (a subscriber bought the app for the switch and reported "she doesn't do
+        // anything"). Now the shared bite block rides along and its [DITZY DEFLECTION] goes.
         var off = Compile(PersonalityPresets.BimboCoachId, slutMode: false);
         var on = Compile(PersonalityPresets.BimboCoachId, slutMode: true);
 
         Assert.Contains("DITZY DEFLECTION", off, StringComparison.Ordinal);
-        Assert.Contains("DITZY DEFLECTION", on, StringComparison.Ordinal);
-        Assert.Equal(off, on, StringComparer.Ordinal);
+        Assert.DoesNotContain(SlutModeBite.Header, off, StringComparison.Ordinal);
+        Assert.DoesNotContain("DITZY DEFLECTION", on, StringComparison.Ordinal);
+        Assert.Contains(SlutModeBite.Header, on, StringComparison.Ordinal);
+        // Its own voice is still the one in charge.
+        Assert.Contains(PersonalityPresets.GetBuiltInById(PersonalityPresets.BimboCoachId)!.PromptSettings!.Personality, on, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheBite_RidesEveryPresetWhenOnAndNoneWhenOff()
+    {
+        foreach (var id in PersonalityPresets.BuiltInIds)
+        {
+            Assert.DoesNotContain(SlutModeBite.Header, Compile(id, slutMode: false), StringComparison.Ordinal);
+            var on = Compile(id, slutMode: true);
+            if (PersonalityPresets.GetBuiltInById(id)!.RequiresExplicitAcknowledgement)
+            {
+                // The "Slut Mode" preset IS the explicit persona: its own examples are already
+                // filthy and its Bambi worst case has no char budget left for a second block.
+                Assert.DoesNotContain(SlutModeBite.Header, on, StringComparison.Ordinal);
+                continue;
+            }
+            Assert.Contains(SlutModeBite.Header, on, StringComparison.Ordinal);
+            // After the persona's own rules (the examples it re-registers come first), before the floor.
+            Assert.True(on.IndexOf(SlutModeBite.Header, StringComparison.Ordinal) < on.IndexOf(SafetyComposer.Floor, StringComparison.Ordinal));
+            // One block for every preset: the short form for presets with their own variant
+            // left Bambi at nine-token replies on the owner's desk run (2026-10-16).
+            Assert.Contains(SlutModeBite.Block, on, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void TheBite_PassesTheWireGuardAndThePromptValidator()
+    {
+        // The block asks for filth, so it has to be filth the app's own moderation lets through:
+        // a bite the guard blocked on the way out would be the old no-op in a new coat.
+        var guard = new ModerationGuard();
+        var validator = new PromptValidator();
+        foreach (var text in new[] { SlutModeBite.Block, PromptAssembler.ChatSpiceInstruction }.Concat(SlutModeBite.ExampleLines))
+        {
+            var outcome = guard.CheckOutput(text);
+            Assert.True(outcome.Allow, $"ModerationGuard blocked the bite ({outcome.Category}: {outcome.Note}): {text}");
+            var v = validator.Validate(text);
+            Assert.True(v.Clean, $"PromptValidator flagged the bite [{string.Join(", ", v.MatchedPatterns)}]: {text}");
+        }
+    }
+
+    [Fact]
+    public void TheBite_WearsNoHeaderTheSafetyPreambleNullifiesByName()
+    {
+        {
+            var block = SlutModeBite.Block;
+            Assert.StartsWith(SlutModeBite.Header, block, StringComparison.Ordinal);
+            Assert.DoesNotContain("[NO LIMITS", block, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("[FULL ENGAGEMENT", block, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("[EXPLICIT]", block, StringComparison.OrdinalIgnoreCase);
+            // Gender neutral toward the user: the persona decides, the bite never does.
+            Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\b(she|he|her|his|girl|boy)\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase), block);
+            // The block lifts the persona's word cap; without this line Bambi's "Max 15 words" wins.
+            Assert.Contains("two to four sentences", block, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void SpiceOn_DropsCannedAppLinesFromTheHistoryWindow()
+    {
+        // 23 turns of "Breakout? go on. I will be watching." pulled the model tame on the owner's
+        // desk run; while the switch is on only typed exchanges reach the wire.
+        var typedQ = CompanionTurn.Create(TurnKind.UserChat, "hey");
+        var typedA = CompanionTurn.Create(TurnKind.AssistantChat, "Mm. Hey yourself.");
+        var canned = CompanionTurn.Create(TurnKind.AssistantChat, "Breakout? go on. I will be watching.") with { IsApplicationReply = true };
+        var window = new[] { canned, typedQ, typedA, canned };
+        var kept = PromptAssembler.DropApplicationReplies(window);
+        Assert.Equal(new[] { typedQ, typedA }, kept);
+        var clean = new[] { typedQ, typedA };
+        Assert.Same(clean, PromptAssembler.DropApplicationReplies(clean));
+    }
+
+    [Fact]
+    public void SpiceOn_LiftsTheChatTokenCapButNeverAboveTheEffectsEnvelope()
+    {
+        Assert.True(AiCallOptions.ChatSpice.MaxTokens > AiCallOptions.Chat.MaxTokens);
+        Assert.True(AiCallOptions.ChatSpice.MaxTokens <= AiCallOptions.ChatWithEffects.MaxTokens);
+        Assert.Equal(AiPurpose.Chat, AiCallOptions.ChatSpice.Purpose);
+        Assert.True(AiCallOptions.ChatSpice.Interactive);
+    }
+
+    [Fact]
+    public void SpiceOn_GatesEveryPreset()
+    {
+        // The switch is explicit on every persona now, so every persona asks for the acknowledgement.
+        foreach (var id in PersonalityPresets.BuiltInIds)
+        {
+            var preset = PersonalityPresets.GetBuiltInById(id)!;
+            Assert.True(ExplicitContentGate.RequiresAcknowledgement(preset, slutModeOn: true), id);
+            Assert.Equal(preset.RequiresExplicitAcknowledgement, ExplicitContentGate.RequiresAcknowledgement(preset, slutModeOn: false));
+        }
     }
 
     [Theory]

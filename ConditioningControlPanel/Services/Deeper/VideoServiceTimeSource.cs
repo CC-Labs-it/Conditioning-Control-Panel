@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace ConditioningControlPanel.Services.Deeper
 {
@@ -21,6 +22,11 @@ namespace ConditioningControlPanel.Services.Deeper
         private readonly VideoService _video;
         private bool _attached;
 
+        // ccp-bugs #1421: the player reports its position only a few times a second. The engine
+        // needs the ~10 Hz the Deeper player gives it, or short effects are crossed unseen.
+        private readonly PlayheadExtrapolator _playhead = new();
+        private DispatcherTimer? _fillTimer;
+
         // Display aspect ratio (w/h, SAR-corrected) of the playing video, cached
         // once the engine reports a non-zero size (LibVLC track data, or the
         // browser page's `meta` message). -1 = not known yet. The bridge builds
@@ -39,6 +45,15 @@ namespace ConditioningControlPanel.Services.Deeper
             if (_attached) return;
             _video.PrimaryPlaybackTimeMsChanged += OnTimeMs;
             _attached = true;
+
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher == null || dispatcher.HasShutdownStarted) return;
+            _fillTimer = new DispatcherTimer(DispatcherPriority.Normal, dispatcher)
+            {
+                Interval = TimeSpan.FromMilliseconds(PlayheadExtrapolator.TickMs)
+            };
+            _fillTimer.Tick += OnFillTick;
+            _fillTimer.Start();
         }
 
         public void Detach()
@@ -46,6 +61,16 @@ namespace ConditioningControlPanel.Services.Deeper
             if (!_attached) return;
             _video.PrimaryPlaybackTimeMsChanged -= OnTimeMs;
             _attached = false;
+            var timer = _fillTimer;
+            _fillTimer = null;
+            if (timer == null) return;
+            try
+            {
+                timer.Tick -= OnFillTick;
+                if (timer.Dispatcher.CheckAccess()) timer.Stop();
+                else timer.Dispatcher.BeginInvoke(new Action(timer.Stop));
+            }
+            catch { }
         }
 
         private void OnTimeMs(long ms)
@@ -60,15 +85,37 @@ namespace ConditioningControlPanel.Services.Deeper
             var dispatcher = Application.Current?.Dispatcher;
             if (dispatcher == null || dispatcher.HasShutdownStarted) return;
 
+            // Stamped HERE, on arrival: the hop to the UI thread can sit behind other work, and
+            // the playhead must run from when the player said it, not from when we heard it.
+            var at = Environment.TickCount64;
             if (dispatcher.CheckAccess())
             {
-                Fire(ms);
+                Report(ms, at);
             }
             else
             {
-                try { dispatcher.BeginInvoke(new Action(() => Fire(ms))); }
+                try { dispatcher.BeginInvoke(new Action(() => Report(ms, at))); }
                 catch (Exception ex) { App.Logger?.Debug("VideoServiceTimeSource marshal error: {Error}", ex.Message); }
             }
+        }
+
+        private void Report(long ms, long at)
+        {
+            if (!_attached) return;
+            var emit = _playhead.OnReport(ms, at);
+            if (emit >= 0) Fire(emit);
+        }
+
+        private void OnFillTick(object? sender, EventArgs e)
+        {
+            if (!_attached) return;
+            try
+            {
+                var emit = _playhead.OnTimer(Environment.TickCount64, _video.IsPrimaryMediaPlaying,
+                    (long)(_video.GetPrimaryDurationSeconds() * 1000));
+                if (emit >= 0) Fire(emit);
+            }
+            catch (Exception ex) { App.Logger?.Debug("VideoServiceTimeSource fill tick error: {Error}", ex.Message); }
         }
 
         private void Fire(long ms)
@@ -121,9 +168,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 var outer = new Rect(originPx.X / sx, originPx.Y / sy, w.ActualWidth, w.ActualHeight);
 
                 var aspect = GetVideoAspect();
-                if (aspect <= 0) return outer; // native size not known yet -> full area
-
-                return FitContain(outer, aspect);
+                return aspect <= 0 ? outer : FitContain(outer, aspect); // native size not known yet -> full area
             }
             catch { return Rect.Empty; }
         }

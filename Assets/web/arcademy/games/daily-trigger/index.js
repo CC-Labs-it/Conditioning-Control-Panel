@@ -1119,7 +1119,10 @@ export default {
      */
     function recordPlay() {
       const gm = readMeta();
-      const fluent = solved && committed.length <= 3;
+      // A retake advances nothing (shell rule), fluency included: after #1455 a
+      // try left mid-class makes the next run a retake, and a replay that
+      // already saw the board must not buy a fluency pip.
+      const fluent = !retake && solved && committed.length <= 3;
       try {
         if (ctx.store && ctx.store.mergeGameMeta) {
           ctx.store.mergeGameMeta('daily_trigger', {
@@ -1128,6 +1131,19 @@ export default {
             lastSolved: !!solved,
             fluency: Math.max(0, Math.round(Number(gm.fluency) || 0)) + (fluent ? 1 : 0),
           });
+        }
+      } catch (e) { say('meta write failed (harmless): ' + ((e && e.message) || e)); }
+    }
+
+    /** The day's try, stamped at the START of the class (#1455). Only the day
+     *  moves on a retake; a first try also clears yesterday's row count so the
+     *  retake tease never quotes a stale number. Fluency is finish()'s alone. */
+    function recordAttempt() {
+      try {
+        if (ctx.store && ctx.store.mergeGameMeta) {
+          ctx.store.mergeGameMeta('daily_trigger', retake
+            ? { lastPlayedUtc: entry.dateUtc }
+            : { lastPlayedUtc: entry.dateUtc, lastRows: 0, lastSolved: false });
         }
       } catch (e) { say('meta write failed (harmless): ' + ((e && e.message) || e)); }
     }
@@ -1318,7 +1334,11 @@ export default {
         cur = new Array(entry.letters).fill('');
         const layout = readSettings();
 
-        retake = readMeta().lastPlayedUtc === entry.dateUtc;
+        retake = readMeta().lastPlayedUtc === entry.dateUtc || !!(spec && spec.retake);
+        // ONE TRY A DAY (ccp-bugs #1455): the attempt is written when the
+        // class STARTS, not only in finish(). A double Esc leaves before
+        // finish() runs, and without this the next run was a first run again.
+        if (!(spec && spec.endless)) recordAttempt();
 
         injectStyles();
         ctx.root.textContent = '';
