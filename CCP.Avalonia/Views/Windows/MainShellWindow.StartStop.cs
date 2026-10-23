@@ -144,17 +144,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF StartStop.cs:485: hand back anything a Takeover pulse borrowed before the overlays go;
             // also retires the pulse timers so an old one cannot end the next run's bubbles.
             CancelAutonomyPulses();
+            PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
+            StopConditioningTimeTracker();         // WPF StartStop.cs:540
+            App.StopDesktopOverlays(final: false);
+            PopQuizHost.Instance.CloseAll();   // first: drops a queued quiz before cards close; WPF StartStop.cs:521
+            LockCardWindow.ForceCloseAll();
+            // After the force-closes (WPF StartStop.cs:487): a throw here must not leave overlays or lock cards up.
             StopRampTimer();
             var s = CoreSettings.Current;
             if (!(AutonomyScheduler.HasEntitlement && s.AutonomyModeEnabled && s.AutonomyConsentGiven)) Autonomy.Stop();
             if (!s.AudioLayersEnabled) Platform.LayeredAudio.Instance?.Stop();
             Platform.LibVlcAudio.Instance?.ForceUnduck();
             EngineCrashSentinel.Clear();
-            PinkRushHost.Stop();                   // WPF StartStop.cs:505 App.SkillTree?.Stop()
-            StopConditioningTimeTracker();         // WPF StartStop.cs:540
-            App.StopDesktopOverlays(final: false);
-            PopQuizHost.Instance.CloseAll();   // first: drops a queued quiz before cards close; WPF StartStop.cs:521
-            LockCardWindow.ForceCloseAll();
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).

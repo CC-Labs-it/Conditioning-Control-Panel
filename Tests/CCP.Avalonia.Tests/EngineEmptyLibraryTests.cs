@@ -48,6 +48,7 @@ public sealed class EngineEmptyLibraryTests
         {
             shell.Show(); Dispatcher.UIThread.RunJobs();
             AvApp.Notifications.AttachHost(host);
+            host.Children.Clear();   // toasts other tests queued without a host replay on attach
             CoreEngine.StoppedHook = shell.OnEngineStopped;
             shell.Named<Button>("BtnStart")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True(CoreEngine.IsRunning);

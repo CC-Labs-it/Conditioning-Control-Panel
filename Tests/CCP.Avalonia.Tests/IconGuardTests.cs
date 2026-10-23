@@ -71,7 +71,7 @@ public sealed class IconGuardTests
             if (Verbatim(rel)) continue;
             var code = StripComments(rel, string.Join("\n", lines)).Split('\n');
             for (int i = 0; i < code.Length; i++)
-                foreach (Match m in refs.Matches(code[i]))
+                foreach (Match m in refs.Matches(Allowed(rel, code[i], "emoji")))
                     foreach (var k in (m.Groups[1].Value + m.Groups[2].Value + " " + m.Groups[3].Value).Split(new[] { ' ', ',', ';' }, StringSplitOptions.RemoveEmptyEntries))
                         if (keys.Contains(k))
                             (perFile.TryGetValue(rel, out var l) ? l : perFile[rel] = new()).Add($"{rel}:{i + 1}: {k}{(GlyphOnly(en[k]) ? " (glyph-only)" : "")}");

@@ -152,6 +152,9 @@ public sealed class ShellStartStopLifecycleTests
         try
         {
             AvApp.Notifications.AttachHost(host);
+            // Startup toasts from shell.Show (6 on windows-latest) are not this test's subject.
+            foreach (var t in host.Children.OfType<Border>()) (t.Tag as DispatcherTimer)?.Stop();
+            host.Children.Clear();
             shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>("BambiTakeoverTab")!
                 .FindControl<CheckBox>("ChkWallpaperKeep")!.IsChecked = true;
             var toast = Assert.IsType<Border>(Assert.Single(host.Children));
@@ -193,6 +196,9 @@ public sealed class ShellStartStopLifecycleTests
         finally
         {
             CoreEngine.Stop(); shell.Autonomy.Stop(); shell.Close(); CoreEngine.StoppedHook = oldStop;
+            // Toasts raised with no host (achievement unlocks) would replay into the next test's AttachHost.
+            ((System.Collections.IList)typeof(NotificationService).GetField("_pending", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(AvApp.Notifications)!).Clear();
             CoreSettings.ServiceProvider = oldSettings; CorePaths.EffectiveAssetsProvider = oldAssets;
             ConditioningControlPanel.Avalonia.Platform.OsNotifications.Sink = oldSink; dir.Delete(true);
         }

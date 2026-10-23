@@ -9,6 +9,9 @@
 # --- temporary (removed by L10 icons-shell-chrome) ---
 Views/Windows/MainShellWindow.axaml :: Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI" :: font: temporary - MDL2 settings gear, the one icon-font site at L0b; L10 converts it to IconGlyph Kind=Settings
 
+# --- sanctioned: the toast renders the leading emoji as an IconGlyph (also exempts the prefixed-loc ratchet) ---
+Views/Windows/MainShellWindow.StartStop.cs :: Loc.Get("btn_get_packs") :: toast renders the leading emoji as IconGlyph (EngineEmptyLibraryTests); covers the flash and wallpaper notices
+
 # --- content (c).1: companion/chat text ---
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
 
