@@ -189,7 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // the Studio rack's right-click QuickToggle. The rings repaint from HookWallRings.
         //
         // ponytail: RefreshMosaicTierBadges, RefreshMysteryTile and SetTierBadge still need
-        // App.Patreon's tier state; NoteDashboardToggleUsed's caption counter is not ported.
+        // App.Patreon's tier state.
 
         /// <summary>The persisted flag behind a wall key. Unknown key = false.</summary>
         internal static bool IsWallFeatureOn(string key)
@@ -255,7 +255,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SetWallFeature(key, !IsWallFeatureOn(key));
             // WPF NoteDashboardToggleUsed: stop saving once the third learned toggle retires the hint.
             var s = CoreSettings.Current;
-            if (s.DashboardToggleHintUses < 3)
+            if (ConditioningControlPanel.Services.DashboardToggleHintRule.ShouldShow(s.DashboardToggleHintUses))
             {
                 s.DashboardToggleHintUses++;
                 CoreSettings.Save();

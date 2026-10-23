@@ -29,7 +29,7 @@ public partial class SettingsTabView
         _refreshingClickChoice = true;
         try
         {
-            DashToggleHint.IsVisible = CoreSettings.Current.DashboardToggleHintUses < 3; // WPF DashboardToggleHintRule.MaxUses
+            DashToggleHint.IsVisible = ConditioningControlPanel.Services.DashboardToggleHintRule.ShouldShow(CoreSettings.Current.DashboardToggleHintUses);
             bool invert = CoreSettings.Current.DashboardInvertClicks;
             DashToggleHint.Text = Loc.Get(invert ? "dash_click_swapped" : "dash_toggle_hint");
             InvertDashboardClicks.IsChecked = invert;

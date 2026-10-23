@@ -346,7 +346,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             FavoritesPageDrawer?.SetOpen(false, animate: false);
             SettingsPage?.CloseClickChoice();
-            SettingsPage?.CloseFavoritesDrawerForPanic();
+            // Home's drawer is left alone: its open state is the user's saved choice (WPF too).
         }
 
         /// <summary>WPF WireFavoritePinMenus (:411): a pin menu on every rail row, door header and

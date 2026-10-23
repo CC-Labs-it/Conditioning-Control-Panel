@@ -219,8 +219,11 @@ public sealed class FavoritesRailFinishTests
         var chip = drawer.FindControl<StackPanel>("PageFavoritesList")!.Children.OfType<Button>().Single();
         Assert.Equal("tab.haptics", chip.Tag);
         Assert.NotNull(chip.ContextMenu);
+        var homeBody = shell.SettingsPage!.FavoritesDrawerBody;
+        shell.SettingsPage.SetFavoritesDrawer(true, animate: false); // Home's saved-open drawer
         PanicSurfaces.All.Single(s => s.Id == "favorites-drawers").Stop(shell);
         Assert.Equal(0, body.Width);
+        Assert.True(homeBody.Width > 0); // WPF panic leaves Home's persisted drawer alone
         shell.ShowTab("settings");
         Assert.False(drawer.IsVisible);
     });

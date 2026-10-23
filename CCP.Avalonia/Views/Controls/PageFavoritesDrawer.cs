@@ -126,9 +126,7 @@ public sealed class PageFavoritesDrawer : Grid
         bool lit = Handle.IsPointerOver || Handle.IsFocused;
         _face.Background = Tint(lit ? (byte)0x4D : (byte)0x26);
         _face.BorderBrush = Tint(lit ? (byte)0xFF : (byte)0x80);
-        double t = lit ? 0.55 : 0.18;
-        var ink = new SolidColorBrush(Color.FromRgb((byte)(_hue.R + (255 - _hue.R) * t),
-            (byte)(_hue.G + (255 - _hue.G) * t), (byte)(_hue.B + (255 - _hue.B) * t)));
+        var ink = new SolidColorBrush(Views.Tabs.SettingsTabView.Lighten(_hue, lit ? 0.55 : 0.18));
         _word.Foreground = _star.Foreground = _chevron.Foreground = ink;
     }
 

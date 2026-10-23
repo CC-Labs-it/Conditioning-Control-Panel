@@ -128,13 +128,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }, TimeSpan.FromMilliseconds(Math.Max(1, glowAfter)));
         }
 
-        internal void CloseFavoritesDrawerForPanic()
-        {
-            _drawerPeeking = false;
-            _drawerPeekTimer.Stop();
-            SetFavoritesDrawer(false, animate: false);
-        }
-
         internal void FavoritesDrawerPeekElapsed()
         {
             _drawerPeekTimer.Stop();
