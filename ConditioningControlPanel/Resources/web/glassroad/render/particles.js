@@ -462,6 +462,7 @@ export function createParticles(feel, art = currentArt()) {
     if (name === 'drift-boost') { mem.evBoost = true; miniTurbo(obj, p.tier | 0, mul); return true; }
     if (name === 'trick') { trick(obj, p.grade, mul); return true; }
     if (name === 'trick-land') { trickLand(obj, p.grade, mul); return true; }
+    if (name === 'go') { miniTurbo(obj, 2, mul); return true; }
     return false;
   }
 

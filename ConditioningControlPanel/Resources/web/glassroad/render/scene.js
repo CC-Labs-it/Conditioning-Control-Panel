@@ -229,6 +229,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     on('land', ({ tier = 0 }) => ['land', 0, tier]);
     // polish 4 drift and trick moments go to the particle layer with their payloads; the player's arrive bare
     for (const n of P4_EVENTS) on(n, (p) => ['p4', 0, n, p]);
+    // Go bursts at the player's own kart (the countdown card is the HUD half of it)
+    on('go', () => ['p4', 0, 'go', {}]);
     on('racer-event', ({ racer = -1, name, p = {} }) => (P4_EVENTS.has(name) ? ['p4', racer, name, p] : [name, racer, (p && p.tier) || 0]));
     on('bump', (p) => ['bump', p.a, p.dv || 0, p.p, p.b]);
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
@@ -242,6 +244,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       if (k && obj && obj.visible) {
         particles.event(obj, k.mem, a, p, { mul: i ? LOOK.botSparkMul : 1 });
         if (a === 'trick-land') wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[2], { gentle });
+        else if (a === 'go') wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[1], { gentle });
       }
       return;
     }
