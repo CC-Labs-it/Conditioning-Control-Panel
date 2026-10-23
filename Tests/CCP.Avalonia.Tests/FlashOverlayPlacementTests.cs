@@ -49,4 +49,19 @@ public sealed class FlashOverlayPlacementTests
         var second = FlashOverlay.Place(screen, 1.0, 400, 400, s, new Random(1), new[] { first });
         Assert.NotEqual(first.Position, second.Position);
     }
+
+    /// <summary>Main 4dcdb625f (FlashScaleRule): a named size wins; 0 (an AI flash_image that left the
+    /// field out) means the player's Image Scale, never a zero-size flash.</summary>
+    [Fact]
+    public void Place_ANamedSizeWins_AndZeroMeansThePlayersScale()
+    {
+        var s = new AppSettings { ImageScale = 50, FlashAvoidCenter = false };
+        var screen = new PixelRect(0, 0, 1920, 1080);
+        var players = FlashOverlay.Place(screen, 1.0, 400, 400, s, new Random(1), Enumerable.Empty<PixelRect>());
+        var zero = FlashOverlay.Place(screen, 1.0, 400, 400, s, new Random(1), Enumerable.Empty<PixelRect>(), size: 0);
+        var named = FlashOverlay.Place(screen, 1.0, 400, 400, s, new Random(1), Enumerable.Empty<PixelRect>(), size: 100);
+        Assert.Equal(players.Size, zero.Size);
+        Assert.Equal(new PixelSize(432, 432), named.Size);
+        Assert.NotEqual(players.Size, named.Size);
+    }
 }
