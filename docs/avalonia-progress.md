@@ -2673,3 +2673,9 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
 - Warden bark rules (`WardenRules`) and reactive consent/Start-Stop rules (`PossessionReactiveRules`) moved into CCP.Core; WPF head calls them, no private copies.
 - PossessionBarkRulesTests git-mv'd to CCP.Core.Tests (runs on Linux); 6 new pure-rule tests.
 - Review ACCEPT (54); P3 fix: run labels use WardenRules.Knock/Stare. rgate GATE-OK.
+
+## avalonia-port/wire-views-daily-quest-card: +239
+
+- Daily quest card gets WPF MotionFx motion: bar fill tween (0.6 s QuadOut, resize snaps), hover lift 1.02/150 ms, gold BoxShadow glow (blur 18, 0.5) fading out; MotionLevel.Off snaps and skips the glow.
+- Test: DailyQuestCardMotionTests (Full + Off, stepped clock), fail-proven. Ledger views-daily-quest-card: stub -> wired.
+- Not run: real-pointer desktop feel.
