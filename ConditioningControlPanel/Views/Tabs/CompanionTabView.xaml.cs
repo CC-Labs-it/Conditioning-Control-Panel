@@ -138,11 +138,14 @@ namespace ConditioningControlPanel.Views.Tabs
         internal Slider SliderIdleIntervalCompanion => _vm.Shelf.Behavior.SliderIdleIntervalCompanion;
         internal TextBlock TxtBubbleDurationCompanion => _vm.Shelf.Behavior.TxtBubbleDurationCompanion;
         internal Slider SliderBubbleDurationCompanion => _vm.Shelf.Behavior.SliderBubbleDurationCompanion;
+        internal TextBlock TxtVoiceLevelCompanion => _vm.Shelf.Behavior.TxtVoiceLevelCompanion;
+        internal Slider SliderVoiceLevelCompanion => _vm.Shelf.Behavior.SliderVoiceLevelCompanion;
         internal TextBlock TxtChatShortcutLabel => _vm.Shelf.Behavior.TxtChatShortcutLabel;
         internal TextBlock TxtCameraShortcutLabel => _vm.Shelf.Behavior.TxtCameraShortcutLabel;
         internal CheckBox ChkMuteWhispersCompanion => _vm.Shelf.Behavior.ChkMuteWhispersCompanion;
         internal CheckBox ChkPauseBrowserCompanion => _vm.Shelf.Behavior.ChkPauseBrowserCompanion;
         internal CheckBox ChkVoiceLinesCompanion => _vm.Shelf.Behavior.ChkVoiceLinesCompanion;
+        internal CheckBox ChkIdleVoiceEngineOffCompanion => _vm.Shelf.Behavior.ChkIdleVoiceEngineOffCompanion;
 
         // ---- Z8 · TRIGGERS & PHRASES ----
         internal CheckBox ChkTriggerModeCompanion => _vm.Shelf.Triggers.ChkTriggerModeCompanion;
