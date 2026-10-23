@@ -512,17 +512,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!AmbientFxCanvas.Env.AllowTransitions || Named<Ellipse>("ProfileBubbleGlowRing") is not { } ring) return;
             ring.Stroke = new ImmutableSolidColorBrush(ProfileBubbleGold);
-            _ = new Animation
-            {
-                Duration = TimeSpan.FromMilliseconds(1200),
-                Children =
-                {
-                    new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 0.0) } },
-                    new KeyFrame { Cue = new Cue(0.1), Setters = { new Setter(OpacityProperty, 1.0) } },
-                    new KeyFrame { Cue = new Cue(0.375), Setters = { new Setter(OpacityProperty, 1.0) } },
-                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(OpacityProperty, 0.0) } },
-                },
-            }.RunAsync(ring);
+            _ = CreateProfileBubbleGlowAnimation().RunAsync(ring);
         }
+
+        internal static Animation CreateProfileBubbleGlowAnimation() => new()
+        {
+            Duration = TimeSpan.FromMilliseconds(1200),
+            Children =
+            {
+                new KeyFrame { Cue = new Cue(0), Setters = { new Setter(OpacityProperty, 0.0) } },
+                new KeyFrame { Cue = new Cue(0.1), Setters = { new Setter(OpacityProperty, 1.0) } },
+                new KeyFrame { Cue = new Cue(0.375), Setters = { new Setter(OpacityProperty, 1.0) } },
+                // WPF eases only the 450-1200ms fade. This cubic is exactly 1 - (1 - t)^2.
+                new KeyFrame { Cue = new Cue(1), KeySpline = new KeySpline(1.0 / 3, 2.0 / 3, 2.0 / 3, 1),
+                    Setters = { new Setter(OpacityProperty, 0.0) } },
+            },
+        };
     }
 }

@@ -211,7 +211,10 @@ public sealed class ProfileBubbleParityTests : IDisposable
             time.Advance(TimeSpan.FromSeconds(0.105));
             BeatLoop.StepAll();
             Assert.Equal(-3, tilt.Angle, 3);
-            time.Advance(TimeSpan.FromSeconds(0.595));
+            time.Advance(TimeSpan.FromSeconds(0.5075));
+            BeatLoop.StepAll();
+            Assert.Equal(-12.527207793864215, tilt.Angle, 6); // WPF's final SineEase EaseOut
+            time.Advance(TimeSpan.FromSeconds(0.0875));
             BeatLoop.StepAll();
             Assert.Equal(-12, tilt.Angle, 3);
             // The 700 ms one-shot stops its own frame clock.

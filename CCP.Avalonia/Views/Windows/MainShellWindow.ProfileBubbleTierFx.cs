@@ -41,7 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     tilt.Angle = -12;
                     _profileTierBeat?.Stop();
                 }
-                else tilt.Angle = BeatLoop.Keys(seconds, ProfileTierWobbleKeys);
+                else tilt.Angle = ProfileTierWobbleAngle(seconds);
             });
             _profileTierTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(8) };
             _profileTierTimer.Tick += (_, _) => ProfileTierWobble();
@@ -67,6 +67,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _profileTierGrow = null;
                 HideProfileTierBig();
             };
+        }
+
+        internal static double ProfileTierWobbleAngle(double seconds)
+        {
+            if (seconds <= 0.525) return BeatLoop.Keys(seconds, ProfileTierWobbleKeys);
+            // WPF's final key alone uses SineEase EaseOut; earlier segments stay linear.
+            var progress = Math.Clamp((seconds - 0.525) / 0.175, 0, 1);
+            return -13.8 + 1.8 * Math.Sin(progress * Math.PI / 2);
         }
 
         private void SyncProfileTierMotion()
