@@ -173,6 +173,7 @@ namespace ConditioningControlPanel.Controls
 
                 var core = _web.CoreWebView2;
                 if (core == null) { Fail("WebView2 core was null after Ensure"); return; }
+                global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(core);
 
                 var s = core.Settings;
                 s.AreDevToolsEnabled = false;

@@ -8,7 +8,7 @@ import { setWheelFace } from './wheel-face.js';
  * backroom/room/main.js - boot, the Back button, visiting, and the ways out.
  *
  * Boot: subscribe, post `ready`, wait for `init`, read stations.json, build the
- * 3D room. The Back button and Escape are wired BEFORE any of that, so the room
+ * 3D room. The Back button is wired BEFORE any of that, so the room
  * can be left at every frame, including a boot that never finishes (Law VI).
  *
  * Visiting (E or the Visit prompt near a station): the room holds (pose kept,
@@ -16,13 +16,12 @@ import { setWheelFace } from './wheel-face.js';
  * dust-sheet card for a `soon` one.
  *
  * Leaving:
- *   Back / Escape with a station open  -> the station closes, the room resumes
+ *   Back with a station open          -> the station closes, the room resumes
  *                                         on the exact spot and facing.
  *   A tap on the room while seated, or a
  *   step back (S, down, the stick)      -> the same close, through the same Back.
- *   Back / Escape with the Stations list open -> the list closes.
- *   Escape with the mouse captured     -> the mouse is freed (pointer lock), nothing else.
- *   Back / Escape in the room          -> `exit`, then `exit-done` once settled.
+ *   Escape in the room                -> toggle Options, never leave.
+ *   Back in the room                  -> `exit`, then `exit-done` once settled.
  *   host `close` (app exit, panic)     -> settle inside 300 ms, `exit-done`.
  *
  * THE FLOOR BELL (CONTRACT 10.16.B). `GET bell/state` on room open and again
@@ -34,6 +33,7 @@ import { setWheelFace } from './wheel-face.js';
  * ==========================================================================*/
 
 import * as bridge from '../bridge.js';
+import { createHostEscape, HOST_ESCAPE } from '../shared/host-escape.js';
 import { prizeState } from '../shared/prize-state.js';
 import { normaliseStations } from './walk.js';
 import { createScene } from './scene.js';
@@ -46,6 +46,8 @@ import { quality } from '../shared/quality.js';
 import { spendFlight, clearSpendFlights } from './spend-flight.js';
 import { createBalanceFeedback } from './balance-feedback.js';
 const rewards = createRoomRewards();
+const hostEscape = createHostEscape();
+bridge.on(HOST_ESCAPE, () => hostEscape.kept());
 let doubleCharm = null, music = null;
 function applyRewards(body) { if (leaving) return; if (rewards.apply(body)) { scene?.setRewards(rewards.snapshot()); doubleCharm?.paint(); } }
 
@@ -427,14 +429,15 @@ function wireExits() {
   $('#br-back').addEventListener('click', () => back('back'));
   window.addEventListener('keydown', (e) => {
     if (scene?.documents.opened) return;
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || e.repeat) return;
     // The first-visit card is the top rung: Escape closes it and nothing else in the room hears the press.
     if (welcome?.dismiss()) { e.preventDefault(); return; }
     e.preventDefault();
-    // The Esc that frees a captured mouse (pointer lock) is only that: the browser may or may not hand us the key.
-    if (scene?.lookJustFreed?.()) return;
-    if (scene?.dismissEmi()) return;
-    back('key');
+    // A mounted station owns its keys. The room never turns Escape into Back.
+    if (loader?.current || visiting) return;
+    scene?.freeLook();
+    if (hud?.optionsOpen) hud.closeOptions();
+    else { hud?.closeStations(); hud?.openOptions(); }
   }, true);
   bridge.on('close', async () => {
     if (leaving) return;

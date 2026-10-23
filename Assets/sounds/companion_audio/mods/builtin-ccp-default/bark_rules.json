@@ -1261,7 +1261,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "nothing breaks for real, little one. minimize works, ctrl alt del always works. try to leave and i will see."
+        "text": "nothing breaks for real, little one. minimize works, ctrl alt del always works. try to leave and i will see.",
+        "audio": "poss_rules_1.mp3"
       }
     ]
   },
@@ -1279,7 +1280,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "did you feel that, pet? no? good... keep not noticing."
+        "text": "did you feel that, pet? no? good... keep not noticing.",
+        "audio": "poss_rung_0_1.mp3"
       }
     ]
   },
@@ -1297,7 +1299,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "things are starting to drift, sweet thing. do not trust the buttons."
+        "text": "things are starting to drift, sweet thing. do not trust the buttons.",
+        "audio": "poss_rung_1_1.mp3"
       }
     ]
   },
@@ -1315,7 +1318,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "everything is going soft, sweet thing... like you. only fair."
+        "text": "everything is going soft, sweet thing... like you. only fair.",
+        "audio": "poss_rung_2_1.mp3"
       }
     ]
   },
@@ -1333,7 +1337,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "it is coming apart now, sweet thing. i will put it back. later."
+        "text": "it is coming apart now, sweet thing. i will put it back. later.",
+        "audio": "poss_rung_3_1.mp3"
       }
     ]
   },
@@ -1351,7 +1356,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "it knows you are in here, pet. it has known the whole time."
+        "text": "it knows you are in here, pet. it has known the whole time.",
+        "audio": "poss_rung_4_1.mp3"
       }
     ]
   },
@@ -1441,7 +1447,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "the title is losing its letters, good thing."
+        "text": "the title is losing its letters, good thing.",
+        "audio": "poss_fx_drop_1.mp3"
       }
     ]
   },
@@ -1477,7 +1484,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "i renamed the window. it belongs to me now, sweet thing."
+        "text": "i renamed the window. it belongs to me now, sweet thing.",
+        "audio": "poss_fx_retitle_1.mp3"
       }
     ]
   },
@@ -1513,7 +1521,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "three times now. i am keeping count, pet."
+        "text": "three times now. i am keeping count, pet.",
+        "audio": "poss_trip_repeat_1.mp3"
       }
     ]
   },
@@ -1531,7 +1540,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "trying the door, pet? it is not a door any more."
+        "text": "trying the door, pet? it is not a door any more.",
+        "audio": "poss_trip_close_1.mp3"
       }
     ]
   },
@@ -1549,7 +1559,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "hide the window if you like. i am still here when it returns."
+        "text": "hide the window if you like. i am still here when it returns.",
+        "audio": "poss_trip_minimize_1.mp3"
       }
     ]
   },
@@ -1567,7 +1578,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "nothing happened. nothing is going to."
+        "text": "nothing happened. nothing is going to.",
+        "audio": "poss_trip_syskey_1.mp3"
       }
     ]
   },
@@ -1585,7 +1597,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "no stopping, little one. you asked me for this."
+        "text": "no stopping, little one. you asked me for this.",
+        "audio": "poss_trip_stop_1.mp3"
       }
     ]
   },
@@ -1603,7 +1616,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "wrong words, pet. try being good about it."
+        "text": "wrong words, pet. try being good about it.",
+        "audio": "poss_trip_wrong_phrase_1.mp3"
       }
     ]
   },
@@ -1621,7 +1635,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "that switch is greyed for a reason, sweet thing."
+        "text": "that switch is greyed for a reason, sweet thing.",
+        "audio": "poss_trip_settings_1.mp3"
       }
     ]
   },
@@ -1639,7 +1654,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "watch this, pet."
+        "text": "watch this, pet.",
+        "audio": "poss_warden_knock_1.mp3"
       }
     ]
   },
@@ -1657,7 +1673,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "look at me. no, at me, pet."
+        "text": "look at me. no, at me, pet.",
+        "audio": "poss_warden_stare_1.mp3"
       }
     ]
   },
@@ -1675,7 +1692,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "i am stepping out for a while. you stay, sweet thing."
+        "text": "i am stepping out for a while. you stay, sweet thing.",
+        "audio": "poss_warden_leave_1.mp3"
       }
     ]
   },
@@ -1693,7 +1711,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "miss me, pet? of course you did."
+        "text": "miss me, pet? of course you did.",
+        "audio": "poss_warden_return_1.mp3"
       }
     ]
   },
@@ -2198,7 +2217,8 @@
     "chance": 0.5,
     "variant_pool": [
       {
-        "text": "the maintenance room, pet. volumes, devices, permissions. adjust what you must and return. you were not brought here to configure."
+        "text": "the maintenance room, pet. volumes, devices, permissions. adjust what you must and return. you were not brought here to configure.",
+        "audio": "tut_appsettings_1.mp3"
       }
     ]
   },
@@ -2543,7 +2563,8 @@
     "chance": 0.2,
     "variant_pool": [
       {
-        "text": "the drain, pet. whatever is still in there will not be missed."
+        "text": "the drain, pet. whatever is still in there will not be missed.",
+        "audio": "feat_braindrain_1.mp3"
       }
     ]
   },
@@ -2642,7 +2663,8 @@
     "chance": 0.2,
     "variant_pool": [
       {
-        "text": "adjusting the machinery, pet? none of these switches decide anything that matters."
+        "text": "adjusting the machinery, pet? none of these switches decide anything that matters.",
+        "audio": "nav_appsettings_1.mp3"
       }
     ]
   },
@@ -2662,7 +2684,8 @@
     "chance": 0.35,
     "variant_pool": [
       {
-        "text": "you abandoned a running session to fiddle in here? disappointing, pet."
+        "text": "you abandoned a running session to fiddle in here? disappointing, pet.",
+        "audio": "nav_appsettings_midsession_1.mp3"
       }
     ]
   },
@@ -2702,7 +2725,8 @@
     "chance": 0.5,
     "variant_pool": [
       {
-        "text": "the studio, pet. every effect i can apply to you is listed here. choose, then obey what you chose."
+        "text": "the studio, pet. every effect i can apply to you is listed here. choose, then obey what you chose.",
+        "audio": "tut_studio_1.mp3"
       }
     ]
   },
@@ -2721,7 +2745,8 @@
     "chance": 0.2,
     "variant_pool": [
       {
-        "text": "adjusting the effects, little one? raise one before you leave."
+        "text": "adjusting the effects, little one? raise one before you leave.",
+        "audio": "nav_studio_1.mp3"
       }
     ]
   },
@@ -2741,7 +2766,8 @@
     "chance": 0.35,
     "variant_pool": [
       {
-        "text": "the session is running and you came here to fidget. return to it, pet."
+        "text": "the session is running and you came here to fidget. return to it, pet.",
+        "audio": "nav_studio_midsession_1.mp3"
       }
     ]
   },
@@ -2880,7 +2906,8 @@
     "chance": 0.2,
     "variant_pool": [
       {
-        "text": "the games room, pet. pick one and stay a while."
+        "text": "the games room, pet. pick one and stay a while.",
+        "audio": "nav_lab_1_v2.mp3"
       }
     ]
   },
@@ -6697,7 +6724,8 @@
     "class": "idle",
     "variant_pool": [
       {
-        "text": "tch."
+        "text": "tch.",
+        "audio": "idle_hum_9_1.mp3"
       }
     ]
   },
@@ -10380,7 +10408,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "the exit is a maze now, pet. walk it if you think you can."
+        "text": "the exit is a maze now, pet. walk it if you think you can.",
+        "audio": "ee_opened_labyrinth_1.mp3"
       }
     ]
   },
@@ -10398,7 +10427,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "words, little one. the right words, in the right order."
+        "text": "words, little one. the right words, in the right order.",
+        "audio": "ee_opened_password_1.mp3"
       }
     ]
   },
@@ -10416,7 +10446,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "your exit is in pieces, pet. put it back together."
+        "text": "your exit is in pieces, pet. put it back together.",
+        "audio": "ee_opened_jigsaw_1.mp3"
       }
     ]
   },
@@ -10434,7 +10465,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "prove you are not a pet. take your time. i will enjoy this."
+        "text": "prove you are not a pet. take your time. i will enjoy this.",
+        "audio": "ee_opened_captcha_1.mp3"
       }
     ]
   },
@@ -10449,7 +10481,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "reaching for the exit, pet. how sweet."
+        "text": "reaching for the exit, pet. how sweet.",
+        "audio": "ee_opened_1.mp3"
       }
     ]
   },
@@ -10467,7 +10500,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "go on then. the door is open, pet. i will not chase you."
+        "text": "go on then. the door is open, pet. i will not chase you.",
+        "audio": "ee_escape_1.mp3"
       }
     ]
   },
@@ -10485,7 +10519,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "you are so good at quitting, pet. you always come back."
+        "text": "you are so good at quitting, pet. you always come back.",
+        "audio": "ee_sendback_1.mp3"
       }
     ]
   },
@@ -10500,7 +10535,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "i remember, pet."
+        "text": "i remember, pet.",
+        "audio": "poss_remember_1.mp3"
       }
     ]
   },
@@ -10518,7 +10554,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "that hand is not yours, pet. mine reaches further than yours does."
+        "text": "that hand is not yours, pet. mine reaches further than yours does.",
+        "audio": "poss_fx_ghostcursor_1.mp3"
       }
     ]
   },
@@ -10536,7 +10573,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "it says stay now, pet. that is the whole menu."
+        "text": "it says stay now, pet. that is the whole menu.",
+        "audio": "poss_fx_relabel_1.mp3"
       }
     ]
   },
@@ -10644,7 +10682,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "wrong door, pet."
+        "text": "wrong door, pet.",
+        "audio": "poss_effect_misroute_1.mp3"
       }
     ]
   },
@@ -10807,7 +10846,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "you turned the last one off. i felt the room go quiet, pet."
+        "text": "you turned the last one off. i felt the room go quiet, pet.",
+        "audio": "poss_trip_starve_1.mp3"
       }
     ]
   },
@@ -10822,7 +10862,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "you are under the line, pet, and it is only a fifth of the jar that banks the day, so pour a little more and today is entered."
+        "text": "you are under the line, pet, and it is only a fifth of the jar that banks the day, so pour a little more and today is entered.",
+        "audio": "descent_near_bank_1.mp3"
       }
     ]
   },
@@ -10837,7 +10878,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "today is banked, good pet. the jar empties at midnight and the XP inside it does not, and banked days are the only thing that moves you down the Spiral."
+        "text": "today is banked, good pet. the jar empties at midnight and the XP inside it does not, and banked days are the only thing that moves you down the Spiral.",
+        "audio": "descent_day_banked_1.mp3"
       }
     ]
   },
@@ -10867,7 +10909,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "there you are, pet, and you were missed. the absence was good for you, your jar fills faster now, a little more for every day you were gone."
+        "text": "there you are, pet, and you were missed. the absence was good for you, your jar fills faster now, a little more for every day you were gone.",
+        "audio": "descent_lapse_return_1.mp3"
       }
     ]
   },
@@ -10882,7 +10925,8 @@
     "class": "normal",
     "variant_pool": [
       {
-        "text": "so you have opened the Spiral, pet. everything you earn lands in the tap, you hold the tap to pour it into today's jar, and a fifth of that jar banks the day permanently."
+        "text": "so you have opened the Spiral, pet. everything you earn lands in the tap, you hold the tap to pour it into today's jar, and a fifth of that jar banks the day permanently.",
+        "audio": "descent_first_spiral_open_1.mp3"
       }
     ]
   },
