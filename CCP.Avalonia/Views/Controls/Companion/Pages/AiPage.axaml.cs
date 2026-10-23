@@ -28,6 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages
         /// <summary>WPF AiPage.OnShown, through ShowTab("companionai") -> OnTabShown.</summary>
         internal void OnShown(CompanionRoomView? room)
         {
+            // WPF AiPage.OnShown: a fresh name editor + recap on every show (the account may have changed).
+            App.Brain?.EnsureCurrentAccount();
+            NameHost.Content = new V2.PreferredNameEditor();
+            RecapHost.Content = new V2.ConversationRecap();
             if (room is null || _giveBack.Count > 0) return;
             var workshop = room.FindControl<WorkshopAccordion>("WorkshopZone")?.DataContext as WorkshopRuntimeVm;
             if (room.FindControl<EngineRoomDrawer>("EngineZone") is { } engine)

@@ -27,8 +27,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The WPF code-behind is a pure relay: every handler is
     /// <c>if (Window.GetWindow(this) is MainWindow mw) mw.&lt;same name&gt;(...)</c>, plus the
     /// mod-aware feature art and the FX lifecycle hook. Library rows, the welcome card, player,
-    /// folder and catalogue relay to MainShellWindow.DeeperHub.cs; import, tutorial and the webcam
-    /// card are still stubs (see docs/avalonia-parity.md). The FEATURE ART is real: Helpers.ModArt.TryLoad plus CoreMods.ModChanged is the same
+    /// folder and catalogue relay to MainShellWindow.DeeperHub.cs; the webcam card shares Blink
+    /// Trainer handlers as WPF does. Import and tutorial are still stubs (see docs/avalonia-parity.md). The FEATURE ART is real: Helpers.ModArt.TryLoad plus CoreMods.ModChanged is the same
     /// answer WPF's ModResourceResolver gives, and Assets/features/deeper.png is linked here.
     /// </summary>
     public partial class DeeperTabView : UserControl
@@ -50,6 +50,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
             RefreshWebcamStatus();
             CoreMods.ModChanged += OnModChanged;
+            CoreSettings.Current.PropertyChanged += OnWebcamSettingsChanged;
+            Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamColumn;
+            RefreshWebcamColumn();
             ApplyFeatureArt();
             if (Owner is { } shell) shell.InitializeDeeperHub();
             else ViewModel?.ReloadLibrary();
@@ -59,6 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             CoreMods.ModChanged -= OnModChanged;
+            CoreSettings.Current.PropertyChanged -= OnWebcamSettingsChanged;
+            Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamColumn;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -167,15 +172,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BtnDeeperOpenPlayer_Click(object? sender, RoutedEventArgs e) => Owner?.BtnDeeperOpenPlayer_Click();
         // ponytail: StartTutorial(TutorialType.Deeper) - no TutorialService on this head.
         private void BtnDeeperTutorial_Click(object? sender, RoutedEventArgs e) { }
-        private void BtnDeeperWebcamCalibrate_Click(object? sender, RoutedEventArgs e) { }
-        private void BtnDeeperWebcamManageConsent_Click(object? sender, RoutedEventArgs e) { }
-        private void BtnDeeperWebcamQuickRecal_Click(object? sender, RoutedEventArgs e) { }
-        private void BtnDeeperWebcamRevokeConsent_Click(object? sender, RoutedEventArgs e) { }
-        private void BtnDeeperWebcamStartStopTracker_Click(object? sender, RoutedEventArgs e) { }
+        // WPF MainWindow.BlinkTrainer.cs:1410: both setup cards use the same handlers.
+        private BlinkTrainerTabView? WebcamActions => Owner?.Named<BlinkTrainerTabView>("BlinkTrainerTab");
+        private void BtnDeeperWebcamCalibrate_Click(object? sender, RoutedEventArgs e)
+            => WebcamActions?.BtnBlinkTrainerCalibrate_Click(sender, e);
+        private void BtnDeeperWebcamManageConsent_Click(object? sender, RoutedEventArgs e)
+            => WebcamActions?.BtnBlinkTrainerManageConsent_Click(sender, e);
+        private void BtnDeeperWebcamQuickRecal_Click(object? sender, RoutedEventArgs e)
+            => WebcamActions?.BtnBlinkTrainerQuickRecal_Click(sender, e);
+        private void BtnDeeperWebcamRevokeConsent_Click(object? sender, RoutedEventArgs e)
+            => WebcamActions?.BtnBlinkTrainerRevokeConsent_Click(sender, e);
+        private void BtnDeeperWebcamStartStopTracker_Click(object? sender, RoutedEventArgs e)
+            => WebcamActions?.BtnBlinkTrainerStartStopTracker_Click(sender, e);
+
+        private void OnWebcamSettingsChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            // One revoke sets ~6 Webcam* settings; coalesce them into a single refresh.
+            if (e.PropertyName?.StartsWith("Webcam", StringComparison.Ordinal) == true && !_webcamRefreshQueued)
+            {
+                _webcamRefreshQueued = true;
+                Dispatcher.UIThread.Post(() => { _webcamRefreshQueued = false; RefreshWebcamColumn(); });
+            }
+        }
+        private bool _webcamRefreshQueued;
+
+        internal void RefreshWebcamColumn()
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(RefreshWebcamColumn); return; }
+            ViewModel?.RefreshWebcam();
+            bool consented = Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current);
+            DeeperWebcamConsentCard.Background = new SolidColorBrush(Color.Parse(consented ? "#1A4ADE80" : "#1AFFD080"));
+            DeeperWebcamConsentCard.BorderBrush = new SolidColorBrush(Color.Parse(consented ? "#4ADE80" : "#FFD080"));
+            BtnDeeperWebcamStartStopTracker.Content = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracker" : "Start tracker";
+        }
         private void BtnDeeperWelcomeDismiss_Click(object? sender, RoutedEventArgs e) => Owner?.DismissDeeperWelcomeCard();
         private void BtnDeeperWelcomeDemo_Click(object? sender, RoutedEventArgs e) => Owner?.BtnDeeperWelcomeDemo_Click();
         private void BtnDeeperWelcomeTour_Click(object? sender, RoutedEventArgs e) => Owner?.BtnDeeperWelcomeTour_Click();
-        private void BtnOpenDeviceSettings_Click(object? sender, RoutedEventArgs e) { }
+        private void BtnOpenDeviceSettings_Click(object? sender, RoutedEventArgs e)
+            => Owner?.OpenAppSettingsSection("devices");
 
         private void DeeperPillAll_Click(object? sender, RoutedEventArgs e)
         {
@@ -531,11 +565,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             foreach (var name in names) PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
         }
 
-        private bool Consented => true;
+        private bool Consented => Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current);
+        internal void RefreshWebcam() => Notify(nameof(ConsentStatusText), nameof(ConsentButtonText), nameof(ShowRevokeConsent), nameof(CalibrationStatusText));
         public string ConsentStatusText => Loc.Get(Consented ? "blink_trainer_consent_granted" : "blink_trainer_consent_required");
         public string ConsentButtonText => Loc.Get(Consented ? "blink_trainer_consent_manage" : "blink_trainer_consent_grant");
         public bool ShowRevokeConsent => Consented;
-        public string CalibrationStatusText => Loc.Get("blink_trainer_calibration_none");
+        public string CalibrationStatusText
+        {
+            get
+            {
+                var cal = Platform.WebcamTracker.Instance.Calibration;
+                return cal?.MonitorBounds?.DeviceName is { Length: > 0 } device
+                    ? Loc.GetF("blink_trainer_calibration_calibrated_format", device)
+                    : Loc.Get(cal == null ? "blink_trainer_calibration_none" : "blink_trainer_calibration_outdated");
+            }
+        }
     }
 
     /// <summary>

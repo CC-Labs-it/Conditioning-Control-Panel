@@ -171,6 +171,19 @@ public static class LandingRules
         _ => false,
     };
 
+    /// <summary>The small word a good send leaves where the player is looking (WPF FriendsLanding.SentBeat):
+    /// the loc key and its English fallback.</summary>
+    public static (string Key, string English) SentWord(SendKind kind) => kind switch
+    {
+        SendKind.Invite => ("friends_land_knock_sent", "knock sent"),
+        SendKind.Watch => ("friends_land_watch_sent", "watch sent"),
+        _ => ("friends_land_poke_sent", "sent"),
+    };
+
+    /// <summary>A landed poke's Emi line and floating word (WPF FriendsLanding.Sink.Poke): only with the
+    /// bell on, and never while a game window has the screen (there it is a toast only).</summary>
+    public static bool PokeThrowsWord(bool noticesOn, bool overGame) => noticesOn && !overGame;
+
     /// <summary>The face Emi reacts with. Every value is a face EmiChains knows.</summary>
     public static string PokeFace(string? pokeId) => pokeId switch
     {
@@ -228,6 +241,8 @@ public static class LandingRules
                 InviteDestination.Goon => "features/goon_game_tile.png",
                 InviteDestination.Ramp => "features/Phrase_Lock.png",
                 InviteDestination.Chess => "features/piecebypiece.png",
+                InviteDestination.Race => "features/race.png",
+                InviteDestination.Breakout => "features/breakout.png",
                 _ => "features/backroom.png",
             };
         return item.Watch?.Kind == WatchKind.Flavour ? "features/backroom.png" : "features/deeper.png";
