@@ -90,8 +90,7 @@ public class LockdownService : IDisposable
         get
         {
             if (!_isActive || _duration <= TimeSpan.Zero) return 0;
-            var f = (UtcNow() - _activatedAt).TotalSeconds / _duration.TotalSeconds;
-            return f < 0 ? 0 : f > 1 ? 1 : f;
+            return LockdownExitRule.ElapsedFraction(_activatedAt, _duration, UtcNow());
         }
     }
 
@@ -140,9 +139,7 @@ public class LockdownService : IDisposable
         get
         {
             if (!_isActive) return TimeSpan.Zero;
-            var elapsed = UtcNow() - _activatedAt;
-            var remaining = _duration - elapsed;
-            return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+            return LockdownExitRule.Remaining(_activatedAt, _duration, UtcNow());
         }
     }
 
@@ -248,9 +245,20 @@ public class LockdownService : IDisposable
         {
             if (!File.Exists(RecoveryFilePath)) return;
 
-            var json = File.ReadAllText(RecoveryFilePath);
-            var state = JsonConvert.DeserializeObject<RecoveryState>(json);
-            if (state != null)
+            RecoveryState? state;
+            try { state = JsonConvert.DeserializeObject<RecoveryState>(File.ReadAllText(RecoveryFilePath)); }
+            catch (Exception ex)
+            {
+                Log.Warning("Lockdown recovery file unreadable: {Error}", ex.Message);
+                state = null;
+            }
+            // An empty or broken file (a kill mid-write) still means a lockdown was interrupted, and
+            // the settings on disk may carry its panic-off. Fail OPEN (WPF 605c451ae): panic on, strict off.
+            if (state == null)
+            {
+                var (strict, panic) = LockdownExitRule.UnreadableRecovery;
+                state = new RecoveryState { StrictLockEnabled = strict, PanicKeyEnabled = panic };
+            }
             {
                 CoreSettings.Current.StrictLockEnabled = state.StrictLockEnabled;
                 CoreSettings.Current.PanicKeyEnabled = state.PanicKeyEnabled;
@@ -294,7 +302,11 @@ public class LockdownService : IDisposable
                 StrictLockEnabled = strictLock,
                 PanicKeyEnabled = panicKey
             });
-            File.WriteAllText(RecoveryFilePath, json);
+            // Temp file + move: a kill between File.WriteAllText's truncate and its write left an
+            // EMPTY recovery file, which the next launch could not read.
+            var tmp = RecoveryFilePath + ".tmp";
+            File.WriteAllText(tmp, json);
+            File.Move(tmp, RecoveryFilePath, overwrite: true);
         }
         catch (Exception ex)
         {
@@ -351,7 +363,7 @@ public class LockdownService : IDisposable
     {
         if (!_isActive) return false;
 
-        if (string.Equals(phrase?.Trim(), "let me out", StringComparison.OrdinalIgnoreCase))
+        if (LockdownExitRule.PhraseMatches(phrase))
         {
             Log.Information("Lockdown deactivated via secret exit phrase");
             Deactivate();
