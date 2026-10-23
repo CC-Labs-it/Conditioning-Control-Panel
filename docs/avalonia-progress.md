@@ -2755,3 +2755,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 
 ## avalonia-port/wire-dialogs-mod-picker: +196
 - Mod picker catalogue cards keep their shipped art; Download/close/retry/upgrader paths covered by real-click tests (row stays stub: WPF has no caller).
+
+## avalonia-port/wire-views-tab-awareness: +227
+- Awareness app-scope list commits on Enter/blur through the shared Core AwarenessAppScopeRules and persists; WPF delegates to the same rules.
+- Editor test is deterministic and fail-proven; ledger numbers corrected with a stored green log.
