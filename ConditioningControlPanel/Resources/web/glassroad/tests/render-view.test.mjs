@@ -18,16 +18,22 @@ test('view: the chase camera sits closer and lower than polish 5', () => {
   assert.ok(cam.eyeUpM > 1.2 && cam.eyeBackM > 3.4, 'still a chase view, never inside the kart');
 });
 
-test('view: the kart is smaller against the world and holds its size on screen', () => {
+// polish 6 (camera 1.5 up / 4.1 back / look 9 ahead 0.3 up, racers at 0.68): EMI read too small in the lap
+const P6 = { cam: { eyeUpM: 1.5, eyeBackM: 4.1, lookAheadM: 9, lookUpM: 0.3 }, scale: 0.68 };
+
+test('view: racers read larger than polish 6, still smaller against the world than polish 5', () => {
   const was = chaseFraming(BEFORE, 60, ASPECTS.desk, { scale: 1 });
+  const p6 = chaseFraming(P6.cam, 60, ASPECTS.desk, { scale: P6.scale });
   const now = chaseFraming(cam, feel.get('fov.baseVDeg'), ASPECTS.desk);
-  // world scale: the kart shrank more than the camera came in, relative to road and props
+  // owner 2026-10-23 follow-up: racers slightly larger (about 0.8), the chase eye 10-15% closer than polish 6
   const worldGain = BEFORE.eyeBackM / cam.eyeBackM;
-  assert.ok(KART_VIEW.scale < 0.85 && KART_VIEW.scale >= 0.6, 'a clear shrink that keeps the rider readable');
+  assert.ok(KART_VIEW.scale >= 0.75 && KART_VIEW.scale <= 0.85, 'slightly larger than polish 6, still under polish 5');
   assert.ok(KART_VIEW.scale / worldGain < 0.6, 'kart against the world');
-  // on screen: about the same width (never more than 15% larger), lower in frame, under the horizon
-  assert.ok(now.kartW <= was.kartW * 1.15 && now.kartW >= was.kartW * 0.8, 'width ' + now.kartW + ' vs ' + was.kartW);
-  assert.ok(now.kartY > was.kartY, 'lower in frame');
+  const dist = Math.hypot(cam.eyeUpM, cam.eyeBackM) / Math.hypot(P6.cam.eyeUpM, P6.cam.eyeBackM);
+  assert.ok(dist >= 0.85 && dist <= 0.9, 'eye 10-15% closer than polish 6: ' + dist);
+  // on screen: wider than polish 6 and polish 5, centre a little below the middle (about 60% down), road ahead in view
+  assert.ok(now.kartW > p6.kartW * 1.2 && now.kartW > was.kartW, 'width ' + now.kartW + ' vs ' + p6.kartW);
+  assert.ok(now.kartY > 0.57 && now.kartY < 0.63, 'centre ' + now.kartY);
   assert.ok(now.horizonY < now.kartY - 0.15, 'road ahead between horizon and kart');
 });
 

@@ -190,10 +190,10 @@ take-off, on a pad up to padLateS after entering it, or on the ground up to earl
 - `respawn.pullWhite` 0.6: how far the pull fades toward white (Gentle rules apply).
 
 ## camera
-- `camera.eyeUpM` 1.5 (polish 6, was 2.2): eye height above the kart.
-- `camera.eyeBackM` 4.1 (polish 6, was 6.5): eye distance behind the kart.
+- `camera.eyeUpM` 1.32 (preview gaps 2026-10-23; polish 6 1.5, was 2.2): eye height above the kart.
+- `camera.eyeBackM` 3.6 (preview gaps 2026-10-23, racers 0.8; polish 6 4.1, was 6.5): eye distance behind the kart.
 - `camera.lookAheadM` 9 (polish 6, was 8): look point ahead of the kart.
-- `camera.lookUpM` 0.3 (polish 6, was 0.6): look point above kart height.
+- `camera.lookUpM` 0.05 (preview gaps 2026-10-23, racer about 60% down; polish 6 0.3, was 0.6): look point above kart height.
 - `camera.followHTcS` 0.08: horizontal follow time constant.
 - `camera.followVTcS` 0.25: vertical follow time constant.
 - `camera.followHopTcS` 0.6: both follow constants (and the heading follow) during a low-speed hop.
@@ -411,8 +411,8 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `ai.cornerMargin` 0.9: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
 
 ## contact (B1 kart contact and slipstream, sim/contact.js)
-- `contact.radiusM` 0.54 (polish 6, follows the 0.68 kart scale; was 0.8): kart contact radius (two karts touch under 2x this).
-- `contact.maxHeightM` 1.05 (polish 6, was 1.5): karts further apart than this along the road normal never touch.
+- `contact.radiusM` 0.6 (preview gaps 2026-10-23, follows the 0.8 kart scale; polish 6 0.54, was 0.8): kart contact radius (two karts touch under 2x this).
+- `contact.maxHeightM` 1.2 (preview gaps 2026-10-23; polish 6 1.05, was 1.5): karts further apart than this along the road normal never touch.
 - `contact.pushMps` 3.5: least sideways speed a touch gives.
 - `contact.pushPerDv` 0.5: extra sideways speed per m/s of closing speed.
 - `contact.maxPushMps` 7: cap on the sideways speed of one bump.

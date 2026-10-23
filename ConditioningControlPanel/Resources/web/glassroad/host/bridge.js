@@ -22,10 +22,28 @@ export function defaultInit({ search = '', coarse = false } = {}) {
     caps: {
       platform: 'web', net: false, relayBase: null, texturableRemote: false, gamepad: true, touch: !!coarse,
       forceRenderer: r === 'webgl2' || r === 'webgpu' ? r : null,
-      hostSfx: false, trackPick: false, canSurface: false, mediaControls: false,
+      hostSfx: false, trackPick: false, canSurface: false, mediaControls: false, songs: [],
     },
     identity: null,
   };
+}
+
+/** A host song chart url: same origin, a plain path to a .json file (CONTRACT section 7, caps.songs). */
+export const SONG_URL = /^\/[A-Za-z0-9/_.-]+\.json$/;
+const DEV_SONGS = Object.freeze(['/private-audio/pink-road/chart.json', '/private-audio/pink-road/chart.v0.json']);
+
+/**
+ * The race song charts to try, in order: `?chart=0` none, `?chart=<url>` that one, the dev host (8790) its
+ * private list, else the host's `caps.songs` (each checked against SONG_URL, at most 8), else none.
+ */
+export function songCharts({ search = '', devHost = false, songs = null } = {}) {
+  const q = new URLSearchParams(search);
+  const c = q.get('chart');
+  if (c === '0') return [];
+  if (c) return [c];
+  if (devHost) return [...DEV_SONGS];
+  if (!Array.isArray(songs)) return [];
+  return songs.filter((u) => typeof u === 'string' && !u.includes('..') && !u.startsWith('//') && SONG_URL.test(u)).slice(0, 8);
 }
 
 /** A host init laid over the defaults (missing fields keep their default). */

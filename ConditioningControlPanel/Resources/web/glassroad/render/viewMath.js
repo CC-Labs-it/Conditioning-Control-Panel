@@ -10,6 +10,11 @@
  * The near cues (render/nearDressing.js): lamp posts just outside a railed edge, a banner on every other
  * post, streaming past the kart at a steady rhythm. They give the eye speed and a human scale next to the
  * road. Static scenery: nothing flashes or pulses, fog fades them with distance.
+ *
+ * Owner follow-up (2026-10-23, preview gaps): EMI read too small in the polish 6 lap. Racers 0.68 -> 0.8 and the
+ * chase eye about 12% closer (1.5 up / 4.1 back -> 1.32 / 3.6, look 0.3 -> 0.05 up so the racer sits a little
+ * below the middle, about 60% down). This supersedes the polish 6 preference for smaller racers.
+ * Collision follows again: contact.radiusM 0.6, contact.maxHeightM 1.2, sim/gaps.js kart.radiusM 0.58.
  */
 import { vFovForAspect } from './cameraMath.js';
 import { SPECTRUM_BASE, sectionKey } from './spectrum.js';
@@ -21,7 +26,7 @@ import { onLoop } from './colossiMath.js';
  * keepSprites: the name tag and head mark keep their world size (they are read at range), only their height
  * follows the kart.
  */
-export const KART_VIEW = Object.freeze({ scale: 0.68, modelRadiusM: 0.75, modelUpM: 0.62, keepSprites: true });
+export const KART_VIEW = Object.freeze({ scale: 0.8, modelRadiusM: 0.75, modelUpM: 0.62, keepSprites: true });
 
 /** Collision radius that matches a visual radius change: the old radius times the scale, rounded to cm. */
 export const scaledRadius = (radiusM, scale = KART_VIEW.scale) => Math.round(radiusM * scale * 100) / 100;

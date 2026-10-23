@@ -221,10 +221,14 @@ export function createBridge({ win = window } = {}) /* -> Bridge */
 ```
 `Init`: `{ v: 2, gentle: { on, fadeMs, riseMs, speed }, caps: { platform: 'desktop'|'web'|'phone', net,
 relayBase, texturableRemote, gamepad, touch, forceRenderer: 'webgpu'|'webgl2'|null, hostSfx, trackPick,
-canSurface, mediaControls }, identity: { unifiedId, displayName, tier } | null }`.
+canSurface, mediaControls, songs }, identity: { unifiedId, displayName, tier } | null }`.
+`caps.songs`: same-origin race song chart urls, each a plain path to a .json file (`host/bridge.js` SONG_URL, no
+`..`, at most 8), tried in order until one loads. Web sends `['/glassroad-audio/pink-road/chart.json']`, desktop `[]`
+(the private song never ships in the public repo or the installer). Absent or empty = no song. `?chart=<url>` /
+`?chart=0` and the dev host (8790, its `/private-audio/` list) win over it (`songCharts`).
 Browser defaults (unhosted): `gentle.on` from `?gentle=1`, fadeMs 600, riseMs 300, speed 0.5;
 caps platform 'web', net false, relayBase null, texturableRemote false, gamepad true, touch from
-`(pointer: coarse)`, forceRenderer from `?renderer=webgl2|webgpu` else null, the rest false; identity null.
+`(pointer: coarse)`, forceRenderer from `?renderer=webgl2|webgpu` else null, songs `[]`, the rest false; identity null.
 Host -> page used in A: `init`, `pause {on}`, `kept-escape`, `gentle {...}`, `focus`, `ping`.
 Page -> host in A: `ready`, `heartbeat`, `pong`, `run-started`, `run-ended { timeS, laps }`, `telemetry`.
 Escape only pauses; the page never sends `exit` on Escape.

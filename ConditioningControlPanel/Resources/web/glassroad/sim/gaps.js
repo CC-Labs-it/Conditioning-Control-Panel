@@ -4,7 +4,7 @@
  * Each default is a slice starting point, reported to the integrator as a contract gap.
  */
 const GAPS = {
-  'kart.radiusM': 0.5,        // saucer radius: rail contact distance (polish 6: the kart is drawn at 0.68, saucer ~0.51 m)
+  'kart.radiusM': 0.58,       // saucer radius: rail contact distance (preview gaps: the kart is drawn at 0.8, saucer ~0.6 m)
   'kart.gripTcS': 0.05,       // lateral velocity bleeds into the heading with this time constant (grip turn)
   'kart.alignTcS': 0.08,      // kart up slerps to the road normal with this time constant
   'kart.snapM': 0.35,         // a grounded kart sticks to the road within this height (crests, sags)
