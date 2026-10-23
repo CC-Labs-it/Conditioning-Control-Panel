@@ -98,4 +98,65 @@ public sealed class SessionRunWireTests
             return Task.CompletedTask;
         });
     }
+
+    private sealed class NoVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, System.Action then) { }
+    }
+
+    /// <summary>WPF MainWindow.CompanionAsks.cs: the companion's Session cards list the Sessions page's
+    /// startable library and refuse while a session runs; WPF MainWindow.Presets.cs:1781: a clip that
+    /// started after the session ended makes the recap passive (not topmost, non-modal).</summary>
+    [Fact]
+    public async Task CompanionCardsOfferTheLibrary_RecapGoesPassiveOverAPlayingVideo()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<AvApp>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var shell = new MainShellWindow();
+            shell.Show();
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            runner.SessionLog.LogReady += shell.OnSessionLogReady;
+            var previousVideo = CoreEngine.Video;
+            var video = new MandatoryVideoScheduler(new NoVideoHost(), library: () => new[] { "a.mp4" });
+            try
+            {
+                var options = shell.CompanionSessionOptions();
+                var library = shell.Named<PresetsTabView>("PresetsTab")!.AvailableSessions;
+                Assert.NotEmpty(options);
+                Assert.Equal(library.Where(s => s.IsAvailable).Select(s => s.Id), options.Select(o => o.Id));
+                Assert.All(options, o => Assert.True(o.Allowed()));
+
+                var session = new Session { Id = "wire_video", Name = "Wire Video", Icon = "🧪", DurationMinutes = 1 };
+                shell.StartSession(session);
+                Assert.All(options, o => Assert.False(o.Allowed()));   // a session runs
+
+                CoreEngine.Video = video;
+                runner.Stop(completed: true);
+                Assert.True(video.Trigger(path: "a.mp4"));   // a new clip, before the recap posts
+                Dispatcher.UIThread.RunJobs();
+                var recap = Assert.Single(shell.OwnedWindows.OfType<SessionCompleteWindow>());
+                Assert.False(recap.Topmost);
+                Assert.False(recap.ShowActivated);
+                recap.Close();
+            }
+            finally
+            {
+                runner.Stop();
+                video.ForceCleanup();
+                CoreEngine.Video = previousVideo;
+                CoreSession.IsSessionRunningProvider = null;
+                AvApp.Sessions = null;
+                CoreEngine.Stop();
+                shell.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

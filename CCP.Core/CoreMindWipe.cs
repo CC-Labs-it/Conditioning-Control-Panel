@@ -62,6 +62,14 @@ namespace ConditioningControlPanel
         {
             try { StartProvider?.Invoke(frequencyPerHour, volume); } catch { }
         }
+        /// <summary>Start in session mode (base plays per five-minute block, 0..1 volume): WPF
+        /// MindWipeService.Volume + StartSession (MindWipeSchedule.SessionProbability). A no-op on a running service.</summary>
+        public static volatile Action<int, double>? StartSessionProvider;
+
+        public static void StartSession(int baseFrequency, double volume)
+        {
+            try { StartSessionProvider?.Invoke(baseFrequency, volume); } catch { }
+        }
         public static void Stop() { try { StopProvider?.Invoke(); } catch { } }
         public static bool IsRunning
         {

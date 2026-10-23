@@ -373,6 +373,69 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.Equal(25, _runner.PinkOpacity!.Value, 2);
     }
 
+    private sealed class NoVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
+    }
+
+    /// <summary>WPF SessionEngine.cs:211-227 (escalating Mind Wipe), :1386 (duck level), :1514-1535 (videos),
+    /// :525/:528 (pause stops both) and :572/:577 (resume restarts them; Mind Wipe in normal mode).</summary>
+    [Fact]
+    public void VideosMindWipeAndDucking_FollowTheSession_ThroughPauseAndResume()
+    {
+        var calls = new System.Collections.Generic.List<(string Kind, double A, double B)>();
+        var (start, startSession, stop) = (CoreMindWipe.StartProvider, CoreMindWipe.StartSessionProvider, CoreMindWipe.StopProvider);
+        var previousVideo = CoreEngine.Video;
+        var video = new MandatoryVideoScheduler(new NoVideoHost());
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel);
+        try
+        {
+            CoreEngine.Video = video;
+            CoreMindWipe.StartProvider = (f, v) => calls.Add(("start", f, v));
+            CoreMindWipe.StartSessionProvider = (b, v) => calls.Add(("session", b, v));
+            CoreMindWipe.StopProvider = () => calls.Add(("stop", 0, 0));
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = (false, 3, false, 10);
+            var session = OneMinute();
+            session.DurationMinutes = 3;
+            var ss = session.Settings;
+            (ss.MandatoryVideosEnabled, ss.VideosPerHour, ss.MandatoryVideosStartMinute) = (true, 9, 1);
+            (ss.MindWipeEnabled, ss.MindWipeStartMinute, ss.MindWipeBaseMultiplier, ss.MindWipeVolume) = (true, 1, 2, 40);
+            ss.AudioDuckLevel = 55;
+
+            _runner.Start(session);
+            Assert.Equal((true, 9, true, 55), (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+            Assert.False(video.IsRunning);                              // minute 1: deferred
+            Assert.DoesNotContain(calls, c => c.Kind == "session");
+
+            _runner.Tick(TimeSpan.FromSeconds(60));
+            Assert.True(video.IsRunning);
+            Assert.Equal(("session", 2.0, 0.4), calls[^1]);
+
+            _runner.Pause();
+            Assert.False(video.IsRunning);
+            Assert.Equal("stop", calls[^1].Kind);
+
+            _runner.Resume();
+            Assert.True(video.IsRunning);
+            Assert.Equal(("start", 2.0, 0.4), calls[^1]);
+
+            _runner.Stop();
+            Assert.False(video.IsRunning);
+            Assert.Equal((false, 3, false, 10), (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel));
+        }
+        finally
+        {
+            _runner.Stop();
+            video.Stop();
+            CoreEngine.Video = previousVideo;
+            (CoreMindWipe.StartProvider, CoreMindWipe.StartSessionProvider, CoreMindWipe.StopProvider) = (start, startSession, stop);
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.AudioDuckingEnabled, s.DuckingLevel) = saved;
+        }
+    }
+
     private static string Fixture([CallerFilePath] string here = "") =>
         Path.Combine(Path.GetDirectoryName(here)!, "Fixtures", "session_log_runner_wpf.json");
 }

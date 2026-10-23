@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls.Billboard;
@@ -16,6 +17,8 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Billboard;
 using ConditioningControlPanel.Services.Billboard.Providers;
 using ConditioningControlPanel.Services.Billboard.Showcase;
+using ConditioningControlPanel.Services.Companion.Asks;
+using Session = ConditioningControlPanel.Models.Session;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -127,6 +130,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (session is not { IsAvailable: true }) return false;
             BtnStartSession_Click(session);
             return true;
+        }
+
+        /// <summary>WPF MainWindow.CompanionSessionOptions (MainWindow.CompanionAsks.cs:22): sessions the
+        /// user can start now; access is asked again at click time.</summary>
+        internal IReadOnlyList<AskOption> CompanionSessionOptions()
+        {
+            try
+            {
+                IEnumerable<Session> Pool() => (Named<Tabs.PresetsTabView>("PresetsTab")?.AvailableSessions ?? Array.Empty<Session>())
+                    .Where(s => s != null && s.IsAvailable && !string.IsNullOrEmpty(s.Id));
+                return Pool().Select(s =>
+                {
+                    var id = s.Id;
+                    return new AskOption(id, s.GetModeAwareName(), () => App.Sessions?.IsRunning != true && Pool().Any(x => x.Id == id));
+                }).ToArray();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Companion session options failed: {E}", ex.Message);
+                return Array.Empty<AskOption>();
+            }
         }
 
         /// <summary>The motion gate or the tab's visibility changed: the board re-reads its gates.</summary>

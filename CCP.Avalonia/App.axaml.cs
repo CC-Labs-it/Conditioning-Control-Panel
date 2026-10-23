@@ -197,9 +197,9 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>
         /// WPF App.xaml.cs SeedAskSeams + NoticeSurface: the asks service and the oversize-prompt toast.
-        /// ponytail: SessionOptions/StartSession stay unseeded (no session launcher on this head, so no
-        /// Session cards), Busy knows a session, video, lockdown, lock card, bubble count and pop quiz (not grace pause, Mantra, a connected remote controller or the startup ladder, which WPF also counts), and a Watch link opens in the external
-        /// browser - WPF's own fallback when its embedded browser cannot take it.
+        /// Session cards list and start through the shell's Sessions page (WPF App.xaml.cs:733-735). Busy is
+        /// WPF's (:737-746) plus bubble count and pop quiz; no browser-media engine on this head. A Watch link
+        /// opens in the external browser - WPF's own fallback when its embedded browser cannot take it.
         /// </summary>
         internal static void SeedCompanionTubeSeams()
         {
@@ -209,7 +209,7 @@ namespace ConditioningControlPanel.Avalonia
                     try { Notifications.Show(message, Helpers.NotificationType.Warning, TimeSpan.FromSeconds(12)); }
                     catch (Exception ex) { Serilog.Log.Debug("PromptAssembler: oversize notice failed to show: {Error}", ex.Message); }
                 });
-            // Only when a card can really follow here (no session launcher: Session cards never build).
+            // Only when a card can really follow here (nothing to build from: no promise).
             ConditioningControlPanel.Services.Companion.ConversationDelivery.AskCardsShown =
                 ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.CanOfferFor;
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BrainProvider = () => Brain;
@@ -217,7 +217,14 @@ namespace ConditioningControlPanel.Avalonia
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.ShowAskCard(card));
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SaySurface = text =>
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() => Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, aiGenerated: false));
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.SessionOptions = () =>
+                Views.Windows.MainShellWindow.Current?.CompanionSessionOptions()
+                ?? Array.Empty<ConditioningControlPanel.Services.Companion.Asks.AskOption>();
+            ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.StartSession = id =>
+                Views.Windows.MainShellWindow.Current?.StartSessionFromBillboard(id) == true;
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider = () => CoreSession.IsSessionRunning
+                || Platform.StartupLadder.IsQuiet || Mantra.IsActive
+                || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
                 || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
                 || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:696

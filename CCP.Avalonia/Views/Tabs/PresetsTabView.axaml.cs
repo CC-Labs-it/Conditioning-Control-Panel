@@ -285,6 +285,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private IReadOnlyList<Session> _availableSessions = Session.GetAllSessions().ToArray();
         private Session? _selectedSession;
 
+        /// <summary>The library (built-in + custom), for the companion's Session cards.</summary>
+        internal IReadOnlyList<Session> AvailableSessions => _availableSessions;
+
         private static string InitialRackSourceFilter() =>
             CoreSettings.HasProvider ? CoreSettings.Current.SessionRackSourceFilter : RackSourceAll;
 

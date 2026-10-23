@@ -3,10 +3,13 @@
 // OnSessionProgressUpdated (:1838), OnSessionStarted (:1891), OnSessionStopped (:1936) and
 // BtnStopSession_Click (:1983); plus the stop-session branch of BtnStart_Click (MainWindow.StartStop.cs:58).
 // The head owns one Core SessionRunner (App.Sessions), which runs only the ported subset - flash,
-// subliminal, bouncing text, lock cards (docs/avalonia-decisions.md).
+// subliminal, bouncing text, lock cards, mandatory videos, Mind Wipe (docs/avalonia-decisions.md).
 // BtnPauseSession_Click (:2021) too.
 // ponytail: dropped, each with no service on this head: corner-GIF options, remote gates, program/punch-card/Bark/profile-sync hooks, the takeaway-shelf refresh, the
-// Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).
+// Withdraw summary suppression.
+// No video-teardown wait before the recap (WPF ShowSessionSummaryWhenClear, #462): this head's
+// MandatoryVideoOverlay.CloseAll tears down synchronously on the UI thread, so no CloseAll is in flight
+// when the recap posts; a clip still playing makes the recap passive below instead.
 // ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
 // "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
 
@@ -183,8 +186,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var dialog = new SessionCompleteWindow(log);
                     // WPF MainWindow.Presets.cs:1790 (#1303): under a lock card, pop quiz or Bubble
                     // Count cover the recap opens passive - non-modal, not activated - and only one.
-                    // ponytail: videoUp is false until the head has a VideoService.IsPlaying.
-                    var passive = SessionSummaryPresentation.Decide(false, LockCardWindow.IsAnyOpen(),
+                    // videoUp = WPF App.Video.IsPlaying (:1781); no browser video engine on this head.
+                    var passive = SessionSummaryPresentation.Decide(CoreEngine.Video?.IsPlaying == true, LockCardWindow.IsAnyOpen(),
                         PopQuizWindow.IsAnyOpen(), BubbleCountWindow.IsAnyOpen()) == SessionSummaryPresentation.Mode.Passive;
                     dialog.Topmost = !passive;   // WPF MainWindow.Presets.cs:1799
                     if (passive)
