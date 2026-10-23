@@ -2752,3 +2752,6 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-shell-lab: +146
 - Lab Lockdown: level-chip glow stays crimson during the run and returns to the live accent on exit; shell close drops the theme/flash, and queued work can't re-theme a closed shell (3 headless tests, fail-proven).
 - shell-lab row stays stub: it now lists the possession readout and rules card (shell-possession) and the missing game hosts (wire-shell-lab-b).
+
+## avalonia-port/wire-dialogs-mod-picker: +196
+- Mod picker catalogue cards keep their shipped art; Download/close/retry/upgrader paths covered by real-click tests (row stays stub: WPF has no caller).
