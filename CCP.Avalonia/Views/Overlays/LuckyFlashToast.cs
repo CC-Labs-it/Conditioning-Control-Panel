@@ -37,10 +37,11 @@ internal sealed class LuckyFlashToast : Window
             Text = "10x XP!", FontSize = 14, Margin = new Thickness(0, 4, 0, 0),
             Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB6, 0xC1)), HorizontalAlignment = HorizontalAlignment.Center,
         };
-        // P82: shadow is a sibling, never an Effect on the content.
+        // P82: shadow is a sibling, never an Effect on the content. Gold under the see-through body,
+        // as WPF's DropShadowEffect glow shows through it.
         var shadow = new Border
         {
-            CornerRadius = new CornerRadius(12), Background = Brushes.Black,
+            CornerRadius = new CornerRadius(12), Background = new SolidColorBrush(Color.FromArgb(204, 0xFF, 0xD7, 0x00)),
             BoxShadow = new BoxShadows(new BoxShadow { Blur = 30, Color = Color.FromArgb(204, 0xFF, 0xD7, 0x00) }),
         };
         var body = new Border

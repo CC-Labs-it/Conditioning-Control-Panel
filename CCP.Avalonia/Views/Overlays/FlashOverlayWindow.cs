@@ -64,7 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void BeginExit(FlashExitState exit)
         {
             if (Exit != null || Shatter != null) return;
-            StopPulse();
+            // WPF FlashLayer.cs:314,417 keeps a lucky glow pulsing while the flash leaves.
             Exit = exit;
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);

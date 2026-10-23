@@ -143,7 +143,7 @@ public sealed class FlashFinishTests
     });
 
     [Fact]
-    public Task Lucky_pulse_follows_elapsed_time_and_stops_when_the_flash_leaves() => OnUi(() =>
+    public Task Lucky_pulse_follows_elapsed_time_through_the_leave_and_stops_on_close() => OnUi(() =>
     {
         var clock = new Clock();
         FlashOverlay.Clock = clock;
@@ -161,12 +161,29 @@ public sealed class FlashFinishTests
             Assert.Equal(38.4, w.GlowShadow[0].Blur, 6);
             Assert.Equal(255, w.GlowShadow[0].Color.A);
             w.BeginExit(FlashExit.Begin(FlashExitStyle.Pop, MotionLevel.Full, 2));
-            var shadow = w.GlowShadow;
             clock.Advance(0.4);
             w.PulseFrame();
-            Assert.Equal(shadow, w.GlowShadow);
+            Assert.Equal(24, w.GlowShadow[0].Blur, 6);
+            Assert.Equal(178, w.GlowShadow[0].Color.A);
         }
         finally { w.Close(); }
+        var shadow = w.GlowShadow;
+        clock.Advance(0.4);
+        w.PulseFrame();
+        Assert.Equal(shadow, w.GlowShadow);
+    });
+
+    [Fact]
+    public Task Glitch_ghost_copies_the_bitmap_pixels_in_their_own_channel_order() => OnUi(() =>
+    {
+        using var bmp = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(2, 2), new Vector(96, 96),
+            global::Avalonia.Platform.PixelFormats.Rgba8888, global::Avalonia.Platform.AlphaFormat.Premul);
+        using (var fb = bmp.Lock())
+            for (var i = 0; i < 4; i++)
+                System.Runtime.InteropServices.Marshal.WriteInt32(fb.Address, i * 4, unchecked((int)0xFF0000FF)); // R=FF,G=0,B=0,A=FF
+        using var ghosts = new FlashGlitchGhosts(bmp);
+        using var pixels = SKBitmap.FromImage(ghosts.Picture);
+        Assert.Equal(new SKColor(255, 0, 0, 255), pixels.GetPixel(1, 1));
     });
 
     [Fact]

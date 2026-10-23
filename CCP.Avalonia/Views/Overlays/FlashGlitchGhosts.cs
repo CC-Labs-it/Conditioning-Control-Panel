@@ -1,5 +1,5 @@
 using System;
-using System.IO;
+using Avalonia.Platform;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -32,10 +32,16 @@ internal sealed class FlashGlitchGhosts : Control, IDisposable
     {
         Name = "FlashGlitchGhosts";
         IsHitTestVisible = false;
-        using var encoded = new MemoryStream();
-        picture.Save(encoded);
-        _picture = SKImage.FromEncodedData(encoded.ToArray());
+        // Raw pixel copy, no PNG encode/decode on the UI thread at every Glitch leave.
+        var size = picture.PixelSize;
+        using var pixels = new SKBitmap(new SKImageInfo(size.Width, size.Height,
+            picture.Format == PixelFormats.Rgba8888 ? SKColorType.Rgba8888 : SKColorType.Bgra8888,
+            picture.AlphaFormat == AlphaFormat.Unpremul ? SKAlphaType.Unpremul : SKAlphaType.Premul));
+        picture.CopyPixels(new PixelRect(size), pixels.GetPixels(), pixels.ByteCount, pixels.RowBytes);
+        _picture = SKImage.FromBitmap(pixels);
     }
+
+    internal SKImage Picture => _picture;
 
     public override void Render(DrawingContext context)
     {
