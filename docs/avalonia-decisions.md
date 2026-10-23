@@ -1110,14 +1110,15 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `MainShellWindow.UiUpdates.cs`. With B, every day CCP was open would read 0 minutes and be charged as idle on the
   user's real lock, which WPF never does. Switch to B in the same lane that ports the tracker.
 - Test: `ChasterMinutesTests.IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource` (fail-proven: wiring B turns it red).
+
 ## 2026-10-13: Hybrid remote gate: Windows jobs on GitHub, Linux half local (avalonia-port/ci-hybrid-gate)
 - Question: every rgate run took ~15 GitHub jobs (5 Linux + 5 Windows Avalonia shards, core-linux, core-guards, coverage),
   so two lanes gating at once exhausted the Free plan's 20-job pool. How do lane gates free that pool?
 - Options: (A) keep every gate fully remote; (B) gate fully locally again; (C) hybrid: GitHub runs only what Linux cannot
   (the Windows jobs) and the Linux half runs locally (`bin/gate`, already the CI-equivalent Linux gate) in parallel.
 - Choice: C (advised by: user + main session). `build.yml` gains a `workflow_dispatch` input `scope` (all | windows, default
-  all). With `scope=windows` every ubuntu job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is skipped;
-  `windows`, `avalonia-windows` and the Windows coverage entry always run (coverage keeps `!cancelled()`, so a skipped
+  all). With `scope=windows` every Linux-side job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is
+  skipped; `windows`, `avalonia-windows` and the Windows coverage entry (itself on `ubuntu-latest`) always run (coverage keeps `!cancelled()`, so a skipped
   avalonia-linux does not skip it). Push and pull_request runs have no inputs, so they stay full. `bin/rgate` dispatches
   `scope=windows` when it sees the input; `RGATE_FULL=1` forces the old all-remote run.
 - Choice (chaster-minutes): A, because the input WPF relies on was missing here: the day log's minutes come from
@@ -1137,6 +1138,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   the earliest `cm > 0` entry is the tracker's first run. Same test: a day before the first log day is null and not
   charged (fail-first: red with `Expected null, Actual 0` before the guard).
 ## 2026-10-12: Linux web views stay off by default; CCP_LINUX_WEBVIEW opts in (webview-probe-fix)
+- Superseded by the 2026-10-13 entry (webview-render): WebKitGTK is the Linux default; the "stall" was a web-process crash.
 - Question: on Arch/CachyOS with webkit2gtk-4.1 and wpewebkit installed every web surface said "No native web view on
   this platform." `WebHost.ProbeUnavailableReason` accepted only adapters advertising `NativeControlHost`; in
   Avalonia.Controls.WebView 12.1.0 `GetAdapterInfo` reports WebKitGtk as `NativeDialog` and WpeWebKit/Headless as
@@ -1161,6 +1163,72 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   The GameWindow no-engine guard is in gamewindow-followup.md (games-host lane).
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs` (adapter-info table; default-off and gtk rows fail-proven).
 
+## 2026-10-13: WebKitGTK is the Linux web view; the "rAF stall" was a missing GStreamer audio sink (webview-render)
+- Question: no Linux web view kept drawing (2026-10-12 entry above). Is it the engines, Avalonia's frame pump, or the box?
+- Root cause (live, ~/ccp-port/evidence/webview-render/findings.md): the WEB PROCESS crashed. Without GStreamer's
+  `autoaudiosink` (gst-plugins-good) WebKitWebProcess/WPEWebProcess SIGABRT on a page's first WebAudio sound
+  ("autoaudiosink not found", then g_signal_connect_data(NULL)). The host keeps the last frame and rAF dies. Every earlier live
+  run has that coredump about 3 s after intake's `init`. Without audio, WebKitGTK (GtkX11) draws continuously at ~62 fps, WebGL included.
+  With a scratch-extracted autoaudiosink on GST_PLUGIN_PATH, intake animates and heartbeats in the real app.
+  WEBKIT_DISABLE_DMABUF_RENDERER, WEBKIT_DISABLE_COMPOSITING_MODE, GDK_BACKEND=x11 and LIBGL_ALWAYS_SOFTWARE change nothing.
+  The WPE frame pump is push (frame_complete per copied buffer) and needs no render-loop call.
+- Second finding: Arch wpewebkit 2.54.1-2 is built without the legacy libwpe API (`webkit_web_view_backend_new` gone,
+  upstream AvaloniaUI/Avalonia.Controls.WebView#88). 12.1's WPE adapter then throws from an async void and kills the app,
+  and WPE is the package's default Linux pick.
+- Answer (advised by: supervisor; advised: oracle-deep - keep the gate, no fake sink, add a CCP_LINUX_WEBVIEW=gtk override and
+  follow GStreamer's own plugin-path rules): on Linux, WebHost always sets `PreferWebKitGtkInstead` (WebKitGTK default).
+  `CCP_LINUX_WEBVIEW=wpe` is honoured only when libWPEWebKit exports `webkit_web_view_backend_new` (`NativeLibrary.TryGetExport`),
+  otherwise GTK is used. `=off` gives the fallback panel. A Linux engine without the audio sink gives the panel with the per-distro
+  command (Core `LinuxDependencies`, "web views (sound)": gst-plugins-good / gstreamer1.0-plugins-good / gstreamer1-plugins-good;
+  found on GST_PLUGIN_SYSTEM_PATH(_1_0), GST_PLUGIN_PATH(_1_0) and the distro plugin dirs). A gate, not a warning: a page that
+  aborts on its first sound is worse than an honest panel. WPE is opt-in only, so the startup toast (`LinuxDependencies.Required`)
+  and the panel (`WebViews`) no longer name it. PKGBUILD: gst-plugins-good in depends, the WPE trio in optdepends. Headless, `--smoke`,
+  `--render-all` and tests are unchanged (never an engine). Windows/macOS are untouched.
+- Override and probe rules (oracle-deep): an explicit `CCP_LINUX_WEBVIEW=gtk` skips the sink check (one warning logged), so a
+  probe false negative (NixOS/Guix store paths, other Debian arches) cannot block every page for good; the unset default stays
+  gated. The probe follows GStreamer: GST_PLUGIN_PATH(_1_0), the user dir ($XDG_DATA_HOME/gstreamer-1.0/plugins), then
+  GST_PLUGIN_SYSTEM_PATH(_1_0), which REPLACES the distro dirs when set (AppImage/Snap/Nix wrappers; the user dir stays, as in
+  GStreamer's registry scan). The panel and the startup toast say to restart CCP after installing (probed once per process); `=wpe` falling back to GTK on 2.54 logs one warning.
+- Not chosen: GTK `ExperimentalOffscreen` survives intake without the sink but pushes ~16 fps and hides the missing dependency.
+- Not chosen: a null/fake audio sink. WebKit asks GStreamer for `autoaudiosink` by name and no WebKit or GStreamer setting maps it
+  to another element; bundling libgstautodetect ties us to the host's GStreamer; turning off WebAudio/media in WebKit settings
+  would make `new AudioContext()` throw in our pages and stop video.
+- Wayland: Avalonia is pinned to X11 (XWayland), and the GTK adapter's `ForceX11GdkBackend` (default true) forces GDK_BACKEND=x11
+  around GTK init. Untested: NVIDIA's proprietary driver is widely reported to give blank WebKitGTK views; `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  is the user-side switch. Fractional/HiDPI scale between GTK and Avalonia is not measured.
+- Residuals: airspace (Avalonia popups under the X11 child), a shutdown-only SIGABRT seen once, and Avalonia 12.1 surfaces no
+  web-process-terminated event, so a future web-process crash would again freeze a page silently.
+- Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
+  (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-13: push-triggered port workflows skip cloud-* and gate-* branches (avalonia-port/ci-skip-cloud)
+- Question: the GitHub Free plan shares 20 concurrent jobs between rgate (build.yml dispatched on `avalonia-port/gate-*`),
+  PR CI and push-triggered workflows. Each push of a throwaway `avalonia-port/cloud-*` (Claude cloud session) branch
+  also starts distro-check, reference-render (3 jobs) and snapshot-lock, ~5 jobs nobody reads. rgate's `gate-*` snapshot
+  commits already carry `[skip ci]`, so for them the exclusion is only a second safeguard.
+  Should those workflows keep running on them?
+- Options: (A) keep `branches: ['avalonia-port/**']`; (B) exclude both prefixes with negative patterns in the same list;
+  (C) drop the push trigger and run them only by hand.
+- Choice: B: `['avalonia-port/**', '!avalonia-port/cloud-**', '!avalonia-port/gate-**']` in distro-check.yml,
+  reference-render.yml and snapshot-lock.yml. `workflow_dispatch` stays. Cloud branches are reviewed locally and re-pushed
+  as normal `avalonia-port/<slug>` PR branches, which still get the full push CI. rgate only dispatches build.yml
+  (`gh workflow run build.yml --ref avalonia-port/gate-...`) and never waits on these push runs.
+- Constraint: `cloud-` and `gate-` are reserved prefixes. A real lane slug must not start with either, or its pushes
+  silently lose distro-check, reference-render and snapshot-lock.
+- Advised: main session.
+## 2026-10-22: One Core bark engine: main's BarkEngine + BarkHead, companion-barks' second engine dropped (main-sync #7 merge)
+- Question: the main-sync #7 tip (`avalonia-port/main-20261015-compat`) already carries a Core `BarkEngine` hosted by
+  `CCP.Avalonia/Platform/BarkHead.cs` (companion lane, b0aa1083e/8485a6665/661745d7a). Lane companion-barks added a different,
+  API-incompatible `BarkEngine` at the same path plus `Views/AvatarTube/BarkHost.cs`, also started from App startup: two engines
+  would double-fire every bark.
+- Options: A) keep main's engine + BarkHead, drop ours, re-point our callers; B) keep ours, delete main's (breaks CompanionCore,
+  CoreBark, CompanionBarkHeadTests); C) merge both engines in one sync (too large for a merge).
+- Choice: A, advised by the supervisor. The bouncing-text triggers now raise on `BarkHead.Engine`; the panic `barks` surface
+  (a P06 floor hold WPF does not have) is dropped, main's ladder-mode `Raise("Panic")` stays; `BarkRuleLoader` stays in the WPF head.
+- Behaviour WPF has and this engine lacks goes to follow-up lane companion-barks-b (listed with WPF lines in the parity row
+  `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
+  barks queued through Giggle. Lane barks-wpf gets the same rule.
 ## 2026-10-14: final verification moves to alpha/beta testers; proposed goal-text replacement
 - Question (user decision, 2026-10-14): final verification is done by alpha/beta testers. Done means the Avalonia app
   runs and looks/works the same as WPF or better. Do the goal's phase 4 and done criteria still fit?

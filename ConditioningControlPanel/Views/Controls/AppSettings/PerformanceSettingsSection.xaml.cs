@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
         public PerformanceSettingsSection()
         {
             InitializeComponent();
+            FillGentleChoices();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             IsVisibleChanged += OnIsVisibleChanged;
@@ -106,6 +107,11 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
                 ChkAutoPerformance.IsChecked = s.AutoPerformanceMode;
                 ChkUnifiedOverlay.IsChecked = s.UnifiedOverlayHost;
                 ChkVideoHwDecode.IsChecked = s.VideoForceHardwareDecoding;
+
+                ChkGentleVisuals.IsChecked = s.GentleVisuals;
+                PnlGentleChoices.Visibility = s.GentleVisuals ? Visibility.Visible : Visibility.Collapsed;
+                CmbGentleFade.SelectedIndex = NearestIndex(Services.Safety.GentleVisuals.FadeChoices, s.GentleFadeSeconds);
+                CmbGentleSpeed.SelectedIndex = NearestIndex(Services.Safety.GentleVisuals.SpeedChoices, s.GentleSpeed);
 
                 // MotionLevel's ordinal IS the item index (Full=0, Reduced=1, Off=2) - the same
                 // contract MainWindow.Settings.cs:92 relies on. Clamped rather than trusted so a
@@ -308,6 +314,53 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             int i = CmbBackRoomFxIntensity.SelectedIndex;
             if (s == null || i < 0) return;
             s.BackRoomFxIntensity = (Services.BackRoom.BackRoomFxIntensity)i;
+            App.Settings?.Save();
+        }
+
+        private void FillGentleChoices()
+        {
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            foreach (var f in Services.Safety.GentleVisuals.FadeChoices)
+                CmbGentleFade.Items.Add(f.ToString("0.##", culture) + " s");
+            foreach (var v in Services.Safety.GentleVisuals.SpeedChoices)
+                CmbGentleSpeed.Items.Add(v.ToString("0.##", culture) + "x");
+        }
+
+        internal static int NearestIndex(double[] choices, double value)
+        {
+            var best = 0;
+            for (var i = 1; i < choices.Length; i++)
+                if (Math.Abs(choices[i] - value) < Math.Abs(choices[best] - value)) best = i;
+            return best;
+        }
+
+        /// <summary>
+        /// Gentle visuals. It also caps the motion level at Reduced (MotionFx.Level), so the
+        /// running ambient loops are re-gated through the same MainWindow handler the motion combo
+        /// uses; that handler reads the combo, which this switch never changes.
+        /// </summary>
+        private void ChkGentleVisuals_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.GentleVisuals = ChkGentleVisuals.IsChecked == true;
+            PnlGentleChoices.Visibility = s.GentleVisuals ? Visibility.Visible : Visibility.Collapsed;
+            App.Logger?.Information("Gentle visuals set to {On}", s.GentleVisuals);
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.CmbMotionLevel_SelectionChanged(CmbMotionLevel, null!);
+            App.Settings?.Save();
+        }
+
+        private void CmbGentle_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            if (CmbGentleFade.SelectedIndex >= 0)
+                s.GentleFadeSeconds = Services.Safety.GentleVisuals.FadeChoices[CmbGentleFade.SelectedIndex];
+            if (CmbGentleSpeed.SelectedIndex >= 0)
+                s.GentleSpeed = Services.Safety.GentleVisuals.SpeedChoices[CmbGentleSpeed.SelectedIndex];
             App.Settings?.Save();
         }
 
