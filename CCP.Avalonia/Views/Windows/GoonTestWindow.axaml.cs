@@ -12,10 +12,9 @@ using Avalonia.Media;
 // The WPF original drove two INDEPENDENT player panels, each with its own
 // GoonGameService, over either the real /v2/goon signaling + WebRTC transport or
 // GoonLoopbackTransport.CreatePair(). None of that is available here:
-// GoonTestPanel, GoonGameService, GoonMatchService, GoonLoopbackTransport and
-// GoonLoopbackOptions all still live in the WPF head (only GoonContracts,
-// GoonDraft, GoonMatchTypes, GoonRng, GoonScoring and GoonWire made it to
-// CCP.Core). So this layer ports the COCKPIT CHROME — mode bar, enablement
+// GoonTestPanel, GoonGameService and GoonMatchService still live in the WPF head
+// (the transports, GoonLoopbackTransport/GoonLoopbackOptions included, are in
+// CCP.Core since goongame-core-d but nothing here wires them yet). So this layer ports the COCKPIT CHROME — mode bar, enablement
 // rules, status strip, panel hosts — and stubs every verb that would touch a
 // service. The ordering comment that mattered most on the original (AdoptLobby
 // BEFORE ConnectAsync, or both sides strand in Idle) is preserved verbatim on

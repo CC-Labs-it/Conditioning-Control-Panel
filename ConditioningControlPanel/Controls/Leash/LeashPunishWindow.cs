@@ -216,6 +216,7 @@ internal sealed class LeashPunishWindow : Window
             await _web.EnsureCoreWebView2Async(env);
             var core = _web.CoreWebView2;
             if (core == null) return;
+            global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(core);
 
             var s = core.Settings;
             s.AreDevToolsEnabled = false;
