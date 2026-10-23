@@ -533,7 +533,8 @@ public sealed partial class FriendsDrawer : Border
             more.Padding = new Thickness(5, 4, 5, 4);
             ToolTip.SetTip(more, Loc.Get("friends_action_more"));
             AutomationProperties.SetName(more, Loc.Get("friends_action_more"));
-            more.Click += (_, _) => { FriendsSfx.Click(); RequestMenu(r).Open(more); };
+            more.ContextMenu = RequestMenu(r);
+            more.Click += (_, _) => { FriendsSfx.Click(); more.ContextMenu.Open(more); };
             buttons.Children.Add(accept);
             buttons.Children.Add(decline);
             buttons.Children.Add(more);
@@ -599,6 +600,7 @@ public sealed partial class FriendsDrawer : Border
     internal async Task<ActResult> AnswerRequestAsync(FriendRequest r, string what)
     {
         if (_svc == null) return ActResult.TryLater;
+        FriendsSfx.Click();   // WPF FriendsDrawer.Honesty.cs:52-74: click, then accepted / sink / denied
         ActResult res;
         try
         {
@@ -610,7 +612,16 @@ public sealed partial class FriendsDrawer : Border
             };
         }
         catch { res = ActResult.TryLater; }
-        if (res != ActResult.Done) ShowTimed((what == "cancel" ? "out:" : "in:") + r.Id, Loc.Get(FriendsDrawerRules.ActResultKey(res)), false);
+        if (res == ActResult.Done)
+        {
+            if (what == "accept")
+            {
+                FriendsSfx.Accepted();
+                Say(Loc.Get("friends_add_accepted"), true);
+            }
+            else FriendsSfx.Dismiss();
+        }
+        else ShowActResult((what == "cancel" ? "out:" : "in:") + r.Id, res);
         await SafeRefreshAsync();
         return res;
     }

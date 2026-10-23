@@ -527,6 +527,17 @@ public sealed class FriendsDrawerTests
         var more = Tagged<Button>(d, "friends-request-more")!;
         Assert.Equal(Loc.Get("friends_action_more"), ToolTip.GetTip(more));
         Assert.Equal(IconKind.MoreHorizontal, more.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind);
+        var host = new Window { Width = 600, Height = 500, Content = d };
+        try
+        {
+            host.Show();
+            more = Tagged<Button>(d, "friends-request-more")!;   // shown: the row may have been redrawn
+            more.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.True(more.ContextMenu!.IsOpen);   // the click opens the request menu, not just the right-click
+            Assert.Equal("friends-request-menu:u_req", more.ContextMenu.Tag);
+            more.ContextMenu.Close();
+        }
+        finally { host.Content = null; host.Close(); }
         var menu = Tagged<Border>(d, "friends-request-in:u_req")!.ContextMenu!;
         var items = menu.ItemsSource!.Cast<MenuItem>().ToList();
         Assert.Equal(new[] { "friends-menu-item:block", "friends-menu-item:report" }, items.Select(i => (string)i.Tag!));
@@ -548,11 +559,10 @@ public sealed class FriendsDrawerTests
         await svc.RefreshAsync();
         var tags = new List<string>();
         var (oldAudio, oldNow, oldVolume) = (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow, CoreSettings.Current.MasterVolume);
-        var t = DateTime.UtcNow;
         try
         {
             CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
-            FriendsLanding.SfxNow = () => t = t.AddSeconds(2);   // past every gap: each cue is judged on its own
+            FriendsLanding.SfxNow = SfxStep;   // past every gap: each cue is judged on its own
             CoreSettings.Current.MasterVolume = 50;
             wire.ActSucceeds = false;
             Assert.NotEqual(ActResult.Done, await d.BlockRequesterAsync(svc.Snapshot.Incoming[0]));
@@ -561,6 +571,41 @@ public sealed class FriendsDrawerTests
             Assert.Equal(ActResult.Done, await d.ConfirmAsync("u_on", "Mia", "block"));
             Assert.Equal(ActResult.Done, await d.UnblockAsync(new BlockedFriend("u_bad", "Bob")));
             Assert.Equal(new[] { "friends-denied", "friends-sink", "friends-sink", "friends-click", "friends-accepted" }, tags);
+        }
+        finally
+        {
+            (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow) = (oldAudio, oldNow);
+            CoreSettings.Current.MasterVolume = oldVolume;
+        }
+    });
+
+    /// <summary>The landing's gap gate is process-wide and remembers the last cue, so every cue test steps one
+    /// clock that never runs behind a previous test's: each cue is past every gap and judged on its own.</summary>
+    private static DateTime _sfxClock = DateTime.UtcNow;
+    private static DateTime SfxStep() => _sfxClock = (_sfxClock > DateTime.UtcNow ? _sfxClock : DateTime.UtcNow).AddSeconds(2);
+
+    /// <summary>WPF AnswerRequestAsync (FriendsDrawer.Honesty.cs:52-74): every answer clicks; a refused one
+    /// is denied, an accept unlocks, a decline or withdraw sinks.</summary>
+    [Fact]
+    public Task AnsweringARequestPlaysWpfsCues() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        var r = svc.Snapshot.Incoming[0];
+        var tags = new List<string>();
+        var (oldAudio, oldNow, oldVolume) = (CoreAudio.PlayOneShotProvider, FriendsLanding.SfxNow, CoreSettings.Current.MasterVolume);
+        try
+        {
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => tags.Add(tag);
+            FriendsLanding.SfxNow = SfxStep;
+            CoreSettings.Current.MasterVolume = 50;
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.AnswerRequestAsync(r, "accept"));
+            wire.ActSucceeds = true;
+            Assert.Equal(ActResult.Done, await d.AnswerRequestAsync(r, "accept"));
+            Assert.Equal(ActResult.Done, await d.AnswerRequestAsync(r, "decline"));
+            Assert.Equal(new[] { "friends-click", "friends-denied", "friends-click", "friends-accepted", "friends-click", "friends-sink" }, tags);
         }
         finally
         {
