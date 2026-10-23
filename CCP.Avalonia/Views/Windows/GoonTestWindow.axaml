@@ -81,7 +81,11 @@
             <Setter Property="FontSize" Value="12" />
         </Style>
 
+        <!-- WPF's window-local CheckBox/ComboBox/ListBoxItem styles (no BasedOn) REPLACE the
+             app's Inputs.xaml chrome; Avalonia styles add on top, so each opts back to the stock
+             theme here. WPF's Inputs ComboBoxItem still reached these combos (no local one). -->
         <Style Selector="CheckBox">
+            <Setter Property="Theme" Value="{StaticResource {x:Type CheckBox}}" />
             <Setter Property="Foreground" Value="{DynamicResource GgText}" />
             <Setter Property="Margin" Value="4,2" />
             <Setter Property="FontSize" Value="12" />
@@ -102,6 +106,8 @@
              moment Loopback mode enables the box. Not worth chasing a template part name for a
              dev-only cockpit. -->
         <Style Selector="ComboBox">
+            <Setter Property="Theme" Value="{StaticResource {x:Type ComboBox}}" />
+            <Setter Property="ItemContainerTheme" Value="{StaticResource InputComboBoxItemTheme}" />
             <Setter Property="Foreground" Value="#FF101024" />
             <Setter Property="Background" Value="#FFD8D8EC" />
             <Setter Property="Margin" Value="2" />
@@ -110,6 +116,7 @@
         </Style>
 
         <Style Selector="ListBox">
+            <Setter Property="ItemContainerTheme" Value="{StaticResource {x:Type ListBoxItem}}" />
             <Setter Property="Foreground" Value="{DynamicResource GgText}" />
             <Setter Property="Background" Value="{DynamicResource GgPanelDeep}" />
             <Setter Property="BorderBrush" Value="#FF3A3A68" />

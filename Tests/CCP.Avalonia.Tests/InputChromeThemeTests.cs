@@ -187,6 +187,33 @@ public sealed class InputChromeThemeTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task WindowLocalStylesThatReplacedInputsInWpfKeepStockChrome() => Run(_ =>
+    {
+        // WPF GoonTestWindow.xaml:86 / QuizCategoryEditorWindow ItemContainerStyle have no BasedOn,
+        // so they replace Inputs.xaml; Avalonia window styles add on top unless they opt out.
+        var goon = new global::ConditioningControlPanel.Avalonia.Views.Windows.GoonTestWindow();
+        var quiz = new global::ConditioningControlPanel.Avalonia.Views.Windows.QuizCategoryEditorWindow(null);
+        try
+        {
+            goon.Show();
+            quiz.Show();
+            Dispatcher.UIThread.RunJobs();
+            var cmb = goon.FindControl<ComboBox>("CmbLoopProfile")!;
+            Assert.Same(Application.Current!.FindResource(typeof(ComboBox)), cmb.Theme);
+            Assert.Same(Res("InputComboBoxItemTheme"), cmb.ItemContainerTheme);
+            var cbo = quiz.FindControl<ComboBox>("CboTemplate")!;
+            cbo.IsDropDownOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            var rows = cbo.GetRealizedContainers().OfType<ComboBoxItem>().ToList();
+            Assert.NotEmpty(rows);
+            Assert.All(rows, r => Assert.Same(Application.Current.FindResource(typeof(ComboBoxItem)), r.Theme));
+            cbo.IsDropDownOpen = false;
+        }
+        finally { goon.Close(); quiz.Close(); }
+        return Task.CompletedTask;
+    });
+
     private static ControlTheme Res(string key) => (ControlTheme)Application.Current!.FindResource(key)!;
     private static T Part<T>(Visual host, string name) where T : Control =>
         host.GetVisualDescendants().OfType<T>().First(c => c.Name == name);

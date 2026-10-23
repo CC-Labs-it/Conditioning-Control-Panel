@@ -103,7 +103,10 @@
                                Margin="0,14,0,4"/>
                     <ComboBox x:Name="CboTemplate" FontSize="13" Foreground="White"
                               Background="#20FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1"
-                              Padding="8,6" SelectedIndex="0" HorizontalAlignment="Stretch">
+                              Padding="8,6" SelectedIndex="0" HorizontalAlignment="Stretch"
+                              ItemContainerTheme="{StaticResource {x:Type ComboBoxItem}}">
+                        <!-- WPF's ItemContainerStyle replaced Inputs.xaml's dotted row; the stock row theme
+                             keeps the house InputComboBoxItemTheme off, the styles below add the colours. -->
                         <ComboBox.Styles>
                             <Style Selector="ComboBoxItem">
                                 <Setter Property="Foreground" Value="White"/>
