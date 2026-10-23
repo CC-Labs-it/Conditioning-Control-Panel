@@ -2791,3 +2791,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-shell-profile-bubble: +459
 - Header bubble shows avatar presets, the WPF tier-badge hover enlargement and 8 s one-shot wobble, a level-up burst on the shared EventBurstLayer, and the copy-link prompt when the browser won't open (skipped in a sandbox).
 - Review fixes: no idle frame clock for the wobble, sandbox-refused link never writes the clipboard, menu-restack tested, ledger row no longer claims Core FxBurstAnchorRules. Fail-proven; rgate green apart from two listed flakes.
+
+## avalonia-port/wire-views-companion-ai-permissions-grid: +434
+- The Engine Room live-actions feed is fed by the Core command sink (shared AiLiveActionFeed rules). The V2 permissions grid is stacked; Forget/memory-off clear history; the lock CTA opens Settings > Account.
+- The lock band repaints on tier change and on re-show, as WPF does. rgate 39698040401: Linux green; the one Windows flake is in flakes.md (P94).
