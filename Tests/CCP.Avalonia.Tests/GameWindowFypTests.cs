@@ -113,6 +113,10 @@ public sealed class GameWindowFypTests
         var v = new MandatoryVideoScheduler(host, clock, () => new[] { Path.Combine(lib, "a.mp4") });
         CoreSettings.Current.MandatoryVideosEnabled = true;   // the replay re-reads it, as WPF (fresh SettingsService per Run)
         CoreSettings.Current.FlashEnabled = false;
+        var (savedVideo, savedNotify) = (CoreEngine.Video, CoreProgram.NotifyProvider);
+        var toasts = new List<string>();
+        CoreEngine.Video = v;                         // the scheduler the real Test button reaches
+        CoreProgram.NotifyProvider = (m, _, _) => toasts.Add(m);
         try
         {
             v.Start();                                // the engine's schedule: the replay needs it running
@@ -120,8 +124,11 @@ public sealed class GameWindowFypTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(GameWindow.IsFypOpen());
             Assert.True(FypFeedDefer.FeedOwnsTheScreen);
-            Assert.True(v.Trigger());                 // held, not started
+            // The Test button press (WPF BtnTestVideo_Click -> TriggerVideo(userInitiated: true)) is held and toasted (#1239).
+            new global::ConditioningControlPanel.Avalonia.Views.Features.VideoFeatureControl().FindControl<Button>("BtnTestVideo")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
             Assert.False(v.IsPlaying);
+            Assert.Equal(new[] { global::ConditioningControlPanel.Localization.Loc.Get("video_toast_feed_has_the_screen") }, toasts);
             PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
             Dispatcher.UIThread.RunJobs();
             Assert.False(FypFeedDefer.FeedOwnsTheScreen);
@@ -129,7 +136,7 @@ public sealed class GameWindowFypTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(v.IsPlaying);                 // the held trigger went through once the feed left
         }
-        finally { v.Stop(); }
+        finally { v.Stop(); (CoreEngine.Video, CoreProgram.NotifyProvider) = (savedVideo, savedNotify); }
     });
 
     /// <summary>WPF ShowTab("fyp") -> OpenFypFeed (MainWindow.Lab.cs:234), refused out loud; panic closes it (GameSurfaces.cs:56).</summary>
