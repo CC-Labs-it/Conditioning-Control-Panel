@@ -26,7 +26,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>The friends rail chip and drawer over the real Core FriendsService, its wire faked in
 /// process (never a server), and the service's timer seam.</summary>
-public sealed class FriendsDrawerTests
+public sealed partial class FriendsDrawerTests
 {
     private const string State = """
         {"ok":true,"code":"CCP-ABCDE","me":{"activity":"panel","lock_day":null,"shared":false},
@@ -43,13 +43,14 @@ public sealed class FriendsDrawerTests
         /// <summary>When set, a "send" waits for it: the answer is still out while the test folds the drawer.</summary>
         public TaskCompletionSource? HoldSends;
         public string StateBody = State;
+        public string MutationBody = """{"ok":true}""";
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var op = r.RequestUri!.AbsolutePath.Split('/').Last();
             lock (Ops) Ops.Add(op);
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
             var body = op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
-                : op == "send" ? """{"ok":true,"status":"sent"}""" : """{"ok":true}""";
+                : op == "send" ? """{"ok":true,"status":"sent"}""" : MutationBody;
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
