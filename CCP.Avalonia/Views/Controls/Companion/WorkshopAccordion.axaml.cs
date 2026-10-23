@@ -41,13 +41,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
             // WPF CompanionCard_Click: the cell supplies the same 0..4 Tag index.
-            parts.Roster.CompanionCardClicked += (_, index) =>
+            parts.Roster.CompanionCardClicked += async (_, index) =>
             {
                 try
                 {
                     // The hero follows through its own CompanionCore.Switched hook (WPF SyncHero).
-                    CompanionCore.SwitchCompanion((CompanionId)index);
-                    // ponytail: the tube's SwitchToCompanionAvatar still needs its head port.
+                    var id = (CompanionId)index;
+                    if (CompanionCore.SwitchCompanion(id) &&
+                        TopLevel.GetTopLevel(this) is Views.Windows.MainShellWindow { Tube: { } tube })
+                        await tube.SwitchToCompanionAvatarAsync(id);
                 }
                 catch (Exception ex) { Log.Warning(ex, "Workshop: companion switch failed"); }
             };

@@ -123,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // actually loaded never starts the timer, which is the WPF rule verbatim.
         private readonly DispatcherTimer _poseTimer;
         private int _currentPoseIndex;
-        private readonly int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
+        private int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
         private Bitmap?[] _avatarPoses = new Bitmap?[4];
 
         // The bubble's auto-hide. One timer, replaced per bubble; the hover hold re-arms it at 1s.
@@ -265,8 +265,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
             // ponytail: still needs AvatarTubeWindow.Avatar.cs for the ANIMATED avatar (level 20+
             // GIF sets, which need an Avalonia GIF decoder) and the emotive-portrait crossfade. The
-            // set ARROWS are blocked on the companion coupling, NOT on the set list - see
-            // SelectAvatarSet. The static four-pose path below is the one every set-1 user is on.
+            // roster coupling is in AvatarTubeWindow.Companion.cs; the hidden selector arrows
+            // still need their separate navigation path. Static poses use the loader below.
 
             // ponytail: the ~14 App.* services the WPF constructor subscribed to (Video, BubbleCount,
             // Flash, Subliminal, Bubbles, Achievements, Progression, Companion, WindowAwareness,
@@ -339,6 +339,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // in one process, and a tick against a torn-down visual tree is exactly the flaky
             // failure the constructor's note refuses to risk.
             LocalizationManager.Instance.LanguageChanged -= OnTubeLanguageChanged;
+            _avatarSwitchClosed = true;
+            CancelAvatarSwitch();
             _poseTimer.Stop();
             _speechTimer?.Stop();
             ClearSpeechQueue();
@@ -1024,11 +1026,14 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// more than one pose to rotate between.</summary>
         private void ApplyAvatarSet()
         {
+            _poseTimer.Stop();
+            var previousPoses = _avatarPoses;
             _avatarPoses = LoadAvatarPoses(_currentAvatarSet);
             _currentPoseIndex = 0;
             for (int i = 0; i < _avatarPoses.Length; i++)
                 if (_avatarPoses[i] != null) { _currentPoseIndex = i; break; }
             ShowCurrentPose();
+            foreach (var pose in previousPoses) pose?.Dispose();
 
             ApplyAvatarTransform(_currentAvatarSet);
             UpdateTitleDisplay();
@@ -1675,15 +1680,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // CoreMods.InstalledMods[ActiveModId].Manifest answers both today. The list of sets is
             // not what is missing.
             //
-            // ponytail: what is missing is the COMPANION COUPLING. WPF's SwitchToAvatarSet
-            // (AvatarTubeWindow.Avatar.cs:395) persists SelectedAvatarSet and switches the active
-            // companion in the same beat for sets 4+, because the tube's caption reads the persona
-            // behind the SET. CoreModsHooks.SwitchCompanion is the seam and no head seeds it, so an
-            // arrow here would write a shared setting and leave the app's active companion pointing
-            // somewhere else - a second writer for one setting, which is the trap this port keeps
-            // hitting. Both arrows are IsVisible=False in the XAML (WPF's UpdateNavigationArrows is
-            // what reveals them), so nothing reaches this today: the tube shows
-            // CoreSettings.Current.SelectedAvatarSet and stays on it.
+            // ponytail: roster-to-tube coupling now lives in AvatarTubeWindow.Companion.cs.
+            // The selector's EffectiveAvatarSets / navigation and animated/portrait paths remain
+            // separate avatar-tube-window work; both arrows stay hidden in this head's markup.
         }
     }
 }

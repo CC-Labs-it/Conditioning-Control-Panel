@@ -1,5 +1,7 @@
 using System;
 using System.Linq;
+using System.IO;
+using ConditioningControlPanel.Localization;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -33,12 +35,22 @@ public sealed class WorkshopRosterSwitchTests
         // would make every switch below vacuous, so state that precondition instead of inheriting it.
         Assert.False(CoreMods.Service?.IsCompanionSupported((CompanionId)2) == false, "active mod hides companion card 2");
         Assert.False(CoreMods.Service?.IsCompanionSupported((CompanionId)3) == false, "active mod hides companion card 3");
+        var oldModId = CoreMods.ActiveModIdProvider;
+        var oldPackage = CoreMods.ActiveModPackageProvider;
+        CoreMods.ActiveModIdProvider = () => "roster-static-test";
+        CoreMods.ActiveModPackageProvider = () => null;
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         s.ActiveCompanionId = 0;
+        s.SelectedAvatarSet = 1;
+        s.AvatarEnabled = true;
         s.CompanionProgressData[2] = new CompanionProgress { Level = 7 };
+        var oldPrompts = CompanionCore.Prompts;
+        var promptDirectory = Path.Combine(Path.GetTempPath(), "ccp-roster-refresh-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(promptDirectory);
+        CompanionCore.Prompts = new CommunityPromptService(userDataPath: promptDirectory, validatorProvider: () => null);
         var shell = new MainShellWindow();
         bool closed = false;
         try
@@ -63,15 +75,40 @@ public sealed class WorkshopRosterSwitchTests
             cell.PickPromptFileForTests = _ => Task.FromResult<string?>(null);   // picker cancelled
             Press(name, MouseButton.Right);
             Assert.Equal(0, s.ActiveCompanionId);
+            Assert.Equal(1, shell.Tube!.CurrentAvatarSet);
             Press(cell.FindControl<Button>("BtnCompanion2Personality")!, MouseButton.Left);
             Assert.Equal(0, s.ActiveCompanionId); // button never also switches the card
+            Assert.Equal(1, shell.Tube!.CurrentAvatarSet);
             Press(name, MouseButton.Left);
             Assert.Equal(2, s.ActiveCompanionId);
+            Assert.Equal(5, shell.Tube!.CurrentAvatarSet);
+            Assert.Equal(5, s.SelectedAvatarSet);
+            Assert.Equal(5, s.ModAvatarSet["roster-static-test"]);
+            s.SelectedAvatarSet = 1;
+            Press(name, MouseButton.Left); // WPF also couples a click on the already-active card
+            Assert.Equal(5, s.SelectedAvatarSet);
             Assert.Equal(7, hero.Level); // hero follows the click (WPF SyncHero)
             Assert.NotEqual(DateTime.MinValue, s.CompanionProgressData[2].FirstActivated);
             Color Ring(int i) => ((ISolidColorBrush)cell.FindControl<Border>($"CompanionCard{i}")!.BorderBrush!).Color;
             Assert.NotEqual(Colors.Transparent, Ring(2));
             Assert.Equal(Colors.Transparent, Ring(0));
+
+            // The shell's mod-change hook already refreshes labels, including their tooltips.
+            var promptFile = Path.Combine(promptDirectory, "Fresh.json");
+            File.WriteAllText(promptFile, "{\"PromptSettings\":{\"Personality\":\"fixture\"}}");
+            var prompt = CompanionCore.Prompts.ImportFromFile(promptFile)!;
+            s.SetCompanionPromptId(2, prompt.Id);
+            await Task.Run(() => CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false)));
+            Dispatcher.UIThread.RunJobs();
+            var promptLabel = cell.FindControl<TextBlock>("TxtCompanion2Prompt")!;
+            var display = CoreMods.Service?.MakeModAware(prompt.Name) ?? prompt.Name;
+            Assert.Equal(display, promptLabel.Text);
+            Assert.Equal(Loc.GetF("tooltip_ai_personality", display), ToolTip.GetTip(promptLabel));
+            s.SetCompanionPromptId(2, null);
+            CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(string.IsNullOrEmpty(promptLabel.Text));
+            Assert.Null(ToolTip.GetTip(promptLabel));
 
             // Core callers (mod switching, XP awards) reach the same refresh without a tab bounce.
             await Task.Run(() => CompanionCore.SwitchCompanion((CompanionId)3));
@@ -105,7 +142,12 @@ public sealed class WorkshopRosterSwitchTests
             Dispatcher.UIThread.RunJobs();
             // The private service's level/XP writes armed a debounced save; drop it here, not via the hook.
             SettingsService.DisarmAllPendingSaves();
+            CompanionCore.Prompts.Dispose();
+            CompanionCore.Prompts = oldPrompts;
+            Directory.Delete(promptDirectory, true);
             CoreSettings.ServiceProvider = old;
+            CoreMods.ActiveModIdProvider = oldModId;
+            CoreMods.ActiveModPackageProvider = oldPackage;
         }
     });
 }
