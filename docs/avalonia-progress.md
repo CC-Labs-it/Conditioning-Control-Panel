@@ -2903,3 +2903,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/chaos-payout-fallin-b: +751
 - Live chaos bubbles: fuse, hold-to-defuse snap (hold and Snap Chain on wall time, a lost capture breaks the hold), detonation (shield/collar/Snap Chain) in Core; a detonation costs the doubled clean-loop tip and silk_touch.
 - Run-end lessons moved to Core ChaosRunLessons (WPF delegates); barks and SNAP/NO FOCUS labels deferred to -c.
+
+## avalonia-port/goongame-core-f: +485
+- Goon media/share-card/avatar/transfer stack moved to CCP.Core behind seams; WPF seeds them.
+- Review ACCEPT; fix commit documents GoonCacheBridge.Post dispatch difference (P3). rgate GATE-OK.
