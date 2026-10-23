@@ -100,10 +100,10 @@
     "pullWhite": 0.6
   },
   "camera": {
-    "eyeUpM": 2.2,
-    "eyeBackM": 6.5,
-    "lookAheadM": 8,
-    "lookUpM": 0.6,
+    "eyeUpM": 1.5,
+    "eyeBackM": 4.1,
+    "lookAheadM": 9,
+    "lookUpM": 0.3,
     "followHTcS": 0.08,
     "followVTcS": 0.25,
     "followHopTcS": 0.6,
@@ -266,8 +266,8 @@
     "cornerMargin": 0.9
   },
   "contact": {
-    "radiusM": 0.8,
-    "maxHeightM": 1.5,
+    "radiusM": 0.54,
+    "maxHeightM": 1.05,
     "pushMps": 3.5,
     "pushPerDv": 0.5,
     "maxPushMps": 7,

@@ -95,7 +95,7 @@ export const LOOK = {
   // road glass sheen from road-glass-normal: a fixed key light and a view fresnel, no extra light pass
   sheenDir: [-0.3, 0.75, -0.6], sheenPow: 40, sheenGain: 0.25, sheenBump: 0.35, sheenFresnel: 0.07, sheenGentle: 0.5,
   // menu attract orbit around the player kart
-  menuOrbitRadps: 0.18, menuOrbitM: 6.5, menuOrbitUpM: 2.2, menuLookUpM: 0.7,
+  menuOrbitRadps: 0.18, menuOrbitM: 4.6, menuOrbitUpM: 1.6, menuLookUpM: 0.7,
   // polish 1: finish arch membrane (render/dressing.js): fade-in distance, lit share, Gentle share, spin share
   artMembraneNearM: [5, 18], artMembraneLit: 0.22, artMembraneGentle: 0.5, artMembraneTurnMul: 0.6,
   // polish 1: particle atlas numbers (render/atlas.js re-exports this as FXART_LOOK)

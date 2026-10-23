@@ -37,6 +37,7 @@ import {
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { LOOK } from './look.js';
+import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
 import { buildKart } from './dressing.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
@@ -53,6 +54,8 @@ const QX = new Quaternion(), QH = new Quaternion(), QI = new Quaternion(), EU = 
 const UPY = new Vector3(0, 1, 0), FZ = new Vector3(0, 0, 1), RX = new Vector3(1, 0, 0), GC = new Color();
 const BUS_EVENTS = ['bump', 'wall', 'countdown', 'go', 'finish', 'item-hit', 'item-fire', 'item-roll', 'race-result', 'racer-event'];
 const RIM = [0, 0, 0], STAR = [0, 0, 0, 0];
+// polish 6 VIEW: every kart root carries the look scale (render/viewMath.js); sprites read at range keep their size
+const KS = KART_VIEW.scale, SPRITE_KEEP = KART_VIEW.keepSprites ? 1 / KS : 1;
 
 /** The stun ring: n sprites on the mark atlas's spark cell sharing one material (k fades it, rot turns them). */
 function starRing(tex, n, cell) {
@@ -142,7 +145,7 @@ function tagSprite(name, hex) {
   const t = new CanvasTexture(cv); t.colorSpace = SRGBColorSpace;
   const m = new SpriteNodeMaterial({ map: t, transparent: true, depthWrite: false });
   const s = new Sprite(m);
-  s.scale.set(LOOK.tagSizeM[0], LOOK.tagSizeM[1], 1);
+  s.scale.set(LOOK.tagSizeM[0] * SPRITE_KEEP, LOOK.tagSizeM[1] * SPRITE_KEEP, 1);
   s.position.y = LOOK.tagUpM; s.renderOrder = 4; s.visible = false;
   return s;
 }
@@ -234,6 +237,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   for (let i = 0; i < count; i++) {
     const look = rivalLook(i, KART_TABLE, LOOK);
     const root = new Group(), body = new Group();
+    root.scale.setScalar(KS);
     const art3d = buildKart(art);
     const model = art3d || new Mesh(greyGeo, createKartMaterial(look ? look.cup : [1, 1, 1]).material);
     const mats = [], rims = [];
@@ -311,12 +315,12 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     if (kind === 'impact') {
       // the item lands: a wide burst in the kind's colour with a few pale sparkles, never a white core (the
       // player's own is half as many and smaller: it bursts right under the camera)
-      const c = V.set(0, 0.7, 0).applyQuaternion(k.root.quaternion).add(k.root.position), H = HIT_LOOK, hex = kindHex(item), me = k.i === 0;
+      const c = V.set(0, 0.7 * KS, 0).applyQuaternion(k.root.quaternion).add(k.root.position), H = HIT_LOOK, hex = kindHex(item), me = k.i === 0;
       particles.burst([c.x, c.y, c.z], Math.max(1, Math.round(n * few * (me ? H.burstPlayerMul : 1))), { colours: [hex, hex, '#fff4fa'],
         speed: H.burstSpeedMps * (gentle ? 0.7 : 1), sizeM: H.burstSizeM * (me ? H.burstPlayerMul : 1), lifeS: H.burstLifeS, sparkle: 0.6, petal: 0.2, up: H.burstUp, g: 0.4 });
       return;
     }
-    const up = V.set(0, RR.sprayUpM, 0).applyQuaternion(k.root.quaternion).add(k.root.position), p = [up.x, up.y, up.z];
+    const up = V.set(0, RR.sprayUpM * KS, 0).applyQuaternion(k.root.quaternion).add(k.root.position), p = [up.x, up.y, up.z];
     const stars = kind === 'stars', me = k.i === 0;
     // the player's own head sprays burst right under the camera: half as many (render/lensMath.js)
     particles.burst(p, Math.max(1, Math.round(n * few * (me ? 0.5 : 1))), stars
@@ -428,7 +432,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const n = Math.floor(a.emitAcc);
     if (n < 1) return;
     a.emitAcc -= n;
-    const c = V.set(0, A.upM * 0.6, 0).applyQuaternion(k.root.quaternion).add(k.root.position);
+    const c = V.set(0, A.upM * 0.6 * KS, 0).applyQuaternion(k.root.quaternion).add(k.root.position);
     particles.burst([c.x, c.y, c.z], n, { colours: [A.colours[o.aura] || '#ffffff', '#ffffff'], speed: A.moteSpeedMps * 0.6, sizeM: A.moteSizeM,
       lifeS: A.moteLifeS, sparkle: 0.7, up: A.moteSpeedMps, g: -0.4 });
   }
@@ -440,9 +444,9 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     if (!c) return;
     if (mk.id !== o.mark) { mk.id = o.mark; mk.u.cell.value.set(c.col, c.row); }
     const t = k.react.t, slow = gentle ? 0.5 : 1, kk = o.markK;
-    const side = M.sided.includes(o.mark) ? M.sideM : 0, up = M.upM + (k.tag && k.tag.visible ? LOOK.tagSizeM[1] + 0.2 : 0);
+    const side = M.sided.includes(o.mark) ? M.sideM : 0, up = M.upM + (k.tag && k.tag.visible ? LOOK.tagSizeM[1] * SPRITE_KEEP + 0.2 : 0);
     mk.sprite.position.set(side, up + o.lift + Math.sin(t * 6.283 * M.bobHz * slow) * M.bobM * slow, 0);
-    mk.sprite.scale.setScalar(M.sizeM * (M.popIn + (1 - M.popIn) * kk));
+    mk.sprite.scale.setScalar(M.sizeM * SPRITE_KEEP * (M.popIn + (1 - M.popIn) * kk));
     mk.u.k.value = kk;
     mk.u.rot.value = o.mark === 'swirl' ? -t * M.spinRadps * slow : Math.sin(t * 6.283 * M.wobbleHz * slow) * M.wobbleRad * slow;
   }
