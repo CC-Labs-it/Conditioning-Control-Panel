@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -28,7 +29,7 @@ public sealed class LeashHolderCard : Border
     private string? _sheet, _videoFor;
     private int _videoCap = LeashVideoCap.Default;
     private (string Text, bool Good)? _result;
-    private DispatcherTimer? _resultTimer;
+    private ITimer? _resultTimer;
     private DateTimeOffset _resultUntil;
     private static readonly LeashTugThrottle TugThrottle = new();
 
@@ -50,17 +51,13 @@ public sealed class LeashHolderCard : Border
         Padding = new Thickness(12);
         Margin = new Thickness(0, 4, 0, 6);
         Child = _body;
-        DetachedFromVisualTree += (_, _) => _resultTimer?.Stop();
-        AttachedToVisualTree += (_, _) =>
-        {
-            if (_result == null || _resultTimer == null) return;
-            var remaining = _resultUntil - DateTimeOffset.UtcNow;
-            if (remaining <= TimeSpan.Zero) { _result = null; Render(); }
-            else { _resultTimer.Interval = remaining; _resultTimer.Start(); }
-        };
+        DetachedFromVisualTree += (_, _) => { _resultTimer?.Dispose(); _resultTimer = null; };
+        AttachedToVisualTree += (_, _) => { if (_result != null) ArmExpiry(); };
         Render();
     }
 
+    /// <summary>Clock for the 3 s send-feedback expiry; tests swap in a stepped one.</summary>
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
     internal string? OpenSheet => _sheet;
     internal string? ResultText => _result?.Text;
     internal void Update(HeldLeash held) { _held = held; Render(); }
@@ -336,11 +333,21 @@ public sealed class LeashHolderCard : Border
         bool good = LeashUiRules.IsGood(r.Status);
         _result = (good ? goodText : r.Status == LeashSendStatus.Dnd && r.DndUntil is { } u
             ? Loc.GetF("leash_res_dnd_until", _held.Who.Name, LeashUiRules.DndUntilText(u)) : Loc.Get(LeashUiRules.ResultKey(r.Status)), good);
-        _resultTimer?.Stop();
-        _resultUntil = DateTimeOffset.UtcNow.AddSeconds(3);
-        _resultTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _resultTimer.Tick += (_, _) => { _resultTimer?.Stop(); _result = null; Render(); };
-        _resultTimer.Start(); Render();
+        _resultUntil = Clock.GetUtcNow().AddSeconds(3);
+        ArmExpiry(); Render();
+    }
+    private void ArmExpiry()
+    {
+        _resultTimer?.Dispose();
+        var remaining = _resultUntil - Clock.GetUtcNow();
+        if (remaining <= TimeSpan.Zero) { ExpireResult(); return; }
+        _resultTimer = Clock.CreateTimer(_ => Dispatcher.UIThread.Post(ExpireResult), null, remaining, Timeout.InfiniteTimeSpan);
+    }
+    private void ExpireResult()
+    {
+        // A superseded timer's queued post must not clear a newer word early.
+        if (_result == null || Clock.GetUtcNow() < _resultUntil) return;
+        _resultTimer?.Dispose(); _resultTimer = null; _result = null; Render();
     }
 
     private static TextBlock Text(string text, double size, IBrush brush, string? tag = null)

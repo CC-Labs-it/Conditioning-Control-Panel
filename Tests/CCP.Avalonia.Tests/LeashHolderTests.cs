@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -24,6 +25,26 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class LeashHolderTests
 {
+    private sealed class SteppedClock : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);
+        private readonly List<(DateTimeOffset Due, TimerCallback Cb)> _due = new();
+        public override DateTimeOffset GetUtcNow() => _now;
+        public override ITimer CreateTimer(TimerCallback cb, object? state, TimeSpan due, TimeSpan period)
+        { var t = (_now + due, cb); _due.Add(t); return new Handle(() => _due.Remove(t)); }
+        public void Step(TimeSpan by)
+        {
+            _now += by;
+            foreach (var t in _due.Where(t => t.Due <= _now).ToArray()) { _due.Remove(t); t.Cb(null); }
+        }
+        private sealed class Handle(Action drop) : ITimer
+        {
+            public bool Change(TimeSpan d, TimeSpan p) => false;
+            public void Dispose() => drop();
+            public ValueTask DisposeAsync() { drop(); return ValueTask.CompletedTask; }
+        }
+    }
+
     private sealed class Service : ILeashService
     {
         public bool Available => true;
@@ -223,14 +244,17 @@ public sealed class LeashHolderTests
     {
         if (Application.Current == null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var svc = new Service(); var card = new LeashHolderCard(Held(), () => svc);
+        var clock = new SteppedClock();
+        var svc = new Service(); var card = new LeashHolderCard(Held(), () => svc) { Clock = clock };
         var window = new Window { Content = card };
         try
         {
             window.Show();
             await card.SendRewardAsync(RewardKind.Pardon, null, null);
             Assert.NotNull(card.ResultText);
-            await Task.Delay(3200, TestContext.Current.CancellationToken);
+            clock.Step(TimeSpan.FromMilliseconds(2900)); Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(card.ResultText);
+            clock.Step(TimeSpan.FromMilliseconds(200)); Dispatcher.UIThread.RunJobs();
             Assert.Null(card.ResultText);
         }
         finally { window.Close(); }
