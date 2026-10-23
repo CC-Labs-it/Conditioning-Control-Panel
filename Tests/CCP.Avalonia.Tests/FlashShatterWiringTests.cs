@@ -162,7 +162,7 @@ public sealed class FlashShatterWiringTests
     [InlineData("", false)]
     [InlineData(PrizeOwnership.FlashPendulum, true)]
     [InlineData(PrizeOwnership.FlashDriftBounce, true)]
-    public Task Shatter_row_and_v2_box_show_only_with_a_v2_prize(string owned, bool shown) => OnUi((_, _) =>
+    public Task Shatter_row_requires_a_v2_prize_and_the_box_keeps_the_unowned_offer(string owned, bool shown) => OnUi((_, _) =>
     {
         PrizeOwnership.IsGranted = id => id == owned;
         var card = new FlashFeatureControl();
@@ -171,7 +171,9 @@ public sealed class FlashShatterWiringTests
         try
         {
             Assert.Equal(shown, card.FindControl<Control>("RowShatter")!.IsVisible);
-            Assert.Equal(shown, card.FindControl<Control>("BoxFlashV2")!.IsVisible);
+            // The incoming Get it row keeps the box open even when Shatter is unowned.
+            Assert.True(card.FindControl<Control>("BoxFlashV2")!.IsVisible);
+            Assert.Equal(!shown, card.FindControl<Control>("RowGetFlashesV2")!.IsVisible);
         }
         finally { host.Close(); }
     });

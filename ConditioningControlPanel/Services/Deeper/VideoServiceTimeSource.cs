@@ -141,13 +141,13 @@ namespace ConditioningControlPanel.Services.Deeper
         public void Pause() => _video.PausePrimary();
         public void Play() => _video.PlayPrimary();
 
-        public Rect GetVideoRect()
+        public PlaybackRect GetVideoRect()
         {
             try
             {
                 var w = _video.PrimaryVideoWindow;
-                if (w == null) return Rect.Empty;
-                if (w.ActualWidth <= 0 || w.ActualHeight <= 0) return Rect.Empty;
+                if (w == null) return PlaybackRect.Empty;
+                if (w.ActualWidth <= 0 || w.ActualHeight <= 0) return PlaybackRect.Empty;
 
                 // The video window is borderless + maximized, so its
                 // Left/Top/Width/Height report stale restore bounds (~400x300 in
@@ -163,11 +163,10 @@ namespace ConditioningControlPanel.Services.Deeper
                 var outer = new Rect(originPx.X / sx, originPx.Y / sy, w.ActualWidth, w.ActualHeight);
 
                 var aspect = GetVideoAspect();
-                if (aspect <= 0) return outer; // native size not known yet -> full area
-
-                return FitContain(outer, aspect);
+                var r = aspect <= 0 ? outer : FitContain(outer, aspect); // native size not known yet -> full area
+                return new PlaybackRect(r.X, r.Y, r.Width, r.Height);
             }
-            catch { return Rect.Empty; }
+            catch { return PlaybackRect.Empty; }
         }
 
         /// <summary>
