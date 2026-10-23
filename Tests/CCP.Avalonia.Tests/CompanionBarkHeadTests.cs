@@ -81,6 +81,7 @@ public sealed class CompanionBarkHeadTests
     {
         var old = (BarkHead.Engine, ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.CornerHit);
         var eng = ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.Engine;
+        var bounds = (eng.MinX, eng.MinY, eng.MaxX, eng.MaxY);
         BarkHead.Engine = Seeded(Rule(trigger, "boing"), out var spoken);
         try
         {
@@ -102,6 +103,7 @@ public sealed class CompanionBarkHeadTests
             (BarkHead.Engine, ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.CornerHit) = old;
             ConditioningControlPanel.Avalonia.Views.Overlays.BouncingTextOverlay.Stop();
             eng.Measure = null;
+            eng.SetBounds(bounds.MinX, bounds.MinY, bounds.MaxX, bounds.MaxY);
         }
     });
 
