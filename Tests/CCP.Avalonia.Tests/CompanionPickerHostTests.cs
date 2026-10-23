@@ -75,23 +75,38 @@ public sealed class CompanionPickerHostTests
     });
 
     [Fact]
-    public void SingleLiveLookExplainsTheDisabledPickerAndOffLookKeepsItsOwnHint() => AvaloniaTestDispatcher.Run(() =>
+    public void SingleLookHintOnlyForAOneLookModAndOffLookKeepsItsOwnHint() => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
+        var oldActive = CoreMods.ActiveModPackageProvider;
+        var one = new ModPackage(new ModManifest { Id = "one-look", Name = "One", SupportedAvatarSets = new() { 1 } }, null, false);
+        var many = new ModPackage(new ModManifest { Id = "many-looks", Name = "Many" }, null, false);
+        var active = one;
+        CoreMods.ActiveModPackageProvider = () => active;
         var tube = new AvatarTubeWindow(null);
         try
         {
             var card = new CompanionPickerCard();
+            var hint = card.FindControl<TextBlock>("TxtAvatarHint")!;
             card.FillAvatars(tube);
             Assert.False(card.FindControl<ComboBox>("CmbAvatar")!.IsEnabled);
             Assert.Single(card.FindControl<ComboBox>("CmbAvatar")!.Items);
-            Assert.True(card.FindControl<TextBlock>("TxtAvatarHint")!.IsVisible);
-            Assert.Equal(Loc.Get("modmgr_avatar_single_hint"), card.FindControl<TextBlock>("TxtAvatarHint")!.Text);
+            Assert.True(hint.IsVisible);
+            Assert.Equal(Loc.Get("modmgr_avatar_single_hint"), hint.Text);
+            // WPF CompanionPickerCard.xaml.cs:202: a mod with several looks gets no single-look hint.
+            active = many;
+            card.FillAvatars(tube);
+            Assert.False(hint.IsVisible);
             card.FillAvatars(null);
-            Assert.Equal(Loc.Get("modmgr_avatar_off_hint"), card.FindControl<TextBlock>("TxtAvatarHint")!.Text);
+            Assert.True(hint.IsVisible);
+            Assert.Equal(Loc.Get("modmgr_avatar_off_hint"), hint.Text);
             Assert.True(card.FindControl<Button>("BtnTurnOn")!.IsVisible);
         }
-        finally { tube.Close(); }
+        finally
+        {
+            tube.Close();
+            CoreMods.ActiveModPackageProvider = oldActive;
+        }
     });
 
     [Theory]

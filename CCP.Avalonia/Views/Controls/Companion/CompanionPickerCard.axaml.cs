@@ -136,10 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 var personalities = ModCompanionContent.GetPersonalities(
                     mod.Id, mod.InstalledPath, mod.Manifest.Personalities, out _);
-                var singleEmote = (mod.Id == BuiltInMods.BambiSleepId || mod.Id == BuiltInMods.SissyHypnoId)
-                                  && (mod.Manifest.SupportedAvatarSets?.Count ?? 0) == 0
-                                  && (mod.Manifest.CustomAvatarSets?.Count ?? 0) == 0;
-                var info = CompanionPreview.Build(mod.Manifest, personalities, singleEmote,
+                var info = CompanionPreview.Build(mod.Manifest, personalities, IsSingleEmote(mod),
                     neutral: mod.Id == BuiltInMods.CCPDefaultId);
 
                 TxtPreviewName.Text = info.Name;
@@ -160,6 +157,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             // straight to WPF's fallback, pose 1 from the mod's own folder.
             ShowPortrait(PortraitInFolder(mod.InstalledPath));
         }
+
+        private static bool IsSingleEmote(ModPackage mod)
+            => (mod.Id == BuiltInMods.BambiSleepId || mod.Id == BuiltInMods.SissyHypnoId)
+               && (mod.Manifest.SupportedAvatarSets?.Count ?? 0) == 0
+               && (mod.Manifest.CustomAvatarSets?.Count ?? 0) == 0;
 
         /// <summary>Pose 1 from a mod's own folder, never through the resolver (which answers
         /// for the ACTIVE mod). Null when the mod ships no pose art on disk.</summary>
@@ -203,7 +205,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 CmbAvatar.Items.Add(item);
                 CmbAvatar.SelectedItem = item;
                 CmbAvatar.IsEnabled = false;
-                ShowHint(Loc.Get("modmgr_avatar_single_hint"));
+                // WPF CompanionPickerCard.xaml.cs:202 shows the hint only when the mod has one look.
+                var active = CoreMods.ActiveModPackage;
+                if (active?.Manifest != null && CompanionPreview.CountLooks(active.Manifest, IsSingleEmote(active)) == 1)
+                    ShowHint(Loc.Get("modmgr_avatar_single_hint"));
+                else TxtAvatarHint.IsVisible = false;
             }
             ShowPortrait(ModArt.TryLoad(set == 1 ? "avatar_pose1.png" : $"avatar{set}_pose1.png", 240));
         }

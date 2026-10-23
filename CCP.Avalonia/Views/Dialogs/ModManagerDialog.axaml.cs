@@ -119,8 +119,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _btnExport.Click += (_, _) => BtnExport_Click();
 
             _companionCard = this.FindControl<CompanionPickerCard>("CompanionCard")!;
-            // ponytail: this head has no PersonalityStudio; null keeps its more-options link hidden.
-            _companionCard.MorePersonalityOptions = null;
+            // ponytail: this head has no PersonalityStudio, so MorePersonalityOptions stays null and the
+            // more-options link hidden (ledger row views-personality-studio).
             RefreshModList();
 
             // WPF SubscribeToPackEvents. Two signals, deliberately. PackInstalled = the bytes are on
