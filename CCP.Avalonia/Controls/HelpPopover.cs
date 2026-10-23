@@ -21,9 +21,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// Rich, interactive help for an existing "?" button. The card is built from the shared Core
     /// <see cref="HelpContent"/> rather than keeping a second catalogue in the head.
     ///
-    /// <para>The popup deliberately remains text-only. Core topics may carry clip metadata, but
-    /// this head has no playback surface; opening a window that cannot play the clip would make
-    /// media parity look complete when it is not.</para>
+    /// <para>As in WPF, a drawn help loop wins; a topic with only a clip shows a muted looping
+    /// <see cref="Views.Controls.InlineLoopVideo"/> poster instead.</para>
     ///
     /// <para>Hover opens after a short delay and keeps the card alive while the pointer crosses the
     /// gap into it. A click pins it; clicking again, pressing Escape, clicking away, deactivation,
@@ -284,6 +283,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
             var body = new StackPanel { MaxWidth = BodyMaxWidth };
             if (HelpLoops.HelpLoopRegistry.TryGet(_content.SectionId, out var scene))
                 body.Children.Add(BuildLoop(scene, pink));
+            else if (_content.HasClip)
+                body.Children.Add(BuildVideoPoster(pink));
 
             var header = new Border
             {
@@ -457,6 +458,51 @@ namespace ConditioningControlPanel.Avalonia.Controls
             });
             panel.Children.Add(new HelpLoops.HelpLoopSteps(view, pink));
             return panel;
+        }
+
+        /// <summary>WPF HelpPopover.BuildVideoPoster (:201): the muted looping clip in a rounded
+        /// pink-rimmed poster with its localized caption. The surface plays while the card is open
+        /// and frees its player when closing detaches it.</summary>
+        private Control BuildVideoPoster(IBrush pink)
+        {
+            var clip = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "Resources", "tutorial_videos", _content.ClipFile!);
+            var overlay = new Grid();
+            overlay.Children.Add(new Views.Controls.InlineLoopVideo(clip) { Name = "HelpInlineVideo" });
+            if (!string.IsNullOrWhiteSpace(_content.CaptionKey))
+            {
+                var caption = new TextBlock
+                {
+                    Foreground = Brush("TextLightBrush", Colors.White),
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                };
+                caption.Bind(TextBlock.TextProperty, new Binding($"[{_content.CaptionKey}]")
+                {
+                    Source = LocalizationManager.Instance,
+                    Mode = BindingMode.OneWay,
+                });
+                overlay.Children.Add(new Border
+                {
+                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Padding = new Thickness(10, 6),
+                    Background = new SolidColorBrush(Color.FromArgb(0x99, 0, 0, 0)),
+                    Child = caption,
+                });
+            }
+            return new Border
+            {
+                Height = 184,
+                Margin = new Thickness(12, 12, 12, 0),
+                CornerRadius = new CornerRadius(8),
+                BorderBrush = pink,
+                BorderThickness = new Thickness(1),
+                Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x20)),
+                ClipToBounds = true,
+                Child = overlay,
+            };
         }
 
         /// <summary>WPF HelpTooltipBuilder.Marked (:44): <c>**word**</c> becomes a SemiBold run in the

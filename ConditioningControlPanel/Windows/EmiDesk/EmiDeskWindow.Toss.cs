@@ -31,27 +31,13 @@ public partial class EmiDeskWindow
 {
     // ---------------------------------------------------------------- the numbers
 
-    /// <summary>A fling is at least this fast (DIP/s). CAMPUS <c>FLING_SPEED</c> 1.5 px/ms.</summary>
-    private const double FlingSpeedDip = 1500.0;
-
-    /// <summary>...held at least this long. CAMPUS <c>FLING_MS</c>.</summary>
-    private const int FlingHoldMs = 120;
-
-    /// <summary>A let-go this soon after she was last flying still counts as a throw: a hand
-    /// always slows down in the last frame or two before it opens.</summary>
-    private const int FlingGraceMs = 150;
-
-    /// <summary>The ordinary landing: emi.css <c>bounce</c>, scale(1.08, .94) at 40 %, 340 ms.</summary>
-    private const double LandSquashX = 1.08, LandSquashY = 0.94;
-    private const int LandMs = 340;
-
-    /// <summary>The thrown landing: emi.css <c>thud</c>, a stretch on the way in, then
-    /// scale(1.10, .88), 280 ms.</summary>
-    private const double ThudSquashX = 1.10, ThudSquashY = 0.88;
-    private const int ThudMs = 280;
-
-    /// <summary>The pickup face and the landing face. CAMPUS holds the landing face 600 ms.</summary>
-    private const string PickupFace = "o_o";
+    // The numbers and the throw detection live in Core (EmiTossRules / EmiFlingDetector) so the
+    // Avalonia desk lands her the same way.
+    private const double LandSquashX = EmiTossRules.LandSquashX, LandSquashY = EmiTossRules.LandSquashY;
+    private const int LandMs = EmiTossRules.LandMs;
+    private const double ThudSquashX = EmiTossRules.ThudSquashX, ThudSquashY = EmiTossRules.ThudSquashY;
+    private const int ThudMs = EmiTossRules.ThudMs;
+    private const string PickupFace = EmiTossRules.PickupFace;
 
     private static readonly EmiChain LandChain = new(
         "land", "PUT DOWN",
@@ -60,10 +46,7 @@ public partial class EmiDeskWindow
 
     // ---------------------------------------------------------------- the state
 
-    private double _tossLastY;
-    private double _tossVy;
-    private DateTime _fastSince = DateTime.MinValue;
-    private DateTime _flingUntil = DateTime.MinValue;
+    private readonly EmiFlingDetector _toss = new();
 
     // ---------------------------------------------------------------- pickup
 
@@ -72,10 +55,7 @@ public partial class EmiDeskWindow
     {
         try
         {
-            _tossLastY = Top;
-            _tossVy = 0;
-            _fastSince = DateTime.MinValue;
-            _flingUntil = DateTime.MinValue;
+            _toss.PickUp(Top);
 
             EmiSfx.Lift();
             if (!_player.IsLive && _wobbleFace == null) DrawFace(PickupFace);
@@ -96,23 +76,7 @@ public partial class EmiDeskWindow
     {
         try
         {
-            double y = Top;
-            double raw = (y - _tossLastY) / dt;
-            _tossLastY = y;
-            _tossVy = _tossVy * WobbleVelKeep + raw * (1.0 - WobbleVelKeep);
-
-            var now = DateTime.UtcNow;
-            double speed = Math.Sqrt(vx * vx + _tossVy * _tossVy);
-            if (speed >= FlingSpeedDip)
-            {
-                if (_fastSince == DateTime.MinValue) _fastSince = now;
-                if ((now - _fastSince).TotalMilliseconds >= FlingHoldMs)
-                    _flingUntil = now.AddMilliseconds(FlingGraceMs);
-            }
-            else
-            {
-                _fastSince = DateTime.MinValue;
-            }
+            _toss.Frame(Top, dt, vx, WobbleVelKeep, DateTime.UtcNow);
         }
         catch (Exception ex)
         {
@@ -127,9 +91,7 @@ public partial class EmiDeskWindow
     {
         try
         {
-            bool flung = DateTime.UtcNow < _flingUntil;
-            _flingUntil = DateTime.MinValue;
-            _fastSince = DateTime.MinValue;
+            bool flung = _toss.PutDown(DateTime.UtcNow);
 
             var ctx = new { zoneRow = ZoneRow(), flings20 = false, flings50 = false };
 
@@ -224,17 +186,5 @@ public partial class EmiDeskWindow
         {
             return "mid";
         }
-    }
-}
-
-/// <summary>The pure half of the toss, so the zone split can be tested without a window.</summary>
-public static class EmiTossRules
-{
-    /// <summary>top / mid / bottom third of a span, by the point's y. Degenerate spans are "mid".</summary>
-    public static string ZoneRow(double y, double top, double height)
-    {
-        if (height <= 0) return "mid";
-        double f = (y - top) / height;
-        return f < 1.0 / 3.0 ? "top" : f >= 2.0 / 3.0 ? "bottom" : "mid";
     }
 }

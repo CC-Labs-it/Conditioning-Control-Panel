@@ -271,18 +271,21 @@ internal static class FypRules
         JObject.FromObject(new { type = "sub-probe", sub = rawSub ?? "", ok = false, videoCount = (int?)null, error = "invalid" });
 
     /// <summary>The frames after a remote batch: the entries (when any), then the status either way so the
-    /// page clears its spinner. "added" is the FRESH count: the raw page kept the dry backoff from arming.</summary>
-    public static IEnumerable<JObject> BatchFrames(FypOnlineCoordinator.FeedBatch batch)
+    /// page clears its spinner. "added" is the FRESH count: the raw page kept the dry backoff from arming.
+    /// <paramref name="newToPage"/>: ids this page was never handed (WPF ScrolllerReuse.CountNewToPage); a
+    /// spent/away batch of cached files the page already holds is not fresh. Null: every entry is.</summary>
+    public static IEnumerable<JObject> BatchFrames(FypOnlineCoordinator.FeedBatch batch, int? newToPage = null)
     {
         int count = batch.Entries?.Count ?? 0;
+        int fresh = newToPage ?? count;
         if (count > 0) yield return JObject.FromObject(new { type = "assets-append", assets = batch.Entries });
         yield return JObject.FromObject(new
         {
             type = "online-status",
             ok = batch.Error == null,
             error = batch.Error,
-            added = count,
-            fresh = count,
+            added = fresh,
+            fresh = fresh,
             dry = batch.Dry,
             poolTotal = batch.PoolTotal,
         });
