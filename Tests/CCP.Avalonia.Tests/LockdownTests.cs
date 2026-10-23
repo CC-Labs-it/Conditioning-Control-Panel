@@ -338,4 +338,43 @@ public sealed class LockdownTests
         Assert.False(File.Exists(Path.Combine(CorePaths.UserData, "lockdown_recovery.json")));
         killed.Dispose();
     }
+
+    /// <summary>WPF 605c451ae: an empty or broken recovery file (a kill mid-write) still means a lockdown was
+    /// interrupted, and the settings on disk may carry its panic-off. It fails OPEN (LockdownExitRule.UnreadableRecovery):
+    /// panic on, Strict Lock off. It used to restore nothing, leaving the panic key off for good.</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("{\"StrictLockEnabled\":tr")]
+    [InlineData("null")]
+    public void AnUnreadableRecoveryFile_FailsOpen(string content)
+    {
+        var s = CoreSettings.Current;
+        (s.PanicKeyEnabled, s.StrictLockEnabled) = (false, true);   // a lockdown's own values, left on disk
+        var path = Path.Combine(CorePaths.UserData, "lockdown_recovery.json");
+        Directory.CreateDirectory(CorePaths.UserData);
+        File.WriteAllText(path, content);
+        LockdownService.RecoverIfNeeded();
+        Assert.True(s.PanicKeyEnabled);
+        Assert.False(s.StrictLockEnabled);
+        Assert.False(File.Exists(path));
+    }
+
+    /// <summary>WPF 605c451ae LockdownExitRule.PhraseMatches: the same words typed full-width, with a doubled space
+    /// or a touch keyboard's period still open the lockdown; other words never do.</summary>
+    [Theory]
+    [InlineData("let me out", true)]
+    [InlineData("ｌｅｔ　ｍｅ　ｏｕｔ", true)]
+    [InlineData("Let  me out.", true)]
+    [InlineData("let me in", false)]
+    [InlineData("please let me out", false)]
+    public void TheExitPhrase_IsForgivingAboutTyping_NeverAboutWords(string typed, bool opens)
+    {
+        Arm(forceStrict: true, disablePanic: true);
+        using var ld = new LockdownService();
+        ld.Activate(TimeSpan.FromMinutes(30));
+        Assert.Equal(opens, ld.TryExitWithPhrase(typed));
+        Assert.Equal(!opens, ld.IsActive);
+        if (ld.IsActive) ld.Deactivate();
+        Assert.True(CoreSettings.Current.PanicKeyEnabled);
+    }
 }

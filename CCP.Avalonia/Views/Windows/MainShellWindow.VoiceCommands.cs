@@ -17,6 +17,7 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Possession;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Speech;
 using Serilog;
 
@@ -40,6 +41,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Recognize = (grammar, opts) => VoiceSpeech?.RecognizeOneOfAsync(grammar, opts, _voicePromptCts?.Token ?? default)
                                            ?? Task.FromResult(PhraseResult.NotAvailable),
             ActionFor = VoiceAction,
+            // The panic applies its own rule (hard rule 6): false = refused, nothing is said.
+            RunFor = n => n == "panic" ? RunVoicePanic : null,
             IsBlocked = g => g == VoiceGuard.Lockdown ? LockdownActive : VoiceStopLocked(),
             OnRefused = () => LockdownService.Current?.NotifyEscapeAttempt(EscapeKinds.Stop),
             ShowListening = line => _avatarTubeWindow?.ShowListeningBubble(line),
@@ -118,7 +121,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The intents this head can run (null = not on this head, so not in the grammar).</summary>
         private Action? VoiceAction(string name) => name switch
         {
-            "panic" => VoicePanic,
             "bubbles_on" when CoreBubbles.StartAction != null => CoreBubbles.Start,
             "bubbles_off" when CoreBubbles.StopAction != null => CoreBubbles.Stop,
             "video_on" when CoreEngine.Video != null => () => CoreEngine.Video?.Trigger(),
@@ -136,14 +138,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _ => null,
         };
 
-        /// <summary>WPF TriggerPanicFromRemote: the spoken safe word. Deliberately NOT refused under
-        /// Lockdown or a strict lock - it is the intended way out (decisions "Panic ↔ mic").</summary>
-        internal void VoicePanic()
+        /// <summary>WPF TriggerPanicFromRemote: the spoken safe word. Hard rule 6 (owner, 2026-10-22, WPF
+        /// 769373c28): it reaches exactly as far as the panic key (Core VoicePanicReach). Under Lockdown or
+        /// with panic switched off it does nothing, except the leash part while leashed, as the key does
+        /// (PanicKeyLeashOnly). Strict Lock alone leaves it whole, as it leaves the key. True = the whole
+        /// panic ran; the recogniser speaks its "everything's off" line only then (VoiceCommandHost.RunFor).
+        /// Supersedes the 2026-09-30 "voice panic stays unguarded" decision.</summary>
+        internal bool RunVoicePanic()
         {
+            var reach = VoicePanicReach.Decide(LockdownActive, CoreSettings.Current.PanicKeyEnabled, LeashHoldLeashed);
+            if (reach == VoicePanicReach.Reach.LeashOnly)
+            {
+                Log.Information("Voice panic while the panic key cannot run: leash safety only");
+                PanicKeyLeashOnly();
+                return false;
+            }
+            if (reach == VoicePanicReach.Reach.Refused)
+            {
+                Log.Information("Voice panic refused: the panic key cannot run (Lockdown or panic off)");
+                return false;
+            }
             Log.Information("Panic triggered by voice");
             PanicSurfaces.StopAll("voice", this);
             ShowFromTray();
+            return true;
         }
+
+        /// <summary><see cref="RunVoicePanic"/> as an Action (tests and callers that need no answer).</summary>
+        internal void VoicePanic() => RunVoicePanic();
 
         /// <summary>Panic (key, tray, voice): abort the capture and the command chain in flight. The wake
         /// loop and push-to-talk stay armed (decisions "Panic ↔ mic").</summary>

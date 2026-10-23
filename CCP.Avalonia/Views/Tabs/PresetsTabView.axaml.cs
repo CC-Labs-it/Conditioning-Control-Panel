@@ -481,8 +481,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (Shell?.RefuseActionIfSessionLocked($"load-preset:{preset.Name}") ?? CoreSession.IsSessionRunning) return false;
             var cur = CoreSettings.Current;
             bool strictBefore = cur.StrictLockEnabled, bubbleStrictBefore = cur.BubbleCountStrictLock;
+            bool panicBefore = cur.PanicKeyEnabled;   // WPF 769373c28: Lockdown owns the panic key
             preset.ApplyTo(cur);
             ConditioningControlPanel.Services.LockdownStrictHold.RestoreAfterApply(cur, strictBefore, bubbleStrictBefore);
+            ConditioningControlPanel.Services.LockdownPanicHold.RestoreAfterApply(cur, panicBefore);
             CoreSettings.Save();
             CoreEngine.Reconcile();
             RefreshPresetsList();

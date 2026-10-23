@@ -172,7 +172,7 @@ Remote Control – escape integrity. A remote controller may never remove the su
 - Advisor: supervisor.
 
 ## 2026-09-30: Panic ↔ mic (avalonia-port/voice-commands)
-Panic ↔ mic: panic aborts in-flight speech capture/command chain (SpeechEngine cancel) but leaves the wake-word loop and PTT armed; mic teardown stays with She's Listening, the privacy pill and shutdown. Rationale: under Lockdown the spoken 'panic' is the only repeatable in-app exit; disarming the mic would violate escape integrity. Voice 'panic' stays unguarded by Lockdown/StrictLock (WPF parity, VoiceCommands.cs:108-109); only the global panic hotkey is suppressed under Lockdown.
+Panic ↔ mic: panic aborts in-flight speech capture/command chain (SpeechEngine cancel) but leaves the wake-word loop and PTT armed; mic teardown stays with She's Listening, the privacy pill and shutdown. Rationale: under Lockdown the spoken 'panic' is the only repeatable in-app exit; disarming the mic would violate escape integrity. Voice 'panic' stays unguarded by Lockdown/StrictLock (WPF parity, VoiceCommands.cs:108-109); only the global panic hotkey is suppressed under Lockdown. SUPERSEDED 2026-10-23 (hard rule 6, owner 2026-10-22): the voice panic reaches exactly as far as the panic key; see "Voice panic obeys the panic key" below.
 - Test: `Tests/CCP.Avalonia.Tests/VoiceCommandsTests.cs` (PanicAbortsTheCaptureButTheLoopStaysArmed, TheSpokenSafeWordWorksUnderLockdown; fail-proven).
 - Advisor: oracle-deep.
 
@@ -611,7 +611,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   (`CCP.Avalonia/Views/Windows/PanicSurfaces.cs`). As a result the safe word now also stops a Chaos run and the
   camera, and the tray now also stops the lock-card scheduler and the Blink Trainer.
 - Deliberate deviation from WPF (whose routes each stop a hand-written subset): the safe word is the only exit under
-  Lockdown, so it must end everything the panic key would. Reviewer-checked (safety review, 2026-10-08).
+  Lockdown, so it must end everything the panic key would. (The "only exit under Lockdown" half is SUPERSEDED 2026-10-23: under Lockdown the safe word does nothing, as the key does.) Reviewer-checked (safety review, 2026-10-08).
 - Tests: `Tests/CCP.Avalonia.Tests/PanicSurfacesTests.cs` (routes call StopAll once, exact surface order, safe word
   stops chaos and the camera, starter scan); each fail-proven.
 ## 2026-10-08: Phrase import confirm matches WPF's two buttons (avalonia-port/rows-settings-data)
@@ -1314,3 +1314,14 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+## 2026-10-23: Voice panic obeys the panic key; Escape pauses every hosted game (port72/panic)
+- Hard rule 6 (owner 2026-10-22, WPF 769373c28): the spoken safe word reaches exactly as far as the panic key (Core
+  `VoicePanicReach`, shared with `BlinkStopGate`). Under Lockdown or with panic off it does nothing and says nothing, except
+  the leash part while leashed (WPF `LeashPanicKeyWhilePanicOff`); the panic key gets the same leash part on this head
+  (`MainShellWindow.PanicKeyLeashOnly` -> `LeashTaskHost.OnPanicPress(panicRuns: false)`). Strict Lock alone leaves both whole.
+  Core `VoiceCommandHost.RunFor`: an intent with its own safety rule returns false to keep its confirmation unsaid.
+- Escape pause (owner 2026-10-12, WPF 251b60807): the race, the board, the Breakout demo, DtRH and the Graded Intake keep a
+  first Escape as their pause (`GameWindow.Escape.cs`, `IntakeHostWindow.KeptEscapeReady`) only once their page is up; a
+  booting page's Escape is a full panic. Not hosted here yet: the full Breakout, the Arcademy, the Back Room room, Goon.
+- A preset or recalled config loaded mid-Lockdown never changes the panic key (Core `LockdownPanicHold`); the Lockdown
+  padlock never covers a running lockdown, and an unreadable recovery file fails open (Core `LockdownExitRule`).

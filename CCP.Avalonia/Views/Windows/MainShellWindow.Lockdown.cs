@@ -79,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PaintLockdownBadge();
                 Platform.Win32Input.ApplyLockdown(LockdownActive, CoreSettings.Current.LockdownBlockSystemKeys);   // WPF Lab.cs:621/714
                 ApplyLockdownTheme(LockdownActive);
+                RefreshLockdownGate();   // WPF 605c451ae: the padlock stands down for the run, back after it
             });
             void Flash() => global::Avalonia.Threading.Dispatcher.UIThread.Post(PlayLockdownActivationAnimation);
             // WPF OnLockdownTick (Lab.cs:771) and OnLockdownTimerRestarted (Lab.cs:1039): the badge

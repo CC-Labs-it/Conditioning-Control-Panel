@@ -174,6 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.
+                    _shellExiting = true;   // on its way out: it no longer keeps an Escape (GameWindow.Escape.cs)
                     DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
                     break;
                 case "exit-done":

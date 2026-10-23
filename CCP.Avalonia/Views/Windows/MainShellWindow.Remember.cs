@@ -80,8 +80,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 // Mid-Lockdown the strict flags stay on (#1282).
                 bool strictBefore = s.StrictLockEnabled, bubbleStrictBefore = s.BubbleCountStrictLock;
+                bool panicBefore = s.PanicKeyEnabled;   // WPF 769373c28: Lockdown owns the panic key
                 rc.Preset.ApplyTo(s);
                 ConditioningControlPanel.Services.LockdownStrictHold.RestoreAfterApply(s, strictBefore, bubbleStrictBefore);
+                ConditioningControlPanel.Services.LockdownPanicHold.RestoreAfterApply(s, panicBefore);
             }
 
             s.BrowserVideoMuted = rc.BrowserMuted;
