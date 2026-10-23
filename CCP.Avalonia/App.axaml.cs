@@ -161,16 +161,19 @@ namespace ConditioningControlPanel.Avalonia
         /// one-shot Hypnotube migration on CoreSettings.Current; with KnownVideoLinksProvider seeded
         /// below from the same Core title table WPF's AvatarTubeWindow.KnownVideoLinks starts from,
         /// that is the write WPF makes at launch (StartModsTests pins it against the Core golden).
-        /// The other CoreModsHooks stay unseeded: each targets a WPF service this head does not have
-        /// yet (Brain, Bark, Companion, DTRH/Arcademy hosts, ModResourceResolver's cache, the portrait
-        /// loader, the voice-line index, BambiSprite), and unseeded means "nothing to invalidate".
-        /// Seed each when its counterpart lands here.
+        /// The brain is built after the mod service, so its callback reads Brain lazily as WPF does.
+        /// The shared prompt prefix is also invalidated when a mod changes its content. BarkHead and
+        /// CompanionHead seed their own hooks later; the remaining head cache/host hooks stay unseeded.
+        /// ponytail: the remaining startup services and global hotkeys are the follow-up lane.
         /// </summary>
         internal static void StartMods()
         {
             // WPF seeds this with AvatarTubeWindow.KnownVideoLinks, which at startup is a copy of
             // the same Core table; this head has no per-mod link reload, so the table itself.
             CoreModsHooks.KnownVideoLinksProvider = () => HypnotubeDefaultLinks.KnownVideoTitles;
+            // WPF App.xaml.cs:317/327: discard stale voice context on a switch or content replacement.
+            CoreModsHooks.ModSwitched = name => Brain?.OnModSwitched(name);
+            CoreModsHooks.InvalidateStablePrompt = BambiSprite.InvalidateStablePrompt;
             Mods = new ModService();
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);

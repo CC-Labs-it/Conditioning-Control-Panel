@@ -101,7 +101,7 @@
                                     BorderThickness="0" Foreground="#90EE90"
                                     FontWeight="Bold" FontSize="13" Padding="14,6"
                                     ToolTip.Tip="Turn the offline mic on or off — wake word (&quot;Hey Bambi&quot;) + voice commands. Works whether or not Takeover is running.">
-                                <TextBlock Text="▶  Start listening"/>
+                                <fx:IconLabel Classes="filled" Kind="Play" Text="Start listening"/>
                             </Button>
                         </Border>
                     </Grid>
@@ -153,6 +153,7 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <Grid Grid.Column="0" Width="64" Height="64" VerticalAlignment="Center">
+                                        <Border x:Name="SL_StatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
                                         <Ellipse x:Name="SL_StatusDot" Width="64" Height="64" Fill="#3A3A52"
                                                  Stroke="{StaticResource SectionHueStudioBorderBrush}" StrokeThickness="2"/>
                                         <fx:IconGlyph Kind="Mic" Size="24" Foreground="{StaticResource TextLightBrush}"
@@ -496,8 +497,8 @@
                                     <fx:IconLabel Classes="vhead" Kind="BubbleMultiple" Text="Bubbles" Tag="voice:bubbles_on|bubbles_off"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="on "/><Run Text="“show me some bubbles” · “bubbles on” · “give me bubbles”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="off "/><Run Text="“stop the bubbles” · “no more bubbles” · “bubbles off”"/></TextBlock>
 
-                                    <fx:IconLabel Classes="vhead" Kind="Tv" Text="Video" Tag="voice:video_on|video_off|video_pause"/>
-                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="play "/><Run Text="“show me a video” · “play a video” · “put on a video”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="stop "/><Run Text="“stop the video” · “no more videos” · “video off”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="pause "/><Run Text="“pause the video” · “resume the video” · “keep playing”"/></TextBlock>
+                                    <fx:IconLabel Classes="vhead" Kind="Tv" Text="Video" Tag="voice:video_on|video_off|video_pause|video_resume"/>
+                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"><Run Foreground="{DynamicResource TextDimBrush}" Text="play "/><Run Text="“show me a video” · “play a video” · “put on a video”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="stop "/><Run Text="“stop the video” · “no more videos” · “video off”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="pause "/><Run Text="“pause the video”"/><LineBreak/><Run Foreground="{DynamicResource TextDimBrush}" Text="resume "/><Run Text="“resume the video” · “keep playing”"/></TextBlock>
 
                                     <fx:IconLabel Classes="vhead filled" Kind="Sparkle" Text="Flash" Tag="voice:flash_once"/>
                                     <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" LineHeight="21" Margin="0,0,0,14"

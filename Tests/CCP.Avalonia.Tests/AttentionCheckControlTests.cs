@@ -48,6 +48,15 @@ public sealed class AttentionCheckControlTests
         // Nothing is rasterized before attach, even after SetProgress: the density is unknown until then.
         Assert.Null(control.FindControl<Image>("DotRingGlow")!.Source);
         Assert.Same(group, control.FindControl<Image>("DotRingGlow")!.RenderTransform);
+        Assert.Equal(1, visuals.OfType<Border>().Count(border => border.BoxShadow.Count > 0));
+        Assert.Equal(expected, control.FindControl<Image>("DotRingGlow")!.Opacity, 8);
+    });
+
+    [Fact]
+    public void RingGlowStartsDark() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        Assert.Equal(0, new AttentionCheckControl().FindControl<Image>("DotRingGlow")!.Opacity);
     });
 
     [Fact]
@@ -60,6 +69,8 @@ public sealed class AttentionCheckControlTests
         var control = new AttentionCheckControl();
         var ring = control.FindControl<Ellipse>("DotRingFg")!;
         var scale = ((TransformGroup)ring.RenderTransform!).Children.OfType<ScaleTransform>().Single();
+        var glowTransform = Assert.IsType<TransformGroup>(control.FindControl<Image>("DotRingGlow")!.RenderTransform);
+        var glowScale = Assert.Single(glowTransform.Children.OfType<ScaleTransform>());
         var window = new Window { Width = 150, Height = 150, Content = control };
         try
         {
@@ -76,6 +87,8 @@ public sealed class AttentionCheckControlTests
             BeatLoop.StepAll();
             Assert.Equal(1.09, scale.ScaleX, 8);
             Assert.Equal(scale.ScaleX, scale.ScaleY);
+            Assert.Equal(scale.ScaleX, glowScale.ScaleX);
+            Assert.Equal(scale.ScaleX, glowScale.ScaleY);
             time.Advance(TimeSpan.FromMilliseconds(210));
             BeatLoop.StepAll();
             Assert.Equal(1.18, scale.ScaleX, 8);
@@ -94,6 +107,7 @@ public sealed class AttentionCheckControlTests
             Assert.DoesNotContain(BeatLoop.Running, p => p.Owner == control);
             Assert.Equal(1, scale.ScaleX);
             Assert.Equal(1, scale.ScaleY);
+            Assert.Equal(1, glowScale.ScaleX);
             control.StopPulse();
         }
         finally

@@ -29,7 +29,9 @@
     <Grid>
         <Ellipse x:Name="DotRingBg" Width="84" Height="84"
                  Stroke="#33FFFFFF" StrokeThickness="3"/>
-        <Image x:Name="DotRingGlow" Width="112" Height="112"
+        <!-- Cache the arc at render density; progress controls visibility, and the shared
+             ring transform pulses both layers without rerasterizing on each frame. -->
+        <Image x:Name="DotRingGlow" Width="112" Height="112" Opacity="0"
                HorizontalAlignment="Center" VerticalAlignment="Center"
                RenderTransformOrigin="50%,50%" Stretch="Fill"/>
         <Ellipse x:Name="DotRingFg" Width="84" Height="84"

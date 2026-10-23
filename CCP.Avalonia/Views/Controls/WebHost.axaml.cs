@@ -73,17 +73,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
 
+        /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
+        public event Action<Uri, bool>? NavigationFinished;
+
         /// <summary>
         /// The seam the engine's NavigationCompleted routes through, internal so a headless test
         /// (which never has an engine) can drive the same path. A completion with no URL raises
         /// nothing: there is nothing live to report.
         /// </summary>
-        internal void OnNavigationCompleted(Uri? url)
+        internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
             if (url is null) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
+            NavigationFinished?.Invoke(url, success);
         }
 
         /// <summary>
@@ -229,7 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.NavigationStarted += OnNavigationStarted;
-                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
+                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);

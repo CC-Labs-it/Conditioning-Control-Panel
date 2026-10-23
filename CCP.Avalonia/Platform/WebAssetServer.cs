@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Quiz;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 using ConditioningControlPanel;
@@ -38,7 +39,7 @@ public sealed class WebAssetServer : IDisposable
         {
             lock (_sharedLock)
                 return _shared ??= new WebAssetServer(Path.Combine(AppContext.BaseDirectory, "Resources", "web"))
-                    { AssetsRoot = () => CorePaths.EffectiveAssets };
+                    { AssetsRoot = () => CorePaths.EffectiveAssets, ContentRoot = () => ContentLocator.ContentWebRoot };
         }
     }
 
@@ -196,6 +197,9 @@ public sealed class WebAssetServer : IDisposable
     /// null = the prefix is not served.</summary>
     public Func<string?>? AssetsRoot { get; init; }
 
+    /// <summary>Downloaded audio-web mirror; read on every request so a pack installed during a run is available.</summary>
+    public Func<string?>? ContentRoot { get; init; }
+
     /// <summary>The file a URL path names, or null if it is missing or lies outside its root, symlinks followed.</summary>
     internal string? ResolveFile(string urlPath)
     {
@@ -215,7 +219,19 @@ public sealed class WebAssetServer : IDisposable
         if (rel.Length == 0 || rel.EndsWith('/')) rel += "index.html";
         if (rel.Contains('\0')) return null;
         var full = Path.GetFullPath(Path.Combine(root, rel));
-        if (!Inside(full, root) || !File.Exists(full) || !LinksStayInside(full, root)) return null;
+        if (!Inside(full, root)) return null;
+        if (!File.Exists(full))
+        {
+            if (asset || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
+                return null;
+            root = Path.GetFullPath(content).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (HoldsUserData(root)) return null;
+            // ponytail: the page's first audio URL uses its own origin; resolve the pack mirror here
+            // so the same cookie and range handling serve recorded clips, with install-dir priority.
+            full = Path.GetFullPath(Path.Combine(root, rel));
+            if (!Inside(full, root) || !File.Exists(full)) return null;
+        }
+        if (!LinksStayInside(full, root)) return null;
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
     }

@@ -70,6 +70,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             double visible = progress * units;
             double gap = Math.Max(0.001, units - visible);
             _dotRingFg.StrokeDashArray = new AvaloniaList<double> { visible, gap };
+            // Preserve the progress-dependent visibility of the ring glow.
+            _dotRingGlow.Opacity = progress;
             // The glow already shows this progress (attach draws the current value); skip the redraw.
             if (progress == _progress)
                 return;
@@ -138,9 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // ponytail: keep this dormant control dormant; WPF removed its service's UI/start path.
             _pulse ??= new BeatLoop(this, seconds =>
             {
-                double scale = 1.0 + 0.18 * BeatLoop.Breath(seconds, 0.42);
-                _dotRingScale.ScaleX = scale;
-                _dotRingScale.ScaleY = scale;
+                SetScale(1.0 + 0.18 * BeatLoop.Breath(seconds, 0.42));
             });
             _pulse.Start();
         }
@@ -160,8 +160,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public void StopPulse()
         {
             _pulse?.Stop();
-            _dotRingScale.ScaleX = 1.0;
-            _dotRingScale.ScaleY = 1.0;
+            SetScale(1.0);
+        }
+
+        private void SetScale(double scale)
+        {
+            _dotRingScale.ScaleX = _dotRingScale.ScaleY = scale;
+            // The raster glow shares the ring transform, including this pulse scale.
         }
     }
 }

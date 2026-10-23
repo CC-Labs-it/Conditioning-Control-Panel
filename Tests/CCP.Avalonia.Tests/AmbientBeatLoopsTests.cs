@@ -75,9 +75,9 @@ public sealed class AmbientBeatLoopsTests
         "Views/Tabs/LockdownTabView.axaml.cs", "Views/Tabs/QuestsTabView.Fx.cs", "Views/Tabs/StudioTabView.axaml.cs",
         "Views/Windows/AnnouncementPopup.axaml.cs", "Views/Windows/FeatureIntroPopup.axaml.cs",
         "Views/Windows/ItemUnlockedPopup.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
-        "Views/Windows/LockCardWindow.axaml.cs", "Views/Windows/MainShellWindow.Animations.cs",
+        "Views/Windows/LockCardWindow.axaml.cs",
         "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MainShellWindow.NavRail.cs",
-        "Views/Windows/MainShellWindow.TabFxTakeoverLabStatus.cs", "Views/Windows/MantraWindow.axaml.cs",
+        "Views/Windows/MantraWindow.axaml.cs",
         "Views/Windows/SettingsPaletteWindow.axaml.cs", "Views/Windows/TeaseRevealPopup.axaml.cs",
     };
 
@@ -322,7 +322,11 @@ public sealed class AmbientBeatLoopsTests
             var plate = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageBorder")!;
             Step(time, 1.5);
             Assert.Equal(Color.FromRgb(0xFF, 0x69, 0xB4), ((ISolidColorBrush)plate.BorderBrush!).Color);
-            Assert.Equal(22, ((DropShadowEffect)plate.Effect!).BlurRadius, 3);
+            var pulseGlow = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageGlow")!;
+            Assert.Null(plate.Effect);
+            Assert.Null(pulseGlow.Effect);
+            Assert.Equal(22, pulseGlow.BoxShadow[0].Blur, 3);
+            Assert.Equal(1, pulseGlow.Opacity);
             Step(time, 1.5);
             Assert.Equal(Color.FromRgb(0xFF, 0x14, 0x93), ((ISolidColorBrush)plate.BorderBrush!).Color);
             shell.StopLockdownPulse();
@@ -349,11 +353,14 @@ public sealed class AmbientBeatLoopsTests
             Dispatcher.UIThread.RunJobs();
             shell.SetAwarenessStatusPulse(true);
             var dot = shell.Named<Control>("AwarenessTab")!.FindControl<Control>("AwarenessStatusDot")!;
-            var glow = Assert.IsType<DropShadowEffect>(dot.Effect);
+            Assert.Null(dot.Effect);
+            var glow = shell.Named<Control>("AwarenessTab")!.FindControl<Border>("AwarenessStatusGlow")!;
+            Assert.True(glow.IsVisible);
             Assert.Equal(0.22, glow.Opacity, 3);
             Step(time, 2.8);
             Assert.Equal(0.95, glow.Opacity, 3);
             shell.SetAwarenessStatusPulse(false);
+            Assert.False(glow.IsVisible);
             Assert.Null(dot.Effect);
         }
         finally
