@@ -779,7 +779,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (isPb)
             {
                 var pbTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
-                pbTimer.Tick += (_, _) => { pbTimer.Stop(); if (!_closed) ChaosSfx.Play("pb_fanfare", 0.6f); };
+                pbTimer.Tick += (_, _) => { pbTimer.Stop(); if (!_closed) ChaosSfx.Play("pb_fanfare", 0.6f); };   // a closed recap stays quiet
                 pbTimer.Start();
             }
 
