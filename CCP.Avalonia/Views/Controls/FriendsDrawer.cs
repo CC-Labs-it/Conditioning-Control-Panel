@@ -3,9 +3,11 @@
 // offline, blocked), a friend's card with the menu (squelch, remove and block after a confirm,
 // report), request answers, add by code and your own code. Driven only by IFriendsService.
 // The send pickers (poke / invite / watch) are in FriendsDrawer.Pickers.cs.
-// ponytail: no feed, trails,
-// open tables or leash section, no lock-day chip, no juice (.Juice.cs), no bell (the corner notices are not on this
-// head). A word WPF throws outside the drawer
+// Open goon tables are in FriendsDrawer.Tables.cs.
+// The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
+// The blocked fallback and once-only presence ask share Core rules with WPF.
+// ponytail: no leash section, no lock-day chip, no juice (.Juice.cs), no bell
+// (the corner notices are not on this head). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
 using System.Collections.Generic;
@@ -147,13 +149,15 @@ public sealed partial class FriendsDrawer : Border
         Rebind();
         try { _svc?.SetDrawerOpen(true); } catch { }
         if (_svc?.Available == true) _ = SafeRefreshAsync();
+        try { if (_svc?.Available == true) StartTables(); } catch { }
         Render();
         Dispatcher.UIThread.Post(() => Focus());
     }
     public void OnClosed()
     {
         try { _svc?.SetDrawerOpen(false); } catch { }
-        Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes)
+        Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes); also stops the tables poll
+        FeedFolded();
         (_isOpen, _openId, _confirm, _picker, _addBox.IsVisible) = (false, null, null, null, false);
     }
     private void Rebind()
@@ -162,12 +166,14 @@ public sealed partial class FriendsDrawer : Border
         if (!ReferenceEquals(next, _svc)) { Unsubscribe(); _svc = next; }
         if (_subscribed || _svc == null) return;
         _svc.SnapshotChanged += OnSnapshot;
+        _svc.SentTrailsChanged += OnTrailsChanged;
         _subscribed = true;
     }
     public void Unsubscribe()
     {
-        if (_subscribed && _svc != null) _svc.SnapshotChanged -= OnSnapshot;
+        if (_subscribed && _svc != null) { _svc.SnapshotChanged -= OnSnapshot; _svc.SentTrailsChanged -= OnTrailsChanged; }
         _subscribed = false;
+        StopTables();
     }
     private void OnSnapshot(FriendsSnapshot _) => Render();
     private async Task SafeRefreshAsync()
@@ -273,7 +279,9 @@ public sealed partial class FriendsDrawer : Border
             _list.Children.Add(box);
             return;
         }
+        AddFeed();
         var (online, offline) = FriendsDrawerRules.Split(snap);
+        (online, offline) = FriendsDrawerRules.HostingFirst(online, offline, f => TableFor(f) != null);
         if (_openId != null && !Contains(snap, _openId)) (_openId, _picker) = (null, null);
         if (_confirm is { } c && !Contains(snap, c.Id)) _confirm = null;
         if (online.Count > 0)
@@ -321,9 +329,10 @@ public sealed partial class FriendsDrawer : Border
     private Control FriendRow(Friend f)
     {
         bool open = _openId == f.Id;
-        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*") };
-        var avatar = Avatar(f.Name, 38, f.Online);
-        if (!f.Online) avatar.Opacity = 0.55;
+        var table = TableFor(f);
+        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
+        var avatar = Avatar(f.Name, 38, f.Online || table != null);
+        if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
         nameLine.Children.Add(Label(f.Name, 14, f.Online ? Text : Muted, Display, FontWeight.Medium));
@@ -334,10 +343,18 @@ public sealed partial class FriendsDrawer : Border
             nameLine.Children.Add(sq);
         }
         mid.Children.Add(nameLine);
-        mid.Children.Add(ActivityLine(f));
+        mid.Children.Add(table != null ? HostingLine() : ActivityLine(f));
+        // What you last sent them and how far it got (sent, arrived, seen, answered).
+        if (TrailLine(f) is { } trail) mid.Children.Add(trail);
         Grid.SetColumn(mid, 1);
         top.Children.Add(avatar);
         top.Children.Add(mid);
+        if (table != null)
+        {
+            var join = TableJoinButton(f, table);
+            Grid.SetColumn(join, 2);
+            top.Children.Add(join);
+        }
         var outer = new StackPanel { Children = { top } };
         if (open) outer.Children.Add(Card(f));
         if (_results.TryGetValue(f.Id, out var res))
@@ -352,6 +369,7 @@ public sealed partial class FriendsDrawer : Border
             Background = open ? Raised : Brushes.Transparent, Cursor = Hand(),
             Tag = "friends-row:" + f.Id, Child = outer, ContextMenu = Menu(f),
         };
+        if (table != null && !open) DressHostingRow(row);
         // A click on the row (not inside the open card) opens or folds its card.
         top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
         return row;
@@ -577,6 +595,8 @@ public sealed partial class FriendsDrawer : Border
             };
         }
         catch { res = ActResult.TryLater; }
+        // WPF Honesty.cs AnswerRequestAsync: an accept answered after the drawer folded is said where the player is looking.
+        if (res == ActResult.Done && what == "accept" && !_isOpen) Say(Loc.Get("friends_add_accepted"), true);
         if (res != ActResult.Done) ShowTimed((what == "cancel" ? "out:" : "in:") + r.Id, Loc.Get(FriendsDrawerRules.ActResultKey(res)), false);
         await SafeRefreshAsync();
         return res;
@@ -688,9 +708,9 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>The window a word outside the drawer flies over. The drawer lives in a popup (not a Window) and is
     /// detached once folded, so its host (the rail chip) sets this to its own window.</summary>
     internal Func<Window?> OwnerWindow { get; set; }
-    /// <summary>WPF TellOutside(always) -> FriendsLanding.Say: a floating word over the window.</summary>
-    private void Say(string text, bool good) =>
-        Overlays.FloatingWord.Throw(OwnerWindow(), text, pink: !good, small: true);
+    /// <summary>WPF TellOutside(always) -> FriendsLanding.Tell: a floating word over the active game, the
+    /// panel or the launcher, else over the drawer's own window.</summary>
+    private void Say(string text, bool good) => Platform.FriendsLanding.Tell(text, good, OwnerWindow());
     internal static TextBlock Label(string text, double size, IBrush fg, FontFamily? font = null, FontWeight weight = FontWeight.Normal) => new()
     {
         Text = text, FontSize = size, Foreground = fg, FontFamily = font ?? FontFamily.Default, FontWeight = weight,

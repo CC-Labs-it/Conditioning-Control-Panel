@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Services
             AudioPackIds.Concat(ModPackIds).ToArray();
 
         private const string ReleaseBaseUrlFormat =
-            "https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/download/{0}/";
+            "https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/download/{0}/";
 
         private readonly string _baseUrlFormat;
 
