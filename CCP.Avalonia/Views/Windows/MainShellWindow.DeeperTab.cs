@@ -22,10 +22,9 @@
 //
 // LIBRARY ACTIONS (open, play, delete, folder, demo) are in MainShellWindow.DeeperHub.cs.
 // STILL OUT, and why:
-//   OpenInDeeperPlayer, OpenDeeperEditorFromPlayer, OpenInDeeperEditorForMedia,
+//   File association entry points (media drops use the existing hub player/editor),
 //   HandlePendingFileOpen (file-association entry points), OnDeeperLibraryChanged (no watcher),
-//   BtnDeeperImport_Click / ImportEnhancementFiles (EnhancementLibrary.FindDuplicateOf /
-//   PromoteToLibrary are in Core now; this head has no EnhancementLibrary instance yet).
+//   BtnDeeperImport_Click (toolbar picker). Drop import is in MainShellWindow.EnhancementImport.cs.
 //   The browser half - OnDeeperBrowserBound/Unbound, RefreshBrowserWebcamButton,
 //   BtnWebcamTracking_Click, MaybePromptBrowserWebcamForEnhancement, OnBrowserEnhanceMatchChanged,
 //   ChkForceShowBambiCloud_Changed, ToggleEnhanceIfPossible_Changed. WebView2 plus WebcamTrackingState.

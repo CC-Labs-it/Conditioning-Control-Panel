@@ -127,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializePremiumCelebration(); // MainShellWindow.Patreon.cs (WPF InitializePatreonTab + MainWindow.xaml.cs:3559)
             InitializePremiumSpark();       // MainShellWindow.PremiumSpark.cs (WPF MainWindow.PremiumSpark.cs)
             InitializeSparkleWallet();      // MainShellWindow.SparkleWallet.cs (WPF MainWindow.SparkleWallet.cs)
+            InitializeSessionShortcuts();
             InitializeWebcamLoadingSplash(); // MainShellWindow.WebcamSplash.cs (WPF MainWindow.xaml.cs:3631)
             InitializeOfflineModeUI(); // MainShellWindow.OfflineMode.cs (WPF MainWindow.Settings.cs:122)
             InitializeHelpButtons(); // MainShellWindow.HelpButtons.cs (WPF MainWindow.Presets.cs:35 SetupHelpButtons)

@@ -54,6 +54,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CmbMicDevice.SelectionChanged += CmbMicDevice_SelectionChanged;
             BtnMicRefresh.Click += BtnMicRefresh_Click;
             BtnChatShortcutDevices.Click += BtnChatShortcut_Click;
+            BtnCameraShortcutDevices.Click += async (_, _) =>
+            {
+                if (TopLevel.GetTopLevel(this) is MainShellWindow shell) await shell.CaptureSessionShortcutAsync(true);
+            };
             BtnPanicKey.Click += BtnPanicKey_Click;
             BtnPauseKey.Click += BtnPauseKey_Click;
             BtnWebcamRevokeConsent.Click += BtnWebcamRevokeConsent_Click;
@@ -747,74 +751,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         //  the chat shortcut (MainWindow.SessionIO.cs BtnChatShortcut_Click / RefreshChatShortcutLabel)
         // =====================================================================================
 
-        /// <summary>
-        /// Paints the row's pill with the combo actually stored. The label is a bare literal in the
-        /// XAML, not a <c>{loc:Str}</c>, so assigning .Text here is safe - and it has to be code
-        /// rather than a binding because the value is composed from two settings strings.
-        /// </summary>
-        private void RefreshChatShortcutLabel() =>
+        internal void RefreshSessionShortcutLabels()
+        {
             TxtChatShortcutLabelDevices.Text = AvatarTubeWindow.FormatChatShortcut();
-
-        /// <summary>
-        /// Opens the capture dialog, stores the captured combo and re-applies the binding without a
-        /// restart - WPF's BtnChatShortcut_Click (MainWindow.SessionIO.cs:1202) with its two
-        /// re-applications kept: the shell window (WPF passes <c>this</c>, i.e. MainWindow) and the
-        /// open tube, which is <see cref="AvatarTubeWindow.Live"/> here rather than App.AvatarWindow.
-        /// Awaited, not fire-and-forget: Avalonia's ShowDialog is async, and writing the setting
-        /// before the answer lands would store whatever the previous combo was.
-        ///
-        /// <para><b>ChatShortcutGlobal is stored but not registered.</b> The checkbox's "activate
-        /// from any app" half is GlobalHotkeyService, a Win32 RegisterHotKey that stays in the WPF
-        /// head. Storing the user's choice is still right - it is one settings file across both
-        /// heads, and WPF honours it - and the IN-WINDOW binding this method applies works on this
-        /// head either way, which is exactly what WPF falls back to when the flag is off.</para>
-        /// </summary>
+            TxtCameraShortcutLabelDevices.Text = MainShellWindow.CameraShortcutText();
+        }
+        private void RefreshChatShortcutLabel() => RefreshSessionShortcutLabels();
         private async void BtnChatShortcut_Click(object? sender, RoutedEventArgs e)
         {
-            try
-            {
-                // No owner means no modal dialog to show, so there is nothing to capture. WPF could
-                // not reach this state; here it is the headless/detached case.
-                if (TopLevel.GetTopLevel(this) is not Window owner) return;
-                var prompt = CoreSettings.Current.CompanionPrompt;
-                if (prompt == null) return;
-
-                var dlg = new ChatShortcutCaptureDialog { GlobalHotkey = prompt.ChatShortcutGlobal };
-                if (!await dlg.ShowDialogSafe<bool>(owner)) return;
-
-                if (dlg.ResetToDefault)
-                {
-                    prompt.ChatShortcutKey = "T";
-                    prompt.ChatShortcutModifiers = "Control";
-                }
-                else
-                {
-                    prompt.ChatShortcutKey = dlg.CapturedKey.ToString();
-                    // Serialises "Windows", not Avalonia's "Meta", so a file written here still
-                    // parses on the WPF head.
-                    prompt.ChatShortcutModifiers = AvatarTubeWindow.SerializeModifiers(dlg.CapturedModifiers);
-                }
-                prompt.ChatShortcutGlobal = dlg.GlobalHotkey;
-                CoreSettings.Save();
-
-                AvatarTubeWindow.ApplyChatShortcutTo(owner);
-                AvatarTubeWindow.ApplyChatShortcutTo(AvatarTubeWindow.Live);
-                RefreshChatShortcutLabel();
-                Log.Information("Chat shortcut rebound to {Combo}", AvatarTubeWindow.FormatChatShortcut());
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "Settings/Devices: chat shortcut rebind failed");
-            }
+            if (TopLevel.GetTopLevel(this) is MainShellWindow shell) await shell.CaptureSessionShortcutAsync(false);
         }
-
-        // ponytail: BtnCameraShortcutDevices stays inert, and NOT for the reason the old note gave.
-        // SerializeModifiers shipped with the tube, so the capture half would work - but the combo
-        // it stores drives MainWindow.ToggleWebcamFromHotkey (MainWindow.SessionIO.cs:1485), which
-        // toggles WebcamTrackingService. This head now has a tracker (Platform/WebcamTracker, and
-        // CoreWebcam.IsAvailable is seeded true), but no global hotkey listener calls it, so a rebind
-        // here would let the user configure a key that cannot fire - and the row's own label would then
-        // report a binding that does nothing. The label is left at its XAML literal for the same reason.
-        // Unblocks with a global-hotkey route to WebcamTracker (ToggleWebcamFromHotkey).
     }
 }

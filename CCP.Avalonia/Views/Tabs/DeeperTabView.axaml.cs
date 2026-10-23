@@ -601,6 +601,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
         }
 
+        private bool _isHighlighted;
+        public bool IsHighlighted
+        {
+            get => _isHighlighted;
+            set { _isHighlighted = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsHighlighted))); }
+        }
         public EnhancementLibraryEntry Entry { get; init; } = new();
         public string Name { get; init; } = "";
         public IconKind MediaTypeIcon { get; init; } = IconKind.Video;

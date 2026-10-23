@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Platform.Storage;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -72,6 +73,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public LauncherWindow()
         {
             InitializeComponent();
+            DragDrop.SetAllowDrop(this, true);
+            AddHandler(DragDrop.DragOverEvent, (_, e) =>
+            {
+                e.DragEffects = e.DataTransfer.TryGetFiles()?.Any() == true ? DragDropEffects.Copy : DragDropEffects.None;
+                e.Handled = true;
+            });
+            AddHandler(DragDrop.DropEvent, (_, e) =>
+            {
+                var paths = e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToArray();
+                e.Handled = true;
+                if (paths is { Length: > 0 }) OpenPanel(async panel =>
+                {
+                    try { await panel.ImportDroppedFilesAsync(paths); }
+                    catch (Exception ex) { Log.Warning(ex, "[Launcher] dropped files failed to import"); }
+                });
+            });
             GamesColumn.SizeChanged += (_, _) => SeatGrid();
             XpTrack.SizeChanged += (_, _) => RefreshStats();
             _statusTimer.Tick += (_, _) => { RefreshStatus(); RefreshStats(); RefreshSpReadout(); };

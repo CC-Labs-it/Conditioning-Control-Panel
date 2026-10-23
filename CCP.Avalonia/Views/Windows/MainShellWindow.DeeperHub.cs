@@ -4,8 +4,8 @@
 // card's demo/tour buttons). The index, filter and sort live in DeeperTabViewModel over Core
 // DeeperLocalLibrary; this partial owns the windows, dialogs, timers and files.
 //
-// Still out (see docs/avalonia-parity.md shell-deeper-hub): import (EnhancementLibrary
-// FindDuplicateOf/PromoteToLibrary + RevealDeeperLibraryRow's flash), the bundled-demo seeding, the
+// Drop import and its reveal live in MainShellWindow.EnhancementImport.cs.
+// Still out (see docs/avalonia-parity.md shell-deeper-hub): the bundled-demo seeding, the
 // library FileSystemWatcher (LibraryChanged), the duration probe, and the Deeper tutorial.
 
 using System;
@@ -47,7 +47,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Reloads the local index when the Deeper view is attached or the tab opens.</summary>
         internal void InitializeDeeperHub() => ReloadDeeperLibraryFromDisk();
 
-        private void ReloadDeeperLibraryFromDisk() => DeeperModel?.ReloadLibrary();
+        private void ReloadDeeperLibraryFromDisk()
+        {
+            DeeperModel?.ReloadLibrary();
+            if (_deeperHighlightedPath != null && DeeperModel != null)
+                foreach (var row in DeeperModel.FilteredEntries)
+                    row.IsHighlighted = DeeperTabViewModel.PathsEqual(row.Entry.FilePath, _deeperHighlightedPath);
+        }
 
         /// <summary>WPF ApplyDeeperFilterAndSort after a submission record changed: repaint badges.</summary>
         internal void RefreshDeeperLibraryRows() => DeeperModel?.Refresh();

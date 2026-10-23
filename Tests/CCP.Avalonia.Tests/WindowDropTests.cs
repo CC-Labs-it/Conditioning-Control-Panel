@@ -17,6 +17,9 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models.Deeper;
+using ConditioningControlPanel.Services.Deeper;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -31,17 +34,30 @@ public sealed class WindowDropTests
         var video = Path.Combine(root, "clip.mp4");
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
+        var oldVideo = ConditioningControlPanel.CoreEngine.Video;
+        var scheduler = new MandatoryVideoScheduler(new SilentVideoHost(), library: () =>
+            Directory.Exists(Path.Combine(assets, "videos")) ? Directory.GetFiles(Path.Combine(assets, "videos")) : Array.Empty<string>());
+        // A stale queue must be discarded even when it still has playable entries.
+        typeof(MandatoryVideoScheduler).GetField("_queue", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(scheduler, new System.Collections.Generic.Queue<string>(new[] { "stale.mp4" }));
+        ConditioningControlPanel.CoreEngine.Video = scheduler;
+        try
+        {
         Drop(shell, video);
-        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
-        Assert.Equal(Loc.Get("dlg_media_drop_library"), ButtonText(ask, "BtnOk"));
-        Click(ask, "BtnOk");
+        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
+        Assert.Equal(Loc.Get("dlg_media_drop_library"), ButtonText(ask, "BtnLibrary"));
+        Click(ask, "BtnLibrary");
 
-        var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault(d => d != ask));
+        var done = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
         Assert.Equal("Imported 1 video", done.FindControl<TextBlock>("TxtMessage")!.Text);
         Assert.True(File.Exists(Path.Combine(assets, "videos", "clip.mp4")));
         Assert.True(File.Exists(video));   // copied, never moved
         Assert.Equal("assets", shell.CurrentTab);
+        var next = typeof(MandatoryVideoScheduler).GetMethod("PickNext", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(scheduler, null);
+        Assert.Equal(Path.Combine(assets, "videos", "clip.mp4"), next);
         done.Close();
+        }
+        finally { ConditioningControlPanel.CoreEngine.Video = oldVideo; }
     });
 
     [Fact]
@@ -51,21 +67,105 @@ public sealed class WindowDropTests
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
         Drop(shell, video);
-        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
+        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
         Click(ask, "BtnCancel");
-        await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any() ? null : shell);
+        await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().Any() ? null : shell);
 
         Assert.False(File.Exists(Path.Combine(assets, "videos", "clip.mp4")));
         Assert.True(File.Exists(video));
     });
 
     [Fact]
-    public Task EnhancementDropSaysTheLibraryIsNotReady() => Run(async (shell, root, _) =>
+    public Task EnhancementDropImportsRevealsAndDeduplicates() => Run(async (shell, root, _) =>
     {
+        var name = "drop-" + Guid.NewGuid().ToString("N");
         var enh = Path.Combine(root, "wave.ccpenh.json");
-        File.WriteAllText(enh, "{\"$schema\":\"" + ConditioningControlPanel.Models.Deeper.Enhancement.SchemaTag + "\"}");
-        Drop(shell, enh);
-        await WaitFor(() => Toast(shell, Loc.Get("deeper_import_library_not_ready")));
+        var project = new Enhancement();
+        project.Metadata.Name = name;
+        File.WriteAllText(enh, EnhancementSerializer.Save(project));
+        string? saved = null;
+        try
+        {
+            Drop(shell, enh);
+            saved = Assert.Single(Directory.GetFiles(DeeperLocalLibrary.DefaultFolder, name + "*.ccpenh.json"));
+            Assert.True(File.Exists(enh));
+            var view = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.DeeperTabView>("DeeperTab")!;
+            var model = Assert.IsType<ConditioningControlPanel.Avalonia.Views.Tabs.DeeperTabViewModel>(view.DataContext);
+            Assert.True(Assert.Single(model.FilteredEntries.Where(r => r.Entry.FilePath == saved)).IsHighlighted);
+            Assert.Equal(root, ConditioningControlPanel.CoreSettings.Current.DeeperLastDirectory);
+            Drop(shell, enh);
+            Assert.Single(Directory.GetFiles(DeeperLocalLibrary.DefaultFolder, name + "*.ccpenh.json"));
+            await WaitFor(() => Toast(shell, Loc.Get("deeper_import_already_in_library")));
+            Assert.True(Assert.Single(model.FilteredEntries.Where(r => r.Entry.FilePath == saved)).IsHighlighted);
+            await Task.Delay(1900);
+            Assert.False(Assert.Single(model.FilteredEntries.Where(r => r.Entry.FilePath == saved)).IsHighlighted);
+        }
+        finally { if (saved != null) File.Delete(saved); }
+    });
+
+    [Theory]
+    [InlineData("clip.mp4", "video")]
+    [InlineData("clip.wav", "audio")]
+    public Task MediaDropEditOpensAnUnsavedProject(string filename, string type) => Run(async (shell, root, assets) =>
+    {
+        var media = Path.Combine(root, filename);
+        File.WriteAllBytes(media, Array.Empty<byte>());
+        Drop(shell, media);
+        var ask = await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
+        Assert.Equal(new[] { "BtnPlay", "BtnEdit", "BtnLibrary", "BtnCancel" },
+            ask.GetVisualDescendants().OfType<Button>().Select(b => b.Name));
+        Click(ask, "BtnEdit");
+        var editor = await WaitFor(() => shell.OwnedWindows.OfType<DeeperEditorWindow>().SingleOrDefault());
+        var project = (Enhancement)typeof(DeeperEditorWindow).GetField("_enhancement",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!;
+        Assert.Equal(type, project.MediaType);
+        Assert.Equal(media, project.MediaSource);
+        Assert.False(Directory.Exists(assets));
+        editor.ForceClose();
+    });
+
+    [Fact]
+    public Task MediaDropPlayUsesTheSharedPlayerAndPanicClosesIt() => Run(async (shell, root, _) =>
+    {
+        var media = Path.Combine(root, "clip.mp4");
+        File.WriteAllBytes(media, Array.Empty<byte>());
+        for (int i = 0; i < 2; i++)
+        {
+            Drop(shell, media);
+            Click(await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault()), "BtnPlay");
+            await WaitFor(() => shell.OwnedWindows.OfType<EnhancementPlayerWindow>().SingleOrDefault());
+        }
+        PanicSurfaces.All.Single(s => s.Id == "deeper-drop-player").Stop(shell);
+        Assert.Empty(shell.OwnedWindows.OfType<EnhancementPlayerWindow>());
+        Drop(shell, media);
+        await WaitFor(() => shell.OwnedWindows.OfType<MediaDropDialog>().SingleOrDefault());
+        PanicSurfaces.All.Single(s => s.Id == "media-drop").Stop(shell);
+        Assert.Empty(shell.OwnedWindows.OfType<MediaDropDialog>());
+    });
+
+    [Fact]
+    public Task LauncherDropShowsThePanelAndImports() => Run(async (shell, root, _) =>
+    {
+        var custom = Directory.CreateDirectory(Path.Combine(root, "custom")).FullName;
+        var files = new SessionFileService(custom, Directory.CreateDirectory(Path.Combine(root, "built-in")).FullName);
+        var manager = new SessionManager(files);
+        manager.LoadAllSessions();
+        shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PresetsTabView>("PresetsTab")!.UseSessionManager(manager);
+        var session = ConditioningControlPanel.Models.SessionDefinition.FromSession(ConditioningControlPanel.Models.Session.MorningDrift);
+        session.Id = "launcher-drop";
+        var dropped = Path.Combine(root, "launcher.session.json");
+        files.ExportSession(session, dropped);
+        var launcher = LauncherWindow.OpenFor(shell);
+        try
+        {
+            shell.Hide();
+            Drop(launcher, dropped);
+            await WaitFor(() => manager.AllSessions.FirstOrDefault(s => s.Id == session.Id));
+            Assert.True(shell.IsVisible);
+            Assert.False(launcher.IsVisible);
+            Assert.Single(Directory.GetFiles(custom));
+        }
+        finally { launcher.Close(); }
     });
 
     [Fact]
@@ -217,7 +317,7 @@ public sealed class WindowDropTests
         }
     });
 
-    private static void Drop(MainShellWindow shell, string path, RawDragEventType type = RawDragEventType.Drop)
+    private static void Drop(Window shell, string path, RawDragEventType type = RawDragEventType.Drop)
     {
         var file = shell.StorageProvider.TryGetFileFromPathAsync(path).GetAwaiter().GetResult()
                    ?? throw new InvalidOperationException("headless storage provider has no file for " + path);
@@ -232,6 +332,13 @@ public sealed class WindowDropTests
 
     private static TextBlock? Toast(MainShellWindow shell, string text) =>
         shell.Named<Panel>("NotificationHost")!.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Text == text);
+
+    private sealed class SilentVideoHost : IMandatoryVideoHost
+    {
+        public void Show(string path, bool strict) { }
+        public double CloseAll() => 0;
+        public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();
+    }
 
     private static string? ButtonText(Window dialog, string name) =>
         dialog.FindControl<Button>(name)!.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault()?.Text

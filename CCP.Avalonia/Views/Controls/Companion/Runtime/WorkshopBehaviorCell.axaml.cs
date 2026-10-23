@@ -95,10 +95,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 // the cell is on screen would show every user the default whatever they had bound.
                 RefreshChatShortcutLabel();
 
-                // TxtCameraShortcutLabel keeps its XAML literal on purpose: the combo it would
-                // report drives WebcamTrackingService, which does not exist on this head, so there
-                // is no live binding for it to be honest about. Same call as the camera pill's.
-
                 // ChkPauseBrowserCompanion is deliberately NOT seeded: WPF restores it only from a
                 // session snapshot (MainWindow.Patreon.cs:1923), never from settings.
 
@@ -125,8 +121,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         /// TextBlock. The literal in the markup is a placeholder, not a binding, so assigning
         /// .Text here is safe (nothing on this control carries {loc:Str}).
         /// </summary>
-        internal void RefreshChatShortcutLabel() =>
+        internal void RefreshChatShortcutLabel()
+        {
             TxtChatShortcutLabel.Text = AvatarTube.AvatarTubeWindow.FormatChatShortcut();
+            TxtCameraShortcutLabel.Text = Windows.MainShellWindow.CameraShortcutText();
+        }
 
         private void SliderIdleInterval_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
         {

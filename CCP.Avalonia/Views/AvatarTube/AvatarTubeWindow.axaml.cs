@@ -1520,41 +1520,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// The stored shortcut, defaulted. One reader for both the label and the binding so they can
         /// never disagree about what an unparseable setting means.
         /// </summary>
-        private static (Key Key, KeyModifiers Mods) CurrentChatShortcut()
-        {
-            var s = CoreSettings.Current.CompanionPrompt;
-            var keyName = string.IsNullOrWhiteSpace(s?.ChatShortcutKey) ? "T" : s!.ChatShortcutKey;
-            var modsName = s?.ChatShortcutModifiers ?? "Control";
-
-            if (!Enum.TryParse<Key>(keyName, ignoreCase: true, out var key)) key = Key.T;
-            if (!TryParseModifiers(modsName, out var mods)) mods = KeyModifiers.Control;
-            return (key, mods);
-        }
-
-        /// <summary>
-        /// Parses the stored "Control,Shift" form. Hand-mapped rather than
-        /// <c>Enum.TryParse&lt;KeyModifiers&gt;</c>: Avalonia calls the Windows key <c>Meta</c>, so a
-        /// settings file written on the WPF head - which stores "Windows" - would fail to parse and
-        /// silently drop the whole combo back to Ctrl+T.
-        /// </summary>
-        private static bool TryParseModifiers(string s, out KeyModifiers result)
-        {
-            result = KeyModifiers.None;
-            if (string.IsNullOrWhiteSpace(s)) return true;
-            foreach (var part in s.Split(new[] { ',', '+', ' ' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                switch (part.Trim().ToLowerInvariant())
-                {
-                    case "control": case "ctrl": result |= KeyModifiers.Control; break;
-                    case "alt": result |= KeyModifiers.Alt; break;
-                    case "shift": result |= KeyModifiers.Shift; break;
-                    case "windows": case "win": case "meta": result |= KeyModifiers.Meta; break;
-                    case "none": break;
-                    default: return false;
-                }
-            }
-            return true;
-        }
+        private static (Key Key, KeyModifiers Mods) CurrentChatShortcut() => Windows.MainShellWindow.SessionShortcut(false);
 
         /// <summary>
         /// The stored form, written back by the capture dialog. Still serializes <c>"Windows"</c>
