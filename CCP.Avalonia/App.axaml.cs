@@ -449,6 +449,10 @@ namespace ConditioningControlPanel.Avalonia
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
+                // P31: WPF seeds EffectPayloadFiring. ponytail: no chaos payload effects on this head yet
+                // (next lane chaos-bubble-field-b); log so a fired payload is never silently dropped.
+                Services.Chaos.EffectPayload.Firer = p =>
+                    Serilog.Log.Information("Chaos payload {Payload} not fired: no effect runner on this head yet", p.DisplayName);
                 LocalizationManager.Instance.SetLanguage(Settings.Current.Language);
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
@@ -622,6 +626,9 @@ namespace ConditioningControlPanel.Avalonia
                     if (friends != null)
                     {
                         Platform.FriendsHead.Service = friends;
+                        // WPF App.xaml.cs:2979: the feed listens to the service from startup on.
+                        try { Platform.FriendsHead.Feed = global::ConditioningControlPanel.Services.Friends.FriendsFeed.CreateForApp(friends, () => Platform.FriendsHead.Identity()?.UnifiedId); }
+                        catch (Exception exFeed) { Serilog.Log.Debug("[Friends] feed failed to start: {E}", exFeed.Message); }
                         CoreAccount.UnifiedIdentityChanged += (_, _) => friends.Kick();
                         friends.Start(new Platform.FriendsHead.Timer());
                         // WPF App.xaml.cs:2991 LEASH: rides the friends poll (report out, block in, 20 s while leashed).
@@ -910,6 +917,7 @@ namespace ConditioningControlPanel.Avalonia
                     CoreEngine.Stop();
                     StopDesktopOverlays();
                     Views.Overlays.CornerGifOverlay.StopAll();   // WPF CornerGifService.OnMainWindowClosing / OnExit
+                    Views.Overlays.SpeakCueOverlay.CloseActive();   // a topmost window must not outlive the shell
                     Views.Windows.LockCardWindow.ForceCloseAll();
                 };
                 // WPF App.xaml.cs:2602: restore at ApplicationIdle, once startup has settled (#709).
@@ -969,8 +977,8 @@ namespace ConditioningControlPanel.Avalonia
                 shell.StartPanicKey();
                 // EMI Desk summon chord (WPF MainWindow.xaml.cs:246 arms it from the shell's Loaded).
                 Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
-                // Do-not-disturb reads the foreground app from X (WPF DoNotDisturbGuard: user32).
-                ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.X11Windows.ForegroundProcess;
+                // Do-not-disturb reads the foreground app: user32 on Windows (as WPF DoNotDisturbGuard), X elsewhere.
+                ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.Win32Windows.ForegroundSource;
                 // Linux: one toast naming the distro's install command for any missing runtime library
                 // (docs/avalonia-linux-install.md). dlopen off the UI thread; nothing when all load.
                 Dispatcher.UIThread.Post(async () =>
@@ -999,6 +1007,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SubliminalWhisperShow.StopAll();
             Views.Overlays.SubliminalOverlay.CloseAll();
             Views.Overlays.BouncingTextOverlay.Stop();
+            Views.Overlays.ChaosFlashOverlay.CloseActive();
             Views.Overlays.SpiralOverlay.CloseAll();   // WPF StopEngine -> App.Overlay.Stop(); panic and exit too
         }
 

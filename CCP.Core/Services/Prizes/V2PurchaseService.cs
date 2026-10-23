@@ -143,8 +143,11 @@ public sealed class V2PurchaseService
             if (_fetching || (onlyIfUnknown && known)) return;
             _fetching = true;
         }
-        _ = Task.Run(FetchAsync);
+        LastBackgroundRead = Task.Run(FetchAsync);
     }
+
+    /// <summary>Test seam: the most recent background read Start launched, so tests await it instead of sleeping.</summary>
+    internal Task LastBackgroundRead { get; private set; } = Task.CompletedTask;
 
     /// <summary>
     /// Drop the cached counter (sign out, account switch). The next box to appear reads it fresh.

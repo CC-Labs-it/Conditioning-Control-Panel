@@ -1,7 +1,7 @@
 using ConditioningControlPanel.Services.Prizes;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// When a counter reply is allowed to move the Sparkle Points wallet. The two rules exist because

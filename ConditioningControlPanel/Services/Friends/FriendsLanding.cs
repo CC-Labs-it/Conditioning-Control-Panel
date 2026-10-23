@@ -386,13 +386,8 @@ public static class FriendsLanding
         {
             var anchor = ActiveGameWindow() ?? Anchor();
             if (anchor == null) return;
-            var word = kind switch
-            {
-                SendKind.Invite => Str("friends_land_knock_sent", "knock sent"),
-                SendKind.Watch => Str("friends_land_watch_sent", "watch sent"),
-                _ => Str("friends_land_poke_sent", "sent"),
-            };
-            FloatingWord.Throw(anchor, word, pink: false, small: true);
+            var (key, english) = LandingRules.SentWord(kind);
+            FloatingWord.Throw(anchor, Str(key, english), pink: false, small: true);
         }
     }
 

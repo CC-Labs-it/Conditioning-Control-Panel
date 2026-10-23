@@ -70,21 +70,9 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// client wearing the app's auth token.</summary>
         private const string AllowedPathPrefix = "/v2/goon/";
 
-        /// <summary>Seconds of "beats arriving, frame counter frozen, page says it is visible"
-        /// before the page is treated as visually frozen. Was 10 s until ccp-bugs #1326 (a busy
-        /// machine closed a live match twice at 11 s); 20 s is still far short of how long the
-        /// owner sat in front of a dead picture on 2026-08-04.</summary>
-        internal const double PaintStallSeconds = 20;
-
-        /// <summary>The heartbeat watch's own tick interval. A tick that arrives much later than
-        /// this means the UI thread itself was stalled, see <see cref="PaintStallVerdict"/>.</summary>
-        internal const double WatchIntervalSeconds = 5;
-        /// <summary>Heartbeat silence after which a running toy cue is stopped.</summary>
+        /// <summary>Heartbeat silence after which a running toy cue is stopped. The paint-stall and
+        /// watch-interval thresholds live in <see cref="GoonHostRules"/>.</summary>
         internal const double ToyCueSilenceSeconds = 6;
-
-        /// <summary>Slack on <see cref="WatchIntervalSeconds"/> before a late tick counts as a UI
-        /// stall, and the <see cref="VideoDiag.UiStallMs"/> age that counts as one too.</summary>
-        internal const double UiStallSlackSeconds = 3;
 
         private static DateTime _lastWatchTickUtc;
 
@@ -155,7 +143,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         public static event Action? HostBusy;
 
         /// <summary>May this account host? Same read the page's <c>caps.canHost</c> gets.</summary>
-        public static bool CanHost => HostingAllowed();
+        public static bool CanHost => GoonHostRules.HostingAllowed();
 
         /// <summary>Open the game on the host screen (friends drawer invite). A window already
         /// up gets a <c>host-now</c> frame: it opens a room, re-tells one it already has, or
@@ -483,11 +471,11 @@ namespace ConditioningControlPanel.Services.GoonGame
                         spiral = true,            // in-page spiral veil; exec/ owns the renderer
                         camera = false,           // no webcam bridge into the page in v1
                         video = true,
-                        mediaTransfer = TransferAllowed(),
-                        canHost = HostingAllowed(),
+                        mediaTransfer = GoonHostRules.TransferAllowed(),
+                        canHost = GoonHostRules.HostingAllowed(),
                         // Patrons host, every signed-in account joins (2026-09-24). The
                         // server's /v2/goon/join is the real gate.
-                        canJoin = JoiningAllowed(),
+                        canJoin = GoonHostRules.JoiningAllowed(),
                     },
                     // Open tables: a Join pressed in the friends drawer lands here. Spent on the
                     // first init so a reload (heartbeat recovery) does not rejoin a finished room.
@@ -1123,42 +1111,6 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// <c>true</c> so the gate has one place to come back to if that ever changes.)</summary>
         private static bool BrainDrainAllowed() => true;
 
-        /// <summary>May the page send its OWN media to the opponent? TIER 1+ (any paid tier or
-        /// whitelist), re-gated 2026-08-06.
-        ///
-        /// Sending was free-for-every-seat for one day (owner call 2026-08-04): the free model
-        /// fixed the "invited free player throws blanks" bug from the first play-test, but left
-        /// an un-gated seat able to push arbitrary media at an opponent, and abuse won over
-        /// generosity. The blank-attack lesson survives as UI instead: the lobby transfer row
-        /// names the perk (S.lobby.transferOff) rather than greying out in silence. The server's
-        /// <c>media_send</c> verdict on /invite and /join computes the same bar
-        /// (computeEffectiveTier &gt;= 1), so the two verdicts agree; voice notes ride this same
-        /// cap. Consent still gates the lane per-match (the lobby checkbox both sides must
-        /// tick), and receiving was never gated.</summary>
-        private static bool TransferAllowed()
-        {
-            try { return App.Patreon?.HasPremiumAccess == true; }
-            catch { return false; }
-        }
-
-        /// <summary>May the page MINT a room? ANY PATRON (owner call 2026-09-24): a paying tier
-        /// or the whitelist, the same bar as sending (<see cref="TransferAllowed"/>). The server
-        /// enforces it at <c>/v2/goon/invite</c> (403 <c>no_host_access</c> below
-        /// <c>computeEffectiveTier &gt;= 1</c>) and this is the same verdict computed locally, so
-        /// the title screen can lock Host instead of routing the player to a refusal. The page
-        /// reads this with <c>=== true</c>, so a host that predates the flag leaves Host enabled
-        /// and falls back to the server's answer.</summary>
-        internal static bool HostingAllowed()
-        {
-            try { return App.Patreon?.HasPremiumAccess == true; }
-            catch { return false; }
-        }
-
-        /// <summary>May the page JOIN a room? Every SIGNED-IN account (owner call 2026-09-24),
-        /// free included. The server's <c>/v2/goon/join</c> answers 401 <c>signin</c> without an
-        /// account; this is only the local read of "is there one". Practice never asks.</summary>
-        internal static bool JoiningAllowed() => !string.IsNullOrEmpty(App.UnifiedUserId);
-
         private static bool TakePendingAutoHost()
         {
             var a = _pendingAutoHost;
@@ -1392,9 +1344,9 @@ namespace ConditioningControlPanel.Services.GoonGame
             // for match 2 would let match 1's opponent be written as match 2's last-opponent record.
             ResetPeerCardState();
 
-            var code = SafeShort((string?)o["code"], 32);
-            var token = SafeShort((string?)o["token"], 128);
-            var role = SafeShort((string?)o["role"], 16);
+            var code = GoonHostRules.SafeShort((string?)o["code"], 32);
+            var token = GoonHostRules.SafeShort((string?)o["token"], 128);
+            var role = GoonHostRules.SafeShort((string?)o["role"], 16);
 
             _ = Task.Run(async () =>
             {
@@ -1414,7 +1366,7 @@ namespace ConditioningControlPanel.Services.GoonGame
 
                     _peerName = string.IsNullOrWhiteSpace(name) ? null : name!.Trim();
                     // Re-validate what the server sent before it can ever reach a shell command.
-                    _peerDmId = IsSnowflake(dmId) ? dmId : null;
+                    _peerDmId = GoonHostRules.IsSnowflake(dmId) ? dmId : null;
                     _peerAvatarCached = false;
 
                     string? uri = null;
@@ -1574,7 +1526,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 var raw = App.Settings?.Current?.GoonLastOpponentJson;
                 if (string.IsNullOrWhiteSpace(raw)) return null;
                 var id = (string?)JObject.Parse(raw!)["dmId"];
-                return IsSnowflake(id) ? id : null;
+                return GoonHostRules.IsSnowflake(id) ? id : null;
             }
             catch { return null; }
         }
@@ -1593,7 +1545,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 "last" => ReadLastOpponentDmId(),
                 _ => null,                       // enum only — a page-supplied id is not a case
             };
-            if (!IsSnowflake(id))
+            if (!GoonHostRules.IsSnowflake(id))
             {
                 App.Logger?.Debug("GoonHostService: discord-open-dm '{W}' - nothing to open", which);
                 return;
@@ -1693,24 +1645,6 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         // ---------------------------------------------------------------- small validators
 
-        /// <summary>A Discord snowflake is digits and nothing else. Applied to the SERVER's value on
-        /// arrival and again on the way to <see cref="Process.Start"/>, because that string is about
-        /// to become part of a shell-executed URL.</summary>
-        private static bool IsSnowflake(string? id)
-        {
-            if (string.IsNullOrEmpty(id) || id!.Length > 20) return false;
-            foreach (var c in id) if (c < '0' || c > '9') return false;
-            return true;
-        }
-
-        /// <summary>Trim + hard-cap a page-supplied string before it rides an outgoing request body.</summary>
-        private static string SafeShort(string? v, int max)
-        {
-            if (string.IsNullOrWhiteSpace(v)) return "";
-            var t = v!.Trim();
-            return t.Length > max ? t.Substring(0, max) : t;
-        }
-
         /// <summary>Forget everything about the match peer. Called from the single teardown funnel:
         /// the snowflake must not outlive the window it was fetched for, and the next duel must not
         /// inherit the previous opponent's cached picture.</summary>
@@ -1762,7 +1696,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             _lastPaintMoveUtc = DateTime.UtcNow;
             _paintStallHandled = false;
             _lastWatchTickUtc = DateTime.UtcNow;
-            _heartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(WatchIntervalSeconds) };
+            _heartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(GoonHostRules.WatchIntervalSeconds) };
             _heartbeatWatch.Tick += (_, _) =>
             {
                 var tickNow = DateTime.UtcNow;
@@ -1791,8 +1725,8 @@ namespace ConditioningControlPanel.Services.GoonGame
                 if (!_paintStallHandled && _lastPaint != null)
                 {
                     var frozen = (DateTime.UtcNow - _lastPaintMoveUtc).TotalSeconds;
-                    var verdict = PaintStallVerdict(frozen, tickGap, VideoDiag.UiStallMs);
-                    if (verdict == PaintStallCall.UiStalled)
+                    var verdict = GoonHostRules.PaintStallVerdict(frozen, tickGap, VideoDiag.UiStallMs);
+                    if (verdict == GoonHostRules.PaintStallCall.UiStalled)
                     {
                         // ccp-bugs #1326: OUR thread was the stalled one (the page's beats sat in
                         // the dispatcher queue), so the frozen counter says nothing about the page.
@@ -1802,7 +1736,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                             tickGap, frozen);
                         _lastPaintMoveUtc = DateTime.UtcNow;
                     }
-                    else if (verdict == PaintStallCall.Stalled)
+                    else if (verdict == GoonHostRules.PaintStallCall.Stalled)
                     {
                         _paintStallHandled = true;
                         App.Logger?.Warning(
@@ -1821,24 +1755,6 @@ namespace ConditioningControlPanel.Services.GoonGame
                 }
             };
             _heartbeatWatch.Start();
-        }
-
-        internal enum PaintStallCall { Healthy, UiStalled, Stalled }
-
-        /// <summary>Pure decision for the paint-stall watchdog (ccp-bugs #1326).
-        /// <paramref name="frozenSeconds"/> is how long the page's frame counter has not moved,
-        /// <paramref name="tickGapSeconds"/> how long since the watch last ticked, and
-        /// <paramref name="uiStallMs"/> the app's own UI-thread stall age. A late tick or a stalled
-        /// UI thread means the page's heartbeats were stuck behind us in the dispatcher queue, so
-        /// the frozen figure is not evidence about the page: it is never a stall, the clock
-        /// restarts. Only a frozen counter seen by a healthy UI thread past
-        /// <see cref="PaintStallSeconds"/> is one.</summary>
-        internal static PaintStallCall PaintStallVerdict(double frozenSeconds, double tickGapSeconds, long uiStallMs)
-        {
-            if (tickGapSeconds > WatchIntervalSeconds + UiStallSlackSeconds
-                || uiStallMs > UiStallSlackSeconds * 1000)
-                return PaintStallCall.UiStalled;
-            return frozenSeconds > PaintStallSeconds ? PaintStallCall.Stalled : PaintStallCall.Healthy;
         }
 
         private static void StopHeartbeatWatch()
@@ -2029,7 +1945,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     (o["subs"] as JArray)?.Select(t => t.Type == JTokenType.String ? (string?)t : null));
                 _peerMedia ??= GoonOnlineMedia.ForPeer(PostPeerMedia);
                 if (subs.Count == 0) { _peerMedia.Off(); return; }
-                if (!PeerFetchAllowed(App.Settings?.Current?.GoonMediaOnline))
+                if (!GoonHostRules.PeerFetchAllowed(App.Settings?.Current?.GoonMediaOnline))
                 {
                     _peerMedia.Off();
                     PostFrame(new { type = "peer-media", state = "declined", subs = Array.Empty<string>(),
@@ -2099,10 +2015,6 @@ namespace ConditioningControlPanel.Services.GoonGame
                 progress = new { have = snap.Have, want = snap.Want },
             });
         }
-
-        /// <summary>The consent rule for the peer pool: on unless the player switched online
-        /// pictures off for the Goon Game. Pure, for the tests.</summary>
-        internal static bool PeerFetchAllowed(bool? goonMediaOnline) => goonMediaOnline != false;
 
         private static void PostPeerMedia(GoonOnlineMedia.Snapshot snap)
         {
