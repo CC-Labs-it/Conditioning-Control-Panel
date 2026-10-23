@@ -34,12 +34,14 @@ const P = v3(), V = v3(), Q = q4(), F = v3(), U = v3(), N = v3(), FP = v3(), RP 
 const qOut = () => ({ normal: [0, 0, 0], p: [0, 0, 0] }), fOut = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });
 const QA = qOut(), QB = qOut(), QR = qOut(), QD = qOut(), FR = fOut(), FL = fOut();
 const FWD = [0, 0, -1], UP = [0, 1, 0];
+const HOLE_FALL = new WeakSet(), HOLE_GRACE_S = 0.45;
 const has = (flags, f) => !!flags && flags.indexOf(f) >= 0;
 
 /** At rest on track.spawnPose(slot). @returns {Float32Array} state */
 export function spawn(st, track, feel, slot = 0) {
   const pose = track.spawnPose(slot);
   st.fill(0);
+  HOLE_FALL.delete(st);
   setPos(st, pose.p); setQuat(st, pose.q);
   st[S.seg] = pose.seg; st[S.latchSeg] = pose.seg; st[S.s] = pose.s; st[S.lateral] = pose.lateral;
   st[S.grounded] = 1; st[S.hopT] = 1e3;          // the last hop was long ago
@@ -51,13 +53,13 @@ export function spawn(st, track, feel, slot = 0) {
 /** One fixed tick. Respawn owns the kart during PULL, HOVER and RELEASE. */
 export function step(st, a, track, feel, dt, ev) {
   const ph = st[S.respawnPhase];
-  if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) return;
+  if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) { HOLE_FALL.delete(st); return; }
   const grace = ph === RESPAWN.GRACE;
   const top = feel.get('speed.topMps');
   getPos(P, st); getVel(V, st); getQuat(Q, st);
   const qa = track.query(P[0], P[1], P[2], st[S.seg] | 0, QA);
   const wasGround = st[S.grounded] > 0;
-  const wasEdge = !wasGround && !has(qa.flags, 'jump') && qa.edgeDist < 0;
+  const wasEdge = !wasGround && !has(qa.flags, 'jump') && (qa.edgeDist < 0 || HOLE_FALL.has(st));
   const prevS = st[S.s], prevLat = st[S.lateral];
   st[S.hopT] += dt;
   if (st[S.stalled] > 0) st[S.stalled] = Math.max(0, st[S.stalled] - dt);
@@ -160,7 +162,7 @@ export function step(st, a, track, feel, dt, ev) {
     // a 'lip' take-off, so a hop right after it pays the trick
     const kick = road && qb.edgeDist < 0 && edgeAt(track, qb, qb.lateral, gap(feel, 'kart.radiusM')) === 'kicker';
     if (kick) v3addScaled(V, V, n, gap(feel, 'route.kickUpMps'));
-    takeoff(st, ev, !kick && road && qb.edgeDist < 0 ? 'edge' : 'lip');
+    takeoff(st, ev, !kick && road && (qb.edgeDist < 0 || qb.hole) ? 'edge' : 'lip');
   } else st[S.airTime] += dt;
 
   // rails (and open sides under Gentle, the soft rails)
@@ -190,18 +192,23 @@ export function step(st, a, track, feel, dt, ev) {
   }
 
   // edge grace and drop
-  const past = !st[S.grounded] && road && ed < 0 && !under && !fall;   // road beneath (a drop shortcut, a lower deck) is no edge
+  if (ground || under || fall) HOLE_FALL.delete(st);
+  else if (qb.hole && qb.height <= 0) HOLE_FALL.add(st);
+  // Keep a real hole fall latched after passing under its far lip; a hop above it does not count.
+  const holeFall = HOLE_FALL.has(st);
+  const past = !st[S.grounded] && road && (ed < 0 || holeFall) && !under && !fall;
   if (past && !wasEdge) ev.emit('edge-enter', { side: lat >= 0 ? 1 : -1 });
   const lim = track.limits || {};
   if (!past) st[S.edgeT] = 0;
-  else if (-ed > feel.get('drop.edgeGraceM')) st[S.edgeT] += dt;   // feel owns the grace; track limits only fallY
+  else if (holeFall || -ed > feel.get('drop.edgeGraceM')) st[S.edgeT] += dt;
   const fell = P[1] < (lim.fallY ?? -Infinity);
-  const drop = !grace && (fell || st[S.edgeT] >= feel.get('drop.edgeGraceS'));
+  const drop = !grace && (fell || st[S.edgeT] >= (holeFall ? Math.min(HOLE_GRACE_S, feel.get('drop.edgeGraceS')) : feel.get('drop.edgeGraceS')));
   if (drop) {
     if (wasEdge || past) ev.emit('edge-exit', { to: 'drop' });
     cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st); resetFall(st);
     st[S.respawnPhase] = RESPAWN.PULL; st[S.respawnT] = 0; st[S.edgeT] = 0;
-    ev.emit('drop', { seg: qb.seg, cause: fell ? 'fallY' : 'edge' });
+    HOLE_FALL.delete(st);
+    ev.emit('drop', { seg: qb.seg, cause: fell ? 'fallY' : holeFall ? 'hole' : 'edge' });
   } else if (wasEdge && !past && !under && !fall) ev.emit('edge-exit', { to: 'road' });
 
   // boost pads: once per entry, on the ground

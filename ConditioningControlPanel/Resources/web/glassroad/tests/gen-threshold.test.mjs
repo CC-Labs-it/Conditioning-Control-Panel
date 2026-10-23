@@ -20,6 +20,8 @@ test('gen: the course passes every generator check', () => {
 test('gen: tracks/threshold.json is the generator output', () => {
   assert.deepEqual(json.nodes, JSON.parse(JSON.stringify(built.track.nodes)));
   assert.deepEqual(json.routes, JSON.parse(JSON.stringify(built.track.routes)));
+  assert.deepEqual(json.courts, JSON.parse(JSON.stringify(built.track.courts)));
+  assert.deepEqual(json.boosts, JSON.parse(JSON.stringify(built.track.boosts)));
   assert.deepEqual(json.checkpoints, built.track.checkpoints);
 });
 

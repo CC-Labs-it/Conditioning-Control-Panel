@@ -15,14 +15,15 @@
  * lands on it (sim/kart.js); nothing beneath keeps the edge drop and rescue.
  */
 import { makeFrame, frameAtSegU } from './frames.js';
+import { holeAt, holeDistance } from './courts.js';
 
 const WINDOW = 4, FAR_M = 25, BELOW_UP = 0.5, BELOW_PASS_M = 1.5, BELOW_END_M = 0.5;
 
 export function makeQuery() {
-  return { seg: 0, segT: 0, s: 0, lateral: 0, height: 0, normal: [0, 1, 0], onRoad: false, edgeDist: 0, surface: 'glass', flags: null, railed: false, p: [0, 0, 0] };
+  return { seg: 0, segT: 0, s: 0, lateral: 0, height: 0, normal: [0, 1, 0], onRoad: false, edgeDist: 0, hole: null, holeDist: Infinity, surface: 'glass', flags: null, railed: false, p: [0, 0, 0] };
 }
 
-export function createQuery(sp, refN, rollAt, widthAt, nodes) {
+export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = []) {
   const { N, SUB, samplePos: S } = sp;
   // bounding sphere per segment over its samples
   const centre = new Float64Array(N * 3), radius = new Float64Array(N);
@@ -100,7 +101,9 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes) {
     out.height = h;
     out.normal[0] = fr.n[0]; out.normal[1] = fr.n[1]; out.normal[2] = fr.n[2];
     out.edgeDist = half - Math.abs(lat);
-    out.onRoad = !gap && out.edgeDist >= 0;
+    out.hole = holeAt(courts, out.s, lat);
+    out.holeDist = out.hole ? holeDistance(out.hole, out.s, lat) : Infinity;
+    out.onRoad = !gap && !out.hole && out.edgeDist >= 0;
     out.surface = fr.surface;
     out.flags = fl;
     out.railed = !gap && (fl.includes('rail') || fl.includes(lat >= 0 ? 'railR' : 'railL'));
@@ -108,11 +111,23 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes) {
     return out;
   }
 
+  const courtProbe = makeQuery();
   function query(px, py, pz, hintSeg = -1, out = makeQuery()) {
     const hint = hintSeg >= 0 && hintSeg < N ? hintSeg | 0 : -1;
     scan(px, py, pz, hint);
     if (hint >= 0 && best[0] > FAR_M * FAR_M) scan(px, py, pz, -1);
-    return solve(best[1] | 0, best[2], px, py, pz, out);
+    solve(best[1] | 0, best[2], px, py, pz, out);
+    // A broad court can be nearer in surface distance while another deck's centreline is nearer.
+    // Only probe its bounded footprint near the floor; preserve the ordinary ribbon and flight query.
+    for (const court of courts) for (let i = court.from; i < court.to; i++) {
+      const o = i * 4;
+      if (px < box[o] || px > box[o + 2] || pz < box[o + 1] || pz > box[o + 3]) continue;
+      solve(i, 0.5, px, py, pz, courtProbe);
+      const h = Math.abs(courtProbe.height), along = (px - fr.p[0]) * fr.t[0] + (py - fr.p[1]) * fr.t[1] + (pz - fr.p[2]) * fr.t[2];
+      if (courtProbe.s < court.fromS || courtProbe.s >= court.toS || courtProbe.edgeDist < -1e-6 || h > 4 || Math.abs(along) > 1e-4) continue;
+      if (h < Math.abs(out.height) - 1e-7 || out.edgeDist < 0) copyQuery(out, courtProbe);
+    }
+    return out;
   }
 
   const tmp = makeQuery();
@@ -153,6 +168,7 @@ export function copyQuery(o, a) {
   o.seg = a.seg; o.segT = a.segT; o.s = a.s; o.lateral = a.lateral; o.height = a.height;
   o.normal[0] = a.normal[0]; o.normal[1] = a.normal[1]; o.normal[2] = a.normal[2];
   o.onRoad = a.onRoad; o.edgeDist = a.edgeDist; o.surface = a.surface; o.flags = a.flags; o.railed = a.railed;
+  o.hole = a.hole; o.holeDist = a.holeDist;
   o.p[0] = a.p[0]; o.p[1] = a.p[1]; o.p[2] = a.p[2];
   return o;
 }

@@ -54,7 +54,7 @@ test('track: roll honoured, right edge low on positive roll, flat when roll is 0
     const f = tr.frameAt(tr.nodeS[i]);
     assert.ok(Math.abs(f.roll - nd.roll * DEG) < 1e-9, 'roll at node ' + i);
     if (Math.abs(f.t[1]) < 0.05) assert.ok(Math.abs(Math.asin(-f.b[1]) - nd.roll * DEG) < 0.5 * DEG, 'bank at node ' + i);
-    assert.equal(f.w, nd.w);
+    assert.ok(Math.abs(f.w - nd.w) < 1e-9, 'width at node ' + i);
   });
   // roll between nodes never overshoots its neighbours
   for (let i = 0; i < N; i++) {

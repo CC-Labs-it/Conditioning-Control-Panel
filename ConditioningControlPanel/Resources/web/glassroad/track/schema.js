@@ -154,6 +154,27 @@ export function validate(t) {
     });
   }
 
+  if (t.courts !== undefined) {
+    if (!Array.isArray(t.courts)) err('courts must be an array');
+    else {
+      const ids = new Set();
+      t.courts.forEach((c, i) => {
+        const at = 'courts[' + i + ']';
+        if (!c || !isStr(c.id) || ids.has(c.id)) { err(at + ' needs a unique id'); return; }
+        ids.add(c.id);
+        if (!inRange(c.from) || !isInt(c.to) || c.to <= c.from || c.to > N) { err(at + ' needs from < to within nodes'); return; }
+        if (!Array.isArray(c.holes)) { err(at + '.holes must be an array'); return; }
+        const holes = new Set();
+        for (const h of c.holes) {
+          if (!h || !isStr(h.id) || holes.has(h.id)) { err(at + ' holes need unique ids'); continue; }
+          holes.add(h.id);
+          if (!inRange(h.node) || h.node < c.from || h.node >= c.to || !isNum(h.x) || !isNum(h.w) || h.w <= 0 || !isNum(h.len) || h.len <= 0 ||
+              (h.ds !== undefined && (!isNum(h.ds) || h.ds < 0))) err(at + ' hole ' + h.id + ' needs an in-court node, x, w > 0, len > 0 and ds >= 0');
+        }
+      });
+    }
+  }
+
   if (!t.ai || typeof t.ai !== 'object' || !Array.isArray(t.ai.lines) || !Array.isArray(t.ai.pace)) err('ai must have lines[] and pace[]');
   else {
     t.ai.lines.forEach((l, i) => { if (!l || !inRange(l.node) || !isNum(l.x)) err('ai.lines[' + i + '] needs node and x'); });

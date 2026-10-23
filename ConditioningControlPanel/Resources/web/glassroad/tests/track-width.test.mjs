@@ -44,7 +44,7 @@ test('width: every change eases monotonically between node widths without a sudd
       const w = track.frameAt(s0 + (s1 - s0) * j / 100).w;
       assert.ok(w >= Math.min(a, b) - 1e-7 && w <= Math.max(a, b) + 1e-7);
       assert.ok((w - last) * (b - a) >= -1e-7);
-      assert.ok(Math.abs(w - last) / 2 < 0.03, 'edge advances smoothly through the join');
+      assert.ok(Math.abs(w - last) / 2 < 0.8 * (s1 - s0) / 100, 'edge taper stays below 0.8 lateral metres per forward metre');
       last = w;
     }
   }

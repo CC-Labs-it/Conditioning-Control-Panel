@@ -9,6 +9,7 @@ import { buildRefNormals, frameAtSegU, makeFrame } from './frames.js';
 import { createQuery } from './query.js';
 import { buildDriveline, buildChecklines } from './driveline.js';
 import { buildMeshes } from './mesh.js';
+import { buildCourts } from './courts.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
 export function loadTrack(json, { validate = true } = {}) {
@@ -54,6 +55,7 @@ export function loadTrack(json, { validate = true } = {}) {
         p: [pf.p[0] + pf.b[0] * r.pad.x, pf.p[1] + pf.b[1] * r.pad.x, pf.p[2] + pf.b[2] * r.pad.x], n: pf.n.slice(), t: pf.t.slice() } };
   });
   const lm = json.limits;
+  const courts = buildCourts(json.courts, nodeS, frameAt);
   // B1 (CONTRACT-B1.md section 9): item boxes and pickup bubbles, s = node s + ds, wrapped
   const items = (json.items || []).map((e) => ({ kind: e.kind, node: e.node, x: e.x, ds: e.ds || 0, s: wrap(nodeS[e.node] + (e.ds || 0), lengthM) }));
 
@@ -68,12 +70,12 @@ export function loadTrack(json, { validate = true } = {}) {
 
   const track = {
     id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS,
-    sections, sectionAt, boosts, jumps, items, routes,
+    sections, sectionAt, boosts, jumps, items, routes, courts,
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
     nodeFlags: (i) => nodes[((i % N) + N) % N].flags,
     frameAt,
-    query: createQuery(sp, refN, rollAt, widthAt, nodes),
+    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts),
     checklines: null,
   };
   track.checklines = buildChecklines(track, json.checkpoints);

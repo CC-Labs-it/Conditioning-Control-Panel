@@ -12,6 +12,7 @@
  * v = s); railCaps, a tall end post wherever a rail run starts or stops (u = share of its height).
  */
 import { makeFrame } from './frames.js';
+import { supportIntervals } from './courts.js';
 
 // RAIL_H: 1.2 m since the EDGES lane (was 0.9: a railed edge read too like an open one); render/look.js railHeightM matches
 const COLS = 4, THICK_M = 0.25, RAIL_H = 1.2, RAIL_T = 0.08, DECAL_M = 0.02, LIP_M = 3, STRIP_STEP_M = 1;
@@ -62,6 +63,7 @@ function runs(Q, keep) {
 
 export function buildMeshes(track, dl) {
   const Q = dl.quads, L = track.lengthM;
+  const courtHoles = (track.courts || []).flatMap((c) => c.holes);
   const row = (q) => q % Q;              // row index of the start of quad q (wrapped)
   const rowS = (q) => dl.s[row(q)] + Math.floor(q / Q) * L;
 
@@ -83,7 +85,11 @@ export function buildMeshes(track, dl) {
       er.push([road.v(off(c, b, h, n, 0), b, 0, v), road.v(off(c, b, h, n, -THICK_M), b, THICK_M, v)]);
     }
     for (let k = 0; k < nq; k++) {
-      for (let i = 0; i < COLS; i++) {
+      const rawS = rowS(q0 + k), offsetS = Math.floor(rawS / L) * L;
+      const s0 = rawS - offsetS, s1 = rowS(q0 + k + 1) - offsetS;
+      const holes = courtHoles.filter((h) => h.s < s1 && h.s + h.len > s0);
+      if (holes.length) courtStrip(road, track, s0, s1, holes, offsetS);
+      else for (let i = 0; i < COLS; i++) {
         road.quad(top[k][i], top[k][i + 1], top[k + 1][i], top[k + 1][i + 1]);
         road.quad(bot[k][i], bot[k][i + 1], bot[k + 1][i], bot[k + 1][i + 1]);
       }
@@ -100,6 +106,7 @@ export function buildMeshes(track, dl) {
       }
     }
   }
+  courtWalls(road, track);
 
   // rails
   const rails = builder();
@@ -155,6 +162,57 @@ export function buildMeshes(track, dl) {
   const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
   const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS);
   return { road: road.done(), rails: rails.done(), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
+}
+
+/** Split only affected road quads, at the exact collision bounds, on both visible faces. */
+function courtStrip(m, track, s0, s1, holes, offsetS) {
+  const cuts = [s0, s1];
+  for (const h of holes) for (const s of [h.s, h.s + h.len]) if (s > s0 && s < s1) cuts.push(s);
+  cuts.sort((a, b) => a - b);
+  for (let j = 1; j < cuts.length; j++) {
+    const a = cuts[j - 1], b = cuts[j];
+    if (b - a < 1e-8) continue;
+    const f0 = track.frameAt(a), f1 = track.frameAt(b), fm = track.frameAt((a + b) / 2), half = fm.w / 2;
+    for (const [lo, hi] of supportIntervals(track.courts, (a + b) / 2, half)) {
+      const left0 = Math.abs(lo + half) < 1e-6 ? -f0.w / 2 : lo, left1 = Math.abs(lo + half) < 1e-6 ? -f1.w / 2 : lo;
+      const right0 = Math.abs(hi - half) < 1e-6 ? f0.w / 2 : hi, right1 = Math.abs(hi - half) < 1e-6 ? f1.w / 2 : hi;
+      const cols = Math.max(1, Math.ceil((hi - lo) / 4));
+      for (const depth of [0, -THICK_M]) {
+        let prev = null;
+        for (let k = 0; k <= cols; k++) {
+          const x0 = left0 + (right0 - left0) * k / cols, x1 = left1 + (right1 - left1) * k / cols;
+          const ids = [m.v(off(f0.p, f0.b, x0, f0.n, depth), depth ? neg(f0.n) : f0.n, x0, a + offsetS),
+            m.v(off(f1.p, f1.b, x1, f1.n, depth), depth ? neg(f1.n) : f1.n, x1, b + offsetS)];
+          if (prev) m.quad(prev[0], ids[0], prev[1], ids[1]);
+          prev = ids;
+        }
+      }
+    }
+  }
+}
+
+/** The exposed glass thickness inside each opening; no bottom cap spans a hole. */
+function courtWalls(m, track) {
+  for (const c of track.courts || []) for (const h of c.holes) {
+    for (const side of [-1, 1]) {
+      let prev = null;
+      const n = Math.max(1, Math.ceil(h.len / STRIP_STEP_M)), x = h.x + side * h.w / 2;
+      for (let k = 0; k <= n; k++) {
+        const s = h.s + h.len * k / n, f = track.frameAt(s), normal = f.b.map((v) => -side * v);
+        const ids = [0, -THICK_M].map((d) => m.v(off(f.p, f.b, x, f.n, d), normal, x, s));
+        if (prev) m.quad(prev[0], prev[1], ids[0], ids[1]);
+        prev = ids;
+      }
+    }
+    for (const [s, sign] of [[h.s, 1], [h.s + h.len, -1]]) {
+      const f = track.frameAt(s), normal = f.t.map((v) => sign * v);
+      const ids = [0, -THICK_M].flatMap((d) => [-1, 1].map((side) => {
+        const x = h.x + side * h.w / 2;
+        return m.v(off(f.p, f.b, x, f.n, d), normal, x, s);
+      }));
+      m.quad(ids[0], ids[1], ids[2], ids[3]);
+    }
+  }
 }
 
 /* EDGES lane: the open edges read "you can fall here" (a hazard strip and a lip, a haze falling away below it)

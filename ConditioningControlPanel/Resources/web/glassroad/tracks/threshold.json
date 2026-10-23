@@ -130,12 +130,12 @@
     {"p":[100.5,3.33,-89.36],"roll":25,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[90.85,2.67,-85.36],"roll":13.09,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[80.5,2,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[69.86,2,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[59.21,2,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[48.57,2,-84],"roll":0,"w":17.5,"flags":["rail","boost"],"speed":1,"surface":"glass"},
-    {"p":[37.93,2,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[27.29,2,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
-    {"p":[16.64,2,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[69.86,2,-84],"roll":0,"w":27.83,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[59.21,2,-84],"roll":0,"w":34,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[48.57,2,-84],"roll":0,"w":34,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[37.93,2,-84],"roll":0,"w":34,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[27.29,2,-84],"roll":0,"w":34,"flags":["rail"],"speed":1,"surface":"glass"},
+    {"p":[16.64,2,-84],"roll":0,"w":26.28,"flags":["rail","boost"],"speed":1,"surface":"glass"},
     {"p":[6,2,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[-4,2.33,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
     {"p":[-14,3.33,-84],"roll":0,"w":17.5,"flags":["rail"],"speed":1,"surface":"glass"},
@@ -206,7 +206,7 @@
     {"node":4,"x":0,"w":4,"len":6},
     {"node":30,"x":-3,"w":4,"len":6},
     {"node":55,"x":0,"w":4,"len":6},
-    {"node":123,"x":0,"w":4,"len":6}
+    {"node":126,"x":0,"w":4,"len":6}
   ],
   "jumps": [{"node":130,"airLen":12,"height":6}],
   "routes": [
@@ -219,6 +219,17 @@
       "open": {"ds":3.5,"len":15},
       "land": {"from":104,"to":108},
       "pad": {"node":107,"ds":0,"x":0}
+    }
+  ],
+  "courts": [
+    {
+      "id": "aperture-court",
+      "from": 120,
+      "to": 127,
+      "holes": [
+        {"id":"aperture-left","node":120,"ds":27,"x":-7.25,"w":6,"len":8},
+        {"id":"aperture-right","node":120,"ds":46,"x":7.25,"w":6,"len":8}
+      ]
     }
   ],
   "hazards": [],

@@ -50,7 +50,7 @@ export const PIECES = [
   // release: down the return lane, round under the deck and the column, the jump, home along the ground
   { id: 'L4a', auto: true, y: 6, w: 14, ease: 'lin', sec: 2, alongside: true },
   { id: 'sweepD', turn: 90, r: 40, roll: 25, y: 2, ease: 'lin', sec: 2 },
-  { id: 'L4d', auto: true, y: 2, sec: 2, pad: { at: 0.4, x: 0 } },
+  { id: 'L4d', auto: true, y: 2, sec: 2, pad: { at: 0.86, x: 0 } },
   { id: 'kicker', len: 30, y: 5, ease: 'kick', sec: 2 },
   { id: 'gap', len: 12, y: -1, ease: 'lin', jump: true, sec: 2 },
   { id: 'landing', len: 24, y: -1, sec: 2 },
@@ -203,7 +203,9 @@ export function build(pieces = PIECES) {
         roll = Math.sign(p.turn) * p.roll * Math.min(1, d / ramp, (L - d) / ramp);
       }
       const flags = p.jump ? ['jump'] : p.open ? ['open'] : p.loop ? ['rail', 'magnet'] : ['rail'];
-      nodes.push({ p: [r2(x), r2(y), r2(z)], roll: r2(roll), w: p.w || W, flags, speed: p.speed || 1.0, surface: 'glass' });
+      // Aperture Court opens out on the flat return, then gathers before the launch ramp.
+      const courtWidth = p.id === 'L4d' ? W + (34 - W) * Math.min(1, d / 17, (L - d) / 20) : 0;
+      nodes.push({ p: [r2(x), r2(y), r2(z)], roll: r2(roll), w: r2(courtWidth || p.w || W), flags, speed: p.speed || 1.0, surface: 'glass' });
       meta.push({ piece: pi, u, s: sAcc + d, sec: p.sec });
     }
     sAcc += L; y0 = y1;
@@ -275,6 +277,14 @@ export function build(pieces = PIECES) {
   });
 
   const minY = Math.min(...nodes.map((n) => n.p[1]));
+  const courtNodes = meta.map((m, i) => pieces[m.piece].id === 'L4d' ? i : -1).filter((i) => i >= 0);
+  const courts = [{
+    id: 'aperture-court', from: courtNodes[0], to: courtNodes[courtNodes.length - 1] + 1,
+    holes: [
+      { id: 'aperture-left', node: courtNodes[0], ds: 27, x: -7.25, w: 6, len: 8 },
+      { id: 'aperture-right', node: courtNodes[0], ds: 46, x: 7.25, w: 6, len: 8 },
+    ],
+  }];
   const track = {
     format: 'glassroad-track', version: 1,
     id: 'threshold', name: { en: 'Threshold' }, author: 'ccl', created: '2026-10-22',
@@ -283,7 +293,7 @@ export function build(pieces = PIECES) {
     sections: sectionRows,
     checkpoints,
     spawn: { node: 0, grid: [[-4, -5], [4, -9], [-4, -13], [4, -17], [-4, -21], [4, -25], [-4, -29], [4, -33]] },
-    items, boosts, jumps, routes, hazards: [], media: [],
+    items, boosts, jumps, routes, courts, hazards: [], media: [],
     ai: { lines: [], pace: [1.0, 1.05, 1.1] },
     beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: Math.floor(minY - 25), edgeGraceM: 1.2, edgeGraceS: 0.8 },
