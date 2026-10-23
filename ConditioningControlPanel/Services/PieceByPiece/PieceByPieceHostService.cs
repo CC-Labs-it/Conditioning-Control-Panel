@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Threading;
 using ConditioningControlPanel.Services.Chaos;
 using Microsoft.Web.WebView2.Core;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Models;
@@ -26,7 +27,9 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 ///
 /// <para>Protocol (the effects ramp codes against these shapes; do not widen them casually):
 /// <list type="bullet">
-/// <item>host -&gt; page, once after boot: <c>{ type: 'pbp:settings', videoHoldSec, reducedMotion, whispers }</c></item>
+/// <item>host -&gt; page, once after boot: <c>{ type: 'pbp:settings', videoHoldSec, reducedMotion, whispers,
+///   letPeopleWatch, watchEffects, watchAmount, mediaAvailable, spectateMatchId? }</c> (the watch
+///   fields: <see cref="PbpWatchRules"/>)</item>
 /// <item>page -&gt; host: <c>{ type: 'pbp:media-request', kinds: ['image','gif','video'], count }</c></item>
 /// <item>host -&gt; page: <c>{ type: 'pbp:media', images: [url...], gifs: [...], videos: [...] }</c></item>
 /// <item>page -&gt; host: <c>{ type: 'pbp:exit' }</c> - close the window</item>
@@ -216,6 +219,8 @@ internal static partial class PieceByPieceHostService
             });
 
             _host.Show();
+            // Spectate v2: the local half of mediaAvailable, walked once per boot off the UI thread.
+            StartLocalMediaProbe();
             // Windowed: the user can close it with the title-bar X. Tear down cleanly so the
             // heartbeat watchdog cannot misread the resulting silence as a wedged page.
             if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
@@ -277,9 +282,10 @@ internal static partial class PieceByPieceHostService
             _lastProgressUtc = DateTime.UtcNow;
             _pinged = false;
             _host?.FocusWeb();
+            // The saved pick first: the settings frame's mediaAvailable reads the opt-in.
+            AdoptSavedMediaChoice();
             PostSettings();
             PostIdentity();
-            AdoptSavedMediaChoice();
             PostMediaState();
             StartOnlineMedia();
             PostFriendIntent();
@@ -330,20 +336,22 @@ internal static partial class PieceByPieceHostService
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: identity post failed: {E}", ex.Message); }
     }
 
-    /// <summary>The one host -&gt; page settings frame, sent once per boot.</summary>
+    /// <summary>The one host -&gt; page settings frame, sent once per boot. <c>letPeopleWatch</c>
+    /// is the "Let people watch my games" switch (<see cref="PbpWatchRules"/>); <c>spectateMatchId</c>
+    /// rides only on a board opened straight into a spectate, and only on that one boot.</summary>
     private static void PostSettings()
     {
         if (_settingsPosted) return;
         _settingsPosted = true;
+        var spectate = TakeSpectateInit();
         try
         {
-            _host?.Post(new
-            {
-                type = "pbp:settings",
-                videoHoldSec = SafeVideoHoldSec(),
-                reducedMotion = SafeReducedMotion(),
-                whispers = SafeWhisperClips(),
-            });
+            // Spectate v2: the stands' effects choice and whether any media source exists ride here
+            // too; the field names live in PbpWatchRules.SettingsFrame (tested).
+            bool mediaAvailable = SafeMediaAvailable();
+            _postedMediaAvailable = mediaAvailable;
+            _host?.Post(PbpWatchRules.SettingsFrame(SafeVideoHoldSec(), SafeReducedMotion(), SafeWhisperClips(),
+                App.Settings?.Current, mediaAvailable, spectate, SafeGentleIntroSpeed()));
         }
         catch (Exception ex) { App.Logger?.Debug("PieceByPiece: settings post failed: {E}", ex.Message); }
     }
@@ -392,6 +400,10 @@ internal static partial class PieceByPieceHostService
 
                 case "pbp:friend-challenge":
                     OnFriendChallenge(o);
+                    break;
+
+                case PbpWatchRules.SettingFrame:
+                    OnPageSetting(o);
                     break;
 
                 case "pbp:exit":
@@ -663,5 +675,21 @@ internal static partial class PieceByPieceHostService
     {
         try { return MotionFx.Level != Models.MotionLevel.Full; }
         catch { return false; }
+    }
+
+    /// <summary>The intros' gentle speed (PbpWatchRules.GentleIntroSpeed): the level the player would
+    /// have without gentle visuals decides whether gentle is the only brake.</summary>
+    private static double SafeGentleIntroSpeed()
+    {
+        try
+        {
+            var s = App.Settings?.Current;
+            if (s == null) return 0;
+            bool osAnim = true;
+            try { osAnim = System.Windows.SystemParameters.ClientAreaAnimation; } catch { }
+            var withoutGentle = MotionFx.ResolveLevel(s.MotionLevel, osAnim, gentleVisuals: false);
+            return PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, withoutGentle, s.GentleSpeed);
+        }
+        catch { return 0; }
     }
 }

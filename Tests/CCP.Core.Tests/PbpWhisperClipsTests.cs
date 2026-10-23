@@ -2,7 +2,7 @@ using System.Linq;
 using ConditioningControlPanel.Services.PieceByPiece;
 using Xunit;
 
-namespace CCP.Core.Tests;
+namespace ConditioningControlPanel.Tests;
 
 public class PbpWhisperClipsTests
 {

@@ -306,8 +306,9 @@ namespace ConditioningControlPanel.Services.Billboard.Providers
         }
     }
 
-    /// <summary>EVENT, the adapter: <see cref="ChasterService.IsLinked"/> (a cached token read) and
-    /// <see cref="ChasterService.LastLadderVerify"/> (kept in memory by the service).</summary>
+    /// <summary>EVENT, the adapter: <see cref="ChasterService.IsLinked"/> (a cached token read),
+    /// <see cref="ChasterService.LastRaffleCard"/> and <see cref="ChasterService.LastLadderVerify"/>
+    /// (kept in memory by the service).</summary>
     public sealed class EventProvider : BillboardProviderBase
     {
         private readonly BillboardHead _head;
@@ -325,11 +326,11 @@ namespace ConditioningControlPanel.Services.Billboard.Providers
             {
                 Action link = RaiseChanged;
                 chaster.LinkChanged += link;
-                OnDetach(() => chaster.LinkChanged -= link);
+                chaster.RaffleChanged += link;
+                OnDetach(() => { chaster.LinkChanged -= link; chaster.RaffleChanged -= link; });
                 _hooked = true;
             }
-            var verify = chaster.LastLadderVerify;
-            var reading = verify is { Ok: true } ? new RaffleReading(verify.DaysCounted, verify.Seconds) : null;
+            var reading = RaffleReading.From(chaster.LastRaffleCard, chaster.LastLadderVerify, context.NowUtc);
             var card = EventCards.Locktober(chaster.IsLinked, context.NowUtc, reading, Loc);
             return card == null ? Array.Empty<BillboardCardSpec>() : new[] { card };
         });

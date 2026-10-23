@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), PvP stakes (no Core
-// StakeBridge on this head), friend / Lobby intents (.Friends.cs),
+// media-flavour / media-more / online-media), PvP stakes (Core StakeBridge.ForApp
+// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -15,8 +15,10 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.Quiz;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -179,7 +181,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     !string.IsNullOrEmpty(folder) && Directory.Exists(folder)
                         ? Directory.GetFiles(folder).Select(f => Path.GetFileName(f)) : null;
                 bool shared = CoreSettings.Current.SubAudioAudible && ModAudioPolicy.UsesSharedSubAudio(CoreMods.ActiveModId);
-                return PbpWhisperClips.Build(Names(Path.Combine(CorePaths.EffectiveAssets, PbpWhisperClips.BrainDrainFolder)),
+                // Unchecked own clips are not offered (the server 404s them), so all-unchecked falls back like an empty folder.
+                var assets = CorePaths.EffectiveAssets;
+                var off = IntakeRun.DisabledAssetSet(_server.DisabledAssets());
+                var own = Path.Combine(assets, PbpWhisperClips.BrainDrainFolder);
+                return PbpWhisperClips.Build(Names(own)?.Where(n => IntakeRun.IsAssetActive(off, assets, Path.Combine(own, n))),
                     shared, Names(_server.SubAudioRoot()), Names(_server.WordsRoot())).Select(_server.WhisperUrl).ToArray();
             }
             catch (Exception ex)

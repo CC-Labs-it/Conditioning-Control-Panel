@@ -686,9 +686,9 @@ namespace ConditioningControlPanel
         /// Refreshes the header listing pill and the Session Code confirmation
         /// banner from the current remote-session state:
         ///   • no active session            → pill hidden, banner hidden
-        ///   • active, not opted in         → "Private only"
-        ///   • active, opted in, no claimer → "Listed" + confirmation banner
-        ///   • active, opted in, claimed    → "Claimed" + confirmation banner
+        ///   • active, not opted in         → "Remote: private"
+        ///   • active, opted in, no claimer → "Remote: listed" + confirmation banner
+        ///   • active, opted in, claimed    → "Remote: claimed" + confirmation banner
         /// </summary>
         private void UpdateDirectoryListingStatus()
         {
@@ -714,21 +714,21 @@ namespace ConditioningControlPanel
             string tip;
             if (!_directoryOptedIn)
             {
-                text = "Private only";
+                text = "Remote: private";
                 dot = System.Windows.Media.Color.FromRgb(0x8A, 0x8A, 0xA0); // muted grey
-                tip = "Your session is private — you are not listed in the Available Subjects Directory.";
+                tip = "Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.";
             }
             else if (claimed)
             {
-                text = "Claimed";
+                text = "Remote: claimed";
                 dot = System.Windows.Media.Color.FromRgb(0x00, 0xFF, 0x88); // green
-                tip = "A controller has claimed your directory listing.";
+                tip = "A controller has claimed your Remote listing.";
             }
             else
             {
-                text = "Listed";
+                text = "Remote: listed";
                 dot = System.Windows.Media.Color.FromRgb(0xB4, 0x7B, 0xFF); // neon purple (directory accent)
-                tip = "You're listed in the Available Subjects Directory and waiting to be claimed.";
+                tip = "Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.";
             }
 
             if (TxtDirectoryStatus != null) TxtDirectoryStatus.Text = text;
@@ -952,7 +952,6 @@ namespace ConditioningControlPanel
         {
             try
             {
-                if (_remoteOverlayBrowserRevealed == reveal) return;
                 _remoteOverlayBrowserRevealed = reveal;
 
                 if (reveal)
@@ -961,7 +960,8 @@ namespace ConditioningControlPanel
                     App.Logger?.Information(
                         "[RemoteControl] Browser un-hidden for a controller video (the remote overlay stays behind the WebView)");
                 }
-                else if (RemoteControlOverlay.Visibility == System.Windows.Visibility.Visible)
+                else if (Services.Browser.RemoteBrowserStopRule.HideBrowser(
+                    RemoteControlOverlay.Visibility == System.Windows.Visibility.Visible, reveal))
                 {
                     // Controller still connected: the overlay needs its airspace back so the
                     // session code is legible again.
@@ -1305,6 +1305,7 @@ namespace ConditioningControlPanel
                     _sessionEngine.PhaseChanged += OnSessionPhaseChanged;
                     _sessionEngine.SessionStarted += OnSessionStarted;
                     _sessionEngine.SessionStopped += OnSessionStopped;
+                    WatchSessionClocks(_sessionEngine);
                     // Attach the bark system to this session engine (it's MainWindow-owned
                     // and created lazily, so BarkService can't subscribe at its own Start()).
                     App.Bark?.AttachSessionEngine(_sessionEngine);
@@ -1350,10 +1351,49 @@ namespace ConditioningControlPanel
             }
         }
 
-        internal void ResumeSessionFromRemote()
+        /// <summary>The pause a LOCAL panic left on the session (PanicAftermath): a remote resume of
+        /// exactly that pause is refused. Cleared when a session starts or stops.</summary>
+        private Services.Safety.PanicAftermath.PanicPause? _panicPause;
+
+        /// <summary>Counts session runs: Session objects are reused (cached built-ins, custom
+        /// sessions), so a mark names the run as well as the object.</summary>
+        private int _sessionRun;
+
+        /// <summary>The local panic only (RunPanicStopTail). A remote panic never marks: the
+        /// controller may resume its own panic (owner, 2026-10-19).</summary>
+        private void NoteLocalPanicPause()
+        {
+            var engine = _sessionEngine;
+            _panicPause = Services.Safety.PanicAftermath.MarkPause(engine?.CurrentSession, _sessionRun,
+                engine?.IsRunning == true, engine?.IsPaused == true, engine?.PauseCount ?? 0);
+        }
+
+        /// <summary>TRUE while the running session still sits in the pause a LOCAL panic left: a
+        /// remote resume_session or start_session must not undo it (PanicAftermath).</summary>
+        internal bool LocalPanicHoldsSession
+        {
+            get
+            {
+                var engine = _sessionEngine;
+                return engine?.IsRunning == true && Services.Safety.PanicAftermath.RemoteResumeRefused(
+                    _panicPause, engine.CurrentSession, _sessionRun, engine.IsPaused, engine.PauseCount);
+            }
+        }
+
+        /// <summary>FALSE when the resume was refused (a local panic paused this session), so the
+        /// remote command reports it instead of a silent ok.</summary>
+        internal bool ResumeSessionFromRemote()
         {
             try
             {
+                // A remote (or voice) resume never undoes a local panic: ResumeSession would restart
+                // flashes, video and subliminals with the engine stopped. Only a local START or
+                // Resume picks that pause up; the controller is told (reason "panic").
+                if (LocalPanicHoldsSession)
+                {
+                    App.Logger?.Information("[RemoteControl] Resume refused: a local panic paused this session");
+                    return false;
+                }
                 if (_sessionEngine?.IsRunning == true && _sessionEngine.IsPaused)
                     _sessionEngine.ResumeSession();
             }
@@ -1361,6 +1401,7 @@ namespace ConditioningControlPanel
             {
                 App.Logger?.Error(ex, "[RemoteControl] Failed to resume session from remote");
             }
+            return true;
         }
 
         internal void StopSessionFromRemote() => StopEngineAndSession("RemoteControl");
@@ -1407,6 +1448,8 @@ namespace ConditioningControlPanel
                 // bark's Panic trigger is raised from the key path only - so without this a remote
                 // panic would leave her chatting.
                 try { App.EmiDesk?.Fire("panicPressed", null); } catch { }
+                // Trigger Mode stays quiet too. No pause mark: the controller may resume its own panic.
+                Services.Safety.PanicAftermath.ArmQuiet();
 
                 App.Logger?.Information("[RemoteControl] Panic triggered from remote");
 

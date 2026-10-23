@@ -11,7 +11,7 @@
 // ponytail: Spiral pulse and Brain Drain pulse (no spiral / blur overlay on this head), Web Video
 // (no browser media service), Wallpaper (Win32 WallpaperService). Spoken Mantra runs through the
 // voice funnel (MainShellWindow.VoiceCommands.cs, Core SpokenMantra). Add each to CanPerformAutonomy the day its surface lands.
-// Also not here: the TakeoverAnnouncerOverlay banner (overlay-takeover-announcer), the avatar
+// The TakeoverAnnouncerOverlay banner shows on the announced roll (AutonomyService.cs:961). Not here: the avatar
 // countdown bar, the announcement's event audio (CompanionPhraseService), the diagnostic Test
 // dialogs and Force Start (debug). Voice/PTT/wake word: MainShellWindow.VoiceCommands.cs.
 using System;
@@ -73,7 +73,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF CanTakeAction: never over a fullscreen interaction (InteractionQueue.IsBusy).
             Autonomy.IsBusy = () => CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen()
                                     || BubbleCountWindow.IsAnyOpen();
-            Autonomy.Perform = (a, _) => Dispatcher.UIThread.Post(() => PerformAutonomy(a));
+            Autonomy.Perform = (a, announced) => Dispatcher.UIThread.Post(() => PerformAutonomy(a, announced));
             Autonomy.EnabledChanged += (_, on) => Dispatcher.UIThread.Post(() =>
             {
                 if (!on) CancelAutonomyPulses();
@@ -84,7 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF AnnounceAction: the tube says it (text only; no event audio here).
             Autonomy.AnnouncementMade += (_, phrase) => Dispatcher.UIThread.Post(() =>
                 _avatarTubeWindow?.GigglePriority(phrase, false, aiGenerated: false));
-            Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
+            Closed += (_, _) => { CancelAutonomyPulses(); Autonomy.Stop(); TakeoverAnnouncerOverlay.CloseActive(); _takeoverQuestTick?.Stop(); StopVoiceInput(); };
             Opened += (_, _) => { ResumeAutonomyOnStartup(); RefreshVoiceInputModes(); };
         }
 
@@ -109,9 +109,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         };
 
         /// <summary>WPF PerformAction for the actions this head has. UI thread.</summary>
-        internal void PerformAutonomy(AutonomyActionType a)
+        internal void PerformAutonomy(AutonomyActionType a, bool announced = false)
         {
             if (!Autonomy.IsEnabled) return;   // stopped while the post was queued
+            // WPF :961: the HUD cue, every effect but Comment, only on the announce roll (#534: 0% = silent).
+            if (announced) TakeoverAnnouncerOverlay.Announce(AutonomyScheduler.TakeoverEffectLabel(a));
             switch (a)
             {
                 case AutonomyActionType.Flash: CoreFlash.ShowProvider?.Invoke(); break;
@@ -272,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void StopAutonomyForPanic()
         {
             Autonomy.Stop();
+            TakeoverAnnouncerOverlay.CloseActive();   // the queued cues go with the action
             CancelVoicePrompt();   // decisions "Panic ↔ mic": the capture in flight ends, the loop stays armed
         }
 

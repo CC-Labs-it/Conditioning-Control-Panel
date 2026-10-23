@@ -21,7 +21,9 @@ import { createLedger, el, button } from '../router.js';
 import { S, mmss } from '../strings.js';
 import { avatarSlot, emitAva } from '../avatar.js';
 import { GoonEndReason, GoonMatchPhase } from '../../core/contracts.js';
-import { evidenceFor, submitReport, NOTE_MAX, REPORT_REASONS } from '../report.js';
+import {
+  evidenceFor, submitReport, NOTE_MAX, REPORT_REASONS, reportSourceFor, evidenceAllowed, SOURCE_SCROLLLER,
+} from '../report.js';
 import { noteMatchFinished } from '../nightProgress.js';
 import { settleOnce, formatRecord, outcomeOf } from '../rivalry.js';
 
@@ -34,6 +36,7 @@ import { buildShareData, cardKey, FLAVOUR_TINTS } from '../shareWords.js';
 import { renderCard, copyCard, saveCard, canvasBlob, cardFileName } from '../shareCard.js';
 import { THUD_EASE, staggerDelays } from '../juice.js';
 import { resultLine } from '../stake.js';
+import { recapPlanWanted, planOf, postFunnel, hostSend, RECAP_PLAN_LINE, RECAP_PLAN_FEATURE } from './recapPlan.js';
 
 const COLLAPSE_AT = 6;
 const GRACEFUL_MS = 8 * 60 * 1000;
@@ -101,7 +104,12 @@ export function assertStageClear(logger) {
  *
  * AN EMPTY RESULT IS THE GATE. No peer media, no card.
  *
- * @returns {Array<{sha,kind,mime,bytes,url,flagged:boolean,rendered:boolean,at:number}>}
+ * Every row is a peer TRANSFER (receivedStore), so each goes out tagged
+ * `from: 'received'`, which ui/report.js reads as the sender's own file. A row
+ * that names a Scrolller post (`id` / `subreddit` / `postId`) keeps those
+ * fields, so its report names the post instead of carrying frames.
+ *
+ * @returns {Array<{sha,kind,mime,bytes,url,from:string,flagged:boolean,rendered:boolean,at:number}>}
  */
 export function reportCandidates({ landed = [], held = [], rendered = [], max = MAX_REPORT_ITEMS } = {}) {
   const rows = new Map();
@@ -129,16 +137,19 @@ export function reportCandidates({ landed = [], held = [], rendered = [], max = 
   return order.slice(0, cap).map((sha) => {
     const row = rows.get(sha);
     const m = marks.get(sha) || null;
-    return {
+    const out = {
       sha,
       kind: row.kind || '',
       mime: row.mime || '',
       bytes: Math.max(0, Number(row.bytes) || 0),
       url: row.url || '',
+      from: 'received',
       flagged: !!(m && m.flagged),
       rendered: !!m,
       at: m ? (Number(m.at) || 0) : 0,
     };
+    for (const k of ['id', 'subreddit', 'postId']) if (typeof row[k] === 'string' && row[k]) out[k] = row[k];
+    return out;
   });
 }
 
@@ -190,6 +201,7 @@ export function mount(container, ctx) {
   let reportPhase = 'idle';   // idle | submitting | done | deduped | failed
   let reportId = '';
   let reportTries = 0;
+  let reportSourceKind = '';  // the filed report's source kind: '' | own | scrolller
 
   /** The shortlist, recomputed on every paint — the store can still be settling. */
   function reportItems() {
@@ -239,13 +251,17 @@ export function mount(container, ctx) {
     // Evidence generation is allowed to take a second (nothing is running) and
     // is allowed to FAIL. `null` is a normal outcome and the route accepts a
     // body without it — an unencodable thumbnail must never eat a report.
+    // SCROLLLER MEDIA (licence clause 3.4): no frame is even CAPTURED unless the
+    // reason is csam / illegal. buildReportBody drops one again either way.
     let evidence = null;
-    try { evidence = await evidenceFor(item); } catch (_e) { evidence = null; }
+    if (evidenceAllowed(reportSourceFor(item), reportReason)) {
+      try { evidence = await evidenceFor(item); } catch (_e) { evidence = null; }
+    }
     if (ledger.isDisposed) return;
 
     const res = await submitReport({
       session,
-      artifact: { sha: item.sha, mime: item.mime, bytes: item.bytes },
+      artifact: item,
       reason: reportReason,
       note: reportNote,
       atMatchMs: atMatchMsFor(item),
@@ -253,6 +269,7 @@ export function mount(container, ctx) {
     });
     if (ledger.isDisposed) return;
 
+    if (res.ok) reportSourceKind = res.sourceKind || '';
     if (res.ok && res.deduped) { reportPhase = 'deduped'; reportId = res.id; }
     else if (res.ok) { reportPhase = 'done'; reportId = res.id; }
     else { reportPhase = 'failed'; reportTries++; }
@@ -319,6 +336,9 @@ export function mount(container, ctx) {
         class: 'gg-report-status is-done',
         text: reportPhase === 'deduped' ? S.report.deduped : S.report.done(reportId),
       }));
+      if (reportSourceKind === SOURCE_SCROLLLER) {
+        card.appendChild(el('p', { class: 'gg-report-note-line gg-report-host', text: S.report.hostToo }));
+      }
       card.appendChild(emailLine());
       return card;
     }
@@ -400,7 +420,11 @@ export function mount(container, ctx) {
           text: spent ? S.report.givenUp : S.report.failed,
         }));
       } else if (!submitting) {
-        card.appendChild(el('p', { class: 'gg-report-note-line', text: S.report.evidenceNote }));
+        const frames = evidenceAllowed(reportSourceFor(picked), reportReason);
+        card.appendChild(el('p', {
+          class: 'gg-report-note-line',
+          text: frames ? S.report.evidenceNote : S.report.evidenceNoteHost,
+        }));
       }
     }
 
@@ -605,6 +629,43 @@ export function mount(container, ctx) {
       el('p', { class: 'gg-recap-cta-lead', text: S.recap.ctaLead }),
       link,
       el('p', { class: 'gg-recap-fine', text: S.recap.ctaFine }),
+    ]);
+  }
+
+  /* ----------------------------------------------------------- plan row
+   * Brief C10 (ui/screens/recapPlan.js has the rules): "Host the next one."
+   * (Basic), only when the host said this account cannot host. A neutral row
+   * BELOW the actions, never between the player and "Back to menu". */
+  let planShownCounted = false;
+  function planCard() {
+    if (!recapPlanWanted(session)) return null;
+    const hosted = !!(session && session.hosted);
+    const plan = planOf(session && session.plans, 'basic');
+    const send = hostSend();
+    const btn = el('a', {
+      class: 'gg-btn gg-btn--ghost gg-recap-plan-btn',
+      href: plan.url,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      text: 'Get ' + plan.name,
+    });
+    ledger.listen(btn, 'click', (e) => {
+      postFunnel('cta_clicked', RECAP_PLAN_FEATURE, 'patreon', { hosted, send });
+      try { audio?.sfx?.('ui-select'); } catch (_e) { /* stub bus */ }
+      // Hosted, the app's own upgrade path answers (open-prime); a WebView2 popup is never the road.
+      if (hosted && actions && typeof actions.seePrime === 'function') {
+        try { e?.preventDefault?.(); } catch (_e) { /* ignore */ }
+        try { actions.seePrime(); } catch (_e) { /* ignore */ }
+      }
+    });
+    if (!planShownCounted) {
+      planShownCounted = true;
+      postFunnel('gate_shown', RECAP_PLAN_FEATURE, 'basic', { hosted, send });
+    }
+    return el('section', { class: 'gg-recap-plan', role: 'group', 'aria-label': plan.name }, [
+      el('p', { class: 'gg-recap-plan-line', text: RECAP_PLAN_LINE }),
+      btn,
+      plan.price ? el('span', { class: 'gg-recap-plan-price', text: plan.price }) : null,
     ]);
   }
 
@@ -902,6 +963,15 @@ export function mount(container, ctx) {
     }));
     const back = button(ledger, S.recap.back, () => actions.leave('recap'), { variant: 'primary', audio, sfx: 'ui-back' });
     column.appendChild(el('div', { class: 'gg-recap-actions' }, [rematch, back]));
+
+    /* --- the plan row (brief C10): below the actions, never above them --- */
+    try {
+      const plan = planCard();
+      if (plan) column.appendChild(plan);
+    } catch (e) {
+      try { ctx?.logger?.warn?.('recap: plan row failed to build: ' + ((e && e.message) || e)); }
+      catch (_e2) { /* logger is optional */ }
+    }
 
     /* --- discover the app (standalone only, and last) --- */
     try {

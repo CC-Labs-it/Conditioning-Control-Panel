@@ -100,15 +100,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 var server = _server;
-                var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server))).Value;
-                Post(new
-                {
-                    type = "manifest",
-                    images = System.Linq.Enumerable.Select(m.Images, e => new { name = e.Name, url = e.Url }),
-                    videos = System.Linq.Enumerable.Select(m.Videos, e => new { name = e.Name, url = e.Url }),
-                    skipped = m.Skipped,
-                    truncated = m.Truncated,
-                });
+                var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl))).Value;
+                Post(GameMediaManifest.Frame(m));
             }
             catch (Exception ex) { Log.Warning("CaucusHostService.OnPageReady: {E}", ex.Message); }
         }

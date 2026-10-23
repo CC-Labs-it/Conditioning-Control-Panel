@@ -142,7 +142,7 @@ public sealed class BouncingTextEngine
             // Random velocity in DIP/second (speed based on setting). The base is the old
             // 3-5 px/tick value scaled by 60 so the on-screen feel is unchanged at 60 FPS, but
             // motion is delta-time driven so it stays correct at any rate.
-            var speed = settings.BouncingTextSpeed / 10.0; // 1-10 maps to 0.1-1.0 multiplier
+            var speed = settings.BouncingTextSpeed / 10.0 * Safety.GentleVisuals.Speed; // 1-10 maps to 0.1-1.0 multiplier (x gentle speed, 1 when off)
             var baseSpeed = (3.0 + _random.NextDouble() * 2.0) * 60.0; // 180-300 DIP/sec
             logo.VelX = baseSpeed * speed * (_random.Next(2) == 0 ? 1 : -1);
             logo.VelY = baseSpeed * speed * (_random.Next(2) == 0 ? 1 : -1);
@@ -247,7 +247,8 @@ public sealed class BouncingTextEngine
         bool textChanged = false;
         if (bounced)
         {
-            l.Color = NextColor(l, settings);
+            // Gentle visuals: no colour jump per bounce, the text keeps the colour it started with.
+            if (!Safety.GentleVisuals.On) l.Color = NextColor(l, settings);
             if (settings.BouncingTextFxSquashStretch)
             {
                 l.SquashTimer = 0;
@@ -370,7 +371,7 @@ public sealed class BouncingTextEngine
     /// <summary>Re-roll every logo's speed to the current setting, keeping its direction.</summary>
     public void RefreshSpeed(AppSettings settings)
     {
-        var speed = settings.BouncingTextSpeed / 10.0;
+        var speed = settings.BouncingTextSpeed / 10.0 * Safety.GentleVisuals.Speed;
         foreach (var l in _logos)
         {
             var currentSpeed = Math.Sqrt(l.VelX * l.VelX + l.VelY * l.VelY);

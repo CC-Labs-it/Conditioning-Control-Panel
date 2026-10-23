@@ -31,10 +31,10 @@ public sealed class GradedIntakeGateTests
             var prevSettings = CoreSettings.ServiceProvider;
             CoreSettings.ServiceProvider = () => service;
             var (week, utc) = (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc);
-            var (loggedIn, lab) = (CoreAccount.IsLoggedInProvider, CoreAccount.HasLabAccessProvider);
-            bool isLoggedIn = false, isLab = false;
+            var (loggedIn, lab) = (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider);
+            bool isLoggedIn = false, isPaid = false;
             CoreAccount.IsLoggedInProvider = () => isLoggedIn;
-            CoreAccount.HasLabAccessProvider = () => isLab;
+            CoreAccount.HasPremiumAccessProvider = () => isPaid;
             service.Current.IntakePassSpentWeek = "";
             service.Current.IntakePassSpentUtc = null;
             var view = new GradedIntakeTabView();
@@ -70,8 +70,8 @@ public sealed class GradedIntakeGateTests
                 Assert.False(banner.IsVisible);
                 Assert.Equal(Loc.Get("intake_gate_spent_headline"), headline.Text);
 
-                // Tier 2: no door, no banner, whatever the week says.
-                isLab = true;
+                // Any paid tier (WPF 2a1fd1e88, was Prime only): no door, no banner, whatever the week says.
+                isPaid = true;
                 AvApp.IntakePass.RaiseChanged();
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(gate.IsVisible);
@@ -82,7 +82,7 @@ public sealed class GradedIntakeGateTests
             {
                 host.Close();
                 CoreAccount.IsLoggedInProvider = loggedIn;
-                CoreAccount.HasLabAccessProvider = lab;
+                CoreAccount.HasPremiumAccessProvider = lab;
                 service.Current.IntakePassSpentWeek = week;
                 service.Current.IntakePassSpentUtc = utc;
                 service.SaveImmediate();
