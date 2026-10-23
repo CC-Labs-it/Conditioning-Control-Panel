@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Services.Safety;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Compositor;
@@ -63,7 +64,45 @@ public abstract class BaseLayer : IWpfLayer
     {
         if (_isActive == value) return;
         _isActive = value;
+        if (GentleFades)
+        {
+            if (GentleVisuals.On)
+            {
+                // A fresh show rises from nothing; a re-show mid fade-out climbs from where it is.
+                if (value) { if (!_fadingOut) _fadeAlpha = 0; _fadingOut = false; }
+                else _fadingOut = true;
+            }
+            else { _fadeAlpha = 1; _fadingOut = false; }
+        }
         _wake();
+    }
+
+    // ---- Gentle visuals (Services/Safety/GentleVisuals): fade in and out instead of cutting ----
+
+    private double _fadeAlpha = 1.0;   // stays 1 while gentle visuals are off
+    private bool _fadingOut;           // hidden for the services, still drawn by the engine
+
+    /// <summary>Opt in: fullscreen fills (spiral, pink tint, brain drain) fade in and out over
+    /// <see cref="GentleVisuals.FadeSeconds"/> while gentle visuals are on.</summary>
+    protected virtual bool GentleFades => false;
+
+    public bool IsRendering => _isActive || _fadingOut;
+
+    public double VisibilityAlpha => _fadeAlpha;
+
+    public bool AdvanceVisibility(TimeSpan delta)
+    {
+        if (!_fadingOut && _fadeAlpha >= 1) return false;
+        if (!GentleVisuals.On)
+        {
+            // Switched off mid-fade: finish at once, exactly like today.
+            _fadeAlpha = 1;
+            _fadingOut = false;
+            return true;
+        }
+        _fadeAlpha = GentleFade.Step(_fadeAlpha, _fadingOut ? 0 : 1, delta.TotalSeconds, GentleVisuals.FadeSeconds);
+        if (_fadingOut && _fadeAlpha <= 0) { _fadingOut = false; _fadeAlpha = 1; }
+        return true;
     }
 
     public virtual void OnActivated() { }

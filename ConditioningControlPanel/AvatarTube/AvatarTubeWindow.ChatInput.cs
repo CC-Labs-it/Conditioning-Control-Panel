@@ -761,10 +761,10 @@ namespace ConditioningControlPanel
             }
 
             TxtUserInput.Text = "";
-            // Keep the box open and focused so the player can type the next line
-            // (ccp-bugs #1279). The reply bubble lives in its own popup, so the open box
-            // never covers it. Esc, right-click and an outside click still close it.
-            ShowInputPanel();
+            // The box closes on Send (owner, 2026-10-16: "the prompt window remains up after I
+            // click enter"). ccp-bugs #1279 had asked for the opposite; the owner's desk call wins.
+            // Click her or press the chat key to type the next line.
+            HideInputPanel();
             SeasonRecapService.TrackFeature(SeasonFeatureKeys.Companion);
 
             // Which of the send paths below this message takes. Decided ONCE, up front, so the
@@ -1082,7 +1082,7 @@ namespace ConditioningControlPanel
                 }
                 else
                 {
-                    mainWindow.StartEngine();
+                    mainWindow.StartEngineFromUser(); // a user click: resumes a session a panic paused (#1464)
                     Giggle("Engine started! *giggles*");
                 }
                 UpdateQuickMenuState();

@@ -216,7 +216,7 @@ namespace ConditioningControlPanel.Models
             new()
             {
                 // Tier deliberately left at 0 - the weekly pass opens this door without one.
-                // Unlimited runs are tier 2 (HasLabAccess) since Sep 18 2026, same as
+                // Unlimited runs are any paid tier (HasPremiumAccess) since 2026-10-14, same as
                 // IntakePassService.IsPremium.
                 Key = "gradedintake", Emoji = "❓",
                 TitleLocKey = "tab_gradedintake", TaglineLocKey = "exclusives_tag_gradedintake",
@@ -226,7 +226,7 @@ namespace ConditioningControlPanel.Models
                 // whose door is legitimately open without premium.
                 Gate = () =>
                 {
-                    if (CoreEntitlement.HasLab) return ExclusiveGateState.Unlocked;
+                    if (CoreEntitlement.HasPremium) return ExclusiveGateState.Unlocked;
                     if (CoreEntitlement.IsIntakePassAvailable) return ExclusiveGateState.PassReady;
                     return ExclusiveGateState.Locked;
                 },
