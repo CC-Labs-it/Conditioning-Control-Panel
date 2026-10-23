@@ -609,6 +609,9 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 // After the version seed: installing / loading a mod checks its MinAppVersion.
                 StartMods();
+                // Every panic opens Circe's Tab safety hold through this one seam (PanicSurfaces, PanicWatchdog,
+                // a controller's trigger_panic in Core RemoteCommands).
+                ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => Platform.ChasterHead.Service;
                 // WPF App.xaml.cs:2513 (App.Chaster). After the version seed: it is the User-Agent.
                 try
                 {

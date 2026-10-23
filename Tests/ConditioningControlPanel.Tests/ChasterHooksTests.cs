@@ -105,6 +105,21 @@ public class ChasterHooksTests
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(provider, "ChasterNote\\(\"attention\"\\)"));
     }
 
+    [Theory]
+    [InlineData("MainWindow/MainWindow.RemoteControl.cs", "internal void TriggerPanicFromRemote()")]
+    [InlineData("MainWindow/MainWindow.xaml.cs", "private void HandlePanicKeyPress()")]
+    [InlineData("MainWindow/MainWindow.xaml.cs", "private void RunEmergencyPanicTeardown()")]
+    [InlineData("Services/RemoteControlService.cs", "private void StopAllRemoteEffects(RemoteEndCause cause)")]
+    public void Every_panic_path_opens_the_chaster_safety_hold(string file, string signature)
+    {
+        // Bug hunt 2026-10-22 (main 7e14c2870): the voice panic ("red", "safe word", "make it stop")
+        // runs TriggerPanicFromRemote, which never opened the hold, so prices kept booking for the ten
+        // minutes the panic key would have held them. The off-thread fallback skipped it too. Port 7.2
+        // fix wave: a controller's trigger_panic (StopAllRemoteEffects with force) opens it as well.
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", file));
+        Assert.Contains("App.Chaster?.NoteSafetyExit()", Body(source, signature));
+    }
+
     // The text of one method: from its signature to the next member at the same indent.
     private static string Body(string source, string signature)
     {

@@ -1096,6 +1096,9 @@ namespace ConditioningControlPanel
                 try { App.Haptics?.PanicStop(); }        catch (Exception ex) { LogPanicFallbackStep("haptics", ex); }
                 App.RemoteControl?.StopRemoteHapticsForPanic();   // the remote loop too (decisions 2026-10-08)
                 CancelPendingAi();
+                // Circe's tab: the hold the real handler would open first. Thread-safe (a lock and a
+                // marshalled repaint), and nothing may book while the UI thread is wedged either.
+                try { App.Chaster?.NoteSafetyExit(); }  catch (Exception ex) { LogPanicFallbackStep("chaster hold", ex); }
                 // Conditional, matching the designed panic path in StopEverything (#668): with the
                 // standalone Audio Layers master on, the bed is the user's, not the session's.
                 try
