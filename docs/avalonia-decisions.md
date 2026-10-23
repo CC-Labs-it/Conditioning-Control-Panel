@@ -1202,6 +1202,15 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
 
+## 2026-10-14: Companion v2 room collapse and the Companion pages (avalonia-port/companion-v2-pages-b)
+- Supersedes the 2026-10-10 choice B above: the v2 ConversationPage is mounted now, so the head follows WPF
+  (CompanionTabView.xaml.cs:36-40): the room is collapsed, and Personality / Permissions / Links are pages that adopt the
+  live zones (`CompanionPageHost.Adopt`, no give-back; AiPage changed to match).
+- The tab owns the visibility edge (`CompanionTabView`, EffectiveVisibility); the collapsed room's own clocks stay parked,
+  as in WPF. The Awareness tab adopts the room's privacy card + Workshop Awareness cell (WPF HostCompanionPrivacy) on
+  ShowTab("awareness") rather than at Loaded; the card follows its own effective visibility (WPF IsVisibleChanged).
+- Zone tests for surfaces v2 leaves only in the room (hero, attention, roster, drawer) show the room via
+  `Tests/CCP.Avalonia.Tests/CollapsedRoom.cs`; the v2 layout itself is `CompanionPagesTests`.
 ## 2026-10-13: push-triggered port workflows skip cloud-* and gate-* branches (avalonia-port/ci-skip-cloud)
 - Question: the GitHub Free plan shares 20 concurrent jobs between rgate (build.yml dispatched on `avalonia-port/gate-*`),
   PR CI and push-triggered workflows. Each push of a throwaway `avalonia-port/cloud-*` (Claude cloud session) branch

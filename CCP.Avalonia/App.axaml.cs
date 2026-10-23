@@ -647,6 +647,14 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
                 Platform.LeashHead.StartDemoIfAsked();   // Debug + sandbox only (WPF CCP_LEASH_DEMO)
+                // WPF App.xaml.cs V2Purchase: pure constructor, the counter is read when a Get it row shows.
+                // The cache is per account (WPF MainWindow.Login.cs:128/316 Invalidate on sign-in/out).
+                if (Platform.V2PurchaseHead.Create(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                        Environment.GetEnvironmentVariable(Platform.V2PurchaseHead.EnvVar)) is { } v2Purchase)
+                {
+                    Platform.V2PurchaseHead.Service = v2Purchase;
+                    CoreAccount.UnifiedIdentityChanged += (_, _) => v2Purchase.Invalidate();
+                }
                 // WPF App.xaml.cs:3010-3013: the task runner the gate's action starts.
                 try { Platform.LeashTaskHost.Start(Platform.LeashHead.Service as ConditioningControlPanel.Services.Leash.LeashService); }
                 catch (Exception exRunner) { Serilog.Log.Warning(exRunner, "[Leash] task runner could not be built"); }

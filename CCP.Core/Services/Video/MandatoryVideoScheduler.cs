@@ -188,6 +188,13 @@ namespace ConditioningControlPanel.Services
             return panicEnabled && key == panicKey ? VideoKeyAction.ForceStop : VideoKeyAction.None;
         }
 
+        /// <summary>WPF SetupStrictHandlers' Closing veto: a strict window refuses a user close only
+        /// while the clip is genuinely playing (never a real teardown, or a strict window is left
+        /// black and un-closable), and stands down once the app has wedged - a lock is only
+        /// defensible while the app responds (#765).</summary>
+        public static bool StrictVetoesClose(bool videoPlaying, bool cleaningUp, bool wedgeStallSeen)
+            => videoPlaying && !cleaningUp && !wedgeStallSeen;
+
         // ---- grace pause (WPF #735) and the clip guards ----
 
         /// <summary>WPF GraceWindowSeconds: the pause resumes on its own after this.</summary>

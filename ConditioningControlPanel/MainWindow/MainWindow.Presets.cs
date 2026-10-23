@@ -1294,8 +1294,7 @@ namespace ConditioningControlPanel
             try
             {
                 var s = App.Settings?.Current;
-                if (s == null || !Services.DashboardToggleHintRule.ShouldShow(s.DashboardToggleHintUses)) return;
-                s.DashboardToggleHintUses++;
+                if (s == null || !Services.DashboardToggleHintRule.NoteUse(s)) return;
                 App.Settings?.Save();
                 RefreshDashboardToggleHint();
             }

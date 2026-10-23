@@ -18,7 +18,7 @@ namespace CCP.Core.Tests;
 ///
 /// The dispatcher call is now fire-and-forget with its own catch, and the guard no longer trusts the
 /// flag indefinitely. <see cref="VideoTriggerRules.EvaluateTriggerGuard"/> is that escape hatch, pulled out
-/// as pure logic so it can be tested without LibVLC (the same seam EvaluateGraceRequest uses).
+/// as pure logic so it can be tested without LibVLC (the same seam MandatoryVideoScheduler.EvaluateGrace uses).
 /// </summary>
 public class VideoTriggerGuardTests
 {
