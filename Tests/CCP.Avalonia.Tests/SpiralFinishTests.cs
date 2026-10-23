@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -85,7 +86,7 @@ public sealed class SpiralFinishTests
                 Assert.Equal("loom-list", (string?)Assert.Single(messages)["type"]);
                 Send(new { type = "loom-save", name = slug, gifBase64 = Gif, @params = new { arms = 3 } });
                 Assert.True((bool)messages.Last(m => (string?)m["type"] == "loom-result")["ok"]!);
-                await Task.Yield();
+                Dispatcher.UIThread.RunJobs();   // the store's Changed repaint is Posted
                 var path = DtrhLoomStore.GifPathFor(slug)!;
                 var panel = card.FindControl<WrapPanel>("SpiralLibraryPanel")!;
                 Assert.Contains(panel.Children.OfType<Border>(), c => (string?)c.Tag == path);
@@ -111,7 +112,7 @@ public sealed class SpiralFinishTests
                 Assert.Equal(0.225f, cueVolume!.Value, 4);
                 CoreSettings.Current.SpiralPath = path;
                 Send(new { type = "loom-delete", slug });
-                await Task.Yield();
+                Dispatcher.UIThread.RunJobs();
                 Assert.Equal("", CoreSettings.Current.SpiralPath);
                 Assert.DoesNotContain(panel.Children.OfType<Border>(), c => (string?)c.Tag == path);
                 var panic = ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(p => p.Id == "games");
@@ -276,6 +277,36 @@ public sealed class SpiralFinishTests
             }
         });
 
+    /// <summary>Default install (SpiralPath ""): the head ships Spirals/spiral.gif beside the exe like WPF
+    /// (csproj :708), so a session's delayed spiral still starts (WPF SessionEngine.cs:826-838).</summary>
+    [Fact]
+    public Task A_default_path_session_spiral_starts_at_its_minute()
+        => Run(() =>
+        {
+            Assert.NotEmpty(Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Spirals"), "*.gif"));
+            var s = CoreSettings.Current;
+            var saved = (s.SpiralEnabled, s.SpiralPath);
+            var runner = new SessionRunner(new SessionLogService());
+            try
+            {
+                (s.SpiralEnabled, s.SpiralPath) = (false, "");
+                var session = new Session { Id = "spiral_default", Name = "Spiral Default", DurationMinutes = 20 };
+                (session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute) = (true, 5);
+                runner.Start(session);
+                Assert.False(s.SpiralEnabled);
+                runner.Tick(TimeSpan.FromMinutes(9));   // past the randomized start (5 +- 3)
+                Assert.True(session.Settings.SpiralEnabled && s.SpiralEnabled);
+            }
+            finally
+            {
+                runner.Stop();
+                CoreEngine.Stop();
+                CoreSession.IsSessionRunningProvider = null;
+                (s.SpiralEnabled, s.SpiralPath) = saved;
+            }
+            return Task.CompletedTask;
+        });
+
     [Fact]
     public Task Native_video_keeps_delivering_frames_after_the_clip_duration()
         => Run(async () =>
@@ -297,10 +328,20 @@ public sealed class SpiralFinishTests
                 (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize) = (true,
                     Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), false);
                 SpiralOverlay.Refresh(host);
-                await Task.Delay(3000, TestContext.Current.CancellationToken);
-                var frames = SpiralOverlay.VideoFrames;
-                Assert.True(frames > 0);
-                await Task.Delay(3000, TestContext.Current.CancellationToken);
+                // Bounded poll (P08/P73): sample once the 2 s clip, timed from its first frame, would have
+                // ended unlooped, then require more frames. A non-looped clip times out here.
+                var deadline = DateTime.UtcNow.AddSeconds(20);
+                DateTime? first = null;
+                var frames = -1;
+                while (DateTime.UtcNow < deadline && !(frames > 0 && SpiralOverlay.VideoFrames > frames))
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    await Task.Yield();
+                    if (first is null && SpiralOverlay.VideoFrames > 0) first = DateTime.UtcNow;
+                    if (frames < 0 && first is { } f && DateTime.UtcNow - f > TimeSpan.FromSeconds(2.5)) frames = SpiralOverlay.VideoFrames;
+                }
+                Assert.True(first is not null, "no video frame arrived");
+                Assert.True(frames > 0, "timed out before the clip's 2 s length passed");
                 Assert.True(SpiralOverlay.VideoFrames > frames); // a non-looped 2s clip has already stopped
                 Assert.IsType<WriteableBitmap>(SpiralOverlay.Shown[0].Spiral.Source);
             }

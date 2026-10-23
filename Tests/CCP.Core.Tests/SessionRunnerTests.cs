@@ -378,21 +378,21 @@ public sealed class SessionRunnerTests : IDisposable
     {
         var s = CoreSettings.Current;
         var saved = (s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath);
-        var spiral = Path.GetTempFileName(); // WPF's delayed-start guard requires an existing custom file
-        (s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath) = (false, 33, spiral);
-        try { SpiralRuns(s); }
-        finally { _runner.Stop(); (s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath) = saved; File.Delete(spiral); }
+        // Default path: the shipped Spirals/spiral.gif beside the exe satisfies the guard (WPF csproj :708).
+        (s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath) = (false, 33, "");
+        try { SpiralRuns(s); } finally { _runner.Stop(); (s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath) = saved; }
     }
 
     [Fact]
     public void Spiral_DelayedStartSkipsMissingFilesBeforeItsMinute()
     {
         var s = CoreSettings.Current;
-        var saved = (s.SpiralEnabled, s.SpiralPath);
+        var saved = (s.SpiralEnabled, s.SpiralPath, SessionRunner.SpiralsFolder);
         var session = OneMinute();
         session.DurationMinutes = 10;
         (session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute) = (true, 5);
         s.SpiralPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".gif");
+        SessionRunner.SpiralsFolder = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));   // no folder
         try
         {
             _runner.Start(session);
@@ -402,34 +402,7 @@ public sealed class SessionRunnerTests : IDisposable
             _runner.Tick(TimeSpan.FromMinutes(9));
             Assert.False(s.SpiralEnabled);
         }
-        finally { _runner.Stop(); (s.SpiralEnabled, s.SpiralPath) = saved; }
-    }
-
-    [Fact]
-    public void Spiral_DelayedStartAcceptsTheApplicationSpiralsFolder()
-    {
-        var folder = Path.Combine(AppContext.BaseDirectory, "Spirals");
-        var existed = Directory.Exists(folder);
-        Directory.CreateDirectory(folder);
-        var gif = Path.Combine(folder, Guid.NewGuid().ToString("N") + ".gif");
-        File.WriteAllBytes(gif, new byte[] { 1 }); // WPF checks existence, not decodability
-        var s = CoreSettings.Current;
-        var saved = s.SpiralPath;
-        s.SpiralPath = "";
-        var session = OneMinute();
-        session.DurationMinutes = 10;
-        (session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute) = (true, 5);
-        try
-        {
-            _runner.Start(session);
-            _runner.Tick(TimeSpan.FromMinutes(9));
-            Assert.True(session.Settings.SpiralEnabled && s.SpiralEnabled);
-        }
-        finally
-        {
-            _runner.Stop(); s.SpiralPath = saved; File.Delete(gif);
-            if (!existed) Directory.Delete(folder);
-        }
+        finally { _runner.Stop(); (s.SpiralEnabled, s.SpiralPath, SessionRunner.SpiralsFolder) = saved; }
     }
 
     private void SpiralRuns(AppSettings s)

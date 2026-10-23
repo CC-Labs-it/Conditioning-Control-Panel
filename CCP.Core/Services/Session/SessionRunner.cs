@@ -51,6 +51,9 @@ namespace ConditioningControlPanel.Services
         /// with it directly (SetSustainedOverlayOpacity) and never writes PinkFilterOpacity (#471).</summary>
         public double? PinkOpacity { get; private set; }
 
+        /// <summary>The exe's Spirals folder the delayed-start guard reads (WPF SessionEngine.cs:827); tests repoint it.</summary>
+        internal static string SpiralsFolder { get; set; } = Path.Combine(AppContext.BaseDirectory, "Spirals");
+
         /// <summary>SessionEngine._randomizedSpiralStartMinute: the preset's start ±3 min.</summary>
         public double SpiralStartMinute { get; private set; }
 
@@ -274,8 +277,9 @@ namespace ConditioningControlPanel.Services
             // overlay, so its opacity lands in settings here the way an immediate start does.
             if (session.Settings.SpiralEnabled && !s.SpiralEnabled)
             {
-                // WPF SessionEngine.cs:826-838: even a shipped default does not satisfy this guard.
-                var folder = Path.Combine(AppContext.BaseDirectory, "Spirals");
+                // WPF SessionEngine.cs:826-838: a custom file or a gif in the exe's Spirals folder, which
+                // every head ships (spiral.gif) - so on a default install this guard passes.
+                var folder = SpiralsFolder;
                 if (!File.Exists(s.SpiralPath) && !(Directory.Exists(folder) && Directory.GetFiles(folder, "*.gif").Length > 0))
                 {
                     session.Settings.SpiralEnabled = false;
