@@ -486,6 +486,7 @@ namespace ConditioningControlPanel
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Stakes.StakeAppHooks.Seed();
             Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
             Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;

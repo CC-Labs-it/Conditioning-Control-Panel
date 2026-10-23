@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Stakes;
 
@@ -52,7 +52,7 @@ public sealed class StakeSettlement
     private readonly object _gate = new();
     private readonly HashSet<string> _settled = new(StringComparer.Ordinal);
 
-    /// <param name="bookTime">(row, seconds) to seconds applied. The app's books on App.Chaster.</param>
+    /// <param name="bookTime">(row, seconds) to seconds applied. The app books on its Chaster tab.</param>
     /// <param name="adoptSp">(account, receipt, sp): hand a balance to the wallet. The app's marshals
     /// onto the UI thread and re-checks the account there.</param>
     /// <param name="account">Who is signed in now.</param>
@@ -108,7 +108,7 @@ public sealed class StakeSettlement
         if (_adoptSp == null || string.IsNullOrEmpty(sentFor)) return;
         if (BalanceOf(reply) is not int sp || sp < 0) return;
         try { _adoptSp(sentFor!, IsReceipt(op, reply), sp); }
-        catch (Exception ex) { App.Logger?.Debug("Stakes: adopt sp failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Stakes: adopt sp failed: {E}", ex.Message); }
     }
 
     /// <summary>
@@ -130,7 +130,7 @@ public sealed class StakeSettlement
             && string.Equals(SafeAccount(), sentFor, StringComparison.Ordinal))
         {
             try { booked = Math.Max(0, _bookTime(StakeRules.LossRowId, result.TimeSeconds)); }
-            catch (Exception ex) { App.Logger?.Debug("Stakes: booking a lost time stake failed: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("Stakes: booking a lost time stake failed: {E}", ex.Message); }
         }
         return new StakeSettleOutcome(result, booked, true);
     }
@@ -182,21 +182,10 @@ public sealed class StakeSettlement
 
     private static StakeSettlement? _shared;
 
-    /// <summary>The app's settlement: books on App.Chaster, adopts on the UI thread.</summary>
-    public static StakeSettlement Shared => _shared ??= CreateForApp();
+    /// <summary>The head's settlement, built once on first use (WPF: <c>StakeAppHooks.CreateSettlement</c>,
+    /// seeded at startup). Unseeded: books nothing, adopts nothing, no account.</summary>
+    public static Func<StakeSettlement> CreateShared { get; set; } = () => new((_, _) => 0, null, () => null);
 
-    private static StakeSettlement CreateForApp() => new(
-        // The row id is literal on purpose: the price-row wiring test reads it.
-        (_, seconds) => App.Chaster?.NoteSeconds("pvp_loss", seconds).AppliedSeconds ?? 0,
-        // The account is checked AGAIN inside the marshalled write (the canAdopt shape
-        // BackRoomBridge.AdoptSp uses): the player may be somebody else by then.
-        (account, receipt, sp) => App.Current?.Dispatcher?.BeginInvoke(new Action(() =>
-        {
-            if (App.Settings?.Current is not { } s) return;
-            var same = string.Equals(BackRoom.BackRoomApi.AppIdentity()?.UnifiedId, account, StringComparison.Ordinal);
-            if (!V2WalletAdoption.Decide(same, receipt, sp, s.SkillPoints, out var next)) return;
-            s.SkillPoints = next;
-            App.Settings.Save();
-        })),
-        () => BackRoom.BackRoomApi.AppIdentity()?.UnifiedId);
+    /// <summary>The app's settlement: books on the head's Chaster tab, adopts on its UI thread.</summary>
+    public static StakeSettlement Shared => _shared ??= CreateShared();
 }
