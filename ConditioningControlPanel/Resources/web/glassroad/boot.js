@@ -36,6 +36,8 @@ import { createContact } from './sim/contact.js';
 import { createStandings } from './sim/standings.js';
 import { createItems } from './sim/items.js';
 import { loadTrack } from './track/load.js';
+import { selectTrack, allowsOnline } from './track/selection.js';
+import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
 import { createRenderer } from './render/renderer.js';
 import { buildWorld } from './render/world.js';
 import { loadArt } from './render/art.js';
@@ -65,6 +67,7 @@ import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 
 const qs = new URLSearchParams(location.search);
+const TRACK_ID = selectTrack(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
 // ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
 const DEV = devAllowed(location.search);
@@ -165,10 +168,12 @@ async function boot() {
   const hostEscape = createHostEscape();          // before the key listeners: its capture hears Escape first
   const init = await bridge.init;
   CHARTS = songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs });
+  // Mainframe has no recorded Drone song yet. A personally selected chart or audio file remains usable.
+  if (TRACK_ID === 'mainframe' && !qs.has('chart')) CHARTS = [];
   // the diegetic faces (render/fonts.js) load beside the feel: road markings and bubble text measure with them
   const [feel, trackJson] = await Promise.all([
     loadFeel(),
-    fetch(new URL('./tracks/threshold.json', import.meta.url), { cache: 'no-store' }).then((r) => {
+    fetch(new URL('./tracks/' + TRACK_ID + '.json', import.meta.url), { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error('track ' + r.status);
       return r.json();
     }),
@@ -180,6 +185,7 @@ async function boot() {
   if (qs.get('feel') === '1') openFeelSheet(feel, document.body);
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
+  debug.trackId = track.id;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -209,7 +215,7 @@ async function boot() {
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
   hud.setLoading('Loading art', 0.08);
   const art = qs.get('art') === '0' ? null
-    : await loadArt(renderer, { onProgress: (d, n) => hud.setLoading('Loading art ' + d + '/' + n, 0.08 + 0.4 * d / n) });
+    : await loadArt(renderer, { trackId: track.id, onProgress: (d, n) => hud.setLoading('Loading art ' + d + '/' + n, 0.08 + 0.4 * d / n) });
   hud.setLoading('Building the road', 0.5);
   await paintGap();
   if (art && art.failed.length) debug.artFailed = art.failed;
@@ -249,7 +255,7 @@ async function boot() {
   const assist = createAssist(track, feel);       // the player's Steer assist (Options), never the bots'
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
-  let race, racers, ai, contact, standings, items, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let race, racers, ai, contact, standings, items, scan, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   function buildRun(s = null) {
     const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
@@ -257,6 +263,7 @@ async function boot() {
     racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: COUNT, seed: sd });
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
     contact = createContact(track, feel, q);
+    scan = createMainframeScan(track, q);
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
@@ -336,6 +343,7 @@ async function boot() {
 
   function resetAll() {
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
+    scan.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
@@ -436,6 +444,8 @@ async function boot() {
   // ---- online (wave B2): lobby transport, the room session behind the lobby UI, the run per room --------------
   /** The lobby transport and identity: dev local lobby, desktop host relay, or a direct fetch on the web. */
   function lobbyLink() {
+    // New course geometry needs its own private room card before online admission.
+    if (!allowsOnline(track.id)) return null;
     const dev = qs.get('lobby');
     if (dev && LOCAL_URL.test(dev) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
       const uid = qs.get('uid') || 'u_devpage1', name = qs.get('name') || uid;
@@ -696,6 +706,10 @@ async function boot() {
       if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
       racers.step(clock.dt, pa, race, sctx);
+      if (race.phase === 'racing') {
+        const sc = scanClock(audio.music, race.timeS);
+        scan.update(racers.list, sc.timeS, sc.bpm);
+      }
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
       items.update(clock.dt, racers.list, standings, race);       //    pickups, use, flights, hits, mods
@@ -737,6 +751,8 @@ async function boot() {
     const iv = items.view();
     // the song position the player hears (frozen while paused: the context is suspended)
     const music = audio.music, song = inRace && music ? music.song : null, songS = song ? music.songS : NaN;
+    const sc = scanClock(inRace ? music : null, race.timeS);
+    if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     const pv = P.view;
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
@@ -744,7 +760,8 @@ async function boot() {
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
-      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive });
+      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive,
+      scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
       debug.song = { t: Math.round(songS * 100) / 100, section: m.sectionId, calm: +m.calm.toFixed(2), helix: +m.helix.toFixed(2),

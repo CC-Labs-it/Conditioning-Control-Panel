@@ -50,9 +50,11 @@ export const currentArt = () => current;
 /** Load the art set. Resolves { tex(id), model(id), row(id), failed[], loaded, wanted } and never rejects.
  * wanted counts the ids asked for minus LATER ids not shipped yet; loaded counts what arrived.
  * onProgress(done, total) runs as each id settles (arrived or failed), for the warming card. */
-export async function loadArt(renderer, { want = WANT, onProgress = null } = {}) {
+export async function loadArt(renderer, { want = WANT, trackId = 'threshold', onProgress = null } = {}) {
   const rows = new Map(), tex = new Map(), models = new Map(), failed = [];
   const materialTier = Q.name;
+  if (trackId === 'mainframe') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
+    .concat('spout-mainframe', 'stone-mainframe');
   const requested = [...new Set([...want, ...MATERIAL_DETAIL_IDS.map((id) => materialDetailId(id, materialTier))])];
   const vertexShading = { applied: [], skipped: [] };
   let manifest = [];

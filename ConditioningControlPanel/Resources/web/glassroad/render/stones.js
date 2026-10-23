@@ -45,14 +45,14 @@ export function buildStones(track, art, pal) {
   const rows = stoneLayout(track), owned = [], geometries = [];
   const basis = new Matrix4(), rotation = new Quaternion();
   const x = new Vector3(), y = new Vector3(), z = new Vector3();
-  const model = rows.length && art && typeof art.model === 'function' ? art.model(STONE_KIT.modelId) : null;
+  const model = rows.length && art && typeof art.model === 'function' ? art.model(track.id === 'mainframe' ? 'stone-mainframe' : STONE_KIT.modelId) : null;
   let mode = 'none';
   if (rows.length && model && model.scene) {
     mode = 'model';
     // the lip tint is one shared material: every clone swaps its lip meshes to it (shared geometry, one program)
     const slots = slotMaterials(model.scene), lipSrc = slots.get('lip');
     const lip = lipSrc ? lipSrc.clone() : null;
-    if (lip) { lip.name = 'stone-lip'; if (lip.color) lip.color.set(STONE_KIT.brass); owned.push(lip); }
+    if (lip) { lip.name = 'stone-lip'; if (lip.color) lip.color.set(track.id === 'mainframe' ? '#76dfae' : STONE_KIT.brass); owned.push(lip); }
     for (const r of rows) {
       const holder = new Group(), body = model.scene.clone(true);
       holder.name = 'stone:' + r.id;

@@ -60,6 +60,7 @@ export function cleanRamp(stops, x) {
 
 export function createSkyMaterial(pal, art = null) {
   const C = { ...SKY_SPECTRUM, ...(LOOK.skySpectrum || {}) };
+  if (pal.theme === 'mainframe') Object.assign(C, { cleanStops: ['#20674d', '#245851', '#175669', '#2c8b73'], armGain: 0.5, nebGain: 0.3, hazeGain: 0.4 });
   // the clean gradient on the palette's hue clock, a little of the section colour mixed in
   const hueClock = pal.hue || float(0);
   const ramp = (x) => mix(cleanRamp(C.cleanStops, x.add(hueClock)), pal.col(1), C.cleanTint);

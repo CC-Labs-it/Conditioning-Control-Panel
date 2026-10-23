@@ -25,7 +25,9 @@ export function buildShowcaseDressing(track, pal, art = null) {
   const layout = showcaseLayout(track), geometry = new BoxGeometry(1, 1, 1), materials = [];
   const matrix = new Matrix4(), basis = new Matrix4(), rotation = new Quaternion();
   const x = new Vector3(), y = new Vector3(), z = new Vector3(), position = new Vector3(), scale = new Vector3();
-  const specs = [['fascia', '#452653', 'enamel'], ['trim', '#d7a85d', 'metal'], ['sleeper', '#e5dce9', 'porcelain']];
+  const specs = track.id === 'mainframe'
+    ? [['fascia', '#183735', 'enamel'], ['trim', '#53bba0', 'metal'], ['sleeper', '#244a47', 'porcelain']]
+    : [['fascia', '#452653', 'enamel'], ['trim', '#d7a85d', 'metal'], ['sleeper', '#e5dce9', 'porcelain']];
   for (const [key, colour, finish] of specs) {
     const rows = layout[key];
     if (!rows.length) continue;
