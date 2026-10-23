@@ -130,11 +130,28 @@ public sealed class PanicReachHeadTests
         var at = src.IndexOf("internal void HandlePanicKeyPress(DateTime now)", StringComparison.Ordinal);
         var body = src.Substring(at, src.IndexOf("\n        }\n", at, StringComparison.Ordinal) - at);
         int gate = body.IndexOf("if (!VoicePanicReach.PanicKeyRuns(LockdownActive, s.PanicKeyEnabled))", StringComparison.Ordinal);
-        int leash = body.IndexOf("if (LeashHoldLeashed) PanicKeyLeashOnly();", StringComparison.Ordinal);
+        int leash = body.IndexOf("if (LeashHoldLeashed) PanicKeyLeashOnly(fromKey: true);", StringComparison.Ordinal);
         Assert.True(gate > 0 && leash > gate);
         Assert.True(leash < body.IndexOf("TryGamePauseOnEscape(now)", StringComparison.Ordinal));
-        Assert.Contains("LeashTaskHost.OnPanicPress(this, panicRuns: false)", src);
+        Assert.Contains("LeashTaskHost.OnPanicPress(this, panicRuns: false, fromKey: fromKey)", src);
+        // The key's own leash call is the only one that may stand aside for the palette.
+        Assert.Contains("Platform.LeashTaskHost.OnPanicPress(this, fromKey: true);", body);
+        // The voice's leash-only path never does ("red" is no Escape).
+        var voice = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Windows", "MainShellWindow.VoiceCommands.cs"));
+        Assert.Contains("PanicKeyLeashOnly();", voice);
+        Assert.DoesNotContain("fromKey: true", voice);
     }
+
+    /// <summary>Fix wave 2 #5: only a physical Escape the Ctrl+K palette takes holds the leash part back.</summary>
+    [Theory]
+    [InlineData(true, true, false, "Escape", true)]
+    [InlineData(true, true, false, "escape", true)]
+    [InlineData(false, true, false, "Escape", false)]   // voice, tray, leash gate, remote
+    [InlineData(true, true, true, "Escape", false)]     // a lock card takes the press first
+    [InlineData(true, false, false, "Escape", false)]   // no palette
+    [InlineData(true, true, false, "F8", false)]        // a rebound key never closes the palette
+    public void ThePalette_OnlyHoldsBackAPhysicalEscape(bool fromKey, bool paletteOpen, bool lockCard, string key, bool skips) =>
+        Assert.Equal(skips, LeashTaskHost.PaletteTakesPress(fromKey, paletteOpen, lockCard, key));
 
     [Fact]
     public void APresetLoadedMidLockdown_NeverChangesThePanicKey() => WithShell((shell, _) =>
