@@ -14,6 +14,8 @@ internal static class FxTheme
     internal static void ApplyForActiveMod()
     {
         if (Application.Current is not { } app) return;
+        // App resources notify every live control, which must happen on the UI thread.
+        if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(ApplyForActiveMod); return; }
         var mods = App.Mods;
         Set("FxMist", mods?.GetMistColorRgb());
         Set("FxParticle", mods?.GetParticleColorRgb());

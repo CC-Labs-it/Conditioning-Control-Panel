@@ -97,7 +97,7 @@ public sealed class ExclusivesCompletionTests
     });
 
     [Fact]
-    public Task CardsLiftBloomBurstAndPanicCancelsTheDelayedDoor() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task CardsLiftBloomBurstAndPanicCancelsTheDelayedDoor() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Platform();
         var s = CoreSettings.Current; var old = (s.MotionLevel, s.PerformanceMode);
@@ -124,7 +124,6 @@ public sealed class ExclusivesCompletionTests
             Assert.Equal("premium", shell.CurrentTab);
             PanicSurfaces.All.Single(p => p.Id == "vault-card").Stop(shell);
             Assert.Equal(0, view.PendingClickCount);
-            await Task.Delay(180, TestContext.Current.CancellationToken);
             Assert.Equal("premium", shell.CurrentTab);
             var sign = view.GetVisualDescendants().OfType<global::Avalonia.Controls.Shapes.Rectangle>().First(c => c.Name == "GroupSignSheen");
             Assert.True(((LinearGradientBrush)sign.Fill!).StartPoint.Point.X > -1.2);
@@ -143,6 +142,7 @@ public sealed class ExclusivesCompletionTests
             Assert.Equal("haptics", shell.CurrentTab); // Reduced has no burst delay
         }
         finally { shell?.Close(); FxAdorner.Time = oldClock; (s.MotionLevel, s.PerformanceMode) = old; }
+        return Task.CompletedTask;
     });
     [Fact]
     public Task VaultRepaintChecksDailyFreeAndLetsTheServiceThrottle() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -181,7 +181,7 @@ public sealed class ExclusivesCompletionTests
     { public long Now; public override long GetTimestamp() => Now; public override long TimestampFrequency => TimeSpan.TicksPerSecond; }
 }
 
-// No controls or text are created: this regression can run on a worker without usable system fonts.
+// No text is created: this regression can run on a worker without usable system fonts.
 public sealed class ExclusivesPalettePublicationTests
 {
     [Fact]
@@ -215,6 +215,28 @@ public sealed class ExclusivesPalettePublicationTests
             CoreSettings.Current.ActiveModId = oldId;
             Dispatcher.UIThread.RunJobs();
         }
+        return Task.CompletedTask;
+    });
+
+    // StartModsTests calls StartMods off the UI thread; a live control then threw in ActualThemeVariant.
+    [Fact]
+    public Task OffThreadPublishMarshalsToTheUiThread() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current == null) global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+            .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var res = Application.Current!.Resources;
+        var border = new Border();
+        var window = new Window { Content = border };
+        try
+        {
+            window.Show();
+            border.Bind(Border.BackgroundProperty, border.GetResourceObservable("FxGlowBrush"));   // what a DynamicResource does
+            res["FxGlowColor"] = Colors.Lime;
+            Assert.Null(Record.Exception(() => Task.Run(FxTheme.ApplyForActiveMod).GetAwaiter().GetResult()));
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotEqual(Colors.Lime, res["FxGlowColor"]);
+        }
+        finally { window.Close(); FxTheme.ApplyForActiveMod(); }
         return Task.CompletedTask;
     });
 }

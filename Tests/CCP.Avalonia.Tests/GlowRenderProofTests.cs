@@ -150,7 +150,8 @@ public sealed class GlowRenderProofTests
         try
         {
             // Frozen clocks: the two frames differ only by the glow, not by the Ken Burns drift or a sheen.
-            FxAdorner.Time = new SteppedTime();
+            var fxClock = new SteppedTime();
+            FxAdorner.Time = fxClock;
             ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
             (s.MotionLevel, s.PerformanceMode) = (MotionLevel.Full, false);
             CoreEntitlement.HasPremiumProvider = null;
@@ -162,6 +163,7 @@ public sealed class GlowRenderProofTests
             w.ShowTab("exclusives");
             Dispatcher.UIThread.RunJobs();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
+            fxClock.Advance(TimeSpan.FromSeconds(5)); view.FlairFrame();   // past the card entrance fade (frozen at 0 opacity otherwise)
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
             var glow = ExclusivesTabView.LockGlow(lockGlyph)!;
             Assert.True(glow.IsVisible, "the padlock glow is not shown - the proof proves nothing");
