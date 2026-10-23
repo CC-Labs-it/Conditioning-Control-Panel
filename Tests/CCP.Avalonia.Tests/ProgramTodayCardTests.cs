@@ -187,6 +187,11 @@ public sealed class ProgramTodayCardTests
         double Nudged(double seconds)
         {
             time.Advance(TimeSpan.FromSeconds(seconds));
+            // A forced tick only brings a frame round when a composition batch is in flight. Under load the
+            // headless 60 fps wall-clock tick can re-run the nudge at an unchanged X (no commit), leaving the
+            // next frame on MediaContext's 16 ms wall-clock timer, so the tick below delivered nothing
+            // (-7.5 vs -10). Requesting a commit makes this one deterministic frame either way.
+            art.InvalidateVisual();
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             Dispatcher.UIThread.RunJobs();
             return ((TranslateTransform)art.RenderTransform!).X;
