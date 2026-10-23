@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Startup;
 using Serilog;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Games;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
@@ -18,11 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so ModalUp /
-    /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
-    /// pump when the startup modals move onto a shared ladder.
     /// </summary>
-    internal static class StartupLadder
+    internal static partial class StartupLadder
     {
         public static StartupInbox Inbox { get; } = new();
 
@@ -30,6 +29,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private static DateTime? _lastPassiveUtc;
         private static readonly List<InboxItem> _held = new();
         private static ITimer? _passiveTimer;
+        private static ITimer? _quietTimer;
+        private static bool _lastQuiet;
+        public static event Action? QuietChanged;
+        public static bool Held { get; private set; }
+
+        public static void Hold() { Held = true; NotifyQuietMaybeChanged(); }
+        public static void Release() { Held = false; NotifyQuietMaybeChanged(); }
 
         /// <summary>WPF's 1 s re-check of the held surfaces (Services/Startup/StartupPresenter.cs:541).</summary>
         internal static readonly TimeSpan PassiveRecheck = TimeSpan.FromSeconds(1);
@@ -47,14 +53,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public static void BeginFirstLaunchQuiet(TimeSpan span)
         {
             if (span <= TimeSpan.Zero) return;
+            if (!Dispatcher.UIThread.CheckAccess())
+            { Dispatcher.UIThread.Post(() => BeginFirstLaunchQuiet(span)); return; }
             var until = UtcNow + span;
             if (_firstLaunchUntilUtc is DateTime existing && existing >= until) return;
             _firstLaunchUntilUtc = until;
+            NotifyQuietMaybeChanged();
             Log.Information("[Startup] first-launch quiet window open for {Minutes:0.#} min", span.TotalMinutes);
         }
 
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
+            ModalUp = _modalUp || MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
+            LadderBusy = !IsLadderIdle,
+            GameHostUp = _gameUp.Any(w => w.IsVisible) || Views.Chaos.ChaosRunHost.IsDescending,
+            LauncherHolding = Held,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
@@ -67,7 +80,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (item == null) return;
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => PresentOrInbox(item)); return; }
 
-            if (StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow)) == StartupRouting.Present)
+            var routing = StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow));
+            if (routing == StartupRouting.Present)
             {
                 // One passive surface on screen at a time: the next one waits for it to close.
                 if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp()))
@@ -81,6 +95,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 StartupInbox.RunSafely(item.Open, item.Key, "open");
                 return;
             }
+            if (Inbox.Contains(item.Key) || _held.Any(h => string.Equals(h.Key, item.Key, StringComparison.OrdinalIgnoreCase))) return;
+            if (routing == StartupRouting.Defer) { _held.Add(item); return; }
+            EnsureQuietWatch();
             if (Inbox.File(item))
                 Log.Information("[Startup] '{Key}' went to the Inbox ({Count} waiting)", item.Key, Inbox.UnreadCount);
         }
@@ -88,11 +105,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
         // Passive windows open right now. Tracked by class handler rather than read from the
         // desktop lifetime, so it holds for any host (and headless tests, which have none).
         private static readonly HashSet<Window> _passiveUp = new();
+        private static readonly HashSet<Window> _gameUp = new();
 
         static StartupLadder()
         {
-            Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) => { if (w is IPassiveStartupSurface) _passiveUp.Add(w); });
-            Window.WindowClosedEvent.AddClassHandler<Window>((w, _) => _passiveUp.Remove(w));
+            Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) =>
+            {
+                if (w is IPassiveStartupSurface) _passiveUp.Add(w);
+                // WPF AnyGameActive excludes the For You feed, which may stay open for hours.
+                if (w is IntakeHostWindow || w is GameWindow game && game.Spec.Id != GameWindow.FypId) _gameUp.Add(w);
+            });
+            Window.WindowClosedEvent.AddClassHandler<Window>((w, _) => { _passiveUp.Remove(w); _gameUp.Remove(w); });
         }
 
         /// <summary>A feature card or an announcement is on screen.</summary>
@@ -114,17 +137,62 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>One tick of the watch: re-routes the held surfaces once nothing passive is up.</summary>
         internal static void PumpHeld()
         {
-            if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
+            if (!IsLadderIdle || StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
             _passiveTimer?.Dispose();
             _passiveTimer = null;
+            FlushHeld();
+        }
+
+        // A drain must re-route even while a previous card settles, so PresentOrInbox arms its watch.
+        private static void FlushHeld()
+        {
             var held = _held.ToList();
             _held.Clear();
             foreach (var h in held) PresentOrInbox(h);
         }
 
+        internal static void FoldPassiveForPanic()
+        {
+            _passiveTimer?.Dispose();
+            _passiveTimer = null;
+            var held = _held.ToArray();
+            _held.Clear();
+            foreach (var item in held) Inbox.File(item);
+            foreach (var window in _passiveUp.ToArray()) window.Close();
+        }
+
+        // WPF's 1 Hz quiet watch runs only while quiet; rows remain user-opened when it ends.
+        private static void EnsureQuietWatch()
+        {
+            _quietTimer ??= Time.CreateTimer(_ => OnUI(NotifyQuietMaybeChanged), null, PassiveRecheck, PassiveRecheck);
+        }
+
+        private static void NotifyQuietMaybeChanged()
+        {
+            var quiet = IsQuiet;
+            if (quiet) EnsureQuietWatch();
+            else { _quietTimer?.Dispose(); _quietTimer = null; }
+            if (quiet == _lastQuiet) return;
+            _lastQuiet = quiet;
+            try { QuietChanged?.Invoke(); }
+            catch (Exception ex) { Log.Debug(ex, "[Startup] a QuietChanged handler threw"); }
+        }
+
+        private static void OnUI(Action action)
+        {
+            if (Dispatcher.UIThread.CheckAccess()) action();
+            else Dispatcher.UIThread.Post(action, DispatcherPriority.Normal);
+        }
+
         /// <summary>Test seam: forget the quiet window, the passive pacing, the passive windows up and every row.</summary>
         internal static void ResetForTests()
         {
+            ResetModalsForTests();
+            Held = _lastQuiet = false;
+            QuietChanged = null;
+            _quietTimer?.Dispose();
+            _quietTimer = null;
+            _gameUp.Clear();
             _firstLaunchUntilUtc = null;
             _lastPassiveUtc = null;
             _held.Clear();

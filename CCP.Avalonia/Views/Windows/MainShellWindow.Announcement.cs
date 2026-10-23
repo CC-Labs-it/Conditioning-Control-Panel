@@ -40,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
+                _serverAnnouncementShownThisLaunch = true; // Claim at routing, even when news becomes a row.
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {

@@ -83,6 +83,8 @@ public sealed class AppUpdaterTests
                 Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
                 Assert.Equal("http://127.0.0.1:9/api", AppUpdater.ApiBase());
 
+                StartupLadder.ResetForTests();
+                StartupLadder.Time = TimeProvider.System;
                 AppUpdater.Handler = feed;
                 AppUpdater.OpenUrl = (_, url) => { opened = url; return Task.CompletedTask; };
                 CoreReleaseContent.AppVersionProvider = () => "6.11.3";
@@ -130,6 +132,7 @@ public sealed class AppUpdaterTests
             }
             finally
             {
+                StartupLadder.ResetForTests();
                 AppUpdater.Handler = null;
                 AppUpdater.OpenUrl = oldOpen;
                 CoreReleaseContent.AppVersionProvider = oldVersion;

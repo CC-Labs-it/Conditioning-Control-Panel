@@ -931,6 +931,7 @@ namespace ConditioningControlPanel.Avalonia
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);
                 if (panelHidden)
                 {
+                    Platform.StartupLadder.Hold();
                     bool activated = shell.ShowActivated, inTaskbar = shell.ShowInTaskbar;
                     shell.ShowActivated = false;
                     shell.ShowInTaskbar = false;

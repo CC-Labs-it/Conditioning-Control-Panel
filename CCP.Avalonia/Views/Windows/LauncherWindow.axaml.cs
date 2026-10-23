@@ -129,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { Services.LockdownService.Current?.NotifyEscapeAttempt(Services.Possession.EscapeKinds.Close); } catch { }
                 return false;
             }
+            Platform.StartupLadder.Hold();
             panel.Hide();
             panel.HideAvatarTube();
             OpenFor(panel);
@@ -157,6 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
+                Platform.StartupLadder.Hold();
                 panel.Hide();
                 panel.HideAvatarTube();
                 if (!(Boot.Surface == BootSurface.Game && Boot.GameId is { } id && LaunchGame(panel, id)))

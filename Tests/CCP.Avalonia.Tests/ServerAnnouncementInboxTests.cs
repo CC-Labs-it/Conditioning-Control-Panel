@@ -100,6 +100,26 @@ public sealed class ServerAnnouncementInboxTests
             Assert.Contains("POST /v2/announcement/dismiss {\"unified_id\":\"u1\",\"announcement_id\":\"a1\"}", fake.Calls);
             Assert.Empty(StartupLadder.Inbox.Items);
 
+            // News owns the launch budget even when it was filed and dismissed unread.
+            var login = CoreAccount.IsLoggedInProvider; var premium = CoreAccount.HasPremiumAccessProvider;
+            var nudge = CoreSettings.Current.IntakeNudgeEnabled;
+            var nudgeWeek = CoreSettings.Current.IntakeNudgeDismissedWeek;
+            try
+            {
+                CoreAccount.IsLoggedInProvider = () => true; CoreAccount.HasPremiumAccessProvider = () => false;
+                CoreSettings.Current.IntakeNudgeEnabled = true;
+                CoreSettings.Current.IntakeNudgeDismissedWeek = "";
+                Assert.True(global::ConditioningControlPanel.Avalonia.App.IntakePass.IsPassAvailable);
+                shell.CheckIntakePassNudge();
+                Assert.Empty(StartupLadder.Inbox.Items);
+            }
+            finally
+            {
+                CoreAccount.IsLoggedInProvider = login; CoreAccount.HasPremiumAccessProvider = premium;
+                CoreSettings.Current.IntakeNudgeEnabled = nudge;
+                CoreSettings.Current.IntakeNudgeDismissedWeek = nudgeWeek;
+            }
+
             // dismissed: the next check fetches and stays silent
             await shell.CheckServerAnnouncementAsync();
             Assert.Empty(StartupLadder.Inbox.Items);

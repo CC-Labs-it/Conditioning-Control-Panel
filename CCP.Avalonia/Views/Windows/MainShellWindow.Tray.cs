@@ -91,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public void ShowFromTray()
         {
             if (_windowClosed) return;
+            Platform.StartupLadder.Release();
             Show();
             WindowState = WindowState.Normal;
             Activate();

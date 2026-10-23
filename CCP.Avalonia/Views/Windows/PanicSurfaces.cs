@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
+            new("startup-passive", _ => Platform.StartupLadder.FoldPassiveForPanic()),
             new("inbox-notice", _ => Dialogs.InboxNoticeCard.CloseForPanic()),
             new("camera", _ => MainShellWindow.StopCameraForPanic()),     // decision C: last, fire-and-forget
         };

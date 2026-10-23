@@ -21,6 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void InitializeInboxBadge()
         {
+            StartupLadder.Attach(this);
             var inbox = StartupLadder.Inbox.Items;
             inbox.CollectionChanged += OnInboxCollectionChanged;
             Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;

@@ -11,6 +11,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
@@ -116,18 +117,26 @@ public sealed class FirstShowStageTests
         CoreSettings.ServiceProvider = () => service;
         MainShellWindow? shell = null, second = null;
         int opened = 0;
+        StartupLadder.ResetForTests();
+        var startupClock = (StartupLadder.TestClock)StartupLadder.Time;
         try
         {
             CoreSettings.Current.Welcomed = false;
             CoreSettings.Current.HasAcceptedAgeVerification = false;
             shell = new MainShellWindow { OpenWelcomeShow = _ => { opened++; return true; } };
             shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(shell.OwnedWindows.OfType<FirstRunWizard>());
+            startupClock.Advance(TimeSpan.FromMilliseconds(750));
             await Until(() => shell.OwnedWindows.OfType<FirstRunWizard>().Any());
             var wizard = shell.OwnedWindows.OfType<FirstRunWizard>().Single();
             Assert.Equal(0, opened);
             wizard.FindControl<CheckBox>("ChkAgeConfirm")!.IsChecked = true;
             wizard.FindControl<Button>("BtnNext")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             wizard.Close();
+            await Until(() => !StartupLadder.IsModalUp);
+            Assert.Equal(0, opened);
+            startupClock.Advance(TimeSpan.FromMilliseconds(750));
             await Until(() => opened > 0);
             Assert.Equal(1, opened);
 
@@ -141,6 +150,7 @@ public sealed class FirstShowStageTests
         {
             foreach (var w in new[] { shell, second }) { foreach (var o in w?.OwnedWindows.ToList() ?? new()) o.Close(); w?.RequestExit(); }
             Dispatcher.UIThread.RunJobs();
+            StartupLadder.ResetForTests();
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
     });
@@ -245,6 +255,7 @@ public sealed class FirstShowStageTests
             foreach (var o in shell?.OwnedWindows.ToList() ?? new()) o.Close();
             shell?.RequestExit();
             Dispatcher.UIThread.RunJobs();
+            StartupLadder.ResetForTests();
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
     });
@@ -286,6 +297,7 @@ public sealed class FirstShowStageTests
             FirstShowService.RequireClickThrough = true;
             EmiDeskService.Instance.Window?.ShutDown();
             Dispatcher.UIThread.RunJobs();
+            StartupLadder.ResetForTests();
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
     });

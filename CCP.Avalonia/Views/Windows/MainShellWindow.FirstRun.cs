@@ -17,22 +17,11 @@
 //     load-bearing: this app keeps the dispatcher busy enough that Loaded-priority work is starved
 //     and the first-launch tour silently never started.
 //
-// WHAT IS DELIBERATELY NOT PORTED:
-//   * The 30s `App.IsUpdateDialogActive` wait. That flag lives in ConditioningControlPanel/
-//     App.xaml.cs and this head never shows an update dialog at all (UpdateNotificationDialog has
-//     no caller here - see its own file for why), so waiting on it would be waiting on a constant.
-//   * `App.EmiDesk.Fire("firstLaunchEver") / ReleaseHold(...)`. There is no EmiDesk seam in Core -
-//     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
-//     has nothing to hold back on this head. Nothing talks over the wizard here either way.
-//   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
-//   * The rest of the `else` branch (ShowWhatsNewIfNeeded / TryPresentSeasonRecap). Returning users
-//     get no mod popup: WPF removed it (MainWindow.xaml.cs:587-588). MainShellWindow.Marquee.cs documents
-//     why those two are still stubs: they need App.Achievements, App.Seasons and App.xaml.cs's startup-dialog queue. One
-//     consequence worth naming: LastSeenVersion is therefore only ever stamped by the first-run
-//     gate below, never on an upgrade launch. That is pre-existing and this file does not
-//     worsen it - the fix is ShowWhatsNewIfNeeded, not a second stamp here.
+// Startup modals now share Platform.StartupLadder (WPF priorities 5 and 20). The welcome
+// show remains the existing follow-up; What's New and the season recap still need their triggers.
 
 using System;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using Serilog;
 
@@ -82,13 +71,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnAgeGateShellOpened(object? sender, EventArgs e)
         {
             Opened -= OnAgeGateShellOpened;
-            Dispatcher.UIThread.Post(async () =>
+            Platform.StartupLadder.EnqueueModal("age-gate", 5, async _ =>
             {
                 var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
                 if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
                 CoreSettings.Save();
-            }, DispatcherPriority.Normal);
+            }, () => ExitWithoutBill());
         }
 
         /// <summary>Test seam: stands in for <see cref="WelcomeShow.FirstShowService.Open"/>.</summary>
@@ -111,9 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             Opened -= OnFirstRunShellOpened;   // one launch, one wizard
 
-            // Normal, never Loaded - see the header. Posting also gets us off the Opened callback
-            // before a modal takes the loop.
-            Dispatcher.UIThread.Post(async () =>
+            Platform.StartupLadder.EnqueueModal("first-run-wizard", 20, async _ =>
             {
                 try
                 {
@@ -127,13 +114,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
 
                     await FirstRunWizard.Run(this);
-                    OfferWelcomeShowAfterFirstRun();
+                    Platform.StartupLadder.EnqueueModal("first-show", 25, _ =>
+                    {
+                        OfferWelcomeShowAfterFirstRun();
+                        return Task.CompletedTask;
+                    });
                 }
                 catch (Exception ex)
                 {
                     Log.Warning(ex, "[FirstRun] The first-run wizard failed to run");
                 }
-            }, DispatcherPriority.Normal);
+            }, () => FirstRunWizard.AbortUngatedLaunch(this, "startup ladder never cleared"));
         }
     }
 }

@@ -1,10 +1,7 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Avalonia.Controls;
-using Avalonia.Controls.ApplicationLifetimes;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Serilog;
@@ -81,20 +78,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { Log.Warning(ex, "Welcome-back sheet failed to show"); }
         }
 
-        private static async Task PresentOnShellAsync(WelcomeBackSheetContent content)
+        private static Task PresentOnShellAsync(WelcomeBackSheetContent content)
         {
-            var desktop = global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
-            // The ladder runs one startup modal at a time (WPF EnqueueModal :4748): wait out the wizard.
-            while (desktop?.Windows.FirstOrDefault(w => w is FirstRunWizard && w.IsVisible) is { } wizard)
-            {
-                var closed = new TaskCompletionSource();
-                wizard.Closed += (_, _) => closed.TrySetResult();
-                await closed.Task;
-            }
-            // WPF StartupPresenter.cs:572-587: the flag every startup surface (feature intros) defers to.
-            MainShellWindow.IsStartupDialogShowing = true;
-            try { await new WelcomeBackSheet(content).ShowDialogSafe<bool>(desktop?.MainWindow); }
-            finally { MainShellWindow.IsStartupDialogShowing = false; }
+            StartupLadder.EnqueueModal("welcome-back", 30,
+                async owner => await new WelcomeBackSheet(content).ShowDialogSafe<bool>(owner));
+            return Task.CompletedTask;
         }
 
         /// <summary>WPF ConsumeFactoryResetMarker (:5033); the marker DataSettingsSection drops.</summary>

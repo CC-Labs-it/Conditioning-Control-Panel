@@ -25,16 +25,12 @@
 // actually keeps it honest.
 //
 // STILL BLOCKED, each naming what it needs rather than guessing at "when X moves to Core":
-//   ShowOgWelcomePopup / TryPresentSeasonRecap / ShowWhatsNewIfNeeded - App.Achievements,
-//     App.Seasons and the startup dialog queue in ConditioningControlPanel/App.xaml.cs. The
-//     dialogs themselves DO exist here (CCP.Avalonia/Views/Dialogs/WhatsNewDialog.axaml.cs,
-//     Views/Controls/SeasonRecapCard); what is missing is the "has this launch already shown a
-//     modal" arbitration those read from App.
+//   ShowOgWelcomePopup / TryPresentSeasonRecap / ShowWhatsNewIfNeeded - their startup
+//     predicates and seen-flag bookkeeping still have no caller here. The shared modal ladder
+//     now exists (Platform.StartupLadder); the existing dialogs need their trigger logic ported.
 //   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
 //     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
-//   _serverAnnouncementShownThisLaunch - only the intake nudge reads it.
-//   CheckIntakePassNudge / StartIntakeFromNudge - App.Programs (the weekly intake pass); the
-//     accepted nudge then wants ShowTab("gradedintake"), which does exist here.
+//   (Weekly intake nudge and its announcement budget are in MainShellWindow.IntakeNudge.cs.)
 //   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
 //   ExternalOpener, which has no no-default-browser prompt - WPF BrowserLauncher's fallback.)
 //   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
@@ -66,8 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>
         /// True while a startup modal owns the screen. FeatureIntroPopup reads this to refuse to
-        /// stack a card on a modal. Set around the first-run wizard (FirstRunWizard.axaml.cs);
-        /// WPF's other startup modals have no ladder on this head yet.
+        /// stack a card on a modal. Platform.StartupLadder owns the flag around each queued surface;
+        /// the wizard also sets it when invoked directly.
         /// </summary>
         public static bool IsStartupDialogShowing { get; set; }
 
