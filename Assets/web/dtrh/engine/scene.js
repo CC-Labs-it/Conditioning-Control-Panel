@@ -18,6 +18,7 @@ import { disposeTextures } from '../shared/assets.js';
 import { buildLoopLayout, createTunnel, FOG_COLOR, FOG_DENSITY } from './tunnel.js';
 import { createFallNav } from './fallNav.js';
 import { createSpawner } from './spawner.js';
+import { stageClosedFor } from './videoStage.js';
 import { createWallPosters } from './wallPosters.js';
 import { createJunctions } from './junctions.js';
 import { createBoonPick } from './boonPick.js';
@@ -25,12 +26,13 @@ import { createPowerupDrops } from './powerupDrops.js';
 import { createHubStations } from './hubStations.js';
 import { createBubbles } from './bubbles.js';
 import { createDirector } from './director.js';
+import { createHostEscape, HOST_ESCAPE } from '../race/hostEscape.js';
 import { createFx } from './fx.js';
 import { createPanel } from './panel.js';
 import { createDriftChain } from './driftChain.js';
 import { modDroneUrl } from '../modContent.js';
 import { getLevel, setLevel, audioGroups, getVoice, setVoice, voiceSets, onVoice } from './audioLevels.js';
-import { getAudioCtx, getMasterOut, closeAudioBus } from './audioBus.js';
+import { getAudioCtx, getMasterOut, closeAudioBus, depthDroneLevel } from './audioBus.js';
 import { S, updateSetting, onSettings, THEME_COLORS, THEME_PRESETS, applyThemePreset, intToHex, hexToInt,
   getLooks, saveLook, clearLook, applyLook, enforceCraftedDefaults } from './settings.js';
 import * as bridge from '../bridge.js';
@@ -41,6 +43,7 @@ const DRONE_FLOOR = 0.16;      // ambient music bed; the speed curve lifts it to
 const DRONE_MAX = 0.5;         // full-speed ceiling (the 'music' slider can push past this up to 2x)
 // Mix hierarchy (sidechain ducks): spotlight video > drift voice > drone bed.
 const DRONE_DUCK = 0.4;        // bed multiplier while a voice line plays
+const DRONE_DEPTH_EASE = 0.35; // per second; how fast the bed follows the depth multiplier
 const DRONE_DUCK_SPOT = 0.25;  // bed multiplier while a spotlight video holds the stage
 const VOICE_DUCK_SPOT = 0.15;  // voice multiplier under a spotlight (the stage owns the foreground)
 const SPEED_REF = 28;          // speed that maps to full drone volume / speed meter 100%
@@ -172,6 +175,7 @@ export async function start({ canvas, hud, tier, media, challenge, game = null }
   let drone = null, droneVol = DRONE_FLOOR, droneStarted = false;
   let droneCtx = null, droneGain = null, droneWatch = 0;
   let droneKickTries = 0, droneKickRest = 0, droneDuck = 1, voiceDuck = 1;
+  let droneDepth = 1;   // feel pass: the bed fills out with depth (audioBus.setDepthTone), eased here
   let voiceSilenced = false;   // VN tutorial: hard-mute the drift voice while the persona speaks
   let runActive = false;       // game mode: the drift whisper + special tube moods live ONLY inside a descent (the Warren hub idles calm + quiet)
   // Creator mods may override the drone bed (ccp.mod is cross-origin, so set
@@ -444,7 +448,7 @@ export async function start({ canvas, hud, tier, media, challenge, game = null }
     if (v === gamePaused) return;
     if (v && director.isOver()) return; // results screen owns the end state
     const held = v
-      ? (forceHold || !game || !game.canHoldPause || !!game.canHoldPause())
+      ? (forceHold || FS.hosted || !game || !game.canHoldPause || !!game.canHoldPause())   // in the app a pause is always a real one (owner, 2026-10-12)
       : pauseHeld;   // unpause undoes exactly what the pause did
     gamePaused = v;
     pauseHeld = held;
@@ -497,19 +501,22 @@ export async function start({ canvas, hud, tier, media, challenge, game = null }
     // closes its modals) - the engine pause card belongs to live descents.
     if (game && game.onEsc && game.onEsc()) return;
 
-    // Hosted (WPF): the browser no longer eats Esc for fullscreen, so we own the
-    // whole ladder - 1) pause (stay fullscreen)  2) drop fullscreen (stay paused)
-    // 3) leave the game gracefully. The panic-key double-tap is suppressed C#-side
-    // while the DtRH window is up, so these presses never kill the app.
+    // Hosted (WPF): Escape only pauses (owner, 2026-10-12). A press pauses, the next
+    // one resumes; it never drops fullscreen (F11 does) and never closes the window
+    // (the pause card's own buttons leave). The panel keeps the press as the pause
+    // (PanicPolicy.GameClaimsEscapeAsPause); a second one inside 2 s is a full panic.
     if (FS.hosted) {
-      if (!director.isOver() && !gamePaused) { setGamePaused(true); return; }   // 1) pause
-      if (FS.isActive()) { toggleFullscreen(); return; }                        // 2) exit fullscreen
-      bridge.send({ type: 'exit' });                                            // 3) graceful close
+      if (director.isOver()) return;
+      setGamePaused(!gamePaused);
       return;
     }
     setGamePaused(!gamePaused);
   }
   window.addEventListener('keydown', onKeyDown);
+  // The Escape the panel kept as the pause while this page was out of keyboard focus
+  // (the title bar clicked): played once as the page's own, unless the real key came too.
+  const hostEscape = createHostEscape();
+  bridge.on(HOST_ESCAPE, () => hostEscape.kept());
 
   // ---- grab: hold an image/gif card in front of the POV ------------------------
   // pointerdown on a card seizes it (spawner pins it ahead of the camera and the
@@ -730,6 +737,8 @@ export async function start({ canvas, hud, tier, media, challenge, game = null }
   // ONLY inside a descent in game mode, plus the usual ESC-pause / hidden-tab
   // parks. One source of truth so the Warren hub never plays video behind it.
   function syncSpawner() {
+    // a run standing down also takes its clip off the stage: parked, it froze there (#1470)
+    spawner.setStageClosed(stageClosedFor(!!game, runActive));
     // a soft (un-held) pause leaves the conveyor running - the fall doesn't wait
     spawner.setPaused((gamePaused && pauseHeld) || document.hidden || (game && !runActive));
   }
@@ -891,8 +900,10 @@ export async function start({ canvas, hud, tier, media, challenge, game = null }
       droneVol += (raw - droneVol) * Math.min(1, dt * 2);
       const duckTarget = spotOn ? DRONE_DUCK_SPOT : (!voiceSilenced && drift.isSpeaking() ? DRONE_DUCK : 1);
       droneDuck += (duckTarget - droneDuck) * Math.min(1, dt * 2.5);
+      // depth drives the mix: a linear ease toward the bus's depth multiplier (about 3 s)
+      droneDepth += (depthDroneLevel() - droneDepth) * Math.min(1, dt * DRONE_DEPTH_EASE);
       // the 'music' slider is a 0..1 multiplier over the speed-following bed
-      setDroneVolume(isMuted() ? 0 : Math.max(0, Math.min(1, droneVol)) * getLevel('music') * droneDuck);
+      setDroneVolume(isMuted() ? 0 : Math.max(0, Math.min(1, droneVol)) * getLevel('music') * droneDuck * droneDepth);
       // THE BALLERINA: the music box rides the same envelope at ~0.35x
       if (mbox) mbox.volume = isMuted() ? 0
         : Math.max(0, Math.min(1, droneVol * getLevel('music') * droneDuck * 0.35));

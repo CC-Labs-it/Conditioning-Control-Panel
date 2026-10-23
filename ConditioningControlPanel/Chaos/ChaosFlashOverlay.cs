@@ -223,6 +223,7 @@ public sealed class ChaosFlashOverlay : Window
         // AttachAnimation would decode from a path that does not exist. So remote goes straight
         // to the still branch, which is also the branch it belongs in.
         bool remote = Services.FlashService.IsRemotePath(path);
+        if (Services.Video.ScrolllerCredit.IsScrolllerMedia(path)) Controls.ScrolllerCreditChip.Hold(this);   // "via Scrolller" while it is up
 
         // still (Back Room hero at MotionLevel Off) takes the still branch below, which decodes the
         // first frame only.
@@ -305,6 +306,7 @@ public sealed class ChaosFlashOverlay : Window
         try { AnimationBehavior.SetSourceUri(_img, null); } catch { }
         Services.AnimatedWebp.Detach(_img);   // stops the webp frame loop (Forever clock pins _img)
         try { _img.Source = null; } catch { }
+        Controls.ScrolllerCreditChip.Release(this);
     }
 
     private void CloseNow()
