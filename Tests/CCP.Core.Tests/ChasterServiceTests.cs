@@ -183,6 +183,34 @@ public class ChasterServiceTests : IDisposable
         Assert.Equal(30, after.AppliedSeconds);
     }
 
+    /// <summary>Port 7.2 fix wave: every panic reaches the hold through one Core seam. The Avalonia stop
+    /// pass, its fallback and a controller's trigger_panic call it; a head with no tab is a no-op.</summary>
+    [Fact]
+    public void The_panic_seam_opens_the_hold_and_every_avalonia_panic_path_calls_it()
+    {
+        using var service = Make();
+        var seeded = ConditioningControlPanel.Services.Safety.PanicChasterHold.Service;
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => null;
+            ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("test");   // no tab: quiet
+            ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => service;
+            ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("test");
+            Assert.Equal(ChasterService.SafetyHold, service.SafetyHoldRemaining);
+            Assert.Equal(TabRefusal.SafetyExit, service.Note("typo").Refusal);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = seeded; }
+
+        string Src(params string[] p) => File.ReadAllText(Path.Combine(new[] { RepoRoot() }.Concat(p).ToArray()));
+        var commands = Src("CCP.Core", "Services", "RemoteControl", "RemoteCommands.cs");
+        var stop = commands.Substring(commands.IndexOf("public static void StopEffects(bool force)", StringComparison.Ordinal));
+        Assert.Contains("if (force) Safety.PanicChasterHold.Open(", stop);
+        Assert.Contains("new(\"chaster-hold\", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open(",
+            Src("CCP.Avalonia", "Views", "Windows", "PanicSurfaces.cs"));
+        Assert.Contains("PanicChasterHold.Open(\"panic fallback\")", Src("CCP.Avalonia", "Platform", "PanicWatchdog.cs"));
+        Assert.Contains("PanicChasterHold.Service = () => Platform.ChasterHead.Service;", Src("CCP.Avalonia", "App.axaml.cs"));
+    }
+
     /// <summary>DESK-6. The rail chip counts a hold down instead of the lock, and with no lock
     /// running its clock ticks once a minute, so a panic must repaint it at once: the hold is
     /// raised as a lock change, which the chip already repaints on (marshalled to its dispatcher).</summary>
@@ -556,13 +584,50 @@ public class ChasterServiceTests : IDisposable
         service.NoteSeconds("watcher", 600);
 
         Assert.Equal(SettleOutcome.TryLater, await service.SettleAsync());
-        Assert.Equal(600, service.BalanceSeconds);
+        // Counted as landed at once, not at the next settle.
+        Assert.Equal(0, service.BalanceSeconds);
 
         _http.Answer = _ => new HttpResponseMessage(HttpStatusCode.NoContent);
         Assert.Equal(SettleOutcome.Nothing, await service.SettleAsync());
         Assert.Equal(0, service.BalanceSeconds);
         Assert.Equal(0, service.Bill().PushedSeconds);
         Assert.Single(_http.Seen, s => s.Path.EndsWith("update-time"));
+    }
+
+    [Fact]
+    public async Task A_credit_earned_after_an_unanswered_push_is_kept()
+    {
+        // Bug hunt 2026-10-22: the doubt waited for the next settle (the 10-minute tick) with the
+        // sent 10:00 still on the balance. A finished session in between cancelled it, and the
+        // doubt then took the 10:00 off a balance of 0: the session's credit was gone, so the next
+        // slip-ups went to the lock instead of being cancelled.
+        File.WriteAllText(Path.Combine(_dir, "tab.json"), "{\"pushed_net\":3600}");
+        _http.Answer = _ => throw new TaskCanceledException("timeout");
+        using var service = Make();
+        service.NoteSeconds("watcher", 600);
+
+        Assert.Equal(SettleOutcome.TryLater, await service.SettleAsync());
+        service.Note("session");
+        Assert.Equal(-600, service.BalanceSeconds);
+
+        _http.Answer = _ => new HttpResponseMessage(HttpStatusCode.NoContent);
+        Assert.Equal(SettleOutcome.Nothing, await service.SettleAsync());
+        Assert.Equal(-600, service.BalanceSeconds);
+        Assert.Single(_http.Seen, s => s.Path.EndsWith("update-time"));
+    }
+
+    [Fact]
+    public void A_push_cut_off_by_a_crash_is_settled_at_load_so_an_early_credit_is_kept()
+    {
+        var day = CircesTab.DayKey(_utc.ToLocalTime());
+        File.WriteAllText(Path.Combine(_dir, "tab.json"),
+            "{\"balance\":600,\"pending\":600,\"pending_day\":\"" + day + "\",\"pushed_net\":3600}");
+        using var service = Make();
+
+        Assert.Equal(0, service.BalanceSeconds);
+        service.Note("session");
+        Assert.Equal(-600, service.BalanceSeconds);
+        Assert.Empty(_http.Seen);
     }
 
     [Fact]

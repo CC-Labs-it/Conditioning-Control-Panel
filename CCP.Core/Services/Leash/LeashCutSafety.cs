@@ -17,8 +17,8 @@ namespace ConditioningControlPanel.Services.Leash;
 /// <item>Stop a mandatory video that is running strict-locked, so nobody sits trapped in one.</item>
 /// <item>Strict Lock OFF, panic key ON, saved at once, panic hook + checkbox resynced. Always, even
 /// when the user turned Strict Lock on themselves.</item>
-/// <item>Circe's Tab: leash bookings not yet pushed would be dropped here. OWED (see
-/// <see cref="ITargets.DropUnpushedLeashBookings"/>); Chaster time already pushed stays.</item>
+/// <item>Circe's Tab: leash time not on the lock yet is dropped (<see cref="ITargets.DropUnpushedLeashBookings"/>,
+/// <c>CircesTab.DropUnpushedLeash</c>); Chaster time already pushed, or on the wire, stays.</item>
 /// </list>
 /// <para>Each step runs in its own try, so one failing step never stops the ones after it.</para>
 /// </summary>
@@ -49,7 +49,7 @@ public static class LeashCutSafety
         void StopVideo();
         /// <summary>StrictLockEnabled = false, PanicKeyEnabled = true, save now, resync the panic UI.</summary>
         void ReleaseSafetySettings();
-        /// <summary>Drop unpushed leash bookings from Circe's Tab. Returns false when it cannot.</summary>
+        /// <summary>Drop leash time not yet pushed from Circe's Tab. Returns false when nothing was dropped.</summary>
         bool DropUnpushedLeashBookings();
     }
 

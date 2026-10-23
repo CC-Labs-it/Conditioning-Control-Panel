@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Services
         private DateTime _lastStatusPush = DateTime.MinValue, _statusBackoffUntil = DateTime.MinValue;
         private string _lastStatus = "ok";
         private string? _lastReason;
-        private bool _remoteSetStrictLock, _pollBackedOff;
+        private bool _pollBackedOff;
         private DateTime _lastControllerCommand = DateTime.MinValue;
         public const double HotPollSeconds = 1.0, HotWindowSeconds = 60.0, ConnectedHeartbeatSeconds = 5.0;   // WPF Screen.cs (d39969827)
 
@@ -130,6 +130,8 @@ namespace ConditioningControlPanel.Services
                 var code = JObject.Parse(json)["code"]?.ToString();
                 if (string.IsNullOrEmpty(code)) return null;
                 (SessionCode, ConnectPin, Tier, IsActive) = (code, pin, tier, true);
+                // The wearer's own values, handed back at every end (owner 2026-10-22, RemoteWearer).
+                Remote.RemoteWearer.Take();
                 (_consecutiveFailures, PollInterval, _lastStatusPush, _statusBackoffUntil) = (0, PollIntervalSeconds, DateTime.MinValue, DateTime.MinValue);
                 if (AutoPoll) StartLoop();
                 Log.Information("[RemoteControl] Session started: {Code}, tier: {Tier}", code, tier);
@@ -185,12 +187,18 @@ namespace ConditioningControlPanel.Services
             _loop?.Cancel();
             _loop = null;
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
-            (_remoteSetStrictLock, _pollBackedOff, _lastControllerCommand) = (false, false, DateTime.MinValue);
+            (_pollBackedOff, _lastControllerCommand) = (false, DateTime.MinValue);
             (_lastOptInTags, _lastOptInStatus) = (null, null);
             Interlocked.Increment(ref _sessionGeneration);   // an opt-in still in flight must not list the next session
             // StopAsync and the poll loop land here off the UI thread, and the stops close windows: run
             // them on the UI like ControllerLeft, posted if a stalled UI cancels the Invoke.
-            void StopEffects() { try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); } }
+            // The stop hands the wearer's own values back (RemoteCommands.StopEffects -> RemoteWearer); then the
+            // session's snapshot and its recovery file go.
+            void StopEffects()
+            {
+                try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                Remote.RemoteWearer.Drop();
+            }
             var (done, _) = CoreDispatch.Invoke(() => { StopEffects(); return 0; }, TimeSpan.FromSeconds(10));
             if (!done) CoreDispatch.Post(StopEffects);
             if (ControllerConnected) { ControllerConnected = false; ControllerConnectedChanged?.Invoke(this, EventArgs.Empty); }
@@ -289,8 +297,9 @@ namespace ConditioningControlPanel.Services
 
         // WPF HandleControllerDisconnectCleanup: default leaves effects running; the opt-in stops them.
         // A remote haptic never outlives its controller, and what could trap the subject is handed back
-        // (WPF 71cfc4185 ReleaseRemoteSafetyState, ccp-bugs #1340): panic key on, the controller's own
-        // strict lock off; a strict lock the subject set stays.
+        // (WPF ReleaseRemoteSafetyState, ccp-bugs #1340, owner 2026-10-22): the strict lock goes back to the
+        // wearer's own (a running Lockdown keeps the one it forced) and the panic key comes back on, except
+        // while a running Lockdown holds it off (RemoteWearer.ReleaseSafetyState).
         // Runs through the same UI dispatch as commands (and so PanicKeyUiSync, which Avalonia leaves unset,
         // is on the UI thread), after bumping the leave generation that refuses anything still in flight.
         private void ControllerLeft()
@@ -305,16 +314,7 @@ namespace ConditioningControlPanel.Services
         private void ReleaseOnLeave()
         {
             RemoteCommands.RemoteHaptics.Stop();
-            var s = CoreSettings.Current;
-            var changed = false;
-            if (_remoteSetStrictLock) { _remoteSetStrictLock = false; if (s.StrictLockEnabled) { s.StrictLockEnabled = false; changed = true; } }
-            if (!s.PanicKeyEnabled) { s.PanicKeyEnabled = true; changed = true; }
-            if (changed)
-            {
-                CoreSettings.Save();
-                try { LockdownService.PanicKeyUiSync?.Invoke(); } catch { }
-                Log.Information("[RemoteControl] Controller left: panic key back on, controller's strict lock released");
-            }
+            Remote.RemoteWearer.ReleaseSafetyState();
             if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
                 try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
         }
@@ -326,7 +326,8 @@ namespace ConditioningControlPanel.Services
             (_lastStatus, _lastReason) = ("ok", null);
             _lastControllerCommand = Now();          // WPF NoteControllerActivity: every command, refused or not
             RemoteCommands.RemoteHaptics.NoteCommand();
-            var reason = RemoteCommandGate.Screen(action, LockdownService.Current?.IsActive == true);
+            var reason = RemoteCommandGate.Screen(action, LockdownService.Current?.IsActive == true,
+                Leash.LeashGuard.Check(), LockdownService.Current?.ForcedStrictLock == true);
             if (reason == null)
             {
                 Log.Information("[RemoteControl] Executing: {Action}", action);
@@ -334,14 +335,7 @@ namespace ConditioningControlPanel.Services
                 {
                     if (gen.Leave != Volatile.Read(ref _leaveGeneration)) return "the controller left";
                     if (gen.Panic != RemoteCommands.PanicGeneration) return "stopped by panic";
-                    var strictBefore = CoreSettings.Current.StrictLockEnabled;
-                    try
-                    {
-                        var refusal = _execute(action, parameters);
-                        // Set here, in the dispatched call, so even a late-landing switch-on is the controller's.
-                        if (refusal == null && action == "enable_strict_lock" && !strictBefore) _remoteSetStrictLock = true;
-                        return refusal;
-                    }
+                    try { return _execute(action, parameters); }
                     catch (Exception ex) { Log.Error(ex, "[RemoteControl] Error executing command: {Action}", action); return "error"; }
                 }, TimeSpan.FromSeconds(10));
                 reason = done ? refused : "timed out";
@@ -502,12 +496,17 @@ namespace ConditioningControlPanel.Services
     /// enable_strict_lock is refused. Verbs that only reduce restraint run as on WPF and never touch the
     /// Lockdown timer; Lockdown restores the pre-lockdown settings when it ends. Strict lock stays the
     /// same setting, so every strict surface keeps its own fall-open.
+    /// <para>A leashed account refuses every command that could take its way out away, from any remote
+    /// session (WPF ExecuteCommand's LeashRemoteRule door, owner 2026-09-26). A disable_strict_lock over a
+    /// strict lock a running Lockdown forced is refused (WPF RemoteHoldings.RefusesStrictOff, owner 2026-10-22).</para>
     /// </summary>
     public static class RemoteCommandGate
     {
-        public static string? Screen(string action, bool lockdownActive) =>
+        public static string? Screen(string action, bool lockdownActive, bool leashed = false, bool lockdownForcedStrict = false) =>
             action == "disable_panic" ? "the panic key stays on"   // WPF 719ed9ca5 wording
+            : Leash.LeashRemoteRule.Screen(action, asksStrictLock: false, leashed) == Leash.LeashRemoteVerdict.Refuse ? "not while on a leash"
             : lockdownActive && action == "enable_strict_lock" ? "not during Lockdown"
+            : action == "disable_strict_lock" && Remote.RemoteHoldings.RefusesStrictOff(lockdownActive, lockdownForcedStrict) ? "the Lockdown holds the strict lock"
             : null;
     }
 }

@@ -130,7 +130,8 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
         /// <para><b>What goes:</b> <c>settings.json</c> (moved aside to
         /// <c>settings.pre-reset-&lt;stamp&gt;.json</c>, not deleted - a reset the user regrets has to
         /// be recoverable by hand), any leftover <c>settings.json*.tmp</c> from an interrupted save,
-        /// and the <c>.restored</c> cloud-restore marker. The temps and the marker MUST go with it:
+        /// the <c>.restored</c> cloud-restore marker, the session / ramp journals and the remote / Lockdown
+        /// recovery files (<see cref="Services.FactoryResetSweep"/>). The temps and the marker MUST go with it:
         /// <c>SettingsService.RecoverAndCleanTempFiles</c> promotes a surviving temp to
         /// <c>settings.json</c> when the real file is missing, which would quietly undo the reset.</para>
         ///
@@ -185,18 +186,9 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
                     App.Logger?.Warning("[RESET] no settings.json to move aside (already at defaults)");
                 }
 
-                foreach (var temp in SafeGlob(dir, "settings.json*.tmp"))
-                {
-                    try { File.Delete(temp); App.Logger?.Information("[RESET] deleted stale temp {Temp}", temp); }
-                    catch (Exception ex) { App.Logger?.Warning("[RESET] could not delete temp {Temp}: {E}", temp, ex.Message); }
-                }
-
-                var marker = settingsPath + ".restored";
-                if (File.Exists(marker))
-                {
-                    try { File.Delete(marker); App.Logger?.Information("[RESET] cleared cloud-restore marker"); }
-                    catch (Exception ex) { App.Logger?.Warning("[RESET] could not clear restore marker: {E}", ex.Message); }
-                }
+                // Temps, the cloud-restore marker, the session / ramp journals and the remote / Lockdown
+                // recovery files: each would hand old settings back on the next launch (FactoryResetSweep).
+                Services.FactoryResetSweep.Delete(dir, LogSweep);
 
                 // Tell the next launch that the missing settings.json is DELIBERATE. Without this,
                 // App.CheckCloudSettingsRestoreAsync sees WasSettingsFileMissing (the fresh-install
@@ -228,11 +220,8 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             // Belt and braces: a temp created by a save that was already mid-flight when the sweep
             // above ran would be promoted to settings.json by
             // SettingsService.RecoverAndCleanTempFiles on the next launch, undoing the reset.
-            foreach (var temp in SafeGlob(dir, "settings.json*.tmp"))
-            {
-                try { File.Delete(temp); App.Logger?.Warning("[RESET] deleted late temp {Temp}", temp); }
-                catch (Exception ex) { App.Logger?.Warning("[RESET] could not delete late temp {Temp}: {E}", temp, ex.Message); }
-            }
+            // SealForReset waited out any write already in flight, so this sweep is the last word.
+            Services.FactoryResetSweep.Delete(dir, LogSweep);
 
             // Hard exit on purpose - see the method docs. Serilog buffers, so flush first or the
             // whole [RESET] trail above is lost exactly when it matters.
@@ -251,10 +240,10 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             else MessageBox.Show(message, title, MessageBoxButton.OK, icon);
         }
 
-        private static string[] SafeGlob(string dir, string pattern)
+        private static void LogSweep(string path, string? error)
         {
-            try { return Directory.Exists(dir) ? Directory.GetFiles(dir, pattern) : Array.Empty<string>(); }
-            catch { return Array.Empty<string>(); }
+            if (error == null) App.Logger?.Information("[RESET] deleted {Path}", path);
+            else App.Logger?.Warning("[RESET] could not delete {Path}: {E}", path, error);
         }
 
         /// <summary>
@@ -277,7 +266,7 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
                 Process.Start(new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
-                    Arguments = $"/c timeout /t 4 /nobreak >nul & start \"\" \"{exe}\"",
+                    Arguments = $"/c timeout /t {Services.FactoryResetSweep.RelaunchDelaySeconds} /nobreak >nul & start \"\" \"{exe}\"",
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     WorkingDirectory = Path.GetDirectoryName(exe) ?? Environment.CurrentDirectory,

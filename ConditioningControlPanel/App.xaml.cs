@@ -3420,6 +3420,15 @@ namespace ConditioningControlPanel
             // prior run that was killed mid-lockdown so the panic key isn't stuck off.
             LockdownService.PanicKeyUiSync = () => MainWindowRef?.SyncNoPanicState();
             LockdownService.RecoverIfNeeded();
+            // A Remote Control session the app died in: the controller's spiral / pink / strict lock
+            // values go back to the wearer's own. After Lockdown's recovery, which can put a
+            // controller's strict lock back first (RemoteHoldings).
+            try
+            {
+                if (Services.Remote.RemoteHoldings.HealOnLaunch(UserDataPath, Settings?.Current) > 0)
+                    Settings?.Save();
+            }
+            catch (Exception ex) { Logger?.Warning(ex, "Remote holdings heal failed (non-fatal)"); }
             Lockdown = new LockdownService();
             LockdownService.Current = Lockdown;
             // Possession: the haunt that rides the lockdown timer. It only arms when a lockdown starts
