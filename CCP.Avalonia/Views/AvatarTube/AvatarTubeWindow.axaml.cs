@@ -1033,7 +1033,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             for (int i = 0; i < _avatarPoses.Length; i++)
                 if (_avatarPoses[i] != null) { _currentPoseIndex = i; break; }
             ShowCurrentPose();
-            foreach (var pose in previousPoses) pose?.Dispose();
+            foreach (var pose in previousPoses) // a set with no art keeps showing the old pose
+                if (!ReferenceEquals(pose, _imgAvatar.Source)) pose?.Dispose();
 
             ApplyAvatarTransform(_currentAvatarSet);
             UpdateTitleDisplay();

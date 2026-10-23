@@ -34,8 +34,10 @@ public partial class AvatarTubeWindow
         if (_avatarSwitchClosed || IsSingleEmoteAvatarMod()) return;
 
         var cancellation = new CancellationTokenSource();
-        _avatarSwitchCancellation?.Cancel();
+        // Swap the field before Cancel: a canceled fade can resume inline inside Cancel().
+        var superseded = _avatarSwitchCancellation;
         _avatarSwitchCancellation = cancellation;
+        superseded?.Cancel();
         _currentAvatarSet = id switch
         {
             CompanionId.OGBambiSprite => 3,
@@ -50,18 +52,28 @@ public partial class AvatarTubeWindow
         ModAvatarLooks.Store(settings.ModAvatarSet, CoreMods.ActiveModId, _currentAvatarSet);
         CoreSettings.Save();
         _poseTimer.Stop();
+        var swapped = false;
         try
         {
             await FadeAvatar(1, 0, cancellation.Token);
             cancellation.Token.ThrowIfCancellationRequested(); // rapid clicks keep only the latest paint
+            // Close detaches the border, which ends the fade without a cancel; never repaint then.
+            if (_avatarSwitchClosed || !IsVisible) return;
             _avatarBorder.Opacity = 0;
             // ponytail: GIF decoding and emotive-portrait skins remain unported. Reuse this head's
             // static pose loader/fallback; do not add a second renderer in the roster.
+            swapped = true;
             ApplyAvatarSet();
             _avatarBorder.Opacity = 1;
             await FadeAvatar(0, 1, cancellation.Token);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // Panic cut the fade-out (not a newer click, not close): the saved set is already the
+            // new one, so jump straight to it rather than leave old art and a stopped rotation.
+            if (!swapped && !_avatarSwitchClosed && _avatarSwitchCancellation is null)
+                ApplyAvatarSet();
+        }
         catch (Exception ex) { Log.Warning(ex, "Roster: avatar switch failed"); }
         finally
         {
@@ -88,8 +100,9 @@ public partial class AvatarTubeWindow
     // not repaint a closed/hidden tube or leave it transparent when the user next shows it.
     private void CancelAvatarSwitch()
     {
-        _avatarSwitchCancellation?.Cancel();
+        var pending = _avatarSwitchCancellation;
         _avatarSwitchCancellation = null;
+        pending?.Cancel();
         _avatarBorder.Opacity = 1;
     }
 

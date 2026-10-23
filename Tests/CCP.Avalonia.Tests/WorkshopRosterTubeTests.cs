@@ -35,15 +35,13 @@ public sealed class WorkshopRosterTubeTests
         {
             CoreSettings.Current.PlayerLevel = 1; // WPF removed level gating
             CoreSettings.Current.CompanionProgressData[companion] = new CompanionProgress { Level = 8 };
-            await tube.SwitchToCompanionAvatarAsync((CompanionId)companion);
+            await Settle(tube.SwitchToCompanionAvatarAsync((CompanionId)companion));
             Assert.Equal(set, tube.CurrentAvatarSet);
             Assert.Equal(set, CoreSettings.Current.SelectedAvatarSet);
             Assert.Equal(set, CoreSettings.Current.ModAvatarSet["roster-static-test"]);
             Assert.True(tube.FindControl<TextBlock>("TxtAvatarLevel")!.IsVisible);
             Assert.Contains("8", tube.FindControl<TextBlock>("TxtAvatarLevel")!.Text);
-            var expected = CoreMods.MakeModAware(CompanionDefinition.GetById((CompanionId)companion)
-                .GetDisplayName(CoreSettings.Current.SlutModeEnabled)).ToUpperInvariant();
-            Assert.Equal(expected, tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
+            Assert.Equal(Title(companion), tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
             Assert.NotNull(tube.FindControl<Image>("ImgAvatar")!.Source);
             Assert.Equal(1, tube.FindControl<Border>("AvatarBorder")!.Opacity);
         });
@@ -56,28 +54,32 @@ public sealed class WorkshopRosterTubeTests
         Assert.False(first.IsCompleted);
         Assert.Equal(oldTitle, tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text); // swap follows fade-out
         var latest = tube.SwitchToCompanionAvatarAsync((CompanionId)4);
-        await Task.WhenAll(first, latest);
+        await Settle(Task.WhenAll(first, latest));
         Assert.Equal(7, tube.CurrentAvatarSet);
         var title = tube.FindControl<TextBlock>("TxtAvatarTitle")!;
         var settled = title.Text;
         var pending = tube.SwitchToCompanionAvatarAsync((CompanionId)2);
         tube.PanicSilence(); // existing tube-speech panic callback also cancels the finite fade
-        await pending;
-        Assert.Equal(settled, title.Text);
+        await Settle(pending);
+        Assert.Equal(5, tube.CurrentAvatarSet); // panic skips the fade, not the saved switch
+        Assert.Equal(5, CoreSettings.Current.SelectedAvatarSet);
+        Assert.Equal(Title(2), title.Text);
+        Assert.NotEqual(settled, title.Text);
+        settled = title.Text;
         Assert.Equal(1, tube.FindControl<Border>("AvatarBorder")!.Opacity);
         pending = tube.SwitchToCompanionAvatarAsync((CompanionId)3);
         tube.Close();
-        await pending;
+        await Settle(pending);
         Assert.Equal(settled, title.Text);
         var closedSet = tube.CurrentAvatarSet;
-        await tube.SwitchToCompanionAvatarAsync((CompanionId)0);
+        await Settle(tube.SwitchToCompanionAvatarAsync((CompanionId)0));
         Assert.Equal(closedSet, tube.CurrentAvatarSet);
     });
 
     [Fact]
     public Task WorkerThreadSwitchMarshalsToTubeDispatcher() => WithTube(async tube =>
     {
-        await Task.Run(() => tube.SwitchToCompanionAvatarAsync((CompanionId)2));
+        await Settle(Task.Run(() => tube.SwitchToCompanionAvatarAsync((CompanionId)2)));
         Assert.Equal(5, tube.CurrentAvatarSet);
         Assert.Equal(1, tube.FindControl<Border>("AvatarBorder")!.Opacity);
     });
@@ -92,7 +94,7 @@ public sealed class WorkshopRosterTubeTests
         var saved = CoreSettings.Current.SelectedAvatarSet;
         var title = tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text;
         CompanionCore.SwitchCompanion((CompanionId)2);
-        await tube.SwitchToCompanionAvatarAsync((CompanionId)2);
+        await Settle(tube.SwitchToCompanionAvatarAsync((CompanionId)2));
         Assert.Equal(2, CoreSettings.Current.ActiveCompanionId);
         Assert.Equal(before, tube.CurrentAvatarSet);
         Assert.Equal(saved, CoreSettings.Current.SelectedAvatarSet);
@@ -151,6 +153,23 @@ public sealed class WorkshopRosterTubeTests
         }
         return Task.CompletedTask;
     });
+
+    private static string Title(int companion) => CoreMods.MakeModAware(CompanionDefinition
+        .GetById((CompanionId)companion).GetDisplayName(CoreSettings.Current.SlutModeEnabled)).ToUpperInvariant();
+
+    // Headless animations only advance on a forced render tick; bound by time, not turns (P73).
+    private static async Task Settle(Task task)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!task.IsCompleted && DateTime.UtcNow < deadline)
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            await Task.Yield();
+        }
+        Assert.True(task.IsCompleted, "avatar switch did not finish within 10 s");
+        await task;
+    }
 
     private static Task WithTube(Func<AvatarTubeWindow, Task> action) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
