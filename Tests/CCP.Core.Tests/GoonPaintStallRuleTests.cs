@@ -18,9 +18,9 @@ public class GoonPaintStallRuleTests
     [InlineData(25, 5.0, 14378, "UiStalled")] // the app's own UI stall age
     public void A_stall_needs_a_healthy_ui_thread(double frozen, double tickGap, long uiStallMs,
         string expected)
-        => Assert.Equal(expected, GoonHostService.PaintStallVerdict(frozen, tickGap, uiStallMs).ToString());
+        => Assert.Equal(expected, GoonHostRules.PaintStallVerdict(frozen, tickGap, uiStallMs).ToString());
 
     [Fact]
     public void The_threshold_is_twenty_seconds()
-        => Assert.Equal(20, GoonHostService.PaintStallSeconds);
+        => Assert.Equal(20, GoonHostRules.PaintStallSeconds);
 }

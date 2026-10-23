@@ -286,6 +286,9 @@ namespace ConditioningControlPanel
                 op.Abort();
                 return (false, null);
             };
+            // The Goon Game match engine moved to Core; it drops UI callbacks once the dispatcher dies.
+            Services.GoonGame.GoonDispatch.ShutdownStarted = () =>
+                Current?.Dispatcher is { } gd && (gd.HasShutdownStarted || gd.HasShutdownFinished);
 
             Services.Deeper.EnhancementResolver.LibraryMatchProvider = (path, type) => EnhancementLibrary?.FindMatch(path, type);
             Services.Deeper.AudioWaveformCache.Decoder = Services.Deeper.MediaDurationProbe.DecodeWaveform;
