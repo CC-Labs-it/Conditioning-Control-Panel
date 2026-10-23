@@ -158,10 +158,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
         }
 
+        /// <remarks>Not a MainWindow-only shim: WPF (AiPermissionsGrid.xaml.cs:107) goes through App.MainWindowRef, so the
+        /// CTA also works in the room preview. Same here: the preview window falls back to the live shell.</remarks>
         private void BtnEffectsLockCta_Click(object? sender, RoutedEventArgs e)
         {
-            if (_isPreview) return;
-            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnGateUnlock_Click(sender, e);
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow ?? Windows.MainShellWindow.Current)?.BtnGateUnlock_Click(sender, e);
         }
 
         /// <summary>WPF MainWindow.Patreon.cs BtnClearChatMemory_Click: confirm, then the brain forgets the
