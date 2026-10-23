@@ -37,6 +37,7 @@ public sealed class GuardedMonoConsumerTests
         var host = new Window { Content = new StackPanel { Children = { fuse, chaster, mood } } };
         var shell = new MainShellWindow();
         var player = new EnhancementPlayerWindow(null, null);
+        var tipHost = new Window();
         try
         {
             foreach (var window in new Window[] { host, shell, player })
@@ -48,6 +49,10 @@ public sealed class GuardedMonoConsumerTests
             fuse.Apply(DescentFusePhase.Clock);
             var sparkTip = Assert.IsType<Border>(ToolTip.GetTip(shell.Named<Grid>("FuseSparkHost")!));
             var railTip = Assert.IsType<Border>(ToolTip.GetTip(fuse));
+            // A closed tip has no parent, so a DynamicResource cannot resolve yet. An open tooltip parents it
+            // under the adorned control; a stand-in host gives it the same app-resource lookup.
+            tipHost.Content = new StackPanel { Children = { sparkTip, railTip } };
+            tipHost.ApplyStyling();
             var labels = fuse.GetLogicalDescendants().OfType<TextBlock>()
                 .Concat(chaster.GetLogicalDescendants().OfType<TextBlock>().Where(t => t.FontSize is 10 or 8.5))
                 .Concat(mood.Children.OfType<TextBlock>().Where(t => t.FontSize != 13))
@@ -68,6 +73,7 @@ public sealed class GuardedMonoConsumerTests
             host.Close();
             shell.Close();
             player.Close();
+            tipHost.Close();
             app.Resources[FontGuard.MonoResourceKey] = original;
         }
         return Task.CompletedTask;

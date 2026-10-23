@@ -295,6 +295,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _bodyImage = this.FindControl<Image>("BodyImage")!;
             _faceLayer = this.FindControl<Canvas>("FaceLayer")!;
             _faceView = this.FindControl<TextBlock>("FaceView")!;
+            // WPF EmiFace.FaceFont runs its chain through FontGuard; the book shares the same guarded family.
+            _faceView.FontFamily = EmiBookWindow.FaceFont;
             _glassCanvas = this.FindControl<Canvas>("GlassCanvas")!;
             _outfitOverImage = this.FindControl<Image>("OutfitOverImage")!;
             _propImage = this.FindControl<Image>("PropImage")!;

@@ -63,6 +63,17 @@ public sealed class FontGuardTests
         Assert.Same(replacement, resources[FontGuard.MonoResourceKey]); // second call really is a no-op
     }
 
+    [Fact]
+    public void EmiFaceChainsDropABrokenConsolasLikeWpfEmiFace()
+    {
+        var guard = new FontGuard(name => { if (name == "Consolas") throw new IOException(); });
+        guard.Verify(new ResourceDictionary(), windows: true);
+        Assert.Equal(new[] { "Noto Sans Mono", "DejaVu Sans Mono", "monospace" },
+            guard.Family("Noto Sans Mono, DejaVu Sans Mono, Consolas, monospace").FamilyNames);
+        Assert.Equal(new[] { "Press Start 2P", "monospace" },
+            guard.Family("avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Consolas, monospace").FamilyNames);
+    }
+
     private sealed class LogSink : ILogEventSink
     {
         internal readonly List<LogEvent> Events = new();

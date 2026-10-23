@@ -101,3 +101,6 @@ Platform/FriendsLanding.cs :: ? "✨" : item.Kind == SendKind.Invite ? "🚪" : 
 
 # --- verbatim imports (Stack rule 4); each follow-up converts the file and deletes its entry ---
 Tours/TutorialService.cs :: * :: verbatim: import (Stack rule 4, trunk 557d9aac3c0aabdedc9280218757373970439ed4); step Icon strings are data mapped via IconMap at render; follow-up tutorials-icons converts the data and removes this exemption
+
+# --- font probes (not render sites) ---
+Platform/FontGuard.cs :: "Segoe MDL2 Assets", "Segoe UI Emoji" :: font: not an icon site - WPF Services/UI/FontGuard.cs probes these installed families for an unreadable file; nothing renders with them

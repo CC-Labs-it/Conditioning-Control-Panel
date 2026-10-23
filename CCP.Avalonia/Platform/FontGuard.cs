@@ -29,6 +29,13 @@ internal sealed class FontGuard
     internal string Sanitize(string? chain) => string.IsNullOrWhiteSpace(chain) ? "Segoe UI"
         : _broken.Count == 0 ? chain : FilterChain(chain, IsBroken);
 
+    /// <summary>WPF FontGuard.Family: the startup guard's view of <paramref name="chain"/>; never throws.</summary>
+    internal FontFamily Family(string chain)
+    {
+        try { return new FontFamily(Sanitize(chain)); }
+        catch { return new FontFamily("Segoe UI"); }
+    }
+
     internal static string FilterChain(string? chain, Func<string, bool> isBroken)
     {
         if (string.IsNullOrWhiteSpace(chain)) return "Segoe UI";

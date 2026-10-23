@@ -333,11 +333,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary><c>EmiFace.PixelFont</c>'s chain, the same string EmiRingWindow uses.</summary>
-        private static readonly FontFamily PixelFont = new("Press Start 2P, Consolas, monospace");
+        private static readonly FontFamily PixelFont = ConditioningControlPanel.Avalonia.Platform.FontGuard.Startup.Family("Press Start 2P, Consolas, monospace");
 
         /// <summary><c>EmiFace.FaceFont</c>'s chain, the same one EmiDeskWindow.axaml carries.</summary>
-        private static readonly FontFamily FaceFont =
-            new("Noto Sans Mono, DejaVu Sans Mono, Consolas, monospace");
+        internal static readonly FontFamily FaceFont =
+            ConditioningControlPanel.Avalonia.Platform.FontGuard.Startup.Family("Noto Sans Mono, DejaVu Sans Mono, Consolas, monospace");
 
         /// <summary>WPF BtnCompleteGuide: the website manual (EmiCodex.OpenManualInBrowser). Test seam.</summary>
         internal static Action OpenManual = ConditioningControlPanel.Avalonia.Views.Windows.Codex.OpenManualInBrowser;
