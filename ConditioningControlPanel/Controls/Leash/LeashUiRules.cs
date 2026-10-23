@@ -353,6 +353,12 @@ public static class LeashUiRules
     /// <summary>After a panic press the gate stands back this long, then returns at the next idle moment.</summary>
     public static readonly TimeSpan PanicSnooze = TimeSpan.FromMinutes(10);
 
+    /// <summary>TRUE when a panic press is an Escape aimed at closing the Ctrl+K palette (the panic ladder's
+    /// rung 2), so the leash part stands aside. Only a physical key press can be that: the voice panic
+    /// ("red", also under Lockdown), the blink stop and the Stop buttons never skip.</summary>
+    public static bool PaletteTakesPanicPress(bool fromKey, bool paletteOpen, bool lockCardOpen, string? panicKey) =>
+        fromKey && paletteOpen && !lockCardOpen && string.Equals(panicKey, "Escape", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The line the panel says when the runner stopped by itself, as a loc key taking
     /// the holder's name. <paramref name="skip"/> is what became of a video that will not play.</summary>
     public static string StopKey(LeashTaskStopped s, PunishKind? kind, LeashSkipResult? skip = null)
