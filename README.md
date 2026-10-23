@@ -5,8 +5,8 @@ A Windows desktop app for visual and audio conditioning: flash images, mandatory
 ![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4?style=flat-square&logo=dotnet)
 ![WPF](https://img.shields.io/badge/WPF-Windows-0078D6?style=flat-square&logo=windows)
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square&logo=windows)
-[![Latest release](https://img.shields.io/github/v/release/CodeBambi/Conditioning-Control-Panel---CSharp-WPF?style=flat-square&color=FF69B4)](https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/latest)
-[![build](https://img.shields.io/github/actions/workflow/status/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/build.yml?branch=main&style=flat-square)](https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/CC-Labs-it/Conditioning-Control-Panel?style=flat-square&color=FF69B4)](https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/latest)
+[![build](https://img.shields.io/github/actions/workflow/status/CC-Labs-it/Conditioning-Control-Panel/build.yml?branch=main&style=flat-square)](https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/workflows/build.yml)
 
 *A CC Labs LLC project* · [cclabs.app](https://cclabs.app) · [Discord](https://discord.gg/YxVAMt4qaZ) · [Patreon](https://www.patreon.com/CodeBambi)
 
@@ -68,7 +68,7 @@ The current tier contents are listed at [cclabs.app](https://cclabs.app). The fu
 - Nothing else. The app ships self-contained, and the installer adds the Visual C++ and WebView2 runtimes if they are missing
 
 ### Install
-1. Download the latest `Setup.exe` from [Releases](https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/latest)
+1. Download the latest `Setup.exe` from [Releases](https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/latest)
 2. Run it and follow the prompts
 3. Launch **Conditioning Control Panel** from the Start menu
 
@@ -76,7 +76,7 @@ Updates are offered inside the app.
 
 ### Build from source
 ```bash
-git clone https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF.git
+git clone https://github.com/CC-Labs-it/Conditioning-Control-Panel.git
 cd Conditioning-Control-Panel---CSharp-WPF
 dotnet build ConditioningControlPanel.sln -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
 dotnet run --project ConditioningControlPanel
