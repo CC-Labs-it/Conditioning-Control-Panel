@@ -46,6 +46,45 @@ export function songCharts({ search = '', devHost = false, songs = null } = {}) 
   return songs.filter((u) => typeof u === 'string' && !u.includes('..') && !u.startsWith('//') && SONG_URL.test(u)).slice(0, 8);
 }
 
+/**
+ * The room origin the lobby's signed song urls must sit on (GET /v2/race/songs, NET.md section 14). A room moved to
+ * another origin changes this line; a local room is passed in by boot (?lobby=...&room=http://127.0.0.1:<port>).
+ */
+export const ROOM_ORIGIN = 'https://glassroad-room.cclabs-race.workers.dev';
+const LOBBY_SONG_PATH = /^\/song\/[a-z0-9][a-z0-9-]{0,47}\/chart\.json$/;
+const SONG_SIG = /^[A-Za-z0-9_-]{43}$/;
+const LOOPBACK = /^(127\.0\.0\.1|localhost)$/;
+
+/** Ask the lobby for songs only when nothing else named one: no charts yet and no `?chart` (`?chart=0` = none). */
+export function wantLobbySongs({ search = '', charts = [] } = {}) {
+  return !(Array.isArray(charts) && charts.length) && !new URLSearchParams(search).has('chart');
+}
+
+/**
+ * The lobby's songs as chart urls to try: each `chartUrl` absolute on `roomOrigin` only (https, or http on loopback
+ * for a local room), path `/song/<id>/chart.json`, an exp still ahead and a 43 char sig; no credentials or hash; at
+ * most 8. Anything else is dropped (a host's own songs keep going through songCharts).
+ */
+export function lobbySongCharts(songs, { roomOrigin = ROOM_ORIGIN, nowMs = Date.now() } = {}) {
+  if (!Array.isArray(songs) || typeof roomOrigin !== 'string') return [];
+  let want;
+  try { want = new URL(roomOrigin); } catch (e) { return []; }
+  if (want.protocol !== 'https:' && !(want.protocol === 'http:' && LOOPBACK.test(want.hostname))) return [];
+  const out = [];
+  for (const s of songs) {
+    const u = s && typeof s.chartUrl === 'string' ? s.chartUrl : '';
+    if (!u || u.length > 512) continue;
+    let p;
+    try { p = new URL(u); } catch (e) { continue; }
+    if (p.origin !== want.origin || p.username || p.password || p.hash || !LOBBY_SONG_PATH.test(p.pathname)) continue;
+    const exp = p.searchParams.get('exp');
+    if (!/^\d{12,14}$/.test(exp || '') || !(Number(exp) > nowMs) || !SONG_SIG.test(p.searchParams.get('sig') || '')) continue;
+    out.push(u);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 /** A host init laid over the defaults (missing fields keep their default). */
 export function mergeInit(base, m = {}) {
   return {

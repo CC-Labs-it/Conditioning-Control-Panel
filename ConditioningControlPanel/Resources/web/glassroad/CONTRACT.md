@@ -226,6 +226,10 @@ canSurface, mediaControls, songs }, identity: { unifiedId, displayName, tier } |
 `..`, at most 8), tried in order until one loads. Web sends `['/glassroad-audio/pink-road/chart.json']`, desktop `[]`
 (the private song never ships in the public repo or the installer). Absent or empty = no song. `?chart=<url>` /
 `?chart=0` and the dev host (8790, its `/private-audio/` list) win over it (`songCharts`).
+When nothing named a song and the page has a lobby link (`caps.net`), the page asks the lobby once for signed song
+urls (`GET /v2/race/songs`, NET.md section 14) and plays them straight from the room origin (`host/bridge.js`
+`lobbySongCharts`, `ROOM_ORIGIN`): a host never relays song bytes, and a desktop or phone host simply keeps sending
+`songs: []`. Such a host's page must be allowed to fetch `https://glassroad-room.cclabs-race.workers.dev` (CORS `*`).
 Browser defaults (unhosted): `gentle.on` from `?gentle=1`, fadeMs 600, riseMs 300, speed 0.5;
 caps platform 'web', net false, relayBase null, texturableRemote false, gamepad true, touch from
 `(pointer: coarse)`, forceRenderer from `?renderer=webgl2|webgpu` else null, songs `[]`, the rest false; identity null.

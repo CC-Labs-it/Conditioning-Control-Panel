@@ -67,6 +67,8 @@ export function createLobbyApi(transport, { timers = globalThis } = {}) {
     claimLink: (token, look, platform) => (LINK_TOKEN.test(token)
       ? call('POST', PREFIX + 'link/claim', { token, ...(look ? { look } : {}), ...(platform ? { platform } : {}) }) : refuse('gone')),
     access: () => call('GET', PREFIX + 'access'),
+    // race songs from our own storage (NET.md section 14): { songs: [{ id, title, chartUrl, exp }] }, signed room urls
+    songs: () => call('GET', PREFIX + 'songs'),
     /** Poll quick until a seat comes (the lobby's retryMs, at least 500 ms) or maxWaitMs passes. */
     async quickMatch({ track, look, maxWaitMs = 60000, isCancelled = () => false } = {}) {
       const t0 = Date.now();
