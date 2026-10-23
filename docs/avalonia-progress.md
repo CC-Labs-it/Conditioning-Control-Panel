@@ -2851,3 +2851,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-feat-fyp-host: +156
 - FYP feed right-click file menu (Open file / Show in folder) on Linux; shared Core FypFileRules for both heads; unsafe/remote/missing ids refused.
 - Review fixes: shared test bootstrap, duplicate WPF test removed, menu-open asserted before panic; rgate 39697255997 green except known RaceTrack flake.
+
+## avalonia-port/wire-feat-video: +414
+- Mandatory-video toy-button attention checks shared via Core binding; Yes/No reset prompt; shared no-videos guidance with pack counts.
+- Review rounds: awaited+logged Test-click run, pack-count test, toy reward haptic asserted, panic leg via scheduler Stop; row stays stub (gaze dwell, interaction queue).
