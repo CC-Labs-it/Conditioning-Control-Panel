@@ -34,6 +34,10 @@ namespace ConditioningControlPanel.Services
         public event EventHandler<string>? AuthenticationFailed;
 
         public PatreonTier CurrentTier => _core.CurrentTier;
+
+        /// <summary>Premium via SubscribeStar alone (Tier 1+ or whitelisted); the canonical gate is
+        /// <see cref="ProviderSubscription.HasPremiumAccess"/>. Main's Inbox lapse rows read this.</summary>
+        public bool HasPremiumAccess => CurrentTier >= PatreonTier.Level1 || IsWhitelisted;
         public bool IsAuthenticated => _core.IsAuthenticated;
         public bool IsActiveSubscriber => _core.IsActive;
         public bool IsVerifying => _core.IsVerifying;

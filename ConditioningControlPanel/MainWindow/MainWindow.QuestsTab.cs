@@ -52,9 +52,7 @@ namespace ConditioningControlPanel
             // a dialog; an empty pool or a finished seat just leaves the card as it was.
             if (App.Quests?.GetRemainingDailyRerolls() > 0) return;
 
-            var hasPatreon = App.Patreon?.HasPremiumAccess == true;
-            var msg = Loc.Get(hasPatreon ? "quest_reroll_daily_none_patron" : "quest_reroll_daily_none_free");
-            MessageBox.Show(msg, Loc.Get("quest_reroll_limit_title"), MessageBoxButton.OK, MessageBoxImage.Information);
+            TellRerollsSpent(weekly: false);
         }
 
         internal void BtnRerollWeekly_Click(object sender, RoutedEventArgs e)
@@ -66,10 +64,37 @@ namespace ConditioningControlPanel
             }
             else
             {
-                var hasPatreon = App.Patreon?.HasPremiumAccess == true;
-                var msg = Loc.Get(hasPatreon ? "quest_reroll_weekly_none_patron" : "quest_reroll_weekly_none_free");
-                MessageBox.Show(msg, Loc.Get("quest_reroll_limit_title"), MessageBoxButton.OK, MessageBoxImage.Information);
+                TellRerollsSpent(weekly: true);
             }
+        }
+
+        /// <summary>
+        /// Out of rerolls. A supporter is told when they come back (nothing to sell). A free
+        /// account gets the same line as a toast with one button to the priced Basic card,
+        /// where the old dialog was a dead end.
+        /// </summary>
+        private void TellRerollsSpent(bool weekly)
+        {
+            if (App.Patreon?.HasPremiumAccess == true)
+            {
+                MessageBox.Show(Loc.Get(weekly ? "quest_reroll_weekly_none_patron" : "quest_reroll_daily_none_patron"),
+                    Loc.Get("quest_reroll_limit_title"), MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            App.Notifications?.Show(Loc.Get(weekly ? "quest_reroll_weekly_none_free" : "quest_reroll_daily_none_free"),
+                NotificationType.Info, TimeSpan.FromSeconds(8), Loc.Get("quest_reroll_see_basic"),
+                () => OpenPricedCard("quest_reroll", 1));
+        }
+
+        /// <summary>
+        /// The priced vault card for a moment outside a padlock (a spent pass, a spent reroll).
+        /// Same split as the padlock button: a patron whose grant died on this PC is sent to
+        /// Reconnect, never sold the tier they hold.
+        /// </summary>
+        internal void OpenPricedCard(string featureKey, int tier)
+        {
+            if (TierGate.ReconnectIsTheAnswer()) { StartPatreonReconnectFromGate(); return; }
+            ShowVaultGate(featureKey, tier);
         }
 
 
