@@ -2,6 +2,7 @@ using System;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Models;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
@@ -39,7 +40,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     ///
     /// PORTED from ConditioningControlPanel/Views/Controls/DailyQuestCard.xaml.cs. Deviations:
     ///  - <c>MotionFx</c> (HoverLift, BarFill, the reduced-motion gate) lives in the WPF head, so
-    ///    the bar is seated directly and the hover glow is attached/detached with no tween.
+    ///    the card runs the same curves on its own stepped timer (MOTION CLOCK below), and the
+    ///    hover glow is the Root border's BoxShadow rather than a DropShadowEffect.
     ///  - <c>FrameworkElement</c> -> <see cref="Control"/>, <c>Visibility</c> -> <c>IsVisible</c>,
     ///    <c>MouseEnter/Leave</c> -> <c>PointerEntered/Exited</c>, <c>ToolTip=</c> ->
     ///    <c>ToolTip.SetTip</c>, <c>App.Logger</c> -> Serilog's static <c>Log</c>.
@@ -80,7 +82,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private double _fraction;
         private bool _hasFraction;
-        private DropShadowEffect? _hoverGlow;
 
         private static readonly IBrush GoldFill = new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00));
         private static readonly IBrush DoneFill = new SolidColorBrush(Color.FromRgb(0x00, 0xE6, 0x76));
@@ -109,7 +110,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _art = this.FindControl<Image>("Art")!;
             _btnReroll = this.FindControl<Button>("BtnReroll")!;
 
-            _track.SizeChanged += (_, _) => ApplyFraction();
+            _track.SizeChanged += (_, _) => ApplyFraction(animate: false);
+            _root.RenderTransform = _liftScale;   // WPF EnsureScale; Root has no transform of its own
             _root.PointerEntered += OnCardPointerEntered;
             _root.PointerExited += OnCardPointerExited;
             _btnReroll.Click += (_, _) => RerollRequested?.Invoke(this, EventArgs.Empty);
@@ -248,21 +250,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (double.IsNaN(fraction)) fraction = 0;
             _fraction = Math.Max(0, Math.Min(1, fraction));
             _hasFraction = true;
-            ApplyFraction();
+            ApplyFraction(animate: true);
         }
 
         /// <summary>
         /// Seat the fill against the track's CURRENT width. Called both from Apply (which can run
         /// before the tab has ever been measured, in which case the track is 0 wide and this is a
-        /// no-op) and from the track's SizeChanged, which is what finally lands it.
-        /// ponytail: MotionFx is NOT coming to Core - it is WPF Storyboard code and Core has no
-        /// UI at all, so "wired when it moves" was never true. The Avalonia shape is a table of
-        /// tween closures stepped off one shared ~16ms DispatcherTimer (CCP.Avalonia/Views/Windows/
-        /// ChaosHudWindow.axaml.cs is the worked example); Animation.RunAsync cannot be used here
-        /// because TransformAnimator seizes the target visual's RenderTransform. The width
-        /// is set directly here, so the bar is correct but never animates.
+        /// no-op) and from the track's SizeChanged, which is what finally lands it. A resize is not
+        /// progress, so that path never tweens. Progress tweens as WPF MotionFx.BarFill: 0.6 s
+        /// QuadraticEase-out, snapped at MotionLevel.Off.
         /// </summary>
-        private void ApplyFraction()
+        private void ApplyFraction(bool animate)
         {
             try
             {
@@ -270,39 +268,132 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 double available = _track.Bounds.Width;
                 if (available <= 0) return;
 
-                _fill.Width = available * _fraction;
+                double to = available * _fraction;
+                double from = double.IsNaN(_fill.Width) ? 0 : _fill.Width;
+
+                if (!animate || !AllowTransitions())
+                {
+                    _bar.Active = false;
+                    _fill.Width = to;
+                    return;
+                }
+
+                if (Math.Abs(to - from) < 0.5) return;
+                Start(_bar, from, to, BarMs, quadOut: true);
             }
             catch (Exception ex) { Log.Debug("DailyQuestCard bar: {E}", ex.Message); }
         }
 
         // ---- INTERACTION ---------------------------------------------------------
 
-        // ponytail: MotionFx.HoverLift is WPF Storyboard code and stays head-side; the Avalonia
-        // shape is the shared-DispatcherTimer tween named above. The reduced-motion gate itself is
-        // NOT blocked - CoreSettings.Current.MotionLevel is in Core today. What is missing is
-        // Core. The glow still attaches and clears; it just arrives at full strength instead of
-        // blooming over 180ms.
+        // WPF: MotionFx.HoverLift(Root) - scale to 1.02 over 150 ms QuadraticEase-out, snapped (not
+        // skipped) at Off - plus a gold glow that blooms to blur 18 / opacity 0.5 over 180 ms and
+        // fades over 160 ms, skipped at Off. WPF's glow is a DropShadowEffect attached only while
+        // hovered; here it is the Root border's own BoxShadow (no Effect on a tile, no offscreen
+        // layer), cleared once the fade lands so nothing is drawn at rest - the same contract.
         private void OnCardPointerEntered(object? sender, PointerEventArgs e)
         {
             try
             {
-                _hoverGlow ??= new DropShadowEffect
-                {
-                    Color = Color.FromRgb(0xFF, 0xD7, 0x00),
-                    OffsetX = 0,
-                    OffsetY = 0,
-                    BlurRadius = 18,
-                    Opacity = 0.5,
-                };
-                _root.Effect = _hoverGlow;
+                if (!AllowTransitions()) { _lift.Active = false; SetLift(HoverLiftScale); return; }
+                Start(_lift, _liftScale.ScaleX, HoverLiftScale, HoverMs, quadOut: true);
+                Start(_glow, _glowLevel, 1, GlowInMs, quadOut: false);
             }
             catch (Exception ex) { Log.Debug("DailyQuestCard hover in: {E}", ex.Message); }
         }
 
         private void OnCardPointerExited(object? sender, PointerEventArgs e)
         {
-            try { _root.Effect = null; }
+            try
+            {
+                if (!AllowTransitions())
+                {
+                    _lift.Active = _glow.Active = false;
+                    SetLift(1.0);
+                    SetGlow(0);
+                    return;
+                }
+                Start(_lift, _liftScale.ScaleX, 1.0, HoverMs, quadOut: true);
+                Start(_glow, _glowLevel, 0, GlowOutMs, quadOut: false);
+            }
             catch (Exception ex) { Log.Debug("DailyQuestCard hover out: {E}", ex.Message); }
+        }
+
+        // ---- MOTION CLOCK --------------------------------------------------------
+
+        // ponytail: one FrameClock per card (frame-locked to the window's shared frame source, 16 ms
+        // like WPF's render-rate DoubleAnimation), running only while a tween is in flight and
+        // stopped when the last one lands: these are 150-600 ms interaction tweens, not an ambient
+        // loop, so no BeatLoop. RunAsync is out: it cannot target a Transform.
+        private const double HoverLiftScale = 1.02;
+        private const double HoverMs = 150, GlowInMs = 180, GlowOutMs = 160, BarMs = 600;
+        private const double GlowBlur = 18, GlowOpacity = 0.5;
+
+        /// <summary>The animation clock. Tests swap in a stepped clock and call <see cref="Step"/>.</summary>
+        internal static TimeProvider Time = TimeProvider.System;
+
+        private sealed class Tween
+        {
+            public double From, To, Ms;
+            public long Started;
+            public bool Active, QuadOut;
+
+            public double Sample()
+            {
+                double t = Math.Min(Time.GetElapsedTime(Started).TotalMilliseconds / Ms, 1);
+                if (t >= 1) Active = false;
+                return From + (To - From) * (QuadOut ? 1 - (1 - t) * (1 - t) : t);
+            }
+        }
+
+        private readonly Tween _lift = new(), _glow = new(), _bar = new();
+        private readonly ScaleTransform _liftScale = new(1, 1);
+        private double _glowLevel;
+        private FrameClock? _clock;
+
+        private static bool AllowTransitions()
+        {
+            try { return AmbientFxCanvas.Env.AllowTransitions; }
+            catch { return true; }   // settings not up yet: motion on, as WPF
+        }
+
+        private void Start(Tween tw, double from, double to, double ms, bool quadOut)
+        {
+            (tw.From, tw.To, tw.Ms, tw.QuadOut) = (from, to, ms, quadOut);
+            tw.Started = Time.GetTimestamp();
+            tw.Active = true;
+            if (_clock == null)
+            {
+                _clock = new FrameClock(this) { Interval = TimeSpan.FromMilliseconds(16) };
+                _clock.Tick += (_, _) => Step();
+            }
+            _clock.Start();
+        }
+
+        /// <summary>One frame at <see cref="Time"/>'s now; stops the timer once nothing is in flight.</summary>
+        internal void Step()
+        {
+            try
+            {
+                if (_lift.Active) SetLift(_lift.Sample());
+                if (_glow.Active) SetGlow(_glow.Sample());
+                if (_bar.Active) _fill.Width = Math.Max(0, _bar.Sample());
+            }
+            catch (Exception ex) { _lift.Active = _glow.Active = _bar.Active = false; Log.Debug("DailyQuestCard motion: {E}", ex.Message); }
+            if (!_lift.Active && !_glow.Active && !_bar.Active) _clock?.Stop();
+        }
+
+        private void SetLift(double scale) => _liftScale.ScaleX = _liftScale.ScaleY = scale;
+
+        private void SetGlow(double level)
+        {
+            _glowLevel = Math.Max(0, Math.Min(1, level));
+            // Faded out: detach, so a resting card carries no shadow at all.
+            _root.BoxShadow = _glowLevel <= 0 ? default : new BoxShadows(new BoxShadow
+            {
+                Blur = GlowBlur * _glowLevel,
+                Color = Color.FromArgb((byte)Math.Round(255 * GlowOpacity * _glowLevel), 0xFF, 0xD7, 0x00),
+            });
         }
     }
 }

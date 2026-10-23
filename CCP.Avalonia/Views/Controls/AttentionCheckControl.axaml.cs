@@ -1,14 +1,12 @@
 using System;
 using System.Linq;
-using System.Threading;
-using Avalonia.Animation;
-using Avalonia.Animation.Easings;
+using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using Avalonia.Styling;
+using ConditioningControlPanel.Avalonia.Helpers;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
@@ -35,7 +33,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     {
         private readonly Ellipse _dotRingFg;
         private readonly ScaleTransform _dotRingScale;
-        private CancellationTokenSource? _pulse;
+        private readonly Border _dotRingGlow;
+        private readonly ScaleTransform _glowScale;
+        private BeatLoop? _pulse;
 
         public AttentionCheckControl()
         {
@@ -46,6 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // rejects x:Name on a ScaleTransform outright (AVLN2000, only a StyledElement can be
             // named), so the WPF markup's x:Name="DotRingScale" could not be kept.
             _dotRingScale = ((TransformGroup)_dotRingFg.RenderTransform!).Children.OfType<ScaleTransform>().First();
+            _dotRingGlow = this.FindControl<Border>("DotRingGlow")!;
+            _glowScale = (ScaleTransform)_dotRingGlow.RenderTransform!;
         }
 
         /// <summary>
@@ -63,55 +65,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             double visible = progress * units;
             double gap = Math.Max(0.001, units - visible);
             _dotRingFg.StrokeDashArray = new AvaloniaList<double> { visible, gap };
+            // WPF's glow was the ring's own DropShadowEffect: nothing drawn, nothing glows.
+            _dotRingGlow.Opacity = progress;
         }
 
         public void StartPulse()
         {
             StopPulse();
-            // WPF's Storyboard + RepeatBehavior.Forever + AutoReverse is Avalonia's
-            // IterationCount.Infinite + PlaybackDirection.Alternate; same 420ms sine ease.
-            var sb = new Animation
+            // WPF's 420 ms sine AutoReverse pulse, driven by the existing shared 30 Hz clock.
+            // ponytail: keep this dormant control dormant; WPF removed its service's UI/start path.
+            _pulse ??= new BeatLoop(this, seconds =>
             {
-                Duration = TimeSpan.FromMilliseconds(420),
-                IterationCount = IterationCount.Infinite,
-                PlaybackDirection = PlaybackDirection.Alternate,
-                Easing = new SineEaseInOut(),
-                Children =
-                {
-                    new KeyFrame
-                    {
-                        Cue = new Cue(0d),
-                        Setters =
-                        {
-                            new Setter(ScaleTransform.ScaleXProperty, 1.0),
-                            new Setter(ScaleTransform.ScaleYProperty, 1.0),
-                        },
-                    },
-                    new KeyFrame
-                    {
-                        Cue = new Cue(1d),
-                        Setters =
-                        {
-                            new Setter(ScaleTransform.ScaleXProperty, 1.18),
-                            new Setter(ScaleTransform.ScaleYProperty, 1.18),
-                        },
-                    },
-                },
-            };
-            _pulse = new CancellationTokenSource();
-            // Target the ELLIPSE, not the transform: Avalonia's TransformAnimator casts its target
-            // to Visual and then finds the matching transform inside the visual's RenderTransform.
-            // Passing the ScaleTransform compiles and throws InvalidCastException at run time.
-            _ = sb.RunAsync(_dotRingFg, _pulse.Token);
+                SetScale(1.0 + 0.18 * BeatLoop.Breath(seconds, 0.42));
+            });
+            _pulse.Start();
+        }
+
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            StopPulse();
+            base.OnDetachedFromVisualTree(e);
         }
 
         public void StopPulse()
         {
-            _pulse?.Cancel();
-            _pulse?.Dispose();
-            _pulse = null;
-            _dotRingScale.ScaleX = 1.0;
-            _dotRingScale.ScaleY = 1.0;
+            _pulse?.Stop();
+            SetScale(1.0);
+        }
+
+        private void SetScale(double scale)
+        {
+            _dotRingScale.ScaleX = _dotRingScale.ScaleY = scale;
+            _glowScale.ScaleX = _glowScale.ScaleY = scale;
         }
     }
 }

@@ -541,9 +541,13 @@ public class ChasterLadderTests : IDisposable
         public readonly List<bool> OptIns = new();
         public bool ServerPostDays;
         public int Mes;
+        public volatile bool NoCard;
+        public Action? DuringVerify;
+        public Action? DuringMe;
         public Task<LadderVerify?> VerifyAsync(string lockId, string accessToken, CancellationToken ct = default)
         {
-            Verifies.Add((lockId, accessToken));
+            lock (Verifies) Verifies.Add((lockId, accessToken));
+            DuringVerify?.Invoke();
             return Task.FromResult<LadderVerify?>(new LadderVerify(true, 42, null));
         }
         public readonly List<IReadOnlyDictionary<string, LadderClaim>?> Claims = new();
@@ -574,7 +578,9 @@ public class ChasterLadderTests : IDisposable
         }
         public Task<RaffleCard?> MeAsync(CancellationToken ct = default)
         {
-            Mes++;
+            Interlocked.Increment(ref Mes);
+            DuringMe?.Invoke();
+            if (NoCard) return Task.FromResult<RaffleCard?>(null);
             return Task.FromResult<RaffleCard?>(new RaffleCard("2026-10", 31, 12, new[] { 1, 2 }, 900, 25, 111600, ServerPostDays, false, null));
         }
     }
@@ -701,6 +707,151 @@ public class ChasterLadderTests : IDisposable
         Assert.Single(ladder.OptIns);
         Assert.Equal(2, ladder.Mes);
     }
+
+    [Fact]
+    public async Task The_card_is_kept_for_the_billboard_and_announced()
+    {
+        var ladder = new FakeLadder();
+        using var service = Make(ladder);
+        var raised = 0;
+        service.RaffleChanged += () => raised++;
+        Assert.Null(service.LastRaffleCard);
+
+        var card = await service.RaffleAsync();
+
+        Assert.Same(card, service.LastRaffleCard);
+        Assert.Equal(new[] { 1, 2 }, service.LastRaffleCard!.Days);
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public async Task A_landed_push_reads_the_card_once_and_a_throttled_one_never()
+    {
+        // The raffle month runs (the page's read noted it), so a push that verifies afresh
+        // follows with exactly one /me; a push inside the 15 minutes verifies nothing and reads
+        // no card.
+        _utc = new DateTime(2026, 10, 12, 10, 0, 0, DateTimeKind.Utc);
+        _store.Tokens = new ChasterStoredTokens("AT", "RT", _utc.AddHours(1));
+        var ladder = new FakeLadder();
+        var chaster = new Handler { Answer = _ => new HttpResponseMessage(HttpStatusCode.NoContent) };
+        using var service = Make(ladder, chaster);
+        await service.RaffleAsync();
+        Assert.Equal(1, Volatile.Read(ref ladder.Mes));
+
+        _utc = _utc.AddMinutes(16);
+        var raised = 0;
+        service.RaffleChanged += () => Interlocked.Increment(ref raised);
+        service.NoteSeconds("typo", 60);
+        Assert.Equal(SettleOutcome.Pushed, await service.SettleAsync());
+        for (var i = 0; i < 100 && Volatile.Read(ref ladder.Mes) < 2; i++) await Task.Delay(20);
+        Assert.Equal(2, Volatile.Read(ref ladder.Mes));
+        Assert.Equal(1, Volatile.Read(ref raised));
+
+        _utc = _utc.AddMinutes(1);
+        service.NoteSeconds("typo", 60);
+        Assert.Equal(SettleOutcome.Pushed, await service.SettleAsync());
+        await Task.Delay(300);
+        Assert.Equal(2, Volatile.Read(ref ladder.Mes));
+        lock (ladder.Verifies) Assert.Equal(2, ladder.Verifies.Count);
+    }
+
+    // ---- a CCP account change (review of #2480) ----
+    // The card comes from /chaster/raffle/me under the CCP account; the Chaster link is this PC's
+    // and survives a sign-out. A kept card must not outlive the account it was read for.
+
+    [Fact]
+    public async Task An_account_change_drops_the_card_and_the_verify_and_the_next_verify_runs_at_once()
+    {
+        var ladder = new FakeLadder();
+        using var service = Make(ladder);
+        await service.RaffleAsync();
+        Assert.NotNull(service.LastRaffleCard);
+        Assert.NotNull(service.LastLadderVerify);
+        var epoch = service.RaffleEpoch;
+        var raised = 0;
+        service.RaffleChanged += () => raised++;
+
+        service.ForgetRaffle();
+
+        Assert.Null(service.LastRaffleCard);
+        Assert.Null(service.LastLadderVerify);
+        Assert.Equal(epoch + 1, service.RaffleEpoch);
+        Assert.Equal(1, raised);
+        Assert.Null(RaffleReadingFor(service));
+
+        // same minute: the last account's verify does not hold the new one back 15 minutes
+        await service.RaffleAsync();
+        lock (ladder.Verifies) Assert.Equal(2, ladder.Verifies.Count);
+        Assert.NotNull(service.LastRaffleCard);
+    }
+
+    [Fact]
+    public async Task The_pages_read_with_no_card_drops_the_kept_one()
+    {
+        var ladder = new FakeLadder();
+        using var service = Make(ladder);
+        await service.RaffleAsync();
+        Assert.NotNull(service.LastRaffleCard);
+        var raised = 0;
+        service.RaffleChanged += () => raised++;
+
+        ladder.NoCard = true;
+        Assert.Null(await service.RaffleAsync());
+
+        Assert.Null(service.LastRaffleCard);
+        Assert.Equal(1, raised);
+    }
+
+    [Fact]
+    public async Task A_read_that_began_under_the_last_account_is_dropped_when_it_lands()
+    {
+        var ladder = new FakeLadder();
+        using var service = Make(ladder);
+
+        ladder.DuringMe = service.ForgetRaffle;
+        Assert.Null(await service.RaffleAsync());
+        Assert.Null(service.LastRaffleCard);
+
+        ladder.DuringMe = null;
+        ladder.DuringVerify = service.ForgetRaffle;
+        Assert.Null(await service.RaffleAsync());
+        Assert.Null(service.LastLadderVerify);
+        Assert.Null(service.LastRaffleCard);
+
+        ladder.DuringVerify = null;
+        Assert.NotNull(await service.RaffleAsync());
+        Assert.NotNull(service.LastLadderVerify);
+        lock (ladder.Verifies) Assert.Equal(3, ladder.Verifies.Count); // the dropped verify held nothing back
+    }
+
+    [Fact]
+    public async Task An_account_change_lets_a_booking_ask_the_raffle_month_again()
+    {
+        // No card (the server has no raffle running for this account): one booking asks once a
+        // run, a second does not, and a new account asks afresh.
+        var ladder = new FakeLadder { NoCard = true };
+        using var service = Make(ladder);
+        async Task Settled(int mes)
+        {
+            for (var i = 0; i < 100 && Volatile.Read(ref ladder.Mes) < mes; i++) await Task.Delay(20);
+            await Task.Delay(100);
+        }
+
+        service.NoteSeconds("typo", 60);
+        await Settled(1);
+        Assert.Equal(1, Volatile.Read(ref ladder.Mes));
+        service.NoteSeconds("typo", 60);
+        await Settled(2);
+        Assert.Equal(1, Volatile.Read(ref ladder.Mes));
+
+        service.ForgetRaffle();
+        service.NoteSeconds("typo", 60);
+        await Settled(2);
+        Assert.Equal(2, Volatile.Read(ref ladder.Mes));
+    }
+
+    private static Services.Billboard.Providers.RaffleReading? RaffleReadingFor(ChasterService service) =>
+        Services.Billboard.Providers.RaffleReading.From(service.LastRaffleCard, service.LastLadderVerify, Utc);
 
     [Fact]
     public async Task No_raffle_api_is_no_card()
