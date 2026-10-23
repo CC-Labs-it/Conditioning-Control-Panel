@@ -189,7 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // the Studio rack's right-click QuickToggle. The rings repaint from HookWallRings.
         //
         // ponytail: RefreshMosaicTierBadges, RefreshMysteryTile and SetTierBadge still need
-        // App.Patreon's tier state; NoteDashboardToggleUsed's caption counter is not ported.
+        // App.Patreon's tier state.
 
         /// <summary>The persisted flag behind a wall key. Unknown key = false.</summary>
         internal static bool IsWallFeatureOn(string key)
@@ -253,6 +253,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (RefuseIfSessionFeatureLocked($"card:{key}")) return;
             SetWallFeature(key, !IsWallFeatureOn(key));
+            var s = CoreSettings.Current;
+            // WPF NoteDashboardToggleUsed: stop saving once the gesture is learned.
+            if (s.DashboardToggleHintUses < 3)
+            {
+                s.DashboardToggleHintUses++;
+                CoreSettings.Save();
+                SettingsPage?.RefreshClickPreference();
+            }
         }
 
         /// <summary>WPF RefreshWallActiveStates (MainWindow.Presets.cs:1404): the ring on every wall
@@ -260,6 +268,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshWallActiveStates()
         {
             if (SettingsPage is not { } dash) return;
+            dash.RefreshClickPreference();
+            dash.RefreshV2Badges();
             var s = CoreSettings.Current;
             dash.CardFlash.IsActive = s.FlashEnabled;
             dash.CardSubliminal.IsActive = s.SubliminalEnabled;

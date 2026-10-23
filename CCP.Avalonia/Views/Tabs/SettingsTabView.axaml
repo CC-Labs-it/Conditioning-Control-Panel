@@ -484,9 +484,34 @@
                        TextWrapping="Wrap" Margin="0,0,0,6"/>
           </StackPanel>
         </ScrollViewer>
-        <!-- ponytail: WPF docks the "Click tips" ClickChoice popup in row 1 here
-             (SettingsTabView.xaml:349, InvertDashboardClicks); not ported in this layer -
-             see the shell-favorites-rail row. -->
+        <Border Grid.Row="1" Margin="8,0,8,0" Padding="0,5,0,7"
+                BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0">
+          <Grid>
+            <Button x:Name="ClickChoiceAnchor" FontSize="11" FontWeight="SemiBold" Padding="2,8" Cursor="Hand"
+                    Background="Transparent" Foreground="{DynamicResource TextLightBrush}" BorderThickness="0"
+                    Click="OpenClickChoice" PointerEntered="HoverClickChoice" PointerExited="ScheduleClickChoiceClose">
+              <TextBlock Text="{loc:Str dash_click_choice}" TextWrapping="Wrap" TextAlignment="Center"/>
+            </Button>
+            <Popup x:Name="ClickChoicePopup" PlacementTarget="{Binding #ClickChoiceAnchor}"
+                   Placement="Left" HorizontalOffset="-6" IsLightDismissEnabled="False"
+                   ShouldUseOverlayLayer="True" Opened="ClickChoiceOpened" Closed="ClickChoiceClosed">
+              <Border x:Name="ClickChoiceBody" Width="290" Padding="18" CornerRadius="12"
+                      Background="#FF1B1B30" BorderBrush="{DynamicResource SecondaryBrush}" BorderThickness="1"
+                      PointerEntered="KeepClickChoiceOpen" PointerExited="ScheduleClickChoiceClose">
+                <StackPanel>
+                  <TextBlock Text="{loc:Str dash_click_choice}" FontSize="17" FontWeight="Bold"
+                             Foreground="{DynamicResource PinkBrush}" Margin="0,0,0,10"/>
+                  <TextBlock x:Name="ClickChoiceDescription" FontSize="13" LineHeight="20"
+                             Foreground="White" TextWrapping="Wrap" Margin="0,0,0,14"/>
+                  <CheckBox x:Name="InvertDashboardClicks" Content="{loc:Str dash_click_invert}"
+                            Foreground="White" FontSize="13" Cursor="Hand" IsCheckedChanged="ClickChoiceChanged"/>
+                  <TextBlock Text="{loc:Str dash_click_pages_pin}" FontSize="12" LineHeight="18"
+                             Foreground="#CCCCDF" TextWrapping="Wrap" Margin="0,14,0,0"/>
+                </StackPanel>
+              </Border>
+            </Popup>
+          </Grid>
+        </Border>
       </Grid>
     </Border>
       </Grid>
@@ -620,6 +645,10 @@
                   </TransformGroup>
                 </Rectangle.RenderTransform>
               </Rectangle>
+              <TextBlock x:Name="DashToggleHint" Text="{loc:Str dash_toggle_hint}"
+                         VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                         Margin="12,0,12,8" FontSize="10" Foreground="{DynamicResource TextMutedBrush}"
+                         TextAlignment="Center" TextWrapping="Wrap" IsHitTestVisible="False"/>
             </Grid>
           </Border>
 
