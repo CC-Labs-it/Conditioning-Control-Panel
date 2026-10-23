@@ -123,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // actually loaded never starts the timer, which is the WPF rule verbatim.
         private readonly DispatcherTimer _poseTimer;
         private int _currentPoseIndex;
-        private readonly int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
+        private int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
         private Bitmap?[] _avatarPoses = new Bitmap?[4];
 
         // The bubble's auto-hide. One timer, replaced per bubble; the hover hold re-arms it at 1s.
@@ -1132,6 +1132,27 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             "avatar_title_platinum_puppet",       // Set 6
             "avatar_title_bambi_cow",             // Set 7
         };
+
+        /// <summary>WPF SwitchToCompanionAvatar (AvatarTubeWindow.Avatar.cs:819) + the static branch of
+        /// SwitchToAvatarSet (:395): a roster switch puts the companion's set on the tube and saves it,
+        /// globally and per mod. The companion itself is already switched by the caller, so the
+        /// set->companion coupling is not re-fired. All sets are unlocked (WPF IsAvatarSetUnlocked).
+        /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
+        public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
+        {
+            // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
+            // so the mapping lives once. No set -> set 1 (BambiSprite's default).
+            int set = 1;
+            for (int n = 3; n <= 7; n++)
+                if (CompanionForAvatarSet(n) == companionId) { set = n; break; }
+            _currentAvatarSet = set;
+            var s = CoreSettings.Current;
+            s.SelectedAvatarSet = set;
+            ConditioningControlPanel.Services.Companion.ModAvatarLooks.Store(s.ModAvatarSet, CoreMods.ActiveModId, set);
+            CoreSettings.Save();
+            _poseTimer.Stop();
+            ApplyAvatarSet();
+        });
 
         /// <summary>The persona an avatar set belongs to; null for sets 1-2, which are generic
         /// sprites with no companion behind them. From AvatarTubeWindow.Avatar.cs.</summary>
