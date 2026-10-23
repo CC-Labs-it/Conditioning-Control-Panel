@@ -54,7 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    seam; <c>App.IsUpdateDialogActive</c> is <see cref="Platform.AppUpdater.IsUpdateDialogActive"/>
     ///    and <c>MainWindow.IsStartupDialogShowing</c> is the shell's twin, set by the first-run
     ///    wizard and the welcome-back offer. A manually opened What's New / season recap does not
-    ///    hold it, as in WPF (only RunModal sets it); their startup callers are not on this head.
+    ///    hold it, as in WPF (only RunModal sets it); startup What's New runs through StartupLadder.
     ///  - Shown through <c>ShowDialogSafe</c>, so a tray-hidden shell does not throw and
     ///    <c>_opening</c> clears when the card closes.
     ///  - The One Account card's CTA is live: <c>Launcher.LaunchUriAsync</c> stands in for
@@ -78,6 +78,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private FeatureIntroPopup(FeatureIntroContent content)
         {
             AvaloniaXamlLoader.Load(this);
+            Opened += (_, _) => _live.Add(this);
+            Closed += (_, _) => _live.Remove(this);
             ApplyContent(content);
 
             this.FindControl<Button>("BtnDismiss")!.Click += (_, _) => TryClose();
@@ -104,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Set between queueing a card and opening it, so a double-click queues one card.</summary>
         private static bool _opening;
+        private static int _showGeneration;
 
         /// <summary>
         /// Pacing gate: a curious first-day user clicking through every tab must not eat a modal
@@ -130,7 +133,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Test seam: forget the pacing clock, the door budget and the latches.</summary>
         internal static void ResetForTests()
         {
+            _showGeneration++;
             _opening = false;
+            _remoteMediaClaimed = false;
+            StopRemoteMediaRetry();
             _lastShownUtc = DateTime.MinValue;
             _doorSlotsSpentThisLaunch.Clear();
             _settling.Clear();
@@ -198,6 +204,68 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        private static readonly HashSet<FeatureIntroPopup> _live = new();
+        private static bool _remoteMediaClaimed;
+        private static System.Threading.ITimer? _remoteMediaRetry;
+        private static Window? _remoteMediaOwner;
+
+        private static void StopRemoteMediaRetry()
+        {
+            _remoteMediaRetry?.Dispose();
+            _remoteMediaRetry = null;
+            _remoteMediaOwner = null;
+        }
+
+        /// <summary>WPF App.OfferRemoteMediaSource/FlushPendingRemoteMediaOffer: one budget across empty-media
+        /// sites, claimed when opened; a startup modal holds it for a 500ms re-check, unspent.</summary>
+        internal static void OfferRemoteMediaSource(Window? owner = null)
+        {
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                var generation = _showGeneration;
+                Dispatcher.UIThread.Post(() => { if (generation == _showGeneration) OfferRemoteMediaSource(owner); });
+                return;
+            }
+            try
+            {
+                if (CoreSettings.Service == null) return;
+                if (_remoteMediaClaimed || !string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase))
+                { StopRemoteMediaRetry(); return; }
+                owner ??= MainShellWindow.Current;
+                if (owner == null || Platform.AppUpdater.IsUpdateDialogActive || MainShellWindow.IsStartupDialogShowing)
+                {
+                    _remoteMediaOwner ??= owner;
+                    var generation = _showGeneration;
+                    _remoteMediaRetry ??= Platform.StartupLadder.Time.CreateTimer(_ =>
+                        Dispatcher.UIThread.Post(() => { if (generation == _showGeneration) OfferRemoteMediaSource(_remoteMediaOwner); }), null,
+                        TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
+                    return;
+                }
+                StopRemoteMediaRetry();
+                Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "intro:remote-media", Glyph = FeatureIntros.All["remotemedia"].Glyph,
+                    Title = "Media without the download",
+                    Summary = "Your folders are empty - she can stream from the online pool instead.",
+                    Open = () =>
+                    {
+                        if (_remoteMediaClaimed) return;
+                        _remoteMediaClaimed = true;
+                        ShowIfFirstTime("remotemedia", owner);
+                    },
+                });
+            }
+            catch (Exception ex) { Log.Warning(ex, "RemoteMedia: offer failed"); }
+        }
+
+        internal static void StopForPanic()
+        {
+            _showGeneration++;
+            _opening = false;
+            StopRemoteMediaRetry();
+            foreach (var popup in new List<FeatureIntroPopup>(_live)) popup.TryClose();
+        }
+
         private static void ShowCore(string key, Window? owner, bool paced, string? doorKey)
         {
             try
@@ -215,10 +283,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (doorKey != null && _doorSlotsSpentThisLaunch.Contains(doorKey)) return;
 
                 _opening = true;
+                var generation = _showGeneration;
                 Dispatcher.UIThread.Post(async () =>
                 {
                     try
                     {
+                        if (generation != _showGeneration) return;
                         var live = CoreSettings.Current;
                         if (live.SeenFeatureIntros.Contains(key)) return;
 
@@ -246,7 +316,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                     finally
                     {
-                        _opening = false;
+                        if (generation == _showGeneration) _opening = false;
                     }
                 }, DispatcherPriority.Normal);
             }

@@ -290,17 +290,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Tier of a live rise waiting for the celebration pass, 0 when none (WPF _pendingRiseTier).</summary>
         private int _pendingRiseTier;
+        private readonly global::ConditioningControlPanel.Avalonia.Controls.EventBurstLayer _tierRiseBurst = new();
+        internal int TierRiseBursts => _tierRiseBurst.Count;
 
-        /// <summary>WPF OnEntitlementTierRaised (Patreon.cs:1177): arms the immediate celebration. ponytail: the
-        /// profile-bubble fanfare (RefreshProfileBubble, FireBurstAt, FlashProfileBubbleGlow) and PremiumSpark's
-        /// Burst are not on this head (lane wire-win-feature-intro-b-next).</summary>
-        private void OnEntitlementTierRaised(int tier) => _pendingRiseTier = tier;
+        /// <summary>WPF OnEntitlementTierRaised: arm the card and dress the profile in the tier colour.</summary>
+        private void OnEntitlementTierRaised(int tier)
+        {
+            _pendingRiseTier = tier;
+            try
+            {
+                var colour = global::Avalonia.Media.Color.Parse(tier >= 2 ? "#5EE6FF" : "#FFD700");
+                RefreshProfileBubble();
+                if (Named<global::Avalonia.Controls.Button>("BtnProfileBubble") is { } bubble)
+                    _tierRiseBurst.Fire(bubble, 60, color: colour);
+                FlashProfileBubbleGlow(colour);
+            }
+            catch (System.Exception ex) { Serilog.Log.Debug("Tier rise fanfare failed: {Error}", ex.Message); }
+        }
 
-        /// <summary>WPF CanCelebrateNow (Patreon.cs:1166). ponytail: WPF's LauncherHost.AwaitingGame clause has no
-        /// twin here (no game-host park on this head).</summary>
+        /// <summary>WPF CanCelebrateNow: game ownership comes from this head's existing panic surface registry.
+        /// ponytail: LauncherHost's AwaitingGame handoff has no twin; live game ownership is checked here.</summary>
         private bool CanCelebrateNow()
             => IsVisible && WindowState != global::Avalonia.Controls.WindowState.Minimized
                && !CoreSession.IsSessionRunning
+               && !PanicSurfaces.AnyOwnsTheScreen()
                && !CoreTutorial.IsActive
                && !Platform.AppUpdater.IsUpdateDialogActive && !IsStartupDialogShowing;
 

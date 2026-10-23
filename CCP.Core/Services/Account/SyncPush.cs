@@ -71,6 +71,8 @@ namespace ConditioningControlPanel.Services
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
+        /// <summary>Head receives the heartbeat's folded tier; applies rises and schedules UI on its own thread.</summary>
+        public Action<int?>? HeartbeatTierRead { get; set; }
         public DateTime? LastSyncTime { get; private set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
@@ -282,7 +284,14 @@ namespace ConditioningControlPanel.Services
         {
             var s = CoreSettings.Current;
             if (!SignedIn(s)) return Task.FromResult(false);
-            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(s.UnifiedId!, true, _inSession());
+            var id = s.UnifiedId!;
+            var token = s.AuthToken;
+            return new V2AuthService(() => s, _handler).SendHeartbeatAsync(id, true, _inSession(), body =>
+            {
+                // A response in flight during logout/account switching belongs to the old account.
+                if (!ReferenceEquals(s, CoreSettings.Current) || !SignedIn(s) || s.UnifiedId != id || s.AuthToken != token) return;
+                HeartbeatTierRead?.Invoke(EntitlementTierRule.ParseHeartbeatTier(body));
+            });
         }
     }
 }

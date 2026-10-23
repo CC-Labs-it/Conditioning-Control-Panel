@@ -103,7 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF ShowPossessionRulesIfFirstTime (Lab.cs:1100): with possession armed, the rules card once,
         /// through the presenter (an Inbox row when quiet); the flag is spent when the card opens, not when the row
-        /// is posted. ponytail: WPF also fires App.Bark.NotifyPossessionRules(); there is no bark service on this head.</summary>
+        /// is posted. The guaranteed rules bark runs when offered, including the quiet Inbox path (WPF Lab.cs:1132).</summary>
         internal void ShowPossessionRulesIfFirstTime()
         {
             try
@@ -123,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         FeatureIntroPopup.ShowIfFirstTime("possession", this);
                     },
                 });
+                Platform.BarkHead.Engine?.Raise(Services.Possession.PossessionBarkTriggers.Rules, guaranteed: true);
             }
             catch (System.Exception ex) { Serilog.Log.Warning(ex, "Possession: failed to show the first-run rules"); }
         }

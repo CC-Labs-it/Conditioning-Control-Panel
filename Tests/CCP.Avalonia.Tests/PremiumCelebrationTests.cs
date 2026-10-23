@@ -40,6 +40,9 @@ public sealed class PremiumCelebrationTests
             var s = CoreSettings.Current;
             s.Welcomed = true;                      // no first-run wizard holding the presenter
             s.HasAcceptedAgeVerification = true;
+            s.WhatMovedCardShown = 1; // unrelated relocation card already read in these fixtures
+            s.LastSeenVersion = CoreReleaseContent.AppVersion; // this fixture tests tiers, with no upgrade owed
+            s.PatreonTier = 0; // each live-rise test starts below the purchased tier
             // Every card spent except the tier celebrations, so no other launch card holds the presenter.
             foreach (var k in FeatureIntros.All.Keys) if (!s.SeenFeatureIntros.Contains(k)) s.SeenFeatureIntros.Add(k);
             s.SeenFeatureIntros.Remove(TierCelebration.KeyT1);
@@ -132,6 +135,53 @@ public sealed class PremiumCelebrationTests
         Assert.Null(Celebration(opened, TierCelebration.KeyT2));
         Assert.DoesNotContain(TierCelebration.KeyT2, CoreSettings.Current.SeenFeatureIntros);
     });
+    [Fact]
+    public void LiveRiseDuringAGameWaitsUnspentInTheInbox() => Run(false, (shell, opened, grant) =>
+    {
+        var old = PanicSurfaces.All;
+        try
+        {
+            PanicSurfaces.All = new[] { new PanicSurfaces.Surface("test-game", _ => { }, () => true) };
+            CoreSettings.Current.UnifiedId = "game-test";
+            CoreSettings.Current.AuthToken = "test-token";
+            grant(true, false);
+            EntitlementTierSync.Offer(1, "test");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(opened.OfType<FeatureIntroPopup>());
+            Assert.True(StartupLadder.Inbox.Contains("intro:" + TierCelebration.KeyT1));
+            Assert.DoesNotContain(TierCelebration.KeyT1, CoreSettings.Current.SeenFeatureIntros);
+        }
+        finally { PanicSurfaces.All = old; }
+    });
+
+    [Theory]
+    [InlineData(1, "#FFD700")]
+    [InlineData(2, "#5EE6FF")]
+    public void LiveRiseGlowsInTheTierColourAndBurstsTheHeader(int tier, string hex) => Run(false, (shell, opened, grant) =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.MotionLevel, s.PerformanceMode);
+        try
+        {
+            s.MotionLevel = MotionLevel.Full;
+            s.PerformanceMode = false;
+            s.UnifiedId = "rise-test";
+            s.AuthToken = "test-token";
+            grant(true, tier >= 2);
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            var activeAtRise = shell.IsActive;
+            EntitlementTierSync.Offer(tier, "test");
+            Dispatcher.UIThread.RunJobs();
+            var ring = shell.Named<global::Avalonia.Controls.Shapes.Ellipse>("ProfileBubbleGlowRing")!;
+            Assert.Equal(global::Avalonia.Media.Color.Parse(hex), ((global::Avalonia.Media.ISolidColorBrush)ring.Stroke!).Color);
+            var spark = shell.Named<global::ConditioningControlPanel.Avalonia.Controls.PremiumSpark>("HeaderPremiumSpark")!;
+            Assert.Contains(spark.Field.Alive, m => m.Kind == global::ConditioningControlPanel.Controls.Header.MoteKind.Burst);
+            Assert.Equal(activeAtRise ? 1 : 0, shell.TierRiseBursts);
+        }
+        finally { (s.MotionLevel, s.PerformanceMode) = old; }
+    });
+
     /// <summary>WPF OnEntitlementTierRaised + MaybeShowPremiumCelebration's rise half (Patreon.cs:1132-1142): a tier
     /// bought on the site (EntitlementTierSync.Offer) is stored, and celebrated AT ONCE, even on an install that holds
     /// the pre-tier key (a rise is a new purchase); the launch re-check alone would owe nothing there.</summary>

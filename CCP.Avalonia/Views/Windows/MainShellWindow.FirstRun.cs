@@ -25,12 +25,8 @@
 //     CCP.Core/Services/EmiDesk/ carries the book's layout and text, not the desk - so the HOLD
 //     has nothing to hold back on this head. Nothing talks over the wizard here either way.
 //   * `QueueEmiKnock(knockSeenVersion)`, listed as dropped in MainShellWindow.axaml.cs already.
-//   * The rest of the `else` branch (ShowWhatsNewIfNeeded / TryPresentSeasonRecap). Returning users
-//     get no mod popup: WPF removed it (MainWindow.xaml.cs:587-588). MainShellWindow.Marquee.cs documents
-//     why those two are still stubs: they need App.Achievements, App.Seasons and App.xaml.cs's startup-dialog queue. One
-//     consequence worth naming: LastSeenVersion is therefore only ever stamped by the first-run
-//     gate below, never on an upgrade launch. That is pre-existing and this file does not
-//     worsen it - the fix is ShowWhatsNewIfNeeded, not a second stamp here.
+//   * TryPresentSeasonRecap: WPF now performs silent monthly bookkeeping (seasons retired).
+//     What's New is wired through StartupLadder by MainShellWindow.FeatureIntroStartup.cs.
 
 using System;
 using Avalonia.Threading;
@@ -56,9 +52,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Nav rework (WPF MainWindow.xaml.cs:537/589): the one-time What moved card, upgrades only.
                 OfferWhatMovedIfNeeded(freshInstall: fresh);
                 if (fresh) Opened += OnFirstRunShellOpened;
+                else if (CoreSettings.Service != null) ShowWhatsNewIfNeeded();
+                Closed += (_, _) => StopStartupModalsForPanic();
                 // WPF's else branch (MainWindow.xaml.cs:602-612) no longer opens a mod picker:
                 // mods are offered by the first-run wizard and the Mod Manager only.
-                else if (CoreSettings.Service != null && CoreSettings.Current.Welcomed
+                if (!fresh && CoreSettings.Service != null && CoreSettings.Current.Welcomed
                          && !CoreSettings.Current.HasAcceptedAgeVerification)
                     Opened += OnAgeGateShellOpened;
             }
@@ -84,7 +82,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Opened -= OnAgeGateShellOpened;
             Dispatcher.UIThread.Post(async () =>
             {
-                var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
+                bool ok;
+                // WPF resolves the age gate before startup notes; this head's gate is asynchronous.
+                IsStartupDialogShowing = true;
+                try { ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true); }
+                finally { IsStartupDialogShowing = false; }
                 if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
                 CoreSettings.Save();

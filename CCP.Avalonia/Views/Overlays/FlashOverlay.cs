@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     if (!_warnedEmpty) Log.Warning("Flash: no images found in {Path}", ImagesPath());
                     _warnedEmpty = true;
+                    Windows.FeatureIntroPopup.OfferRemoteMediaSource();
                     return;
                 }
 

@@ -394,6 +394,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             AmbientFxCanvas.Env.MotionGateChanged += OnGate;
             if (Platform.AccountSeed.Patreon is { } p) p.TierChanged += OnTierChanged;
             if (Platform.AccountSeed.SubscribeStar is { } s) s.TierChanged += OnTierChanged;
+            Platform.EntitlementTierSync.TierRaised += OnTierRaised;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
             _watch.Restart();
             Refresh();
@@ -410,6 +411,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             AmbientFxCanvas.Env.MotionGateChanged -= OnGate;
             if (Platform.AccountSeed.Patreon is { } p) p.TierChanged -= OnTierChanged;
             if (Platform.AccountSeed.SubscribeStar is { } s) s.TierChanged -= OnTierChanged;
+            Platform.EntitlementTierSync.TierRaised -= OnTierRaised;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             StopLoops();
             _watch.Reset();
@@ -427,6 +429,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
         }
 
         private void OnGate() => Dispatcher.UIThread.Post(Refresh);
+        // WPF PremiumSpark.OnTierRaised: refresh before the one-shot burst, on the UI thread.
+        private void OnTierRaised(int tier) => Dispatcher.UIThread.Post(() => { Refresh(); Burst(); });
+
         private void OnTierChanged(object? sender, PatreonTier tier) => Dispatcher.UIThread.Post(Refresh);
         private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
         {

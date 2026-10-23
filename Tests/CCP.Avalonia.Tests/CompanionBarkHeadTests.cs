@@ -74,6 +74,33 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Fact]
+    public void PossessionRulesBarkEvenWhileTheCardWaitsInTheInbox() => WithSeamsRestored(s =>
+    {
+        var old = (BarkHead.Engine, s.LockdownPossessionEnabled, s.LockdownPossessionIntroSeen);
+        var rule = Rule(ConditioningControlPanel.Services.Possession.PossessionBarkTriggers.Rules, "the rules");
+        rule.Chance = 0; // guaranteed rules bypass the random roll, as WPF NotifyPossessionRules does
+        BarkHead.Engine = Seeded(rule, out var spoken);
+        StartupLadder.ResetForTests();
+        StartupLadder.BeginFirstLaunchQuiet(System.TimeSpan.FromMinutes(10));
+        var shell = new MainShellWindow();
+        try
+        {
+            s.LockdownPossessionEnabled = true;
+            s.LockdownPossessionIntroSeen = false;
+            shell.ShowPossessionRulesIfFirstTime();
+            Assert.Equal("the rules", spoken());
+            Assert.True(StartupLadder.Inbox.Contains("intro:possession"));
+            Assert.False(s.LockdownPossessionIntroSeen);
+        }
+        finally
+        {
+            shell.Close();
+            (BarkHead.Engine, s.LockdownPossessionEnabled, s.LockdownPossessionIntroSeen) = old;
+            StartupLadder.ResetForTests();
+        }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },

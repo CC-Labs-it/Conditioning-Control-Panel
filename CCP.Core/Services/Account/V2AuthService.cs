@@ -729,16 +729,22 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Send heartbeat to update online status
         /// </summary>
-        public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false)
+        public async Task<bool> SendHeartbeatAsync(string unifiedId, bool isActive = true, bool inSession = false, Action<string>? acceptedBody = null)
         {
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/heartbeat");
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/heartbeat");
                 AddAuthHeader(request);
                 request.Content = new StringContent(SyncBody.Heartbeat(unifiedId, isActive, inSession, CoreReleaseContent.AppVersion), Encoding.UTF8, "application/json");
-                var response = await _http.SendAsync(request);
+                using var response = await _http.SendAsync(request);
 
                 if (await TryHandleMergedAsync(response)) return false;
+                if (response.IsSuccessStatusCode && acceptedBody != null)
+                {
+                    // WPF heartbeat's second reading: malformed/missing optional data never fails the ping.
+                    try { acceptedBody(await response.Content.ReadAsStringAsync()); }
+                    catch (Exception ex) { Log.Debug("Heartbeat reading skipped: {Error}", ex.Message); }
+                }
                 return response.IsSuccessStatusCode;
             }
             catch

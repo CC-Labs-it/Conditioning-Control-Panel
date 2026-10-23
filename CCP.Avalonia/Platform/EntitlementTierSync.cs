@@ -3,8 +3,7 @@
 // EntitlementTierRule decides; a lower server tier is logged and never applied).
 // Feeds on this head: the focus refresh (OnAppFocused, MainShellWindow Activated) and the profile load
 // (AccountSeed.LoadProfileCoreAsync, WPF ProfileSyncService read-before-write :1109, via Raised).
-// ponytail: the heartbeat's second reading (WPF ProfileSyncService :751) is not here: Core SyncPush does not
-// read the heartbeat body yet (lane wire-win-feature-intro-b-next).
+// The heartbeat's second reading (WPF ProfileSyncService :751) comes through SyncPush.HeartbeatTierRead.
 
 using System;
 using System.Threading;

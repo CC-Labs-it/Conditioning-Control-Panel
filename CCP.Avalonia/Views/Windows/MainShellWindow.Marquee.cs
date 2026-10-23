@@ -25,11 +25,9 @@
 // actually keeps it honest.
 //
 // STILL BLOCKED, each naming what it needs rather than guessing at "when X moves to Core":
-//   ShowOgWelcomePopup / TryPresentSeasonRecap / ShowWhatsNewIfNeeded - App.Achievements,
-//     App.Seasons and the startup dialog queue in ConditioningControlPanel/App.xaml.cs. The
-//     dialogs themselves DO exist here (CCP.Avalonia/Views/Dialogs/WhatsNewDialog.axaml.cs,
-//     Views/Controls/SeasonRecapCard); what is missing is the "has this launch already shown a
-//     modal" arbitration those read from App.
+//   ShowOgWelcomePopup - its achievement gate is not wired here.
+//   ShowWhatsNewIfNeeded is wired in MainShellWindow.FeatureIntroStartup.cs through StartupLadder.
+//   TryPresentSeasonRecap no longer opens a WPF window: seasons retired; monthly bookkeeping only.
 //   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
 //     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
 //   _serverAnnouncementShownThisLaunch - only the intake nudge reads it.
@@ -67,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>
         /// True while a startup modal owns the screen. FeatureIntroPopup reads this to refuse to
         /// stack a card on a modal. Set around the first-run wizard and the welcome-back offer;
-        /// WPF's other startup modals (What's New, season recap) have no startup caller here yet.
+        /// startup What's New uses the same flag through StartupLadder's awaited modal turn.
         /// </summary>
         public static bool IsStartupDialogShowing { get; set; }
 

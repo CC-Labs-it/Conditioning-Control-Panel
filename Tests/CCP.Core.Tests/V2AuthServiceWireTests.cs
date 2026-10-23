@@ -59,6 +59,7 @@ public sealed class V2AuthServiceWireTests : IDisposable
         public HttpStatusCode Status = HttpStatusCode.OK;
         public string Body = "{\"success\":true}";
         public Exception? Throw;
+        public Action? BeforeReply;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
@@ -68,6 +69,7 @@ public sealed class V2AuthServiceWireTests : IDisposable
             var body = r.Content == null ? "" : await r.Content.ReadAsStringAsync(ct);
             Seen.Add($"{r.Method} {r.RequestUri!.AbsoluteUri}\n{string.Join("\n", headers)}\n\n{body.Replace(Environment.NewLine, "\n")}");
             if (Throw != null) throw Throw;
+            BeforeReply?.Invoke();
             return new HttpResponseMessage(Status) { Content = new StringContent(Body) };
         }
     }
@@ -106,6 +108,51 @@ public sealed class V2AuthServiceWireTests : IDisposable
             Post("/v2/auth/device/authorize", "{\n  \"unified_id\": \"u_abc123\",\n  \"client\": \"ccp-desktop\"\n}", true),
         };
         Assert.Equal(expected, _fake.Seen);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.OK, true)]
+    [InlineData(HttpStatusCode.Unauthorized, false)]
+    [InlineData(HttpStatusCode.Conflict, false)]
+    public async Task HeartbeatTierReadingOnlyUsesAcceptedBodies(HttpStatusCode status, bool accepted)
+    {
+        _fake.Status = status;
+        _fake.Body = "{\"effective_tier\":2}";
+        int? reading = null;
+        Assert.Equal(accepted, await Client().SendHeartbeatAsync("u_abc123", acceptedBody:
+            body => reading = EntitlementTierRule.ParseHeartbeatTier(body)));
+        Assert.Equal(accepted ? 2 : (int?)null, reading);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HeartbeatOffersTheTierOnlyToTheSameSignedInAccount(bool accountChanged)
+    {
+        var oldService = CoreSettings.ServiceProvider;
+        var oldSignedIn = CoreAccount.IsLoggedInProvider;
+        try
+        {
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            CoreAccount.IsLoggedInProvider = () => true;
+            var s = service.Current;
+            s.OfflineMode = false;
+            s.UnifiedId = "heartbeat-account";
+            s.AuthToken = "test-token";
+            _fake.Body = "{\"effective_tier\":2}";
+            if (accountChanged) _fake.BeforeReply = () => s.UnifiedId = "another-account";
+            int? reading = null;
+            var push = new SyncPush(() => Array.Empty<string>(), () => false, _fake)
+                { HeartbeatTierRead = tier => reading = tier };
+            Assert.True(await push.HeartbeatAsync());
+            Assert.Equal(accountChanged ? (int?)null : 2, reading);
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = oldService;
+            CoreAccount.IsLoggedInProvider = oldSignedIn;
+        }
     }
 
     [Fact]
