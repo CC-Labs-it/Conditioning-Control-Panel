@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>WPF KillStaleInstances (App.xaml.cs:4058); tests swap it so nothing real is killed.</summary>
         internal static Func<int> KillStale = KillStaleInstances;
         static readonly TimeSpan LegacyTakeoverWait = TimeSpan.FromSeconds(8);   // WPF App.xaml.cs:1862
-        static readonly TimeSpan StaleTakeoverWait = TimeSpan.FromSeconds(3);    // WPF App.xaml.cs:1914
+        internal static TimeSpan StaleTakeoverWait = TimeSpan.FromSeconds(3);    // WPF App.xaml.cs:1914; tests shorten it
 
         readonly Mutex _mutex;
         readonly bool _owned;
@@ -108,6 +108,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try { return proc.MainModule?.FileName; } catch { return null; }
         }
 
+        /// <summary>The mutex is per profile (SandboxSuffix), so the kill is too: a sandboxed run never kills the
+        /// user's app or another sandbox, nor the other way round. Linux reads the target's /proc environ and skips
+        /// it when unreadable; other OSes cannot read it, so only an unsandboxed run (WPF's case) may kill there.</summary>
+        internal static bool SameProfile(string? ourDir, byte[]? theirEnviron, bool environReadable)
+        {
+            ourDir ??= "";
+            if (!environReadable) return ourDir.Length == 0;
+            if (theirEnviron == null) return false;
+            const string key = "CCP_USERDATA_DIR=";
+            string theirs = "";
+            foreach (var entry in Encoding.UTF8.GetString(theirEnviron).Split('\0'))
+                if (entry.StartsWith(key, StringComparison.Ordinal)) { theirs = entry[key.Length..]; break; }
+            return string.Equals(theirs, ourDir, StringComparison.Ordinal);
+        }
+
         /// <summary>WPF App.xaml.cs:4058-4113: terminate every OTHER process running our exact executable;
         /// returns how many were actually terminated. Each verdict is logged.</summary>
         static int KillStaleInstances()
@@ -116,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             try
             {
                 string? self = Normalize(Environment.ProcessPath);
+                string? ourDir = Environment.GetEnvironmentVariable("CCP_USERDATA_DIR");
                 if (!IsAppExecutable(self))
                 {
                     Serilog.Log.Warning("[LIFECYCLE] Takeover aborted: we run {Self}, not the app executable, so no other process can be confirmed to be this build", self);
@@ -133,6 +149,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         if (!IsSameBuild(self, other))
                         {
                             Serilog.Log.Warning("[LIFECYCLE] Takeover skipped pid {Pid}: it runs {Other}, we run {Self}", id, other ?? "(unreadable)", self);
+                            continue;
+                        }
+                        byte[]? environ = null;
+                        if (OperatingSystem.IsLinux()) try { environ = File.ReadAllBytes($"/proc/{id}/environ"); } catch (Exception) { }
+                        if (!SameProfile(ourDir, environ, OperatingSystem.IsLinux()))
+                        {
+                            Serilog.Log.Warning("[LIFECYCLE] Takeover skipped pid {Pid}: not provably the same profile (CCP_USERDATA_DIR)", id);
                             continue;
                         }
                         proc.Kill();

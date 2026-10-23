@@ -35,9 +35,11 @@ namespace CCP.Avalonia.Tests
         {
             var savedKill = SingleInstance.KillStale;
             var savedAck = SingleInstance.ShowAckTimeoutMs;
+            var savedWait = SingleInstance.StaleTakeoverWait;
             int kills = 0;
             SingleInstance.KillStale = () => { Interlocked.Increment(ref kills); return 1; };
             SingleInstance.ShowAckTimeoutMs = 500;
+            SingleInstance.StaleTakeoverWait = TimeSpan.FromMilliseconds(100);
             using var wedge = new ManualResetEventSlim();
             try
             {
@@ -95,11 +97,29 @@ namespace CCP.Avalonia.Tests
                 wedge.Set();
                 SingleInstance.KillStale = savedKill;
                 SingleInstance.ShowAckTimeoutMs = savedAck;
+                SingleInstance.StaleTakeoverWait = savedWait;
             }
         }
 
         /// <summary>WPF's kill fails closed (App.xaml.cs:4041-4057): only our exact, readable executable path is a
         /// target, and a host shared by unrelated processes (dotnet, testhost) never kills anything.</summary>
+        /// <summary>The kill is per profile like the mutex: a sandbox (kc, tests) never kills the user's app or
+        /// another sandbox running the same binary, and an unreadable profile is never a target.</summary>
+        [Fact]
+        public void TheStaleKillNeverCrossesAProfile()
+        {
+            static byte[] Env(params string[] vars) => System.Text.Encoding.UTF8.GetBytes(string.Join('\0', vars) + "\0");
+            Assert.True(SingleInstance.SameProfile(null, Env("HOME=/home/u"), true));                         // real app, real app
+            Assert.True(SingleInstance.SameProfile("/s/a", Env("HOME=/h", "CCP_USERDATA_DIR=/s/a"), true));   // same sandbox
+            Assert.False(SingleInstance.SameProfile("/s/a", Env("HOME=/home/u"), true));                      // sandbox -> real app
+            Assert.False(SingleInstance.SameProfile(null, Env("CCP_USERDATA_DIR=/s/a"), true));               // real app -> sandbox
+            Assert.False(SingleInstance.SameProfile("/s/a", Env("CCP_USERDATA_DIR=/s/b"), true));             // other sandbox
+            Assert.False(SingleInstance.SameProfile("/s/a", Env("XCCP_USERDATA_DIR=/s/a"), true));            // not the variable
+            Assert.False(SingleInstance.SameProfile(null, null, true));                                       // unreadable: skip
+            Assert.False(SingleInstance.SameProfile("/s/a", null, false));                                    // no environ, sandboxed: never
+            Assert.True(SingleInstance.SameProfile(null, null, false));                                       // no environ, real app: WPF
+        }
+
         [Fact]
         public void TheStaleKillOnlyTargetsThisExactBuild()
         {
