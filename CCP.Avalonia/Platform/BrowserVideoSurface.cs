@@ -165,6 +165,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         v.onloadedmetadata=meta; v.ondurationchange=meta;
         v.onplaying=()=>send({type:'playing'}); v.onended=()=>send({type:'ended'});
         v.onerror=()=>send({type:'error'});
+        document.addEventListener('pointerdown',()=>send({type:'pointer'}),true);
         window.addEventListener('keydown',e=>{e.preventDefault(); if(!e.repeat)
           send({type:'key',key:e.key,alt:e.altKey});},true);
         v.src=c.url; v.play().catch(()=>send({type:'error'})); return true;

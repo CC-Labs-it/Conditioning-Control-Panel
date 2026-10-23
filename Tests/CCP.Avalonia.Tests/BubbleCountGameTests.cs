@@ -155,6 +155,156 @@ public sealed class BubbleCountGameTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Queued_end_and_spawn_callbacks_cannot_revive_a_closed_or_panicked_game(bool panic) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            _ => game.Completed++, () => game.Skipped++);
+        var window = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = window.Browser!;
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        Send(browser, "playing");
+        Send(browser, "ended"); // queued at the moment panic/native close arrives
+        var spawn = typeof(BubbleCountWindow).GetMethod("SpawnBubbleAt", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() => spawn.Invoke(window, new object[] { .5, .5, 120 }));
+        if (panic) { BubbleCountWindow.ForceCloseAll(); BubbleCountWindow.ForceCloseAll(); }
+        else window.Close();
+        await BubbleCountWindow.Teardown;
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Send(browser, "ended"); Send(browser, "error");
+        Assert.Empty(BubbleCountWindow.OpenWindows);
+        Assert.Empty(BubbleCountResultWindow.OpenWindows);
+        Assert.Empty(ActiveBubbles(window));
+        Assert.False(BrowserVideoSurface.SessionActive);
+        Assert.Equal(0, game.Completed);
+        Assert.Equal(panic ? 0 : 1, game.Skipped); // panic belongs to the scheduler's ForceCleanup
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Close_completion_waits_for_bounded_teardown_and_panic_cancels_it(bool panic) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            _ => game.Completed++, () => game.Skipped++);
+        var window = Assert.Single(BubbleCountWindow.OpenWindows);
+        var clock = new NativeVideoLifetimeTests.Clock();
+        var safety = new NativeVideoSafety(clock);
+        var lifetime = new NativeVideoLifetime(safety, () => { }, clock);
+        // A fake constructor remains blocked while native-close and panic compete for completion.
+        using var release = new System.Threading.ManualResetEventSlim();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startup = lifetime.RunNative(() => { entered.SetResult(); release.Wait(); });
+        var field = typeof(BubbleCountWindow).GetField("_native", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var native = Activator.CreateInstance(field.FieldType, nonPublic: true)!;
+        field.FieldType.GetField("Lifetime", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(native, lifetime);
+        field.SetValue(null, native);
+        try
+        {
+            await entered.Task;
+            window.Close();
+            Assert.Empty(BubbleCountWindow.OpenWindows);
+            Assert.Equal(0, game.Skipped);
+            Assert.True(lifetime.Armed);
+            if (panic) { BubbleCountWindow.ForceCloseAll(); BubbleCountWindow.ForceCloseAll(); }
+            clock.Advance(500);
+            await BubbleCountWindow.Teardown;
+            Assert.Equal(panic ? 0 : 1, game.Skipped);
+            Assert.Equal(0, game.Completed);
+            Assert.Equal(1, safety.QuarantinedCount);
+            Assert.False(lifetime.Armed);
+        }
+        finally { release.Set(); await startup; }
+    });
+
+    [Fact]
+    public Task Native_poison_skips_strict_once_but_does_not_block_browser_games() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var previous = BubbleCountWindow.NativeSafety;
+        var gate = BrowserVideoGate.EngineAccepts;
+        try
+        {
+            BubbleCountWindow.NativeSafety = new NativeVideoSafety(TimeProvider.System);
+            BubbleCountWindow.NativeSafety.Poison();
+            BrowserVideoGate.EngineAccepts = (_, _) => false;
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+                _ => game.Completed++, () => game.Skipped++);
+            Assert.Equal(1, game.Skipped);
+            Assert.Equal(0, game.Completed);
+            Assert.Empty(BubbleCountWindow.OpenWindows);
+            Assert.Null(BubbleCountWindow.Sink);
+            BrowserVideoGate.EngineAccepts = gate;
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+                _ => game.Completed++, () => game.Skipped++);
+            Assert.NotNull(Assert.Single(BubbleCountWindow.OpenWindows).Browser);
+            Assert.Equal(1, game.Skipped);
+        }
+        finally { BubbleCountWindow.NativeSafety = previous; BrowserVideoGate.EngineAccepts = gate; }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Clicking_game_restacks_every_active_bubble_without_making_game_click_through(bool browserClick) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, false,
+            _ => game.Completed++, () => game.Skipped++);
+        var window = Assert.Single(BubbleCountWindow.OpenWindows);
+        var previous = CountBubble.Restack;
+        var calls = new List<(TopLevel Bubble, TopLevel Owner)>();
+        CountBubble.Restack = (bubble, owner) => { calls.Add((bubble, owner)); return true; };
+        try
+        {
+            var first = new CountBubble(null, 120, 10, 10, new Random(1), null, window);
+            var second = new CountBubble(null, 120, 20, 20, new Random(2), null, window);
+            var disposed = new CountBubble(null, 120, 30, 30, new Random(3), null, window);
+            var secondary = new BubbleCountWindow(game.Clip, BubbleCountScheduler.Difficulty.Easy, false,
+                _ => game.Completed++, isPrimary: false);
+            typeof(BubbleCountWindow).GetField("_useBrowser", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(secondary, true);
+            secondary.Show();
+            var third = new CountBubble(null, 120, 40, 40, new Random(4), null, secondary);
+            ActiveBubbles(secondary).Add(third);
+            ActiveBubbles(window).AddRange(new[] { first, second, disposed });
+            disposed.Dispose();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); // settle layout before real pointer routing
+            calls.Clear();
+            var clicked = browserClick ? secondary : window;
+            if (browserClick)
+            {
+                secondary.Browser!.View.OnNavigationCompleted(new Uri("about:blank"));
+                Send(secondary.Browser, "pointer");
+            }
+            else
+            {
+                window.MouseDown(new Point(50, 50), MouseButton.Left);
+                window.MouseUp(new Point(50, 50), MouseButton.Left);
+            }
+            Assert.Equal(new[] { (first.Window as TopLevel, clicked as TopLevel),
+                (second.Window as TopLevel, clicked as TopLevel), (third.Window as TopLevel, clicked as TopLevel) }, calls);
+            Assert.True(window.IsHitTestVisible);
+            window.Close();
+            calls.Clear();
+            first.RestackAbove(window);
+            Assert.Empty(calls);
+        }
+        finally { CountBubble.Restack = previous; }
+        return Task.CompletedTask;
+    });
+
+    private static List<CountBubble> ActiveBubbles(BubbleCountWindow window) =>
+        (List<CountBubble>)typeof(BubbleCountWindow).GetField("_activeBubbles", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+
     private static void Send(BrowserVideoSurface surface, string type, double durationMs = 0) =>
         surface.View.OnWebMessage(JsonSerializer.Serialize(new { session = surface.SessionId, type, durationMs }));
 
@@ -286,6 +436,8 @@ public sealed class BubbleCountGameTests
                     Assert.Empty(BubbleCountWindow.OpenWindows);
                     Assert.Null(BubbleCountWindow.Sink);
 
+                    await BubbleCountWindow.Teardown;
+
                     // Strict with NO live listener (#875): the panic key must escape, not trap.
                     BubbleCountWindow.PanicListenerLive = () => false;
                     w = await Open(strict: true);
@@ -293,6 +445,7 @@ public sealed class BubbleCountGameTests
                     Assert.False(b.IsBusy, "no listener: the panic key force-stops a strict game");
                     Assert.Empty(BubbleCountWindow.OpenWindows);
                     Assert.Empty(host.Messages);                          // a stop, not a WRONG! retry
+                    await BubbleCountWindow.Teardown;
                 });
             }
             finally

@@ -105,6 +105,20 @@ internal static class Win32Overlay
         return SetClickThrough(window, hwnd, through);
     }
 
+    internal static void DenyClickActivation(TopLevel window)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        Win32Properties.AddWndProcHookCallback(window, NoClickRaise);
+        window.Closed += (_, _) => Win32Properties.RemoveWndProcHookCallback(window, NoClickRaise);
+    }
+
+    private static IntPtr NoClickRaise(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg != 0x0021) return IntPtr.Zero; // WM_MOUSEACTIVATE
+        handled = true;
+        return new IntPtr(3); // MA_NOACTIVATE: preserve the click, deny the activation/raise.
+    }
+
     private static StrongBox<bool> Track(TopLevel window) => Wanted.GetValue(window, w =>
     {
         var box = new StrongBox<bool>();

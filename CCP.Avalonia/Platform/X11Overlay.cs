@@ -314,6 +314,12 @@ internal static class X11Overlay
     /// stalls every window's frames and the UI thread 1-2 s (measured, overlay-first-frame-perf).</summary>
     internal static uint OpacityCardinal(double alpha) => Math.Max(1u, (uint)(Math.Clamp(alpha, 0, 1) * uint.MaxValue));
 
+    internal static void DenyClickActivation(TopLevel window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out _)) Win32Overlay.DenyClickActivation(window);
+        // X11 window managers own activation; the game re-stacks its live bubbles on pointer input.
+    }
+
     /// <summary>Stacks <paramref name="window"/> immediately above <paramref name="sibling"/> -
     /// the analogue of <c>SetWindowPos(hwnd, hwndInsertAfter, SWP_NOACTIVATE)</c>, and what holds
     /// the ~15 Chaos overlay classes in their fixed internal order.
