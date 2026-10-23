@@ -78,13 +78,14 @@ export function createEngine(ctx, out, feel) {
   }
 
   let on = false;
+  const layersOut = { idle: 0, cruise: 0, air: 0 };   // engineLayers fills it in place every frame
   function update(speedPct, flags = {}) {
     const maxPct = feel.get('speed.maxPct');
     const p = Math.max(0, Math.min(speedPct || 0, maxPct));
     if (!on) { on = true; glide(padGain.gain, SOUND.padGain, 0.8); }
     if (rec) {
       const tc = mixGet(feel, 'engGlideS');
-      const w = engineLayers(p, flags, feel), rate = semisToRate(enginePitchSemis(p, flags, feel));
+      const w = engineLayers(p, flags, feel, layersOut), rate = semisToRate(enginePitchSemis(p, flags, feel));
       const road = flags.onRoad === false ? 0.7 : 1;
       for (const k of LAYERS) { glide(rec.v[k].gain, w[k] * rec.v[k].level * road, tc); glide(rec.v[k].rate, rate, tc); }
       glide(rec.lp.frequency, engineCutHz(p, flags, feel), flags.boosting ? feel.get('boost.riseS') : feel.get('boost.tailTcS'));

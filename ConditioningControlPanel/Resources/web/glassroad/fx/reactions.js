@@ -162,7 +162,7 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     if (pm.waitS > 0) pm.waitS = Math.max(0, pm.waitS - dt);   // the old palette lingers one beat
     else if (pm.t < 1) pm.t = Math.min(1, pm.t + dt / Math.max(fx.paletteS, 1e-3));
     if (pm.t >= 1 && pm.base) pm.base = null;
-    const sh = shake.update(dt);
+    const sh = shake.update(dt, sides.length > 0);
     if (sides.length && (gentle.on || feel.get('gentle.on'))) sides.length = 0;
     state.shake[0] = sh[0] + (sides.length ? sideStep(sides, dt) : 0); state.shake[1] = sh[1]; state.shake[2] = sh[2];
   }

@@ -15,7 +15,8 @@
  * lobby card counts down on server time, the race goes at the room's startAt, pause only coasts your own kart
  * (the sim keeps running under the steer assist), and the results come from the room's finish. Lobby transport:
  * desktop host relay (caps.net on desktop), else a direct fetch to caps.relayBase; dev only (127.0.0.1 pages):
- * ?lobby=http://127.0.0.1:8811&uid=<id>&name=<n> talks to a local race-local.mjs lobby with the fake identity.
+ * ?lobby=http://127.0.0.1:8811&uid=<id>&name=<n> talks to a local race-local.mjs lobby with the fake identity
+ * (&tier=N also goes to the lobby as x-dev-tier). ?r=<token>: a friend's race link, claimed on the lobby card.
  */
 import { createBridge } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
@@ -56,6 +57,7 @@ import { createAssist } from './sim/assist.js';
 import { createRoomSession } from './net/room.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { configureLobby } from './hud/lobby.js';
+import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
@@ -357,8 +359,20 @@ async function boot() {
    * go lands on a bar downbeat (S3): the song is offset against go, go never moves.
    */
   let songToken = 0;
+  // a song the player dropped on the page (solo only): no chart, so the beat shake runs on its analysis
+  // (audio/songShape.js analyzeBuffer) and there are no words. Online the room's chart wins.
+  let pickedSong = null;
   async function playSong(align = null) {
     const my = ++songToken;
+    if (pickedSong && !online && audio.music) {
+      if (await audio.music.playFile(pickedSong)) {
+        if (my !== songToken) return;
+        debug.chart = 'file:' + pickedSong.name;
+        armWords();
+        return;
+      }
+      if (my !== songToken) return;
+    }
     for (const url of CHARTS) {
       if (my !== songToken || !audio.music) return;
       if (await audio.music.playChart(url, { align })) {
@@ -399,7 +413,7 @@ async function boot() {
     const started = audio.start(); unpause(); resetAll(); begin();
     // solo: the song would start with the count; it waits (or starts part way in) so go is a downbeat
     const align = (song) => goDownbeat(song, goS) - race.goInS;
-    if (CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
+    if (pickedSong || CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
   function toMenu() {
     if (online && lobbyUi) lobbyUi.leave();       // quit mid-race online: leave the room (online-left tears down)
@@ -415,7 +429,7 @@ async function boot() {
     const dev = qs.get('lobby');
     if (dev && LOCAL_URL.test(dev) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
       const uid = qs.get('uid') || 'u_devpage1', name = qs.get('name') || uid;
-      return { transport: fetchTransport({ base: dev, headers: { authorization: 'Bearer jwt-' + uid, 'x-dev-name': name }, credentials: 'omit' }),
+      return { transport: fetchTransport({ base: dev, headers: { authorization: 'Bearer jwt-' + uid, 'x-dev-name': name, ...(qs.get('tier') ? { 'x-dev-tier': qs.get('tier') } : {}) }, credentials: 'omit' }),
         identity: { unifiedId: uid, displayName: name, tier: Number(qs.get('tier') || 2) } };
     }
     if (!init.caps.net) return null;
@@ -457,7 +471,13 @@ async function boot() {
     quick: (o) => lobbyApi.quick(o),
     invite: (friendUid, roomId) => lobbyApi.invite({ friendUid, roomId }),
     leave: (roomId) => lobbyApi.leave({ roomId }),
-  } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id });
+    makeLink: () => lobbyApi.makeLink(),
+    revokeLink: () => lobbyApi.revokeLink(),
+    claimLink: (token, look, plat) => lobbyApi.claimLink(token, look, plat),
+    access: () => lobbyApi.access(),
+  } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id, platform,
+  // a race link (?r=<token>, NET.md section 13): the address drops its r after the first claim answer
+  linkClaimed: () => { const to = dropLinkParam(location.href); if (to) history.replaceState(history.state, '', to); } });
   hud.on('online', (e) => { lobbyUi = (e && e.lobby) || lobbyUi; });
   // polish 5 (S4): the one hud-to-audio hook: card and lobby sounds (hud/sounds.js names, audio/cues-b1.js UI_CUES)
   hud.on('sound', (e) => { if (e && e.name) audio.cue(e.name); });
@@ -558,6 +578,16 @@ async function boot() {
     window.addEventListener('blur', () => setPaused(true));
     document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
   }
+  // drop an audio file anywhere: it is the race song from now on (solo); mid-race it starts at once
+  const audioFile = (e) => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; return f && /^audio\//.test(f.type) ? f : null; };
+  window.addEventListener('dragover', (e) => { if (!online && e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  window.addEventListener('drop', (e) => {
+    const f = online ? null : audioFile(e);
+    if (!f) return;
+    e.preventDefault();
+    pickedSong = f;
+    if (state === 'race') Promise.resolve(audio.start()).then(() => playSong()).catch((err) => console.warn('[glassroad] song', err));
+  });
 
   // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
   hud.setLoading('Preparing shaders', 0.55);
@@ -573,6 +603,9 @@ async function boot() {
   hud.setReady(true);
   bridge.ready();
   toMenu();
+  // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
+  const linkTok = linkToken(location.search);
+  if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }
   if (BOT && !link) botT = performance.now() + 2500;   // attract: a short look at the menu, then race (never with a lobby)
 
   let fpsN = 0, fpsT = performance.now(), telT = 0;

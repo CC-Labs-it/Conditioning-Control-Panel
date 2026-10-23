@@ -1,8 +1,9 @@
-/* hud/lobby.js - the online lobby, drawn in the #card (hud/cards.js kind 'lobby'). NET.md sections 4, 8, 10, 12.
+/* hud/lobby.js - the online lobby, drawn in the #card (hud/cards.js kind 'lobby'). NET.md sections 4, 8, 10, 12, 13.
  *
  * Views: home (open tables, quick match, host a table, friends room), host (the table form), look (outfit and
  * vehicle from Astra's wardrobe and vehicle files), quick (waiting), room (8 seats, ready, start, preset chat,
- * invite, leave, the server-time countdown), invite (friends), results (times and pops), msg (an error or abort).
+ * invite, Invite link and Revoke for a friends room host, leave, the server-time countdown), invite (friends), results
+ * (times and pops), msg (an error or abort), link (a race link claim: waiting for the host, or why it was refused).
  * Pure logic lives in hud/lobbyMath.js and hud/presets.js. Keyboard and pad come through hud/cards.js: up and down
  * move focus, left and right step a form row, Escape and pad back go up one view (in a room it only moves focus to
  * Leave: leaving is always a deliberate press). No free text anywhere; names come from tickets, uids never reach the
@@ -16,6 +17,8 @@
  *        ({ code }), room.send(msg), room.close(), room.now() (server ms).
  *   identity: { displayName, tier } or a function returning it. friends?: () -> [{ uid, name }].
  *   track: 'threshold'. storage: localStorage-like. looks?: () -> { wardrobe, vehicles } (default: fetch the files).
+ *   link (section 13): api.makeLink(), revokeLink(), claimLink(token, look, platform), access(); platform: 'web' | ...;
+ *        linkClaimed(): after the first claim answer (boot drops ?r= from the address bar).
  * Events (through the hud's emit): online-start, online-race (at countAt), online-seat, online-emote,
  * online-finish, online-left, online-abort, online-closed.
  */
@@ -23,6 +26,7 @@ import {
   hostGate, signedIn, tableRows, pollDue, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS, applySeats, applySeat,
   seatRows, raceTags, readyCount, humans, canStart, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
   serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, trackName, startsLabel, rowStartsIn, BADGE_COPY,
+  linkButton, linkNote, claimStep,
 } from './lobbyMath.js';
 import { PRESETS, presetOf, poseOf, poseHoldS, emoteAllowed, EMOTE_GAP_MS, EMOTE_SHOW_MS } from './presets.js';
 import { normLook } from '../net/protocol.js';
@@ -62,6 +66,7 @@ const CSS = [
   '.lb-hostrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 10px; }',
   '.lb-head { margin: 10px 0 6px; font: 700 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--paper-dim); }',
   '.lb-res .k { font: 12px var(--mono); color: var(--paper-dim); }',
+  '#card .lb-url { margin: 0 0 8px; padding: 6px 8px; font: 12px var(--mono); word-break: break-all; user-select: all; -webkit-user-select: all; border: 1.5px dashed var(--paper-ink); border-radius: 4px; }',
   '.c-rows.lb-res li { grid-template-columns: 26px 1fr auto auto; }',
   '@media (prefers-reduced-motion: reduce) { .lb-bub { animation-name: lb-bub-soft; } .lb-count.pop { animation: none; } }',
 ].join('\n');
@@ -86,6 +91,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     seats: applySeats([]), start: null, raced: false, results: null, leaving: false,
     lastEmote: -Infinity, myPose: null, bubbles: {}, friends: null, sent: new Set(),
     quickT: 0, quickOn: false, autoAt: 0, gen: 0,
+    // the race link (NET.md section 13): preview refusal, access().host, our live link, a claim in flight
+    preview: false, access: null, accessAsked: false, link: null, linkCopied: false, linkMsg: '', linkBusy: false, claim: null,
   };
   let ticker = 0, lastCount = '', bellT = 0;
   // polish 5 (S4): menu sounds through the hud's `sound` event (hud/sounds.js); refusals say no
@@ -130,6 +137,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       const who = ident(), gate = hostGate(who);
       if (!deps().api) { setNote(errorCopy('off')); extra.innerHTML = '<div class="c-list">' + btn('lb-exit', 'Back', 'quiet') + '</div>'; return; }
       if (!signedIn(who)) { setNote('Sign in to race online'); extra.innerHTML = '<div class="c-list">' + btn('lb-exit', 'Back', 'quiet') + '</div>'; return; }
+      if (st.preview) { setNote(errorCopy('preview')); extra.innerHTML = '<div class="c-list">' + btn('lb-exit', 'Back', 'quiet') + '</div>'; return; }
       const now = listNow();
       setNote(st.msg || (st.rows.length ? st.rows.length + ' open, refreshed every 15 s' : st.listAt > 0 ? 'No open tables. Host one, or quick match' : 'Looking'));
       const rows = st.rows.map((r) => '<li>' + btn('lb-join', '<b>' + esc(r.host) + (r.friend ? ' (friend)' : '') + '</b><span class="n">' + r.seatsLabel +
@@ -174,8 +182,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       const cfg = st.cfg || {}, me = st.seats[st.seat] || {};
       title.textContent = trackName(cfg.track) + ', ' + (cfg.laps || 3) + ' laps';
       const hs = humans(st.seats).length;
-      setNote(st.msg || (st.phase === 'lobby' ? (cfg.mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + readyCount(st.seats) + ' of ' + hs + ' ready'
+      setNote(st.msg || st.linkMsg || (st.phase === 'lobby' ? (cfg.mode === 'friends' ? 'Friends room' : 'Open table') + ', ' + readyCount(st.seats) + ' of ' + hs + ' ready'
         : st.phase === 'done' ? 'Race over' : 'Racing'));
+      if (cfg.mode === 'friends' && me.host && !st.accessAsked) askAccess();
+      const linkOn = linkButton(cfg, me, st.access, st.phase);
       const now = localNow();
       const seats = seatRows(st.seats, st.seat, st.phase, cfg.seats || 8).map((r) => {
         const b = st.bubbles[r.seat], p = b && b.until > now ? presetOf(b.code) : null;
@@ -191,7 +201,15 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
           btn('lb-ready', me.ready ? 'Ready' : 'Not ready', 'c-tog' + (me.ready ? ' on' : ''), ' aria-pressed="' + !!me.ready + '"') +
           (me.host ? btn('lb-start', 'Start', 'hot', canStart(st.seats, st.seat, st.phase) ? '' : ' disabled') : '') + '</div>' : '') +
         '<div class="lb-chat" role="group" aria-label="Say">' + PRESETS.map((p) => btn('lb-emote', esc(p.text), '', ' data-id="' + p.code + '"' + (chatOff ? ' disabled' : ''))).join('') + '</div>' +
-        '<div class="c-links">' + (lobby && deps().friends && st.join ? btn('lb-invite', 'Invite a friend', 'c-link') : '') + btn('lb-leave', 'Leave', 'c-link') + '</div>';
+        (linkOn && st.link && !st.linkCopied ? '<p class="lb-url" aria-label="Race link">' + esc(st.link.url) + '</p>' : '') +
+        '<div class="c-links">' + (lobby && deps().friends && st.join ? btn('lb-invite', 'Invite a friend', 'c-link') : '') +
+        (linkOn ? btn('lb-link', 'Invite link', 'c-link', st.linkBusy ? ' disabled' : '') + (st.link ? btn('lb-unlink', 'Revoke', 'c-link') : '') : '') +
+        btn('lb-leave', 'Leave', 'c-link') + '</div>';
+    },
+    link() {
+      title.textContent = 'Race a friend';
+      setNote(st.msg || 'Checking the link');
+      extra.innerHTML = '<div class="c-list row">' + (st.claim ? btn('lb-back', 'Cancel', 'quiet') : btn('lb-home', 'Tables', 'hot') + btn('lb-exit', 'Menu')) + '</div>';
     },
     invite() {
       title.textContent = 'Invite a friend';
@@ -242,7 +260,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   function tick() {
     const now = localNow();
-    if (shown() && st.view === 'home' && !st.busy && signedIn(ident()) && deps().api && pollDue(st.listAt, now)) refresh();
+    if (shown() && st.view === 'home' && !st.busy && !st.preview && signedIn(ident()) && deps().api && pollDue(st.listAt, now)) refresh();
     if (st.start && !st.raced && st.phase !== 'done' && srv() >= st.start.countAt) { st.raced = true; emit('online-race', ctx()); }
     let expired = false;
     for (const k of Object.keys(st.bubbles)) if (st.bubbles[k].until <= now) { delete st.bubbles[k]; expired = true; }
@@ -262,10 +280,59 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   async function call(fn) {
     try {
       const r = await fn();
-      if (r && r.error) { st.msg = errorCopy(r.error); return null; }
+      if (r && r.error) { st.preview = r.error === 'preview'; st.msg = errorCopy(r.error); return null; }
       return r;
-    } catch (e) { st.msg = errorCopy((e && e.code) || 'net'); return null; }
+    } catch (e) { st.preview = !!e && e.code === 'preview'; st.msg = errorCopy((e && e.code) || 'net'); return null; }
   }
+
+  // ---- the race link (NET.md section 13) -----------------------------------------------------
+
+  /** May we mint a link? Asked once, the first time we host a friends room. */
+  async function askAccess() {
+    const api = deps().api;
+    st.accessAsked = true;
+    if (!api || !api.access) return;
+    try { st.access = (await api.access()) || null; } catch (e) { st.access = null; }
+    if (st.view === 'room') paint();
+  }
+  /** Invite link: mint (or reuse) the link, copy its url, say how many seats and how long. */
+  async function makeLink() {
+    const api = deps().api;
+    st.linkBusy = true; paint();
+    const r = await call(() => api.makeLink());
+    st.linkBusy = false;
+    if (!r || typeof r.url !== 'string') { st.linkMsg = st.msg; st.msg = ''; if (st.view === 'room') paint(); return; }
+    let copied = false;
+    try { await win.navigator.clipboard.writeText(r.url); copied = true; } catch (e) { copied = false; }
+    st.link = r; st.linkCopied = copied; st.linkMsg = linkNote(r, srv(), copied);
+    if (st.view === 'room') paint();
+  }
+  async function revokeLink() {
+    const r = await call(() => deps().api.revokeLink());
+    if (r) { st.link = null; st.linkCopied = false; st.linkMsg = 'Link revoked.'; } else { st.linkMsg = st.msg; st.msg = ''; }
+    if (st.view === 'room') paint();
+  }
+  /** Claim a link (boot's ?r=): seated -> the room; waiting -> poll on retryMs until seated or cancelled; refused -> its card. */
+  async function claimLink() {
+    const c = st.claim, api = deps().api;
+    if (!c) return;
+    let r;
+    try { r = await api.claimLink(c.token, normLook(st.look), deps().platform); } catch (e) { r = { error: (e && e.code) || 'net' }; }
+    if (st.claim !== c) { if (r && r.roomId) late(r); return; }
+    if (!c.said) { c.said = true; try { deps().linkClaimed?.(); } catch (e) { /* the address bar stays */ } }
+    const s = claimStep(r);
+    if (s.kind === 'seat') { st.claim = null; seat(s.join, null); return; }
+    st.msg = s.msg;
+    if (s.kind === 'wait') { c.t = win.setTimeout(claimLink, s.delayMs); if (st.view === 'link') paint(); return; }
+    st.claim = null; say('menu-deny'); st.view = 'link'; paint();
+  }
+  function startClaim(token) {
+    stopClaim();
+    if (!deps().api || !deps().api.claimLink) { st.msg = errorCopy('off'); st.view = 'link'; return; }
+    st.claim = { token, t: 0, said: false }; st.msg = ''; st.view = 'link';
+    claimLink();
+  }
+  function stopClaim() { const c = st.claim; st.claim = null; if (c && c.t) win.clearTimeout(c.t); }
 
   async function refresh() {
     const api = deps().api;
@@ -398,12 +465,13 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     const r = st.room; st.room = null;
     if (r) { st.leaving = true; try { r.close?.(); } catch (e) { /* already closed */ } }
     st.join = null; st.welcome = null; st.start = null; st.autoAt = 0; st.bubbles = {}; st.myPose = null;
+    st.link = null; st.linkCopied = false; st.linkMsg = '';             // the link lives on server side; Invite link fetches it again
     if (bellT) { win.clearTimeout(bellT); bellT = 0; }
   }
 
   /** Leave on purpose: tell the room and the lobby, then back to the tables. */
   function leave() {
-    stopQuick(); st.gen++;
+    stopQuick(); stopClaim(); st.gen++;
     const r = st.room, j = st.join, api = deps().api;
     if (r) { try { r.send({ t: 'leave' }); } catch (e) { /* closing anyway */ } }
     if (j && api && api.leave) call(() => api.leave(j.roomId));
@@ -464,6 +532,8 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       paint(); return;
     }
     if (a === 'lb-invite') { openInvite(); return; }
+    if (a === 'lb-link') { const api = deps().api; if (!api || !api.makeLink || st.linkBusy) return false; makeLink(); return; }
+    if (a === 'lb-unlink') { const api = deps().api; if (!api || !api.revokeLink || !st.link) return false; revokeLink(); return; }
     if (a === 'lb-send') {
       const i = Number(id), f = st.friends && st.friends[i], api = deps().api;
       if (!f || !st.join || !api) return false;
@@ -500,9 +570,10 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     const v = st.view;
     if (!quiet) say(v === 'room' || v === 'joining' ? 'menu-move' : 'menu-back');
     if (v === 'quick') { stopQuick(); st.view = 'home'; st.msg = ''; paint(); return; }
+    if (v === 'link' && st.claim) { stopClaim(); st.view = 'home'; st.msg = ''; st.listAt = -1e9; paint(); return; }
     if (v === 'host' || v === 'look' || v === 'invite') { st.view = st.room ? 'room' : 'home'; st.msg = ''; paint(); return; }
     if (v === 'room' || v === 'joining') { extra.querySelector('[data-act="lb-leave"]')?.focus?.({ preventScroll: true }); return; }
-    if (v === 'results' || v === 'msg') { leave(); st.view = 'home'; st.msg = ''; st.listAt = -1e9; paint(); return; }
+    if (v === 'results' || v === 'msg' || v === 'link') { leave(); st.view = 'home'; st.msg = ''; st.listAt = -1e9; paint(); return; }
     leave(); stopTicker(); exit();
   }
 
@@ -518,10 +589,11 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   }
 
   return {
-    /** hud/cards.js calls this from show('lobby', data). data.view: 'results' or 'home' to jump there. */
+    /** hud/cards.js calls this from show('lobby', data). data.view: 'results' or 'home' to jump there; data.claim: a link token (boot's ?r=). */
     show(data = {}) {
       injectCss();
-      if (data.view === 'home' && !st.room) { st.view = 'home'; st.msg = ''; }
+      if (data.claim && !st.room) startClaim(data.claim);
+      else if (data.view === 'home' && !st.room) { st.view = 'home'; st.msg = ''; }
       else if (data.view === 'results' && st.results) st.view = 'results';
       startTicker();
       paint();

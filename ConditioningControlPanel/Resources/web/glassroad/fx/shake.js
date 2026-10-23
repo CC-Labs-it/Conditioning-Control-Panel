@@ -75,7 +75,7 @@ export function createBeatChannel(feel, { music = liveMusic, reduced = reducedMo
   };
 }
 
-/** @returns {{kick(kind: 'hit'|'boost'|'side', ampM?: number, repeatMul?: number): void, update(dt: number): number[], reset(): void, beat: object}} */
+/** @returns {{kick(kind: 'hit'|'boost'|'side', ampM?: number, repeatMul?: number): void, update(dt: number, otherKick?: boolean): number[], reset(): void, beat: object}} */
 export function createShake(feel, opts = {}) {
   const runs = [];      // { axis, amp, mul, sign, t }
   const out = [0, 0, 0];
@@ -91,7 +91,8 @@ export function createShake(feel, opts = {}) {
     if (amp >= feel.get('shake.stopBelowM')) runs.push({ axis, amp, mul, sign: 1, t: 0 });
   }
 
-  function update(dt) {
+  /** otherKick: a shake run outside this channel (the bump side shake, fx/reactions.js) is alive, so the beat ducks too. */
+  function update(dt, otherKick = false) {
     out[0] = out[1] = out[2] = 0;
     if (feel.get('gentle.on')) { runs.length = 0; beat.reset(); return out; }
     const T = feel.get('shake.periodS'), stop = feel.get('shake.stopBelowM');
@@ -106,7 +107,7 @@ export function createShake(feel, opts = {}) {
       const v = r.sign * lobe(r.amp, r.t, T);
       out[0] += r.axis[0] * v; out[1] += r.axis[1] * v; out[2] += r.axis[2] * v;
     }
-    out[1] += beat.update(dt, runs.length > 0);
+    out[1] += beat.update(dt, runs.length > 0 || otherKick);
     return out;
   }
 

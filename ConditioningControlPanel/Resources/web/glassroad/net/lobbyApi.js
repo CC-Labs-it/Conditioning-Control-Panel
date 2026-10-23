@@ -1,4 +1,4 @@
-/* net/lobbyApi.js - the lobby routes (NET.md section 12) over one of two transports (plan 3.4):
+/* net/lobbyApi.js - the lobby routes (NET.md sections 12 and 13) over one of two transports (plan 3.4):
  *   fetchTransport  web and dev: a direct fetch (web: the cookie session; dev and node bots: a bearer header)
  *   hostTransport   desktop: page -> host `net { id, method, path, body }`, host -> page `net-reply { id, status, body }`
  *                   (the C# side relays /v2/race/ only and adds the account token; the page never holds it)
@@ -7,6 +7,9 @@
  */
 
 const PREFIX = '/v2/race/';
+/** A race link token (the lobby mints 22 base64url chars); anything else never leaves the page. */
+export const LINK_TOKEN = /^[A-Za-z0-9_-]{16,64}$/;
+const refuse = (code) => { const e = new Error('lobby ' + code); e.code = code; e.status = 0; return Promise.reject(e); };
 
 export function fetchTransport({ base = '', headers = {}, fetchImpl = globalThis.fetch, credentials = 'include' } = {}) {
   return async (method, path, body) => {
@@ -57,6 +60,13 @@ export function createLobbyApi(transport, { timers = globalThis } = {}) {
     invite: ({ friendUid, roomId }) => call('POST', PREFIX + 'invite', { friendUid, roomId }),
     leave: ({ roomId }) => call('POST', PREFIX + 'leave', { roomId }),
     board: (track) => call('GET', PREFIX + 'board/' + encodeURIComponent(track)),
+    // race a friend through a link (NET.md section 13): mint or reuse, revoke, the public lookup, claim, access
+    makeLink: () => call('POST', PREFIX + 'link', {}),
+    revokeLink: () => call('POST', PREFIX + 'link/revoke', {}),
+    linkInfo: (token) => (LINK_TOKEN.test(token) ? call('GET', PREFIX + 'link/' + token) : refuse('gone')),
+    claimLink: (token, look, platform) => (LINK_TOKEN.test(token)
+      ? call('POST', PREFIX + 'link/claim', { token, ...(look ? { look } : {}), ...(platform ? { platform } : {}) }) : refuse('gone')),
+    access: () => call('GET', PREFIX + 'access'),
     /** Poll quick until a seat comes (the lobby's retryMs, at least 500 ms) or maxWaitMs passes. */
     async quickMatch({ track, look, maxWaitMs = 60000, isCancelled = () => false } = {}) {
       const t0 = Date.now();

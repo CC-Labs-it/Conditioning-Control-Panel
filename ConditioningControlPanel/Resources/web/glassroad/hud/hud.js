@@ -271,6 +271,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     /** The saved options, for boot to apply at load. */
     get options() { return cards.options; },
     get card() { return cards.kind; },
+    /** The online lobby handle (hud/lobby.js), for boot's race link claim. */
+    get lobby() { return cards.lobby; },
     toast,
     item: el.item,
     credit: root.querySelector('.hud-credit'),

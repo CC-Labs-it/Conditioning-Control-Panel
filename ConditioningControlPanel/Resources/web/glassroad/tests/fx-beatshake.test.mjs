@@ -102,3 +102,14 @@ test('shake: a side kick (bump) is camera-local x, sized by its amp, and the bea
   const g = rig(); g.feel.set('gentle.on', true); g.sh.kick('side', 0.08);
   assert.deepEqual([...g.sh.update(0.05)], [0, 0, 0]);
 });
+
+test('shake: a run outside the channel (the bump side shake, otherKick) ducks the beat too', () => {
+  const r = rig();
+  run(r, 7, 20);
+  const during = [];
+  for (let t = 20; t < 20.35; t += 1 / 240) { r.music.songS = t; during.push(r.sh.update(1 / 240, true)[1]); }
+  const ref = run(rig(), 7, 20.35).slice(-during.length);
+  const sum = (a) => a.reduce((s, y) => s + Math.abs(y), 0);
+  assert.ok(sum(during.slice(30)) < 0.2 * sum(ref.slice(30)), 'ducked ' + sum(during) + ' vs ' + sum(ref));
+  assert.ok(Math.min(...run(r, 21.5, 24)) < -0.02, 'back once it ends');
+});

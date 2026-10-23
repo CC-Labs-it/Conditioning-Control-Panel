@@ -74,11 +74,11 @@ const MOTE_HEX = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k
 let frame = 0;
 
 /** opts.photosafe (fx/photosafe.js): an impact's soft glow asks it once and is skipped when refused or missing. */
-export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
+export function createItemVisuals(scene, art, feel, { photosafe = null, backend = '' } = {}) {
   const top = ITEM_TIERS.high, start = tierOf(Q.name);
   const root = new Group(); root.name = 'item-visuals'; scene.add(root);
-  // polish 6: webgl2 redraws the icon atlas at most 15 fps (the backend is known only after boot, so read it per tick)
-  const backendOf = () => (globalThis.__glassroad && globalThis.__glassroad.backend) || '';
+  // polish 6: webgl2 redraws the icon atlas at most 15 fps (backend from buildWorld's renderer; the debug global is the fallback)
+  const backendOf = () => backend || (globalThis.__glassroad && globalThis.__glassroad.backend) || '';
   const icons = createLivingIcons({ px: start.iconPx, fps: () => iconFps(tierOf(Q.name).iconFps, backendOf()) });
   // motes: bubble rings, pop sprays, throw ribbons, lob dots, box glints and impact glows share one draw
   const bubbles = bubbleCloud(top.bubbles + 24, icons.texture);
