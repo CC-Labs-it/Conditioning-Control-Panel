@@ -792,11 +792,11 @@ namespace ConditioningControlPanel.Avalonia
                 CoreProgression.TrackAttentionCheckProvider = passed =>
                 {
                     if (passed) { Achievements?.TrackAttentionCheckPassed(isVideo: true); return; }
-                    // WPF: TrackAttentionCheckFailed and TrackVideoAttentionCheckFailed each note "attention".
+                    // WPF (7e14c2870): one failed check books "attention" ONCE. Booking it for both
+                    // trackers charged one failure twice (+10:00, more with heat on).
                     Achievements?.TrackAttentionCheckFailed();
                     ChasterNote("attention");
                     Achievements?.TrackVideoAttentionCheckFailed();
-                    ChasterNote("attention");
                     // WPF App.Companion?.OnAttentionCheckFailed(): the Trainer's -25 XP.
                     if (Services.Companion.CompanionPerks.ApplyAttentionFailPenalty(CoreSettings.Current))
                     {

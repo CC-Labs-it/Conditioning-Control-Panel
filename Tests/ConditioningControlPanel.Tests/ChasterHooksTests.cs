@@ -82,6 +82,43 @@ public class ChasterHooksTests
         Assert.Equal(OwedRows.OrderBy(id => id), unwired);
     }
 
+    [Fact]
+    public void One_failed_video_attention_check_books_the_attention_row_once()
+    {
+        // Bug hunt 2026-10-22 (main 7e14c2870): the video's end calls TrackAttentionCheckFailed AND
+        // TrackVideoAttentionCheckFailed for one failed check, and both booked "attention", so one
+        // failure put +10:00 on the lock (+12:30 with heat on) instead of +5:00.
+        var app = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        var video = File.ReadAllText(Path.Combine(app, "Services", "Video", "VideoService.cs"));
+        Assert.Contains("TrackAttentionCheckFailed();", video);
+        Assert.Contains("TrackVideoAttentionCheckFailed();", video);
+
+        var achievements = File.ReadAllText(Path.Combine(app, "Services", "Progression", "AchievementService.cs"));
+        Assert.Contains("App.Chaster?.Note(\"attention\")", Body(achievements, "public void TrackAttentionCheckFailed()"));
+        Assert.DoesNotContain("App.Chaster", Body(achievements, "public void TrackVideoAttentionCheckFailed()"));
+
+        // The Avalonia head books it in its attention provider: once.
+        var ava = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "App.axaml.cs"));
+        var at = ava.IndexOf("CoreProgression.TrackAttentionCheckProvider", StringComparison.Ordinal);
+        Assert.True(at > 0, "attention provider not found");
+        var provider = ava.Substring(at, ava.IndexOf("};", at, StringComparison.Ordinal) - at);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(provider, "ChasterNote\\(\"attention\"\\)"));
+    }
+
+    // The text of one method: from its signature to the next member at the same indent.
+    private static string Body(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, signature + " not found");
+        var from = start + signature.Length;
+        var next = new[] { "\n        private ", "\n        internal ", "\n        public ", "\n    private ", "\n    internal ", "\n    public " }
+            .Select(m => source.IndexOf(m, from, StringComparison.Ordinal))
+            .Where(i => i > 0)
+            .DefaultIfEmpty(source.Length)
+            .Min();
+        return source[from..next];
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
