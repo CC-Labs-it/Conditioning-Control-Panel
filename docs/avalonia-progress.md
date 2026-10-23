@@ -2744,3 +2744,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 - Review fix: share and toast-fade tests await a Task / removal seam instead of 5 Task.Delay polls (P08/P73); Share hidden without InstalledPath (WPF :459); previews always 160 px wide like DecodePixelWidth; ledger row labels fail-proven vs asserted.
 - rgate: only failure is Core GoonClockAndRounds, which already fails on the base (fix is in flake-clocks, P108). The other gate steps were run by hand (see body).
 - Review fix 2 (dcd62bbe0): Deeper acceptance is a keyed sticky (fail-proven, rcheck); mod-catalogue row wired. rgate 39697111817 red only on P108 + listed RaceTrack flake; skipped steps green via rcheck 39700816833.
+
+## avalonia-port/wire-shell-enhancements: +974
+- Enhancements tab: the four owned PRO analytics expanders (Lifetime Dashboard, Season Rewind, Bestie Records, Brain Drain Report), aggregation shared with WPF through Core `EnhancementAnalytics`.
+- Season Rewind deltas use Fluent arrows; row stays stub (purchase + lucky toast in wire-shell-enhancements-b).
