@@ -399,8 +399,16 @@
                     BorderThickness="1" CornerRadius="4" Height="32"
                     Cursor="Hand"
                     ToolTip.Tip="{loc:Str deeper_player_tip_minitimeline}">
-                <Canvas x:Name="MiniTimelineCanvas" ClipToBounds="True"
-                        Background="Transparent"/>
+                <Grid>
+                    <Canvas x:Name="MiniTimelineCanvas" ClipToBounds="True"
+                            Background="Transparent"/>
+                    <Border x:Name="MiniHoverLabel" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Padding="4,1" CornerRadius="3" IsHitTestVisible="False"
+                            Background="{DynamicResource DeeperPlayerOverlayBgBrush}" IsVisible="False">
+                        <TextBlock x:Name="TxtMiniHoverTime" Text="0:00" Foreground="White"
+                                   FontSize="9" FontFamily="{DynamicResource Font.Mono}"/>
+                    </Border>
+                </Grid>
             </Border>
         </StackPanel>
 

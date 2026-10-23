@@ -2765,7 +2765,7 @@
             Background="#B00A0514" BorderBrush="#40E0B052" BorderThickness="1">
         <StackPanel>
             <TextBlock x:Name="FuseCornerDigits" Text=""
-                       FontFamily="Consolas, Courier New, monospace" FontSize="15"
+                       FontFamily="{DynamicResource Font.Mono}" FontSize="15"
                        Foreground="#FFC9C4D6" HorizontalAlignment="Center"/>
             <TextBlock x:Name="FuseCornerPresence" Text="" IsVisible="False"
                        FontSize="10" Margin="0,3,0,0" Foreground="#8AC9C4D6"

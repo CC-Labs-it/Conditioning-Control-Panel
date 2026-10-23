@@ -10,6 +10,7 @@ using System;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Styling;
 using ConditioningControlPanel.Services.Descent;
 using Serilog;
@@ -85,7 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     else ToolTip.SetTip(spark, NewFuseTip(_fuseTooltipDigits = new TextBlock
                     {
                         Text = remaining,
-                        FontFamily = new FontFamily("Consolas, Courier New, monospace"),
+                        [!TextBlock.FontFamilyProperty] = new DynamicResourceExtension("Font.Mono"),
                         FontSize = 14,
                         Foreground = FuseNeutralDigits,
                     }));

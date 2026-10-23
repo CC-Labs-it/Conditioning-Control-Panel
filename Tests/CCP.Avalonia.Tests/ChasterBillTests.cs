@@ -192,6 +192,7 @@ public sealed class ChasterBillTests
         var layer = AdornerLayer.GetAdornerLayer(shell.Named<ChasterRailChip>("ChasterRail")!)!;
         var flash = layer.Children.OfType<ChasterBookedFlash>().Single();
         Assert.Equal(CircesTab.Format(first.AppliedSeconds), flash.Figure.Text);
+        Assert.Equal(Application.Current!.Resources[FontGuard.MonoResourceKey], flash.Figure.FontFamily);
         Assert.Equal(Color.FromUInt32(BookedFlashPlan.AddColour), ((ISolidColorBrush)flash.Figure.Foreground!).Color);
 
         var second = chaster.Note("typo");                 // inside the coalescing window: one figure, bigger number
