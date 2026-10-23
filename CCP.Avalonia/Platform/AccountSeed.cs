@@ -215,8 +215,9 @@ internal static class AccountSeed
         if (accountDeleted) App.Quests?.ResetProgress();
         CoreSettings.Save();
         App.Achievements?.Reset();
-        Sync?.Reset();
-        PrizeOwnership.Feed.Clear();
+        // SyncPush.Reset clears its Prizes feed (seeded with PrizeOwnership.Feed); unseeded, clear it here.
+        if (Sync is { } push) push.Reset();
+        else PrizeOwnership.Feed.Clear();
     }
 
     /// <summary>All three validate at once, as WPF starts them (App.xaml.cs). Never throws.</summary>

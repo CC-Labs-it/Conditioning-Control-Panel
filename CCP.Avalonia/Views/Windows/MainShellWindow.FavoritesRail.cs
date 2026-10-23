@@ -7,8 +7,9 @@
 // AppSettings.RailFavorites / RailRecent. Lock truth is IsNavEntryLocked (NavPremiumTags.cs), so the
 // chip's padlock and the rail's gold star cannot disagree.
 //
-// ponytail: not on this head yet - the champagne v2 pill (Services/Prizes/V2Badges + PrizeGrants are
-// WPF-only) and a mod's own art framing (WPF ActiveModFraming); mod art is centre-cropped instead.
+// ponytail: not on this head yet - the champagne v2 pill (Core V2Badges is not consumed here; PrizeGrants
+// is attached by Platform/PrizeOwnership.cs) and a mod's own art framing (WPF ActiveModFraming); mod art
+// is centre-cropped instead.
 
 using System;
 using System.Collections.Generic;
