@@ -25,11 +25,16 @@ function rig({ gentle = false } = {}) {
 }
 
 test('every CONTRACT event has exactly one fx registry entry and nothing else', () => {
-  assert.equal(EVENTS.length, 28);
+  // wave 2 stepping stones: `stone` and `void` are SIM's CONTRACT rows (BRIEF-STONES); the registry carries them
+  // before that section lands, so the count runs 28 (water) to 30 (stones documented)
+  const STONES = ['stone', 'void'];
+  assert.ok(EVENTS.length >= 28 && EVENTS.length <= 30, 'events ' + EVENTS.length);
   // B1: the registry may also hold CONTRACT-B1 events (its section 4), nothing else
   const b1 = readFileSync(new URL('../CONTRACT-B1.md', import.meta.url), 'utf8');
   const B1 = [...b1.slice(b1.indexOf('## 4. Events')).matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1]);
-  assert.deepEqual(Object.keys(FX_CUES).filter((k) => EVENTS.includes(k) || !B1.includes(k)).sort(), EVENTS.slice().sort());
+  const expected = [...new Set([...EVENTS, ...STONES])];
+  assert.deepEqual(Object.keys(FX_CUES).filter((k) => EVENTS.includes(k) || !B1.includes(k)).sort(), expected.sort());
+  for (const k of STONES) assert.equal(typeof FX_CUES[k], 'function', k);
   for (const k of Object.keys(FX_CUES)) assert.equal(typeof FX_CUES[k], 'function');
 });
 

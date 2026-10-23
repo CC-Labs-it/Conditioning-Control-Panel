@@ -54,6 +54,7 @@ import { createNearDressing } from './nearDressing.js';
 import { createWordRush } from './wordRush.js';
 import { createWaterfall } from './waterfall.js';
 import { waterTable, tableCode } from './waterMath.js';
+import { buildStones } from './stones.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -158,6 +159,10 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   scene.add(showcaseDressing.group);
   const court = buildCourt(track, pal);
   scene.add(court.group);
+  // wave 2: the stepping stones of every field (render/stones.js), in the scene before the warm so their
+  // materials link behind the card (Firefox links programs one by one)
+  let stones = null;
+  try { stones = buildStones(track, art, pal); scene.add(stones.group); } catch (e) { console.warn('[glassroad/world] stones failed: ' + (e && e.message)); }
   const rails = createRailMaterial(pal, art);
   add(meshFrom(track.meshes.rails, rails.material));
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
@@ -271,12 +276,17 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // water (CONTRACT splash / chute): the ring, drops and lip spray; inert until the sim emits them
     on('splash', (p) => ['splash', 0, 0, p]);
     on('chute', (p) => ['chute', 0, 0, p]);
+    // stepping stones (BRIEF-STONES stone / void): a small ring under the player on a stone; the void is camera only
+    on('stone', (p) => ['stone', 0, 0, p]);
+    on('void', (p) => ['void', 0, 0, p]);
   }
   const posOf = (i) => { const o = kartObjs[i]; return o ? [o.position.x, o.position.y, o.position.z] : null; };
   function juice(e, gentle) {
     const [kind, i, a, p, b] = e, k = karts.list[i], obj = kartObjs[i], few = gentle ? 0.6 : 1;
     if (kind === 'splash') { if (waterfall) waterfall.splash(p || {}, gentle); return; }
     if (kind === 'chute') { if (waterfall) waterfall.chute(p || {}, gentle); return; }
+    if (kind === 'stone') { if (obj && obj.visible) wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[0], { gentle, gain: LOOK.ringGain * 0.4 }); return; }
+    if (kind === 'void') return;
     if (kind === 'p4') {
       if (k && obj && obj.visible) {
         particles.event(obj, k.mem, a, p, { mul: i ? LOOK.botSparkMul : 1 });
@@ -458,11 +468,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (waterfall) waterfall.dispose();
     showcaseDressing.dispose();
     court.dispose();
+    if (stones) stones.dispose();
     if (terrace) terrace.dispose();
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles

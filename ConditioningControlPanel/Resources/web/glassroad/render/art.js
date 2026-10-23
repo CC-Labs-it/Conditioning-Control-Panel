@@ -34,6 +34,8 @@ export const WANT = [
   'emi-outfit-drone-protocol', 'emi-outfit-snow-day', 'emi-vehicle-petal', 'emi-vehicle-trinket',
   // Starting terrace: the delivered cabinet rows, selected by the current quality tier.
   'threshold-slot-row-lod0', 'threshold-slot-row-lod1',
+  // wave 2 stepping stones (render/stones.js): Astra's static Threshold platform, one clone per stone
+  'stone-threshold',
 ];
 /** Wanted before they ship: missing from the manifest is quiet (not in failed); a broken file still counts. */
 const LATER = new Set([]);

@@ -11,6 +11,9 @@
 
 import { WATER_CUES } from '../render/waterMath.js';
 
+/** Stepping stones (wave 2): the stone tick and bob, the void dip and darkening. Shorter than the drop cue. */
+export const STONE_CUES = Object.freeze({ tickMul: 0.5, tickOutS: 0.18, bobM: 0.02, bobOutS: 0.22, dipDeg: -2, darken: 0.6, outS: 0.35 });
+
 const j = (fx, k) => fx.feel.get('juice.' + k);
 const rise = (fx) => j(fx, 'riseS');                                       // generic fast IN
 const tail = (fx) => j(fx, 'tailTcs') * fx.feel.get('boost.tailTcS');     // an exponential tail is ~95% gone in 3 tc
@@ -237,6 +240,20 @@ export const FX_CUES = {
   chute(fx) {
     const W = WATER_CUES;
     fx.fire('fov', fx.gentle.kick(W.chuteLeanDeg), rise(fx), W.chuteHoldS, W.chuteOutS);
+  },
+  // stepping stones (wave 2, BRIEF-STONES; STONE_CUES): landing on a stone is a soft tick (the thud channel,
+  // the reaction layer drops the rumble under Gentle) and a 2 cm bob (a camera push beat through gentle.kick:
+  // Gentle keeps only the tick). Dropping below the deck over the void is a short fov dip and a short darkening
+  // (the drop's duck tone, fired rather than held: shorter than the drop cue, which holds it to the rescue).
+  stone(fx) {
+    const C = STONE_CUES;
+    fx.fire('thud', rumbleOf(fx, 1) * C.tickMul, 0, 0, C.tickOutS);
+    fx.fire('push', fx.gentle.kick(C.bobM), rise(fx), 0, C.bobOutS);
+  },
+  void(fx) {
+    const C = STONE_CUES;
+    fx.fire('fov', fx.gentle.kick(C.dipDeg), rise(fx), 0, C.outS);
+    fx.fire('duck', C.darken, rise(fx), 0, C.outS);
   },
   // the rest change nothing on screen; kept so every event has its one entry
   wall(fx, { dv = 0 }) {
