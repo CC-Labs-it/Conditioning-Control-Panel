@@ -30,7 +30,7 @@ public sealed class KeywordAudioRuntimeTests
         var s = CoreSettings.Current;
         var saved = (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
             s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled);
+            CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider);
         var engine = new KeywordAudioRuntime();
         var played = new List<(string, float)>();
         var file = Path.GetTempFileName();
@@ -45,6 +45,7 @@ public sealed class KeywordAudioRuntimeTests
             CoreEntitlement.IsFreeTodayProvider = _ => false;
             CoreAudio.PlayStoppableProvider = (path, volume, _, _, _) => { played.Add((path, volume)); return () => played.Add(("stopped", 0)); };
             engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 0);
+            CoreSession.IsEngineRunningProvider = () => true; // WPF holds keyword audio while the engine is off.
             engine.Start();
             await body(engine, s, played);
         }
@@ -53,7 +54,7 @@ public sealed class KeywordAudioRuntimeTests
             engine.Stop(); KeywordTriggerHead.Stop(); File.Delete(file);
             (s.KeywordTriggers, s.KeywordTriggersEnabled, s.KeywordTriggerIgnoreOwnFocus, s.KeywordTriggerAppScope,
                 s.KeywordGlobalCooldownSeconds, s.KeywordPerKeywordCooldownSeconds, s.MasterVolume,
-                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled) = saved;
+                CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider, CoreAudio.PlayStoppableProvider, s.AwarenessLoopProtectionEnabled, CoreSession.IsEngineRunningProvider) = saved;
         }
     });
 
@@ -177,4 +178,40 @@ public sealed class KeywordAudioRuntimeTests
         _ = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
         Assert.True(KeywordTriggerHead.Engine.IsActive);
     });
+    [Fact]
+    public void PulseFeedShowsFiveNewestRecordsAndTheirSavedActionChips() => Run((_, _, _) =>
+    {
+        var view = new AwarenessTabView();
+        var window = new Window { Content = view };
+        window.Show();
+        try
+        {
+            for (var i = 0; i < 6; i++) KeywordTriggerHead.Engine.FireDemo("pulse " + i, "Tutorial");
+            var feed = view.FindControl<StackPanel>("AwarenessPulseFeed")!;
+            Assert.Equal(5, feed.Children.Count);
+            var row = Assert.IsType<StackPanel>(Assert.IsType<Border>(feed.Children[0]).Child);
+            Assert.Equal("\"pulse 5\"", Assert.IsType<TextBlock>(row.Children[0]).Text);
+            Assert.Equal(2, row.Children.OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().Count());
+            Assert.Contains("fires today", view.FindControl<TextBlock>("TxtAwarenessFireCount")!.Text!);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void AppScopeListCommitsCanonicalProcessNamesOnFocusLoss() => Run((_, s, _) =>
+    {
+        var saved = s.KeywordTriggerApps;
+        try
+        {
+            s.KeywordTriggerApps = new();
+            var view = new AwarenessTabView();
+            var box = view.FindControl<TextBox>("TxtAwarenessAppList")!;
+            box.Text = "editor.exe; browser, EDITOR";
+            box.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(global::Avalonia.Input.InputElement.LostFocusEvent));
+            Assert.Equal(new[] { "editor", "browser" }, s.KeywordTriggerApps);
+            Assert.Equal("editor, browser", box.Text);
+        }
+        finally { s.KeywordTriggerApps = saved; }
+    });
+
 }

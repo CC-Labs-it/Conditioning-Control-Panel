@@ -22,7 +22,7 @@ namespace CCP.Avalonia.Tests;
 /// (MockProviderV2, an Intiface address nobody listens on) - never a real toy.</summary>
 public sealed class HapticsHeadTests
 {
-    private static void WithHaptics(bool premium, bool mock, Action<HapticService, ConcurrentQueue<string>> body)
+    internal static void WithHaptics(bool premium, bool mock, Action<HapticService, ConcurrentQueue<string>> body)
     {
         var s = CoreSettings.Current.Haptics;
         s.EnsureV2Migrated();   // before the flags below: migration fans the legacy enum (Mock) out over them

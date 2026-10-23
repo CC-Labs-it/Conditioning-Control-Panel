@@ -85,7 +85,21 @@ public static class KeywordMatchRules
             return entry.Length > 0 && string.Equals(entry, processName, StringComparison.OrdinalIgnoreCase);
         });
 
-    /// <summary>WPF KeywordTriggerService :677-681: the default Everywhere scope never resolves the foreground app.</summary>
+    /// <summary>WPF ParseAppList: preserve first spelling/order while canonicalizing process names.</summary>
+    public static List<string> ParseAppList(string? text)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(text)) return result;
+        foreach (var part in text.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var entry = part.Trim();
+            if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) entry = entry[..^4];
+            if (entry.Length > 0 && !result.Contains(entry, StringComparer.OrdinalIgnoreCase)) result.Add(entry);
+        }
+        return result;
+    }
+
+    /// <summary>WPF :677-681: Everywhere never resolves the foreground app.</summary>
     public static bool NeedsForeground(AppSettings settings) =>
         settings.KeywordTriggerAppScope != AwarenessAppScope.Everywhere || settings.KeywordTriggerIgnoreOwnFocus;
 

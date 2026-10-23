@@ -25,8 +25,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
-    /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
+    /// ponytail: ScreenOcr, highlight windows and recent-app chips remain
+    /// follow-ups; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
     {
@@ -91,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (ex.Name == "KeywordTriggersExpander")
                     ex.SetCurrentValue(Expander.IsExpandedProperty, false);
 
+            InitializePulseFeed();
             SyncAwarenessTabUi();
 
             // Tabs are shown and hidden rather than rebuilt, so re-read on every show: the master
@@ -146,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 TxtAwarenessAppList.Text = string.Join(", ", s.KeywordTriggerApps ?? new());
                 AwarenessAppListPanel.IsVisible = s.KeywordTriggerAppScope != AwarenessAppScope.Everywhere;
 
+                RefreshPulseFeed();
                 UpdateStatusIndicator(masterOn);
                 RefreshAwarenessPresetCards();
             }
@@ -206,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 CoreSettings.Current.KeywordTriggersEnabled = on;
 
                 Platform.KeywordTriggerHead.Sync();
-                // ponytail: OCR/highlights and non-audio actions remain wire-shell-keyword-triggers-b.
+                // ponytail: OCR/highlights remain a follow-up.
 
                 _isLoading = true;
                 try { if ((ChkAwarenessKeyboard.IsChecked ?? false) != on) ChkAwarenessKeyboard.IsChecked = on; }
@@ -342,12 +344,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void CommitAppList()
         {
-            // ponytail: BLOCKED on KeywordTriggerService.ParseAppList, which canonicalises the box
-            // (split on , ; newline, strip a trailing ".exe", de-duplicate case-insensitively).
-            // That is a pure static with no platform dependency and belongs in Core, but the
-            // service is not this layer's file and copying the parse here would give the two heads
-            // two definitions of what "chrome.exe" means. The box is seeded and readable; commit
-            // lands with the service.
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            var parsed = ConditioningControlPanel.Services.KeywordMatchRules.ParseAppList(TxtAwarenessAppList.Text);
+            if (parsed.SequenceEqual(s.KeywordTriggerApps ?? new(), StringComparer.OrdinalIgnoreCase)) return;
+            s.KeywordTriggerApps = parsed;
+            CoreSettings.Save();
+            TxtAwarenessAppList.Text = string.Join(", ", parsed);
         }
 
         // ------------------------------------------------------------------ highlight colour
