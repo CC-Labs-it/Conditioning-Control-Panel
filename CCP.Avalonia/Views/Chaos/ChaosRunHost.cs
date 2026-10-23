@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
@@ -47,7 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// (stacked after companion-barks + barks-wpf: this base has no Core BarkEngine and Avalonia never
     /// seeds CoreBark); the announcer banners (NO FOCUS TO DEFUSE, last breath, UNLEASHED) wait for
     /// the announcer overlay. Every WPF Pulse/Shake call lands on the run's
-    /// <see cref="ChaosFxWindow"/> and <see cref="ScreenShake"/> (tests swap in
+    /// <see cref="ChaosFxWindow"/> (its pulse layer; the heat tint is driven from <c>UpdateHeatTint</c>)
+    /// and on the shared Deeper <see cref="ScreenShake"/> (tests swap in
     /// <see cref="PulseFx"/>/<see cref="ShakeFx"/>); regen, the first-time bonuses, the defuse
     /// lessons and the combo milestones run as WPF's. The hold and the Snap Chain window run on wall time
     /// (<c>BubbleOverlay.Field.Clock</c>), as WPF does (:4531, ChaosModeService :2000).</para>

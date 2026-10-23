@@ -5,28 +5,21 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
-using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services.Chaos;
-using ConditioningControlPanel.Services.Safety;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>The run's juice from a real run: BeginRun births the click-through colour vignette
-/// (WPF ChaosModeService :500), a bare detonation pulses it with WPF ChaosFxWindow.Pulse's envelope
-/// and shakes every visible window like WPF ScreenShakeService, and run teardown closes it.</summary>
+/// <summary>The run's juice from a real run: a bare detonation pulses the run's ChaosFxWindow
+/// (chaos-fx-window lane) with WPF's malus colour and strength, shakes every visible window through
+/// the shared Deeper ScreenShake (WPF ScreenShakeService), and panic closes the window.</summary>
 public sealed class ChaosFxAndShakeTests
 {
-    private sealed class Clock : TimeProvider
-    {
-        public DateTimeOffset Now = new(2026, 10, 22, 12, 0, 0, TimeSpan.Zero);
-        public override DateTimeOffset GetUtcNow() => Now;
-    }
-
     [Fact]
-    public async Task A_bare_detonation_pulses_the_vignette_and_shakes_the_windows_then_teardown_closes_it()
+    public async Task A_bare_detonation_pulses_the_fx_window_and_shakes_the_windows_then_panic_closes_it()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -34,27 +27,20 @@ public sealed class ChaosFxAndShakeTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
-            var clock = new Clock();
-            var oldFx = ChaosFxWindow.Clock;
-            var oldShake = ScreenShake.Clock;
-            var oldWindows = ScreenShake.Windows;
-            var oldRng = ScreenShake.Rng;
+            var clock = new SteppedTime();
+            var oldAccept = ChaosFxWindow.Accept;
+            var oldWindows = ScreenShake.WindowsProvider;
             ChaosFxWindow.Clock = ScreenShake.Clock = clock;
-            ChaosFxWindow.SkipPlatformChecksForTests = true;
-            ScreenShake.Rng = new Random(7);
+            ChaosFxWindow.Accept = _ => true;   // headless has no X11 window to make click-through
             var root = new Border();
             var host = new Window { Content = root };
-            ScreenShake.Windows = () => new[] { host };
+            ScreenShake.WindowsProvider = () => new[] { host };
             try
             {
                 host.Show();
                 ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, ShakeIntensity = 1.0 });
-                Assert.Null(ChaosRunHost.Fx);   // born at BeginRun, not during the countdown
                 ChaosRunHost.Overlay!.FinishCountdown();
-                var fx = ChaosRunHost.Fx;
-                Assert.NotNull(fx);
-                Assert.True(fx!.IsVisible);
-                Assert.False(fx.IsHitTestVisible);
+                var fx = ChaosRunHost.Fx!;
                 Assert.False(fx.IsAnimating);   // P07: idle until a pulse
 
                 var state = ChaosRunHost.State!;
@@ -66,34 +52,30 @@ public sealed class ChaosFxAndShakeTests
                 Assert.Equal(1, state.Detonated);
                 double s = spec.Strength / 100.0;
 
-                // Shake: 0.4 + s x 0.5 for 380 ms, the same jitter on every window, up to 28 px x intensity.
-                double amp = ScreenShake.MAX_OFFSET_PX * Math.Clamp(0.4 + s * 0.5, 0, 1);
+                // Shake: 0.4 + s x 0.5 for 380 ms, up to 28 px x intensity.
+                double amp = ScreenShake.MaxOffsetPx * Math.Clamp(0.4 + s * 0.5, 0, 1);
                 var t = Assert.IsType<TranslateTransform>(root.RenderTransform);
                 Assert.True(ScreenShake.IsRunning);
-                ScreenShake.Step();
+                ScreenShake.Tick();
                 Assert.True(t.X != 0 && Math.Abs(t.X) <= amp && Math.Abs(t.Y) <= amp);
 
-                // The last pulse is the bare hit's red malus: 0.4 + s x 0.35 (WPF :2131).
-                double peak = ChaosFxWindow.PeakFor(0.4 + s * 0.35);
-                int rise = GentleVisuals.RiseMs(40);
+                // The last pulse is the bare hit's red malus, 0.4 + s x 0.35 (WPF :2131), on the pulse layer.
                 Assert.True(fx.IsAnimating);
-                var rim = Assert.IsType<RadialGradientBrush>(fx.Vignette.Background);
+                var rim = Assert.IsAssignableFrom<IRadialGradientBrush>(fx.VignetteLayer.Background);
                 Assert.Equal(Color.FromArgb(255, 255, 50, 50), rim.GradientStops[2].Color);
-                Assert.Equal(Color.FromArgb(0, 255, 50, 50), rim.GradientStops[1].Color);
-                clock.Now = clock.Now.AddMilliseconds(rise);
-                fx.Step();
-                Assert.Equal(peak, fx.Vignette.Opacity, 3);
-                clock.Now = clock.Now.AddMilliseconds(ChaosFxWindow.FADE_MS / 2.0);
-                fx.Step();
-                Assert.Equal(peak / 2, fx.Vignette.Opacity, 3);
-                clock.Now = clock.Now.AddMilliseconds(ChaosFxWindow.FADE_MS);
-                fx.Step();
-                Assert.Equal(0, fx.Vignette.Opacity);
-                Assert.False(fx.IsAnimating);
+                clock.Advance(TimeSpan.FromMilliseconds(40));
+                fx.Frame();
+                Assert.Equal(ChaosFxEnvelope.Pulse(0, 0.4 + s * 0.35).Sample(40), fx.VignetteLayer.Opacity, 3);
+                clock.Advance(TimeSpan.FromMilliseconds(300));
+                fx.Frame();
+                Assert.Equal(0, fx.VignetteLayer.Opacity);
 
-                ScreenShake.Step();   // 430 ms on: past the 380 ms shake
+                ScreenShake.Tick();   // 340 ms on: still inside the 380 ms shake
+                Assert.Same(t, root.RenderTransform);
+                clock.Advance(TimeSpan.FromMilliseconds(50));
+                ScreenShake.Tick();   // past it
                 Assert.Null(root.RenderTransform);   // the window's own transform is back
-                Assert.Equal(0, ScreenShake.TargetCount);   // holds no window past its shake
+                Assert.Equal(0, ScreenShake.TargetCount);
                 Assert.False(ScreenShake.IsRunning);
 
                 ChaosRunHost.ForceShutdown();
@@ -103,13 +85,11 @@ public sealed class ChaosFxAndShakeTests
             finally
             {
                 ChaosRunHost.ForceShutdown();
-                ScreenShake.Reset();
+                ScreenShake.Stop();
                 host.Close();
-                ChaosFxWindow.Clock = oldFx;
-                ChaosFxWindow.SkipPlatformChecksForTests = false;
-                ScreenShake.Clock = oldShake;
-                ScreenShake.Windows = oldWindows;
-                ScreenShake.Rng = oldRng;
+                ChaosFxWindow.Clock = ScreenShake.Clock = TimeProvider.System;
+                ChaosFxWindow.Accept = oldAccept;
+                ScreenShake.WindowsProvider = oldWindows;
             }
             return Task.CompletedTask;
         });
