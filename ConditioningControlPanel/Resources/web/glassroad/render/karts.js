@@ -46,6 +46,8 @@ import {
   hitRimRgb, stunStar, kindHex, holdFace, rigTable, rigNumbers, createDirector, directorEvent, directorStep,
 } from './kartPose.js';
 import { dressKart, lookForSeat } from './wardrobe.js';
+import { createEmiSkin } from './emiSkin.js';
+import { skinFromWire } from '../hud/garageState.js';
 import { lookForTier } from './wardrobeMath.js';
 import { HIT_LOOK, AURA_LOOK, ITEM_TIERS } from './items/look.js';
 import { createFaceCanvas, faceCell, FACE_LOOK, MARK_LOOK, markCell, createMarkAtlas } from './faces.js';
@@ -198,6 +200,7 @@ function faceScreen(art, model, fg) {
   }
   screen.set('neutral', false, 0);
   mesh.material = screen.material;
+  mesh.material.name = 'emi_screen';
   if (old) { if (old.map) old.map.dispose(); old.dispose(); }
   return screen;
 }
@@ -250,9 +253,10 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     // ART5: the seat's outfit and vehicle (render/wardrobe.js); an outfit brings its own headpiece, so the
     // old head accessory only stays on a rival with no outfit
     const want = lookForTier(lookForSeat(i, seed, looks[i]), Q.name);
+    const face = art3d ? faceScreen(art, model, look ? look.hex : LOOK.emiColour) : null;
+    const skin = art3d ? createEmiSkin(model,{cloneMaterials:false}) : null;
     const dress = art3d ? dressKart(art, model, want, { tint: look ? look.cup : null, tintMix: LOOK.vehicleTintMix }) : null;
     const accessory = art3d && look && !(dress && dress.outfit) ? attachAccessory(art, model, look.accessory) : null;
-    const face = art3d ? faceScreen(art, model, look ? look.hex : LOOK.emiColour) : null;
     const head = art3d ? headRig(model) : null;
     const rig = art3d ? makeRig(kartGltf, model) : null;
     const bones = {};
@@ -269,7 +273,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     root.add(aura.mesh);
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
-      dress, rig, dir: createDirector(),
+      dress, skin, rig, dir: createDirector(),
       tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura,
     });
@@ -471,6 +475,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       k.aura.material.dispose();
       if (k.accessory) k.accessory.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
       if (k.dress) k.dress.dispose();
+      if (k.skin) k.skin.dispose();
       if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.mixer.uncacheRoot(k.model); }
     }
     if (markTex) markTex.dispose();
@@ -481,7 +486,9 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const k = list[i];
     if (!k || !k.dress) return null;
     k.dress.dispose();
-    k.dress = dressKart(art, k.model, lookForTier(lookForSeat(i, seed, want), Q.name), { tint: k.look ? k.look.cup : null, tintMix: LOOK.vehicleTintMix });
+    const picked=lookForSeat(i,seed,want);
+    k.dress = dressKart(art, k.model, i===0&&want?picked:lookForTier(picked,Q.name), { tint: k.look ? k.look.cup : null, tintMix: LOOK.vehicleTintMix });
+    if(k.skin)k.skin.set(skinFromWire(want?.skin));
     if (k.accessory) k.accessory.visible = !k.dress.outfit;
     return lookOf(k);
   }

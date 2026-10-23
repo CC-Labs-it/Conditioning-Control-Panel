@@ -61,6 +61,8 @@ import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
+import { createGarage } from './render/garage.js';
+import { raceLook } from './hud/garageState.js';
 
 const qs = new URLSearchParams(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
@@ -219,6 +221,9 @@ async function boot() {
   // and the Shadows option turns it on or off in applyOptions
   const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0',
     spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
+  const garage=await createGarage({art,renderer,canvas,track:trackName,laps,
+    action:name=>hud.menuAction(name),sound:name=>{audio.start();audio.cue(name);}});
+  if(garage){hud.setGarageNav(garage.nav);debug.garage=garage;}
   // passing through a spiral gate plays that gate's own Loom over the view (photosafe, Gentle halves it)
   const gateScreen = createGateScreen(document.body, { feel, photosafe, tier: renderer.tier });
   bus.on('gate-pass', (g) => { if (state === 'race' && !paused) gateScreen.play(g.params, 1); });
@@ -261,8 +266,9 @@ async function boot() {
     hud.setRacers(racers.list.map((r) => r.meta));
     fall = BOT_FALL && !s ? createFallSteer(track, P.st, feel) : null;
     // each seat's look (Astra's wardrobe and vehicles) on its kart: online the room's ids, back to the seat picks after
-    if (world.setLook && (s || looksOnline)) {
+    if (world.setLook && (s || looksOnline || garage)) {
       for (let i = 0; i < COUNT; i++) world.setLook(i, s && racers.list[i] ? racers.list[i].meta.look : undefined);
+      if(garage&&!s)world.setLook(0,raceLook(garage.state));
       looksOnline = !!s;
     }
   }
@@ -402,6 +408,7 @@ async function boot() {
   }
   function begin() {
     state = 'race';
+    garage?.setVisible(false);
     hud.setCard(null);
     canvas.focus({ preventScroll: true });
     race.start();
@@ -409,7 +416,9 @@ async function boot() {
     bridge.runStarted({ track: track.id, laps });
   }
   function startRace() {
-    const started = audio.start(); unpause(); resetAll(); begin();
+    const started = audio.start(); unpause(); resetAll();
+    if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
+    begin();
     // solo: the song would start with the count; it waits (or starts part way in) so go is a downbeat
     const align = (song) => goDownbeat(song, goS) - race.goInS;
     if (pickedSong || CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
@@ -486,6 +495,7 @@ async function boot() {
     claimLink: (token, look, plat) => lobbyApi.claimLink(token, look, plat),
     access: () => lobbyApi.access(),
   } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id, platform,
+  garageLook:()=>garage?raceLook(garage.state):null,
   // a race link (?r=<token>, NET.md section 13): the address drops its r after the first claim answer
   linkClaimed: () => { const to = dropLinkParam(location.href); if (to) history.replaceState(history.state, '', to); } });
   hud.on('online', (e) => { lobbyUi = (e && e.lobby) || lobbyUi; });
@@ -752,7 +762,10 @@ async function boot() {
     }
     if (HT) hLap('world');
     renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
-    renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
+    const inGarage=!!garage&&state==='menu'&&hud.card==='menu';
+    garage?.setVisible(inGarage);
+    if(inGarage)garage.render(frameDt,hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview||matchMedia('(prefers-reduced-motion: reduce)').matches);
+    else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
     if (HT) hLap('render');
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud

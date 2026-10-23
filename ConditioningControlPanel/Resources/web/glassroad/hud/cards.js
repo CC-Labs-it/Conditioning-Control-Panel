@@ -325,6 +325,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   doc.addEventListener('keydown', (e) => {
     if (card.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
+    if(kind==='menu'&&doc.body.classList.contains('garage-open'))return;
     if (e.key === 'Escape') { if (BACKS.includes(kind)) back(); else if (kind === 'lobby') lobby.back(); return; }   // never swallowed
     if (kind === 'start') {
       if (e.repeat || e.key === 'Shift' || e.key === 'Tab' || e.key === 'CapsLock') return;
@@ -342,6 +343,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   return {
     show, nav, refreshDevice,
+    menuAction(name){if(kind==='menu'&&['race','online','options','controls','howto','back'].includes(name))act({dataset:{act:name}});},
     get kind() { return card.hidden ? null : kind; },
     /** The online lobby (hud/lobby.js): boot calls lobby.use({ api, connect, identity, friends }) or configureLobby. */
     get lobby() { return lobby; },

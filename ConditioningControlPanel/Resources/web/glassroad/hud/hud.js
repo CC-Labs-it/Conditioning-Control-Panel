@@ -71,6 +71,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     for (const fn of list.slice()) { try { fn(payload); } catch (e) { console.warn('[hud]', name, e); } }
   }
   const cards = createCards(card, { doc, emit: fire, devices, kit });
+  let garageNav=null;
   let noteTimer = 0;
   function note(text) {
     el.note.textContent = text;
@@ -258,7 +259,9 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   }
 
   return {
-    setCard, update, nav: cards.nav,
+    setCard, update, nav: (dir)=>cards.kind==='menu'&&garageNav?garageNav(dir):cards.nav(dir),
+    menuAction:cards.menuAction,
+    setGarageNav(fn){garageNav=fn;},
     setReady: (r, n) => cards.setReady(r, n),
     /** The warming card's stage line and bar, p 0..1 (pass 3: boot names each stage). */
     setLoading: (stage, p) => cards.setProgress(stage, p),

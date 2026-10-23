@@ -15,6 +15,7 @@ export const BIN = Object.freeze({ BATCH: 1, UPLOAD: 2 });
 export const TICK_HZ = 60;
 export const COUNT_MS = 3000;
 export const MSG_MAX_BYTES = 2048;
+export const ROOM_MSG_MAX_CHARS = 4096; // eight complete appearances plus lobby seat metadata
 
 /** Rates and timings (NET.md sections 2, 3, 8). */
 export const RATES = Object.freeze({
@@ -287,7 +288,7 @@ export function checkMsg(table, m) {
 
 /** Parse a text frame for one direction ('c2r' or 'r2c'). @returns {object|null} */
 export function decodeMsg(text, dir) {
-  if (typeof text !== 'string' || text.length > MSG_MAX_BYTES) return null;
+  if (typeof text !== 'string' || text.length > (dir==='r2c'?ROOM_MSG_MAX_CHARS:MSG_MAX_BYTES)) return null;
   let m;
   try { m = JSON.parse(text); } catch { return null; }
   return checkMsg(dir === 'c2r' ? C2R : R2C, m) ? m : null;
