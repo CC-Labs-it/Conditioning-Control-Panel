@@ -2,7 +2,7 @@
 // StepBrush, ItemIcon, SentRow): the holder's receipts. The last few things sent to one leashed friend,
 // each with its steps (sent, arrived, seen, then done / skipped / refused), its step word and how long
 // ago. The rules (rows kept, lit dots, words, times, tooltip timeline) are Core LeashUiRules / LeashSentLog.
-// ponytail: unhosted until the holder card lands (feat-leash drawer cards); LeashHolderCard calls For().
+// Hosted by LeashHolderCard on the Leash page.
 using System;
 using System.Collections.Generic;
 using System.Linq;

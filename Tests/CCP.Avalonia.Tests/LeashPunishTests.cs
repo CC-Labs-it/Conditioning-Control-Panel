@@ -54,6 +54,24 @@ public sealed class LeashPunishTests
             }
         });
 
+    [Fact]
+    public void PanicOffStillParksALeashTaskAndLeavesItsPunishmentPending() => Run((shell, launcher, svc, host, runner) =>
+    {
+        var enabled = CoreSettings.Current.PanicKeyEnabled;
+        try
+        {
+            CoreSettings.Current.PanicKeyEnabled = false;
+            StartFromTheGate(shell, launcher, host, runner);
+            shell.HandlePanicKeyPress(DateTime.Now);
+            Assert.False(runner.IsRunning);
+            Assert.NotNull(svc.GateDue);
+            Now = Now.Add(LeashTaskRunner.LockCardRetry).Add(TimeSpan.FromSeconds(1)); runner.Tick();
+            Assert.Equal(1, host.Shows);
+            shell.CheckLeashGate(); Assert.False(shell.LeashGate!.IsUp);
+        }
+        finally { CoreSettings.Current.PanicKeyEnabled = enabled; }
+    });
+
     private static void StartFromTheGate(MainShellWindow shell, LauncherWindow launcher, FakeHost host, LeashTaskRunner runner)
     {
         LeashGateCardTests.PressTile(launcher);

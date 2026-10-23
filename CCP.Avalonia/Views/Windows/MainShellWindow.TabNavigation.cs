@@ -251,6 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "leaderboard": _ = Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.RefreshLeaderboardAsync(); RefreshSeasonRecapReview(); break;
                     // WPF MainWindow.SocialTabs.cs: subscribe and ask for a fresh list (the page folds itself on hide).
                     case "friends": Named<Tabs.FriendsTabView>("FriendsTab")?.OnShown(); break;
+                    case "leash": Named<Tabs.LeashTabView>("LeashTab")?.OnShown(); break;
 
                     // WPF MainWindow.Exclusives.cs RefreshExclusivesTab "on tab show": gates can move between visits.
                     case "premium": RefreshExclusivesTab(); break;

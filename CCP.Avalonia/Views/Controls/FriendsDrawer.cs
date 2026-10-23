@@ -6,7 +6,7 @@
 // Open goon tables are in FriendsDrawer.Tables.cs.
 // The "What happened" feed and the send trails are in FriendsDrawer.Feed.cs.
 // ponytail: no
-// leash section, no lock-day chip, no once-only presence ask, no juice (.Juice.cs), no bell (the corner notices are not on this
+// offer chip, no lock-day chip, no once-only presence ask, no juice (.Juice.cs), no bell (the corner notices are not on this
 // head), no per-PC block list (the server's list only). A word WPF throws outside the drawer
 // (FriendsLanding.Tell) is a FloatingWord over the rail chip's window (OwnerWindow).
 using System;
@@ -57,6 +57,7 @@ public sealed partial class FriendsDrawer : Border
     private readonly Dictionary<string, (string Text, bool Good)> _results = new();
     private readonly Border _head = new(), _addBox = new(), _foot = new();
     private readonly StackPanel _list = new();
+    internal Leash.LeashDrawerSection? LeashSection { get; }
     private readonly TextBox _codeBox = new();
     private readonly Button _addGo;
     private readonly TextBlock _addResult = Label("", 11.5, Muted, Display);
@@ -92,6 +93,11 @@ public sealed partial class FriendsDrawer : Border
         Grid.SetRow(scroll, 1);
         Grid.SetRow(_addBox, 2);
         Grid.SetRow(_foot, 3);
+        if (!asPage)
+        {
+            LeashSection = new Leash.LeashDrawerSection();
+            scroll.Content = new StackPanel { Children = { LeashSection, _list } };
+        }
         root.Children.AddRange(new Control[] { _head, scroll, _addBox, _foot });
         Child = root;
         // The add box (WPF BuildAddBox): CCP- and five letters from the code alphabet.
@@ -144,6 +150,7 @@ public sealed partial class FriendsDrawer : Border
     public void OnOpened()
     {
         _isOpen = true;
+        LeashSection?.Refresh();
         Rebind();
         try { _svc?.SetDrawerOpen(true); } catch { }
         if (_svc?.Available == true) _ = SafeRefreshAsync();
@@ -156,6 +163,7 @@ public sealed partial class FriendsDrawer : Border
         try { _svc?.SetDrawerOpen(false); } catch { }
         Unsubscribe(); // a folded drawer redraws nothing (OnOpened re-subscribes); also stops the tables poll
         FeedFolded();
+        LeashSection?.Deactivate();
         (_isOpen, _openId, _confirm, _picker, _addBox.IsVisible) = (false, null, null, null, false);
     }
     private void Rebind()

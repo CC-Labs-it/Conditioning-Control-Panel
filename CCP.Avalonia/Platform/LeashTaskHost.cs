@@ -2,7 +2,7 @@
 // LeashOnPanicPress/EndLeashTask: lock cards (never strict), a leash session, bubbles and a caged video under the Core
 // LeashTaskRunner. Head differences: completed cards are counted from LockCardWindow.Completed; the video clock is a
 // 1 s script poll; the Deeper player raises no completion event, so a catalogue watch there never finishes by itself.
-// ponytail: WPF LeashPanicKeyWhilePanicOff (panic key off / Lockdown while leashed) is not on this head's key route.
+// The panic-off / Lockdown key route parks only leash-owned activity.
 using System;
 using System.Globalization;
 using System.IO;
@@ -60,16 +60,19 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     }
     /// <summary>The "leash-task" panic surface (WPF LeashOnPanicPress, the first thing a panic press does): the
     /// runner parks with its progress, the video window closes, the gate stands back. The punishment stays pending.</summary>
-    internal static void OnPanicPress(MainShellWindow? shell)
+    internal static void OnPanicPress(MainShellWindow? shell, bool panicRuns = true)
     {
         var r = Runner;
-        if (r?.IsRunning != true && LeashPunishWindow.Current == null) return;
+        shell ??= MainShellWindow.Current;
+        if (r?.IsRunning != true && LeashPunishWindow.Current == null && (panicRuns || shell?.LeashGate?.IsUp != true)) return;
         if (SettingsPaletteWindow.IsOpen && !LockCardWindow.IsAnyOpen()   // WPF MainWindow.Leash.cs:382: an Escape
             && string.Equals(CoreSettings.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)) return;   // closing the palette is no panic
         Serilog.Log.Information("Leash: panic press stops the running task (kept pending)");
-        try { r?.Park(); } catch (Exception ex) { Serilog.Log.Debug("Leash park failed: {E}", ex.Message); }
+        var closeLines = !panicRuns && (r as LeashTaskRunner)?.RunningKind == PunishKind.Lines;
+        try { if (panicRuns) r?.Park(); else r?.ParkAndStopItsSession(); } catch (Exception ex) { Serilog.Log.Debug("Leash park failed: {E}", ex.Message); }
+        if (closeLines) LockCardWindow.ForceCloseAll();
         LeashPunishWindow.CloseNow();
-        try { (shell ?? MainShellWindow.Current)?.LeashStandBack(); }
+        try { shell?.LeashStandBack(); }
         catch (Exception ex) { Serilog.Log.Debug("Leash gate stand-back failed: {E}", ex.Message); }
     }
     // ---- the host -----------------------------------------------------------------------------

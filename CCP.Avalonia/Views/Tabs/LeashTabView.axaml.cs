@@ -1,19 +1,26 @@
+using System;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services.Leash;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
-/// <summary>Social &gt; Leash (WPF LeashTabView). Empty state only on this head: the leash cards
-/// are parity row feat-leash. The button opens Friends, where offers start.</summary>
+/// <summary>WPF Social > Leash: live cards, with the Friends door when no cards are present.</summary>
 public partial class LeashTabView : UserControl
 {
-    public LeashTabView()
+    internal LeashDrawerSection Section { get; }
+    public LeashTabView() : this(() => LeashHead.Service) { }
+    internal LeashTabView(Func<ILeashService?> service)
     {
         InitializeComponent();
+        Section = new LeashDrawerSection(service);
+        Section.Changed += () => EmptyPanel.IsVisible = !Section.IsVisible;
+        SectionHost.Children.Add(Section);
         EmptyButton.Click += (_, _) => (TopLevel.GetTopLevel(this) as MainShellWindow)?.ShowTab("friends");
     }
-
-    /// <summary>True while there is nothing leash-shaped to show (always, until feat-leash lands; so
-    /// tests assert it, it is not fail-provable yet).</summary>
     internal bool ShowingEmpty => EmptyPanel.IsVisible;
+    internal void OnShown() => Section.Refresh();
+    internal void FoldForPanic() => Section.FoldForPanic();
 }

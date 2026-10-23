@@ -63,10 +63,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var s = CoreSettings.Current;
             // WPF MainWindow.xaml.cs:914: a Pause-key capture takes the press before the panic branch, so the
             // Escape that unbinds Pause (the default panic key) is never also a panic.
-            if (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey || !s.PanicKeyEnabled) return;
+            if (CapturingPanicKey || Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey) return;
+            // WPF LeashPanicKeyWhilePanicOff: the leash keeps its way out even under Lockdown.
+            if (!s.PanicKeyEnabled || LockdownActive)
+            {
+                if (Platform.LeashHead.Service?.Snapshot.Me != null)
+                    Platform.LeashTaskHost.OnPanicPress(this, panicRuns: false);
+                return;
+            }
             // WPF MainWindow.xaml.cs:888: Lockdown ignores every GLOBAL key, whatever LockdownDisablePanicKey
             // says. Only this listener layer: window and TextBox input (the secret phrase) are untouched.
-            if (LockdownActive) { Serilog.Log.Information("Panic key ignored under Lockdown"); return; }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
             if (TryGamePauseOnEscape(now)) return;
             IntakeHostWindow.StopMicsForPanic();   // every press, before the lock-card stop or the capture abort reads as silence
