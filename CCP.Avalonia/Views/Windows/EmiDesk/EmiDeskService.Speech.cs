@@ -72,9 +72,11 @@ internal sealed partial class EmiDeskService
         }
     }
 
-    private void ScheduleGreeting()
+    private void ScheduleGreeting(string? why)
     {
         CancelGreeting();
+        _summonVia = string.Equals(why, "hotkey", StringComparison.OrdinalIgnoreCase) ? "hotkey" : "rail";
+        _summonTouring = string.Equals(why, "tour", StringComparison.OrdinalIgnoreCase);
         _greetingTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(EmiSpeechCadence.SummonGreetingMs)
@@ -94,7 +96,12 @@ internal sealed partial class EmiDeskService
         CancelGreeting();
         if (!IsOut) return;
         var moment = EmiSpeechCadence.Greeting(LineEngine.EverSpent("firstContact"), LineEngine.EverSpent("desktopFirstBoot"));
-        Fire(moment, new { via = "rail", minutes = 0, touring = false });
+        var mute = _pendingMuteMoment;
+        _pendingMuteMoment = null;
+        if (mute != null) Fire(mute);
+        ScheduleEmptyLibrary();
+        Fire(moment, new { via = _summonVia, minutes = MinutesOut(), touring = _summonTouring });
+        _summonTouring = false;
     }
 
     private void CancelGreeting()
@@ -106,6 +113,7 @@ internal sealed partial class EmiDeskService
     internal void PanicSilence()
     {
         CancelGreeting();
+        CancelFollowups();
         Fire("panicPressed");
         _window?.CancelChain();
     }

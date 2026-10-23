@@ -5,6 +5,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Threading;
 using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 
@@ -16,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// height up, a 10 px tail, width 1.5x her body clamped 220..380, font 11 at a 220 px body
     /// (floor 10), line height 1.4x. Every chain frame that carries a bubble lands here through
     /// <see cref="OnBubbleTextCore"/>.
-    /// ponytail: the Blipese voice (WPF EmiVox.cs) and the book-side preference remain;
+    /// ponytail: the Blipese voice (WPF EmiVox.cs) remains;
     /// the shared Core placement clamps the bubble into the monitor work area.
     /// </summary>
     public partial class EmiDeskWindow
@@ -86,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _bubbleCanvas.Children.Add(_bubble);
             _bubble.SizeChanged += (_, _) => LayoutBubble();
             Resized += (_, _) => LayoutBubble();
-            Moved += (_, _) => LayoutBubble();
+            Moved += (_, _) => PostBubbleRelayout();
             AddHandler(KeyDownEvent, OnAskKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
 
@@ -137,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 var placement = EmiBubblePlacement.Resolve(
                     left, bodyX + bw * (1.0 - BubbleLeftFrac) - size.Width, size.Width,
-                    false, winW, workLeft, workRight);
+                    _book?.SideOfHer > 0, winW, workLeft, workRight);
                 left = placement.Left;
                 bool flip = placement.Flip;
                 if (top < 2) top = 2;
@@ -156,6 +157,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
             }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] bubble layout failed"); }
+        }
+
+        private bool _bookRelayoutPending;
+
+        // WPF PostBubbleRelayout: the book finishes placing before we ask which side it chose.
+        internal void PostBubbleRelayout()
+        {
+            if (_closingForGood || _bookRelayoutPending || _bubble is not { IsVisible: true }) return;
+            _bookRelayoutPending = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _bookRelayoutPending = false;
+                if (!_closingForGood) LayoutBubble();
+            }, DispatcherPriority.Background);
         }
 
         private void LayoutTail(double left, double bubbleBottom, double bubbleWidth, bool flip)

@@ -6,6 +6,8 @@ using Avalonia.Controls.ApplicationLifetimes;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Serilog;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.EmiDesk;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 {
@@ -13,8 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// The effects an offer chip fires on this head: WPF ConditioningControlPanel/Services/EmiDesk/EmiOffers.cs.
     /// Feasibility is checked at DRAW time and fails silently (LINES-SCHEMA 4): an effect this head
     /// cannot run refuses here, so the engine never puts that ask on the glass. No dead chips.
-    /// <para>ponytail: spiral, video, rain, tour:, book:, pinTop:, bedtime, packs and assets refuse
-    /// until wire-views-settings-emidesk-b-next ports their host; WPF :42-87 lists them.</para>
+    /// <para>ponytail: spiral, video, rain and tour: still refuse until their effect adapters are ported.</para>
     /// </summary>
     internal static class EmiOffers
     {
@@ -29,9 +30,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 var e = effect.Trim();
                 if (e.StartsWith("open:", StringComparison.OrdinalIgnoreCase))
                     return EmiTargets.Find(e.Substring(5)) is { Available: true, Locked: false };
+                if (e.StartsWith("pinTop:", StringComparison.OrdinalIgnoreCase))
+                    return EmiTargets.Find(e.Substring(7)) is { Available: true, Locked: false }
+                        && !EmiState.Current.Pins.Contains(e.Substring(7), StringComparer.OrdinalIgnoreCase);
+                if (e.StartsWith("book:", StringComparison.OrdinalIgnoreCase))
+                    return string.Equals(e.Substring(5).Trim(), "open", StringComparison.OrdinalIgnoreCase)
+                        && EmiBookCards.All.Count > 0 && EmiDeskService.Instance.Window is { Book: null };
                 return e.ToLowerInvariant() switch
                 {
-                    "none" => true,
+                    "none" or "packs" => true,
+                    "bedtime" => !EmiLineEngine.BedtimeSet,
+                    "assets" => string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)
+                        && Shell != null,
                     "burst" => X11Overlay.IsAvailable && HasImages(),
                     "shrink" => EmiDeskService.Instance.Window is { } w && w.BodyWidth > EmiDeskWindow.MinBodyWidth + 1,
                     _ => false
@@ -60,15 +70,66 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     t.Open();
                     return;
                 }
+                if (e.StartsWith("pinTop:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var id = e.Substring(7);
+                    if (EmiTargets.Find(id) == null) return;
+                    EmiSuggester.PinToTop(id);
+                    if (EmiDeskService.Instance.Window is { RingOpen: true } ring) ring.RebuildRing();
+                    EmiDeskService.Instance.Fire("pinAdded", new { target = id });
+                    return;
+                }
+                if (e.StartsWith("book:", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!string.Equals(e.Substring(5).Trim(), "open", StringComparison.OrdinalIgnoreCase)) return;
+                    EmiDeskService.Instance.Window?.OpenBook();
+                    EmiDeskService.Instance.Fire("effectFired", new { channel = "book", fromAsk });
+                    return;
+                }
                 switch (e.ToLowerInvariant())
                 {
                     case "none": return;
+                    case "bedtime":
+                        EmiState.Current.BedtimeUntil = BedtimeUntil(DateTime.Now);
+                        EmiState.SaveSoon();
+                        EmiDeskService.Instance.Fire("bedtimeSet", new { fromAsk });
+                        return;
+                    case "packs": _ = AppUpdater.OpenUrl(Shell, DiscordLinks.PackCatalogue); return;
+                    case "assets":
+                        if (Shell is { } main) { main.ShowFromTray(); main.ShowTab("assets"); }
+                        return;
                     case "burst": FireBurst(fromAsk); return;
                     case "shrink": FireShrink(); return;
                     default: Log.Debug("[EmiDesk] unknown effect {Effect}, ignored", e); return;
                 }
             }
             catch (Exception ex) { Log.Warning(ex, "[EmiDesk] effect {Effect} failed", e); }
+        }
+
+        private static MainShellWindow? Shell =>
+            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow;
+
+        // WPF SetBedtime: the next LOCAL 06:00, persisted as UTC. Exactly 06:00 means tomorrow.
+        internal static DateTime BedtimeUntil(DateTime now)
+        {
+            var six = now.Date.AddHours(6);
+            return (now >= six ? six.AddDays(1) : six).ToUniversalTime();
+        }
+
+        internal static bool LibraryIsEmpty() =>
+            string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)
+                && !HasImages() && !HasVideos();
+
+        private static bool HasVideos()
+        {
+            try
+            {
+                var dir = Path.Combine(CorePaths.EffectiveAssets, "videos");
+                return Directory.Exists(dir) && Directory.EnumerateFiles(dir, "*.*", SearchOption.AllDirectories)
+                    .Any(f => new[] { ".mp4", ".webm", ".mkv", ".avi", ".mov", ".wmv", ".m4v" }
+                        .Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] video scan failed"); return false; }
         }
 
         /// <summary>The burst a chip fires (tests swap it). WPF :494 TriggerFlashOnce(4, user duration).</summary>

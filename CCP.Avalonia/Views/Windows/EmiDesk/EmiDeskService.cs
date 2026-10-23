@@ -17,8 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// Dismiss :420, EnsureWindow :607, MaybeAskAboutMuting :1541, AvatarMuted :80. The dock chip,
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
-    /// <para>ponytail: not here yet, each a named WPF member: backSoon/weekend/bedtime beats,
-    /// the ambient moment bus, offers/effects, the nudge machine, the
+    /// <para>ponytail: not here yet, each a named WPF member:
+    /// the full ambient moment bus, remaining effects, the nudge machine, the
     /// knock (<c>TryKnock</c>) and the tube hand-off (<c>TubeDeskVisibility</c>). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
     /// </summary>
@@ -46,10 +46,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private bool WindowOnScreen => _window?.IsVisible == true;
 
         /// <summary>Summon her if she is away, send her away if she is out. A widget ON SCREEN wins over the flag.</summary>
-        public void Toggle()
+        public void Toggle(string? why = null)
         {
             if (IsOut || WindowOnScreen) Dismiss();
-            else _ = Summon();
+            else _ = Summon(why);
         }
 
         /// <summary>Bring her out. No-op when she is out or the feature is off.</summary>
@@ -89,9 +89,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 win.RunSummon();
                 bool first = !EmiState.Current.FirstBootSeen;
                 int summons = EmiState.NoteSummon();
-                ScheduleGreeting();
+                _outSinceUtc = Now().ToUniversalTime();
                 RaiseOutChanged();
                 Log.Information("[EmiDesk] summoned ({Why}), firstBoot={First}, summon #{N}", why ?? "user", first, summons);
+                ScheduleGreeting(why);
+                SummonBeats(summons);
             }
             catch (Exception ex)
             {
@@ -112,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // Invalidate a summon parked behind the mute prompt before anything else.
                 _summonGen++;
                 CancelGreeting();
+                CancelFollowups();
                 // WPF EmiDeskService.cs:422: sending her away ends the welcome show she is presenting.
                 if (_window?.PresentationActive == true) _window.StopPresentation();
 
@@ -123,6 +126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     IsOut = true;
                 }
 
+                Fire("dismissed", new { minutes = MinutesOut() });
+                _lastDismissUtc = Now().ToUniversalTime();
                 _window.RunDismiss(() =>
                 {
                     IsOut = false;
@@ -146,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (window == null) return null;
             _summonGen++;   // a summon parked behind the mute prompt must not finish over the show
             CancelGreeting();
+            CancelFollowups();
             if (!IsOut) window.RestorePlacement();
             IsOut = true; RaiseOutChanged();
             return window;
@@ -162,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     if (!ReferenceEquals(_window, win)) return;
                     _window = null;
                     CancelGreeting();
+                    CancelFollowups();
                     IsOut = false;
                     RaiseOutChanged();
                 };
@@ -203,6 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _mutePromptShownThisSession = true;
                 var choice = await AskMute();
                 _muteAccepted = choice != EmiMuteChoice.Keep;
+                _pendingMuteMoment = _muteAccepted ? "avatarMuted" : "avatarKept";
                 if (choice == EmiMuteChoice.DontAsk)
                 {
                     s.EmiDeskMuteDontAsk = true;
@@ -262,7 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     return;
                 }
                 // X delivers the press on the listener thread: marshal before touching UI.
-                HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(Toggle));
+                HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(() => Toggle("hotkey")));
                 if (HotkeyArmed) Log.Information("[EmiDesk] summon hotkey armed: {Chord}", chord);
                 else Log.Warning("[EmiDesk] summon hotkey {Chord} could not be grabbed: another client holds it. " +
                                  "The dock chip in the nav rail still summons her.", chord);

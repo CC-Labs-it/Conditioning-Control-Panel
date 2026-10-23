@@ -90,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 CmbSpice.SelectedIndex = Math.Max(0, Math.Min(2, s.EmiDeskSpice));
 
                 RefreshHotkeyButton();
+                RingPicker.Rebuild();
             }
             catch (Exception ex)
             {
