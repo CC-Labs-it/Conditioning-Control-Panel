@@ -184,6 +184,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var total = FreeTotal();
             TxtProfileViewerAchievements.Text = $"{unlocked} / {total}";
             Host?.SetProfileViewingSelf(true);
+            // WPF Browser.cs:1890: your Discord picture, only with ShareProfilePicture on.
+            Host?.LoadProfilePicture(OwnPictureUrl());
             Host?.ApplyOwnProfileWardrobe();
             SetXpMeter(s.PlayerLevel, s.PlayerXP);
             Host?.UpdateProfileShowcase(unlocked, total, progress?.UnlockedAchievements);
@@ -211,6 +213,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ShowAchievements(null, $"{entry.AchievementsCount} achievements unlocked");
             // entry.Xp is lifetime; the meter wants progress inside the level.
             Host?.SetProfileViewingSelf(isOwn);
+            // WPF Browser.cs:2152: the picture rides on the lookup below, so the empty slot is Pending (#847).
+            Host?.LoadProfilePicture(null, pending: entry.DisplayName.Length > 0 && !s.OfflineMode);
             // WPF Browser.cs:2290: the board row carries no cosmetics - yours from settings, theirs stripped until the lookup.
             if (isOwn) Host?.ApplyOwnProfileWardrobe();
             else Host?.ApplyViewedProfileWardrobe(null);
@@ -223,10 +227,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshProfileViewerAsync: GET /user/lookup, drawn only while the same user is still on screen.</summary>
         private async Task RefreshProfileViewerAsync(string name)
         {
-            var lookup = await LeaderboardTabView.NewClient().LookupUserAsync(name);
-            if (lookup == null || TxtProfileViewerName.Text != name) return;
+            UserLookupResult? lookup = null;
+            try { lookup = await LeaderboardTabView.NewClient().LookupUserAsync(name); }
+            catch (Exception ex) { Log.Warning(ex, "Failed to refresh profile viewer for {Name}", name); }
+            if (TxtProfileViewerName.Text != name) return;
+            // WPF ResolveProfilePictureUnavailable: a failed lookup must not leave the slot Pending forever.
+            if (lookup == null) { Host?.ResolveProfilePictureUnavailable(); return; }
             SetOnline(lookup.IsOnline, lookup.IsOnline ? "Online" : "Offline");
-            if (string.Equals(name, CoreSettings.Current.UserDisplayName, StringComparison.OrdinalIgnoreCase))
+            var own = string.Equals(name, CoreSettings.Current.UserDisplayName, StringComparison.OrdinalIgnoreCase);
+            // WPF Browser.cs:2416: the server's picture, else your own Discord one on your own card.
+            Host?.LoadProfilePicture(!string.IsNullOrEmpty(lookup.AvatarUrl) ? lookup.AvatarUrl : own ? OwnPictureUrl() : null);
+            if (own)
             {
                 ApplyIdentityBadges(false, null, CoreAccount.IsWhitelisted);
                 Host?.ApplyOwnProfileWardrobe();
@@ -239,6 +250,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (lookup.Achievements is { Count: > 0 }) ShowAchievements(lookup.Achievements, "");
             else if (lookup.AchievementsCount > 0) ShowAchievements(null, $"{lookup.AchievementsCount} achievements unlocked");
         }
+
+        private static string? OwnPictureUrl() =>
+            CoreSettings.Current.ShareProfilePicture && Platform.AccountSeed.Discord?.IsAuthenticated == true
+                ? Platform.AccountSeed.Discord.GetAvatarUrl(256) : null;
 
         private void ShowCard(bool og)
         {
@@ -380,7 +395,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// through the sender's DataContext exactly as the WPF handler reads it.</summary>
         private void ProfileAchievementTile_Click(object? sender, PointerReleasedEventArgs e)
         {
-            if (sender is Control { DataContext: ProfileAchievementTile }) { /* mw.ToggleOwnAchievementPin(tile.Id) */ }
+            if (sender is Control { DataContext: ProfileAchievementTile tile }) Host?.ToggleOwnAchievementPin(tile.Id);
         }
     }
 

@@ -342,6 +342,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 fill.Fill = loggedIn ? Tabs.LeaderboardRow.BuildAvatarBrush(name) : ProfileBubbleNeutralBrush;
                 initials.IsVisible = true;
 
+                // WPF ProfileBubble.cs:175: the equipped preset bust beats initials; a real picture beats both.
+                if (Helpers.ModArt.AvatarPreset(CoreSettings.Current.ProfileCosmetics?.AvatarId) is { } preset)
+                    PaintBubblePhoto(new ImageBrush(preset) { Stretch = Stretch.UniformToFill });
+
                 string? url = null;
                 if (CoreSettings.Current.ShareProfilePicture && AccountSeed.Discord?.IsAuthenticated == true)
                     url = AccountSeed.Discord.GetAvatarUrl(128);
