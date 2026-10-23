@@ -14,7 +14,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 ///
 /// <para>Only X11/XWayland surfaces report: under Wayland the pointer over a native Wayland window is
 /// invisible to X clients, so click-away there only sees clicks on X windows. Null when there is no
-/// X display at all (headless, Windows, macOS). One owned connection, opened lazily, UI thread only.</para>
+/// X display at all (headless, macOS). Windows uses GetCursorPos/GetAsyncKeyState below.
+/// One owned X connection, opened lazily, UI thread only.</para>
 /// </summary>
 internal static class X11Pointer
 {
@@ -37,6 +38,7 @@ internal static class X11Pointer
     {
         try
         {
+            if (OperatingSystem.IsWindows()) return ReadWindows();
             if (!_tried)
             {
                 _tried = true;
@@ -64,4 +66,19 @@ internal static class X11Pointer
             return null;
         }
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WinPoint { public int X, Y; }
+    [DllImport("user32.dll")] private static extern bool GetCursorPos(out WinPoint point);
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int key);
+
+    private static (PixelPoint At, bool Pressed, bool Escape)? ReadWindows()
+    {
+        if (!GetCursorPos(out var p)) return null;
+        // High bit only: never consume the shared "pressed since last read" low bit.
+        return (new PixelPoint(p.X, p.Y),
+            ((GetAsyncKeyState(0x01) | GetAsyncKeyState(0x02)) & 0x8000) != 0,
+            (GetAsyncKeyState(0x1b) & 0x8000) != 0);
+    }
+
 }

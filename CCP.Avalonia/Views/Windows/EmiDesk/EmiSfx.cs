@@ -13,9 +13,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// <para>SAFETY IS SILENCE (WPF EmiSfx.Audible): Core <see cref="CoreAudio.IsOutputSuppressed"/>, a
     /// master volume of 0 and an active line-engine hold each mute her. The throttle slot is spent
     /// before that gate, as on WPF, so a muted cue still counts against the 130 ms floor.
-    /// ponytail: files resolve through ContentLocator only: WPF's ModResourceResolver.ResolveAudioPath (a
-    /// mod's replacement cue, the .wav/.mp3 swap) has no Core sounds seam yet, so a mod cannot
-    /// re-voice these here; a stock install sounds right.
+    /// Cues resolve through CoreModArt's audio override (.wav/.mp3 swap) before ContentLocator,
+    /// matching WPF ModResourceResolver.ResolveAudioPath for each candidate in order.
     /// The toss cues (Lift/Bump/Thud/Chime) come with the toss port (row win-emi-desk-extras).</para>
     /// </summary>
     internal static class EmiSfx
@@ -81,7 +80,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (!Audible(out float master)) return;
                 foreach (var rel in candidates)
                 {
-                    var path = ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
+                    var path = CoreModArt.AudioOverridePath(rel)
+                        ?? ContentLocator.Resolve(Path.Combine("Resources", "sounds", rel.Replace('/', Path.DirectorySeparatorChar)));
                     if (string.IsNullOrEmpty(path) || !File.Exists(path)) continue;
                     CoreAudio.PlayOneShot(path, Math.Clamp(master * scale, 0f, 1f), tag);
                     return;

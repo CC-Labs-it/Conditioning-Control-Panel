@@ -54,10 +54,8 @@
         physical-pixels-over-DPI arithmetic the widget uses (SEAMS.md: BodyScreenRect and
         RingAnchorScreenPoint are PHYSICAL PIXELS, never DIPs).
 
-        Nothing in here is hit-testable except the cards themselves - on Windows, where a layered
-        window does not hit-test fully transparent pixels. On X11 a window hit-tests its whole
-        rectangle whatever its alpha, so the gaps in the fan are NOT click-through on this head
-        yet; see the ponytail note about X11Overlay in the code-behind.
+        Only the cards take input. The platform input region lets clicks in the gaps reach the
+        desktop; the non-consuming desktop snapshot folds the fan on click-away or Escape.
     -->
     <Canvas x:Name="Field" ClipToBounds="False"/>
 </Window>

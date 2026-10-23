@@ -166,6 +166,7 @@ internal sealed partial class EmiDeskService
     public void StopRingSpeechForPanic()
     {
         StopRingNudges();
+        _window?.CloseRing();
         _window?.CancelChain();
         Fire("panicPressed");
     }

@@ -96,12 +96,14 @@ internal static class Win32Overlay
     /// its rects every step gets WS_EX_TRANSPARENT toggled by the cursor: input only while the pointer
     /// is over a rect, click-through everywhere else - the same answer WPF's per-pixel layered bubble
     /// windows gave. Only a changed state touches the window style.</summary>
-    internal static bool SetInputRects(TopLevel window, IntPtr hwnd, global::Avalonia.PixelRect[] rects, int count)
+    internal static bool SetInputRects(TopLevel window, IntPtr hwnd, global::Avalonia.PixelRect[] rects, int count, bool passive = false)
     {
         if (!OperatingSystem.IsWindows() || !GetCursorPos(out var p) || !GetWindowRect(hwnd, out var r)) return false;
+        if (passive && !IsPassive(window)) Passive.AddOrUpdate(window, Passive);
         var through = !Hits(rects, count, p.X - r.Left, p.Y - r.Top);
         var box = Track(window);
-        if (box.Value == through && (GetWindowLong(hwnd, GwlExStyle) & WsExTransparent) != 0 == through) return true;
+        if (box.Value == through && ((GetWindowLong(hwnd, GwlExStyle) & WsExTransparent) != 0) == through
+            && (!passive || (GetWindowLong(hwnd, GwlExStyle) & WsExNoActivate) != 0)) return true;
         return SetClickThrough(window, hwnd, through);
     }
 

@@ -165,8 +165,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF MainWindow.Lab.cs:148: the pass gate and the AI gate in front of the launch.</summary>
         internal async void BtnStartIntake_Click(object? sender, RoutedEventArgs e)
+            => await StartIntake(TopLevel.GetTopLevel(this) as Window);
+
+        /// <summary>The Begin Intake and EMI ring doors share the same pass/AI gates and launcher.</summary>
+        internal static async System.Threading.Tasks.Task StartIntake(Window? owner)
         {
-            var owner = TopLevel.GetTopLevel(this) as Window;
             var pass = App.IntakePass;
             if (!pass.CanStartIntake)
             {

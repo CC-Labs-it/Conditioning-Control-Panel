@@ -44,7 +44,7 @@ public sealed class EmiRingWiringTests
     {
         var ids = EmiTargets.All.Select(t => t.Id).ToList();
         // Table order, minus exactly the doors this head cannot open.
-        var hidden = new[] { "arcademy", "dtrh", "intake", "spiral", "goon", "backroom", "justdrop" };
+        var hidden = new[] { "arcademy", "dtrh", "spiral", "goon", "backroom" };
         Assert.Equal(EmiDoors.All.Select(d => d.Id).Except(hidden), ids);
 
         // A brand new user: no pins, no usage, so the first six available doors in order.

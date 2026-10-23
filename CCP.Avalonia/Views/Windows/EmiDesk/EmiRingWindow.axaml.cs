@@ -1,5 +1,6 @@
 ﻿using System;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
@@ -47,55 +48,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// <c>BodyScreenRect</c> and <c>RingAnchorScreenPoint</c> are PHYSICAL PIXELS, and converting
     /// them with an assumed scale of 1.0 is the coordinate trap that ate the gaze work.</para>
     ///
-    /// PORTED from ConditioningControlPanel/Windows/EmiDesk/EmiRingWindow.xaml.cs. The card, the
-    /// fan, the pop and the fold are all real; the deviations, every one of them forced:
-    ///  - <b>The owner is gone.</b> The WPF ring read <c>_owner.BodyScreenRect</c> and
-    ///    <c>_owner.RingAnchorScreenPoint</c> off <c>EmiDeskWindow</c>, which is not ported yet, so
-    ///    the two rectangles come in through <see cref="SetWidgetGeometry"/> instead. That is the
-    ///    whole of what the ring ever wanted from her.
-    ///  - <b>Win32.</b> <c>SetWindowLong(GWL_EXSTYLE, WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)</c> is
-    ///    <c>ShowInTaskbar="False"</c> + <c>ShowActivated="False"</c> in the markup, so
-    ///    <c>SourceInitialized</c> and its two P/Invokes go with it. <c>NativeStyle()</c> read
-    ///    <c>WS_VISIBLE</c> straight off the HWND because WPF's own properties lied during the
-    ///    invisible-first-open bug; there is no X11 twin, so the log line carries
-    ///    <c>IsVisible</c> and the caveat that it is the property that once lied.
-    ///  - <b>Click-through.</b> On Windows a layered window does not hit-test fully transparent
-    ///    pixels, which is what let a click land on the desktop THROUGH a gap in the fan. X11 hit
-    ///    tests the whole rectangle, and <c>X11Overlay.SetClickThrough</c> is all-or-nothing - the
-    ///    whole window, which would kill the cards too. ponytail: POSSIBLE, and blocked on one
-    ///    member the shim does not expose yet, not on a service:
-    ///    <c>X11Overlay.SetInputRegion(TopLevel, IReadOnlyList&lt;PixelRect&gt;)</c>, the cards'
-    ///    own rectangles. <c>SetClickThrough</c> already builds an XFixes region and passes it to
-    ///    <c>XFixesSetWindowShapeRegion</c> - it just only ever builds the EMPTY one - and that
-    ///    method's own doc says a non-empty region is strictly more capable than
-    ///    <c>WS_EX_TRANSPARENT</c>. It is a CCP.Avalonia/Platform/ change, not a view one. Until
-    ///    then a click in a gap does not reach the desktop - but it is no longer swallowed
-    ///    either, see <see cref="InstallHooks"/>.
-    ///  - <b>The global hooks.</b> <c>GlobalMouseHook</c> / <c>GlobalKeyboardHook</c> are
-    ///    <c>SetWindowsHookEx</c>, which has NO equivalent on this head, and with them goes
-    ///    <c>_hotPx</c> - the frozen rect snapshot existed only to answer the hook thread. The half
-    ///    of click-outside-to-close that lands INSIDE this window is recovered locally
-    ///    (<see cref="InstallHooks"/>); the desktop-wide half and Escape-to-close are still gone.
-    ///    Every other road into <see cref="CloseRing"/> (the pick, <see cref="Kill"/>, the caller's
-    ///    own toggle) is intact.
-    ///  - <b>The DPI.</b> <c>PresentationSource…TransformToDevice</c> and the
-    ///    <c>System.Drawing.Graphics</c> fallback become <c>Screens.ScreenFromWindow(this).Scaling</c>;
-    ///    <c>System.Windows.Forms.Screen.FromPoint</c> becomes <c>Screens.ScreenFromPoint</c>.
-    ///  - <b>The animations.</b> <c>BeginAnimation</c> becomes <see cref="Tween"/>, a timer that
-    ///    writes the value, cancelled through one <c>CancellationTokenSource</c> per opening instead
-    ///    of a null <c>BeginAnimation</c> per property. It is NOT an Avalonia <c>Animation</c>, and
-    ///    the first cut of this port was: <c>RunAsync</c> on a <c>ScaleTransform</c> throws, so the
-    ///    pop, the fold and the hover grow were all silently inert. Read <see cref="Tween"/> before
-    ///    reaching for <c>Animation</c> here again. WPF's <c>BackEase.Amplitude</c> has no Avalonia
-    ///    equivalent - <c>BackEaseOut</c> is fixed at roughly amplitude 1.0, three times the settle
-    ///    the owner tuned this to - so the pop's move uses <c>CubicEaseOut</c> and loses the
-    ///    overshoot rather than exaggerating it.
-    ///  - <b>PinToggled is dropped.</b> The WPF ring declares the event and never raises it,
-    ///    because <c>EmiDeskWindow.Ring.cs</c> subscribes for the pin-nudge latch and the pin is
-    ///    made from her options menu. Neither end of that exists on this head yet, so it would be
-    ///    an unraised member with no subscriber; take it back with EmiDeskWindow.
-    ///  - <b>The services.</b> <c>EmiSuggester.Compose</c> and <c>EmiRingLayout.Solve</c> are Core;
-    ///    the sfx are this head's <c>EmiSfx</c>, the pixel font is the shipped TTF, art is ModArt.
+    /// Ported from WPF EmiRingWindow.xaml.cs. Geometry is supplied by the desk in physical pixels;
+    /// Core solves the fan and composes its slots. Desktop click-away/Escape reuse X11Pointer's
+    /// non-consuming snapshot and X11Overlay's card input regions (Windows dispatches to its shim).
+    /// ponytail: a 30 ms poll, like the options panel, can miss a shorter press and cannot observe
+    /// native Wayland clients. Pop/fold/hover use cancellable value tweens, never RunAsync on a Transform.
     /// </summary>
     public partial class EmiRingWindow : Window
     {
@@ -288,6 +245,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             AvaloniaXamlLoader.Load(this);
             _field = this.FindControl<Canvas>("Field")!;
             SetWidgetGeometry(bodyPx, anchorPx);
+            ReadPointer = ReadDesktopPointer;
+            Closed += (_, _) => RemoveHooks();
         }
 
         /// <summary>
@@ -401,7 +360,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 // Unconditionally first, exactly as in the original: the hooks must never outlive
-                // the gesture that armed them. Both are stubs on this head - see InstallHooks.
+                // the gesture that armed them.
                 RemoveHooks();
 
                 // A fold already owns this closing. Not a second RingClosed, not a second fold.
@@ -638,9 +597,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 Canvas.SetTop(_cards[i], Math.Round(plan[i].Y - minY));
             }
 
-            // The frozen hit-rect snapshot lived here. It answered the global mouse hook and nothing
-            // else; the local click-away that replaces part of that hook reads the cards' own hit
-            // testing instead, so there is nothing to snapshot - see InstallHooks.
+            // Window-relative physical pixels for the native input region, desktop pixels for
+            // click-away. Only the cards take input; her silhouette belongs to the desk's toggle.
+            RefreshInputRegions();
 
             // Information, not Debug: the file sink's floor is Information, so a Debug line here is
             // invisible in the log the owner actually sends back. Everything needed to reproduce a
@@ -1006,13 +965,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 var token = RestartAnimations();
 
-                // Two easings, not one. WPF gave the MOVE a BackEase at amplitude 0.30 - a settle you
-                // feel rather than watch. Avalonia's BackEaseOut has no amplitude and overshoots
-                // roughly three times as far, which is the "snap" the owner had this retuned away
-                // from, so the move takes the SCALE's cubic instead and loses the settle. ponytail:
-                // an amplitude-carrying BackEase is ~15 lines of Easing subclass; write it when a
-                // second view wants one.
-                var move = new CubicEaseOut();
+                // WPF BackEase EaseOut, amplitude 0.30, on translation only.
+                var move = PopMoveEasing;
                 var grow = new CubicEaseOut();
                 var fadeEase = new QuadraticEaseOut();
 
@@ -1173,58 +1127,90 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         // The card's own pin gesture lived here. It is gone (owner, third live run) and pinning is
-        // in her options menu, which is EmiDeskWindow's - see the PinToggled note in the class doc.
+        // in her options menu through NotePinMadeElsewhere.
 
-        // ---------------------------------------------------------------- the hooks
+        // ---------------------------------------------------------------- desktop input
 
-        /// <summary>
-        /// CLICK AWAY TO FOLD, as far as this head can reach it.
-        ///
-        /// <para>WPF installed a low-level <c>SetWindowsHookEx</c> MOUSE hook: a click anywhere on
-        /// the desktop outside the cards' hot rects folded the ring, and the hook never swallowed
-        /// that click. X11 has no equivalent a view can reach - the shape of it is a passive XI2
-        /// grab, which belongs next to <c>X11Overlay</c> in its own layer, not bolted onto a
-        /// window - so the desktop-wide half of the gesture stays lost.</para>
-        ///
-        /// <para>WHAT IS RECOVERED HERE is the part that lands inside this window, and it is the
-        /// part the port actually broke. On Windows a layered window does not hit-test fully
-        /// transparent pixels, so a click in a GAP between two cards fell straight through to
-        /// whatever was underneath and the hook read it as a dismissal. On X11 the server hit-tests
-        /// the whole rectangle, so that same click hits this window and, with no handler, is
-        /// silently eaten - the fan's own gaps swallowing the click that opened them. Folding on it
-        /// is strictly better than eating it and is the same OUTCOME the hook produced; what is
-        /// still missing is that the click also reached the desktop.</para>
-        ///
-        /// <para>On <c>PointerReleased</c>, not pressed: a card's own handler marks the release
-        /// handled, and Avalonia does not raise a bubbled handler for an already-handled event, so
-        /// a pick can never be read as a dismissal. Escape stays lost either way - this window is
-        /// <c>Focusable="False"</c> and <c>ShowActivated="False"</c>, so it never has the keyboard
-        /// and a local <c>KeyDown</c> would recover nothing.</para>
-        /// </summary>
-        private void InstallHooks()
+        private PixelRect[] _inputRects = Array.Empty<PixelRect>();
+        private PixelRect[] _hotPx = Array.Empty<PixelRect>();
+        private DispatcherTimer? _awayPoll;
+        private bool _wasDown, _wasEsc;
+        internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer;
+
+        private (PixelPoint At, bool Pressed, bool Escape)? ReadDesktopPointer()
         {
-            PointerReleased -= OnClickAway;
-            PointerReleased += OnClickAway;
+            // Headless tests/renders never read the real desktop, even if a display is available.
+            var kind = TryGetPlatformHandle()?.HandleDescriptor;
+            return kind is "HWND" or "XID" ? X11Pointer.Read() : null;
         }
 
-        /// <inheritdoc cref="InstallHooks"/>
-        private void RemoveHooks() => PointerReleased -= OnClickAway;
+        private void ApplyInputRegion() => X11Overlay.SetInputRects(this, _inputRects, _inputRects.Length, passive: true);
 
-        /// <inheritdoc cref="InstallHooks"/>
-        private void OnClickAway(object? sender, PointerReleasedEventArgs e)
+        private void InstallHooks()
         {
+            RemoveHooks();
+            // Ignore the gesture that opened the ring until it is released.
+            _wasDown = _wasEsc = true;
+            // Layout ran before Show, when there may have been no native handle yet.
+            RefreshInputRegions();
+            PointerReleased += OnClickAway;
+            _awayPoll = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Background, (_, _) => PollClickAway());
+            _awayPoll.Start();
+        }
+
+        private void RefreshInputRegions()
+        {
+            double s = DipScale;
+            _inputRects = _cards.Select(c => new PixelRect(
+                (int)Math.Round(Canvas.GetLeft(c) * s), (int)Math.Round(Canvas.GetTop(c) * s),
+                (int)Math.Ceiling(CardW * s), (int)Math.Ceiling(CardH * s))).ToArray();
+            _hotPx = _inputRects.Select(r => new PixelRect(Position.X + r.X, Position.Y + r.Y, r.Width, r.Height))
+                .Append(_bodyPx).ToArray();
+            ApplyInputRegion();
+        }
+
+        private void RemoveHooks()
+        {
+            PointerReleased -= OnClickAway;
+            _awayPoll?.Stop();
+            _awayPoll = null;
+            _hotPx = _inputRects = Array.Empty<PixelRect>();
+            ApplyInputRegion();   // cards in flight take no clicks, from the start of the fold
+        }
+
+        internal void PollClickAway()
+        {
+            if (!_open) return;
             try
             {
-                if (!_open || _folding) return;
-
-                // Any button, exactly as the hook: it read a right-click outside the hot rects as a
-                // dismissal too.
-                Log.Information("[EmiDesk] ring dismissed by a click in the fan");
-                CloseRing();
+                // Windows' shim updates click-through as the pointer moves between cards and gaps.
+                ApplyInputRegion();
+                if (ReadPointer() is not { } r) return;
+                bool press = r.Pressed && !_wasDown, escape = r.Escape && !_wasEsc;
+                _wasDown = r.Pressed;
+                _wasEsc = r.Escape;
+                if (escape || (press && Array.TrueForAll(_hotPx, h => !h.Contains(r.At)))) CloseRing();
             }
-            catch (Exception ex)
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring click-away poll failed"); }
+        }
+
+        private void OnClickAway(object? sender, PointerReleasedEventArgs e)
+        {
+            // Local fallback when native input regions are unavailable. A right-click over a card
+            // is intentionally inert in WPF, just like the left press before its pick on release.
+            if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
+            if (_open && Array.TrueForAll(_hotPx, h => !h.Contains(this.PointToScreen(e.GetPosition(this))))) CloseRing();
+        }
+
+        internal static Easing PopMoveEasing { get; } = new RingPopEase();
+
+        private sealed class RingPopEase : Easing
+        {
+            public override double Ease(double progress)
             {
-                Log.Debug(ex, "[EmiDesk] ring click-away failed");
+                // WPF BackEase.EaseInCore: t^3 - amplitude * t * sin(pi*t), reflected for EaseOut.
+                double t = 1 - progress;
+                return 1 - t * t * t + 0.30 * t * Math.Sin(Math.PI * t);
             }
         }
     }

@@ -181,9 +181,9 @@ internal static class X11Overlay
     /// <summary>Several input rects (window-relative px); count 0 = fully click-through. Allocation-
     /// free after the first call at a given size, so a per-frame caller (the bubble field) costs
     /// one XFixes request, not garbage.</summary>
-    internal static bool SetInputRects(TopLevel window, PixelRect[] rects, int count)
+    internal static bool SetInputRects(TopLevel window, PixelRect[] rects, int count, bool passive = false)
     {
-        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetInputRects(window, hwnd, rects, count);
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetInputRects(window, hwnd, rects, count, passive);
         if (!TryGetXid(window, out var xid)) return false;
         lock (Gate)
         {

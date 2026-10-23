@@ -6,6 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Services.JustDrop;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
@@ -16,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// availability, lock probe and opener this mirrors door for door.
     ///
     /// <para>ponytail: HIDDEN, not faked, until this head has their surface: arcademy, dtrh,
-    /// intake, spiral (overlay), goon, backroom and justdrop. Each is a host window or overlay no
+    /// spiral (timed overlay), goon and backroom. Each needs a host or timed-overlay API no
     /// Avalonia code launches yet; a null from <see cref="Door"/> keeps the card out of the ring the
     /// same way an unavailable door does. Picks use the ring moment service, including locked-card feedback.</para>
     /// </summary>
@@ -70,6 +71,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             "flashes" => Free(() => Rack("flash")),
             "codex" => Free(() => EmiDeskService.Instance.Window?.OpenBook()),
             "videos" => Free(() => Rack("video")),
+            "intake" => (Always, () => !App.IntakePass.CanStartIntake,
+                () => _ = Views.Tabs.GradedIntakeTabView.StartIntake(Shell)),
+            "justdrop" => (() => JustDropService.DoorAvailable, Never, () => Nav("justdrop")),
             "subliminals" => Free(() => Rack("subliminal")),
             "bubbles" => Free(() => Rack("bubbles")),
             "pinkfilter" => Free(() => Rack("pinkfilter")),
@@ -121,7 +125,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     var name = Loc.Get("emi_desk_target_" + id);
                     string? daily = id is "awareness" or "remote" or "takeover" ? id : null;
-                    if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
+                    if (id == "intake") TierGate.DemandLab(name);
+                    else if (daily == null) TierGate.DemandPremium(name); else TierGate.DemandPremium(name, daily);
                     EmiDeskService.Instance.Fire("lockedCardTapped", new { target = id });
                     return;
                 }

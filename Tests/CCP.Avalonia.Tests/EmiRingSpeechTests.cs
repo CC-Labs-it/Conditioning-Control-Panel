@@ -119,7 +119,10 @@ public sealed class EmiRingSpeechTests
             Assert.True(st.PinGistGot);
             Assert.Single(moments.Where(m => m == "pinAdded"));
             desk.Say("panic cuts this");
+            desk.ToggleRing();
+            Assert.True(desk.RingOpen);
             service.StopRingSpeechForPanic();
+            Assert.False(desk.RingOpen);
             Assert.False(desk.ChainLive);
             Assert.DoesNotContain(desk.BubbleHost.Children.OfType<Border>(), b => b.IsVisible);
             Assert.Contains("panicPressed", moments);
