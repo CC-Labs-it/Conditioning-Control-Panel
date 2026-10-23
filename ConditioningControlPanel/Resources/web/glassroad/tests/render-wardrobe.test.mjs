@@ -163,13 +163,13 @@ test('art5: under the rig the procedural squash, twist, knock and lifts give way
 });
 
 test('art5: a stable look per seat: distinct outfits for the seven bots, vehicles mixed, the player is EMI', () => {
-  assert.equal(C.outfits.length, 8); assert.equal(C.vehicles.length, 2);
+  assert.equal(C.outfits.length, 8); assert.equal(C.vehicles.length, 10);
   assert.deepEqual(lookForSeat(0, 7, C), DEFAULT_LOOK);
   const looks = [1, 2, 3, 4, 5, 6, 7].map((s) => lookForSeat(s, 7, C));
   assert.equal(new Set(looks.map((l) => l.outfit)).size, 7);
   assert.deepEqual(looks, [1, 2, 3, 4, 5, 6, 7].map((s) => lookForSeat(s, 7, C)), 'stable');
   const vs = new Set(looks.map((l) => l.vehicle));
-  assert.ok(vs.has(null) && vs.size >= 2, 'some teacups and some variants');
+  assert.ok(vs.size >= 2, 'multiple stable kart variants');
   assert.notDeepEqual(looks, [1, 2, 3, 4, 5, 6, 7].map((s) => lookForSeat(s, 'other', C)));
   assert.equal(seedHash(7), seedHash('7'));
   // remote ids: kept when known, an unknown id falls back to the default look field by field

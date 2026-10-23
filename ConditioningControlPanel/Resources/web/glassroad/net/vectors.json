@@ -21,7 +21,7 @@
   "emi-outfit-croupier",
   "emi-outfit-pool",
   "emi-outfit-varsity",
-  "emi-outfit-labcoat",
+  "emi-outfit-builder",
   "emi-outfit-cheer",
   "emi-outfit-swim",
   "emi-outfit-drone-protocol",
@@ -30,7 +30,15 @@
  "vehicles": [
   "emi-teacup-kart",
   "emi-vehicle-petal",
-  "emi-vehicle-trinket"
+  "emi-vehicle-trinket",
+  "emi-vehicle-pendulum",
+  "emi-vehicle-reverie",
+  "emi-vehicle-house-edge",
+  "emi-vehicle-checkmate",
+  "emi-vehicle-lovebomb",
+  "emi-vehicle-feedback",
+  "emi-vehicle-velvet-lock",
+  "emi-vehicle-undertow"
  ],
  "karts": [
   {
@@ -1011,7 +1019,7 @@
      "vehicle": "emi-teacup-kart"
     },
     {
-     "outfit": "emi-outfit-labcoat",
+     "outfit": "emi-outfit-builder",
      "vehicle": "emi-vehicle-petal"
     },
     {
@@ -1020,23 +1028,23 @@
     },
     {
      "outfit": "emi-outfit-pool",
-     "vehicle": "emi-teacup-kart"
+     "vehicle": "emi-vehicle-pendulum"
     },
     {
      "outfit": "emi-outfit-cheer",
-     "vehicle": "emi-vehicle-petal"
+     "vehicle": "emi-vehicle-reverie"
     },
     {
      "outfit": "emi-outfit-snow-day",
-     "vehicle": "emi-vehicle-trinket"
+     "vehicle": "emi-vehicle-house-edge"
     },
     {
      "outfit": "emi-outfit-varsity",
-     "vehicle": "emi-teacup-kart"
+     "vehicle": "emi-vehicle-checkmate"
     },
     {
      "outfit": "emi-outfit-swim",
-     "vehicle": "emi-vehicle-petal"
+     "vehicle": "emi-vehicle-lovebomb"
     }
    ]
   },
@@ -1045,35 +1053,35 @@
    "seats": [
     {
      "outfit": "emi-outfit-snow-day",
-     "vehicle": "emi-vehicle-petal"
+     "vehicle": "emi-vehicle-lovebomb"
     },
     {
      "outfit": "emi-outfit-varsity",
-     "vehicle": "emi-vehicle-trinket"
+     "vehicle": "emi-vehicle-feedback"
     },
     {
      "outfit": "emi-outfit-swim",
-     "vehicle": "emi-teacup-kart"
+     "vehicle": "emi-vehicle-velvet-lock"
     },
     {
      "outfit": "emi-outfit-croupier",
-     "vehicle": "emi-vehicle-petal"
+     "vehicle": "emi-vehicle-undertow"
     },
     {
-     "outfit": "emi-outfit-labcoat",
-     "vehicle": "emi-vehicle-trinket"
-    },
-    {
-     "outfit": "emi-outfit-drone-protocol",
+     "outfit": "emi-outfit-builder",
      "vehicle": "emi-teacup-kart"
     },
     {
-     "outfit": "emi-outfit-pool",
+     "outfit": "emi-outfit-drone-protocol",
      "vehicle": "emi-vehicle-petal"
     },
     {
-     "outfit": "emi-outfit-cheer",
+     "outfit": "emi-outfit-pool",
      "vehicle": "emi-vehicle-trinket"
+    },
+    {
+     "outfit": "emi-outfit-cheer",
+     "vehicle": "emi-vehicle-pendulum"
     }
    ]
   },
@@ -1082,35 +1090,35 @@
    "seats": [
     {
      "outfit": "emi-outfit-snow-day",
-     "vehicle": "emi-teacup-kart"
+     "vehicle": "emi-vehicle-pendulum"
     },
     {
      "outfit": "emi-outfit-varsity",
-     "vehicle": "emi-vehicle-petal"
+     "vehicle": "emi-vehicle-reverie"
     },
     {
      "outfit": "emi-outfit-swim",
-     "vehicle": "emi-vehicle-trinket"
+     "vehicle": "emi-vehicle-house-edge"
     },
     {
      "outfit": "emi-outfit-croupier",
-     "vehicle": "emi-teacup-kart"
+     "vehicle": "emi-vehicle-checkmate"
     },
     {
-     "outfit": "emi-outfit-labcoat",
-     "vehicle": "emi-vehicle-petal"
+     "outfit": "emi-outfit-builder",
+     "vehicle": "emi-vehicle-lovebomb"
     },
     {
      "outfit": "emi-outfit-drone-protocol",
-     "vehicle": "emi-vehicle-trinket"
+     "vehicle": "emi-vehicle-feedback"
     },
     {
      "outfit": "emi-outfit-pool",
-     "vehicle": "emi-teacup-kart"
+     "vehicle": "emi-vehicle-velvet-lock"
     },
     {
      "outfit": "emi-outfit-cheer",
-     "vehicle": "emi-vehicle-petal"
+     "vehicle": "emi-vehicle-undertow"
     }
    ]
   },
@@ -1119,27 +1127,27 @@
    "seats": [
     {
      "outfit": "emi-outfit-swim",
-     "vehicle": "emi-teacup-kart"
+     "vehicle": "emi-vehicle-house-edge"
     },
     {
      "outfit": "emi-outfit-croupier",
-     "vehicle": "emi-vehicle-petal"
+     "vehicle": "emi-vehicle-checkmate"
     },
     {
-     "outfit": "emi-outfit-labcoat",
-     "vehicle": "emi-vehicle-trinket"
+     "outfit": "emi-outfit-builder",
+     "vehicle": "emi-vehicle-lovebomb"
     },
     {
      "outfit": "emi-outfit-drone-protocol",
-     "vehicle": "emi-teacup-kart"
+     "vehicle": "emi-vehicle-feedback"
     },
     {
      "outfit": "emi-outfit-pool",
-     "vehicle": "emi-vehicle-petal"
+     "vehicle": "emi-vehicle-velvet-lock"
     },
     {
      "outfit": "emi-outfit-cheer",
-     "vehicle": "emi-vehicle-trinket"
+     "vehicle": "emi-vehicle-undertow"
     },
     {
      "outfit": "emi-outfit-snow-day",

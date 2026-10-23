@@ -42,18 +42,18 @@ export const PLATFORMS = Object.freeze(['desktop', 'web', 'phone']);
 export const PULSE = Object.freeze({ HOP: 1, LAND: 2, LAND_HEAVY: 4, BOOST: 8, LIP: 16, TRICK: 32, WORD: 64, BUBBLE: 128 });
 
 /** Looks (Astra wardrobe r4 #2623, vehicle variants #2624). */
-export const LOOK_OUTFITS = Object.freeze(['emi-outfit-croupier', 'emi-outfit-pool', 'emi-outfit-varsity', 'emi-outfit-labcoat',
+export const LOOK_OUTFITS = Object.freeze(['emi-outfit-croupier', 'emi-outfit-pool', 'emi-outfit-varsity', 'emi-outfit-builder',
   'emi-outfit-cheer', 'emi-outfit-swim', 'emi-outfit-drone-protocol', 'emi-outfit-snow-day']);
-export const LOOK_VEHICLES = Object.freeze(['emi-teacup-kart', 'emi-vehicle-petal', 'emi-vehicle-trinket']);
+export const LOOK_VEHICLES = Object.freeze(['emi-teacup-kart', 'emi-vehicle-petal', 'emi-vehicle-trinket', 'emi-vehicle-pendulum', 'emi-vehicle-reverie', 'emi-vehicle-house-edge', 'emi-vehicle-checkmate', 'emi-vehicle-lovebomb', 'emi-vehicle-feedback', 'emi-vehicle-velvet-lock', 'emi-vehicle-undertow']);
 export const DEFAULT_LOOK = Object.freeze({ outfit: null, vehicle: 'emi-teacup-kart' });
 
 /** A look with unknown ids replaced by the defaults. */
 export function normLook(look) {
   const o = look && typeof look === 'object' ? look : {};
-  return {
-    outfit: LOOK_OUTFITS.includes(o.outfit) ? o.outfit : null,
+  const outfit=o.outfit==='emi-outfit-labcoat'?'emi-outfit-builder':o.outfit;
+  return {outfit: LOOK_OUTFITS.includes(outfit) ? outfit : null,
     vehicle: LOOK_VEHICLES.includes(o.vehicle) ? o.vehicle : DEFAULT_LOOK.vehicle,
-  };
+    ...(typeof o.skin === 'string' && /^[0-9a-f]{36}[0-3]$/.test(o.skin) ? {skin:o.skin} : {})};
 }
 
 /** The look a bot wears in a seat (NET.md section 10). */
@@ -192,7 +192,7 @@ export function fromHex(hex) {
 const isInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 const LOOK_ID = /^[a-z0-9-]{1,48}$/;
 const SEATS_OK = (v) => Array.isArray(v) && v.length <= 8 && v.every((s) => isInt(s, 0, 7));
-const isLook = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 2
+const isLook = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(k=>['outfit','vehicle','skin'].includes(k)) && Object.keys(v).length >= 2 && Object.keys(v).length <= 3 && (v.skin === undefined || (typeof v.skin === 'string' && /^[0-9a-f]{36}[0-3]$/.test(v.skin)))
   && (v.outfit === null || (typeof v.outfit === 'string' && LOOK_ID.test(v.outfit)))
   && typeof v.vehicle === 'string' && LOOK_ID.test(v.vehicle);
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -212,6 +212,7 @@ export const TYPES = Object.freeze({
   mode: (v) => MODES.includes(v),
   code: (v) => typeof v === 'string' && /^[a-z0-9-]{1,24}$/.test(v),
   lookId: (v) => v === null || (typeof v === 'string' && LOOK_ID.test(v)),
+  skin: (v) => typeof v === 'string' && /^[0-9a-f]{36}[0-3]$/.test(v),
   look: isLook,
   phase: (v) => PHASES.includes(v),
   verdict: (v) => VERDICTS.includes(v),
@@ -241,7 +242,7 @@ export const C2R = Object.freeze({
   ping: { c: 'num' },
   ready: { on: 'bool' },
   start: {},
-  look: { outfit: 'lookId', vehicle: 'lookId' },
+  look: { outfit: 'lookId', vehicle: 'lookId', skin: 'skin?' },
   pickup: { box: 'u16', tick: 'u32', seat: 'seat?' },
   fire: { id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', seat: 'seat?' },
   cp: { idx: 'u8', lap: 'u8', tick: 'u32', seat: 'seat?' },
