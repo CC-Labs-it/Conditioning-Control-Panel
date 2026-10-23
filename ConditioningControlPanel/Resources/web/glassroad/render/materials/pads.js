@@ -13,7 +13,8 @@
  * edge, so a pad reads as a clear run of bright arrows. Lips (no mask) take a lighter rainbow tint.
  */
 import { MeshBasicNodeMaterial, AdditiveBlending, Color } from 'three/webgpu';
-import { uniform, uv, fract, smoothstep, vec2, vec3, texture, clamp, abs, float, max, mix } from 'three/tsl';
+import { uniform, uv, fract, smoothstep, vec2, vec3, texture, clamp, abs, float, max, mix, fwidth } from 'three/tsl';
+import { ROAD_AA } from '../roadAaMath.js';
 import { LOOK } from '../look.js';
 import { spectrumRamp } from './palette.js';
 
@@ -30,10 +31,15 @@ export function createPadMaterial(hex, mask = null) {
   const p = uv();
   const halfW = LOOK.artChevronWideM / 2;
   const across = mask ? clamp(p.x.div(LOOK.artChevronWideM).add(0.5), 0, 1) : null;
-  const at = (back) => fract(p.y.add(back).div(LOOK.artChevronM).sub(u.phase));
+  // no fract here: the mask repeats along v, and a fract made a 1 px seam of the coarsest mip at every wrap
+  const at = (back) => p.y.add(back).div(LOOK.artChevronM).sub(u.phase);
+  // a lip's plain stripes: on over the back half of each period, both edges blended over a pixel (the wrap
+  // edge was a hard step) and melted to the half-lit average where the stripes pass a pixel (road widen-and-melt)
+  const sx = p.y.div(LOOK.padStripeM).sub(u.phase), spx = fwidth(sx);
+  const sw = max(spx.mul(ROAD_AA.stepMul), 0.05);
   const stripe = mask
     ? texture(mask, vec2(across, at(0))).r
-    : smoothstep(0.45, 0.55, fract(p.y.div(LOOK.padStripeM).sub(u.phase)));
+    : mix(smoothstep(sw.negate(), sw, float(0.25).sub(abs(fract(sx).sub(0.75)))), float(0.5), smoothstep(ROAD_AA.meltFrom, ROAD_AA.meltTo, spx));
   // a smear behind each chevron (the mask read a little further back, fainter)
   const trail = mask
     ? texture(mask, vec2(across, at(F.trailM))).r.mul(F.trailGain).add(texture(mask, vec2(across, at(F.trailM * 2))).r.mul(F.trailGain * 0.45))

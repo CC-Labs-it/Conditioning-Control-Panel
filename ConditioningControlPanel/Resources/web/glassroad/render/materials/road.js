@@ -22,6 +22,7 @@ import { uniform, uv, sin, fract, mix, smoothstep, float, vec2, vec3, texture, n
   normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select, fwidth } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
+import { ROAD_AA } from '../roadAaMath.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -33,6 +34,30 @@ export const ROAD_POLISH = Object.freeze({
 });
 
 const TAU = Math.PI * 2;
+
+// widen-and-melt (render/roadAaMath.js has the same shapes as numbers, tested): px is always fwidth of the
+// coordinate a shape is drawn in, so every hard step and thin line is about a pixel soft and melts to its
+// average once its cells pass a pixel. Near the kart (px tiny) each shape is what it was.
+const AA = ROAD_AA;
+const meltN = (px) => smoothstep(AA.meltFrom, AA.meltTo, px);
+/** Line coverage: d distance from the centre, w the half width, px fwidth of d, cell the repeat period (0: none). */
+function aaLineN(d, w, px, cell = 0) {
+  const wN = float(w), wE = max(max(wN, px.mul(AA.lineMul)), 1e-6);
+  const cov = float(1).sub(smoothstep(float(0), wE, d)).mul(wN.div(wE));
+  return cell > 0 ? mix(cov, Math.min(1, w / cell), meltN(px.div(cell))) : cov;
+}
+/** floor(x) with each step blended over about a pixel; m melts it to the ramp x - 0.5. */
+function aaFloorN(x, px, m) {
+  const n = floor(x.add(0.5)), h = clamp(px.mul(AA.stepMul), 1e-4, 0.5);
+  return mix(n.sub(1).add(smoothstep(h.negate(), h, x.sub(n))), x.sub(0.5), m);
+}
+/** floor(x) mod 2 blended the same way (0.5 once melted). */
+function aaParityN(x, px) {
+  const m = meltN(px);
+  return aaFloorN(x, px, m).sub(aaFloorN(x.mul(0.5), px.mul(0.5), m).mul(2));
+}
+const xorN = (p, q) => p.add(q).sub(p.mul(q).mul(2));
+const cellD = (f) => min(f, float(1).sub(f));
 
 /** Music road shader numbers (the per-frame amounts come from render/musicRoadMath.js). */
 export const MUSIC_ROAD = Object.freeze({
@@ -102,26 +127,34 @@ function patternTexture(track, S) {
  */
 function patterns(u, a, per, S, calm, spin) {
   const au = abs(u);
-  const edgeLine = (f, w) => float(1).sub(smoothstep(0, w, min(f, float(1).sub(f))));
+  // every line (lane, checker, ring, weave) is a cell line: widened to a pixel, melted past one (aaLineN)
+  const edgeLine = (f, w, px) => aaLineN(cellD(f), w, px, 1);
   // 0 streaming lanes: hue flows down each lane; steady lane lines; light packets run toward you
-  const lu = u.div(S.laneW), k = floor(lu), e = fract(lu);
-  const line0 = float(1).sub(smoothstep(0, S.laneLineW, min(e, float(1).sub(e)).mul(S.laneW)));
-  const pk = float(1).sub(fract(a.div(per.packet).add(hash(k.add(11.3)))));
-  const packet = pow(smoothstep(1 - S.packetLen, 1, pk), 2).mul(float(1).sub(smoothstep(0.18, 0.42, abs(e.sub(0.5)))))
+  const lu = u.div(S.laneW), k = floor(lu), e = fract(lu), luPx = fwidth(lu);
+  const line0 = aaLineN(cellD(e).mul(S.laneW), S.laneLineW, luPx.mul(S.laneW), S.laneW);
+  const pa = a.div(per.packet), pf = fract(pa.add(hash(k.add(11.3)))), pk = float(1).sub(pf);
+  // the packet's head is the fract wrap (a hard step): blended over a pixel of the stream coordinate
+  const head = smoothstep(0, max(fwidth(pa).mul(AA.lineMul * 1.5), 1e-4), pf);
+  const packet = pow(smoothstep(1 - S.packetLen, 1, pk), 2).mul(head).mul(float(1).sub(smoothstep(0.18, 0.42, abs(e.sub(0.5)))))
     .mul(step(1 - S.packetShare, hash(k.add(3.7))));
-  const p0 = { x: k.mul(S.laneHueStep).add(a.div(per.ramp)), l: max(line0.mul(0.8), packet.mul(S.packetGain / S.lineGain)) };
+  // the lane hue steps at each lane line (the line covers the join; far off the steps blend and melt)
+  const p0 = { x: aaFloorN(lu, luPx, meltN(luPx)).mul(S.laneHueStep).add(a.div(per.ramp)), l: max(line0.mul(0.8), packet.mul(S.packetGain / S.lineGain)) };
   // 1 chevrons pointing up the road: a solid hue per chevron (chevronHueSteps whole chevron lengths of
   // ramp apart, so the wrap stays seamless), a hot leading edge, a soft smear behind
   const cv = a.add(au.mul(S.chevronSlope)).div(per.chevron), cf = fract(cv), cm = cf.mul(per.chevron);
-  const p1 = { x: floor(cv).add(smoothstep(0, 1, cf).mul(0.4)).mul(S.chevronHueSteps * per.chevron / per.ramp).add(au.mul(0.01)),
-    l: max(float(1).sub(smoothstep(0, S.chevronEdgeM, cm)), float(1).sub(smoothstep(0, per.chevron * 0.5, cm)).mul(0.3)).mul(calm) };
+  const cvPx = fwidth(cv), cvMelt = meltN(cvPx), cvF = aaFloorN(cv, cvPx, cvMelt);
+  // the hard side of the leading edge (the wrap, cf 1 to 0) blended over a pixel; far off the run melts flat
+  const ahead = float(1).sub(smoothstep(0, max(cvPx.mul(AA.lineMul), 1e-4), float(1).sub(cf)));
+  const chev = max(max(float(1).sub(smoothstep(0, S.chevronEdgeM, cm)), float(1).sub(smoothstep(0, per.chevron * 0.5, cm)).mul(0.3)), ahead);
+  const p1 = { x: cvF.add(smoothstep(0, 1, clamp(cv.sub(cvF), 0, 1)).mul(0.4)).mul(S.chevronHueSteps * per.chevron / per.ramp).add(au.mul(0.01)),
+    l: mix(chev, Math.min(1, (S.chevronEdgeM * 0.5 + per.chevron * 0.075) / per.chevron), cvMelt).mul(calm) };
   // 2 warped checker: two hue families half a ramp apart, swapping cell by cell
   const uw = u.add(sin(a.mul(TAU / per.warpA).add(u.mul(0.3))).mul(0.9));
   const aw = a.add(sin(u.mul(0.55).add(a.mul(TAU / per.warpB))).mul(1.4));
-  const ci = floor(uw.div(S.checkerM)), cj = floor(aw.div(per.checker));
-  const par = fract(ci.add(cj).mul(0.5)).mul(2);
-  const p2 = { x: par.mul(0.5).add(cj.mul(per.checker / per.ramp)),
-    l: max(edgeLine(fract(uw.div(S.checkerM)), 0.03), edgeLine(fract(aw.div(per.checker)), 0.03).mul(calm)) };
+  const cx = uw.div(S.checkerM), cy = aw.div(per.checker), cxPx = fwidth(cx), cyPx = fwidth(cy);
+  const par = xorN(aaParityN(cx, cxPx), aaParityN(cy, cyPx));
+  const p2 = { x: par.mul(0.5).add(aaFloorN(cy, cyPx, meltN(cyPx)).mul(per.checker / per.ramp)),
+    l: max(edgeLine(fract(cx), 0.03, cxPx), edgeLine(fract(cy), 0.03, cyPx).mul(calm)) };
   // 3 spiral rings: a two-armed spiral every ring cell, turning inward (clockwise from above)
   const cc = fract(a.div(per.ring)), cvr = cc.sub(0.5).mul(per.ring);
   const r = length(vec2(u, cvr)), ang = atan(u, cvr);
@@ -131,12 +164,12 @@ function patterns(u, a, per, S, calm, spin) {
   // atan cut, faded out at the cell seams; never a mix of two far apart ramp coordinates, which would
   // sweep the whole ramp in a few metres); the lines keep to a disc of ringLineR so no flat arcs strobe past
   const swing = sin(r.mul(TAU / S.ringHueM).sub(ang)).mul(S.ringSwing).mul(seamFade);
-  const p3 = { x: a.div(per.ramp).add(au.mul(0.05)).add(swing), l: edgeLine(fract(sp), 0.09).mul(smoothstep(0.3, 1, r)).mul(smoothstep(S.ringLineR[0], S.ringLineR[1], r)).mul(seamFade).mul(calm) };
+  const p3 = { x: a.div(per.ramp).add(au.mul(0.05)).add(swing), l: edgeLine(fract(sp), 0.09, fwidth(sp)).mul(smoothstep(0.3, 1, r)).mul(smoothstep(S.ringLineR[0], S.ringLineR[1], r)).mul(seamFade).mul(calm) };
   // 4 kaleidoscope weave: mirrored across the centre, two diagonal strand sets going over and under
-  const q1 = au.add(a).div(per.weave), q2 = a.sub(au).div(per.weave);
-  const over = fract(floor(q1).add(floor(q2)).mul(0.5)).mul(2);
+  const q1 = au.add(a).div(per.weave), q2 = a.sub(au).div(per.weave), qPx = max(fwidth(q1), fwidth(q2));
+  const over = xorN(aaParityN(q1, qPx), aaParityN(q2, qPx));
   const strand = mix(fract(q2), fract(q1), over);
-  const p4 = { x: over.mul(0.33).add(a.div(per.ramp)).add(au.mul(0.02)), l: edgeLine(strand, 0.08).mul(calm) };
+  const p4 = { x: over.mul(0.33).add(a.div(per.ramp)).add(au.mul(0.02)), l: edgeLine(strand, 0.08, qPx).mul(calm) };
   return [p0, p1, p2, p3, p4];
 }
 
@@ -218,7 +251,9 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const crestFade = clamp(float(cap).div(max(px, 1e-4)), 0, 1).pow(2);
   const edgeLine = float(1).sub(smoothstep(lineW.mul(0.55), lineW, trueEdge)).mul(float(E.lineM).div(lineW).min(1).mul(0.6).add(0.4)).mul(crestFade);
   const gutter = smoothstep(lineW, lineW.add(E.gutterSoftM), trueEdge).mul(float(1).sub(smoothstep(lineW.add(E.gutterSoftM), lineW.add(E.gutterM), trueEdge))).mul(crestFade);
-  const centre = float(1).sub(smoothstep(S.centreLineW * 0.5, S.centreLineW, au));
+  // the centre line widens to a pixel and dims to match (same light per pixel), so far off it never crawls
+  const cW = max(float(S.centreLineW), fwidth(au).mul(AA.lineMul * 1.5));
+  const centre = float(1).sub(smoothstep(cW.mul(0.5), cW, au)).mul(float(S.centreLineW).div(cW));
 
   // modes: calm (a break) flattens toward clear glass, big (a drop, a peak) lifts the contrast and lines
   const con = u.contrast.mul(float(1).sub(mu.calm.mul(M.calmFlatten))).mul(mu.big.mul(M.bigContrast).add(1)).min(1.15);

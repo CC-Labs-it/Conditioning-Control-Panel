@@ -21,9 +21,14 @@
  */
 import { MeshBasicNodeMaterial, BackSide, Vector3 } from 'three/webgpu';
 import { uniform, positionLocal, normalize, atan, acos, asin, log, sin, mix, smoothstep, clamp, vec2, vec3, dot, texture, float, cameraPosition,
-  fract, abs, max, min } from 'three/tsl';
+  fract, abs, max, min, fwidth, select } from 'three/tsl';
 import { Color } from 'three/webgpu';
 import { LOOK } from '../look.js';
+
+/** An equirect u (atan / 2pi + 0.5) without the meridian seam: the u jumps 1 to 0 at the atan cut, so the
+ * pixels there read the coarsest mip in a 1 px line. Two copies cut half a turn apart; each pixel keeps
+ * the one with the smaller fwidth (the textures repeat in u, so both sample the same texel). */
+const seamU = (x) => { const a = fract(x), b = fract(x.add(0.5)).sub(0.5); return select(fwidth(a).lessThanEqual(fwidth(b)), a, b); };
 
 export const SKY_PALETTES = ['dawn', 'deep', 'afterglow'];
 
@@ -81,7 +86,7 @@ export function createSkyMaterial(pal, art = null) {
   }
   if (art) {
     // equirectangular: u around the y axis, v from the zenith (KTX2 rows run top down)
-    const eq = vec2(atan(d.z, d.x).div(Math.PI * 2).add(0.5), float(0.5).sub(asin(clamp(d.y, -1, 1)).div(Math.PI)));
+    const eq = vec2(seamU(atan(d.z, d.x).div(Math.PI * 2).add(0.5)), float(0.5).sub(asin(clamp(d.y, -1, 1)).div(Math.PI)));
     const w = [u.galaxy.x, u.galaxy.y, u.galaxy.z];
     let haze = vec3(0, 0, 0), stars = float(0);
     SKY_PALETTES.forEach((id, i) => {
@@ -104,14 +109,14 @@ export function createSkyMaterial(pal, art = null) {
       S.layers.forEach(([R, tile, gain, tint], i) => {
         const q = normalize(cameraPosition.add(d.mul(R)));
         const r = i % 2 ? vec3(q.z, q.y, q.x.negate()) : vec3(q.x.negate(), q.y, q.z.negate());
-        const e = vec2(atan(r.z, r.x).div(Math.PI * 2).add(0.5).mul(tile), float(0.5).sub(asin(clamp(r.y, -1, 1)).div(Math.PI)));
+        const e = vec2(seamU(atan(r.z, r.x).div(Math.PI * 2).add(0.5)).mul(tile), float(0.5).sub(asin(clamp(r.y, -1, 1)).div(Math.PI)));
         const s = smoothstep(S.floor, 1, texture(deepStars, e).r);
         ground = ground.add(mix(vec3(1, 1, 1), pal.col(i % 3), tint).mul(s.mul(gain)));
       });
       // the galaxy haze also gets a slow far layer, so the clouds have a near and a far
       if (S.hazeGain > 0) {
         const q = normalize(cameraPosition.add(d.mul(S.hazeR)));
-        const e = vec2(atan(q.x, q.z).div(Math.PI * 2).add(0.5), float(0.5).sub(asin(clamp(q.y, -1, 1)).div(Math.PI)));
+        const e = vec2(seamU(atan(q.x, q.z).div(Math.PI * 2).add(0.5)), float(0.5).sub(asin(clamp(q.y, -1, 1)).div(Math.PI)));
         let far = vec3(0, 0, 0);
         SKY_PALETTES.forEach((id, i) => { const g = art.tex(`sky-${id}-galaxy`); if (g) far = far.add(texture(g, e).rgb.mul(w[i])); });
         // recoloured through the clean gradient too (the raw galaxy carried the red and green)

@@ -7,6 +7,7 @@ import { RepeatWrapping, ClampToEdgeWrapping, SRGBColorSpace, NoColorSpace } fro
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { Q } from './quality.js';
 
 const BASE = new URL('../art/', import.meta.url);
 const TRANSCODER = new URL('../vendor/three/addons/libs/basis/', import.meta.url).href;
@@ -51,6 +52,9 @@ export async function loadArt(renderer, { want = WANT, onProgress = null } = {})
   for (const r of manifest) rows.set(r.id, r);
 
   // renderer: our createRenderer wrapper or a bare WebGPURenderer (already init-ed)
+  // anisotropic filtering from the START tier, set once here (changing it mid-race re-uploads every texture);
+  // the renderer caps it at what the GPU offers
+  const aniso = Math.max(1, Q.anisotropy || 1);
   const ktx2 = new KTX2Loader().setTranscoderPath(TRANSCODER).detectSupport(renderer.three || renderer);
   const gltf = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
 
@@ -69,6 +73,7 @@ export async function loadArt(renderer, { want = WANT, onProgress = null } = {})
         const [ws, wt] = r.wrap || ['repeat', 'repeat'];
         t.wrapS = WRAP[ws] || RepeatWrapping; t.wrapT = WRAP[wt] || RepeatWrapping;
         t.colorSpace = r.colorSpace === 'srgb' ? SRGBColorSpace : NoColorSpace;
+        if ((r.mipLevels || t.mipmaps && t.mipmaps.length || 0) > 1) t.anisotropy = aniso;
         t.needsUpdate = true;
         tex.set(id, t);
       } else {

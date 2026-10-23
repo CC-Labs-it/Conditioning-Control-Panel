@@ -21,8 +21,12 @@ import { uv, vec3, float, smoothstep, length, uniform, vertexColor } from 'three
 import { LOOK } from './look.js';
 import { worldLook, shadowFit, shadowMode, shadowSize, capsuleShade, shadeRanges, sampleTrack, V3 } from './colossiMath.js';
 
-/** Catchers live on this layer so the VSM pass (which also draws receivers) never maps the road onto itself. */
+/** Catchers live on this layer. r186 copies the view camera's layers to the shadow camera, so they still land in the
+ *  VSM map; the tight depth range in SHADOW_DEPTH (not this layer) is what keeps the road from shadowing itself. */
 export const CATCH_LAYER = 2;
+
+/** The map's depth range around the player along the lamp ray, and the depth bias, all in metres. */
+export const SHADOW_DEPTH = Object.freeze({ aboveM: 400, belowM: 100, biasM: 0.3 });
 
 const UPV = new Vector3(0, 1, 0), NV = new Vector3(), QT = new Quaternion();
 
@@ -99,8 +103,16 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
     lamp.shadow.mapSize.set(size.map, size.map);
     const cam = lamp.shadow.camera;
     cam.left = -size.halfM; cam.right = size.halfM; cam.top = size.halfM; cam.bottom = -size.halfM;
-    cam.near = 1; cam.far = W.shadowFarM; cam.updateProjectionMatrix();
-    lamp.shadow.radius = W.shadowRadius; lamp.shadow.blurSamples = W.shadowBlurSamples; lamp.shadow.bias = W.shadowBias; lamp.shadow.normalBias = W.shadowNormalBias;
+    // depth range (polish 5, ROAD lane): the VSM moments are half floats, and r186 draws the receivers into the
+    // map as well (it copies the view camera's layers, which join CATCH_LAYER). Over 1 .. shadowFarM the road sat
+    // about 900 m past the near plane, where a half float steps about 0.45 m: the road shadowed itself in
+    // stair-stepped bands along those steps. Holding the near plane SHADOW_DEPTH.aboveM toward the lamp (above
+    // the tallest colossus) and the far plane belowM past the player cuts the step to about 0.25 m, and a
+    // bias of biasM (in metres, over the range) clears it.
+    const D = SHADOW_DEPTH, range = D.aboveM + D.belowM;
+    cam.near = Math.max(1, W.shadowDistM - D.aboveM); cam.far = W.shadowDistM + D.belowM; cam.updateProjectionMatrix();
+    lamp.shadow.radius = W.shadowRadius; lamp.shadow.blurSamples = W.shadowBlurSamples; lamp.shadow.normalBias = W.shadowNormalBias;
+    lamp.shadow.bias = Math.min(W.shadowBias, -D.biasM / range);
   }
   for (const c of opts.casters || []) castFrom(c);
   for (const k of karts) castFrom(k);
