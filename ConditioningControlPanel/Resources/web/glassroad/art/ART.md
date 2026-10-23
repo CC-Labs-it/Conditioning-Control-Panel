@@ -1326,3 +1326,203 @@ compressed download sizes. The one-at-a-time Wave 3 backdrops add 9 MiB on deskt
 and 7.910156 MiB on phone. SVGs have zero baked texture allocation. Per-vertex
 sidecars are separate attribute bytes, never counted as texture memory.
 The combined phone persistent addition stays below 14 MiB; the phone ceiling is 128 MiB.
+
+## Grounded EMI and independent cup components
+
+EMI now stands on the cup's real inner floor, with the approved source shoes restored. Her lower hand pads touch the continuous gold brim while riding. The opaque tea cap and inner grip bars are removed. The narrower, lower cup keeps the whole screen above the lip. Cup, saucer and rider have independent controls for staggered separation and reseating.
+
+| Runtime model | Triangles | Draws | Joints | Texture allocation |
+|---|---:|---:|---:|---:|
+| emi-teacup-kart | 4,892 | 2 | 15 | 2,796,200 bytes, 2.667 MiB |
+
+The two replacement 512 square UASTC atlases use the same allocation as before, including all mip levels under conservative RGBA8 accounting. No texture residency is added. `kart_surface` and blank `emi_screen` remain the two materials. The screen retains its original geometry and full 0..1 UVs. Base-color alpha protects ornament from tinting while the material stays OPAQUE. `_CUP_TINT` and `_SAUCER_TINT` remain independent and do not affect EMI or the shoes. Each vertex has one rigid weight.
+
+Original EMI shapes are retained. All 864 source shoe triangles were restored at the same 0.63 scale. After float32 export, 62 microscopic triangles had exactly zero area; only those index triplets were removed. Every position, normal, UV, weight and tint attribute remained byte-exact across that cleanup. The 802 visible runtime shoe triangles retain the approved shape. Source triangle edge differences before cleanup are below 0.000000056 m; existing rider geometry differs by less than 0.00000021 m in its own joint space after the intentional rest-pose adjustment.
+
+The original 13 joint names remain. `cup_body` and `saucer_body` are new children of `kart_root`, alongside `rider_mount`. Cup walls, handle, floor and brim use `cup_body`; the saucer uses `saucer_body`; EMI and restored footwear follow `rider_mount` through the existing hierarchy. Resolve joints by name, since exported skin indices are reordered. `head_attach` retains its relationship to `EMI_root` within float rounding of 0.00000012 in its local matrix. Old rest-pose animation data must be rebuilt for this seated rig.
+
+Rest dimensions in meters are X 1.469185, Y 1.099799, Z 1.440000. Origin is base center, Y up and forward -Z. Saucer radius remains 0.72 m; rest bound radius is 1.110877 m. Motion supplies the padded animated bound.
+
+Geometry contacts in model meters:
+
+- Both sole minima are Y 0.320 on the actual flat cup floor, with a conservative usable radius of 0.362 m.
+- The continuous brim top is Y 0.510, spanning radii 0.374 to 0.400 m with 32 segments.
+- Left lower hand pad: `(0.3683814, 0.5100257, -0.1249986)`.
+- Right lower hand pad: `(-0.3664382, 0.5099980, -0.1249985)`.
+- Actual triangle ray hits place those pads within 0.000026 m of the brim.
+- Cup foot and saucer seat meet at Y 0.105; cup foot contact radius is 0.220 m.
+
+The private contact contract records the sole patches, palm patches, actual brim triangle hits, cup-foot patch and seating planes. Floor-to-brim depth is 0.19 m, so full rider emergence needs more than that relative lift. Planted states keep the soles seated; free pitch and roll begin only after sufficient foot clearance. The motion contract defines phase timing, release, regrip and antenna follow-through. Whole-world travel remains engine-owned.
+
+Private source and native masters are reproducible. Build seating, export the raw GLB, run the zero-area index cleanup, then validate the export. A review-only cutaway demonstrates shoe/floor contact and is never exported. No live engine integration is claimed by this model pass.
+## EMI seated kart motion and opposing wobble
+
+The kart has 26 clips timed at 30 fps, 15 joints and two draws. Ten assembly actions
+use 120 fps base keys with exact support-switch timestamps. The other 16 use 30 fps.
+The extra keys represent the cusp where the lowest cup-foot support changes,
+keeping gaps stable without oversized uniform sampling. Use GLB timestamps, not
+a fixed frame stride. Its original 13
+joint names remain, with cup_body and saucer_body added beside rider_mount.
+The corrected seated model supplies the actual floor, brim and original feet.
+Motion appends samples to the final packed binary without changing its existing
+geometry, skin/rest matrices, materials, embedded textures, tint masks or anchors.
+
+| Clip | Seconds | Playback |
+|---|---:|---|
+| `idle_bob` | 2.40 | loop |
+| `lean_left` | 0.50 | hold |
+| `lean_right` | 0.50 | hold |
+| `hop_squash` | 1.20 | one-shot |
+| `landing_squash` | 0.60 | one-shot |
+| `hit_wobble` | 1.00 | one-shot |
+| `spin_out` | 1.20 | one-shot |
+| `wave` | 1.50 | one-shot |
+| `cheer` | 1.60 | loop |
+| `sulk` | 1.20 | hold |
+| `bump_left` | 0.50 | one-shot |
+| `bump_right` | 0.50 | one-shot |
+| `hit_recoil` | 0.80 | one-shot |
+| `rescue_pull` | 0.50 | hold |
+| `rescue_hover` | 0.60 | loop |
+| `rescue_release` | 0.50 | one-shot |
+| `jump_takeoff` | 0.30 | hold |
+| `ramp_takeoff` | 0.40 | hold |
+| `air_glide` | 1.20 | loop |
+| `landing_heavy` | 0.80 | one-shot |
+| `max_speed` | 1.20 | loop |
+| `boost_recoil` | 0.60 | one-shot |
+| `item_ready` | 1.60 | loop |
+| `item_throw` | 0.50 | one-shot |
+| `item_lob` | 0.70 | one-shot |
+| `countdown_ready` | 0.70 | hold |
+
+### Contact and assembly
+
+Model forward is -Z and up +Y. Use this model's seated rest and absolute tracks;
+bone-local axes differ from model axes. Resolve controls by name, not skin index.
+Clone the complete common scene root with SkeletonUtils, keeping skin and bones
+together. Drive the common host root for physics, road alignment and rescue travel.
+
+Soles meet the actual cup floor at Y 0.320. Supported hand pads meet the actual
+brim annulus at Y 0.510, radii 0.374-0.400 m. Ordinary driving keeps the soles planted.
+The floor/brim surface patches are embedded in the binding file for integration.
+At 120 fps, with dense assembly checked at 240 fps plus actual-key midpoints, supported palms deviate at most 0.084 mm and planted sole patches at most
+0.130 mm. Intentional foot/hand release windows are explicit per action.
+
+The controls are siblings, with independently opposing model-space slopes about
+the actual seat center. Full-hop peak is cup+6 deg and saucer-4.5 deg at frame 13,
+followed by opposite rebounds at 20/26 and a damped return to rest. Takeoff and
+impacts use smaller opposition; ramp/hit pitch complements the roll. Relative to
+R 3, angular envelopes are 1.5 x and impact separation 1.3 x. Full-air cup/rider
+gaps are 120/300 mm, with the same 3 mm breathing and unchanged phase timing.
+
+Evaluate the tilted saucer seat plane, then translate cup/rider along its normal
+until the actual lowest cup-foot patch has the desired signed clearance. Compose
+the rider through the cup and solve soles along the cup floor normal. Finally
+ground the common rig above the road support plane. World-Y-only cup offsets
+or a common-root lift do not maintain these relative contacts.
+
+The full hop lasts 1.20 s: hands release by frame 5, external takeoff at 6, cup separates
+at 9, rider separates at 12, saucer touchdown at 21, cup seats at 25, soles at 29,
+hands at 32 and antenna settles at 36. The reference peak uses 120 mm cup clearance
+and 300 mm sole-to-floor clearance. Air breathing adds at most 3 mm. Body pitch/roll
+is gated above 230 mm sole clearance, because the brim is 190 mm above the floor.
+Bump/hit reactions use smaller separate responses. Antenna base remains attached.
+The complete hop is a legacy/review alternative to the split jump, never layered
+with jump_takeoff/ramp_takeoff, air_glide and landing. No world flight arc is baked.
+
+### Physical landing adaptation is required
+
+The supplied landing clips are canonical full-air templates. At the real land
+signal, capture the evaluated saucer offset, cup/sole gaps, saucer/cup/rider quaternions,
+arm pose and antenna pose. Apply the binding's exact landing envelopes from that
+entry. Zero gap stays closed within 0.2 mm interpolation tolerance, and partial
+separation only closes. Post-sampling contact solve removes the residual. Do not crossfade a
+partial takeoff into the canonical 120/300 mm first sample or wait for takeoff to end.
+
+Landing decays captured saucer/cup orientation and adds a small opposing, damped
+rebound. Soft landing closes the cup by 35% and soles by 60% of its 0.60 s duration. Heavy uses
+45% and 72% of 0.80 s. Already planted soles stay planted. Hands regrip over 63-83%,
+then antenna finishes. Blend free arm/antenna entry over the first 18% while solving
+contacts. Every final local transform returns to rest. Zero-gap, early, normal
+and long-air probes replay the same captured-entry recipe and pass independent
+240 fps plus every actual-key/midpoint check. Worst zero-gap residual is 0.000 mm; no plane/triangle
+penetration or uncovered seat contact exceeds the fixed numerical tolerances.
+
+Use one primary normal-blend rig action. Disable conflicting procedural bone
+writes and duplicate spin/body reactions. Preserve physics, road-normal alignment,
+tint, ghost wash, faces and marks. Solve contacts after any crossfade. The sampled
+bound 1.590 m includes 3 mm margin; it does not certify arbitrary layered combinations.
+Actual saucer-seat, floor and brim triangle coverage/ray checks pass. These contact
+checks do not constitute a full triangle self-intersection test of every mesh part.
+
+### Events and accessibility
+
+models/emi-kart-event-bindings.json is an art contract for Claude, not implemented
+engine code. It carries actual bus/state paths, priorities, ownership, fades,
+interruptions, face/mark timelines, contact geometry and assembly envelopes.
+The current procedural engine must load/use GLB animations and stop overwriting
+owned joints before these actions play. All original 26 names remain available.
+
+Wall side is track-lateral: convert through the track frame and inverse kart
+rotation. Wall/bump speed change at or above 7.5 m/s selects spin_out. Countdown
+exits on go or phase change. Rescue phase changes override clip completion and
+cooldown; actual touchdown starts landing exactly once. Damage requires verdict
+hit, so mercy, shield and decoy results do not flinch. Read view.items.held for
+held items. Max-speed thresholds 0.98 enter/0.90 exit are proposed art defaults.
+There is no slope-entry signal; airborne cause lip selects ramp_takeoff.
+An overtake wave is optional, low priority and never queued. Item-fire already
+created the projectile, so the cast marker must not delay gameplay. Boost kinds include
+drift with tier 0..3 and trick; suppress the latest procedural hitMotion yaw/roll/lift
+and fireMotion pitch while the corresponding animation channels are owned.
+
+Gentle halves semantic envelopes, then solves cumulative contacts again. Never
+halve independently sampled bone transforms. If that solver is unavailable,
+use a coherent assembled-rest fallback with face/static-mark cues and 0.3 s fades.
+Physical landing/rescue clocks remain authoritative. Spin retains its continuous
+full-turn root rotation at half speed; shortest-arc rest slerp cannot halve a turn.
+Motion-off holds a coherent rest pose while physical travel continues. No screen,
+flash, strobe, emissive animation, sound, text or media is baked into these clips.
+Wave/lob are outward raised casts with original short arms, below the case roof.
+
+This model has 4,892 tris and two 512 px UASTC atlases using 2,796,200 B conservative
+RGBA 8 residency including all mips. Motion adds zero texture memory. Validation
+checks actual exported skin at 120/240 fps plus actual-key midpoints, exact loops/rest exits/named joins, source
+payload preservation, full 0..1 blank emi_screen UVs, tints and head_attach.
+Final packed visual review/video and engine integration are separate evidence.
+
+
+### Final runtime verification and budgets
+
+The final 569,428 byte GLB has SHA256
+7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1.
+The event-binding sidecar pins that hash. Its animated bound is 1.59 m;
+the padded rest bound is 1.113 m. Dimensions are 1.469185 x 1.099799 x 1.44 m.
+
+Both replacement UASTC atlases pass strict Khronos KTX2 validation. The packed
+asset loads in the game's three.js r186 renderer. Review media shows the actual
+runtime GLB, with the existing face atlas and a private lit stage. The full-hop
+review supplies one common flight arc outside the GLB to show the physical
+trajectory alongside the authored relative separation. The cutaway seating
+proof is review-only. Contact sheets, movies and sources never enter the game tree.
+
+This is an art delivery. Engine event wiring, pose adaptation for interrupted
+landings, per-racer animation ownership and device play review remain required.
+The public tree contains no engine changes. All ten W3 clip names are retained;
+this model supersedes the earlier kart payload in PR #2589.
+
+The two 512 atlases retain 2,796,200 bytes of conservative RGBA8 residency with
+mips. Motion adds no textures. Totals below are the running delivery projection
+including W3/W4 art families, not measured live-engine memory. Only the
+active sky palette's nebula is resident on either tier.
+
+| Residency | Desktop MiB | Phone MiB |
+|---|---:|---:|
+| This kart, replacing existing allocation | 2.666664 | 2.666664 |
+| This PR added texture allocation | 0 | 0 |
+| W4 additions, unchanged | 87.083347 | 9.770847 |
+| Persistent running total | 196.416664 | 119.104164 |
+| With selected menu backdrop | 205.416664 | 127.014320 |
+
+These totals exclude render targets, decoding buffers and 63,154 bytes of
+optional vertex sidecars. The 17-icon allowance is counted once.

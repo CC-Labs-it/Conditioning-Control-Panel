@@ -343,9 +343,9 @@
     "id": "emi-teacup-kart",
     "file": "models/emi-teacup-kart.glb",
     "kind": "kart",
-    "tris": 4722,
+    "tris": 4892,
     "texBytes": 2796200,
-    "boundRadiusM": 1.274,
+    "boundRadiusM": 1.59,
     "materialSlots": [
       "kart_surface",
       "emi_screen"
@@ -355,10 +355,10 @@
     "texBytesBlock16": 699104,
     "textureEncoding": "UASTC",
     "skins": 1,
-    "joints": 13,
+    "joints": 15,
     "sizeM": [
-      1.52835,
-      1.26305,
+      1.469185,
+      1.099799,
       1.44
     ],
     "tintAttributes": {
@@ -367,7 +367,190 @@
     },
     "tintDetailChannel": "baseColorTexture.a",
     "tintAlphaMode": "OPAQUE",
-    "attachPoint": "head_attach"
+    "attachPoint": "head_attach",
+    "restBoundRadiusM": 1.113,
+    "animationFps": 30,
+    "animationBlendMode": "normal",
+    "animationBindings": "models/emi-kart-event-bindings.json",
+    "animations": [
+      {
+        "name": "idle_bob",
+        "durationSec": 2.4,
+        "playback": "loop",
+        "sampleFps": 30
+      },
+      {
+        "name": "lean_left",
+        "durationSec": 0.5,
+        "playback": "hold",
+        "sampleFps": 30
+      },
+      {
+        "name": "lean_right",
+        "durationSec": 0.5,
+        "playback": "hold",
+        "sampleFps": 30
+      },
+      {
+        "name": "hop_squash",
+        "durationSec": 1.2,
+        "playback": "one-shot",
+        "sampleFps": 120
+      },
+      {
+        "name": "landing_squash",
+        "durationSec": 0.6,
+        "playback": "one-shot",
+        "sampleFps": 120
+      },
+      {
+        "name": "hit_wobble",
+        "durationSec": 1,
+        "playback": "one-shot",
+        "sampleFps": 120
+      },
+      {
+        "name": "spin_out",
+        "durationSec": 1.2,
+        "playback": "one-shot",
+        "sampleFps": 30
+      },
+      {
+        "name": "wave",
+        "durationSec": 1.5,
+        "playback": "one-shot",
+        "sampleFps": 30
+      },
+      {
+        "name": "cheer",
+        "durationSec": 1.6,
+        "playback": "loop",
+        "sampleFps": 30
+      },
+      {
+        "name": "sulk",
+        "durationSec": 1.2,
+        "playback": "hold",
+        "sampleFps": 30
+      },
+      {
+        "name": "bump_left",
+        "durationSec": 0.5,
+        "playback": "one-shot",
+        "sampleFps": 120
+      },
+      {
+        "name": "bump_right",
+        "durationSec": 0.5,
+        "playback": "one-shot",
+        "sampleFps": 120
+      },
+      {
+        "name": "hit_recoil",
+        "durationSec": 0.8,
+        "playback": "one-shot",
+        "sampleFps": 120
+      },
+      {
+        "name": "rescue_pull",
+        "durationSec": 0.5,
+        "playback": "hold",
+        "sampleFps": 30
+      },
+      {
+        "name": "rescue_hover",
+        "durationSec": 0.6,
+        "playback": "loop",
+        "sampleFps": 30
+      },
+      {
+        "name": "rescue_release",
+        "durationSec": 0.5,
+        "playback": "one-shot",
+        "sampleFps": 30
+      },
+      {
+        "name": "jump_takeoff",
+        "durationSec": 0.3,
+        "playback": "hold",
+        "sampleFps": 120
+      },
+      {
+        "name": "ramp_takeoff",
+        "durationSec": 0.4,
+        "playback": "hold",
+        "sampleFps": 120
+      },
+      {
+        "name": "air_glide",
+        "durationSec": 1.2,
+        "playback": "loop",
+        "sampleFps": 120
+      },
+      {
+        "name": "landing_heavy",
+        "durationSec": 0.8,
+        "playback": "one-shot",
+        "sampleFps": 120
+      },
+      {
+        "name": "max_speed",
+        "durationSec": 1.2,
+        "playback": "loop",
+        "sampleFps": 30
+      },
+      {
+        "name": "boost_recoil",
+        "durationSec": 0.6,
+        "playback": "one-shot",
+        "sampleFps": 30
+      },
+      {
+        "name": "item_ready",
+        "durationSec": 1.6,
+        "playback": "loop",
+        "sampleFps": 30
+      },
+      {
+        "name": "item_throw",
+        "durationSec": 0.5,
+        "playback": "one-shot",
+        "sampleFps": 30
+      },
+      {
+        "name": "item_lob",
+        "durationSec": 0.7,
+        "playback": "one-shot",
+        "sampleFps": 30
+      },
+      {
+        "name": "countdown_ready",
+        "durationSec": 0.7,
+        "playback": "hold",
+        "sampleFps": 30
+      }
+    ],
+    "skinJoints": 15,
+    "assemblyControls": [
+      "cup_body",
+      "saucer_body",
+      "rider_mount"
+    ],
+    "animationBoundsScope": "All26 clips checked at120fps, dense assembly at240fps plus every actual key and interval midpoint, plus3mm margin; arbitrary blends require contact solve.",
+    "assemblySampleFps": 120,
+    "contactSwitchKeys": true
+  },
+  {
+    "id": "emi-kart-event-bindings",
+    "file": "models/emi-kart-event-bindings.json",
+    "kind": "animation-bindings",
+    "tris": 0,
+    "texBytes": 0,
+    "boundRadiusM": 0,
+    "materialSlots": [],
+    "palette": "all",
+    "model": "emi-teacup-kart",
+    "clips": 26
   },
   {
     "id": "bubble",
