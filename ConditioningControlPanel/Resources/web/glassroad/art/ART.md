@@ -1572,3 +1572,36 @@ active sky palette's nebula is resident on either tier.
 
 These totals exclude render targets, decoding buffers and 63,154 bytes of
 optional vertex sidecars. The 17-icon allowance is counted once.
+
+## EMI bot wardrobe (2026-10-23)
+
+Eight original modular 3D outfits for the approved EMI. Croupier and pool use their accepted fitted Back Room and pool references. Varsity, lab coat, cheer and swim translate the existing Arcademy outfits into 3D. Drone Protocol and Snow Day are new clothing interpretations of those Arcademy shop theme palettes, not previously existing outfits. Revision 2 adds a distinct head silhouette to every outfit so it remains identifiable above the vessel and from the chase view. No source character, screen, cup, saucer, rig or animation is replaced.
+
+| Outfit | Top accessory | Tris | Draws | Added texture bytes | GLB bytes | Animated radius m |
+|---|---|---:|---:|---:|---:|---:|
+| Croupier | Dealer visor | 1282 | 2 | 0 | 28096 | 1.525 |
+| Pool waistcoat | Plum beret | 1632 | 2 | 0 | 31428 | 1.568 |
+| Varsity | Navy varsity cap | 2026 | 2 | 0 | 36760 | 1.563 |
+| Lab coat | Folded lab cap | 1180 | 2 | 0 | 29220 | 1.586 |
+| Cheer | Pink side bow | 1836 | 2 | 0 | 39732 | 1.613 |
+| Swim club | Swim cap and goggles | 1972 | 2 | 0 | 35516 | 1.538 |
+| Drone Protocol | Lime comms headset | 1618 | 2 | 0 | 37436 | 1.612 |
+| Snow Day | Knit cap and pom | 1832 | 1 | 0 | 34636 | 1.649 |
+
+All GLBs use meshopt, rigid one-joint weights, linear COLOR_0, opaque fabric/metal materials and no images. Radius includes all 26 clips sampled at all exported keys and 60 fps, padded by 10 mm. Base kart remains 4,892 tris and two draws. Wearing an outfit adds its table cost, so the dressed kart exceeds the original 5k target; the maximum is 6918 tris and four draws. Eight distinct outfits add 13378 tris and 15 draws to a full field. This is a measured art cost, not a new phone performance claim.
+
+### Binding and ownership
+
+Requires the approved seated R4 EMI model from draft #2621 and classic R5 faces from draft #2622. The exact base hash and 15 joint names are in models/emi-bot-wardrobe.json. Reject mismatched bases instead of guessing transforms. Load the outfit, collect its SkinnedMesh objects, and map each skin joint by name to the cloned kart's existing Bone objects. Discard the outfit's temporary rig. Add the outfit mesh as a sibling of the original kart mesh with identity local position, rotation and scale. Bind with the copied outfit inverse-bind matrices and an identity bindMatrix. Never calculate new inverse binds from a posed rider or copy a world transform into the model's local transform.
+
+One outfit is selected per racer. Reuse the existing 26 actions and reaction ownership contract, including Gentle and motion-off behavior. Clothing follows existing bones; there is no extra cloth simulation or animation clock. Face atlas, bare palms, soles and antenna are unchanged. Headpieces follow EMI_root; the existing antenna keeps its separate reactive bones. All eight accessories clear the actual antenna mesh across 4,083 sampled poses. Original garment geometry is retained except the replaced visor, tiny bow and goggles details. No engine integration is included in this art family.
+
+### Residency by tier
+
+Desktop and phone use the same geometry. Eight outfits add 0 MiB persistent textures. Share the existing kart maps (2.666664 MiB) and classic face atlas (5.333332 MiB), counted once. Running projection remains 196.416664 MiB desktop and 119.104164 MiB phone; with one selected menu backdrop 205.416664/127.014320 MiB. W4 additions remain 87.083347/9.770847 MiB. Only the active sky palette's nebula is resident. Render targets, decoder buffers and optional 63,154-byte vertex sidecars are outside these texture totals.
+
+### Provenance and review
+
+CC Labs original work. Reference pixels and meshes are not redistributed in these outfits. The croupier tailoring comes from the Back Room counter/card-table EMI; the pool tailoring comes from the newer continuous runtime waistcoat, not the old plate costume in its GLB. Arcademy references are art/emi/{varsity,labcoat,cheer,swim} and its Drone Protocol/Snow Day theme palettes.
+
+Private sources and editable Blender masters stay in the art workspace. Contact sheets and actual Three.js motion captures are attached to the unpublished draft review release and PR description. The selected Petal cup and Trinket box replacements are a separate art family. They share the same rider bones; a Petal vehicle with the largest outfit totals 9,798 tris and six draws. Each racer selects one outfit and one vehicle. Packed GLBs pass a fresh meshopt decode, exact rig/bind comparison, finite/normal/degenerate checks and the Khronos core validator. Fresh Blender imports preserve the triangle totals, 15 required bones, rigid weights and vertex colours; eight editable masters are saved privately. The existing non-root skin warning is retained. Runtime composite views cover front, rear, sides, top, jump, impact and item poses, plus 190 px headwear readability and both selected vehicles. The geometry budget increase from the earlier 1,500-triangle wardrobe target to a 2,200 review cap is an implementation tradeoff for recognizable hats and clean antenna channels; the largest final outfit is 2,026 tris. Integration and a real race playtest remain Claude's lane.
