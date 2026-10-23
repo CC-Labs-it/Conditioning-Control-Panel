@@ -39,7 +39,9 @@ export function showcaseLayout(track, options = {}) {
       rows.trim.push({ s, p: p.map((v, j) => v + up[j] * (K.fasciaDown - K.trimDown)),
         b: right, n: up, t: forward, size: [K.trimW, K.trimH, distance + 0.045] });
     }
-    if (i % K.sleeperEvery === 0) rows.sleeper.push({ s, p: shifted(f, 0, -K.sleeperDown),
+    const crossesHole = (track.courts || []).some((c) => c.holes.some((h) =>
+      s + K.sleeperDepth / 2 >= h.s && s - K.sleeperDepth / 2 <= h.s + h.len));
+    if (i % K.sleeperEvery === 0 && !crossesHole) rows.sleeper.push({ s, p: shifted(f, 0, -K.sleeperDown),
       b: [...f.b], n: [...f.n], t: [...f.t], size: [f.w + 0.12, K.sleeperH, K.sleeperDepth] });
   }
   return rows;

@@ -1,6 +1,6 @@
 /* Nodes for fixed, shallow glazed panes. Built with the road before warming, never a new draw pass. */
 import { float, vec3, fract, floor, sin, min, max, abs, clamp, mix, smoothstep, step, fwidth, normalize, dot, pow, normalWorld } from 'three/tsl';
-import { MUSIC_TILES as T, TILE_COLOURS, musicTileLayout } from '../musicTilesMath.js';
+import { MUSIC_TILES as T, TILE_COLOURS, musicTileLayout, courtTileLayouts } from '../musicTilesMath.js';
 import { LOOK } from '../look.js';
 
 const TAU = Math.PI * 2;
@@ -16,21 +16,33 @@ const line = (d, width, px, period) => {
 };
 
 export function createMusicTiles({ track, p, trueEdge, music: mu, view, distance }) {
-  const layout = musicTileLayout(track);
+  const start = musicTileLayout(track), courts = courtTileLayouts(track), layout = start || courts[0];
   if (!layout) return { mask: float(0), colour: vec3(...TILE_COLOURS[0]), relief: float(1), glaze: float(0), opacity: float(T.opacity) };
-  const s = fract(p.y.sub(layout.startS).div(layout.lapM).add(0.5)).sub(0.5).mul(layout.lapM);
-  let mask = smoothstep(layout.fromM, layout.fromM + T.fadeM, s)
-    .mul(oneMinus(smoothstep(layout.toM - T.fadeM, layout.toM, s)))
-    .mul(smoothstep(T.shoulderM, T.shoulderM + T.shoulderFadeM, trueEdge));
-  for (const pad of layout.pads) {
-    const a = oneMinus(smoothstep(pad.len / 2 + T.padMarginM, pad.len / 2 + T.padMarginM + T.padFadeM, abs(s.sub(pad.s))));
-    const b = oneMinus(smoothstep(pad.w / 2 + T.padMarginM, pad.w / 2 + T.padMarginM + T.padFadeM, abs(p.x.sub(pad.x))));
-    mask = mask.mul(oneMinus(a.mul(b)));
+  const s = fract(p.y.sub(layout.startS).div(layout.lapM).add(0.5)).sub(0.5).mul(layout.lapM).toVar();
+  let mask = float(0), courtMask = float(0), lateral = vec3(...layout.lateral), forward = vec3(...layout.forward);
+  for (const region of [...(start ? [start] : []), ...courts]) {
+    const d = region === layout ? s : fract(p.y.sub(region.startS).div(region.lapM).add(0.5)).sub(0.5).mul(region.lapM).toVar();
+    let local = smoothstep(region.fromM, region.fromM + T.fadeM, d)
+      .mul(oneMinus(smoothstep(region.toM - T.fadeM, region.toM, d)))
+      .mul(smoothstep(T.shoulderM, T.shoulderM + T.shoulderFadeM, trueEdge));
+    for (const pad of region.pads) {
+      const a = oneMinus(smoothstep(pad.len / 2 + T.padMarginM, pad.len / 2 + T.padMarginM + T.padFadeM, abs(d.sub(pad.s))));
+      const b = oneMinus(smoothstep(pad.w / 2 + T.padMarginM, pad.w / 2 + T.padMarginM + T.padFadeM, abs(p.x.sub(pad.x))));
+      local = local.mul(oneMinus(a.mul(b)));
+    }
+    local = local.toVar();
+    mask = max(mask, local);
+    if (courts.includes(region)) courtMask = max(courtMask, local);
+    if (region !== layout) {
+      lateral = mix(lateral, vec3(...region.lateral), local);
+      forward = mix(forward, vec3(...region.forward), local);
+    }
   }
+  mask = mask.toVar();
 
   // Only these raw metre coordinates define the panes. Neither song time nor road flow moves a joint.
   const x = p.x.div(T.cellX).add(0.5), y = s.div(T.cellS).add(0.5);
-  const fx = fract(x), fy = fract(y), px = fwidth(p.x), py = fwidth(s);
+  const fx = fract(x), fy = fract(y), px = fwidth(p.x), py = fwidth(p.y);
   const cxPx = px.div(T.cellX), cyPx = py.div(T.cellS);
   const detail = oneMinus(smoothstep(T.meltFrom, T.meltTo, max(cxPx, cyPx)));
   const near = smoothstep(T.nearFromM, T.nearToM, distance);
@@ -51,12 +63,15 @@ export function createMusicTiles({ track, p, trueEdge, music: mu, view, distance
   const bevel = (d, f, pixel) => smoothstep(0, T.bevelM, d).mul(oneMinus(smoothstep(T.bevelM, T.bevelM * 2, d)))
     .mul(oneMinus(step(0.5, f).mul(2))).mul(float(T.bevelM).div(max(float(T.bevelM), pixel))).mul(T.bevelSlope).mul(detail);
   const bx = bevel(dx, fx, px), by = bevel(dy, fy, py).mul(near);
-  const N = normalize(normalWorld.sub(vec3(...layout.lateral).mul(bx)).sub(vec3(...layout.forward).mul(by)));
+  const N = normalize(normalWorld.sub(lateral.mul(bx)).sub(forward.mul(by)));
   const light = normalize(vec3(...LOOK.sheenDir)), H = normalize(light.add(view));
   // A specular lobe alone misses the usual driving view. Fixed opposing light/shadow on the bevel
   // makes the shallow moulding readable there; it fades with the existing pixel/near attenuation.
   const moulding = dot(N, light).sub(dot(normalWorld, light)).mul(T.bevelLight).mul(mix(1, 0.5, mu.tileGentle));
   const glaze = pow(max(dot(N, H), 0), T.glazePower).mul(T.glazeGain)
     .add(pow(oneMinus(abs(dot(N, view))), 5).mul(T.glazeFresnel));
-  return { mask, colour, relief: oneMinus(joint.mul(T.jointDark)).add(moulding), glaze, opacity: float(T.opacity) };
+  // The broad court needs more seam contrast than the intimate start terrace. Same fixed joints,
+  // pixel filtering and near fade; only their depth changes, never with a beat or Gentle toggle.
+  const jointDark = mix(T.jointDark, T.courtJointDark, courtMask);
+  return { mask, colour, relief: oneMinus(joint.mul(jointDark)).add(moulding), glaze, opacity: float(T.opacity) };
 }

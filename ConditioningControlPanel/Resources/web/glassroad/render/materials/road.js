@@ -24,6 +24,7 @@ import { LOOK } from '../look.js';
 import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
 import { ROAD_AA } from '../roadAaMath.js';
 import { createMusicTiles } from './musicTiles.js';
+import { ROAD_HALF_WIDTH_RANGE, encodeRoadHalfWidth } from '../musicTilesMath.js';
 import { createMusicBands } from './musicBands.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
@@ -103,13 +104,13 @@ export function energyTexture(song) {
   return { texture: t, width: w, fps: e.fps * w / n };
 }
 
-/** Half road width per metre of s as a 1-row texture (R = halfWidth / 16). */
+/** Half road width per metre of s, sharing one range with the shader decoder. */
 function widthTexture(track) {
   const n = Math.max(2, Math.ceil(track.lengthM)), data = new Uint8Array(n * 4);
   const f = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
   for (let i = 0; i < n; i++) {
     const fr = track.frameAt((i + 0.5) * track.lengthM / n, f);
-    data[i * 4] = Math.round(Math.min(1, fr.w / 2 / 16) * 255); data[i * 4 + 3] = 255;
+    data[i * 4] = encodeRoadHalfWidth(fr.w / 2); data[i * 4 + 3] = 255;
   }
   const t = new DataTexture(data, n, 1, RGBAFormat, UnsignedByteType);
   t.wrapS = RepeatWrapping; t.wrapT = ClampToEdgeWrapping; t.magFilter = t.minFilter = LinearFilter; t.needsUpdate = true;
@@ -238,7 +239,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
 
   // edges and centre: a steady bright edge lane and a calm centre line frame the racing line; the music
   // breathes the edge lanes with the bass and moves the edge lines with the melody
-  const half = track ? texture(widthTexture(track), vec2(p.y.div(lapM), 0.5)).r.mul(16) : float(P.halfWidthM);
+  const half = track ? texture(widthTexture(track), vec2(p.y.div(lapM), 0.5)).r.mul(ROAD_HALF_WIDTH_RANGE) : float(P.halfWidthM);
   const toEdge = half.sub(au).sub(melody);
   const laneM = float(S.edgeLaneM).mul(mu.bassW.add(1));
   // the true edge never moves (no vibration, no melody): the lane's outer stretch stays lane colour there

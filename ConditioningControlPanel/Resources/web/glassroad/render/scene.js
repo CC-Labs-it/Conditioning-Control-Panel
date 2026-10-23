@@ -32,6 +32,7 @@ import { buildCountdown, buildFinish, buildScatter, reelTexture } from './dressi
 import { buildTerrace } from './terrace.js';
 import { buildColossi } from './colossi.js';
 import { buildShowcaseDressing } from './showcaseDressing.js';
+import { buildCourt } from './court.js';
 import { buildShadows, CATCH_LAYER } from './shadows.js';
 import { sampleTrack } from './colossiMath.js';
 import { createPropMaterial } from './materials/kart.js';
@@ -148,6 +149,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // Built before warmup: shared static construction gives the glass road depth.
   const showcaseDressing = buildShowcaseDressing(track, pal, art);
   scene.add(showcaseDressing.group);
+  const court = buildCourt(track, pal);
+  scene.add(court.group);
   const rails = createRailMaterial(pal, art);
   add(meshFrom(track.meshes.rails, rails.material));
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
@@ -432,11 +435,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (roadWords) roadWords.dispose();
     if (wordRush) wordRush.dispose();
     showcaseDressing.dispose();
+    court.dispose();
     if (terrace) terrace.dispose();
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles

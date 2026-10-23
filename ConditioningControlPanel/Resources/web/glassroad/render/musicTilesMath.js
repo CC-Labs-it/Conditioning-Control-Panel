@@ -2,12 +2,16 @@
 import { hexRgb, roadLevel } from './spectrum.js';
 import { smoothstep, aaLine } from './roadAaMath.js';
 
+// Shared by width texture encode/decode. 48 m full width leaves room beyond the 34 m court.
+export const ROAD_HALF_WIDTH_RANGE = 24;
+export const encodeRoadHalfWidth = (half) => Math.round(Math.max(0, Math.min(1, half / ROAD_HALF_WIDTH_RANGE)) * 255);
+
 export const MUSIC_TILES = Object.freeze({
   fromM: -48, toM: 84, fadeM: 10, sampleM: 2,
   cellX: 3, cellS: 6, jointM: 0.045, bevelM: 0.16, bevelSlope: 0.22,
   bevelLight: 0.7, glazePower: 10, glazeGain: 0.16, glazeFresnel: 0.09,
   shoulderM: 1.85, shoulderFadeM: 0.5, padMarginM: 0.7, padFadeM: 1.2,
-  jointDark: 0.12, opacity: 0.92, luminance: 0.29,
+  jointDark: 0.12, courtJointDark: 0.38, opacity: 0.92, luminance: 0.29,
   meltFrom: 0.22, meltTo: 0.7, nearFromM: 3, nearToM: 9,
   barTurns: 1 / 8, beatTurns: 1 / 2, beatShare: 0.24,
 });
@@ -52,6 +56,17 @@ export function musicTileLayout(track) {
     if (s + pad.len / 2 >= fromM - 3 && s - pad.len / 2 <= toM + 3) layout.pads.push({ s, x: pad.x, w: pad.w, len: pad.len });
   }
   return layout;
+}
+
+/** Court tiles share the song uniforms and shader, but use their own transported bevel frame. */
+export function courtTileLayouts(track) {
+  return (track?.courts || []).map((c) => {
+    const startS = (c.fromS + c.toS) / 2, f = track.frameAt(startS);
+    return { startS, lapM: track.lengthM, fromM: c.fromS - startS, toM: c.toS - startS,
+      lateral: [...f.b], forward: [...f.t], pads: (track.boosts || [])
+        .filter((p) => p.s + p.len / 2 >= c.fromS && p.s - p.len / 2 <= c.toS)
+        .map((p) => ({ s: p.s - startS, x: p.x, w: p.w, len: p.len })) };
+  });
 }
 
 /** CPU reference for the shader's soft mask, including the quiet shoulder and pad underlay. */
