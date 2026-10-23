@@ -18,7 +18,8 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: DispatchIdle, PickVoiceLine, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
-    /// the Chaos-narrator gate with a source; tier latches key on "None" until a tier reaches Core.
+    /// the Chaos-narrator gate and the flash-audio whisper hold (WPF FlashService.cs:1533, row feat-flash) with a
+    /// source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
     {
