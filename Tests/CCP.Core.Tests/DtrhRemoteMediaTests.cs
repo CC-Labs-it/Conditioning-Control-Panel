@@ -179,6 +179,11 @@ public class DtrhRemoteMediaTests
             Assert.Contains(new GameMediaManifest.Entry("online100:Sub-0.webp", "asset:" + Path.Combine(copies, "0.webp")), m.Images);
             Assert.Contains("\"id\":\"scrolller/Sub/0\"", File.ReadAllText(cachePath));
 
+            // AppendTo starts a clips refill while loops are still backed off. Let it finish before
+            // moving the clock, or the next Take may only observe that older in-flight request.
+            await DtrhRemoteMedia.RefillTask;
+            Assert.Equal(DtrhRemoteMedia.Kind.Clips, asked[^1]);
+
             now += DtrhRemoteMedia.LoopsDrySeconds;                                     // the back-off is over
             DtrhRemoteMedia.Take(settings.Current, c => "asset:" + c, copier);
             await DtrhRemoteMedia.RefillTask;
