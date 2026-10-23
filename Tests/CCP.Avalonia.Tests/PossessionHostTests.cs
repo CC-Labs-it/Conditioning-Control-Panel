@@ -34,6 +34,32 @@ public sealed class PossessionHostTests
         window.Show(); Dispatcher.UIThread.RunJobs(); return (window, root);
     }
     private static Button Button(string name) => new() { Name = name, Content = "Run", Width = 80, Height = 30 };
+    // P02: InstallPossession replaces the process-wide director; put one back if the run had one.
+    private static void RestorePossession(bool had)
+    {
+        MainShellWindow.DisposePossession();
+        if (had && LockdownService.Current is { } ld) MainShellWindow.InstallPossession(ld);
+    }
+
+    [Fact]
+    public Task ShellOpenedAttachesItsHostAndClosedDetachesIt() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Show(new Border()).Window.Close();
+        bool had = MainShellWindow.PossessionDirector != null;
+        using var lockdown = new LockdownService();
+        MainShellWindow.InstallPossession(lockdown); var director = MainShellWindow.PossessionDirector!;
+        var shell = new MainShellWindow(); bool closed = false;
+        try
+        {
+            shell.Show(); Dispatcher.UIThread.RunJobs();
+            var host = Assert.IsType<PossessionHost>(shell._possessionHost);
+            Assert.True(director.HasHost(host));
+            shell.Close(); closed = true; Dispatcher.UIThread.RunJobs();
+            Assert.False(director.HasHost(host)); Assert.Null(shell._possessionHost);
+        }
+        finally { if (!closed) shell.Close(); RestorePossession(had); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task WalkKeepsInnermostCardsAndLeavesAndHonoursExplicitTags() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -135,9 +161,11 @@ public sealed class PossessionHostTests
     [Fact]
     public Task InstalledDirectorFollowsLockdownAndPanicCancelsPendingCharge() => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        bool saved = CoreSettings.Current.LockdownPossessionEnabled; CoreSettings.Current.LockdownPossessionEnabled = true;
+        // The director reads CoreSettings.Service (null without a head), not the Current fallback.
+        var oldProvider = CoreSettings.ServiceProvider; var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
+        service.Current.LockdownPossessionEnabled = true;
         var (w, root) = Show(Button("Action")); var frames = new FakeFrames(); using var host = new PossessionHost(w, root, frames);
-        using var lockdown = new LockdownService();
+        using var lockdown = new LockdownService(); bool had = MainShellWindow.PossessionDirector != null;
         try
         {
             MainShellWindow.InstallPossession(lockdown); var director = MainShellWindow.PossessionDirector!; director.AttachHost(host);
@@ -149,7 +177,7 @@ public sealed class PossessionHostTests
             Assert.False(PossessionLease.IsLeased((Control)Assert.Single(host.Targets).Visual));
             lockdown.Deactivate(); Assert.False(director.IsHaunting);
         }
-        finally { MainShellWindow.DisposePossession(); w.Close(); CoreSettings.Current.LockdownPossessionEnabled = saved; }
+        finally { RestorePossession(had); w.Close(); CoreSettings.ServiceProvider = oldProvider; }
         return Task.CompletedTask;
     });
 

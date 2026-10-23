@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class MainShellWindow
 {
     internal static PossessionDirector? PossessionDirector { get; private set; }
-    private PossessionHost? _possessionHost;
+    internal PossessionHost? _possessionHost;
     internal static void InstallPossession(LockdownService lockdown)
     {
         PossessionDirector?.Dispose();

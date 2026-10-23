@@ -176,6 +176,7 @@ public sealed class PanicSurfacesTests
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
         ["InlineLoopVideo"] = "WPF parity: the help card's muted, no-audio clip poster; it lives only while that card is open, and closing the card detaches and frees it",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
+        ["PossessionHost"] = "the shell's haunt layer: the 'possession' surface (StopPossessionForPanic) undoes every haunt and releases its attribution",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
     };
 

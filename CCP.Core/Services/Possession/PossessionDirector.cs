@@ -103,6 +103,7 @@ public sealed class PossessionDirector : IDisposable
     public bool IsHaunting { get; private set; }
     public IPossessionWarden? Warden { get; set; }
     public int LiveEffectCount => _live.Count;
+    internal bool HasHost(IPossessionHost host) => _hosts.Any(h => ReferenceEquals(h.Host, host));
 
     /// <summary>Raised the moment a haunt is committed (effect id, victim key or null for a window
     /// effect, whether the warden will name it). The audio layer rides this for its ember tick rather

@@ -461,7 +461,9 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
                 var lockdown = LockdownService.Current;
-                Views.Windows.MainShellWindow.InstallPossession(lockdown);
+                // A haunt layer that fails to install must not take startup down with it.
+                try { Views.Windows.MainShellWindow.InstallPossession(lockdown); }
+                catch (Exception ex) { Serilog.Log.Error(ex, "Possession install failed; lockdown runs without it"); }
                 lockdown.LockdownDeactivated += () =>
                 {
                     try { Quests?.TrackLockdownCompleted(lockdown.LastActiveDuration); }
