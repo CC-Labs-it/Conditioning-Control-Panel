@@ -644,6 +644,10 @@
                   </TransformGroup>
                 </Rectangle.RenderTransform>
               </Rectangle>
+              <TextBlock x:Name="DashToggleHint" Text="{loc:Str dash_toggle_hint}"
+                         VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="12,0,12,8"
+                         FontSize="10" Foreground="{DynamicResource TextMutedBrush}"
+                         TextAlignment="Center" TextWrapping="Wrap" IsHitTestVisible="False"/>
             </Grid>
           </Border>
 

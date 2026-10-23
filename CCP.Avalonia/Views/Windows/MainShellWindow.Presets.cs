@@ -253,6 +253,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (RefuseIfSessionFeatureLocked($"card:{key}")) return;
             SetWallFeature(key, !IsWallFeatureOn(key));
+            // WPF NoteDashboardToggleUsed: stop saving once the third learned toggle retires the hint.
+            var s = CoreSettings.Current;
+            if (s.DashboardToggleHintUses < 3)
+            {
+                s.DashboardToggleHintUses++;
+                CoreSettings.Save();
+                SettingsPage?.RefreshClickPreference();
+            }
         }
 
         /// <summary>WPF RefreshWallActiveStates (MainWindow.Presets.cs:1404): the ring on every wall

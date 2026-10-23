@@ -7,8 +7,8 @@
 // AppSettings.RailFavorites / RailRecent. Lock truth is IsNavEntryLocked (NavPremiumTags.cs), so the
 // chip's padlock and the rail's gold star cannot disagree.
 //
-// ponytail: not on this head yet - the champagne v2 pill (Services/Prizes/V2Badges + PrizeGrants are
-// WPF-only) and a mod's own art framing (WPF ActiveModFraming); mod art is centre-cropped instead.
+// ponytail: live prize snapshots still depend on svc-prize-ownership. Like the feature pickers,
+// chips read this head's PrizeOwnership seam; settings never confer ownership.
 
 using System;
 using System.Collections.Generic;
@@ -19,6 +19,12 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Prizes;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -29,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private bool _favoritesRailHooked;
+        internal PageFavoritesDrawer? FavoritesPageDrawer => Named<PageFavoritesDrawer>("PageDrawer");
 
         /// <summary>WPF FavoritePinMap (MainWindow.FavoritesRail.cs:63): rail/Play-wall x:Name -> palette id.</summary>
         private static readonly (string Element, string Id)[] FavoritePinMap =
@@ -53,8 +60,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _favoritesRailHooked = true;
                 WireFavoritePinMenus();
                 EventHandler onLanguage = (_, _) => RefreshFavoritesRail();
+                Action onGrants = () => Dispatcher.UIThread.Post(RefreshFavoritesRail);
+                EventHandler<ModPackage> onMod = (_, _) => Dispatcher.UIThread.Post(RefreshFavoritesRail);
                 LocalizationManager.Instance.LanguageChanged += onLanguage;
-                Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= onLanguage;
+                PrizeGrants.GrantsChanged += onGrants;
+                CoreMods.ModChanged += onMod;
+                Closed += (_, _) =>
+                {
+                    LocalizationManager.Instance.LanguageChanged -= onLanguage;
+                    PrizeGrants.GrantsChanged -= onGrants;
+                    CoreMods.ModChanged -= onMod;
+                };
             }
             RefreshFavoritesRail();
             SettingsPage?.ApplyFavoritesDrawerSetting();
@@ -66,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var dash = SettingsPage;
             var s = CoreSettings.Current;
             if (dash?.FavoritesList == null || dash.RecentList == null || s == null) return;
+            dash.RefreshClickPreference();
             try
             {
                 var byId = SettingsPaletteIndex.All
@@ -82,6 +99,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
                     dash.RecentList.Children.Add(BuildRailChip(dash, byId[id]));
                 dash.RecentEmpty.IsVisible = dash.RecentList.Children.Count == 0;
+                if (FavoritesPageDrawer is { } drawer)
+                {
+                    drawer.Paint(AmbientFxCanvas.Env.GlowColor);
+                    drawer.FavoritesList.Children.Clear();
+                    foreach (var id in s.RailFavorites.Where(Known))
+                        drawer.FavoritesList.Children.Add(BuildRailChip(dash, byId[id]));
+                    drawer.RecentList.Children.Clear();
+                    foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
+                        drawer.RecentList.Children.Add(BuildRailChip(dash, byId[id]));
+                    drawer.FavoritesEmpty.IsVisible = drawer.FavoritesList.Children.Count == 0;
+                    drawer.RecentEmpty.IsVisible = drawer.RecentList.Children.Count == 0;
+                }
             }
             catch (Exception ex) { Log.Debug("RefreshFavoritesRail: {E}", ex.Message); }
         }
@@ -118,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 });
             }
 
+            AddRailChipV2Pill(entry.Id, grid, locked);
             var chip = new Button { Content = grid, Tag = entry.Id };
             if (dash.FavoritesRail.TryFindResource("RailChipStyle", out var theme) && theme is global::Avalonia.Styling.ControlTheme ct)
                 chip.Theme = ct;
@@ -129,6 +159,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             chip.Click += (_, _) => OpenDestination(entry);
             AttachPinMenu(chip, entry.Id);
             return chip;
+        }
+
+        private static void AddRailChipV2Pill(string id, Grid grid, bool locked)
+        {
+            bool Owned(string grant) => PrizeOwnership.IsGranted(grant);
+            if (!V2Badges.ChipWearsV2Pill(id,
+                V2Badges.FlashRule(Owned(PrizeGrants.FlashDriftBounce), Owned(PrizeGrants.FlashPendulum), Owned(PrizeGrants.JackpotRemix)),
+                V2Badges.BubbleRule(Owned(PrizeGrants.BubbleRain), Owned(PrizeGrants.BubbleSpiralIn)))) return;
+            var champagne = new SolidColorBrush(Color.FromRgb(0xFF, 0xE0, 0x8A));
+            grid.Children.Add(new Border
+            {
+                Margin = locked ? new Thickness(3, 2, 0, 0) : new Thickness(0, 2, 3, 0),
+                Padding = new Thickness(3, 0, 4, 1), CornerRadius = new CornerRadius(5),
+                Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
+                BorderBrush = champagne, BorderThickness = new Thickness(1), IsHitTestVisible = false,
+                HorizontalAlignment = locked ? HorizontalAlignment.Left : HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Child = new TextBlock { Text = Loc.Get("badge_v2"), Foreground = champagne, FontSize = 7, FontWeight = FontWeight.Bold },
+            });
+        }
+
+        // WPF ActiveModFraming: hand-authored manifest keys ignore case and normalize separators.
+        private static ModArtFraming? ActiveRailFraming(string resourcePath)
+        {
+            var map = CoreMods.ActiveModPackage?.Manifest.ArtFraming;
+            if (map == null) return null;
+            foreach (var entry in map)
+            {
+                if (entry.Value == null || !string.Equals(entry.Key.Replace('\\', '/'), resourcePath, StringComparison.OrdinalIgnoreCase)) continue;
+                foreach (var surface in entry.Value)
+                    if (string.Equals(surface.Key, ModArtFramingRegistry.SurfaceRailChip, StringComparison.OrdinalIgnoreCase))
+                        return surface.Value;
+                return null;
+            }
+            return null;
         }
 
         /// <summary>WPF BuildRailChipArt (:253): Cover (scene art, railChip crop) or Plate (square icon).</summary>
@@ -158,7 +223,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (probe == null) continue;
                 bool modArt = CoreModArt.HasOverride(path);
                 double aspect = probe.Size.Height > 0 ? probe.Size.Width / probe.Size.Height : 0;
-                var vb = ModArtFramingRegistry.ResolveViewbox(basePath, ModArtFramingRegistry.SurfaceRailChip, modArt, aspect, null);
+                var vb = ModArtFramingRegistry.ResolveViewbox(basePath, ModArtFramingRegistry.SurfaceRailChip, modArt, aspect, modArt ? ActiveRailFraming(basePath) : null);
                 var width = FavoritesRailArt.DecodeWidthFor(vb.Width);
                 var bitmap = width > FavoritesRailArt.BaseDecodeWidth ? RailArt(path, width) ?? probe : probe;
                 grid.Children.Add(RailChipScrim(dash));
@@ -273,7 +338,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 try { SettingsPage?.PeekFavoritesDrawer(id); }
                 catch (Exception ex) { Log.Debug("PeekFavoritesDrawer({Id}): {E}", id, ex.Message); }
+                if (FavoritesPageDrawer?.IsVisible == true) FavoritesPageDrawer.SetOpen(true, animate: true);
             }
+        }
+
+        internal void CloseFavoritesDrawersForPanic()
+        {
+            FavoritesPageDrawer?.SetOpen(false, animate: false);
+            SettingsPage?.CloseClickChoice();
+            SettingsPage?.CloseFavoritesDrawerForPanic();
         }
 
         /// <summary>WPF WireFavoritePinMenus (:411): a pin menu on every rail row, door header and
