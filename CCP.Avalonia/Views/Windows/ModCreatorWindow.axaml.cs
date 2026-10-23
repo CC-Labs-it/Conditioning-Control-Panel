@@ -314,30 +314,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             LaunchTutorial();
         }
 
-        /// <summary>
-        /// WPF's <c>App.Tutorial.Start(TutorialType.Modding)</c> plus a <c>TutorialOverlay</c>, both
-        /// of which this head has: <see cref="CoreTutorial"/> is the seam and
-        /// <see cref="TutorialOverlay"/> is the ported overlay, which reads that seam itself.
-        ///
-        /// <para>The overlay is only shown once the seam confirms a tour is actually running.
-        /// <c>Tours.TutorialHead.Seed</c> backs the seam; if <c>Start</c> is refused (another tour
-        /// running) <c>IsActive</c> answers for that tour, never an empty coach-mark card.</para>
-        ///
-        /// <para>ponytail: the step-rewriting half cannot be done through the seam. WPF walks
-        /// <c>App.Tutorial.CurrentSteps</c> and replaces each <c>step.OnActivate</c> so a step
-        /// tagged <c>RequiresTab="mod:&lt;section&gt;"</c> calls <see cref="NavigateToSection"/>.
-        /// <c>CoreTutorial</c> deliberately exposes only a per-step SNAPSHOT (no step list, no
-        /// OnActivate) because activation is head navigation - so until the seam grows a
-        /// step-activation callback, a Modding tour spotlights sections this window does not
-        /// navigate to. NavigateToSection is ready for it.</para>
-        /// </summary>
+        /// <summary>WPF LaunchTutorial: bind mod section navigation before showing the coach mark.</summary>
         private void LaunchTutorial()
         {
-            if (_tutorialOverlay != null) return;
+            if (_tutorialOverlay != null || CoreTutorial.IsActive) return;
 
             CoreTutorial.Start("Modding");
             if (!CoreTutorial.IsActive) return;
 
+            foreach (var step in Tours.TutorialHead.Service.CurrentSteps)
+            {
+                if (step.RequiresTab is { } tab && tab.StartsWith("mod:", StringComparison.Ordinal))
+                {
+                    var section = tab.Substring(4);
+                    step.OnActivate = () => NavigateToSection(section);
+                }
+            }
+            Tours.TutorialHead.Service.CurrentStep?.OnActivate?.Invoke();
             _tutorialOverlay = new TutorialOverlay(this);
             _tutorialOverlay.Closed += (_, _) => _tutorialOverlay = null;
             _tutorialOverlay.Show();

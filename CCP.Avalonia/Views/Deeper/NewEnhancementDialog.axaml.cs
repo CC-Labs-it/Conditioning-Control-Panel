@@ -11,11 +11,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// PORTED from ConditioningControlPanel/Views/Deeper/NewEnhancementDialog.xaml.cs. Deviations:
     ///  - DialogResult becomes Close(bool); callers use ShowDialog&lt;bool&gt;.
     ///  - OpenFileDialog becomes the StorageProvider file picker.
-    ///  - The three interactive tutorials are stubs. AppSettings is
-    ///    NOT what blocks them - the HypnoTube flow's one settings write is restored below - and
-    ///    nor is the overlay, which is ported
-    ///    (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs). See StartInteractiveTutorial and
-    ///    BrowseAsync for what each one is actually waiting on.
     /// </summary>
     public partial class NewEnhancementDialog : Window
     {
@@ -37,8 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _txtError = this.FindControl<TextBlock>("TxtError")!;
 
             this.FindControl<Button>("BtnBrowse")!.Click += async (_, _) => await BrowseAsync();
-            this.FindControl<Button>("BtnLocalVideoTutorial")!.Click += (_, _) => { _rbVideo.IsChecked = true; StartInteractiveTutorial(); };
-            this.FindControl<Button>("BtnLocalAudioTutorial")!.Click += (_, _) => { _rbAudio.IsChecked = true; StartInteractiveTutorial(); };
+            this.FindControl<Button>("BtnLocalVideoTutorial")!.Click += (_, _) => { _rbVideo.IsChecked = true; StartInteractiveTutorial("DeeperEditorInteractiveLocalVideo"); };
+            this.FindControl<Button>("BtnLocalAudioTutorial")!.Click += (_, _) => { _rbAudio.IsChecked = true; StartInteractiveTutorial("DeeperEditorInteractiveLocalAudio"); };
             this.FindControl<Button>("BtnTryHypnoTubeTutorial")!.Click += (_, _) => BtnTryHypnoTubeTutorial_Click();
             this.FindControl<Button>("BtnCancel")!.Click += (_, _) => Close(false);
             this.FindControl<Button>("BtnCreate")!.Click += (_, _) => BtnCreate_Click();
@@ -87,38 +82,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
             catch { /* a settings write must never take the dialog down */ }
 
-            StartInteractiveTutorial();
+            StartInteractiveTutorial("DeeperEditorInteractiveHT");
         }
 
-        /// <summary>
-        /// ponytail: still a no-op, but NOT for the reason the old note gave. TutorialOverlay is
-        /// ported (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs, live ctor
-        /// <c>TutorialOverlay(Window)</c>) and App.Tutorial is now the <c>CoreTutorial</c> seam,
-        /// so the two things that note named as head-only are both here. What blocks it:
-        ///
-        /// <list type="number">
-        ///   <item>Nothing seeds <c>CoreTutorial</c> on this head (CCP.Avalonia/App.axaml.cs:71) -
-        ///     the step lists are sentences about WPF controls and stay in
-        ///     ConditioningControlPanel/Services/TutorialService.cs. <c>Start</c> is a silent
-        ///     no-op, so showing the overlay would dim this dialog behind an empty card, which is
-        ///     worse than the button doing nothing visible.</item>
-        ///   <item>Part 2 needs <c>TutorialEventBus.PendingPart2Tutorial</c>
-        ///     (ConditioningControlPanel/Services/TutorialEventBus.cs). <c>CoreTutorial</c> carries
-        ///     no event bus by design, so that hand-off has no seam at all - it is an addition to
-        ///     Core, not a call into it. The WPF original sets it in BtnCreate_Click, after
-        ///     validation, precisely so a fumbled first click cannot leave the flag armed forever.</item>
-        /// </list>
-        ///
-        /// <para>Part 1's whole visible effect - pick the media type, pre-fill the source - already
-        /// happens in the three callers. Restore as:
-        /// <c>if (CoreTutorial.IsActive) CoreTutorial.Skip(); CoreTutorial.Start(part1); if
-        /// (!CoreTutorial.IsActive) return; new TutorialOverlay(this).Show();</c> - where
-        /// <c>part1</c> is the WPF <c>TutorialType</c> name as a string
-        /// ("DeeperEditorInteractiveLocalVideo" / "…LocalAudio" / "…HT"), since the seam takes a
-        /// name rather than an enum Core refuses to copy.</para>
-        /// </summary>
-        private void StartInteractiveTutorial()
+        private string? _pendingPart2Tutorial;
+        private Windows.TutorialOverlay? _activeTutorialOverlay;
+        private void StartInteractiveTutorial(string part1)
         {
+            _pendingPart2Tutorial = part1 + "Part2";
+            if (CoreTutorial.IsActive) CoreTutorial.Skip();
+            _activeTutorialOverlay?.Close();
+            CoreTutorial.Start(part1);
+            if (!CoreTutorial.IsActive) return;
+            _activeTutorialOverlay = new Windows.TutorialOverlay(this);
+            _activeTutorialOverlay.Show();
         }
 
         private void BtnCreate_Click()
@@ -131,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
             SelectedMediaType = _rbVideo.IsChecked == true ? MediaTypes.Video : MediaTypes.Audio;
             SelectedSource = source;
+            if (_pendingPart2Tutorial != null) CoreTutorialEvents.PendingPart2Tutorial = _pendingPart2Tutorial;
             Close(true);
         }
     }

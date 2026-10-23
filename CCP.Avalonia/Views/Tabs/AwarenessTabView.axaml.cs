@@ -423,7 +423,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// skipped) pops the Puppy preset's editor (MainWindow.Settings.cs:689). A start refused
         /// because another tour runs leaves CurrentTourName on that tour, so the guard below returns.
         /// </summary>
-        private void BtnAwarenessTutorial_Click(object? sender, RoutedEventArgs e)
+        internal void BtnAwarenessTutorial_Click(object? sender, RoutedEventArgs e)
         {
             CoreTutorial.Start("Awareness");
             if (!CoreTutorial.IsActive || CoreTutorial.CurrentTourName != "Awareness") return;

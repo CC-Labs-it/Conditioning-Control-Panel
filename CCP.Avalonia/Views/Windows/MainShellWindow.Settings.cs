@@ -18,25 +18,6 @@
 //     CoreSettings.Current.CustomAssetsPath is exactly where WPF writes the answer - CorePaths
 //     .EffectiveAssets reads it straight back through the head's provider.
 //
-// Still blocked, each naming its symbol rather than a vague service:
-//   - StartTutorial(TutorialType) and every tour behind it: ConditioningControlPanel/Services/
-//     TutorialService.cs (App.Tutorial), which drives TutorialOverlay step by step.
-//   - OpenBugReportWindow: opens the shared BugReportService-backed BugReportWindow below.
-//   - BtnTutorialModding_Click's second half: Windows/ModCreatorWindow.xaml, not ported.
-//   - BtnSave_Click: SaveSettings() re-derives AppSettings from AppSettingsTab's controls, but on
-//     this head every one of those controls is already a live editor that writes Current and
-//     saves (GeneralSettingsSection, PerformanceSettingsSection, AudioSettingsSection, ...).
-//     Restoring the read-back would make the shell a SECOND writer of settings the sections
-//     already own - the exact hazard WPF's own Phase 8 comment spends 20 lines on. The rest of
-//     the handler (_allPresets, the "save as preset" offer, FlashSaveAbsorb) is preset machinery
-//     that is stubbed in MainShellWindow.Presets.cs.
-//   - LoadSettings / UpdateSliderTexts: same reason - each Settings section seeds itself.
-//   - The pack migration inside BtnPickAssetsFolder_Click: Services/PackEncryptionService.cs and
-//     Services/ContentPacks are not on this head, so no .packs folder is discovered to move.
-//   - The post-change rescan (App.Flash/Video/BubbleCount/ContentPacks RefreshImagesPath etc. and
-//     RefreshAssetTree): those four services and the assets tree are not on this head.
-//   - Services/Auth/SecurityHelper.IsPersonalFolderRoot: the #1053 refusal. Not in Core, so the
-//     guard is re-stated privately below; delete the local copy the day it moves.
 
 using System;
 using System.Collections.Generic;
@@ -241,30 +222,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (browser != null) browser.IsVisible = !open;
         }
 
-        // Every row of the ? panel: close the panel, then start a tour. The close half is real;
-        // the tour half is one call into App.Tutorial, which is not on this head. Named per row so
-        // the day TutorialService lands, each is one line rather than a rediscovery of which
-        // TutorialType a row meant.
-        //   GettingStarted => GettingStarted   Settings => Settings
-        //   Presets => Presets         Progression => Progression         Achievements => Achievements
-        //   Companion => Companion     Patreon => Patreon                 Avatar => Avatar
-        //   Awareness => Awareness (plus the one-shot "open the Puppy preset editor when the tour
-        //   finishes naturally" hook in MainWindow.Settings.cs:670)
-        //   StartTutorial (the panel's big button) => FullTour
-        private void BtnStartTutorial_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialGettingStarted_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialSettings_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialPresets_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialProgression_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialAchievements_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialCompanion_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialPatreon_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialAvatar_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
-        private void BtnTutorialAwareness_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
+        private void StartGuide(string tour)
+        {
+            CloseTutorialOverlay();
+            if (tour == "Awareness") Named<Tabs.AwarenessTabView>("AwarenessTab")?.BtnAwarenessTutorial_Click(this, new global::Avalonia.Interactivity.RoutedEventArgs());
+            else CoreTutorial.Start(tour);
+        }
 
-        /// <summary>ponytail: closes the panel, then WPF opens Windows/ModCreatorWindow.xaml with
-        /// startWithTutorial:true. That window is not ported.</summary>
-        private void BtnTutorialModding_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => CloseTutorialOverlay();
+        private void BtnStartTutorial_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("FullTour");
+        private void BtnTutorialGettingStarted_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("GettingStarted");
+        private void BtnTutorialSettings_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("Settings");
+        private void BtnTutorialPresets_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("Presets");
+        private void BtnTutorialProgression_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("Progression");
+        private void BtnTutorialAchievements_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("Achievements");
+        private void BtnTutorialCompanion_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("Companion");
+        private void BtnTutorialPatreon_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("Patreon");
+        private void BtnTutorialAvatar_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("Avatar");
+        private void BtnTutorialAwareness_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => StartGuide("Awareness");
+
+        private void BtnTutorialModding_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            CloseTutorialOverlay();
+            if (CoreTutorial.IsActive) return;
+            new ModCreatorWindow(startWithTutorial: true).Show(this);
+        }
 
         /// <summary>Close the help panel first, then open the owned report dialog, matching WPF.</summary>
         private void BtnTutorialReportBug_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)

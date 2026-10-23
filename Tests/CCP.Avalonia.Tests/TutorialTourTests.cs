@@ -106,6 +106,28 @@ public sealed class TutorialTourTests : IDisposable
     }
 
     [Fact]
+    public void ShortWalkDemoRunsAfterItsTabNavigationAndOnlyOnTheFlashCard()
+    {
+        var before = TutorialHeadHooks.FlashDemo;
+        var calls = new List<string>();
+        TutorialHeadHooks.FlashDemo = () => calls.Add("flash");
+        try
+        {
+            var service = new TutorialService();
+            service.ConfigureCallbacks(() => calls.Add("tab"), () => { }, () => { }, () => { }, () => { }, () => { });
+            service.Start(TutorialType.ShortWalk);
+            Assert.DoesNotContain("flash", calls);
+            calls.Clear();
+            service.Next();
+            Assert.Equal("sw-flash", service.CurrentStep!.Id);
+            Assert.Equal(new[] { "tab", "flash" }, calls);
+            service.Next();
+            Assert.Single(calls.Where(c => c == "flash"));
+        }
+        finally { TutorialHeadHooks.FlashDemo = before; }
+    }
+
+    [Fact]
     public void EveryTourHasCardsWithTextAndUniqueIds()
     {
         foreach (var group in TutorialHead.AllSteps().GroupBy(x => x.Tour))
@@ -194,7 +216,7 @@ public sealed class TutorialTourTests : IDisposable
     }
 
     [Fact]
-    public Task ATourStartsStepsClosesAndPanicEndsIt() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task ATourStartsStepsClosesAndPanicEndsIt() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
         var service = new SettingsService();
@@ -261,6 +283,9 @@ public sealed class TutorialTourTests : IDisposable
             Assert.NotNull(second);
             Assert.NotSame(overlay, second);
             second!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Assert.False(CoreTutorial.IsActive);
+            Assert.True(second.IsVisible); // the WPF 200ms fade retains the card briefly
+            await Task.Delay(250);
             Dispatcher.UIThread.RunJobs();
             Assert.False(CoreTutorial.IsActive);
             Assert.Null(ShellOverlay());
@@ -276,6 +301,5 @@ public sealed class TutorialTourTests : IDisposable
             CoreSettings.SaveImmediate();
             CoreSettings.ServiceProvider = null;
         }
-        return Task.CompletedTask;
     });
 }

@@ -59,6 +59,10 @@ namespace ConditioningControlPanel.Avalonia.Tours
             CoreTutorial.PreviousAction = Service.Previous;
             CoreTutorial.SkipAction = Service.Skip;
             CoreTutorial.StartAction = StartByName;
+            TutorialHeadHooks.FlashDemo ??= () =>
+            {
+                if (TutorialHeadHooks.Shell is { } shell) Views.Overlays.FlashOverlay.TriggerOnce(shell, amount: 1, durationMs: 1600);
+            };
 
             if (_seeded) return;      // the seam is re-pointed every call, the events are wired once
             _seeded = true;
@@ -106,9 +110,13 @@ namespace ConditioningControlPanel.Avalonia.Tours
         }
 
         /// <summary>Panic: a tour ends at once, by the abandon route (never latched as walked).</summary>
+        internal static bool PanicStopping { get; private set; }
+
         internal static void OnPanic()
         {
+            PanicStopping = true;
             try { if (Service.IsActive) Service.Skip(); } catch { /* panic never throws */ }
+            finally { PanicStopping = false; }
         }
 
         /// <summary>One snapshot per head step, so the overlay's "is this still my step" check holds.</summary>

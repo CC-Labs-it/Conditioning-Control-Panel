@@ -21,7 +21,7 @@
          the card's shadow                         logical tree, so it has no resource host to
                                                    resolve a DynamicResource against.
        Click="X_Click"                          -> wired in the constructor
-       Opacity fade in/out (DoubleAnimation)    -> dropped, see the code-behind note.
+       Opacity fade in/out (DoubleAnimation)    -> finite live transitions; render samples skip them.
 
      Every string here is hardcoded English in the WPF original too — the card's text comes from
      TutorialStep, not from the resource dictionary — so there is no {loc:Str} and no key has been
@@ -36,7 +36,7 @@
         SystemDecorations="None"
         TransparencyLevelHint="Transparent"
         Background="Transparent"
-        Topmost="True"
+        Topmost="False"
         ShowActivated="False"
         ShowInTaskbar="False"
         WindowStartupLocation="Manual"
