@@ -32,9 +32,8 @@
 //     modal" arbitration those read from App.
 //   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
 //     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
-//   _serverAnnouncementShownThisLaunch - only the intake nudge reads it.
-//   CheckIntakePassNudge / StartIntakeFromNudge - App.Programs (the weekly intake pass); the
-//     accepted nudge then wants ShowTab("gradedintake"), which does exist here.
+//   (CheckIntakePassNudge / StartIntakeFromNudge / _serverAnnouncementShownThisLaunch are PORTED:
+//     MainShellWindow.IntakeNudge.cs.)
 //   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
 //   ExternalOpener, which has no no-default-browser prompt - WPF BrowserLauncher's fallback.)
 //   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
@@ -191,10 +190,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // ponytail: WPF falls back to App.Patreon/App.Discord DisplayName when the unified
-            // name is blank. Neither provider exists on this head, so a user who linked an
-            // account but has no UserDisplayName written back gets the generic line.
-            var displayName = s.UserDisplayName;
+            // WPF Marquee.cs:135: unified name, then the provider names. UpdateQuickLoginUI re-runs
+            // this on sign-in, restore and logout, as WPF's login paths do (Login.cs:57/123/324).
+            var displayName = s.UserDisplayName
+                              ?? Platform.AccountSeed.Patreon?.DisplayName
+                              ?? Platform.AccountSeed.Discord?.DisplayName;
             secondary.Text = string.IsNullOrEmpty(displayName)
                 ? Loc.Get("label_welcome_consider_logging_in_with_patreon_for")
                 : Loc.GetF("label_welcome_back_0", displayName!);

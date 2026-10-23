@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // each (Login.cs:198 UpdateLevelDisplay, OnProfileLoaded).
                 UpdateLevelDisplay();
                 RefreshProfileBubble();   // WPF UpdateXPBarLoginState: the bubble paints the same identity
+                UpdateBannerWelcomeMessage();   // WPF Login.cs:57/123/324: the banner's welcome-back name
                 // WPF UpdatePatreonUI -> RefreshEntitlementVeils: an account change moves every veil.
                 RefreshEntitlementVeils(persist: accountChanged);
                 // WPF Patreon.cs:294: the pass is per-account, so sign-in/out moves the intake door.

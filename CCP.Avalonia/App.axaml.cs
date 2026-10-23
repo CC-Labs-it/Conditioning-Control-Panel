@@ -569,6 +569,8 @@ namespace ConditioningControlPanel.Avalonia
                 DescentCountdown.Start();
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).
+                // WPF MainWindow.Marquee.cs:717: the weekly intake pass nudge, 14 s after the shell opens (local only).
+                Views.Windows.MainShellWindow.IntakeNudgeArmed = true;
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
                 {
                     Views.Windows.MainShellWindow.AnnouncementClient = () => new V2AuthService();

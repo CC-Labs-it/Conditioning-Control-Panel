@@ -40,6 +40,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (a == null || a.Id == CoreSettings.Current.DismissedAnnouncementId) return;
                 Log.Information("Server announcement received: id={Id}, title={Title}", a.Id, a.Title);
 
+                // WPF Marquee.cs:913: claim the launch's one popup slot at routing time, so the weekly
+                // intake nudge (MainShellWindow.IntakeNudge.cs) stands down - shown or parked alike.
+                _serverAnnouncementShownThisLaunch = true;
                 string id = a.Id!, title = a.Title!, message = a.Message ?? "";
                 Platform.StartupLadder.PresentOrInbox(new Services.Startup.InboxItem
                 {
