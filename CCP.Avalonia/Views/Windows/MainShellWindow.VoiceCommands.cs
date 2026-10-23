@@ -5,7 +5,7 @@
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
 // ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here (spiral, pink, keyword triggers, shake, deeper, video pause/resume) are left out of
+// seam here (keyword triggers, deeper) are left out of
 // the grammar (wire-shell-she-listening-b-next).
 
 using System;
@@ -123,12 +123,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "bubbles_off" when CoreBubbles.StopAction != null => CoreBubbles.Stop,
             "video_on" when CoreEngine.Video != null => () => CoreEngine.Video?.Trigger(),
             "video_off" when CoreEngine.Video != null => () => CoreEngine.Video?.Stop(),
+            "video_pause" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PausePrimary,
+            "video_resume" when CoreEngine.Video == MandatoryVideoOverlay.Instance.Scheduler => MandatoryVideoOverlay.Instance.PlayPrimary,
+            "spiral_on" => () => SpiralOverlay.ShowForVoice(this, CoreSettings.Current.SpiralOpacity / 100.0),
+            "spiral_off" => () => SpiralOverlay.HideForVoice(this),
+            "pink_on" => () => PinkFilterOverlay.ShowForVoice(this, Math.Max(0.4, CoreSettings.Current.PinkFilterOpacity / 100.0)),
+            "pink_off" => () => PinkFilterOverlay.HideForVoice(this),
             "flash_once" when CoreFlash.ShowProvider != null => () => CoreFlash.ShowProvider?.Invoke(),
             "subliminals_on" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Start,
             "subliminals_off" when CoreSubliminal.ShowProvider != null => CoreSubliminal.Stop,
             "bouncing_on" when CoreBouncingText.StartAction != null => CoreBouncingText.Start,
             "bouncing_off" when CoreBouncingText.StopAction != null => CoreBouncingText.Stop,
             "lock_once" when CoreLockCard.ShowHandler != null => () => CoreLockCard.Show(),
+            "shake_once" => () => Deeper.ScreenShake.Shake(60, 1200), // WPF passes 60; Shake clamps it to 1
             "freeze_once" when CoreSubliminal.BambiFreezeProvider != null => CoreSubliminal.TriggerBambiFreeze,
             "wipe_once" when CoreMindWipe.TriggerOnceProvider != null => CoreMindWipe.TriggerOnce,
             "quiz_once" when CoreEngine.PopQuiz != null => () => CoreEngine.PopQuiz?.Show(),

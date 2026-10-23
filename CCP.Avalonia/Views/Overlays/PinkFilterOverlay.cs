@@ -16,8 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// in step with <see cref="Models.AppSettings"/>. The Avalonia counterpart of
     /// <c>OverlayService</c>'s Pink region (StartPinkFilter / StopPinkFilter /
     /// UpdatePinkFilterOpacity / RefreshFilterColor), minus everything that belongs to the session
-    /// engine - the timed and sustained holds, the Deeper ramp override and the 500ms poll all
-    /// live in <c>OverlayService</c> and have nothing on this head to drive them.
+    /// engine. Voice sustained holds use this renderer; ponytail: timed holds, the Deeper ramp
+    /// override and the 500ms poll still belong to the unported <c>OverlayService</c> runtime.
     ///
     /// <para><b>Static, and not a service, deliberately.</b> There is exactly one desktop and one
     /// tint on it; an instance would need an owner, and the only candidate owner is the shell
@@ -37,6 +37,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// OverlayService, #1180). MainShellWindow.Autonomy.cs sets and releases it.</summary>
         internal static bool PulseHold;
 
+        // WPF OverlayService.Show/HideOverlaySustained: voice owns a hold, never a saved toggle.
+        private static double? _voiceOpacity;
+        internal static double? VoiceOpacity => _voiceOpacity;
+
+        internal static void ShowForVoice(Visual host, double opacity)
+        {
+            _voiceOpacity = Math.Clamp(opacity, 0, 1);
+            Refresh(host);
+            if (!IsShowing) _voiceOpacity = null;
+        }
+
+        internal static void HideForVoice(Visual host)
+        {
+            _voiceOpacity = null;
+            Refresh(host); // a running persistent feature / Takeover pulse keeps its own ownership
+        }
+
+        internal static bool SkipPlatformChecksForTests;
         private static bool _refused;
 
         /// <summary>Whether a tint can actually reach the screen: X11 with click-through, a
@@ -49,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             && X11Overlay.IsAvailable && X11Overlay.IsCompositing;
 
         private static readonly List<TintOverlayWindow> Windows = new();
+        internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
 
         /// <summary>WPF AchievementService:239 - quest minutes while the tint is on screen.</summary>
         internal static readonly OverlayQuestMinutes QuestMinutes = new(m => App.Quests?.TrackPinkFilterMinutes(m));
@@ -75,7 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.PinkFilterEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (_voiceOpacity == null && (!s.PinkFilterEnabled || !ShouldShow())) { CloseWindows(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -83,7 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
-            var opacity = (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
+            var opacity = _voiceOpacity ?? (App.Sessions?.PinkOpacity ?? s.PinkFilterOpacity) / 100.0;   // a session ramps it without writing it (#471)
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -93,14 +112,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
 
             // Checked BEFORE anything is created, not only inside Accept: without this, a slider
             // drag on a platform that cannot do click-through flashes a topmost full-screen window
             // once per tick and logs a warning each time. Accept still runs - IsAvailable being
             // true does not promise THIS window is an X11 one, nor that the compositor granted
             // transparency.
-            if (!X11Overlay.IsAvailable)
+            if (!SkipPlatformChecksForTests && !X11Overlay.IsAvailable)
             {
                 Log.Debug("Pink filter: no X11 display, so no tint on this platform");
                 return;
@@ -117,7 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                                 // BubbleCountWindow uses; there is no XID before Show
                 // A refusal is about the platform, not about this monitor, so drop the whole set
                 // rather than tinting some screens and not others.
-                if (!Accept(w)) { CloseAll(); return; }
+                if (!Accept(w)) { CloseWindows(); return; }
                 Windows.Add(w);
             }
             _shownOn = want;
@@ -126,6 +145,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         public static void CloseAll()
+        {
+            _voiceOpacity = null;
+            CloseWindows();
+        }
+
+        private static void CloseWindows()
         {
             foreach (var w in Windows)
             {
@@ -180,6 +205,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The two safety refusals. False means the window has already been closed.</summary>
         private static bool Accept(TintOverlayWindow w)
         {
+            if (SkipPlatformChecksForTests) return true;
             if (!X11Overlay.SetClickThrough(w, true))
             {
                 Log.Warning("Pink filter: this platform cannot make the tint click-through, so it is not shown - a full-screen topmost window that swallows clicks would lock the desktop");

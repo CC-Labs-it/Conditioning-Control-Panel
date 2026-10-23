@@ -113,6 +113,44 @@ public sealed class VoiceSeamCommandsTests
         finally { CoreMindWipe.TriggerOnceProvider = saved; }
     });
 
+    [Fact]
+    public Task MuteCutsHerPlayingClipBeforeTheConfirmation() => Run(shell =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted, s.AvatarEnabled, s.CompanionVoiceLinesMuted);
+        var audio = CoreAudio.PlayStoppableProvider;
+        var clip = System.IO.Path.GetTempFileName();
+        try
+        {
+            (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted, s.AvatarEnabled, s.CompanionVoiceLinesMuted) = (70, true, false, true, false);
+            var live = false;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, ended) =>
+            {
+                live = true;
+                return () => { live = false; ended?.Invoke(); };
+            };
+            shell.SetAvatarEnabled(true);
+            shell.Tube!.GigglePriority("playing", phraseAudioPath: clip, barkVoice: true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(live);
+            var done = shell.Tube.SpokenAudioDone;
+            // Check before the queued terse confirmation can replace the old bubble and cut its audio.
+            Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi mute", Wake));
+            Assert.False(live);
+            Assert.True(done.IsCompleted);
+            shell.ApplyVoiceMute(true); // repeated mute is harmless and preserves the remembered volume
+            shell.ApplyVoiceMute(false);
+            Assert.Equal(70, s.MasterVolume);
+        }
+        finally
+        {
+            shell.Tube?.Close();
+            CoreAudio.PlayStoppableProvider = audio;
+            (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted, s.AvatarEnabled, s.CompanionVoiceLinesMuted) = saved;
+            System.IO.File.Delete(clip);
+        }
+    });
+
     private static Task Run(System.Action<MainShellWindow> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {

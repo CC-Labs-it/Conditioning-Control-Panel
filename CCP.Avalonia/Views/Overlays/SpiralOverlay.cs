@@ -43,6 +43,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static TimeSpan _delay = TimeSpan.FromMilliseconds(50);
         private static DispatcherTimer? _timer;
         private static int _index;
+        // WPF OverlayService.Show/HideOverlaySustained: voice owns a hold, never a saved toggle.
+        private static double? _voiceOpacity;
+        internal static double? VoiceOpacity => _voiceOpacity;
+
+        internal static void ShowForVoice(Visual host, double opacity)
+        {
+            _voiceOpacity = Math.Clamp(opacity, 0, 1);
+            Refresh(host);
+            if (!IsShowing && Decoding == null) _voiceOpacity = null;
+        }
+
+        internal static void HideForVoice(Visual host)
+        {
+            _voiceOpacity = null;
+            Refresh(host); // a running persistent feature / Takeover pulse keeps its own ownership
+        }
+
         private static bool _refused;
 
         /// <summary>The off-thread decode in flight, if any (tests await it).</summary>
@@ -67,22 +84,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve.</summary>
-        internal static double PaintedOpacity => SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0);
+        internal static double PaintedOpacity => SpiralFrames.Paint(_voiceOpacity ?? CoreSettings.Current.SpiralOpacity / 100.0);
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
+            if (_voiceOpacity == null && (!s.SpiralEnabled || !ShouldShow())) { CloseWindows(); return; }
 
             var path = SourcePath();
             if (_framesKey != path)
             {
-                CloseAll();
+                CloseWindows();
                 BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
                 return;
             }
-            if (_frames.Count == 0) { CloseAll(); return; }   // undecodable: logged once by the decode
+            if (_frames.Count == 0) { CloseWindows(); return; }   // undecodable: logged once by the decode
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -96,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return;
             }
 
-            CloseAll();
+            CloseWindows();
             // No compositor = no per-pixel alpha: the spiral would be an opaque screen-sized block.
             if (!SkipPlatformChecksForTests && (_refused || !X11Overlay.IsAvailable || !X11Overlay.IsCompositing))
             {
@@ -118,7 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Log.Warning("Spiral: the platform refused a click-through topmost overlay window, so the spiral is not shown");
                     _refused = true;
                     w.Close();
-                    CloseAll();
+                    CloseWindows();
                     return;
                 }
                 w.Show();
@@ -146,6 +163,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
+        {
+            _voiceOpacity = null;
+            CloseWindows();
+        }
+
+        private static void CloseWindows()
         {
             _timer?.Stop();
             _timer = null;
@@ -182,6 +205,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             (_frames, _framesKey, _delay, _index) = (frames, path, delay, 0);
             Decoding = null;   // or the Refresh below, still inside this task, cannot start a newer path's decode
             Refresh(host);   // the user may have stopped the engine or unticked it mid-decode
+            if (!IsShowing) _voiceOpacity = null;
         }
 
         /// <summary>WPF DecodeGifFrames on SkiaSharp: every frame composited in order (so partial GIF

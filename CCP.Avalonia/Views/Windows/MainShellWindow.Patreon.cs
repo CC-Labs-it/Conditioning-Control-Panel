@@ -318,8 +318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.Patreon.cs:2136 ApplyVoiceMute (the "mute"/"unmute" voice commands): master
         /// to 0 (remembered), whispers and her voice off; unmute restores the remembered level or 70. WPF's
         /// manual slider sync (Patreon.cs:2161-2166) is the binder's Changed event, raised in PushMasterVolume,
-        /// which repaints every attached master slider (Settings · Audio, dashboard audio card). ponytail: WPF also cuts her clip in flight (StopVoiceLineAudio); the tube
-        /// has no stop for a playing one-shot, so that clip finishes.</summary>
+        /// which repaints every attached master slider (Settings · Audio, dashboard audio card).</summary>
         internal void ApplyVoiceMute(bool muted)
         {
             var s = CoreSettings.Current;
@@ -329,6 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 s.MasterVolume = 0;
                 s.SubAudioEnabled = false;
                 s.AvatarMuted = true;
+                _avatarTubeWindow?.StopVoiceLineAudio(); // WPF: cut the clip already in the air
             }
             else
             {

@@ -167,7 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (FirstFrameMs < 0)
                 {
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
-                    if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
+                    if (!_gracePaused && !PrimaryPaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
                 }
                 var fill = _surfaces.Any(x => x.Fill.IsVisible);
@@ -214,6 +214,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var s = CoreSettings.Current;
             if (_player is { } p) p.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+        }
+
+        internal bool PrimaryPaused { get; private set; }
+
+        /// <summary>WPF PausePrimary/PlayPrimary: pause the shared player for every screen. A voice
+        /// resume cannot release the grace card. Freeze attention/health clocks while held so a
+        /// deliberately paused output is never mistaken for a stalled decoder.</summary>
+        internal void PausePrimary()
+        {
+            if (_player == null || _closing || PrimaryPaused) return;
+            PrimaryPaused = true;
+            _player.SetPause(true);
+            _sinceShow.Stop();
+            _sinceFrame.Stop();
+        }
+
+        internal void PlayPrimary()
+        {
+            if (_gracePaused || !PrimaryPaused || _player == null || _closing) return;
+            PrimaryPaused = false;
+            _sinceShow.Start();
+            if (FirstFrameMs >= 0) _sinceFrame.Start();
+            FrameTs = Stopwatch.GetTimestamp();
+            _player.SetPause(false);
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
@@ -428,6 +452,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _graceTimer?.Stop();
             _graceTimer = null;
             foreach (var x in _surfaces) { x.Grace.IsVisible = false; x.Layer.IsHitTestVisible = true; }
+            PrimaryPaused = false; // WPF ResumeFromGrace -> PlayPrimary releases the paused player
             _sinceShow.Start();
             if (FirstFrameMs >= 0) _sinceFrame.Start();
             FrameTs = Stopwatch.GetTimestamp();
@@ -439,7 +464,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// that shows no frame, stalls, overruns or passes the user's max ends like a dismiss.</summary>
         internal void GuardTick()
         {
-            if (_gracePaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
+            if (_gracePaused || PrimaryPaused || _surfaces.Count == 0 || !Scheduler.IsPlaying) return;
             var framed = FirstFrameMs >= 0;
             var why = MandatoryVideoScheduler.Guard(Elapsed, framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed, framed,
                 (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
@@ -536,7 +561,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.RequestAnimationFrame(now =>
             {
                 if (!_attention || _surfaces.Count == 0 || _surfaces[0].Window != w) return;
-                if (_gracePaused) { _lastFrame = null; NextFrame(); return; }   // targets hold still, expiry clock stopped
+                if (_gracePaused || PrimaryPaused) { _lastFrame = null; NextFrame(); return; }   // targets hold still, expiry clock stopped
                 Step(Elapsed, _lastFrame is { } l ? Math.Clamp((now - l).TotalSeconds, 0, 0.25) : 1 / 60.0);
                 _lastFrame = now;
                 NextFrame();
@@ -787,6 +812,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _closing = true;
             try
             {
+                PrimaryPaused = false;
                 _attention = _gracePaused = false;
                 _graceTimer?.Stop();
                 _guard?.Stop();
