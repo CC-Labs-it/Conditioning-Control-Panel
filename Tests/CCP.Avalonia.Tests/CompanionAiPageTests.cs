@@ -2,6 +2,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -10,6 +11,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.V2;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -22,6 +24,35 @@ namespace CCP.Avalonia.Tests;
 /// room is collapsed (v2), so the page adopts them for good (WPF CompanionPageHost.Adopt).</summary>
 public sealed class CompanionAiPageTests
 {
+    [Fact]
+    public void MissingRoomStillBuildsFreshNameAndRecap() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previousBrain = global::ConditioningControlPanel.Avalonia.App.Brain;
+        global::ConditioningControlPanel.Avalonia.App.Brain = null;
+        try
+        {
+            var page = new AiPage();
+            page.OnShown(null);   // WPF creates these before looking for the collapsed room
+            var nameHost = page.FindControl<ContentControl>("NameHost")!;
+            var recapHost = page.FindControl<ContentControl>("RecapHost")!;
+            var name = Assert.IsType<PreferredNameEditor>(nameHost.Content);
+            var recap = Assert.IsType<ConversationRecap>(recapHost.Content);
+            Assert.False(name.NameBox.IsEnabled);
+            Assert.False(name.SaveButton.IsEnabled);
+            Assert.False(recap.IsVisible);
+            page.OnShown(null);
+            Assert.NotSame(name, nameHost.Content);
+            Assert.NotSame(recap, recapHost.Content);
+            Assert.Null(page.FindControl<ContentControl>("EngineHost")!.Content);
+            Assert.Null(page.FindControl<ContentControl>("MemoryHost")!.Content);
+        }
+        finally { global::ConditioningControlPanel.Avalonia.App.Brain = previousBrain; }
+    });
+
     [Fact]
     public System.Threading.Tasks.Task AiPillAdoptsTheLiveZones() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -57,7 +88,15 @@ public sealed class CompanionAiPageTests
             var engine = room.FindControl<EngineRoomDrawer>("EngineZone")!;
             var diary = room.FindControl<MemoryDiaryView>("MemoryZone")!;
             Control[] zones = { engine, workshop.Parts.Behavior, workshop.Parts.Triggers, diary };
-            shell.ShowTab("companionai");
+            // The real Companion pill opens the page, including the formerly missing glyph.
+            var strip = shell.PageStrip!;
+            var pill = strip.PillFor("companionai")!;
+            var glyph = strip.Part("companionai")!.Glyph!;
+            Assert.NotNull(glyph);
+            Assert.Equal(FluentIcons.Common.Symbol.Bot, glyph.Kind);
+            Assert.False(glyph.IsFallback);
+            Assert.True(pill.IsVisualAncestorOf(glyph));
+            pill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.True(page.IsVisible);
             Assert.Equal("companionai", shell.CurrentTab);
@@ -65,9 +104,19 @@ public sealed class CompanionAiPageTests
             Assert.Equal("probe-model", ((EngineRoomVm)engine.DataContext!).OllamaModel);
             Assert.True(((EngineRoomVm)engine.DataContext!).IsExpanded);   // WPF: Engine.IsExpanded = true
 
-            // The section strip draws the pill (it only draws pages this head can open).
-            var strip = shell.PageStrip!;
-            Assert.Contains(strip.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("label_ai_badge"));
+            Assert.Equal("companionai", strip.ActivePillKey);
+            Assert.Contains(pill.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("label_ai_badge"));
+            Assert.Same(engine, page.FindControl<ContentControl>("EngineHost")!.Content);
+            Assert.Same(workshop.Parts.Behavior, page.FindControl<ContentControl>("BehaviorHost")!.Content);
+            Assert.Same(workshop.Parts.Triggers, page.FindControl<ContentControl>("TriggersHost")!.Content);
+            Assert.Same(diary, page.FindControl<ContentControl>("MemoryHost")!.Content);
+            var nameHost = page.FindControl<ContentControl>("NameHost")!;
+            var recapHost = page.FindControl<ContentControl>("RecapHost")!;
+            var name = Assert.IsType<PreferredNameEditor>(nameHost.Content);
+            var recap = Assert.IsType<ConversationRecap>(recapHost.Content);
+            // WPF AiPage.xaml: name, recap, then the live diary, in the same memory sheet.
+            Assert.Equal(new[] { nameHost, recapHost, page.FindControl<ContentControl>("MemoryHost")! },
+                ((StackPanel)nameHost.Parent!).Children.OfType<ContentControl>());
 
             // Leaving keeps them (the room is collapsed) and disarms an armed forget (WPF OnHidden).
             typeof(DiaryForgetConfirm).GetProperty(nameof(DiaryForgetConfirm.IsArmed))!.SetValue(diary.ForgetConfirm, true);
@@ -84,6 +133,8 @@ public sealed class CompanionAiPageTests
             Dispatcher.UIThread.RunJobs();
             Assert.All(zones, z => Assert.True(page.IsVisualAncestorOf(z)));
             Assert.True(((EngineRoomVm)engine.DataContext!).IsExpanded);
+            Assert.NotSame(name, nameHost.Content);   // WPF refreshes both on every visit
+            Assert.NotSame(recap, recapHost.Content);
             await System.Threading.Tasks.Task.CompletedTask;
         }
         finally

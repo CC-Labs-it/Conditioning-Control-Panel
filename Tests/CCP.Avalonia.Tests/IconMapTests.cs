@@ -68,6 +68,17 @@ public sealed class IconMapTests
     }
 
     [Fact]
+    public void CompanionAiPillUsesTheExistingFluentAdaptation()
+    {
+        // WPF SectionTabStrip.Glyphs: E701 is the AI connection signal. The port's
+        // established Fluent adaptation is Bot, shared by the pill and MDL2 conversion.
+        var icon = Assert.IsType<IconEntry>(IconMap.ForTab("companionai"));
+        Assert.Equal(new IconEntry(IconKind.Bot, IconVariant.Regular), icon);
+        Assert.True(IconMap.TryGetMdl2('\uE701', out var kind));
+        Assert.Equal(icon.Kind, kind);
+    }
+
+    [Fact]
     public void SplitKeepsClustersWholeRepeatsAndMirrors()
     {
         var s = IconText.Split("⚙️ System");
