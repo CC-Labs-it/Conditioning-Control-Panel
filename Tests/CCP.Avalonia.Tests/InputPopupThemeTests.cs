@@ -198,6 +198,44 @@ public sealed class InputPopupThemeTests
         Assert.False(popup.IsOpen);
     });
 
+    [Fact]
+    public Task FaultedSubmenuFadeStillClosesThePopup() => Run(async window =>
+    {
+        var runs = CaptureAnimations();
+        var top = new MenuItem { Header = "File", Items = { new MenuItem { Header = "Leaf" } } };
+        window.Content = new Menu { Items = { top } };
+        window.Show();
+        top.IsSubMenuOpen = true;
+        Dispatcher.UIThread.RunJobs();
+        var popup = Part<Popup>(top, "PART_Popup");
+        runs.Last().Done.SetResult();
+        await InputPopupFx.Pending(popup);
+        top.IsSubMenuOpen = false;
+        Dispatcher.UIThread.RunJobs();
+        runs.Last().Done.SetException(new InvalidOperationException("animation broke"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => InputPopupFx.Pending(popup));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(popup.IsOpen);
+    });
+
+    [Fact]
+    public Task RealAnimationRunnerDrivesTheSubmenuVisualOnARenderTick() => Run(window =>
+    {
+        // P08: the headless render timer reads a Stopwatch and Animatable.Clock is internal, so the real
+        // 150ms run cannot be stepped to its end; prove it starts on the Visual. Completion paths above.
+        var top = new MenuItem { Header = "File", Items = { new MenuItem { Header = "Leaf" } } };
+        window.Content = new Menu { Items = { top } };
+        window.Show();
+        top.IsSubMenuOpen = true;
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        Dispatcher.UIThread.RunJobs();
+        var popup = Part<Popup>(top, "PART_Popup");
+        Assert.False(InputPopupFx.Pending(popup).IsFaulted);
+        Assert.True(popup.Child!.Opacity < 1, $"fade-in not applied, opacity {popup.Child.Opacity}");
+        return Task.CompletedTask;
+    });
+
     private sealed record AnimationRun(Animation Animation, Control Child, TaskCompletionSource Done);
     private static List<AnimationRun> CaptureAnimations()
     {
@@ -229,7 +267,8 @@ public sealed class InputPopupThemeTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var window = new Window { Width = 500, Height = 400 };
+        var runner = InputPopupFx.RunAnimation;
         try { await body(window); }
-        finally { window.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally { window.Close(); Dispatcher.UIThread.RunJobs(); InputPopupFx.RunAnimation = runner; }
     });
 }

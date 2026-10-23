@@ -137,9 +137,13 @@ public static class InputPopupFx
                 }
                 // RunAsync targets the Visual, never a Transform (Avalonia's Transform cast trap).
                 await RunAnimation(CreateAnimation(motion, opening, height), child, token);
-                if (!token.IsCancellationRequested && !opening) SetIsPresented(_popup, false);
             }
             catch (OperationCanceledException) { }
+            finally
+            {
+                // A faulted fade must still close; only a cancel (reopen/owner close) keeps it.
+                if (!token.IsCancellationRequested && !opening && !_disposed) SetIsPresented(_popup, false);
+            }
         }
 
         private void Closed(object? sender, EventArgs e)
