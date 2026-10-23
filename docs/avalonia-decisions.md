@@ -1228,3 +1228,16 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Behaviour WPF has and this engine lacks goes to follow-up lane companion-barks-b (listed with WPF lines in the parity row
   `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
   barks queued through Giggle. Lane barks-wpf gets the same rule.
+
+## 2026-10-23: Dead-in-WPF surfaces are `wired`, not `stub` (P122, lane dead-in-wpf)
+- Question: some WPF surfaces are fully built but nothing in WPF opens them. Examples: UsernamePickerDialog, whose
+  quick-login handlers nothing subscribes to, and the AttentionCheck mechanic, which was scrapped. Under
+  `docs/avalonia-parity.md` "a surface nothing opens is `stub`", such rows could never close.
+- Options: A) a new status (changes the done vocabulary); B) amend `wired` with a dead-in-WPF exception; C) leave them `stub` forever.
+- Choice: B. The port's target is WPF's reachable behaviour, and WPF is frozen. So such a surface counts as `wired` when
+  its Avalonia counterpart matches WPF and is equally unreachable. The proof is a grep at a pinned SHA plus
+  `WpfDeadSurfaceTests`, which fails if upstream turns a caller back on. In that case the row goes back to `stub` and the
+  opener gets ported. The ported code stays, with no invented opener, so a revived caller costs one wiring change.
+- First rows: dialogs-username-picker, dialogs-mod-picker, ctrl-attention-check (grep at 61a934110). win-emi-codex stays
+  `stub`: its EmiCodexWindow has no WPF caller, but the row also carries WPF's live `bookOffer` moment.
+- Advised by: oracle-deep (run 3533a738).
