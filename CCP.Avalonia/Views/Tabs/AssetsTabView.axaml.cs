@@ -19,6 +19,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -37,9 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
-    /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), video thumbnails (WPF uses the
-    /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
-    /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
+    /// ponytail: the disabled WPF pack strip (including its card actions and wheel-to-pan)
+    /// stays hidden; see docs/cloud/fin-views-tab-assets.md for the pinned P122 proof.
     /// </summary>
     public partial class AssetsTabView : UserControl
     {
@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>Every thumbnail decode started by the last folder load (tests await it).</summary>
         internal Task ThumbnailLoads { get; private set; } = Task.CompletedTask;
+        internal Func<string, Task<Bitmap?>> VideoThumbnail = AssetVideoThumbnail.LoadAsync;
         internal bool MediaLogPulsing => _mediaLogPulse is { IsCancellationRequested: false };
         internal IReadOnlyList<AssetTreeItem> AssetTree => _assetTree;
         internal IReadOnlyList<AssetThumbnailViewModel> CurrentFolderFiles => _currentFolderFiles;
@@ -299,7 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var rel = Rel(file);
                 var item = new AssetThumbnailViewModel(file, rel) { IsChecked = !S.DisabledAssetPaths.Contains(rel) };
                 _currentFolderFiles.Add(item);
-                if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+                loads.Add(LoadThumbnailAsync(item, generation));
             }
             ThumbnailLoads = Task.WhenAll(loads);
         }
@@ -318,6 +319,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     try
                     {
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
+                        if (item.IsVideo)
+                        {
+                            var path = item.PackFile != null
+                                ? item.PackStore?.GetPackFileTempPath(item.PackId!, item.PackFile) : item.FullPath;
+                            try { return path == null ? null : await VideoThumbnail(path).ConfigureAwait(false); }
+                            finally
+                            {
+                                if (item.PackFile != null && path != null) item.PackStore?.DeleteTempFile(path);
+                            }
+                        }
                         using Stream? fs = item.PackFile != null
                             ? item.PackStore?.GetPackFileStream(item.PackId!, item.PackFile)
                             : File.OpenRead(item.FullPath);
@@ -329,7 +340,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (bmp != null) await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     if (item.PackFile != null) CachePackThumb(item, bmp);
-                    if (generation == _thumbGeneration) item.Thumbnail = bmp;
+                    if (generation == _thumbGeneration)
+                    {
+                        item.Thumbnail = bmp;
+                        item.IsLoadingThumbnail = false;
+                    }
                     else if (item.PackFile == null) bmp.Dispose();
                 });
             }
@@ -865,9 +880,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public string RelativePath { get; }
         public string Name { get; }
         public bool IsVideo { get; }
+        public bool ShowVideoPlaceholder => IsVideo && Thumbnail == null;
         public bool IsChecked { get => _isChecked; set => Set(ref _isChecked, value); }
         public bool IsLoadingThumbnail { get => _isLoadingThumbnail; set => Set(ref _isLoadingThumbnail, value); }
-        public IImage? Thumbnail { get => _thumbnail; set => Set(ref _thumbnail, value); }
+        public IImage? Thumbnail
+        {
+            get => _thumbnail;
+            set
+            {
+                Set(ref _thumbnail, value);
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowVideoPlaceholder)));
+            }
+        }
 
         public event PropertyChangedEventHandler? PropertyChanged;
 

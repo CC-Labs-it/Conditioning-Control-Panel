@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly Func<Media?> _media;
         private readonly Action<WriteableBitmap> _bitmapChanged;
         private readonly Action _frame;
+        private readonly int _maxDimension;
         private IntPtr _buffer;
         private int _width, _height, _blitQueued, _frames;
         private bool _freed;
@@ -30,9 +31,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         /// <param name="bitmapChanged">UI thread: a new bitmap (first frame or a size change) to show.</param>
         /// <param name="frame">UI thread: the bitmap holds a new frame (invalidate what shows it).</param>
-        public VlcFrameSink(MediaPlayer player, Func<Media?> media, Action<WriteableBitmap> bitmapChanged, Action frame)
+        public VlcFrameSink(MediaPlayer player, Func<Media?> media, Action<WriteableBitmap> bitmapChanged, Action frame, int maxDimension = 0)
         {
             _media = media;
+            _maxDimension = maxDimension;
             _bitmapChanged = bitmapChanged;
             _frame = frame;
             _blit = Blit;   // cached: Display runs per decoded frame
@@ -57,6 +59,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 width = v.SarNum > 0 && v.SarDen > 0 ? v.Width * v.SarNum / v.SarDen : v.Width;
                 height = v.Height;
                 break;
+            }
+            if (_maxDimension > 0 && Math.Max(width, height) > _maxDimension)
+            {
+                var scale = (double)_maxDimension / Math.Max(width, height);
+                width = (uint)Math.Max(1, Math.Round(width * scale));
+                height = (uint)Math.Max(1, Math.Round(height * scale));
             }
             pitches = width * 4;
             lines = height;

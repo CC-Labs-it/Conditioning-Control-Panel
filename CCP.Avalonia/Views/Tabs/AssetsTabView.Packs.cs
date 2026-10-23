@@ -71,8 +71,7 @@ public partial class AssetsTabView
                 var item = new AssetThumbnailViewModel(store, folder.PackId!, file)
                     { IsChecked = !S.DisabledAssetPaths.Contains(ContentPackStore.SelectionKey(folder.PackId!, file)) };
                 _currentFolderFiles.Add(item);
-                // ponytail: videos keep the existing placeholder; WPF's Windows shell thumbnailer needs a portable replacement.
-                if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+                loads.Add(LoadThumbnailAsync(item, generation));
             }
         ThumbnailLoads = Task.WhenAll(loads);
         return true;

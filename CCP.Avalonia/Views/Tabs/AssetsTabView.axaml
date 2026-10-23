@@ -686,13 +686,13 @@
                                                         <Grid>
                                                             <!-- Video placeholder icon (shows when IsVideo and no thumbnail) -->
                                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                                        IsVisible="{Binding IsVideo}">
+                                                                        IsVisible="{Binding ShowVideoPlaceholder}">
                                                                 <fx:IconGlyph Kind="Video" Size="26" HorizontalAlignment="Center"/>
                                                                 <TextBlock Text="{loc:Str label_video}" FontSize="9"
                                                                            Foreground="{DynamicResource TextMutedBrush}"
                                                                            HorizontalAlignment="Center" Margin="0,4,0,0"/>
                                                             </StackPanel>
-                                                            <!-- Image thumbnail (for images, or video if we had one) -->
+                                                            <!-- Image or decoded video thumbnail -->
                                                             <Image hover:HoverPop.IsEnabled="True" Source="{Binding Thumbnail}" Stretch="UniformToFill"/>
                                                             <!-- Loading indicator -->
                                                             <fx:IconGlyph Kind="HourglassHalf" Size="14"

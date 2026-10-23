@@ -109,6 +109,138 @@ public sealed class AssetsTabTests
     });
 
     [Fact]
+    public Task LocalVideosLoadThumbnailsAndReplaceTheirPlaceholders() => Run(async (shell, tab, s) =>
+    {
+        var pending = new TaskCompletionSource<global::Avalonia.Media.Imaging.Bitmap?>();
+        var started = new TaskCompletionSource();
+        var calls = 0;
+        tab.VideoThumbnail = path =>
+        {
+            Assert.True(File.Exists(path));
+            if (System.Threading.Interlocked.Increment(ref calls) == 2) started.SetResult();
+            return pending.Task;
+        };
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "videos");
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.All(tab.CurrentFolderFiles, f =>
+        {
+            Assert.True(f.IsLoadingThumbnail);
+            Assert.True(f.ShowVideoPlaceholder);
+        });
+        pending.SetResult(new global::Avalonia.Media.Imaging.Bitmap(
+            Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png")));
+        await tab.ThumbnailLoads;
+        Assert.All(tab.CurrentFolderFiles, f =>
+        {
+            Assert.NotNull(f.Thumbnail);
+            Assert.False(f.IsLoadingThumbnail);
+            Assert.False(f.ShowVideoPlaceholder);
+        });
+        var glyphs = await Realized(shell, () => tab.ThumbnailsItemsControl.GetVisualDescendants()
+            .OfType<IconGlyph>().Where(g => g.Kind == IconKind.Video).ToList() is { Count: 2 } list ? list : null);
+        Assert.All(glyphs, g => Assert.False(g.IsEffectivelyVisible));
+    });
+
+    [Fact]
+    public Task FailedVideosKeepTheirPlaceholderAndReleaseDecodeSlots() => Run(async (shell, tab, s) =>
+    {
+        var calls = 0;
+        tab.VideoThumbnail = path =>
+        {
+            System.Threading.Interlocked.Increment(ref calls);
+            if (Path.GetFileName(path) == "w.mp4") throw new IOException("unsupported codec");
+            return Task.FromResult<global::Avalonia.Media.Imaging.Bitmap?>(null);
+        };
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "videos");
+        await tab.ThumbnailLoads;
+        Assert.All(tab.CurrentFolderFiles, f =>
+        {
+            Assert.Null(f.Thumbnail);
+            Assert.False(f.IsLoadingThumbnail);
+            Assert.True(f.ShowVideoPlaceholder);
+        });
+        tab.RefreshAssetTree();
+        await tab.ThumbnailLoads;
+        Assert.Equal(4, calls); // failures neither poison a gate slot nor become cached successes
+    });
+
+    [Fact]
+    public Task SwitchingFoldersDropsLateVideoFrames() => Run(async (shell, tab, s) =>
+    {
+        var pending = new TaskCompletionSource<global::Avalonia.Media.Imaging.Bitmap?>();
+        var started = new TaskCompletionSource();
+        var calls = 0;
+        tab.VideoThumbnail = _ =>
+        {
+            if (System.Threading.Interlocked.Increment(ref calls) == 2) started.SetResult();
+            return pending.Task;
+        };
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "videos");
+        var oldLoad = tab.ThumbnailLoads;
+        var oldFiles = tab.CurrentFolderFiles.ToArray();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "images");
+        await tab.ThumbnailLoads;
+        var current = tab.CurrentFolderFiles.Select(f => f.Thumbnail).ToArray();
+        pending.SetResult(new global::Avalonia.Media.Imaging.Bitmap(
+            Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png")));
+        await oldLoad;
+        Assert.All(oldFiles, f => { Assert.Null(f.Thumbnail); Assert.False(f.IsLoadingThumbnail); });
+        Assert.Equal(current, tab.CurrentFolderFiles.Select(f => f.Thumbnail));
+        Assert.All(tab.CurrentFolderFiles, f => Assert.False(f.IsVideo));
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PackVideoThumbnailsCleanDecryptsAndReuseOnlySuccessfulDecodes(bool failFirst) => Run(async (shell, tab, s) =>
+    {
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var oldStore = ContentPackStore.Current;
+        var dir = Path.Combine(assets, ".packs", "video-thumb-guid");
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        var file = new PackFileEntry { OriginalName = "clip.mp4", ObfuscatedName = "clip.enc", FileType = "video", Extension = ".mp4" };
+        var manifest = new InstalledPackManifest { PackId = "video-thumb-" + failFirst, PackGuid = "video-thumb-guid", PackName = "Video pack" };
+        manifest.Files.Add(file);
+        var bytes = new byte[] { 1, 2, 3, 4 };
+        File.WriteAllBytes(Path.Combine(dir, "content", file.ObfuscatedName), PackEncryptionService.Encrypt(bytes));
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        ContentPackStore.Current = new ContentPackStore(() => assets, () => s, () => { });
+        var calls = 0;
+        tab.VideoThumbnail = path =>
+        {
+            calls++;
+            Assert.EndsWith(".mp4", path);
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+            if (failFirst && calls == 1) throw new IOException("decoder refused");
+            return Task.FromResult<global::Avalonia.Media.Imaging.Bitmap?>(new global::Avalonia.Media.Imaging.Bitmap(
+                Path.Combine(assets, "images", "a.png")));
+        };
+        try
+        {
+            tab.RefreshAssetTree();
+            var folder = tab.AssetTree.Single(n => n.IsPackFolder).Children.Single().Children.Single();
+            tab.AssetTreeView.SelectedItem = folder;
+            await tab.ThumbnailLoads;
+            var first = Assert.Single(tab.CurrentFolderFiles);
+            Assert.Equal(failFirst, first.ShowVideoPlaceholder);
+            Assert.False(first.IsLoadingThumbnail);
+            Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
+            tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "images");
+            await tab.ThumbnailLoads;
+            tab.AssetTreeView.SelectedItem = folder;
+            await tab.ThumbnailLoads;
+            var next = Assert.Single(tab.CurrentFolderFiles);
+            Assert.NotNull(next.Thumbnail);
+            Assert.False(next.ShowVideoPlaceholder);
+            Assert.Equal(failFirst ? 2 : 1, calls);
+            if (!failFirst) Assert.Same(first.Thumbnail, next.Thumbnail);
+            Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
+        }
+        finally { ContentPackStore.Current = oldStore; }
+    });
+
+    [Fact]
     public Task DoorBuildsTreeAndSpaceOnAFolderCheckboxDisablesItsFiles() => Run(async (shell, tab, s) =>
     {
         var images = tab.AssetTree.Single(n => n.Name == "images");
