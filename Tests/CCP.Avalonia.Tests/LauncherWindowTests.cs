@@ -130,6 +130,9 @@ public sealed class LauncherWindowTests
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
         var w = LauncherWindow.Instance!;
+        // App never starts here, so the toast service has no host until a test gives it this shell's (WindowDropTests).
+        var toasts = shell.FindControl<Panel>("NotificationHost")!;
+        global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(toasts);
         Assert.True(DragDrop.GetAllowDrop(w));
         w.OpenPanelWithDrop(Array.Empty<string>());
         Assert.True(w.IsVisible);
@@ -143,7 +146,7 @@ public sealed class LauncherWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.False(w.IsVisible);
         Assert.True(shell.IsVisible);
-        Assert.Contains(Loc.Get("drop_not_recognised"), Texts(shell.FindControl<Panel>("NotificationHost")!));
+        Assert.Contains(Loc.Get("drop_not_recognised"), Texts(toasts));
         System.IO.File.Delete(path);
     });
 

@@ -177,7 +177,8 @@ public sealed class LauncherFxTests
         Step(w, 1);
         Assert.Equal(held, drift.ScaleX);
         var tile = Tile(w);
-        w.MouseMove(tile.TranslatePoint(new Point(tile.Bounds.Width - 2, 2), w)!.Value);
+        // inside the rounded corner (WPF Tiles.cs:65 CornerRadius = TileRadius): (W-2, 2) misses the tile's hit geometry
+        w.MouseMove(tile.TranslatePoint(new Point(tile.Bounds.Width * 0.95, tile.Bounds.Height * 0.05), w)!.Value);
         Step(w, 0.2);
         var slide = tile.GetVisualDescendants().OfType<Panel>().Select(p => p.RenderTransform).OfType<TranslateTransform>().Single();
         Assert.InRange(slide.X, -7, -6);
@@ -198,9 +199,11 @@ public sealed class LauncherFxTests
         var tile = Tile(w);
         var title = tile.GetVisualDescendants().OfType<TextBlock>().First(t => t.FontSize == 19);
         var rest = ((ISolidColorBrush)title.Foreground!).Color;
+        var brush = title.Foreground;
         w.TileHover(tile, true);
         Step(w, 0.2);
         Assert.NotEqual(rest, ((ISolidColorBrush)title.Foreground!).Color);
+        Assert.Same(brush, title.Foreground);   // recoloured in place, no brush per frame
         w.TileHover(tile, false);
         Step(w, 0.2);
         Assert.Equal(rest, ((ISolidColorBrush)title.Foreground!).Color);
@@ -225,16 +228,25 @@ public sealed class LauncherFxTests
         badge.IsVisible = true;
         bool wobbled = false;
         for (int i = 0; i < 450; i++) { w.StepFx(0.02); wobbled |= ((RotateTransform)badge.RenderTransform!).Angle != 0; }
-        Assert.True(((ScaleTransform)w.FindControl<StackPanel>("Wordmark")!.RenderTransform!).ScaleX > 1);
+        // WPF LauncherWindow.xaml:357-363: only the logo drifts, the title text stays put, the wordmark clips it
+        var mark = w.FindControl<StackPanel>("Wordmark")!;
+        Assert.True(((ScaleTransform)w.FindControl<Image>("WordmarkImage")!.RenderTransform!).ScaleX > 1);
+        Assert.Null(mark.RenderTransform);
+        Assert.True(mark.ClipToBounds);
         Assert.True(wobbled);
         badge.Source = w.FindControl<Image>("PanelArt")!.Source;
         w.UpdateLayout();
+        var big = (ScaleTransform)w.FindControl<Image>("TierBadgeBig")!.RenderTransform!;
+        // Headless MouseMove renders and runs jobs up to 10x after the input, so the real 30 fps clock can finish the
+        // 260 ms grow before the call returns: record every value instead of reading one afterwards.
+        var seen = new List<double>();
+        big.PropertyChanged += (_, e) => { if (e.Property == ScaleTransform.ScaleXProperty) seen.Add(big.ScaleX); };
         w.MouseMove(badge.TranslatePoint(new Point(badge.Bounds.Width / 2, badge.Bounds.Height / 2), w)!.Value);
         Dispatcher.UIThread.RunJobs();
         Assert.True(w.FindControl<Popup>("TierBadgePopup")!.IsOpen);
-        var big = (ScaleTransform)w.FindControl<Image>("TierBadgeBig")!.RenderTransform!;
-        Assert.InRange(big.ScaleX, 0.35, 0.5);
         Step(w, 0.3);
+        Assert.Equal(0.35, seen[0]);                      // WPF TierBadge.cs:91: grows from TierHoverStartScale
+        Assert.Contains(seen, v => v > 1);                // WPF TierBadge.cs:93 BackEase 0.45 overshoots: not a snap
         Assert.Equal(1, big.ScaleX, 3);
         w.Hide();
         Assert.Equal(0, ((RotateTransform)badge.RenderTransform!).Angle);
@@ -268,7 +280,7 @@ public sealed class LauncherFxTests
     {
         Step(w, 20);
         Assert.Equal(1, ((ScaleTransform)w.FindControl<Image>("PanelArt")!.RenderTransform!).ScaleX);
-        Assert.Equal(1, ((ScaleTransform)w.FindControl<StackPanel>("Wordmark")!.RenderTransform!).ScaleX);
+        Assert.Equal(1, ((ScaleTransform)w.FindControl<Image>("WordmarkImage")!.RenderTransform!).ScaleX);
         CoreSettings.Current.PlayerLevel = 6;
         w.RefreshStats();
         Assert.Equal("6", w.FindControl<TextBlock>("StatLevel")!.Text);

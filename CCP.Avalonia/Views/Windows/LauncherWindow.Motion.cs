@@ -45,8 +45,8 @@ public partial class LauncherWindow
         Ambient.RenderTransform = _shifts[2].Transform;
         SpiralLayer.RenderTransform = new TransformGroup { Children = { SpiralTurn, _shifts[3].Transform } };
         SpiralSmall.RenderTransform = new TransformGroup { Children = { SpiralSmallTurn, _shifts[4].Transform } };
-        Wordmark.RenderTransform = _wordmarkScale;
-        Wordmark.RenderTransformOrigin = RelativePoint.Center;
+        WordmarkImage.RenderTransform = _wordmarkScale;
+        WordmarkImage.RenderTransformOrigin = RelativePoint.Center;
         TierBadge.RenderTransform = _tierTilt;
         TierBadge.RenderTransformOrigin = RelativePoint.Center;
         TierBadgeBig.RenderTransform = _tierBigScale;

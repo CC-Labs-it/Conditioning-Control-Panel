@@ -77,6 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public Border? Shadow;
             public TextBlock? Title;
             public Color TitleRest;
+            public SolidColorBrush TitleTint = null!;   // one per tile, recoloured in place
             public TranslateTransform ArtSlide = new();
             public Color Hue;
             public Tween Lift, Lean, Shine, Dim, ArtX, ArtY;
@@ -122,8 +123,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _fxLast = now;
                 StepFx(dt);
             };
-            SpiralLayer.RenderTransform = SpiralTurn;
-            SpiralSmall.RenderTransform = SpiralSmallTurn;
             HookMotion();
             ContentRoot.RenderTransform = ShakeSlide;
             if (EdgeGlint.BorderBrush is LinearGradientBrush glint) glint.Transform = EdgeGlintRel;
@@ -376,6 +375,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _tileFx.RemoveAll(t => t.Tile.Parent == null);   // BuildTiles cleared the grid
             var fx = new TileFx { Tile = tile, Hue = hue, Title = title,
                 TitleRest = ((ISolidColorBrush)title.Foreground!).Color };
+            title.Foreground = fx.TitleTint = new SolidColorBrush(fx.TitleRest);
             fx.Shine.Go(TileGlowRest, TileGlowRest, 0);
             artHost.RenderTransform = fx.ArtSlide;
             tile.RenderTransformOrigin = RelativePoint.Center;
@@ -448,10 +448,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     double u = Math.Clamp((shine - TileGlowRest) / (TileGlowHover - TileGlowRest), 0, 1);
                     var c = Lighten(t.Hue, 0.35);
-                    t.Title.Foreground = new SolidColorBrush(Color.FromRgb(
+                    t.TitleTint.Color = Color.FromRgb(
                         (byte)(t.TitleRest.R + (c.R - t.TitleRest.R) * u),
                         (byte)(t.TitleRest.G + (c.G - t.TitleRest.G) * u),
-                        (byte)(t.TitleRest.B + (c.B - t.TitleRest.B) * u)));
+                        (byte)(t.TitleRest.B + (c.B - t.TitleRest.B) * u));
                 }
             }
             if (t.ArtX.On || dt == 0) t.ArtSlide.X = t.ArtX.Step(dt);

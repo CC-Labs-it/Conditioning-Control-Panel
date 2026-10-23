@@ -83,7 +83,7 @@ public sealed class PanicSurfacesTests
         "gaze-minigame", "mantra", "chaos", "chaos-intro", "haptics", "remote-haptics", "takeover", "program-session",
         "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "possession", "attention-test", "deeper-editor-audio",
         "knock-cards", "chaos-flash", "gif-cascade", "chaos-announcer", "chaos-dvd", "chaos-cursor-glow", "chaos-vibe-trail", "chaos-estim",
-        "chaos-field-fx", "chaos-skia-fx", "speak-cue", "companion-transcript", "camera",
+        "chaos-field-fx", "chaos-skia-fx", "speak-cue", "companion-transcript", "camera", "launcher-notes", "launcher-friends",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
