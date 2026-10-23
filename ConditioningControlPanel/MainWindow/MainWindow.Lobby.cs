@@ -76,7 +76,7 @@ namespace ConditioningControlPanel
         {
             bool signedIn = BackRoomApi.AppIdentity() != null;
             bool remote = App.Patreon?.HasPremiumAccess == true || App.DailyFree?.IsFreeToday("remote") == true;
-            return LobbyGates.From(signedIn, GoonHostService.HostingAllowed(), remote);
+            return LobbyGates.From(signedIn, GoonHostRules.HostingAllowed(), remote);
         }
 
         /// <summary>ShowTab("availablesubjects"): hook once, take a lease, paint what we have.</summary>
@@ -287,7 +287,7 @@ namespace ConditioningControlPanel
                         PieceByPieceHostService.HostOpenTable();
                         break;
                     case LobbyGame.Goon:
-                        // Patrons host (GoonHostService.HostingAllowed); everyone else sees the gate.
+                        // Patrons host (GoonHostRules.HostingAllowed); everyone else sees the gate.
                         if (TierGate.DemandPremium("Goon Game")) GoonHostService.LaunchToHost();
                         break;
                     case LobbyGame.Remote:
