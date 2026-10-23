@@ -52,6 +52,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ? bmp.CreateScaledBitmap(new PixelSize(Math.Max(1, sw * MaxEdge / longest), Math.Max(1, sh * MaxEdge / longest)))
                 : null;
             var src = scaled ?? bmp;
+            // The scaled copy may not keep the source's channel order: read the format it has.
+            fmt = src.Format;
+            bgra = fmt == PixelFormat.Bgra8888;
+            if (!bgra && fmt != PixelFormat.Rgba8888) return null;
             int w = src.PixelSize.Width, h = src.PixelSize.Height, stride = w * 4;
             var pixels = new byte[stride * h];
             var pin = GCHandle.Alloc(pixels, GCHandleType.Pinned);
@@ -59,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             {
                 src.CopyPixels(new PixelRect(0, 0, w, h), pin.AddrOfPinnedObject(), pixels.Length, stride);
                 ToGrey(pixels, bgra);
-                return new Bitmap(fmt.Value, bmp.AlphaFormat ?? AlphaFormat.Premul, pin.AddrOfPinnedObject(),
+                return new Bitmap(fmt.Value, src.AlphaFormat ?? AlphaFormat.Premul, pin.AddrOfPinnedObject(),
                     new PixelSize(w, h), new Vector(96, 96), stride);
             }
             finally { pin.Free(); }

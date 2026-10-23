@@ -286,6 +286,34 @@ public sealed class FeatureCardFxTests
         Assert.Equal(0.0, spring.Ease(0.0), 3);
     }
 
+    [Fact]
+    public void ArtDesaturateGreysALargeDecodedPngOnTheScalingPath() => WithCard((_, _, _) =>
+    {
+        // A real 1024 px PNG (decoded, not a WriteableBitmap) takes the CreateScaledBitmap path.
+        using var src = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(1024, 1024), new Vector(96, 96),
+            global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Premul);
+        using (var fb = src.Lock())
+        {
+            var red = new byte[fb.RowBytes * 1024];
+            for (int i = 0; i < red.Length; i += 4) { red[i] = 0; red[i + 1] = 0; red[i + 2] = 255; red[i + 3] = 255; }
+            System.Runtime.InteropServices.Marshal.Copy(red, 0, fb.Address, red.Length);
+        }
+        var png = new System.IO.MemoryStream();
+        src.Save(png);
+        png.Position = 0;
+        using var decoded = new global::Avalonia.Media.Imaging.Bitmap(png);
+
+        var grey = ArtDesaturate.Of(decoded);
+        Assert.NotNull(grey);
+        Assert.Equal(new PixelSize(ArtDesaturate.MaxEdge, ArtDesaturate.MaxEdge), grey!.PixelSize);
+        var px = new byte[4];
+        var pin = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try { grey.CopyPixels(new PixelRect(160, 160, 1, 1), pin.AddrOfPinnedObject(), 4, 4); }
+        finally { pin.Free(); }
+        // Pure red -> 0.299 x 255 = 76 in every channel, whatever order the scaled copy uses.
+        Assert.Equal(new byte[] { 76, 76, 76, 255 }, px);
+    });
+
     private static void Hover(FeatureCard card, Window window, bool on) => card.RaiseEvent(new PointerEventArgs(
         on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent, card,
         new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), window, default, 0, PointerPointProperties.None, KeyModifiers.None));
