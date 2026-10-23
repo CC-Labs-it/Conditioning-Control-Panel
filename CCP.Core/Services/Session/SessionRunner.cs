@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
@@ -271,11 +272,22 @@ namespace ConditioningControlPanel.Services
             }
             // Spiral delayed start (SessionEngine.cs:823-851). A non-ramping session never drives the
             // overlay, so its opacity lands in settings here the way an immediate start does.
-            if (session.Settings.SpiralEnabled && !s.SpiralEnabled && minutes >= SpiralStartMinute)
+            if (session.Settings.SpiralEnabled && !s.SpiralEnabled)
             {
-                if (session.Settings.SpiralOpacity == session.Settings.SpiralOpacityEnd) s.SpiralOpacity = session.Settings.SpiralOpacity;
-                s.SpiralEnabled = true;
-                Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
+                // WPF SessionEngine.cs:826-838: even a shipped default does not satisfy this guard.
+                var folder = Path.Combine(AppContext.BaseDirectory, "Spirals");
+                if (!File.Exists(s.SpiralPath) && !(Directory.Exists(folder) && Directory.GetFiles(folder, "*.gif").Length > 0))
+                {
+                    session.Settings.SpiralEnabled = false;
+                    Log.Warning("Spiral enabled in session but no spiral files found - skipping");
+                    return;
+                }
+                if (minutes >= SpiralStartMinute)
+                {
+                    if (session.Settings.SpiralOpacity == session.Settings.SpiralOpacityEnd) s.SpiralOpacity = session.Settings.SpiralOpacity;
+                    s.SpiralEnabled = true;
+                    Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
+                }
             }
             Ticked?.Invoke();
         }

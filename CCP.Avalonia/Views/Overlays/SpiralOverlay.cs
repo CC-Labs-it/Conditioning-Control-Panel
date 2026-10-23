@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// stop/start. A frame tick only swaps <c>Image.Source</c> on each window: no decode, no bitmap
     /// allocation. The timer exists only while windows are up, so nothing ticks while stopped.</para>
     /// </summary>
-    internal static class SpiralOverlay
+    internal static partial class SpiralOverlay
     {
         /// <summary>Headless tests have no X11 window to make click-through; this lets them drive the
         /// real show/animate/close path. Never set outside tests.</summary>
@@ -75,7 +75,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ? settings.SpiralPath : null;
             _sourcePath = _randomizeAtStart == true
                 ? Pool.Pick(configured, Path.Combine(CorePaths.UserData, "Spirals")) : null;
-            // ponytail: videos still require a playback surface; the pool deliberately matches WPF's image extensions.
             return _sourcePath ?? configured ?? CoreModArt.SpiralOverridePath()
                 ?? Path.Combine(AppContext.BaseDirectory, "Resources", "spiral.gif");
         }
@@ -93,13 +92,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!s.SpiralEnabled || !ShouldShow()) { CloseAll(); return; }
 
             var path = SourcePath();
+            var video = IsVideo(path);
             if (_framesKey != path)
             {
                 CloseWindows();
-                BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
-                return;
+                if (!video)
+                {
+                    BeginDecode(TopLevel.GetTopLevel(host) ?? host, path);
+                    return;
+                }
+                foreach (var old in _frames) old.Dispose();
+                (_frames, _framesKey, _index) = (new List<Bitmap>(), path, 0);
             }
-            if (_frames.Count == 0)   // undecodable: logged once by the decode
+            if (_frames.Count == 0 && !video)   // undecodable: logged once by the decode
             {
                 // WPF's 500 ms tick re-picks past a broken random file; re-pick once so the run is not blank.
                 if (_sourcePath != null && !_repicked) { _repicked = true; _sourcePath = null; Refresh(host); return; }
@@ -130,7 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var i in want)
             {
                 var w = new SpiralOverlayWindow();
-                w.Spiral.Source = _frames[_index % _frames.Count];
+                if (!video) w.Spiral.Source = _frames[_index % _frames.Count];
                 w.Spiral.Opacity = opacity;
                 // Click-through and override-redirect (with the geometry) before Show, the order
                 // FlashOverlay/SubliminalOverlay use: a stale WM replay cannot mis-size it, and a
@@ -149,6 +154,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _shownOn = want;
             QuestMinutes.Follow(Windows.Count > 0);
+            if (video && Windows.Count > 0)
+            {
+                try { _videoPlayer = VideoStart(path, ShowVideoFrame); }
+                catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
+                if (_videoPlayer == null) { CloseWindows(); return; }
+            }
             if (_frames.Count > 1 && Windows.Count > 0)
             {
                 _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = _delay };
@@ -181,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _timer?.Stop();
             _timer = null;
+            StopVideo();
             foreach (var w in Windows)
             {
                 try { w.Close(); }

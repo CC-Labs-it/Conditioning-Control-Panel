@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Features
@@ -53,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public SpiralFeatureControl()
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
+            SettingsAndArt.SizeChanged += (_, _) => ResizeSideArt();
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             ChkRandomize.IsCheckedChanged += ChkRandomize_Changed;
@@ -62,16 +64,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CmbMonitor.SelectionChanged += CmbMonitor_Changed;
             BtnOpenLoom.Click += (_, _) =>
             {
-                // ponytail: needs Services.Chaos.LoomHostService.Launch()
-                // (ConditioningControlPanel/Services/Chaos/), still in the WPF head. Its live-save
-                // feed, Services.Chaos.DtrhLoomStore.Changed, is in the same place - which is why
-                // this panel does not subscribe to it either.
+                try { Games.GameWindow.Launch("loom"); }
+                catch (Exception ex) { Log.Warning(ex, "Spiral card: Loom launch failed"); }
             };
             BtnCornerGifs.Click += BtnCornerGifs_Click;
             BtnSelectGif.Click += BtnSelectGif_Click;
             BtnOpenSpiralFolder.Click += BtnOpenSpiralFolder_Click;
             BtnRefreshSpirals.Click += (_, _) => RefreshLibrary();
 
+            Helpers.ModArt.BindFeaturePlates(this, "features/spiral_overlay.png", HeroArt, SideArt);
             LoadFromSettings();
             RefreshLibrary();
         }
@@ -81,15 +82,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += RebindToCurrentSettings;
             RebindToCurrentSettings();
+            DtrhLoomStore.Changed += OnLoomStoreChanged;
+            CoreMods.ModChanged += OnModChanged;
             RefreshLibrary();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= RebindToCurrentSettings;
+            DtrhLoomStore.Changed -= OnLoomStoreChanged;
+            CoreMods.ModChanged -= OnModChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
+
+        private bool _sideArtCollapsed;
+        private void ResizeSideArt()
+        {
+            var width = SettingsAndArt.Bounds.Width;
+            if (width <= 0) return;
+            // WPF AdaptiveSideArt: 48px hysteresis prevents scrollbar-induced layout oscillation.
+            _sideArtCollapsed = width < (_sideArtCollapsed ? 748 : 700);
+            SettingsAndArt.ColumnDefinitions[1].Width = _sideArtCollapsed ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
+            SettingsAndArt.ColumnDefinitions[0].MaxWidth = _sideArtCollapsed ? double.PositiveInfinity : 780;
+            SideArt.IsVisible = !_sideArtCollapsed;
+        }
+
+        // WPF Loaded/Unloaded: live Loom saves and mod switches repaint the attached library.
+        private void OnLoomStoreChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_hooked != null) RefreshLibrary();
+        });
+        private void OnModChanged(object? sender, ModPackage mod) => OnLoomStoreChanged();
 
         /// <summary>WPF's <c>ISettingsRebindable.RebindToCurrentSettings</c>: detach from whichever
         /// instance we were on, attach to the live one, repaint from it.</summary>
@@ -458,9 +482,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
         /// <summary>
         /// Browse for a spiral anywhere on disk. WPF blocks on <c>OpenFileDialog</c> and then shows
-        /// a confirmation MessageBox; Avalonia's picker is async, and there is no MessageBox on this
-        /// head, so the gallery highlight is the confirmation.
+        /// a confirmation MessageBox; this head uses its async MessageDialog.
         /// </summary>
+        internal async System.Threading.Tasks.Task SelectPickedSpiral(string file)
+        {
+            CoreSettings.Current.SpiralPath = file;
+            CoreSettings.Save();
+            RefreshLibrary();
+            Overlays.SpiralOverlay.Refresh(this);
+            if (TopLevel.GetTopLevel(this) is Window owner)
+                await Dialogs.MessageDialog.ShowAsync(owner, "Spiral Selected", $"Selected: {Path.GetFileName(file)}");
+        }
+
         private async void BtnSelectGif_Click(object? sender, RoutedEventArgs e)
         {
             try
@@ -492,13 +525,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 var file = picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
                 if (string.IsNullOrEmpty(file)) return;
 
-                CoreSettings.Current.SpiralPath = file!;
-                CoreSettings.Save();
-
-                // Reflect the new choice in the gallery (highlights it if it lives in the Spirals
-                // folder, otherwise just clears the Default highlight).
-                RefreshLibrary();
-                Overlays.SpiralOverlay.Refresh(this);   // WPF App.Overlay.RefreshOverlays()
+                await SelectPickedSpiral(file!);
             }
             catch (Exception ex)
             {

@@ -8,10 +8,8 @@
        Content="{loc:Str ...}" on Button ->  a <TextBlock> child (trap 1)
        LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%" (Avalonia points are absolute
                                             unless given as %)
-       ImageBrush HeroArtBrush/SideArtBrush -> dropped: Resources/features/*.png is not an
-                                            AvaloniaResource in this head yet, and x:Name on a
-                                            brush is AVLN2000. The wash stands in on both plates.
-       feat:AdaptiveSideArt.CollapseBelow -> dropped (WPF-head attached behaviour)
+       ImageBrush HeroArtBrush/SideArtBrush -> named Borders painted by ModArt.BindFeaturePlates.
+       feat:AdaptiveSideArt.CollapseBelow -> local size handler (700px + 48px hysteresis)
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
        all event handlers                ->  wired in code-behind (porting convention) -->
 <UserControl xmlns="https://github.com/avaloniaui"
@@ -31,7 +29,7 @@
         <Border Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
                 BorderBrush="{StaticResource SectionHueStudioBorderBrush}" BorderThickness="2" Margin="0,0,0,10">
             <Grid>
-                <Border CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
+                <Border x:Name="HeroArt" CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
                         Background="{StaticResource SectionHueStudioWashBrush}">
                     <Border.OpacityMask>
                         <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -60,7 +58,7 @@
         <!-- VELVET KIT 2 · ROUND 3 · DENSITY. The settings column is capped (3*, MaxWidth 780) so a
              slider stops being a ~1200px runway in the wide Studio detail pane, and the width that
              buys back becomes ONE big art card instead of dead margin. -->
-        <Grid>
+        <Grid x:Name="SettingsAndArt">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" MaxWidth="780"/>
                 <ColumnDefinition Width="2*"/>
@@ -223,9 +221,8 @@
                 </DockPanel>
             </StackPanel>
 
-            <!-- SIDE ART. On WPF the art is the Border's BACKGROUND (an ImageBrush); the wash stands
-                 in until feature art ships in this head. The scrim is kept verbatim. -->
-            <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
+            <!-- WPF background art, clipped by the Border's rounded corners. -->
+            <Border x:Name="SideArt" Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                     Background="{StaticResource SectionHueStudioWashBrush}"
                     VerticalAlignment="Stretch" MinHeight="200">

@@ -47,6 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
             // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
+            ["loom"] = new("loom", "billboard_loom_title", "dtrh/loom.html"), // WPF LoomHostService: free
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
         };
 
@@ -84,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
-            Title = Loc.Get(spec.TitleKey);
+            Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -105,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
+            if (Spec.Id == "loom") DirectoryForLoom();
             PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
             Web.Navigate(PageUrl);
         }
@@ -125,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (Spec.Id == "loom") { HandleLoom(o); return; } // only the Loom bridge subset
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
             if (Spec.Id == PbpId && HandlePbp(o)) return;
