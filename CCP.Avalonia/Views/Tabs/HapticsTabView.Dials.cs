@@ -28,6 +28,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _attached;
         internal DispatcherTimer? LiveStatusTimer { get; private set; }
 
+        // Every buzz this page starts (toy Test, pattern Play) hangs off this, so switching rack module
+        // (the page is hidden) or detaching it ends it; leaving Studio only hides StudioTab and does not. Panic ends it too: PanicSurfaces "haptics" -> HapticService.PanicStop.
+        private System.Threading.CancellationTokenSource? _previewCts;
+        internal bool PreviewRunning => _previewCts is { IsCancellationRequested: false };
+        internal System.Threading.Tasks.Task LastPreview { get; private set; } = System.Threading.Tasks.Task.CompletedTask;   // test seam (P56)
+
+        private System.Threading.CancellationToken NewPreview()
+        {
+            StopPreview();
+            return (_previewCts = new System.Threading.CancellationTokenSource()).Token;
+        }
+
+        private void EndPreview(System.Threading.CancellationToken token)
+        {
+            if (_previewCts is { } cts && cts.Token == token) _previewCts = null;
+        }
+
+        /// <summary>Stops what this page started (the page hid or left the tree).</summary>
+        internal void StopPreview()
+        {
+            var cts = _previewCts;
+            _previewCts = null;
+            try { cts?.Cancel(); } catch { }
+        }
+
         /// <summary>WPF LoadHapticsSettingsToUi :424-445 + the four Phase F load helpers.</summary>
         private void LoadDialsToUi(HapticSettings s)
         {
@@ -122,7 +147,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private async void OnHapticToyTestClicked(object? sender)
         {
             if (Haptics is not { } h || sender is not Button { Tag: string deviceKey }) return;
-            if (!await h.TestDeviceAsync(deviceKey)) SetKey(TxtHapticActivity, "haptics_test_toy_failed");
+            var token = NewPreview();
+            try
+            {
+                if (!await h.TestDeviceAsync(deviceKey, token: token)) SetKey(TxtHapticActivity, "haptics_test_toy_failed");
+            }
+            catch (Exception ex) { Log.Warning(ex, "Haptics toy test failed"); }
+            finally { EndPreview(token); }
         }
 
         /// <summary>The audio-sync tuning sliders (and Advanced) only mean anything while that layer is on.</summary>
@@ -148,6 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             else
             {
+                StopPreview();
                 LiveStatusTimer?.Stop();
                 LiveStatusTimer = null;
             }
@@ -376,14 +408,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 return;
             }
             var deviceKey = (CmbPatternToy.SelectedItem as ComboBoxItem)?.Tag as string;
+            var token = NewPreview();
             try
             {
-                if (string.IsNullOrEmpty(deviceKey))
-                    await h.PlayPatternAsync(SelectedPatternIntensity, 1500, SelectedPatternMode, priority: 5);
-                else
-                    await h.TestDeviceAsync(deviceKey, SelectedPatternMode, SelectedPatternIntensity, 1500);
+                await (LastPreview = string.IsNullOrEmpty(deviceKey)
+                    ? h.PlayPatternAsync(SelectedPatternIntensity, 1500, SelectedPatternMode, priority: 5, token: token)
+                    : h.TestDeviceAsync(deviceKey, SelectedPatternMode, SelectedPatternIntensity, 1500, token));
             }
             catch (Exception ex) { Log.Warning(ex, "Haptics pattern play failed"); }
+            finally { EndPreview(token); }
         }
     }
 }

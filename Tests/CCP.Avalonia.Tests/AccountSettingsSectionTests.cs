@@ -34,7 +34,7 @@ public sealed class AccountSettingsSectionTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var oldGet = CoreSecrets.RetrieveProvider;
@@ -221,6 +221,35 @@ public sealed class AccountSettingsSectionTests
                 Assert.Equal("btn_link_discord", section.FindControl<IconLabel>("TxtBtnLinkDiscord")!.Key);
             }
             finally { discord.IsVerifying = false; LoginDialog.ProxyReachable = oldProbe; }
+        });
+    }
+
+    /// <summary>The privacy panel's Discord button goes through this section's real provider flow (no fake action).</summary>
+    [Fact]
+    public void PrivacyPanelDiscordButtonRunsTheSectionLinkFlow()
+    {
+        Run((shell, section, s, secrets) =>
+        {
+            s.UnifiedId = "u-test";
+            s.HasLinkedDiscord = false;
+            s.OfflineMode = false;
+            var discord = AccountSeed.Discord!;
+            discord.IsVerifying = true;            // SignInAsync returns at once: no token, the link fails
+            var oldProbe = LoginDialog.ProxyReachable;
+            int probes = 0;
+            LoginDialog.ProxyReachable = _ => { probes++; return Task.FromResult(true); };
+            var panel = new global::ConditioningControlPanel.Avalonia.Views.Controls.ProfilePrivacyPanel();
+            var dialog = new global::ConditioningControlPanel.Avalonia.Views.Dialogs.ProfilePrivacyDialog(panel);
+            try
+            {
+                dialog.Show(shell);
+                var login = panel.LoginAsync();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(login.IsCompleted);
+                Assert.True(probes > 0);           // the section's LinkAsync ran
+                Assert.Equal("btn_link_discord", section.FindControl<IconLabel>("TxtBtnLinkDiscord")!.Key);
+            }
+            finally { discord.IsVerifying = false; LoginDialog.ProxyReachable = oldProbe; dialog.Close(); }
         });
     }
 

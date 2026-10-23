@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
@@ -16,11 +18,14 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <summary>
 /// PORTED (invites only) from ConditioningControlPanel/Services/Friends/FriendsLanding.cs: what a delivery
 /// does when it lands. Core's <see cref="FriendsLandingRouter"/> decides (hold, Inbox, knock); this sink
-/// knocks an invite with a <see cref="KnockCard"/> and files Inbox rows. Nothing here plays or joins by
-/// itself. A light timer re-attaches to <see cref="FriendsHead.Service"/> and releases the held queue (WPF :28-82).
+/// knocks an invite with a <see cref="KnockCard"/>, files Inbox rows, and throws the words a delivery or a send
+/// leaves through <see cref="FloatingWord"/> (poke received with Emi's line, the sent beat, Say/Tell from outside
+/// the drawer). Nothing here plays or joins by itself. A light timer re-attaches to <see cref="FriendsHead.Service"/>
+/// and releases the held queue (WPF :28-82).
 /// ponytail: the corner notices (FriendNotices: poke toast, watch toast, request toast) are not on this head
-/// (row feat-friends-open-tables), so a poke and a watch go to the Inbox as WPF does with the bell off
-/// (WPF :212); request rows/cues, SentBeat words and Emi lines wait for row feat-friends-landing.
+/// (row feat-friends-open-tables), so a watch, and a poke that cannot throw its word (over a game, or nothing of
+/// ours on screen), go to the Inbox as WPF does with the bell off (WPF :212); WPF's "Poke back" toast is dropped
+/// with them. Request rows/cues wait for row feat-friends-open-tables.
 /// </summary>
 internal static class FriendsLanding
 {
@@ -33,6 +38,15 @@ internal static class FriendsLanding
 
     /// <summary>Where a card lands: the panel, else the launcher (WPF Anchor :158); tests replace it.</summary>
     internal static Func<Window?> Anchor { get; set; } = DefaultAnchor;
+
+    /// <summary>WPF ActiveGameWindow: the active window when it is a game host's; tests replace it.</summary>
+    internal static Func<Window?> ActiveGameWindow { get; set; } = () => GameWindow.ActiveOpen();
+
+    /// <summary>WPF EmiSays: Emi's desk line when she is out; tests replace it.</summary>
+    internal static Action<string, string> EmiSays { get; set; } = DeskSays;
+
+    /// <summary>The friends service the landing follows; tests replace it.</summary>
+    internal static Func<IFriendsService?> Service { get; set; } = () => FriendsHead.Service;
 
     internal static FriendsLandingRouter? Router => _router;
 
@@ -59,7 +73,7 @@ internal static class FriendsLanding
     {
         try
         {
-            var current = FriendsHead.Service;
+            var current = Service();
             if (!ReferenceEquals(_router?.Service, current))
             {
                 _router?.Dispose();
@@ -86,8 +100,7 @@ internal static class FriendsLanding
             ProgramSession: program,
             PanelVisible: mw is { IsVisible: true } && mw.WindowState != WindowState.Minimized,
             LauncherVisible: lw is { IsVisible: true } && lw.WindowState != WindowState.Minimized,
-            // ponytail: GameWindow (Breakout demo) is not a WPF landing host; ActiveGameWindow waits for the hosts.
-            GameHostActive: false,
+            GameHostActive: GameWindow.ActiveOpen() != null,
             SessionRunning: session);
     }
 
@@ -97,6 +110,24 @@ internal static class FriendsLanding
         if (mw is { IsVisible: true } && mw.WindowState != WindowState.Minimized) return mw;
         var lw = LauncherWindow.Instance;
         return lw is { IsVisible: true } && lw.WindowState != WindowState.Minimized ? lw : null;
+    }
+
+    /// <summary>WPF FriendsLanding.Tell/Say: a short word where the player is looking (the game, the panel,
+    /// the launcher). <paramref name="fallback"/> is the caller's own window when none of those is up.</summary>
+    internal static void Tell(string text, bool good, Window? fallback = null)
+    {
+        var anchor = ActiveGameWindow() ?? Anchor() ?? fallback;
+        if (anchor != null) FloatingWord.Throw(anchor, text, pink: !good, small: true);
+    }
+
+    private static void DeskSays(string line, string face)
+    {
+        try
+        {
+            var desk = EmiDeskService.Instance;
+            if (desk.IsOut && desk.Window != null) desk.Window.Say(line, face);
+        }
+        catch (Exception ex) { Log.Debug("[Friends] emi say: {E}", ex.Message); }
     }
 
     // ---------------------------------------------------------------- words (WPF :169-201)
@@ -126,18 +157,31 @@ internal static class FriendsLanding
         // No Join where this head has no host: a Join that opens nothing would tell the sender "joined".
         KnockCard.Show(anchor, item, KnockLine(item), CanJoin(item) ? Str("friends_land_join", "Join") : null,
             Str("friends_land_not_now", "Not now"), Str("friends_land_answer_later", "Answer later"),
-            OnKnockDone, shown: i => FriendsSeen.Shared.Seen(FriendsHead.Service, i.Id));
+            OnKnockDone, shown: i => FriendsSeen.Shared.Seen(Service(), i.Id));
 
     private sealed class Sink : ILandingSink
     {
-        public void Poke(InboxItem item, bool inGame) => Inbox(item);
+        /// <summary>WPF Sink.Poke :229: Emi says it and the word floats over the panel, pink for a tease.
+        /// Bell off, over a game, or nothing on screen: the Inbox row (the corner toast is not on this head).</summary>
+        public void Poke(InboxItem item, bool inGame)
+        {
+            var game = inGame ? ActiveGameWindow() : null;
+            var anchor = Anchor();
+            if (!LandingRules.PokeThrowsWord(NoticesOn, game != null) || anchor == null) { Inbox(item); return; }
+            var word = Str("friends_poke_" + item.PokeId, LandingRules.PokeFallback(item.PokeId));
+            FriendsSeen.Shared.Seen(Service(), item.Id);
+            EmiSays(string.Format(Str("friends_land_emi_poke", "{0} says {1}"), item.FromName, word),
+                LandingRules.PokeFace(item.PokeId));
+            FloatingWord.Throw(anchor, word, LandingRules.PokeIsPink(item.PokeId));
+        }
 
         public void Knock(InboxItem item, bool inGame)
         {
-            var anchor = Anchor();
-            // The bell off, or nothing of ours on screen: the Inbox row and nothing else (WPF :227-229).
+            var anchor = inGame ? ActiveGameWindow() ?? Anchor() : Anchor();   // WPF :262
+            // The bell off, or nothing of ours on screen: the Inbox row and nothing else (WPF :263-264).
             if (anchor == null || !NoticesOn || item.Kind != SendKind.Invite) { Inbox(item); return; }
             Sfx("chaos/dling.mp3", 0.18f, "friends-knock", incoming: true);   // WPF FriendsSfx.Knock
+            if (!inGame) EmiSays(Str("friends_land_emi_knock", "someone wants you"), "o_o");   // WPF :266-270
             // An invite knocks with a card that counts down to its own expiry (WPF :251-258).
             ShowCard(anchor, item);
         }
@@ -158,7 +202,14 @@ internal static class FriendsLanding
             });
         }
 
-        public void SentBeat(SendKind kind, Friend to) { }
+        /// <summary>WPF Sink.SentBeat :366: "knock sent" / "watch sent" / "sent", small and mint.</summary>
+        public void SentBeat(SendKind kind, Friend to)
+        {
+            var anchor = ActiveGameWindow() ?? Anchor();
+            if (anchor == null) return;
+            var (key, english) = LandingRules.SentWord(kind);
+            FloatingWord.Throw(anchor, Str(key, english), pink: false, small: true);
+        }
         public void RequestRow(FriendRequest request) { }
         public void RequestAnnounce(FriendRequest request, bool inGame) { }
         public void RequestCue() { }
@@ -196,7 +247,7 @@ internal static class FriendsLanding
                 if (item.Kind == SendKind.Watch && !item.IsExpired(now)) TheSink.Inbox(item);
                 return;
             case KnockOutcome.NotNow:
-                FriendsSeen.Shared.Report(FriendsHead.Service, ReceiptReport.Item(item.Id, ReceiptState.Declined));
+                FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Declined));
                 StartupLadder.Inbox.Remove("friends:" + item.Id);
                 Sfx("chaos/sink.mp3", 0.10f, "friends-sink");   // WPF FriendsSfx.Dismiss
                 return;
@@ -204,7 +255,7 @@ internal static class FriendsLanding
         if (item.Kind != SendKind.Invite) { StartupLadder.Inbox.Remove("friends:" + item.Id); return; }
         if (!CanJoin(item)) { OnKnockDone(item, KnockOutcome.Later); return; }   // never a Joined receipt for nothing
         StartupLadder.Inbox.Remove("friends:" + item.Id);
-        FriendsSeen.Shared.Report(FriendsHead.Service, ReceiptReport.Item(item.Id, ReceiptState.Joined));
+        FriendsSeen.Shared.Report(Service(), ReceiptReport.Item(item.Id, ReceiptState.Joined));
         Sfx("chaos/reveal_chime.mp3", 0.20f, "friends-join");   // WPF FriendsSfx.Join
         Join(item);
     }
