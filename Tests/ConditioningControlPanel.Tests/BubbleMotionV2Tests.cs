@@ -215,4 +215,10 @@ public class BubbleMotionV2Tests
         Assert.True(PrizeGrants.Matches("fx.*", PrizeGrants.BubbleRain));
         Assert.True(PrizeGrants.Matches("fx.*", PrizeGrants.BubbleSpiralIn));
     }
+
+    [Fact]
+    public void AnyV2Owned_forwards_to_the_V2Badges_rule()
+        // Moved from V2BadgesTests when the rule went to Core: the bubbles read the mosaic
+        // already used forwards to the same rule.
+        => Assert.Equal(V2Badges.BubbleOwned(), AmbientBubbleMotion.AnyV2Owned);
 }

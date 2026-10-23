@@ -35,10 +35,10 @@ public sealed class PlayWallTests
             var prevSettings = CoreSettings.ServiceProvider;
             CoreSettings.ServiceProvider = () => service;
             var (week, utc) = (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc);
-            var (loggedIn, lab) = (CoreAccount.IsLoggedInProvider, CoreAccount.HasLabAccessProvider);
-            bool isLoggedIn = false, isLab = false;
+            var (loggedIn, lab) = (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider);
+            bool isLoggedIn = false, isPaid = false;
             CoreAccount.IsLoggedInProvider = () => isLoggedIn;
-            CoreAccount.HasLabAccessProvider = () => isLab;
+            CoreAccount.HasPremiumAccessProvider = () => isPaid;
             (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc) = ("", null);
             var shell = new MainShellWindow();
             shell.Show();
@@ -74,8 +74,8 @@ public sealed class PlayWallTests
                 Assert.Equal(days == 1 ? Loc.Get("intake_gate_spent_body_one_day") : Loc.GetF("intake_gate_spent_body", days), line.Text);
                 Assert.False(where.IsVisible);
 
-                // Tier 2: no band, no line.
-                isLab = true;
+                // Any paid tier (WPF 2a1fd1e88, was Prime only): no band, no line.
+                isPaid = true;
                 AvApp.IntakePass.RaiseChanged();
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(band.IsVisible);
@@ -113,7 +113,7 @@ public sealed class PlayWallTests
             {
                 shell.Close();
                 CoreAccount.IsLoggedInProvider = loggedIn;
-                CoreAccount.HasLabAccessProvider = lab;
+                CoreAccount.HasPremiumAccessProvider = lab;
                 (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc) = (week, utc);
                 service.SaveImmediate();
                 CoreSettings.ServiceProvider = prevSettings;
