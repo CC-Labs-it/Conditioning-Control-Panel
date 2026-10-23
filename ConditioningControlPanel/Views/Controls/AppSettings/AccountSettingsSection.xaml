@@ -58,6 +58,7 @@
              RefreshTierBadge() in the code-behind - no settings property,
              no service call, just the entitlement the gates already use. -->
         <Border x:Name="AccountTierCard" x:FieldModifier="internal" CornerRadius="12" Padding="0" Margin="0,0,0,12"
+                MouseLeftButtonUp="AccountTierCard_MouseLeftButtonUp"
                 Background="{DynamicResource ElevatedSurfaceBrush}"
                 BorderBrush="{StaticResource SectionHueAccountBorderBrush}" BorderThickness="1">
             <Grid>

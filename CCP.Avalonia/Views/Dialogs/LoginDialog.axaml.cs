@@ -346,7 +346,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
                 // An existing account carries this provider's email: ask rather than mint a twin
                 // (WPF AccountService.ConfirmCreateNewDespiteExistingAccount; default No).
-                if (authResponse.CanAutoLink && !await ConfirmCreateNewDespiteExistingAccount(provider, authResponse.AutoLinkDisplayName))
+                if (authResponse.CanAutoLink && !await ConfirmCreateNewDespiteExistingAccount(this, provider, authResponse.AutoLinkDisplayName))
                 {
                     AccountSeed.LogoutProvider(provider);
                     ShowProviderSelection();
@@ -385,13 +385,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             await MessageDialog.ShowLinkCopiedAsync(this, url, purpose);
         }
 
-        private async Task<bool> ConfirmCreateNewDespiteExistingAccount(string provider, string? existingDisplayName)
+        /// <summary>Also the shell's pending registration (MainShellWindow.PendingRegistration.cs), as WPF shares it.</summary>
+        internal static async Task<bool> ConfirmCreateNewDespiteExistingAccount(Window owner, string provider, string? existingDisplayName)
         {
             var label = provider switch { "patreon" => "Patreon", "discord" => "Discord", "substar" => "SubscribeStar", _ => provider };
             var body = string.IsNullOrWhiteSpace(existingDisplayName)
                 ? Loc.GetF("account_existing_email_prompt_unnamed", label)
                 : Loc.GetF("account_existing_email_prompt", label, existingDisplayName);
-            return await MessageDialog.ConfirmAsync(this, Loc.Get("account_existing_email_title"), body, defaultToCancel: true);
+            return await MessageDialog.ConfirmAsync(owner, Loc.Get("account_existing_email_title"), body, defaultToCancel: true);
         }
 
         #endregion

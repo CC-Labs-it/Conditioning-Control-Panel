@@ -76,5 +76,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         internal static void DisposeRoadmapIfCreated() => _roadmap?.Dispose();
+
+        /// <summary>Test seam: drop the in-memory roadmap so the next read reloads it from the
+        /// (TestIsolation-restored) roadmap.json instead of carrying one test's progress into the next.</summary>
+        internal static void ResetRoadmapForTests()
+        {
+            DisposeRoadmapIfCreated();
+            _roadmap = null;
+        }
     }
 }
