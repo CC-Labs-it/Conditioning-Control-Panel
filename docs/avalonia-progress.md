@@ -2620,3 +2620,7 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/ledger-dedupe: +54
 - Parity ledger: 64 duplicate row ids merged (honest status, newer text first, union of paths/notes), section row counts fixed.
+
+## avalonia-port/emidesk-core-e: +344
+
+EmiChains data/rules and EmiNudges moved to CCP.Core (git mv); WPF keeps the DispatcherTimer player as EmiChainPlayer and seeds EmiNudgeWorld.QuietProbe at startup. Avalonia reads EmiChains.RestFace. Core tests: moved EmiNudgeMachineTests + new QuietProbe/EmiChains tests. No UI change; no parity rows moved.

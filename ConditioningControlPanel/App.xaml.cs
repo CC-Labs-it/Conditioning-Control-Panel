@@ -389,6 +389,8 @@ namespace ConditioningControlPanel
             // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
             Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
+            // EmiNudgeWorld lives in Core too; whether the desktop is quiet is the head's call.
+            Services.EmiDesk.EmiNudgeWorld.QuietProbe = () => EmiDesk?.NudgeQuiet() == true;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
             // Goon signaling moved to Core with its transports; its 409-merged recovery stays here.
