@@ -83,7 +83,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (!s.HasSeenDeeperTab)
             {
                 s.HasSeenDeeperTab = true;
-                StopNavDoorHeaderPulse("deeper"); // WPF DeeperTab.cs:45 StopDeeperTabPulse
                 CoreSettings.Save();
             }
 

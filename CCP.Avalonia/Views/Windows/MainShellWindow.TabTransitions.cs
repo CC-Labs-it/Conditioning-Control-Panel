@@ -84,6 +84,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private bool _firstVisitPulsesArmed;
 
+        /// <summary>Stepped-clock seam (P08): tests capture the 1.2 s arming instead of waiting it out.</summary>
+        internal Func<Action, TimeSpan, IDisposable> ScheduleOnce { get; set; } =
+            (action, delay) => DispatcherTimer.RunOnce(action, delay);
+
         /// <summary>WPF MainWindow.xaml.cs:3795-3830, on load: 1.2 s later the Deeper and Programs
         /// rail rows announce a page the user has not opened yet. Opened fires on every Show, so armed once.</summary>
         private void InitializeFirstVisitPulses()
@@ -93,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_firstVisitPulsesArmed) return;
                 _firstVisitPulsesArmed = true;
-                delay = DispatcherTimer.RunOnce(StartFirstVisitPulses, TimeSpan.FromMilliseconds(1200));
+                delay = ScheduleOnce(StartFirstVisitPulses, TimeSpan.FromMilliseconds(1200));
             };
             // Nothing of this window's motion may outlive it (P65): the pending start, the rows, the entrance.
             Closed += (_, _) =>

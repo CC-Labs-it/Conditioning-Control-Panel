@@ -17,7 +17,7 @@ namespace CCP.Avalonia.Tests;
 /// StartNavDoorHeaderPulse, driven through ShowTab and the startup seam.</summary>
 public sealed class TabTransitionsTests
 {
-    private static Task Run(Action<MainShellWindow> check) => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task Run(Action<MainShellWindow> check, Action<MainShellWindow>? beforeShow = null) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -36,6 +36,7 @@ public sealed class TabTransitionsTests
         try
         {
             shell = new MainShellWindow();
+            beforeShow?.Invoke(shell);
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             check(shell);
@@ -110,4 +111,39 @@ public sealed class TabTransitionsTests
         Assert.False(shell.NavDoorHeaderPulsing("programs"));
         Assert.True(shell.NavDoorHeaderPulsing("deeper"));
     });
+
+    [Fact]
+    public Task OpeningTheWindowArmsTheFirstVisitPulsesOnceAfterOnePointTwoSeconds()
+    {
+        var armed = new System.Collections.Generic.List<(Action Fire, TimeSpan Delay)>();
+        return Run(shell =>
+        {
+            var s = CoreSettings.Current;
+            s.HasSeenProgramsTab = false;
+            s.EnableDeeper = true;
+            s.HasSeenDeeperTab = false;
+            shell.ShowTab("settings");
+
+            // WPF xaml.cs:3795: Opened arms one 1.2 s delay; nothing pulses before it elapses.
+            var only = Assert.Single(armed);
+            Assert.Equal(TimeSpan.FromMilliseconds(1200), only.Delay);
+            Assert.False(shell.NavDoorHeaderPulsing("deeper"));
+
+            // Opened fires on every Show; the arming does not repeat.
+            shell.Hide();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(armed);
+
+            only.Fire();
+            Assert.True(shell.NavDoorHeaderPulsing("deeper"));
+            Assert.True(shell.NavDoorHeaderPulsing("programs"));
+        }, shell => shell.ScheduleOnce = (fire, delay) =>
+        {
+            armed.Add((fire, delay));
+            return new Pending();
+        });
+    }
+
+    private sealed class Pending : IDisposable { public void Dispose() { } }
 }
