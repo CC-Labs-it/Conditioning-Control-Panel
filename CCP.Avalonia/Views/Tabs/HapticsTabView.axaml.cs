@@ -70,7 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Dispatcher.UIThread.Post(ApplyFeatureArt);
 
         /// <summary>
-        /// The two vibe.png plates, mod override first. A null answer means neither the mod nor this
+        /// The three vibe.png plates, mod override first. A null answer means neither the mod nor this
         /// head has the picture; the authored bare surface then stands, which is what WPF's resolver
         /// falls back to as well.
         /// </summary>
@@ -84,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Stretch = Stretch.UniformToFill,
                 AlignmentX = AlignmentX.Right,
             };
+            HapticsSideArt.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
             ImgVideoHapticSync.Source = art;
         }
 

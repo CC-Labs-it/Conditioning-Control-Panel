@@ -24,6 +24,9 @@ internal sealed class NoticeLook
     public string? Word;
     public bool Pink;
     public string? AvatarUrl;
+    /// <summary>Drawn in the avatar's place by a notice that is not from a friend (the online
+    /// media meter's spent notice). Null = the friend's avatar.</summary>
+    public Func<FrameworkElement>? Icon;
     public string? ActionLabel;
     public Action<object?>? Act;
     /// <summary>A click on the body: the panel and the drawer on that friend.</summary>
@@ -272,7 +275,7 @@ internal sealed class FriendNotices : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var avatar = LandingChrome.Avatar(n.Name, look.AvatarUrl, 34);
+        var avatar = look.Icon?.Invoke() ?? LandingChrome.Avatar(n.Name, look.AvatarUrl, 34);
         avatar.VerticalAlignment = VerticalAlignment.Top;
         grid.Children.Add(avatar);
 
