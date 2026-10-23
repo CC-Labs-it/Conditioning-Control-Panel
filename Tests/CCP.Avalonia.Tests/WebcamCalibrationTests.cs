@@ -286,7 +286,12 @@ public sealed class WebcamCalibrationTests
         shell.Show();
         Dispatcher.UIThread.RunJobs();
         var seen = new List<(double P, string? Text)>();
-        Action<double, string> spy = (p, _) => seen.Add((p, shell.WebcamLoadingSplashForTests?.FindControl<TextBlock>("TxtStatus")!.Text));
+        WebcamLoadingSplash? shown = null;   // kept here: a slow runner can finish the fade before the test reads the shell's field
+        Action<double, string> spy = (p, _) =>
+        {
+            shown = shell.WebcamLoadingSplashForTests ?? shown;
+            seen.Add((p, shell.WebcamLoadingSplashForTests?.FindControl<TextBlock>("TxtStatus")!.Text));
+        };
         tracker.OnStartupProgress += spy;   // after the shell's handler, so it sees the splash the shell made
         try
         {
@@ -295,7 +300,7 @@ public sealed class WebcamCalibrationTests
             Assert.Equal(new[] { 0.08, 0.25, 0.55, 0.92, 1.0 }, seen.Select(x => x.P));
             Assert.Equal("Opening camera…", seen[2].Text);
             Assert.Equal("Ready", seen[4].Text);
-            var splash = shell.WebcamLoadingSplashForTests!;
+            var splash = Assert.IsType<WebcamLoadingSplash>(shown);
             PumpUntilSplashGone(shell);
             Assert.Null(shell.WebcamLoadingSplashForTests);   // faded and closed
             Assert.False(splash.IsVisible);

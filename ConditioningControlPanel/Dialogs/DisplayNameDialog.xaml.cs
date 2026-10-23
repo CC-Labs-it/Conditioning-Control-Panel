@@ -1,6 +1,9 @@
+using System;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel
 {
@@ -35,6 +38,26 @@ namespace ConditioningControlPanel
         }
 
         private bool _isDeleteMode;
+
+        // Required mode (onboarding, owner call 2026-10-20): the account has no name yet. No
+        // Cancel button; the corner X and Escape just close it and the next launch asks again.
+        // The dialog saves for itself so a taken name keeps it open with the reason on screen.
+        private Func<string, Task<string?>>? _save;
+        private bool _closed;
+
+        /// <param name="save">Sends the name; returns null when saved, else the line to show.</param>
+        public DisplayNameDialog(string? suggestion, Func<string, Task<string?>> save) : this()
+        {
+            _save = save;
+            Closed += (_, _) => _closed = true;
+            TxtTitle.Text = Loc.Get("label_choose_your_display_name");
+            TxtPrompt.Text = Loc.Get("name_ask_body");
+            WarningPanel.Visibility = Visibility.Collapsed;
+            BtnCancel.Visibility = Visibility.Collapsed;
+            BtnClose.Visibility = Visibility.Visible;
+            TxtDisplayName.Text = suggestion ?? "";
+            TxtDisplayName.SelectAll();
+        }
 
         public DisplayNameDialog(string confirmationMode) : this()
         {
@@ -80,6 +103,13 @@ namespace ConditioningControlPanel
                 {
                     BtnConfirm.IsEnabled = TxtDisplayName.Text.Trim() == "DELETE";
                 }
+                else if (_save != null)
+                {
+                    var shape = NeedsDisplayNameRule.Check(TxtDisplayName.Text);
+                    TxtCharCount.Text = Loc.GetF("label_char_count_of_max", TxtDisplayName.Text.Trim().Length, NeedsDisplayNameRule.MaxLength);
+                    BtnConfirm.IsEnabled = shape == DisplayNameShape.Ok;
+                    ShowStatus(shape == DisplayNameShape.BadChars ? Loc.Get("name_ask_bad_chars") : null);
+                }
                 else
                 {
                     var length = TxtDisplayName.Text.Trim().Length;
@@ -87,6 +117,44 @@ namespace ConditioningControlPanel
                     BtnConfirm.IsEnabled = length >= 2 && length <= 20;
                 }
             };
+        }
+
+        private void ShowStatus(string? line)
+        {
+            TxtStatus.Text = line ?? "";
+            TxtStatus.Visibility = string.IsNullOrEmpty(line) ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        private void BtnClose_Click(object sender, MouseButtonEventArgs e)
+        {
+            DialogResult = false;
+            Close();
+        }
+
+        private async void SaveRequired(string name)
+        {
+            BtnConfirm.IsEnabled = false;
+            TxtDisplayName.IsEnabled = false;
+            ShowStatus(Loc.Get("login_checking"));
+            string? error;
+            try { error = await _save!(name); }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning(ex, "Display name save failed");
+                error = Loc.Get("msg_failed_to_change_display_name");
+            }
+            if (_closed) return;
+            if (error == null)
+            {
+                DisplayName = name;
+                DialogResult = true;
+                Close();
+                return;
+            }
+            TxtDisplayName.IsEnabled = true;
+            BtnConfirm.IsEnabled = NeedsDisplayNameRule.Check(TxtDisplayName.Text) == DisplayNameShape.Ok;
+            ShowStatus(error);
+            TxtDisplayName.Focus();
         }
 
         private void TxtDisplayName_KeyDown(object sender, KeyEventArgs e)
@@ -123,6 +191,12 @@ namespace ConditioningControlPanel
                 DisplayName = name;
                 DialogResult = true;
                 Close();
+                return;
+            }
+
+            if (_save != null)
+            {
+                if (NeedsDisplayNameRule.Check(name) == DisplayNameShape.Ok) SaveRequired(name);
                 return;
             }
 

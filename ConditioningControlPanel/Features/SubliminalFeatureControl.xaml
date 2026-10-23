@@ -145,6 +145,9 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkWhispers_Changed" Unchecked="ChkWhispers_Changed"/>
                             </Grid>
+                            <TextBlock x:Name="TxtWhispersSilentHint" Text="{loc:Str hint_silent_lines}"
+                                       Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
+                                       TextWrapping="Wrap" Margin="0,0,0,4" Visibility="Collapsed"/>
 
                             <!-- Solid mode: shared-host renderer, mirrors the Flashes/Bubble Pop toggle -->
                             <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_subliminal_solid_mode}">
