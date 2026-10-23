@@ -70,7 +70,7 @@ internal static class X11ActiveWindow
 
     private static bool EnsureDisplay()
     {
-        if (Disabled || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return false;
+        if (Disabled) return false;
         if (!_tried)
         {
             _tried = true;

@@ -35,9 +35,16 @@ internal static class KeywordTriggerHead
         Engine.RememberForeground(app.Process, app.Own);
     }
 
-    private static (string? Process, bool Own) ReadForeground()
+    internal static (string? Process, bool Own) ReadForeground()
     {
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return (null, false);
+        return PlatformForeground();
+    }
+
+    // Test seam: the real desktop read, reached only outside the sandbox.
+    internal static Func<(string? Process, bool Own)> PlatformForeground = ReadPlatformForeground;
+    private static (string? Process, bool Own) ReadPlatformForeground()
+    {
         if (OperatingSystem.IsWindows())
         {
             GetWindowThreadProcessId(GetForegroundWindow(), out var id);

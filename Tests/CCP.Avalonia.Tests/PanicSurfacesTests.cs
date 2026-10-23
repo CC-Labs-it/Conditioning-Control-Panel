@@ -79,7 +79,7 @@ public sealed class PanicSurfacesTests
     /// <summary>Surfaces a panic must never lose. Dropping one fails here; a new surface needs no edit.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "keyword-triggers", "haptics",
+        "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "keyword-comments", "keyword-triggers", "haptics",
         "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "companion-transcript", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
     };
 
@@ -113,6 +113,9 @@ public sealed class PanicSurfacesTests
         ("engine", "corner-gif", "standalone corner slots after the session's"),
         // WPF :1977-1981: the tube is silenced after the corner GIFs.
         ("corner-gif", "tube-speech", "tube after corner GIFs"),
+        // WPF :1977-1981 cuts the avatar's speech; a pending keyword comment is cancelled before the tube is silenced
+        // so it cannot queue a new line after the cut (PanicSurfaces.cs "keyword-comments").
+        ("keyword-comments", "tube-speech", "pending keyword comment cancelled before the tube is silenced"),
         // WPF :2030 StopAdHocEffects closes lock cards after the media stops; engine before lock cards.
         ("engine", "lock-cards", "engine before lock cards"),
         // WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does: the task parks before

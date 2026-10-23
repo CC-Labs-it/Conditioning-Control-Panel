@@ -88,6 +88,7 @@ public sealed class AwarenessFinishRuntimeTests
     public Task SamplerUsesInjectedProcessSourceOnlyWhenArmedAndEntitled() => Run((_, s, _) =>
     {
         var source = KeywordTriggerHead.ForegroundSource;
+        var platform = KeywordTriggerHead.PlatformForeground;
         var calls = 0;
         try
         {
@@ -99,10 +100,13 @@ public sealed class AwarenessFinishRuntimeTests
             KeywordTriggerHead.SampleForeground(); Assert.Equal(1, calls);
             s.KeywordTriggersEnabled = false;
             KeywordTriggerHead.SampleForeground(); Assert.Equal(1, calls);
-            // Even with DISPLAY set, the sandbox never opens X11 or reads the real process/title.
-            Assert.Equal((null, false), X11ActiveWindow.ReadProcess());
+            // The sandbox (CCP_USERDATA_DIR, set by TestUserDataProfile) never reaches the real desktop read.
+            var platformCalls = 0;
+            KeywordTriggerHead.PlatformForeground = () => { platformCalls++; return ("real-desktop", false); };
+            Assert.Equal((null, false), KeywordTriggerHead.ReadForeground());
+            Assert.Equal(0, platformCalls);
         }
-        finally { KeywordTriggerHead.Stop(); KeywordTriggerHead.ForegroundSource = source; }
+        finally { KeywordTriggerHead.Stop(); KeywordTriggerHead.ForegroundSource = source; KeywordTriggerHead.PlatformForeground = platform; }
         return Task.CompletedTask;
     });
 
