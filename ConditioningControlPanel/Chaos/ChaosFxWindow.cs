@@ -166,10 +166,12 @@ public sealed class ChaosFxWindow : Window
             brush.Freeze();
             _vignette.Background = brush;
 
-            // Snap up (40ms), fade out (260ms) — reads as an impact.
+            // Snap up (40ms), fade out (260ms) — reads as an impact. Gentle visuals floor the rise
+            // at 300ms (the fade keeps its own 260ms after it).
+            int rise = Services.Safety.GentleVisuals.RiseMs(40);
             var anim = new DoubleAnimationUsingKeyFrames();
-            anim.KeyFrames.Add(new LinearDoubleKeyFrame(peak, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(40))));
-            anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(300))));
+            anim.KeyFrames.Add(new LinearDoubleKeyFrame(peak, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(rise))));
+            anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(rise + 260))));
             _vignette.BeginAnimation(OpacityProperty, anim);
         }
         catch { }

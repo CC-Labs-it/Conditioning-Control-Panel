@@ -82,9 +82,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// CoreAudio + the master-volume curve), <c>ChaosTips</c> (40 lines of control composition),
     /// <c>ChaosBoonColors</c> (an id table, now ChaosBoonColors.cs beside this file),
     /// <c>ChaosRanks</c>/<c>ChaosRank</c>/<c>ChaosGlyphs</c> (Core, Services/Chaos/ChaosRanks.cs)
-    /// and <c>ChaosWindowZ.BornTopmost</c> (<c>AppSettings.ChaosPinOnTop</c>). <c>ChaosArt</c>,
-    /// <c>ChaosNarrator</c> and <c>ChaosAnnouncerOverlay</c> still live in the WPF head and are
-    /// stubbed in the Stubs region below. <c>ChaosBoon</c>, <c>ChaosRunState</c>, <c>ChaosMeta</c>,
+    /// and <c>ChaosWindowZ.BornTopmost</c> (<c>AppSettings.ChaosPinOnTop</c>). <c>ChaosArt</c> and
+    /// <c>ChaosNarrator</c> still live in the WPF head and are stubbed in the Stubs region below;
+    /// <c>ChaosAnnouncerOverlay</c> is the head's real overlay (ChaosAnnouncerOverlay.cs). <c>ChaosBoon</c>, <c>ChaosRunState</c>, <c>ChaosMeta</c>,
     /// <c>ChaosLessons</c>, <c>RevealService</c> and <c>ChaosConversation</c> are the real Core
     /// types; <see cref="ChaosRunHost"/> (the run-lifecycle slice of WPF ChaosModeService) drives
     /// the window during a run.</para>
@@ -779,7 +779,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (isPb)
             {
                 var pbTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
-                pbTimer.Tick += (_, _) => { pbTimer.Stop(); ChaosSfx.Play("pb_fanfare", 0.6f); };
+                pbTimer.Tick += (_, _) => { pbTimer.Stop(); if (!_closed) ChaosSfx.Play("pb_fanfare", 0.6f); };
                 pbTimer.Start();
             }
 
@@ -963,7 +963,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             timer.Tick += (_, _) =>
             {
                 elapsed += FRAME_MS;
-                if (elapsed >= DURATION_MS || !_resultsPanel.IsVisible)
+                if (_closed || elapsed >= DURATION_MS || !_resultsPanel.IsVisible)   // a closed recap must not tick on
                 {
                     timer.Stop();
                     line.Text = $"score {score:N0}";
@@ -1477,8 +1477,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // unchanged. ponytail: each one is wired for real when its owner moves to Core; the
         // shapes here are exactly the members this view calls, nothing more.
 
-        private enum ChaosAnnounceKind { Willpower, Temptation }
-
         /// <summary>
         /// Not a stub any more: all thirteen cues in this window fire for real. The head's
         /// <c>Services/Chaos/ChaosSfx.cs</c> is a resolve plus a one-shot, and BOTH halves are
@@ -1501,7 +1499,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// lands - and exactly what the stub gave. Nothing here can be louder than the user's
         /// master volume, and a missing file is still a silent no-op.</para>
         /// </summary>
-        private static class ChaosSfx
+        internal static class ChaosSfx
         {
             /// <summary>Generic one-shot: <c>Resources/sounds/chaos/{name}.mp3</c>, silent when
             /// the asset is absent.</summary>
@@ -1561,8 +1559,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <para>ponytail: this and <c>ChaosHudWindow.AttachTip</c> are now the same builder in two
         /// files. Collapse them into one <c>Views/Chaos/ChaosTips.cs</c> the moment a third caller
         /// appears - not before, because the head's own class is the source both are copying and a
-        /// third copy is where drift starts.</para></summary>
-        private static class ChaosTips
+        /// third copy is where drift starts. ChaosToyButtonWindow reuses this one (internal) rather
+        /// than copying it; its tooltip has the default chrome, not this window's style.</para></summary>
+        internal static class ChaosTips
         {
             public static void Attach(Control target, string title, string? desc,
                                       string? extra = null, Color? accent = null, string? flavor = null)
@@ -1607,11 +1606,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             public static void PlayCardLine(string? audioKey, string text) { }
             public static void EndCard() { }
-        }
-
-        private static class ChaosAnnouncerOverlay
-        {
-            public static void Announce(string text, ChaosAnnounceKind kind, string? artKey = null) { }
         }
 
         /// <summary>Real now, not a stand-in. The head's <c>ChaosWindowZ.BornTopmost</c> is its

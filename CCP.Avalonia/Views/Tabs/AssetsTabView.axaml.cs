@@ -11,6 +11,7 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -410,10 +411,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (!File.Exists(file.FullPath)) { Log.Warning("File not found for preview: {File}", file.FullPath); return; }
                 var win = new Windows.MiniPlayerWindow();
                 win.LoadFile(file.FullPath);
-                if (TopLevel.GetTopLevel(this) is Window owner) win.Show(owner); else win.Show();
+                if (TopLevel.GetTopLevel(this) is Window owner)
+                {
+                    // WPF previewWindow.Closed: re-activate the main window, but only while our process
+                    // still owns the foreground (never steal it back from another app).
+                    var inFront = false;
+                    win.Closing += (_, _) => inFront = AppInFront();
+                    win.Closed += (_, _) => { if (inFront) owner.Activate(); };
+                    win.Show(owner);
+                }
+                else win.Show();
+                LastPreview = win;
             }
             catch (Exception ex) { Log.Error(ex, "Failed to open asset preview for {File}", file.Name); }
         }
+
+        /// <summary>The last preview opened (tests drive it).</summary>
+        internal Windows.MiniPlayerWindow? LastPreview { get; private set; }
+
+        /// <summary>WPF GetForegroundWindow + GetWindowThreadProcessId == our pid. Read as the preview closes
+        /// (ponytail: WPF reads it after Closed; at Closing the foreground is the same window or another
+        /// app's). Off Windows there is no portable foreground query: one of our windows being active
+        /// is the same answer. No foreground window at all counts as ours, as in WPF. Tests swap it.</summary>
+        internal static Func<bool> AppInFront = () => OperatingSystem.IsWindows()
+            ? Platform.EscapeClaim.CcpInFront(noForegroundCounts: true)
+            : Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d && d.Windows.Any(w => w.IsActive);
 
         /// <summary>WPF InvalidateAssetPoolsAfterSelectionChange (MainWindow.Assets.cs:1318, #130). Flash
         /// lists the disk per burst here (FlashOverlay.LoadPictures), so it has no cache to drop; the

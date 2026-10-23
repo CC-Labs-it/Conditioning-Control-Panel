@@ -140,6 +140,48 @@ namespace ConditioningControlPanel
                     dash.RecentEmpty.Visibility = dash.RecentList.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
             catch (Exception ex) { App.Logger?.Debug("RefreshFavoritesRail: {E}", ex.Message); }
+            RefreshPageDrawer();
+        }
+
+        /// <summary>
+        /// The every-page drawer (Controls/NavRail/PageFavoritesDrawer) wears the SAME chips as
+        /// Home's: same builder, same lists, same right-click menu, so the two cannot drift. A
+        /// chip has one parent, hence a second set rather than a shared one.
+        /// </summary>
+        internal void RefreshPageDrawer()
+        {
+            var drawer = PageDrawer;
+            var dash = SettingsTab;
+            var s = App.Settings?.Current;
+            if (drawer == null || dash?.FavoritesRail == null || s == null) return;
+            try
+            {
+                var byId = SettingsPaletteIndex.All
+                    .Where(e => FavoritesRailRule.IsDestination(e.Id))
+                    .ToDictionary(e => e.Id, e => e, StringComparer.Ordinal);
+                bool Known(string id) => byId.TryGetValue(id, out var e) && e.Available;
+
+                var caption = dash.FavoritesRail.TryFindResource("RailSectionCaption") as Style;
+                var empty = dash.FavoritesRail.TryFindResource("RailEmptyText") as Style;
+                var recentMargin = drawer.RecentCaption.Margin;
+                drawer.FavoritesCaption.Style = caption;
+                drawer.RecentCaption.Style = caption;
+                drawer.RecentCaption.Margin = recentMargin;
+                drawer.FavoritesEmpty.Style = empty;
+                drawer.RecentEmpty.Style = empty;
+                drawer.Paint(Services.FxTheme.GlowColor);
+
+                drawer.FavoritesList.Children.Clear();
+                foreach (var id in s.RailFavorites.Where(Known))
+                    drawer.FavoritesList.Children.Add(BuildRailChip(byId[id]));
+                drawer.FavoritesEmpty.Visibility = drawer.FavoritesList.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+                drawer.RecentList.Children.Clear();
+                foreach (var id in FavoritesRailRule.RecentForDisplay(s.RailRecent, s.RailFavorites, Known))
+                    drawer.RecentList.Children.Add(BuildRailChip(byId[id]));
+                drawer.RecentEmpty.Visibility = drawer.RecentList.Children.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (Exception ex) { App.Logger?.Debug("RefreshPageDrawer: {E}", ex.Message); }
         }
 
         private Button BuildRailChip(SettingsPaletteEntry entry)
@@ -427,6 +469,9 @@ namespace ConditioningControlPanel
             {
                 try { SettingsTab?.PeekFavoritesDrawer(id); }
                 catch (Exception ex) { App.Logger?.Debug("PeekFavoritesDrawer({Id}): {E}", id, ex.Message); }
+                // Off Home the page's own drawer is the one in view: it opens to show the pin
+                // land and goes away with the next navigation.
+                if (PageDrawer?.IsVisible == true) PageDrawer.SetOpen(true, animate: true);
             }
         }
 
