@@ -34,11 +34,14 @@ namespace ConditioningControlPanel.Services.Quiz
     ///              unavailable { reason }           see <see cref="IntakeSpeechPolicy"/> reasons
     ///              stopped                          ack of speech-stop / window closing
     ///
-    /// ONE RULE: this never fights another mic owner. If the wake-word loop, push-to-talk, a lock
-    /// card or a spoken mantra already holds the mic, the page is told <c>busy</c> and drops the
-    /// item to typed input. (LockCardWindow and SpeakPromptSession evict the wake loop instead;
-    /// the intake is a 20-minute windowed tool and standing She's Listening down for its whole
-    /// length would be the bigger surprise.)
+    /// THE MIC IS BORROWED (owner, 2026-10-13). The "Hey Bambi" wake word and push-to-talk hold the
+    /// mic for good while armed, so a say-it item used to be told <c>busy</c> and could never be
+    /// spoken. Now the item stands them down for the length of the spoken answer and they come back
+    /// when it ends: on the answer, the question's timer, idle, an error, the window closing, panic
+    /// (<see cref="IntakeMicBorrow"/>, the same handover LockCardWindow and SpeakPromptSession do).
+    /// Only the spoken answer borrows it, never the whole run. A mic some OTHER feature holds (a
+    /// lock card or a spoken mantra mid-listen) is still not fought: the page is told <c>busy</c>
+    /// and drops the item to typed input.
     ///
     /// Threading: page messages arrive on the UI thread; the listen loop runs on the pool and
     /// every post back is marshalled onto the dispatcher because <c>CoreWebView2</c> is UI-affine.
@@ -54,12 +57,90 @@ namespace ConditioningControlPanel.Services.Quiz
         /// the right note before its first start (availability is re-checked on every start).</summary>
         private static object BuildSpeechCaps()
         {
-            var reason = SpeechUnavailability();
+            // A mic the wake word holds is one we can borrow, so it is not a reason here.
+            var reason = SpeechUnavailability(countMicHeld: !WakeArmed());
             return new { bridge = true, available = reason == null, reason };
         }
 
-        /// <summary>Live availability check; null = the mic can open now.</summary>
-        private static string? SpeechUnavailability()
+        // ---- borrowing the mic from the wake word ----
+
+        /// <summary>How long a listen window waits for the wake loop's capture session to let go
+        /// after it was stood down (the lock card waits the same way).</summary>
+        private const int MicReleaseWaitMs = 600;
+
+        private static readonly IntakeMicBorrow _mic = new(WakeArmed, StandWakeDown, GiveWakeBack);
+
+        /// <summary>True while the user has the wake word or push-to-talk armed.</summary>
+        private static bool WakeArmed()
+        {
+            try { return App.Autonomy?.UserDrivenVoiceArmed == true; }
+            catch { return false; }
+        }
+
+        // Both hops are POSTED to the dispatcher, never run inline: the push-to-talk hook belongs to
+        // the UI thread, and posting keeps "stand down" and "give back" in the order they were
+        // decided even when one comes from the pool and the next from the UI thread.
+        private static void StandWakeDown() => PostToUi(() =>
+        {
+            App.Autonomy?.StopVoiceInput();
+            App.Logger?.Information("IntakeHostService: borrowed the mic from the wake word for a spoken answer");
+        });
+
+        private static void GiveWakeBack() => PostToUi(() =>
+        {
+            // Reconcile with settings, never force on: a wake word the user switched off stays off.
+            App.Autonomy?.RefreshVoiceInputModes();
+            App.Logger?.Information("IntakeHostService: gave the mic back to the wake word");
+        });
+
+        private static void PostToUi(Action work)
+        {
+            void Run()
+            {
+                try { work(); }
+                catch (Exception ex) { App.Logger?.Debug("IntakeHostService.speech mic handover: {E}", ex.Message); }
+            }
+            try
+            {
+                var disp = Application.Current?.Dispatcher;
+                if (disp == null || disp.HasShutdownStarted) { Run(); return; }
+                disp.BeginInvoke((Action)Run);
+            }
+            catch { Run(); }
+        }
+
+        /// <summary>Wait until the stand-down posted by <see cref="IntakeMicBorrow.Take"/> has run
+        /// and the wake loop's capture session has closed, so our own listen window is not the one
+        /// that gets cut.</summary>
+        private static async Task WaitForBorrowedMicAsync(CancellationToken ct)
+        {
+            try
+            {
+                var disp = Application.Current?.Dispatcher;
+                if (disp != null && !disp.HasShutdownStarted && !disp.CheckAccess())
+                    await disp.InvokeAsync(() => { }).Task.ConfigureAwait(false);   // FIFO: the stand-down ran
+                for (int waited = 0; waited < MicReleaseWaitMs; waited += 25)
+                {
+                    if (App.Speech?.IsListening != true && App.WakeWord?.IsListening != true) return;
+                    await Task.Delay(25, ct).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { App.Logger?.Debug("IntakeHostService.speech: mic release wait failed: {E}", ex.Message); }
+        }
+
+        /// <summary>Teardown for the mic: cancel the listen loop and give the wake word its mic back
+        /// at once, without waiting for the loop to wind down. Idempotent. Called when the window
+        /// closes and when the host closes it (panic).</summary>
+        private static void ReleaseSpeechMic(string why)
+        {
+            StopSpeechBridge(why, notifyPage: false);
+            _mic.ReturnAll();
+        }
+
+        /// <summary>Live availability check; null = the mic can open now. <paramref name="countMicHeld"/>
+        /// false leaves out "someone holds the mic", for the checks made before the borrow.</summary>
+        private static string? SpeechUnavailability(bool countMicHeld = true)
         {
             try
             {
@@ -69,8 +150,9 @@ namespace ConditioningControlPanel.Services.Quiz
                 // IsAvailable probes (and caches) the model; ask it first so ModelStatus is real.
                 var model = speech == null ? SpeechModelStatus.NoModelFound
                           : (speech.IsAvailable ? SpeechModelStatus.Ok : speech.ModelStatus);
-                var held = speech?.IsListening == true
-                        || App.WakeWord?.IsListening == true;
+                var held = countMicHeld
+                        && (speech?.IsListening == true
+                            || App.WakeWord?.IsListening == true);
                 return IntakeSpeechPolicy.Unavailability(consent, hasMic, model, held);
             }
             catch (Exception ex)
@@ -96,13 +178,18 @@ namespace ConditioningControlPanel.Services.Quiz
             // re-tapped after an idle). Cancel it first so at most one loop ever touches the mic.
             StopSpeechBridge("superseded", notifyPage: false);
 
-            var reason = SpeechUnavailability();
+            // Consent, hardware and the model are settled here. Whether the mic is free is settled in
+            // the loop, after the wake word has been stood down.
+            var reason = SpeechUnavailability(countMicHeld: false);
             if (reason != null)
             {
                 App.Logger?.Information("IntakeHostService: speech-start #{Id} refused ({Reason})", id, reason);
                 PostSpeechEvent(id, "unavailable", new { reason });
                 return;
             }
+
+            // Borrow the mic for this answer. The loop's finally gives it back.
+            _mic.Take(id);
 
             var cts = new CancellationTokenSource();
             lock (_speechGate)
@@ -152,7 +239,12 @@ namespace ConditioningControlPanel.Services.Quiz
         private static async Task RunSpeechLoopAsync(int id, string phrase, CancellationToken ct)
         {
             var speech = App.Speech;
-            if (speech == null) { PostSpeechEvent(id, "unavailable", new { reason = IntakeSpeechPolicy.ReasonNoModel }); return; }
+            if (speech == null)
+            {
+                _mic.Return(id);
+                PostSpeechEvent(id, "unavailable", new { reason = IntakeSpeechPolicy.ReasonNoModel });
+                return;
+            }
 
             string lastPartial = "";
             void OnPartial(object? _, string text)
@@ -174,8 +266,15 @@ namespace ConditioningControlPanel.Services.Quiz
 
                 while (!ct.IsCancellationRequested)
                 {
+                    // The wake word lends us the mic for this answer. Asked again before every
+                    // window: a lock card that closed meanwhile hands the mic back to the wake loop,
+                    // and it has to stand down once more.
+                    if (_mic.Take(id)) await WaitForBorrowedMicAsync(ct).ConfigureAwait(false);
+                    if (ct.IsCancellationRequested) return;
+
                     // Re-check between windows: the engine can vanish (device unplugged) and another
-                    // feature can claim the mic mid-run. Neither is ours to argue with.
+                    // feature (a lock card, a spoken mantra) can claim the mic mid-run. Neither is
+                    // ours to argue with.
                     var reason = SpeechUnavailability();
                     if (reason != null)
                     {
@@ -244,6 +343,8 @@ namespace ConditioningControlPanel.Services.Quiz
             finally
             {
                 speech.PartialTranscript -= OnPartial;
+                // The answer is over, however it ended: the wake word gets its mic back.
+                _mic.Return(id);
                 CancellationTokenSource? mine = null;
                 lock (_speechGate)
                 {

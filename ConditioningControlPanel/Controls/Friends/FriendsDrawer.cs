@@ -555,6 +555,7 @@ public sealed partial class FriendsDrawer : Border
             sq.Tag = "friends-squelched";
             nameLine.Children.Add(sq);
         }
+        AddPlatformMarks(nameLine, f);
         mid.Children.Add(nameLine);
         mid.Children.Add(table != null ? HostingLine() : ActivityLine(f));
         // What you last sent them and how far it got (sent, arrived, seen, answered).
@@ -945,11 +946,13 @@ public sealed partial class FriendsDrawer : Border
             copy.ToolTip = Loc.Get("friends_copy");
             copy.Click += (_, _) => CopyCode(code, copy);
             top.Children.Add(copy);
+            top.Children.Add(LinkPill());
             _copied = FriendsLook.Label(Loc.Get("friends_my_code"), 9, FriendsLook.DimBrush, FriendsLook.Mono);
             mine.Children.Add(_copied);
             Grid.SetColumn(top, 1);
             mine.Children.Add(top);
             foot.Children.Add(mine);
+            if (LinkNote() is { } note) foot.Children.Add(note);
         }
         foot.Children.Add(g);
         _foot.Child = foot;
@@ -1008,7 +1011,7 @@ public sealed partial class FriendsDrawer : Border
 
         _codeBox = new TextBox
         {
-            MaxLength = 9,
+            MaxLength = 64,
             CharacterCasing = CharacterCasing.Upper,
             FontFamily = FriendsLook.Mono,
             FontSize = 14,
@@ -1021,15 +1024,21 @@ public sealed partial class FriendsDrawer : Border
             ToolTip = Loc.Get("friends_add_hint"),
             Tag = "friends-code-box",
         };
+        var boxBefore = "";
         _codeBox.TextChanged += (_, _) =>
         {
-            var n = FriendsDrawerRules.NormaliseCode(_codeBox.Text);
+            // A code, a pasted link or a bare link token (FriendsLinkRules.BoxText).
+            var raw = _codeBox.Text;
+            var (n, isToken) = FriendsLinkRules.BoxText(raw, raw.Length == boxBefore.Length + 1);
+            boxBefore = n;
             if (n != _codeBox.Text)
             {
                 _codeBox.Text = n;
                 _codeBox.CaretIndex = n.Length;
             }
-            if (_addGo != null) _addGo.IsEnabled = n.Length == FriendsDrawerRules.CodeLength;
+            prefix.Visibility = isToken ? Visibility.Collapsed : Visibility.Visible;
+            if (_addGo != null)
+                _addGo.IsEnabled = n.Length == (isToken ? FriendsLinkRules.TokenLength : FriendsDrawerRules.CodeLength);
         };
         _codeBox.KeyDown += (_, e) =>
         {
@@ -1078,6 +1087,7 @@ public sealed partial class FriendsDrawer : Border
         _inviteLine.Inlines.Add(inviteLink);
         sp.Children.Add(_inviteLine);
         RefreshInviteLine();
+        sp.Children.Add(NewLinkLine());
         _addBox.Child = sp;
     }
 
@@ -1093,6 +1103,8 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>Sends the typed code and words the answer under the box. Internal for the suite.</summary>
     internal async Task<AddResult> AddByCodeAsync(string? typed = null)
     {
+        if (FriendsLinkRules.ParseToken(typed ?? _codeBox?.Text) is { } token)
+            return await ClaimTypedAsync(token);
         var full = FriendsDrawerRules.FullCode(typed ?? _codeBox?.Text);
         if (full == null || _svc == null) return AddResult.NotFound;
         if (_addGo != null) _addGo.IsEnabled = false;

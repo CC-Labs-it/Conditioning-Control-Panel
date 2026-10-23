@@ -103,38 +103,10 @@ public static class EmiCodex
     /// Missing index.html is checked as well as the folder: WebView2 maps a folder that exists and
     /// then serves a 404 for the page, which reads to the user as an empty white hole.
     /// </summary>
-    public static bool BundlePresent
-    {
-        get
-        {
-            try
-            {
-                var root = BundleRoot;
-                return !string.IsNullOrEmpty(root) && File.Exists(Path.Combine(root, "index.html"));
-            }
-            catch (Exception ex) { Log.Debug(ex, "[{Tag}] bundle probe failed", LogTag); return false; }
-        }
-    }
+    public static bool BundlePresent => EmiCodexRules.BundlePresent(BundleRoot);
 
-    /// <summary>
-    /// Is there anything to READ, by either body? True when the hosted page exists OR at least one
-    /// chapter file does. It is what <see cref="EmiOffers"/> asks before she is allowed to offer
-    /// the book: a chip that opens a window with nothing in it is a dead chip.
-    /// </summary>
-    public static bool HasContent
-    {
-        get
-        {
-            try
-            {
-                if (BundlePresent) return true;
-                var dir = ChaptersDir;
-                return !string.IsNullOrEmpty(dir) && Directory.Exists(dir)
-                       && Directory.EnumerateFiles(dir, "*.json").Any();
-            }
-            catch (Exception ex) { Log.Debug(ex, "[{Tag}] content probe failed", LogTag); return false; }
-        }
-    }
+    /// <summary>A hosted page or at least one chapter file; shared with the portable engine.</summary>
+    public static bool HasContent => EmiCodexRules.HasContent(BundleRoot);
 
     // =====================================================================================
     //  the fail-soft chapter reader
@@ -723,9 +695,8 @@ public static class EmiCodex
     {
         try
         {
-            if (!HasContent) { Log.Debug("[{Tag}] no offer: there is no book in this build", LogTag); return; }
-            if (IsOpen) { Log.Debug("[{Tag}] no offer: the book is already open", LogTag); return; }
-            if (EmiState.Current.CodexOpens > 0) { Log.Debug("[{Tag}] no offer: they have read it", LogTag); return; }
+            var refusal = EmiCodexRules.OfferRefusal(HasContent, IsOpen, () => EmiState.Current.CodexOpens);
+            if (refusal != null) { Log.Debug("[{Tag}] no offer: {Why}", LogTag, refusal); return; }
 
             App.EmiDesk?.Fire("bookOffer", new { why = why ?? "idle" });
         }
