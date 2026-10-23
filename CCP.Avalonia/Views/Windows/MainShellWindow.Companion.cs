@@ -16,9 +16,9 @@
 //   OnCompanionXPAwarded   - App.Companion's XPAwarded / LevelUp / XPDrained / CompanionSwitched
 //   OnCompanionLevelUp       events (ConditioningControlPanel/Services/Companion/CompanionService.cs)
 //   OnCompanionXPDrained     and UpdateCompanionCardsUI, which is itself blocked twice over -
-//   OnCompanionSwitched      see MainShellWindow.CompanionTab.cs. The level-up half also needs
-//                            _trayIcon.ShowNotification (here: Platform.OsNotifications.Show), PlayLevelUpSound (WPF MainWindow.xaml.cs, not ported) and
-//                            UpdateLevelDisplay (MainShellWindow.Progression.cs), both stubs.
+//   OnCompanionSwitched      see MainShellWindow.CompanionTab.cs. The level-up OS notification is
+//                            real (MainShellWindow.HeroFx.cs NotifyCompanionLevelUp); its milestone
+//                            sound is not ported.
 //   FlashXpBarOnDrain      - restored for the HEADER bar only. Its second overlay,
 //                            CompanionTab.PrgCompanion0FlashOverlay, lives inside
 //                            CCP.Avalonia/Views/Controls/Companion/CompanionHeroCard.axaml and

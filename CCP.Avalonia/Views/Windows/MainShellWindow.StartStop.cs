@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Localization;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -81,7 +82,75 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 SpiralOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
+                WarnIfFlashLibraryEmpty();         // WPF StartEngine :317 (no audio-only/system starts here)
             });
+        }
+
+        // WPF MainWindow.StartStop.cs:174-274: a non-blocking notice when a feature was asked for
+        // with nothing to show. Only a local-only media source counts; any IO failure means "do not nag".
+        private static readonly string[] FlashImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp" };
+        private static readonly string[] WallpaperImageExtensions = { ".jpg", ".jpeg", ".png", ".bmp" };
+
+        internal static bool FolderHasAnyMedia(string folder, string[] extensions)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(folder) || !System.IO.Directory.Exists(folder)) return false;
+                foreach (var file in System.IO.Directory.EnumerateFiles(folder, "*", System.IO.SearchOption.AllDirectories))
+                {
+                    var ext = System.IO.Path.GetExtension(file);
+                    foreach (var wanted in extensions)
+                        if (string.Equals(ext, wanted, System.StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                return false;
+            }
+            catch { return true; }
+        }
+
+        private static bool IsLocalOnlyMediaSource(global::ConditioningControlPanel.Models.AppSettings? s) =>
+            s != null && string.Equals(s.MediaSource, "local", System.StringComparison.OrdinalIgnoreCase);
+
+        private void ShowEmptyLibraryNotice(string messageKey)
+        {
+            App.Notifications.Show(
+                string.Format(Loc.Get(messageKey), Loc.Get("nav_door_library"), Loc.Get("tab_assets")),
+                Helpers.NotificationType.Warning,
+                System.TimeSpan.FromSeconds(18),
+                actionLabel: Loc.Get("btn_open_media_manager"),
+                action: () => ShowTab("assets"),
+                secondaryActionLabel: global::ConditioningControlPanel.Avalonia.Controls.IconText.BareLoc("btn_get_packs"),   // the toast's button carries no glyph
+                secondaryAction: () => Platform.ExternalOpener.Open(global::ConditioningControlPanel.Services.DiscordLinks.PackCatalogue));
+        }
+
+        internal void WarnIfFlashLibraryEmpty()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (s == null || !s.FlashEnabled || !IsLocalOnlyMediaSource(s)) return;
+                if (FolderHasAnyMedia(System.IO.Path.Combine(global::ConditioningControlPanel.CorePaths.EffectiveAssets, "images"), FlashImageExtensions)) return;
+                ShowEmptyLibraryNotice("msg_no_flash_images");
+                Serilog.Log.Information("[empty-state] Flashes started with an empty local image library");
+            }
+            catch (System.Exception ex) { Serilog.Log.Debug(ex, "[empty-state] flash library check failed"); }
+        }
+
+        /// <summary>WPF :253, called when the user arms the wallpaper takeover, not when it fires.</summary>
+        internal void WarnIfWallpaperLibraryEmpty()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (s == null || !IsLocalOnlyMediaSource(s)) return;
+                var custom = s.WallpaperSourceFolder;
+                var dir = !string.IsNullOrWhiteSpace(custom) && System.IO.Directory.Exists(custom)
+                    ? custom
+                    : System.IO.Path.Combine(global::ConditioningControlPanel.CorePaths.EffectiveAssets, "wallpapers");
+                if (FolderHasAnyMedia(dir, WallpaperImageExtensions)) return;
+                ShowEmptyLibraryNotice("msg_no_wallpaper_images");
+                Serilog.Log.Information("[empty-state] Wallpaper armed with an empty local wallpapers folder");
+            }
+            catch (System.Exception ex) { Serilog.Log.Debug(ex, "[empty-state] wallpaper library check failed"); }
         }
 
         /// <summary>WPF StopEngine. Saved flags are left alone; <see cref="OnEngineStopped"/> clears the screen.

@@ -29,6 +29,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Companion;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -43,10 +44,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void HookLevelDisplay()
         {
             Action<double, string> awarded = (_, _) => Dispatcher.UIThread.Post(UpdateLevelDisplay);
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { FlashLevelUp(); UpdateLevelDisplay(); });
+            // WPF OnLevelUp (MainWindow.xaml.cs:762): flash, level display, then the OS notification.
+            Action<int> levelUp = level => Dispatcher.UIThread.Post(() =>
+            {
+                FlashLevelUp(); UpdateLevelDisplay();
+                Platform.OsNotifications.Show(Loc.Get("toast_level_up_title"), Loc.GetF("toast_level_up_body", level));
+            });
+            Action<Models.CompanionId, int> companionLevelUp = (id, level) => Dispatcher.UIThread.Post(() => NotifyCompanionLevelUp(id, level));
             ProgressionBank.Awarded += awarded;
             ProgressionBank.LevelUp += levelUp;
-            Closed += (_, _) => { ProgressionBank.Awarded -= awarded; ProgressionBank.LevelUp -= levelUp; };
+            CompanionCore.LevelUp += companionLevelUp;
+            Closed += (_, _) => { ProgressionBank.Awarded -= awarded; ProgressionBank.LevelUp -= levelUp; CompanionCore.LevelUp -= companionLevelUp; };
             if (Named<Border>("XPBar")?.Parent is Control track)
                 track.SizeChanged += (_, _) => FillXpBar(animate: false);
             // WPF XPBarTrack_ToolTipOpening (MainWindow.UiUpdates.cs:2897): the ambient-bubble daily
@@ -98,6 +106,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 : null;
             bar.Width = _xpFraction * available;
+        }
+
+        /// <summary>WPF OnCompanionLevelUp (MainWindow.Companion.cs:48): an OS notification at max level and every
+        /// tenth level, with the mod-aware companion name (#325). Literal English titles, as WPF.
+        /// ponytail: the milestone sound and companion cards refresh (MainWindow.Companion.cs:74) are not here.</summary>
+        internal static void NotifyCompanionLevelUp(Models.CompanionId id, int level)
+        {
+            var raw = Models.CompanionDefinition.GetById(id).Name;
+            var name = CoreMods.MakeModAware(raw);
+            if (level == Models.CompanionProgress.MaxLevel)
+                Platform.OsNotifications.Show("MAX LEVEL!", $"{name} has reached maximum level!");
+            else if (level % 10 == 0)
+                Platform.OsNotifications.Show("Companion Level Up!", $"{name} reached Level {level}!");
         }
 
         /// <summary>CelebrateLevelUp's FlashOverlay(XPBarFlashOverlay): 0 -> 1 over 250ms, auto-reversed.</summary>
