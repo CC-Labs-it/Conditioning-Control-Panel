@@ -57,12 +57,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // A replaced viewmodel stops listening to the brain's turn log (WPF Detach on teardown).
                 if (!ReferenceEquals(_vm, DataContext)) _vm?.Detach();
                 _vm = DataContext as ChatThresholdViewModel;
-                ObserveThinking(_vm);
+                Observe(_vm);
                 WatchTurns(_vm?.Turns);
                 SyncThinking();
             };
             Loaded += OnLoaded;
-            Unloaded += (_, _) => { StopThinking(); ObserveThinking(null); WatchTurns(null); };
+            Unloaded += (_, _) => { StopThinking(); Observe(null); WatchTurns(null); };
         }
 
         /// <summary>Convenience for hosts that hand in a viewmodel rather than setting DataContext.</summary>
@@ -74,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         private void OnLoaded(object? sender, RoutedEventArgs e)
         {
-            ObserveThinking(ViewModel);
+            Observe(ViewModel);
             SyncThinking();
             WatchTurns(ViewModel?.Turns);
             ScrollThreadToEnd();
@@ -91,18 +91,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
         }
 
-        private void ObserveThinking(ChatThresholdViewModel? vm)
+        private void Observe(ChatThresholdViewModel? vm)
         {
             if (ReferenceEquals(_observed, vm)) return;
-            if (_observed != null) _observed.PropertyChanged -= OnThinkingChanged;
+            if (_observed != null) _observed.PropertyChanged -= OnVmPropertyChanged;
             _observed = vm;
-            if (_observed != null) _observed.PropertyChanged += OnThinkingChanged;
+            if (_observed != null) _observed.PropertyChanged += OnVmPropertyChanged;
         }
 
-        private void OnThinkingChanged(object? sender, PropertyChangedEventArgs e)
+        private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName != nameof(ChatThresholdViewModel.IsThinking) && !string.IsNullOrEmpty(e.PropertyName)) return;
-            Dispatcher.UIThread.Post(() => { if (ReferenceEquals(sender, _observed)) SyncThinking(); });
+            bool all = string.IsNullOrEmpty(e.PropertyName);
+            bool thinking = all || e.PropertyName == nameof(ChatThresholdViewModel.IsThinking);
+            bool state = all || e.PropertyName == nameof(ChatThresholdViewModel.State);
+            if (!thinking && !state) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                // A queued notification must not animate a replaced or unloaded view.
+                if (!ReferenceEquals(sender, _observed)) return;
+                if (thinking) SyncThinking();
+                if (state) PlayDormantShimmer(); // WPF OnVmPropertyChanged(State), once per view lifetime.
+            }, DispatcherPriority.Normal);
         }
 
         /// <summary>WPF SyncThinking: re-read on every room show; hidden ancestors park the clock.</summary>
@@ -186,6 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 {
                     Property = TranslateTransform.XProperty,
                     Duration = TimeSpan.FromSeconds(1.4),
+                    Delay = TimeSpan.FromMilliseconds(250), // WPF CmpShimmerSweepStoryboard.BeginTime
                     Easing = new CubicEaseInOut()
                 }
             };
