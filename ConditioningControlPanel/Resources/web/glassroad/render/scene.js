@@ -52,6 +52,8 @@ import { createWordPopFx } from './wordPopFx.js';
 import { createRoadWords } from './roadWords.js';
 import { createNearDressing } from './nearDressing.js';
 import { createWordRush } from './wordRush.js';
+import { createWaterfall } from './waterfall.js';
+import { waterTable, tableCode } from './waterMath.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -72,6 +74,11 @@ export function meshFrom(d, material) {
   g.setAttribute('position', new BufferAttribute(d.positions, 3));
   g.setAttribute('normal', new BufferAttribute(d.normals, 3));
   g.setAttribute('uv', new BufferAttribute(d.uvs, 2));
+  // water (wave 1): the road carries `surface` (0 glass .. 3 stream, 4 pool) and `flow` (m/s along, lateral)
+  // per vertex; a mesh without them reads as glass with no current (zero filled so the shader always binds)
+  const n = d.positions.length / 3;
+  g.setAttribute('surface', new BufferAttribute(d.surface && d.surface.length === n ? d.surface : new Float32Array(n), 1));
+  g.setAttribute('flow', new BufferAttribute(d.flow && d.flow.length === n * 2 ? d.flow : new Float32Array(n * 2), 2));
   g.setIndex(new BufferAttribute(d.indices, 1));
   g.computeBoundingSphere();
   return new Mesh(g, material);
@@ -196,9 +203,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   ringMesh.position.y = 0.03; kart.add(ringMesh);
   const tendril = createGlowMaterial(LOOK.tendrilColour);
   const tendrilMesh = add(new Mesh(new CylinderGeometry(0.15, 0.6, 1, 12, 1, true).translate(0, 0.5, 0), tendril.material));
-  const particles = createParticles(feel, art), lines = createSpeedLines(feel), wakes = createWakes(feel, count), motes = createMotes(pal, seed);
+  // water (wave 1): per-metre surface codes so a wake laid on water goes wider and whiter with one table read
+  const water = waterTable((s) => track.frameAt(s).surface, track.lengthM);
+  const waterAt = (s) => tableCode(water, s, track.lengthM);
+  const particles = createParticles(feel, art), lines = createSpeedLines(feel), wakes = createWakes(feel, count, undefined, { waterAt }), motes = createMotes(pal, seed);
   add(particles.object); add(lines.object); add(motes.object);
   for (const o of wakes.objects) add(o);
+  // the chute's waterfall sheet, spray and splash ring (render/waterfall.js; in the scene before the warm)
+  let waterfall = null;
+  try { waterfall = createWaterfall(track, pal, { particles, wakes }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
   // polish 4: glowing skid ribbons under a drift (one pooled draw call for every kart)
   const skids = createSkids(feel, count);
   add(skids.object);
@@ -255,10 +268,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
     on('item-box', (p) => ['box', p.racer, 0, p.p]);
     on('item-hit', (p) => ['hit', p.victim, p.verdict, p.p, p.kind]);
+    // water (CONTRACT splash / chute): the ring, drops and lip spray; inert until the sim emits them
+    on('splash', (p) => ['splash', 0, 0, p]);
+    on('chute', (p) => ['chute', 0, 0, p]);
   }
   const posOf = (i) => { const o = kartObjs[i]; return o ? [o.position.x, o.position.y, o.position.z] : null; };
   function juice(e, gentle) {
     const [kind, i, a, p, b] = e, k = karts.list[i], obj = kartObjs[i], few = gentle ? 0.6 : 1;
+    if (kind === 'splash') { if (waterfall) waterfall.splash(p || {}, gentle); return; }
+    if (kind === 'chute') { if (waterfall) waterfall.chute(p || {}, gentle); return; }
     if (kind === 'p4') {
       if (k && obj && obj.visible) {
         particles.event(obj, k.mem, a, p, { mul: i ? LOOK.botSparkMul : 1 });
@@ -362,6 +380,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     road.uniforms.phase.value = (road.uniforms.phase.value + dt * LOOK.bandScrollMps * band) % LOOK.bandLenM;
     road.uniforms.contrast.value = contrast;
     road.uniforms.sheen.value = gentle ? LOOK.sheenGentle : 1;
+    // water: the ripple and sheet clocks run at the Gentle scroll share (slower ripples, nothing pulses)
+    if (road.uniforms.water && !view.paused) road.uniforms.water.t.value += dt * scroll;
+    if (waterfall) waterfall.update(dt, { playerPos: kart.position, gentle, paused: !!view.paused, scroll });
     // the song clock (music.songS) drives the music road; with a song the breath below rides its real beats
     const mf = musicRoad ? musicRoad.update(view.song || null, view.songS, { kartS: k[S.s] || 0, gentle }) : null;
     // beat breath: a soft swell with no step at the beat (rises over breathRise of the beat, falls to
@@ -434,6 +455,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (wordFx) wordFx.dispose();
     if (roadWords) roadWords.dispose();
     if (wordRush) wordRush.dispose();
+    if (waterfall) waterfall.dispose();
     showcaseDressing.dispose();
     court.dispose();
     if (terrace) terrace.dispose();

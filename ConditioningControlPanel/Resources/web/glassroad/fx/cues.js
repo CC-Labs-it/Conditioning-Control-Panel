@@ -9,6 +9,8 @@
  * (fov, push, shake, rumble, bloom pulses) go through gentle.kick so Gentle removes them.
  */
 
+import { WATER_CUES } from '../render/waterMath.js';
+
 const j = (fx, k) => fx.feel.get('juice.' + k);
 const rise = (fx) => j(fx, 'riseS');                                       // generic fast IN
 const tail = (fx) => j(fx, 'tailTcs') * fx.feel.get('boost.tailTcS');     // an exponential tail is ~95% gone in 3 tc
@@ -218,6 +220,23 @@ export const FX_CUES = {
   'bubble-pop'(fx, { racer = -1 }) {
     if (racer !== 0 || !fx.ask('band')) return;
     fx.fire('band', fx.gentle.contrast(j(fx, 'padBandPeak') * 0.4), rise(fx), 0, j(fx, 'landGoneS') * 2);
+  },
+  // water (wave 1, CONTRACT splash / surface / chute; render/waterMath.js WATER_CUES): a splash is a short
+  // camera dip (a negative fov beat through gentle.kick: Gentle removes it) and a thud; the white ring is
+  // positional (render/scene.js -> waterfall.splash). Entering a stream lifts the fov softly; a chute leans it.
+  splash(fx, { down = 0 }) {
+    const W = WATER_CUES, k = Math.min(1, Math.max(0.3, (Number(down) || 0) / 10));
+    fx.fire('fov', fx.gentle.kick(W.splashDipDeg * k), rise(fx), 0, W.splashOutS);
+    fx.fire('thud', fx.gentle.kick(rumbleOf(fx, k >= 0.7 ? 2 : 1)), 0, 0, j(fx, 'landGoneS'));
+  },
+  surface(fx, { kind = 'glass', from = 'glass' }) {
+    if (kind !== 'stream' || from === 'stream') return;
+    const W = WATER_CUES;
+    fx.fire('fov', fx.gentle.kick(W.streamLiftDeg), W.streamInS, 0, W.streamOutS);
+  },
+  chute(fx) {
+    const W = WATER_CUES;
+    fx.fire('fov', fx.gentle.kick(W.chuteLeanDeg), rise(fx), W.chuteHoldS, W.chuteOutS);
   },
   // the rest change nothing on screen; kept so every event has its one entry
   wall(fx, { dv = 0 }) {

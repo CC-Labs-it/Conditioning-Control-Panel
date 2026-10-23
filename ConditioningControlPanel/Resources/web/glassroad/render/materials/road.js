@@ -26,6 +26,7 @@ import { ROAD_AA } from '../roadAaMath.js';
 import { createMusicTiles } from './musicTiles.js';
 import { ROAD_HALF_WIDTH_RANGE, encodeRoadHalfWidth } from '../musicTilesMath.js';
 import { createMusicBands } from './musicBands.js';
+import { createWaterSurface, waterAttributes } from './water.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -180,7 +181,8 @@ function patterns(u, a, per, S, calm, spin) {
 export function createRoadMaterial(pal, art = null, track = null) {
   const P = { ...ROAD_POLISH, ...(LOOK.roadPolish || {}) };
   const S = { ...SPECTRUM_LOOK, ...(LOOK.roadSpectrum || {}) };
-  const u = { phase: uniform(0), contrast: uniform(1), bright: uniform(0), sheen: uniform(1), music: musicUniforms(), energyNode: null };
+  const u = { phase: uniform(0), contrast: uniform(1), bright: uniform(0), sheen: uniform(1), music: musicUniforms(), energyNode: null,
+    water: { t: uniform(0) } };   // the water scroll clock (seconds; scene.js advances it by the Gentle share)
   const lapM = track && track.lengthM > 0 ? track.lengthM : 0;
   const fit = (b) => (lapM ? fitPeriod(lapM, b) : b);
   const per = { ramp: fit(S.rampM), packet: fit(S.packetM), chevron: fit(S.chevronM), checker: fit(S.checkerM),
@@ -332,15 +334,23 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const tileBody = tiles.colour.mul(tiles.relief).mul(haze).mul(LOOK.roadGain)
     .add(vec3(1, 0.96, 0.98).mul(tiles.glaze).mul(u.sheen))
     .add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)).mul(LOOK.roadGain));
-  const glassBody = mix(surface.add(deepCol), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
+  // WATER (wave 1): stream and pool vertices (attribute `surface` 3 / 4, `flow` m/s) swap the glass body
+  // for the water surface (materials/water.js) BEFORE the tiles and bands, so both keep working on water;
+  // the glass sheen and polish thin out over it. The clock u.water.t is the caller's (Gentle halves it).
+  const wa = waterAttributes();
+  const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal, u: u.water, skyRamp });
+  const wet = water.w;
+  const glassBody = mix(mix(surface.add(deepCol), water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
   const musicBody = beatBands.apply(glassBody);
-  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish).mul(float(1).sub(gutter.mul(E.gutterDark)));
+  const dry = float(1).sub(wet.mul(0.75));
+  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen).mul(dry)).add(polish.mul(dry)).mul(float(1).sub(gutter.mul(E.gutterDark)));
   const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);
   const ribbonAlpha = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
     .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)).add(gutter.mul(E.gutterAlpha)), 0, 1);
-  m.opacityNode = max(mix(ribbonAlpha, max(tiles.opacity, schlick.mul(0.08).add(tiles.opacity)), tiles.mask), edgeLine);
+  const bodyAlpha = mix(ribbonAlpha, water.alpha, wet);
+  m.opacityNode = max(mix(bodyAlpha, max(tiles.opacity, schlick.mul(0.08).add(tiles.opacity)), tiles.mask), edgeLine);
   return { material: m, uniforms: u };
 }

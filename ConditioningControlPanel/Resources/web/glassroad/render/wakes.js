@@ -19,6 +19,7 @@ import { createGlowMaterial } from './materials/glow.js';
 import { currentArt } from './art.js';
 import { atlasOf, atlasCoverage } from './particles.js';
 import { FXART_LOOK, cellIndex, juiceLook, juiceHues, gentleGrow, p4Look, tierColour } from './atlas.js';
+import { wakeOnWater } from './waterMath.js';
 
 /** A flat ring card: the atlas ring cell, its ring at radius 1 of the mesh scale; u.col tints it. */
 function atlasRing(at, hex, A) {
@@ -29,7 +30,11 @@ function atlasRing(at, hex, A) {
   return { geometry: new PlaneGeometry(half * 2, half * 2).rotateX(-Math.PI / 2), material: m, uniforms: u };
 }
 
-export function createWakes(feel, count = 8, art = currentArt()) {
+/**
+ * opts.waterAt(s) -> surface code (render/waterMath.js SURFACE_CODE; 3 / 4 = water): a ribbon laid on
+ * water is wider and whiter (wakeOnWater). Absent = every ribbon as before.
+ */
+export function createWakes(feel, count = 8, art = currentArt(), { waterAt = null } = {}) {
   const at = atlasOf(art), A = LOOK.fxArt || FXART_LOOK, J = juiceLook(LOOK), HUES = juiceHues();
   let hue = 0;
   const N = Q.trailPoints, V = count * N * 2;
@@ -54,7 +59,7 @@ export function createWakes(feel, count = 8, art = currentArt()) {
   const mesh = new Mesh(g, m);
   mesh.frustumCulled = false; mesh.renderOrder = 1;
 
-  const trails = Array.from({ length: count }, () => ({ pts: new Float32Array(N * 6), n: 0, a: 0, rgb: [1, 1, 1] }));
+  const trails = Array.from({ length: count }, () => ({ pts: new Float32Array(N * 6), n: 0, a: 0, rgb: [1, 1, 1], water: 1 }));
   const tmp = new Vector3(), right = new Vector3(), cc = new Color();
 
   function colourOf(bk) {
@@ -71,7 +76,14 @@ export function createWakes(feel, count = 8, art = currentArt()) {
     // a long step (a respawn, or a slow frame at speed) restarts the ribbon: never one straight beam across the view
     const jump = t.n && Math.hypot(p[last] - tmp.x, p[last + 1] - tmp.y, p[last + 2] - tmp.z) > LOOK.trailStepM * 8;
     if ((on && t.a < 0.05) || jump || !visible) t.n = 0;             // a new boost grows from the kart
-    if (on) { cc.set(colourOf(bk)); t.rgb[0] = cc.r; t.rgb[1] = cc.g; t.rgb[2] = cc.b; }
+    // water: the ribbon wears a share of white and runs wider (wakeOnWater); the lookup is one table read
+    const ww = waterAt ? wakeOnWater(waterAt(st[S.s] || 0)) : null;
+    if (on) {
+      cc.set(colourOf(bk));
+      const wh = ww ? ww.white : 0;
+      t.rgb[0] = cc.r + (1 - cc.r) * wh; t.rgb[1] = cc.g + (1 - cc.g) * wh; t.rgb[2] = cc.b + (1 - cc.b) * wh;
+    }
+    t.water += ((ww ? ww.widthMul : 1) - t.water) * (1 - Math.exp(-dt / 0.15));
     t.a += ((on ? 1 : 0) - t.a) * (1 - Math.exp(-dt / (on ? 0.05 : LOOK.trailFadeTcS)));
     const far = !t.n || Math.hypot(p[last] - tmp.x, p[last + 1] - tmp.y, p[last + 2] - tmp.z) >= LOOK.trailStepM;
     if (far) {
@@ -84,7 +96,7 @@ export function createWakes(feel, count = 8, art = currentArt()) {
   }
 
   function write(k) {
-    const t = trails[k], P = pos.array, C = col.array, W = LOOK.trailWidthM * gentleGrow(J.trailWidthMul, gentleNow(), J) / 2;
+    const t = trails[k], P = pos.array, C = col.array, W = LOOK.trailWidthM * gentleGrow(J.trailWidthMul, gentleNow(), J) * t.water / 2;
     const A0 = Math.min(1, LOOK.trailAlpha * J.trailAlphaMul);
     for (let i = 0; i < N; i++) {
       const j = Math.min(i, Math.max(t.n - 1, 0)) * 6, age = t.n > 1 ? 1 - Math.min(i, t.n - 1) / (t.n - 1) : 1;
