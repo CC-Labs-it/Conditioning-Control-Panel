@@ -29,7 +29,7 @@ public sealed class VideoTargetMonitorTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var s = CoreSettings.Current;
             var saved = s.VideoTargetMonitor;
@@ -81,7 +81,7 @@ public sealed class VideoTargetMonitorTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var lm = ConditioningControlPanel.Localization.LocalizationManager.Instance;
             lm.SetLanguage("en");
@@ -108,7 +108,7 @@ public sealed class VideoTargetMonitorTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var fold = new MoreFold();
             fold.Children.Add(new TextBlock { Text = "row" });

@@ -71,17 +71,6 @@ namespace ConditioningControlPanel.Services
     //             follow-up that would need a dedicated model.
     // ─────────────────────────────────────────────────────────────────────────────
 
-    public enum WebcamTrackingState
-    {
-        Stopped,
-        Starting,
-        Tracking,
-        FaceLost,
-        CameraInUse,
-        CameraDenied,
-        Error
-    }
-
     /// <summary>
     /// Local, offline webcam-based eye and gaze tracking. Powers Lab Box 1
     /// (Webcam Triggers) and Lab Box 2 (Focus Training). Owns the only
