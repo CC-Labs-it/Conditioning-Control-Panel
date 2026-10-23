@@ -19,6 +19,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using Serilog;
 
@@ -42,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
     ///    <c>App.Flash</c> suspend/resume -> <c>CoreFlash</c>; <c>App.Haptics</c> -> <c>CoreHaptics</c>.
     ///  - Panic closes the game (PanicSurfaces "gaze-minigame"): panic also closes the camera here.
     ///  - Video panes reuse InlineLoopVideo's muted VLC frame sink; GIFs reuse the spiral decoder.
-    ///  - ponytail: still missing - the Flashes / Bubbles / MindWipe / OverlayPulse rewards.
+    ///  - Rewards use the existing head services, including point-fired flashes while the schedule is stopped.
     ///  - <c>MessageBox.Show</c> -> this head's <c>Views/Dialogs/MessageDialog.ConfirmAsync</c>,
     ///    so the mid-run "quit the session?" confirmation is raised again (awaited, hence the
     ///    re-test of <c>_gameRunning</c> after it).
@@ -1156,16 +1157,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
         //  Reward / vibration triggers
         // ─────────────────────────────────────────────────────────────────────
 
-        /// <summary>
-        /// ponytail: reward-effects follow-up. Audio is wired; port the other four together:
-        /// CoreFlash.ShowProvider / CoreMindWipe.TriggerOnce exist, but WPF's five one-shot
-        /// bubbles and pulse of all active overlays still need equivalent head service entry points.
-        /// </summary>
         private void FireRewardEffect(GazeRewardEffect effect)
         {
-            if (effect == GazeRewardEffect.Audio) { PlayRewardAudio(_settings.RewardAudioFile); return; }
-            if (effect == GazeRewardEffect.None) return;
-            Log.Debug("GazeMinigame: reward effect {Effect} suppressed (reward-effects follow-up)", effect);
+            try
+            {
+                switch (effect)
+                {
+                    case GazeRewardEffect.Flashes:
+                        // WPF TriggerFlashOnce: defaults, independent of the suspended schedule (#221).
+                        CoreFlash.ShowProvider?.Invoke();
+                        break;
+                    case GazeRewardEffect.Bubbles:
+                        for (int i = 0; i < 5; i++) BubbleOverlay.SpawnOnce(this);
+                        break;
+                    case GazeRewardEffect.Audio:
+                        PlayRewardAudio(_settings.RewardAudioFile);
+                        break;
+                    case GazeRewardEffect.MindWipe:
+                        CoreMindWipe.TriggerOnce();
+                        break;
+                    case GazeRewardEffect.OverlayPulse:
+                        OverlayPulse.PulseOverlays();
+                        break;
+                }
+            }
+            catch (Exception ex) { Log.Warning(ex, "GazeMinigame: reward effect '{Effect}' threw", effect); }
         }
 
         /// <summary>
@@ -1580,6 +1596,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 w._gameRunning = false;
                 w.Close();
             }
+            // These one-shots can outlive both the game and a stopped engine. CloseAll also
+            // invalidates queued flash spawns; a suspended schedule must not resume on panic.
+            CoreFlash.Stop();
+            FlashOverlay.CloseAll(final: false);
+            BubbleOverlay.Stop();
+            CoreMindWipe.Stop();
+            OverlayPulse.Cancel();
         }
     }
 }

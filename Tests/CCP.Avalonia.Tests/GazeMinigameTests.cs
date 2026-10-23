@@ -15,6 +15,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Lab.GazeMinigame;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
@@ -185,6 +186,336 @@ public sealed class GazeMinigameTests
             (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay) = (oldClock, oldDelay);
             try { File.Delete(Path.Combine(CorePaths.UserData, GazeMinigameSettings.FileName)); } catch { }
             try { dir.Delete(true); } catch { }
+        }
+    });
+
+    [Fact]
+    public void FlashReward_ReachesHeadWhileScheduleSuspended_PanicDropsShownAndQueuedFlashes() =>
+        RunRewardRound(GazeRewardEffect.Flashes, (win, _, score, panic) =>
+        {
+            var old = (FlashOverlay.Fire, CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider);
+            var bursts = new List<(Visual Host, bool Ambient)>();
+            using var cleanup = new Callback(() =>
+            {
+                (FlashOverlay.Fire, CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider) = old;
+                FlashOverlay.CloseAll(final: false);
+            });
+            FlashOverlay.Fire = (host, ambient) => bursts.Add((host, ambient));
+            FlashOverlay.SeedCore(() => win, () => { }); // the same wiring App installs
+            Assert.False(CoreFlash.IsRunning);
+            score();
+            var burst = Assert.Single(bursts);
+            Assert.Same(win, burst.Host);
+            Assert.False(burst.Ambient); // defaults, including count/duration/size, stay in TriggerOnce
+            Assert.False(CoreFlash.IsRunning);
+            var flash = new FlashOverlayWindow();
+            FlashOverlay.Active.Add((flash, new PixelRect(0, 0, 400, 300)));
+            flash.Closed += (_, _) => FlashOverlay.Active.RemoveAll(x => x.Window == flash);
+            flash.Show();
+            var generation = FlashOverlay.Generation;
+            panic();
+            Assert.False(flash.IsVisible);
+            Assert.Empty(FlashOverlay.Active);
+            Assert.True(FlashOverlay.Generation > generation);
+            Assert.False(CoreFlash.IsRunning);
+        });
+
+    [Fact]
+    public void BubblesReward_SpawnsExactlyFiveWithoutAmbientSchedule_PanicClearsField() =>
+        RunRewardRound(GazeRewardEffect.Bubbles, (win, clock, score, panic) =>
+        {
+            var s = CoreSettings.Current;
+            var old = (BubbleOverlay.SkipPlatformChecksForTests, s.BubbleSharedHost, s.BubblesEnabled);
+            BubbleOverlay.Stop();
+            using var cleanup = new Callback(() =>
+            {
+                BubbleOverlay.Stop();
+                (BubbleOverlay.SkipPlatformChecksForTests, s.BubbleSharedHost, s.BubblesEnabled) = old;
+            });
+            (BubbleOverlay.SkipPlatformChecksForTests, s.BubbleSharedHost, s.BubblesEnabled) = (true, true, false);
+            score();
+            Assert.Equal(5, BubbleOverlay.Field.Bubbles.Count);
+            Assert.False(BubbleOverlay.IsRunning);
+            Assert.All(BubbleOverlay.Field.Bubbles, b => Assert.Null(b.Spec));
+            // The field's own frame clock cannot add bubbles while the continuous service is off.
+            BubbleOverlay.OnFrame(TimeSpan.Zero);
+            clock.Now += TimeSpan.FromSeconds(1);
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(1));
+            Assert.Equal(5, BubbleOverlay.Field.Bubbles.Count);
+            panic();
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            BubbleOverlay.OnFrame(TimeSpan.FromSeconds(2));
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.False(BubbleOverlay.IsRunning);
+        });
+
+    [Fact]
+    public void OneShotBubbles_RespectCap_ReleaseIdleWindows_AndCanHandOverToAmbient() =>
+        RunRewardRound(GazeRewardEffect.None, (win, _, score, panic) =>
+        {
+            var s = CoreSettings.Current;
+            var old = (BubbleOverlay.SkipPlatformChecksForTests, s.BubbleSharedHost);
+            BubbleOverlay.Stop();
+            using var cleanup = new Callback(() =>
+            {
+                BubbleOverlay.Stop();
+                (BubbleOverlay.SkipPlatformChecksForTests, s.BubbleSharedHost) = old;
+            });
+            (BubbleOverlay.SkipPlatformChecksForTests, s.BubbleSharedHost) = (true, false);
+            for (int i = 0; i < 5; i++) BubbleOverlay.SpawnOnce(win);
+            Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count); // WPF's non-shared cap
+            Assert.NotEmpty(BubbleOverlay.Shown);
+            foreach (var bubble in BubbleOverlay.Field.Bubbles) bubble.Y = -100000;
+            BubbleOverlay.OnFrame(TimeSpan.Zero);
+            Assert.Empty(BubbleOverlay.Field.Bubbles);
+            Assert.Empty(BubbleOverlay.Shown);
+            BubbleOverlay.SpawnOnce(win);
+            var windows = BubbleOverlay.Shown.ToArray();
+            BubbleOverlay.Start(win);
+            Assert.True(BubbleOverlay.IsRunning);
+            Assert.Equal(windows, BubbleOverlay.Shown.ToArray()); // no second set of windows
+            Assert.Equal(2, BubbleOverlay.Field.Bubbles.Count); // one-shot + ambient's immediate first spawn
+            panic();
+            Assert.Empty(BubbleOverlay.Shown);
+        });
+
+    private sealed class RewardVoice : MindWipePlayer.IVoice
+    {
+        public bool Disposed;
+        public double Volume { get; set; }
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public void MindWipeReward_ReachesStoppedHeadPlayerAtSavedVolume_PanicDisposesVoice() =>
+        RunRewardRound(GazeRewardEffect.MindWipe, (win, _, score, panic) =>
+        {
+            var s = CoreSettings.Current;
+            var old = (CoreMindWipe.TriggerOnceProvider, CoreMindWipe.StopProvider, s.MindWipeAudioPath, s.MindWipeVolume);
+            var file = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".wav");
+            File.WriteAllBytes(file, new byte[] { 0 }); // the head player uses a fake voice, never an audio device
+            var voices = new List<RewardVoice>();
+            MindWipePlayer? player = null;
+            using var cleanup = new Callback(() =>
+            {
+                player?.Stop();
+                (CoreMindWipe.TriggerOnceProvider, CoreMindWipe.StopProvider, s.MindWipeAudioPath, s.MindWipeVolume) = old;
+                File.Delete(file);
+            });
+            (s.MindWipeAudioPath, s.MindWipeVolume) = (file, 37);
+            player = new MindWipePlayer((path, volume, loop, ended) =>
+            {
+                Assert.Equal(file, path);
+                Assert.False(loop);
+                var voice = new RewardVoice { Volume = volume };
+                voices.Add(voice);
+                return voice;
+            });
+            CoreMindWipe.TriggerOnceProvider = player.TriggerOnce;
+            CoreMindWipe.StopProvider = player.Stop;
+            Assert.False(player.IsRunning);
+            score();
+            var played = Assert.Single(voices);
+            Assert.Equal(0.37, played.Volume, 10);
+            win.Close(); // the reward can outlive a normally closed game and an already stopped engine
+            Assert.False(played.Disposed);
+            panic();
+            Assert.True(played.Disposed);
+            Assert.False(player.IsRunning);
+        });
+
+    [Fact]
+    public void OverlayPulseReward_DoublesBothActiveHeadOverlays_RestoresLiveValues_AndPanicCancels() =>
+        RunRewardRound(GazeRewardEffect.OverlayPulse, (win, clock, score, panic) =>
+        {
+            var s = CoreSettings.Current;
+            var old = (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath, s.GentleVisuals);
+            var hooks = (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests, OverlayPulse.Clock);
+            var gif = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".gif");
+            File.WriteAllBytes(gif, Convert.FromBase64String(Gif));
+            using var cleanup = new Callback(() =>
+            {
+                OverlayPulse.Cancel();
+                PinkFilterOverlay.CloseAll();
+                SpiralOverlay.CloseAll();
+                (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath, s.GentleVisuals) = old;
+                (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests, OverlayPulse.Clock) = hooks;
+                File.Delete(gif);
+            });
+            CoreSession.IsEngineRunningProvider = () => true;
+            (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralOpacity, s.SpiralPath, s.GentleVisuals) = (true, 60, true, 80, gif, false);
+            PinkFilterOverlay.SkipPlatformChecksForTests = SpiralOverlay.SkipPlatformChecksForTests = true;
+            OverlayPulse.Clock = clock;
+            PinkFilterOverlay.Refresh(win);
+            SpiralOverlay.Refresh(win);
+            Assert.True(SpinUntil(() => SpiralOverlay.IsShowing));
+            var tint = (SolidColorBrush)((Border)PinkFilterOverlay.Shown[0].Content!).Background!;
+            score();
+            Assert.True(OverlayPulse.IsPulsing);
+            Assert.Equal(255, tint.Color.A); // 60% doubled, clamped to 100%
+            Assert.Equal(Math.Min(SpiralFrames.Paint(0.8) * 2, 1), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+            Assert.Equal(60, s.PinkFilterOpacity); // pulse must never write settings
+            Assert.Equal(80, s.SpiralOpacity);
+            s.PinkFilterOpacity = 25;
+            s.SpiralOpacity = 40;
+            clock.Now += TimeSpan.FromMilliseconds(1000);
+            OverlayPulse.Tick();
+            Assert.False(OverlayPulse.IsPulsing);
+            Assert.Equal((byte)(0.25 * 255), tint.Color.A);
+            Assert.Equal(SpiralFrames.Paint(0.4), SpiralOverlay.Shown[0].Spiral.Opacity, 10);
+            OverlayPulse.PulseOverlays();
+            Assert.True(OverlayPulse.IsPulsing);
+            panic();
+            Assert.False(OverlayPulse.IsPulsing);
+            // Cancellation restores in place; an old tick cannot re-open a stopped overlay.
+            PinkFilterOverlay.CloseAll();
+            SpiralOverlay.CloseAll();
+            clock.Now += TimeSpan.FromSeconds(2);
+            OverlayPulse.Tick();
+            Assert.False(PinkFilterOverlay.IsShowing || SpiralOverlay.IsShowing);
+        });
+
+    [Fact]
+    public void OverlayPulse_GentleVisualsEaseAndRestore_AndInactiveServiceShowsNothing() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var providers = (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock);
+        var skip = (PinkFilterOverlay.SkipPlatformChecksForTests, PinkFilterOverlay.PulseHold);
+        var service = new SettingsService(); // CCP_USERDATA_DIR is the assembly's temporary sandbox
+        var s = service.Current;
+        var clock = new SteppedClock();
+        var host = new global::Avalonia.Controls.Window();
+        using var cleanup = new Callback(() =>
+        {
+            OverlayPulse.Cancel();
+            PinkFilterOverlay.CloseAll();
+            host.Close();
+            (PinkFilterOverlay.SkipPlatformChecksForTests, PinkFilterOverlay.PulseHold) = skip;
+            (CoreSettings.ServiceProvider, CoreSession.IsEngineRunningProvider, OverlayPulse.Clock) = providers;
+        });
+        CoreSettings.ServiceProvider = () => service;
+        CoreSession.IsEngineRunningProvider = () => false;
+        OverlayPulse.Clock = clock;
+        PinkFilterOverlay.SkipPlatformChecksForTests = true;
+        PinkFilterOverlay.PulseHold = false;
+        s.PinkFilterEnabled = true;
+        s.PinkFilterOpacity = 20;
+        s.SpiralEnabled = false;
+        s.GentleVisuals = true;
+        s.GentleFadeSeconds = 0.3;
+        host.Show();
+        OverlayPulse.PulseOverlays();
+        Assert.False(OverlayPulse.IsPulsing || PinkFilterOverlay.IsShowing);
+        CoreSession.IsEngineRunningProvider = () => true;
+        OverlayPulse.PulseOverlays(); // enabled without an active overlay is still a no-op
+        Assert.False(OverlayPulse.IsPulsing || PinkFilterOverlay.IsShowing);
+        PinkFilterOverlay.Refresh(host);
+        var tint = (SolidColorBrush)((Border)PinkFilterOverlay.Shown[0].Content!).Background!;
+        OverlayPulse.PulseOverlays();
+        Assert.Equal(51, tint.Color.A);
+        clock.Now += TimeSpan.FromMilliseconds(100);
+        OverlayPulse.Tick();
+        Assert.InRange(tint.Color.A, (byte)52, (byte)101);
+        clock.Now += TimeSpan.FromMilliseconds(300);
+        OverlayPulse.Tick();
+        Assert.Equal(102, tint.Color.A);
+        clock.Now += TimeSpan.FromMilliseconds(700);
+        OverlayPulse.Tick();
+        Assert.InRange(tint.Color.A, (byte)52, (byte)101);
+        clock.Now += TimeSpan.FromMilliseconds(200);
+        OverlayPulse.Tick();
+        Assert.Equal(51, tint.Color.A);
+        Assert.False(OverlayPulse.IsPulsing);
+        // Takeover's hold is the existing head equivalent of a standalone OverlayService.Start.
+        CoreSession.IsEngineRunningProvider = () => false;
+        PinkFilterOverlay.PulseHold = true;
+        OverlayPulse.PulseOverlays();
+        Assert.True(OverlayPulse.IsPulsing);
+    });
+
+    private sealed class Callback(Action action) : IDisposable
+    {
+        public void Dispose() => action();
+    }
+
+    private static void RunRewardRound(GazeRewardEffect effect,
+        Action<GazeMinigameWindow, SteppedClock, Action, Action> check) => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var tracker = WebcamTracker.Instance;
+        var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory, tracker.Calibration,
+            CoreAudio.PlayOneShotProvider, CoreSession.IsEngineRunningProvider, s.FlashEnabled, CoreFlash.IsRunning);
+        var timing = (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay);
+        var clock = new SteppedClock();
+        var dir = Directory.CreateTempSubdirectory("gaze-reward-");
+        var feedback = new TaskCompletionSource();
+        GazeMinigameWindow? win = null;
+        try
+        {
+            s.WebcamConsentGiven = true;
+            s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
+            WebcamTracker.SourceFactory = () => new BlankSource();
+            tracker.Calibration = new WebcamCalibrationData();
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
+            s.FlashEnabled = false; // no background timer races; Start still marks the schedule running
+            CoreFlash.Start();
+            GazeMinigameWindow.Clock = clock;
+            GazeMinigameWindow.Delay = t => t.TotalMilliseconds == 1400 ? feedback.Task : Task.CompletedTask;
+            var saved = new GazeMinigameSettings
+            {
+                ImageCount = 2, VideoCount = 0, PassTimeSec = 3, WrongHoldMs = 2000, RewardEffect = effect,
+            };
+            foreach (var role in new[] { GazePackRole.Focus, GazePackRole.Ignore })
+            {
+                var path = Directory.CreateDirectory(Path.Combine(dir.FullName, role.ToString())).FullName;
+                File.WriteAllBytes(Path.Combine(path, "1.png"), Png);
+                saved.Packs.Add(new GazePackRef { Path = path, Role = role });
+            }
+            saved.Save();
+            win = new GazeMinigameWindow();
+            win.Show();
+            win.FindControl<Button>("BtnStartGame")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(SpinUntil(() => win.FindControl<Grid>("GameplayScreen")!.IsVisible));
+            Assert.True(tracker.IsRunning);
+            Assert.False(CoreFlash.IsRunning); // Start really suspended the running schedule (#221)
+            void Score()
+            {
+                clock.Now += TimeSpan.FromMilliseconds(1100);
+                win.RoundTicker_Tick(null, EventArgs.Empty);
+                tracker.RaiseGazeSideForTest(win.CorrectIsLeftForTest ? GazeSide.Left : GazeSide.Right);
+                for (int i = 0; i < 60; i++)
+                {
+                    clock.Now += TimeSpan.FromMilliseconds(50);
+                    win.RoundTicker_Tick(null, EventArgs.Empty);
+                }
+                Assert.Equal("GOOD GIRL", win.FindControl<TextBlock>("TxtFeedback")!.Text);
+            }
+            void Panic()
+            {
+                PanicSurfaces.All.Single(x => x.Id == "gaze-minigame").Stop(null);
+                Assert.False(win.IsVisible);
+                feedback.TrySetResult();
+                global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                Assert.Empty(win.FindControl<Grid>("LeftPane")!.Children);
+                Assert.False(win.FindControl<Grid>("ResultsScreen")!.IsVisible);
+            }
+            check(win, clock, Score, Panic);
+        }
+        finally
+        {
+            win?.Close();
+            feedback.TrySetResult();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            tracker.Stop();
+            CoreFlash.Stop();
+            (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory, tracker.Calibration,
+                CoreAudio.PlayOneShotProvider, CoreSession.IsEngineRunningProvider, s.FlashEnabled, _) = old;
+            if (old.Item8) CoreFlash.Start();
+            (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay) = timing;
+            File.Delete(Path.Combine(CorePaths.UserData, GazeMinigameSettings.FileName));
+            dir.Delete(true);
         }
     });
 

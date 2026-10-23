@@ -68,6 +68,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve.</summary>
         internal static double PaintedOpacity => SpiralFrames.Paint(CoreSettings.Current.SpiralOpacity / 100.0);
+        private static double? _pulseWeight;
+        private static double PulseOpacity => Math.Clamp(PaintedOpacity +
+            (Math.Min(PaintedOpacity * 2, 1) - PaintedOpacity) * (_pulseWeight ?? 0), 0, 1);
+
+        internal static void SetPulse(double? weight)
+        {
+            _pulseWeight = weight;
+            foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
+        }
 
         /// <summary>WPF RefreshOverlays' spiral half: show, hide, move or repaint to match the settings.</summary>
         public static void Refresh(Visual host)
@@ -88,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
             var want = PinkFilterOverlay.ResolveScreenIndices(s.SpiralTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-            var opacity = PaintedOpacity;
+            var opacity = PulseOpacity;
 
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
@@ -147,6 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF StopSpiral: the windows and the clock go; the decoded frames stay cached.</summary>
         public static void CloseAll()
         {
+            _pulseWeight = null;
             _timer?.Stop();
             _timer = null;
             foreach (var w in Windows)
