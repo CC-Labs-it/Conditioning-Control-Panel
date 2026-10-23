@@ -1,5 +1,11 @@
 using System;
 using System.Linq;
+using System.IO;
+using Avalonia.Media;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Avalonia.Views.AvatarTube;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -221,6 +227,207 @@ public sealed class TakeoverTests
             }
             return Task.CompletedTask;
         });
+
+    [Fact]
+    public Task PopQuizDefersTakeoverAndMindWipeRechecksBothSwitches() => WithArmedShell((shell, _) =>
+    {
+        Assert.False(shell.Autonomy.IsBusy());
+        var quiz = new PopQuizWindow();
+        try
+        {
+            quiz.Show();
+            Assert.True(shell.Autonomy.IsBusy());
+        }
+        finally { quiz.Close(); }
+        Assert.False(shell.Autonomy.IsBusy());
+        var s = CoreSettings.Current;
+        var saved = (s.MindWipeEnabled, s.AutonomyCanTriggerMindWipe);
+        var provider = CoreMindWipe.TriggerOnceProvider;
+        int calls = 0;
+        CoreMindWipe.TriggerOnceProvider = () => calls++;
+        try
+        {
+            (s.MindWipeEnabled, s.AutonomyCanTriggerMindWipe) = (true, false);
+            shell.PerformAutonomy(AutonomyActionType.MindWipe);
+            (s.MindWipeEnabled, s.AutonomyCanTriggerMindWipe) = (false, true);
+            shell.PerformAutonomy(AutonomyActionType.MindWipe);
+            Assert.Equal(0, calls);
+            (s.MindWipeEnabled, s.AutonomyCanTriggerMindWipe) = (true, true);
+            shell.PerformAutonomy(AutonomyActionType.MindWipe);
+            Assert.Equal(1, calls);
+        }
+        finally
+        {
+            (s.MindWipeEnabled, s.AutonomyCanTriggerMindWipe) = saved;
+            CoreMindWipe.TriggerOnceProvider = provider;
+        }
+    });
+
+    [Fact]
+    public Task CountdownBindsOnOpenDrainsAndRetiresOnPanicAndClose() => WithArmedShell((shell, _) =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.ShowTakeoverCountdownBar, s.AutonomyRandomTriggerEnabled);
+        var now = new DateTime(2026, 1, 1, 14, 0, 0);
+        shell.Autonomy.Clock = () => now;
+        s.AutonomyRandomTriggerEnabled = s.ShowTakeoverCountdownBar = true;
+        shell.Autonomy.RefreshRandomTimer();
+        var interval = shell.Autonomy.NextRandomFire - now;
+        var tube = new AvatarTubeWindow(shell);
+        try
+        {
+            tube.Show();   // real OnOpened hookup, including when Takeover was already running
+            Assert.True(tube.TakeoverCountdownRunning);
+            var bar = tube.FindControl<Border>("TakeoverCountdownBar")!;
+            var fill = tube.FindControl<Border>("TakeoverCountdownFill")!;
+            Assert.True(bar.IsVisible);
+            Assert.Equal(new RelativePoint(0, 0.5, RelativeUnit.Relative), fill.RenderTransformOrigin);
+            Assert.Equal(1, Assert.IsType<ScaleTransform>(fill.RenderTransform).ScaleX);
+            now += interval / 2;
+            tube.TakeoverCountdownTick();
+            Assert.Equal(0.5, Assert.IsType<ScaleTransform>(fill.RenderTransform).ScaleX, 6);
+            s.ShowTakeoverCountdownBar = false;
+            tube.TakeoverCountdownTick();
+            Assert.False(bar.IsVisible);
+            s.ShowTakeoverCountdownBar = true;
+            s.AutonomyRandomTriggerEnabled = false;
+            shell.Autonomy.RefreshRandomTimer();
+            tube.TakeoverCountdownTick();
+            Assert.False(bar.IsVisible);
+            s.AutonomyRandomTriggerEnabled = true;
+            shell.Autonomy.RefreshRandomTimer();
+            tube.InitTakeoverCountdownBar();   // idempotent rebind
+            Assert.True(bar.IsVisible);
+            PanicSurfaces.StopAll("test", shell);
+            Assert.False(bar.IsVisible);
+            Assert.False(tube.TakeoverCountdownRunning);
+            shell.Autonomy.Start(withTimer: false);
+            Assert.True(tube.TakeoverCountdownRunning);
+            tube.Close();
+            Assert.False(tube.TakeoverCountdownRunning);
+            shell.Autonomy.Stop();
+            shell.Autonomy.Start(withTimer: false);
+            Assert.False(tube.TakeoverCountdownRunning);   // no dangling EnabledChanged handler
+        }
+        finally { tube.Close(); (s.ShowTakeoverCountdownBar, s.AutonomyRandomTriggerEnabled) = old; }
+    });
+
+    [Fact]
+    public Task AnnouncementsUseModEventAudioAndPanicStopsTheClip() => WithArmedShell((shell, _) =>
+    {
+        var s = CoreSettings.Current;
+        var oldSettings = (s.AvatarEnabled, s.AvatarMuted, s.MasterVolume, s.AutonomyAnnouncementChance, s.AutonomyCanTriggerFlash);
+        var oldMods = (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider);
+        var oldAudio = CoreAudio.PlayStoppableProvider;
+        var root = Path.Combine(Path.GetTempPath(), "ccp-announcement-" + Guid.NewGuid());
+        var folder = Path.Combine(root, "resources", "sounds", "event_audio");
+        Directory.CreateDirectory(folder);
+        int plays = 0, stops = 0;
+        string? played = null, said = null;
+        try
+        {
+            foreach (var slug in new[] { "time for a little surprise", "here comes something pretty", "look at the screen for me",
+                         "ooh i want to show you something", "pretty picture time" })
+                File.WriteAllText(Path.Combine(folder, slug + ".mp3"), "audio");
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "test" }, root, false);
+            CoreMods.ActiveModIdProvider = () => "test";
+            CoreAudio.PlayStoppableProvider = (path, _, tag, _, _) =>
+            {
+                Assert.Equal("phrase-audio", tag);
+                played = path; plays++;
+                return () => stops++;
+            };
+            s.AvatarMuted = false;
+            s.MasterVolume = 100;
+            s.AutonomyCanTriggerFlash = true;
+            shell.SetAvatarEnabled(true);
+            shell.Autonomy.Clock = () => new DateTime(2026, 1, 1, 14, 0, 0);
+            shell.Autonomy.CanPerform = a => a == AutonomyActionType.Flash;
+            shell.Autonomy.AnnouncementMade += (_, line) => said = line;
+            s.AutonomyAnnouncementChance = 100;
+            shell.Autonomy.TestTrigger();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, plays);
+            Assert.Equal(CompanionEventAudio.Resolve(said), played);
+            Assert.Equal(said, shell.Tube!.FindControl<TextBlock>("TxtSpeech")!.Text);
+            PanicSurfaces.StopAll("test", shell);
+            Assert.Equal(1, stops);
+            Directory.Delete(folder, true);
+            shell.Autonomy.Start(withTimer: false);
+            shell.Autonomy.TestTrigger();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, plays);   // missing event clip stays text-only, without a fallback giggle
+            Assert.Equal(said, shell.Tube!.FindControl<TextBlock>("TxtSpeech")!.Text);
+        }
+        finally
+        {
+            shell.Tube?.PanicSilence();
+            (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider) = oldMods;
+            CoreAudio.PlayStoppableProvider = oldAudio;
+            (s.AvatarEnabled, s.AvatarMuted, s.MasterVolume, s.AutonomyAnnouncementChance, s.AutonomyCanTriggerFlash) = oldSettings;
+            Directory.Delete(root, true);
+        }
+    });
+
+    [Fact]
+    public Task DiagnosticTestShowsStatusBeforeActingAndPanicCancelsIt() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.AutonomyResumeOnStartup, s.AutonomyAnnouncementChance, s.AutonomyCanTriggerFlash);
+        var premium = CoreEntitlement.HasPremiumProvider;
+        s.AutonomyResumeOnStartup = false;
+        var shell = new MainShellWindow();
+        shell.Show();
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => false;
+            var test = shell.TestAutonomy();
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal("Autonomy Not Running", dialog.Title);
+            Assert.Contains("requires Patreon access", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+            Assert.Contains("Diagnostic Status:\nService Enabled: False", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+            dialog.Close();
+            await test;
+            CoreEntitlement.HasPremiumProvider = () => true;
+            test = shell.TestAutonomy();
+            dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+            Assert.Contains("Click the green \"Start\" button", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+            dialog.Close();
+            await test;
+            s.AutonomyModeEnabled = s.AutonomyConsentGiven = true;
+            s.AutonomyAnnouncementChance = 0;
+            shell.Autonomy.Start(withTimer: false);
+            int actions = 0;
+            shell.Autonomy.Perform = (_, _) => actions++;
+            shell.Autonomy.CanPerform = a => a == AutonomyActionType.Flash;
+            s.AutonomyCanTriggerFlash = true;
+            test = shell.TestAutonomy();
+            dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal("Autonomy Test", dialog.Title);
+            Assert.Contains("Triggering test action...\n\nCurrent Status:\nService Enabled: True", dialog.FindControl<TextBlock>("TxtMessage")!.Text);
+            Assert.Equal(0, actions);
+            dialog.Close();
+            await test;
+            Assert.Equal(1, actions);
+            test = shell.TestAutonomy();
+            PanicSurfaces.StopAll("test", shell);
+            await test;
+            Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+            Assert.Equal(1, actions);
+        }
+        finally
+        {
+            shell.Autonomy.Stop();
+            foreach (var dialog in shell.OwnedWindows.ToList()) dialog.Close();
+            CoreEntitlement.HasPremiumProvider = premium;
+            (s.AutonomyModeEnabled, s.AutonomyConsentGiven, s.AutonomyResumeOnStartup, s.AutonomyAnnouncementChance, s.AutonomyCanTriggerFlash) = saved;
+            shell.RequestExit();
+        }
+    });
 
     /// <summary>overlay-takeover-announcer: an announced action queues the "TAKEOVER" cue (WPF
     /// AutonomyService.cs:961, #534 silent roll shows none), cues play in turn on the real timings,

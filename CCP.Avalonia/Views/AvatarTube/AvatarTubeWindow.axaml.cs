@@ -321,8 +321,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
 
-            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection
-            // and InitTakeoverCountdownBar; none has ported.
+            InitTakeoverCountdownBar();
+            // ponytail: WPF's OnLoaded also ran StartFloatingAnimation / StartFullscreenDetection;
+            // neither has ported.
         }
 
         protected override void OnClosed(EventArgs e)
