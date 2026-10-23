@@ -1,8 +1,4 @@
-// PORTED from ConditioningControlPanel/Controls/NavRail/SectionTabStrip.Help.cs (d0ec7aa8d, owner
-// 2026-10-07): a "?" badge over every strip pill. Colour math through NavStripRules (Core
-// NavStripPaint). ponytail: WPF's other half, a Window pill (Just Drop) asking "Open it?" before
-// opening (AskBeforeOpening), has no pill to ask on: Just Drop has no window on this head, so
-// CanOpen hides its pill. Port the card with the Just Drop window.
+// PORTED from WPF SectionTabStrip.Help.cs: sibling help badges and the Just Drop ask-first card.
 
 using System;
 using System.Collections.Generic;
@@ -13,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Models;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
@@ -94,6 +91,83 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!string.IsNullOrEmpty(tier))
                 body.Children.Add(new TextBlock { Text = tier, FontSize = 11.5, Opacity = 0.75, Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap });
             return body;
+        }
+
+        private Popup? _confirm;
+        private NavTab? _confirmTab;
+        internal string? ConfirmingKey => _confirmTab?.Key;
+        internal Control? ConfirmCard => _confirm?.Child;
+
+        private void AskBeforeOpening(NavTab tab)
+        {
+            var target = PillFor(tab.Key)?.Parent as Control ?? PillFor(tab.Key);
+            if (target == null) { TabRequested?.Invoke(tab); return; }
+            CloseConfirm();
+            _confirmTab = tab;
+            var yes = ConfirmButton(SafeLoc("nav_open_window_yes", "Open it"), true);
+            var no = ConfirmButton(SafeLoc("nav_open_window_no", "Not now"), false);
+            global::Avalonia.Automation.AutomationProperties.SetAutomationId(yes, "NavOpenWindowYes");
+            global::Avalonia.Automation.AutomationProperties.SetAutomationId(no, "NavOpenWindowNo");
+            yes.Click += (_, _) => AnswerConfirm(true);
+            no.Click += (_, _) => AnswerConfirm(false);
+            var card = new Border
+            {
+                CornerRadius = new CornerRadius(14), Padding = new Thickness(16, 12), MinWidth = 240, MaxWidth = 340,
+                Background = new SolidColorBrush(Color.FromArgb(0xF5, 0x1B, 0x10, 0x26)),
+                BorderBrush = new SolidColorBrush(NavStripRules.WithAlpha(_hue, 0.85)), BorderThickness = new Thickness(1.5),
+                Child = new StackPanel { Children =
+                {
+                    new TextBlock { Text = string.Format(SafeLoc("nav_open_window_title", "Open {0}?"), SafeLoc(tab.LabelKey, tab.Key)),
+                        FontSize = 14, FontWeight = FontWeight.Bold, Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap },
+                    new TextBlock { Text = SafeLoc("nav_open_window_body", "It opens in its own window."), FontSize = 12.5,
+                        Margin = new Thickness(0, 3, 0, 12), Foreground = new SolidColorBrush(Color.FromArgb(0xD9, 255, 255, 255)), TextWrapping = TextWrapping.Wrap },
+                    new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
+                        Spacing = 8, Children = { yes, no } },
+                } },
+            };
+            // WPF PopupAnimation.Fade; Off opens instantly. Animate the card Visual, never a transform.
+            if (Level != MotionLevel.Off)
+            {
+                card.Opacity = 0;
+                card.Transitions = new global::Avalonia.Animation.Transitions
+                {
+                    new global::Avalonia.Animation.DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(150) },
+                };
+            }
+            var popup = new Popup { PlacementTarget = target, Placement = PlacementMode.Bottom, VerticalOffset = 8,
+                IsLightDismissEnabled = true, Child = card };
+            popup.Opened += (_, _) => { card.Opacity = 1; yes.Focus(); };
+            popup.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_confirm, popup)) { _confirm = null; _confirmTab = null; }
+            };
+            _confirm = popup;
+            // Own the popup logically so it shares the strip's lifetime and resources.
+            LogicalChildren.Add(popup);
+            popup.Closed += (_, _) => LogicalChildren.Remove(popup);
+            popup.IsOpen = true;
+        }
+
+        private Button ConfirmButton(string text, bool filled) => new()
+        {
+            Content = text, FontSize = 13, FontWeight = FontWeight.SemiBold, CornerRadius = new CornerRadius(11),
+            Padding = new Thickness(14, 5, 14, 6), Cursor = new Cursor(StandardCursorType.Hand),
+            Background = filled ? new SolidColorBrush(_hue) : new SolidColorBrush(Color.FromArgb(0x1F, 255, 255, 255)),
+            Foreground = filled ? new SolidColorBrush(NavStripRules.ActiveTextOn(_hue)) : Brushes.White,
+        };
+
+        private void AnswerConfirm(bool open)
+        {
+            var tab = _confirmTab;
+            CloseConfirm();
+            if (open && tab != null) TabRequested?.Invoke(tab);
+        }
+
+        internal void CloseConfirm()
+        {
+            if (_confirm != null) _confirm.IsOpen = false;
+            _confirm = null;
+            _confirmTab = null;
         }
 
         // ---- test seams ---------------------------------------------------------------------

@@ -109,6 +109,39 @@ public sealed class SectionStripMovedNoteTests
         });
     }
 
+    [Theory]
+    [InlineData(MotionLevel.Full)]
+    [InlineData(MotionLevel.Reduced)]
+    public async Task FadeTimerActuallyHidesTheNote_AndANewNoteCancelsTheOldFade(MotionLevel level)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            SetUp();
+            var strip = new SectionTabStrip { MotionOverride = level };
+            var w = new global::Avalonia.Controls.Window { Content = strip };
+            try
+            {
+                w.Show();
+                strip.Show(NavSections.Studio, "presets");
+                strip.ShowMovedNote("first");
+                strip.ExpireMovedNote();
+                Assert.True(strip.MovedNoteShown);
+                await Task.Delay(SectionTabStrip.MovedNoteFade + TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(strip.MovedNoteShown); // the real DispatcherTimer, not HideNote's seam
+
+                strip.ShowMovedNote("second");
+                strip.ExpireMovedNote();
+                strip.ShowMovedNote("replacement");
+                await Task.Delay(SectionTabStrip.MovedNoteFade + TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(strip.MovedNoteShown);
+                Assert.Equal("replacement", strip.MovedNoteTextForTests);
+            }
+            finally { w.Close(); }
+        });
+    }
+
     private sealed class SteppedClock : TimeProvider
     {
         public override long GetTimestamp() => 1_000_000;

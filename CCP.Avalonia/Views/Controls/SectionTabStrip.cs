@@ -12,8 +12,7 @@
 // SectionTabStrip.Help.cs.
 // Choose rings reuse NavGlow; the press squish shares WPF MotionFx's Core values.
 // The "Moved" note (ShowMovedNote, WPF :503) landed in wire-ctrl-section-tab-strip-b.
-// ponytail: wire-ctrl-section-tab-strip-b-next owns Just Drop ask-first with its missing window,
-// absent Companion/Premium paths and section edge lap/fog/embers.
+// Just Drop uses the ask-first card in SectionTabStrip.Help.cs.
 
 using System;
 using System.Collections.Generic;
@@ -63,6 +62,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly TextBlock _crumbSep = new() { FontSize = 14, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6 };
         private readonly TextBlock _crumbPage = new() { FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         private readonly Button _crumbSection;
+        private readonly StackPanel _crumbPanel;
+        private string? _crumbKey;
+        private System.Threading.CancellationTokenSource? _crumbFadeRun;
+        internal System.Threading.Tasks.Task CrumbFadeCompletion { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
+        internal double CrumbOpacity => _crumbPanel.Opacity;
         private readonly StackPanel _pillRow = new() { Orientation = Orientation.Horizontal, Spacing = 6 };
         private readonly Border _track;
         private readonly Border _accentLine = new() { Height = 2, CornerRadius = new CornerRadius(1), Opacity = 0.85 };
@@ -136,7 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 VerticalAlignment = VerticalAlignment.Center, Template = PlainTemplate(),
             };
             _crumbSection.Click += (_, e) => { e.Handled = true; if (_section != null) SectionRequested?.Invoke(_section); };
-            var crumb = new StackPanel
+            var crumb = _crumbPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(4, 0, 18, 0), Children = { _crumbSection, _crumbSep, _crumbPage },
@@ -174,6 +178,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _sheenClock?.Stop();   // P65: a detached strip never ticks
             _noteTimer?.Stop();
             HideNote();
+            CloseConfirm();
+            _crumbFadeRun?.Cancel();
+            _crumbFadeRun?.Dispose();
+            _crumbFadeRun = null;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -248,6 +256,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             bool sectionChanged = !string.Equals(section, _section, StringComparison.OrdinalIgnoreCase);
             if (!NavStripTable.ShowsHeader(section))
             {
+                CloseConfirm();
                 IsVisible = false;
                 _section = section;
                 return;
@@ -287,9 +296,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _crumbSep.Text = SafeLoc("nav_crumb_sep", "›");
             _crumbSep.IsVisible = !string.IsNullOrEmpty(page);
             _crumbPage.Text = page;
+            var crumbKey = sectionLabel + "|" + page;
+            if (crumbKey != _crumbKey)
+            {
+                if (_crumbKey != null) CrossfadeCrumb();
+                _crumbKey = crumbKey;
+            }
             ToolTip.SetTip(_crumbSection, sectionLabel);
 
             SetActive(NavStripTable.ActivePill(tab), animate: !sectionChanged);
+        }
+
+        // WPF Crossfade: the changed crumb fades from 0.25 to 1 in 150/75/0 ms.
+        private void CrossfadeCrumb()
+        {
+            _crumbFadeRun?.Cancel();
+            _crumbFadeRun?.Dispose();
+            _crumbFadeRun = null;
+            _crumbPanel.Opacity = 1;
+            CrumbFadeCompletion = System.Threading.Tasks.Task.CompletedTask;
+            if (Level == MotionLevel.Off) return;
+            _crumbFadeRun = new System.Threading.CancellationTokenSource();
+            var fade = new global::Avalonia.Animation.Animation
+            {
+                Duration = TimeSpan.FromMilliseconds(Level == MotionLevel.Reduced ? 75 : 150),
+                Children = { Frame(0, OpacityProperty, 0.25), Frame(1, OpacityProperty, 1) },
+            };
+            CrumbFadeCompletion = fade.RunAsync(_crumbPanel, _crumbFadeRun.Token);
         }
 
         internal static Color Hue(string? section)
@@ -317,6 +350,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void BuildPills(string section)
         {
+            CloseConfirm();
             _pillRow.Children.Clear();
             _pills.Clear();
             _helpBadges.Clear();
@@ -462,6 +496,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
             FxOnChosen(tab);
+            if (tab.Kind == NavTabKind.Window) { AskBeforeOpening(tab); return; }
             TabRequested?.Invoke(tab);
         }
 

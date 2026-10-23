@@ -3,6 +3,12 @@ using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Models;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -87,6 +93,58 @@ public sealed class JustDropWindowTests
         PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.Null(Open());
+    });
+
+    [Fact]
+    public void StripAsksBeforeOpening_AndCancelSectionChangeAndPanicDismiss() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("presets");
+        Dispatcher.UIThread.RunJobs();
+        var strip = shell.PageStrip!;
+        strip.MotionOverride = MotionLevel.Off;
+        Button Answer(string id) => strip.ConfirmCard!.GetLogicalDescendants().OfType<Button>()
+            .Single(b => global::Avalonia.Automation.AutomationProperties.GetAutomationId(b) == id);
+        void Choose() => strip.PillFor("justdrop")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        Choose();
+        Assert.Equal("justdrop", strip.ConfirmingKey);
+        Assert.Null(Open());
+        Assert.Equal("presets", strip.ActivePillKey);
+        Assert.Equal("presets", shell.CurrentTab);
+        Assert.Null(strip.ConfirmCard!.Transitions); // Off has no popup fade
+        Click(Answer("NavOpenWindowNo"));
+        Assert.Null(strip.ConfirmingKey);
+        Assert.Null(Open());
+
+        // Arrow focus on a window pill does not navigate or ask; Enter asks.
+        strip.PillFor("ramp")!.Focus();
+        strip.PillFor("ramp")!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Left });
+        Assert.True(strip.PillFor("justdrop")!.IsFocused);
+        Assert.Null(strip.ConfirmingKey);
+        strip.PillFor("justdrop")!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+        Assert.Equal("justdrop", strip.ConfirmingKey);
+        Click(Answer("NavOpenWindowYes"));
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(Open());
+        Assert.Null(strip.ConfirmingKey);
+        Assert.Equal("presets", shell.CurrentTab);
+        GameWindow.CloseAllForPanic();
+
+        Choose();
+        var staleYes = Answer("NavOpenWindowYes");
+        PanicSurfaces.All.Single(x => x.Id == "nav-window-confirm").Stop(shell);
+        Assert.Null(strip.ConfirmingKey);
+        Click(staleYes); // a queued acceptance cannot open after panic
+        Assert.Null(Open());
+        Choose();
+        shell.ShowTab("play");
+        Assert.Null(strip.ConfirmingKey);
+        shell.ShowTab("presets");
+        Choose();
+        shell.ShowTab("settings"); // Home hides the strip
+        Assert.Null(strip.ConfirmingKey);
     });
 
     [Fact]

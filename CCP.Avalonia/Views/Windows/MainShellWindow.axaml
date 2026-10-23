@@ -2706,7 +2706,7 @@
          not the mod accent, and a faint band of that hue fades 28 px into the window. Authored in
          Home's Lilac; MainShellWindow.SectionChrome.cs PaintSectionEdge repaints it with the page
          wash. Each band is a solid hue under a fade mask (WPF's three stops A / 0.42 A / 0), so
-         the retint is a BrushTransition. The lift sits at the top centre (WPF's Fixed motion). -->
+         the retint is a BrushTransition. The lift travels at Full, rests at Reduced and hides at Off. -->
     <Panel x:Name="SectionEdgeHost" Grid.RowSpan="6" Grid.ColumnSpan="2" ZIndex="9997" IsHitTestVisible="False">
         <Panel x:Name="SectionEdgeGlow">
             <Border Height="28" VerticalAlignment="Top" Background="#32B79CFF">
@@ -2739,13 +2739,7 @@
             </Border>
         </Panel>
         <Border x:Name="GlassWindowEdge" BorderBrush="#E6B79CFF" BorderThickness="3" CornerRadius="8"/>
-        <Border x:Name="SectionEdgeLiftTop" Height="3" VerticalAlignment="Top" Margin="8,0,8,0" Background="#FFD0BFFF">
-            <Border.OpacityMask>
-                <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%">
-                    <GradientStop Offset="0.4" Color="#00000000"/><GradientStop Offset="0.5" Color="#FF000000"/><GradientStop Offset="0.6" Color="#00000000"/>
-                </LinearGradientBrush>
-            </Border.OpacityMask>
-        </Border>
+        <cmp:SectionEdgeLift x:Name="SectionEdgeLift"/>
     </Panel>
 
     <!-- THE FUSE's corner readout (CONTRACT-FUSE-0816 2.2). From T-1h the T-minus stops being a

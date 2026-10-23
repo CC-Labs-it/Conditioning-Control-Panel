@@ -12,11 +12,8 @@
 // The section edge (PaintSectionEdge, WPF MainWindow.SectionEdge.cs, 8f4bb7814) is here too: the
 // frame line, the 28 px glow band and the lift in the hue.
 //
-// ponytail: not yet here (lane sync6-nav-polish-c): the edge lift's lap round the frame at Full
-// motion (it sits at the top centre, WPF's Reduced), the fog and ember strips the band thins for
-// (EdgeParticles, AmbientFxCanvas.EdgeFog), the depth painters the wash feeds
-// (PaintDepthRail/Hud/Home/Quests), and the "Cloud sync
-// issue" title suffix (SetSyncIssueTitle: no cloud profile sync on this head).
+// ponytail: fog/ember strips still need AmbientFxCanvas.EdgeFog / EdgeDrift. The depth
+// painters and cloud-sync title suffix remain owned by their respective feature lanes.
 
 using System;
 using System.Linq;
@@ -129,11 +126,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _washSection = section;
                 var hue = NavStripRules.Accent(section);
                 PaintSectionInk(section);
-                var level = CoreSettings.Current.MotionLevel;
+                var level = AmbientFxCanvas.Env.Level;
                 int ms = level switch { Models.MotionLevel.Off => 0, Models.MotionLevel.Reduced => SectionWashMs / 2, _ => SectionWashMs };
                 PaintFill(Named<Border>("SectionWashFill"), NavStripRules.WithAlpha(hue, SectionWashAlpha / 255.0), ms);
                 PaintFill(Named<Border>("SectionWashLine"), NavStripRules.WithAlpha(hue, SectionWashLineAlpha / 255.0), ms);
-                PaintSectionEdge(hue, level, ms);
+                PaintSectionEdge(hue, ms);
             }
             catch (Exception ex) { Serilog.Log.Debug("PaintSectionWash failed: {E}", ex.Message); }
         }
@@ -141,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF PaintSectionEdge (SectionEdge.cs :105) with no fog running (the full band):
         /// the 3 px line at 0xE6, each band's edge alpha balanced for brightness
         /// (SectionEdgeRules.GlowAlpha), the lift the hue toward white, hidden at Motion Off.</summary>
-        private void PaintSectionEdge(global::Avalonia.Media.Color hue, Models.MotionLevel level, int ms)
+        private void PaintSectionEdge(global::Avalonia.Media.Color hue, int ms)
         {
             if (Named<Border>("GlassWindowEdge") is { } line)
             {
@@ -151,11 +148,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Panel>("SectionEdgeGlow") is { } glow)
                 foreach (var band in glow.Children.OfType<Border>())
                     PaintFill(band, NavStripRules.WithAlpha(hue, NavStripRules.EdgeGlowAlpha(hue) / 255.0), ms);
-            if (Named<Border>("SectionEdgeLiftTop") is { } lift)
+            if (Named<SectionEdgeLift>("SectionEdgeLift") is { } lift)
             {
-                lift.IsVisible = level != Models.MotionLevel.Off;
-                PaintFill(lift, NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
+                lift.Paint(NavStripRules.Mix(hue, global::Avalonia.Media.Colors.White, SectionEdgeLiftWhite), ms);
+                UpdateSectionEdgeMotion();
             }
+        }
+
+        private void UpdateSectionEdgeMotion() => Named<SectionEdgeLift>("SectionEdgeLift")?.Apply(
+            AmbientFxCanvas.Env.Level, AmbientFxCanvas.Env.AllowAmbientLoops,
+            IsActive && IsVisible && WindowState != WindowState.Minimized);
+
+        private void RefreshSectionEdge() => PaintSectionEdge(NavStripRules.Accent(_washSection), 0);
+
+        private void HookSectionEdge()
+        {
+            Activated += (_, _) => UpdateSectionEdgeMotion();
+            Deactivated += (_, _) => UpdateSectionEdgeMotion();
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) UpdateSectionEdgeMotion();
+            };
+            AmbientFxCanvas.Env.MotionGateChanged += RefreshSectionEdge;
+            Closed += (_, _) => AmbientFxCanvas.Env.MotionGateChanged -= RefreshSectionEdge;
         }
 
         /// <summary>A solid background, crossfaded over <paramref name="ms"/> (0 = at once, WPF's
@@ -203,6 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_sectionStripWired || PageStrip is not { } strip) return;
             _sectionStripWired = true;
+            HookSectionEdge();
             // WPF NavStripRules.PillLocked: a paying account sees no tier sign on pages it owns.
             strip.PillLocked = tier => tier > 0 && (tier == 1 ? !CoreAccount.HasPremiumAccess : !CoreAccount.HasLabAccess);
             strip.CanOpen = CanOpenNavTab;
@@ -228,11 +244,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
         }
 
-        /// <summary>Pills this head can open. A page another lane has not ported yet (Friends,
-        /// Leash, the Companion pages, Folders' scroll...) is not drawn rather than drawn dead.</summary>
+        /// <summary>Draw only pills with a live launcher, page/zone route or Just Drop window.</summary>
         private static bool CanOpenNavTab(NavTab tab) => tab.Kind == NavTabKind.Launcher
             ? tab.Key is "mods" or "catalogue" or "phrases" or "medialog"
-            : TabPanels.ContainsKey(tab.Key);
+            : tab.Key == "justdrop" || TabPanels.ContainsKey(tab.Key);
 
         /// <summary>WPF OnSectionPillChosen (:246): launchers through their old handlers, pages and
         /// zones through ShowTab.</summary>
