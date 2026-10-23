@@ -62,12 +62,23 @@ public sealed class ProgramsCompletionMotionTests
         AmbientFxCanvas.Env.RaiseMotionGateChanged();
         Pump(tab);
         Assert.Contains(BeatLoop.Running, l => l.Owner == glow);
+        // A maximise is not a gate: the breath keeps its phase (WPF storyboard keeps running).
+        Step(0.3);
+        var breath = Assert.Single(BeatLoop.Running, l => l.Owner == glow);
+        var midBreath = glow.Opacity;
+        Assert.NotEqual(0.35, midBreath, 3);
+        shell.WindowState = WindowState.Maximized;
+        Pump(tab);
+        Assert.Same(breath, Assert.Single(BeatLoop.Running, l => l.Owner == glow));
+        Assert.Equal(midBreath, glow.Opacity, 3);
+        shell.WindowState = WindowState.Normal;
+        Pump(tab);
         shell.WindowState = WindowState.Minimized;
         Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == glow);
         shell.WindowState = WindowState.Normal;
         Pump(tab);
         Assert.Contains(BeatLoop.Running, l => l.Owner == glow);
-        shell.ShowTab("dashboard");
+        shell.ShowTab("settings");
         Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == glow);
         shell.ShowTab("programs");
         Pump(tab);
@@ -183,7 +194,7 @@ public sealed class ProgramsCompletionMotionTests
     public void EntranceHasWpfStaggerAndRefreshDoesNotReplayIt() => ProgramIgnitionTests.WithRun(false, (shell, tab, _, _) =>
     {
         Step(1);
-        shell.ShowTab("dashboard");
+        shell.ShowTab("settings");
         shell.ShowTab("programs");
         Pump(tab);
         var header = tab.FindControl<Border>("RunHeaderPanel")!;

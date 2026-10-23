@@ -83,6 +83,9 @@ public partial class ProgramsTabView
 
     private void QueuePipBreathing()
     {
+        // WPF's storyboard keeps running through a repaint or a maximise: keep a live breath on today's pip.
+        if (_pipBreaths.Count > 0 && _pipBreaths.All(p => p.Glow.IsAttachedToVisualTree()
+                && p.Glow.DataContext is ProgramDayPip { Breathe: true })) return;
         StopPipBreathing();
         var epoch = _pipEpoch;
         Dispatcher.UIThread.Post(() =>
