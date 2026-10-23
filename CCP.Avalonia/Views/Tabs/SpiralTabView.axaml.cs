@@ -45,10 +45,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///   <item>The first-light canvas supplies the fog; the one-shot reveal still needs the
     ///     ceremony director and block-service handoff, timeout and cancellation integration.</item>
     ///   <item><c>SpiralEmbedView</c> (WebView2, Windows-only) becomes
-    ///     <see cref="WebHost"/>, whose <c>Navigated</c>/<c>Failed</c>/<c>Ready</c>/<c>PostState</c>
-    ///     have no twin yet — see <see cref="EnsureEmbed"/>.</item>
-    ///   <item><c>MotionFx</c>, <c>DescentRoomSfx</c> and <c>DescentBarkWatcher</c> are
-    ///     WPF-head services; each is a stub at its call site. <c>HelpPopover</c> is real on
+    ///     <see cref="WebHost"/>. Map state/ready/failure handling is not connected, and the
+    ///     host's navigation-completion signal is not consumed — see <see cref="EnsureEmbed"/>.</item>
+    ///   <item><c>DescentBarkWatcher</c> still needs the live descent block service.
+    ///     Room SFX and the Windows motion cap are ported. <c>HelpPopover</c> is real on
     ///     this head and carries the shared Core topic.</item>
     /// </list>
     ///
@@ -154,14 +154,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// a field captured once would leave the ember loop running for the rest of the session
         /// after someone turned motion off mid-run.</para>
         ///
-        /// <para>ponytail: the ONE thing WPF has that this head does not is the cap to Reduced
-        /// when Windows' animation-effects flag is off — see AmbientFxCanvas.Env.Level, which owns
-        /// that note. AllowTransitions is spelled out rather than read from Env because Env carries
-        /// only the ambient half; MotionFx.cs:56 is this same comparison.</para>
+        /// <para>Env also applies WPF's Windows animation and Gentle Visuals caps.</para>
         /// </summary>
         private static bool AllowAmbientLoops => AmbientFxCanvas.Env.AllowAmbientLoops;
 
-        private static bool AllowTransitions => CoreSettings.Current.MotionLevel != MotionLevel.Off;
+        private static bool AllowTransitions => AmbientFxCanvas.Env.AllowTransitions;
 
         // ---- the parts ----
         private readonly Canvas _emberHost;
@@ -197,6 +194,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>True while the splash owns the surface — set the instant the spiral era is
         /// painted, cleared when the embed is revealed, when it fails, or on leaving the tab.</summary>
         private bool _splashUp;
+
+        // WPF spends these on paint, and rearms only on exit: visibility and OnTabShown both refresh.
+        private bool _entrySfxSpent;
+        private bool _splashChimed;
 
         /// <summary>The embed, for as long as this tab is the one on screen in the spiral state.</summary>
         private WebHost? _embed;
@@ -332,6 +333,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             HideSplash(fade: false);
             StopWaitingAmbience();
             TeardownEmbed();
+            _entrySfxSpent = false;
+            _splashChimed = false;
         }
 
         // ============================== the state ==============================
@@ -391,8 +394,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _fogCopy.IsVisible = true;
                     ApplyFogReadout();
                     StartFogFx();
-                    // ponytail: needs DescentRoomSfx.PlayFogEntry() (WPF head), one door sound per
-                    // entry. Audio is decoration; the room paints without it.
+                    if (!_entrySfxSpent)
+                    {
+                        _entrySfxSpent = true;
+                        DescentRoomSfx.PlayFogEntry();
+                    }
                     break;
 
                 case SpiralRoomState.Spiral:
@@ -827,9 +833,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _spiralSplash.Opacity = 1;
                 _spiralSplash.IsVisible = true;
 
-                // ponytail: needs DescentRoomSfx.PlaySplashOpen() (WPF head), one chime per ENTRY
-                // and never per retry: a cue that repeated while a browser struggled would sound
-                // exactly like the thing being stuck.
+                if (!_splashChimed)
+                {
+                    _splashChimed = true;
+                    DescentRoomSfx.PlaySplashOpen();
+                }
 
                 if (!AllowAmbientLoops)
                 {
