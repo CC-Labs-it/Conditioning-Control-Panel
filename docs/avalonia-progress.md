@@ -2576,3 +2576,124 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/friends-feed: +557
 - Friends drawer "What happened" feed, per-friend send trails, chip unread badge, tray unread count, accept-after-fold honesty word (feat-friends-feed -> partial).
 - No Core changes (rules already in Core); 4 fail-proven tests; Windows not gated (P97 local fallback).
+
+## avalonia-port/friends-open-tables: +259
+- Friends drawer: open Goon tables (hosting row first, pink wash, Join/lock, 30 s poll while open); LobbyWire seeded on this head.
+- Join, the launcher badge and the corner notices are still stub/missing (no Goon host or Goon tile on this head; notices go to the -b lane).
+
+## avalonia-port/friends-open-tables: +259
+- Friends drawer: open Goon tables (hosting row first, pink wash, Join/lock, 30 s poll while open); LobbyWire seeded on this head.
+- Join, the launcher badge and the corner notices are still stub/missing (no Goon host or Goon tile on this head; notices go to the -b lane).
+
+## avalonia-port/friends-open-tables: +259
+- Friends drawer: open Goon tables (hosting row first, pink wash, Join/lock, 30 s poll while open); LobbyWire seeded on this head.
+- Join, the launcher badge and the corner notices are still stub/missing (no Goon host or Goon tile on this head; notices go to the -b lane).
+## avalonia-port/companion-v2-conversation: +989
+- Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
+- Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+
+## avalonia-port/companion-v2-conversation: +989
+- Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
+- Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+
+## avalonia-port/companion-v2-conversation: +989
+- Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
+- Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+
+## avalonia-port/companion-v2-conversation: +989
+- Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
+- Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/decision-tester-verification: +37
+- decisions log entry: tester verification + proposed goal text
+
+## avalonia-port/ledger-dedupe: +54
+- Parity ledger: 64 duplicate row ids merged (honest status, newer text first, union of paths/notes), section row counts fixed.
+
+## avalonia-port/emidesk-core-e: +344
+
+EmiChains data/rules and EmiNudges moved to CCP.Core (git mv); WPF keeps the DispatcherTimer player as EmiChainPlayer and seeds EmiNudgeWorld.QuietProbe at startup. Avalonia reads EmiChains.RestFace. Core tests: moved EmiNudgeMachineTests + new QuietProbe/EmiChains tests. No UI change; no parity rows moved.
+
+## avalonia-port/deeper-core-d: +194
+- Cloud session, local review (ACCEPT) + gate.
+- AudioWaveformCache (DPK2 cache + bucket rule) moved to Core behind a Decoder seam; WPF NAudio decoder registered at startup; 10 Core tests.
+- Review fixes: withdrew unbacked pass counts from Verification limits; WPF sample provider built lazily again (pre-move parity). rgate GATE-OK.
+
+## avalonia-port/stakes-core: +112
+- Stake wire, bridge and settlement maths (plus V2WalletAdoption) moved into CCP.Core with git mv. The WPF App gates are now in StakeAppHooks, seeded at startup. StakeTests (25) run in CCP.Core.Tests and are fail-proven.
+- feat-stakes missing -> stub. Next lane is stakes-host: route the Avalonia GameWindow `stake-*` frames to StakeBridge.ForApp and seed the head gates.
+
+## avalonia-port/goongame-core-e: +402
+Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportBase/GoonDispatch, GoonLoopbackTransport, Rounds/*) git-mv to CCP.Core; host/join/paint-stall rules extracted to GoonHostRules (one copy, WPF calls it); DispatcherTimers -> TimeProvider; GoonDispatch.ShutdownStarted seeded in WPF App(). Tests: GoonPaintStallRuleTests moved, GoonHostGateTests, GoonMatchEngineTests (one-thread loopback match, fail-proven). Gate: local Linux GATE-OK; Windows red only on known flakes.
+
+## avalonia-port/tester-test-plan: +675
+- docs/avalonia-test-plan.md: tester steps per ledger area (open/click/expect, WPF file:line, row ids), the live queue rewritten in plain words, safety steps flagged for an agent live check before the shipping switch.
+- Every ledger row id is listed with its WPF reference. Only tester reports move a row to verified.
+
+## avalonia-port/video-core-f: +113
+- Moved six video memory-render helpers (`DisplayAspectFrom`, `FitToAspect`, `StagingBytesFor`, `ComputeSnapshotDims`,
+  `IsSnapshotFrame`, `IsRebuildCurrent`) from WPF `VideoService` into `CCP.Core/Services/Video/VideoRenderMath.cs`, unchanged.
+  WPF calls them through `using static`.
+- `BlurSurfaceFrameTests` (24 cases) moved to `Tests/CCP.Core.Tests`, so they now run on Linux CI.
+- Review accepted (side-by-side equal). The two P3s were left as they are, with reasons given in the body.
+
+## avalonia-port/wire-win-quiz-report: +21
+- win-quiz-report: run-row hover (#15FFFFFF) and a real pointer click on a report row are now tested through an open gate. Stays stub because both heads hide BtnStartQuiz; whether to show it or delete it is an open product decision.
+- QuizPastRunsReportTests fail-proven (failproof-5-no-hover.log).
+
+## avalonia-port/video-max-cap-links: +192
+- BUG-7NAKK79CZ2: the user's max video length now ends app-started web-video takeovers (Core `VideoMaxCap.TakeoverStopAfter`, wired into the WPF BrowserMediaService), and a heal or fallback replay continues the clip's cap on both heads.
+- Tests: Core VideoMaxCapTests plus the headless MandatoryVideoOverlay heal-at-cap test, both fail-proven. Linux gate green; one known Windows flake (PhrasePoolCustody).
+
+## avalonia-port/wire-views-settings-performance: +368
+- Settings > Performance: AutoPerformanceMode escalates via Core PerformanceTierRule (shared with WPF); GPU decode is read by the mandatory-video player; a motion change repaints the shell chrome.
+- Row stays stub: ChkUnifiedOverlay and chrome FX refresh -> wire-views-settings-performance-b.
+
+## avalonia-port/wire-win-mini-player: +103
+- win-mini-player: stub -> wired. Library thumbnail double-click and context-menu Preview open MiniPlayerWindow owned by the shell; closing it re-activates the shell only while we own the foreground (or none, as WPF).
+- AssetsTabTests: 2 tests, fail-proven (evidence/wire-win-mini-player/fail-proofs.txt).
+
+## avalonia-port/wire-win-knock-card: +120
+- Knock card: the sender's proxy picture fades in over the initials (WPF LandingChrome.Avatar). Join, Not now and the x lift 1.02 over 150 ms quad-out and snap at Motion Off (WPF MotionFx.HoverLift).
+- Tests: KnockCardTests cover the picture fetch (no network) and the hover lift with motion Off and Full. Each was fail-proven.
+- Ledger: win-knock-card stub -> wired. rgate GATE-OK.
+
+## avalonia-port/possession-core-d: +211
+- Warden bark rules (`WardenRules`) and reactive consent/Start-Stop rules (`PossessionReactiveRules`) moved into CCP.Core; WPF head calls them, no private copies.
+- PossessionBarkRulesTests git-mv'd to CCP.Core.Tests (runs on Linux); 6 new pure-rule tests.
+- Review ACCEPT (54); P3 fix: run labels use WardenRules.Knock/Stare. rgate GATE-OK.
+
+## avalonia-port/wire-views-daily-quest-card: +239
+
+- Daily quest card gets WPF MotionFx motion: bar fill tween (0.6 s QuadOut, resize snaps), hover lift 1.02/150 ms, gold BoxShadow glow (blur 18, 0.5) fading out; MotionLevel.Off snaps and skips the glow.
+- Test: DailyQuestCardMotionTests (Full + Off, stepped clock), fail-proven. Ledger views-daily-quest-card: stub -> wired.
+- Not run: real-pointer desktop feel.
+
+## avalonia-port/settings-migration-test: +616
+- Settings migration test over a real WPF profile (local only; CI runs a synthetic variant): 768 keys and 9568 files survive startup+shutdown.
+- It found and fixed 3 losses: Companion drawers reset on exit, built-in preset action ids re-minted each load, Circe-neutral voice lines reverted (LockedMod/overrides now ship).
+
+## avalonia-port/linux-package-wired: +28
+- linux-package -> wired: the installed tarball reaches the First run window under kwin --virtual (splash 0.46 s, wizard 5.80 s, 749 MiB installed); AUR test-local passes.
+- Hand-install steps for the tarball added to docs/avalonia-linux-install.md (the .desktop Exec needs a PATH launcher).
+
+## avalonia-port/wire-shell-ambient-fx: +107
+Premium room canvas enrolled in the shell ambient registry under `premium` (WPF MainWindow.Exclusives.cs:379; `exclusives` redirects). Settings/Programs already enrolled; WPF Play has no canvas. Ledger shell-ambient-fx names the unenrolled WPF `chaster` and `appsettings` canvases and their owning rows. Test TabAmbientRegistryTests.PremiumRoomRegistersOnceAndParksThroughRealNavigation (fail-proven). rgate: local Linux green, Windows run 38586062437 green.
+
+## avalonia-port/wire-views-tab-deeper: +201
+- Deeper webcam setup card: consent manage/revoke, calibrate, quick recal and tracker start/stop delegate to the Blink Trainer handlers as WPF does (MainWindow.BlinkTrainer.cs:1410-1488); consent colours/text and calibration line follow live state; Devices link opens Settings → Devices. Row stays stub; follow-up wire-views-tab-deeper-b (Import, Tutorial/Tour, status-chip telemetry).
+
+## avalonia-port/wire-dialogs-username-picker: +93
+- Headless tests pin the already-ported UsernamePickerDialog (length rules, colours, Cancel); not wired: WPF has no live caller.
+- Remote gate green (run 38714794266); row stays `stub`.

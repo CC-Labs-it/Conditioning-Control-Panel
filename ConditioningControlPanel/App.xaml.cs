@@ -286,8 +286,12 @@ namespace ConditioningControlPanel
                 op.Abort();
                 return (false, null);
             };
+            // The Goon Game match engine moved to Core; it drops UI callbacks once the dispatcher dies.
+            Services.GoonGame.GoonDispatch.ShutdownStarted = () =>
+                Current?.Dispatcher is { } gd && (gd.HasShutdownStarted || gd.HasShutdownFinished);
 
             Services.Deeper.EnhancementResolver.LibraryMatchProvider = (path, type) => EnhancementLibrary?.FindMatch(path, type);
+            Services.Deeper.AudioWaveformCache.Decoder = Services.Deeper.MediaDurationProbe.DecodeWaveform;
             Services.SettingsPaletteIndex.JustDropDoorAvailableProvider = () => Services.JustDrop.JustDropService.DoorAvailable;
             Services.SettingsPaletteIndex.GameAvailableProvider = id => Services.Launcher.LauncherCatalogue.Find(id)?.Available == true;
             Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
@@ -389,6 +393,8 @@ namespace ConditioningControlPanel
             // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
             Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
+            // EmiNudgeWorld lives in Core too; whether the desktop is quiet is the head's call.
+            Services.EmiDesk.EmiNudgeWorld.QuietProbe = () => EmiDesk?.NudgeQuiet() == true;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
             // Goon signaling moved to Core with its transports; its 409-merged recovery stays here.
@@ -483,6 +489,7 @@ namespace ConditioningControlPanel
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Stakes.StakeAppHooks.Seed();
             Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
             Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;

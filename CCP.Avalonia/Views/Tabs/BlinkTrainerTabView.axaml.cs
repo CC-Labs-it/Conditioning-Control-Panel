@@ -402,6 +402,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshBlinkTrainerWebcamColumn's consent card and calibration line.</summary>
         private void RefreshWebcamColumn()
         {
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
             bool consented = WebcamConsent.IsCurrent(CoreSettings.Current);
             BlinkTrainerConsentCard.Background = new SolidColorBrush(consented ? Color.FromArgb(0x1A, 0x4A, 0xDE, 0x80) : Color.FromArgb(0x1A, 0xFF, 0xD0, 0x80));
             BlinkTrainerConsentCard.BorderBrush = consented ? Green : Amber;
@@ -591,12 +592,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenAppSettingsSection("devices");
 
         /// <summary>WPF: the same consent dialog both ways (grant, or review when granted).</summary>
-        private void BtnBlinkTrainerManageConsent_Click(object? sender, RoutedEventArgs e) => GrantConsent();
+        internal void BtnBlinkTrainerManageConsent_Click(object? sender, RoutedEventArgs e) => GrantConsent();
 
         /// <summary>WPF BtnBlinkTrainerRevokeConsent_Click: confirm (Cancel default), then
         /// WebcamTrackingService.RevokeConsent in full (Platform.WebcamTracker.RevokeConsent: stop,
         /// delete the calibration file, clear consent, turn the webcam features off).</summary>
-        private async void BtnBlinkTrainerRevokeConsent_Click(object? sender, RoutedEventArgs e)
+        internal async void BtnBlinkTrainerRevokeConsent_Click(object? sender, RoutedEventArgs e)
         {
             try
             {
@@ -616,7 +617,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF BtnBlinkTrainerCalibrate_Click (MainWindow.BlinkTrainer.cs:1320): straight to the
         /// window, which says so when tracking is not running.</summary>
-        private async void BtnBlinkTrainerCalibrate_Click(object? sender, RoutedEventArgs e)
+        internal async void BtnBlinkTrainerCalibrate_Click(object? sender, RoutedEventArgs e)
         {
             try
             {
@@ -630,7 +631,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF BtnBlinkTrainerQuickRecal_Click (MainWindow.BlinkTrainer.cs:1334): consent when
         /// stale, refuse without a calibration, start tracking if off (say so if that fails), run the
         /// one-dot recal, stop again only if started here.</summary>
-        private async void BtnBlinkTrainerQuickRecal_Click(object? sender, RoutedEventArgs e)
+        internal async void BtnBlinkTrainerQuickRecal_Click(object? sender, RoutedEventArgs e)
         {
             try
             {
@@ -691,7 +692,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF ToggleWebcamTrackingAsync (MainWindow.BlinkTrainer.cs:310): stop if running;
         /// else consent dialog when stale, then start off the UI thread. A failed start says why
         /// (OpenCV missing, no camera) instead of silently staying off.</summary>
-        private async void BtnBlinkTrainerStartStopTracker_Click(object? sender, RoutedEventArgs e)
+        internal async void BtnBlinkTrainerStartStopTracker_Click(object? sender, RoutedEventArgs e)
         {
             try
             {
@@ -718,6 +719,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshBlinkTrainerTrackerButton: the literal label WPF authors untranslated.</summary>
         private void RefreshTrackerButton()
         {
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
             if (BtnBlinkTrainerStartStopTracker.Content is TextBlock tb)
                 tb.Text = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracker" : "Start tracker";
         }
