@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
     internal sealed class BrowserVideoWindow : Window
     {
         private readonly Screen _screen;
+        private readonly System.Drawing.Rectangle _bounds;   // the screen, or the floating rectangle
         private readonly string _tag;
         private readonly BrowserVideoSurface _surface;
 
@@ -76,9 +77,12 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// diagnostics line can say which window the surface actually missed.</summary>
         public int FirstFrameBudgetMs { get; set; }
 
-        public BrowserVideoWindow(Screen screen, bool primary)
+        /// <param name="floatBounds">Floating mandatory video: this rectangle (physical pixels)
+        /// instead of the whole screen, and the window never takes focus.</param>
+        public BrowserVideoWindow(Screen screen, bool primary, System.Drawing.Rectangle? floatBounds = null)
         {
             _screen = screen;
+            _bounds = floatBounds ?? screen.Bounds;
             IsPrimary = primary;
             _tag = primary ? "primary" : "secondary";
 
@@ -93,16 +97,16 @@ namespace ConditioningControlPanel.Services.Video.Browser
             // Chromium, so the page's {type:'key'} reports are the only route ESC/panic have back to
             // C#. The host stamps WS_EX_NOACTIVATE straight after, so the window can never RE-raise
             // itself over the attention targets / chaos layer afterwards.
-            ShowActivated = primary;
+            ShowActivated = primary && floatBounds == null;
             Topmost = true;
             Background = Brushes.Black;
             WindowStartupLocation = WindowStartupLocation.Manual;
             // Full screen bounds up front (no start-small-then-maximize white frame, #368). The DIP
             // math below is only correct on the creation monitor; PinToScreen fixes mixed DPI.
-            Left = screen.Bounds.X / dpiScale;
-            Top = screen.Bounds.Y / dpiScale;
-            Width = screen.Bounds.Width / dpiScale;
-            Height = screen.Bounds.Height / dpiScale;
+            Left = _bounds.X / dpiScale;
+            Top = _bounds.Y / dpiScale;
+            Width = _bounds.Width / dpiScale;
+            Height = _bounds.Height / dpiScale;
 
             _surface = new BrowserVideoSurface(_tag);
             _surface.Message += (_, o) => Message?.Invoke(this, o);
@@ -129,7 +133,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                 {
                     var hwnd = new WindowInteropHelper(this).Handle;
                     if (hwnd == IntPtr.Zero) return;
-                    var b = _screen.Bounds;
+                    var b = _bounds;
                     SetWindowPos(hwnd, IntPtr.Zero, b.X, b.Y, b.Width, b.Height, SWP_NOZORDER | SWP_NOACTIVATE);
                 }
                 catch (Exception ex)
@@ -163,7 +167,47 @@ namespace ConditioningControlPanel.Services.Video.Browser
         }
 
         /// <summary>Post a message to the page; queued until the page's <c>ready</c> handshake.</summary>
-        public void Post(object msg) => _surface.Post(msg);
+        public void Post(object msg) => _surface.Post(WithFloatingMute(msg));
+
+        // ---- floating: this window's own sound ----
+
+        /// <summary>Null until a floating frame takes charge of this window's sound.</summary>
+        private bool? _floatMuted;
+        /// <summary>What the engine last asked for, so letting go of the mute restores exactly that.</summary>
+        private bool _engineMuted;
+
+        /// <summary>
+        /// Silence or restore THIS page's video (FloatingVideoFrame.SetMuted). The frame can only
+        /// add silence: unmuting hands the sound back as the engine last set it, at the engine's
+        /// volume. Every later <c>load</c> / <c>setVolume</c> the engine posts keeps the mute.
+        /// </summary>
+        public void SetFloatingMuted(bool muted)
+        {
+            _floatMuted = muted;
+            _surface.Post(new { type = "setVolume", muted = muted || _engineMuted });
+        }
+
+        /// <summary>The engine's <c>load</c> and <c>setVolume</c> carry their own <c>muted</c>;
+        /// while the frame holds this window silent, that flag goes out as true.</summary>
+        private object WithFloatingMute(object msg)
+        {
+            try
+            {
+                var o = msg as JObject ?? JObject.FromObject(msg);
+                var type = (string?)o["type"];
+                if (type != "load" && type != "setVolume") return msg;
+                if (o["muted"]?.Type == JTokenType.Boolean) _engineMuted = (bool)o["muted"]!;
+                else if (type == "setVolume") return msg;   // volume only: the page keeps its mute
+                if (_floatMuted == null) return msg;
+                o["muted"] = _floatMuted.Value || _engineMuted;
+                return o;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("BrowserVideo[{Tag}].WithFloatingMute: {E}", _tag, ex.Message);
+                return msg;
+            }
+        }
 
         /// <summary>Unhook + dispose the WebView2. Runs on Close() too, so the shared teardown funnel
         /// (VideoService.CloseAll closes every window in its list) is enough to end a session cleanly.</summary>

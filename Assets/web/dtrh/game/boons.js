@@ -58,7 +58,7 @@ export const BOONS = [
   // ---- synergy duos: only drafted when the partner is equipped (gold frame) ----
   { id: 'overload', name: 'Overload', rarity: 'Rare', curse: false, mult: 0.0, unique: true, fxTheme: 'electric',
     requiresAny: ['e_stim'],
-    desc: 'the e-stim runs double charges per press: 6/8/10 charged pops by toy level.',
+    desc: 'the e-stim arcs twice as often: 20/30/40% of the pops you click by toy level, 60% maxed.',
     flavor: 'more than the dial was built for.',
     apply: (s) => { s.estimChargeMult = 2; } },
   { id: 'afterglow', name: 'Afterglow', rarity: 'Rare', curse: false, mult: 0.0, unique: true,

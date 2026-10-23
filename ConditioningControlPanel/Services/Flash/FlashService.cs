@@ -698,8 +698,8 @@ namespace ConditioningControlPanel.Services
             if (StayUntilPopped(stay, pointFired: false))
             {
                 bool layer = UseCompositor;
-                int cap = FlashStayRule.Cap(ResolveFlashCap(layer, !layer && stay.FlashSolidMode), true,
-                    sharedHost: layer || stay.FlashSolidMode);
+                int cap = FlashStayRule.OnScreen(FlashStayRule.Cap(ResolveFlashCap(layer, !layer && stay.FlashSolidMode), true,
+                    sharedHost: layer || stay.FlashSolidMode), stay.HydraLimit, stay: true);
                 int active;
                 lock (_lockObj) active = _activeWindows.Count;
                 if (FlashStayRule.ScreenFull(true, active, cap)) return;
@@ -1043,7 +1043,12 @@ namespace ConditioningControlPanel.Services
                 () => ActiveWindowCount > 0,
                 () => App.Video?.IsPlaying == true || App.DualMonitorVideo?.IsPlaying == true || App.BrowserMedia?.IsPlaying == true,
                 () => App.Settings?.Current?.JackpotRemixEnabled == true,
-                Path.Combine(App.UserDataPath, "cache", "remix"));
+                Path.Combine(App.UserDataPath, "cache", "remix"),
+                owned: () => PrizeGrants.IsGranted(PrizeGrants.JackpotRemix),
+                motion: () => MotionFx.Level,
+                builderDisabled: () => JackpotRemixBuilder.Default.Disabled,
+                build: async (sources, seed, ct) => (await JackpotRemixBuilder.Default.BuildAsync(sources, seed, ct).ConfigureAwait(false))?.FilePath,
+                availablePhysicalBytes: JackpotRemixBuilder.AvailablePhysicalBytes);
 
         /// <summary>The local flash pool's gifs under the assets root (what the remix page can read).</summary>
         private IReadOnlyList<string> SnapshotGifPool()
@@ -1202,7 +1207,11 @@ namespace ConditioningControlPanel.Services
                         if (cached.decodeMax >= decodeMax || uncapped)
                         {
                             _imageDecodeCache[path] = (cached.data, DateTime.UtcNow, cached.decodeMax);
-                            return CloneImageData(cached.data);
+                            var hit = CloneImageData(cached.data);
+                            // A remote decode is cached by URL, but its clip file can be replaced
+                            // or released since: hand out the CURRENT file, never the cached one.
+                            if (IsRemotePath(path)) hit.ClipPath = CurrentRemoteClipPath(path);
+                            return hit;
                         }
                     }
                 }
@@ -1689,8 +1698,12 @@ namespace ConditioningControlPanel.Services
             // Prevent memory explosion / compositor backup from too many concurrent flash windows.
             // Only the classic layered-window path carries that risk; compositor/solid flashes are
             // cheap shared-host items, so they get the higher cap (see MAX_CONCURRENT_FLASH_HOST).
-            int cap = FlashStayRule.Cap(ResolveFlashCap(useLayer, useHost),
-                StayUntilPopped(settings, pointFired: oneShotGen != null), sharedHost: useLayer || useHost);
+            // Every path (timed, one-shot bursts, bubble pops, hydra) lands here, so this is the one
+            // place the player's Max on screen is enforced.
+            bool staySpawn = StayUntilPopped(settings, pointFired: oneShotGen != null);
+            int cap = FlashStayRule.OnScreen(FlashStayRule.Cap(ResolveFlashCap(useLayer, useHost),
+                staySpawn, sharedHost: useLayer || useHost),
+                settings.HydraLimit, staySpawn);
             lock (_lockObj)
             {
                 if (_activeWindows.Count >= cap) return;
@@ -1757,6 +1770,8 @@ namespace ConditioningControlPanel.Services
                 window.ClipPath = imageData.ClipPath;
                 // #1194: the user's GIF speed slider, applied once here rather than per tick.
                 window.FrameDelay = ScaleFrameDelay(imageData.FrameDelay, settings.FlashGifSpeedMultiplier);
+                if (Safety.GentleVisuals.On)   // gentle visuals: GIFs play at the gentle speed
+                    window.FrameDelay = TimeSpan.FromMilliseconds(Safety.GentleVisuals.ScaleDelayMs(window.FrameDelay.TotalMilliseconds));
                 window.StartTime = DateTime.Now;
                 window.CurrentFrameIndex = 0;
                 // The shared host is fully click-through (pops on it would need the global mouse
@@ -2023,6 +2038,20 @@ namespace ConditioningControlPanel.Services
                     var ring = BuildDodgeRing();
                     content = new Grid { Children = { content, ring } };
                     window.NatashaDodgeRing = ring;
+                }
+
+                // "via Scrolller" on the picture itself, bottom-right, like the video badge (the
+                // layer path draws the same text in FlashLayer.DrawCredit). Fades with the flash.
+                if (!useLayer && content != null && Video.ScrolllerCredit.IsScrolllerMedia(imageData.FilePath))
+                {
+                    var credit = new Controls.ScrolllerCreditBadge
+                    {
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                        VerticalAlignment = System.Windows.VerticalAlignment.Bottom,
+                        Margin = new System.Windows.Thickness(0, 0, 6, 4),
+                    };
+                    content = new Grid { Children = { content, credit } };
+                    credit.SetShown(true);
                 }
 
                 if (useLayer)
@@ -2558,6 +2587,7 @@ namespace ConditioningControlPanel.Services
                         window.LayerItem = layer.Spawn(frames, x, y, w, h,
                             paddingPx, cornerRadiusPx, skGlowColor, glowSigmaPx,
                             glowOpacity, luckyPulse, motionState);
+                        window.LayerItem.Credit = Video.ScrolllerCredit.IsScrolllerMedia(imageData.FilePath);
                         window.LayerItem.NatashaCue = window.IsNatasha;
                         window.LayerItem.DodgeUntilMs = window.NatashaDodged ? 0 : window.NatashaDodgeUntilMs;
                         if (imageData.BubbleOriginPx is { } origin)
@@ -2628,6 +2658,11 @@ namespace ConditioningControlPanel.Services
                 && px.X >= exclude[0] && px.X <= exclude[0] + exclude[2]
                 && px.Y >= exclude[1] && px.Y <= exclude[1] + exclude[3])
                 return false;
+
+            // ccp-bugs #1416: bubbles draw above flashes, so a click where a bubble covers a
+            // flash is the bubble's. This hook is installed per flash run, after the bubble
+            // hook, so it is asked first and used to claim the click from under the bubble.
+            if (BubbleService.HostBubbleAt(px.X, px.Y)) return false;
 
             var hits = _layerHits;
             for (int i = hits.Length - 1; i >= 0; i--)
@@ -2940,7 +2975,8 @@ namespace ConditioningControlPanel.Services
             // it. Purely how the picture leaves - the XP below, the hydra roll and the active list
             // all run exactly as they did, and a timer expiry never reaches here.
             window.ShatterOnDismiss = true;
-            SafeCloseFlashWindow(window);
+            if (Safety.GentleVisuals.On && !window.UsesLayer) GentleFadeThenClose(window);
+            else SafeCloseFlashWindow(window);
             FlashClicked?.Invoke(this, EventArgs.Empty);
             _ = App.Haptics?.FlashClickVibeAsync();
 
@@ -3158,6 +3194,10 @@ namespace ConditioningControlPanel.Services
             // Read the Fade slider live so a mid-session change lands on the next frame.
             // 0% = instant: a full-alpha step arrives (and leaves) in a single frame.
             var fadeSeconds = settings.FadeDuration * FADE_SECONDS_PER_PERCENT;
+            // Gentle visuals: never shorter than the gentle fade, on every host (the layered
+            // path's 0.5 s cap is lifted too: a slow fade is the point).
+            var gentle = Safety.GentleVisuals.On;
+            if (gentle) fadeSeconds = Safety.GentleVisuals.Fade(fadeSeconds);
 
             FlashWindow[] windowsCopy;
             lock (_lockObj)
@@ -3207,9 +3247,12 @@ namespace ConditioningControlPanel.Services
                     // thinned. The compositor keeps the slider's full ramp length because the
                     // quantiser, not the frame rate, is what bounds its writes.
                     var cheapAlpha = window.UsesHost;
-                    var winFadeSeconds = ResolveFadeSeconds(fadeSeconds, fullRamp: cheapAlpha || window.UsesLayer);
+                    var winFadeSeconds = ResolveFadeSeconds(fadeSeconds, fullRamp: cheapAlpha || window.UsesLayer || gentle);
                     if (window.BubbleDelivery && showThisWindow)
+                    {
                         winFadeSeconds = window.UsesLayer || MotionFx.Level == MotionLevel.Off ? 0 : .18;
+                        if (gentle) winFadeSeconds = Safety.GentleVisuals.Fade(winFadeSeconds);
+                    }
                     var fadeStep = winFadeSeconds > 0 ? dt / winFadeSeconds : 1.0;
 
                     var currentAlpha = cheapAlpha ? window.VisualOpacity : window.FadeAlpha;
@@ -3253,16 +3296,30 @@ namespace ConditioningControlPanel.Services
                         window.Height = moving.H / d;
                     }
 
-                    if (window.ClipPath != null && window.ClipPlayer == null && !window.ClipAttempted
-                        && (window.LayerItem != null || window.ImageControl != null))
+                    // A leaving flash lends its clip slot to the next one that needs it. One that
+                    // lost its slot that way and is back on screen (a linger) asks again below.
+                    if (window.ClipPlayer is { } clipPlayer)
                     {
-                        window.ClipAttempted = true;
-                        window.ClipPlayer = FlashClipPlayer.Start(window.ClipPath, window.Frames[0].PixelWidth,
+                        clipPlayer.Evictable = FlashClipUpgrade.Evictable(showThisWindow);
+                        if (FlashClipUpgrade.Reclaim(true, clipPlayer.IsDisposed, showThisWindow))
+                        { window.ClipPlayer = null; window.ClipRefusedAtCap = true; window.ClipAttempted = false; }
+                    }
+
+                    // A flash refused at the player cap shows its poster and upgrades to the clip
+                    // as soon as a slot frees (ClipAttempted stays false until a real attempt).
+                    // CanStartFlash is read only for a refused flash: it takes the budget lock.
+                    if (FlashClipUpgrade.ShouldTryStart(window.ClipPath != null,
+                            window.LayerItem != null || window.ImageControl != null, showThisWindow,
+                            window.ClipPlayer != null, window.ClipAttempted, window.ClipRefusedAtCap,
+                            window.ClipRefusedAtCap && FlashClipPlayer.CanStartFlash))
+                    {
+                        window.ClipPlayer = FlashClipPlayer.TryStart(window.ClipPath, window.Frames[0].PixelWidth,
                             window.Frames[0].PixelHeight, frame =>
                             {
                                 if (window.LayerItem is { } item) item.SetClipFrame(frame);
                                 else if (window.ImageControl != null) window.ImageControl.Source = frame;
-                            }, App.Settings?.Current.FlashGifSpeedMultiplier ?? 1);
+                            }, App.Settings?.Current.FlashGifSpeedMultiplier ?? 1, out var atCap, flash: true);
+                        (window.ClipAttempted, window.ClipRefusedAtCap) = FlashClipUpgrade.AfterTry(window.ClipPlayer != null, atCap);
                     }
 
                     // Animate GIF frames
@@ -3830,7 +3887,13 @@ namespace ConditioningControlPanel.Services
         /// on a fetch. Cheap enough to call on every draw: three field reads when the pool is
         /// already full or a fetch is in flight.
         /// </summary>
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Path, string Poster)> RemoteClips = new();
+        // Owns the clip files (ownerReleases), so the shared 50-file temp sweep cannot delete a
+        // clip between its draw and LibVLC opening it (the "no flash animates after a few rounds" bug).
+        private static readonly RemoteClipFiles RemoteClips = new();
+
+        /// <summary>The clip file currently held for this URL, or null when there is none on disk.</summary>
+        private static string? CurrentRemoteClipPath(string url)
+            => RemoteClips.TryUse(url, Environment.TickCount64, out var path, out _) && File.Exists(path) ? path : null;
 
         private void RefreshRemoteSelection()
         {
@@ -3910,20 +3973,37 @@ namespace ConditioningControlPanel.Services
 
                     var url = entry.SmallUrl ?? entry.Url;
                     if (string.IsNullOrEmpty(entry.PosterUrl)) continue;
-                    var path = await RemoteMediaCache.MaterializeAsync(url, ct).ConfigureAwait(false);
+                    // A URL handed out again (reuse cycles, cached-only batches) keeps its file:
+                    // a second copy would orphan the first under a decode that still points at it.
+                    var held = CurrentRemoteClipPath(url);
+                    var path = held ?? await RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true).ConfigureAwait(false);
                     if (path == null) continue;
-                    if (!await RemoteMediaCache.PrefetchAsync(entry.PosterUrl, ct).ConfigureAwait(false))
-                    { RemoteMediaCache.ReleaseTempFile(path); continue; }
-                    RefreshRemoteSelection();
-                    lock (_remoteLock)
+                    // A fresh file is ours until RemoteClips takes it: released on every other
+                    // path, a cancelled poster fetch at teardown included. File deletes run
+                    // outside _remoteLock, which the UI draw path waits on.
+                    bool ours = held == null, stale = false;
+                    List<string>? dropped = null;
+                    try
                     {
-                        if (generation != _remoteReady.Generation) { RemoteMediaCache.ReleaseTempFile(path); return; }
-                        if (RemoteClips.Count >= 512)
-                            foreach (var key in RemoteClips.Keys.Take(128))
-                                if (RemoteClips.TryRemove(key, out var old)) RemoteMediaCache.ReleaseTempFile(old.Path);
-                        RemoteClips[url] = (path, entry.PosterUrl);
-                        if (_remoteReady.Add(generation, url)) warmed++;
+                        if (!await RemoteMediaCache.PrefetchAsync(entry.PosterUrl, ct).ConfigureAwait(false)) continue;
+                        RefreshRemoteSelection();
+                        lock (_remoteLock)
+                        {
+                            stale = generation != _remoteReady.Generation;
+                            if (!stale)
+                            {
+                                dropped = RemoteClips.Put(url, path, entry.PosterUrl, Environment.TickCount64);
+                                ours = false;
+                                if (_remoteReady.Add(generation, url)) warmed++;
+                            }
+                        }
                     }
+                    finally
+                    {
+                        if (ours) RemoteMediaCache.ReleaseTempFile(path);
+                        if (dropped != null) foreach (var old in dropped) RemoteMediaCache.ReleaseTempFile(old);
+                    }
+                    if (stale) return;
                 }
 
                 if (warmed > 0)
@@ -3961,7 +4041,7 @@ namespace ConditioningControlPanel.Services
             lock (_remoteLock)
             {
                 Func<string, bool> usable = url =>
-                    RemoteClips.TryGetValue(url, out var clip) && File.Exists(clip.Path);
+                    RemoteClips.TryUse(url, Environment.TickCount64, out var clipPath, out _) && File.Exists(clipPath);
                 return _remoteReady.Take(_random, usable) ?? _remoteReady.TakeShown(usable);
             }
         }
@@ -4000,7 +4080,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private async Task<LoadedImageData?> LoadRemoteImageAsync(string url, int decodeMax)
         {
-            if (RemoteClips.ContainsKey(url)) return await LoadRemoteFaceAsync(url, decodeMax, true);
+            if (RemoteClips.Contains(url)) return await LoadRemoteFaceAsync(url, decodeMax, true);
             try
             {
                 // A bounded wait even though the bytes should already be resident: if the entry
@@ -4258,8 +4338,8 @@ namespace ConditioningControlPanel.Services
                 // is static — the overlays are static singletons and hold no service reference.
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-                bool isClip = RemoteClips.TryGetValue(url, out var clip);
-                using var stream = await RemoteMediaCache.OpenAsync(isClip ? clip.Poster : url, cts.Token).ConfigureAwait(false);
+                bool isClip = RemoteClips.TryUse(url, Environment.TickCount64, out var clipPath, out var clipPoster);
+                using var stream = await RemoteMediaCache.OpenAsync(isClip ? clipPoster : url, cts.Token).ConfigureAwait(false);
                 if (stream == null) return null;
 
                 // CPU-bound; the stream stays alive for it because this await is inside the using.
@@ -4267,7 +4347,7 @@ namespace ConditioningControlPanel.Services
                 int max = Math.Clamp(decodeMax, 64, 4096);
                 var data = await Task.Run(() => DecodeRemoteStill(url, captured, max, allowAnimated: animate)).ConfigureAwait(false);
 
-                if (data != null && isClip && animate) data.ClipPath = clip.Path;
+                if (data != null && isClip && animate) data.ClipPath = clipPath;
                 // Frozen by DecodeRemoteStill, so it is safe to hand across to the UI thread.
                 return data;
             }
@@ -4321,21 +4401,8 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private void CleanupTempPackFiles()
         {
-            foreach (var tempFile in _tempPackFiles)
-            {
-                try
-                {
-                    if (File.Exists(tempFile))
-                    {
-                        File.Delete(tempFile);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    App.Logger?.Debug("Failed to delete temp pack file: {Error}", ex.Message);
-                }
-            }
-            _tempPackFiles.Clear();
+            // A refused delete (the file is still open) stays listed and is retried next time.
+            _tempPackFiles.RemoveAll(MediaTempFileLedger.TryDeleteFile);
         }
 
         private string? GetNextSound()
@@ -4629,12 +4696,17 @@ namespace ConditioningControlPanel.Services
                 // companion voicelines (see SoundsPath), and at raw master they were the loudest
                 // thing in the app while the duck sweep pushed everything else down under them.
                 var volume = volumePercent / 100.0f;
-                var curvedVolume = volume <= 0f ? 0f : Math.Max(0.05f, (float)Math.Pow(volume, 1.5)) * 0.85f;
+                var curvedVolume = volume <= 0f ? 0f : Math.Max(0.05f, (float)Math.Pow(volume, 1.5)) * CompanionVoiceGain.BarkTrim;
+                // 7.1.8: her Voice level rides on top (1 at the default, so nothing moves unasked).
+                // At level 0 the clip still runs silent: the flash keeps its audio-linked length.
+                curvedVolume = CompanionVoiceGain.ApplyLevel(curvedVolume,
+                    App.Settings?.Current?.CompanionVoiceLevel ?? CompanionVoiceGain.DefaultLevel);
                 audioFile.Volume = curvedVolume;
 
                 sound.Init(audioFile);
                 sound.Play();
                 App.Audio?.NoteOutputSuccess();
+                Audio.EngineOffAudioLog.Note("flash-voice", path);
 
                 // Only assign to fields after everything succeeded
                 _currentAudioFile = audioFile;
@@ -4776,6 +4848,30 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        /// <summary>
+        /// Gentle visuals: a popped window or solid-host flash fades out over the gentle fade, then
+        /// takes the normal close. It is already off the active list, so nothing else touches it.
+        /// The animation is cleared before the close so a pooled window comes back writable.
+        /// </summary>
+        private void GentleFadeThenClose(FlashWindow window)
+        {
+            // Off the active list now, so the heartbeat never marks it: lend the slot here.
+            if (window.ClipPlayer != null) window.ClipPlayer.Evictable = true;
+            UIElement? target = window.UsesHost ? window.HostedRoot : window;
+            if (target == null) { SafeCloseFlashWindow(window); return; }
+            target.IsHitTestVisible = false;
+            var anim = new System.Windows.Media.Animation.DoubleAnimation(target.Opacity, 0,
+                TimeSpan.FromSeconds(Safety.GentleVisuals.FadeSeconds));
+            anim.Completed += (_, _) =>
+            {
+                try { target.BeginAnimation(UIElement.OpacityProperty, null); target.Opacity = 0; target.IsHitTestVisible = true; }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+                SafeCloseFlashWindow(window);
+            };
+            try { target.BeginAnimation(UIElement.OpacityProperty, anim); }
+            catch (Exception ex) { Diag.Swallowed(ex); SafeCloseFlashWindow(window); }
+        }
+
         private void SafeCloseFlashWindow(FlashWindow window)
         {
             try
@@ -4806,6 +4902,7 @@ namespace ConditioningControlPanel.Services
                 window.ClipPlayer = null;
                 window.ClipPath = null;
                 window.ClipAttempted = false;
+                window.ClipRefusedAtCap = false;
                 window.Frames.Clear();
 
                 // Stop the glow's animations BEFORE dropping the content. A lucky proc starts
@@ -4839,8 +4936,11 @@ namespace ConditioningControlPanel.Services
                     {
                         var item = window.LayerItem;
                         window.LayerItem = null;
-                        var shatter = shatterThis ? BuildShatter(window, item) : null;
-                        var exit = shatter == null && shatterThis ? BuildExit() : null;
+                        // Gentle visuals: a popped flash leaves as a plain fade (no break, no style).
+                        var gentlePop = shatterThis && Safety.GentleVisuals.On;
+                        var shatter = shatterThis && !gentlePop ? BuildShatter(window, item) : null;
+                        var exit = gentlePop ? FlashExit.Gentle(Safety.GentleVisuals.Fade(FlashExit.DurationOf(FlashExitStyle.Mix)), _random.Next())
+                            : shatter == null && shatterThis ? BuildExit() : null;
                         if (shatter != null) _flashLayer?.BeginShatter(item, shatter);
                         else if (exit != null) _flashLayer?.BeginExit(item, exit);
                         else _flashLayer?.Remove(item);
@@ -5041,6 +5141,7 @@ namespace ConditioningControlPanel.Services
             try { _remoteCts.Cancel(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _remoteCts.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
             lock (_remoteLock) _remoteReady.Clear();
+            foreach (var clip in RemoteClips.TakeAll()) RemoteMediaCache.ReleaseTempFile(clip);
             StopCurrentSound();
             CleanupTempPackFiles();
             lock (_imageDecodeCache) { _imageDecodeCache.Clear(); _imageCacheBytes = 0; }
@@ -5157,6 +5258,7 @@ namespace ConditioningControlPanel.Services
         internal FlashClipPlayer? ClipPlayer;
         internal string? ClipPath;
         internal bool ClipAttempted;
+        internal bool ClipRefusedAtCap;
         public bool BubbleDelivery { get; set; }
         public double FadeAlpha { get; set; }
 
