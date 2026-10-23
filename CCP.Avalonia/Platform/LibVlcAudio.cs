@@ -82,7 +82,25 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
-        internal LibVlcAudio(Func<string, string> pactl) { _vlc = null!; _pactl = pactl; }
+        internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _vlc = null!; _pactl = pactl; _journal = duckJournal; }
+
+        /// <summary>
+        /// App start-up only (never the probes or tests, which must not touch a real profile): restore
+        /// what a run that died while ducked left quiet, then journal every duck to <paramref name="path"/>
+        /// (WPF AudioService RecoverFromCrash / SaveDuckingState). Linux only: this head ducks nothing on Windows.
+        /// </summary>
+        internal void StartDuckJournal(string path)
+        {
+            if (!OperatingSystem.IsLinux()) return;
+            _journal = path;
+            RecoverDucks();
+        }
+
+        /// <summary>On the pactl queue, so it lands before any new duck sweep journals.</summary>
+        internal void RecoverDucks()
+        {
+            if (_journal is { } path) Enqueue(() => DuckRecovery.RecoverPulse(path, _pactl, Environment.ProcessId));
+        }
 
         public void Seed()
         {
@@ -275,7 +293,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private long _duckGeneration;
         private int _duckCount;
         private bool _isDucked;
-        private readonly Dictionary<int, string[]> _originalVolumes = new(); // sink-input index -> raw channel volumes
+        private readonly Dictionary<int, DuckRecovery.PulseStream> _originalVolumes = new(); // sink-input index -> owner + raw channel volumes
+        private readonly Dictionary<int, DuckRecovery.PulseStream> _parked = new(); // restores that could not land (stream gone)
+        private string? _journal; // ducking crash journal; null = none (tests, probes)
         private Task _duckWork = Task.CompletedTask; // chained so a duck and its unduck run in order
         private bool _pactlWarned;
         private Timer? _duckWatchdog; // WPF's safety net for a leaked duck ref: force-unduck after 5 min
@@ -345,33 +365,53 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private void DuckSweep(double keep)
         {
-            using var doc = JsonDocument.Parse(_pactl("-f json list sink-inputs"));
-            foreach (var si in doc.RootElement.EnumerateArray())
+            try
             {
-                var props = si.GetProperty("properties");
-                if (props.TryGetProperty("application.process.id", out var pid) && pid.GetString() == Environment.ProcessId.ToString())
-                    continue;
-                var index = si.GetProperty("index").GetInt32();
-                var raw = si.GetProperty("volume").EnumerateObject().Select(c => c.Value.GetProperty("value").GetInt32()).ToArray();
-                lock (_duckLock)
+                foreach (var si in DuckRecovery.ParseSinkInputs(_pactl("-f json list sink-inputs")))
                 {
-                    if (!_isDucked) return;
-                    if (!_originalVolumes.TryAdd(index, raw.Select(v => v.ToString()).ToArray())) continue;
+                    if (si.Pid == Environment.ProcessId) continue;
+                    var index = si.Index;
+                    lock (_duckLock)
+                    {
+                        if (!_isDucked) return;
+                        if (!_originalVolumes.TryAdd(index, new(si.Pid, si.Name, si.Volumes.Select(v => v.ToString()).ToArray()))) continue;
+                        _parked.Remove(index);
+                    }
+                    // Journal BEFORE lowering: a crash between the two must still find the original.
+                    Journal();
+                    try { _pactl($"set-sink-input-volume {index} {string.Join(' ', si.Volumes.Select(v => (int)(v * keep)))}"); }
+                    catch { lock (_duckLock) _originalVolumes.Remove(index); } // the stream ended mid-sweep
                 }
-                try { _pactl($"set-sink-input-volume {index} {string.Join(' ', raw.Select(v => (int)(v * keep)))}"); }
-                catch { lock (_duckLock) _originalVolumes.Remove(index); } // the stream ended mid-sweep
             }
+            finally { Journal(); }
         }
 
         private void Restore()
         {
-            KeyValuePair<int, string[]>[] saved;
-            lock (_duckLock) { saved = _originalVolumes.ToArray(); _originalVolumes.Clear(); }
-            foreach (var (index, raw) in saved)
+            KeyValuePair<int, DuckRecovery.PulseStream>[] saved;
+            lock (_duckLock) { saved = _originalVolumes.ToArray(); }
+            foreach (var (index, stream) in saved)
             {
-                try { _pactl($"set-sink-input-volume {index} {string.Join(' ', raw)}"); }
-                catch { } // the stream ended while ducked - nothing to restore
+                var ok = false;
+                try { _pactl($"set-sink-input-volume {index} {string.Join(' ', stream.Volumes)}"); ok = true; }
+                catch { } // the stream ended while ducked: pulse may remember the ducked level for that app
+                lock (_duckLock)
+                {
+                    _originalVolumes.Remove(index);
+                    // WPF parks what it could not hand back; the journal keeps it for the next launch.
+                    if (!ok) _parked[index] = stream;
+                }
             }
+            Journal();
+        }
+
+        /// <summary>Every original not yet handed back (WPF SaveDuckingState via DuckRecoveryRule.ToPersist).</summary>
+        private void Journal()
+        {
+            if (_journal is not { } path) return;
+            Dictionary<int, DuckRecovery.PulseStream> owed;
+            lock (_duckLock) owed = global::ConditioningControlPanel.Services.Audio.DuckRecoveryRule.ToPersist(_originalVolumes, _parked);
+            DuckRecovery.SavePulse(path, owed);
         }
 
         // ---- output device (WPF AudioService.EnumerateOutputDevices / ApplyPreferredDevice) ----
