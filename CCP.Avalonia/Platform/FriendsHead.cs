@@ -16,6 +16,9 @@ internal static class FriendsHead
     /// <summary>WPF App.Friends. Null until startup built it.</summary>
     internal static IFriendsService? Service { get; set; }
 
+    /// <summary>WPF App.FriendsFeed: the "What happened" lines, built with the service at startup.</summary>
+    internal static FriendsFeed? Feed { get; set; }
+
     /// <summary>WPF BackRoomApi.AppIdentity: null offline or without an id and a token.</summary>
     internal static (string UnifiedId, string Token)? Identity()
     {
@@ -33,6 +36,9 @@ internal static class FriendsHead
         var url = BaseUrl(userDataDir, overrideUrl);
         Services.Invites.InviteApi.DefaultIdentity = Identity;
         Services.Invites.InviteApi.DefaultBaseUrl = () => url;
+        // WPF App.xaml.cs:459: the open-tables listing (GoonOpenTables) rides the same proxy and door.
+        Services.Lobby.LobbyWire.DefaultIdentity = Identity;
+        Services.Lobby.LobbyWire.DefaultBaseUrl = () => url;
     }
 
     internal static FriendsService? Create(string? userDataDir, string? overrideUrl)
