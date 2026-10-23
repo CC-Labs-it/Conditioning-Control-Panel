@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Sign-in, startup restore and logout all land here; WPF repaints the header on
                 // each (Login.cs:198 UpdateLevelDisplay, OnProfileLoaded).
                 UpdateLevelDisplay();
+                ProfilePage?.RefreshPrivacyState();
                 RefreshProfileBubble();   // WPF UpdateXPBarLoginState: the bubble paints the same identity
                 // WPF UpdatePatreonUI -> RefreshEntitlementVeils: an account change moves every veil.
                 RefreshEntitlementVeils(persist: accountChanged);
@@ -79,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // The cloud profile may adopt a different level (WPF OnProfileLoaded -> UpdateLevelDisplay).
                 try { await dialog.ProfileLoad; } catch (Exception ex) { Serilog.Log.Debug("ProfileLoad: {E}", ex.Message); }
                 UpdateLevelDisplay();
+                if (AccountSeed.Discord?.IsAuthenticated == true) await OfferAchievementSharingAfterDiscordLink();
             }
         }
 

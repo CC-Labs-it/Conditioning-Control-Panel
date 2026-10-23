@@ -1,3 +1,7 @@
+using System;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Interactivity;
@@ -17,6 +21,188 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class ProfilePrivacyPanelTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task AchievementOfferAsksWithShellOwnerAndOnlyYesEnablesSharing(bool accept) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            EnsureApp();
+            var old = CoreSettings.Current.DiscordShareAchievements;
+            StartupLadder.ResetForTests();
+            var shell = new MainShellWindow();
+            try
+            {
+                CoreSettings.Current.DiscordShareAchievements = false;
+                shell.Show();
+                var task = shell.OfferAchievementSharingAfterDiscordLink(userAsked: true);
+                var prompt = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                Assert.Equal(Loc.Get("title_discord_linked"), prompt.Title);
+                Assert.Equal(Loc.Get("msg_discord_share_achievements_prompt"), prompt.FindControl<TextBlock>("TxtMessage")!.Text);
+                Assert.False(task.IsCompleted);
+                prompt.FindControl<Button>(accept ? "BtnOk" : "BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await task;
+                Assert.Equal(accept, CoreSettings.Current.DiscordShareAchievements);
+                var tab = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.DiscordTabView>("DiscordTab")!;
+                Assert.Equal(accept, tab.PrivacyPanel.FindControl<CheckBox>("ChkDiscordTabShareAchievements")!.IsChecked);
+                if (accept)
+                {
+                    await shell.OfferAchievementSharingAfterDiscordLink();
+                    Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+                }
+            }
+            finally { shell.Close(); CoreSettings.Current.DiscordShareAchievements = old; StartupLadder.ResetForTests(); }
+        });
+
+    [Fact]
+    public Task AchievementOfferParksOnceDuringGameThenInboxAsksAndPanicDeclines() =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            EnsureApp();
+            StartupLadder.ResetForTests();
+            var old = CoreSettings.Current.DiscordShareAchievements;
+            var surfaces = PanicSurfaces.All;
+            var shell = new MainShellWindow();
+            try
+            {
+                CoreSettings.Current.DiscordShareAchievements = false;
+                shell.Show();
+                PanicSurfaces.All = new[] { new PanicSurfaces.Surface("game-test", _ => { }, () => true) };
+                await shell.OfferAchievementSharingAfterDiscordLink();
+                await shell.OfferAchievementSharingAfterDiscordLink();
+                Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+                var row = Assert.Single(StartupLadder.Inbox.Items);
+                Assert.Equal("discord-share-achievements", row.Key);
+                StartupLadder.Inbox.Open(row);
+                Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                // Restore the production registry: its new entry must close the actual prompt.
+                PanicSurfaces.All = surfaces;
+                Assert.Single(PanicSurfaces.All.Where(x => x.Id == "achievement-share-prompt")).Stop(shell);
+                await Task.Yield();
+                Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+                Assert.False(CoreSettings.Current.DiscordShareAchievements);
+                Assert.Empty(StartupLadder.Inbox.Items);
+            }
+            finally { shell.Close(); PanicSurfaces.All = surfaces; CoreSettings.Current.DiscordShareAchievements = old; StartupLadder.ResetForTests(); }
+        });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task AchievementOfferWaitsWhenShellIsHiddenOrMinimized(bool minimized) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            EnsureApp();
+            StartupLadder.ResetForTests();
+            var old = CoreSettings.Current.DiscordShareAchievements;
+            var shell = new MainShellWindow();
+            try
+            {
+                CoreSettings.Current.DiscordShareAchievements = false;
+                if (minimized) { shell.Show(); shell.WindowState = WindowState.Minimized; }
+                await shell.OfferAchievementSharingAfterDiscordLink();
+                Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
+                Assert.Single(StartupLadder.Inbox.Items);
+            }
+            finally { shell.Close(); CoreSettings.Current.DiscordShareAchievements = old; StartupLadder.ResetForTests(); }
+        });
+
+    [Fact]
+    public Task DiscordActionOpensProfileAndFailureCopiesIdForFeedbackInterval() =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            EnsureApp();
+            var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.DiscordTabView();
+            var button = tab.FindControl<Button>("BtnProfileDiscord")!;
+            var label = tab.FindControl<TextBlock>("TxtProfileDiscordId")!;
+            button.Tag = "123";
+            label.Text = "community-member";
+            var copied = new TaskCompletionSource();
+            var delay = new TaskCompletionSource();
+            tab.OpenDiscord = url => { Assert.Equal("https://discord.com/users/123", url); return Task.FromResult(true); };
+            tab.CopyDiscord = _ => throw new Exception("A successful launch must not copy");
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("community-member", label.Text);
+            tab.OpenDiscord = _ => Task.FromResult(false);
+            tab.CopyDiscord = id => { Assert.Equal("123", id); copied.SetResult(); return Task.CompletedTask; };
+            tab.CopiedDelay = () => delay.Task;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await copied.Task;
+            Assert.Equal(Loc.Get("label_id_copied"), label.Text);
+            delay.SetResult();
+            await Task.Yield();
+            Assert.Equal("community-member", label.Text);
+        });
+
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
+
+    [Fact]
+    public Task ProfileNoticeTracksLinkStateAndRunsThePrivacyLoginFlow() =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var s = CoreSettings.Current;
+            var oldLinked = s.HasLinkedDiscord;
+            var oldOffline = s.OfflineMode;
+            var shell = new MainShellWindow();
+            try
+            {
+                s.OfflineMode = false;
+                s.HasLinkedDiscord = false;
+                shell.Show();
+                var tab = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.DiscordTabView>("DiscordTab")!;
+                var calls = 0;
+                tab.PrivacyPanel.DiscordAction = host => { Assert.Same(shell, host); calls++; return Task.CompletedTask; };
+                shell.ShowTab("discord");
+                Assert.True(tab.FindControl<Border>("ProfileLinkNotice")!.IsVisible);
+                tab.FindControl<Button>("BtnProfileLinkNotice")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(1, calls);
+                s.HasLinkedDiscord = true;
+                shell.UpdateQuickLoginUI();
+                Assert.False(tab.FindControl<Border>("ProfileLinkNotice")!.IsVisible);
+                s.OfflineMode = true;
+                shell.UpdateQuickLoginUI();
+                Assert.False(tab.FindControl<Button>("BtnProfileLinkNotice")!.IsEnabled);
+            }
+            finally { shell.Close(); s.HasLinkedDiscord = oldLinked; s.OfflineMode = oldOffline; }
+            return Task.CompletedTask;
+        });
+
+    [Fact]
+    public Task OwnCardDmConsentHidesAnyPreviousUsersDiscordAction() =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var s = CoreSettings.Current;
+            var oldOffline = s.OfflineMode;
+            var oldDm = s.AllowDiscordDm;
+            try
+            {
+                s.OfflineMode = true;
+                s.AllowDiscordDm = false;
+                var tab = new ConditioningControlPanel.Avalonia.Views.Tabs.DiscordTabView();
+                var button = tab.FindControl<Button>("BtnProfileDiscord")!;
+                tab.DisplayProfileEntry(new ConditioningControlPanel.Avalonia.Views.Tabs.LeaderboardRow
+                    { DisplayName = "community-member", DiscordId = "123" });
+                Assert.True(button.IsVisible);
+                Assert.Equal("123", button.Tag);
+                tab.DisplayOwnProfile();
+                Assert.False(button.IsVisible);
+                Assert.Null(button.Tag);
+            }
+            finally { s.OfflineMode = oldOffline; s.AllowDiscordDm = oldDm; }
+            return Task.CompletedTask;
+        });
+
     [Fact]
     public Task LocalSharingSwitchesLoadSavedValuesAndPersistIndependentChoices() =>
         AvaloniaTestDispatcher.RunAsync(() =>

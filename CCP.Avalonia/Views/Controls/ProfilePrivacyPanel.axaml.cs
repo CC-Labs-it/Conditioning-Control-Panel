@@ -59,11 +59,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 if (read(s) == on) return;
                 write(s, on);
                 CoreSettings.Save();
+                Changed?.Invoke();
                 if (consent != SyncBody.Field.None) _ = PushSafe(consent);
             };
         }
 
-        private void RefreshPrivacy()
+        internal event System.Action? Changed;
+
+        internal void RefreshPrivacy()
         {
             _paintingLocal = true;
             try
@@ -104,12 +107,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             shell.AppSettingsPage?.FindControl<AppSettings.AccountSettingsSection>("SectionAccount")?.DiscordFromProfileAsync()
                 ?? System.Threading.Tasks.Task.CompletedTask;
 
-        internal async System.Threading.Tasks.Task LoginAsync()
+        internal async System.Threading.Tasks.Task LoginAsync(Views.Windows.MainShellWindow? requestedShell = null)
         {
             try
             {
                 var host = TopLevel.GetTopLevel(this) as Window;
-                var shell = host as Views.Windows.MainShellWindow ?? host?.Owner as Views.Windows.MainShellWindow;
+                var shell = requestedShell ?? host as Views.Windows.MainShellWindow ?? host?.Owner as Views.Windows.MainShellWindow;
                 if (shell == null || CoreSettings.Current.OfflineMode) return;
                 if (Platform.AccountSeed.Discord?.IsAuthenticated != true && host is Dialogs.ProfilePrivacyDialog dialog)
                     dialog.Close();

@@ -19,7 +19,7 @@
 //   private void UpdateAccountLinkingUI(…)
 //   internal async void BtnLinkPatreon_Click(…)
 //   internal async void BtnLinkDiscord_Click(…)
-//   internal void OfferAchievementSharingAfterDiscordLink(…)
+//   OfferAchievementSharingAfterDiscordLink lives in MainShellWindow.Privacy.cs
 //   internal void BtnVisitPatreon_Click(…)
 //   private void OnPatreonTierChanged(…)
 //   private void MaybeShowPremiumCelebration(…)
