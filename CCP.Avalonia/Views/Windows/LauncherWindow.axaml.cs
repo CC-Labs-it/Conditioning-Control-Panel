@@ -18,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Launcher;
+using ConditioningControlPanel.Services.Prizes;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
@@ -66,7 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF _statusTimer: the status line and the stats, every second while shown.</summary>
         private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
 
-        /// <summary>Each tile's reveal as drawn (WPF _revealedAtBuild); every card here is revealed.</summary>
+        /// <summary>Each available tile's reveal as drawn (WPF _revealedAtBuild).</summary>
         private readonly Dictionary<string, bool> _revealedAtBuild = new(StringComparer.OrdinalIgnoreCase);
 
         public LauncherWindow()
@@ -76,11 +77,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             XpTrack.SizeChanged += (_, _) => RefreshStats();
             _statusTimer.Tick += (_, _) => { RefreshStatus(); RefreshStats(); RefreshSpReadout(); };
             CoreMods.ModChanged += OnModChanged;
+            PrizeGrants.GrantsChanged += OnGrantsChanged;
             Closed += (_, _) =>
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
                 CoreMods.ModChanged -= OnModChanged;
+                PrizeGrants.GrantsChanged -= OnGrantsChanged;
             };
             // WPF OnIsVisibleChanged -> OnShown / OnHidden.
             PropertyChanged += (_, e) =>
@@ -414,20 +417,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF OnModChanged: the pill at once, the tiles a dispatcher turn later (ccp-bugs #1292).
-        /// ponytail: WPF also redraws on PrizeGrants.GrantsChanged; no grant service or grant-revealed
-        /// card exists on this head yet (launcher-games slice).</summary>
+        /// Grant changes redraw only when a tile's reveal changed.</summary>
         private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
         {
             RefreshMod();
             RefreshTiles(LauncherTileTrigger.ModChanged);
         });
 
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(() => RefreshTiles(LauncherTileTrigger.GrantsChanged));
+
         /// <summary>WPF RefreshTiles: redraw when Core's LauncherTileRefresh says the event changed a tile.</summary>
         internal void RefreshTiles(LauncherTileTrigger trigger)
         {
             try
             {
-                var now = VisibleCards.Select(c => new KeyValuePair<string, bool>(c.Id, true));
+                var now = LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id))
+                    .Select(c => new KeyValuePair<string, bool>(c.Id, Revealed(c.Id)));
                 if (!LauncherTileRefresh.ShouldRebuild(trigger, IsVisible, _revealedAtBuild, now)) return;
                 Log.Information("[Launcher] {Trigger} redrawing tiles", trigger);
                 BuildTiles();
@@ -552,7 +557,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             GamesGrid.Children.Clear();
             _revealedAtBuild.Clear();
-            foreach (var card in VisibleCards) { GamesGrid.Children.Add(CreateTile(card)); _revealedAtBuild[card.Id] = true; }
+            foreach (var card in LauncherCards.All.Where(c => Destinations.ContainsKey(c.Id)))
+                _revealedAtBuild[card.Id] = Revealed(card.Id);
+            foreach (var card in VisibleCards) GamesGrid.Children.Add(CreateTile(card));
             SeatGrid();
         }
 

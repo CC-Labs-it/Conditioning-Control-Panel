@@ -1,63 +1,61 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Prizes;
+using Serilog;
 
-namespace ConditioningControlPanel.Avalonia.Platform
+namespace ConditioningControlPanel.Avalonia.Platform;
+
+/// <summary>WPF App.Ownership and ProfileSyncService.PrizeFeed over the shared engine. Grants
+/// live only in memory, bound to CoreAccount, and are fetched again by validate/sync each run.</summary>
+internal static class PrizeOwnership
 {
-    /// <summary>
-    /// Back Room prize ownership on this head. WPF asks <c>PrizeGrants.IsGranted</c>, backed by
-    /// OwnershipService snapshots from BackRoomApi. Here only the snapshots a counter reply carries
-    /// (<see cref="ApplySnapshot"/>, fed by <see cref="V2PurchaseHead"/>) are held, for this run;
-    /// the profile-sync feed is parity row svc-prize-ownership. The other source is WPF's DEBUG-only
-    /// <c>CCP_PRIZE_GRANTS</c> override (Core OwnershipService.ReadDebugOverride): same variable,
-    /// same patterns (exact id, <c>prefix.*</c>, <c>*</c>), and a Release build never reads it.
-    /// Parsing is Core's, so an empty id never matches and a pattern holding whitespace or a
-    /// misplaced <c>*</c> is dropped.
-    /// </summary>
-    internal static class PrizeOwnership
+    internal const string FlashDriftBounce = PrizeGrants.FlashDriftBounce;
+    internal static readonly string? OverrideSpec = OwnershipService.ReadDebugOverride();
+    private static readonly OwnershipService Service = new(() => CoreAccount.UnifiedUserId, OverrideSpec, Raise);
+    internal static readonly PrizesFeed Feed = new(() => Service, () => CoreAccount.UnifiedUserId, Post);
+
+    // Keep the existing owned-check test seam; production uses the same facade as WPF.
+    internal static Func<string, bool> IsGranted = PrizeGrants.IsGranted;
+
+    static PrizeOwnership() => PrizeGrants.Attach(Service);
+
+    /// <summary>WPF App's provider-validate and counter sinks, installed before provider initialization.</summary>
+    internal static void Seed()
     {
-        /// <summary>Core <see cref="PrizeGrants.FlashDriftBounce"/>.</summary>
-        internal const string FlashDriftBounce = PrizeGrants.FlashDriftBounce;
-
-        /// <summary>The DEBUG override spec, read once; always null in Release.</summary>
-        internal static readonly string? OverrideSpec = OwnershipService.ReadDebugOverride();
-
-        /// <summary>Test seam: the owned-check every caller uses.</summary>
-        internal static Func<string, bool> IsGranted = id => Matches(OverrideSpec, id) || Held(id);
-
-        private static readonly object Gate = new();
-        private static string? _heldAccount;
-        private static long _revision;
-        private static HashSet<string> _grants = new(StringComparer.Ordinal);
-
-        /// <summary>WPF OwnershipService.IsGranted over the snapshots counter replies carry (row
-        /// feat-backroom-counter-buy). Per run only: no profile-sync feed yet (svc-prize-ownership).</summary>
-        internal static bool Held(string id)
-        {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            lock (Gate) return current != null && current == _heldAccount && _grants.Contains(id);
-        }
-
-        /// <summary>WPF OwnershipService.ApplySnapshot: another account's snapshot and a lower
-        /// revision for the held account are ignored; blank ids skipped, ids trimmed.</summary>
-        internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants)
-        {
-            var current = FriendsHead.Identity()?.UnifiedId;
-            if (string.IsNullOrEmpty(accountId) || grants is null || current != accountId) return;
-            lock (Gate)
-            {
-                if (_heldAccount == accountId && revision < _revision) return;
-                (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
-            }
-        }
-
-        /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
-        internal static void ResetHeld() { lock (Gate) (_heldAccount, _revision, _grants) = (null, 0, new(StringComparer.Ordinal)); }
-
-        /// <summary>Core OwnershipService's override rules over one comma list.</summary>
-        internal static bool Matches(string? spec, string id) =>
-            !string.IsNullOrEmpty(id) && OwnershipService.MatchesOverride(OwnershipService.ParseOverride(spec), id);
+        ProviderSubscription.PrizesSink = (requested, answered, prizes, source) => Feed.Apply(requested, answered, prizes, source);
+        BackRoomApi.DefaultApplyPrizes = ApplySnapshot;
     }
+
+    // WPF OwnershipChanged runs inline on the UI thread, queued from other threads. Feed work
+    // always queues, keeping a pool-thread snapshot and a UI-thread logout in FIFO order.
+    private static volatile bool _shutdown;
+    private static void Raise(Action work)
+    {
+        if (Application.Current == null || Dispatcher.UIThread.CheckAccess()) { if (!_shutdown) work(); }
+        else Post(work);
+    }
+
+    private static void Post(Action work)
+    {
+        void Safe()
+        {
+            if (_shutdown) return;
+            try { work(); }
+            catch (Exception ex) { Log.Debug("[Prizes] ownership update failed: {Error}", ex.Message); }
+        }
+        if (Application.Current == null) Safe();
+        else Dispatcher.UIThread.Post(Safe);
+    }
+
+    internal static void WatchShutdown() => Dispatcher.UIThread.ShutdownStarted += (_, _) => _shutdown = true;
+    internal static bool Held(string id) => Service.Grants.Contains(id);
+    internal static void ApplySnapshot(string accountId, long revision, IEnumerable<string> grants) => Service.ApplySnapshot(accountId, revision, grants);
+    internal static void ResetHeld() => Service.Clear();
+    internal static bool Matches(string? spec, string id) =>
+        !string.IsNullOrEmpty(id) && OwnershipService.MatchesOverride(OwnershipService.ParseOverride(spec), id);
 }

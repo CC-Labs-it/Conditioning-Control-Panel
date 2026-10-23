@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Prizes;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -71,6 +72,8 @@ namespace ConditioningControlPanel.Services
         public bool Loaded { get; private set; }
         /// <summary>The fuse fed by each successful response's <c>descent_countdown</c> block.</summary>
         public Descent.DescentCountdownService? Countdown { get; set; }
+        /// <summary>The head's ordered ownership feed (WPF ProfileSyncService.PrizeFeed).</summary>
+        public PrizesFeed? Prizes { get; set; }
         public DateTime? LastSyncTime { get; private set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
@@ -95,6 +98,7 @@ namespace ConditioningControlPanel.Services
         public void Reset()
         {
             StopHeartbeat();
+            Prizes?.Clear();
             Loaded = false;
             _serverAchievements = null;
             _pendingCosmeticsClear = false;   // never carry one account's unequip into the next
@@ -166,6 +170,7 @@ namespace ConditioningControlPanel.Services
                 }
                 var id = s.UnifiedId!;
                 if (!Loaded || !SignedIn(s)) return false;   // a logout between the check above and the gate
+                Prizes?.NoteAccount(id);
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
@@ -225,6 +230,8 @@ namespace ConditioningControlPanel.Services
                 try
                 {
                     var reply = JObject.Parse(json);
+                    // WPF applies ownership first: another flag's failure must not skip a grant/revoke.
+                    Prizes?.Apply(id, id, reply["prizes"]?.ToObject<PrizesBlock>(), "V2 sync");
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
                     // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
                     // takes the offer (no descent_auto), so only the ack half runs here.
