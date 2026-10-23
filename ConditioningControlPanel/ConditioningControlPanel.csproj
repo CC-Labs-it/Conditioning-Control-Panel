@@ -573,6 +573,7 @@
       Resources\web\arcademy\shell\recordsroom.demo.html;
       Resources\web\arcademy\games\**\smoke\**\*;
       Resources\web\backroom\smoke\**\*;
+      Resources\web\glassroad\**\*;
       Resources\web\backroom\**\tests\**\*;
       Resources\web\backroom\shared\hypno\tests\**\*;
       Resources\web\backroom\stations\breakout\**\*.test.js;
