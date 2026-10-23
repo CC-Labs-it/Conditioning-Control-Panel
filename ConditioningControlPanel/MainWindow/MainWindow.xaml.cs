@@ -1522,6 +1522,19 @@ namespace ConditioningControlPanel
                 bool goonInFront = Services.GoonGame.GoonHostService.IsInFront;
                 bool roomInFront = Services.BackRoom.BackRoomHostService.IsRoomInFront;
                 bool intakeInFront = Services.Quiz.IntakeHostService.IsInFront;
+                bool raceReady = Services.Chaos.CaucusHostService.IsReady;
+                bool boardReady = Services.PieceByPiece.PieceByPieceHostService.IsReady;
+                bool breakoutReady = Services.BackRoom.BackRoomHostService.IsBreakoutReady;
+                bool dtrhReady = Services.Chaos.DtrhHostService.IsReady;
+                bool arcademyReady = Services.Arcademy.ArcademyHostService.IsReady;
+                bool goonReady = Services.GoonGame.GoonHostService.IsReady;
+                bool roomReady = Services.BackRoom.BackRoomHostService.IsRoomReady;
+                bool intakeReady = Services.Quiz.IntakeHostService.IsReady;
+                // Only a game that is up can pause: a booting page that kept the press did nothing.
+                bool frontGameReady = Services.Safety.PanicPolicy.KeptEscapeGoesTo(true,
+                    raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
+                    dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
+                    roomInFront, roomReady, intakeInFront, intakeReady) != Services.Safety.PanicPolicy.KeptEscapePage.None;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
                     gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront
@@ -1529,7 +1542,9 @@ namespace ConditioningControlPanel
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
                     lastClaimUtc: _lastRaceEscapeClaimUtc,
-                    nowUtc: now);
+                    nowUtc: now,
+                    frontGameReady: frontGameReady,
+                    fromPanicKey: !_panicFromStopButton);
                 if (!claim) { _lastRaceEscapeClaimUtc = null; return false; }
                 _lastRaceEscapeClaimUtc = now;
                 var gameName = raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece"
@@ -1541,14 +1556,9 @@ namespace ConditioningControlPanel
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
                 // when the real key reached it as well (host-escape.js).
                 switch (Services.Safety.PanicPolicy.KeptEscapeGoesTo(claim,
-                            raceInFront, raceReady: Services.Chaos.CaucusHostService.IsReady,
-                            boardInFront, boardReady: Services.PieceByPiece.PieceByPieceHostService.IsReady,
-                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady,
-                            dtrhInFront, dtrhReady: Services.Chaos.DtrhHostService.IsReady,
-                            arcademyInFront, arcademyReady: Services.Arcademy.ArcademyHostService.IsReady,
-                            goonInFront, goonReady: Services.GoonGame.GoonHostService.IsReady,
-                            roomInFront, roomReady: Services.BackRoom.BackRoomHostService.IsRoomReady,
-                            intakeInFront, intakeReady: Services.Quiz.IntakeHostService.IsReady))
+                            raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
+                            dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
+                            roomInFront, roomReady, intakeInFront, intakeReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Race:
                         Services.Chaos.CaucusHostService.PostKeptEscape(); break;
@@ -1575,6 +1585,21 @@ namespace ConditioningControlPanel
                 App.Logger?.Warning("PANIC: race pause probe failed: {Error}", ex.Message);
                 return false;
             }
+        }
+
+        /// <summary>True while a Stop or Panic BUTTON runs the panic path (<see cref="HandlePanicFromStopButton"/>).</summary>
+        private bool _panicFromStopButton;
+
+        /// <summary>
+        /// A Stop / Panic button (the Remote HUD, the leash gate) runs exactly the panic press, except
+        /// that it is never a game's Escape pause: a click is not an Escape (bug hunt 2026-10-22). The
+        /// Remote HUD never takes focus, so the game under it stayed in front and its Stop paused it.
+        /// </summary>
+        private void HandlePanicFromStopButton()
+        {
+            _panicFromStopButton = true;
+            try { HandlePanicKeyPress(); }
+            finally { _panicFromStopButton = false; }
         }
 
         private void HandlePanicKeyPress()
@@ -1624,7 +1649,8 @@ namespace ConditioningControlPanel
             // short grace window, so the press is claimed exactly once whichever of the two
             // deliveries (WPF KeyDown vs the hook's queued handler) lands first - and it is only
             // ASKED when no lock card is open, because asking closes the palette as a side effect.
-            bool paletteClaimed = !lockCardOpen
+            // A Stop / Panic BUTTON is never an Escape: it never closes the palette instead of stopping.
+            bool paletteClaimed = !lockCardOpen && !_panicFromStopButton
                 && string.Equals(App.Settings?.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)
                 && SettingsPaletteWindow.TryConsumeEscape();
 
@@ -1774,6 +1800,7 @@ namespace ConditioningControlPanel
                 // Standalone Lab minigames run outside the engine, so the tail below never reaches
                 // them; the override mode's stop pass stops them by hand for the same reason.
                 try { App.BlinkTrainer?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                PanicStopOffEngineHosts();
                 RunPanicStopTail(advanceExitLadder: false);
                 return;
             }
@@ -1804,6 +1831,7 @@ namespace ConditioningControlPanel
             // Stop standalone Lab minigames first — they run independently of
             // the main engine, so the rest of the panic flow won't touch them.
             App.BlinkTrainer?.Stop();
+            PanicStopOffEngineHosts();
 
             RunPanicStopTail(advanceExitLadder: true);
         }
@@ -2007,6 +2035,11 @@ namespace ConditioningControlPanel
             Step("bouncing text", () => App.BouncingText?.Stop());
             Step("mind wipe", () => App.MindWipe?.Stop());
             Step("brain drain", () => App.BrainDrain?.Stop());
+            // The two media hosts outside VideoService. A Takeover web video (or any page video in
+            // the built-in browser) kept playing, fullscreen and topmost with the engine off; the
+            // Deeper player kept playing and its timeline re-fired effects at the next cue.
+            Step("web video", PanicEndBrowserMedia);
+            Step("Deeper player", Views.Deeper.EnhancementPlayerWindow.PanicPauseAll);
 
             // --- overlays ---
             // Stop() already clears _isRunning and calls StopPinkFilter/StopSpiral/StopBrainDrainBlur,
@@ -2071,6 +2104,26 @@ namespace ConditioningControlPanel
             VideoDiag.Log("PANIC", "stop-all pass complete");
         }
 
+        /// <summary>Ends a browser takeover and pauses every page video, fullscreen dropped. The
+        /// synchronous body, so the queue slot is free before the pass resets the queue.</summary>
+        private static void PanicEndBrowserMedia()
+        {
+            if (App.BrowserMedia != null) App.BrowserMedia.ForceEndCore("panic");
+            else App.MainWindowRef?.EndWebVideoTakeover();
+        }
+
+        /// <summary>
+        /// The legacy ladder (PanicOverridesAll off) never runs <see cref="PanicStopEverySurface"/>,
+        /// and its tail only reached what the engine owns: the toy kept vibrating, a Takeover web
+        /// video and the Deeper player kept playing. The three it missed, before its stop tail.
+        /// </summary>
+        private void PanicStopOffEngineHosts()
+        {
+            try { App.Haptics?.PanicStop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { PanicEndBrowserMedia(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Views.Deeper.EnhancementPlayerWindow.PanicPauseAll(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        }
+
         /// <summary>
         /// Stops every "ad-hoc" effect that can be live without the engine running — i.e. effects
         /// fired by voice commands ("She's Listening"), dashboard one-shots, or Deeper. The normal
@@ -2082,6 +2135,9 @@ namespace ConditioningControlPanel
         {
             try
             {
+                // A Takeover pulse writes its boost into the saved spiral/pink settings; settle it
+                // now, as the stop-all pass does, instead of leaving it there for up to 30 s.
+                App.Autonomy?.CancelActivePulses();
                 App.KillAllAudio();
                 App.Video?.Stop();
                 App.Flash?.Stop();

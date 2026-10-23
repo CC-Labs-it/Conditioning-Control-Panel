@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -118,6 +119,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>PanicSurfaces 'intake' screen probe (WPF AnyGameSurfaceOwnsTheScreen).</summary>
         internal static bool IsAnyOpen() { lock (OpenWindows) return OpenWindows.Count > 0; }
+
+        /// <summary>WPF IntakeHostService.IsInFront: the open intake that is the active window, else null.</summary>
+        internal static IntakeHostWindow? InFront() { lock (OpenWindows) return OpenWindows.FirstOrDefault(w => w.IsActive); }
+
+        /// <summary>WPF IntakeHostService.IsReady: the page said ready and is not on its way out. A booting
+        /// page never keeps an Escape (PanicPolicy frontGameReady, main 251b60807).</summary>
+        internal bool KeptEscapeReady => _pageReady && !Run.Exiting && !_closed;
+
+        /// <summary>WPF IntakeHostService.PostKeptEscape: the Escape the panel kept as the intake's pause
+        /// (owner 2026-10-12; the page plays it once through intake's host-escape.js) and the keyboard back.</summary>
+        internal void PostKeptEscape()
+        {
+            try
+            {
+                Post(new { type = "kept-escape" });   // WPF CaucusHostService.KeptEscapeType
+                Web.Focus();
+            }
+            catch (Exception ex) { Log.Debug("IntakeHost: kept Escape post failed: {E}", ex.Message); }
+        }
 
         /// <summary>The panic key's first step, before anything aborts the capture: cancel each say-it loop so
         /// an aborted listen is never read as silence and the mic never reopens. The page is told "stopped",

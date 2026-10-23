@@ -53,6 +53,31 @@ public sealed class VoiceCommandsTests
         Assert.Empty(said);   // no spoken "you called?" re-prompt after a panic
     }
 
+    /// <summary>WPF 769373c28 (hard rule 6): the voice panic reaches as far as the panic key. A head's
+    /// RunFor that refuses (false) leaves the "everything's off" line unsaid; one that ran says it.
+    /// A RunFor intent is in the grammar even with no ActionFor.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ARefusedPanicSaysNothing_ARunPanicConfirms(bool panicRuns)
+    {
+        var ran = new List<string>(); var said = new List<string>(); var heard = new Queue<string>();
+        var vc = new VoiceCommands(new VoiceCommandHost
+        {
+            RunFor = n => n == "panic" ? () => { ran.Add(n); return panicRuns; } : null,
+            Say = (t, _) => said.Add(t),
+            Recognize = (_, _) => Task.FromResult(heard.Count > 0
+                ? new PhraseResult { Transcript = heard.Dequeue(), LoudEnough = true } : new PhraseResult()),
+            Delay = _ => Task.CompletedTask,
+        });
+        Assert.Contains("safe word", vc.Grammar());
+        heard.Enqueue("safe word");
+        Assert.True(await vc.TryHandleVoiceCommandAsync());
+        Assert.Equal(new[] { "panic" }, ran);
+        Assert.Equal(panicRuns, said.Any(l => l.Contains("safe")));
+        if (!panicRuns) Assert.Empty(said);
+    }
+
     [Fact]
     public void EveryConfirmTableLeadsWithNeutral()
         => Assert.All(VoiceCommands.ConfirmTables(), t => Assert.Equal("neutral", t.Lines.Keys.First()));

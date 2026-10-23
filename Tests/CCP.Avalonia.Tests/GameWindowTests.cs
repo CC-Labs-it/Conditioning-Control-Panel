@@ -791,4 +791,73 @@ public sealed class GameWindowTests
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
     });
+
+    /// <summary>WPF TryRacePauseOnEscape (owner 2026-10-12: Escape only pauses a game) on every game this head
+    /// hosts, and main 251b60807: a page that has not said ready (or is on its way out) cannot pause, so its
+    /// Escape is a full panic that closes it. A second Escape inside 2 s is a full panic too.</summary>
+    [Fact]
+    public void Breakout_EscapePausesOnlyOnceTheGameIsUp_ASecondEscapeClosesIt() => Run((shell, launcher) =>
+    {
+        var s = CoreSettings.Current;
+        var (oldKey, oldEnabled) = (s.PanicKey, s.PanicKeyEnabled);
+        try
+        {
+            (s.PanicKey, s.PanicKeyEnabled) = ("Escape", true);
+            launcher.Hide();
+            var t0 = new DateTime(2026, 1, 1, 12, 0, 0);
+
+            // Booting: the page never said ready, so the press is a full panic, never a swallowed pause.
+            var w = GameWindow.Launch("breakoutdemo")!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(w, GameWindow.EscapePauseInFront());
+            shell.HandlePanicKeyPress(t0);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+
+            // Up: the first Escape is the pause, handed to the page as kept-escape; the window stays.
+            w = GameWindow.Launch("breakoutdemo")!;
+            w.Activate();
+            Dispatcher.UIThread.RunJobs();
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            var t1 = t0.AddSeconds(10);
+            shell.HandlePanicKeyPress(t1);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(GameWindow.IsAnyOpen());
+            Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+
+            shell.HandlePanicKeyPress(t1.AddSeconds(1));                     // again within 2 s: panic
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(GameWindow.IsAnyOpen());
+        }
+        finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
+    });
+
+    /// <summary>Each hosted game's kept-Escape page and frame (WPF KeptEscapeType per host: the board reads
+    /// pbp:escape, the race / Breakout / DtRH pages kept-escape). FYP and Just Drop do not pause on Escape.</summary>
+    [Theory]
+    [InlineData("race", "Race", "kept-escape")]
+    [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
+    [InlineData("breakoutdemo", "Breakout", "kept-escape")]
+    [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]
+    [InlineData(GameWindow.FypId, "None", null)]
+    [InlineData(GameWindow.JustDropId, "None", null)]
+    public void EveryHostedGame_KnowsItsKeptEscapePage(string id, string page, string? frame) => Run((_, launcher) =>
+    {
+        launcher.Hide();
+        var w = new GameWindow(GameWindow.Games[id]);
+        try
+        {
+            Assert.Equal(page, w.KeptEscapePage.ToString());
+            Assert.False(w.KeptEscapeReady);                                // nothing loaded: never ready
+            if (frame == null) return;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.PostKeptEscape();
+            Assert.Equal(frame, (string?)Assert.Single(sent)["type"]);
+        }
+        finally { w.Close(); }
+    });
 }
