@@ -118,6 +118,7 @@
   },
   "fov": { "baseVDeg": 60, "kickByTierDeg": [2, 4, 6, 9], "kickInS": 0.12, "kickOutS": 0.45 },
   "shake": { "hitAmpM": 0.12, "boostAmpM": 0.35, "periodS": 0.1, "repeatMul": 0.85, "boostRepeatMul": 0.6, "tier2Mul": 0.55, "stopBelowM": 0.05 },
+  "beatShake": { "ampStartM": 0.03, "ampHalfM": 0.065, "energyMix": 0.35, "fracStart": 0.25, "fracMax": 0.9, "rampBars": 16, "onsetLevel": 0.55, "onsetHoldBars": 2, "gateGroove": 0.6, "gateBuild": 0.4, "gateLo": 0.35, "gateHi": 0.7, "riseK": 0.7, "fallK": 0.65, "outroBars": 4, "accentOff": 0.7, "inS": 0.03, "outS": 0.16, "duckInS": 0.04, "duckOutS": 0.35 },
   "stall": { "durationS": 1.2, "yawSteps": 3, "thrustMul": 0.4 },
   "juice": {
     "countdownPulses": 3,
