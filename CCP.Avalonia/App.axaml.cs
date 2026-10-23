@@ -445,6 +445,9 @@ namespace ConditioningControlPanel.Avalonia
                 // callback, so a CI render cannot touch a user's profile. Unseeded, Core hands
                 // out one default instance, which is what the renders bind against.
                 await step(0.2, "Loading settings...");
+                // WPF AudioService.RecoverFromCrash: apps a dead run (WPF or this head) left ducked get their volume
+                // back; the Windows ducker queues behind it. Linux recovers on the pactl queue after vlc.Seed below.
+                if (OperatingSystem.IsWindows()) Platform.DuckRecovery.RecoverWpfJournalAtLaunch(CorePaths.UserData);
                 // Secrets first: SettingsService's auth-token migration asks CoreSecrets.HasStore on load.
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
@@ -722,6 +725,8 @@ namespace ConditioningControlPanel.Avalonia
                 {
                     var vlc = new Platform.LibVlcAudio();
                     vlc.Seed();
+                    // Ducking crash journal (Linux): restore what a dead run left ducked, then journal every duck.
+                    vlc.StartDuckJournal(Path.Combine(CorePaths.UserData, Platform.DuckRecovery.PulseFileName));
                     // Mind wipe plays through the same LibVLC (WPF App.MindWipe, App.xaml.cs:385).
                     new Platform.MindWipePlayer(vlc.PlayVoice) { CleanSlate = secs => Achievements?.TrackMindWipeDuration(secs) }.Seed();
                     Console.WriteLine("[Audio] LibVLC seeded CoreAudio");
