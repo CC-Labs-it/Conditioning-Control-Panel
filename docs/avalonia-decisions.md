@@ -1228,3 +1228,23 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Behaviour WPF has and this engine lacks goes to follow-up lane companion-barks-b (listed with WPF lines in the parity row
   `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
   barks queued through Giggle. Lane barks-wpf gets the same rule.
+
+## 2026-10-22: Contract D (merged accounts): seams seeded before any door (avalonia-port/merged-account-recovery-head)
+
+Advised by oracle-deep (Q2, ~/ccp-port/briefs/oracle-cloud-backup-contract-d.md). Wiring a 409-merged door without the
+head seams would swap the id, drop the token and leave the user silently signed out; wiring neither (the previous state)
+failed safe. So `Platform/MergedAccountRecoveryHead.Seed()` runs right after `AccountSeed.Seed()` and `AccountSeed.Sync`
+exist, then `WireDoors()`, both before the session validate (WPF App.xaml.cs:380-384).
+
+- StopSync = `AccountSeed.Sync.Reset()` (heartbeat off, Loaded=false: WPF StopTimersForAccountSwap + ResetLoadedProfileState).
+  No prize feed on this head. StampQuests = `QuestService.StampOwner`.
+- Reauthenticate ports `App.ReauthenticateAfterMergedSwapAsync`: Patreon, Discord, SubscribeStar while no token is held,
+  behind one gate (WPF `_authUpgradeGate`); success applies `ProfileAdopt.ApplyUserData` + invite grant and saves;
+  needs-registration is skipped. The username picker is never opened from a background swap.
+- ReloadProfile = `AccountSeed.LoadProfileAsync` (load, heartbeat, push). Finished repaints the login surfaces on the UI
+  thread and, when not re-authenticated, posts `merged-account-signin:<canonical>` through the StartupLadder (OK/Cancel,
+  then LoginDialog, which keeps progression because the canonical id is already stored).
+- Doors: V2AuthService (also carries SyncPush, providers, Quiz, and Core ContentPack's external download and
+  RemoteRelay, which are Avalonia-only Core clients), ArcademySync, AiService, GoonSignaling, BackRoomApi, FriendsApi
+  (`onReply`, the 4th argument, not the first), PbP net relay. Absent here (no host or no HTTP on this head): Goon
+  host, JustDrop orders, AvailableSubjects, ArcademyPresence, Bureau. Each gets its door when it is ported.

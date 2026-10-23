@@ -38,8 +38,8 @@ internal static class FriendsHead
     internal static FriendsService? Create(string? userDataDir, string? overrideUrl)
     {
         if (BaseUrl(userDataDir, overrideUrl) is not { } url) return null;
-        // ponytail: no Contract D hook yet; Core MergedAccountRecovery is unseeded on this head (re-auth/sign-in seams pending).
-        return new FriendsService(new FriendsApi(null, Identity, url), () => Identity()?.UnifiedId, AnyWindowActive);
+        // WPF FriendsServiceApp.cs:12: contract D rides every friends reply (seams: MergedAccountRecoveryHead).
+        return new FriendsService(new FriendsApi(null, Identity, url, MergedAccountRecovery.TryHandle), () => Identity()?.UnifiedId, AnyWindowActive);
     }
 
     /// <summary>WPF FriendsServiceApp.AnyAppWindowActive.</summary>
