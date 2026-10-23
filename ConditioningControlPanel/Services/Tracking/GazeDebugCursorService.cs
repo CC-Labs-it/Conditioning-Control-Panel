@@ -250,8 +250,22 @@ public class GazeDebugCursorService : IDisposable
         _rimPaint = null;
     }
 
+    private int _monitorRevision = -1;
+
     private void HandleGazeMove(Point p)
     {
+        var revision = App.Webcam?.GazeMonitorRevision ?? 0;
+        if (_overlay != null && revision != _monitorRevision)
+        {
+            _monitorRevision = revision;
+            _overlay.Left = SystemParameters.VirtualScreenLeft;
+            _overlay.Top = SystemParameters.VirtualScreenTop;
+            _overlay.Width = Math.Max(1, SystemParameters.VirtualScreenWidth);
+            _overlay.Height = Math.Max(1, SystemParameters.VirtualScreenHeight);
+            CacheDpi();
+            _trail.Clear();
+            _needsPaint = true;
+        }
         _pos = p;
         _hasPos = true;
     }
@@ -486,12 +500,12 @@ public class GazeDebugCursorService : IDisposable
         if (_overlay == null) return false;
 
         var bounds = App.Webcam?.Calibration?.MonitorBounds;
-        // A pre-hotfix save carries no DeviceName: the monitor is unknown, so fall back to
-        // "primary, at the origin" rather than trusting a stale X/Y. Same rule as FypHostService.
-        bool known = bounds?.DeviceName != null;
+        // A sleeping display can return at a different desktop origin. Resolve live bounds;
+        // the primary fallback is temporary and never replaces the calibration's identity.
+        var screen = App.Webcam?.GetGazeScreen();
         double scale = bounds is { DpiScale: > 0.25 and < 8.0 } ? bounds.DpiScale : 1.0;
-        double originX = known ? bounds!.X : 0;
-        double originY = known ? bounds!.Y : 0;
+        double originX = screen?.Bounds.X ?? 0;
+        double originY = screen?.Bounds.Y ?? 0;
 
         // monitor-local DIPs -> physical desktop px -> WPF units.
         double physX = _pos.X * scale + originX;
