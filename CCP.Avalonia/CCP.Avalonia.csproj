@@ -195,6 +195,7 @@
                       Link="Resources\intake\%(RecursiveDir)%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\haptics_guide\**\*"
                       Link="Resources\haptics_guide\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AvaloniaResource Include="..\Assets\lockdown_icon.png" Link="Resources\lockdown_icon.png" />
     <AvaloniaResource Include="..\Assets\lockdown\**\*"
                       Link="Resources\lockdown\%(RecursiveDir)%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\descent\**\*"

@@ -5,12 +5,8 @@
 // the window's 30 fps beat (BeatLoop) instead of an infinite Animation (lag fix, P82), which also
 // parks it while the plate is hidden or the window minimised. Durations, amplitudes and colours verbatim.
 //
-// Avalonia cannot put an x:Name on a brush or an effect (AVLN2000), so LockdownImageBorderBrush and
-// LockdownImageGlow are reached as LockdownImageBorder's own BorderBrush and Effect. A XAML attribute
-// brush is immutable, so the start swaps in a mutable SolidColorBrush and the stop puts the original back.
-//
-// NOTHING CALLS THE PULSE YET. On WPF it is started from the tab transition
-// (MainWindow.TabNavigation.cs:677); on this head that funnel is SwitchTabFx in MainShellWindow.AmbientFx.cs.
+// The image glow is a sibling Border.BoxShadow; the shared beat changes no Effect.
+// SwitchTabFx starts/stops the pulse on navigation; closing the shell stops it too.
 //
 // Dropped, with the reason:
 //   StartSeasonTitleShimmer / StopSeasonTitleShimmer (WPF :35-83)
@@ -41,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void StartLockdownPulse()
         {
+            if (CoreSettings.Current.LockdownPhotosafe) return;
             if (_lockdownPulseClock != null) return;                 // already running
             // WPF :88: no pulse when ambient loops are off (Motion Reduced/Off, performance tier).
             if (!global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops) return;
@@ -53,14 +50,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _lockdownRestingBrush ??= plate.BorderBrush;
                 var brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x14, 0x93));
                 plate.BorderBrush = brush;
-                var glow = plate.Effect as DropShadowEffect;
+                var shadow = Named<Control>("LockdownTab")?.FindControl<Border>("LockdownImageShadow");
 
                 _lockdownPulseClock = new BeatLoop(plate, t =>
                 {
                     // Linear AutoReverse: 0 -> 1 over 1.5 s, back over the next 1.5 s.
                     double p = t / LockdownPulseSeconds % 2, k = p <= 1 ? p : 2 - p;
                     brush.Color = Color.FromRgb(0xFF, (byte)Math.Round(0x14 + (0x69 - 0x14) * k), (byte)Math.Round(0x93 + (0xB4 - 0x93) * k));
-                    if (glow != null) { glow.BlurRadius = 12 + 10 * k; glow.Opacity = 0.7 + 0.3 * k; }
+                    if (shadow != null) shadow.BoxShadow = new BoxShadows(new BoxShadow
+                    { Color = Color.FromArgb((byte)Math.Round(255 * (0.7 + 0.3 * k)), 255, 20, 147), Blur = 12 + 10 * k });
                 });
                 _lockdownPulseClock.Start();
             }
@@ -78,7 +76,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var plate = Named<Control>("LockdownTab")?.FindControl<Border>("LockdownImageBorder");
                 if (plate == null) return;
                 if (_lockdownRestingBrush != null) plate.BorderBrush = _lockdownRestingBrush;
-                if (plate.Effect is DropShadowEffect glow) { glow.BlurRadius = 14; glow.Opacity = 0.7; }
+                if (Named<Control>("LockdownTab")?.FindControl<Border>("LockdownImageShadow") is { } shadow)
+                    shadow.BoxShadow = new BoxShadows(new BoxShadow { Color = Color.FromArgb(179, 255, 20, 147), Blur = 14 });
             }
             catch (Exception ex) { Log.Debug("StopLockdownPulse: {E}", ex.Message); }
         }

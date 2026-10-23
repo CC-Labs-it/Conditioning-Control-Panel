@@ -34,13 +34,9 @@
                                           x:Names are kept so the wiring is a one-line change.
        feat:AdaptiveSideArt           ->  kept (Helpers/AdaptiveSideArt.cs), same threshold as WPF.
                                           The 3*/2* split with MaxWidth="780" is kept verbatim.
-       hover:HoverPop.IsEnabled       ->  dropped: its only target, ImgLockdownFeature, is not on this head.
-       poss:Possession.Role/Name/Exclude -> dropped throughout; the Possession tagger is a WPF
-                                          service. Re-add as attached properties when it moves.
-       pack:// ImageSource            ->  dropped. This head ships no Resources/ PNGs yet, so the
-                                          hero art strip, the side-art plate and the Emergency
-                                          Exit face plate keep their geometry and scrim and draw
-                                          no bitmap. Re-add as avares:// when the art moves. -->
+       hover:HoverPop.IsEnabled       -> fx:HoverPop.IsEnabled on the restored Image.
+       poss:Possession.Role/Name/Exclude -> awaits shell-possession.
+       pack:// ImageSource            -> ModArt resolves overrides then shipped avares:// art. -->
 <UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -125,9 +121,15 @@
          carry a local RenderTransform or it outranks these setters. -->
     <UserControl.Styles>
         <Style Selector="Grid#EERoot">
+            <Setter Property="Transitions">
+                <Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14" Easing="QuadraticEaseInOut"/></Transitions>
+            </Setter>
             <Setter Property="RenderTransform" Value="scale(1)"/>
         </Style>
         <Style Selector="Button#BtnEmergencyExit:pressed Grid#EERoot">
+            <Setter Property="Transitions">
+                <Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.06" Easing="QuadraticEaseOut"/></Transitions>
+            </Setter>
             <Setter Property="RenderTransform" Value="scale(0.965)"/>
         </Style>
     </UserControl.Styles>
@@ -140,15 +142,11 @@
 
                 <StackPanel>
 
-                    <!-- HERO. Replaces the 44px-emoji header row. On WPF the art strip is an
-                         ImageBrush bound to ImgLockdownFeature.Source so the per-mod art swap
-                         repaints the hero too; this head ships no PNGs, so the strip keeps its
-                         geometry, its right-to-left opacity mask and a hue wash, and takes the
-                         bound ImageBrush back when the art moves. -->
+                    <!-- WPF hero strip follows the same resolved source as the side plate. -->
                     <Border Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
                             BorderBrush="{StaticResource TabHueBorderBrush}" BorderThickness="2" Margin="0,0,0,10">
                         <Grid>
-                            <Border CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
+                            <Border x:Name="LockdownHeroArt" CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
                                     Background="{StaticResource TabHueWashBrush}">
                                 <Border.OpacityMask>
                                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -502,15 +500,6 @@
                                                 </Button.Template>
 
                                                 <Grid x:Name="EERoot" RenderTransformOrigin="50%,50%">
-                                                    <Grid.Transitions>
-                                                        <Transitions>
-                                                            <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14">
-                                                                <TransformOperationsTransition.Easing>
-                                                                    <QuadraticEaseInOut/>
-                                                                </TransformOperationsTransition.Easing>
-                                                            </TransformOperationsTransition>
-                                                        </Transitions>
-                                                    </Grid.Transitions>
 
                                                     <!-- Hazard plate -->
                                                     <Border x:Name="EEPlate" CornerRadius="20" BorderThickness="7" Background="#160810"
@@ -541,8 +530,7 @@
                                                                      Image: Border does not clip its children, so the only
                                                                      way to get the art's own corners rounded is to make it
                                                                      the background. Reads as an inset plate instead of a
-                                                                     square pasted onto the slab. The brush itself waits
-                                                                     for the art to move to avares://. -->
+                                                                     square pasted onto the slab. -->
                                                                 <Border Grid.Column="0" x:Name="EEFacePlate"
                                                                         Width="128" Margin="14,10,8,10" CornerRadius="10"
                                                                         Background="#33000000"
@@ -598,22 +586,16 @@
                             </Border>
                         </StackPanel>
 
-                        <!-- SIDE ART = the lockdown plate, moved out of the card body. It keeps its
-                             own pink border instead of the velvet outline because on WPF
-                             StartLockdownPulse animates LockdownImageBorderBrush and
-                             LockdownImageGlow directly. Those two x:Names are gone here (Avalonia
-                             cannot name a brush or an effect), and the plate ships without its
-                             Image child until the art moves to avares://. -->
-                        <Border Grid.Column="1" x:Name="LockdownImageBorder" Margin="10,0,0,10" CornerRadius="12"
-                                BorderThickness="2" ClipToBounds="True" Background="#12FFFFFF"
-                                BorderBrush="#FF1493"
-                                VerticalAlignment="Stretch" MinHeight="200" MaxHeight="520">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#FF1493" BlurRadius="14" OffsetX="0" OffsetY="0" Opacity="0.7"/>
-                            </Border.Effect>
-                            <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="64" Opacity="0.55"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <!-- WPF plate: the shadow is a sibling so hover/pulse never cache the image in an Effect. -->
+                        <Grid Grid.Column="1" Margin="10,0,0,10" MinHeight="200" MaxHeight="520">
+                            <Border x:Name="LockdownImageShadow" CornerRadius="12" IsHitTestVisible="False"
+                                    Background="#12FFFFFF" BoxShadow="0 0 14 0 #B3FF1493"/>
+                            <Border x:Name="LockdownImageBorder" CornerRadius="12" BorderThickness="2"
+                                    ClipToBounds="True" Background="#12FFFFFF" BorderBrush="#FF1493">
+                                <Image x:Name="ImgLockdownFeature" Stretch="Uniform" Margin="10"
+                                       fx:HoverPop.IsEnabled="True"/>
+                            </Border>
+                        </Grid>
                     </Grid>
                 </StackPanel>
 

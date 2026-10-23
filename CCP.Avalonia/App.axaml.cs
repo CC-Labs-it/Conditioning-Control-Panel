@@ -457,6 +457,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
                 LockdownService.RecoverIfNeeded();
+                Services.Haptics.CoreLockdownDoseKeeper.RecoverIfNeeded();
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.

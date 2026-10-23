@@ -9,6 +9,19 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class CoreEngineTests
 {
+    [Fact]
+    public void AutomaticDoseStartsDoNotCountAsUserSessions()
+    {
+        var count = CoreSettings.Current.TotalSessions;
+        try
+        {
+            CoreEngine.Start(systemInitiated: true);
+            Assert.True(CoreEngine.IsRunning);
+            Assert.Equal(count, CoreSettings.Current.TotalSessions);
+        }
+        finally { CoreEngine.Stop(); }
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, false)]

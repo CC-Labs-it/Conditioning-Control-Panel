@@ -76,7 +76,7 @@ public sealed class AmbientBeatLoopsTests
         "Views/Tabs/LockdownTabView.axaml.cs", "Views/Tabs/QuestsTabView.Fx.cs", "Views/Tabs/StudioTabView.axaml.cs",
         "Views/Windows/AnnouncementPopup.axaml.cs", "Views/Windows/FeatureIntroPopup.axaml.cs",
         "Views/Windows/ItemUnlockedPopup.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
-        "Views/Windows/LockCardWindow.axaml.cs", "Views/Windows/MainShellWindow.Animations.cs",
+        "Views/Windows/LockCardWindow.axaml.cs",
         "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MainShellWindow.NavRail.cs",
         "Views/Windows/MainShellWindow.TabFxTakeoverLabStatus.cs", "Views/Windows/MantraWindow.axaml.cs",
         "Views/Windows/SettingsPaletteWindow.axaml.cs", "Views/Windows/TeaseRevealPopup.axaml.cs",
@@ -314,7 +314,9 @@ public sealed class AmbientBeatLoopsTests
             Assert.Equal(1.0, spark.Opacity);
 
             // Lockdown plate (WPF MainWindow.Animations.cs:99-112): #FF1493 -> #FF69B4, blur 12 -> 22, linear 1.5 s.
+            CoreSettings.Current.LockdownPhotosafe = false;
             CoreSettings.Current.MotionLevel = MotionLevel.Reduced;      // WPF :88 AllowAmbientLoops gate
+            shell.ShowTab("lockdown");
             shell.StartLockdownPulse();
             Assert.False(shell.LockdownPulsing);
             CoreSettings.Current.MotionLevel = MotionLevel.Full;
@@ -323,7 +325,9 @@ public sealed class AmbientBeatLoopsTests
             var plate = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageBorder")!;
             Step(time, 1.5);
             Assert.Equal(Color.FromRgb(0xFF, 0x69, 0xB4), ((ISolidColorBrush)plate.BorderBrush!).Color);
-            Assert.Equal(22, ((DropShadowEffect)plate.Effect!).BlurRadius, 3);
+            var shadow = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageShadow")!;
+            Assert.Equal(22, shadow.BoxShadow[0].Blur, 3);
+            Assert.Equal(255, shadow.BoxShadow[0].Color.A);
             Step(time, 1.5);
             Assert.Equal(Color.FromRgb(0xFF, 0x14, 0x93), ((ISolidColorBrush)plate.BorderBrush!).Color);
             shell.StopLockdownPulse();

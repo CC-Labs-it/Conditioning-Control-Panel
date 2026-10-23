@@ -30,6 +30,77 @@ namespace CCP.Avalonia.Tests;
 /// the panel half is a table of every control WPF greys or refuses under Lockdown.</summary>
 public sealed class LockdownVeilTests
 {
+    [Fact]
+    public void DoseHostIsInstalledAndCanDriveTheRealWall() => Run((shell, ld) =>
+    {
+        var keeper = ConditioningControlPanel.Services.Haptics.CoreLockdownDoseKeeper.Current;
+        Assert.NotNull(keeper);
+        ld.Activate(TimeSpan.FromMinutes(20));
+        Assert.True(keeper!.IsArmed);
+        var host = MainShellWindow.LockdownDoseHostFor(() => shell);
+        host.SetWallFeature("bouncingtext", true);
+        Assert.True(CoreSettings.Current.BouncingTextEnabled);
+        host.SetWallFeature("bouncingtext", false);
+        Assert.False(CoreSettings.Current.BouncingTextEnabled);
+        Assert.False(MainShellWindow.LockdownDoseHostFor(() => null).IsAlive());
+        ld.Deactivate();
+        host.StartEngine();
+        Assert.False(CoreEngine.IsRunning);
+        Assert.Contains("picks features for you", LockdownTabView.LockdownWarning(20, CoreSettings.Current));
+    });
+
+    [Fact]
+    public void LockdownArtAndPulseHaveAUserPath() => Run((shell, ld) =>
+    {
+        var premium = CoreEntitlement.HasPremiumProvider;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        try
+        {
+            CoreSettings.Current.LockdownPhotosafe = false;
+            shell.ShowTab("lockdown");
+            var tab = shell.Named<LockdownTabView>("LockdownTab")!;
+            Assert.NotNull(tab.ImgLockdownFeature.Source);
+            Assert.Same(tab.ImgLockdownFeature.Source, Assert.IsType<global::Avalonia.Media.ImageBrush>(tab.LockdownHeroArt.Background).Source);
+            Assert.IsType<global::Avalonia.Media.ImageBrush>(tab.EEFacePlate.Background);
+            var previous = CoreModArt.OverridePathProvider;
+            var dir = Directory.CreateTempSubdirectory("ccp-lockdown-art-");
+            var png = Path.Combine(dir.FullName, "art.png");
+            try
+            {
+                using (var image = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96))) image.Save(png);
+                CoreModArt.OverridePathProvider = _ => png;
+                CoreMods.RaiseModChanged(null, new ModPackage(new ModManifest(), null, false));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(6, Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(tab.ImgLockdownFeature.Source).PixelSize.Width);
+                Assert.Same(tab.ImgLockdownFeature.Source, Assert.IsType<global::Avalonia.Media.ImageBrush>(tab.LockdownHeroArt.Background).Source);
+            }
+            finally { CoreModArt.OverridePathProvider = previous; dir.Delete(true); }
+            Assert.True(ConditioningControlPanel.Avalonia.Controls.HoverPop.GetIsEnabled(tab.ImgLockdownFeature));
+            ld.Activate(TimeSpan.FromMinutes(20));
+            Dispatcher.UIThread.RunJobs();
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs();
+            tab.BtnEmergencyExit.BringIntoView();
+            Frame();
+            double PressDuration() => Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(tab.EERoot.Transitions![0]).Duration.TotalMilliseconds;
+            Assert.Equal(140, PressDuration());
+            var press = tab.BtnEmergencyExit.TranslatePoint(new Point(30, 30), shell)!.Value;
+            shell.MouseDown(press, MouseButton.Left);
+            Assert.True(tab.BtnEmergencyExit.IsPressed);
+            Assert.Equal(60, PressDuration());
+            shell.MouseUp(press, MouseButton.Left);
+            Assert.Equal(140, PressDuration());
+            Assert.Null(tab.LockdownImageBorder.Effect);
+            Assert.True(shell.LockdownPulsing);
+            shell.ShowTab("dashboard");
+            Assert.False(shell.LockdownPulsing);
+            CoreSettings.Current.LockdownPhotosafe = true;
+            shell.ShowTab("lockdown");
+            Assert.False(shell.LockdownPulsing);
+        }
+        finally { CoreEntitlement.HasPremiumProvider = premium; }
+    });
+
     private static void Run(Action<MainShellWindow, LockdownService> body)
     {
         AvaloniaTestDispatcher.Run(() =>

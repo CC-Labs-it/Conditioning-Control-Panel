@@ -69,13 +69,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine()
+        internal void StartEngine(bool systemInitiated = false)
         {
             var gen = ++_engineGen;
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
-                CoreEngine.Start();
+                if (systemInitiated && !LockdownActive) return; // portal consent may outlive the lockdown
+                CoreEngine.Start(systemInitiated);
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);

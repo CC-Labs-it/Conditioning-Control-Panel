@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             InitializeComponent();
 
             LoadPossessionSettings();
+            ApplyFeatureArt();
             UpdateQuestHint();
 
             // Tabs are shown and hidden rather than rebuilt, so the first attach fires once.
@@ -56,6 +57,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) =>
             {
                 LoadPossessionSettings();
+                CoreMods.ModChanged += OnModChanged;
+                ApplyFeatureArt();
                 // P01: a minimised window draws nothing, so the breath stops with it.
                 _host = TopLevel.GetTopLevel(this) as Window;
                 if (_host != null) _host.PropertyChanged += OnHostChanged;
@@ -64,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             DetachedFromVisualTree += (_, _) =>
             {
                 if (_host != null) _host.PropertyChanged -= OnHostChanged;
+                CoreMods.ModChanged -= OnModChanged;
                 _host = null;
                 StopEmergencyExitPulse();
             };
@@ -84,6 +88,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ld.TimerRestarted += _ => Dispatcher.UIThread.Post(() => TxtLockdownTimer.Text = Clock(ld.Remaining));
                 ShowLockdownState();
             }
+        }
+
+        private void OnModChanged(object? sender, Models.ModPackage mod) => Dispatcher.UIThread.Post(ApplyFeatureArt);
+
+        private void ApplyFeatureArt()
+        {
+            var art = Helpers.ModArt.TryLoad("lockdown_icon.png");
+            ImgLockdownFeature.Source = art;
+            LockdownHeroArt.Background = art != null
+                ? new ImageBrush(art) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right }
+                : (IBrush)Resources["TabHueWashBrush"]!;
+            EEFacePlate.Background = Helpers.ModArt.TryLoad("lockdown/emergency_exit.png") is { } face
+                ? new ImageBrush(face) { Stretch = Stretch.UniformToFill }
+                : new SolidColorBrush(Color.Parse("#33000000"));
         }
 
         // ==== Duration (WPF LockdownTabView.xaml.cs:36) =====================================
@@ -257,8 +275,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ponytail: ported: premium gate, double warning, Activate, panel swap, clock, the secret
         // phrase, the Emergency Exit breath; the title-bar badge, blood-red theme and activation flash
         // are MainShellWindow.Lockdown.cs; the Strict toggles grey themselves (HoldWhileLockdown).
-        // Not on this head: the Possession haunt/readout (no director yet), the Dose keeper and
-        // the system-key hook (Linux has none, so the warning does not promise it).
+        // Possession haunt/readout still waits on shell-possession. Dose is Core; system keys are Windows-only.
 
         /// <summary>The head's live Lockdown (null in renders and tests that set none).</summary>
         internal static LockdownService? Lockdown => LockdownService.Current;
@@ -320,8 +337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ld.Activate(TimeSpan.FromMinutes(minutes));
         }
 
-        /// <summary>WPF's consent text, minus the lines this head would be lying about (Dose keeper,
-        /// Possession: none run here; system keys off Windows, where nothing blocks them) and with the
+        /// <summary>WPF's consent text, minus Possession (no lifecycle here) and system keys off Windows and with the
         /// platform's safety valve.</summary>
         internal static string LockdownWarning(int minutes, Models.AppSettings cfg) => LockdownWarning(minutes, cfg, OperatingSystem.IsWindows());
 
@@ -338,6 +354,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
+            if (cfg.LockdownDoseKeeperEnabled)
+                warn.Append("\n- Nothing running? Lockdown starts the engine and picks features for you\n")
+                    .Append("  (and switches them back on if you turn them all off - one more each time)");
             return warn.ToString();
         }
 

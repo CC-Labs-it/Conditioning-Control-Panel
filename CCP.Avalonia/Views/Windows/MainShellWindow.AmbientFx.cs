@@ -83,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Both of these run BEFORE the early return below: the first visit to a tab is the
             // visit that registers its canvas, and it has to be resumed on that same pass. The
             // Deeper drift is not a canvas at all and is not in the registry.
+            if (tab == "lockdown") StartLockdownPulse(); else StopLockdownPulse();
             EnsureTabFx(tab);
             ApplyDeeperGlyphDrift(tab);
 
