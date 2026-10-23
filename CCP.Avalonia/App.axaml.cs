@@ -794,6 +794,7 @@ namespace ConditioningControlPanel.Avalonia
                     }
                 };
                 SeedLevelAchievements(Achievements);
+                SeedBubbleAchievements(Achievements);
                 StartQuests();
                 Platform.CompanionHead.Start();   // WPF App.Companion: switch seams, companion XP, drain, level-up
                 Platform.BarkHead.Start();        // WPF App.Bark (App.xaml.cs:313/336/604/2826): rules, gate, sources
@@ -1003,13 +1004,24 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SpiralOverlay.CloseAll();   // WPF StopEngine -> App.Overlay.Stop(); panic and exit too
         }
 
-        /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.
-        /// ponytail: no sound, no Discord webhook - neither service exists on this head.</summary>
+        /// <summary>WPF AwardAmbientPop -> AchievementService.TrackBubblePopped, even when no XP pays.
+        /// Returns the handler so tests can detach the startup subscription.</summary>
+        internal static Action SeedBubbleAchievements(AchievementEngine engine)
+        {
+            Action popped = engine.TrackBubblePopped;
+            Views.Overlays.BubbleOverlay.Popped += popped;
+            return popped;
+        }
+
         /// <summary>WPF ProgressionService.cs:285 (a level-up celebrates) and App.xaml.cs:3174 (retroactive,
         /// silent). Returns the LevelUp handler so a test can detach it.</summary>
         internal static Action<int> SeedLevelAchievements(AchievementEngine engine)
         {
-            Action<int> onLevel = engine.CheckLevelAchievements;
+            Action<int> onLevel = level =>
+            {
+                engine.CheckLevelAchievements(level);
+                engine.TrackSkillPointsEarned(SparklePointRewards.PointsPerLevel);
+            };
             ProgressionBank.LevelUp += onLevel;
             var was = engine.SuppressPopups;
             engine.SuppressPopups = true;

@@ -412,22 +412,9 @@ public class AchievementService : IDisposable
             TryUnlock("pop_the_thought");
         }
 
-        // Award 1 sparkle point every 100 bubbles
-        if (_progress.TotalBubblesPopped % 100 == 0)
-        {
-            var settings = App.Settings?.Current;
-            if (settings != null)
-            {
-                var previousPoints = settings.SkillPoints;
-                settings.SkillPoints += 1;
-                var creditedBalance = settings.SkillPoints;
-                App.Settings?.Save();
-                SparklePointRewards.PublishCredit(previousPoints, creditedBalance, SparklePointSource.BubbleMilestone);
-                App.Logger?.Information("Bubble milestone! {Total} bubbles popped — awarded 1 sparkle point (total: {Points})",
-                    _progress.TotalBubblesPopped, settings.SkillPoints);
-                ShowBubbleMilestoneNotification(_progress.TotalBubblesPopped);
-            }
-        }
+        if (App.Settings?.Current != null &&
+            SparklePointRewards.CreditBubbleMilestones(_progress.TotalBubblesPopped - 1, _progress.TotalBubblesPopped) > 0)
+            ShowBubbleMilestoneNotification(_progress.TotalBubblesPopped);
 
         // #1071: a pop used to set _isDirty and nothing else, leaving the entire run's count to the
         // 30s autosave timer - a DispatcherTimer running at DispatcherPriority.Background (its
@@ -466,24 +453,8 @@ public class AchievementService : IDisposable
             TryUnlock("pop_the_thought");
         }
 
-        // 1 sparkle point per 100 bubbles — award every milestone crossed in one go.
-        int milestones = after / 100 - before / 100;
-        if (milestones > 0)
-        {
-            var settings = App.Settings?.Current;
-            if (settings != null)
-            {
-                var previousPoints = settings.SkillPoints;
-                settings.SkillPoints += milestones;
-                var creditedBalance = settings.SkillPoints;
-                App.Settings?.Save();
-                SparklePointRewards.PublishCredit(previousPoints, creditedBalance, SparklePointSource.BubbleMilestone);
-                App.Logger?.Information("Bubble milestone (batch)! {Total} bubbles popped — awarded {N} sparkle point(s) (total: {Points})",
-                    after, milestones, settings.SkillPoints);
-                // one popup for the highest 100-boundary reached this run
-                ShowBubbleMilestoneNotification(after - after % 100);
-            }
-        }
+        if (App.Settings?.Current != null && SparklePointRewards.CreditBubbleMilestones(before, after) > 0)
+            ShowBubbleMilestoneNotification(after - after % 100);
 
         // Called once at run-end, not per pop, so an inline flush costs nothing here (#1071).
         Save();

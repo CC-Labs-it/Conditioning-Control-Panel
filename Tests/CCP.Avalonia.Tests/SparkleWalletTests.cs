@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -12,6 +13,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -91,6 +93,79 @@ public sealed class SparkleWalletTests
             shell?.Close();
             (s.SkillPoints, s.MotionLevel, s.PerformanceMode) = old;
             BeatLoop.Time = TimeProvider.System;
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RealProducersCueTheShellWallet(bool bubbleMilestone) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Platform();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldXp = CoreProgression.AddXPProvider;
+        var oldTime = BeatLoop.Time;
+        BeatLoop.Time = new SteppedTime();
+        var service = new SettingsService();
+        service.Reset(); // Each test starts from fresh settings in the assembly's CCP_USERDATA_DIR sandbox.
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        var dir = Directory.CreateTempSubdirectory("ccp-wallet-producer-");
+        var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
+        var levelHandler = AvApp.SeedLevelAchievements(engine);
+        var bubbleHandler = AvApp.SeedBubbleAchievements(engine);
+        MainShellWindow? shell = null;
+        try
+        {
+            s.SkillPoints = 40;
+            s.PlayerLevel = 1;
+            s.PlayerXP = 0;
+            s.DescentEpoch = 0;
+            s.UnlockedSkills.Clear();
+            s.OfflineMode = true;
+            s.OfflineUsername = "wallet-test";
+            s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+            CoreProgression.AddXPProvider = ProgressionBank.Add;
+            shell = new MainShellWindow { Width = 1400, Height = 900 };
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var wallet = shell.Named<SparkleWallet>("HeaderSparkleWallet")!;
+            Assert.False(wallet.RewardShowing);
+
+            if (bubbleMilestone)
+            {
+                // Real ambient-pop handler, even after the daily XP bucket is exhausted.
+                s.AmbientBubbleXpDayKey = DateTime.Now.ToString("yyyy-MM-dd");
+                s.AmbientBubbleXpPaidToday = 300;
+                engine.Progress.TotalBubblesPopped = 98;
+                BubbleOverlay.Pop(new AmbientBubble { Clickable = true });
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(99, engine.Progress.TotalBubblesPopped);
+                Assert.False(wallet.RewardShowing);
+                BubbleOverlay.Pop(new AmbientBubble { Clickable = true });
+                Assert.Equal(100, engine.Progress.TotalBubblesPopped);
+            }
+            else
+            {
+                ProgressionBank.Add(XpCurve.GetXPForLevel(1, 0), "Bubble");
+                Assert.Equal(2, s.PlayerLevel);
+                Assert.Equal(1, engine.Progress.TotalSkillPointsEarned);
+            }
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(41, s.SkillPoints);
+            Assert.Equal(41, wallet.Balance);
+            Assert.True(wallet.RewardShowing);
+            Assert.Contains("1", wallet.GainLabel);
+        }
+        finally
+        {
+            shell?.Close();
+            ProgressionBank.LevelUp -= levelHandler;
+            BubbleOverlay.Popped -= bubbleHandler;
+            CoreProgression.AddXPProvider = oldXp;
+            CoreSettings.ServiceProvider = oldProvider;
+            BeatLoop.Time = oldTime;
+            dir.Delete(true);
         }
     });
 

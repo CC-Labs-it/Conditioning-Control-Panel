@@ -24,7 +24,7 @@ public class SkillTreeService : IDisposable
     /// <summary>
     /// Points awarded per level up
     /// </summary>
-    public const int PointsPerLevel = 1;
+    public const int PointsPerLevel = SparklePointRewards.PointsPerLevel;
 
     /// <summary>
     /// Event fired when a skill is unlocked
@@ -685,25 +685,10 @@ public class SkillTreeService : IDisposable
     /// </summary>
     public void OnLevelUp(int newLevel, int levelsGained = 1)
     {
-        var settings = App.Settings?.Current;
-        if (settings == null) return;
+        if (App.Settings?.Current == null) return;
 
-        var pointsAwarded = levelsGained * PointsPerLevel;
-        var previousPoints = settings.SkillPoints;
-        settings.SkillPoints += pointsAwarded;
-        var creditedBalance = settings.SkillPoints;
-
-        // Track total skill points earned (for stats)
-        App.Achievements?.TrackSkillPointsEarned(pointsAwarded);
-
-        // Season Rewind: remember the season's peak level (PlayerLevel itself is wiped at rollover)
-        settings.SeasonPeakLevel = Math.Max(settings.SeasonPeakLevel, newLevel);
-
-        App.Logger?.Information("Level up to {Level}! Awarded {Points} skill points. Total: {Total}",
-            newLevel, pointsAwarded, settings.SkillPoints);
-
-        App.Settings?.Save();
-        SparklePointRewards.PublishCredit(previousPoints, creditedBalance, SparklePointSource.LevelUp);
+        App.Achievements?.TrackSkillPointsEarned(levelsGained * PointsPerLevel);
+        SparklePointRewards.CreditLevelUp(newLevel, levelsGained);
     }
 
     #endregion
