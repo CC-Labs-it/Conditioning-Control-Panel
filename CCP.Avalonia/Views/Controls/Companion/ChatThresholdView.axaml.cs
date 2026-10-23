@@ -50,6 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Unloaded += (_, _) =>
             {
                 StopThinking();
+                // Cut mid-sweep: _shimmerPlayed blocks a replay, so hide the band rather than freeze it.
+                if (_shimmerLoop is { IsRunning: true }) DormantShimmer.Opacity = 0;
                 _shimmerLoop?.Stop();
                 _vm?.Detach();
                 Observe(null);

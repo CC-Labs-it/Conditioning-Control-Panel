@@ -141,4 +141,39 @@ public sealed class ChatThresholdMotionTests
             BeatLoop.Time = previousTime;
         }
     });
+
+    [Fact]
+    public Task UnloadMidSweepHidesTheShimmerBand() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previousTime = BeatLoop.Time;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        var view = new ChatThresholdView();
+        var ancestor = new Border { Child = view };
+        var window = new Window { Content = ancestor, Width = 700, Height = 600 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var shimmer = view.FindControl<Border>("DormantShimmer")!;
+            typeof(ChatThresholdViewModel).GetProperty(nameof(ChatThresholdViewModel.State))!
+                .SetValue(view.ViewModel!, CompanionZoneState.Dormant);
+            Dispatcher.UIThread.RunJobs();
+            var loop = Assert.Single(BeatLoop.Running, l => ReferenceEquals(l.Owner, shimmer));
+            Step(time, 0.8);
+            Assert.Equal(1, shimmer.Opacity);
+            ancestor.Child = null;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(loop.IsRunning);
+            Assert.Equal(0, shimmer.Opacity); // _shimmerPlayed blocks a replay; a visible band would freeze mid-card
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+            BeatLoop.Time = previousTime;
+        }
+    });
 }
