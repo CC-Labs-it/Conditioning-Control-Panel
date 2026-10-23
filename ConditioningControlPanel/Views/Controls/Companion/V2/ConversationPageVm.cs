@@ -176,9 +176,7 @@ internal sealed class ConversationPageVm : CompanionObservable
         if (dispatcher == null || dispatcher.HasShutdownStarted) return;
         dispatcher.BeginInvoke(Reconcile, DispatcherPriority.Normal);
     }
-    // Every AI line the tube said shows here too (#1443): ambient replies and display-only tube lines.
-    internal static bool Shows(TurnKind kind) =>
-        kind is TurnKind.UserChat or TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine;
+    internal static bool Shows(TurnKind kind) => Services.Companion.ConversationRules.Shows(kind);
     private void Reconcile()
     {
         var next = (_session?.Turns ?? Array.Empty<CompanionTurn>()).Where(t => Shows(t.Kind)).ToArray();
@@ -323,18 +321,8 @@ internal sealed class ConversationPageVm : CompanionObservable
         }
         catch (Exception ex) { App.Logger?.Debug("Companion page reply not spoken: {Type}", ex.GetType().Name); }
     }
-    internal static bool ShouldSpeak(string? text, bool avatarEnabled) => avatarEnabled && !string.IsNullOrWhiteSpace(text);
-    internal static string FailureNoticeKey(AiFailureKind? failure) => failure switch
-    {
-        AiFailureKind.SignInRequired => "companion_v2_error_signin",
-        AiFailureKind.DailyLimit => "companion_v2_error_limit",
-        AiFailureKind.BudgetLimit => "companion_v2_error_budget",
-        AiFailureKind.Offline => "companion_v2_error_offline",
-        AiFailureKind.Busy => "companion_v2_busy",
-        AiFailureKind.Cancelled => "companion_v2_cancelled",
-        AiFailureKind.InvalidResponse => "companion_v2_error_invalid",
-        _ => "companion_v2_unavailable"
-    };
+    internal static bool ShouldSpeak(string? text, bool avatarEnabled) => Services.Companion.ConversationRules.ShouldSpeak(text, avatarEnabled);
+    internal static string FailureNoticeKey(AiFailureKind? failure) => Services.Companion.ConversationRules.FailureNoticeKey(failure);
     public void NewChat()
     {
         if (Busy) return;
