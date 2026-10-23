@@ -324,11 +324,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (!await Platform.ExternalOpener.OpenAsync(this, url))
-                {
-                    try { if (Clipboard is { } cb) await cb.SetTextAsync(url); } catch { /* clipboard may be unavailable */ }
-                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_open_link_in_browser"),
-                        Loc.GetF("msg_browser_no_default_for", "open the CC Labs web app") + Loc.GetF("msg_browser_link_copied", url));
-                }
+                    await Dialogs.MessageDialog.ShowLinkCopiedAsync(this, url, "open the CC Labs web app");
                 RetireWebBannerBeat();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "DoorWebApp_Click failed"); }
