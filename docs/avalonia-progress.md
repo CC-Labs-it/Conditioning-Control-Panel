@@ -2795,3 +2795,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-companion-ai-permissions-grid: +434
 - The Engine Room live-actions feed is fed by the Core command sink (shared AiLiveActionFeed rules). The V2 permissions grid is stacked; Forget/memory-off clear history; the lock CTA opens Settings > Account.
 - The lock band repaints on tier change and on re-show, as WPF does. rgate 39698040401: Linux green; the one Windows flake is in flakes.md (P94).
+
+## avalonia-port/wire-views-tab-companion: +205
+- Workshop roster card clicks switch the companion through Core `CompanionCore.SwitchCompanion`, refresh the hero and ring, and put the companion's avatar set on the tube (WPF `SwitchToCompanionAvatar`, saved globally and per mod).
+- `CompanionRosterSwitchTests` fail-proven for both the Core switch and the tube set. Rows stay stub; remaining work is in wire-views-tab-companion-b.
