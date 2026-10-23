@@ -105,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // root, so that override never fires on it and the rail never opened.
             InitializeNavRail();
             InitializeProgramsAnnouncement(); // WPF Loaded: first-visit cue on the You rail row
+            InitializeProgramsToasts(); // WPF Presets.cs:1935,1979: program session start/end toasts
             InitFavoritesRail(); // MainShellWindow.FavoritesRail.cs (WPF MainWindow.xaml.cs:3501)
             ApplyEnableDeeper(); // MainShellWindow.DeeperTab.cs (WPF LoadSettings: rail door follows EnableDeeper)
             InitializeTabHistoryInput(); // MainShellWindow.TabHistory.cs (WPF MainWindow ctor)

@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Platform.ProgramEngineBridge.SessionChanged -= OnProgramSessionChanged;
             UnsubscribePrograms();
             UnhookIgnition();
+            StopRunEntrance();
             base.OnDetachedFromVisualTree(e);
         }
 

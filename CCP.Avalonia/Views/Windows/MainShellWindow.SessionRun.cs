@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     runner.Start(session);
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
+                    AnnounceProgramSessionStarted();   // WPF Presets.cs:1935; silent for a foreign session
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
                     StartConditioningTimeTracker();   // ... and StartEngine :423
                     PinkFilterOverlay.Refresh(this);
