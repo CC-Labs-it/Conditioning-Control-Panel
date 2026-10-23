@@ -2730,3 +2730,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 - The 401 recovery is Core `AuthRecovery`, shared by both heads: rename recovers the session without retrying; delete retries once.
 - Review fixes: an unparseable restore-session 200 is no longer a recovery (WPF parity); time-bounded test waits; no armed timer in shell tests; the WPF 401 test now points at Core AuthRecovery.
 - Gate: the local gate fallback passed (P97). Windows was not gated before push.
+
+## avalonia-port/wire-win-tutorial-overlay: +394
+- Tutorial overlay auto-advance triggers (click, text, selection, slider, CoreTutorialEvents) via shared Core TutorialAdvanceRules; row stays stub.
+- Triggers unreachable on this head until Deeper tours host an overlay; remote gate green.
