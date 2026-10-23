@@ -23,10 +23,10 @@
  * online-finish, online-left, online-abort, online-closed.
  */
 import {
-  hostGate, signedIn, tableRows, pollDue, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS, applySeats, applySeat,
+  hostGate, signedIn, tableRows, quickDelay, cleanHost, stepHost, hostBody, HOST_DEFAULTS, applySeats, applySeat,
   seatRows, raceTags, readyCount, humans, canStart, lookChoices, cycleLook, lookLabel, loadLook, saveLook, countdown,
   serverNow, resultLines, popsLabel, errorCopy, abortCopy, closeCopy, trackName, startsLabel, rowStartsIn, BADGE_COPY,
-  linkButton, linkNote, claimStep,
+  linkButton, linkNote, claimStep, pollNow, pollStep, pollReset, listKey,
 } from './lobbyMath.js';
 import { PRESETS, presetOf, poseOf, poseHoldS, emoteAllowed, EMOTE_GAP_MS, EMOTE_SHOW_MS } from './presets.js';
 import { normLook } from '../net/protocol.js';
@@ -85,7 +85,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   const st = {
     view: 'home', msg: '', busy: false,
-    rows: [], listAt: -1e9, listMs: 0, listSeen: 0,
+    rows: [], listAt: -1e9, listMs: 0, listSeen: 0, poll: { key: null, same: 0 },
     host: cleanHost(HOST_DEFAULTS), look: loadLook(storage()), choices: lookChoices(), looksAsked: false,
     join: null, room: null, offs: [], welcome: null, seenAt: 0, seat: -1, phase: 'lobby', cfg: null, seed: 0, keep: [],
     seats: applySeats([]), start: null, raced: false, results: null, leaving: false,
@@ -95,6 +95,9 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     preview: false, access: null, accessAsked: false, link: null, linkCopied: false, linkMsg: '', linkBusy: false, claim: null,
   };
   let ticker = 0, lastCount = '', bellT = 0;
+  // the tab coming back is a user action: the poll gap drops to 15 s again
+  const onVis = () => { if (!doc.hidden) st.poll = pollReset(st.poll); };
+  try { doc.addEventListener?.('visibilitychange', onVis); } catch (e) { /* a page without the event polls as before */ }
   // polish 5 (S4): menu sounds through the hud's `sound` event (hud/sounds.js); refusals say no
   const say = (name) => { if (name) emit('sound', { name }); };
 
@@ -139,7 +142,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
       if (!signedIn(who)) { setNote('Sign in to race online'); extra.innerHTML = '<div class="c-list">' + btn('lb-exit', 'Back', 'quiet') + '</div>'; return; }
       if (st.preview) { setNote(errorCopy('preview')); extra.innerHTML = '<div class="c-list">' + btn('lb-exit', 'Back', 'quiet') + '</div>'; return; }
       const now = listNow();
-      setNote(st.msg || (st.rows.length ? st.rows.length + ' open, refreshed every 15 s' : st.listAt > 0 ? 'No open tables. Host one, or quick match' : 'Looking'));
+      setNote(st.msg || (st.rows.length ? st.rows.length + ' open' + (st.poll.same < 2 ? ', refreshed every 15 s' : ', checked less often while quiet') : st.listAt > 0 ? 'No open tables. Host one, or quick match' : 'Looking'));
       const rows = st.rows.map((r) => '<li>' + btn('lb-join', '<b>' + esc(r.host) + (r.friend ? ' (friend)' : '') + '</b><span class="n">' + r.seatsLabel +
         '</span><small data-starts="' + r.roomId + '">' + esc(r.track) + ', ' + r.laps + ' laps, ' + esc(startsLabel(rowStartsIn(r.raw, st.listMs, now))) + '</small>',
         'lb-row', ' data-id="' + r.roomId + '"' + (r.full ? ' disabled' : '')) + '</li>').join('');
@@ -260,7 +263,9 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   function tick() {
     const now = localNow();
-    if (shown() && st.view === 'home' && !st.busy && !st.preview && signedIn(ident()) && deps().api && pollDue(st.listAt, now)) refresh();
+    // the list poll stops while the page is hidden and backs off while answers stay the same (lobbyMath pollNow)
+    if (shown() && st.view === 'home' && !st.busy && !st.preview && signedIn(ident()) && deps().api
+      && pollNow({ hidden: !!doc.hidden, lastAt: st.listAt, now, poll: st.poll })) refresh();
     if (st.start && !st.raced && st.phase !== 'done' && srv() >= st.start.countAt) { st.raced = true; emit('online-race', ctx()); }
     let expired = false;
     for (const k of Object.keys(st.bubbles)) if (st.bubbles[k].until <= now) { delete st.bubbles[k]; expired = true; }
@@ -341,6 +346,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     const r = await call(() => api.list());
     if (!r) { paint(); return; }
     st.listMs = Number(r.serverMs) || localNow(); st.listSeen = localNow();
+    st.poll = pollStep(st.poll, listKey(r));
     const raw = new Map((r.rows || []).map((x) => [x && x.roomId, x]));
     st.rows = tableRows(r, st.listMs).map((x) => ({ ...x, raw: raw.get(x.roomId) }));
     if (st.view === 'home') { st.msg = ''; paint(); }
@@ -490,6 +496,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   /** A lobby button: its sound (hud/sounds.js), or a no when the press is refused. */
   function act(el) {
+    st.poll = pollReset(st.poll);
     const r = actOn(el);
     say(r === false ? 'menu-deny' : actSound(el.dataset.act));
   }
@@ -579,6 +586,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
 
   /** Pad or arrows from hud/cards.js. True when handled here. */
   function nav(dir) {
+    st.poll = pollReset(st.poll);
     if (dir === 'back') { back(); return true; }
     const cur = doc.activeElement;
     if ((dir === 'left' || dir === 'right') && cur && card.contains(cur) && (cur.dataset.act === 'lb-hstep' || cur.dataset.act === 'lb-lstep')) {
@@ -609,7 +617,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     pose(now = localNow()) { return st.myPose && st.myPose.until > now ? st.myPose.pose : 0; },
     /** Emote from the race (pause card or a pad chord): same rules as the lobby chat. */
     emote(code) { const el = { dataset: { act: 'lb-emote', id: code } }; act(el); },
-    dispose() { stopQuick(); leave(); stopTicker(); },
+    dispose() { stopQuick(); leave(); stopTicker(); try { doc.removeEventListener?.('visibilitychange', onVis); } catch (e) { /* gone */ } },
   };
 }
 

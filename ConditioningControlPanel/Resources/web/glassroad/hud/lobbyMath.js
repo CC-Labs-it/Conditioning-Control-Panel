@@ -63,6 +63,20 @@ export function tableRows(list, nowMs) {
 
 /** True when the list is due again (15 s, like Goon). */
 export const pollDue = (lastAt, now, every = POLL_MS) => !(now - lastAt < every);
+export const POLL_MAX_MS = 60000;
+/** The poll gap after `same` unchanged answers in a row: 15 s, 15 s, then 30 s, then 60 s (RACE-LOAD.md fix 2). */
+export const pollEvery = (same) => Math.min(POLL_MAX_MS, POLL_MS * 2 ** Math.max(0, Math.min(3, (Math.floor(Number(same)) || 0) - 1)));
+/** What makes two list answers the same: the tables, seats and hosts, never the countdown (it moves every call). */
+export function listKey(r) {
+  const rows = r && Array.isArray(r.rows) ? r.rows : [];
+  return rows.map((x) => (x ? [x.roomId, x.filled, x.seats, x.laps, x.staked ? 1 : 0, x.friend ? 1 : 0, x.host && x.host.name].join(':') : '')).join('|');
+}
+/** One answer into the poll state { key, same }: the same key counts one more unchanged answer, a new one starts over. */
+export const pollStep = (poll, key) => ({ key, same: poll && poll.key === key ? (poll.same || 0) + 1 : 0 });
+/** A user action (a press, a move, the tab coming back): the next gap is 15 s again. */
+export const pollReset = (poll) => ({ key: poll ? poll.key : null, same: 0 });
+/** Poll the list now? Never while the page is hidden; else when the backed-off gap has passed. */
+export const pollNow = ({ hidden, lastAt, now, poll }) => !hidden && pollDue(lastAt, now, pollEvery(poll ? poll.same : 0));
 /** Quick match retry delay: the lobby's retryMs, clamped to 1..10 s. */
 export const quickDelay = (retryMs) => int(retryMs, 1000, 10000, 3000);
 
