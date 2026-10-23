@@ -2899,3 +2899,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/video-core-d: +505
 - Moves VideoService selection, cooldown, strict-lock and wedge-ladder rules to CCP.Core; WPF routed to Core (no second copy).
 - Review fixes: pre-move grace-pause log texts restored; stale EvaluateGraceRequest comments updated.
+
+## avalonia-port/chaos-payout-fallin-b: +751
+- Live chaos bubbles: fuse, hold-to-defuse snap (hold and Snap Chain on wall time, a lost capture breaks the hold), detonation (shield/collar/Snap Chain) in Core; a detonation costs the doubled clean-loop tip and silk_touch.
+- Run-end lessons moved to Core ChaosRunLessons (WPF delegates); barks and SNAP/NO FOCUS labels deferred to -c.
