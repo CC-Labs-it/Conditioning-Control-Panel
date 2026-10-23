@@ -15,6 +15,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Fyp.Online;
@@ -89,6 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     };
                 }
                 RefreshRemoteMediaPicker();
+                WireOnlineMeter();   // AssetsTabView.OnlineMeter.cs: the card, the note and the credit
             }
             catch (Exception ex) { Log.Warning(ex, "Remote media picker init failed"); }
         }
@@ -165,6 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 PaintChrome(s);
                 RebuildCustomSubRows(s);
                 SetFineTuneOpen(_fineTuneOpen);
+                OnlineMeterHead.Poke();   // the source or consent may have changed: the pill and the card follow
             }
             catch (Exception ex) { Log.Warning(ex, "Remote media picker refresh failed"); }
             finally { _pickerSyncing = false; }
