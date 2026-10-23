@@ -58,6 +58,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CmbMotion.SelectionChanged += CmbMotion_Changed;
             SliderDriftSpeed.ValueChanged += SliderDriftSpeed_Changed;
 
+            // WPF OnLoaded: Configure, then RowChanged re-measures the box (OnGetRowChanged -> RefreshV2Box).
+            RowGetFlashesV2.RowChanged += (_, _) => RefreshV2Box();
+            RowGetFlashesV2.Configure(ConditioningControlPanel.Services.Prizes.V2PurchaseRule.FlashesPrizeId, "v2_get_flash_blurb");
+
             LoadFromSettings();
 
             // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt +
@@ -143,13 +147,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         // WPF rebuilds on PrizeGrants.GrantsChanged; ownership never changes at runtime on this head
         // (PrizeOwnership), so the rebuild on load/rebind is all there is to do.
 
+        /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
+        /// no row is left (only the motion row and the Get it row exist here).</summary>
+        private void RefreshV2Box() =>
+            BoxFlashV2.IsVisible = RowMotion.IsVisible || !RowGetFlashesV2.IsRowHidden;
+
         /// <summary>Still always, Drift and Bounce with its v2 pill when owned, Mix once anything v2 is
-        /// owned; with nothing owned the box stays hidden. Pendulum is not offered: this head cannot
-        /// play it yet (it would play Still).</summary>
+        /// owned. Pendulum is not offered: this head cannot play it yet (it would play Still).</summary>
         private void BuildMotionPicker()
         {
             var drift = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce);
-            BoxFlashV2.IsVisible = RowMotion.IsVisible = drift;
+            RowMotion.IsVisible = drift;
+            RefreshV2Box();
             CmbMotion.Items.Clear();
             AddMotionChoice(FlashMotionStyle.Still, "option_flash_motion_still", v2: false);
             if (drift)

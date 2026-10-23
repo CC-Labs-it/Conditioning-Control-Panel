@@ -37,6 +37,10 @@ Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: tr
 
 # --- content (c).3: emoji inside head-authored sentences ---
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ☠ RELAPSE — one more loop :: WPF ChaosModeService.cs:1083 announcer copy, the line itself is drawn as outlined text (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ⏳ ten seconds. make them count. :: WPF ChaosModeService.cs:1073 run event-feed sentence (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 🔮 prism! 10x :: run event-feed sentence, WPF ChaosModeService.cs:1837 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 🪨 heavy drop! x3 :: run event-feed sentence, WPF ChaosModeService.cs:1870 verbatim (content (c).3)
 
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
 Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations

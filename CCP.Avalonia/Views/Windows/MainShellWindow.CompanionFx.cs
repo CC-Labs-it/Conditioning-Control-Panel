@@ -25,6 +25,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private bool _companionFxInitialized;
+        /// <summary>WPF restores the drawers at load; here that waits for the first show, so until
+        /// then the room holds defaults and persisting them would overwrite the saved states.</summary>
+        private bool _companionDrawersRestored;
 
         /// <summary>WPF MainWindow.CompanionFx.cs:32, called from CompanionTabView on a real
         /// visibility edge of the room.</summary>
@@ -36,9 +39,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (!visible)
                 {
                     // Per-toggle would be a settings save on every click of a rarely-opened drawer.
-                    if (map != null) { room.PersistDrawerStates(map); CoreSettings.Save(); }
+                    if (map != null && _companionDrawersRestored) { room.PersistDrawerStates(map); CoreSettings.Save(); }
                 }
-                else if (map != null) room.RestoreDrawerStates(map);
+                else
+                {
+                    if (map != null) room.RestoreDrawerStates(map);
+                    _companionDrawersRestored = true;
+                }
 
                 InitializeCompanionFx(room);
 
@@ -52,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var map = CoreSettings.Current?.CompanionSectionOpen;
             var room = Named<Tabs.CompanionTabView>("CompanionTab")?.FindControl<CompanionRoomView>("Room");
-            if (map == null || room == null) return;
+            if (map == null || room == null || !_companionDrawersRestored) return;
             room.PersistDrawerStates(map);
             CoreSettings.Save();
         }
