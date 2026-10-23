@@ -3922,9 +3922,9 @@ namespace ConditioningControlPanel.Services
             // EnableHardwareDecoding=false above) to dodge the LibVLC white-screen/wedge on the
             // hardware path (#533/#537/#540). Skipped only when the user has explicitly opted into
             // GPU decode, in which case we honour their choice and leave the HW path enabled.
-            if (!(App.Settings?.Current?.VideoForceHardwareDecoding ?? false))
+            if (MandatoryVideoScheduler.SoftwareDecodeOption(App.Settings?.Current?.VideoForceHardwareDecoding ?? false) is { } swDecode)
             {
-                media.AddOption(":avcodec-hw=none");
+                media.AddOption(swDecode);
             }
 
             // Everything that needs a live aout hangs off Playing, and the handler is subscribed

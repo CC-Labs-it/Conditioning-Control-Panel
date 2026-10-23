@@ -147,7 +147,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             BouncingTextOverlay.PauseForVideo(true);
             _attention = s.AttentionChecksEnabled;
 
-            _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
+            // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
+            _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _player.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
             var blur = s.VideoBlurredBackgroundEnabled;
             _sink = new VlcFrameSink(_player, () => _media, bmp =>
@@ -207,6 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
             _media = new Media(vlc, path, FromType.FromPath);
+            if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
