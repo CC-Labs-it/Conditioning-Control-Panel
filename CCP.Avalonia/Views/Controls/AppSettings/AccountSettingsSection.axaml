@@ -243,7 +243,10 @@
                                Text="{loc:Str label_checking_backup_status}"
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <!-- Backup now / Restore stay hidden: uploading and restoring settings across Windows and Linux
+                         waits on a path-translation design (docs/avalonia-decisions.md rows-cloud-remember;
+                         parity row views-settings-account, wire-views-settings-account-b-next). -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" IsVisible="False">
                         <Button x:Name="BtnBackupSettingsNow"
                                 Background="{DynamicResource SecondaryBrush}" Foreground="White"
                                 BorderThickness="0" Padding="15,8" Margin="0,0,10,0"
@@ -295,15 +298,13 @@
                                TextWrapping="Wrap" Margin="0,2,0,12"/>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <!-- Hidden until GDPR export is ported (needs ProfileSync's export call): a
-                             visible button that does nothing is worse than none. -->
-                        <Button x:Name="BtnExportData" IsVisible="False"
+                        <Button x:Name="BtnExportData"
                                 Background="#555" Foreground="White"
                                 BorderThickness="0" Padding="15,8" Margin="0,0,10,0"
                                 FontWeight="Bold" FontSize="12"
                                 Cursor="Hand"
                                 Click="BtnExportData_Click">
-                            <TextBlock Text="{loc:Str btn_export_my_data}"/>
+                            <TextBlock x:Name="TxtBtnExportData" Text="{loc:Str btn_export_my_data}"/>
                         </Button>
                         <Button x:Name="BtnPrivacyPolicy"
                                 Background="Transparent" Foreground="{DynamicResource TextMutedBrush}"

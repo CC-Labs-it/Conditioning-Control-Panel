@@ -57,6 +57,9 @@ public sealed class AccountSettingsSectionTests
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
+            // Every repaint with a cloud identity asks for the backup status: never the real server from a test.
+            var oldCloud = AccountSettingsSection.CloudData;
+            AccountSettingsSection.CloudData = () => new V2AuthService(() => s, new OfflineServer());
             MainShellWindow? shell = null;
             try
             {
@@ -75,6 +78,7 @@ public sealed class AccountSettingsSectionTests
                 CoreSecrets.RetrieveProvider = oldGet;
                 CoreSecrets.StoreProvider = oldSet;
                 CoreSettings.ServiceProvider = oldSettings;
+                AccountSettingsSection.CloudData = oldCloud;
                 // P02: providers that read the process settings again, not this test's thrown-away ones.
                 AccountSeed.Seed(p => new ProviderSubscription(p));
                 CoreAccount.IsLoggedInProvider = CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = CoreAccount.IsWhitelistedProvider = null;
@@ -192,7 +196,10 @@ public sealed class AccountSettingsSectionTests
             Assert.True(Shown(section, "BtnLinkDiscord"));
             Assert.False(Shown(section, "BtnLinkPatreon"));         // the grant works
             Assert.True(Shown(section, "DataPrivacySection"));
-            Assert.False(Shown(section, "BtnExportData"));          // not ported: hidden, not inert
+            Assert.True(Shown(section, "BtnExportData"));
+            Assert.True(Shown(section, "CloudSettingsBackupSection"));
+            Assert.False(section.FindControl<Button>("BtnBackupSettingsNow")!.IsEffectivelyVisible); // not ported: hidden, not inert
+            Assert.False(section.FindControl<Button>("BtnRestoreSettings")!.IsEffectivelyVisible);
 
             Click(section, "BtnPatreonLogin");     // the only provider: the whole account goes
 
@@ -284,6 +291,84 @@ public sealed class AccountSettingsSectionTests
             }
         });
     }
+    private sealed class OfflineServer : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+    }
+
+    private sealed class CloudDataServer(bool success) : HttpMessageHandler
+    {
+        internal readonly List<string> Calls = new();
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            var body = await request.Content!.ReadAsStringAsync(ct);
+            Calls.Add($"{path} {request.Headers.GetValues("X-Auth-Token").Single()} {body.Contains("\"u-test\"")}");
+            var json = path switch
+            {
+                "/v2/user/settings-backup" => "{\"success\":true,\"backup\":{\"app_version\":\"6.1.0\",\"backed_up_at\":\"2026-10-01T12:00:00Z\",\"settings_data\":\"x\"}}",
+                "/v2/user/export-data" when success => "{\"user\":{\"unified_id\":\"u-test\"}}",
+                "/v2/user/export-data" => "{\"error\":\"export refused\"}",
+                _ => throw new InvalidOperationException("Unexpected fake request " + path),
+            };
+            return new HttpResponseMessage(success || path != "/v2/user/export-data" ? HttpStatusCode.OK : HttpStatusCode.Forbidden)
+            { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
+        }
+    }
+
+    /// <summary>WPF MainWindow.CloudBackup.cs UpdateBackupStatus (:261) and BtnExportData_Click (:191): the status line
+    /// reads the cloud backup's date/version; Export my data writes the server's JSON where the user picked, or tells why not.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task BackupStatusAndGdprExportUseTheCloudIdentity(bool success) => RunAsync(async (shell, section, s, secrets) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "tok";
+        using var server = new CloudDataServer(success);
+        var oldCloud = AccountSettingsSection.CloudData;
+        var oldTell = AccountSettingsSection.Tell;
+        var oldPick = AccountSettingsSection.PickExportPath;
+        var dir = Directory.CreateTempSubdirectory("ccp-export-");
+        var target = Path.Combine(dir.FullName, "export.json");
+        var told = new List<(string title, string body)>();
+        var picked = 0;
+        AccountSettingsSection.CloudData = () => new V2AuthService(() => s, server);
+        AccountSettingsSection.Tell = (_, title, body) => { told.Add((title, body)); return Task.CompletedTask; };
+        AccountSettingsSection.PickExportPath = _ => { picked++; return Task.FromResult<string?>(target); };
+        try
+        {
+            await section.UpdateBackupStatusAsync();
+            var at = DateTime.Parse("2026-10-01T12:00:00Z").ToLocalTime().ToString("MMM d, yyyy h:mm tt");
+            Assert.Equal(Loc.GetF("label_last_backup_0_v_1", at, "6.1.0"), Text(section, "TxtCloudBackupStatus"));
+
+            await section.ExportDataAsync();
+            Assert.Equal(new[] { "/v2/user/settings-backup tok True", "/v2/user/export-data tok True" }, server.Calls);
+            Assert.True(section.FindControl<Button>("BtnExportData")!.IsEnabled);
+            Assert.Equal(Loc.Get("btn_export_my_data"), Text(section, "TxtBtnExportData"));
+            if (success)
+            {
+                Assert.Equal(1, picked);
+                Assert.Equal("{\n  \"user\": {\n    \"unified_id\": \"u-test\"\n  }\n}", File.ReadAllText(target).ReplaceLineEndings("\n"));
+                Assert.Equal((Loc.Get("title_export_complete"), Loc.GetF("msg_data_exported_to_0", target)), Assert.Single(told));
+            }
+            else
+            {
+                Assert.Equal(0, picked);
+                Assert.False(File.Exists(target));
+                Assert.Equal((Loc.Get("title_export_failed"), "export refused"), Assert.Single(told));
+            }
+        }
+        finally
+        {
+            AccountSettingsSection.CloudData = oldCloud;
+            AccountSettingsSection.Tell = oldTell;
+            AccountSettingsSection.PickExportPath = oldPick;
+            dir.Delete(true);
+        }
+    });
+
     private sealed class LinkServer(bool success) : HttpMessageHandler
     {
         internal readonly List<string> Paths = new();

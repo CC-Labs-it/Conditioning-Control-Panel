@@ -807,6 +807,67 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// GDPR data export (WPF ProfileSyncService.ExportDataAsync): the server's JSON, pretty-printed for the file.
+        /// Errors carry the server's own text. WPF's 401 token-recovery retry is not here (as DeleteAccountAsync).
+        /// </summary>
+        public async Task<(bool success, string? error, string? jsonData)> ExportDataAsync(string? unifiedId)
+        {
+            if (string.IsNullOrEmpty(unifiedId)) return (false, "You must be logged in to export your data", null);
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/export-data");
+                AddAuthHeader(request);
+                request.Content = new StringContent(new JObject { ["unified_id"] = unifiedId }.ToString(), Encoding.UTF8, "application/json");
+                var response = await _http.SendAsync(request);
+                var json = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (await TryHandleMergedAsync(response, json))
+                        return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
+                    return (false, ServerError(json, response.StatusCode), null);
+                }
+                return (true, null, JToken.Parse(json).ToString(Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "[V2Auth] Export data failed");
+                return (false, "Data export requires an internet connection", null);
+            }
+        }
+
+        /// <summary>
+        /// Metadata of the cloud settings backup (WPF ProfileSyncService.GetSettingsBackupInfoAsync): null when there is
+        /// none or the check failed, as WPF answered. Read-only; uploading and restoring are not on this client.
+        /// </summary>
+        public async Task<(DateTime? backedUpAt, string? appVersion)?> GetSettingsBackupInfoAsync(string? unifiedId)
+        {
+            if (string.IsNullOrEmpty(unifiedId)) return null;
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/settings-backup");
+                AddAuthHeader(request);
+                request.Content = new StringContent(new JObject { ["unified_id"] = unifiedId }.ToString(), Encoding.UTF8, "application/json");
+                var response = await _http.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    await TryHandleMergedAsync(response);
+                    return null;
+                }
+                // Raw date text (no Newtonsoft date conversion), parsed the way WPF's string property was.
+                var body = JsonConvert.DeserializeObject<JObject>(await response.Content.ReadAsStringAsync(),
+                    new JsonSerializerSettings { DateParseHandling = DateParseHandling.None });
+                if (body?["backup"] is not JObject backup) return null;
+                DateTime? at = DateTime.TryParse(backup["backed_up_at"]?.ToString(), out var dt) ? dt : null;
+                return (at, backup["app_version"]?.ToString());
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("[V2Auth] Settings backup info check failed: {Error}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Adds the X-Auth-Token header to a V2 API request if an auth token is available.
         /// </summary>
         private void AddAuthHeader(HttpRequestMessage request)
