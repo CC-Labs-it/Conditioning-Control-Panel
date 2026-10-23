@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderMaxOnScreen.ValueChanged += SliderMaxOnScreen_Changed;
             ChkClickable.IsCheckedChanged += ChkClickable_Changed;
             ChkStayUntilPopped.IsCheckedChanged += ChkStayUntilPopped_Changed;
+            ChkFlashRoundedCorners.IsCheckedChanged += ChkFlashRoundedCorners_Changed;
             ChkFlashShatter.IsCheckedChanged += ChkFlashShatter_Changed;
             CmbExit.SelectionChanged += CmbExit_Changed;
             ChkCorruption.IsCheckedChanged += ChkCorruption_Changed;
@@ -126,6 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ChkClickable.IsChecked = s.FlashClickable;
                 ChkStayUntilPopped.IsChecked = s.FlashStayUntilPopped;
                 BuildExitPicker(s.FlashExitStyle);
+                ChkFlashRoundedCorners.IsChecked = s.FlashRoundedCorners;
                 ChkFlashShatter.IsChecked = s.FlashShatterEnabled;
                 RefreshExitRow();
                 ChkCorruption.IsChecked = s.CorruptionMode;
@@ -151,16 +153,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         // (PrizeOwnership), so the rebuild on load/rebind is all there is to do.
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
-        /// no motion, Shatter or Get it row is left.</summary>
+        /// no motion, rounded-corner, Shatter or Get it row is left.</summary>
         private void RefreshV2Box() =>
-            BoxFlashV2.IsVisible = RowMotion.IsVisible || RowShatter.IsVisible || !RowGetFlashesV2.IsRowHidden;
+            BoxFlashV2.IsVisible = RowMotion.IsVisible || RowRoundedCorners.IsVisible || RowShatter.IsVisible || !RowGetFlashesV2.IsRowHidden;
 
         /// <summary>Still always, Drift and Bounce with its v2 pill when owned, Mix once anything v2 is
         /// owned. Pendulum is not offered: this head cannot play it yet (it would play Still).</summary>
         private void BuildMotionPicker()
         {
             var drift = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce);
-            RowShatter.IsVisible = Platform.PrizeOwnership.OwnsFlashV2();
+            RowRoundedCorners.IsVisible = RowShatter.IsVisible = Platform.PrizeOwnership.OwnsFlashV2();
             RowMotion.IsVisible = drift;
             RefreshV2Box();
             CmbMotion.Items.Clear();
@@ -239,6 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.FlashClickable) ||
                 e.PropertyName == nameof(AppSettings.FlashStayUntilPopped) ||
                 e.PropertyName == nameof(AppSettings.FlashExitStyle) ||
+                e.PropertyName == nameof(AppSettings.FlashRoundedCorners) ||
                 e.PropertyName == nameof(AppSettings.FlashShatterEnabled) ||
                 e.PropertyName == nameof(AppSettings.CorruptionMode) ||
                 e.PropertyName == nameof(AppSettings.HydraLinkedTiming) ||
@@ -378,6 +381,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CoreSettings.Current.FlashShatterEnabled, Platform.PrizeOwnership.OwnsFlashV2());
             CmbExit.IsEnabled = !shatter;
             TxtExitShatterNote.IsVisible = shatter;
+        }
+
+        private void ChkFlashRoundedCorners_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            CoreSettings.Current.FlashRoundedCorners = ChkFlashRoundedCorners.IsChecked ?? false;
+            CoreSettings.Save();
         }
 
         private void ChkFlashShatter_Changed(object? sender, RoutedEventArgs e)

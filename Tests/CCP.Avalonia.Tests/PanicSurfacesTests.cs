@@ -80,7 +80,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-flash", "gif-cascade", "chaos-announcer", "chaos-dvd", "chaos-cursor-glow", "chaos-vibe-trail", "chaos-estim", "chaos-field-fx", "chaos-skia-fx", "chaos-intro", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "flash", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "speak-cue", "companion-transcript", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
+        "remote-haptics", "takeover", "program-session", "engine", "lucky-flash-toast", "flash", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "speak-cue", "companion-transcript", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are

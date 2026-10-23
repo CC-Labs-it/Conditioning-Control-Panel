@@ -32,8 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
-    /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
-    /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
+    /// Natasha's favourite, the avatar's FlashClicked category/audio reaction,
+    /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), remote pools, avatar pre-announce.</para>
     /// </summary>
     internal static class FlashOverlay
     {
@@ -160,6 +160,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             App.Sessions?.SessionLog.RecordImages(new[] { path });
             App.MediaHistory?.RecordImages(new[] { path });   // WPF MediaHistoryService.OnFlashDisplayed
+            if (multiplier > 1)
+            {
+                try { LuckyFlashToast.ShowLucky(multiplier); }
+                catch (Exception ex) { Log.Debug("Lucky flash toast failed: {E}", ex.Message); }
+            }
             if (multiplier > 1 && !s.SuppressPerkNotifications) LuckyChime(s);   // WPF :4441 PerkNotificationsSuppressed
             CoreProgression.AddXP(FlashFxRules.Xp(soundPlaying: false, s.HydraLinkedTiming, hydraGeneration, multiplier), "Flash");
             if (s.HydraLinkedTiming || hydraGeneration == 0)
@@ -224,6 +229,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable)
         {
             var pad = w.ApplyGlow(glow, scaling);
+            w.ConfigureCorners(CoreSettings.Current.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2());
             var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
             // (passive); off: exactly the click-through recipe above.
@@ -322,6 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// re-enabled flash can show again.</summary>
         public static void CloseAll(bool final = true)
         {
+            LuckyFlashToast.CloseActive();
             _generation++;
             _closed |= final;
             foreach (var (w, _) in Active.ToList()) w.Close();
@@ -365,8 +372,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ? TimeSpan.FromMilliseconds(FlashStayRule.SafetyLifetimeMs)
             : TimeSpan.FromMilliseconds((durationMs ?? s.FlashDuration * 1000) + 1000);
 
-        /// <summary>WPF FlashService.cs:1692: the shared-host cap (30), 40 while flashes stay.</summary>
-        internal static int Cap(AppSettings s, bool ambient) => FlashStayRule.Cap(MaxConcurrent, Stays(s, ambient), sharedHost: true);
+        /// <summary>WPF FlashService:1704: the Max on screen slider caps ordinary spawns;
+        /// staying flashes retain the promised forty, regardless of the slider (#1452).</summary>
+        internal static int Cap(AppSettings s, bool ambient) => FlashStayRule.OnScreen(
+            FlashStayRule.Cap(MaxConcurrent, Stays(s, ambient), sharedHost: true), s.HydraLimit, Stays(s, ambient));
 
         /// <summary>WPF FlashService.cs:696-706: with stay on and the screen full, the ambient tick
         /// skips whole (picture and whisper) and waits for a pop.</summary>
@@ -399,7 +408,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>Spawns hydra children of a popped flash (tests swap it): parent, count, lifetime, generation.</summary>
-        internal static Action<FlashOverlayWindow, int, TimeSpan, int> Multiply = SpawnChildren;
+        internal static Action<FlashOverlayWindow, int, TimeSpan, int> Multiply =
+            (parent, count, lifetime, generation) => _ = SpawnChildren(parent, count, lifetime, generation);
 
         /// <summary>WPF TriggerMultiplication + ShowImages: linked timing inherits what the parent had
         /// left (at least 1 s), independent a fresh full lifetime; children of an ambient flash still
@@ -413,7 +423,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF TriggerMultiplication: the children stay on the parent's screen, play no
         /// sound and spawn 100 ms apart; a CloseAll in between drops them.</summary>
-        private static async void SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
+        internal static async Task SpawnChildren(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
         {
             if (_closed || parent.SpawnScreen is not { } screen) return;
             var generation = _generation;
@@ -423,9 +433,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var occupied = Active.Select(a => a.Rect).ToList();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
                 if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
+                if (flashes.Count == 0) return;
+                var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
-                    parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
+                    parent.Ambient, hydraGeneration, done: () => finished.TrySetResult(), parent.MotionStyle);
+                await finished.Task;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: hydra spawn failed"); }
         }

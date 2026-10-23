@@ -1308,15 +1308,11 @@ namespace ConditioningControlPanel.Avalonia.Controls
             public static bool AllowTransitions => Level != MotionLevel.Off;
 
             /// <summary>PerformanceProfile.AllowGlow, verbatim.</summary>
-            public static bool AllowGlow(PerformanceTier tier) => tier != PerformanceTier.Performance;
+            public static bool AllowGlow(PerformanceTier tier) => ConditioningControlPanel.Services.Flash.FlashFxRules.AllowGlow(tier);
 
             /// <summary>PerformanceProfile.MaxGlowBlurRadius, verbatim. Only consulted when
             /// <see cref="AllowGlow"/> already said yes, hence no Performance arm.</summary>
-            public static double MaxGlowBlurRadius(PerformanceTier tier) => tier switch
-            {
-                PerformanceTier.Balanced => 18,
-                _ => 24,
-            };
+            public static double MaxGlowBlurRadius(PerformanceTier tier) => ConditioningControlPanel.Services.Flash.FlashFxRules.MaxGlowBlurRadius(tier);
 
             // FxTheme's colours are read, not computed: it writes four Color keys into the app
             // resources from the mod palette and every consumer reads them back. Theme/Colors.xaml
