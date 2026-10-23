@@ -177,7 +177,7 @@ public class LeashReceiptsTests
         Assert.Equal(2, items.Count);
         Assert.Equal(Id1, items.Single(i => i.Punish == PunishKind.Chaster).Id);
         Assert.Null(items.Single(i => i.Punish == PunishKind.Lines).Id);
-        Assert.Equal("leash_pun_chaster +15:00", LeashUiRules.ItemText(items.Single(i => i.Punish == PunishKind.Chaster), Id));
+        Assert.Equal("leash_pun_chaster +15m", LeashUiRules.ItemText(items.Single(i => i.Punish == PunishKind.Chaster), Id));
     }
 
     [Fact]
