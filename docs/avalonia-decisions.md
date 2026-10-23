@@ -1280,3 +1280,25 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Avalonia has no web-video takeover yet; when it is ported it must follow WPF `VideoLengthCap.BrowserTakeoverSeconds`.
 - Tests: `Tests/CCP.Core.Tests/VideoMaxCapTests.cs`, `Tests/CCP.Avalonia.Tests/MandatoryVideoOverlayTests.cs` (heal replay
   ends at the cap), each fail-proven. Live tester step: ~/ccp-port/evidence/live-queue/media.md.
+## 2026-10-14: Settings migration test input = local only (avalonia-port/settings-migration-test)
+- Question: the settings-migration test needs a real WPF-release settings file. Found the user's WPF 7.x profile on the
+  mounted Windows drive (settings.json 768 keys, 2026-10-04). Repo is public.
+- Options: scrub+commit; local-only (env var, CI skips, commit only aggregate results); don't use.
+- Choice (advised by: user): LOCAL ONLY, nothing from the profile committed. Test reads CCP_MIGRATION_PROFILE (a dir),
+  copies it to a temp dir, never touches the original (read-only use), skips when unset. Evidence committed: key counts
+  + pass/fail only, no values. Never copy auth_token.dat / chaster_auth.dat / browser_data*.
+- Shape: own testhost `Tests/CCP.Avalonia.Migration.Tests` (CorePaths.UserData is immutable per process and Avalonia
+  sets up once per process, so it cannot share CCP.Avalonia.Tests' profile). Optional CCP_MIGRATION_ROAMING copies only
+  `achievements.json` (WPF keeps it in AppData\Roaming). CI runs a synthetic variant through the same assertions.
+- What the first real run found (3 keys, 34 files), fixed in this lane: (A) quitting without opening the Companion tab
+  reset `CompanionSectionOpen` (Avalonia only; `MainShellWindow.CompanionFx.cs` persists only after a restore);
+  (B) built-in Awareness presets minted new action ids on every load (`SettingsService.KeepActionIds`, Core: WPF benefits
+  too); (D) REAL REGRESSION: a profile moved to Linux re-extracts builtin-locked (archive path changed) and this head
+  shipped no `LockedMod/overrides`, so the 25 gender-neutral voice lines were deleted, the old gendered ones restored and
+  PNGs reverted; the overrides now ship in output and publish (tarball) like WPF's copy targets.
+- Named expected transforms (approved by the supervisor; each asserted precisely, nothing broader):
+  `patreon-tier-cleared-without-tokens` (PatreonTier, only to 0: Windows DPAPI secrets are not portable; Linux users sign
+  in again - tester plan note), `pack-stamp-new-root` (builtin_mods/*/pack.json differs only in sourcePath+extractedUtc),
+  `circe-override-of-this-release` (a builtin-locked file byte-identical to this release's shipped override),
+  `quest-roll` (quests.json differs only in daily/weekly roll keys, only when that roll is due), `exit-flush-same-content`
+  (media_history/feature_day_log/quests/achievements rewritten with LF, JSON-equal). Settings backups rotate by design.
