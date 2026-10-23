@@ -254,6 +254,23 @@ public sealed class ChaosUnlockCardOverlayTests
     }
 
     [Fact]
+    public async Task A_window_manager_close_releases_the_lesson_pause()
+    {
+        await Run(_ =>
+        {
+            Begin();
+            Complete("taking_chances");
+            Complete("intrusive_thoughts");
+            var state = ChaosRunHost.State!;
+            double elapsed = state.ElapsedSec;
+            ChaosUnlockCardOverlay.Active!.Close();   // Alt+F4, not CloseActive
+            Assert.False(ChaosUnlockCardOverlay.IsShowing);
+            ChaosRunHost.Tick();
+            Assert.Equal(elapsed + ChaosRunEngine.TICK_SEC, state.ElapsedSec);
+        });
+    }
+
+    [Fact]
     public async Task A_throwing_callback_does_not_wedge_the_next_card()
     {
         await Run(clock =>

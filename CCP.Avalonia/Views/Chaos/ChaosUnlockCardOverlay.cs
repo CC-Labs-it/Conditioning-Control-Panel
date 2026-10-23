@@ -109,7 +109,7 @@ internal sealed class ChaosUnlockCardOverlay : Window
         {
             if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) { Dismiss(); e.Handled = true; }
         };
-        _auto.Tick += (_, _) => Step();
+        _auto.Tick += (_, _) => Dismiss();   // the timer IS the 12 s expiry; an early tick must not re-arm it
         if (!live) return;
         Opened += (_, _) => SizeToScreens();
         _frame = new BeatLoop(_host, _ => Step());
@@ -117,8 +117,16 @@ internal sealed class ChaosUnlockCardOverlay : Window
         {
             _auto.Stop();
             _frame.Stop();
+            var done = _done;
             _done = null;
-            if (ReferenceEquals(_active, this)) { _active = null; Queue.Clear(); _showing = false; }
+            Current = null;
+            if (!ReferenceEquals(_active, this)) return;   // CloseActive: teardown owns the pause flags
+            var queued = Queue.Select(q => q.Done).ToList();
+            _active = null;
+            Queue.Clear();
+            _showing = false;
+            Notify(done);   // closed by the window manager: release the lesson pause like a click
+            foreach (var d in queued) Notify(d);
         };
     }
 
