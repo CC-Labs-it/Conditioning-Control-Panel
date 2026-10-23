@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -39,17 +41,38 @@ public sealed class SectionStripMovedNoteTests
             SetUp();
             var s = CoreSettings.Current;
             var hitsBefore = s.NavMovedToastHits;
+            var motionBefore = s.MotionLevel;
             var w = new MainShellWindow();
+            NavGlow.Time = new SteppedClock();   // the glow outlives a slow runner (NavRailPaintTests)
             try
             {
-                s.NavMovedToastHits = MainShellWindow.NavMovedNoteLimit - 1;
+                s.NavMovedToastHits = MainShellWindow.NavMovedNoteLimit - 2;
+                s.MotionLevel = MotionLevel.Full;
                 w.Show();
                 w.ShowTab("presets");
                 var strip = w.Named<SectionTabStrip>("SectionStrip")!;
-                strip.MotionOverride = MotionLevel.Off;
+                strip.MotionOverride = MotionLevel.Full;
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(strip.MovedNoteShown);
 
+                // Hit one, at Full: the new home glows (WPF SectionChrome.cs:89, posted after the note).
+                w.ShowTab("together");
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("availablesubjects", w.CurrentTab);
+                Assert.True(strip.MovedNoteShown);
+                var lobby = w.PageStrip!.PillFor(NavStripTable.ActivePill("availablesubjects") ?? "availablesubjects")!;
+                Assert.Contains(AdornerLayer.GetAdornerLayer(lobby)!.Children.OfType<NavGlowRing>(),
+                    r => AdornerLayer.GetAdornedElement(r) == lobby);
+
+                // The hold ends above Off: a 300 ms fade, so the note is still up while it fades (WPF :522).
+                strip.ExpireMovedNote();
+                Assert.True(strip.MovedNoteShown);
+                strip.HideNote();
+                Assert.False(strip.MovedNoteShown);
+
+                // Hit two, at Off.
+                strip.MotionOverride = MotionLevel.Off;
+                w.ShowTab("presets");
                 w.ShowTab("together");
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal("availablesubjects", w.CurrentTab);
@@ -77,10 +100,18 @@ public sealed class SectionStripMovedNoteTests
             }
             finally
             {
+                NavGlow.Time = TimeProvider.System;
+                s.MotionLevel = motionBefore;
                 s.NavMovedToastHits = hitsBefore;
                 w.Close();
             }
             return Task.CompletedTask;
         });
+    }
+
+    private sealed class SteppedClock : TimeProvider
+    {
+        public override long GetTimestamp() => 1_000_000;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
     }
 }
