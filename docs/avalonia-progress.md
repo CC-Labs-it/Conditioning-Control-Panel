@@ -2863,3 +2863,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-shell-she-listening: +1
 - Voiced wake/command confirmations read the active bark manifest; mic waits for her clip (or any bark that cut it) plus a cancellable 300 ms echo tail.
 - Stop/revoke/lapse/panic end a command prompt in flight without reopening the mic.
+
+## avalonia-port/wire-win-webcam-calibration: +695
+- Calibration bubble accuracy test ported to Avalonia; its rules moved to Core (`BubbleAccuracyTest`, `GazeTrimData.Compose`) and WPF now calls them.
+- Row stays stub: mouth detector and cursor trail queued as lane `wire-win-webcam-calibration-b`.

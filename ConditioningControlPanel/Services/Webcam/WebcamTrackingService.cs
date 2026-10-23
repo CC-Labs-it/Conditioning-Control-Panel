@@ -1096,42 +1096,18 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>
         /// Fold a newly-measured per-axis linear correction (from the bubble
-        /// test) into the calibration's GazeTrim. The new fit was measured
-        /// with the existing trim ACTIVE, so the two compose (apply old,
-        /// then new): for x' = x + a0 + a1·u then x'' = x' + b0 + b1·u',
-        /// the composition is c0 = a0 + b0 + b1·a0, c1 = a1 + b1 + a1·b1.
-        /// Composed coefficients are clamped so repeated tests can't wind
-        /// the map up into something wild.
+        /// test) into the calibration's GazeTrim (composition and clamps:
+        /// Core GazeTrimData.Compose).
         /// </summary>
         public void ApplyGazeTrim(double x0, double x1, double y0, double y1,
             double centerX, double centerY, bool persist)
         {
-            const double MaxOffset = 300;   // DIPs
-            const double MaxScale = 0.35;   // ±35% stretch, total
-
             lock (_stateLock)
             {
                 var current = Calibration;
                 if (current == null) return;
 
-                double cx0 = x0, cx1 = x1, cy0 = y0, cy1 = y1;
-                if (current.GazeTrim is { } old)
-                {
-                    cx0 = old.X0 + x0 + x1 * old.X0;
-                    cx1 = old.X1 + x1 + old.X1 * x1;
-                    cy0 = old.Y0 + y0 + y1 * old.Y0;
-                    cy1 = old.Y1 + y1 + old.Y1 * y1;
-                }
-                var composed = new GazeTrimData
-                {
-                    X0 = Math.Clamp(cx0, -MaxOffset, MaxOffset),
-                    X1 = Math.Clamp(cx1, -MaxScale, MaxScale),
-                    Y0 = Math.Clamp(cy0, -MaxOffset, MaxOffset),
-                    Y1 = Math.Clamp(cy1, -MaxScale, MaxScale),
-                    CenterX = centerX,
-                    CenterY = centerY,
-                    CapturedAt = DateTime.UtcNow,
-                };
+                var composed = GazeTrimData.Compose(current.GazeTrim, x0, x1, y0, y1, centerX, centerY, DateTime.UtcNow);
                 var updated = current.WithGazeTrim(composed);
                 if (persist) updated.Save();
                 Calibration = updated;

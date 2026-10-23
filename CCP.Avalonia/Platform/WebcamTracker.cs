@@ -90,8 +90,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// blinks, face lost/found, head pose, raw iris, gaze side and the projected gaze point. Camera
     /// open only between Start and Stop, only with current consent.
     /// ponytail: no mouth/tongue yet (the MAR/HSV detectors are still WPF-only), so calibration's
-    /// mouth prompts time out to "moving on", as WPF does on a miss. Long stare and gaze lock-on
-    /// are in Core (LongStareDetector, GazeLock) but not consumed here yet (webcam-avalonia-lock).
+    /// mouth prompts time out to "moving on", as WPF does on a miss. Gaze lock-on (Core GazeLock)
+    /// runs for the calibration bubble test's attractor; long stare (Core LongStareDetector) is not
+    /// consumed here yet (webcam-avalonia-lock).
     /// </summary>
     internal sealed class WebcamTracker
     {
@@ -392,8 +393,38 @@ namespace ConditioningControlPanel.Avalonia.Platform
             Log.Information("[Webcam] runtime offset {State} (persist={Persist})", offset == null ? "cleared" : "set", persist);
         }
 
+        /// <summary>WPF ApplyGazeTrim: fold a bubble-test correction into the calibration's GazeTrim
+        /// (Core GazeTrimData.Compose), optionally saving it.</summary>
+        public void ApplyGazeTrim(double x0, double x1, double y0, double y1, double centerX, double centerY, bool persist)
+        {
+            GazeTrimData composed;
+            lock (_gate)
+            {
+                if (Calibration is not { } current) return;
+                composed = GazeTrimData.Compose(current.GazeTrim, x0, x1, y0, y1, centerX, centerY, DateTime.UtcNow);
+                var updated = current.WithGazeTrim(composed);
+                if (persist) updated.Save();
+                Calibration = updated;
+            }
+            Log.Information("[Webcam] gaze trim applied: total x0={X0:F0} x1={X1:F3} y0={Y0:F0} y1={Y1:F3} (persist={Persist})",
+                composed.X0, composed.X1, composed.Y0, composed.Y1, persist);
+        }
+
+        private readonly GazeLock _lock = new();
+        private sealed record GazeSnapshot(double X, double Y);
+        private volatile GazeSnapshot? _lastPreLockGaze;
+
+        /// <summary>WPF LastPreLockGaze: the latest gaze point BEFORE the lock-on contraction, for
+        /// accuracy/residual math the lock must not flatter. Null until the first emitted frame.</summary>
+        public ScreenPoint? LastPreLockGaze => _lastPreLockGaze is { } s ? new ScreenPoint(s.X, s.Y) : null;
+
+        /// <summary>WPF SetGazeAttractor: the current gaze target in OnGazeMove space (Core GazeLock).</summary>
+        public void SetGazeAttractor(double centerX, double centerY, double radius) => _lock.SetTarget(centerX, centerY, radius);
+
+        public void ClearGazeAttractor() => _lock.Clear();
+
         /// <summary>WPF ProcessFrame without mouth/tongue: face, mesh, face lost/found, head pose,
-        /// iris, EAR blink, then the gaze chain (EmitGazeEvents minus lock-on and long stare).</summary>
+        /// iris, EAR blink, then the gaze chain (EmitGazeEvents minus long stare).</summary>
         private void ProcessFrame(Run run, Mat bgr)
         {
             var found = run.Face!.Detect(bgr);
@@ -432,7 +463,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
             var mapped = _gaze.Step(Calibration, dx, dy, GazeEngine.Now(), out var side);
             Dispatcher.UIThread.Post(() => OnGazeSide?.Invoke(side));
             if (mapped is not { } m) return;
-            var p = _gaze.Follow(m.X, m.Y);
+            _lastPreLockGaze = new GazeSnapshot(m.X, m.Y);
+            var locked = _lock.Apply(m.X, m.Y);
+            var p = _gaze.Follow(locked.X, locked.Y);
             Dispatcher.UIThread.Post(() => OnGazeMove?.Invoke(new ScreenPoint(p.X, p.Y)));
         }
 
