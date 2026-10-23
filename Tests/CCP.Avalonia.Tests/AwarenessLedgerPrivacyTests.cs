@@ -38,11 +38,16 @@ public sealed class AwarenessLedgerPrivacyTests
             Assert.True(known.IndexOf("second-app") < known.IndexOf("first-app"));   // counters alone would offer second-app first
             AwarenessLive.Ledger = ledger;
 
+            // Stop() keeps the last window seen, so an earlier test on a real display may leave one in front.
+            var front = AwarenessText.SanitizeRuleEntry(
+                global::ConditioningControlPanel.Avalonia.App.WindowAwareness.CurrentServiceName ?? string.Empty);
+            var inFront = front is null ? Array.Empty<string>() : new[] { front };
+
             var picked = AwarenessPrivacyViewModel.Candidates(new[] { "LISTED-APP" });
 
-            Assert.Equal(new[] { "first-app", "second-app" }, picked);   // switches in ring order first, de-duplicated, listed skipped
+            Assert.Equal(inFront.Concat(new[] { "first-app", "second-app" }), picked);   // switches in ring order first, de-duplicated, listed skipped
             AwarenessLive.Ledger = null;
-            Assert.Empty(AwarenessPrivacyViewModel.Candidates(Array.Empty<string>()));
+            Assert.Equal(inFront, AwarenessPrivacyViewModel.Candidates(Array.Empty<string>()));
         }
         finally
         {
