@@ -31,7 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <c>SkillTreeRules</c>, the same rules WPF SkillTreeService delegates to.
     ///
     /// <para>Not here (see the parity rows): purchasing (SkillCard_Click / PurchaseSkillAsync is a
-    /// server call behind account auth) and the four Ditzy Data PRO analytics expanders.</para>
+    /// server call behind account auth), including its purchase celebration. The four PRO analytics
+    /// panels live in EnhancementsTabView.Pro.cs.</para>
     /// </summary>
     public partial class EnhancementsTabView : UserControl
     {
@@ -379,7 +380,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             return _blurredArt[id] = baked;
         }
 
-        /// <summary>CreateSkillTreeHeader, minus the four PRO expanders (AddProSection).</summary>
+        /// <summary>CreateSkillTreeHeader, including the four ownership-gated PRO expanders.</summary>
         private Control Header()
         {
             var settings = CoreSettings.Current;
@@ -451,6 +452,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             if (SkillTreeRules.HasSkill(settings, "ditzy_data"))
                 AddDitzyStats(main, mods?.GetStatsTitle());
+
+            AddProSection(main, "ditzy_data_pro", IconKind.ChartMultiple, "label_pro_lifetime_title", BuildProLifetimePanel);
+            AddProSection(main, "season_rewind", IconKind.Rewind, "label_pro_rewind_title", BuildSeasonRewindPanel);
+            AddProSection(main, "bestie_records", IconKind.Trophy, "label_pro_bestie_title", BuildBestieRecordsPanel);
+            AddProSection(main, "brain_drain_report", IconKind.BrainCircuit, "label_pro_braindrain_title", BuildBrainDrainPanel);
 
             // Stats: XP multiplier (+ rush), conditioning time.
             var xp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
