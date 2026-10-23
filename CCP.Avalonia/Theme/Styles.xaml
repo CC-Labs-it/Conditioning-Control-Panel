@@ -11,11 +11,11 @@
      That one substitution is the bulk of the work in porting a view, which is why it is worth
      writing down here rather than rediscovering it 193 times.
 
-     Shared themes used by the ported views live here. MainWindow.xaml still has unported
-     implicit scroll/tree styles and keyed session/art/emote themes; see theme-main-window
-     in docs/avalonia-parity.md for the named follow-up lane. -->
+     Shared themes used by the ported views live here. Dead WPF keys are documented in
+     docs/cloud/fin-theme-main-window.md rather than copied without a caller. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:ConditioningControlPanel.Avalonia.Controls">
 
   <!-- MainWindow.xaml:525 -->
   <ControlTheme x:Key="SectionPanel" TargetType="Border">
@@ -99,8 +99,8 @@
     </Setter>
   </ControlTheme>
 
-  <!-- Current WPF Resources/Theme/MainWindow.xaml:739: 22px help chrome and owner tooltip delays.
-       ponytail: Avalonia has no ShowDuration property; the 60-second lifetime needs a UI seam. -->
+  <!-- MainWindow.xaml:739: owner delays and the 60-second lifetime for ordinary help tooltips.
+       Interactive HelpPopover cards keep their own hover/pin lifetime, as in WPF. -->
   <ControlTheme x:Key="HelpButtonStyle" TargetType="Button">
     <Setter Property="Width" Value="22"/>
     <Setter Property="Height" Value="22"/>
@@ -112,6 +112,7 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
     <Setter Property="Margin" Value="8,0,0,0"/>
     <Setter Property="Padding" Value="0"/>
+    <Setter Property="controls:ToolTipLifetime.Duration" Value="60000"/>
     <Setter Property="ToolTip.ShowDelay" Value="100"/>
     <Setter Property="ToolTip.BetweenShowDelay" Value="0"/>
     <Setter Property="Template">
@@ -483,7 +484,12 @@
       <ControlTemplate TargetType="Button">
         <Border x:Name="border" CornerRadius="6" Padding="{TemplateBinding Padding}"
                 Background="{TemplateBinding Background}"
-                RenderTransformOrigin="50%,50%">
+                RenderTransformOrigin="50%,50%" RenderTransform="scale(1)">
+          <Border.Transitions><Transitions>
+            <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15">
+              <TransformOperationsTransition.Easing><controls:SmallButtonReleaseEase/></TransformOperationsTransition.Easing>
+            </TransformOperationsTransition>
+          </Transitions></Border.Transitions>
           <ContentPresenter Content="{TemplateBinding Content}"
                             ContentTemplate="{TemplateBinding ContentTemplate}"
                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -495,6 +501,9 @@
     </Style>
     <Style Selector="^:pressed /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}"/>
+      <Setter Property="Transitions"><Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.08"/>
+      </Transitions></Setter>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -801,6 +810,7 @@
     <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentHoverBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="FontSize" Value="11"/>
+    <Setter Property="MaxDropDownHeight" Value="254"/>
     <Setter Property="MinHeight" Value="24"/>
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="Cursor" Value="Hand"/>
@@ -810,11 +820,19 @@
     </Style>
     <Style Selector="^:dropdownopen /template/ Border#Background">
       <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="controls:MainWindowThemeMotion.ComboGlow" Value="{DynamicResource PinkColor}"/>
     </Style>
     <Style Selector="^:disabled">
       <Setter Property="Opacity" Value="0.45"/>
+      <Setter Property="Cursor" Value="Arrow"/>
     </Style>
+    <Style Selector="^ /template/ PathIcon#DropDownGlyph"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/></Style>
+    <Style Selector="^:pointerover /template/ PathIcon#DropDownGlyph"><Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/></Style>
+    <Style Selector="^:dropdownopen /template/ PathIcon#DropDownGlyph"><Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/></Style>
+    <Style Selector="^ /template/ ScrollViewer"><Setter Property="MaxHeight" Value="240"/></Style>
     <Style Selector="^ /template/ Border#PopupBorder">
+      <Setter Property="controls:MainWindowThemeMotion.SlideOnLoad" Value="True"/>
+      <Setter Property="Margin" Value="0,4,0,0"/>
       <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
       <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
       <Setter Property="BorderThickness" Value="1"/>
@@ -826,11 +844,14 @@
 
   <!-- MainWindow.xaml:1366. Gradient-border card with a left accent strip and a chevron that
        rotates on expand. Expander's IsExpanded drives the content; the chevron rotation is a
-       :expanded selector rather than a Storyboard. DropShadowEffect dropped. -->
+       :expanded selector and finite 200 ms transition. The glow is a sibling BoxShadow. -->
   <ControlTheme x:Key="CollapsibleCard" TargetType="Expander">
     <Setter Property="IsExpanded" Value="True"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="Expander">
+        <Grid>
+        <Border CornerRadius="10" Margin="0,0,0,10" IsHitTestVisible="False"
+                controls:MainWindowThemeMotion.CardGlow="{DynamicResource PinkColor}"/>
         <Border CornerRadius="10" Margin="0,0,0,10" BorderThickness="1" ClipToBounds="True">
           <Border.Background>
             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
@@ -871,7 +892,11 @@
                                   VerticalAlignment="Center"/>
                 <TextBlock x:Name="Chevron" Grid.Column="3" Text="&#x25B8;" Foreground="{DynamicResource PinkBrush}"
                            FontSize="14" FontWeight="Bold" VerticalAlignment="Center" Margin="8,0,4,0"
-                           RenderTransformOrigin="50%,50%"/>
+                           RenderTransformOrigin="50%,50%" RenderTransform="rotate(0deg)">
+                  <TextBlock.Transitions><Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2"/>
+                  </Transitions></TextBlock.Transitions>
+                </TextBlock>
               </Grid>
             </ToggleButton>
             <ContentPresenter x:Name="PART_ContentPresenter" Grid.Row="1" Margin="15,0,15,15"
@@ -880,8 +905,12 @@
                               IsVisible="{TemplateBinding IsExpanded}"/>
           </Grid>
         </Border>
+        </Grid>
       </ControlTemplate>
     </Setter>
+    <Style Selector="^ /template/ ToggleButton#PART_toggle:pointerover TextBlock#Chevron">
+      <Setter Property="Foreground" Value="White"/>
+    </Style>
     <Style Selector="^:expanded /template/ TextBlock#Chevron">
       <Setter Property="RenderTransform" Value="rotate(90deg)"/>
     </Style>
@@ -985,5 +1014,319 @@
     <Style Selector="^:pointerover /template/ Border#bg">
       <Setter Property="Background" Value="{DynamicResource PinkButtonHoveredBrush}"/>
     </Style>
+  </ControlTheme>
+
+  <!-- Shared WPF achievement, quest-panel and remote-emote themes. Quest particles remain
+       on QuestsTabView.Fx.cs's shared ambient clock; no compositor animation is introduced. -->
+
+    <ControlTheme x:Key="AchievementCard" TargetType="ToggleButton">
+      <Setter Property="Focusable" Value="True"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+      <Setter Property="Width" Value="210"/>
+      <Setter Property="Height" Value="306"/>
+      <Setter Property="Margin" Value="5"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Template">
+        <ControlTemplate TargetType="ToggleButton">
+          <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="15" ClipToBounds="True">
+            <Grid>
+              <ContentPresenter Content="{TemplateBinding Content}"/>
+              <Border x:Name="FocusRing" CornerRadius="15" BorderThickness="2"
+                      BorderBrush="{DynamicResource PinkBrush}" Opacity="0" IsHitTestVisible="False"/>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#Chrome">
+        <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      </Style>
+      <Style Selector="^:focus-within /template/ Border#FocusRing">
+        <Setter Property="Opacity" Value="1"/>
+      </Style>
+    </ControlTheme>
+    <ControlTheme x:Key="AchievementFilterChip" TargetType="ToggleButton">
+      <Setter Property="Margin" Value="0,0,6,6"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Background" Value="#26FFFFFF"/>
+      <Setter Property="BorderBrush" Value="#33FFFFFF"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Template">
+        <ControlTemplate TargetType="ToggleButton">
+          <Border x:Name="Chip" CornerRadius="13" Padding="12,5"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Border#Chip">
+        <Setter Property="Background" Value="#335EC8F2"/>
+        <Setter Property="BorderBrush" Value="#5EC8F2"/>
+      </Style>
+    </ControlTheme>
+
+
+    <ControlTheme x:Key="AnimatedGradientPanel" TargetType="ContentControl">
+      <Setter Property="Template">
+        <ControlTemplate TargetType="ContentControl">
+          <Border CornerRadius="15"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  ClipToBounds="True">
+            <Grid>
+              <Rectangle RadiusX="15" RadiusY="15">
+                <Rectangle.Fill>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Color="{DynamicResource SurfaceBg}" Offset="0"/>
+                    <GradientStop Color="{DynamicResource AccentMidGradient}" Offset="0.5"/>
+                    <GradientStop Color="{DynamicResource DarkerBg}" Offset="1"/>
+                  </LinearGradientBrush>
+                </Rectangle.Fill>
+              </Rectangle>
+              <Ellipse Width="200" Height="200" Opacity="0.15"
+                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-50,-50,0,0">
+                <Ellipse.Fill>
+                  <RadialGradientBrush>
+                    <GradientStop Color="{DynamicResource PinkColor}" Offset="0"/>
+                    <GradientStop Color="Transparent" Offset="1"/>
+                  </RadialGradientBrush>
+                </Ellipse.Fill>
+              </Ellipse>
+              <Ellipse Width="180" Height="180" Opacity="0.12"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-40,-40">
+                <Ellipse.Fill>
+                  <RadialGradientBrush>
+                    <GradientStop Color="{DynamicResource PatreonPurple}" Offset="0"/>
+                    <GradientStop Color="Transparent" Offset="1"/>
+                  </RadialGradientBrush>
+                </Ellipse.Fill>
+              </Ellipse>
+              <Canvas Classes="qparticles" Tag="std" IsHitTestVisible="False">
+                <Ellipse Width="4" Height="4" Fill="{DynamicResource PinkBrush}" Opacity="0.4" Canvas.Left="20" Canvas.Top="80"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="3" Height="3" Fill="{DynamicResource SecondaryBrush}" Opacity="0.35" Canvas.Left="80" Canvas.Top="120"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="5" Height="5" Fill="{DynamicResource PinkBrush}" Opacity="0.3" Canvas.Left="150" Canvas.Top="60"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="3" Height="3" Fill="{DynamicResource SecondaryBrush}" Opacity="0.35" Canvas.Left="220" Canvas.Top="100"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="4" Height="4" Fill="{DynamicResource SecondaryBrush}" Opacity="0.3" Canvas.Left="280" Canvas.Top="40"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="3" Height="3" Fill="{DynamicResource PinkBrush}" Opacity="0.4" Canvas.Left="50" Canvas.Top="150"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+              </Canvas>
+              <Border Padding="20">
+                <ContentPresenter Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}"/>
+              </Border>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="AnimatedGradientPanelWide" TargetType="ContentControl">
+      <Setter Property="Template">
+        <ControlTemplate TargetType="ContentControl">
+          <Border CornerRadius="10"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  ClipToBounds="True">
+            <Grid>
+              <Rectangle RadiusX="10" RadiusY="10">
+                <Rectangle.Fill>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Color="{DynamicResource SurfaceBg}" Offset="0"/>
+                    <GradientStop Color="{DynamicResource AccentMidGradient}" Offset="0.5"/>
+                    <GradientStop Color="{DynamicResource DarkerBg}" Offset="1"/>
+                  </LinearGradientBrush>
+                </Rectangle.Fill>
+              </Rectangle>
+              <Ellipse Width="250" Height="150" Opacity="0.12"
+                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-80,-40,0,0">
+                <Ellipse.Fill>
+                  <RadialGradientBrush>
+                    <GradientStop Color="{DynamicResource PinkColor}" Offset="0"/>
+                    <GradientStop Color="Transparent" Offset="1"/>
+                  </RadialGradientBrush>
+                </Ellipse.Fill>
+              </Ellipse>
+              <Ellipse Width="200" Height="120" Opacity="0.1"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-60,-30">
+                <Ellipse.Fill>
+                  <RadialGradientBrush>
+                    <GradientStop Color="{DynamicResource PatreonPurple}" Offset="0"/>
+                    <GradientStop Color="Transparent" Offset="1"/>
+                  </RadialGradientBrush>
+                </Ellipse.Fill>
+              </Ellipse>
+              <Canvas Classes="qparticles" Tag="wide" IsHitTestVisible="False">
+                <Ellipse Width="4" Height="4" Fill="{DynamicResource PinkBrush}" Opacity="0.4" Canvas.Left="30" Canvas.Top="60"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="3" Height="3" Fill="{DynamicResource SecondaryBrush}" Opacity="0.35" Canvas.Left="120" Canvas.Top="100"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="5" Height="5" Fill="{DynamicResource PinkBrush}" Opacity="0.3" Canvas.Left="250" Canvas.Top="40"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="3" Height="3" Fill="{DynamicResource SecondaryBrush}" Opacity="0.35" Canvas.Left="380" Canvas.Top="80"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="4" Height="4" Fill="{DynamicResource SecondaryBrush}" Opacity="0.3" Canvas.Left="500" Canvas.Top="50"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+                <Ellipse Width="3" Height="3" Fill="{DynamicResource PinkBrush}" Opacity="0.4" Canvas.Left="180" Canvas.Top="120"><Ellipse.RenderTransform><TranslateTransform/></Ellipse.RenderTransform></Ellipse>
+              </Canvas>
+              <Border Padding="10">
+                <ContentPresenter Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}"/>
+              </Border>
+            </Grid>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+
+
+        <ControlTheme x:Key="EmoteCircleButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="44"/>
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="Background" Value="#252542"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="22">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Background" Value="#33335A"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#bd">
+                <Setter Property="Background" Value="#3F3F66"/>
+            </Style>
+        </ControlTheme>
+        <ControlTheme x:Key="EmoteEditOverlayStyle" TargetType="Button">
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Background" Value="#3A3A55"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="9">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
+            </Style>
+        </ControlTheme>
+
+
+        <ControlTheme x:Key="EmoteCircleButtonBigStyle" TargetType="Button">
+            <Setter Property="Width" Value="72"/>
+            <Setter Property="Height" Value="72"/>
+            <Setter Property="Background" Value="#252542"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="36">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Background" Value="#33335A"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#bd">
+                <Setter Property="Background" Value="#3F3F66"/>
+            </Style>
+        </ControlTheme>
+        <ControlTheme x:Key="EmoteCustomTextBoxStyle" TargetType="TextBox"
+                      BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Background" Value="#252542"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="BorderBrush" Value="#3A3A55"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="MaxLength" Value="60"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Style Selector="^:pointerover"><Setter Property="Foreground" Value="White"/></Style>
+            <Style Selector="^:focus"><Setter Property="Foreground" Value="White"/></Style>
+            <Style Selector="^ /template/ TextBlock#PART_Placeholder">
+                <Setter Property="Foreground" Value="#5A5A75"/>
+                <Setter Property="Opacity" Value="1"/>
+                <Setter Property="FontStyle" Value="Italic"/>
+            </Style>
+            <Style Selector="^:pointerover /template/ Border#PART_BorderElement">
+                <Setter Property="Background" Value="#252542"/>
+                <Setter Property="BorderBrush" Value="#3A3A55"/>
+            </Style>
+            <Style Selector="^:focus /template/ Border#PART_BorderElement">
+                <Setter Property="Background" Value="#252542"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+            </Style>
+        </ControlTheme>
+
+  <ControlTheme x:Key="EmoteCustomBadgeStyle" TargetType="Border">
+    <Setter Property="Width" Value="44"/>
+    <Setter Property="Height" Value="44"/>
+    <Setter Property="Background" Value="#252542"/>
+    <Setter Property="BorderBrush" Value="#3A3A55"/>
+    <Setter Property="BorderThickness" Value="2"/>
+    <Setter Property="CornerRadius" Value="22"/>
+  </ControlTheme>
+
+  <!-- MainWindow.xaml:502. Keep the framework's selection/keyboard behavior; WPF's
+       unvirtualized ItemsPresenter is hosted by the same transparent, borderless scroller. -->
+  <ControlTheme x:Key="{x:Type TreeView}" TargetType="TreeView">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="TreeView">
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}">
+          <ScrollViewer Name="PART_ScrollViewer" Focusable="False" Padding="{TemplateBinding Padding}"
+                        HorizontalScrollBarVisibility="{TemplateBinding (ScrollViewer.HorizontalScrollBarVisibility)}"
+                        VerticalScrollBarVisibility="{TemplateBinding (ScrollViewer.VerticalScrollBarVisibility)}">
+            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+          </ScrollViewer>
+        </Border>
+      </ControlTemplate>
+    </Setter>
   </ControlTheme>
 </ResourceDictionary>

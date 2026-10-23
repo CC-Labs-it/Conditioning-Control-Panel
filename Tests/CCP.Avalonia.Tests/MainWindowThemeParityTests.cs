@@ -203,4 +203,232 @@ public sealed class MainWindowThemeParityTests
         finally { host.Close(); }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task SharedThemesReachAchievementQuestAndEmoteUserPaths() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var app = Application.Current!;
+        var achievements = new AchievementsTabView();
+        var quests = new QuestsTabView();
+        var remote = new RemoteControlTabView();
+        foreach (var key in new[] { "AchievementCard", "AchievementFilterChip", "AnimatedGradientPanel",
+                     "AnimatedGradientPanelWide", "EmoteCircleButtonStyle", "EmoteCircleButtonBigStyle",
+                     "EmoteEditOverlayStyle", "EmoteCustomBadgeStyle", "EmoteCustomTextBoxStyle" })
+        {
+            Assert.IsType<ControlTheme>(app.FindResource(key));
+            Assert.False(achievements.Resources.ContainsKey(key));
+            Assert.False(quests.Resources.ContainsKey(key));
+            Assert.False(remote.Resources.ContainsKey(key));
+        }
+        var box = remote.FindControl<TextBox>("TxtEmoteCustom")!;
+        Assert.Same(app.FindResource("EmoteCustomTextBoxStyle"), box.Theme);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task CustomEmoteChromeKeepsTheGhostClearOfTypedTextAndUsesTheLiveFocusAccent() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var box = new TextBox
+        {
+            Theme = (ControlTheme)Application.Current!.FindResource("EmoteCustomTextBoxStyle")!,
+            Watermark = "last sent",
+        };
+        var host = new Window { Width = 300, Height = 100, Content = box };
+        host.Resources["PinkBrush"] = Brushes.Cyan;
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var ghost = box.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "PART_Placeholder");
+            Assert.True(ghost.IsVisible);
+            Assert.Equal("last sent", ghost.Text);
+            Assert.Equal(FontStyle.Italic, ghost.FontStyle);
+            Assert.Equal(Color.Parse("#5A5A75"), ((ISolidColorBrush)ghost.Foreground!).Color);
+            Assert.Equal(60, box.MaxLength);
+            box.Text = "typing";
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ghost.IsVisible);
+            box.Text = "";
+            box.Focus();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(ghost.IsVisible);
+            var chrome = box.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "PART_BorderElement");
+            Assert.Same(Brushes.Cyan, chrome.BorderBrush);
+            Assert.Equal(new Thickness(1), chrome.BorderThickness);
+            Assert.Equal(Color.Parse("#252542"), ((ISolidColorBrush)chrome.Background!).Color);
+            host.Resources["PinkBrush"] = Brushes.Lime;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(Brushes.Lime, chrome.BorderBrush);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ImplicitTreeViewKeepsWpfChromeScrollingAndSelection() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var tree = new TreeView { ItemsSource = Enumerable.Range(0, 40).Select(i => $"folder {i}").ToArray() };
+        var host = new Window { Width = 300, Height = 200, Content = tree };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            Assert.Equal(Brushes.Transparent.Color, ((ISolidColorBrush)tree.Background!).Color);
+            Assert.Equal(new Thickness(0), tree.BorderThickness);
+            var viewer = tree.GetVisualDescendants().OfType<ScrollViewer>().First();
+            Assert.False(viewer.Focusable);
+            Assert.Equal(global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto, viewer.VerticalScrollBarVisibility);
+            Assert.True(viewer.Extent.Height > viewer.Viewport.Height);
+            tree.SelectedItem = "folder 2";
+            Assert.Equal("folder 2", tree.SelectedItem);
+            viewer.Offset = new Vector(0, 100);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(viewer.Offset.Y > 0);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task OrdinaryHelpTooltipExpiresAtSixtySecondsAndCancelsOnCloseDetachAndPanic() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var clock = new TooltipClock();
+        var oldTime = global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time;
+        global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time = clock;
+        var owner = new Button { Theme = (ControlTheme)Application.Current!.FindResource("HelpButtonStyle")! };
+        var host = new Window { Width = 100, Height = 100, Content = owner };
+        ToolTip.SetTip(owner, "ordinary help");
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            ToolTip.SetIsOpen(owner, true);
+            clock.Advance(59999);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(ToolTip.GetIsOpen(owner));
+            clock.Advance(1);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ToolTip.GetIsOpen(owner));
+
+            ToolTip.SetIsOpen(owner, true);
+            clock.Advance(60000); // queue an expiry, then close/reopen before it dispatches
+            ToolTip.SetIsOpen(owner, false);
+            ToolTip.SetIsOpen(owner, true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(ToolTip.GetIsOpen(owner));
+            global::ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All
+                .Single(s => s.Id == "help-tooltips").Stop(null);
+            Assert.False(ToolTip.GetIsOpen(owner));
+            Assert.True(clock.Last!.Disposed);
+            ToolTip.SetIsOpen(owner, true);
+            host.Content = null;
+            Assert.False(ToolTip.GetIsOpen(owner));
+            Assert.True(clock.Last!.Disposed);
+        }
+        finally
+        {
+            ToolTip.SetIsOpen(owner, false);
+            host.Close();
+            global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.Time = oldTime;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SmallButtonPressAndReleaseKeepWpfTimingAndBackEase() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var button = new Button { Content = "press", Theme = (ControlTheme)Application.Current!.FindResource("SmallPinkButton")! };
+        var host = new Window { Width = 150, Height = 100, Content = button };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var border = button.GetVisualDescendants().OfType<Border>().First();
+            var point = button.TranslatePoint(new Point(20, 20), host)!.Value;
+            host.MouseMove(point);
+            host.MouseDown(point, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            var press = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(border.Transitions!));
+            Assert.Equal(TimeSpan.FromMilliseconds(80), press.Duration);
+            await Task.Delay(120);
+            host.CaptureRenderedFrame()?.Dispose();
+            Assert.Equal(0.97, border.RenderTransform!.Value.M11, 2);
+            host.MouseUp(point, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            var release = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(border.Transitions!));
+            Assert.Equal(TimeSpan.FromMilliseconds(150), release.Duration);
+            Assert.Equal(1.025, release.Easing.Ease(0.5), 5); // WPF amplitude 0.3, including the tiny overshoot
+            await Task.Delay(200);
+            host.CaptureRenderedFrame()?.Dispose();
+            Assert.Equal(1, border.RenderTransform!.Value.M11, 2);
+        }
+        finally { host.Close(); }
+    });
+
+    [Fact]
+    public Task CollapsibleCardAndComboKeepWpfMotionAndLiveAccentChrome() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var card = new Expander { Header = "header", Content = "body", Theme = (ControlTheme)Application.Current!.FindResource("CollapsibleCard")! };
+        var combo = new ComboBox { ItemsSource = Enumerable.Range(0, 30).ToArray(), Theme = (ControlTheme)Application.Current.FindResource("DarkComboBoxStyle")! };
+        var panel = new StackPanel(); panel.Children.Add(card); panel.Children.Add(combo);
+        var host = new Window { Width = 300, Height = 250, Content = panel };
+        host.Resources["PinkBrush"] = Brushes.Cyan;
+        host.Resources["PinkColor"] = Colors.Cyan;
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var chevron = card.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "Chevron");
+            Assert.Equal(TimeSpan.FromMilliseconds(200), Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(chevron.Transitions!)).Duration);
+            card.IsExpanded = false;
+            await Task.Delay(250);
+            host.CaptureRenderedFrame()?.Dispose();
+            Assert.Equal(1, chevron.RenderTransform!.Value.M11, 2);
+            Assert.False(card.GetVisualDescendants().OfType<global::Avalonia.Controls.Presenters.ContentPresenter>()
+                .Single(c => c.Name == "PART_ContentPresenter").IsVisible);
+            var glow = card.GetVisualDescendants().OfType<Border>().Single(b => b.BoxShadow.Count > 0);
+            Assert.Null(glow.Effect);
+            Assert.Equal(Colors.Cyan.R, glow.BoxShadow[0].Color.R);
+            combo.IsDropDownOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            var arrow = combo.GetVisualDescendants().OfType<PathIcon>().Single(p => p.Name == "DropDownGlyph");
+            Assert.Same(Brushes.Cyan, arrow.Foreground);
+            var chrome = combo.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "Background");
+            Assert.Same(Brushes.Cyan, chrome.BorderBrush);
+            Assert.Equal(10, chrome.BoxShadow[0].Blur);
+            var popup = combo.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.Popup>().Single();
+            var popupBorder = Assert.IsType<Border>(popup.Child);
+            Assert.Equal(TimeSpan.FromMilliseconds(150), Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(popupBorder.Transitions!)).Duration);
+            Assert.Equal(240, popupBorder.GetVisualDescendants().OfType<ScrollViewer>().First().MaxHeight);
+        }
+        finally { combo.IsDropDownOpen = false; host.Close(); }
+    });
+
+    private sealed class TooltipClock : TimeProvider
+    {
+        private long _now;
+        internal Alarm? Last;
+        public override System.Threading.ITimer CreateTimer(System.Threading.TimerCallback callback, object? state,
+            TimeSpan dueTime, TimeSpan period) => Last = new Alarm(callback, state, _now + (long)dueTime.TotalMilliseconds);
+        internal void Advance(long milliseconds)
+        {
+            _now += milliseconds;
+            if (Last is { Disposed: false } alarm && _now >= alarm.Due) alarm.Fire();
+        }
+        internal sealed class Alarm(System.Threading.TimerCallback callback, object? state, long due) : System.Threading.ITimer
+        {
+            internal long Due = due;
+            internal bool Disposed;
+            internal void Fire() { Due = long.MaxValue; callback(state); }
+            public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException();
+            public void Dispose() => Disposed = true;
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
 }

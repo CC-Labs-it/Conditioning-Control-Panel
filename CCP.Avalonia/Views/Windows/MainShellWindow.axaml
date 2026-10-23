@@ -150,58 +150,6 @@
             <Setter Property="IsHitTestVisible" Value="False"/>
         </ControlTheme>
 
-        <!-- ponytail: local copy of ConditioningControlPanel/Resources/Theme/MainWindow.xaml:
-             EmoteCircleButtonBigStyle / EmoteCustomTextBoxStyle. WindowControlButton and
-             WindowCloseButton moved to Theme/Styles.xaml once the launcher needed them too. -->
-        <ControlTheme x:Key="EmoteCircleButtonBigStyle" TargetType="Button">
-            <Setter Property="Width" Value="72"/>
-            <Setter Property="Height" Value="72"/>
-            <Setter Property="Background" Value="#252542"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
-            <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="36">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          Foreground="{TemplateBinding Foreground}"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover /template/ Border#bd">
-                <Setter Property="Background" Value="#33335A"/>
-            </Style>
-            <Style Selector="^:pressed /template/ Border#bd">
-                <Setter Property="Background" Value="#3F3F66"/>
-            </Style>
-        </ControlTheme>
-
-        <!-- The WPF original templated a watermark driven by two EmoteHelper attached properties
-             and a MultiBinding converter; both live in the WPF head.
-             ponytail: watermark dropped, plain dark TextBox kept. Restore it with Avalonia's own
-             Watermark property once EmoteHelper moves to Core. -->
-        <ControlTheme x:Key="EmoteCustomTextBoxStyle" TargetType="TextBox"
-                      BasedOn="{StaticResource {x:Type TextBox}}">
-            <Setter Property="Background" Value="#252542"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="CaretBrush" Value="White"/>
-            <Setter Property="BorderBrush" Value="#3A3A55"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Padding" Value="10,8"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="MaxLength" Value="60"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </ControlTheme>
     </Window.Resources>
 
     <Grid x:Name="RootGrid">

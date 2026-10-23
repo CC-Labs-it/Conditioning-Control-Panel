@@ -41,63 +41,6 @@
             <GradientStop Color="#00000000" Offset="0.55"/>
         </LinearGradientBrush>
 
-        <!-- ponytail: local copy of Resources/Theme/MainWindow.xaml:EmoteCircleButtonStyle,
-             hoist when a second view needs it. Circular preset button: 44x44, emoji inside. -->
-        <ControlTheme x:Key="EmoteCircleButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="44"/>
-            <Setter Property="Height" Value="44"/>
-            <Setter Property="Background" Value="#252542"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
-            <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="22">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover /template/ Border#bd">
-                <Setter Property="Background" Value="#33335A"/>
-            </Style>
-            <Style Selector="^:pressed /template/ Border#bd">
-                <Setter Property="Background" Value="#3F3F66"/>
-            </Style>
-        </ControlTheme>
-
-        <!-- ponytail: local copy of Resources/Theme/MainWindow.xaml:EmoteEditOverlayStyle,
-             hoist when a second view needs it. Pencil overlay on each preset slot. -->
-        <ControlTheme x:Key="EmoteEditOverlayStyle" TargetType="Button">
-            <Setter Property="Width" Value="18"/>
-            <Setter Property="Height" Value="18"/>
-            <Setter Property="Background" Value="#3A3A55"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="9">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover /template/ Border#bd">
-                <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
-            </Style>
-        </ControlTheme>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -472,24 +415,15 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
 
-                                <!-- Custom slot row: circular badge + watermarked textbox + send button.
-                                     ponytail: local copy of Resources/Theme/MainWindow.xaml
-                                     :EmoteCustomBadgeStyle and :EmoteCustomTextBoxStyle, inlined
-                                     because each has exactly one use site. The WPF textbox style is
-                                     a whole ControlTemplate only to draw a watermark; Avalonia's
-                                     TextBox.Watermark does it natively. -->
+                                <!-- Shared emote chrome; native watermark retains the last successful send. -->
                                 <Grid ColumnDefinitions="Auto,*,Auto">
-                                    <Border Grid.Column="0" Width="44" Height="44" CornerRadius="22"
-                                            Background="#252542" BorderBrush="#3A3A55" BorderThickness="2">
+                                    <Border Grid.Column="0" Theme="{StaticResource EmoteCustomBadgeStyle}">
                                         <fx:IconGlyph Kind="Edit" Size="18"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
                                     <TextBox Grid.Column="1" x:Name="TxtEmoteCustom"
                                              Watermark="{loc:Str watermark_emote_custom}"
-                                             MaxLength="60"
-                                             Background="#252542" Foreground="White" CaretBrush="White"
-                                             BorderBrush="#3A3A55" BorderThickness="1" CornerRadius="6"
-                                             Padding="10,8" FontSize="14" VerticalContentAlignment="Center"
+                                             Theme="{StaticResource EmoteCustomTextBoxStyle}"
                                              Margin="12,0,8,0"
                                              KeyDown="TxtEmoteCustom_KeyDown"/>
                                     <Button Grid.Column="2" x:Name="BtnEmoteCustomSend"
