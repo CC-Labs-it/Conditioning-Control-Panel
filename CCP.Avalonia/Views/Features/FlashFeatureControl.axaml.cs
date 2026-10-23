@@ -56,7 +56,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             ChkFlashGazeLinger.IsCheckedChanged += ChkFlashGazeLinger_Changed;
             SliderFlashLingerMs.ValueChanged += SliderFlashLingerMs_Changed;
             CmbMotion.SelectionChanged += CmbMotion_Changed;
+            ChkFlashRoundedCorners.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.FlashRoundedCorners = ChkFlashRoundedCorners.IsChecked ?? false;
+                CoreSettings.Save();
+            };
             SliderDriftSpeed.ValueChanged += SliderDriftSpeed_Changed;
+            ChkFlashDraggable.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.FlashDraggable = ChkFlashDraggable.IsChecked ?? false;
+                CoreSettings.Save();
+            };
 
             // WPF OnLoaded: Configure, then RowChanged re-measures the box (OnGetRowChanged -> RefreshV2Box).
             RowGetFlashesV2.RowChanged += (_, _) => RefreshV2Box();
@@ -64,11 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             LoadFromSettings();
 
-            // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt +
-            // App.Mods.ModChanged). The mod-override half of ResolveImageDecoded is portable now
-            // (CoreModArt.OverridePath), but the plate still needs a named ImageBrush in the
-            // .axaml, which Avalonia rejects (x:Name on a brush is AVLN2000); the port draws a
-            // static wash instead, so there is nothing here to repaint.
+            Helpers.ModArt.BindFeaturePlates(this, "features/flash.png", HeroArt, SideArt);
         }
 
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
@@ -79,15 +87,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnGrantsChanged;
             RebindToCurrentSettings();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnGrantsChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
+
+        private void OnGrantsChanged() => Dispatcher.UIThread.Post(LoadFromSettings);
 
         private void OnCurrentReplaced() => Dispatcher.UIThread.Post(RebindToCurrentSettings);
 
@@ -128,6 +140,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 ChkCorruption.IsChecked = s.CorruptionMode;
                 ChkHydraLinked.IsChecked = s.HydraLinkedTiming;
                 ChkGlow.IsChecked = s.FlashGlowEnabled;
+                ChkFlashRoundedCorners.IsChecked = s.FlashRoundedCorners;
+                ChkFlashDraggable.IsChecked = s.FlashDraggable;
                 ChkSolidMode.IsChecked = s.FlashSolidMode;
                 ChkFlashGazePop.IsChecked = s.FlashGazePopEnabled;
                 ChkFlashGazeLinger.IsChecked = s.FlashGazeLingerEnabled;
@@ -144,29 +158,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        // WPF rebuilds on PrizeGrants.GrantsChanged; ownership never changes at runtime on this head
-        // (PrizeOwnership), so the rebuild on load/rebind is all there is to do.
+        // WPF rebuilds the picker and rows on load, rebind and PrizeGrants.GrantsChanged.
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
-        /// no row is left (only the motion row and the Get it row exist here).</summary>
-        private void RefreshV2Box() =>
+        /// no row is left.</summary>
+        private void RefreshV2Box()
+        {
+            RowRoundedCorners.IsVisible = RowMotion.IsVisible;
+            RowDraggable.IsVisible = RowMotion.IsVisible;
             BoxFlashV2.IsVisible = RowMotion.IsVisible || !RowGetFlashesV2.IsRowHidden;
+        }
 
         /// <summary>Still always, Drift and Bounce with its v2 pill when owned, Mix once anything v2 is
-        /// owned. Pendulum is not offered: this head cannot play it yet (it would play Still).</summary>
+        /// owned, Pendulum when owned, then Mix.</summary>
         private void BuildMotionPicker()
         {
             var drift = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce);
-            RowMotion.IsVisible = drift;
+            var pendulum = Platform.PrizeOwnership.IsGranted(ConditioningControlPanel.Services.Prizes.PrizeGrants.FlashPendulum);
+            RowMotion.IsVisible = drift || pendulum;
             RefreshV2Box();
             CmbMotion.Items.Clear();
             AddMotionChoice(FlashMotionStyle.Still, "option_flash_motion_still", v2: false);
-            if (drift)
-            {
-                AddMotionChoice(FlashMotionStyle.DriftBounce, "option_flash_motion_drift", v2: true);
-                AddMotionChoice(FlashMotionStyle.Mix, "option_flash_motion_mix", v2: false);
-            }
-            // A style with no row here (unowned, Pendulum) shows as Still, which is how it plays.
+            if (drift) AddMotionChoice(FlashMotionStyle.DriftBounce, "option_flash_motion_drift", v2: true);
+            if (pendulum) AddMotionChoice(FlashMotionStyle.Pendulum, "option_flash_motion_pendulum", v2: true);
+            if (drift || pendulum) AddMotionChoice(FlashMotionStyle.Mix, "option_flash_motion_mix", v2: false);
+            // An unowned style shows as Still, which is how it plays.
             var style = CoreSettings.Current.FlashMotionStyle;
             CmbMotion.SelectedItem = CmbMotion.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is FlashMotionStyle t && t == style)
                 ?? CmbMotion.Items[0];
@@ -238,6 +254,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.CorruptionMode) ||
                 e.PropertyName == nameof(AppSettings.HydraLinkedTiming) ||
                 e.PropertyName == nameof(AppSettings.FlashGlowEnabled) ||
+                e.PropertyName == nameof(AppSettings.FlashRoundedCorners) ||
+                e.PropertyName == nameof(AppSettings.FlashDraggable) ||
                 e.PropertyName == nameof(AppSettings.FlashSolidMode) ||
                 e.PropertyName == nameof(AppSettings.FlashGazePopEnabled) ||
                 e.PropertyName == nameof(AppSettings.FlashGazeLingerEnabled) ||

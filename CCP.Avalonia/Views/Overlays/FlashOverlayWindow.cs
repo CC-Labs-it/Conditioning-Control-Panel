@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
@@ -29,6 +30,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed class FlashOverlayWindow : Window
     {
         private readonly Image _image;
+        private readonly FlashPicture _picture;
+        private int _frame;
+        private bool _closed;
+        private double _motionAngle;
+        internal bool IsAnimated => _picture.Frames.Count > 1;
+        internal int FrameIndex => _frame;
+
+        internal void AdvanceFrame()
+        {
+            if (_closed || Exit != null || !IsAnimated) return;
+            var index = (int)(FlashOverlay.Clock.GetElapsedTime(SpawnedAt).Ticks / _picture.Delay.Ticks % _picture.Frames.Count);
+            if (index == _frame) return;
+            _image.Source = _picture.Frames[_frame = index];
+        }
+
+        internal void ApplyCorners(bool rounded, bool owned, bool glow, double width, double height)
+        {
+            var r = FlashCorners.Resolve(rounded, owned, glow, Math.Min(width, height), 1);
+            _glow.CornerRadius = new CornerRadius(r);
+            if (r > 0) _image.Clip = new RectangleGeometry(new Rect(0, 0, width, height), r, r);
+        }
+
+        internal void ApplyMotion(FlashMotionState m)
+        {
+            var k = DesktopScaling > 0 ? DesktopScaling : 1;
+            _card.Width = m.MediaW / k;
+            _card.Height = m.MediaH / k;
+            _motionAngle = m.AngleRad * 180 / Math.PI;
+            if (_card.RenderTransform is not RotateTransform) _card.RenderTransform = new RotateTransform();
+            ((RotateTransform)_card.RenderTransform).Angle = _motionAngle;
+            Width = m.W / k + 2 * GlowPadPx / k;
+            Height = m.H / k + 2 * GlowPadPx / k;
+            Position = new PixelPoint((int)Math.Round(m.X) - GlowPadPx, (int)Math.Round(m.Y) - GlowPadPx);
+        }
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
         private readonly Panel _card, _root;
         private readonly Border _glow, _whiten;
@@ -49,7 +84,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void MakeClickable(Action onPop)
         {
             IsHitTestVisible = true;
-            PointerPressed += (_, e) => { e.Handled = true; onPop(); };
+            double NowMs() => FlashOverlay.Clock.GetElapsedTime(0).TotalMilliseconds;
+            PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                if (!CoreSettings.Current.FlashDraggable || !FlashOverlay.OwnsMotion) { onPop(); return; }
+                var m = FlashOverlay.MotionForDrag(this);
+                var p = this.PointToScreen(e.GetPosition(this));
+                FlashDrag.Begin(m, p.X, p.Y, NowMs());
+                MotionStyle = FlashMotionStyle.DriftBounce;
+                _motionAngle = 0;
+                _card.RenderTransform = null;
+                var k = DesktopScaling > 0 ? DesktopScaling : 1;
+                _card.Width = m.MediaW / k;
+                _card.Height = m.MediaH / k;
+                e.Pointer.Capture(this);
+            };
+            PointerMoved += (_, e) =>
+            {
+                if (FlashOverlay.Drifting.Find(x => x.Window == this).Motion?.Drag is not { Held: true } d) return;
+                var p = this.PointToScreen(e.GetPosition(this));
+                FlashDrag.Sample(d, p.X, p.Y, NowMs());
+            };
+            PointerReleased += (_, e) =>
+            {
+                var m = FlashOverlay.Drifting.Find(x => x.Window == this).Motion;
+                if (m?.Drag is not { Held: true }) return;
+                var outcome = FlashDrag.Release(m, NowMs(), CoreSettings.Current.MotionLevel);
+                e.Pointer.Capture(null);
+                e.Handled = true;
+                if (outcome == FlashDragOutcome.Tap) onPop();
+            };
+            PointerCaptureLost += (_, _) =>
+            {
+                var m = FlashOverlay.Drifting.Find(x => x.Window == this).Motion;
+                if (m?.Drag is { Held: true }) FlashDrag.Release(m, NowMs(), MotionLevel.Off);
+            };
         }
 
         /// <summary>Play <paramref name="exit"/> (WPF FlashLayer draws FlashExit.Sample the same way)
@@ -139,7 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _card.RenderTransformOrigin = new RelativePoint(0.5, s.PivotY, RelativeUnit.Relative);
             _exitScale!.ScaleX = s.ScaleX;
             _exitScale.ScaleY = s.ScaleY;
-            _exitRotate!.Angle = s.RotationDeg;
+            _exitRotate!.Angle = _motionAngle + s.RotationDeg;
             _exitShift!.Y = s.OffsetY * _card.Bounds.Height;
             // TV off: the picture burns white as it collapses (FlashLayer: white at Whiten x alpha).
             _whiten.Opacity = Math.Clamp(s.Whiten, 0, 1);
@@ -209,8 +280,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Height = 300;
         }
 
-        public FlashOverlayWindow(Bitmap picture)
+        public FlashOverlayWindow(Bitmap picture) : this(new FlashPicture(picture)) { }
+
+        internal FlashOverlayWindow(FlashPicture picture)
         {
+            _picture = picture;
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
@@ -220,7 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CanResize = false;
             Focusable = false;
             IsHitTestVisible = false;
-            _image = new Image { Source = picture, Stretch = Stretch.Uniform };
+            _image = new Image { Source = picture.Frames[0], Stretch = Stretch.Uniform };
             _glow = new Border { IsHitTestVisible = false };
             _whiten = new Border { Background = Brushes.White, Opacity = 0, IsHitTestVisible = false };
             // Centred, so the card is the letterboxed picture, not the window (as the bare Image was).
@@ -232,7 +306,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => picture.Dispose();
+            Closed += (_, _) => { _closed = true; _image.Source = null; picture.Dispose(); };
         }
 
         /// <summary>
@@ -259,7 +333,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var v = from + (to - from) * i / steps;
                 var last = i == steps;
-                DispatcherTimer.RunOnce(() => { if (Exit != null) return; X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
+                DispatcherTimer.RunOnce(() => { if (_closed || Exit != null) return; X11Overlay.SetOpacity(this, v); if (last) done?.Invoke(); }, span * i / steps + TimeSpan.FromMilliseconds(1));
             }
         }
     }

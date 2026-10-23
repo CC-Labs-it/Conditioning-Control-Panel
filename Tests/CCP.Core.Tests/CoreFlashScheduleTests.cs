@@ -84,4 +84,20 @@ public sealed class CoreFlashScheduleTests
             ConditioningControlPanel.Services.UI.DndGuard.ResetCacheForTests();
         }
     }
+    [Fact]
+    public void Stop_always_cleans_up_the_head_including_idle_point_fired_bursts()
+    {
+        var was = CoreFlash.StopProvider;
+        var stops = 0;
+        try
+        {
+            CoreFlash.StopProvider = () => stops++;
+            CoreFlash.Stop();
+            CoreFlash.Stop();
+            Assert.False(CoreFlash.IsRunning);
+            Assert.Equal(2, stops);
+        }
+        finally { CoreFlash.StopProvider = was; }
+    }
+
 }

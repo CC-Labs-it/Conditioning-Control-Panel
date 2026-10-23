@@ -144,7 +144,7 @@ public sealed class FlashPopTests
     [Fact]
     public Task Startup_seeding_keeps_remote_and_voice_flashes_point_fired_and_skips_a_full_ambient_tick() => OnUi((s, _) =>
     {
-        var (show, ambient, busy, fire) = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire);
+        var (show, ambient, busy, fire, stop) = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire, CoreFlash.StopProvider);
         var (click, stay) = (s.FlashClickable, s.FlashStayUntilPopped);
         var fired = new System.Collections.Generic.List<bool>();
         var host = new Window();
@@ -163,7 +163,7 @@ public sealed class FlashPopTests
         }
         finally
         {
-            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire) = (show, ambient, busy, fire);
+            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider, FlashOverlay.Fire, CoreFlash.StopProvider) = (show, ambient, busy, fire, stop);
             (s.FlashClickable, s.FlashStayUntilPopped) = (click, stay);
         }
     });
