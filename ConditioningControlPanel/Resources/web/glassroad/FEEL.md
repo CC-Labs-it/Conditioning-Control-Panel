@@ -190,10 +190,11 @@ take-off, on a pad up to padLateS after entering it, or on the ground up to earl
 - `respawn.pullWhite` 0.6: how far the pull fades toward white (Gentle rules apply).
 
 ## camera
-- `camera.eyeUpM` 1.5 (polish 6, was 2.2): eye height above the kart.
-- `camera.eyeBackM` 4.1 (polish 6, was 6.5): eye distance behind the kart.
-- `camera.lookAheadM` 9 (polish 6, was 8): look point ahead of the kart.
-- `camera.lookUpM` 0.3 (polish 6, was 0.6): look point above kart height.
+- `camera.eyeUpM` 1.8 (owner reference framing): eye height above the kart.
+- `camera.eyeBackM` 3.4 (owner reference framing): eye distance behind the kart.
+- `camera.lookAheadM` 9: base look range ahead of the kart, before the screen framing correction.
+- `camera.lookUpM` 0.3: base look height, before the screen framing correction.
+- `render/framing.js` keeps all racer models at scale 0.78 and aims their stable body centre at viewport x 0.5, y 0.6. The eye keeps its eased orbit and loop-up blend; hops allow up to 0.035 vertical screen travel and hit kicks stay visible. Rescue predicts its actual interpolated displacement to keep the kart ahead of the eye.
 - `camera.followHTcS` 0.08: horizontal follow time constant.
 - `camera.followVTcS` 0.25: vertical follow time constant.
 - `camera.followHopTcS` 0.6: both follow constants (and the heading follow) during a low-speed hop.
@@ -411,7 +412,7 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `ai.cornerMargin` 0.9: share of the kart's calmed full-lock grip yaw a bot plans a bend with (was a feel gap in sim/ai.js).
 
 ## contact (B1 kart contact and slipstream, sim/contact.js)
-- `contact.radiusM` 0.54 (polish 6, follows the 0.68 kart scale; was 0.8): kart contact radius (two karts touch under 2x this).
+- `contact.radiusM` 0.54 (retained from polish 6 when visual scale rose to 0.78): kart contact radius (two karts touch under 2x this).
 - `contact.maxHeightM` 1.05 (polish 6, was 1.5): karts further apart than this along the road normal never touch.
 - `contact.pushMps` 3.5: least sideways speed a touch gives.
 - `contact.pushPerDv` 0.5: extra sideways speed per m/s of closing speed.

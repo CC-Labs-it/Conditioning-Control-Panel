@@ -54,8 +54,9 @@ export const WORLD_DEFAULTS = Object.freeze({
   heroUpM: Object.freeze([-4, 1]), heroLowShare: 0.3, heroLowUpM: Object.freeze([-18, -8]),
   heroPlinthM: 1.5, heroPlinthK: 0.07, heroPlinthR: 1.15, heroMarginM: 6, heroAirM: 14, heroGapBetweenM: 6,
   heroLeanEvery: 2, heroLeanDeg: Object.freeze([22, 34]), heroLeanGapM: Object.freeze([15, 45]), heroLeanStepDeg: 4, heroGapStepM: 6, heroFarGapM: 45, heroTopMinM: 20, heroFitPadM: 2, heroCastN: 3, heroCastR: 0.7, heroCastMinM: 4,
-  // polish 6: the stacked course leaves fewer clear slots, so more tries (90, was 40), a late pass for a boxed-in slot, every 2nd hero leans (was 3rd) and a leaner may stand up to 45 m off (was 32), any hero up to 110 m (was 90) and 6 m from the next (was 8)
-  heroFaceLeadM: 110, heroEyeM: 2.6, heroSwingRad: 0.35, heroTries: 90,
+  // Wider P6 roads leave fewer clear slots: search more candidates at load, retaining the accepted sizes,
+  // lean, spacing and strict clearance checks. This adds no per-frame work.
+  heroFaceLeadM: 110, heroEyeM: 2.6, heroSwingRad: 0.35, heroTries: 120,
   // polish 6: the finish arch and the whole coil (the dare's take-off on its outer turn, the landing on its inner
   // one; a hero beside a turn that tight could never face the oncoming camera)
   heroAvoidS: Object.freeze([Object.freeze([-28, 28]), Object.freeze([900, 1200])]),

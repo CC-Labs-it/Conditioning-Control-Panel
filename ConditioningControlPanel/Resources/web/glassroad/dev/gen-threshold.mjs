@@ -17,6 +17,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { validate } from '../track/schema.js';
+import { createScalar } from '../track/spline.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const argOut = process.argv.indexOf('--out');
@@ -26,27 +27,28 @@ const DEG = Math.PI / 180;
 // y = target height at the piece end; ease: smooth | lin | kick (grade grows to the end)
 export const PIECES = [
   // induction: ground level, the climb onto deck 1, the bridge over the start straight
-  { id: 'start', len: 90, y: 0, w: 16, sec: 0, pad: { at: 0.45, x: 0 } },
+  { id: 'start', len: 90, y: 0, w: 20, sec: 0, pad: { at: 0.45, x: 0 } },
   { id: 'sweepA', turn: 90, r: 45, roll: 25, y: 1, sec: 0 },
   { id: 'L2', len: 24, y: 3, sec: 0 },
   { id: 'hairpin', turn: 180, r: 36, roll: 28, y: 10, sec: 0 },
   { id: 'bridge', len: 124, y: 14, sec: 0, pad: { at: 0.35, x: -3 } },
   // deepening: up round the column onto the top deck, the wheel and its hoop, the dare, down the keyhole
-  { id: 'column', turn: -360, r: 28, roll: 18, y: 28, ease: 'lin', w: 13, speed: 0.92, sec: 1 },
+  { id: 'column', turn: -360, r: 28, roll: 18, y: 28, ease: 'lin', w: 16.25, speed: 0.92, sec: 1 },
   { id: 'deck', len: 40, y: 28, sec: 1, pad: { at: 0.55, x: 0 } },
-  { id: 'wheel', loop: true, r: 16, off: -20, y: 28, sec: 1 },
-  { id: 'link', len: 50, y: 28, sec: 1 },
-  { id: 'hoop', loop: true, r: 14, off: 20, y: 28, sec: 1 },
-  { id: 'deck2', len: 30, y: 28, sec: 1, alongside: true },
-  // the coil (the dare, owner 16:14 and main 16:55): one and a half turns whose radius WIDENS 20 -> 28.25 ->
-  // 36.5, c1 and c3 about one centre. c2 dives under deck2 (10 m clear) and c3 climbs back up OUTSIDE c1, the
+  // The nested loops and dare retain their technical widths: expanding them closes real air gaps.
+  { id: 'wheel', loop: true, r: 16, off: -20, y: 28, w: 14, sec: 1 },
+  { id: 'link', len: 50, y: 28, w: 14, sec: 1 },
+  { id: 'hoop', loop: true, r: 14, off: 20, y: 28, w: 14, sec: 1 },
+  { id: 'deck2', len: 30, y: 28, w: 14, sec: 1, alongside: true },
+  // the coil (the dare): one and a half turns whose radius widens 20 -> 28.75 -> 37.5,
+  // c1 and c3 about one centre. c2 dives under deck2 (10 m clear) and c3 climbs back up OUTSIDE c1, the
   // same way round, its edge 2.5 m off c1's outer edge and about 5 m lower: carry your speed straight out of
   // c1 (a boost or a hop) and you clear the gap onto c3
-  { id: 'c1', turn: 180, r: 20, roll: 22, y: 26.5, ease: 'lin', speed: 0.9, sec: 1, alongside: true },
-  { id: 'c2', turn: 180, r: 28.75, roll: 20, y: 13, ease: 'dive', sec: 1, alongside: true },
+  { id: 'c1', turn: 180, r: 20, w: 14, roll: 22, y: 26.5, ease: 'lin', speed: 0.9, sec: 1, alongside: true },
+  { id: 'c2', turn: 180, r: 28.75, w: 14, roll: 20, y: 13, ease: 'dive', sec: 1, alongside: true },
   { id: 'c3', turn: 180, r: 37.5, w: 16, roll: 18, y: 23, sec: 1, alongside: true },
   // release: down the return lane, round under the deck and the column, the jump, home along the ground
-  { id: 'L4a', auto: true, y: 6, ease: 'lin', sec: 2, alongside: true },
+  { id: 'L4a', auto: true, y: 6, w: 14, ease: 'lin', sec: 2, alongside: true },
   { id: 'sweepD', turn: 90, r: 40, roll: 25, y: 2, ease: 'lin', sec: 2 },
   { id: 'L4d', auto: true, y: 2, sec: 2, pad: { at: 0.4, x: 0 } },
   { id: 'kicker', len: 30, y: 5, ease: 'kick', sec: 2 },
@@ -54,14 +56,15 @@ export const PIECES = [
   { id: 'landing', len: 24, y: -1, sec: 2 },
   { id: 'sweepE', turn: -90, r: 42, roll: 24, y: 0, speed: 0.9, sec: 2 },
   { id: 'sweepF', turn: -90, r: 42, roll: 24, y: 0, speed: 0.85, sec: 2 },
-  { id: 'home', len: 60, y: 0, w: 16, sec: 2 },
+  { id: 'home', len: 60, y: 0, w: 20, sec: 2 },
 ];
 const SECTIONS = [
   { id: 'induction', act: 'induction', palette: 'dawn', sky: 'spiral-slow', bandSpeed: 0.6 },
   { id: 'deepening', act: 'deepening', palette: 'deep', sky: 'spiral-deep', bandSpeed: 1.0 },
   { id: 'release', act: 'release', palette: 'afterglow', sky: 'spiral-wide', bandSpeed: 0.8 },
 ];
-const W = 14, TOP = 30, G = 28;
+// Main racing road gains 25% room. The loader's monotone width spline eases each join without overshoot.
+const W = 17.5, TOP = 30, G = 28;
 /** Loop clearance: the exit lane's edge keeps this much plan room from the entry lane's edge. */
 const LOOP_SIDE_GAP_M = 4;
 /** Lanes marked alongside keep at least this much plan gap between edges and this much height between them. */
@@ -293,9 +296,10 @@ const r2 = (v) => Math.round(v * 100) / 100;
 /** Dense centreline samples [x, y, z, w, node, s] (5 per segment). */
 function densePts(track, meta, L) {
   const P = track.nodes.map((n) => n.p), N = P.length, pts = [];
+  const widthAt = createScalar(track.nodes.map((n) => n.w));
   for (let i = 0; i < N; i++) {
-    const a = P[i], b = P[(i + 1) % N], w = track.nodes[i].w, s0 = meta[i].s, s1 = i + 1 < N ? meta[i + 1].s : L;
-    for (let k = 0; k < 5; k++) { const t = k / 5; pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, w, i, s0 + (s1 - s0) * t]); }
+    const a = P[i], b = P[(i + 1) % N], s0 = meta[i].s, s1 = i + 1 < N ? meta[i + 1].s : L;
+    for (let k = 0; k < 5; k++) { const t = k / 5; pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, widthAt(i, t), i, s0 + (s1 - s0) * t]); }
   }
   return pts;
 }
@@ -394,7 +398,9 @@ export function checks({ track, closure, lengthM, lipPiece, meta, pieces }) {
   }
   if (minSep < 10) errs.push('plan overlap with only ' + minSep.toFixed(2) + ' m vertical at nodes ' + worst);
   for (const p of pieces) if (p.loop) {
-    if (Math.abs(p.off) < W + LOOP_SIDE_GAP_M) errs.push('loop ' + p.id + ' exit offset ' + p.off + ' m is under a road width plus ' + LOOP_SIDE_GAP_M);
+    const pi = pieces.indexOf(p), exit = pieces[(pi + 1) % pieces.length];
+    const entryExitWidth = ((p.w || W) + (exit.w || W)) / 2;
+    if (Math.abs(p.off) < entryExitWidth + LOOP_SIDE_GAP_M) errs.push('loop ' + p.id + ' exit offset ' + p.off + ' m is under the entry/exit half widths plus ' + LOOP_SIDE_GAP_M);
     if (p.r < 12 || p.r > 18) errs.push('loop ' + p.id + ' radius ' + p.r + ' outside 12..18 m');
   }
   // the decks: at least three levels, and the course crosses over itself at least twice (distinct places)

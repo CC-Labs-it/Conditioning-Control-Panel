@@ -18,9 +18,16 @@ test('gen: the course passes every generator check', () => {
 });
 
 test('gen: tracks/threshold.json is the generator output', () => {
-  assert.deepEqual(json.nodes.map((n) => n.p), built.track.nodes.map((n) => n.p));
+  assert.deepEqual(json.nodes, JSON.parse(JSON.stringify(built.track.nodes)));
   assert.deepEqual(json.routes, JSON.parse(JSON.stringify(built.track.routes)));
   assert.deepEqual(json.checkpoints, built.track.checkpoints);
+});
+
+test('gen: loop clearance uses its actual entry and exit widths', () => {
+  const pieces = PIECES.map((p) => ({ ...p, ...(['wheel', 'link'].includes(p.id) ? { w: 17 } : {}) }));
+  assert.ok(checks(build(pieces)).errs.some((e) => e.includes('loop wheel exit offset')));
+  const inner = PIECES.find((p) => p.id === 'c1'), outer = PIECES.find((p) => p.id === 'c3');
+  assert.equal(outer.r - inner.r - (inner.w + outer.w) / 2, 2.5, 'the dare still crosses a real gap');
 });
 
 test('gen: loops carry magnet and both rails, roll 0, and never hold a checkpoint, an item or a respawn grid', () => {
