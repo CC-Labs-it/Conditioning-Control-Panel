@@ -1,0 +1,124 @@
+<!-- PORTED from ConditioningControlPanel/Views/Controls/Companion/CompanionPickerCard.xaml.
+     Same structure, order, spacing and resource keys. Deviations: Style -> Theme, Visibility ->
+     IsVisible, ToolTip -> ToolTip.Tip, the link template is a ControlTheme with a TextBlock (no
+     access-key underscores), the portrait placeholder is an fx:IconGlyph (Sparkle, WPF's U+2727), and the perk glyph is a TextBlock with the Core glyph as WPF has it. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Companion.CompanionPickerCard">
+
+    <UserControl.Resources>
+        <ControlTheme x:Key="PickerLinkTemplate" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <TextBlock x:Name="t" Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                               FontSize="{TemplateBinding FontSize}" Background="Transparent" TextWrapping="Wrap"/>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ TextBlock#t">
+                <Setter Property="TextDecorations" Value="Underline"/>
+            </Style>
+            <Style Selector="^:focus-visible /template/ TextBlock#t">
+                <Setter Property="TextDecorations" Value="Underline"/>
+            </Style>
+        </ControlTheme>
+    </UserControl.Resources>
+
+    <!-- THE one place that picks the companion's avatar and personality (see the WPF header).
+         LIVE (Refresh) edits the companion of the mod in use; PREVIEW (ShowPreview) describes
+         another mod's companion, read-only, without activating that mod. -->
+    <Border Background="{DynamicResource ElevatedSurfaceBrush}" BorderBrush="{DynamicResource SectionOutlineBrush}"
+            BorderThickness="1" CornerRadius="12" Padding="16">
+        <Grid ColumnDefinitions="Auto,*">
+
+            <!-- portrait -->
+            <Border Grid.Column="0" Width="120" Height="150" CornerRadius="10" Margin="0,0,18,0" VerticalAlignment="Top"
+                    Background="{DynamicResource DarkerBgBrush}" BorderBrush="{DynamicResource PanelAccentBrush}"
+                    BorderThickness="1" ClipToBounds="True">
+                <Grid>
+                    <fx:IconGlyph x:Name="TxtPreviewGlyph" Kind="Sparkle" Size="38"
+                                  Foreground="{DynamicResource TextMutedBrush}"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Image x:Name="ImgPreview" Stretch="Uniform" Margin="4"
+                           RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Column="1">
+            <!-- LIVE: pick look and personality -->
+            <StackPanel x:Name="LivePanel">
+                <TextBlock x:Name="TxtLiveName" Theme="{StaticResource Type.CardTitle}" Margin="0,0,0,8"/>
+                <Grid ColumnDefinitions="*,12,*">
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="{loc:Str modmgr_label_look}" Theme="{StaticResource Type.Label}" Margin="0,0,0,3"/>
+                        <ComboBox x:Name="CmbAvatar" Theme="{DynamicResource DarkComboBoxStyle}" HorizontalAlignment="Stretch"
+                                  Foreground="{DynamicResource TextLightBrush}" MinHeight="30"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="{loc:Str modmgr_label_personality}" Theme="{StaticResource Type.Label}" Margin="0,0,0,3"/>
+                        <ComboBox x:Name="CmbPersonality" Theme="{DynamicResource DarkComboBoxStyle}" HorizontalAlignment="Stretch"
+                                  Foreground="{DynamicResource TextLightBrush}" MinHeight="30"/>
+                        <!-- The deeper personality editor, right under the choice it refines. -->
+                        <Button x:Name="BtnMorePersonality" Content="{loc:Str companion_v2_personality}" IsVisible="False"
+                                HorizontalAlignment="Left" Margin="0,5,0,0"
+                                Foreground="{DynamicResource SectionInkBrush}" FontSize="11.5" Theme="{StaticResource PickerLinkTemplate}"/>
+                    </StackPanel>
+                </Grid>
+                <TextBlock x:Name="TxtAvatarHint" Theme="{StaticResource Type.Caption}" IsVisible="False" Margin="0,6,0,0"/>
+                <!-- the switch the "switched off" hint asks for, right where it asks -->
+                <Button x:Name="BtnTurnOn" Content="{loc:Str modmgr_avatar_turn_on}"
+                        IsVisible="False" HorizontalAlignment="Left" Margin="0,3,0,0"
+                        Foreground="{DynamicResource SectionInkBrush}" FontSize="11.5" Theme="{StaticResource PickerLinkTemplate}"/>
+
+                <!-- how the personality talks: one or two lines in its own voice -->
+                <Border Background="{DynamicResource PanelAccentBrush}" CornerRadius="10" Padding="14,10" Margin="0,10,0,0"
+                        BorderBrush="{DynamicResource SectionRuleBrush}" BorderThickness="2,0,0,0">
+                    <StackPanel x:Name="SamplePanel"/>
+                </Border>
+
+                <Button x:Name="BtnTubeFit" Content="{loc:Str btn_tube_fit}" ToolTip.Tip="{loc:Str tooltip_tube_fit}"
+                        HorizontalAlignment="Left" Margin="0,8,0,0"
+                        Foreground="{DynamicResource SectionInkBrush}" FontSize="11.5" Theme="{StaticResource PickerLinkTemplate}"/>
+            </StackPanel>
+
+            <!-- PREVIEW: another mod's companion, read-only -->
+            <StackPanel x:Name="PreviewPanel" IsVisible="False">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                    <TextBlock x:Name="TxtPreviewName" Theme="{StaticResource Type.CardTitle}" VerticalAlignment="Center"/>
+                    <Border Background="{DynamicResource PanelAccentBrush}" CornerRadius="10" Padding="8,3"
+                            Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{loc:Str modmgr_preview_tag}" FontSize="10" FontWeight="Bold"
+                                   Foreground="{DynamicResource TextMutedBrush}"/>
+                    </Border>
+                </StackPanel>
+                <TextBlock x:Name="TxtPreviewCounts" Theme="{StaticResource Type.Body}" Margin="0,0,0,8"/>
+                <Border x:Name="PreviewSampleBorder" Background="{DynamicResource PanelAccentBrush}" CornerRadius="10"
+                        Padding="14,10" Margin="0,0,0,8"
+                        BorderBrush="{DynamicResource SectionRuleBrush}" BorderThickness="2,0,0,0">
+                    <TextBlock x:Name="TxtPreviewSample" Theme="{StaticResource Type.Body}" FontStyle="Italic"/>
+                </Border>
+                <TextBlock Text="{loc:Str modmgr_preview_hint}" Theme="{StaticResource Type.Caption}"/>
+            </StackPanel>
+
+            <!-- PERK: what this companion does to XP, read-only. -->
+            <Grid x:Name="PerkRow" Margin="0,10,0,0" ColumnDefinitions="Auto,Auto,*" ToolTip.Tip="{loc:Str modmgr_perk_tooltip}">
+                <Border x:Name="PerkBadge" Width="22" Height="22" CornerRadius="11" VerticalAlignment="Top"
+                        Background="{DynamicResource PanelAccentBrush}">
+                    <TextBlock x:Name="TxtPerkGlyph" FontSize="11"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="{loc:Str modmgr_perk_label}" Theme="{StaticResource Type.Label}" VerticalAlignment="Center"
+                           Margin="8,0,6,0"/>
+                <TextBlock Grid.Column="2" x:Name="TxtPerk" Theme="{StaticResource Type.Body}" VerticalAlignment="Center"/>
+            </Grid>
+            <!-- The perk picker's door (Companion v2). -->
+            <Button x:Name="BtnPerkChange" Content="{loc:Str companion_perk_change}"
+                    IsVisible="False" HorizontalAlignment="Left" Margin="30,5,0,0"
+                    Foreground="{DynamicResource SectionInkBrush}" FontSize="11.5" Theme="{StaticResource PickerLinkTemplate}"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

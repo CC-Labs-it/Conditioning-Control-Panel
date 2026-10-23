@@ -15,7 +15,7 @@ public sealed class DtrhRemoteEntryTtlTests
 {
     private const long Now = 1_790_000_000;
 
-    private static DtrhAssetManifest.RemoteEntry At(long atUnix)
+    private static DtrhRemoteMedia.RemoteEntry At(long atUnix)
         => new("scrolller/sub/1", "https://images.scrolller.com/a.jpg", true, atUnix);
 
     [Fact]
