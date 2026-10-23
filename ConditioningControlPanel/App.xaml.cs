@@ -251,6 +251,8 @@ namespace ConditioningControlPanel
         static App()
         {
             CorePaths.EffectiveAssetsProvider = () => EffectiveAssetsPath;
+            // Chaos bubble payloads are Core data; what firing one does is this head's.
+            Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.
@@ -289,6 +291,7 @@ namespace ConditioningControlPanel
                 Current?.Dispatcher is { } gd && (gd.HasShutdownStarted || gd.HasShutdownFinished);
 
             Services.Deeper.EnhancementResolver.LibraryMatchProvider = (path, type) => EnhancementLibrary?.FindMatch(path, type);
+            Services.Deeper.AudioWaveformCache.Decoder = Services.Deeper.MediaDurationProbe.DecodeWaveform;
             Services.SettingsPaletteIndex.JustDropDoorAvailableProvider = () => Services.JustDrop.JustDropService.DoorAvailable;
             Services.SettingsPaletteIndex.GameAvailableProvider = id => Services.Launcher.LauncherCatalogue.Find(id)?.Available == true;
             Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
@@ -311,9 +314,22 @@ namespace ConditioningControlPanel
             // The settings model now lives in Core; Core code reads the live instance through
             // this. Settings is created later in OnStartup; the delegate reads it lazily.
             CoreSettings.ServiceProvider = () => Settings;
+            // The browser video gate's rules live in Core; the WebView2 engine half stays here.
+            // Touching Instance also kicks off the shared environment build on first use, so a
+            // later video finds IsAvailable already settled. A file the page cannot serve (outside
+            // every mapped virtual host) would 404 and cost a pointless fallback, so it is decided
+            // here rather than at runtime.
+            Services.Video.Browser.BrowserVideoGate.EngineAccepts = (path, stableKey) =>
+                Services.Video.Browser.BrowserVideoEngine.Instance.IsAvailable
+                && Services.Video.Browser.BrowserVideoEngine.BuildPageUrl(path) != null
+                && !Services.Video.Browser.BrowserUnsafeVideoCache.Contains(path, stableKey);
             // Race rules live in Core; the prize store and the NAudio decoder stay here.
             Services.Race.RacingAccess.IsGrantedProvider = Services.Prizes.PrizeGrants.IsGranted;
             Services.Race.TrackDecoder.DecodeProvider = Services.Race.NAudioTrackDecode.Decode;
+            // The Bureau's evidence index lives in Core; it reads this head's pack service.
+            Services.Bureau.BureauIndexService.InstalledPacksProvider = () => ContentPacks?.InstalledPacks;
+            Services.Bureau.BureauIndexService.ImageFilesProvider = packId => ContentPacks?.GetPackFiles(packId, "image") ?? new();
+            Services.Bureau.BureauIndexService.OpenFileProvider = (packId, entry) => ContentPacks?.GetPackFileStream(packId, entry);
             // The compositor layers moved to Core; their per-monitor fill gate resolves screens here.
             Services.Compositor.BaseLayer.ScreenTargetGate = ShouldRenderTargetOnScreen;
             // The mod service's side effects on a switch, and what it asks the head.
@@ -377,8 +393,12 @@ namespace ConditioningControlPanel
             // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
             Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
+            // EmiNudgeWorld lives in Core too; whether the desktop is quiet is the head's call.
+            Services.EmiDesk.EmiNudgeWorld.QuietProbe = () => EmiDesk?.NudgeQuiet() == true;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
+            // Goon signaling moved to Core with its transports; its 409-merged recovery stays here.
+            Services.GoonGame.GoonSignalingClient.MergedAccountHook = Services.MergedAccountRecovery.TryHandle;
             Services.MergedAccountRecoveryHead.Seed();
             Services.Arcademy.ArcademySyncService.MergedRecovery = Services.MergedAccountRecovery.TryHandle;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
@@ -469,6 +489,7 @@ namespace ConditioningControlPanel
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Stakes.StakeAppHooks.Seed();
             Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
             Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
@@ -607,6 +628,10 @@ namespace ConditioningControlPanel
             // declared null! until then - so the provider must not capture it now.
             CoreWebcam.IsAvailableProvider = () => Webcam != null;
             CoreWebcam.RevokeConsentAction = () => Webcam?.RevokeConsent();
+            // The Deeper engine and its host moved to Core; the effects and the tracker stay here.
+            Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Services.Deeper.RealActionDispatcher();
+            Services.Deeper.EnhancementHostService.WebcamProvider = () =>
+                Webcam == null ? null : (_deeperWebcam ??= new Services.Deeper.EnhancementWebcamAdapter(Webcam));
 
             // Speech capability, for the views that ask whether voice input is worth offering.
             // SpeechService itself stays here - it owns a capture device. Reading ModelStatus
@@ -1222,6 +1247,7 @@ namespace ConditioningControlPanel
         public static BugReportService BugReport { get; private set; } = null!;
         public static WallpaperService? Wallpaper { get; private set; }
         public static WebcamTrackingService Webcam { get; private set; } = null!;
+        private static Services.Deeper.EnhancementWebcamAdapter? _deeperWebcam;
         public static NotificationService Notifications { get; private set; } = null!;
         public static AttentionCheckService AttentionCheck { get; private set; } = null!;
         public static FocusGameService FocusGame { get; private set; } = null!;
@@ -2717,7 +2743,23 @@ namespace ConditioningControlPanel
             _ = DailyFree.RefreshAsync();
             // Prize ownership. Pure constructor: no I/O, no network; it only reads the DEBUG
             // CCP_PRIZE_GRANTS desk-test override. The static PrizeGrants facade the effect lanes call forwards here.
-            Ownership = new Services.Prizes.OwnershipService();
+            // Core holds the rules; WPF hands it the UI-thread marshal (inline when already on the
+            // UI thread, dropped once the dispatcher is shutting down, synchronous with no Application).
+            Ownership = new Services.Prizes.OwnershipService(invoke =>
+            {
+                try
+                {
+                    var dispatcher = Current?.Dispatcher;
+                    if (dispatcher is null) { invoke(); return; }
+                    if (dispatcher.HasShutdownStarted) return;
+                    if (dispatcher.CheckAccess()) invoke();
+                    else dispatcher.BeginInvoke(invoke);
+                }
+                catch (Exception ex)
+                {
+                    Logger?.Debug("[Prizes] could not raise OwnershipChanged: {Error}", ex.Message);
+                }
+            });
             Services.Prizes.PrizeGrants.Attach(Ownership);
             // Buying a v2 prize from the options panel instead of the Back Room (owner decision,
             // 2026-09-19). Pure constructor: the counter is read only when a "Get it" row is put on
@@ -2730,7 +2772,7 @@ namespace ConditioningControlPanel
             V2Purchase = new Services.Prizes.V2PurchaseService(
                 new Services.BackRoom.BackRoomApi(null, Services.BackRoom.BackRoomApi.AppIdentity, adoptSp: null),
                 () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId,
-                Services.Prizes.V2PurchaseRule.OwnsPrize,
+                id => Services.Prizes.V2PurchaseRule.OwnsPrize(id, Services.Prizes.PrizeGrants.IsGranted),
                 () => Settings?.Current?.SkillPoints ?? 0,
                 // The account is captured when the reply lands and checked AGAIN inside the
                 // marshalled write, the `canAdopt` shape BackRoomBridge.AdoptSp uses: the write
