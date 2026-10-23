@@ -356,12 +356,83 @@ public sealed class AssetsTabTests
         shell.Content = content;
     });
 
+    [Fact]
+    public Task DoubleClickingAThumbnailOpensItInTheMiniPlayer() => Run(async (shell, tab, s) =>
+    {
+        var sub = tab.AssetTree.Single(n => n.Name == "images").Children.Single();
+        tab.AssetTreeView.SelectedItem = sub;
+        await tab.ThumbnailLoads;
+        var tile = await Thumbnail(shell, tab);
+        var at = tile.TranslatePoint(new Point(50, 30), shell)!.Value;
+
+        // WPF ThumbnailItem_Click: the first click toggles, the second (ClickCount 2) previews. The
+        // headless platform never counts a double click, so the second press carries its count.
+        shell.MouseDown(at, MouseButton.Left);
+        shell.MouseUp(at, MouseButton.Left);
+        Assert.Null(tab.LastPreview);
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        tile.RaiseEvent(new PointerPressedEventArgs(tile, pointer, shell, at, 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+            KeyModifiers.None, 2));
+        Dispatcher.UIThread.RunJobs();
+
+        var preview = Assert.IsType<MiniPlayerWindow>(tab.LastPreview);
+        Assert.Same(shell, preview.Owner);
+        Assert.True(preview.IsVisible);
+        var image = preview.FindControl<Image>("ImagePreview")!;
+        Assert.True(image.IsVisible);
+        Assert.NotNull(image.Source);
+        Assert.Contains("images/sub/c.png", s.DisabledAssetPaths);   // one toggle, not two
+    });
+
+    [Fact]
+    public Task ContextMenuPreviewOpensAndClosingReactivatesTheShellOnlyWhileWeOwnTheForeground() => Run(async (shell, tab, s) =>
+    {
+        var oldInFront = AssetsTabView.AppInFront;
+        try
+        {
+            var sub = tab.AssetTree.Single(n => n.Name == "images").Children.Single();
+            tab.AssetTreeView.SelectedItem = sub;
+            await tab.ThumbnailLoads;
+            var tile = await Thumbnail(shell, tab);
+
+            foreach (var inFront in new[] { true, false })
+            {
+                AssetsTabView.AppInFront = () => inFront;
+                tile.ContextMenu!.Open(tile);
+                Dispatcher.UIThread.RunJobs();
+                var item = tile.ContextMenu.Items.OfType<MenuItem>().First();
+                item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+                tile.ContextMenu.Close();
+                Dispatcher.UIThread.RunJobs();
+
+                var preview = Assert.IsType<MiniPlayerWindow>(tab.LastPreview);
+                Assert.True(preview.IsVisible);
+                Assert.True(preview.FindControl<Image>("ImagePreview")!.IsVisible);
+                Assert.DoesNotContain("images/sub/c.png", s.DisabledAssetPaths);   // Preview never toggles
+
+                var activations = 0;
+                void Count(object? o, EventArgs e) => activations++;
+                shell.Activated += Count;
+                preview.Close();
+                Dispatcher.UIThread.RunJobs();
+                shell.Activated -= Count;
+                Assert.Equal(inFront ? 1 : 0, activations);
+            }
+        }
+        finally { AssetsTabView.AppInFront = oldInFront; }
+    });
+
     // ---- harness ----------------------------------------------------------------------
 
     private static void HoverPack(Window shell, Control card, bool on) => card.RaiseEvent(
         new PointerEventArgs(on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent,
             card, new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), shell, default,
             0, PointerPointProperties.None, KeyModifiers.None));
+
+    private static Task<Border> Thumbnail(Window shell, AssetsTabView tab) => Realized(shell, () =>
+        tab.ThumbnailsItemsControl.GetVisualDescendants().OfType<Border>()
+            .FirstOrDefault(b => b.ContextMenu != null && b.DataContext == tab.CurrentFolderFiles[0]));
 
     private static void PressSpace(Window shell, Control target)
     {
