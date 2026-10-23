@@ -334,7 +334,9 @@
                                         BorderBrush="{Binding EdgeBrush}" BorderThickness="{Binding EdgeThickness}"
                                         Cursor="{Binding Cursor}" ToolTip.Tip="{Binding UnavailableTip}"
                                         PointerEntered="Card_PointerEntered" PointerExited="Card_PointerExited"
-                                        PointerReleased="Card_PointerReleased">
+                                        PointerReleased="Card_PointerReleased" RenderTransformOrigin="50%,50%">
+                                  <!-- WPF GiveVaultCardTransforms: the hover lift and the press scale the card itself (Flair.cs). -->
+                                  <Border.RenderTransform><ScaleTransform/></Border.RenderTransform>
                                   <Grid>
                                     <!-- Everything that must respect the card's corners lives in
                                          this inner clip. The card itself does NOT clip: the tier
@@ -455,6 +457,12 @@
                                     <fx:TierBadge Tier="{Binding Tier}" FreeToday="{Binding BadgeFreeToday}"
                                                   HorizontalAlignment="Right" VerticalAlignment="Top"
                                                   Margin="0,-6,-6,0"/>
+
+                                    <!-- WPF VaultCardAura (an adorner, so above everything): a door that is yours
+                                         breathes a rim glow in its group colour and glints now and then. -->
+                                    <fx:VaultCardAura Name="Aura" IsVisible="{Binding IsMine}" Hue="{Binding GroupHue}"
+                                                      Seed="{Binding AuraSeed}" Margin="{Binding AuraMargin}"
+                                                      Loaded="Aura_Loaded" Unloaded="Aura_Unloaded"/>
                                   </Grid>
                                 </Border>
                             </DataTemplate>
@@ -466,9 +474,25 @@
                                         BorderBrush="{Binding Rule}" BorderThickness="0,0,0,1.5"
                                         AutomationProperties.Name="{Binding Title}">
                                     <Grid ColumnDefinitions="Auto,*,Auto">
-                                        <Image Source="{Binding Sign}" IsVisible="{Binding HasSign}" Height="44"
-                                               Stretch="Uniform" Margin="0,0,14,0" VerticalAlignment="Center"
-                                               RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                                        <!-- WPF VaultSignWithSheen: a shimmer band crosses the sign, masked to its own pixels. -->
+                                        <Panel IsVisible="{Binding HasSign}" Margin="0,0,14,0" VerticalAlignment="Center">
+                                            <Image Source="{Binding Sign}" Height="44" Stretch="Uniform"
+                                                   RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                                            <Panel ClipToBounds="True" IsHitTestVisible="False" OpacityMask="{Binding SignMask}">
+                                                <Rectangle Name="SignSheen" Opacity="0"
+                                                           Loaded="SignSheen_Loaded" Unloaded="SignSheen_Unloaded">
+                                                    <Rectangle.Fill>
+                                                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,35%">
+                                                            <GradientStop Color="#00FFFFFF" Offset="0.30"/>
+                                                            <GradientStop Color="#D8FFFFFF" Offset="0.47"/>
+                                                            <GradientStop Color="#F0FFFFFF" Offset="0.50"/>
+                                                            <GradientStop Color="#D8FFFFFF" Offset="0.53"/>
+                                                            <GradientStop Color="#00FFFFFF" Offset="0.70"/>
+                                                        </LinearGradientBrush>
+                                                    </Rectangle.Fill>
+                                                </Rectangle>
+                                            </Panel>
+                                        </Panel>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Title}"
                                                        FontSize="22" FontWeight="SemiBold" Foreground="{Binding HueBrush}"/>

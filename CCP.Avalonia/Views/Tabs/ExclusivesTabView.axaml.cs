@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) UpdateMotion(); };
             // Main bf57cecdf: columns follow the width, cards stretch to fill the row (Core ExclusiveShelfFit).
             this.FindControl<ItemsControl>("ExclusivesShelf")!.SizeChanged += (_, e) => { if (e.WidthChanged) FitShelf(); };
+            this.FindControl<ItemsControl>("ExclusivesShelf")!.ContainerPrepared += Shelf_ContainerPrepared;
         }
 
         public static readonly StyledProperty<double> CardWidthProperty = AvaloniaProperty.Register<ExclusivesTabView, double>(nameof(CardWidth), Services.UI.ExclusiveShelfFit.BaseWidth);
@@ -175,6 +176,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RefreshTierPlates();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+            // WPF RefreshExclusivesTab (:1022): the 6h/10min gates inside make the server-override check free on
+            // every repaint, so a user parked on the vault catches a same-day override without a clock of its own.
+            _ = App.DailyFree?.RefreshAsync();
         }
 
         // WPF RetintVaultChrome: only decor follows the mod; gold free-day and tier commerce do not.
@@ -237,7 +241,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>The only start/stop: visible, attached and MotionFx.AllowAmbientLoops (PLAYBOOK P01).</summary>
         private void UpdateMotion()
         {
-            bool want = IsVisible && this.IsAttachedToVisualTree() && AmbientFxCanvas.Env.AllowAmbientLoops;
+            bool shown = IsVisible && this.IsAttachedToVisualTree();
+            if (!shown || !AmbientFxCanvas.Env.AllowTransitions) EndEntrance();
+            bool want = shown && AmbientFxCanvas.Env.AllowAmbientLoops;
             // Re-dressed either way: a glow-gate change (performance tier) alone must re-apply the glows.
             if (want == (_motion != null)) { }
             else if (want)
@@ -256,6 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 foreach (var k in _sheens.Keys.ToList()) _sheens[k] = null;
                 _kenBurns.ScaleX = _kenBurns.ScaleY = 1;
                 if (LitPlate != null) LitPlate.Opacity = 1;
+                RestFlair();
             }
             foreach (var part in _fxParts) Dress(part);
         }
@@ -281,6 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // WPF AttachExclusiveSheens retries cards whose adorner layer was not there yet.
             foreach (var card in _sheens.Where(p => p.Value == null).Select(p => p.Key).ToList())
                 _sheens[card] = CardSheenAdorner.Attach(card, 12);
+            FlairFrame(t);
         }
 
         /// <summary>Sine ease in/out, auto-reversed: WPF's DoubleAnimation(min, max, seconds) recipe.</summary>
@@ -364,8 +372,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void Card_PointerReleased(object? sender, PointerReleasedEventArgs e)
         {
-            if (e.InitialPressMouseButton == MouseButton.Left && (sender as Control)?.DataContext is ExclusiveCardRow row)
-                Open(row.Feature);
+            if (e.InitialPressMouseButton == MouseButton.Left && sender is Control { DataContext: ExclusiveCardRow row } card)
+                ClickCard(card, row.Feature);
         }
 
         /// <summary>
@@ -384,11 +392,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenExclusiveFeature(feature.Key);
         }
 
-        /// <summary>WPF OnExclusiveCardHover: the shared hover pop on the art, driven from the card.
-        /// ponytail: no MotionFx.HoverLift or glow bloom on this head yet.</summary>
-        private void Card_PointerEntered(object? sender, PointerEventArgs e) => HoverPop.Enter(CardArt(sender));
+        /// <summary>WPF OnExclusiveCardHover: lift, bloom and the shared hover pop on the art (ExclusivesTabView.Flair.cs).</summary>
+        private void Card_PointerEntered(object? sender, PointerEventArgs e) => HoverCard(sender as Control, true);
 
-        private void Card_PointerExited(object? sender, PointerEventArgs e) => HoverPop.Leave(CardArt(sender));
+        private void Card_PointerExited(object? sender, PointerEventArgs e) => HoverCard(sender as Control, false);
 
         private static Control? CardArt(object? card) =>
             (card as Control)?.GetVisualDescendants().OfType<Control>().FirstOrDefault(c => c.Name == "CardArt");
@@ -462,6 +469,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public IBrush EdgeBrush => Tier > 0 ? Livery(Tier) : FreeToday ? EdgeFree : new SolidColorBrush(ExclusivesTabView.WithAlpha(ExclusivesTabView.VaultPartner(), 0x4D));
         public Thickness EdgeThickness => new(Tier > 0 ? 3 : FreeToday ? 2 : 1);
 
+        /// <summary>WPF AttachVaultAuras: only a door that is yours (open, or today's free one) wears the aura.</summary>
+        public bool IsMine => !IsLocked;
+        public Color GroupHue => ExclusiveGroupRow.HueOf(Feature);
+        /// <summary>WPF seeds each aura from its place in the roster, so neighbours never breathe in step.</summary>
+        public int AuraSeed => (ExclusiveFeature.All.ToList().IndexOf(Feature) + 1) * 7 + Feature.Key.Length;
+        /// <summary>The aura sits inside the card's border; this pulls it back out to the card's edge.</summary>
+        public Thickness AuraMargin => new(-EdgeThickness.Left);
+
         /// <summary>VaultLivery.EdgeFree: gold means "open for one day only".</summary>
         internal static IBrush EdgeFree => Brush("#E6FFD27A");
 
@@ -491,12 +506,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Services.UI.PremiumGroup.Prime => "prime",
             _ => "free",
         };
-        private Color Hue => Group switch
+        private Color Hue => HueOf(Group);
+
+        /// <summary>WPF VaultGroupHue: Basic gold, Prime cyan, the rest lilac.</summary>
+        internal static Color HueOf(Services.UI.PremiumGroup g) => g switch
         {
             Services.UI.PremiumGroup.Basic => BasicGold,
             Services.UI.PremiumGroup.Prime => PrimeCyan,
             _ => FreeLilac,
         };
+
+        /// <summary>WPF VaultGroupOf + VaultGroupHue.</summary>
+        internal static Color HueOf(ExclusiveFeature f) => HueOf(Services.UI.PremiumShelfOrder.GroupOf(f.Key, f.Tier));
+
+        /// <summary>The sign's own pixels: the shimmer crosses the neon and nothing else (WPF VaultSignWithSheen).</summary>
+        public IBrush? SignMask => Sign == null ? null : new ImageBrush(Sign) { Stretch = Stretch.Uniform };
 
         public string Title => Loc.Get($"premium_group_{Key}");
         public string Sub => Loc.Get($"premium_group_{Key}_sub");
