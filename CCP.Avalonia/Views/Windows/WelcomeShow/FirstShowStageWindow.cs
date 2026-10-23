@@ -76,7 +76,9 @@ internal sealed partial class FirstShowStageWindow : Window
     internal BrainDrainVisual Drain => _drain;
     private CancellationTokenSource? _load;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
-    private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
+    private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y, _spokeAt = -10;
+    /// <summary>Test seam: the bob/turn last handed to EMI.</summary>
+    internal double LastBob, LastTurn;
     private int _beat = -1;
     private static readonly HttpClient Http = new(UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
     /// <summary>Seconds since the stage was built. Tests step it (P08).</summary>
@@ -94,7 +96,11 @@ internal sealed partial class FirstShowStageWindow : Window
     internal FirstShowAudio Audio => _audio;
     internal double LogoOpacity => _logo.Opacity;
     /// <summary>--render-all: the stage at the reveal (logo up), nothing else on it.</summary>
-    internal FirstShowStageWindow() : this(null) => _logo.Opacity = 1;
+    internal FirstShowStageWindow() : this(null)
+    {
+        _logo.Opacity = 1;
+        SetInputRects = _ => { };   // a render proof is never mapped click-through; the failed-region close would dispose it mid-capture
+    }
     public FirstShowStageWindow(MainShellWindow? main)
     {
         Clock = () => _life.Elapsed.TotalSeconds;
@@ -151,7 +157,15 @@ internal sealed partial class FirstShowStageWindow : Window
         _effects?.Pop(point.X, point.Y);
         UpdateInputRects();
     }
-    private void UpdateInputRects() => SetInputRects(_playing ? _effects?.BubbleInputRects(_scale) ?? Array.Empty<PixelRect>() : Array.Empty<PixelRect>());
+    private PixelRect[]? _sentRects;
+    /// <summary>P07: send the native region only when it changes, not every frame.</summary>
+    private void UpdateInputRects()
+    {
+        var rects = _playing ? _effects?.BubbleInputRects(_scale) ?? Array.Empty<PixelRect>() : Array.Empty<PixelRect>();
+        if (_sentRects != null && rects.AsSpan().SequenceEqual(_sentRects)) return;
+        _sentRects = rects;
+        SetInputRects(rects);
+    }
     /// <summary>Make the stage input-transparent and passive, then show it. False when the platform refuses.</summary>
     internal bool Launch()
     {
@@ -377,8 +391,11 @@ internal sealed partial class FirstShowStageWindow : Window
         _moving = arriving || Math.Abs(_x - previous.X) + Math.Abs(_y - previous.Y) > .3 || (_centered && move < 1)
             || (!_guiding && (_playing || _ending) && time >= S.StepAsideAt && time < S.StepAsideAt + S.StepAsideSeconds);
         if (_moving) _settledAt = now;
-        var bob = (Math.Sin(now * 2.5) * 3 + Math.Sin(now * 1.1) * 2) * m;
-        var turn = Math.Sin(now * 1.5) * 1.6 * m;
+        // WPF FirstShowDesktopWindow.cs:299-301: she wobbles for 1.4 s after each spoken line.
+        var speech = Math.Max(0, 1 - (now - _spokeAt) / 1.4);
+        var bob = (Math.Sin(now * 2.5) * 3 + Math.Sin(now * 1.1) * 2 + speech * Math.Sin(now * 16) * 2) * m;
+        var turn = (Math.Sin(now * 1.5) * 1.6 + speech * Math.Sin(now * 9)) * m;
+        LastBob = bob; LastTurn = turn;
         _emi?.PresentAt(ToScreen(_x, _y), bob, turn, S.Pose(_playing, _ending, time, m), S.Face(_serious, m, now));
         if (!_guiding && time >= S.RevealAt && (_playing || _ending))
         {
@@ -446,7 +463,7 @@ internal sealed partial class FirstShowStageWindow : Window
         _speechWindow.Width = rect.Width; _speechWindow.Height = rect.Height;
         if (_pendingSpeech is { } line)
         {
-            _pendingSpeech = null;
+            _pendingSpeech = null; _spokeAt = Clock();
             _audio.Speak(line, _serious ? "idle" : "celebration");
         }
         if (_speechWindow.IsVisible) return;

@@ -320,8 +320,8 @@ public sealed class FirstShowStageTests
     [Fact]
     public Task LiveBubbleRegionsReachPopAndClearOnGatherAndClose() => Run(async stage =>
     {
-        var regions = Array.Empty<PixelRect>();
-        stage.SetInputRects = rects => regions = rects;
+        var regions = Array.Empty<PixelRect>(); int sends = 0;
+        stage.SetInputRects = rects => { regions = rects; sends++; };
         await stage.Bundled();
         double t = 1; stage.Clock = () => t; stage.Start();
         t += S.BubblesAt + .1; stage.Frame();
@@ -338,6 +338,8 @@ public sealed class FirstShowStageTests
         t += .8; stage.Frame(); t += .1; stage.Frame();
         Assert.NotEmpty(regions);
         t = 1 + S.GatherAt; stage.Frame(); Assert.Empty(regions);
+        var sent = sends; t += .1; stage.Frame(); t += .1; stage.Frame();
+        Assert.Equal(sent, sends);   // P07: an unchanged (empty) region is not resent every frame
         stage.Close(); Assert.Empty(regions);
     });
 
@@ -360,6 +362,31 @@ public sealed class FirstShowStageTests
     });
 
     [Fact]
+    public Task SheWobblesForOnePointFourSecondsAfterEachSpokenLine() => Run(stage =>
+    {
+        CoreSettings.Current.MasterVolume = 50;
+        double t = 1, spoke = double.NaN; stage.Clock = () => t;
+        stage.Audio.Play = (_, _, tag) => { if (tag == "first-show-voice") spoke = t; return () => { }; };
+        for (int i = 0; i < 6 && double.IsNaN(spoke); i++) { stage.Frame(); t += .3; }
+        Assert.False(double.IsNaN(spoke));
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;   // m = 1 from here on
+        bool wobbled = false;
+        for (t = spoke + .05; t < spoke + 1.4; t += .07)
+        {
+            stage.Frame();
+            double speech = 1 - (t - spoke) / 1.4;
+            // WPF FirstShowDesktopWindow.cs:299-301
+            Assert.Equal(Math.Sin(t * 2.5) * 3 + Math.Sin(t * 1.1) * 2 + speech * Math.Sin(t * 16) * 2, stage.LastBob, 6);
+            Assert.Equal(Math.Sin(t * 1.5) * 1.6 + speech * Math.Sin(t * 9), stage.LastTurn, 6);
+            wobbled |= Math.Abs(speech * Math.Sin(t * 16) * 2) > .1;
+        }
+        Assert.True(wobbled);
+        t = spoke + 1.5; stage.Frame();
+        Assert.Equal(Math.Sin(t * 2.5) * 3 + Math.Sin(t * 1.1) * 2, stage.LastBob, 6);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HelpAndBookReplayButtonsUseTheExistingService() => Run(stage =>
     {
         CoreSettings.Current.Welcomed = true;
@@ -369,13 +396,21 @@ public sealed class FirstShowStageTests
         try
         {
             shell.Show(); shell.SetTutorialOverlay(true);
+            int opened = 0;
+            var real = shell.OpenWelcomeShow;
+            shell.OpenWelcomeShow = s => { opened++; return real(s); };
             shell.FindControl<Button>("BtnFirstShowReplay")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, opened);   // through the shell's one door, not a second stage
             Assert.False(shell.FindControl<Border>("MainTutorialOverlay")!.IsVisible);
             Assert.Same(stage, FirstShowService.Window);
+            // The book has no seam: close the show first, so only its own Open can bring one back.
+            FirstShowService.Stop(); Dispatcher.UIThread.RunJobs();
+            Assert.False(FirstShowService.IsActive);
             book = new EmiBookWindow(null); book.Show();
             book.FindControl<Button>("BtnFirstShow")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.False(book.IsVisible);
-            Assert.Same(stage, FirstShowService.Window);
+            Assert.True(FirstShowService.IsActive);
+            Assert.NotSame(stage, FirstShowService.Window);
         }
         finally { book?.Kill(); shell.RequestExit(); }
         return Task.CompletedTask;
