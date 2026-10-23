@@ -1638,3 +1638,30 @@ Contact validation checks actual decoded triangles and vertices over 8,140 poses
 Desktop and phone share the two vehicle GLBs. Added texture allocation is 0 MiB. Persistent running totals remain 196.416664 MiB desktop and 119.104164 MiB phone; with one selected menu backdrop 205.416664/127.014320 MiB. Existing kart maps and the classic face atlas remain shared and counted once. Render targets and decoder buffers are outside these texture totals.
 
 Packed GLBs preserve decoded attributes, exact rest transforms and inverse binds, and pass finite, normal, degenerate and Khronos core checks with the existing non-root skin warning. Animated bounds cover all 26 clips at exported keys plus 60 fps, with 10 mm padding. Fresh Blender imports preserve triangle totals, the 15 required joints, two materials and vertex colors; editable masters stay private. Actual runtime views cover front, rear, sides, top, grip, seated cutaway, takeoff, apex, landing, settling, bump, hit and item poses. Sources, masters, contact sheets and preview movies are excluded from the public art tree.
+
+## Water kit W3: stepping stones and turntables
+
+Twelve original procedural GLBs: six static platforms and a matching rotating variant for each. No external geometry or pixels, no textures, no text in surfaces. Author: CCP art pipeline. Original project work, available under the repository licence.
+
+Every platform is 5 x 5 m at maximum footprint bounds. The deck is Y=0.55 m, the complete perimeter lip crest is Y=0.80 m, and the lip rises 0.25 m. This includes the circle, capsule and all six hex sides. Decorative inlays are shallow and are not collision features. Dark hulls close the undersides. Units are metres, Y up, forward -Z, base-centre root.
+
+### Host attachment and motion
+
+platform_root is at [0,0,0]. Static mesh is its child. Each turntable adds rotating_platform at [0,0.55,0]; every platform mesh is a descendant. Spin this node about local Y on the host's shared race clock. Apply that same support transform to the kart while attached. There are no animation clips, bones or built-in physics. Rotating and static variants have identical resting silhouettes. The host owns collision and the lip hop.
+
+### Runtime inventory
+
+| Asset pair | Tris each | Material draws | Bound radius m | Texture bytes |
+|---|---:|---:|---:|---:|
+| stone-threshold + rotating | 188 | 4 | 3.471 | 0 |
+| stone-boudoir + rotating | 1844 | 4 | 2.577 | 0 |
+| stone-keep + rotating | 1260 | 3 | 3.399 | 0 |
+| stone-mainframe + rotating | 1332 | 4 | 2.856 | 0 |
+| stone-quarantine + rotating | 1877 | 4 | 3 | 0 |
+| stone-switchboard + rotating | 5044 | 4 | 2.577 | 0 |
+
+Material roles are surface, lip, underside and detail (Keep uses three roles). Materials are scalar, host-tintable PBR values. No bundled image residency; family texBytes total is 0. All exports use EXT_meshopt_compression with 16-bit position quantization. Quantized bounds differ by less than 0.0001 m vertically.
+
+Validation: all twelve packed and decompressed GLBs pass the Khronos validator with zero errors. Actual packed-accessor coordinates are finite, there are no degenerate triangles, all bounds and pivot/parenting gates pass, and every model has zero textures. Fresh Blender reimport verifies all twelve exports. Fixed front/back/left/right/top/perspective plus low-behind and underside renders come from the packed artifacts after decompression.
+
+Private editable masters, deterministic source, manifest fragment, detailed validation and contact sheets stay under C:/Projects/glassroad-art/stones/. Contact sheets belong in the PR body only. No game files changed by this family.
