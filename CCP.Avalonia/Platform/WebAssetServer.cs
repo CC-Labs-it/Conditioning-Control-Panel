@@ -39,8 +39,14 @@ public sealed class WebAssetServer : IDisposable
         get
         {
             lock (_sharedLock)
-                return _shared ??= new WebAssetServer(Path.Combine(AppContext.BaseDirectory, "Resources", "web"))
+            {
+                if (_shared != null) return _shared;
+                _shared = new WebAssetServer(Path.Combine(AppContext.BaseDirectory, "Resources", "web"))
                     { AssetsRoot = () => CorePaths.EffectiveAssets, ContentRoot = () => ContentLocator.ContentWebRoot };
+                // Every host's frames point Scrolller media at this server's relay origin (Core ScrolllerRelay.RewriteJson).
+                ScrolllerRelay.Relay = (_shared.RelayOrigin, _shared.Token);
+                return _shared;
+            }
         }
     }
 
@@ -58,24 +64,49 @@ public sealed class WebAssetServer : IDisposable
         [".woff2"] = "font/woff2", [".ttf"] = "font/ttf", [".wasm"] = "application/wasm",
     };
 
-    readonly HttpListener _listener = new();
+    readonly HttpListener _listener = new(), _relayListener = new();
     readonly string _root;
 
     public int Port { get; }
+
+    /// <summary>
+    /// The Scrolller relay's OWN port. A web engine caps HTTP/1.1 connections per scheme+host+port (Chromium and libsoup:
+    /// 6), every web view shares one profile, and a relay request holds its socket until the whole fetch lands; on the
+    /// page's origin six uncached relays would starve every page's scripts, styles and media. On their own origin they
+    /// only ever queue behind each other. The token rides in the path (<c>/scrolller-media/~token/...</c>): a
+    /// cross-origin <c>crossOrigin="anonymous"</c> load or fetch carries no cookie.
+    /// </summary>
+    public int RelayPort { get; }
+
+    /// <summary>The relay's origin, what <see cref="ScrolllerRelay.RewriteJson"/> points media at.</summary>
+    public string RelayOrigin => $"http://127.0.0.1:{RelayPort}";
+
     public string Token { get; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
 
     public WebAssetServer(string root)
     {
         _root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        Port = Bind(_listener);
+        RelayPort = Bind(_relayListener);
+        _ = Task.Run(() => Loop(_listener, relay: false));
+        _ = Task.Run(() => Loop(_relayListener, relay: true));
+    }
+
+    static int Bind(HttpListener listener)
+    {
         // ponytail: probe-then-bind can lose the port to another process in between; retry if that ever shows up.
         var probe = new TcpListener(IPAddress.Loopback, 0);
         probe.Start();
-        Port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
         probe.Stop();
-        _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
-        _listener.Start();
-        _ = Task.Run(Loop);
+        listener.Prefixes.Add($"http://127.0.0.1:{port}/");
+        listener.Start();
+        return port;
     }
+
+    /// <summary>The relay url for one Scrolller media url (what a host frame carries after the rewrite), or null.</summary>
+    internal string? RelayUrl(string scrolllerUrl) =>
+        ScrolllerRelay.ToRelayPath(scrolllerUrl) is { } path ? RelayOrigin + ScrolllerRelay.WithToken(path, Token) : null;
 
     /// <summary>The URL a web view navigates to for a page under the root, e.g. "intake/index.html".</summary>
     public string Url(string relativePath, string? query = null) =>
@@ -98,21 +129,21 @@ public sealed class WebAssetServer : IDisposable
         candidate != null && CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(candidate), Encoding.UTF8.GetBytes(Token));
 
-    async Task Loop()
+    async Task Loop(HttpListener listener, bool relay)
     {
-        while (_listener.IsListening)
+        while (listener.IsListening)
         {
             HttpListenerContext ctx;
-            try { ctx = await _listener.GetContextAsync().ConfigureAwait(false); }
+            try { ctx = await listener.GetContextAsync().ConfigureAwait(false); }
             catch (Exception) { return; } // listener stopped
-            // A relayed Scrolller fetch can take minutes: it waits on its own slots, never on the page's files, and the
-            // slot is taken INSIDE the task, so nothing a request waits on ever stalls this accept loop.
-            bool relay = ctx.Request.Url?.AbsolutePath.StartsWith(ScrolllerRelay.PathPrefix, StringComparison.Ordinal) == true;
+            // The slot is taken INSIDE the task, so nothing a request waits on ever stalls this accept loop.
             _ = Task.Run(() => HandleAsync(ctx, relay));
         }
     }
 
-    /// <summary>How long a request waits for a free slot before it is answered 503 + Retry-After.</summary>
+    /// <summary>How long a page file waits for a free slot before it is answered 503 + Retry-After. A relay request
+    /// never waits: with every relay slot busy it is answered 503 at once (the page treats it like the 403 of a spent
+    /// share: the element errors and the page moves on).</summary>
     internal TimeSpan SlotWait { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Cancelled by <see cref="Dispose"/>: every queued request and every relay fetch stops with the server.</summary>
@@ -124,7 +155,8 @@ public sealed class WebAssetServer : IDisposable
         bool held = false;
         try
         {
-            held = await slots.WaitAsync(SlotWait, _closing.Token).ConfigureAwait(false);
+            if (relay) AddRelayCors(ctx.Response);   // a page on the other port reads every answer, the 503 included
+            held = relay ? slots.Wait(0) : await slots.WaitAsync(SlotWait, _closing.Token).ConfigureAwait(false);
             if (!held)
             {
                 ctx.Response.StatusCode = 503;
@@ -177,6 +209,34 @@ public sealed class WebAssetServer : IDisposable
         SendFile(ctx, path, Types.GetValueOrDefault(Path.GetExtension(path), "application/octet-stream"), CacheControlFor(path));
     }
 
+    /// <summary>The relay port's rule: its own Host, loopback only, GET / HEAD (and an OPTIONS preflight, answered 204),
+    /// and the token in the path. Returns the relay path with the token taken out, or null (status set).</summary>
+    string? AdmitRelay(HttpListenerContext ctx)
+    {
+        var req = ctx.Request;
+        var res = ctx.Response;
+        if (!string.Equals(req.UserHostName, $"127.0.0.1:{RelayPort}", StringComparison.OrdinalIgnoreCase)) { res.StatusCode = 404; return null; }
+        if (!IPAddress.IsLoopback(req.RemoteEndPoint.Address)) { res.StatusCode = 403; return null; }
+        if (req.HttpMethod == "OPTIONS")
+        {
+            res.StatusCode = 204;
+            res.Headers.Add("Access-Control-Allow-Methods", "GET, HEAD");
+            res.Headers.Add("Access-Control-Allow-Headers", "Range");
+            return null;
+        }
+        var path = ScrolllerRelay.TakeToken(req.RawUrl, out var token);
+        if ((req.HttpMethod != "GET" && req.HttpMethod != "HEAD") || path == null || !IsToken(token)) { res.StatusCode = 403; return null; }
+        return path;
+    }
+
+    /// <summary>Pages load relay media cross-origin (another port): any origin may read it, as from the CDN, and the
+    /// range headers a player reads are exposed. The token is in the url, so no credential is involved.</summary>
+    static void AddRelayCors(HttpListenerResponse res)
+    {
+        res.Headers.Add("Access-Control-Allow-Origin", "*");
+        res.Headers.Add("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges");
+    }
+
     /// <summary>Slots for relayed Scrolller requests (a fresh fetch holds one until the download lands).</summary>
     readonly SemaphoreSlim _relayInFlight = new(6);
 
@@ -197,9 +257,9 @@ public sealed class WebAssetServer : IDisposable
     /// </summary>
     async Task ServeRelayAsync(HttpListenerContext ctx)
     {
-        if (!Admit(ctx, out _)) return;
+        if (AdmitRelay(ctx) is not { } relayPath) return;
         var res = ctx.Response;
-        var url = ScrolllerRelay.FromRelayPath(ctx.Request.RawUrl);
+        var url = ScrolllerRelay.FromRelayPath(relayPath);
         var cached = url == null || !ScrolllerPolicy.Enabled ? null : ScrolllerCached(url);
         // HEAD: headers of a cached copy only; an uncached url is a 404, never a fetch (and never a charge).
         bool head = ctx.Request.HttpMethod == "HEAD";
@@ -375,5 +435,6 @@ public sealed class WebAssetServer : IDisposable
     {
         try { _closing.Cancel(); } catch (ObjectDisposedException) { }
         _listener.Close();
+        _relayListener.Close();
     }
 }

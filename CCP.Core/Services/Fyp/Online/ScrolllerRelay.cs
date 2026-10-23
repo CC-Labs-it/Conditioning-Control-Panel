@@ -105,29 +105,53 @@ internal static class ScrolllerRelay
             root = JToken.ReadFrom(reader);
         }
         catch (JsonException) { return json; }
-        bool changed = Walk(root, origin?.TrimEnd('/') ?? "");
+        origin = origin?.TrimEnd('/') ?? "";
+        // On the relay's own origin the url carries its token (no cookie crosses ports for an anonymous load).
+        var token = Relay is { } r && origin == r.Origin ? r.Token : null;
+        bool changed = Walk(root, origin, token);
         return changed ? root.ToString(Formatting.None) : json;
     }
 
-    private static bool Walk(JToken token, string origin)
+    private static bool Walk(JToken token, string origin, string? relayToken)
     {
         bool changed = false;
         switch (token)
         {
             case JValue { Type: JTokenType.String } v when v.Value is string s && ToRelayPath(s) is { } relay:
-                v.Value = origin + relay;
+                v.Value = origin + (relayToken == null ? relay : WithToken(relay, relayToken));
                 return true;
             case JContainer c:
-                foreach (var child in c.Children()) changed |= Walk(child is JProperty p ? p.Value : child, origin);
+                foreach (var child in c.Children()) changed |= Walk(child is JProperty p ? p.Value : child, origin, relayToken);
                 break;
         }
         return changed;
     }
 
-    /// <summary>The origin a host rewrites against: the page's own scheme://authority when the page is this head's
-    /// loopback server, else null (a remote site is never handed a relay url).</summary>
+    /// <summary>The head's relay listener (its own origin, so relay sockets never share the page origin's connection
+    /// pool) and its token; null = relay urls go on the page's own origin. Set by the head's asset server.</summary>
+    internal static (string Origin, string Token)? Relay { get; set; }
+
+    /// <summary>"/scrolller-media/images/a.jpg" -> "/scrolller-media/~TOKEN/images/a.jpg": the path still starts with
+    /// the prefix (every page's "via Scrolller" mark reads it) and still ends with the file's extension.</summary>
+    internal static string WithToken(string relayPath, string token) => PathPrefix + "~" + token + "/" + relayPath[PathPrefix.Length..];
+
+    /// <summary>The reverse of <see cref="WithToken"/>: the relay path without its token, or null when there is none.</summary>
+    internal static string? TakeToken(string? pathAndQuery, out string? token)
+    {
+        token = null;
+        if (pathAndQuery == null || !pathAndQuery.StartsWith(PathPrefix + "~", StringComparison.Ordinal)) return null;
+        var rest = pathAndQuery[(PathPrefix.Length + 1)..];
+        int slash = rest.IndexOf('/');
+        if (slash <= 0) return null;
+        token = rest[..slash];
+        return PathPrefix + rest[(slash + 1)..];
+    }
+
+    /// <summary>The origin a host rewrites against when the page is this head's loopback server: the relay's own origin
+    /// (<see cref="Relay"/>) when there is one, else the page's scheme://authority; null for a remote site (it is
+    /// never handed a relay url).</summary>
     internal static string? LoopbackOrigin(Uri? page)
-        => page is { IsAbsoluteUri: true } && page.Host == "127.0.0.1" ? page.GetLeftPart(UriPartial.Authority) : null;
+        => page is { IsAbsoluteUri: true } && page.Host == "127.0.0.1" ? Relay?.Origin ?? page.GetLeftPart(UriPartial.Authority) : null;
 
     /// <summary>The Content-Type a relayed answer carries, by extension (WPF ScrolllerWebGate.ContentTypeFor).</summary>
     internal static string ContentTypeFor(string url) => Path.GetExtension(new Uri(url).AbsolutePath).ToLowerInvariant() switch
