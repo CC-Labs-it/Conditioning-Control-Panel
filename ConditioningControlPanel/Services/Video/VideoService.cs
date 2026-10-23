@@ -2445,31 +2445,10 @@ namespace ConditioningControlPanel.Services
                 // Build helpful error message
                 var activePackCount = App.ContentPacks?.GetActivePackIds()?.Count ?? 0;
                 var installedPackCount = App.ContentPacks?.InstalledPacks?.Count ?? 0;
-                var message = Loc.GetF("video_no_videos_found", _videosPath) + "\n\n";
-
-                // #1352: files exist, the user's length filter kept none of them. "Add files" is the
-                // wrong advice there; name the filter and where it lives instead.
                 var lengthFilterEmptied = NoVideosReason.LengthFilterEmptied(_lastFunnelEnabled, _lastFunnelDuration);
-                if (lengthFilterEmptied)
-                {
-                    message = Loc.GetF("video_length_filter_emptied", _lastFunnelEnabled,
-                        NoVideosReason.FormatRange(App.Settings?.Current?.VideoMinDurationSeconds ?? 0,
-                            App.Settings?.Current?.VideoMaxDurationSeconds ?? 0));
-                }
-                else
-                {
-                    if (installedPackCount > 0 && activePackCount == 0)
-                    {
-                        message += Loc.GetF("video_packs_installed_none_active", installedPackCount) + "\n";
-                        message += Loc.Get("video_enable_packs_hint") + "\n\n";
-                    }
-                    else if (activePackCount > 0)
-                    {
-                        message += Loc.GetF("video_active_packs_no_videos", activePackCount) + "\n\n";
-                    }
-
-                    message += Loc.Get("video_add_files_hint");
-                }
+                var message = NoVideosReason.Message(_videosPath, _lastFunnelEnabled, _lastFunnelDuration,
+                    App.Settings?.Current?.VideoMinDurationSeconds ?? 0,
+                    App.Settings?.Current?.VideoMaxDurationSeconds ?? 0, installedPackCount, activePackCount);
 
                 // Posted, not called: MessageBox.Show blocks its caller and pumps a nested message
                 // loop, and this caller is the trigger path. It returns immediately now and the box
@@ -5719,14 +5698,8 @@ namespace ConditioningControlPanel.Services
                 // check IN ADDITION to the normal click (it never replaces it), and only while
                 // this spawn's targets are on screen. Subscribed below, dropped the moment the
                 // spawn resolves either way.
-                EventHandler<Services.Haptics.Core.HapticToyEvent>? toyHandler = null;
-                void UnhookToyInput()
-                {
-                    var h = toyHandler;
-                    if (h == null) return;
-                    toyHandler = null;
-                    try { App.Haptics!.ToyInput.ButtonPressed -= h; } catch (Exception ex) { Diag.Swallowed(ex); }
-                }
+                AttentionToyButtonBinding? toyBinding = null;
+                void UnhookToyInput() { toyBinding?.Dispose(); toyBinding = null; }
 
                 App.Logger?.Debug("Spawning attention target ({Chars} chars) on {ScreenCount} screen(s) ({Spawned}/{Total})",
                     (text ?? "").Length, screens.Length, _spawned, _total);
@@ -5816,42 +5789,20 @@ namespace ConditioningControlPanel.Services
                     try { App.EmiDesk?.Fire("attentionCheckShown", null); } catch (Exception ex) { Diag.Swallowed(ex); }
                 }
 
-                // PHASE F: arm the toy-button alternative for this spawn's lifetime.
-                if (spawnedTargets.Count > 0 &&
-                    App.Haptics != null &&
-                    App.Haptics.Settings.AttentionCheckToyButton &&
-                    App.Haptics.Settings.ToyInputEnabled)
-                {
-                    toyHandler = (s, e) =>
-                    {
-                        // ToyInputService already marshals to the dispatcher, but the event can
-                        // still land during shutdown.
-                        if (Application.Current?.Dispatcher == null) return;
-                        try
+                // Shared with the Avalonia video host: only a still-visible batch accepts input.
+                if (spawnedTargets.Count > 0)
+                    toyBinding = AttentionToyButtonBinding.Arm(App.Haptics,
+                        () =>
                         {
-                            if (hitRegistered) return;
-                            IAttentionTarget? live = null;
-                            lock (_targets)
-                            {
-                                foreach (var t in spawnedTargets)
-                                    if (_targets.Contains(t)) { live = t; break; }
-                            }
-                            if (live == null) { UnhookToyInput(); return; }
-
-                            App.Logger?.Information("ATTENTION: satisfied by toy button press");
-                            // Same idempotent pipeline as a mouse click / gaze dwell: Hit() plays
-                            // the pop sound and runs the onHit callback (which unhooks us).
-                            live.Hit();
-                            _ = App.Haptics?.PostEvent(Services.Haptics.Core.HapticEventKind.ToyButtonReward);
-                        }
-                        catch (Exception ex)
+                            if (Application.Current?.Dispatcher == null || hitRegistered) return false;
+                            lock (_targets) return spawnedTargets.Any(t => _targets.Contains(t));
+                        },
+                        () =>
                         {
-                            App.Logger?.Debug("Toy-button attention hit failed: {Error}", ex.Message);
-                        }
-                    };
-                    try { App.Haptics.ToyInput.ButtonPressed += toyHandler; }
-                    catch { toyHandler = null; }
-                }
+                            IAttentionTarget? live;
+                            lock (_targets) live = spawnedTargets.FirstOrDefault(t => _targets.Contains(t));
+                            live?.Hit();
+                        });
 
                 // Auto-expire all targets from this spawn together. Booked against the spawner's own
                 // clock (_startTime-relative seconds) rather than a wall-clock Task.Delay, so a grace

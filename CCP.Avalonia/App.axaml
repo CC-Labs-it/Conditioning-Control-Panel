@@ -20,6 +20,8 @@
              each repeating a ResourceInclude. -->
         <ResourceInclude Source="avares://CCP.Avalonia/Views/Controls/Companion/Runtime/WorkshopCellTheme.axaml"/>
       </ResourceDictionary.MergedDictionaries>
+      <!-- WPF App.xaml: one shared monospace chain for DynamicResource consumers. -->
+      <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>

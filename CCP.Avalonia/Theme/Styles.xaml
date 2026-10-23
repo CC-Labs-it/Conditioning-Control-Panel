@@ -11,11 +11,14 @@
      That one substitution is the bulk of the work in porting a view, which is why it is worth
      writing down here rather than rediscovering it 193 times.
 
-     Only the styles needed by the first ported view live here. The remaining ~12 keys in
-     Controls.xaml and the rest of MainWindow.xaml follow the same mapping. -->
+     Controls.xaml keys are shared here, including the three Deeper button themes.
+     Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
+     ponytail: SecondaryButton/PinkButton HudPlank depth and the ToggleStyle timing gaps below
+     remain wire-theme-controls-b. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls">
+                    xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+                    xmlns:theme="clr-namespace:ConditioningControlPanel.Avalonia.Theme">
 
   <!-- MainWindow.xaml:525 -->
   <ControlTheme x:Key="SectionPanel" TargetType="Border">
@@ -131,10 +134,22 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
   </ControlTheme>
 
+  <!-- Controls.xaml:60-87: press scales to 0.97 over 80ms (linear), release returns over 150ms
+       with BackEase EaseOut Amplitude 0.3. Avalonia has no Enter/ExitActions, so the direction is
+       chosen by which Transitions the Border carries: :pressed swaps in the 80ms set. -->
+  <Transitions x:Key="PressReleaseTransitions">
+    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.15">
+      <TransformOperationsTransition.Easing>
+        <theme:BackEaseOutAmplitude Amplitude="0.3"/>
+      </TransformOperationsTransition.Easing>
+    </TransformOperationsTransition>
+  </Transitions>
+  <Transitions x:Key="PressDownTransitions">
+    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.08"/>
+  </Transitions>
+
   <!-- Controls.xaml:36. The press-feedback Storyboards (scale 0.97 in, BackEase out) become a
-       :pressed RenderTransform: Avalonia has no Trigger EnterActions/ExitActions, and the
-       HelpButtonStyle above already sets the precedent of reproducing the visual rather than
-       guessing at unmappable trigger machinery.
+       :pressed RenderTransform plus the direction-specific Transitions above.
        WPF's bare <ContentPresenter/> also has to name what it presents on Avalonia. -->
   <ControlTheme x:Key="ActionButton" TargetType="Button">
     <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
@@ -158,7 +173,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource DarkPinkBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -185,7 +204,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource PanelAccentHoverBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -410,7 +433,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource TransparentPinkBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -826,6 +853,82 @@
       <Style Selector="^:pointerover /template/ Border#bd">
           <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
       </Style>
+  </ControlTheme>
+
+        <!-- WPF Controls.xaml:563. Standard body button, 8px corners; Background / BorderBrush /
+             Padding stay TemplateBound so every inline setter at the call sites keeps working. -->
+        <ControlTheme x:Key="DeeperRoundButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="8"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.85"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.70"/>
+            </Style>
+            <Style Selector="^:disabled /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.40"/>
+            </Style>
+        </ControlTheme>
+
+        <!-- WPF Controls.xaml:597. Icon-only buttons, 6px corners, no size defaults. -->
+        <ControlTheme x:Key="DeeperRoundIconButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="6"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.85"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.70"/>
+            </Style>
+            <Style Selector="^:disabled /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.40"/>
+            </Style>
+        </ControlTheme>
+
+
+  <!-- WPF Controls.xaml:629. The creator lock's checked plate is six-pixel rounded. -->
+  <ControlTheme x:Key="DeeperRoundIconToggleButton" TargetType="ToggleButton">
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="bd" CornerRadius="6" Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:checked /template/ Border#bd">
+      <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent20Brush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Opacity" Value="0.85"/></Style>
   </ControlTheme>
 
 </ResourceDictionary>
