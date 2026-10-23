@@ -71,6 +71,7 @@ public sealed class KnockCardTests
         var (motion, bell, volume) = (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume);
         var (oldSvc, oldClock, oldWorld, oldAnchor) = (FriendsHead.Service, KnockCard.Clock, FriendsLanding.World, FriendsLanding.Anchor);
         var oldOpenTab = FriendsLanding.OpenPanelTab;
+        var oldFetch = KnockCard.FetchPicture;
         var now = T0;
         var world = new LandingWorld(false, false, false, PanelVisible: true, LauncherVisible: false, GameHostActive: false);
         var host = new Window { Width = 1000, Height = 700 };
@@ -84,6 +85,7 @@ public sealed class KnockCardTests
             FriendsSeen.Shared.Clear();
             host.Show();
             KnockCard.Clock = () => now;
+            KnockCard.FetchPicture = _ => throw new InvalidOperationException("no network in tests");
             FriendsLanding.World = () => world;
             FriendsLanding.Anchor = () => host;
             FriendsHead.Service = svc;
@@ -95,6 +97,7 @@ public sealed class KnockCardTests
             FriendsLanding.Stop();
             (FriendsHead.Service, KnockCard.Clock, FriendsLanding.World, FriendsLanding.Anchor) = (oldSvc, oldClock, oldWorld, oldAnchor);
             FriendsLanding.OpenPanelTab = oldOpenTab;
+            KnockCard.FetchPicture = oldFetch;
             (s.MotionLevel, s.FriendNotificationsEnabled, s.MasterVolume) = (motion, bell, volume);
             StartupLadder.ResetForTests();
             FriendsSeen.Shared.Clear();
@@ -209,6 +212,64 @@ public sealed class KnockCardTests
         Assert.Empty(KnockCard.Up);
         Assert.Contains(svc.Receipts, r => r.State == ReceiptState.Joined && r.Key.Contains("00000000000000c2"));
         Assert.Equal(new[] { "studio" }, tabs);
+    });
+
+    /// <summary>WPF LandingChrome.Avatar: a proxy path ("/...") is fetched from the proxy and laid over the
+    /// initials; anything else (an absolute URL a sender could point anywhere) keeps the initials and fetches nothing.</summary>
+    [Fact]
+    public Task TheSendersProxyPictureCoversTheInitialsAndNothingElseIsFetched() => Run((svc, _, _, _) =>
+    {
+        byte[] png;
+        using (var s = global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + LandingRules.KnockArt(Invite("x", InviteDestination.Ramp)))))
+        using (var ms = new MemoryStream()) { s.CopyTo(ms); png = ms.ToArray(); }
+        var urls = new List<string>();
+        KnockCard.FetchPicture = url => { urls.Add(url); return Task.FromResult(png); };
+
+        svc.Deliver(Invite("00000000000000d1") with { FromAvatarUrl = "/friends/avatar/u_mia.png" });
+        var card = Assert.Single(KnockCard.Up);
+        Assert.Equal(new[] { "https://codebambi-proxy.vercel.app/friends/avatar/u_mia.png" }, urls);
+        Assert.NotNull(card.AvatarFace);
+        Assert.Equal(1, card.AvatarFace!.Opacity);
+        Assert.IsType<global::Avalonia.Media.ImageBrush>(card.AvatarFace.Fill);
+        Assert.Contains("M", Text(card));   // the initials stay underneath
+        card.Fold(KnockOutcome.Later);
+
+        svc.Deliver(Invite("00000000000000d2") with { FromAvatarUrl = "https://elsewhere.example/a.png" });
+        Assert.Null(Assert.Single(KnockCard.Up).AvatarFace);
+        Assert.Single(urls);
+    });
+
+    /// <summary>WPF MakeButton :210: every card button lifts to 1.02 under the pointer and settles back.</summary>
+    [Fact]
+    public Task TheCardsButtonsLiftUnderThePointer() => Run((svc, _, _, _) =>
+    {
+        svc.Deliver(Invite("00000000000000e1", InviteDestination.Ramp));
+        var card = Assert.Single(KnockCard.Up);
+        card.UpdateLayout();
+        foreach (var b in new[] { card.GoButton!, card.NotNowButton, card.LaterButton })
+        {
+            var scale = Assert.IsType<global::Avalonia.Media.ScaleTransform>(b.RenderTransform);
+            var at = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), card)!.Value;
+            card.MouseMove(at);
+            Assert.Equal(1.02, scale.ScaleX, 3);
+            Assert.Equal(1.02, scale.ScaleY, 3);
+            card.MouseMove(new Point(2, 60));
+            Assert.Equal(1, scale.ScaleX, 3);
+            Assert.Null(scale.Transitions);   // Motion Off snaps
+        }
+
+        // Motion on: the lift eases over WPF's 150 ms quad-out (MotionFx.cs:74-85); Run restores the level.
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        var go = card.GoButton!;
+        var lift = Assert.IsType<global::Avalonia.Media.ScaleTransform>(go.RenderTransform);
+        card.MouseMove(go.TranslatePoint(new Point(go.Bounds.Width / 2, go.Bounds.Height / 2), card)!.Value);
+        Assert.NotNull(lift.Transitions);
+        Assert.Equal(2, lift.Transitions!.Count);
+        Assert.All(lift.Transitions.OfType<global::Avalonia.Animation.DoubleTransition>(), t =>
+        {
+            Assert.Equal(TimeSpan.FromMilliseconds(150), t.Duration);
+            Assert.IsType<global::Avalonia.Animation.Easings.QuadraticEaseOut>(t.Easing);
+        });
     });
 
     /// <summary>P04/P11: startup starts the landing on the friends service; exit stops it before the poll goes.</summary>
