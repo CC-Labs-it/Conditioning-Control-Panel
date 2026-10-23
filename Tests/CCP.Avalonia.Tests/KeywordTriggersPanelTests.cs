@@ -179,6 +179,40 @@ public sealed class KeywordTriggersPanelTests
         Assert.False(detail.IsVisible);
     });
     [Theory]
+    [InlineData(0, -1)]
+    [InlineData(120, 1)]
+    public Task WheelOverScrollableTriggerListMovesOuterViewport(double innerOffset, double delta) => Run((_, _, s) =>
+    {
+        s.KeywordTriggers.AddRange(Enumerable.Range(0, 20).Select(i => new KeywordTrigger { Keyword = $"word {i}" }));
+        var panel = new KeywordTriggersPanel();
+        Find<Expander>(panel, "KeywordTriggersExpander").IsExpanded = true;
+        var content = new StackPanel();
+        content.Children.Add(new Border { Height = 600 });
+        content.Children.Add(panel);
+        content.Children.Add(new Border { Height = 900 });
+        var outer = new ScrollViewer { Content = content };
+        var host = new Window { Width = 900, Height = 500, Content = outer };
+        try
+        {
+            host.Show(); Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
+            var inner = Find<StackPanel>(panel, "KeywordTriggerListPanel")
+                .GetVisualAncestors().OfType<ScrollViewer>().First();
+            Assert.True(inner.Extent.Height > inner.Viewport.Height + 120);
+            outer.Offset = new Vector(0, outer.Offset.Y + inner.TranslatePoint(default, outer)!.Value.Y - 100);
+            inner.Offset = new Vector(0, innerOffset);
+            host.UpdateLayout();
+            var before = outer.Offset.Y;
+            var point = inner.TranslatePoint(new Point(8, 20), host)!.Value;
+            host.MouseWheel(point, new Vector(0, delta));
+            Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
+            // WPF PreviewMouseWheel always redirects to the ancestor, even before the list's edge.
+            Assert.Equal(before - delta * 120, outer.Offset.Y, 1);
+            Assert.Equal(innerOffset, inner.Offset.Y, 1);
+        }
+        finally { host.Close(); }
+    });
+
+    [Theory]
     [InlineData(MotionLevel.Full)]
     [InlineData(MotionLevel.Reduced)]
     public Task RevealPulsesTwiceAndReclickRestartsThenDetachStops(MotionLevel motion) => Run((view, panel, s) =>
