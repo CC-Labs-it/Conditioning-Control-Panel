@@ -1778,3 +1778,28 @@ The selected design must stay under 2,000 triangles, use metres, +Y up and -Z fo
 The rig's head attachment is `head_attach` under `EMI_root`; a hand-held prop uses the existing `shoulderL` or `shoulderR` palm transform. There are no joints literally named head or hand. Do not add bones. Umbrellas are authored open; host-owned morph or the permitted single child handles open/close, and a non-bone rotor child handles beanie spin. Screen, face pixels and antenna remain unchanged. Fit checks after selection must cover every accepted action, antenna sweep, palm contact and the low rear chase camera.
 
 Runtime manifest rows: none until a selected mesh is exported and measured. Added runtime triangles: 0. Added runtime `texBytes`: 0.
+
+## W4 unlockable umbrella glide props
+
+Six original umbrella alternatives follow the W3 concept family: Threshold porcelain and rose panels with a pawn; Boudoir satin scallops and bow; The Keep iron/velvet with a padlock; Mainframe smoked octagonal panels; Quarantine saline dome and capsule; Switchboard ivory panels and brass ribs. Each model is a standalone meshopt GLB in metres, +Y up, forward -Z, with no textures, skin, bones, morphs or animation clips. `kind: "glide"`, `variant: "umbrella"`, `unlock: true`.
+
+Use the exact accepted R4 base SHA256 `7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1`. Reject a mismatch. Bind to the existing `shoulderL` using the manifest `attach.matrix` as a local, column-major matrix. It derives from the existing palm contact `[0.368381, 0.510026, -0.124999]` and a fixed 60-degree outward rest angle. Never replace it with an assumed identity rotation: the upright-rest prototype clipped the antenna during existing actions. Do not alter the shoulder, re-pose EMI or calculate new inverse binds. The prop root origin is the grip.
+
+`umbrella_root` has exactly one child `spin`. Rotate `spin` around its local Y to turn the canopy, ribs and finial while the shaft and handle stay fixed. The shared axis passes through the grip and canopy hub. Open pose only uses the W4 allowed fallback; show/hide the complete prop while glide is active. There is no `open` morph target. The four simple material slots are `canopy_primary`, `canopy_secondary`, `hardware`, `grip_and_hem`; the host may tint them. The double-sided panels intentionally have open boundaries. No transmission, image texture, baked lettering or colour-mask dependency is added.
+
+| Model | Triangles | Texture bytes | boundRadiusM |
+|---|---:|---:|---:|
+| umbrella-threshold | 1812 | 0 | 1.367 |
+| umbrella-boudoir | 1792 | 0 | 1.298 |
+| umbrella-keep | 1680 | 0 | 1.356 |
+| umbrella-mainframe | 1500 | 0 | 1.281 |
+| umbrella-quarantine | 1724 | 0 | 1.336 |
+| umbrella-switchboard | 1828 | 0 | 1.316 |
+
+Each has two mesh nodes and six material draws. `boundRadiusM` is measured from the prop's grip origin, including the entire canopy. It is not a replacement for the assembled kart's culling radius.
+
+Validation: packed and decoded GLBs have zero Khronos errors, finite geometry and zero degenerate triangles. Fresh Blender imports retain the triangle counts and node contract. All 26 accepted actions were sampled at every exported key plus 60 Hz: 2726 samples per prop, no face/antenna triangle intersections and a maximum palm-anchor error of 4.83e-8 m. A conservative full-rotation canopy envelope also clears the actual face/antenna triangles at every key plus 120 Hz (4083 samples), so `spin` remains free to rotate. Front and low rear runtime views of every action and every theme use the actual packed models and original R4 face atlas. Seven-view standalone import sheets and all-action sheets were opened and reviewed. Game input/unlock integration is outside this art delivery.
+
+All native sources, editable masters and review sheets remain under `C:/Projects/glassroad-art/glide/umbrellas/`. Contact sheets belong in the PR body, never this runtime tree. Reproduction entry points are `build_umbrellas.py`, `pack_umbrellas.mjs`, `render_umbrellas.py`, `validate_attachment.mjs`, `validate_spin.mjs` and `capture_attached.mjs`. Original procedural geometry only; no third-party asset or pixel reuse.
+
+Meshopt packing preserves every decoded geometry attribute exactly. `lossless-meshopt-validation.json` proves the two-node hierarchy and identity transforms. Use the reorder plus EXT_meshopt_compression packing path: generic geometry quantization inserted an unwanted unnamed child, which violated this prop contract.
