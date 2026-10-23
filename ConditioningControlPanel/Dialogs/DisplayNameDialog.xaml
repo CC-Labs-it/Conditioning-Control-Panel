@@ -45,8 +45,8 @@
             </Border>
 
             <!-- Prompt -->
-            <TextBlock Grid.Row="2" Text="{loc:Str label_enter_the_name_you_d_like_to_be_called}"
-                       Foreground="White" FontSize="13" Margin="0,0,0,8"/>
+            <TextBlock x:Name="TxtPrompt" Grid.Row="2" Text="{loc:Str label_enter_the_name_you_d_like_to_be_called}"
+                       Foreground="White" FontSize="13" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
             <!-- Input -->
             <TextBox x:Name="TxtDisplayName" Grid.Row="3"
@@ -63,7 +63,7 @@
 
             <!-- Buttons -->
             <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
-                <Button Content="{loc:Str btn_cancel}" Width="90" Padding="10,10" Margin="0,0,10,0"
+                <Button x:Name="BtnCancel" Content="{loc:Str btn_cancel}" Width="90" Padding="10,10" Margin="0,0,10,0"
                         Background="{DynamicResource PanelAccentBrush}" Foreground="White" BorderThickness="0"
                         Click="BtnCancel_Click" Cursor="Hand" FontSize="13"/>
                 <Button x:Name="BtnConfirm" Content="{loc:Str btn_confirm}" Width="90" Padding="10,10"
@@ -71,6 +71,14 @@
                         BorderThickness="0" FontWeight="Bold" FontSize="13"
                         Click="BtnConfirm_Click" Cursor="Hand" IsEnabled="False"/>
             </StackPanel>
+            <!-- Required mode only (NeedsDisplayNameRule): why the save failed, and a plain way out.
+                 Kept LAST in the grid: delete mode reads its prompt as Children[2]. -->
+            <TextBlock x:Name="TxtStatus" Grid.Row="4" Visibility="Collapsed" Foreground="{StaticResource WarningBrush}"
+                       FontSize="11" Margin="0,5,60,0" TextWrapping="Wrap" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+            <TextBlock x:Name="BtnClose" Grid.Row="0" Visibility="Collapsed" Text="&#xD7;" FontSize="18"
+                       FontFamily="Segoe UI, Segoe UI Symbol" Foreground="{DynamicResource TextMutedBrush}"
+                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-12,-8,0" Cursor="Hand"
+                       ToolTip="{loc:Str name_ask_close_tip}" MouseLeftButtonUp="BtnClose_Click"/>
         </Grid>
     </Border>
 </Window>

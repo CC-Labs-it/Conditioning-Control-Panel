@@ -287,13 +287,13 @@ namespace ConditioningControlPanel.Features
                 return;
             }
             if (App.Speech?.IsAvailable == true)
-                TxtVoiceHint.Text = "On — speak the phrase to dismiss the card. Typing stays available if the mic can't hear you.";
+                TxtVoiceHint.Text = "On. Speak the phrase to dismiss the card. Typing stays available if the mic can't hear you.";
             else if (App.Speech == null || !Services.Speech.SpeechService.HasCaptureDevice)
-                TxtVoiceHint.Text = "No microphone detected — lock cards will use typing until one is connected.";
+                TxtVoiceHint.Text = "No microphone detected. Lock cards will use typing until one is connected.";
             else if (App.Speech.ModelStatus == Services.Speech.SpeechModelStatus.LoadFailed)
-                TxtVoiceHint.Text = "Speech model found but it would not load — remove any extra model you added under Resources\\Models\\vosk, then restart.";
+                TxtVoiceHint.Text = "Speech model found but it would not load. Remove any extra model you added under Resources\\Models\\vosk, then restart.";
             else
-                TxtVoiceHint.Text = "Speech model not installed yet — lock cards will use typing until it is.";
+                TxtVoiceHint.Text = "Speech model not installed yet. Lock cards will use typing until it is.";
         }
 
         private void BtnManagePhrases_Click(object sender, RoutedEventArgs e)
