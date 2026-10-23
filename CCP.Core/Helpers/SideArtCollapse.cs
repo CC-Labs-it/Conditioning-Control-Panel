@@ -2,7 +2,7 @@ namespace ConditioningControlPanel.Helpers;
 
 /// <summary>
 /// The pure decision behind both heads' AdaptiveSideArt (WPF Features/AdaptiveSideArt.cs and
-/// CCP.Avalonia Views/Features/AdaptiveSideArt.cs): when a feature page's side-art column folds away.
+/// CCP.Avalonia Helpers/AdaptiveSideArt.cs): when a feature page's side-art column folds away.
 /// </summary>
 public static class SideArtCollapse
 {

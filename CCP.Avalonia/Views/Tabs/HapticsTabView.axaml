@@ -33,7 +33,7 @@
                                             (Avalonia parses bare numbers as pixels)
        x:FieldModifier="internal"        -> dropped; no host on this head reads the fields. x:Names kept.
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
-       feat:AdaptiveSideArt.CollapseBelow-> Views/Features/AdaptiveSideArt.cs (same contract, Core rule).
+       feat:AdaptiveSideArt.CollapseBelow-> sideart:AdaptiveSideArt.CollapseBelow (Helpers/AdaptiveSideArt.cs, Core rule).
 
      features/vibe.png plates: the hero (HapticsHeroArt) and the Video-Haptic-Sync thumb
      (ImgVideoHapticSync) are RESTORED - Assets/features/vibe.png is linked into this head and
@@ -47,7 +47,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
-             xmlns:feat="using:ConditioningControlPanel.Avalonia.Views.Features"
+             xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -541,9 +541,9 @@
                              Capped column: the two dense Tier-1 cards stop being slider runways and
                              the width that buys back becomes one art plate. Scoped to THIS region
                              (the toy wall below wants the full pane). Below 1000px
-                             (Views/Features/AdaptiveSideArt.cs) the plate folds to zero and the
+                             (Helpers/AdaptiveSideArt.cs) the plate folds to zero and the
                              settings retake the width. -->
-                        <Grid x:Name="HapticsTier1Grid" feat:AdaptiveSideArt.CollapseBelow="1000">
+                        <Grid x:Name="HapticsTier1Grid" sideart:AdaptiveSideArt.CollapseBelow="1000">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="3*" MaxWidth="780"/>
                                 <ColumnDefinition Width="2*"/>
