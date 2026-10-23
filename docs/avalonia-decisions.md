@@ -1229,22 +1229,22 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `feat-companion-barks`): idle chatter + gated-idle bias, whisper/narrator floors, tier latch key, DryRun, ordinary voiced
   barks queued through Giggle. Lane barks-wpf gets the same rule.
 
-## 2026-10-23: Flatpak first build: WPE stays unbundled, tray own-name is `org.kde.*`
+## 2026-10-23: Flatpak first build: WPE stays unbundled, tray own-name is `org.kde.StatusNotifierItem-2-0..3`
 - Question: the 2026-09-29 "Linux package shape" row left two things to the first flatpak-builder run: bundle WPE (as
   docs/avalonia-linux-install.md asks) or not, and which StatusNotifierItem name the sandbox lets the tray own.
 - WPE: not bundled. `WebHost.LinuxEngine` picks WebKitGTK unless `CCP_LINUX_WEBVIEW=wpe`, and takes WPE only when
   libWPEWebKit exports `webkit_web_view_backend_new`; otherwise it logs a warning and stays on GTK. The installed
   org.gnome.Platform//50 has `libwebkit2gtk-4.1.so.0` and GStreamer's `libgstautodetect.so` (the audio-sink check), and no
   WPE trio. So every web surface takes the default path without WPE. Bundling it would only serve an opt-in that is already
-  broken on wpewebkit 2.54+. docs/avalonia-linux-install.md still asks to bundle WPE: the user should confirm the amendment
-  (not edited in this lane).
-- Own-name: `--own-name=org.kde.*`. Avalonia 12.1.2 `DBusTrayIconImpl.CreateTrayIcon` requests
+  broken on wpewebkit 2.54+. Decided: docs/avalonia-linux-install.md Plan step 1 now says WPE is not bundled and WebKitGTK
+  is the default.
+- Own-name: `org.kde.StatusNotifierItem-2-0` through `-2-3`. Avalonia 12.1.2 `DBusTrayIconImpl.CreateTrayIcon` requests
   `org.kde.StatusNotifierItem-{Environment.ProcessId}-{n}`, where n starts at 0 and goes up on every watcher restart
-  (plasmashell restart) or visibility toggle. That call runs in an `async void` with no catch, and CCP has no dispatcher
-  UnhandledException handler, so a name the proxy denies would crash the app. Flatpak accepts a wildcard only as a whole
-  trailing segment, which rules out `StatusNotifierItem-*`. Fixed names (`-2-0`, `-2-1`) would bet on sandbox pid 2 and a
-  bounded n. `org.kde.*` is broader than Flathub allows, but this manifest is for the own-repo channel and is not submitted
-  to Flathub. If it ever is, switch to fixed names and catch the failure.
+  (plasmashell restart) or visibility toggle. In the sandbox the app is pid 2 (bwrap is 1, the launcher `exec`s).
+  Flatpak accepts a wildcard only as a whole trailing segment, which rules out `StatusNotifierItem-*`, and `org.kde.*`
+  is broader than the app needs. Past `-2-3` the proxy refuses the name; that call runs in an `async void` with no catch,
+  so `MainShellWindow.CreateTray` adds a `Dispatcher.UIThread.UnhandledException` filter that swallows a D-Bus
+  AccessDenied (the tray icon is lost, the app stays up; `ShellTrayTests.DeniedTrayBusNameDoesNotEndTheApp`).
 - Also: libVLC moved from 3.0.21 to 3.0.24 because 3.0.21 does not compile against the Sdk's FFmpeg 7 channel-layout API.
   BUILDCC is set because VLC's configure finds no `c99` binary.
 - Advised by: worker-deep (lane flatpak-first-build). Not yet run live (user: no local app launch); steps are in

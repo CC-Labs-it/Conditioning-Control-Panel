@@ -17,9 +17,12 @@ finish-args:
   - --device=dri
   - --talk-name=org.kde.StatusNotifierWatcher
   - --talk-name=org.freedesktop.Notifications
-  # Tray: Avalonia owns org.kde.StatusNotifierItem-<pid>-<n>, n +1 per watcher restart, and a denied RequestName
-  # throws in an async void (app crash). Flatpak only allows a whole-segment `.*`, so org.kde.* (decisions 2026-10-23).
-  - --own-name=org.kde.*
+  # Tray: Avalonia owns org.kde.StatusNotifierItem-<pid>-<n>; the app is pid 2 in the sandbox and n +1 per watcher
+  # restart. Past -2-3 the name is refused and the tray icon goes (MainShellWindow.Tray.cs swallows the refusal).
+  - --own-name=org.kde.StatusNotifierItem-2-0
+  - --own-name=org.kde.StatusNotifierItem-2-1
+  - --own-name=org.kde.StatusNotifierItem-2-2
+  - --own-name=org.kde.StatusNotifierItem-2-3
 modules:
   # ponytail: minimal libVLC (audio/video decode + pulse/xcb/gl output), no GUI or Lua; add modules when a format fails.
   - name: vlc

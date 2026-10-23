@@ -136,4 +136,27 @@ public sealed class ShellTrayTests
             return Task.CompletedTask;
         });
     }
+
+    /// <summary>Flatpak: a StatusNotifierItem name past the manifest's own-name list is refused, and Avalonia's
+    /// async-void CreateTrayIcon rethrows that on the dispatcher. The app survives it; anything else still surfaces.</summary>
+    [Fact]
+    public async Task DeniedTrayBusNameDoesNotEndTheApp()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var shell = new MainShellWindow();
+            shell.CreateTray();
+            Dispatcher.UIThread.Post(() => throw new Tmds.DBus.Protocol.DBusErrorReplyException(
+                "org.freedesktop.DBus.Error.AccessDenied", "Not allowed to own org.kde.StatusNotifierItem-2-4"));
+            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.Post(() => throw new InvalidOperationException("other"));
+            Assert.Throws<InvalidOperationException>(() => Dispatcher.UIThread.RunJobs());
+            shell.Tray!.Dispose();
+            return Task.CompletedTask;
+        });
+    }
 }

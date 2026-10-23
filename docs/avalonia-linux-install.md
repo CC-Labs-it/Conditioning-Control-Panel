@@ -29,7 +29,8 @@ Fedora 44 (none); Arch extra ships all three (`pacman -Si` 2026-10-10; the image
 which LibVLCSharp does not find (audio disabled). None of the rows pulls a font or an emoji font.
 
 ## Plan (channel order CONFIRMED by the user 2026-09-28: own Flatpak repo + AUR first; Flathub after a content-policy check)
-1. **Flatpak (primary, every distro, one click).** GNOME runtime already has WebKitGTK; bundle libVLC and the WPE libs (wpewebkit, wpebackend-fdo, libwpe) if the runtime lacks them; self-contained .NET.
+1. **Flatpak (primary, every distro, one click).** GNOME runtime already has WebKitGTK, the default Linux web engine; bundle libVLC; self-contained .NET. WPE is NOT bundled (decided 2026-10-23, avalonia-decisions.md): it is opt-in only (`CCP_LINUX_WEBVIEW=wpe`) and WebHost falls back to WebKitGTK without it.
+   Tray own-name: `org.kde.StatusNotifierItem-2-0` .. `-2-3` (a refused name drops the tray icon, not the app).
    finish-args: `--socket=x11` (overlays need X11/XWayland; not fallback-x11), `--talk-name=org.kde.StatusNotifierWatcher`
    (tray), portals for notifications, GlobalShortcuts and Secret (libsecret uses the Secret portal inside Flatpak).
    Updates come from the store. Host: own Flatpak repo + `.flatpakref` on the website first; Flathub only after checking
@@ -71,8 +72,9 @@ Evidence: ~/ccp-port/evidence/package-verify/.
   `ldd` over every bundled `.so`: all owning packages are inside the `pactree` closure of `depends=` (zlib via
   zlib-ng-compat's provide); only `liblttng-ust.so.0` (optional .NET tracing) is unresolved (`aur-native-deps.txt`).
   A clean-container proof of `depends=` sufficiency is still owed: the host has far more than the closure installed.
-- **Flatpak:** no flatpak-builder and no org.gnome.Sdk//50 on the box and Docker is down, so the manifest is still unbuilt.
-  Substitute proof: the extracted tarball run inside the installed `org.gnome.Platform//50` runtime (`flatpak run
+- **Flatpak:** built with flatpak-builder (org.flatpak.Builder) on org.gnome.Sdk//50 and installed to the user
+  installation 2026-10-23 (~/ccp-port/evidence/flatpak-first-build/); not launched yet (`--smoke`, window, tray, panic key
+  and overlays are queued in evidence/live-queue/packaging.md). Earlier substitute proof: the extracted tarball run inside the installed `org.gnome.Platform//50` runtime (`flatpak run
   --command=...`) passes every smoke check except LibVLC (`libvlc` absent), which is exactly the module the manifest
   bundles (`flatpak-runtime-smoke.log`). The runtime has webkit2gtk-4.1, javascriptcoregtk-4.1, soup-3, libsecret, libX11,
   libXi, libpulse, ICU and `parec`; it lacks libvlc and the WPE trio (`flatpak-runtime-libs.txt`).

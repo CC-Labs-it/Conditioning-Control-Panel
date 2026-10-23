@@ -38,8 +38,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // WPF TrayIconService._hasShownFirstMinimizeNotification.
         private bool _shownFirstMinimizeNotification;
 
+        private static bool _trayNameFilterInstalled;
+
+        /// <summary>A RequestName the bus (or the Flatpak proxy past its own-name list) refused. Avalonia's
+        /// DBusTrayIconImpl.CreateTrayIcon asks for org.kde.StatusNotifierItem-&lt;pid&gt;-&lt;n&gt; in an async void
+        /// with no catch, n +1 per watcher restart, so once the manifest's names run out the refusal would
+        /// reach the dispatcher and end the app. Losing the tray icon is the lesser failure.</summary>
+        internal static bool IsDeniedBusName(Exception? e)
+        {
+            for (; e is not null; e = e.InnerException)
+                if (e is DBusErrorReplyException { ErrorName: "org.freedesktop.DBus.Error.AccessDenied" }) return true;
+            return false;
+        }
+
+        internal static void SwallowDeniedBusName(object? sender, global::Avalonia.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            if (!IsDeniedBusName(e.Exception)) return;
+            Serilog.Log.Warning("Tray: D-Bus name refused, tray icon unavailable: {E}", e.Exception.Message);
+            e.Handled = true;
+        }
+
         internal TrayIcon CreateTray()
         {
+            if (!_trayNameFilterInstalled)
+            {
+                _trayNameFilterInstalled = true;
+                global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException += SwallowDeniedBusName;
+            }
             Tray = new TrayIcon
             {
                 ToolTipText = "Conditioning Control Panel",
