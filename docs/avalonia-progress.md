@@ -2663,3 +2663,8 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
 ## avalonia-port/wire-win-mini-player: +103
 - win-mini-player: stub -> wired. Library thumbnail double-click and context-menu Preview open MiniPlayerWindow owned by the shell; closing it re-activates the shell only while we own the foreground (or none, as WPF).
 - AssetsTabTests: 2 tests, fail-proven (evidence/wire-win-mini-player/fail-proofs.txt).
+
+## avalonia-port/wire-win-knock-card: +120
+- Knock card: the sender's proxy picture fades in over the initials (WPF LandingChrome.Avatar). Join, Not now and the x lift 1.02 over 150 ms quad-out and snap at Motion Off (WPF MotionFx.HoverLift).
+- Tests: KnockCardTests cover the picture fetch (no network) and the hover lift with motion Off and Full. Each was fail-proven.
+- Ledger: win-knock-card stub -> wired. rgate GATE-OK.
