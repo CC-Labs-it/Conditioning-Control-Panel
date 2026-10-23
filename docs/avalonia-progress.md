@@ -2647,3 +2647,7 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
   WPF calls them through `using static`.
 - `BlurSurfaceFrameTests` (24 cases) moved to `Tests/CCP.Core.Tests`, so they now run on Linux CI.
 - Review accepted (side-by-side equal). The two P3s were left as they are, with reasons given in the body.
+
+## avalonia-port/wire-win-quiz-report: +21
+- win-quiz-report: run-row hover (#15FFFFFF) and a real pointer click on a report row are now tested through an open gate. Stays stub because both heads hide BtnStartQuiz; whether to show it or delete it is an open product decision.
+- QuizPastRunsReportTests fail-proven (failproof-5-no-hover.log).
