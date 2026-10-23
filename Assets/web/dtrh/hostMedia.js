@@ -55,6 +55,8 @@
  * keeps tainted pixels out of the GPU.
  * ==========================================================================*/
 
+import { isScrolllerEntry, sourceCredit } from './shared/sourceCredit.js';
+
 const NO_ECHO = 8; // a reshuffled deck avoids repeating the last N draws
 
 /** Origins WebView2 maps to local folders (see DtrhHostService's mapping table).
@@ -69,9 +71,17 @@ const isLocalUrl = (u) => typeof u === 'string' && LOCAL_URL_RE.test(u);
 const SHARE_RE = /^online(\d{1,3}):/i;
 const DEFAULT_REMOTE_SHARE = 0.3;
 
+/** "loop:sub-123.mp4": a MOVING PICTURE, the clip half of an online gif post (the host's
+ *  loops lane, DtrhAssetManifest.cs). It rides the videos list because it is a video file,
+ *  but the game shows it where a picture goes: silent, looping, grabbable. One with a copy
+ *  on this machine gets its own pool behind drawLoop(); one without stays a DOM-only clip. */
+const LOOP_RE = /^loop:/i;
+
 export function createHostMediaSource() {
   let entries = [];   // LOCAL { kind: 'image'|'video', name, url } - safe for WebGL
   let remote = [];    // REMOTE (CDN, tainted) - DOM layer only, never a texture
+  let loops = [];     // LOCAL moving pictures { kind: 'loop', name, url } - their own door
+  const loopRecent = [];
   let remoteShare = DEFAULT_REMOTE_SHARE;
   const remoteRecent = [];   // last few remote urls drawn (echo guard; the pool is small)
   let skipped = 0;    // reported by the host (browser-undecodable formats etc.)
@@ -113,9 +123,13 @@ export function createHostMediaSource() {
     return i;
   }
 
-  const makeAcquire = (entry) => async function acquire() {
+  // `shows`: this acquire puts the entry on screen now, so a Scrolller entry raises the
+  // page's "via Scrolller" mark (shared/sourceCredit.js). The race wall's pre-draw does not
+  // show anything yet: race/wallDom.js holds the mark itself while a poster is up.
+  const makeAcquire = (entry, shows = true) => async function acquire() {
+    if (shows && entry.online) sourceCredit.touch();
     // Nothing to read or revoke - the URL streams straight off the virtual host.
-    return { url: entry.url, release() {} };
+    return { url: entry.url, online: !!entry.online, release() {} };
   };
 
   /** The REMOTE draw, hoisted for the same reason as drawLocal: it is both the tail of
@@ -129,7 +143,7 @@ export function createHostMediaSource() {
     if (!e) return null;
     remoteRecent.push(e.url);
     if (remoteRecent.length > 4) remoteRecent.shift();
-    return { kind: e.kind, name: e.name, remote: true, acquire: makeAcquire(e) };
+    return { kind: e.kind, name: e.name, remote: true, online: !!e.online, acquire: makeAcquire(e, false) };
   }
 
   /** The LOCAL deck draw, hoisted so drawDom() can reach it without a `this` binding
@@ -140,7 +154,7 @@ export function createHostMediaSource() {
       const i = drawIndex();
       if (i < 0) return null;
       const e = entries[i];
-      if (!kind || e.kind === kind) return { kind: e.kind, name: e.name, acquire: makeAcquire(e) };
+      if (!kind || e.kind === kind) return { kind: e.kind, name: e.name, online: !!e.online, acquire: makeAcquire(e) };
     }
     return null;
   }
@@ -154,6 +168,8 @@ export function createHostMediaSource() {
     setManifest(m) {
       entries = [];
       remote = [];
+      loops = [];
+      loopRecent.length = 0;
       remoteShare = DEFAULT_REMOTE_SHARE;
       const take = (list, kind) => {
         for (const e of (list || [])) {
@@ -161,7 +177,11 @@ export function createHostMediaSource() {
           const name = String(e.name || '');
           const share = SHARE_RE.exec(name);
           if (share) remoteShare = Math.min(1, Math.max(0, Number(share[1]) / 100));
-          const item = { kind, name: share ? name.slice(share[0].length) : name, url: e.url };
+          const item = { kind, name: share ? name.slice(share[0].length) : name, url: e.url, online: isScrolllerEntry(e) };
+          if (LOOP_RE.test(item.name)) {
+            item.name = item.name.replace(LOOP_RE, '');
+            if (isLocalUrl(e.url)) { item.kind = 'loop'; loops.push(item); continue; }
+          }
           (isLocalUrl(e.url) ? entries : remote).push(item);
         }
       };
@@ -174,6 +194,8 @@ export function createHostMediaSource() {
     },
 
     hasUserMedia: () => entries.length > 0,
+    /** Any Scrolller entry in any pool (the "via Scrolller" mark can only ever be due then). */
+    hasOnline: () => entries.some((e) => e.online) || remote.some((e) => e.online) || loops.some((e) => e.online),
     /** Anything the DOM layer could show, local or remote. payloadFx gates on THIS, not on
      *  hasUserMedia — the whole point of remote media is a user whose library is empty. */
     hasDomMedia: () => entries.length > 0 || remote.length > 0,
@@ -188,13 +210,14 @@ export function createHostMediaSource() {
     favorite(kind) {
       for (const name of favorites) {
         const e = entries.find((x) => x.name === name && (!kind || x.kind === kind));
-        if (e) return { kind: e.kind, name: e.name, url: e.url };
+        if (e) { if (e.online) sourceCredit.touch(); return { kind: e.kind, name: e.name, url: e.url, online: !!e.online }; }
       }
       return null;
     },
     /** Resolve an asset name to its virtual-host URL (null if not in the pool). */
     urlByName(name) {
       const e = name ? entries.find((x) => x.name === name) : null;
+      if (e && e.online) sourceCredit.touch();
       return e ? e.url : null;
     },
 
@@ -212,8 +235,21 @@ export function createHostMediaSource() {
       const i = drawIndex();
       if (i < 0) return null;
       const e = entries[i];
-      return { kind: e.kind, name: e.name, acquire: makeAcquire(e) };
+      return { kind: e.kind, name: e.name, online: !!e.online, acquire: makeAcquire(e) };
     },
+
+    /** A MOVING PICTURE with a copy on this machine (so the tube may draw it), or null.
+     *  Random with a short echo guard: the pool is a few dozen at most. */
+    drawLoop() {
+      if (!loops.length) return null;
+      const fresh = loops.filter((e) => !loopRecent.includes(e.url));
+      const from = fresh.length ? fresh : loops;
+      const e = from[(Math.random() * from.length) | 0];
+      loopRecent.push(e.url);
+      if (loopRecent.length > Math.min(6, loops.length - 1)) loopRecent.shift();
+      return { kind: 'loop', name: e.name, online: !!e.online, acquire: makeAcquire(e) };
+    },
+    loopCount: () => loops.length,
 
     // Draw specifically an image/video (used when the live-video cap is hit).
     drawKind(kind) {
@@ -222,7 +258,7 @@ export function createHostMediaSource() {
         const i = drawIndex();
         if (i < 0) return null;
         const e = entries[i];
-        if (e.kind === kind) return { kind: e.kind, name: e.name, acquire: makeAcquire(e) };
+        if (e.kind === kind) return { kind: e.kind, name: e.name, online: !!e.online, acquire: makeAcquire(e) };
       }
       return null;
     },

@@ -107,9 +107,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         still live in the WPF head, so every handler that reached them is a stub.
     ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
-    ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. What
-    ///         does NOT come with them is the host's OTHER half — <c>Bind</c>, the rule engine and
-    ///         the playback time source — so a loaded enhancement's rules never fire here.</item>
+    ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. The
+    ///         host's <c>Bind</c> and the rule engine are in Core too, but this head has no
+    ///         <c>IPlaybackTimeSource</c> for the web pane and seeds no
+    ///         <c>EnhancementHostService.DispatcherFactory</c>/<c>WebcamProvider</c>, so a loaded
+    ///         enhancement's rules never fire here.</item>
     ///   <item><b>WebView2.</b> The WPF pane hosted a <c>wv2:WebView2</c> driven through
     ///         <c>CoreWebView2</c>. <see cref="Controls.WebHost"/> covers more of that than the
     ///         first pass assumed: NavigationStarted carries a settable Cancel (so the allowlist
@@ -776,7 +778,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// and MaybePromptForWebcamBeforePlay for the consent gate — which is a second reason not
         /// to make Play do more than this: skipping a consent prompt is worse than not playing.
         /// Note that even in video mode the enhancement's RULES do not fire: that needs
-        /// EnhancementHostService.Bind and the engine, both still in the WPF head.
+        /// an IPlaybackTimeSource over the web pane and a seeded DispatcherFactory for
+        /// EnhancementHostService.Bind (host and engine are in Core; this head supplies neither).
         /// </summary>
         private async void BtnPlayPause_Click()
         {
