@@ -1513,7 +1513,12 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         public static string FormatChatShortcut()
         {
             var (key, mods) = CurrentChatShortcut();
+            return FormatChord(key, mods);
+        }
 
+        /// <summary>One label format for both shortcut pills (WPF FormatCameraShortcut is the same code).</summary>
+        internal static string FormatChord(Key key, KeyModifiers mods)
+        {
             var parts = new List<string>();
             if ((mods & KeyModifiers.Control) != 0) parts.Add("Ctrl");
             if ((mods & KeyModifiers.Alt) != 0) parts.Add("Alt");
@@ -1544,7 +1549,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// settings file written on the WPF head - which stores "Windows" - would fail to parse and
         /// silently drop the whole combo back to Ctrl+T.
         /// </summary>
-        private static bool TryParseModifiers(string s, out KeyModifiers result)
+        internal static bool TryParseModifiers(string s, out KeyModifiers result)
         {
             result = KeyModifiers.None;
             if (string.IsNullOrWhiteSpace(s)) return true;

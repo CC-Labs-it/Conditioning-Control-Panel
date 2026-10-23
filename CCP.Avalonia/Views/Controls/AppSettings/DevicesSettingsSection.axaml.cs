@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CmbMicDevice.SelectionChanged += CmbMicDevice_SelectionChanged;
             BtnMicRefresh.Click += BtnMicRefresh_Click;
             BtnChatShortcutDevices.Click += BtnChatShortcut_Click;
+            BtnCameraShortcutDevices.Click += BtnCameraShortcut_Click;
             BtnPanicKey.Click += BtnPanicKey_Click;
             BtnPauseKey.Click += BtnPauseKey_Click;
             BtnWebcamRevokeConsent.Click += BtnWebcamRevokeConsent_Click;
@@ -752,8 +753,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// XAML, not a <c>{loc:Str}</c>, so assigning .Text here is safe - and it has to be code
         /// rather than a binding because the value is composed from two settings strings.
         /// </summary>
-        private void RefreshChatShortcutLabel() =>
+        private void RefreshChatShortcutLabel()
+        {
             TxtChatShortcutLabelDevices.Text = AvatarTubeWindow.FormatChatShortcut();
+            // WPF RefreshCameraShortcutLabel paints this row too (MainWindow.SessionIO.cs:1392).
+            TxtCameraShortcutLabelDevices.Text = Windows.CameraShortcut.Format();
+        }
 
         /// <summary>
         /// Opens the capture dialog, stores the captured combo and re-applies the binding without a
@@ -808,13 +813,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
         }
 
-        // ponytail: BtnCameraShortcutDevices stays inert, and NOT for the reason the old note gave.
-        // SerializeModifiers shipped with the tube, so the capture half would work - but the combo
-        // it stores drives MainWindow.ToggleWebcamFromHotkey (MainWindow.SessionIO.cs:1485), which
-        // toggles WebcamTrackingService. This head now has a tracker (Platform/WebcamTracker, and
-        // CoreWebcam.IsAvailable is seeded true), but no global hotkey listener calls it, so a rebind
-        // here would let the user configure a key that cannot fire - and the row's own label would then
-        // report a binding that does nothing. The label is left at its XAML literal for the same reason.
-        // Unblocks with a global-hotkey route to WebcamTracker (ToggleWebcamFromHotkey).
+        /// <summary>WPF BtnCameraShortcut_Click (MainWindow.SessionIO.cs:1403), the same handler the
+        /// Workshop pill uses. Only the system-wide RegisterHotKey half is missing on this head.</summary>
+        private async void BtnCameraShortcut_Click(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (TopLevel.GetTopLevel(this) is not Window owner || !owner.IsVisible) return;
+                if (await Windows.CameraShortcut.RebindAsync(owner)) RefreshChatShortcutLabel();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Settings/Devices: camera shortcut rebind failed"); }
+        }
     }
 }

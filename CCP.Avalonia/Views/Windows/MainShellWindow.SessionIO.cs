@@ -45,13 +45,11 @@
 //   offers "Add to Asset Library"/Cancel only, and an enhancement drop says the library is not
 //   ready, WPF's own string (docs/avalonia-decisions.md, 2026-10-09 window-wide drop).
 //
-//   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, ApplyCameraShortcutTo,
-//   ParseModifiers, FormatCameraShortcut, RefreshChatShortcutLabel, RefreshCameraShortcutLabel,
-//   BtnChatShortcut_Click, BtnCameraShortcut_Click, ToggleCameraCommand, OpenAvatarChat_Executed,
-//   BringToForegroundAndOpenChat, _cameraCommandBound. RoutedUICommand and ModifierKeys are WPF
-//   types, and a DESKTOP-WIDE hotkey is a Win32 RegisterHotKey - the bucket-E problem CLAUDE.md
-//   describes, not a port. ToggleCameraCommand is additionally a camera control: see the refusal
-//   already recorded for the two device pills in MainShellWindow.LabTab.cs.
+//   The two global hotkeys - ApplyGlobalChatHotkey, ApplyGlobalCameraHotkey, OpenAvatarChat_Executed,
+//   BringToForegroundAndOpenChat. A DESKTOP-WIDE hotkey is a Win32 RegisterHotKey - the bucket-E
+//   problem CLAUDE.md describes, not a port. The in-window halves ARE ported: ApplyCameraShortcutTo,
+//   FormatCameraShortcut, BtnCameraShortcut_Click and ToggleCameraCommand in Views/Windows/
+//   CameraShortcut.cs; the chat ones in AvatarTubeWindow and the Workshop/Devices pills.
 //
 //   RefreshImagesList / RefreshVideosList - the assets tab's lists, blocked with the asset tree in
 //   MainShellWindow.Assets.cs.

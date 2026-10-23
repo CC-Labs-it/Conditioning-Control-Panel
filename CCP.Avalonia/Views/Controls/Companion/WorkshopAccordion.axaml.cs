@@ -38,14 +38,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
+            // WPF BtnCameraShortcut_Click (MainWindow.SessionIO.cs:1403): the combo drives the in-window
+            // KeyBinding that toggles Platform/WebcamTracker (CameraShortcut.ApplyTo, also applied by the
+            // shell at startup). Only WPF's system-wide RegisterHotKey half is missing on this head.
+            parts.Behavior.CameraShortcutRequested += async (_, _) => await RebindCameraShortcutAsync();
 
+            // Browser pause forwards from the cell to the shell's live Home WebHost.
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
-            //  · Behavior.CameraShortcutRequested — the combo drives MainWindow.SessionIO.cs:1485
-            //    ToggleWebcamFromHotkey / WebcamTrackingService, and no webcam engine exists on this
-            //    head, so a rebind would configure a key for a feature that cannot fire. Same
-            //    refusal as DevicesSettingsSection.axaml.cs's BtnCameraShortcutDevices.
-            // Browser pause forwards from the cell to the shell's live Home WebHost.
             //  · Roster.CompanionCardClicked / PersonalityAssignRequested — MainWindow's
             //    CompanionCard_Click / BtnCompanionPersonality_Click (MainWindow.Patreon.cs), which
             //    switch the active companion through App.Companion. No seam on this head.
@@ -104,6 +104,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 Log.Warning(ex, "Workshop: chat shortcut rebind failed");
             }
+        }
+
+        private async System.Threading.Tasks.Task RebindCameraShortcutAsync()
+        {
+            try
+            {
+                // Same guard as the chat pill: no visible window, nothing to capture.
+                if (TopLevel.GetTopLevel(this) is not Window owner || !owner.IsVisible) return;
+                if (await Windows.CameraShortcut.RebindAsync(owner))
+                    (DataContext as WorkshopRuntimeVm)?.Parts.Behavior.RefreshCameraShortcutLabel();
+            }
+            catch (Exception ex) { Log.Warning(ex, "Workshop: camera shortcut rebind failed"); }
         }
 
         /// <summary>

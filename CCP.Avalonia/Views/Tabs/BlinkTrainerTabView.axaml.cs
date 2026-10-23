@@ -693,24 +693,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// (OpenCV missing, no camera) instead of silently staying off.</summary>
         private async void BtnBlinkTrainerStartStopTracker_Click(object? sender, RoutedEventArgs e)
         {
+            // Shared with the camera shortcut: Windows.CameraShortcut.ToggleTrackerAsync.
             try
             {
-                var tracker = Platform.WebcamTracker.Instance;
-                if (tracker.IsRunning) { await tracker.StopAsync(); RefreshTrackerButton(); return; }
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
-                if (!WebcamConsent.IsCurrent(CoreSettings.Current))
+                bool wasRunning = Platform.WebcamTracker.Instance.IsRunning;
+                try
                 {
-                    var dlg = new Dialogs.WebcamConsentDialog();
-                    await dlg.ShowDialogSafe(owner);
-                    Refresh();
-                    if (!WebcamConsent.IsCurrent(CoreSettings.Current)) return;
+                    await Windows.CameraShortcut.ToggleTrackerAsync(owner,
+                        beforeStart: () => BtnBlinkTrainerStartStopTracker.IsEnabled = false);
                 }
-                BtnBlinkTrainerStartStopTracker.IsEnabled = false;
-                bool started = await tracker.StartAsync();
-                BtnBlinkTrainerStartStopTracker.IsEnabled = true;
+                finally { BtnBlinkTrainerStartStopTracker.IsEnabled = true; }
+                if (!wasRunning) Refresh();   // the consent dialog may have changed the status row
                 RefreshTrackerButton();
-                if (!started && tracker.LastError != null)
-                    await Dialogs.MessageDialog.ShowAsync(owner, "Webcam tracking", tracker.LastError);
             }
             catch (Exception ex) { Log.Warning(ex, "Blink Trainer tracker toggle failed"); }
         }

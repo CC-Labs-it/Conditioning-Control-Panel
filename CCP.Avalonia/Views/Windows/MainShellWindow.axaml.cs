@@ -136,6 +136,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeStatPills(); // MainShellWindow.UiUpdates.cs (WPF MainWindow.xaml.cs:3726 StartStatPillUpdateTimer)
             InitializeWebcamActivePill(); // MainShellWindow.SafetyPills.cs (WPF LabTab.cs:134 WireWebcamActivePill)
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)
+            // WPF MainWindow.xaml.cs:234-240 (Loaded): the in-window chat and camera shortcuts.
+            AvatarTube.AvatarTubeWindow.ApplyChatShortcutTo(this);
+            CameraShortcut.ApplyTo(this);
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
             InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.

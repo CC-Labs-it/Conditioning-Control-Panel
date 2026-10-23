@@ -162,6 +162,7 @@ public sealed class PanicSurfacesTests
         ["DevicesSettingsSection"] = "camera preview/calibration: the 'camera' surface stops WebcamTracker",
         ["SettingsTabView"] = "the Home browser card's webcam pill: the 'camera' surface stops WebcamTracker",
         ["BlinkTrainerTabView"] = "camera: the 'camera' and 'blink-trainer' surfaces",
+        ["CameraShortcut"] = "the camera shortcut / shared tracker toggle: the 'camera' surface stops WebcamTracker",
         ["LibVlcAudio"] = "the CoreAudio sink: Core services stop their clips on the 'engine' surface",
         ["MandatoryVideoOverlay"] = "Core video sink: the 'engine' surface (CoreEngine.Stop) closes it",
         ["BubbleCountWindow"] = "Core bubble-count sink: the 'engine' surface closes it",
