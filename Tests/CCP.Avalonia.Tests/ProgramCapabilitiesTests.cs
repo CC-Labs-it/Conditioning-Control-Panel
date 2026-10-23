@@ -90,9 +90,11 @@ public sealed class ProgramCapabilitiesTests
         Assert.Matches(@"LockdownDeactivated \+=[^;]*?TrackLockdownCompleted\(", Src("App.axaml.cs"));
 
         // The achievement half (WPF AchievementService:221-279, :535): totals, unlocks, continuous spiral reset.
-        Assert.Matches(@"QuestMinutes = new\(\s*m => \{ App\.Achievements\?\.TrackPinkFilterMinutes\(m\);", Src("Views", "Overlays", "PinkFilterOverlay.cs"));
-        Assert.Matches(@"QuestMinutes = new\(\s*m => \{ App\.Achievements\?\.TrackSpiralMinutes\(m\);[^;]*;[^;]*\},\s*\(\) => App\.Achievements\?\.ResetContinuousSpiral\(\)\)", Src("Views", "Overlays", "SpiralOverlay.cs"));
-        Assert.Matches(@"App\.Achievements\?\.TrackLockCardCompletion\(completionTime, _totalErrors, _requiredRepeats\)", Src("Views", "Windows", "LockCardWindow.axaml.cs"));
+        // Whitespace is stripped first, so reformatting the lambdas does not break the scan.
+        string Flat(params string[] p) => Regex.Replace(Src(p), @"\s+", "");
+        Assert.Matches(@"QuestMinutes=new\(m=>\{App\.Achievements\?\.TrackPinkFilterMinutes\(m\);", Flat("Views", "Overlays", "PinkFilterOverlay.cs"));
+        Assert.Matches(@"QuestMinutes=new\(m=>\{App\.Achievements\?\.TrackSpiralMinutes\(m\);[^;]*;\},\(\)=>App\.Achievements\?\.ResetContinuousSpiral\(\)\)", Flat("Views", "Overlays", "SpiralOverlay.cs"));
+        Assert.Matches(@"App\.Achievements\?\.TrackLockCardCompletion\(completionTime,_totalErrors,_requiredRepeats\)", Flat("Views", "Windows", "LockCardWindow.axaml.cs"));
     }
 
     // Strips comments and string literals (P23), as ShellInitializerScanTests does.
