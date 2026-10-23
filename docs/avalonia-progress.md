@@ -2875,3 +2875,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-shell-presets: +197
 - WPF dashboard gesture caption + shared Core DashboardToggleHintRule.NoteUse; Spiral wall toggle refreshes the live overlay.
 - Review fixes: parity row names the remaining live FX members and cites the fail-proof; spiral test uses the right-click combo path. rgate green but the P115 RaceTrack flake.
+
+## avalonia-port/wire-shell-exclusives: +257
+- Premium vault accents (edges, badges, pills, title shadows) follow the active mod, as on Windows.
+- New tests drive a real mod switch and check the mounted vault repaints.
