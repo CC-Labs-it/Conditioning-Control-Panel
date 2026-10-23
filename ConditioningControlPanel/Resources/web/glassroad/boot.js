@@ -18,7 +18,7 @@
  * ?lobby=http://127.0.0.1:8811&uid=<id>&name=<n> talks to a local race-local.mjs lobby with the fake identity
  * (&tier=N also goes to the lobby as x-dev-tier). ?r=<token>: a friend's race link, claimed on the lobby card.
  */
-import { createBridge } from './host/bridge.js';
+import { createBridge, songCharts } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -71,10 +71,10 @@ const HT = qs.get('hitch') === '1' ? (window.__hitch = { sim: 0, fx: 0, audio: 0
 let hT = 0;
 const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
-// server (port 8790) tries the private song folder it mounts at /private-audio/. Nothing ships a chart yet.
+// server (port 8790) tries the private song folder it mounts at /private-audio/; a host names its own charts in
+// init.caps.songs (host/bridge.js songCharts). Set once the init lands, before any race can start.
 const DEV_HOST = location.port === '8790' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
-const CHARTS = qs.get('chart') === '0' ? [] : qs.get('chart') ? [qs.get('chart')]
-  : DEV_HOST ? ['/private-audio/pink-road/chart.json', '/private-audio/pink-road/chart.v0.json'] : [];
+let CHARTS = [];
 const COUNT = 8;                                   // offline grid (and the kart slots the world builds); online = the room's seats
 const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
 const canvas = document.getElementById('view');
@@ -162,6 +162,7 @@ async function boot() {
   const bridge = createBridge();
   const hostEscape = createHostEscape();          // before the key listeners: its capture hears Escape first
   const init = await bridge.init;
+  CHARTS = songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs });
   // the diegetic faces (render/fonts.js) load beside the feel: road markings and bubble text measure with them
   const [feel, trackJson] = await Promise.all([
     loadFeel(),

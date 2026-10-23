@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBridge, defaultInit } from '../host/bridge.js';
+import { createBridge, defaultInit, mergeInit, songCharts } from '../host/bridge.js';
 import { createHostEscape } from '../host/hostEscape.js';
 import { formatTime } from '../hud/hud.js';
 import { applyKept, rangeFor } from '../hud/feelSheet.js';
@@ -70,4 +70,19 @@ test('hud and feel sheet helpers', () => {
   assert.equal(feel.get('speed.topMps'), 33); assert.equal(feel.get('gentle.on'), false);
   assert.deepEqual(rangeFor(30), { min: 0, max: 90, step: 1 });
   assert.equal(rangeFor(0.15).max, 1);
+});
+
+test('caps.songs: default empty, host list validated, query and dev host win', () => {
+  assert.deepEqual(defaultInit().caps.songs, []);
+  const web = mergeInit(defaultInit(), { caps: { platform: 'web', songs: ['/glassroad-audio/pink-road/chart.json'] } });
+  assert.deepEqual(songCharts({ songs: web.caps.songs }), ['/glassroad-audio/pink-road/chart.json']);
+  assert.deepEqual(songCharts({ songs: mergeInit(defaultInit(), { caps: { platform: 'desktop' } }).caps.songs }), []);
+  assert.deepEqual(songCharts({ songs: undefined }), []);
+  assert.deepEqual(songCharts({ songs: 'x.json' }), []);
+  const bad = ['https://evil.test/a.json', '//evil.test/a.json', '/a/../b.json', '/a.mp3', 'a.json', '/a b.json', 7, null, '/ok/c.json'];
+  assert.deepEqual(songCharts({ songs: bad }), ['/ok/c.json']);
+  assert.equal(songCharts({ songs: Array.from({ length: 12 }, (_, i) => `/s/${i}.json`) }).length, 8);
+  assert.deepEqual(songCharts({ search: '?chart=0', songs: ['/a.json'] }), []);
+  assert.deepEqual(songCharts({ search: '?chart=/x.json', songs: ['/a.json'] }), ['/x.json']);
+  assert.equal(songCharts({ devHost: true, songs: ['/a.json'] })[0], '/private-audio/pink-road/chart.json');
 });
