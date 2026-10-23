@@ -122,7 +122,7 @@ function props(track) {
  * Polish 2 opts: renderer (createRenderer's wrapper: the shadow map and its tier hook), shadowsOn (the
  * Shadows option), photosafe (fx/photosafe.js, the impact glows ask it). Returns { ..., shadows, colossi }.
  */
-export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id) } = {}) {
+export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id), looks = [] } = {}) {
   const scene = new Scene();
   const pal = createPalette();
   const owned = [], offs = [];
@@ -167,7 +167,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   }
   if (finish) add(finish.object);
 
-  const karts = buildKarts(art, count, art && art.model('emi-teacup-kart') ? null : kartGeometry());
+  // bot looks from the race seed; online each seat's { outfit, vehicle } (B2: boot calls setLook per seat on the room's start)
+  const karts = buildKarts(art, count, art && art.model('emi-teacup-kart') ? null : kartGeometry(), { seed, looks });
   for (const k of karts.list) add(k.root);
   const kartObjs = karts.list.map((k) => k.root);
   const kart = kartObjs[0];
@@ -311,7 +312,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     const topMps = feel.get('speed.topMps');
     for (let i = 0; i < karts.list.length; i++) {
       const r = racers[i], kk = karts.list[i];
-      if (!r || !r.st) { karts.hide(kk); continue; }
+      if (!r || !r.st || (r.meta && r.meta.left)) { karts.hide(kk); continue; }   // online: a seat that left is removed
       const d = i ? Math.hypot(r.st[S.posX] - k[S.posX], r.st[S.posY] - k[S.posY], r.st[S.posZ] - k[S.posZ]) : 0;
       karts.pose(kk, r.st, r.fxv, dt, d, { squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '' });
       kk.root.updateMatrixWorld();
@@ -414,6 +415,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     for (const off of offs) off();
   }
   return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush,
+    // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
+    setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
     resetReactions: () => { karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

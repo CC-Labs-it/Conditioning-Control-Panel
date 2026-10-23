@@ -10,6 +10,12 @@
  * Dev (?bot=1 only): window.__glassroad.peek = { s, backM, upM, latM, aheadM, liftM } holds the camera at a
  * fixed spot on the track for screenshots (dev/shots.mjs); null hands it back to the chase rig.
  * Escape only pauses; nothing here ever leaves.
+ * Online (wave B2, NET.md): the menu's Race online door opens hud/lobby.js; its room is a net/room.js session.
+ * On the room's start the run is rebuilt from the session (racers per seat, online items, the tapped queue), the
+ * lobby card counts down on server time, the race goes at the room's startAt, pause only coasts your own kart
+ * (the sim keeps running under the steer assist), and the results come from the room's finish. Lobby transport:
+ * desktop host relay (caps.net on desktop), else a direct fetch to caps.relayBase; dev only (127.0.0.1 pages):
+ * ?lobby=http://127.0.0.1:8811&uid=<id>&name=<n> talks to a local race-local.mjs lobby with the fake identity.
  */
 import { createBridge } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
@@ -46,6 +52,10 @@ import { createSlotFx } from './render/items/slotfx.js';
 import { createGateScreen } from './render/gateScreen.js';
 import { loadFonts } from './render/fonts.js';
 import { createAssist } from './sim/assist.js';
+import { createRoomSession } from './net/room.js';
+import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
+import { configureLobby } from './hud/lobby.js';
+import { poseOf } from './hud/presets.js';
 
 const qs = new URLSearchParams(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
@@ -54,7 +64,8 @@ const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
 const DEV_HOST = location.port === '8790' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
 const CHARTS = qs.get('chart') === '0' ? [] : qs.get('chart') ? [qs.get('chart')]
   : DEV_HOST ? ['/private-audio/pink-road/chart.json', '/private-audio/pink-road/chart.v0.json'] : [];
-const COUNT = 8;
+const COUNT = 8;                                   // offline grid (and the kart slots the world builds); online = the room's seats
+const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
 const canvas = document.getElementById('view');
 const cardEl = document.getElementById('card');
 const note = document.getElementById('card-note');
@@ -155,7 +166,8 @@ async function boot() {
   if (qs.get('feel') === '1') openFeelSheet(feel, document.body);
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
-  const laps = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
+  const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
+  let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
   const bus = createBus(), queue = createQueue();
   const photosafe = createPhotosafe(feel);
@@ -215,26 +227,44 @@ async function boot() {
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
 
   const clock = createClock({ hz: feel.get('clock.hz'), maxSubsteps: feel.get('clock.maxSubsteps'), bpm: feel.get('clock.bpm') });
-  const race = createRace(track, feel, queue);
-  const racers = createRacers(track, feel, queue, { count: COUNT, seed });
-  const ai = createAi(track, feel, { seed });
   const assist = createAssist(track, feel);       // the player's Steer assist (Options), never the bots'
-  const contact = createContact(track, feel, queue);
-  const standings = createStandings(track, feel, queue);
-  const items = createItems(track, feel, queue, { seed });
-  const P = racers.player;
-  const sctx = { ai, items, standings };
-  const aiCtx = { racers: racers.list, items, standings, race };
-  const kartViews = racers.list.map((r) => ({ st: r.view, meta: r.meta, fxv: r.fxv }));
-  const mapXz = new Float32Array(COUNT * 2);
+  // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
+  // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
+  let race, racers, ai, contact, standings, items, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
+  function buildRun(s = null) {
+    const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
+    race = createRace(track, feel, q);
+    racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: COUNT, seed: sd });
+    ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
+    contact = createContact(track, feel, q);
+    standings = createStandings(track, feel, q);
+    items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
+    P = racers.player;
+    sctx = { ai, items, standings };
+    aiCtx = { racers: racers.list, items, standings, race };
+    kartViews = racers.list.map((r) => ({ st: r.view, meta: r.meta, fxv: r.fxv }));
+    mapXz = new Float32Array(racers.list.length * 2);
+    racers.setAssist(runAssist);
+    hud.setRacers(racers.list.map((r) => r.meta));
+    fall = BOT_FALL && !s ? createFallSteer(track, P.st, feel) : null;
+    // each seat's look (Astra's wardrobe and vehicles) on its kart: online the room's ids, back to the seat picks after
+    if (world.setLook && (s || looksOnline)) {
+      for (let i = 0; i < COUNT; i++) world.setLook(i, s && racers.list[i] ? racers.list[i].meta.look : undefined);
+      looksOnline = !!s;
+    }
+  }
+  buildRun();
   const hudItem = { id: null, rolling: false, rollT: 0, rollS: 1 };
-  hud.setRacers(racers.list.map((r) => r.meta));
   hud.setTrack({ xz: centreline(track) });
-  const fall = BOT_FALL ? createFallSteer(track, P.st, feel) : null;
   // dev (?bot=1): the racers and the track for scripted runs (dev drive scripts); not enumerable
   // debug.hands = { steer, throttle, brake, hop, hopPressed } overrides the AI's hands on the player (hopPressed
   // lasts one step); null hands the player back to the AI
-  if (BOT) for (const [k, v] of [['racers', racers], ['track', track], ['feel', feel], ['ai', ai]]) Object.defineProperty(debug, k, { value: v, enumerable: false });
+  if (BOT) {
+    for (const [k, v] of [['track', track], ['feel', feel]]) Object.defineProperty(debug, k, { value: v, enumerable: false });
+    Object.defineProperty(debug, 'racers', { get: () => racers, enumerable: false });
+    Object.defineProperty(debug, 'ai', { get: () => ai, enumerable: false });
+  }
 
   const gamepad = createGamepad();
   // the pad's own Start edge (gamepads fire no DOM events); card navigation comes from gamepad.takeNav()
@@ -253,12 +283,25 @@ async function boot() {
 
   // ---- options: Gentle preview (never below the host's switch), steering assist and sensitivity,
   //      volumes, and the display set (frame cap, render scale, quality, fps readout, shadows) ----
-  let opts = hud.options;
+  // online: { s (net/room.js session), cfg, go (race.start() done) } or null; lobbyUi = the hud/lobby.js handle
+  let online = null, lobbyUi = null;
+  let opts = hud.options, assistKey = '';
+  /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and on while paused. */
+  function syncAssist() {
+    let m = opts.steerAssist;
+    if (online && online.go) {
+      if (paused) m = !m || m === 'off' ? 'light' : m;
+      else if (!(online.cfg && online.cfg.laneKeeper)) m = 'off';
+    }
+    const key = String(m);
+    if (key !== assistKey) { assistKey = key; assist.setMode(m); }
+  }
   function applyOptions(o) {
     opts = o;
     gentle.set({ on: hostGentle || !!o.gentlePreview });
-    racers.setAssist(!!o.assist);
-    assist.setMode(o.steerAssist);
+    runAssist = !!o.assist;
+    racers.setAssist(runAssist);
+    assistKey = ''; syncAssist();
     audio.setVolumes({ master: o.volMaster, music: o.volMusic, sfx: o.volSfx });
     if (Number.isFinite(o.steerSens)) feel.set('steer.userMul', o.steerSens);   // FEEL.md: grip yaw, player only
     renderer.setOptions(o);
@@ -287,7 +330,10 @@ async function boot() {
     if (!song || !song.words.length) { words = null; wordCount.show(false); return; }
     if (!words || words.song !== song) {
       words = createWordRun(song, track, { seed }); words.song = song;
-      words.onPop((e) => { bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on'), e); });
+      words.onPop((e) => {
+        bus.emit('word-pop', e); wordCount.pop(!!feel.get('gentle.on'), e);
+        if (online && words) online.s.wordPop(words.pops);   // a pulse for the others, the total for the standings
+      });
     } else words.reset(seed);
     wordCount.show(true);
   }
@@ -309,16 +355,18 @@ async function boot() {
   function unpause() {
     if (!paused) return;
     paused = false; clock.pause(false); audio.setPaused(false); bus.emit('pause', { on: false });
+    syncAssist();
   }
   function setPaused(on) {
     on = !!on;
     if (on === paused) return;
     if (on && (state !== 'race' || (race.phase !== 'countdown' && race.phase !== 'racing'))) return;
     paused = on;
-    clock.pause(on);
-    audio.setPaused(on);
+    // online the room never waits: the sim, the clock and the song keep going and only your kart coasts
+    if (!online) { clock.pause(on); audio.setPaused(on); }
     bus.emit('pause', { on });
-    hud.setCard(on ? 'pause' : null, on ? { track: trackName, lap: P.st[S.lap], laps, place: standings.placeOf(0), count: COUNT } : undefined);
+    syncAssist();
+    hud.setCard(on ? 'pause' : null, on ? { track: trackName, lap: P.st[S.lap], laps, place: standings.placeOf(0), count: racers.list.length } : undefined);
     if (!on) canvas.focus({ preventScroll: true });
   }
   function begin() {
@@ -334,14 +382,118 @@ async function boot() {
     if (CHARTS.length) Promise.resolve(started).then(playSong).catch((e) => console.warn('[glassroad] song', e));
   }
   function toMenu() {
+    if (online && lobbyUi) lobbyUi.leave();       // quit mid-race online: leave the room (online-left tears down)
+    if (online) endOnline();
     stopSong(); unpause(); resetAll();
     state = 'menu';
     hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps });
   }
 
+  // ---- online (wave B2): lobby transport, the room session behind the lobby UI, the run per room --------------
+  /** The lobby transport and identity: dev local lobby, desktop host relay, or a direct fetch on the web. */
+  function lobbyLink() {
+    const dev = qs.get('lobby');
+    if (dev && LOCAL_URL.test(dev) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
+      const uid = qs.get('uid') || 'u_devpage1', name = qs.get('name') || uid;
+      return { transport: fetchTransport({ base: dev, headers: { authorization: 'Bearer jwt-' + uid, 'x-dev-name': name }, credentials: 'omit' }),
+        identity: { unifiedId: uid, displayName: name, tier: Number(qs.get('tier') || 2) } };
+    }
+    if (!init.caps.net) return null;
+    if (init.caps.platform === 'desktop' && bridge.hosted) return { transport: hostTransport(bridge), identity: init.identity };
+    return { transport: fetchTransport({ base: init.caps.relayBase || '' }), identity: init.identity };
+  }
+  const link = lobbyLink();
+  const lobbyApi = link ? createLobbyApi(link.transport) : null;
+  const platform = init.caps.platform === 'desktop' || init.caps.platform === 'phone' ? init.caps.platform : 'web';
+  const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
+  /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
+  async function connectRoom(join) {
+    const s = createRoomSession({ track, feel, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
+    const welcome = await s.connect(join, { lookNow: join.look });
+    return {
+      session: s,
+      on(t, fn) {
+        if (t === 'close') return s.on('closed', fn);
+        const off = s.on(t, fn);
+        if (t === 'welcome') Promise.resolve().then(() => fn(welcome));   // connect resolved on it before the UI listened
+        return off;
+      },
+      send(m) {
+        if (m.t === 'ready') return s.ready(m.on);
+        if (m.t === 'start') return s.start();
+        if (m.t === 'look') return s.setLook(m);
+        if (m.t === 'emote') return s.emote(m.code, poseOf(m.code));
+        if (m.t === 'leave') { s.leave(); return true; }
+        return false;
+      },
+      close() { s.leave(); if (online && online.s === s) endOnline(); },
+      now: () => s.serverNow(),
+    };
+  }
+  configureLobby({ api: lobbyApi ? {
+    list: () => lobbyApi.list(),
+    open: (body) => lobbyApi.open(body),
+    join: (roomId, look) => lobbyApi.join({ roomId, look }),
+    quick: (o) => lobbyApi.quick(o),
+    invite: (friendUid, roomId) => lobbyApi.invite({ friendUid, roomId }),
+    leave: (roomId) => lobbyApi.leave({ roomId }),
+  } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id });
+  hud.on('online', (e) => { lobbyUi = (e && e.lobby) || lobbyUi; });
+
+  /** The room said start (or we joined mid-race): build the run from the session, the lobby card counts down. */
+  function startOnline(ctx) {
+    const s = ctx && ctx.room && ctx.room.session;
+    if (!s || (online && online.s === s)) return;
+    stopSong(); unpause();
+    online = { s, cfg: s.cfg, go: false };
+    track.laps = (s.cfg && s.cfg.laps) || TRACK_LAPS; laps = track.laps;
+    buildRun(s);
+    resetAll();
+    syncAssist();
+    debug.online = { roomId: s.roomId, seat: s.seat, seats: racers.list.length };
+    Object.defineProperty(debug.online, 'keep', { get: () => s.keep, enumerable: true });
+    if (BOT) Object.defineProperty(debug, 'session', { value: s, configurable: true, enumerable: false });   // dev e2e: room messages
+    if (ctx.resume || s.phase === 'racing') goOnline();
+  }
+  /** countAt: the card goes, the song starts (everyone hears the same moment), go lands on startAt (frame loop). */
+  function goOnline() {
+    if (!online || state === 'race') return;
+    state = 'race';
+    hud.setCard(null);
+    canvas.focus({ preventScroll: true });
+    const started = audio.start();
+    if (CHARTS.length) Promise.resolve(started).then(playSong).catch((e) => console.warn('[glassroad] song', e));
+    bridge.runStarted({ track: track.id, laps });
+  }
+  /** Back to the solo run (left, closed or aborted). showLobby: put the lobby card back when no card is up. */
+  function endOnline(showLobby = false) {
+    if (!online) return;
+    online = null;
+    track.laps = TRACK_LAPS; laps = TRACK_LAPS;
+    stopSong(); unpause();
+    buildRun();
+    resetAll();
+    syncAssist();
+    debug.online = null;
+    if (state === 'race' || state === 'results') state = 'menu';
+    if (showLobby && !hud.card) hud.setCard('lobby', {});
+  }
+  hud.on('online-start', startOnline);
+  hud.on('online-race', () => goOnline());
+  hud.on('online-finish', (m) => {
+    if (!online) return;
+    debug.onlineResult = m && m.lines ? m.lines.map((l) => [l.place, l.name, l.time]) : null;
+    unpause();
+    state = 'results';
+    hud.setCard('lobby', { view: 'results' });
+  });
+  hud.on('online-left', () => endOnline());
+  hud.on('online-abort', () => endOnline(true));
+  hud.on('online-closed', () => endOnline(true));
+
   hud.on('race', startRace);
   hud.on('again', startRace);
-  hud.on('restart', startRace);
+  hud.on('restart', () => { if (online) setPaused(false); else startRace(); });   // online a restart only resumes
   hud.on('start', startRace);                     // the Phase A start card, should it ever show
   hud.on('resume', () => setPaused(false));
   hud.on('quit', toMenu);
@@ -395,7 +547,7 @@ async function boot() {
   hud.setReady(true);
   bridge.ready();
   toMenu();
-  if (BOT) botT = performance.now() + 2500;      // attract: a short look at the menu, then race
+  if (BOT && !link) botT = performance.now() + 2500;   // attract: a short look at the menu, then race (never with a lobby)
 
   let fpsN = 0, fpsT = performance.now(), telT = 0;
 
@@ -423,7 +575,10 @@ async function boot() {
     }
     if (paused) { hopLatch.clear(); itemLatch.clear(); } else { hopLatch.hold(a); itemLatch.hold(a); }
     const inRace = state === 'race' || state === 'results';
-    if (!paused && inRace) for (let i = 0; i < steps; i++) {        // 2. sim
+    // online: go lands on the room's startAt (race.start() runs the local count of goS); the sim never pauses
+    if (online && state === 'race' && !online.go && online.s.serverNow() >= online.s.raceStartAt(goS)) { online.go = true; race.start(); syncAssist(); }
+    const simOn = inRace && (online ? online.go : !paused);
+    if (simOn) for (let i = 0; i < steps; i++) {                    // 2. sim
       if (BOT && !P.finished) {
         ai.drive(P, aiCtx, clock.dt, a); if (fall) fall.apply(a);
         if (debug.hands) {                                      // dev drive scripts (steerAdd leans on the AI's own steer)
@@ -434,7 +589,10 @@ async function boot() {
         }
       }
       // the Steer assist reshapes the player's hands only (sim/assist.js); a ?bot=1 run opts in with debug.assistOn
-      const pa = BOT && !debug.assistOn ? a : assist.apply(a, P.st, clock.dt, race.phase);
+      // paused online: your kart coasts on the assist (neutral hands, cruise and auto) while the race goes on
+      const coast = online && paused;
+      if (coast) { a.steer = 0; a.throttle = 0; a.brake = 0; a.hop = false; a.hopPressed = false; a.item = false; }
+      const pa = BOT && !debug.assistOn && !coast ? a : assist.apply(a, P.st, clock.dt, race.phase);
       race.update(clock.dt, pa, P.st);
       racers.step(clock.dt, pa, race, sctx);
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
@@ -442,15 +600,17 @@ async function boot() {
       items.update(clock.dt, racers.list, standings, race);       //    pickups, use, flights, hits, mods
       hopLatch.spent(a); itemLatch.spent(a);
     }
+    if (online) online.s.update({ paused, assist: assist.mode !== 'off' });   //    online: clock slew, pings, uploads
     queue.flush(bus);                                             // 3. events
-    const fxDt = paused ? 0 : frameDt;                            //    the pause card freezes every effect too
+    const frozen = paused && !online;                             //    online the pause card freezes nothing
+    const fxDt = frozen ? 0 : frameDt;                            //    the pause card freezes every effect too
     fx.update(fxDt, P.st, race);                                  // 4. fx
     effects.update(fxDt);                                         //    the local screen effect
     const fs = fx.state;
     const pst = P.st;
     audio.update(pst[S.speedPct], {                               // 5. audio
       boosting: pst[S.boostKind] > 0, drifting: pst[S.driftDir] !== 0, driftTier: pst[S.driftStage],
-      airborne: pst[S.airborne] > 0, onRoad: pst[S.grounded] > 0, edge: fs.edgeGlow > 0, paused, duck: fs.duck,
+      airborne: pst[S.airborne] > 0, onRoad: pst[S.grounded] > 0, edge: fs.edgeGlow > 0, paused: frozen, duck: fs.duck,
     }, inRace ? racers.nearby(feel.get('ai.audibleKarts'), 80) : []);
     // rumble follows fs.rumble (zero under Gentle): re-sent every juice.rumbleMs at its current level,
     // and at once when it steps up (drift tiers 2 and 3), so the ladder ramps and a landing fades
@@ -465,6 +625,7 @@ async function boot() {
     } else { rumbleT = 0; rumbleSent = 0; }
 
     racers.interpolate(alpha);                                    // 6. camera
+    if (online) online.s.drawRemotes();                           //    remote karts at this frame's server time (100 ms back)
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
@@ -487,19 +648,19 @@ async function boot() {
     if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
     if (BOT && world.roadWords) debug.roadWords = world.roadWords.stats();   // dev only: the painted road words
     renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
-    renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: paused ? 0 : frameDt });   // 7. render
+    renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud
-    for (let i = 0; i < COUNT; i++) { const s = racers.list[i].view; mapXz[i * 2] = s[S.posX]; mapXz[i * 2 + 1] = s[S.posZ]; }
+    for (let i = 0; i < racers.list.length; i++) { const s = racers.list[i].view; mapXz[i * 2] = s[S.posX]; mapXz[i * 2 + 1] = s[S.posZ]; }
     const it = P.item, holding = inRace && (it.id || it.rolling);
     if (holding) { hudItem.id = it.id; hudItem.rolling = it.rolling; hudItem.rollT = it.rollT; hudItem.rollS = feel.get('items.rollS'); }
     hud.update({ lap: pst[S.lap], laps, timeS: race.timeS, speedPct: pst[S.speedPct], countdown: null,
-      sectionIdx: pst[S.sectionIdx], paused, place, count: COUNT, item: holding ? hudItem : null,
+      sectionIdx: pst[S.sectionIdx], paused, place, count: racers.list.length, item: holding ? hudItem : null,
       map: mapXz, finished: P.finished, bestLapS: P.bestLapS });
     gateScreen.update(frameDt, paused);
     slotFx.update(paused ? 0 : frameDt, holding && !P.finished ? hudItem : null, !!feel.get('gentle.on'));
 
-    if (state === 'race' && finishAt && now >= finishAt && result) {   // results after the finish swell
+    if (!online && state === 'race' && finishAt && now >= finishAt && result) {   // results after the finish swell (online: the room's)
       finishAt = 0;
       state = 'results';
       hud.setCard('results', result);
