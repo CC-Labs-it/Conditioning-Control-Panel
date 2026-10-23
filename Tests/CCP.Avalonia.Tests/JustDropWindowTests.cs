@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
@@ -111,6 +112,15 @@ public sealed class JustDropWindowTests
         Choose();
         Assert.Equal("justdrop", strip.ConfirmingKey);
         Assert.Null(Open());
+        // WPF's plain template: TextBlock content (no access key), own fill, hover at 0.85 opacity.
+        var yesButton = Answer("NavOpenWindowYes");
+        Assert.IsType<TextBlock>(yesButton.Content);
+        Assert.IsType<FuncControlTemplate<Button>>(yesButton.Template);
+        Assert.Equal(1, yesButton.Opacity);
+        ((global::Avalonia.Controls.IPseudoClasses)yesButton.Classes).Set(":pointerover", true);
+        Assert.Equal(SectionTabStrip.ConfirmHoverOpacity, yesButton.Opacity);
+        ((global::Avalonia.Controls.IPseudoClasses)yesButton.Classes).Set(":pointerover", false);
+        Assert.Equal(1, yesButton.Opacity);
         Assert.Equal("presets", strip.ActivePillKey);
         Assert.Equal("presets", shell.CurrentTab);
         Assert.Null(strip.ConfirmCard!.Transitions); // Off has no popup fade

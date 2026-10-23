@@ -114,32 +114,64 @@ public sealed class SectionStripMovedNoteTests
     [InlineData(MotionLevel.Reduced)]
     public async Task FadeTimerActuallyHidesTheNote_AndANewNoteCancelsTheOldFade(MotionLevel level)
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        await AvaloniaTestDispatcher.RunAsync(() =>
         {
             SetUp();
-            var strip = new SectionTabStrip { MotionOverride = level };
+            var clock = new SteppedTimers();
+            var strip = new SectionTabStrip { MotionOverride = level, After = clock.After };
             var w = new global::Avalonia.Controls.Window { Content = strip };
             try
             {
                 w.Show();
                 strip.Show(NavSections.Studio, "presets");
                 strip.ShowMovedNote("first");
-                strip.ExpireMovedNote();
+                clock.Advance(SectionTabStrip.MovedNoteHold);   // the hold timer starts the fade
                 Assert.True(strip.MovedNoteShown);
-                await Task.Delay(SectionTabStrip.MovedNoteFade + TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
-                Dispatcher.UIThread.RunJobs();
-                Assert.False(strip.MovedNoteShown); // the real DispatcherTimer, not HideNote's seam
+                clock.Advance(SectionTabStrip.MovedNoteFade);
+                Assert.False(strip.MovedNoteShown); // the scheduled fade timer, not HideNote's seam
 
                 strip.ShowMovedNote("second");
                 strip.ExpireMovedNote();
                 strip.ShowMovedNote("replacement");
-                await Task.Delay(SectionTabStrip.MovedNoteFade + TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
-                Dispatcher.UIThread.RunJobs();
+                clock.Advance(SectionTabStrip.MovedNoteFade);
                 Assert.True(strip.MovedNoteShown);
                 Assert.Equal("replacement", strip.MovedNoteTextForTests);
             }
             finally { w.Close(); }
+            return Task.CompletedTask;
         });
+    }
+
+    /// <summary>One-shot timers on a stepped clock: Advance fires what is due and not disposed.</summary>
+    private sealed class SteppedTimers
+    {
+        private readonly System.Collections.Generic.List<Pending> _pending = new();
+        private TimeSpan _now;
+
+        public IDisposable After(TimeSpan span, Action act)
+        {
+            var p = new Pending(_now + span, act);
+            _pending.Add(p);
+            return p;
+        }
+
+        public void Advance(TimeSpan by)
+        {
+            _now += by;
+            foreach (var p in _pending.Where(p => !p.Disposed && p.Due <= _now).OrderBy(p => p.Due).ToList())
+            {
+                p.Disposed = true;
+                p.Act();
+            }
+        }
+
+        private sealed class Pending(TimeSpan due, Action act) : IDisposable
+        {
+            public TimeSpan Due { get; } = due;
+            public Action Act { get; } = act;
+            public bool Disposed { get; set; }
+            public void Dispose() => Disposed = true;
+        }
     }
 
     private sealed class SteppedClock : TimeProvider

@@ -30,8 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
+            new("nav-window-confirm", sh => sh?.PageStrip?.CloseConfirm()),   // the strip's "Open Just Drop?" card: a stale "Open it" opens nothing
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
-            new("nav-window-confirm", sh => sh?.PageStrip?.CloseConfirm()),
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             new("voice-capture", sh => sh?.CancelVoicePrompt()),

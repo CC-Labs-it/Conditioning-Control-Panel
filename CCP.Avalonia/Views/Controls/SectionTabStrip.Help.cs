@@ -4,10 +4,13 @@ using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using ConditioningControlPanel.Services.UI;
 using ConditioningControlPanel.Models;
 
@@ -148,13 +151,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             popup.IsOpen = true;
         }
 
-        private Button ConfirmButton(string text, bool filled) => new()
+        // WPF's own button template: a plain rounded fill that hovers at 0.85 opacity (no Fluent hover grey).
+        // TextBlock content opts out of Avalonia's "_" access-key parsing (CLAUDE.md trap 1).
+        internal const double ConfirmHoverOpacity = 0.85;
+
+        private Button ConfirmButton(string text, bool filled)
         {
-            Content = text, FontSize = 13, FontWeight = FontWeight.SemiBold, CornerRadius = new CornerRadius(11),
-            Padding = new Thickness(14, 5, 14, 6), Cursor = new Cursor(StandardCursorType.Hand),
-            Background = filled ? new SolidColorBrush(_hue) : new SolidColorBrush(Color.FromArgb(0x1F, 255, 255, 255)),
-            Foreground = filled ? new SolidColorBrush(NavStripRules.ActiveTextOn(_hue)) : Brushes.White,
-        };
+            var b = new Button
+            {
+                Content = new TextBlock { Text = text }, FontSize = 13, FontWeight = FontWeight.SemiBold, CornerRadius = new CornerRadius(11),
+                Padding = new Thickness(14, 5, 14, 6), Cursor = new Cursor(StandardCursorType.Hand),
+                Background = filled ? new SolidColorBrush(_hue) : new SolidColorBrush(Color.FromArgb(0x1F, 255, 255, 255)),
+                Foreground = filled ? new SolidColorBrush(NavStripRules.ActiveTextOn(_hue)) : Brushes.White,
+                Template = new FuncControlTemplate<Button>((btn, _) => new Border
+                {
+                    Name = "ConfirmFill",
+                    [!Border.BackgroundProperty] = btn[!TemplatedControl.BackgroundProperty],
+                    [!Border.CornerRadiusProperty] = btn[!TemplatedControl.CornerRadiusProperty],
+                    Child = new ContentPresenter
+                    {
+                        [!ContentPresenter.ContentProperty] = btn[!ContentControl.ContentProperty],
+                        [!ContentPresenter.PaddingProperty] = btn[!TemplatedControl.PaddingProperty],
+                    },
+                }),
+            };
+            b.Styles.Add(new global::Avalonia.Styling.Style(x => x.OfType<Button>().Class(":pointerover"))
+            {
+                Setters = { new global::Avalonia.Styling.Setter(OpacityProperty, ConfirmHoverOpacity) },
+            });
+            return b;
+        }
 
         private void AnswerConfirm(bool open)
         {

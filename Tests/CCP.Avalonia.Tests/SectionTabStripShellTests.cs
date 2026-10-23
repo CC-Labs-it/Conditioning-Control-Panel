@@ -33,7 +33,7 @@ public sealed class SectionTabStripShellTests
     [InlineData(MotionLevel.Full)]
     public async Task ChangedCrumbFadesAndAnUnchangedCrumbKeepsItsAnimation(MotionLevel level)
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        await AvaloniaTestDispatcher.RunAsync(() =>
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -55,8 +55,7 @@ public sealed class SectionTabStripShellTests
                 while (!fade.IsCompleted && DateTime.UtcNow < deadline)
                 {
                     AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                    Dispatcher.UIThread.RunJobs();
-                    await Task.Delay(10, TestContext.Current.CancellationToken);
+                    Dispatcher.UIThread.RunJobs();   // the render clock is real time; no sleep (P08)
                 }
                 Assert.True(fade.IsCompletedSuccessfully);
                 Assert.Equal(1, strip.CrumbOpacity);
@@ -67,6 +66,7 @@ public sealed class SectionTabStripShellTests
                 Assert.Equal(1, strip.CrumbOpacity);
             }
             finally { w.Close(); }
+            return Task.CompletedTask;
         });
     }
 

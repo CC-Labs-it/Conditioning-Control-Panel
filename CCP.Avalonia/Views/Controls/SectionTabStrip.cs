@@ -73,7 +73,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // WPF SectionTabStrip.xaml:78 MovedNote: non-modal, never hit-testable, column 2 of the header row.
         private readonly TextBlock _movedNoteText = new() { FontSize = 12.5, FontWeight = FontWeight.SemiBold };
         private readonly Border _movedNote;
-        private global::Avalonia.Threading.DispatcherTimer? _noteTimer, _noteFadeTimer;
+        private IDisposable? _noteTimer, _noteFadeTimer;
+        // One-shot timer seam (P08): tests swap in a stepped clock instead of waiting in real time.
+        internal Func<TimeSpan, Action, IDisposable> After { get; set; } =
+            (span, act) => global::Avalonia.Threading.DispatcherTimer.RunOnce(act, span);
 
         /// <summary>WPF :516: the note stays 3.2 s, then fades out over 300 ms.</summary>
         internal static readonly TimeSpan MovedNoteHold = TimeSpan.FromSeconds(3.2), MovedNoteFade = TimeSpan.FromMilliseconds(300);
@@ -176,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
             _sheenClock?.Stop();   // P65: a detached strip never ticks
-            _noteTimer?.Stop();
+            _noteTimer?.Dispose();
             HideNote();
             CloseConfirm();
             _crumbFadeRun?.Cancel();
@@ -196,7 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var hue = NavStripRules.Accent(_section);
             _movedNote.BorderBrush = new SolidColorBrush(hue);
             _movedNoteText.Foreground = new SolidColorBrush(NavStripRules.WithAlpha(hue, NavStripRules.NoteTextAlpha));
-            _noteFadeTimer?.Stop();
+            _noteFadeTimer?.Dispose();
             var level = Level;
             // Fade in 150 ms (75 at Reduced), instant at Off.
             _movedNote.Transitions = level == MotionLevel.Off ? null : new global::Avalonia.Animation.Transitions
@@ -210,31 +213,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _movedNote.IsVisible = true;
             _movedNote.Opacity = 1;
 
-            _noteTimer?.Stop();
-            _noteTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = MovedNoteHold };
-            _noteTimer.Tick += (_, _) => ExpireMovedNote();
-            _noteTimer.Start();
+            _noteTimer?.Dispose();
+            _noteTimer = After(MovedNoteHold, ExpireMovedNote);
         }
 
         /// <summary>The hold timer's tick (test seam): Off hides at once, else a 300 ms fade, then hidden.</summary>
         internal void ExpireMovedNote()
         {
-            _noteTimer?.Stop();
+            _noteTimer?.Dispose();
             if (Level == MotionLevel.Off) { HideNote(); return; }
             _movedNote.Transitions = new global::Avalonia.Animation.Transitions
             {
                 new global::Avalonia.Animation.DoubleTransition { Property = OpacityProperty, Duration = MovedNoteFade },
             };
             _movedNote.Opacity = 0;
-            _noteFadeTimer?.Stop();
-            _noteFadeTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = MovedNoteFade };
-            _noteFadeTimer.Tick += (_, _) => HideNote();
-            _noteFadeTimer.Start();
+            _noteFadeTimer?.Dispose();
+            _noteFadeTimer = After(MovedNoteFade, HideNote);
         }
 
         internal void HideNote()
         {
-            _noteFadeTimer?.Stop();
+            _noteFadeTimer?.Dispose();
             _movedNote.Transitions = null;
             _movedNote.Opacity = 0;
             _movedNote.IsVisible = false;
