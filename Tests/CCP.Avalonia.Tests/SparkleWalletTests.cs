@@ -196,13 +196,13 @@ public sealed class SparkleWalletTests
         using var frame = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(152, 137));
         frame.Render(face);
         var px = new byte[152 * 137 * 4];
-        void Read()
+        void Read(global::Avalonia.Media.Imaging.RenderTargetBitmap bitmap)
         {
             var handle = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
-            try { frame.CopyPixels(new PixelRect(new PixelSize(152, 137)), handle.AddrOfPinnedObject(), px.Length, 152 * 4); }
+            try { bitmap.CopyPixels(new PixelRect(new PixelSize(152, 137)), handle.AddrOfPinnedObject(), px.Length, 152 * 4); }
             finally { handle.Free(); }
         }
-        Read();
+        Read(frame);
         int count = 0, left = 152, right = 0, top = 137, bottom = 0;
         for (int y = 0; y < 137; y++)
             for (int x = 0; x < 152; x++)
@@ -219,9 +219,7 @@ public sealed class SparkleWalletTests
         face.Draw(null);
         using var cleared = new global::Avalonia.Media.Imaging.RenderTargetBitmap(new PixelSize(152, 137));
         cleared.Render(face);
-        var pin = System.Runtime.InteropServices.GCHandle.Alloc(px, System.Runtime.InteropServices.GCHandleType.Pinned);
-        try { cleared.CopyPixels(new PixelRect(new PixelSize(152, 137)), pin.AddrOfPinnedObject(), px.Length, 152 * 4); }
-        finally { pin.Free(); }
+        Read(cleared);
         Assert.All(px, b => Assert.Equal((byte)0, b));
     });
 

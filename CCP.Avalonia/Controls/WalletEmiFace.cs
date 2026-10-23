@@ -4,6 +4,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Controls
@@ -29,8 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
         // WPF ResolveFaceFont prefers this shipped font; all three wallet glyphs are in it.
         private static readonly FontFamily FaceFont = new(Platform.AppFonts.Mono);
 
-        private static readonly IBrush PinkBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4));
-        private static readonly Pen PinkPen = new(PinkBrush, Thick, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        private static readonly IImmutableBrush PinkBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4));
+        private static readonly IPen PinkPen = new ImmutablePen(PinkBrush, Thick, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
 
         private string? _face;
 
