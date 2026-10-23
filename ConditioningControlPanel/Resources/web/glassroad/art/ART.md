@@ -1639,6 +1639,99 @@ Desktop and phone share the two vehicle GLBs. Added texture allocation is 0 MiB.
 
 Packed GLBs preserve decoded attributes, exact rest transforms and inverse binds, and pass finite, normal, degenerate and Khronos core checks with the existing non-root skin warning. Animated bounds cover all 26 clips at exported keys plus 60 fps, with 10 mm padding. Fresh Blender imports preserve triangle totals, the 15 required joints, two materials and vertex colors; editable masters stay private. Actual runtime views cover front, rear, sides, top, grip, seated cutaway, takeoff, apex, landing, settling, bump, hit and item poses. Sources, masters, contact sheets and preview movies are excluded from the public art tree.
 
+## Water kit, October 23 wave 3
+
+Original deterministic procedural art by CC Labs. No external pixels, fonts or text are
+embedded in these textures. Masters, source, compression checks and contact sheets remain
+private in C:/Projects/glassroad-art/water/. Review media belongs in the PR body only.
+
+### Scalar channel and UV contract
+
+The owner requested R-only masks. Every scalar file samples `.r`. The brief's proposed
+G inputs are separate auxiliary R textures: water-foam-edge-mask and waterfall-phase-mask.
+The OpenGL tangent normal is linear RGB (+Y), UASTC, with normalized mip vectors.
+The host owns palette tint, scrolling, contrast and Gentle Visuals behavior.
+
+| ID | Metre tile U x V | Wrap U / V | Meaning |
+|---|---|---|---|
+| water-normal | 4 x 4 | repeat / repeat | shallow OpenGL tangent normal, RGB |
+| water-flow-mask | 4 x 4 | repeat / repeat | longitudinal flow streak phase, R |
+| water-foam-mask | 4 x 4 | repeat / repeat | foam streaks and bubble rims, R |
+| water-foam-edge-mask | 4 x 4 | clamp / repeat | U is normalized distance from bank, R |
+| water-caustic-mask | 4 x 4 | repeat / repeat | even tileable caustic web, R |
+| waterfall-sheet | 6 x 12 | clamp / repeat | sheet density, taper at side edges, R |
+| waterfall-phase-mask | 6 x 12 | clamp / repeat | phase down the fall, R |
+| pool-ripple-mask | 8 x 8 | clamp / clamp | concentric landing decal, R |
+
+The newer art brief's clamp-U/repeat-V waterfall convention supersedes the older kit
+table's clamp-V note. Treat sheet phase as a scrolling field, not an encoded speed.
+Normals and mask detail use source UVs; lighting and animation remain shader work.
+
+### Water particle cells
+
+particles-water is a second atlas, preserving the earlier atlas unchanged. Desktop is
+1024 square, 4 x 4 cells of 256; phone is 256 square with 64px cells. The six named cells
+are centered, grayscale with straight alpha, white RGB under transparent pixels. Coverage
+samples alpha. Ten spare cells remain transparent. Cell origin is top-left in the KTX
+image convention. Clamp the sampler, inset by one atlas texel at mip zero and clamp LOD
+to maxSafeLod 4 on desktop or 2 on phone to prevent cross-cell bleed. Full mip chains
+are present. Do not infer free cell padding at the smallest mip levels.
+
+| Cell | Column | Row |
+|---|---:|---:|
+| splash-crown | 0 | 0 |
+| spray-cluster | 1 | 0 |
+| single-drop | 2 | 0 |
+| ripple-ring | 3 | 0 |
+| foam-puff | 0 | 1 |
+| bubble-cluster | 1 | 1 |
+
+### Encoding and allocation
+
+Load one tier only. Plain IDs are desktop; -phone replaces the corresponding desktop ID.
+Main fields are 512 desktop / 128 phone, auxiliary fields 256 / 64, all with full mips.
+UASTC is used for the normal and particle atlas; scalar masks use ETC1S. texBytes is
+conservative decoded RGBA8 with mips, not the KTX file size. texBytesBlock16 is separately
+reported for 16-byte blocks. These counts exclude render targets and browser staging.
+
+| Texture | Desktop texBytes | Phone texBytes |
+|---|---:|---:|
+| water-normal | 1398100 | 87380 |
+| water-flow-mask | 1398100 | 87380 |
+| water-foam-mask | 1398100 | 87380 |
+| water-foam-edge-mask | 349524 | 21844 |
+| water-caustic-mask | 1398100 | 87380 |
+| waterfall-sheet | 1398100 | 87380 |
+| waterfall-phase-mask | 349524 | 21844 |
+| pool-ripple-mask | 1398100 | 87380 |
+| particles-water | 5592404 | 349524 |
+
+| Tier | Family MiB | Running persistent MiB | With selected menu backdrop MiB |
+|---|---:|---:|---:|
+| desktop | 13.999989 | 210.416653 | 219.416653 |
+| phone | 0.874989 | 119.979153 | 127.889309 |
+
+All 18 KTX2 files pass strict Khronos validation with glTF BasisU rules. Decoded
+channels, tile repeats, normal orientation and native phone cells were inspected. The
+existing Glassroad unit suite passes 752/752. Engine binding and device play remain untested.
+## Wave 3 waterfall spouts
+
+Six original themed waterfall-source props, one per track. All files are meshopt-compressed GLB, metres, Y up, front -Z and base-centred. Each contains exactly one locator named `spout`; place the 6 m sheet centred on that node along local X and flow down -Y. Locator positions in the manifest are measured after packing. The host supplies water colour and animation. No textures or baked water are included.
+
+| Asset | Tris | Draws | Height m | Bound radius m | texBytes |
+|---|---:|---:|---:|---:|---:|
+| spout-keep | 4,768 | 3 | 12.230 | 12.232 | 0 |
+| spout-mainframe | 3,412 | 4 | 10.246 | 10.761 | 0 |
+| spout-quarantine | 2,612 | 4 | 11.800 | 12.066 | 0 |
+| spout-switchboard | 2,432 | 3 | 10.700 | 11.310 | 0 |
+| spout-threshold | 4,730 | 3 | 10.427 | 10.705 | 0 |
+| spout-boudoir | 5,642 | 4 | 9.500 | 11.096 | 0 |
+
+Threshold retains the approved pawn sculpture, using an allowed LOD reduction, a forward tip and the requested white material tint. New collar and spillway parts are original. Other props are original geometry: perfume flask with removed stopper and foam rim, chained padlock sluice, cable-wrapped data elbow, sealed IV bag and open line, and brass valve wheel on an instrument panel.
+
+Sources and rights: original project-authored geometry. The pawn uses the already approved project chess asset, without a replacement sculpt. No external textures, third-party pixels or borrowed designs. Native Blender masters, reproducible source, source hash, decoded verification files and contact sheets stay in the private art workspace.
+
+Validation: 12 Khronos checks across six packed and six decoded GLBs have zero errors and zero warnings. All six packed assets were decoded, imported into fresh Blender and rendered from front, three-quarter, rear, left, right, top, sky-context and low rear views. Final contact sheets were inspected. All six native masters reopen; finite geometry, no zero-length edges or loose vertices; fresh imports contain zero degenerate triangles. Partial open edges on tube ends are intentional game geometry. Blender 5.2.1 LTS, four render threads. Runtime integration remains the engine lane.
 ## Water kit W3: stepping stones and turntables
 
 Twelve original procedural GLBs: six static platforms and a matching rotating variant for each. No external geometry or pixels, no textures, no text in surfaces. Author: CCP art pipeline. Original project work, available under the repository licence.
