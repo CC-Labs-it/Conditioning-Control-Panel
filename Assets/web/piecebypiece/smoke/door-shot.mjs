@@ -29,6 +29,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(here, '..', '..');
 const out = arg('out', path.join(here, 'out', 'door'));
 const port = Number(arg('port', '8823'));
+const viewport = arg('viewport', '');   // e.g. 390,844 for a phone held upright
+const only = arg('only', '');           // comma list of shot name prefixes, e.g. 01,08
 mkdirSync(out, { recursive: true });
 
 const server = spawn('python', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], { cwd: webRoot, stdio: 'ignore' });
@@ -105,14 +107,21 @@ const SHOTS = [
   ['15-profile-hosted', 'menu', `(async () => { ${FAKE_HOST(true)}; window.PBP.settings.playerName = 'Bambi'; ${SEED_SHELF}; window.PBP.door.show('profile'); await new Promise((r) => setTimeout(r, 200)); return { readonly: !!document.querySelector('.door-name input[readonly]'), name: document.querySelector('.door-name input').value }; })()`],
   // one tap on offer draw and one on resign: "draw offered" stands, "resign?" is asked, and posts holds a draw and NO resign
   ['16-online-resign-ask', 'menu', MOCK_NET(null, TAP_DRAW_THEN_RESIGN), '1200'],
+  // the door polish pass (2026-10-14): the menu as a host sees it (Leave on the card), its setup open, a loss and a win online
+  ['17-menu-hosted', 'menu', `(async () => { ${FAKE_HOST(true)}; window.PBP.settings.playerName = 'Bambi'; window.PBP.door.show('lobby'); window.PBP.door.show('menu'); await new Promise((r) => setTimeout(r, 200)); return !!document.querySelector('.door-back'); })()`],
+  ['18-menu-setup', 'menu', `(() => { document.querySelector('.door-setup').open = true; return 'open'; })()`],
+  ['19-end-online-win', 'menu', `(() => { window.PBP.door.debug.fakeEnd({ opponent: 'velvet' }, { delta: 14, before: { rated: true, rating: 1212, rank: 9, best: 1212 }, plies: 30, reason: 'checkmate' }); return 'won'; })()`, '2600'],
+  ['20-profile-empty', 'profile', `(() => { window.localStorage.removeItem('pbp-games'); window.PBP.door.show('menu'); window.PBP.door.show('profile'); return 'empty'; })()`],
+  ['21-games-empty', 'games', `(() => { window.localStorage.removeItem('pbp-games'); window.PBP.door.show('menu'); window.PBP.door.show('games'); return 'empty'; })()`],
 ];
 
 let failed = 0;
 for (const [name, screen, evalExpr, afterMs] of SHOTS) {
-  const url = `http://127.0.0.1:${port}/piecebypiece/index.html?lobby=mock&seed=7&media=none&screen=${screen}`;
+  if (only && !only.split(',').some((p) => name.startsWith(p))) continue;
+  const url = `http://127.0.0.1:${port}/piecebypiece/index.html?lobby=mock&seed=7&media=none&intro=0&screen=${screen}`;
   const file = path.join(out, name + '.png');
   const after = afterMs || (name.startsWith('09') || name.startsWith('10') ? '2600' : '900');
-  const r = spawnSync('node', [path.join(here, 'shot.mjs'), '--url', url, '--out', file, '--wait', '5000', '--eval', evalExpr, '--after', after, '--port', String(9300)], { encoding: 'utf8' });
+  const r = spawnSync('node', [path.join(here, 'shot.mjs'), '--url', url, '--out', file, '--wait', '5000', '--eval', evalExpr, '--after', after, '--port', String(9300), ...(viewport ? ['--viewport', viewport] : [])], { encoding: 'utf8' });
   const lines = (r.stdout || '').trim().split('\n').filter((l) => /screenshot|eval|ERROR|clean/.test(l));
   console.log(`[${name}] ${lines.join(' | ')}`);
   if (r.status !== 0) { failed++; console.log((r.stdout || '') + (r.stderr || '')); }
