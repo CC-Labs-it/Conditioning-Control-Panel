@@ -12,6 +12,7 @@ using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Stakes;
 
 namespace ConditioningControlPanel.Services.GoonGame
@@ -43,7 +44,7 @@ namespace ConditioningControlPanel.Services.GoonGame
     ///   Page -&gt; Host:  ready · log              (consumed inside ChaosWebViewHost)
     ///                  heartbeat { t, paint, vis } · pong · boot-error · fullscreen-set
     ///                  exit · exit-done
-    ///                  toy-pattern · toy-stop   (STUBS — haptics v2 is not merged)
+    ///                  toy-pattern · toy-stop   (GoonToyDirector)
     ///                  match-result             (STUB — XP wiring comes later)
     ///                  net-post { id, path, body }
     ///                  cache-req { op } · cache-put · encode-done
@@ -69,19 +70,9 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// client wearing the app's auth token.</summary>
         private const string AllowedPathPrefix = "/v2/goon/";
 
-        /// <summary>Seconds of "beats arriving, frame counter frozen, page says it is visible"
-        /// before the page is treated as visually frozen. Was 10 s until ccp-bugs #1326 (a busy
-        /// machine closed a live match twice at 11 s); 20 s is still far short of how long the
-        /// owner sat in front of a dead picture on 2026-08-04.</summary>
-        internal const double PaintStallSeconds = 20;
-
-        /// <summary>The heartbeat watch's own tick interval. A tick that arrives much later than
-        /// this means the UI thread itself was stalled, see <see cref="PaintStallVerdict"/>.</summary>
-        internal const double WatchIntervalSeconds = 5;
-
-        /// <summary>Slack on <see cref="WatchIntervalSeconds"/> before a late tick counts as a UI
-        /// stall, and the <see cref="VideoDiag.UiStallMs"/> age that counts as one too.</summary>
-        internal const double UiStallSlackSeconds = 3;
+        /// <summary>Heartbeat silence after which a running toy cue is stopped. The paint-stall and
+        /// watch-interval thresholds live in <see cref="GoonHostRules"/>.</summary>
+        internal const double ToyCueSilenceSeconds = 6;
 
         private static DateTime _lastWatchTickUtc;
 
@@ -122,6 +113,24 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         public static bool IsActive => _host != null;
 
+        /// <summary>True while the game window is in front and can keep Escape as its pause.</summary>
+        public static bool IsInFront => _host?.IsForeground == true;
+
+        /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+        public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+        /// <summary>Hand the page a kept Escape after PanicPolicy.KeptEscapeGoesTo allows it,
+        /// then return keyboard focus so the pause card works without another click.</summary>
+        public static void PostKeptEscape()
+        {
+            try
+            {
+                _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+                _host?.FocusWeb();
+            }
+            catch (Exception ex) { App.Logger?.Debug("GoonHost: kept Escape post failed: {E}", ex.Message); }
+        }
+
         /// <summary>The join code of the room this window is hosting while nobody has sat down
         /// yet, else null. The page reports it (<c>room-code</c>); the friends drawer sends it.</summary>
         public static string? RoomCode => _roomCode;
@@ -134,7 +143,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         public static event Action? HostBusy;
 
         /// <summary>May this account host? Same read the page's <c>caps.canHost</c> gets.</summary>
-        public static bool CanHost => HostingAllowed();
+        public static bool CanHost => GoonHostRules.HostingAllowed();
 
         /// <summary>Open the game on the host screen (friends drawer invite). A window already
         /// up gets a <c>host-now</c> frame: it opens a room, re-tells one it already has, or
@@ -347,6 +356,9 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// <summary>Graceful close: ask the page to wind down, watchdog-force after 1200 ms. Idempotent.</summary>
         public static void CloseActive()
         {
+            // The toy first, and refused until the window opens again: the page winding down may
+            // still send a cue after a panic (review, ccp-bugs #1429).
+            try { GoonToyDirector.Close(); } catch { }
             try
             {
                 if (_host == null) return;
@@ -425,6 +437,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 _paintStallHandled = false;
                 _host?.FocusWeb();
                 HookMicPermission();
+                HookToys();
 
                 var consent = new ConsentSheetMsg();   // the engine's own defaults, never a fork
                 _host?.Post(new
@@ -452,16 +465,17 @@ namespace ConditioningControlPanel.Services.GoonGame
                     },
                     caps = new
                     {
-                        haptics = false,          // haptics v2 is not merged; toy-* are stubs below
+                        // A toy connected in CCP, Lovense or Intiface alike (ccp-bugs #1429).
+                        haptics = GoonToyDirector.ReadyNow,
                         brainDrain = BrainDrainAllowed(),
                         spiral = true,            // in-page spiral veil; exec/ owns the renderer
                         camera = false,           // no webcam bridge into the page in v1
                         video = true,
-                        mediaTransfer = TransferAllowed(),
-                        canHost = HostingAllowed(),
+                        mediaTransfer = GoonHostRules.TransferAllowed(),
+                        canHost = GoonHostRules.HostingAllowed(),
                         // Patrons host, every signed-in account joins (2026-09-24). The
                         // server's /v2/goon/join is the real gate.
-                        canJoin = JoiningAllowed(),
+                        canJoin = GoonHostRules.JoiningAllowed(),
                     },
                     // Open tables: a Join pressed in the friends drawer lands here. Spent on the
                     // first init so a reload (heartbeat recovery) does not rejoin a finished room.
@@ -475,6 +489,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                         payloadMinGapMs = consent.PayloadMinGapMs,
                     },
                     fullscreen = _host?.IsFullscreen == true,
+                    // The plan list (contract C1 via PlanCatalog) for the recap's "Host the next
+                    // one" card (C10). A page shows a price only when this is present.
+                    plans = Services.Vault.PlanCatalog.ToWire(Services.Vault.PlanCatalog.Current),
                     // Discord sharing state (contract §4). Built from the CACHE only — init is
                     // posted synchronously and an avatar may never sit on a boot path. If the
                     // cached own-avatar is stale/absent, KickOwnAvatarRefresh below fetches it and
@@ -730,13 +747,12 @@ namespace ConditioningControlPanel.Services.GoonGame
                     DisposeAll();
                     break;
                 case "toy-pattern":
+                    // Clamped to the consent sheet's toy cap the page sends with it; the player's
+                    // own master cap still applies inside the mixer.
+                    GoonToyDirector.OnPattern(o);
+                    break;
                 case "toy-stop":
-                    // STUB. The haptics v2 multi-toy director is not merged yet, so a toy cue is
-                    // logged and dropped. Deliberately a no-op rather than a call into the v1
-                    // haptics path: the consent sheet's toyCap is enforced by the mixer that
-                    // doesn't exist here, and an uncapped buzz is exactly the thing the sheet is
-                    // for. Wire this to the director when the overhaul lands.
-                    App.Logger?.Debug("GoonHostService: {Type} (haptics stub, no-op)", (string?)o["type"]);
+                    GoonToyDirector.Stop();
                     break;
                 case "match-result":
                     // STUB. XP / progression wiring comes with the client ledger; log it so a
@@ -789,6 +805,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                     break;
                 case "open-prime":       // page's patron sheet "See the tiers": the app's own refusal and upgrade path
                     TierGate.DemandPremium("Goon Game");
+                    break;
+                case Services.Funnel.FunnelPageMessage.Type:   // recap end card (contract C10): count + open the plan checkout
+                    Services.Funnel.FunnelPageMessage.Handle(o, mayOpen: !_exiting);
                     break;
                 case "peer-niches":      // the opponent's hello named their niches; fill a pool from them
                     OnPeerNiches(o);
@@ -999,7 +1018,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                 ? (string?)o["body"] ?? ""
                 : o["body"]?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
 
-            if (!path.StartsWith(AllowedPathPrefix, StringComparison.Ordinal))
+            // Judged on the BUILT Uri, not the raw string: "/v2/goon/../user/me" starts with the
+            // prefix and still lands on /v2/user/me once System.Uri collapses it (HostNetPathRule).
+            if (!HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out var target) || target is null)
             {
                 App.Logger?.Warning("GoonHostService: net-post REJECTED for path '{Path}'", path);
                 ReplyNetPost(id, 0, "forbidden_path");
@@ -1012,7 +1033,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 string responseBody = "";
                 try
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, ProxyBaseUrl + path)
+                    using var request = new HttpRequestMessage(HttpMethod.Post, target)
                     {
                         Content = new StringContent(body, Encoding.UTF8, "application/json")
                     };
@@ -1089,42 +1110,6 @@ namespace ConditioningControlPanel.Services.GoonGame
         /// and the drain is a real part of the duel. (Kept as a method rather than an inlined
         /// <c>true</c> so the gate has one place to come back to if that ever changes.)</summary>
         private static bool BrainDrainAllowed() => true;
-
-        /// <summary>May the page send its OWN media to the opponent? TIER 1+ (any paid tier or
-        /// whitelist), re-gated 2026-08-06.
-        ///
-        /// Sending was free-for-every-seat for one day (owner call 2026-08-04): the free model
-        /// fixed the "invited free player throws blanks" bug from the first play-test, but left
-        /// an un-gated seat able to push arbitrary media at an opponent, and abuse won over
-        /// generosity. The blank-attack lesson survives as UI instead: the lobby transfer row
-        /// names the perk (S.lobby.transferOff) rather than greying out in silence. The server's
-        /// <c>media_send</c> verdict on /invite and /join computes the same bar
-        /// (computeEffectiveTier &gt;= 1), so the two verdicts agree; voice notes ride this same
-        /// cap. Consent still gates the lane per-match (the lobby checkbox both sides must
-        /// tick), and receiving was never gated.</summary>
-        private static bool TransferAllowed()
-        {
-            try { return App.Patreon?.HasPremiumAccess == true; }
-            catch { return false; }
-        }
-
-        /// <summary>May the page MINT a room? ANY PATRON (owner call 2026-09-24): a paying tier
-        /// or the whitelist, the same bar as sending (<see cref="TransferAllowed"/>). The server
-        /// enforces it at <c>/v2/goon/invite</c> (403 <c>no_host_access</c> below
-        /// <c>computeEffectiveTier &gt;= 1</c>) and this is the same verdict computed locally, so
-        /// the title screen can lock Host instead of routing the player to a refusal. The page
-        /// reads this with <c>=== true</c>, so a host that predates the flag leaves Host enabled
-        /// and falls back to the server's answer.</summary>
-        internal static bool HostingAllowed()
-        {
-            try { return App.Patreon?.HasPremiumAccess == true; }
-            catch { return false; }
-        }
-
-        /// <summary>May the page JOIN a room? Every SIGNED-IN account (owner call 2026-09-24),
-        /// free included. The server's <c>/v2/goon/join</c> answers 401 <c>signin</c> without an
-        /// account; this is only the local read of "is there one". Practice never asks.</summary>
-        internal static bool JoiningAllowed() => !string.IsNullOrEmpty(App.UnifiedUserId);
 
         private static bool TakePendingAutoHost()
         {
@@ -1359,9 +1344,9 @@ namespace ConditioningControlPanel.Services.GoonGame
             // for match 2 would let match 1's opponent be written as match 2's last-opponent record.
             ResetPeerCardState();
 
-            var code = SafeShort((string?)o["code"], 32);
-            var token = SafeShort((string?)o["token"], 128);
-            var role = SafeShort((string?)o["role"], 16);
+            var code = GoonHostRules.SafeShort((string?)o["code"], 32);
+            var token = GoonHostRules.SafeShort((string?)o["token"], 128);
+            var role = GoonHostRules.SafeShort((string?)o["role"], 16);
 
             _ = Task.Run(async () =>
             {
@@ -1381,7 +1366,7 @@ namespace ConditioningControlPanel.Services.GoonGame
 
                     _peerName = string.IsNullOrWhiteSpace(name) ? null : name!.Trim();
                     // Re-validate what the server sent before it can ever reach a shell command.
-                    _peerDmId = IsSnowflake(dmId) ? dmId : null;
+                    _peerDmId = GoonHostRules.IsSnowflake(dmId) ? dmId : null;
                     _peerAvatarCached = false;
 
                     string? uri = null;
@@ -1541,7 +1526,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 var raw = App.Settings?.Current?.GoonLastOpponentJson;
                 if (string.IsNullOrWhiteSpace(raw)) return null;
                 var id = (string?)JObject.Parse(raw!)["dmId"];
-                return IsSnowflake(id) ? id : null;
+                return GoonHostRules.IsSnowflake(id) ? id : null;
             }
             catch { return null; }
         }
@@ -1560,7 +1545,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 "last" => ReadLastOpponentDmId(),
                 _ => null,                       // enum only — a page-supplied id is not a case
             };
-            if (!IsSnowflake(id))
+            if (!GoonHostRules.IsSnowflake(id))
             {
                 App.Logger?.Debug("GoonHostService: discord-open-dm '{W}' - nothing to open", which);
                 return;
@@ -1660,24 +1645,6 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         // ---------------------------------------------------------------- small validators
 
-        /// <summary>A Discord snowflake is digits and nothing else. Applied to the SERVER's value on
-        /// arrival and again on the way to <see cref="Process.Start"/>, because that string is about
-        /// to become part of a shell-executed URL.</summary>
-        private static bool IsSnowflake(string? id)
-        {
-            if (string.IsNullOrEmpty(id) || id!.Length > 20) return false;
-            foreach (var c in id) if (c < '0' || c > '9') return false;
-            return true;
-        }
-
-        /// <summary>Trim + hard-cap a page-supplied string before it rides an outgoing request body.</summary>
-        private static string SafeShort(string? v, int max)
-        {
-            if (string.IsNullOrWhiteSpace(v)) return "";
-            var t = v!.Trim();
-            return t.Length > max ? t.Substring(0, max) : t;
-        }
-
         /// <summary>Forget everything about the match peer. Called from the single teardown funnel:
         /// the snowflake must not outlive the window it was fetched for, and the next duel must not
         /// inherit the previous opponent's cached picture.</summary>
@@ -1729,7 +1696,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             _lastPaintMoveUtc = DateTime.UtcNow;
             _paintStallHandled = false;
             _lastWatchTickUtc = DateTime.UtcNow;
-            _heartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(WatchIntervalSeconds) };
+            _heartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(GoonHostRules.WatchIntervalSeconds) };
             _heartbeatWatch.Tick += (_, _) =>
             {
                 var tickNow = DateTime.UtcNow;
@@ -1739,6 +1706,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                 // page can't false-trip.
                 if (_host == null || !_host.IsReady || _exiting) return;
                 var silent = (DateTime.UtcNow - _lastHeartbeatUtc).TotalSeconds;
+                // A page that stopped beating cannot send toy-stop: end its cue long before the
+                // 20 s recovery (review, ccp-bugs #1429). The next cue from a live page plays.
+                if (silent > ToyCueSilenceSeconds) { try { GoonToyDirector.Stop(); } catch { } }
                 if (silent > 20)
                 {
                     App.Logger?.Warning("GoonHostService: page heartbeat silent >20s - recovering");
@@ -1755,8 +1725,8 @@ namespace ConditioningControlPanel.Services.GoonGame
                 if (!_paintStallHandled && _lastPaint != null)
                 {
                     var frozen = (DateTime.UtcNow - _lastPaintMoveUtc).TotalSeconds;
-                    var verdict = PaintStallVerdict(frozen, tickGap, VideoDiag.UiStallMs);
-                    if (verdict == PaintStallCall.UiStalled)
+                    var verdict = GoonHostRules.PaintStallVerdict(frozen, tickGap, VideoDiag.UiStallMs);
+                    if (verdict == GoonHostRules.PaintStallCall.UiStalled)
                     {
                         // ccp-bugs #1326: OUR thread was the stalled one (the page's beats sat in
                         // the dispatcher queue), so the frozen counter says nothing about the page.
@@ -1766,7 +1736,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                             tickGap, frozen);
                         _lastPaintMoveUtc = DateTime.UtcNow;
                     }
-                    else if (verdict == PaintStallCall.Stalled)
+                    else if (verdict == GoonHostRules.PaintStallCall.Stalled)
                     {
                         _paintStallHandled = true;
                         App.Logger?.Warning(
@@ -1785,24 +1755,6 @@ namespace ConditioningControlPanel.Services.GoonGame
                 }
             };
             _heartbeatWatch.Start();
-        }
-
-        internal enum PaintStallCall { Healthy, UiStalled, Stalled }
-
-        /// <summary>Pure decision for the paint-stall watchdog (ccp-bugs #1326).
-        /// <paramref name="frozenSeconds"/> is how long the page's frame counter has not moved,
-        /// <paramref name="tickGapSeconds"/> how long since the watch last ticked, and
-        /// <paramref name="uiStallMs"/> the app's own UI-thread stall age. A late tick or a stalled
-        /// UI thread means the page's heartbeats were stuck behind us in the dispatcher queue, so
-        /// the frozen figure is not evidence about the page: it is never a stall, the clock
-        /// restarts. Only a frozen counter seen by a healthy UI thread past
-        /// <see cref="PaintStallSeconds"/> is one.</summary>
-        internal static PaintStallCall PaintStallVerdict(double frozenSeconds, double tickGapSeconds, long uiStallMs)
-        {
-            if (tickGapSeconds > WatchIntervalSeconds + UiStallSlackSeconds
-                || uiStallMs > UiStallSlackSeconds * 1000)
-                return PaintStallCall.UiStalled;
-            return frozenSeconds > PaintStallSeconds ? PaintStallCall.Stalled : PaintStallCall.Healthy;
         }
 
         private static void StopHeartbeatWatch()
@@ -1993,7 +1945,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     (o["subs"] as JArray)?.Select(t => t.Type == JTokenType.String ? (string?)t : null));
                 _peerMedia ??= GoonOnlineMedia.ForPeer(PostPeerMedia);
                 if (subs.Count == 0) { _peerMedia.Off(); return; }
-                if (!PeerFetchAllowed(App.Settings?.Current?.GoonMediaOnline))
+                if (!GoonHostRules.PeerFetchAllowed(App.Settings?.Current?.GoonMediaOnline))
                 {
                     _peerMedia.Off();
                     PostFrame(new { type = "peer-media", state = "declined", subs = Array.Empty<string>(),
@@ -2064,10 +2016,6 @@ namespace ConditioningControlPanel.Services.GoonGame
             });
         }
 
-        /// <summary>The consent rule for the peer pool: on unless the player switched online
-        /// pictures off for the Goon Game. Pure, for the tests.</summary>
-        internal static bool PeerFetchAllowed(bool? goonMediaOnline) => goonMediaOnline != false;
-
         private static void PostPeerMedia(GoonOnlineMedia.Snapshot snap)
         {
             PostFrame(new
@@ -2111,12 +2059,48 @@ namespace ConditioningControlPanel.Services.GoonGame
             }));
         }
 
+        // ============================ toys ============================
+
+        private static bool _toysHooked;
+
+        /// <summary>Cues may play while the window is up, and the page hears a toy connect or drop.</summary>
+        private static void HookToys()
+        {
+            GoonToyDirector.Open();
+            if (_toysHooked || App.Haptics == null) return;
+            App.Haptics.ConnectionChanged += OnToyConnectionChanged;
+            _toysHooked = true;
+        }
+
+        private static void UnhookToys()
+        {
+            GoonToyDirector.Close();
+            if (!_toysHooked) return;
+            _toysHooked = false;
+            try { if (App.Haptics != null) App.Haptics.ConnectionChanged -= OnToyConnectionChanged; } catch { }
+        }
+
+        private static void OnToyConnectionChanged(object? sender, bool connected)
+        {
+            try
+            {
+                Application.Current?.Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+                {
+                    if (_disposing) return;
+                    _host?.Post(new { type = "haptics-state", connected = GoonToyDirector.ReadyNow });
+                }));
+            }
+            catch { }
+        }
+
         private static void DisposeAll()
         {
             if (_disposing) return;   // _host.Dispose() closes the window, re-raising Closed -> here
             _disposing = true;
             try
             {
+                // The toy first: a closed window (panic included) never leaves it running.
+                try { UnhookToys(); } catch { }
                 CancelExitWatchdog();
                 StopHeartbeatWatch();
                 // Unbind the cache feed BEFORE the host goes, so a worker-thread Changed can't post

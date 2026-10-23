@@ -27,7 +27,7 @@ internal sealed class PreferredNameEditor : StackPanel
         System.Windows.Automation.AutomationProperties.SetName(_name, Loc.Get("companion_v2_calls_you"));
         App.Brain?.EnsureCurrentAccount();
         var store = App.Brain?.Memory;
-        if (store?.Profile.TryGetValue(MemoryStore.KeyPreferredName, out var value) == true) _name.Text = value?.ToString() ?? string.Empty;
+        _name.Text = Services.Companion.ConversationRules.PreferredName(store);
         _owner = store;
         save.IsEnabled = _name.IsEnabled = store != null;
         save.Click += (_, _) => Save();
@@ -38,26 +38,13 @@ internal sealed class PreferredNameEditor : StackPanel
         System.Windows.Automation.AutomationProperties.SetLiveSetting(_notice, System.Windows.Automation.AutomationLiveSetting.Polite);
         Children.Add(_notice);
     }
-    internal static string Normalize(string? input)
-    {
-        var clean = Regex.Replace(input ?? string.Empty, @"\s+", " ").Trim();
-        var elements = StringInfo.ParseCombiningCharacters(clean);
-        return elements.Length > 64 ? clean[..elements[64]] : clean;
-    }
+    internal static string Normalize(string? input) => Services.Companion.ConversationRules.NormalizePreferredName(input);
     private void Save()
     {
         App.Brain?.EnsureCurrentAccount();
-        var store = App.Brain?.Memory;
-        if (store == null || !ReferenceEquals(store, _owner)) { _name.Clear(); IsEnabled = false; return; }
-        var name = Normalize(_name.Text);
-        if (!MemoryStore.IsStorable(App.ModerationGuard, name, MemoryFact.SourceUserEdited))
-        {
-            _name.Clear();
-            _notice.Text = Loc.Get("companion_v2_name_refused");
-            return;
-        }
-        store.UpdateProfileSignal(MemoryStore.KeyPreferredName, name.Length == 0 ? null : name);
+        var (result, name) = Services.Companion.ConversationRules.SavePreferredName(App.Brain?.Memory, _owner, _name.Text, App.ModerationGuard);
+        if (result == Services.Companion.ConversationRules.NameSave.Stale) { _name.Clear(); IsEnabled = false; return; }
         _name.Text = name;
-        _notice.Text = Loc.Get("companion_v2_name_saved");
+        _notice.Text = Loc.Get(result == Services.Companion.ConversationRules.NameSave.Refused ? "companion_v2_name_refused" : "companion_v2_name_saved");
     }
 }
