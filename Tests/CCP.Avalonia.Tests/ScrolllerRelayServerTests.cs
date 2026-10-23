@@ -57,7 +57,7 @@ public sealed class ScrolllerRelayServerTests : IDisposable
         return http;
     }
 
-    private static string Relay(WebAssetServer s) => $"http://127.0.0.1:{s.Port}{ScrolllerRelay.ToRelayPath(Url)}";
+    private static string Relay(WebAssetServer s) => s.RelayUrl(Url)!;
 
     [Fact]
     public async Task A_cached_copy_is_served_with_range_and_no_store_and_never_fetched()
@@ -109,10 +109,13 @@ public sealed class ScrolllerRelayServerTests : IDisposable
     {
         using var s = Make(File10("c.jpg"), fresh: true);
         using (var bare = new HttpClient(new HttpClientHandler { UseCookies = false }))
-            Assert.Equal(HttpStatusCode.Forbidden, (await bare.GetAsync(Relay(s))).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await bare.GetAsync(s.RelayOrigin + ScrolllerRelay.ToRelayPath(Url))).StatusCode);   // no token in the path
         using var http = await Signed(s);
+        Assert.Equal(HttpStatusCode.Forbidden, (await http.GetAsync(s.RelayOrigin + ScrolllerRelay.WithToken(ScrolllerRelay.ToRelayPath(Url)!, "00"))).StatusCode);
+        // The page origin never relays (its sockets are the pages' own), even with the page cookie.
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync($"http://127.0.0.1:{s.Port}{ScrolllerRelay.ToRelayPath(Url)}")).StatusCode);
         foreach (var path in new[] { "/scrolller-media/api/v2/graphql.jpg", "/scrolller-media/images/page.html", "/scrolller-media/evil.test/a.jpg" })
-            Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync($"http://127.0.0.1:{s.Port}{path}")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync(s.RelayOrigin + ScrolllerRelay.WithToken(path, s.Token))).StatusCode);
         Assert.Equal(0, _fetches);
     }
 

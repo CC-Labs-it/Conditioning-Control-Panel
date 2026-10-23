@@ -93,4 +93,26 @@ public class ScrolllerRelayTests
         Assert.Null(ScrolllerRelay.LoopbackOrigin(new System.Uri("https://app.cclabs.app/shop")));
         Assert.Null(ScrolllerRelay.LoopbackOrigin(null));
     }
+
+    [Fact]
+    public void On_the_relays_own_origin_the_url_carries_its_token_and_keeps_its_shape()
+    {
+        try
+        {
+            ScrolllerRelay.Relay = ("http://127.0.0.1:7001", "ABC");
+            // Same class as the test above (run in sequence): Relay is process-wide.
+            Assert.Equal("http://127.0.0.1:7001", ScrolllerRelay.LoopbackOrigin(new System.Uri("http://127.0.0.1:5555/fyp/index.html")));
+            const string json = "{\"u\":\"https://images.scrolller.com/a/2.mp4?x=1\"}";
+            var url = (string?)JObject.Parse(ScrolllerRelay.RewriteJson(json, "http://127.0.0.1:7001"))["u"];
+            Assert.Equal("http://127.0.0.1:7001/scrolller-media/~ABC/images/a/2.mp4?x=1", url);
+            var u = new System.Uri(url!);
+            Assert.StartsWith(ScrolllerRelay.PathPrefix, u.AbsolutePath);   // the pages' "via Scrolller" mark
+            Assert.EndsWith(".mp4", u.AbsolutePath);
+            var back = ScrolllerRelay.TakeToken(u.PathAndQuery, out var token);
+            Assert.Equal("ABC", token);
+            Assert.Equal("https://images.scrolller.com/a/2.mp4?x=1", ScrolllerRelay.FromRelayPath(back));
+            Assert.Null(ScrolllerRelay.TakeToken("/scrolller-media/images/a/2.mp4", out _));
+        }
+        finally { ScrolllerRelay.Relay = null; }
+    }
 }
