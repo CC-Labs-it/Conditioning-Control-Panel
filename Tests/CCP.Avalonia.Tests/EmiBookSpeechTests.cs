@@ -241,16 +241,23 @@ public sealed class EmiBookSpeechTests
         var bookmark = EmiState.Current.BookCard;
         var book = new EmiBookWindow();
         int applied = 0;
-        EmiBookWindow.ApplyPassive = w => { Assert.Same(book, w); Assert.False(w.IsVisible); applied++; };
+        double widthAtApply = 0;
+        var narrow = EmiBookWindow.ForceNarrow;
+        // Narrow placement must change Width from the XAML 364, so a PlaceWindow before the
+        // recipe (geometry before override-redirect, X11Overlay.SetOverrideRedirect) shows here.
+        EmiBookWindow.ForceNarrow = true;
+        EmiBookWindow.ApplyPassive = w => { Assert.Same(book, w); Assert.False(w.IsVisible); widthAtApply = w.Width; applied++; };
         try
         {
             book.OpenBook(null);
             Assert.True(book.IsVisible);
             Assert.Equal(1, applied);
+            Assert.Equal(364, widthAtApply);
+            Assert.Equal(EmiBookLayout.NarrowWidth, book.Width);
             book.OpenBook(null);
             Assert.Equal(1, applied);
         }
-        finally { book.Close(); EmiBookWindow.ApplyPassive = apply; EmiState.Current.BookCard = bookmark; }
+        finally { book.Close(); EmiBookWindow.ApplyPassive = apply; EmiBookWindow.ForceNarrow = narrow; EmiState.Current.BookCard = bookmark; }
         return Task.CompletedTask;
     });
 

@@ -542,7 +542,9 @@ public sealed class EmiVox : IEmiVox
             var handle = CoreAudio.PlayStoppable(path, volume, "emi-vox");
             lock (_gate) _live = handle;
             Spoke++;
-            return handle != null;
+            // PlayStoppable never returns null, so a head that refuses the clip still reads as spoken here
+            // (WPF returned false when App.Audio refused it). Only diagnostics read this value.
+            return true;
         }
         catch (Exception ex)
         {

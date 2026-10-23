@@ -379,10 +379,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 SelectCard(EmiBookCards.IndexOf(cardId) is var i and >= 0 ? i : 0, speak: false);
 
+                // Override-redirect before any geometry (X11Overlay.SetOverrideRedirect): a Position
+                // set first is a ConfigureRequest the WM may replay with a stale size after Show().
+                bool first = !IsVisible;
+                if (first) ApplyPassive(this);
                 PlaceWindow();
-                if (!IsVisible)
+                if (first)
                 {
-                    ApplyPassive(this);
                     Show();
                     // The window has no scaling of its own until it is up, so the first placement is
                     // always done twice: once to get it on screen, once with its real scale.
