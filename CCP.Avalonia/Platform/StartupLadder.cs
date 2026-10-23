@@ -124,6 +124,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static void PumpHeld()
         {
             if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
+            // Still deferred (a modal turn, a game, the launcher): keep holding, as WPF does, without rebuilding the watch.
+            if (StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow)) == StartupRouting.Defer) return;
             _passiveTimer?.Dispose();
             _passiveTimer = null;
             var held = _held.ToList();

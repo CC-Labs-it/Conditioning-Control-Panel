@@ -481,6 +481,9 @@ public sealed class LanguageSelectorTests
         settings.Current.RailRecent.Add("tab.presets");
         // Opening a section page remembers its last tab (a real save, WPF SyncSectionChrome); already so.
         settings.Current.NavLastTabBySection = "{\"studio\":\"presets\"}";
+        // A fresh install stamps this build's version at launch (a real save, WPF ShowWhatsNewIfNeeded); already so.
+        var v = typeof(ConditioningControlPanel.Avalonia.App).Assembly.GetName().Version!;
+        settings.Current.LastSeenVersion = $"{v.Major}.{v.Minor}.{v.Build}";
         settings.SaveImmediate();
         return File.ReadAllText(settingsPath);
     }

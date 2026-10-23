@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Startup;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
@@ -182,6 +183,32 @@ public sealed class FeatureIntroStartupTests
         finally { PanicSurfaces.All = old; }
     });
 
+    /// <summary>A card held behind a waiting modal turn keeps ONE watch (no per-second rebuild), and a panic with no
+    /// shell still cancels the queued turn, after which the held card opens.</summary>
+    [Fact]
+    public Task HeldCardKeepsItsWatchAndShellLessPanicCancelsTheTurn() => Run("current", async (shell, _, clock) =>
+    {
+        var stop = PanicSurfaces.All.Single(s => s.Id == "startup-modals");
+        bool shown = false;
+        int opens = 0;
+        shell.Hide();   // the turn waits for its owner: the ladder is busy and nothing else owns the user
+        StartupLadder.EnqueueModal("waiting", 30, shell, () => { shown = true; return Task.CompletedTask; });
+        Dispatcher.UIThread.RunJobs();
+        await Step(clock, 750);
+        var before = clock.Timers.ToList();
+        StartupLadder.PresentOrInbox(new InboxItem { Key = "held", Open = () => opens++ });
+        var watch = Assert.Single(clock.Timers.Except(before), t => t.Period > TimeSpan.Zero);
+        for (int i = 0; i < 6; i++) await Step(clock, 500);
+        Assert.Contains(watch, clock.Timers);
+        Assert.Equal(0, opens);
+        Assert.Equal(0, StartupLadder.Inbox.UnreadCount);
+        stop.Stop(null);
+        Assert.False(StartupLadder.World(clock.Now.UtcDateTime).LadderBusy);
+        await Step(clock, 1000);
+        Assert.Equal(1, opens);
+        Assert.False(shown);
+    });
+
     [Fact]
     public Task LauncherParksTheQueueUntilThePanelReturns() => Run("previous", async (shell, opened, clock) =>
     {
@@ -191,6 +218,8 @@ public sealed class FeatureIntroStartupTests
         Assert.True(StartupLadder.World(clock.Now.UtcDateTime).LauncherHolding);
         for (int i = 0; i < 601; i++) await Step(clock, 500);
         Assert.Empty(opened.OfType<WhatsNewDialog>());
+        // The launcher's exit fade runs on the real frame clock; motion Off hands over at once (AfterExitBeat).
+        CoreSettings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
         launcher.OpenPanel();
         await Step(clock, 500);
         Assert.Single(opened.OfType<WhatsNewDialog>());

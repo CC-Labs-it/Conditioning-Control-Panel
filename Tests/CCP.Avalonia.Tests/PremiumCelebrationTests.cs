@@ -170,14 +170,14 @@ public sealed class PremiumCelebrationTests
             grant(true, tier >= 2);
             shell.Activate();
             Dispatcher.UIThread.RunJobs();
-            var activeAtRise = shell.IsActive;
+            Assert.True(shell.IsActive);   // the burst fires only on an active window; an inactive one proves nothing
             EntitlementTierSync.Offer(tier, "test");
             Dispatcher.UIThread.RunJobs();
             var ring = shell.Named<global::Avalonia.Controls.Shapes.Ellipse>("ProfileBubbleGlowRing")!;
             Assert.Equal(global::Avalonia.Media.Color.Parse(hex), ((global::Avalonia.Media.ISolidColorBrush)ring.Stroke!).Color);
             var spark = shell.Named<global::ConditioningControlPanel.Avalonia.Controls.PremiumSpark>("HeaderPremiumSpark")!;
             Assert.Contains(spark.Field.Alive, m => m.Kind == global::ConditioningControlPanel.Controls.Header.MoteKind.Burst);
-            Assert.Equal(activeAtRise ? 1 : 0, shell.TierRiseBursts);
+            Assert.Equal(1, shell.TierRiseBursts);
         }
         finally { (s.MotionLevel, s.PerformanceMode) = old; }
     });
