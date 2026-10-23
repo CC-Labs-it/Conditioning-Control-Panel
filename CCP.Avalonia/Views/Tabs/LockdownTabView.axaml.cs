@@ -97,7 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var art = Helpers.ModArt.TryLoad("lockdown_icon.png");
             ImgLockdownFeature.Source = art;
             LockdownHeroArt.Background = art != null
-                ? new ImageBrush(art) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right }
+                ? new ImageBrush(art) { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right, Opacity = 0.9 }   // WPF xaml:114
                 : (IBrush)Resources["TabHueWashBrush"]!;
             EEFacePlate.Background = Helpers.ModArt.TryLoad("lockdown/emergency_exit.png") is { } face
                 ? new ImageBrush(face) { Stretch = Stretch.UniformToFill }

@@ -19,6 +19,7 @@ public sealed class LockdownDoseHost
     public Action<Action> OnUi = a => a();
     public Func<bool> IsAlive = () => true;
     internal TimeSpan KickoffDelay = TimeSpan.FromSeconds(2);
+    internal TimeProvider Time = TimeProvider.System;   // test seam for the kickoff
     public Func<string> RecoveryPath = () => CoreLockdownDoseKeeper.DefaultRecoveryPath;
     public Func<string> AssetsPath = () => CorePaths.EffectiveAssets;
 }
@@ -118,6 +119,9 @@ public sealed class CoreLockdownDoseKeeper : IDisposable
     private bool _disposed;
     private bool _panicHeld;
     public void HoldAfterPanic() => _panicHeld = true;
+    /// <summary>WPF PanicAftermath.EndQuiet: only the user's own START undoes a panic.</summary>
+    public void ReleasePanicHold() => _panicHeld = false;
+    internal bool IsPanicHeld => _panicHeld;
     private int _round;                 // conscriptions so far this lockdown
     private int _engineIdle;            // consecutive ticks with the engine off
     private int _doseIdle;              // consecutive ticks with an empty dose
@@ -126,7 +130,7 @@ public sealed class CoreLockdownDoseKeeper : IDisposable
     private bool _weStartedEngine;
     private HashSet<string> _snapshotOn = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _flipped = new(StringComparer.OrdinalIgnoreCase);
-    private System.Threading.Timer? _kickoff;
+    private System.Threading.ITimer? _kickoff;
     private readonly LockdownDoseHost _host;
     public int Round => _round;
     public bool IsArmed => _armed;
@@ -165,7 +169,7 @@ public sealed class CoreLockdownDoseKeeper : IDisposable
             Serilog.Log.Information("Lockdown dose: armed (engine {Engine}, dose {Dose}: {Keys})",
                 _engineWasRunning ? "running" : "OFF", _wasEmpty ? "EMPTY" : "ok", string.Join(",", _snapshotOn));
             StopKickoff();
-            _kickoff = new System.Threading.Timer(_ => _host.OnUi(() =>
+            _kickoff = _host.Time.CreateTimer(_ => _host.OnUi(() =>
             {
                 try { if (_armed && !_disposed) Enforce(atActivation: true); }
                 catch (Exception ex) { Serilog.Log.Warning("Lockdown dose: kickoff failed: {Error}", ex.Message); }
@@ -283,7 +287,7 @@ public sealed class CoreLockdownDoseKeeper : IDisposable
     }
     private void Bark(string? names, bool engineStarted)
     {
-        try { _host.Bark(names ?? "", _round, engineStarted); } catch { }
+        try { _host.Bark(string.IsNullOrEmpty(names) ? "something" : names, _round, engineStarted); } catch { }   // WPF BarkService.cs:422
     }
     private static readonly string[] VideoExtensions = { ".mp4", ".mov", ".avi", ".wmv", ".mkv", ".webm" };
     private bool AssetsExistFor(string key)

@@ -206,7 +206,9 @@ public class LockdownDoseKeeperTests
     //  Source pins - the runtime half is WPF-bound, so these hold the shape the play-test verified
     // =============================================================================================
 
-    private static string Source(params string[] parts) => SourceRoots.ReadProductFile(parts);
+    // Pinned to the WPF head: CCP.Core carries its own Services/Haptics/LockdownDoseKeeper.cs (the Avalonia keeper).
+    private static string Source(params string[] parts) =>
+        File.ReadAllText(Path.Combine(new[] { SourceRoots.RepoRoot, "ConditioningControlPanel" }.Concat(parts).ToArray()));
 
     [Fact]
     public void Restore_MarshalsBeforeReadingTheWindow_AndOwnsTheRecoveryFile()

@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void StartLockdownPulse()
         {
+            // Deliberate difference: WPF :83 pulses under Lockdown Photosafe too; here Photosafe stills it like the EE breath.
             if (CoreSettings.Current.LockdownPhotosafe) return;
             if (_lockdownPulseClock != null) return;                 // already running
             // WPF :88: no pulse when ambient loops are off (Motion Reduced/Off, performance tier).

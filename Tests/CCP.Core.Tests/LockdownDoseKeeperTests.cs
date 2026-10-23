@@ -193,6 +193,7 @@ public class CoreLockdownDoseKeeperTests
         var starves = 0;
         ld.EscapeAttempted += a => { if (a.Kind == "starve") starves++; };
         var flips = new List<(string Key, bool On)>();
+        var clock = new PopQuizSchedulerTests.FakeClock();
         var barks = new List<(string Names, int Round, bool Engine)>();
         var host = new LockdownDoseHost
         {
@@ -216,11 +217,17 @@ public class CoreLockdownDoseKeeperTests
                 }
             },
             Bark = (names, round, started) => { lock (barks) barks.Add((names, round, started)); },
-            KickoffDelay = System.Threading.Timeout.InfiniteTimeSpan,
+            Time = clock,
             RecoveryPath = () => recovery,
             AssetsPath = () => dir,
         };
         using var keeper = new CoreLockdownDoseKeeper(ld, host);
+        // Install's own hooks drive it: the kickoff timer on the stepped clock, CountdownTick via RestartTimer.
+        // Only the test's own ticks run; the service's real 1 s timer posts from the pool and is dropped.
+        var post = CoreDispatch.PostProvider;
+        var me = Environment.CurrentManagedThreadId;
+        CoreDispatch.PostProvider = a => { if (Environment.CurrentManagedThreadId == me) a(); };
+        void Tick() => ld.RestartTimer("test");
         try
         {
             CoreLockdownDoseKeeper.TakeoverRunningProvider = () => false;
@@ -232,40 +239,46 @@ public class CoreLockdownDoseKeeperTests
             keeper.Install();
             ld.Activate(TimeSpan.FromMinutes(20));
             Assert.True(keeper.IsArmed);
-            keeper.Enforce(atActivation: true);
+            clock.Advance(TimeSpan.FromMilliseconds(1999));
+            Assert.False(engine);
+            clock.Advance(TimeSpan.FromMilliseconds(1));            // WPF's 2 s kickoff
             Assert.True(engine);                                   // the engine was started for the user
             Assert.Equal(1, keeper.Round);
             Assert.Equal(2, CoreLockdownDoseKeeper.KeysOn(s).Count);   // round one conscripts two starters
             Assert.True(File.Exists(recovery));                    // a killed lockdown can still give them back
             var bark = Assert.Single(barks);
             Assert.True(bark.Engine && bark.Round == 1 && bark.Names.Contains(" and "));
-            keeper.Enforce(false); // the next countdown observes the newly supplied dose
+            Tick(); // the next countdown observes the newly supplied dose
             if (scenario == "restart" || scenario == "panic")
             {
                 engine = false;
                 if (scenario == "panic") keeper.HoldAfterPanic();
-                for (var i = 0; i < 3; i++) keeper.Enforce(false);
+                for (var i = 0; i < 3; i++) Tick();
                 Assert.False(engine);
-                keeper.Enforce(false);
+                Tick();
                 Assert.Equal(scenario == "restart", engine);
+                if (scenario == "restart") Assert.Equal(("something", 1, true), barks[^1]);   // WPF BarkService.cs:422
+                keeper.ReleasePanicHold();                         // the user's START (WPF PanicAftermath.EndQuiet)
+                for (var i = 0; i < 4; i++) Tick();
+                Assert.True(engine);
             }
             if (scenario == "refill" || scenario == "session" || scenario == "disabled")
             {
                 foreach (var key in CoreLockdownDoseKeeper.KeysOn(s)) host.SetWallFeature(key, false);
                 session = scenario == "session";
                 s.LockdownDoseKeeperEnabled = scenario != "disabled";
-                for (var i = 0; i < 3; i++) keeper.Enforce(false);
+                for (var i = 0; i < 3; i++) Tick();
                 Assert.Empty(CoreLockdownDoseKeeper.KeysOn(s));
                 Assert.Equal(scenario == "refill" ? 1 : 0, starves);
                 session = false;
-                keeper.Enforce(false);
+                Tick();
                 Assert.Equal(scenario == "refill" ? 3 : 0, CoreLockdownDoseKeeper.KeysOn(s).Count);
                 if (scenario == "refill")
                 {
                     foreach (var key in CoreLockdownDoseKeeper.KeysOn(s)) host.SetWallFeature(key, false);
-                    keeper.Enforce(false);
+                    Tick();
                     Assert.Empty(CoreLockdownDoseKeeper.KeysOn(s));
-                    keeper.Enforce(false);
+                    Tick();
                     Assert.Equal(4, CoreLockdownDoseKeeper.KeysOn(s).Count);
                 }
                 if (scenario == "session") Assert.Equal(1, starves); // stand-down preserved the edge
@@ -284,6 +297,7 @@ public class CoreLockdownDoseKeeperTests
         }
         finally
         {
+            CoreDispatch.PostProvider = post;
             if (ld.IsActive) ld.Deactivate();
             LockdownService.Current = prev;
             CoreLockdownDoseKeeper.TakeoverRunningProvider = takeover;

@@ -100,7 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }
             else
             {
-                shell.StartEngine();
+                shell.StartEngineFromUser();   // a user click (WPF ChatInput.cs:1085)
                 Giggle("Engine started! *giggles*");
             }
             UpdateQuickMenuState();

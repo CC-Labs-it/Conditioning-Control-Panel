@@ -43,7 +43,13 @@ public sealed class LockdownVeilTests
         host.SetWallFeature("bouncingtext", false);
         Assert.False(CoreSettings.Current.BouncingTextEnabled);
         Assert.False(MainShellWindow.LockdownDoseHostFor(() => null).IsAlive());
+        PanicSurfaces.StopAll("test", shell);
+        Assert.True(keeper.IsPanicHeld);                       // the panic registry holds the keeper's restart
         ld.Deactivate();
+        shell.StartEngineFromUser();                           // only the user's START lifts it (WPF PanicAftermath.EndQuiet)
+        Assert.False(keeper.IsPanicHeld);
+        MainShellWindow.StopEngine();
+        Dispatcher.UIThread.RunJobs();
         host.StartEngine();
         Assert.False(CoreEngine.IsRunning);
         Assert.Contains("picks features for you", LockdownTabView.LockdownWarning(20, CoreSettings.Current));
@@ -92,7 +98,7 @@ public sealed class LockdownVeilTests
             Assert.Equal(140, PressDuration());
             Assert.Null(tab.LockdownImageBorder.Effect);
             Assert.True(shell.LockdownPulsing);
-            shell.ShowTab("dashboard");
+            shell.ShowTab("settings");
             Assert.False(shell.LockdownPulsing);
             CoreSettings.Current.LockdownPhotosafe = true;
             shell.ShowTab("lockdown");
