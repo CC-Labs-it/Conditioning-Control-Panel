@@ -56,7 +56,7 @@ public class BrainDrainBlurZeroTests
     [Theory]
     [InlineData("Services/Notifications/OverlayService.cs", 2)]   // the start gate + RefreshBrainDrainState
     [InlineData("Services/AutonomyService.cs", 1)]                // the 5-second pulse
-    [InlineData("Services/Chaos/EffectPayload.cs", 1)]            // the melt bubble's pop
+    [InlineData("Services/Chaos/EffectPayloadFiring.cs", 1)]      // the melt bubble's pop
     public void EveryVisualCallSiteAsksThePolicy(string file, int expectedMentions)
     {
         var src = ReadSource(file.Split('/'));

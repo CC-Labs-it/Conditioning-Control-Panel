@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static bool IsTransientNetworkError(Exception ex)
         {
-            if (ex is System.Net.Http.HttpRequestException or IOException
+            if (ex is System.Net.Http.HttpRequestException or TimeoutException or IOException
                 or System.Net.Sockets.SocketException or System.Threading.Tasks.TaskCanceledException)
                 return true;
 
