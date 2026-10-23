@@ -19,6 +19,14 @@
 import * as THREE from 'three';
 import { FOG_COLOR, FOG_DENSITY } from './tunnel.js';
 import { S, onSettings } from './settings.js';
+import { softPulseAmount } from '../shared/softPulse.js';
+import { motionLevel, motionScale } from '../shared/motion.js';
+import { createWorldFeel, WARM_LINE_COLOR, WARM_FOG_COLOR, WARM_HUE_PULL, WARM_FOG_PULL,
+  WARM_DENSITY, WARM_RIBBON, WARM_SPARKLE, BREATH_RIBBON, threadTarget } from './worldFeel.js';
+
+// act change: the chamber palette crossfade runs this much longer than the
+// caller asks, on a gentler curve (the snap of counts stays where it was).
+const GRADE_FADE_STRETCH = 1.5;
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 const hslOf = (intOrColor) => {
@@ -107,7 +115,7 @@ function makeFlowTexture() {
   return tex;
 }
 
-export function createFx({ scene, layout, tunnelMat, particleFog }) {
+export function createFx({ scene, layout, tunnelMat, particleFog, threads = true }) {
   const seed = Math.random() * 997;
 
   // each ribbon's hue offset from the first, so one picked ribbon color expands
@@ -281,6 +289,9 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
     ['surge', 'uSurge'], ['slip', 'uSlip'], ['beatScroll', 'uBeatScroll'],
     ['dots', 'uDots'], ['checker', 'uChecker'], ['desat', 'uDesat'],
     ['filigree', 'uFiligree'], ['panel', 'uPanel'],
+    // thread layers: a base everywhere plus a biome's own (worldFeel.js threadTarget)
+    ['thHalo', 'uThHalo'], ['thWeave', 'uThWeave'], ['thSheen', 'uThSheen'], ['thSparkle', 'uThSparkle'],
+    ['thBeads', 'uThBeads'], ['thBraid', 'uThBraid'], ['thWisps', 'uThWisps'], ['thStatic', 'uThStatic'],
   ];
   // biome pattern params: integer counts / frequencies / spiral direction.
   // These SNAP at the chamber commit (hidden under commitWave's flash, exactly
@@ -296,6 +307,10 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
     _spiralE = new THREE.Color(ZP.calm.spiral);
   const _lineF = new THREE.Color(), _spiralF = new THREE.Color();
   let densityE = FOG_DENSITY;
+  // feel pass: warmth, breath and the light ring (the logic lives in worldFeel.js)
+  const worldFeel = createWorldFeel();
+  const _fogF = new THREE.Color();
+  const warmLineC = new THREE.Color(WARM_LINE_COLOR), warmFogC = new THREE.Color(WARM_FOG_COLOR);
 
   function update(depth, dt, t, intensity, rush) {
     rush = rush || 0;
@@ -304,7 +319,8 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
     // eased six colors each frame (a handful of HSL ops - only during the fade)
     if (gradeT < 1) {
       gradeT = Math.min(1, gradeT + dt / Math.max(0.001, gradeDur));
-      const ge = gradeT * gradeT * (3 - 2 * gradeT);
+      // smootherstep: a longer settle at both ends than the old smoothstep
+      const ge = gradeT * gradeT * gradeT * (gradeT * (gradeT * 6 - 15) + 10);
       for (const k of GRADE_KEYS) gradeCur[k].lerpColors(gradeFrom[k], gradeTarget[k], ge);
       applyBaseColors(gradeCur);
     }
@@ -337,10 +353,23 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
     tintEased += (tintTarget - tintEased) * Math.min(1, dt * 1.6);
     _lineF.copy(_lineE); _spiralF.copy(_spiralE);
     if (tintEased > 0.003) { _lineF.lerp(tintC, tintEased); _spiralF.lerp(tintC, tintEased); }
-    if (scene.fog) { scene.fog.color.copy(_fogE); scene.fog.density = densityE; }
+    // feel pass: warmth leans hue and haze (composed on scratch copies, like
+    // the tint, so the eased bases never accumulate it)
+    const wf = worldFeel.update(dt);
+    const wm = wf.warmth;
+    _fogF.copy(_fogE);
+    if (wm > 0.003) {
+      _lineF.lerp(warmLineC, wm * WARM_HUE_PULL);
+      _spiralF.lerp(warmLineC, wm * WARM_HUE_PULL);
+      _fogF.lerp(warmFogC, wm * WARM_FOG_PULL);
+    }
+    const densityF = densityE * (1 + wm * WARM_DENSITY);
+    if (scene.fog) { scene.fog.color.copy(_fogF); scene.fog.density = densityF; }
     const uni = tunnelMat.uniforms;
-    uni.uFogColor.value.copy(_fogE);
-    uni.uFogDensity.value = densityE;
+    uni.uFogColor.value.copy(_fogF);
+    uni.uFogDensity.value = densityF;
+    if (uni.uFeelGlow) uni.uFeelGlow.value = wf.glow;
+    if (uni.uFeelRing) uni.uFeelRing.value.set(wf.ringDist, wf.ringAmp, wf.ringWidth);
     uni.uLineColor.value.copy(_lineF);
     uni.uSpiralColor.value.copy(_spiralF);
     if (rushOverrideEased > 0.003 && uni.uRush) {
@@ -367,6 +396,8 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
     // chamber pattern knobs: glide toward this chamber's enter->peak lerp (or
     // back to 0 off-region). One code path = the transition crossfade AND the
     // in-chamber escalation, so patterns never pop.
+    const thMs = motionScale();
+    if (uni.uThTime) uni.uThTime.value += dt * thMs;   // the thread clock stands still at motion off
     for (let i = 0; i < KNOBS.length; i++) {
       const ku = uni[KNOBS[i][1]];
       if (!ku) continue;
@@ -377,8 +408,11 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
         const p = regionKnobs.peak[key] != null ? regionKnobs.peak[key] : e;
         target = e + (p - e) * regionProgress;
         // photosensitivity guard: the flashy knobs ride the effect-intensity dial
-        if (key === 'strobe' || key === 'glitch') target *= strobeScale;
+        if (key === 'strobe' || key === 'glitch' || key === 'thStatic') target *= strobeScale;
       }
+      // thread layers keep a base off-region too, and warmth brings sparkle and sheen
+      // (threads: false = a tube that keeps its classic threads; Racing Thoughts asks for that)
+      if (threads) target = threadTarget(KNOBS[i][0], target, wm, thMs);
       ku.value += (target - ku.value) * Math.min(1, dt * 0.8);
     }
     // The Surfacing floors ride AFTER the knob ease so the ending always wins:
@@ -397,7 +431,8 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
     // ribbons + sparkles: zone blend, plus a slow breath, the intensity ramp,
     // and the speed rush (fast falls burn brighter and shimmer harder)
     const ribbonOp = ((base.ribbon + (z.ribbon - base.ribbon) * w) + 0.22 * intensity
-      + (regionFx ? regionFx.ribbon : 0)) * (1 + rush * 0.9);
+      + (regionFx ? regionFx.ribbon : 0)) * (1 + rush * 0.9)
+      * (1 + wm * WARM_RIBBON) * (1 + wf.breath * BREATH_RIBBON);
     // swirl: scroll the flow-bands along each strand. Rate ramps with depth so
     // the ribbons corkscrew lazily up top and race the deeper you fall.
     const flowRate = 0.03 + 0.28 * intensity + rush * 0.35;
@@ -405,8 +440,8 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
       ribbons[i].mat.opacity = ribbonOp * (0.8 + 0.2 * Math.sin(t * (0.7 + rush * 1.6) + i * 2.1));
       if (ribbons[i].flow) ribbons[i].flow.offset.x -= dt * flowRate * (1 + i * 0.18);
     }
-    const sparkleOp = (base.sparkle + (z.sparkle - base.sparkle) * w) + 0.1 * intensity + 0.18 * rush
-      + (regionFx ? regionFx.sparkle : 0);
+    const sparkleOp = ((base.sparkle + (z.sparkle - base.sparkle) * w) + 0.1 * intensity + 0.18 * rush
+      + (regionFx ? regionFx.sparkle : 0)) * (1 + wm * WARM_SPARKLE) * (1 + wf.breath * BREATH_RIBBON);
     sparkMat.opacity = sparkleOp * (0.7 + 0.3 * Math.sin(t * (2.3 + rush * 3)));
 
     // storm: strikes while the zone is properly inside its window; a flat-out
@@ -520,7 +555,11 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
   // pulseFlash: bump the tunnel shader's uFlash directly (the lightning-strike
   // light) - used for loop boundaries and ripple shockwaves.
   function pulseFlash(amount = 0.6) {
-    flash = Math.min(1.3, flash + amount);
+    // Every caller passes its full-motion amount; the motion level caps it here
+    // (reduced: a soft pulse at most, off: none), so no call site can skip the rule.
+    const a = softPulseAmount(amount, motionLevel());
+    if (a <= 0) return;
+    flash = Math.min(1.3, flash + a);
   }
   // seedZoneAhead: pre-roll the NEXT zone index to a special mood different
   // from the current one, so every loop boundary is followed by a visible
@@ -590,7 +629,7 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
       u.value = integer ? Math.round(v) : v;
     }
     if (!regionBase) regionProgress = 0;
-    retargetGrade(fadeSec);
+    retargetGrade(fadeSec * GRADE_FADE_STRETCH);
   }
   // setRegionProgress: 0..1 position inside the chamber's intensity band -
   // drives each pattern knob's enter->peak lerp (the in-chamber escalation).
@@ -605,6 +644,7 @@ export function createFx({ scene, layout, tunnelMat, particleFog }) {
 
   function dispose() {
     offSettings();
+    worldFeel.dispose();
     if (overrideTimer) { clearTimeout(overrideTimer); overrideTimer = 0; }
     themeOverride = null;
     for (const r of ribbons) { scene.remove(r.mesh); r.geo.dispose(); r.mat.dispose(); if (r.flow) r.flow.dispose(); }

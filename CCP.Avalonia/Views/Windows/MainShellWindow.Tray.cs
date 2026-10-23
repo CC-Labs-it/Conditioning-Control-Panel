@@ -50,7 +50,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
             Closed += (_, _) => _windowClosed = true;
+            AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
             return Tray;
+        }
+
+        /// <summary>WPF FriendsFeedTray: the tray tooltip adds how many friends-feed lines are unread.
+        /// Refreshed on every feed change, and on an account change (the feed switches accounts lazily and
+        /// raises nothing; WPF refreshes on hover, which Avalonia's tray does not have).</summary>
+        internal void AttachFeedTooltip(global::ConditioningControlPanel.Services.Friends.FriendsFeed? feed,
+            global::ConditioningControlPanel.Services.Friends.IFriendsService? service = null)
+        {
+            if (Tray == null || feed == null) return;
+            var baseText = Tray.ToolTipText ?? "";
+            void Refresh()
+            {
+                if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh); return; }
+                try
+                {
+                    var n = feed.Unread;
+                    if (Tray != null) Tray.ToolTipText = global::ConditioningControlPanel.Services.Friends.FriendsFeedRules.TrayText(baseText, n, n > 0 ? Loc.GetF("friends_feed_tray", n) : "");
+                }
+                catch (Exception ex) { Serilog.Log.Debug("[Friends] tray tooltip failed: {E}", ex.Message); }
+            }
+            void OnIdentity(object? s, EventArgs e) => Refresh();
+            void OnSnapshot(global::ConditioningControlPanel.Services.Friends.FriendsSnapshot _) => Refresh();
+            feed.Changed += Refresh;
+            CoreAccount.UnifiedIdentityChanged += OnIdentity;
+            if (service != null) service.SnapshotChanged += OnSnapshot;
+            Closed += (_, _) =>
+            {
+                feed.Changed -= Refresh;
+                CoreAccount.UnifiedIdentityChanged -= OnIdentity;
+                if (service != null) service.SnapshotChanged -= OnSnapshot;
+            };
+            Refresh();
         }
 
         /// <summary>WPF order: Show, Back to CC Labs, Wake, separator, Exit - with Stop everything above Exit.</summary>
