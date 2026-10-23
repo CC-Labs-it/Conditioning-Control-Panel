@@ -37,23 +37,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// header lists the markup deviations; these are the code ones, and every one is forced:</para>
     ///
     /// <list type="bullet">
-    ///   <item><b>The Win32 goes, and one behaviour goes with it.</b>
-    ///     <c>SetWindowLong(GWL_EXSTYLE, WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)</c> becomes
-    ///     <c>ShowInTaskbar="False"</c> plus <c>ShowActivated="False"</c> in the markup.
-    ///     <b>WS_EX_NOACTIVATE is only half covered.</b> On Windows it meant the book could NEVER
-    ///     take the keyboard, at any point in its life - which is why the original has no key
-    ///     handling at all. <c>ShowActivated="False"</c> only governs the first Show, so on X11 a
-    ///     click on a chip WILL focus this window and pull focus off whatever the reader was doing.
-    ///     There is no property for the permanent form; it needs
-    ///     <c>_NET_WM_STATE_SKIP_TASKBAR</c>/input-hint work on the X11 shim, which is its own
-    ///     layer. Nothing here fakes it.
-    ///     <c>NativeStyle()</c> (<c>GWL_STYLE</c>/<c>WS_VISIBLE</c>) is dropped outright: it existed
-    ///     to catch a WPF-specific bug where <c>Window.IsVisible</c> lied, and the native style word
-    ///     it printed has no X11 twin worth inventing. The log line keeps the geometry.</item>
+    ///   <item><b>The passive window recipe</b> uses the existing platform overlay seam before
+    ///     Show: WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE on Windows, override-redirect on X11.
+    ///     On a backend that refuses it (Wayland/headless), ShowActivated=False is the fallback.
+    ///     NativeStyle's diagnostic for WPF's queued-hide bug has no portable equivalent.</item>
     ///   <item><b>No web view anywhere.</b> This window never hosted one - the original's header
     ///     explains at length why it could not - so nothing here touches <c>controls:WebHost</c>.</item>
-    ///   <item><b>No X11Overlay call.</b> Nothing in this window was click-through or restacked
-    ///     against a sibling; <c>Topmost</c> in the markup is the whole z-order story.</item>
+    ///   <item><b>No click-through.</b> The passive recipe keeps the panel's mouse input;
+    ///     <c>Topmost</c> in the markup retains the WPF stacking intent.</item>
     ///   <item><b>The deck and the demos are the real ones</b>: <c>EmiBookCards</c>,
     ///     <c>EmiBookDemos</c> and <c>EmiPixelCanvas</c> live in Core; this window blits the buffer
     ///     into its own <c>WriteableBitmap</c>. Core rail painters and the bundled fonts
@@ -325,6 +316,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>WPF BtnCompleteGuide: the website manual (EmiCodex.OpenManualInBrowser). Test seam.</summary>
         internal static Action OpenManual = ConditioningControlPanel.Avalonia.Views.Windows.Codex.OpenManualInBrowser;
 
+        /// <summary>WPF's permanent no-activate recipe; a seam to test the pre-Show ordering.</summary>
+        internal static Action<EmiBookWindow> ApplyPassive = w => Platform.X11Overlay.SetOverrideRedirect(w, passive: true);
+
         private void WireControls()
         {
             _btnClose.Click += (_, _) => CloseBook();
@@ -361,8 +355,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// one, and the next <c>?</c> click would then re-open a dead panel.
         ///
         /// <para>ponytail: the WPF button calls <c>EmiBook.Close()</c>; the bookmark half is
-        /// <c>EmiState.NoteBookCard</c> (Core, written on every card). Still missing:
-        /// <c>EmiBook.SideChanged</c> (her bubble dodging away from the panel, EmiBook.cs).</para>
+        /// <c>EmiState.NoteBookCard</c> (Core, written on every card), and
+        /// owner-local BookSideChanged keeps her bubble clear of the panel.</para>
         /// </summary>
         private void CloseBook()
         {
@@ -388,6 +382,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 PlaceWindow();
                 if (!IsVisible)
                 {
+                    ApplyPassive(this);
                     Show();
                     // The window has no scaling of its own until it is up, so the first placement is
                     // always done twice: once to get it on screen, once with its real scale.
@@ -904,7 +899,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             }
             CloseBook();
             CoreTutorial.Start(card.Tour);
-            // ponytail: bookGo/bookTour moments need the desk's moment bus (wire-win-emi-book-b).
+            // ponytail: bookGo/bookTour moments need the desk's moment bus (win-emi-desk).
         }
 
         private void RenderTabs()

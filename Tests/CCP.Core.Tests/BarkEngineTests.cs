@@ -66,6 +66,23 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void ExternalSpeechMovesOnlyTheGlobalFloorAndKeepsExistingBypasses()
+    {
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var e = Engine(Rule("T", "ambient"), Rule("AttentionCheckFail", "eyes"));
+        e.Clock = clock;
+        e.NotifyExternalLineSpoken();
+        Assert.False(e.Raise("T"));
+        Assert.True(e.Raise("AttentionCheckFail"));
+        clock.Advance(TimeSpan.FromMilliseconds(BarkEngine.GlobalMinGapMs - 1));
+        Assert.False(e.Raise("T"));
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.True(e.Raise("T"));
+        e.NotifyExternalLineSpoken();
+        Assert.True(e.Raise("T", guaranteed: true));
+    }
+
+    [Fact]
     public void AOneShotLatchOutlivesTheSessionAndASafetyBarkHoldsTheFloor()
     {
         var once = Rule("AttentionCheckFail", "once");

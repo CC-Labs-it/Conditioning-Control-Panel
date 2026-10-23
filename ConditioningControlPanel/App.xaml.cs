@@ -393,6 +393,11 @@ namespace ConditioningControlPanel
             // Audio and AI availability, for the views that only need to play a sound or duck,
             // and for the engine code that shapes content by whether an AI provider is usable.
             CoreAudio.PlayOneShotProvider = (path, volume, tag, onStarted, onFinished) => Audio?.PlayOneShot(path, volume, tag, onStarted, onFinished);
+            CoreAudio.PlayStoppableProvider = (path, volume, tag, started, finished) =>
+            {
+                var handle = Audio?.PlayOneShot(path, volume, tag, started, finished);
+                return () => handle?.Stop();
+            };
             CoreAudio.DuckProvider = strength => Audio?.Duck(strength);
             CoreAudio.UnduckProvider = generation => Audio?.Unduck(generation);
             CoreAudio.DuckGenerationProvider = () => Audio?.DuckGeneration ?? 0;

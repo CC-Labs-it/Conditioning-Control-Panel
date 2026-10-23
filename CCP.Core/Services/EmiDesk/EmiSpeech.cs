@@ -38,6 +38,62 @@ public sealed record EmiChain(
 /// <summary>The locked WPF speech cadence, shared by both heads.</summary>
 public static class EmiSpeech
 {
+    public static readonly IReadOnlyDictionary<string, string> FaceBodyFrame =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            // celebration
+            ["^_^"] = "celebration",
+            ["^___^"] = "celebration",
+            ["^_~"] = "celebration",
+            ["\\o/"] = "celebration",
+            ["GG"] = "celebration",
+            ["LV UP"] = "celebration",
+            ["\u2605\u2605\u2605"] = "celebration",
+            [":D"] = "celebration",
+            ["XD"] = "celebration",
+            // sad
+            [";_;"] = "sad",
+            ["T_T"] = "sad",
+            ["x_x"] = "sad",
+            ["(\u0CA5_\u0CA5)"] = "sad",
+            ["(\u2716\u256D\u256E\u2716)"] = "sad",
+            [":'("] = "sad",
+            // shock
+            ["o_o"] = "shock",
+            ["(\u25C9_\u25C9)"] = "shock",
+            ["(\u2299_\u2299)"] = "shock",
+            [">_<"] = "shock",
+            [">.<"] = "shock",
+            ["!!!"] = "shock",
+            ["???"] = "shock",
+            ["#ERR"] = "shock",
+            ["404"] = "shock",
+            [":O"] = "shock",
+            // smug
+            ["\u00AC_\u00AC"] = "smug",
+            ["(\u00AC\u203F\u00AC)"] = "smug",
+            ["(\u0CA0\u203F\u0CA0)"] = "smug",
+            ["(\u2310\u25A0_\u25A0)"] = "smug",
+            ["( \u0361\u00B0 \u035C\u0296 \u0361\u00B0)"] = "smug",
+            ["(\u25D4_\u25D4)"] = "smug",
+            ["B)"] = "smug",
+            [">:)"] = "smug",
+            // pet
+            ["(\uFF61\u2665\u203F\u2665\uFF61)"] = "pet",
+            ["(\u273F\u25E1\u203F\u25E1)"] = "pet",
+            ["(\u2267\u25E1\u2266)"] = "pet",
+            ["(\u25E0\u203F\u25E0)"] = "pet",
+            ["(\u25D5\u203F\u25D5)"] = "pet",
+            ["*_*"] = "pet",
+            ["\u2665\u2665\u2665"] = "pet",
+            ["<3"] = "pet"
+        };
+
+    /// <summary>The pose a raw face string wears. Unpaired faces rest at idle.</summary>
+    public static string FrameForFace(string? text)
+        => text != null && FaceBodyFrame.TryGetValue(text, out var f) ? f : "idle";
+
+
     public static EmiChain MakeSay(string? line, string reactionFace = "^_^", int holdMs = 1800)
         => new("say", "SAY", new[]
         {

@@ -3,7 +3,7 @@ using System.Linq;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Core.Tests;
 
 /// <summary>
 /// BLIPESE, the half of it that has no audio device in it.
@@ -15,8 +15,7 @@ namespace ConditioningControlPanel.Tests;
 /// score ever stopped being deterministic, the cache would start handing back the wrong melody
 /// rather than sounding wrong out loud, which is a far quieter failure.</para>
 ///
-/// <para>Nothing here touches <see cref="EmiVox"/> the instance: that one needs App.Audio,
-/// App.Settings and a writable data path. The score and the renderer are static and pure.</para>
+/// <para>Nothing here touches <see cref="EmiVox"/> the instance: playback has its own CoreAudio spy tests. The score and the renderer are static and pure.</para>
 /// </summary>
 public class EmiVoxScoreTests
 {

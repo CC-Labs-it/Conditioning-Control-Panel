@@ -28,8 +28,9 @@
      Controls come back from FindControl, and this head does not lean on generated x:Name fields.
 
      THE WINDOW RECIPE, in this head's terms. WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE was stamped in
-     OnSourceInitialized; ShowInTaskbar="False" covers the first and ShowActivated="False" covers
-     as much of the second as Avalonia exposes. See the code-behind for what that loses.
+     OnSourceInitialized; the existing platform overlay seam now applies the passive recipe
+     before Show (Win32 no-activate or X11 override-redirect). ShowActivated is the fallback
+     when the backend refuses the native recipe.
 
      NO Visibility="Hidden" HERE, exactly as in the original, and for a reason that survives the
      port: the book is built and shown in the same turn. -->

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -11,6 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 
 public partial class EmiDeskWindow
 {
+    private EmiVox? _vox;
+    private string _voxMood = "idle";
     private Border? _speechBubble;
     private TextBlock? _speechText;
     private Polygon? _speechTail;
@@ -20,12 +23,13 @@ public partial class EmiDeskWindow
     private Action? _speechDone;
     private bool _bubbleRelayoutPending;
 
-    // ponytail: the general offer/hold channel and vox/body-pose hooks remain in
-    // wire-win-emi-book-c. Book margins have no chain/hold and cannot draw an offer.
+    // ponytail: the general offer/hold channel and chain/body-pose hooks remain in
+    // the desk chain/offer unit. Book margins have no chain/hold and cannot draw an offer.
     public void SpeakLine(LineDraw? line)
     {
         if (PresentationActive || line is null) return;
         EmiLineEngine.Instance.Ack(line.Id);
+        EmiDeskService.Instance.NoteEmiSpoke();
         if (string.IsNullOrWhiteSpace(line.Text)) { DrawFace(line.Face); return; }
         Say(line.Text, string.IsNullOrWhiteSpace(line.Face) ? "^_^" : line.Face);
     }
@@ -34,6 +38,7 @@ public partial class EmiDeskWindow
     {
         if (PresentationActive || _closingForGood) return;
         CancelChain();
+        _voxMood = EmiSpeech.FrameForFace(face);
         StopIdleBeats();
         _speechFrames = EmiSpeech.MakeSay(line, face, EmiSpeech.SayHoldMs(line)).Seq;
         _speechIndex = 0;
@@ -86,17 +91,37 @@ public partial class EmiDeskWindow
 
     partial void OnBubbleTextCore(string? text)
     {
-        if (text is null)
+        if (string.IsNullOrEmpty(text))
         {
+            _vox?.Stop();
             if (_speechBubble is not null) _speechBubble.IsVisible = false;
             if (_speechTail is not null) _speechTail.IsVisible = false;
             return;
         }
+        Vox(text);
         EnsureSpeechBubble();
         _speechText!.Text = text;
         _speechBubble!.IsVisible = true;
         _speechTail!.IsVisible = true;
         LayoutBubble();
+    }
+
+    private void Vox(string text)
+    {
+        try
+        {
+            _vox ??= new EmiVox();
+            var t = text.Trim();
+            if (t.Length is > 0 and <= 3 && t.All(c => c == '.')) _vox.Tick();
+            else _vox.Speak(t, _voxMood);
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] vox seam threw"); }
+    }
+
+    private void TearDownVox()
+    {
+        _vox?.Dispose();
+        _vox = null;
     }
 
     private void EnsureSpeechBubble()

@@ -43,6 +43,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>Setting on AND the user agreed - a mute the user never chose is not a mute.</summary>
         public bool AvatarMuted => IsOut && CoreSettings.Current.EmiDeskMuteAvatar && _muteAccepted;
 
+        /// <summary>WPF's bark min-gap stamp, skipped while EMI mutes the avatar.</summary>
+        public void NoteEmiSpoke()
+        {
+            try
+            {
+                if (!AvatarMuted) Platform.BarkHead.Engine?.NotifyExternalLineSpoken();
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] bark min-gap stamp failed"); }
+        }
+
         private bool WindowOnScreen => _window?.IsVisible == true;
 
         /// <summary>Summon her if she is away, send her away if she is out. A widget ON SCREEN wins over the flag.</summary>

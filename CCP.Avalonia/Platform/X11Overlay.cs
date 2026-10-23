@@ -247,7 +247,7 @@ internal static class X11Overlay
         return ok;
     }
 
-    private static bool SetOverrideRedirect(TopLevel window, bool passive)
+    internal static bool SetOverrideRedirect(TopLevel window, bool passive)
     {
         if (TryGet(window, OverlayBackend.Win32, out var hwnd)) return Win32Overlay.SetOverrideRedirect(window, hwnd, passive);
         // The struct offsets below are the LP64 layout (x86_64, arm64).

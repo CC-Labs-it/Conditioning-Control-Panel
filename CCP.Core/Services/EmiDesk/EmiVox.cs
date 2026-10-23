@@ -483,7 +483,7 @@ public sealed class EmiVox : IEmiVox
     private const int CacheCap = 96;
 
     private readonly object _gate = new();
-    private AudioPlaybackHandle? _live;
+    private Action? _live;
     private bool _dead;
     private string? _tickPath;
 
@@ -502,10 +502,10 @@ public sealed class EmiVox : IEmiVox
         volume = 0f;
         try
         {
-            var audio = App.Audio;
-            if (audio == null || audio.IsOutputSuppressed) return false;
+            if ((CoreAudio.PlayStoppableProvider is null && CoreAudio.PlayOneShotProvider is null)
+                || CoreAudio.IsOutputSuppressed) return false;
 
-            int master = App.Settings?.Current?.MasterVolume ?? 0;
+            int master = CoreSettings.Current.MasterVolume;
             if (master <= 0) return false;
 
             // SAFETY IS SILENCE. A hold or the panic tail means she is deliberately quiet, and a
@@ -539,7 +539,7 @@ public sealed class EmiVox : IEmiVox
             if (path == null) return false;
 
             Stop();                                   // ONE VOICE: never two at once
-            var handle = App.Audio?.PlayOneShot(path, volume, "emi-vox");
+            var handle = CoreAudio.PlayStoppable(path, volume, "emi-vox");
             lock (_gate) _live = handle;
             Spoke++;
             return handle != null;
@@ -563,7 +563,7 @@ public sealed class EmiVox : IEmiVox
 
             // A tick is 30 ms and lands between bursts, so it does NOT take the live slot: cutting
             // a burst on a dot frame would be the typewriter this voice is deliberately not.
-            App.Audio?.PlayOneShot(_tickPath, volume, "emi-vox-tick");
+            CoreAudio.PlayOneShot(_tickPath, volume, "emi-vox-tick");
             Ticks++;
             return true;
         }
@@ -577,10 +577,10 @@ public sealed class EmiVox : IEmiVox
     /// <inheritdoc/>
     public void Stop()
     {
-        AudioPlaybackHandle? live;
+        Action? live;
         lock (_gate) { live = _live; _live = null; }
         if (live == null) return;
-        try { live.Stop(); }
+        try { live(); }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] vox stop failed"); }
     }
 

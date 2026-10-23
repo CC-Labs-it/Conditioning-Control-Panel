@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -6,6 +8,11 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Bark;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -148,6 +155,102 @@ public sealed class EmiBookSpeechTests
             Assert.False(bubble.IsVisible);
         }
         finally { owner.ShutDown(); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task BookSpeechTicksLandsInItsMoodAndStopsOnPanicAndClose(bool avatarMuted) =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var settingsProvider = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var audio = (CoreAudio.PlayStoppableProvider, CoreAudio.PlayOneShotProvider, CoreAudio.IsOutputSuppressedProvider);
+        var oldBark = BarkHead.Engine;
+        var bookmark = EmiState.Current.BookCard;
+        var opens = EmiState.Current.CodexOpens;
+        var svc = EmiDeskService.Instance;
+        var clips = new List<(string Path, float Volume, string Tag)>();
+        int ticks = 0, stops = 0;
+        CoreAudio.PlayStoppableProvider = (path, volume, tag, _, _) =>
+        {
+            clips.Add((path, volume, tag));
+            return () => stops++;
+        };
+        CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => { Assert.Equal("emi-vox-tick", tag); ticks++; };
+        CoreAudio.IsOutputSuppressedProvider = () => false;
+        try
+        {
+            var s = CoreSettings.Current;
+            s.AvatarEnabled = s.EmiDeskEnabled = true;
+            s.EmiDeskMuteAvatar = avatarMuted;
+            s.EmiDeskMuteDontAsk = true;
+            s.MasterVolume = 37;
+            s.MotionLevel = MotionLevel.Off;
+            svc.ResetMutePrompt();
+            await svc.Summon();
+            var owner = Assert.IsType<EmiDeskWindow>(svc.Window);
+            Assert.Equal(avatarMuted, svc.AvatarMuted);
+            var rule = new BarkRule { Id = "book-test", Trigger = "T", VariantPool = new() { new BarkVariant("avatar") } };
+            var bark = BarkHead.Engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = _ => { } };
+            bark.Start();
+            var card = EmiBookCards.All.First(c => !string.IsNullOrWhiteSpace(c.MarginEn));
+            owner.OpenBook(card.Id);
+            // The floor is spent on the first dot, not when the words land. Muting skips the stamp.
+            Assert.Equal(avatarMuted, bark.Raise("T"));
+            Assert.Equal(1, ticks);
+            Assert.Empty(clips);
+            for (int i = 0; i < 3; i++) Assert.True(owner.StepSpeech());
+            Assert.Equal(3, ticks);
+            var clip = Assert.Single(clips);
+            Assert.Equal((.37f, "emi-vox"), (clip.Volume, clip.Tag));
+            Assert.Equal(EmiVox.WriteWav(EmiVox.RenderBurst(EmiVox.MakeScore(card.MarginEn,
+                EmiSpeech.FrameForFace(card.MarginFace)))), File.ReadAllBytes(clip.Path));
+            PanicSurfaces.All.Single(p => p.Id == "emi-speech").Stop(null);
+            Assert.Equal(1, stops);
+            Assert.False(owner.StepSpeech());
+            owner.OpenBook(card.Id);
+            for (int i = 0; i < 3; i++) Assert.True(owner.StepSpeech());
+            Assert.Equal(2, clips.Count);
+            owner.BeginPresentation(() => { });
+            Assert.Equal(2, stops);
+            owner.EndPresentation();
+            owner.OpenBook(card.Id);
+            for (int i = 0; i < 3; i++) Assert.True(owner.StepSpeech());
+            owner.ShutDown();
+            Assert.Equal(3, stops);
+        }
+        finally
+        {
+            svc.Window?.ShutDown(); svc.ResetMutePrompt();
+            (CoreAudio.PlayStoppableProvider, CoreAudio.PlayOneShotProvider, CoreAudio.IsOutputSuppressedProvider) = audio;
+            BarkHead.Engine = oldBark;
+            EmiState.Current.BookCard = bookmark; EmiState.Current.CodexOpens = opens;
+            CoreSettings.ServiceProvider = settingsProvider;
+        }
+    });
+
+    [Fact]
+    public Task PassiveRecipeRunsBeforeTheBookIsShown() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var apply = EmiBookWindow.ApplyPassive;
+        var bookmark = EmiState.Current.BookCard;
+        var book = new EmiBookWindow();
+        int applied = 0;
+        EmiBookWindow.ApplyPassive = w => { Assert.Same(book, w); Assert.False(w.IsVisible); applied++; };
+        try
+        {
+            book.OpenBook(null);
+            Assert.True(book.IsVisible);
+            Assert.Equal(1, applied);
+            book.OpenBook(null);
+            Assert.Equal(1, applied);
+        }
+        finally { book.Close(); EmiBookWindow.ApplyPassive = apply; EmiState.Current.BookCard = bookmark; }
         return Task.CompletedTask;
     });
 
