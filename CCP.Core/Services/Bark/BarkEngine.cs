@@ -35,6 +35,14 @@ namespace ConditioningControlPanel.Services.Bark
             "PossessionTimerRestarted", "PossessionRemember", "LockdownConscript", "EmergencyExitOpened", "EmergencyExitVerdict",
         };
 
+        /// <summary>WPF IsPossessionAttribution + IsEmergencyExitAttribution (:107-122): text-only
+        /// attributions that may cross a live whisper. Kept separate from the gap list, as in WPF.</summary>
+        public static readonly HashSet<string> WhisperExemptTriggers = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "PossessionEffect", "PossessionTripwire", "PossessionWarden", "PossessionRungChanged",
+            "PossessionTimerRestarted", "PossessionRemember", "LockdownConscript", "EmergencyExitOpened", "EmergencyExitVerdict",
+        };
+
         private readonly object _gate = new();
         private readonly Func<BarkRuleSet> _loadRules;
         private readonly Random _rng;
@@ -68,7 +76,6 @@ namespace ConditioningControlPanel.Services.Bark
 
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
-        public Func<bool>? IsWhisperAudioPlaying;
         public Func<bool>? IsChaosNarratorPlaying;
         public Func<string?>? CurrentTier;
         /// <summary>Evaluate and retain session timing/rotation, but never speak or mutate settings.</summary>
@@ -331,9 +338,7 @@ namespace ConditioningControlPanel.Services.Bark
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
                 // WPF: only possession/emergency-exit text attributions may cross a whisper.
-                bool attribution = GlobalGapExemptTriggers.Contains(rule.Trigger)
-                    && !string.Equals(rule.Trigger, "AttentionCheckFail", StringComparison.OrdinalIgnoreCase);
-                if ((now < _whisperBusyUntilUtc || Safe(IsWhisperAudioPlaying)) && !attribution) return (false, -1, "whisper-active");
+                if (now < _whisperBusyUntilUtc && !WhisperExemptTriggers.Contains(rule.Trigger)) return (false, -1, "whisper-active");
                 if (Safe(IsChaosNarratorPlaying)) return (false, -1, "narrator-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)

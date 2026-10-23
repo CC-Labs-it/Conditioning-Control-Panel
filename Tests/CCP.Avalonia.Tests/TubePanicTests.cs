@@ -24,10 +24,10 @@ public sealed class TubePanicTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
-                .UseSkia().WithInterFont()
+                .WithInterFont()
                 .With(ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (enabled, volume, muted, voMuted) = (s.AvatarEnabled, s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted);

@@ -222,7 +222,7 @@ public sealed class BarkEngineTests : IDisposable
     public void WhisperExemptsOnlyAttributionsWhileNarratorHoldsThemAll(string trigger, bool maySpeak)
     {
         var e = Engine(Rule(trigger, "line"));
-        e.IsWhisperAudioPlaying = () => true;
+        e.NoteWhisperAudio(TimeSpan.FromMinutes(1));
         Assert.Equal(maySpeak, e.Raise(trigger));
         e.IsChaosNarratorPlaying = () => true;
         Assert.False(e.Raise(trigger));
@@ -230,7 +230,8 @@ public sealed class BarkEngineTests : IDisposable
         var safety = Rule("Panic", "safe");
         safety.ClassRaw = "safety";
         e = Engine(safety);
-        e.IsWhisperAudioPlaying = e.IsChaosNarratorPlaying = () => true;
+        e.NoteWhisperAudio(TimeSpan.FromMinutes(1));
+        e.IsChaosNarratorPlaying = () => true;
         Assert.True(e.Raise("Panic"));
     }
 
