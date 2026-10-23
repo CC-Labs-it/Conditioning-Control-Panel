@@ -2721,3 +2721,6 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-dialogs-companion-phrase-editor: +353
 - The Phrase Manager shows real voice-line and bark rows from Core `CompanionVoiceLines`, which WPF shares. Its bulk enable/disable persists to settings.json.
 - Manage Phrases opens from the Companion room's Workshop Triggers cell. Tests cover the disk round-trip and the real navigation path.
+
+## avalonia-port/wire-dialogs-companion-prompt-editor: +179
+- Installed community prompt badge wired (purple name / red unknown), shared Core loader with one folder-name constant; WPF forwards to it.
