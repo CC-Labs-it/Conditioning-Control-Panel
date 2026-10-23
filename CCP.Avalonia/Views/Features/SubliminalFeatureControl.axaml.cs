@@ -18,17 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
     /// and the settings hook is inlined for the reason spelled out in
     /// <see cref="BubbleCountFeatureControl"/>.
     ///
-    /// <para>The font combo is real rather than two placeholders:
-    /// <c>FontManager.Current.SystemFonts</c> is the cross-platform half of the WPF
-    /// <c>Helpers.FontPickerHelper</c>, and each row previews in its own face exactly as
-    /// <c>Populate</c> did. What does not carry over is that helper's <c>Fredoka (bundled)</c>
-    /// sentinel: the face ships as a WPF <c>pack://</c> Resource and is not packed on this head,
-    /// so offering it would name a font nothing can resolve.</para>
-    ///
-    /// <para>Still head-side: the flash SURFACE (Views/Overlays/SubliminalOverlay) and the
-    /// mod-aware feature art. The loop itself is not - the enable toggle, the interval and the
-    /// phrase pick are <see cref="CoreSubliminal"/>; see <see cref="ChkEnable_Changed"/> for how
-    /// this head arms it.</para>
+    /// <para>Installed families and WPF's bundled Fredoka sentinel preview in their own face.
+    /// The same resolver paints the picker, the card and the Advanced color preview.</para>
     /// </summary>
     public partial class SubliminalFeatureControl : UserControl
     {
@@ -100,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             }
             if (names.Length == 0) names = new[] { FontFallback };
 
-            foreach (var name in names)
+            foreach (var name in new[] { Helpers.SubliminalFont.BundledFredoka }.Concat(names))
             {
                 // Tag carries the value that gets stored; Content is what the row shows. Each row
                 // renders in its own face, so the list reads as a real preview, as on WPF.
@@ -108,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 {
                     Content = name,
                     Tag = name,
-                    FontFamily = new FontFamily($"{name}, {FontFallback}"),
+                    FontFamily = Helpers.SubliminalFont.Resolve(name),
                     FontSize = 14,
                 });
             }
@@ -118,15 +109,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// Moves the selection to the stored family, else to the fallback, else row 0 - WPF's
         /// <c>match ?? fallbackItem</c> chain.
         ///
-        /// <para>WPF's <c>ApplySelectedFamily</c> (repainting the CLOSED box in the picked face) is
-        /// deliberately not ported: setting the ComboBox's own FontFamily shifts which face
-        /// Avalonia's fallback chain picks for the emoji on the sibling buttons, and a render
-        /// proved it turns the colour glyphs monochrome. The per-row preview below is the part
-        /// that carries the information.</para>
         /// </summary>
         private void SelectFont(string? wanted)
         {
-            if (string.IsNullOrWhiteSpace(wanted)) wanted = FontFallback;
+            wanted = string.IsNullOrWhiteSpace(wanted) ? FontFallback : wanted.Trim();
             ComboBoxItem? fallbackItem = null;
             foreach (var obj in CmbFont.Items)
             {
@@ -134,13 +120,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 if (string.Equals(name, wanted, StringComparison.OrdinalIgnoreCase))
                 {
                     CmbFont.SelectedItem = item;
+                    CmbFont.FontFamily = item.FontFamily;
                     return;
                 }
                 if (fallbackItem == null && string.Equals(name, FontFallback, StringComparison.OrdinalIgnoreCase))
                     fallbackItem = item;
             }
             if (fallbackItem != null) CmbFont.SelectedItem = fallbackItem;
-            else if (CmbFont.SelectedItem == null && CmbFont.ItemCount > 0) CmbFont.SelectedIndex = 0;
+            else if (CmbFont.ItemCount > 0) CmbFont.SelectedIndex = 0;
+            if (CmbFont.SelectedItem is ComboBoxItem selected) CmbFont.FontFamily = selected.FontFamily;
         }
 
         private void LoadFromSettings()
@@ -269,6 +257,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (_isLoading) return;
             var s = CoreSettings.Current;
             var name = (CmbFont.SelectedItem as ComboBoxItem)?.Tag as string;
+            if (CmbFont.SelectedItem is ComboBoxItem selected) CmbFont.FontFamily = selected.FontFamily;
             if (string.IsNullOrWhiteSpace(name) || s.SubliminalFont == name) return;
             s.SubliminalFont = name;
             CoreSettings.Save();

@@ -502,6 +502,11 @@ namespace ConditioningControlPanel.Avalonia
                     Views.Overlays.SubliminalWhisperShow.Phrase(text);
                     NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
                 };
+                CoreSubliminal.CustomShowProvider = text =>
+                {
+                    Views.Overlays.SubliminalWhisperShow.Custom(text);
+                    NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
+                };
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
                 CoreSubliminal.DeferredBambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.FreezeBeforeVideo;
                 CoreSubliminal.DeferredBambiResetProvider = Views.Overlays.SubliminalWhisperShow.DeferredReset;

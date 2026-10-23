@@ -4,6 +4,9 @@ using System.IO;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Bark;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -162,6 +165,106 @@ public sealed class SubliminalWhisperShowTests
         });
         return Task.CompletedTask;
     });
+
+    /// <summary>WPF PlayWhisperAudio.onStarted -> MarkWhisperAudio: only audible clips hold the
+    /// bark floor, through their duration plus 250 ms; neither a failed nor a muted clip does.</summary>
+    [Fact]
+    public void Audible_whisper_holds_the_bark_floor_until_its_tail_ends() => With(audible: true, roll: 0.5, run =>
+    {
+        var old = (BarkHead.Engine,
+            CoreSettings.Current.AvatarEnabled, CoreSettings.Current.BarkChatSuppressionMs);
+        var rule = new BarkRule
+        {
+            Id = "whisper-floor", Trigger = "AttentionCheckFail",
+            VariantPool = new() { new BarkVariant("eyes") },
+        };
+        var clock = new WhisperClock();
+        var engine = new BarkEngine(() =>
+            new BarkRuleSet(new[] { rule }))
+            { Clock = clock, Speak = _ => { } };
+        (CoreSettings.Current.AvatarEnabled, CoreSettings.Current.BarkChatSuppressionMs) = (true, 0);
+        BarkHead.Engine = engine;
+        engine.Start();
+        Action<TimeSpan>? started = null;
+        CoreAudio.PlayStoppableProvider = (_, _, _, onStarted, _) => { started = onStarted; return () => { }; };
+        try
+        {
+            SubliminalWhisperShow.Phrase("reset");
+            Assert.True(engine.Raise("AttentionCheckFail"));   // requested but not yet audible
+            Assert.NotNull(started);
+            started!(TimeSpan.FromSeconds(2));
+            Assert.False(engine.Raise("AttentionCheckFail"));
+            clock.Advance(TimeSpan.FromMilliseconds(2249));
+            Assert.False(engine.Raise("AttentionCheckFail"));
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.True(engine.Raise("AttentionCheckFail"));   // its own tail expired
+            SubliminalWhisperShow.StopAll();
+
+            CoreSettings.Current.SubAudioMuted = true;
+            started = null;
+            SubliminalWhisperShow.Phrase("reset");
+            Assert.Null(started);
+            Assert.True(engine.Raise("AttentionCheckFail"));
+            Assert.Equal("card reset", run.Log[^1]);
+        }
+        finally
+        {
+            (BarkHead.Engine,
+                CoreSettings.Current.AvatarEnabled, CoreSettings.Current.BarkChatSuppressionMs) = old;
+        }
+    });
+
+    [Fact]
+    public void Custom_card_keeps_wpf_sanitization_opacity_haptic_lead_and_stop_guard() => With(audible: true, roll: 0.5, run =>
+    {
+        var old = (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, CoreProgression.AddXPProvider,
+            SubliminalWhisperShow.DrawWithOpacity);
+        var settings = new ConditioningControlPanel.Models.HapticSettings { Enabled = true };
+        settings.EnsureV2Migrated();
+        settings.V2.Provider("mock").Enabled = true;
+        settings.V2.Provider("buttplug").Enabled = false;
+        settings.V2.Provider("lovense").Enabled = false;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        using var haptics = new HapticService(settings);
+        CoreHaptics.Service = haptics;
+        Assert.True(haptics.ConnectAsync().GetAwaiter().GetResult());
+        var triggered = 0;
+        haptics.HapticTriggered += (_, _) => triggered++;
+        var xp = new List<double>();
+        CoreProgression.AddXPProvider = (amount, _) => xp.Add(amount);
+        SubliminalWhisperShow.DrawWithOpacity = (text, opacity) => run.Log.Add($"custom {text} {opacity}");
+        try
+        {
+            Assert.True(haptics.SubliminalAnticipationMs > 0);
+            SubliminalWhisperShow.Custom("  <b>Relax</b>  ", 42);
+            Assert.Empty(run.Log);                       // silent custom card, no whisper
+            Assert.Equal(1, triggered);
+            Fire(run, haptics.SubliminalAnticipationMs);
+            Assert.Equal("custom Relax 42", Assert.Single(run.Log));
+            SubliminalWhisperShow.Custom("queued", 30);
+            SubliminalWhisperShow.StopAll();
+            Fire(run, haptics.SubliminalAnticipationMs);
+            Assert.Single(run.Log);                     // panic during anticipation drops it
+            CoreHaptics.Service = null;
+            SubliminalWhisperShow.Custom(" ");
+            SubliminalWhisperShow.Custom(new string('x', 205), 12);
+            Assert.Equal($"custom {new string('x', 200)} 12", run.Log[^1]);
+            Assert.Equal(new[] { 10.0, 10.0, 10.0 }, xp);
+        }
+        finally
+        {
+            haptics.PanicStop();
+            (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, CoreProgression.AddXPProvider,
+                SubliminalWhisperShow.DrawWithOpacity) = old;
+        }
+    });
+
+    private sealed class WhisperClock : TimeProvider
+    {
+        private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan time) => _now += time;
+    }
 
     /// <summary>A Stop that lands while the whisper is starting still silences it and drops its card.</summary>
     [Fact]

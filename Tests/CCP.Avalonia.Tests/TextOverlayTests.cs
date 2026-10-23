@@ -59,6 +59,53 @@ public sealed class TextOverlayTests
     }
 
     [Fact]
+    public void SubliminalBundledFont_RoundTripsAndMatchesTheCardAndAdvancedPreview() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureAvalonia();
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var previous = s.SubliminalFont;
+        try
+        {
+            s.SubliminalFont = "Fredoka (bundled)";
+            var panel = new ConditioningControlPanel.Avalonia.Views.Features.SubliminalFeatureControl();
+            var picker = panel.FindControl<ComboBox>("CmbFont")!;
+            var first = Assert.IsType<ComboBoxItem>(picker.Items[0]);
+            Assert.Equal("Fredoka (bundled)", first.Tag);
+            Assert.Same(first, picker.SelectedItem);
+            Assert.Equal(new FontFamily(AppFonts.Fredoka), picker.FontFamily);
+            // The shipped variable font reports "Fredoka Light" on Skia; other platforms can
+            // expose its typographic family "Fredoka". Both must resolve to the bundled resource.
+            Assert.StartsWith("Fredoka", new Typeface(picker.FontFamily).GlyphTypeface.FamilyName, StringComparison.Ordinal);
+            var card = SubliminalOverlayWindow.Build("Relax", s);
+            Assert.All(card.Children.OfType<TextBlock>(), t => Assert.Equal(picker.FontFamily, t.FontFamily));
+            var advanced = new ConditioningControlPanel.Avalonia.Views.Dialogs.ColorEditorDialog();
+            try { Assert.Equal(picker.FontFamily, advanced.FindControl<TextBlock>("PreviewText")!.FontFamily); }
+            finally { advanced.Close(); }
+
+            // Selecting another face and then returning to the bundled item persists WPF's exact sentinel.
+            if (picker.ItemCount > 1) picker.SelectedIndex = 1;
+            picker.SelectedIndex = 0;
+            Assert.Equal("Fredoka (bundled)", s.SubliminalFont);
+            s.SubliminalFont = "  fReDoKa (bundled)  ";
+            panel.RebindToCurrentSettings();
+            Assert.Same(first, picker.SelectedItem);
+            Assert.Equal(new FontFamily(AppFonts.Fredoka), picker.FontFamily);
+        }
+        finally { s.SubliminalFont = previous; }
+    });
+
+    [Theory]
+    [InlineData(null, "Arial")]
+    [InlineData("   ", "Arial")]
+    [InlineData(" DejaVu Sans , ignored ", "DejaVu Sans")]
+    public void SubliminalCard_UsesWpfFontFallbackAndDropsExtraFamilyLinks(string? stored, string expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureAvalonia();
+        var card = SubliminalOverlayWindow.Build("Relax", new AppSettings { SubliminalFont = stored! });
+        Assert.All(card.Children.OfType<TextBlock>(), t => Assert.Equal(expected, t.FontFamily.FamilyNames[0]));
+    });
+
+    [Fact]
     public async Task SubliminalCard_ClosesOnTime_EvenWithoutAFirstFrame()
     {
         // A first frame that never comes (measured on XWayland: up to 2 s late). The card must

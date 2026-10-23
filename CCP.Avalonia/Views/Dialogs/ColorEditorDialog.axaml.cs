@@ -12,8 +12,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///  - DialogResult becomes Close(bool).
     ///  - System.Windows.Forms.ColorDialog becomes <see cref="ColorPickerDialog"/>, which is async
     ///    and needs an owner, so the three swatch handlers await where WPF blocked inline.
-    ///  - FontPickerHelper is a WPF-head helper (it resolves the bundled Fredoka face from a
-    ///    pack:// URI), so the preview keeps the markup's Arial rather than the chosen face.
     ///  - The text outline stays a DropShadowEffect - Avalonia.Media has the same type.
     ///
     /// Save mutates <c>CoreSettings.Current</c> WITHOUT calling Save(), exactly as the WPF original
@@ -69,6 +67,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _chkBgTransparent.IsChecked = settings.SubBackgroundTransparent;
             _chkTextTransparent.IsChecked = settings.SubTextTransparent;
             _chkStealsFocus.IsChecked = settings.SubliminalStealsFocus;
+            _previewText.FontFamily = Helpers.SubliminalFont.Resolve(settings.SubliminalFont);
 
             UpdateColorButtons();
         }

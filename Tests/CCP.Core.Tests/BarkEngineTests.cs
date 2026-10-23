@@ -120,6 +120,59 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void WhisperBusyWindowExtendsThroughTheTailAndNeverShrinks()
+    {
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var e = Engine(Rule("AttentionCheckFail", "eyes"));
+        e.Clock = clock;
+        foreach (var invalid in new[] { 0.0, -1, double.NaN, double.PositiveInfinity }) e.MarkWhisperAudio(invalid);
+        Assert.False(e.IsWhisperAudioPlaying);
+        e.MarkWhisperAudio(3);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        e.MarkWhisperAudio(0.1);                      // shorter clip cannot retire the older hold
+        clock.Advance(TimeSpan.FromSeconds(2.249));
+        Assert.False(e.Raise("AttentionCheckFail"));
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.True(e.Raise("AttentionCheckFail"));   // duration + exactly 250 ms
+        e.MarkWhisperAudio(2);
+        Assert.False(e.Raise("AttentionCheckFail"));
+        clock.Advance(TimeSpan.FromSeconds(1));
+        e.MarkWhisperAudio(5);                        // a newer longer clip extends the hold
+        clock.Advance(TimeSpan.FromSeconds(5.249));
+        Assert.True(e.IsWhisperAudioPlaying);
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        Assert.False(e.IsWhisperAudioPlaying);
+    }
+
+    [Theory]
+    [InlineData("UiAction", false)]
+    [InlineData("AttentionCheckFail", false)]
+    [InlineData("PossessionEffect", true)]
+    [InlineData("PossessionTripwire", true)]
+    [InlineData("PossessionWarden", true)]
+    [InlineData("PossessionRungChanged", true)]
+    [InlineData("PossessionTimerRestarted", true)]
+    [InlineData("PossessionRemember", true)]
+    [InlineData("LockdownConscript", true)]
+    [InlineData("EmergencyExitOpened", true)]
+    [InlineData("EmergencyExitVerdict", true)]
+    public void WhisperGateKeepsWpfSafetyGuaranteedAndTextAttributionExemptions(string trigger, bool allowed)
+    {
+        var normal = Rule(trigger, "line");
+        normal.Repeatable = false;
+        var e = Engine(normal);
+        e.MarkWhisperAudio(10);
+        Assert.Equal(allowed, e.Raise(trigger));
+        if (!allowed) Assert.True(e.Raise(trigger, guaranteed: true));   // refused line spent no latch
+        var panic = Rule("Panic", "safe");
+        panic.ClassRaw = "safety";
+        e = Engine(panic);
+        e.MarkWhisperAudio(10);
+        _s.AvatarEnabled = false;
+        Assert.True(e.Raise("Panic"));
+    }
+
+    [Fact]
     public void AModOverlayMergesFieldByFieldOverTheBaseRule()
     {
         var dir = Directory.CreateTempSubdirectory().FullName;

@@ -148,7 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!s.SubBackgroundTransparent)
                 grid.Children.Add(new Rectangle { Fill = new SolidColorBrush(Parse(s.SubBackgroundColor, Colors.Black)) });
 
-            var family = new FontFamily(string.IsNullOrWhiteSpace(s.SubliminalFont) ? "Arial" : s.SubliminalFont + ", Arial");
+            var family = Helpers.SubliminalFont.Resolve(s.SubliminalFont);
             TextBlock Text(Color c, double x, double y) => new()
             {
                 Text = text,

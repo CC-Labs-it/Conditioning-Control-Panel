@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using ConditioningControlPanel.Services.Companion;
 using Serilog;
 
@@ -17,7 +18,7 @@ namespace ConditioningControlPanel.Services.Bark
     /// cooldown, chance), the no-repeat variant rotation persisted in AppSettings (:1793-1941) and the
     /// {0}/{key} substitutions (:2000). The head owns the event subscriptions and the mouth.
     /// ponytail: DispatchIdle, PickVoiceLine, the awareness arbiter and CCP_BARK_DRYRUN land with a caller;
-    /// the whisper / Chaos-narrator gates with a source; tier latches key on "None" until a tier reaches Core.
+    /// the Chaos-narrator gate with a source; tier latches key on "None" until a tier reaches Core.
     /// </summary>
     public sealed class BarkEngine
     {
@@ -48,6 +49,7 @@ namespace ConditioningControlPanel.Services.Bark
         private DateTime _globalLastFireUtc = DateTime.MinValue;
         private DateTime _safetyHoldUntilUtc = DateTime.MinValue;
         private DateTime _lastUserMessageUtc = DateTime.MinValue;
+        private long _whisperBusyUntilTicks;
 
         // WPF BarkState's rolling mod-switch and avatar-click windows, the counters a source on this head feeds.
         private readonly List<DateTime> _modSwitches = new(), _avatarClicks = new();
@@ -61,6 +63,26 @@ namespace ConditioningControlPanel.Services.Bark
         /// <summary>The gap / cooldown / hold clock; tests step it (P08).</summary>
         public TimeProvider Clock { get; set; } = TimeProvider.System;
         private DateTime Now => Clock.GetUtcNow().UtcDateTime;
+
+        /// <summary>WPF AudioService.MarkWhisperAudio: an audible clip holds the bark floor for
+        /// its duration plus 250 ms. A shorter overlapping clip never shortens that hold.</summary>
+        public void MarkWhisperAudio(double durationSeconds)
+        {
+            if (!double.IsFinite(durationSeconds) || durationSeconds <= 0) return;
+            var until = Now.AddSeconds(durationSeconds + 0.25).Ticks;
+            long previous;
+            do { previous = Interlocked.Read(ref _whisperBusyUntilTicks); }
+            while (until > previous && Interlocked.CompareExchange(ref _whisperBusyUntilTicks, until, previous) != previous);
+        }
+
+        public bool IsWhisperAudioPlaying => Now.Ticks < Interlocked.Read(ref _whisperBusyUntilTicks);
+
+        // WPF BarkService.IsPossessionAttribution / IsEmergencyExitAttribution: text-only naming
+        // still works during a whisper. AttentionCheckFail is floor-exempt, but must NOT overlap audio.
+        private static bool WhisperAttribution(string trigger) => trigger.ToLowerInvariant() is
+            "possessioneffect" or "possessiontripwire" or "possessionwarden" or "possessionrungchanged"
+            or "possessiontimerrestarted" or "possessionremember" or "lockdownconscript"
+            or "emergencyexitopened" or "emergencyexitverdict";
 
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
@@ -259,6 +281,7 @@ namespace ConditioningControlPanel.Services.Bark
             {
                 var now = Now;
                 if (now < _safetyHoldUntilUtc) return (false, -1, "safety-active");
+                if (IsWhisperAudioPlaying && !WhisperAttribution(rule.Trigger)) return (false, -1, "whisper-active");
                 int window = s.BarkChatSuppressionMs;
                 if (Safe(() => IsCompanionBusy?.Invoke(window) == true)
                     || (window > 0 && (now - _lastUserMessageUtc).TotalMilliseconds < window))
