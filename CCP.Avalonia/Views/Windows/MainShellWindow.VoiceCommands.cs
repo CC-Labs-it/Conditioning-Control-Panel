@@ -4,8 +4,7 @@
 //
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
-// ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path), no bark voice lines (text confirmations), no
-// echo wait on her clip (confirmations here are text-only; a 300 ms tail stands in). Intents with no
+// ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
 // seam here (spiral, pink, mind wipe, quiz, keyword triggers, bubble count, shake, deeper,
 // session pause/resume, volume/mute, video pause/resume) are left out of the grammar.
 
@@ -45,13 +44,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             OnRefused = () => LockdownService.Current?.NotifyEscapeAttempt(EscapeKinds.Stop),
             ShowListening = line => _avatarTubeWindow?.ShowListeningBubble(line),
             HideListening = () => _avatarTubeWindow?.HideListeningBubble(),
-            Say = (text, audio) => Dispatcher.UIThread.Post(() => _avatarTubeWindow?.GigglePriority(text,
-                playSound: audio != null, aiGenerated: false, phraseAudioPath: audio, barkVoice: audio != null)),
-            WaitQuiet = _ => Task.Delay(300),
+            Say = SayVoiceConfirmation,
+            PickVoiceLine = id => Platform.BarkHead.Engine?.PickVoiceLine(id),
+            WaitQuiet = _ => WaitForVoiceConfirmationAsync(),
             ActiveModId = () => CoreMods.ActiveModId,
             OnUi = a => Dispatcher.UIThread.InvokeAsync(a).GetTask(),
             HelpFromAvailable = true,
         });
+
+        private Task _voiceConfirmationSpoken = Task.CompletedTask;
+        private int _voiceConfirmationGeneration;
+
+        /// <summary>Keep the manifest text paired with its clip and record completion BEFORE posting:
+        /// the command chain can ask for quiet before the dispatcher has started the voiced line.</summary>
+        private void SayVoiceConfirmation(string text, string? audio)
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _voiceConfirmationSpoken = done.Task;
+            var generation = Volatile.Read(ref _voiceConfirmationGeneration);
+            Dispatcher.UIThread.Post(() =>
+            {
+                // Panic can run before this queued speech: never resurrect her audio afterward.
+                if (generation != Volatile.Read(ref _voiceConfirmationGeneration)) { done.TrySetResult(); return; }
+                if (_avatarTubeWindow is not { } tube) { done.TrySetResult(); return; }
+                tube.GigglePriority(text, playSound: audio != null, aiGenerated: false,
+                    phraseAudioPath: audio, barkVoice: audio != null, onSpoken: () => done.TrySetResult());
+            });
+        }
+
+        /// <summary>WPF's echo guard: her clip must end before a re-prompt/chained capture opens.
+        /// The completion callback also covers muted/missing audio. Bound the wait by WPF's
+        /// 800 ms start grace + 5 s speaking cap, then allow its 300 ms speaker-echo tail.</summary>
+        private async Task WaitForVoiceConfirmationAsync()
+        {
+            var ct = _voicePromptCts?.Token ?? default;
+            try
+            {
+                var deadline = DateTime.UtcNow.AddMilliseconds(5800);
+                try
+                {
+                    await _voiceConfirmationSpoken.WaitAsync(TimeSpan.FromMilliseconds(5800), ct).ConfigureAwait(false);
+                    // WPF polls IsSpeakingAudio, not just its own line: a bark that cut the confirmation
+                    // is still her voice, so follow whatever clip is now in the air, within the same cap.
+                    while (_avatarTubeWindow?.SpokenAudioDone is { IsCompleted: false } speaking)
+                    {
+                        var left = deadline - DateTime.UtcNow;
+                        if (left <= TimeSpan.Zero) break;
+                        await speaking.WaitAsync(left, ct).ConfigureAwait(false);
+                    }
+                }
+                catch (TimeoutException) { /* WPF's speaking cap: a broken audio backend cannot wedge voice. */ }
+                await VoiceEchoTail(ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { /* panic/stop: the engine sees the cancelled session and stays shut. */ }
+        }
+
+        /// <summary>WPF's 300 ms speaker-echo tail; a test seam so tests need no real sleep (P08).</summary>
+        internal Func<CancellationToken, Task> VoiceEchoTail = ct => Task.Delay(300, ct);
 
         /// <summary>True while the wake-word loop owns (or is waiting to own) the mic.</summary>
         internal bool WakeLoopArmed => _wakeLoopCts != null;
@@ -100,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// loop and push-to-talk stay armed (decisions "Panic ↔ mic").</summary>
         internal void CancelVoicePrompt()
         {
+            Interlocked.Increment(ref _voiceConfirmationGeneration);
             try { _voicePromptCts?.Cancel(); } catch { }
             try { VoiceSpeech?.StopListening(); } catch { }
         }
