@@ -19,7 +19,6 @@
  * (&tier=N also goes to the lobby as x-dev-tier). ?r=<token>: a friend's race link, claimed on the lobby card.
  */
 import { createBridge, songCharts } from './host/bridge.js';
-import { KART_VIEW } from './render/viewMath.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -735,7 +734,7 @@ async function boot() {
     if (chipA < 1) dimChips(chipA);
     let goPoint = null;
     if (kartV && rph && (rph === 'countdown' || rph === 'ready' || (goAt > 0 && now - goAt < 1500))) {
-      kartV.copy(world.kart.position); kartV.y += 0.9 * KART_VIEW.scale;   // the go pop sits on the kart
+      kartV.copy(world.kart.position); kartV.y += 0.6;
       kartV.project(cam.camera);
       const k = kartPoint(kartV.x, kartV.y, kartV.z);
       if (k) { kartAt.x = k.x; kartAt.y = k.y; goPoint = kartAt; }
