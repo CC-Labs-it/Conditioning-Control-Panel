@@ -145,7 +145,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
         /// event on <c>chrome.webview</c>. Every hosted page shares this one carrier script.</summary>
-        public Task<string?> PostJsonAsync(string json) => InvokeScriptAsync(
+        public Task<string?> PostJsonAsync(string json)
+        {
+            // A Scrolller media url becomes this head's loopback relay (Core ScrolllerRelay); a remote site gets none.
+            var origin = ConditioningControlPanel.Services.Fyp.Online.ScrolllerRelay.LoopbackOrigin(CurrentUrl ?? Source);
+            return PostRewrittenAsync(origin == null ? json : ConditioningControlPanel.Services.Fyp.Online.ScrolllerRelay.RewriteJson(json, origin));
+        }
+
+        /// <summary><see cref="PostJsonAsync"/> after the Scrolller rewrite (every host's frames, the Core relay rule).</summary>
+        private Task<string?> PostRewrittenAsync(string json) => InvokeScriptAsync(
             "(function(m){try{if(typeof window.__ccpRnPush==='function'){window.__ccpRnPush(JSON.stringify(m));return;}"
             + "var w=window.chrome&&window.chrome.webview;if(w&&w.dispatchEvent){w.dispatchEvent(new MessageEvent('message',{data:m}));}}catch(e){}})("
             + json + ");");
@@ -272,6 +280,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var target = e.Request;
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
+            // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
+            if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
             if (gate is null) return;
             // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a

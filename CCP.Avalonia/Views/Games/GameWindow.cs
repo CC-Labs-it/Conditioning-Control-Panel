@@ -8,6 +8,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Fyp.Online;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -227,7 +228,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post) through the page's string carrier.</summary>
         internal void Post(object message)
         {
-            var json = JsonConvert.SerializeObject(message);
+            // Every Scrolller media url becomes the loopback relay path (Core ScrolllerRelay): the page never fetches the CDN.
+            var json = ScrolllerRelay.RewriteJson(JsonConvert.SerializeObject(message), ScrolllerRelay.LoopbackOrigin(PageUrl));
             Posted?.Invoke(json);
             if (_closing) return;
             _ = Web.PostJsonAsync(json);
