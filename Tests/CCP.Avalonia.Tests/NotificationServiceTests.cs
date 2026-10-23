@@ -121,7 +121,7 @@ public sealed class NotificationServiceTests
     [Fact]
     public async Task StickyActionClearsWithoutRememberingDismissalEvenWhenItThrows()
     {
-        await AvaloniaTestDispatcher.RunAsync(async () =>
+        await AvaloniaTestDispatcher.RunAsync(() =>
         {
             Setup();
             var key = "sticky-action-" + Guid.NewGuid();
@@ -139,12 +139,12 @@ public sealed class NotificationServiceTests
             Assert.Equal(1, invoked);
             Assert.False(toast.IsHitTestVisible);
             Assert.DoesNotContain(key, CoreSettings.Current.DismissedNotificationKeys);
-            await Task.Delay(400); // WPF's 220 ms fade removes the old toast
-            Assert.Empty(host.Children);
+            // The old toast is still fading (removal covered above); the key is free again at once.
             service.ShowSticky(key, "condition recurred");
-            Assert.Equal("condition recurred", Message(Assert.Single(host.Children)));
-            Find(host.Children[0], "ToastDismiss").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("condition recurred", Message(host.Children[^1]));
+            Find(host.Children[^1], "ToastDismiss").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             CoreSettings.Current.DismissedNotificationKeys.Remove(key);
+            return Task.CompletedTask;
         });
     }
 

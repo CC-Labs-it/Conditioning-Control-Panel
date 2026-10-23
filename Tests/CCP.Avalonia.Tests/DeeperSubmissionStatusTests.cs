@@ -121,9 +121,7 @@ public sealed class DeeperSubmissionStatusTests
                     Assert.True(row.ShowSubmissionBadge);
                     Assert.Equal(Loc.Get("deeper_submission_badge_published"), row.SubmissionBadgeLabel);
                 }
-                await Task.Delay(400);
-                Dispatcher.UIThread.RunJobs();
-                Assert.Empty(host.Children);
+                Assert.False(toast.IsHitTestVisible); // View closes the toast (fade removal: NotificationServiceTests)
             }
             finally
             {
