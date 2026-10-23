@@ -224,11 +224,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web = new NativeWebView();
                     // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
                     // throws EntryPointNotFoundException in an async void, which takes the whole app down.
-                    if (LinuxChoice != "wpe")
-                        _web.EnvironmentRequested += (_, e) =>
-                        {
-                            if (e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
-                        };
+                    var preferGtk = LinuxChoice != "wpe";
+                    _web.EnvironmentRequested += (_, e) =>
+                    {
+                        if (preferGtk && e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
+                        // Windows: the WebView2 profile under UserData, never beside the exe (Platform/WebViewProfile).
+                        Platform.WebViewProfile.Apply(e);
+                    };
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.

@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
 using System.Runtime.Versioning;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Launcher;
@@ -108,45 +106,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 return File.Exists(path);
             }
 
-            // WPF StartupManager.CreateShortcut, line for line.
-            var link = (IShellLinkW)new ShellLink();
-            link.SetPath(exe);
-            link.SetWorkingDirectory(dir);
-            link.SetDescription(Path.GetFileNameWithoutExtension(fileName));
-            link.SetArguments(arguments);
-            if (!string.IsNullOrEmpty(icon)) link.SetIconLocation(icon, 0);
-            var file = (IPersistFile)link;
-            file.Save(path, false);
-            Marshal.ReleaseComObject(file);
-            Marshal.ReleaseComObject(link);
+            // WPF StartupManager.CreateShortcut, line for line (Platform/ShellLinkFile).
+            ShellLinkFile.Save(path, exe, dir, Path.GetFileNameWithoutExtension(fileName), arguments, icon);
             Log.Information("[Launcher] shortcut written: {Path} {Args}", path, arguments);
             return true;
-        }
-
-        [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
-        private class ShellLink { }
-
-        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
-        private interface IShellLinkW
-        {
-            void GetPath(IntPtr pszFile, int cch, IntPtr pfd, int fFlags);
-            void GetIDList(out IntPtr ppidl);
-            void SetIDList(IntPtr pidl);
-            void GetDescription(IntPtr pszName, int cch);
-            void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string pszName);
-            void GetWorkingDirectory(IntPtr pszDir, int cch);
-            void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string pszDir);
-            void GetArguments(IntPtr pszArgs, int cch);
-            void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string pszArgs);
-            void GetHotkey(out short pwHotkey);
-            void SetHotkey(short wHotkey);
-            void GetShowCmd(out int piShowCmd);
-            void SetShowCmd(int iShowCmd);
-            void GetIconLocation(IntPtr pszIconPath, int cch, out int piIcon);
-            void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string pszIconPath, int iIcon);
-            void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string pszPathRel, int dwReserved);
-            void Resolve(IntPtr hwnd, int fFlags);
-            void SetPath([MarshalAs(UnmanagedType.LPWStr)] string pszFile);
         }
     }
 }
