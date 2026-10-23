@@ -2767,3 +2767,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-shell-tab-fx-takeover-lab-status: +261
 - Status dots breathe on effect-free sibling BoxShadow layers with motion/perf/visibility gates; Haptics glow on arrival fail-proven.
 - Review fixes: redundant seed dropped, ratchet trimmed, padlock/Env gaps moved to owning rows; row stays stub; last rgate 39701865337 red only on listed P108 flake.
+
+## avalonia-port/wire-win-emi-codex: +132
+- Core `EmiCodexRules` (content probes + offer brakes with WPF's per-brake reason), WPF delegates; Avalonia caller deferred to wire-win-emi-codex-b.
+- Foreign test bootstrap change reverted; remote gate run 39688213091 green.
