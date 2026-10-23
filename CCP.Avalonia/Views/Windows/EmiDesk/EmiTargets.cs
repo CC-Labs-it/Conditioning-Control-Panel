@@ -70,6 +70,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _ => null,
         };
 
+        // WPF EmiTargets.cs:140-178: all entry routes score the same destination.
+        internal static void NoteTabOpened(string tab)
+        {
+            var id = tab switch
+            {
+                "presets" => "sessions", "companion" => "companion", "awareness" => "awareness",
+                "remotecontrol" => "remote", "bambitakeover" => "takeover", "lockdown" => "lockdown",
+                "premium" => "vault", "discord" => "profile", "appsettings" => "settings",
+                "progression" => "progression", _ => null,
+            };
+            if (id != null) EmiState.NoteUsage(id);
+            // ponytail: TargetOpened's nudge listener awaits the EMI moment bus port.
+        }
+
         private static MainShellWindow? Shell =>
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow;
 

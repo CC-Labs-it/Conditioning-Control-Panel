@@ -6,15 +6,11 @@
 // is real too, and runs inside ShowTab (MainShellWindow.AmbientFx.cs).
 //
 // What is NOT, on purpose, each named so it is not lost silently:
-//   - The transition choreography is REAL in part (AnimateTabIn's crossfade, the first-visit door
-//     pulse: MainShellWindow.TabTransitions.cs); the slide, stagger and outgoing fade are not - see that file.
-//     Of WPF's Stop* calls, StopLockdownPulse runs here; the season shimmer, skill-tree air and
-//     vault motion park themselves with their tab's IsVisible (QuestsTabView.Fx, AmbientFxCanvas, BeatLoop).
-//   - UpdatePatreonUI on bambitakeover/studio/haptics/ramp: its tab half is RefreshEntitlementVeils,
-//     which OnTabShown runs on every navigation; the account half lives in AccountSettingsSection.
-//   - Per-tab side effects on the way in (StopPolling on leaving Available Subjects,
-//     RefreshIntakePassTile, RefreshDashboardRail - its favorites half is restored). Those reach App.* or a service.
-//     (WPF BtnPresets_Click's RefreshPresetsList is dead in WPF: no XAML names the handler.)
+//   - Transition choreography lives in MainShellWindow.TabTransitions.cs. Season shimmer,
+//     skill-tree air and vault motion park with IsVisible. RefreshEntitlementVeils owns the
+//     tab half of UpdatePatreonUI, AccountSettingsSection owns its account half.
+//   - AvailableSubjects StopPolling/LeaveLobbyTab await the unported directory + lobby lifecycle.
+//     (WPF BtnPresets_Click's RefreshPresetsList is dead: no XAML names the handler.)
 //     The FIVE that do not are restored in OnTabShown below:
 //       * StudioTab.OnTabShown() for "studio" and StudioTab.FocusRackEntry("haptics") for the
 //         haptics alias - ported view state on StudioTabView. Without the second, ShowTab("haptics")
@@ -27,8 +23,8 @@
 //       * UpdateProfileSharingSummary() on "discord" - see the case itself for why it lands here
 //         and not in the FX partial WPF reaches it through.
 //       * HasSeenProgramsTab and ProgramsIntroPopup.ShowIfFirstTime on "programs".
-//   - EmiDesk (EmiTargets.NoteTabOpened). The Bark hook is REAL now, through CoreBark, and fires
-//     in the same place WPF fires it - see ShowTab.
+//   - EMI ring usage and the Bark hook run at the same point as WPF. The EMI moment bus
+//     (TargetOpened nudge listeners) is a separate unported dependency.
 //   - The keys that are WINDOWS, not tabs, and the one launcher door: "patreon" (Settings · Account,
 //     as WPF ShowAppInfoPopup - wired), "fyp" (OpenFypFeed), "justdrop" (the shop host).
 //     fyp opens the feed (GameWindow.Fyp.cs); justdrop opens its GameWindow (MainShellWindow.JustDrop.cs). The "webapp" door is
@@ -172,17 +168,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // Window launchers have already returned. Real tabs keep their legacy bark aliases.
             CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
+            EmiDesk.EmiTargets.NoteTabOpened(tab);
 
             // WPF :306: the Lockdown plate's breath stops on every navigation; its case restarts it.
             StopLockdownPulse();
 
+            PrepareTabTransition(Named<Control>(target));
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
                 var panel = this.FindControl<Control>(name);
                 if (panel is not null) panel.IsVisible = name == target;
             }
             // WPF AnimateTabIn on every arm of the switch (MainShellWindow.TabTransitions.cs).
-            AnimateTabIn(this.FindControl<Control>(target));
+            AnimateTabIn(this.FindControl<Control>(target), tab);
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;
@@ -211,7 +209,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // three (MainWindow.TabNavigation.cs:260/476/501): the Dashboard and the rack
                     // both host real dose dials, so a lock that was latched rather than re-derived
                     // could survive a crash, an abort or an out-of-order session event.
-                    case "settings": RefreshFavoritesRail(); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("daily-free", "settings"); break;
+                    case "settings": RefreshFavoritesRail(); RefreshSessionFeatureLock(); RefreshIntakePassTile(); MaybeShowFeatureIntro("daily-free", "settings"); break;
                     case "progression": RefreshFavoritesRail(); break; // WPF TabNavigation.cs:308 (RefreshDashboardRail)
                     case "studio": StudioRack?.OnTabShown(); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("studio-rack", "studio"); break;
                     case "haptics": StudioRack?.FocusRackEntry("haptics"); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("haptics"); break;

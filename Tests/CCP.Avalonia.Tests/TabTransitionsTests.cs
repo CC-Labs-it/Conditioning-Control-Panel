@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using ConditioningControlPanel.Services;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -143,6 +145,229 @@ public sealed class TabTransitionsTests
             armed.Add((fire, delay));
             return new Pending();
         });
+    }
+
+    // A stepped entrance lets pointer tests sample resting geometry without sleeping.
+    private static void Step(MainShellWindow shell, double milliseconds) => shell.StepTabTransition(milliseconds);
+
+    [Fact]
+    public Task FullEntranceUsesRailDirectionAndSettlesBeforePointerInput() => Run(shell =>
+    {
+        shell.ShowTab("quests");
+        var quests = shell.Named<Control>("QuestsTab")!;
+        var slide = Assert.IsType<TranslateTransform>(quests.RenderTransform);
+        Assert.Equal(12, slide.X);
+        Step(shell, 100);
+        Assert.Equal(3, slide.X, 5); // QuadraticEaseOut at half time
+        Step(shell, 620);
+        Assert.Equal(0, slide.X);
+        Assert.Equal(1, quests.Opacity);
+        shell.ShowTab("achievements");
+        shell.ShowTab("quests");
+        Assert.Equal(-12, slide.X);
+        shell.ShowTab("quests"); // same key has no direction: WPF rises
+        Assert.Equal(0, slide.X);
+        Assert.Equal(12, slide.Y);
+        shell.ShowTab("settings"); // browser airspace never slides
+        Assert.False(shell.SettingsPage!.RenderTransform is TranslateTransform { X: not 0 } or TranslateTransform { Y: not 0 });
+    });
+
+    [Fact]
+    public Task OutgoingFadeDoesNotReshowTheLeavingViewAndRapidReturnIsClickable() => Run(shell =>
+    {
+        shell.ShowTab("quests");
+        Step(shell, 620);
+        shell.UpdateLayout();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        var quests = shell.Named<Control>("QuestsTab")!;
+        var shownAgain = 0;
+        quests.PropertyChanged += (_, e) => { if (e.Property == Visual.IsVisibleProperty && quests.IsVisible) shownAgain++; };
+        shell.ShowTab("achievements");
+        var host = (Panel)quests.Parent!;
+        var fade = Assert.Single(host.Children.OfType<Image>());
+        Assert.False(fade.IsHitTestVisible);
+        Assert.False(quests.IsVisible);
+        Step(shell, 50);
+        Assert.Equal(0.5, fade.Opacity, 5);
+        shell.ShowTab("quests"); // previous snapshot must not win a late completion
+        Step(shell, 620);
+        Assert.Equal(1, shownAgain);
+        Assert.True(quests.IsVisible);
+        Assert.True(quests.IsHitTestVisible);
+        Assert.Empty(host.Children.OfType<Image>());
+        Assert.Equal(1, quests.Opacity);
+    });
+
+    [Fact]
+    public Task ReducedCrossfadesAndOffCancelsAllEntranceGeometry() => Run(shell =>
+    {
+        shell.ShowTab("quests");
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        shell.ShowTab("achievements");
+        var tab = shell.Named<Control>("AchievementsTab")!;
+        Assert.Equal(0, tab.Opacity);
+        Assert.False(tab.RenderTransform is TranslateTransform { X: not 0 } or TranslateTransform { Y: not 0 });
+        Step(shell, 100);
+        Assert.Equal(0.75, tab.Opacity, 5);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        shell.ShowTab("quests");
+        Assert.Equal(1, tab.Opacity);
+        Assert.Empty(((Panel)tab.Parent!).Children.OfType<Image>());
+        Assert.Null(shell.EnteringTab);
+    });
+
+    [Fact]
+    public Task IntakePassRefreshesOnHomeEntryAndStateChangesAndParksOnLeave() => Run(shell =>
+    {
+        var loggedIn = CoreAccount.IsLoggedInProvider;
+        var lab = CoreAccount.HasLabAccessProvider;
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreAccount.HasLabAccessProvider = () => false;
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            shell.ShowTab("quests");
+            shell.ShowTab("settings");
+            var face = shell.SettingsPage!.FindControl<Border>("IntakePassFace")!;
+            var logo = shell.SettingsPage.FindControl<Border>("LogoFaceLogo")!;
+            Assert.True(face.IsVisible);
+            Assert.False(logo.IsVisible);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("intake_pass_card_cta"),
+                shell.SettingsPage.FindControl<TextBlock>("IntakePassCta")!.Text);
+            CoreAccount.HasLabAccessProvider = () => true;
+            global::ConditioningControlPanel.Avalonia.App.IntakePass.RaiseChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(face.IsVisible);
+            Assert.True(logo.IsVisible);
+            CoreAccount.HasLabAccessProvider = () => false;
+            CoreAccount.IsLoggedInProvider = () => false;
+            global::ConditioningControlPanel.Avalonia.App.IntakePass.RaiseChanged();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(face.IsVisible); // a signed-out account never gets a ticket
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            shell.ShowTab("settings");
+            Assert.False(face.IsVisible); // WPF holds the wordmark for 8 s before turning
+            shell.ShowTab("quests");
+            var group = Assert.IsType<TransformGroup>(shell.SettingsPage.FindControl<Grid>("LogoFlipHost")!.RenderTransform);
+            Assert.Equal(1, Assert.Single(group.Children.OfType<ScaleTransform>()).ScaleX);
+        }
+        finally
+        {
+            CoreAccount.IsLoggedInProvider = loggedIn;
+            CoreAccount.HasLabAccessProvider = lab;
+        }
+    });
+
+    [Fact]
+    public Task CardStaggerCapsSlotsPreservesTransformsAndSkipsHiddenOrDimmedCards() => Run(shell =>
+    {
+        var tab = shell.Named<ContentControl>("QuestsTab")!;
+        var content = tab.Content;
+        var cards = new StackPanel();
+        var authored = new ScaleTransform(2, 2);
+        var dim = new Border { Opacity = 0.6 };
+        var hidden = new Border { IsVisible = false };
+        for (var i = 0; i < 10; i++) cards.Children.Add(new Border());
+        cards.Children[0].RenderTransform = authored;
+        cards.Children.Insert(1, dim);
+        cards.Children.Insert(2, hidden);
+        tab.Content = new Border { Child = cards };
+        try
+        {
+            shell.ShowTab("quests");
+            // First card is animated to 0 already; test the original logical selection separately.
+            Assert.Equal(0, cards.Children[0].Opacity);
+            Assert.Same(authored, cards.Children[0].RenderTransform);
+            Step(shell, 40);
+            Assert.InRange(cards.Children[0].Opacity, 0.01, 1);
+            Assert.Equal(0, cards.Children[3].Opacity); // second eligible card starts at 40 ms
+            Step(shell, 250);
+            Assert.Equal(cards.Children[8].Opacity, cards.Children[9].Opacity); // slots 6 and 7 share the cap
+            Assert.Equal(1, cards.Children[10].Opacity); // ninth card is outside Take(8)
+            Assert.Equal(0.6, dim.Opacity);
+            Assert.False(hidden.IsVisible);
+            shell.CompleteTabTransition();
+            Assert.Equal(8, MainShellWindow.FindStaggerTargets(tab).Count);
+            Assert.All(cards.Children.Where(c => c != dim), c => Assert.Equal(1, c.Opacity));
+        }
+        finally { shell.CompleteTabTransition(); tab.Content = content; }
+    });
+
+    [Fact]
+    public Task IntakeTurnSwapsAtTheThinPointAndCtaUsesTheSharedBeat() => Run(shell =>
+    {
+        var saved = (CoreAccount.IsLoggedInProvider, CoreAccount.HasLabAccessProvider);
+        var savedTime = ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        var time = new SteppedTime();
+        ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreAccount.HasLabAccessProvider = () => false;
+            shell.ShowTab("settings");
+            var group = Assert.IsType<TransformGroup>(shell.SettingsPage!.FindControl<Grid>("LogoFlipHost")!.RenderTransform);
+            var scale = Assert.Single(group.Children.OfType<ScaleTransform>());
+            void At(double seconds)
+            {
+                time.Now = TimeSpan.FromSeconds(seconds).Ticks;
+                ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            }
+            At(8.052); // first 105/2 ms close finishes: edge-on, face swaps
+            Assert.Equal(0, scale.ScaleX, 5);
+            Assert.True(shell.IntakePassShowingCard);
+            At(9.058); // five half-turns complete; the card is square
+            Assert.Equal(1, scale.ScaleX, 5);
+            Assert.True(shell.IntakePassShowingCard);
+            var cta = shell.SettingsPage!.FindControl<TextBlock>("IntakePassCta")!;
+            Assert.InRange(cta.Opacity, 0.65, 1);
+            Assert.InRange(Assert.IsType<ScaleTransform>(cta.RenderTransform).ScaleX, 1.0001, 1.05);
+            shell.WindowState = WindowState.Minimized;
+            Assert.False(shell.IntakePassLoopRunning);
+            Assert.Equal(1, scale.ScaleX);
+            shell.WindowState = WindowState.Normal;
+            Assert.True(shell.IntakePassLoopRunning);
+            shell.ShowTab("quests");
+            Assert.False(shell.IntakePassLoopRunning);
+            At(30);
+            Assert.Equal(1, scale.ScaleX);
+            Assert.Equal(1, cta.Opacity);
+            shell.Close();
+            Assert.Null(shell.EnteringTab);
+        }
+        finally
+        {
+            (CoreAccount.IsLoggedInProvider, CoreAccount.HasLabAccessProvider) = saved;
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedTime;
+        }
+    });
+
+    [Fact]
+    public Task NavigationFromAnyDoorCountsForEmisRingAndUnknownKeysDoNot() => Run(shell =>
+    {
+        var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
+        var usage = new System.Collections.Generic.Dictionary<string, int>(state.Usage);
+        var scores = new System.Collections.Generic.Dictionary<string, double>(state.OpenScore);
+        var at = new System.Collections.Generic.Dictionary<string, long>(state.UsageAt);
+        try
+        {
+            state.Usage.TryGetValue("sessions", out var before);
+            shell.ShowTab("presets");
+            Assert.Equal(before + 1, state.Usage["sessions"]);
+            shell.ShowTab("not-a-tab");
+            Assert.Equal(before + 1, state.Usage["sessions"]);
+        }
+        finally
+        {
+            state.Usage = usage; state.OpenScore = scores; state.UsageAt = at;
+        }
+    });
+
+    private sealed class SteppedTime : TimeProvider
+    {
+        public long Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Now;
     }
 
     private sealed class Pending : IDisposable { public void Dispose() { } }

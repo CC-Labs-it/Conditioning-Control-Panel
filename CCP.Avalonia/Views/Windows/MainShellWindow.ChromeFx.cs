@@ -28,7 +28,7 @@
 //   3. the breathing glows - ApplyNavGlowBreath, ApplyStartButtonGlow and their six
 //      Min/MaxOpacity/BreathSeconds constants. PlaybackDirection.Alternate +
 //      IterationCount.Infinite over the effect's Opacity, per CLAUDE.md.
-//   4. crossfade PORTED in MainShellWindow.TabTransitions.cs (slide/stagger/outgoing fade: see there): the tab transition and card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab,
+//   4. tab choreography PORTED in MainShellWindow.TabTransitions.cs: the tab transition and card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab,
 //      CollapseOutgoingTab, EnsureTabTranslate, ResetTabSlide, StaggerTabCards,
 //      StaggerCleanupTimer_Tick, CancelStaggerCleanup, FindStaggerTargets, _pendingTabKey,
 //      _activeTabKey, _activeTabElement, _staggerCleanupTimer, _staggeredElements, TabFadeOutMs/
