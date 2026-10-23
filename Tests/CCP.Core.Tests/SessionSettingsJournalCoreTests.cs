@@ -85,6 +85,30 @@ public sealed class SessionSettingsJournalCoreTests : IDisposable
         Assert.Null(bare.JournalDir);
     }
 
+    [Fact]
+    public void The_conditioning_tracker_credits_real_time_not_ticks()
+    {
+        var s = new AppSettings { TotalConditioningMinutes = 0 };
+        var clock = new SteppedClock();
+        var t = new ConditioningTimeTracker(clock);
+        t.Start(s);
+        // 46 ticks 1.3 s apart = 59.8 s; 47 = 61.1 s. Counting ticks credited nothing until tick 60.
+        for (var i = 0; i < 46; i++) { clock.Now = clock.Now.AddSeconds(1.3); t.Tick(s); }
+        Assert.Equal(0, s.TotalConditioningMinutes);
+        clock.Now = clock.Now.AddSeconds(1.3); t.Tick(s);
+        Assert.Equal(1, s.TotalConditioningMinutes);
+        // A sleep counts at most the cap.
+        clock.Now = clock.Now.AddHours(8); t.Tick(s);
+        Assert.Equal(1, s.TotalConditioningMinutes);
+        t.Stop(s);
+    }
+
+    private sealed class SteppedClock : TimeProvider
+    {
+        public DateTimeOffset Now = new(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     private static string RepoRoot()
     {
         var d = new DirectoryInfo(AppContext.BaseDirectory);

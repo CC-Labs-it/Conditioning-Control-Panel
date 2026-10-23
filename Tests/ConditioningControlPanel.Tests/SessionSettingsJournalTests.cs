@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Progression;
 using Xunit;
 
 namespace ConditioningControlPanel.Tests;
@@ -160,6 +161,38 @@ public class SessionSettingsJournalTests
         Assert.DoesNotContain("Wallpaper", settleBody);
         Assert.DoesNotContain("Overlay?.Stop", settleBody);
         Assert.DoesNotContain("_globalPulseGeneration", settleBody);
+    }
+
+    // ---- conditioned minutes ----
+
+    [Fact]
+    public void Late_ticks_still_count_their_real_time()
+    {
+        double pending = 0;
+        var minutes = 0;
+        // 46 ticks 1.3 s apart = 59.8 s; the old tick counter credited nothing until tick 60 (78 s).
+        for (var i = 0; i < 47; i++) minutes += ConditioningClock.Tick(ref pending, 1.3);
+        Assert.Equal(1, minutes);
+        Assert.InRange(pending, 0, 1.3);
+    }
+
+    [Fact]
+    public void A_long_gap_counts_at_most_the_cap()
+    {
+        double pending = 0;
+        Assert.Equal(0, ConditioningClock.Tick(ref pending, 8 * 3600));
+        Assert.Equal(ConditioningClock.MaxGapSeconds, pending);
+        Assert.Equal(0, ConditioningClock.Tick(ref pending, -5));
+        Assert.Equal(0, ConditioningClock.Tick(ref pending, double.NaN));
+        Assert.Equal(ConditioningClock.MaxGapSeconds, pending);
+    }
+
+    [Fact]
+    public void The_engine_timer_credits_through_the_clock()
+    {
+        var ui = Read("MainWindow", "MainWindow.UiUpdates.cs");
+        Assert.Contains("Services.Progression.ConditioningClock.Tick(ref _conditioningPendingSeconds,", ui);
+        Assert.DoesNotContain("if (_conditioningTimeSecondCounter >= 60)", ui);
     }
 
     private static string Member(string src, string signature)
