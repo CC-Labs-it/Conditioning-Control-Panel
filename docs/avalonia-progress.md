@@ -2799,3 +2799,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-tab-companion: +205
 - Workshop roster card clicks switch the companion through Core `CompanionCore.SwitchCompanion`, refresh the hero and ring, and put the companion's avatar set on the tube (WPF `SwitchToCompanionAvatar`, saved globally and per mod).
 - `CompanionRosterSwitchTests` fail-proven for both the Core switch and the tube set. Rows stay stub; remaining work is in wire-views-tab-companion-b.
+
+## avalonia-port/wire-shell-app-startup: +101
+- Startup seeds brain mod-switch + BambiSprite prompt-invalidation hooks (WPF App.xaml.cs:317/327).
+- Two StartModsTests facts fail-proven via real ActivateMod; GATE-OK; row stays stub.
