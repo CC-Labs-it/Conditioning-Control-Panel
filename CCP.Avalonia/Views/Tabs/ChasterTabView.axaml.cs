@@ -1,13 +1,5 @@
-// PORTED (first read-only slice) from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs
-// (1,379 lines) and ChasterTabView.Mood.cs. Real: OnTabShown / Refresh / RefreshHero (:119-260),
-// the live hero clock (:301), the ends line (:277), the pills (:372), the account chip (:871),
-// the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
-// Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
-// ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
-// limits, the row trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
-// menu (Menu.cs), how-it-works/hint/reset (Help.cs) and the price box (PriceEdit.cs) are partials.
-// The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
-// bursts included) are later slices. Unlink, the switch + consent and pause are real (slice 2).
+// PORTED from WPF ChasterTabView and its partials. Remaining decoration and browser-scene gaps
+// are listed in docs/avalonia-parity.md (views-tab-chaster).
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -45,12 +38,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private string _clockShape = "";
         private readonly List<TextBlock> _clockNumbers = new();
         private bool _loading;
+        private Cursor? _keyHintCursor;
 
         public ChasterTabView()
         {
             InitializeComponent();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
-            SlowTick.Tick += (_, _) => RefreshHero();
+            SlowTick.Tick += (_, _) => { RefreshHero(); RefreshLimits(); RefreshNumbers(); };
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
             AttachedToVisualTree += (_, _) => { _attached = true; Subscribe(IsVisible); };
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
@@ -59,6 +53,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             HeroCard.SizeChanged += (_, _) => HeroTitle.FitWidth = Math.Max(0, HeroCard.Bounds.Width - 52);
             LadderInit();
             NumbersInit();
+            TrailerInit();
+            PaperInit();
+            SetupHint.PointerReleased += (_, e) =>
+            {
+                if (SetupHint.Text != Loc.Get("chaster_setup_nothing")) return;
+                PresetRow.BringIntoView();
+                e.Handled = true;
+            };
             KeysInit();
             Refresh();
             LadderRenderSample();
@@ -70,6 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             Refresh();
             LadderOnShown();
+            if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell) shell.RegisterTabFx("chaster", Ambient);
+            Ambient.Resume();
             // WPF FxOnShown (Fx.cs:159-160): the word lands, then idles.
             HeroTitle.PlayEntry();
             HeroTitle.Start();
@@ -79,13 +83,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void Subscribe(bool on)
         {
-            if (!on) HeroTitle.Stop(); // WPF Fx.cs:262 on hide, linked or not
+            if (!on) { HeroTitle.Stop(); Ambient.Pause(); } // WPF Fx.cs:262 on hide, linked or not
             if (on && _subscribed == null && ChasterHead.Service is { } c)
             {
                 _subscribed = c;
                 c.LinkChanged += OnLinkChanged;
                 c.LockChanged += OnLockChanged;
                 c.Booked += OnBooked;
+                c.RaffleChanged += OnRaffleChanged;
                 _tick.Start();
                 SlowTick.Start();
             }
@@ -94,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 s.LinkChanged -= OnLinkChanged;
                 s.LockChanged -= OnLockChanged;
                 s.Booked -= OnBooked;
+                s.RaffleChanged -= OnRaffleChanged;
                 _subscribed = null;
                 _tick.Stop();
                 SlowTick.Stop();
@@ -102,7 +108,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // All three arrive on whatever thread found out.
         private void OnLinkChanged() => Dispatcher.UIThread.Post(OnTabShown);
-        private void OnLockChanged() => Dispatcher.UIThread.Post(() => { RefreshHero(); PaintStamps(); });
+        private void OnLockChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            RefreshHero();
+            if (ChasterHead.Service?.IsLinked == true) RefreshNumbers();
+            PaintStamps();
+        });
+        private void OnRaffleChanged() => Dispatcher.UIThread.Post(() => { PaintLadder(); MarkRaffleDays(); });
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() =>
         {
             RefreshHero(); RefreshAdded(); RefreshNumbers();
@@ -120,6 +132,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             NumbersPanel.IsVisible = linked;
             MenuPanel.IsVisible = linked;
             if (linked) { RefreshNumbers(); ApplyPriceToggles(); RefreshPresets(); }
+            else HideTrailer();
+            RefreshLimits();
             if (linked) RefreshAdded(); else HideLadder();
             SwitchPill.IsVisible = linked;
             PausePill.IsVisible = linked;
@@ -230,6 +244,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PaintChasterChip(chaster);
             RefreshMood(chaster);
             HeroTitle.IsVisible = linked;
+            PaperTag.IsVisible = linked;
+            RefreshTag(chaster?.BalanceSeconds ?? 0);
             if (linked) HeroTitle.Text = Loc.Get("chaster_hero_title"); // WPF :253
             HeroPills.Children.Clear();
             if (!linked)
@@ -248,6 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 anyRowOn: TabPageText.AnyRowOn(CoreSettings.Current.ChasterPrices));
             SetupHint.Text = key == null ? "" : Loc.Get(key);
             SetupHint.IsVisible = key != null;
+            SetupHint.Cursor = key == "chaster_setup_nothing" ? _keyHintCursor ??= new Cursor(StandardCursorType.Hand) : null;
             PaintHeroClock();
             var ends = LiveLockClock.EndsAt(snapshot, chaster.BalanceSeconds, DateTime.UtcNow)?.ToLocalTime();
             TxtHeroEnds.Text = ends is { } when ? Loc.GetF("chaster_hero_ends", when.ToString("ddd d MMM HH:mm")) : "";

@@ -28,7 +28,7 @@ namespace CCP.Avalonia.Tests;
 /// :1176-1290, ChasterTabView.Help.cs, ChasterTabView.PriceEdit.cs; WPF ChasterTabRenderTests
 /// The_menu_is_one_row_per_price..., Clicking_the_figure_opens_a_box..., Escape_in_the_open_price_box...),
 /// against a fake Chaster and a memory-only SecretStore.</summary>
-public sealed class ChasterMenuTests
+public sealed partial class ChasterMenuTests
 {
     private const string NoLock = "[]";
     private static readonly string Locked =
@@ -59,6 +59,10 @@ public sealed class ChasterMenuTests
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         var old = (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge);
+        var limits = (s.ChasterDayLimit, s.ChasterBacklogLimit, s.ChasterRelockPastEnd, s.ChasterPaused);
+        s.ChasterDayLimit = new LimitSetting(180, 0, null);
+        s.ChasterBacklogLimit = new LimitSetting(1440, 0, null);
+        s.ChasterRelockPastEnd = s.ChasterPaused = false;
         var (oldGet, oldSet) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
         var secrets = new Dictionary<string, string?>();   // memory only: never the OS keyring
         CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
@@ -70,7 +74,9 @@ public sealed class ChasterMenuTests
         var fake = new FakeChaster();
         var chaster = new ChasterService(new ChasterClient(fake), new SecretChasterTokenStore(), Path.Combine(dir, "chaster_tab.json"),
             () => new ChasterOptions(CoreSettings.Current.ChasterTabEnabled, CoreSettings.Current.ChasterLockId,
-                new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>())));
+                new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>()),
+                TabLimits.FromMinutes(LimitChange.Effective(s.ChasterDayLimit, DateTime.UtcNow), LimitChange.Effective(s.ChasterBacklogLimit, DateTime.UtcNow)),
+                Paused: s.ChasterPaused));
         ChasterHead.Service = chaster;
         var tab = new ChasterTabView();
         var w = new Window { Width = 1200, Height = 3000, Content = tab };
@@ -90,6 +96,7 @@ public sealed class ChasterMenuTests
             new SecretChasterTokenStore().Clear();
             try { Directory.Delete(dir, true); } catch { }
             (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge) = old;
+            (s.ChasterDayLimit, s.ChasterBacklogLimit, s.ChasterRelockPastEnd, s.ChasterPaused) = limits;
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (oldGet, oldSet);
             service.SaveImmediate(); CoreSettings.ServiceProvider = null;
         }

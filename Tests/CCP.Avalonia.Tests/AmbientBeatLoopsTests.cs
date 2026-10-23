@@ -92,7 +92,7 @@ public sealed class AmbientBeatLoopsTests
         "Views/Controls/Companion/Themes/CompanionTheme.axaml", "Views/Controls/DailyQuestCard.axaml", "Views/Controls/EmiDock.axaml",
         "Views/Controls/SeasonRecapCard.axaml", "Views/Dialogs/AttentionTargetEditorDialog.axaml",
         "Views/Dialogs/ProfilePrivacyDialog.axaml", "Views/Dialogs/RoadmapStepPopup.axaml",
-        "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml", "Views/Tabs/AchievementsTabView.axaml", "Views/Tabs/ChasterTabView.axaml",
+        "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml", "Views/Tabs/AchievementsTabView.axaml",
         "Views/Tabs/DiscordTabView.axaml", "Views/Tabs/ExclusivesTabView.axaml", "Views/Tabs/LeaderboardTabView.axaml",
         "Views/Tabs/LockdownTabView.axaml", "Views/Tabs/PlayTabView.axaml", "Views/Tabs/QuestsTabView.axaml",
         "Views/Tabs/SettingsTabView.axaml", "Views/Windows/AchievementPopup.axaml", "Views/Windows/AnnouncementPopup.axaml",

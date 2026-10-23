@@ -1,6 +1,5 @@
 // PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.Help.cs: the "How it works" card, the
 // line over the menu, Reset times and the red flash line. Stakes (:52) lives in ChasterTabView.Keys.cs.
-// ponytail: WPF re-opens the row trailer after a reset (OpenTrailer); the trailer is not ported.
 using System.Linq;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Localization;
@@ -41,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreSettings.Save();
             Log.Information("[Chaster] prices reset to the table by the player");
             PaintStamps();
+            if (_trailerShown) OpenTrailer();
         }
     }
 }

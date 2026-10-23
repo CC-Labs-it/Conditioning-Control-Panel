@@ -2,8 +2,7 @@
 // and RefreshPresets (:1075-1124), Stakes (ChasterTabView.Help.cs:52), on Core TabPresets.
 // A key rewrites the price list and requests the preset's limits, as WPF; it never touches the lock
 // itself (prices only book when an event happens), so it does not go through the import confirm.
-// ponytail: FxPreset/FxKeyTurned (Fx.cs) are not ported; the limits rows the WPF click also refreshes
-// (RefreshLimits) are not on this head yet.
+// ponytail: FxPreset/FxKeyTurned (Fx.cs) remain unported.
 using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
@@ -39,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 CoreSettings.Save();
                 ApplyPriceToggles();
                 RefreshNumbers();
+                RefreshLimits();
             }
             RefreshPresets();
         }
