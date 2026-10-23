@@ -89,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>ModChanged may be raised off the UI thread; marshal before touching the Image.</summary>
-        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() => { LoadBackdrop(); RefreshVault(); });
+        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() => { _vaultState = null; LoadBackdrop(); RefreshVault(); });
 
         /// <summary>WPF binds the group headers live (BindVaultLoc); here the rows are rebuilt (PLAYBOOK P09).</summary>
         private void OnLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(RefreshVault);
@@ -122,6 +122,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // The vault (WPF MainWindow.Exclusives.cs EnsureExclusivesBuilt + RefreshExclusivesTab)
         // ------------------------------------------------------------------
 
+        private (ExclusiveFeature Feature, bool Shown, ExclusiveGateState State, bool FreeToday)[]? _vaultState;
+        private string? _vaultMod;
+        private string? _vaultLanguage;
+
         /// <summary>
         /// Repaints the spotlight and the shelf from <see cref="ExclusiveFeature.All"/> and each
         /// feature's live gate. Called on construction, on every show of the tab
@@ -130,11 +134,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void RefreshVault()
         {
+            var mod = CoreMods.ActiveModId;
+            var language = LocalizationManager.Instance.CurrentLanguage;
+            var state = ExclusiveFeature.All.Select(f =>
+            {
+                var gate = f.GateState();
+                return (Feature: f, Shown: f.Shown(), State: gate, FreeToday: f.IsFreeToday(gate));
+            }).ToArray();
+            // WPF keeps its cards and caches decoded art. An unchanged visit must not replace
+            // ItemsSource: that decodes every image and re-templates the entire shelf on the UI thread.
+            // Still probe the live gates on every visit, including doors absent from the shelf.
+            RefreshTierPlates();
+            if (_vaultState != null && _vaultMod == mod && _vaultLanguage == language
+                && _vaultState.SequenceEqual(state)) return;
+
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
             var rows = new List<object>();
-            var cards = ExclusiveFeature.All.Where(f => f.Shown()).Select(f => new ExclusiveCardRow(f));
+            var cards = state.Where(s => s.Shown).Select(s => new ExclusiveCardRow(s.Feature, s.State, s.FreeToday));
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
             {
                 rows.Add(new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count));
@@ -142,7 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = rows;
 
-            var spot = new ExclusiveCardRow(ExclusiveFeature.All[0]);
+            var spot = new ExclusiveCardRow(state[0].Feature, state[0].State, state[0].FreeToday);
             this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
             var spotArt = this.FindControl<Image>("SpotArtImage")!;
             var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
@@ -173,9 +191,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             open.IsEnabled = spot.IsAvailable;
             ToolTip.SetTip(open, spot.UnavailableTip);
             ToolTip.SetShowOnDisabled(open, true);
-            RefreshTierPlates();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+            // Publish only after a successful repaint. ModChanged clears this even for a same-id reload.
+            (_vaultState, _vaultMod, _vaultLanguage) = (state, mod, language);
         }
 
         /// <summary>WPF RefreshExclusiveTierPlates: the plate matching the account's access lights and breathes.
@@ -376,11 +395,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// </summary>
     public sealed class ExclusiveCardRow
     {
-        public ExclusiveCardRow(ExclusiveFeature feature)
+        public ExclusiveCardRow(ExclusiveFeature feature) : this(feature, feature.GateState()) { }
+
+        private ExclusiveCardRow(ExclusiveFeature feature, ExclusiveGateState state)
+            : this(feature, state, feature.IsFreeToday(state)) { }
+
+        internal ExclusiveCardRow(ExclusiveFeature feature, ExclusiveGateState state, bool freeToday)
         {
             Feature = feature;
-            State = feature.GateState();
-            FreeToday = feature.IsFreeToday(State);
+            State = state;
+            FreeToday = freeToday;
             // WPF ExclusiveArtPath: Takeover forks its art under BambiSleep.
             Art = ModArt.TryLoad(feature.Key == "bambitakeover" && CoreMods.ActiveModId == BuiltInMods.BambiSleepId
                 ? "features/bambi takeover.png"
