@@ -88,7 +88,9 @@ namespace ConditioningControlPanel
                 var mainWindow = MainWindowRef ?? Current.Windows.OfType<MainWindow>().FirstOrDefault();
                 if (mainWindow == null) return false;
 
-                if (BrowserMedia?.BeginTakeover(Services.Browser.BrowserMediaService.MediaOwner.Autonomy) == false)
+                // A video asked for in chat plays whole: the longest-video limit is about what
+                // the app makes the player watch (owner, 2026-10-13).
+                if (BrowserMedia?.BeginTakeover(Services.Browser.BrowserMediaService.MediaOwner.Autonomy, playerAskedFor: true) == false)
                     return false;
 
                 // userInitiated: false - the AI decided this, so an offline block stays silent.
