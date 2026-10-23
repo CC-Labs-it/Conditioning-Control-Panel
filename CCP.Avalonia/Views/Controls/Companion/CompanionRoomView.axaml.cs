@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             SizeChanged += (_, e) => { if (e.WidthChanged) ApplyShelfLayout(e.NewSize.Width); };
             // WPF CompanionRuntimeContext: the hero reaches the shell and this navigator through us.
             if (HeroZone.ViewModel is { } hero) hero.Host = this;
+            ConversationZone.Room = this;
             // Z2/Z3 over the brain (WPF CompanionRoomVm builds ChatThresholdRuntimeVm / MemoryDiaryRuntimeVm).
             ChatZone.ViewModel = ChatThresholdViewModel.CreateLive();
             MemoryZone.ViewModel = MemoryDiaryViewModel.CreateLive();
@@ -130,7 +131,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         /// <summary>WPF OnCompanionFxModChanged's UpdateCompanionCardsUI half: the roster's names,
         /// accent ring and supported set follow a mod switch made while the tab is open.</summary>
-        internal void RefreshRoster() => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
+        internal Runtime.WorkshopShelfParts? WorkshopParts => (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts;
+
+        internal void RefreshRoster() => WorkshopParts?.Roster.Refresh();
+
+        /// <summary>WPF UpdateCompanionCardsUI also refreshes the visible room after switching.</summary>
+        internal void RefreshCompanionIdentity()
+        {
+            HeroZone.ApplyAvatarArt();
+            HeroZone.RefreshAmbientState();
+            RefreshRoster();
+        }
 
         // ponytail: ICompanionRoomVm (zone interfaces) lives in the WPF head; hero, chat and memory are
         // live, the other zones seed their own viewmodels until their runtime crosses.
@@ -155,6 +166,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             try
             {
+                ConversationZone.Resume();   // WPF ConversationPage IsVisibleChanged -> Vm.Resume
                 // WPF CompanionTabView.IsVisibleChanged -> CompanionRoom.Sync(): the hero re-reads
                 // what changed while the tab was hidden (level, mute, awareness, AI pill, mod art).
                 HeroZone.ApplyAvatarArt();
@@ -187,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             try
             {
+                ConversationZone.Park();
                 HeroZone.StopAmbientLoop();
                 AwarenessZone.StopCursorBlink();
                 AwarenessZone.StopRefresh();

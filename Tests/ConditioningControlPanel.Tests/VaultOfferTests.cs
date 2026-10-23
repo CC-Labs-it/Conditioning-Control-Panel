@@ -16,17 +16,18 @@ namespace ConditioningControlPanel.Tests;
 public class VaultOfferTests
 {
     private static readonly DateTime Now = new(2026, 10, 2, 12, 0, 0, DateTimeKind.Utc);
-    private static readonly string[] Languages = { "en", "de", "es", "fr", "ja", "ko", "pt-BR", "ru", "zh-CN" };
+    private static readonly string[] Languages = { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" };
 
+    // The compiled plan list (contract C1): USD headline, EUR secondary, yearly 20% off.
     [Theory]
-    [InlineData(1, PriceCurrency.Eur, "€6", "€0.20", "€60", "€5")]
-    [InlineData(2, PriceCurrency.Eur, "€10", "€0.33", "€100", "€8.33")]
-    [InlineData(1, PriceCurrency.Usd, "$7.50", "$0.25", "$75", "$6.25")]
-    [InlineData(2, PriceCurrency.Usd, "$12.50", "$0.42", "$125", "$10.42")]
-    [InlineData(0, PriceCurrency.Usd, "$7.50", "$0.25", "$75", "$6.25")]
-    public void ThePatreonPriceList(int tier, PriceCurrency currency, string monthly, string perDay, string yearly, string yearlyPerMonth)
+    [InlineData(1, PriceCurrency.Eur, "€6", "€0.20", "€57.60", "€4.80")]
+    [InlineData(2, PriceCurrency.Eur, "€10", "€0.33", "€96", "€8")]
+    [InlineData(1, PriceCurrency.Usd, "$7.50", "$0.25", "$72", "$6")]
+    [InlineData(2, PriceCurrency.Usd, "$12.50", "$0.42", "$120", "$10")]
+    [InlineData(0, PriceCurrency.Usd, "$7.50", "$0.25", "$72", "$6")]
+    public void ThePriceListFallback(int tier, PriceCurrency currency, string monthly, string perDay, string yearly, string yearlyPerMonth)
     {
-        var price = VaultOffer.PriceFor(tier, currency);
+        var price = VaultOffer.PriceFor(tier, currency, PlanCatalog.Fallback);
         Assert.Equal(monthly, VaultOffer.Money(price.MonthlyCents, currency));
         Assert.Equal(perDay, VaultOffer.PerDay(price));
         Assert.Equal(yearly, VaultOffer.Money(price.YearlyCents, currency));
@@ -34,15 +35,13 @@ public class VaultOfferTests
     }
 
     [Theory]
-    [InlineData(1, PriceCurrency.Eur)]
-    [InlineData(2, PriceCurrency.Eur)]
-    [InlineData(1, PriceCurrency.Usd)]
-    [InlineData(2, PriceCurrency.Usd)]
-    public void YearlyIsTwoMonthsFree(int tier, PriceCurrency currency)
-    {
-        var price = VaultOffer.PriceFor(tier, currency);
-        Assert.Equal(price.MonthlyCents * 10, price.YearlyCents);
-    }
+    [InlineData(1)]
+    [InlineData(2)]
+    public void YearlyIsTwentyPercentOff(int tier)
+        => Assert.Equal(20, PlanCatalog.YearlyOffPercent(PlanCatalog.Fallback.For(tier)));
+
+    [Fact]
+    public void TheHeadlineIsDollars() => Assert.Equal(PriceCurrency.Usd, VaultOffer.HeadlineCurrency(PlanCatalog.Fallback));
 
     [Theory]
     [InlineData("EUR", PriceCurrency.Eur)]
@@ -50,8 +49,17 @@ public class VaultOfferTests
     [InlineData("USD", PriceCurrency.Usd)]
     [InlineData("GBP", PriceCurrency.Usd)]
     [InlineData(null, PriceCurrency.Usd)]
-    public void EurosOnlyWhereTheRegionPaysInEuros(string? iso, PriceCurrency expected)
+    public void EurosOnlyWhenThePlanListSaysEuros(string? iso, PriceCurrency expected)
         => Assert.Equal(expected, VaultOffer.CurrencyFor(iso));
+
+    [Fact]
+    public void TheCardNeverOpensTheBareProfile()
+    {
+        var src = File.ReadAllText(Path.Combine(AppDir(), "Dialogs", "VaultGateDialog.cs"));
+        Assert.DoesNotContain("patreon.com/CodeBambi\"", src);
+        Assert.Contains("plan.PatreonUrl", src);
+        Assert.Contains("PlanCatalog.WebUrlFor(", src);
+    }
 
     [Theory]
     [InlineData("LockdownTabView", "lockdown")]
