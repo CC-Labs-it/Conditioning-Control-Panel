@@ -457,6 +457,10 @@ namespace ConditioningControlPanel.Avalonia
                         Settings.Save();
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
+                // WPF App.xaml.cs:2571-2577: the installer's Content Folder pick (Windows), then the custom
+                // folder's subdirs (#391), before anything resolves the assets folder.
+                Platform.InstallerAssetsPath.Apply(Settings);
+                CorePaths.EnsureCustomAssetsDirectories(Settings.Current.CustomAssetsPath);
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
