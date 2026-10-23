@@ -18,9 +18,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <item>Linux: this head ducks other apps' sink-inputs through pactl (LibVlcAudio). Its journal is
     /// <see cref="PulseFileName"/>, one <see cref="PulseStream"/> per sink-input index, restored at
     /// launch on the same pactl queue before any new duck.</item>
-    /// <item>Windows: this head does not duck other apps (LibVlcAudio leaves the duck providers
-    /// unseeded there), so it never writes a journal. It still restores the one a WPF build left
-    /// (<see cref="WpfFileName"/>: a 7.1.x crash while ducked, then the 7.2 upgrade), over WASAPI.</item>
+    /// <item>Windows: WindowsDucker (WPF's WASAPI ducker) journals in WPF's own shape,
+    /// <see cref="WpfFileName"/> + names, so a 7.1.x journal (crash, then the 7.2 upgrade) and this
+    /// head's own are restored the same way at launch, over WASAPI.</item>
     /// </list>
     /// </summary>
     internal static class DuckRecovery
@@ -169,17 +169,44 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return restored;
         }
 
+        /// <summary>WPF SaveDuckingState's shape: PID -> original volume, names beside it; nothing owed = no files.</summary>
+        internal static void SaveWpfJournal(string userData, IReadOnlyDictionary<int, float> owed, IReadOnlyDictionary<int, string> names)
+        {
+            var file = Path.Combine(userData, WpfFileName);
+            var namesFile = Path.Combine(userData, WpfNamesFileName);
+            try
+            {
+                if (owed.Count == 0)
+                {
+                    if (File.Exists(file)) File.Delete(file);
+                    if (File.Exists(namesFile)) File.Delete(namesFile);
+                    return;
+                }
+                Directory.CreateDirectory(userData);
+                File.WriteAllText(file, JsonSerializer.Serialize(owed));
+                var known = new Dictionary<int, string>();
+                foreach (var pid in owed.Keys)
+                    if (names.TryGetValue(pid, out var n) && !string.IsNullOrEmpty(n)) known[pid] = n;
+                File.WriteAllText(namesFile, JsonSerializer.Serialize(known));
+            }
+            catch (Exception ex) { Log.Debug("Failed to save ducking state: {Error}", ex.Message); }
+        }
+
+        /// <summary>The launch restore of the WPF journal. The Windows ducker queues behind it, so a new
+        /// duck never rewrites the file before it is read.</summary>
+        internal static System.Threading.Tasks.Task LaunchRecovery { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
+
         /// <summary>Windows launch: the WPF journal over WASAPI, off the UI thread (WPF ran it on its duck worker).</summary>
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         internal static void RecoverWpfJournalAtLaunch(string userData)
         {
             if (!File.Exists(Path.Combine(userData, WpfFileName))) return;
-            System.Threading.Tasks.Task.Run(() =>
+            LaunchRecovery = System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
                     using var scope = WasapiSessions.Collect();
-                    RecoverWpfJournal(userData, () => scope.Sessions, ProcessName, Environment.ProcessId);
+                    RecoverWpfJournal(userData, () => scope.Sessions.Select(s => (s.Pid, s.SetVolume)).ToList(), ProcessName, Environment.ProcessId);
                 }
                 catch (Exception ex) { Log.Warning("Ducking recovery over WASAPI failed: {Error}", ex.Message); }
             });

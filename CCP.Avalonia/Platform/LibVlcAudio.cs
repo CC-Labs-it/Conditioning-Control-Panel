@@ -91,10 +91,23 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// </summary>
         internal void StartDuckJournal(string path)
         {
+            if (OperatingSystem.IsWindows())
+            {
+                // Windows: WPF's WASAPI ducker, journalling WPF's ducking_recovery.json beside the pulse
+                // journal's path (UserData); it queues behind DuckRecovery's launch restore.
+                _win = WindowsDucker.ForApp(Path.GetDirectoryName(path)!);
+                CoreAudio.DuckProvider = _win.Duck;
+                CoreAudio.UnduckProvider = _win.Unduck;
+                CoreAudio.DuckGenerationProvider = () => _win.Generation;
+                return;
+            }
             if (!OperatingSystem.IsLinux()) return;
             _journal = path;
             RecoverDucks();
         }
+
+        /// <summary>The Windows ducker, once App start-up made it (never in probes or tests).</summary>
+        private WindowsDucker? _win;
 
         /// <summary>On the pactl queue, so it lands before any new duck sweep journals.</summary>
         internal void RecoverDucks()
@@ -108,7 +121,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
-            // ponytail: Windows ducking stays unseeded (no-op) until AudioService's WASAPI sweep is ported.
+            // Windows ducking is seeded by StartDuckJournal (App start-up only): a probe or test must never
+            // lower the desk's real apps.
             if (!OperatingSystem.IsLinux()) return;
             CoreAudio.DuckProvider = Duck;
             CoreAudio.UnduckProvider = Unduck;
@@ -333,6 +347,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>As WPF: advancing the generation turns every pending Unduck into a stale no-op.</summary>
         internal void ForceUnduck()
         {
+            if (_win != null) { _win.ForceUnduck(); return; }
             lock (_duckLock)
             {
                 _duckGeneration++;
@@ -344,6 +359,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>App exit: never leave other apps ducked behind us.</summary>
         internal void Shutdown()
         {
+            if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
             Drain();
         }

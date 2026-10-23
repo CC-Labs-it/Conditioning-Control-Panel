@@ -445,8 +445,8 @@ namespace ConditioningControlPanel.Avalonia
                 // callback, so a CI render cannot touch a user's profile. Unseeded, Core hands
                 // out one default instance, which is what the renders bind against.
                 await step(0.2, "Loading settings...");
-                // WPF AudioService.RecoverFromCrash: apps a dead WPF build left ducked get their volume back
-                // (this head does not duck on Windows; Linux recovers on the pactl queue after vlc.Seed below).
+                // WPF AudioService.RecoverFromCrash: apps a dead run (WPF or this head) left ducked get their volume
+                // back; the Windows ducker queues behind it. Linux recovers on the pactl queue after vlc.Seed below.
                 if (OperatingSystem.IsWindows()) Platform.DuckRecovery.RecoverWpfJournalAtLaunch(CorePaths.UserData);
                 // Secrets first: SettingsService's auth-token migration asks CoreSecrets.HasStore on load.
                 Platform.SecretStore.Seed();

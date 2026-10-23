@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         private readonly List<object> _com = new();
 
-        internal List<(int Pid, Action<float> SetVolume)> Sessions { get; } = new();
+        internal List<DuckSession> Sessions { get; } = new();
 
         internal static WasapiSessions Collect()
         {
@@ -47,11 +47,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                             scope._com.Add(control);
                             if (control.GetProcessId(out var pid) < 0) continue;
                             var volume = (ISimpleAudioVolume)control;
-                            scope.Sessions.Add(((int)pid, v =>
-                            {
-                                var context = Guid.Empty;
-                                Check(volume.SetMasterVolume(Math.Clamp(v, 0f, 1f), ref context));
-                            }));
+                            scope.Sessions.Add(new DuckSession((int)pid,
+                                () => { Check(volume.GetMasterVolume(out var level)); return level; },
+                                v =>
+                                {
+                                    var context = Guid.Empty;
+                                    Check(volume.SetMasterVolume(Math.Clamp(v, 0f, 1f), ref context));
+                                }));
                         }
                         catch { /* the session may have ended */ }
                     }
