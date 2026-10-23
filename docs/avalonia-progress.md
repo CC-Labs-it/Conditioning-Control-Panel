@@ -2705,3 +2705,8 @@ Premium room canvas enrolled in the shell ambient registry under `premium` (WPF 
 ## avalonia-port/wire-win-mantra: +71
 - win-mantra stub -> wired: Programs Mantra door click-through test; StartMantraSession failure dialog ported (WPF text).
 - Review fixes: ledger names the kept-enrollment blocker (shell-programs-tab); test waits bounded by wall time (P73). rgate 39688519974 green except known RaceTrackPlayer flake.
+
+## avalonia-port/wire-views-tab-presets: +870
+
+Presets tab row views-tab-presets goes from stub to wired: the corner-GIF option panel, the session corner GIF in Core SessionRunner with a CornerGifOverlay session slot, the card sheen, and the rack hover reveal (out of the Tab order at rest). Fix round: a Fluent Folder icon on Select GIF, and gate fixes in ContentHitTest and ShellMemory. Fail-proofs: ~/ccp-port/evidence/review-wire-views-tab-presets/failproof.log.
+- Round 2: ContentHitTest skip narrowed to `.rackActions` (fail-proven).

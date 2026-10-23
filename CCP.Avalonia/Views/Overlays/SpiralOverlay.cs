@@ -157,6 +157,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Windows.Clear();
             _shownOn = Array.Empty<int>();
             QuestMinutes.Follow(false);
+            // WPF OverlayService.cs:2094: the fullscreen spiral left, so a session may raise its corner GIF again.
+            App.Sessions?.RefreshCornerGifPolicy();
         }
 
         /// <summary>WPF AchievementService:276 - quest minutes while the spiral is on screen.</summary>
