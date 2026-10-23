@@ -31,24 +31,72 @@
 .hud-best { font-size: 12px; color: var(--ink-dim); font-weight: 400; }
 .hud-best:empty { display: none; }
 
-/* item slot: a round glass socket, top centre; tap to use on touch */
+/* item slot, top centre; tap to use on touch. Polish 6: a SOLID ink socket with a paper rim and an ink
+ * outline, never see-through, so it reads over any scene and over a Flash; the glass bubble sits on an
+ * opaque core disc. States (hud/slotMath.js, data-state): empty / rolling / ready (.held) / used. */
 .hud-item { position: absolute; top: max(12px, env(safe-area-inset-top)); left: 50%; width: 72px; height: 72px;
-  margin-left: -36px; padding: 0; border-radius: 50%; border: 2px solid rgba(253, 247, 255, 0.75);
-  background: rgba(14, 10, 22, 0.42); box-shadow: 0 2px 0 var(--shade); pointer-events: auto; cursor: pointer;
-  display: grid; place-items: center; touch-action: none; -webkit-tap-highlight-color: transparent; }
-.hud-item img { width: 82%; height: 82%; object-fit: contain; pointer-events: none; }
-.hud-item-ring { position: absolute; inset: 4px; border-radius: 50%; border: 2px dashed transparent; }
-.hud-item.empty { opacity: 0.55; }
-.hud-item.rolling .hud-item-ring { border-color: var(--pink); animation: hud-spin 0.9s linear infinite; }
-.hud-item.held { border-color: var(--pink); }
+  margin-left: -36px; padding: 0; border-radius: 50%; border: 4px solid var(--paper); background: var(--paper-ink);
+  box-shadow: 0 0 0 2px var(--paper-ink), 3px 4px 0 2px rgba(14, 10, 22, 0.45); pointer-events: auto; cursor: pointer;
+  display: grid; place-items: center; touch-action: none; -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s; box-sizing: border-box; }
+.hud-item-core { position: absolute; inset: 7%; border-radius: 50%; background: radial-gradient(circle at 50% 36%, #43365a 0, #271f35 52%, #16121e 100%);
+  box-shadow: inset 0 0 0 2px rgba(245, 240, 232, 0.16); transition: opacity 0.15s; }
+.hud-item img { position: relative; grid-area: 1 / 1; width: 84%; height: 84%; object-fit: contain; pointer-events: none; }
+.hud-item-ring { position: absolute; inset: 3px; border-radius: 50%; border: 2px dashed transparent; }
+.hud-item-flare { position: absolute; inset: -4px; border-radius: 50%; border: 3px solid var(--flare, var(--pink)); opacity: 0; pointer-events: none; }
+.hud-item.empty { border-color: rgba(245, 240, 232, 0.72); }
+.hud-item.empty .hud-item-core { opacity: 0.55; }
+.hud-item.empty .hud-item-ring { inset: 22%; border-color: rgba(245, 240, 232, 0.3); }
+.hud-item.rolling, .hud-item.held { border-color: var(--pink); }
+.hud-item.rolling .hud-item-ring { border-color: var(--paper); animation: hud-spin 0.9s linear infinite; }
 .hud-item.held img { animation: hud-bob 2.4s ease-in-out infinite; }
-.hud-item.land { animation: hud-land 0.32s ease-out; }
-.hud-item.pop-soft { animation: hud-fade 0.4s ease-out; }
+/* ready: a pink ring breathes out of the rim (IN at the rim, OUT as it fades) */
+.hud-item.held::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; border: 2px solid var(--pink);
+  animation: hud-ready 1.6s ease-out infinite; pointer-events: none; }
+.hud-item.used { border-color: var(--paper); }
+/* the moments: catch (a card grabbed), land (the roll snaps onto the drawn item), use (fired), drop, soft (Gentle) */
+.hud-item.m-catch { animation: hud-catch 0.34s ease-out; --flare: var(--paper); }
+.hud-item.m-land { animation: hud-snap 0.3s ease-out; --flare: var(--gold); }
+.hud-item.m-land .hud-item-icon { animation: hud-icon-snap 0.3s ease-out, hud-bob 2.4s ease-in-out 0.3s infinite; }
+.hud-item.m-use { animation: hud-squeeze 0.3s ease-out; --flare: var(--pink); }
+.hud-item.m-catch .hud-item-flare, .hud-item.m-land .hud-item-flare, .hud-item.m-use .hud-item-flare { animation: hud-flare 0.42s ease-out; }
+.hud-item.m-use .hud-item-ghost { animation: hud-shrink-out 0.42s ease-in both; }
+.hud-item.m-use-soft .hud-item-ghost { animation: hud-fade-out 0.6s ease-out both; }
+.hud-item.m-drop, .hud-item.m-soft { animation: hud-fade 0.4s ease-out; }
+.hud-item .hud-item-ghost { position: absolute; width: 84%; height: 84%; }
+/* the roll slides each card in from the right (render/items/slotfx.js): a smaller card stays inside the rim */
+.hud-item.rolling .hud-item-icon { width: 64%; height: 64%; }
+.hud-item-ghost[hidden], .hud-item img[hidden] { display: none; }
 .hud.finished .hud-item { visibility: hidden; }
 @keyframes hud-spin { to { transform: rotate(360deg); } }
 @keyframes hud-bob { 50% { transform: translateY(-3px); } }
-@keyframes hud-land { from { transform: scale(1.16); } to { transform: scale(1); } }
 @keyframes hud-fade { from { opacity: 0.5; } to { opacity: 1; } }
+@keyframes hud-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes hud-ready { 0% { opacity: 0; transform: scale(0.94); } 20% { opacity: 0.9; } 100% { opacity: 0; transform: scale(1.22); } }
+@keyframes hud-catch { 0% { transform: scale(1); } 35% { transform: scale(1.2); } 70% { transform: scale(0.95); } 100% { transform: scale(1); } }
+@keyframes hud-snap { 0% { transform: scale(1.24); } 45% { transform: scale(0.93); } 100% { transform: scale(1); } }
+@keyframes hud-icon-snap { 0% { transform: scale(1.45) rotate(-8deg); } 60% { transform: scale(0.94); } 100% { transform: none; } }
+@keyframes hud-squeeze { 0% { transform: scale(0.86); } 55% { transform: scale(1.06); } 100% { transform: scale(1); } }
+@keyframes hud-flare { 0% { opacity: 0.95; transform: scale(0.85); } 100% { opacity: 0; transform: scale(1.5); } }
+@keyframes hud-shrink-out { 0% { opacity: 1; transform: scale(1.1); } 100% { opacity: 0; transform: scale(0.15) translateY(30%); } }
+
+/* a pickup bubble: two rings at the kart (IN from small, OUT as they spread) and a speed punch */
+.hud-pop { position: absolute; left: 50%; top: 66%; width: 0; height: 0; visibility: hidden; }
+.hud-pop.on, .hud-pop.on-soft { visibility: visible; }
+.hud.paused .hud-pop { visibility: hidden; }
+.hud-pop i { position: absolute; left: -46px; top: -30px; width: 92px; height: 60px; border-radius: 50%; border: 3px solid var(--pink);
+  box-sizing: border-box; opacity: 0; }
+.hud-pop i.r2 { border-color: var(--paper); border-width: 2px; }
+.hud-pop.on i { animation: hud-pop-ring 0.46s cubic-bezier(0.15, 0.7, 0.3, 1) both; }
+.hud-pop.on i.r2 { animation-delay: 0.06s; }
+.hud-pop.on-soft i { animation: hud-fade-out 0.6s ease-out both; }
+.hud-pop.on-soft i.r2 { display: none; }
+@keyframes hud-pop-ring { 0% { opacity: 0.9; transform: scale(0.35); } 100% { opacity: 0; transform: scale(2.1); } }
+.hud-speed b { display: inline-block; transform-origin: 80% 70%; }
+.hud-speed.punch b { animation: hud-punch 0.4s ease-out; }
+.hud-speed.punch-soft b { animation: hud-ink-in 0.6s ease-out; }
+@keyframes hud-punch { 0% { transform: scale(1.3); color: var(--accent); } 100% { transform: scale(1); } }
+@keyframes hud-ink-in { from { color: var(--accent); } }
 
 /* minimap */
 .hud-mapbox { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(16px, env(safe-area-inset-right));
@@ -74,6 +122,15 @@
 .hud-pips i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(253, 247, 255, 0.5);
   transition: background-color 0.12s, border-color 0.12s; }
 .hud-pips i.on { background: var(--pip, #fff); border-color: var(--pip, #fff); }
+/* polish 6: lit pips wear a ring in the CURRENT tier colour (the spark colour); a new tier pops its pip
+ * (IN: a swell past size, OUT: settles), the release swells the row and fades it (hud/slotMath.js PIP_OUT_S) */
+.hud-pips i.on { box-shadow: 0 0 0 2px var(--paper-ink), 0 0 0 4px var(--tier, var(--pip, #fff)); }
+.hud-pips i.pop { animation: hud-pip-pop 0.32s ease-out; }
+.hud-pips i.pop-soft { animation: hud-fade 0.4s ease-out; }
+.hud-pips.out i.on { animation: hud-pip-out 0.34s ease-out both; }
+.hud-pips.out-soft i.on { animation: hud-fade-out 0.34s ease-out both; }
+@keyframes hud-pip-pop { 0% { transform: scale(0.6); } 40% { transform: scale(1.7); } 100% { transform: scale(1); } }
+@keyframes hud-pip-out { 0% { transform: scale(1); opacity: 1; } 35% { transform: scale(1.45); opacity: 1; } 100% { transform: scale(1.9) translateY(-6px); opacity: 0; } }
 .hud-speed { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); color: var(--ink-dim); }
 .hud-speed b { font-size: 28px; color: var(--ink); }
 
@@ -139,14 +196,23 @@
 .hud-div { display: none; }
 .hud.kit-divider .hud-div { display: block; width: 108px; height: 9px; margin: 1px 0 2px;
   background: url(art/ui/lap-time-divider.svg) left center / contain no-repeat; }
-.hud.kit-slot .hud-item { border: 0; box-shadow: none; background: url(art/ui/item-slot-frame.svg) center / 100% 100% no-repeat; }
-.hud.kit-slot .hud-item img { width: 56%; height: 56%; }
+/* polish 6: the kit frame now sits on a SOLID ink disc (its own fill is 60% see-through); the state rim is a
+ * ring just outside the frame (pink rolling and ready, paper when used) */
+.hud.kit-slot .hud-item { border: 0; box-shadow: 3px 4px 0 1px rgba(14, 10, 22, 0.45);
+  background: url(art/ui/item-slot-frame.svg) center / 100% 100% no-repeat, radial-gradient(circle closest-side, var(--paper-ink) 0 98%, transparent 100%); }
+.hud.kit-slot .hud-item.rolling, .hud.kit-slot .hud-item.held { box-shadow: 0 0 0 3px var(--pink), 3px 4px 0 4px rgba(14, 10, 22, 0.45); }
+.hud.kit-slot .hud-item.used { box-shadow: 0 0 0 3px var(--paper), 3px 4px 0 4px rgba(14, 10, 22, 0.45); }
+.hud.kit-slot .hud-item-core { inset: 12%; }
+.hud.kit-slot .hud-item img, .hud.kit-slot .hud-item-ghost { width: 70%; height: 70%; }
+.hud.kit-slot .hud-item.rolling .hud-item-icon { width: 54%; height: 54%; }
 .hud.kit-slot .hud-item-ring { inset: 13%; }
+.hud.kit-slot .hud-item.empty .hud-item-ring { inset: 26%; }
 .hud.kit-slot .hud-item.held .hud-item-ring { border: 2px solid var(--pink); }
+.hud.kit-slot .hud-item-flare { inset: -6px; }
 .hud.kit-map .hud-mapbox { width: 168px; height: 128px; background: url(art/ui/minimap-frame.svg) center / 100% 100% no-repeat; }
 .hud.kit-map .hud-map { inset: 15.79% auto auto 12%; width: 76%; height: 68.42%; border-radius: 0; background: none; }
 .hud.kit-pips .hud-pips { gap: 4px; }
-.hud.kit-pips .hud-pips i { width: 22px; height: 22px; border: 0; border-radius: 0; background: center / contain no-repeat;
+.hud.kit-pips .hud-pips i { width: 26px; height: 26px; border: 0; border-radius: 50%; background: center / contain no-repeat;
   opacity: 0.3; transition: opacity 0.12s; }
 .hud.kit-pips .hud-pips i:nth-child(1) { background-image: url(art/ui/drift-pip-pink.svg); }
 .hud.kit-pips .hud-pips i:nth-child(2) { background-image: url(art/ui/drift-pip-white.svg); }
@@ -158,7 +224,8 @@
 .hud-place.art sup { top: 10px; }
 
 /* Gentle: no spin, no bob, no scale pops (fades only) */
-.hud.gentle .hud-item-ring, .hud.gentle .hud-item img { animation: none; }
+.hud.gentle .hud-item-ring, .hud.gentle .hud-item-icon { animation: none; }
+.hud.gentle .hud-item.held::after { display: none; }
 
 /* phone: the place numeral goes top right, left of the touch pause button; the map tucks under the time */
 @media (max-width: 640px) {
@@ -170,7 +237,7 @@
   .hud.kit-map .hud-mapbox { width: 112px; height: 85px; }
   .hud-place-art { height: 56px; }
   .hud.kit-divider .hud-div { width: 84px; }
-  .hud-item { width: 58px; height: 58px; margin-left: -29px; }
+  .hud-item { width: 58px; height: 58px; margin-left: -29px; border-width: 3px; }
   .hud-toast { top: calc(max(12px, env(safe-area-inset-top)) + 68px); }
   .hud-lap { font-size: 15px; }
   .hud-time { font-size: 16px; }
@@ -277,7 +344,12 @@
 .c-rows .t.est { color: var(--paper-dim); }
 
 @media (prefers-reduced-motion: reduce) {
-  #card .card-body.in, .hud-item-ring, .hud-item img, .hud-item.land, .hud-place.pop, .hud-place.pop b { animation: none; }
+  #card .card-body.in, .hud-item-ring, .hud-item-icon, .hud-item.land, .hud-place.pop, .hud-place.pop b { animation: none; }
+  /* polish 6: the slot, pip and pop moments keep their fades, never a scale */
+  .hud-item.m-catch, .hud-item.m-land, .hud-item.m-use, .hud-pips i.pop { animation: hud-fade 0.4s ease-out; }
+  .hud-item.m-land .hud-item-icon, .hud-item-flare, .hud-item.held::after, .hud-pop i.r2 { animation: none; display: none; }
+  .hud-item.m-use .hud-item-ghost, .hud-pips.out i.on, .hud-pop.on i { animation: hud-fade-out 0.5s ease-out both; }
+  .hud-speed.punch b { animation: hud-ink-in 0.6s ease-out; }
   .hud-count.stamp span { animation-name: hud-fade-beat; }
   .hud-go.on span { animation-name: hud-fade-go; }
   .hud-go-ring { display: none; }

@@ -13,9 +13,23 @@
  * player should hear NOW (goDownbeat(song, goInS) less the seconds left to Go, the countdown's own clock);
  * the source is scheduled later (a short silence) or started part way in to match. Go itself never moves
  * (online shares it through the room's startAt). No align, or a picked file: the song starts at once, as before.
+ * Polish 6 (BEAT): the voice registers itself as the live music (audio/songShape.js setLiveMusic) so the beat
+ * shake reads songS and the song with no extra wiring. A picked file has no chart: its decoded samples get one
+ * analysis (songShape.analyzeBuffer: tempo, beats, bar energy), cached per buffer, exposed as `analysis`.
  */
 import { mixGet } from './mix.js';
 import { normalizeChart } from './chart.js';
+import { analyzeBuffer, setLiveMusic, liveMusic } from './songShape.js';
+
+/** The one-time analysis of an AudioBuffer-like ({ numberOfChannels, sampleRate, getChannelData(i) }), or null. */
+export function analyzeAudioBuffer(buf) {
+  try {
+    if (!buf || typeof buf.getChannelData !== 'function') return null;
+    const chs = [];
+    for (let i = 0; i < Math.min(buf.numberOfChannels || 1, 2); i++) chs.push(buf.getChannelData(i));
+    return analyzeBuffer(chs, buf.sampleRate);
+  } catch (e) { console.warn('[music] analysis', e); return null; }
+}
 
 /** Beat at song time tS: { bpm, phase 0..1, index } (index < 0 before the first downbeat). */
 export function beatAt(chart, tS) {
@@ -88,6 +102,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   gain.connect(out);
   let src = null, startT = 0, durS = 0, chart = null, song = null, bpm = 96, volume = 1, token = 0;
   let cached = null;   // { url, buffer, chart, song }: the last chart's decode, reused by a restart
+  let analysis = null, analyzed = null;   // a picked file's beat analysis, and the buffer it belongs to
   const g = (k) => mixGet(feel, k);
   const feelBpm = () => { try { return feel.get('clock.bpm'); } catch (e) { return 96; } };
 
@@ -119,6 +134,8 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     const t = ctx.currentTime;
     durS = buffer && buffer.duration > 0 ? buffer.duration : 0;
     chart = c; bpm = b; song = c ? (cached && cached.chart === c ? cached.song : normalizeChart(c)) : null;
+    if (c) analysis = null;
+    else if (analyzed !== buffer) { analysis = analyzeAudioBuffer(buffer); analyzed = buffer; }
     let pos = null;
     if (song && typeof align === 'function') { try { pos = align(song); } catch (e) { pos = null; } }
     if (Number.isFinite(pos)) {
@@ -141,7 +158,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     });
   }
 
-  return {
+  const api = {
     /**
      * Load and loop a chart's track. false when anything is missing (no chart ships in B1).
      * opts.align(song) -> the song position to hear now (see goDownbeat), asked once the audio is decoded.
@@ -192,6 +209,10 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
       return beatAt(chart || { bpm, downbeatS: 0 }, songTime());
     },
     get sectionIdx() { return chart ? sectionAt(chart, songTime()) : 0; },
-    dispose() { token++; stopSrc(0.05); try { gain.disconnect(); } catch (e) { /* gone */ } },
+    /** A picked file's beat analysis (songShape.analyzeBuffer), null for a chart or nothing playing. */
+    get analysis() { return src && !song ? analysis : null; },
+    dispose() { token++; stopSrc(0.05); try { gain.disconnect(); } catch (e) { /* gone */ } if (liveMusic() === api) setLiveMusic(null); },
   };
+  setLiveMusic(api);
+  return api;
 }

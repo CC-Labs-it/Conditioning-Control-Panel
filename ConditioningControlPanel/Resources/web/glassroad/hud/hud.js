@@ -11,8 +11,14 @@
  * Polish 5 (J2): each bell stamps its digit in big and shrinks it out over one beat (IN and OUT); Go bursts at
  * the player's kart (update's kartAt, view fractions from boot) with two rings, then lifts away. Gentle and
  * reduced motion keep only the fades.
+ * Polish 6 (JUICE): the item slot is a solid ink socket with a paper rim and the bubble sits on an opaque
+ * core, so the held item reads over any scene and over a Flash; its states (empty, rolling, ready, used) and
+ * the moment each change plays come from hud/slotMath.js (catch, land, use, drop). A pickup bubble answers
+ * with a ring at the kart and a speed punch; a drift tier pops its pip in the tier colour and the release
+ * flashes the pips out. Gentle and reduced motion keep the fades only.
  */
 import { formatTime, ordinal, iconOf, itemName, rollFrame, racerLabels, ICON_IDS } from './format.js';
+import { slotState, slotMoment, gentleMoment, pipMoment, USED_S, PIP_OUT_S } from './slotMath.js';
 import { createMinimap } from './minimap.js';
 import { createCards } from './cards.js';
 import { createKit, placeArt } from './kit.js';
@@ -30,7 +36,9 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   root.innerHTML =
     '<div class="hud-race">' +
       '<div class="hud-tl"><span class="hud-lap"></span><i class="hud-div" aria-hidden="true"></i><span class="hud-time"></span><span class="hud-best"></span></div>' +
-      '<button type="button" class="hud-item empty" tabindex="-1" aria-label="Item"><i class="hud-item-ring"></i><img alt="" draggable="false" hidden></button>' +
+      '<button type="button" class="hud-item empty" data-state="empty" tabindex="-1" aria-label="Item"><i class="hud-item-core"></i><i class="hud-item-ring"></i>' +
+        '<img class="hud-item-icon" alt="" draggable="false" hidden><img class="hud-item-ghost" alt="" draggable="false" hidden><i class="hud-item-flare"></i></button>' +
+      '<div class="hud-pop" aria-hidden="true"><i></i><i class="r2"></i></div>' +
       '<div class="hud-mapbox"><canvas class="hud-map" aria-hidden="true"></canvas></div>' +
       '<div class="hud-place" aria-live="polite" hidden><img class="hud-place-art" alt="" draggable="false" hidden><b></b><sup></sup><small></small></div>' +
       '<span class="hud-pips"><i></i><i></i><i></i></span>' +
@@ -45,7 +53,8 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   const el = {
     lap: $('.hud-lap'), time: $('.hud-time'), best: $('.hud-best'), count: $('.hud-count'), countN: $('.hud-count span'),
     flag: $('.hud-count-flag'), speed: $('.hud-speed b'), go: $('.hud-go'),
-    pips: [...root.querySelectorAll('.hud-pips i')], item: $('.hud-item'), icon: $('.hud-item img'),
+    pips: [...root.querySelectorAll('.hud-pips i')], pipRow: $('.hud-pips'), item: $('.hud-item'), icon: $('.hud-item-icon'), ghost: $('.hud-item-ghost'),
+    pop: $('.hud-pop'), speedBox: $('.hud-speed'),
     place: $('.hud-place'), placeArt: $('.hud-place-art'), placeN: $('.hud-place b'), placeSuf: $('.hud-place sup'), placeOf: $('.hud-place small'),
     toast: $('.hud-toast'), note: $('.hud-note'),
   };
@@ -82,6 +91,10 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   const put = (key, node, text) => { if (last[key] !== text) { last[key] = text; node.textContent = text; } };
   const gentleOn = () => !!feel.get('gentle.on');
   const retrigger = (node, cls) => { node.classList.remove('pop', 'pop-soft', 'land'); void node.offsetWidth; node.classList.add(cls); };
+  // a one-shot class (polish 6): removed and re-added so the same moment can play twice in a row
+  const MOMENTS = ['m-catch', 'm-land', 'm-use', 'm-drop', 'm-soft', 'm-use-soft'];
+  const play = (node, cls, all = [cls]) => { node.classList.remove(...all); void node.offsetWidth; node.classList.add(cls); };
+  let usedUntil = 0, usedId = null, pipTier = 0, pipsOutUntil = 0;
 
   function toast(text) {
     const t = now() / 1000;
@@ -108,8 +121,22 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
       el.go.classList.remove('on'); void el.go.offsetWidth; el.go.classList.add('on');
     }),
     bus.on('drift-tier', ({ tier }) => pips(tier)),
-    bus.on('drift-release', () => pips(0)),
-    bus.on('drift-cancel', () => pips(0)),
+    // the release flashes the lit pips out (IN: a swell, OUT: a fade), then they go dark; a cancel just fades
+    bus.on('drift-release', ({ tier = 0 } = {}) => {
+      if (pipMoment(pipTier, 0, { released: true }).out || tier > 0) {
+        play(el.pipRow, gentleOn() ? 'out-soft' : 'out', ['out', 'out-soft']);
+        pipsOutUntil = now() + PIP_OUT_S * 1000;
+      } else pips(0);
+    }),
+    bus.on('drift-cancel', () => { pipsOutUntil = 0; el.pipRow.classList.remove('out', 'out-soft'); pips(0); }),
+    // the player used the held item: the slot shows `used` for USED_S (the icon shrinks out, a ring flares)
+    bus.on('item-fire', ({ racer }) => { if (racer === 0) { usedUntil = now() / 1000 + USED_S; usedId = last.icon || null; } }),
+    // a pickup bubble: a ring at the kart and a speed punch (IN fast, OUT over the keyframes)
+    bus.on('bubble-pop', ({ racer }) => {
+      if (racer !== 0) return;
+      play(el.pop, gentleOn() ? 'on-soft' : 'on', ['on', 'on-soft']);
+      play(el.speedBox, gentleOn() ? 'punch-soft' : 'punch', ['punch', 'punch-soft']);
+    }),
     bus.on('lap', ({ lap }) => { if (lap > 0 && lap < laps) toast(lap === laps - 1 ? 'Final lap' : 'Lap ' + (lap + 1)); }),
     bus.on('slipstream', ({ racer, state }) => { if (racer === 0 && state === 'fire') toast('Slipstream'); }),
     bus.on('race-standings', ({ order }) => { leader = order && order.length ? order[0] : -1; }),
@@ -122,32 +149,42 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
   ];
   const colours = () => feel.get('juice.sparkColours');
   function pips(tier) {
-    const c = colours();
-    el.pips.forEach((p, i) => { p.classList.toggle('on', i < tier); p.style.setProperty('--pip', c[i] || '#fff'); });
+    const c = colours(), t = Math.max(0, Math.min(3, tier | 0));
+    const m = pipMoment(pipTier, t);
+    pipTier = t;
+    if (t > 0) { pipsOutUntil = 0; el.pipRow.classList.remove('out', 'out-soft'); }
+    // every lit pip wears the CURRENT tier colour (the spark colour), so the row reads blue, orange, pink
+    el.pipRow.style.setProperty('--tier', c[t - 1] || '#fff');
+    el.pips.forEach((p, i) => { p.classList.toggle('on', i < t); p.style.setProperty('--pip', c[i] || '#fff'); });
+    if (m.pop >= 0 && el.pips[m.pop]) play(el.pips[m.pop], gentleOn() ? 'pop-soft' : 'pop', ['pop', 'pop-soft']);
   }
 
   function slot(item, gentle) {
-    let id = null, state = 'empty';
-    if (item && (item.id || item.rolling)) {
-      if (item.rolling) {
-        const rollS = item.rollS > 0 ? item.rollS : feel.get('items.rollS') || 1;
-        const f = rollFrame(item.rollT || 0, rollS, item.id, { gentle });
-        id = f.id; state = f.tick < 0 ? 'held' : 'rolling';
-      } else { id = item.id; state = 'held'; }
+    let frame = null;
+    if (item && item.rolling) {
+      const rollS = item.rollS > 0 ? item.rollS : feel.get('items.rollS') || 1;
+      frame = rollFrame(item.rollT || 0, rollS, item.id, { gentle });
     }
+    const { state, id: shown } = slotState(item, frame, { nowS: now() / 1000, usedUntil, usedId });
+    const id = state === 'used' ? null : shown;
     if (state !== last.slot) {
-      const wasRolling = last.slot === 'rolling';
+      const from = last.slot || 'empty';
       last.slot = state;
+      el.item.dataset.state = state;
       el.item.classList.toggle('empty', state === 'empty');
       el.item.classList.toggle('rolling', state === 'rolling');
-      el.item.classList.toggle('held', state === 'held');
-      if (wasRolling && state === 'held') retrigger(el.item, gentle ? 'pop-soft' : 'land');
+      el.item.classList.toggle('held', state === 'ready');
+      el.item.classList.toggle('used', state === 'used');
+      // the used item's icon stays on a ghost that shrinks out under the flare
+      if (state === 'used' && shown) { el.ghost.src = iconOf(shown); el.ghost.hidden = false; } else el.ghost.hidden = true;
+      const cls = gentleMoment(slotMoment(from, state), gentle);
+      if (cls) play(el.item, cls, MOMENTS);
     }
     if (id !== last.icon) {
       last.icon = id;
       if (id) el.icon.src = iconOf(id);
       el.icon.hidden = !id;
-      el.item.setAttribute('aria-label', state === 'held' && id ? 'Use ' + itemName(id) : 'Item');
+      el.item.setAttribute('aria-label', state === 'ready' && id ? 'Use ' + itemName(id) : 'Item');
     }
   }
 
@@ -194,6 +231,9 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
       if (last.kx !== kx || last.ky !== ky) { last.kx = kx; last.ky = ky; el.go.style.left = kx; el.go.style.top = ky; }
     }
     if (goUntil && now() >= goUntil) { goUntil = 0; el.go.classList.remove('on'); }
+    // the bubble ring follows the kart the same way (last.kx / ky are the Go burst's fractions)
+    if (kartAt && (last.px !== last.kx || last.py !== last.ky)) { last.px = last.kx; last.py = last.ky; el.pop.style.left = last.kx; el.pop.style.top = last.ky; }
+    if (pipsOutUntil && now() >= pipsOutUntil) { pipsOutUntil = 0; el.pipRow.classList.remove('out', 'out-soft'); pips(0); }
     const flagOn = !!countText && kit.ok('flag-start');
     if (flagOn !== last.flag) { last.flag = flagOn; if (flagOn && !el.flag.src) el.flag.src = kit.url('flag-start'); el.flag.hidden = !flagOn; }
     root.classList.toggle('paused', !!paused);

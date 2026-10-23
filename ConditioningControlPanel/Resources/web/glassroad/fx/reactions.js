@@ -7,10 +7,31 @@
  * freezes every envelope. update() also advances the photosafe window.
  * Polish 4: ITEM_CUES (below) is this lane's own small registry, run beside FX_CUES: an item hit on the
  * player kicks the camera in toward the kart (channel 'kick', added to camPush; Gentle removes it).
+ * Polish 6: fx.side(ampM, sign) is a short sideways shake (the camera's x) for a hard bump: the same parabola
+ * lobes as fx/shake.js (sideStep), SIDE numbers below, added on top of the shake vector; Gentle removes it.
  */
 import { clamp, smoothstep } from '../core/math.js';
 import { S } from '../sim/state.js';
-import { createShake } from './shake.js';
+import { createShake, lobe } from './shake.js';
+
+/** The side shake (polish 6): lobe length, the share each lobe keeps, the floor it stops under, at most this many at once. */
+export const SIDE = Object.freeze({ periodS: 0.07, repeatMul: 0.55, stopM: 0.02, maxRuns: 3 });
+
+/**
+ * One side shake step: advances every run by dt (runs die under SIDE.stopM) and returns the summed x offset.
+ * runs: [{ amp, sign, t }] (mutated in place).
+ */
+export function sideStep(runs, dt, P = SIDE) {
+  let x = 0;
+  for (let i = runs.length - 1; i >= 0; i--) {
+    const r = runs[i];
+    r.t += dt;
+    while (r.t >= P.periodS && r.amp >= P.stopM) { r.t -= P.periodS; r.amp *= P.repeatMul; r.sign = -r.sign; }
+    if (r.amp < P.stopM) { runs.splice(i, 1); continue; }
+    x += r.sign * lobe(r.amp, r.t, P.periodS);
+  }
+  return x;
+}
 import { FX_CUES } from './cues.js';
 import { HIT_LOOK } from '../render/items/look.js';
 
@@ -70,6 +91,7 @@ export function createFx(bus, feel, { gentle, photosafe }) {
   const ch = Object.fromEntries(CHANNELS.map((n) => [n, newEnv()]));
   const shake = createShake(feel);
   let padT = -1, padLife = 1;
+  const sides = [];   // polish 6: side shake runs (fx.side)
 
   const fx = {
     state, ch, shake, gentle, feel, paused: false,
@@ -100,6 +122,12 @@ export function createFx(bus, feel, { gentle, photosafe }) {
       fx.paletteS = gentle.fade(s);
     },
     paletteS: 1,
+    /** A short sideways shake (a hard bump): IN on the first lobe, OUT as each lobe shrinks; Gentle: none. */
+    side(ampM, sign = 1) {
+      if (gentle.on || feel.get('gentle.on') || !(ampM > 0)) return;
+      if (sides.length >= SIDE.maxRuns) sides.shift();
+      sides.push({ amp: ampM, sign: sign < 0 ? -1 : 1, t: 0 });
+    },
   };
 
   const offs = [...Object.entries(FX_CUES), ...Object.entries(ITEM_CUES)].map(([name, react]) => bus.on(name, (p) => react(fx, p || {})));
@@ -135,13 +163,14 @@ export function createFx(bus, feel, { gentle, photosafe }) {
     else if (pm.t < 1) pm.t = Math.min(1, pm.t + dt / Math.max(fx.paletteS, 1e-3));
     if (pm.t >= 1 && pm.base) pm.base = null;
     const sh = shake.update(dt);
-    state.shake[0] = sh[0]; state.shake[1] = sh[1]; state.shake[2] = sh[2];
+    if (sides.length && (gentle.on || feel.get('gentle.on'))) sides.length = 0;
+    state.shake[0] = sh[0] + (sides.length ? sideStep(sides, dt) : 0); state.shake[1] = sh[1]; state.shake[2] = sh[2];
   }
 
   function reset() {
     for (const n of CHANNELS) Object.assign(ch[n], newEnv());
     Object.assign(state, restState());
-    shake.reset(); photosafe.reset?.();
+    shake.reset(); photosafe.reset?.(); sides.length = 0;
     padT = -1; fx.paused = false;
   }
 

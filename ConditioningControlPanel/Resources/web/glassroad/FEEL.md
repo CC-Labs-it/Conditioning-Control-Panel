@@ -221,6 +221,29 @@ take-off, on a pad up to padLateS after entering it, or on the ground up to earl
 - `shake.repeatMul` 0.85: each repeat is this much of the last.
 - `shake.stopBelowM` 0.05: repeats stop under this amplitude.
 
+## beatShake (polish 6: the camera dips on the beat once the song's rhythm part arrives; zero under Gentle and OS reduced motion)
+audio/songShape.js bakes the plan per beat from the chart (bars, section moods, mix and drum energy) or, for a song with no chart, one analysis of the decoded samples; fx/shake.js reads it on the song clock (music.songS) and adds it to the vertical shake axis. Pink road: onset bar 34 (61.8 s, the s4 drop), every beat by about bar 49 (88 s), 6.5 cm in the late drops and peaks.
+- `beatShake.ampStartM` 0.03: dip depth at the onset, metres (subtle).
+- `beatShake.ampHalfM` 0.065: dip depth reached by the song's half (a bit more noticeable).
+- `beatShake.energyMix` 0.35: share of the depth that follows the bar's loudness (quiet bars dip less).
+- `beatShake.fracStart` 0.25: share of a bar's beats that dip at the onset (downbeats only).
+- `beatShake.fracMax` 0.9: share of beats that dip once grown (almost every beat; the rest carries over bars).
+- `beatShake.rampBars` 16: rhythm bars (gate-weighted) to grow from fracStart to fracMax.
+- `beatShake.onsetLevel` 0.55: bar loudness (0..1 between the song's 10th and 90th percentile bar) a drop or peak needs to count as the rise.
+- `beatShake.onsetHoldBars` 2: rising bars in a row before the shake starts (it starts on the first of them).
+- `beatShake.gateGroove` 0.6: a groove section's weight after the onset (drop and peak 1; intro, break, outro 0).
+- `beatShake.gateBuild` 0.4: a build section's weight after the onset.
+- `beatShake.gateLo` 0.35: bar loudness under which a bar's weight halves (with moods) or is zero (no chart).
+- `beatShake.gateHi` 0.7: bar loudness at which a bar keeps its whole weight.
+- `beatShake.riseK` 0.7: per-bar share the weight climbs toward a louder bar.
+- `beatShake.fallK` 0.65: per-bar share the weight falls in a break (eases back over two or three bars).
+- `beatShake.outroBars` 4: the last bars of the song taper the shake to zero.
+- `beatShake.accentOff` 0.7: depth of a dip off the downbeat, share of the downbeat's.
+- `beatShake.inS` 0.03: each dip's rise, ending on the beat.
+- `beatShake.outS` 0.16: each dip's fall back to rest.
+- `beatShake.duckInS` 0.04: the beat ducks under any kick this fast (a boost or hit always wins).
+- `beatShake.duckOutS` 0.35: and comes back over this long once the kick is done.
+
 ## stall (item hit, unused until B1)
 - `stall.durationS` 1.2: stall length; steering cleared, no camera yaw.
 - `stall.yawSteps` 3: fixed yaw steps during a stall.
