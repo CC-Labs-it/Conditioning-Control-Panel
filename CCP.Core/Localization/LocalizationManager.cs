@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Localization
             ("es", "Español", "ES"),
             ("pt-BR", "Português (BR)", "PT"),
             ("fr", "Français", "FR"),
-            ("it", "Italiano", "IT"),
+            ("it", "Italiano (beta)", "IT"),
             ("de", "Deutsch", "DE"),
             ("ru", "Русский", "RU"),
         };

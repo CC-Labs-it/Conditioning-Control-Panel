@@ -442,6 +442,27 @@ namespace ConditioningControlPanel.Services
             try { await seq.Completion; } catch (OperationCanceledException) { }
         }
 
+        /// <summary>
+        /// The pattern lab's Play on "All toys". Same contract as TestAsync/TestDeviceAsync: the
+        /// master toggle is waived for the length of the pattern, premium is not. False means
+        /// nothing played.
+        /// </summary>
+        public async Task<bool> TestPatternAsync(double intensity, int durationMs, VibrationMode mode)
+        {
+            if (_disposed) return false;
+            durationMs = Math.Clamp(durationMs, 100, 8000);
+            _mixer.AllowTestWindow(durationMs + 2000);
+            if (!_mixer.IsGateOpen) return false;
+
+            var steps = HapticPatterns.Render(mode, Math.Clamp(intensity, MinPerceptibleIntensity, 1.0),
+                                              durationMs, priority: 5);
+            await _mixer.Play(steps, isTest: true).Completion;
+            return true;
+        }
+
+        /// <summary>True when only the Test buttons can reach a toy: the master toggle is off.</summary>
+        public bool IsMasterOff => !Settings.Enabled;
+
         private HapticSequence PostEvent(HapticEventKind kind, double? intensityOverride,
                                          int? durationOverride, VibrationMode? modeOverride, int priority)
         {
@@ -577,7 +598,7 @@ namespace ConditioningControlPanel.Services
                 new(1100, new HapticPulse(0.6, 60, 440, 100, 5)),
                 new(2200, new HapticPulse(1.0, 60, 740, 120, 5)),
             };
-            await _mixer.Play(steps).Completion;
+            await _mixer.Play(steps, isTest: true).Completion;
             Log.Information("TestAsync: Test pattern completed");
             return HapticTestResult.Success;
         }
@@ -824,7 +845,7 @@ namespace ConditioningControlPanel.Services
             for (int i = 0; i < intensities.Length; i++)
                 values[i] = Math.Clamp(intensities[i], 0f, 1f);
 
-            _mixer.PlayLayerEnvelope(HapticLayer.Pattern, values, totalDurationMs, target);
+            _mixer.PlayLayerEnvelope(HapticLayer.Pattern, values, totalDurationMs, target, isTest: true);
             return Task.FromResult(true);
         }
 

@@ -2,7 +2,8 @@
 // PR-1 of the FX overhaul, the shell's own chrome: tab transitions, the nav rail's glow and icon
 // nudge, the START button sheen and the XP meter.
 //
-// ONE member is live, and it is the one MainShellWindow.axaml actually names:
+// Live: StartSheenHost_SizeChanged (below) and SweepBannerSheen (its caller is the marquee interlude's return).
+// The first is the one MainShellWindow.axaml actually names:
 // StartSheenHost_SizeChanged. Not decoration - it is the CLIP that keeps the sheen band inside the
 // START button's rounded rect, and without it the band pokes out of the corners the moment
 // anything sweeps it. Fully portable: WPF's RectangleGeometry(rect, 8, 8) is spelled the same in
@@ -46,6 +47,8 @@
 // subscriptions are re-expressed by Pr4aAmbientAllowed and AmbientFxCanvas.Evaluate().
 
 using System;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -78,6 +81,57 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     StartSheenCornerRadius, StartSheenCornerRadius);
             }
             catch (Exception ex) { Log.Debug("StartSheenHost_SizeChanged: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF BannerSheenSeconds (:47), SweepBannerSheen's peak opacity and BannerSheenMinGapSeconds (:50).</summary>
+        internal const double BannerSheenMs = 750, BannerSheenPeak = 0.22;
+        private const int BannerSheenMinGapSeconds = 20;
+
+        private BeatLoop? _bannerSweep;
+        private DateTime _lastBannerSheenUtc = DateTime.MinValue;
+
+        /// <summary>The banner sheen is crossing (tests).</summary>
+        internal bool BannerSheenSweeping => _bannerSweep?.IsRunning == true;
+
+        /// <summary>
+        /// WPF SweepBannerSheen (MainWindow.ChromeFx.cs:769) -> SweepSheen (:610): one band over the support banner,
+        /// -110 -> width + 27.5 in 0.75 s (SineEase InOut), alpha 0 -> 0.22 at 20 %, held to 75 %, 0 at the end. Skipped
+        /// while the window is inactive or motion is Off; without <paramref name="force"/>, at most once per 20 s. Its
+        /// one caller so far is the marquee interlude's return (WPF RestoreTicker, SettingsTabView.MarqueeReads.cs).
+        /// </summary>
+        internal void SweepBannerSheen(bool force = false)
+        {
+            try
+            {
+                if (!IsActive || !ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions) return;
+                var band = Named<Border>("BannerSheen");
+                if (band?.Parent is not Control host || host.Bounds.Width <= 0 || !band.IsEffectivelyVisible) return;
+                var now = DateTime.UtcNow;
+                if (!force && (now - _lastBannerSheenUtc).TotalSeconds < BannerSheenMinGapSeconds) return;
+                _lastBannerSheenUtc = now;
+                if (_bannerSweep == null)
+                {
+                    var slide = (band.RenderTransform as TransformGroup)?.Children.OfType<TranslateTransform>().FirstOrDefault();
+                    _bannerSweep = new BeatLoop(band, t =>
+                    {
+                        double p = t * 1000 / BannerSheenMs;
+                        if (slide != null)
+                            slide.X = -band.Width + (host.Bounds.Width + band.Width * 1.25) * BeatLoop.Keys(Math.Min(1, p), new[] { (0.0, 0.0), (1.0, 1.0) }, sine: true);
+                        band.Opacity = BeatLoop.Keys(p, new[] { (0.0, 0.0), (0.20, BannerSheenPeak), (0.75, BannerSheenPeak), (1.0, 0.0) });
+                        if (p >= 1) EndBannerSheen();
+                    }) { OnParked = EndBannerSheen };
+                    Closed += (_, _) => EndBannerSheen();
+                }
+                _bannerSweep.Stop();
+                _bannerSweep.Start();
+            }
+            catch (Exception ex) { Log.Debug("SweepBannerSheen: {E}", ex.Message); }
+        }
+
+        private void EndBannerSheen()
+        {
+            _bannerSweep?.Stop();
+            if (Named<Border>("BannerSheen") is { } band) band.Opacity = 0;
         }
     }
 }
