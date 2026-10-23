@@ -64,7 +64,7 @@ test('mesh: rails only on railed sides, decals on the road', () => {
     const q = tr.query(r.positions[v * 3], r.positions[v * 3 + 1], r.positions[v * 3 + 2]);
     const fl = tr.nodeFlags(q.seg);
     assert.ok(!fl.includes('open') || q.segT < 1e-3 || q.segT > 1 - 1e-3, 'rail vertex on an open segment ' + q.seg);
-    assert.ok(r.uvs[v * 2] >= 0 && r.uvs[v * 2] <= 1.0001);
+    assert.ok(r.uvs[v * 2] >= 0 && r.uvs[v * 2] <= 1.2001);   // u = metres up, the rail is 1.2 m (EDGES lane)
   }
   assert.ok(M.pads.positions.length / 3 >= tr.boosts.length * 4);
   for (let v = 0; v < M.pads.positions.length / 3; v++) {

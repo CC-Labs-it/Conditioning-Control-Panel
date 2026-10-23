@@ -49,17 +49,67 @@ export function beneath(track, st, P, out) {
 }
 
 /**
- * The route's open side: a rail everywhere but the opening (openS0..openS1), and inside the opening a low
- * kerb that holds a kart on the ground, so only a hop gets through. @returns {'rail'|'kerb'|null}
+ * The route's open side: a rail everywhere but the opening (openS0..openS1), and inside the opening a small
+ * kicker lip (EDGES lane, owner 2026-10-23: the old kerb that needed a hop was never found): a kart that
+ * drives over it on the ground is thrown up by route.kickUpMps (sim/kart.js) and flies on to the lower
+ * road; a hop at the lip still pays the trick. slackM widens the opening at both ends (the kart's radius: a
+ * body already over the opening never scrapes the rail end). @returns {'rail'|'kicker'|null}
  */
-export function edgeAt(track, q, lat) {
+export function edgeAt(track, q, lat, slackM = 0) {
   const rs = track.routes;
   if (!rs || !rs.length) return null;
   for (const r of rs) {
     if (q.seg < r.from || q.seg >= r.to || (r.side === 'L' ? lat >= 0 : lat < 0)) continue;
-    return q.s >= r.openS0 && q.s <= r.openS1 ? 'kerb' : 'rail';
+    return q.s >= r.openS0 - slackM && q.s <= r.openS1 + slackM ? 'kicker' : 'rail';
   }
   return null;
+}
+
+const KF = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
+
+/**
+ * The glass catch in the air: while a route's landing road is beneath a flying kart (q = its query on that
+ * road), the kart's sideways speed across that road turns toward a drift back to its middle (route.airPull per
+ * metre off centre, at most route.airMaxMps), changing by at most route.airAccel m/s per second, so a player
+ * who aimed hard for the opening still comes down on the road while a wild exit still misses. V changes in place.
+ */
+export function airCatch(track, q, V, feel, dt) {
+  const b = track.frameAt(q.s, KF).b, vl = V[0] * b[0] + V[1] * b[1] + V[2] * b[2];
+  const m = gap(feel, 'route.airMaxMps'), want = Math.max(-m, Math.min(m, -q.lateral * gap(feel, 'route.airPull')));
+  const lim = gap(feel, 'route.airAccel') * dt, k = Math.max(-lim, Math.min(lim, want - vl));
+  V[0] += b[0] * k; V[1] += b[1] * k; V[2] += b[2] * k;
+}
+const LIP_VIEWS = new WeakMap();
+
+/**
+ * The track as a hop sees it (sim/hop.js hands it to the trick clock): with a route kicker lip added as one
+ * more jump lip when this kart, sliding out toward an opening's edge at its current lateral speed, crosses
+ * that edge inside the opening within lookS. Otherwise the track itself (nothing allocated on the normal line).
+ * @param {object} q the kart's ground query @param {number[]} V velocity @param {number} speed forward m/s
+ */
+export function hopTrack(track, q, V, speed, lookS) {
+  const rs = track.routes;
+  if (!rs || !rs.length || !(q.edgeDist >= 0)) return track;
+  for (const r of rs) {
+    if (q.seg < r.from - 1 || q.seg >= r.to) continue;
+    const side = r.side === 'L' ? -1 : 1;
+    if (q.lateral * side <= 0) continue;
+    const b = track.frameAt(q.s, KF).b, out = (V[0] * b[0] + V[1] * b[1] + V[2] * b[2]) * side;
+    if (!(out > 0.3)) continue;
+    const t = q.edgeDist / out;
+    if (t > lookS) continue;
+    const s = q.s + Math.max(0, speed) * t;
+    if (s < r.openS0 - 0.5 || s > r.openS1 + 0.5) continue;
+    let view = LIP_VIEWS.get(track);
+    if (!view) {
+      view = { lip: { s: 0, node: -1, kicker: true } };
+      view.track = Object.create(track, { jumps: { value: [...(track.jumps || []), view.lip] } });
+      LIP_VIEWS.set(track, view);
+    }
+    view.lip.s = s;
+    return view.track;
+  }
+  return track;
 }
 
 /** The kart's take-off route when query q (any probe) lies on that route's landing road, else null. */

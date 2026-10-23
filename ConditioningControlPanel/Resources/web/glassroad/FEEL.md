@@ -75,6 +75,7 @@ in Light and Strong. A steer the player makes always wins: an agreeing assist ad
 - `assist.cruiseCornerShare` 0.8: ... lifting (and braking gently) for a bend ahead with this share of the grip yaw.
 - `assist.lineCutM` 1.2: the autopilot's drive line cuts this far to the inside of a bend ...
 - `assist.lineBandHalf` 0.4: ... never further from the centre than this share of the half width.
+- `assist.routeApproachM` 80: from this far before a drop shortcut's opening to its end, a player steering toward the opening (stick that way, or the nose turned out that way) gets no centre pull and no added steer, in every mode (EDGES lane).
 
 ## offroad
 - `offroad.hazeThrustLoss` 0.35: thrust lost on `haze` surface; skipped during any boost.
@@ -94,6 +95,10 @@ in Light and Strong. A steer the player makes always wins: an agreeing assist ad
 - `route.cleanDeg` 25: with the nose this close to the road heading.
 - `route.cleanAmount` 0.15: the clean landing boost (share of top over top), paid when the catch ends.
 - `route.cleanHoldS` 0.6: how long that boost holds.
+- `route.kickUpMps` 2.5: the opening is a kicker lip (EDGES lane, no kerb, no hop needed): a kart driving off it is thrown up this fast along the road normal, a 'lip' take-off, so a hop at the lip still pays the trick.
+- `route.airPull` 1: in the air over the landing road, the sideways speed turns toward a drift back to the road's middle at this many m/s per metre off centre ...
+- `route.airMaxMps` 5: ... at most this fast ...
+- `route.airAccel` 6: ... changing by at most this many m/s per second (a hard aim for the opening still lands, a wild exit still misses).
 
 ## hop
 Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every drift); now 0.40 m, 0.33 s, lands soft.

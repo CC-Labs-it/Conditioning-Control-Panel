@@ -22,6 +22,10 @@ const GAPS = {
   'route.cleanDeg': 25,       // with the nose this close to the road's heading
   'route.cleanAmount': 0.15,  // clean landing boost: share of top over top, when the catch ends
   'route.cleanHoldS': 0.6,
+  'route.kickUpMps': 2.5,     // EDGES lane: the opening's kicker lip throws a kart driving off it up this fast
+  'route.airPull': 1,         // in the air over the landing road: drift back to its middle at this many m/s per metre off
+  'route.airMaxMps': 5,       // at most this fast
+  'route.airAccel': 6,        // changing by at most this many m/s per second
 };
 
 // feel.get throws on a missing key and a feel never gains keys (set refuses them), so a miss is remembered

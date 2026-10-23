@@ -1,8 +1,9 @@
 /* render/routes.js - the drop shortcut's markings (polish 4 ROUTES), drawn from track.meshes.routeEdge and
  * routeLand (track/mesh.js builds them three-free).
  *
- * The open edge: a hot glowing kerb, chevrons pointing off it and a tall post at each end of the break,
- * so the gap in the rail reads from the approach. The landing: a cyan ring round the pad with forward
+ * The open edge: the kicker lip, chevrons pointing off it and a tall post at each end of the break under an
+ * arch, with double chevrons on the floor leading to it from about 80 m out (EDGES lane), so the gap in the rail
+ * reads from the approach. The landing: a cyan ring round the pad with forward
  * arrows and the soft catch zone, bright enough to read from the helix 13 m above. A slow wave of glow
  * runs outward over the chevrons and round the ring (well under 3 Hz per point; the mean brightness never
  * moves). A clean landing swells the ring once, if fx/photosafe.js grants it, rising over at least 300 ms.
@@ -16,7 +17,9 @@ import { uniform, uv, vec3, sin, float, clamp, mix } from 'three/tsl';
 
 /** Route look numbers (this lane's look table). */
 export const ROUTE_LOOK = Object.freeze({
-  edgeColour: 0xff4fd8, landColour: 0x5ff6ff,
+  // EDGES lane: the shortcut is one colour from the lead chevrons and the arch to the landing ring (cyan reads on
+  // every palette, and apart from the hot open-edge hazard strip)
+  edgeColour: 0x5ff6ff, landColour: 0x5ff6ff,
   edgeGain: 1.25, landGain: 1.1,
   waveHz: 0.6,          // wave cycles per second along uv.x (each point: waveHz x waveK times a second)
   waveK: 2,             // bumps along a piece

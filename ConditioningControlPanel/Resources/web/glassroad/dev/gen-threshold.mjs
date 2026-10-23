@@ -63,7 +63,7 @@ const ITEM_JUMP_CLEAR_M = 40, ITEM_OPEN_CLEAR_M = 30, ITEM_PAD_CLEAR_M = 8;
 // is the landing marker (`at` of the land piece, x metres + right). The checks below hold the drop height
 // and that the open edge sits over the landing road.
 const ROUTES = [
-  { id: 'helix-drop', kind: 'drop', side: 'L', piece: 'spiral', from: 0, to: 0.07, open: { ds: 13, len: 5 }, land: 'L3b', landFrom: 0, landTo: 0.9, pad: { at: 0.57, ds: 3, x: -1 } },
+  { id: 'helix-drop', kind: 'drop', side: 'L', piece: 'spiral', from: 0, to: 0.07, open: { ds: 11.5, len: 8 }, land: 'L3b', landFrom: 0, landTo: 0.9, pad: { at: 0.57, ds: 3, x: -1 } },
 ];
 const ROUTE_DROP_M = [10, 16];
 
@@ -206,7 +206,7 @@ function build() {
     nodes,
     sections: sectionRows,
     checkpoints,
-    spawn: { node: 0, grid: [[-3, -4], [3, -6], [-3, -8], [3, -10], [-3, -12], [3, -14], [-3, -16], [3, -18]] },
+    spawn: { node: 0, grid: [[-4, -5], [4, -9], [-4, -13], [4, -17], [-4, -21], [4, -25], [-4, -29], [4, -33]] },
     items, boosts, jumps, routes, hazards: [], media: [],
     ai: { lines: [], pace: [1.0, 1.05, 1.1] },
     beat: { bpm: null, offsetMs: 0, map: [] },

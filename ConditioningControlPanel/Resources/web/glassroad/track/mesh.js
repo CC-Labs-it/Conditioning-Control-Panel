@@ -7,10 +7,16 @@
  * at a gap. Rails: vertical ribbons on railed sides, inner and outer face, u = metres up, v = s.
  * Pads: a strip per boost 2 cm above the road, u = metres across from the pad centre, v = metres from 0.
  * Jumps: a lip marker strip over the last LIP_M metres before each lip, u = lateral, v from 0.
+ * Edges (EDGES lane, render/edges.js draws them): edgeStrip, a hazard strip painted along every open edge (u =
+ * metres in from the edge, v = s); edgeHaze, a curtain hanging from that lip into the drop (u = metres down,
+ * v = s); railCaps, a tall end post wherever a rail run starts or stops (u = share of its height).
  */
 import { makeFrame } from './frames.js';
 
-const COLS = 4, THICK_M = 0.25, RAIL_H = 0.9, RAIL_T = 0.08, DECAL_M = 0.02, LIP_M = 3, STRIP_STEP_M = 1;
+// RAIL_H: 1.2 m since the EDGES lane (was 0.9: a railed edge read too like an open one); render/look.js railHeightM matches
+const COLS = 4, THICK_M = 0.25, RAIL_H = 1.2, RAIL_T = 0.08, DECAL_M = 0.02, LIP_M = 3, STRIP_STEP_M = 1;
+/** Edge numbers (EDGES lane): the open-edge strip width, the haze curtain's depth and flare, the rail end post. */
+export const EDGE_MESH = Object.freeze({ stripM: 1.2, hazeM: 7, hazeOutM: 2.2, capW: 0.34, capH: 2.1, capSkipM: 3 });
 
 function builder() {
   const P = [], Nn = [], U = [], I = [];
@@ -105,8 +111,10 @@ export function buildMeshes(track, dl) {
     const sm = (dl.s[q] + dl.s[q + 1]) / 2;
     return (track.routes || []).some((r) => dl.seg[q] >= r.from && dl.seg[q] < r.to && (r.side === 'L' ? side < 0 : side > 0) && (sm < r.openS0 || sm > r.openS1));
   };
+  const railEnds = [];
   for (const side of [-1, 1]) {
     for (const [q0, nq, closed] of runs(Q, (q) => railed(q, side))) {
+      if (!closed) railEnds.push([rowS(q0), side, -1], [rowS(q0 + nq), side, 1]);
       const inner = [], outer = [];
       for (let k = 0; k <= nq; k++) {
         const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);
@@ -145,14 +153,59 @@ export function buildMeshes(track, dl) {
     strip(jumps, j.s - LIP_M, LIP_M, 0, w, false);
   }
   const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
-  return { road: road.done(), rails: rails.done(), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand };
+  const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS);
+  return { road: road.done(), rails: rails.done(), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
+}
+
+/* EDGES lane: the open edges read "you can fall here" (a hazard strip and a lip, a haze falling away below it)
+ * and every rail run ends in a tall post, so a railed edge and an open one differ in shape, not colour alone. */
+function buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS) {
+  const E = EDGE_MESH, Q = dl.quads, L = track.lengthM;
+  const strip = builder(), haze = builder(), caps = builder();
+  for (const side of [-1, 1]) {
+    for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q] && !railed(q, side))) {
+      const sr = [], hr = [];
+      for (let k = 0; k <= nq; k++) {
+        const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);
+        const c = at(dl.c, r), n = at(dl.n, r), b = at(dl.b, r), h = dl.w[r] / 2, out = side > 0 ? b : neg(b);
+        sr.push([strip.v(off(c, b, side * (h - E.stripM), n, DECAL_M), n, E.stripM, v), strip.v(off(c, b, side * h, n, DECAL_M), n, 0, v)]);
+        const top = off(c, b, side * (h + 0.03), n, 0), low = off(c, b, side * (h + 0.03 + E.hazeOutM), n, -E.hazeM);
+        hr.push([haze.v(top, out, 0, v), haze.v(low, out, E.hazeM, v)]);
+      }
+      for (let k = 0; k < nq; k++) {
+        strip.quad(sr[k][0], sr[k][1], sr[k + 1][0], sr[k + 1][1]);
+        haze.quad(hr[k][0], hr[k][1], hr[k + 1][0], hr[k + 1][1]);
+      }
+    }
+  }
+  // a tall end post on the rail line wherever a rail run stops (the drop shortcut's own posts stand at its opening)
+  const f = makeFrame(), rs = track.routes || [];
+  for (const [sRun, side] of railEnds) {
+    const s = ((sRun % L) + L) % L;           // a run that wraps the start line ends past L
+    if (rs.some((r) => Math.abs(s - r.openS0) < E.capSkipM || Math.abs(s - r.openS1) < E.capSkipM)) continue;
+    track.frameAt(s, f);
+    const x = side * (f.w / 2 + 0.04), hw = E.capW / 2;
+    const P = (dx, dt, up) => [f.p[0] + f.b[0] * (x + dx) + f.t[0] * dt + f.n[0] * up, f.p[1] + f.b[1] * (x + dx) + f.t[1] * dt + f.n[1] * up,
+      f.p[2] + f.b[2] * (x + dx) + f.t[2] * dt + f.n[2] * up];
+    const face = (nrm, pts, us) => { const ids = pts.map((p, i) => caps.v(p, nrm, us[i], 0)); caps.quad(ids[0], ids[1], ids[2], ids[3]); };
+    for (const [ax, sg] of [[f.b, 1], [f.b, -1], [f.t, 1], [f.t, -1]]) {
+      const nrm = [ax[0] * sg, ax[1] * sg, ax[2] * sg], onB = ax === f.b;
+      const a0 = onB ? [sg * hw, -hw] : [-hw, sg * hw], a1 = onB ? [sg * hw, hw] : [hw, sg * hw];
+      face(nrm, [P(a0[0], a0[1], 0), P(a1[0], a1[1], 0), P(a0[0], a0[1], E.capH), P(a1[0], a1[1], E.capH)], [0, 0, 1, 1]);
+    }
+    face(f.n.slice(), [P(-hw, -hw, E.capH), P(hw, -hw, E.capH), P(-hw, hw, E.capH), P(hw, hw, E.capH)], [1, 1, 1, 1]);
+  }
+  return { edgeStrip: strip.done(), edgeHaze: haze.done(), railCaps: caps.done() };
 }
 
 /* Polish 4 drop shortcuts (render/routes.js draws these). uv.x = a 0..1 coordinate a slow glow wave runs
  * along (outward across the gap, round the ring, forward on the arrows), uv.y = that piece's gain.
- * routeEdge: a low kerb strip along the open edge, chevrons pointing off it, a glowing post at each end of
- * the break. routeLand: the soft catch zone, a ring round the landing pad and forward arrows inside it. */
-const KERB_W = 0.5, KERB_UP = 0.06, POST_H = 3.2, POST_W = 0.5, CHEV_STEP_M = 4, CHEV_ARM = 1.5, CHEV_W = 0.45;
+ * routeEdge: the kicker lip along the opening (a ramp up to the edge and its face), chevrons pointing off it, a
+ * glowing post at each end of the break joined by an arch over the opening (the frame you aim through), and
+ * floor chevrons leading to the opening from LEAD_M before it (EDGES lane: "I never made it to the shortcut").
+ * routeLand: the soft catch zone, a ring round the landing pad and forward arrows inside it. */
+const KICK_W = 1.4, KICK_UP = 0.18, POST_H = 4, POST_W = 0.5, CHEV_STEP_M = 4, CHEV_ARM = 1.5, CHEV_W = 0.45;
+const ARCH_RISE = 1.6, ARCH_W = 0.8, ARCH_SEGS = 16, LEAD_M = 80, LEAD_STEP_M = 8, LEAD_ARM = 1.7, LEAD_W = 0.55, LEAD_TURN = 0.4, LEAD_DOUBLE_M = 1.5;
 const RING_R = 4.6, RING_W = 0.45, RING_SEGS = 48, ZONE_LEN = 24, ZONE_HALF = 3.5, ZONE_LINE = 0.25;
 
 function buildRouteMeshes(track, builder) {
@@ -166,14 +219,32 @@ function buildRouteMeshes(track, builder) {
   };
   for (const r of rs) {
     const side = r.side === 'L' ? -1 : 1, s0 = r.openS0, len = r.openS1 - r.openS0;
-    // the kerb: follows the opening, u runs along it
+    // the kicker lip: a ramp rising to the edge and its face dropping away, u runs along it
     const n = Math.max(2, Math.ceil(len / STRIP_STEP_M));
     let prev = null;
     for (let k = 0; k <= n; k++) {
       track.frameAt(s0 + (len * k) / n, f);
-      const row = [side * (f.w / 2 - KERB_W), side * f.w / 2].map((x) => edge.v(off(f.p, f.b, x, f.n, KERB_UP), f.n, k / n, 0.8));
-      if (prev) edge.quad(prev[0], prev[1], row[0], row[1]);
+      const h = f.w / 2, out = side > 0 ? f.b : neg(f.b), sl = Math.hypot(KICK_W, KICK_UP);
+      const rn = [f.n[0] * KICK_W / sl + out[0] * -KICK_UP / sl, f.n[1] * KICK_W / sl + out[1] * -KICK_UP / sl, f.n[2] * KICK_W / sl + out[2] * -KICK_UP / sl];
+      const row = [edge.v(off(f.p, f.b, side * (h - KICK_W), f.n, DECAL_M), rn, k / n, 0.75), edge.v(off(f.p, f.b, side * h, f.n, KICK_UP), rn, k / n, 1.1),
+        edge.v(off(f.p, f.b, side * h, f.n, KICK_UP), out, k / n, 1), edge.v(off(f.p, f.b, side * h, f.n, -THICK_M), out, k / n, 0.6)];
+      if (prev) { edge.quad(prev[0], prev[1], row[0], row[1]); edge.quad(prev[2], prev[3], row[2], row[3]); }
       prev = row;
+    }
+    // floor chevrons leading to the opening: from LEAD_M out, drifting toward the open side, nosed at the gap
+    for (let d = LEAD_M; d >= LEAD_STEP_M * 1.5; d -= LEAD_STEP_M) {
+      track.frameAt(s0 - d, f);
+      const k = 1 - d / LEAD_M, x = side * (0.5 + k * (f.w / 2 - 3.2)), turn = side * LEAD_TURN * (0.4 + 0.6 * k);
+      const dl = Math.hypot(turn, 1), dir = [turn / dl, 1 / dl], perp = [dir[1], -dir[0]], gain = 0.9 + 0.4 * k;
+      for (const back of [0, LEAD_DOUBLE_M]) {           // a double chevron: reads as "this way" at speed
+        const tx = x - dir[0] * back, ty = -dir[1] * back;
+        for (const sg of [-1, 1]) {
+          const tip = [tx, ty], tb = [tx - dir[0] * LEAD_W, ty - dir[1] * LEAD_W];
+          const arm = [tx - dir[0] * LEAD_ARM + perp[0] * sg * LEAD_ARM, ty - dir[1] * LEAD_ARM + perp[1] * sg * LEAD_ARM];
+          const ab = [arm[0] - dir[0] * LEAD_W, arm[1] - dir[1] * LEAD_W];
+          flat(edge, f, [tip, tb, arm, ab], [k, k, k - 0.04, k - 0.04], gain);
+        }
+      }
     }
     // chevrons pointing off the edge, three across, through the opening and a little before it
     for (let d = len / 2 - CHEV_STEP_M * 2; d <= len / 2 + 1e-6; d += CHEV_STEP_M) {
@@ -196,6 +267,16 @@ function buildRouteMeshes(track, builder) {
         const b = [base[0] + ax[0] * POST_W / 2, base[1] + ax[1] * POST_W / 2, base[2] + ax[2] * POST_W / 2];
         edge.quad(edge.v(a, nrm, 0, 1.2), edge.v(b, nrm, 0, 1.2), edge.v(up(a), nrm, 1, 1.2), edge.v(up(b), nrm, 1, 1.2));
       }
+    }
+    // the arch: a glowing band from post top to post top over the opening, facing the road
+    let arc = null;
+    for (let k = 0; k <= ARCH_SEGS; k++) {
+      const u = k / ARCH_SEGS, y = POST_H + ARCH_RISE * Math.sin(Math.PI * u);
+      track.frameAt(s0 + len * u, f);
+      const inN = side > 0 ? neg(f.b) : f.b.slice();
+      const row = [edge.v(off(f.p, f.b, side * f.w / 2, f.n, y - ARCH_W / 2), inN, u, 1.2), edge.v(off(f.p, f.b, side * f.w / 2, f.n, y + ARCH_W / 2), inN, u, 1.2)];
+      if (arc) edge.quad(arc[0], arc[1], row[0], row[1]);
+      arc = row;
     }
     // the landing: soft catch zone (fill and side lines), the ring, two forward arrows
     const fill = (x0, x1, gain, lift) => {

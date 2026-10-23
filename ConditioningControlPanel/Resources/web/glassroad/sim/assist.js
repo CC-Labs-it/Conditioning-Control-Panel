@@ -33,6 +33,7 @@ const MODE = Object.freeze({
 export const assistMode = (m) => (Object.prototype.hasOwnProperty.call(MODE, m) ? m : ASSIST_MODES[0]);
 
 const STEP = 2;                                   // m between bend table samples
+const ROUTE_NOSE = 0.035;                         // rad: a nose turned this far out toward an opening counts as steering for it
 const YP = {};
 
 export function createAssist(track, feel, { mode = 'light' } = {}) {
@@ -56,6 +57,10 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     for (const j of track.jumps || []) for (let d = -40; d <= (j.landS > j.s ? j.landS - j.s : 20) + 6; d += STEP) lip[Math.floor(wrap(j.s + d, L) / STEP) % N] = 1;
   }
   const at = (s) => Math.floor(wrap(s, L) / STEP) % N;
+  // drop shortcuts (track.routes): from assist.routeApproachM before an opening to its far end, a player who
+  // steers toward that opening gets no centre pull (EDGES lane: the pull used to drag the player off the shortcut)
+  const zones = (track.routes || []).map((r) => ({ from: r.openS0, len: r.openS1 - r.openS0, side: r.side === 'L' ? -1 : 1 }));
+  const zoneAt = (s, lead) => { for (const z of zones) if (wrap(s - (z.from - lead), L) <= lead + z.len) return z; return null; };
 
   const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] }, FA = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
   const out = { steer: 0, throttle: 0, brake: 0, hop: false, hopPressed: false, pause: false, item: false, back: false };
@@ -128,6 +133,12 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
 
     // steering help only on the ground, rolling forward, out of a drift
     if (backwards || st[S.grounded] <= 0 || st[S.driftDir] !== 0 || speed < 2) return out;
+    // the player steering for a drop shortcut's opening (stick toward it, or the nose already turned out that way)
+    const z = steerIn && zones.length ? zoneAt(s, g('routeApproachM')) : null;
+    if (z && (Math.sign(a.steer) === z.side || Math.atan2(ax.fx * f0.b[0] + ax.fy * f0.b[1] + ax.fz * f0.b[2], ft) * z.side > ROUTE_NOSE)) {
+      out.steer = a.steer;
+      return out;
+    }
     view.active = true;
     const h = half[at(s)];
     // PULL: past pullFromHalf of the half width, back toward the centre

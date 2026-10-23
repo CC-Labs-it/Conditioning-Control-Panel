@@ -11,11 +11,18 @@
  * sets) so the colour never jumps when the flow wraps. Gentle: pal.motion halves the flow and also
  * stands in for contrast (1 or 0.5), flattening the core toward the palette. Everything fades within LOOK.railNearM of the camera
  * so a rail beside the eye never walls the view.
+ *
+ * EDGES lane (owner 2026-10-23: "hard to tell where the guardrails are"): the barrier is 1.2 m (track/mesh.js
+ * RAIL_H), its glass body more opaque, with a bright top line, a solid foot and posts at a steady rhythm
+ * (render/edgesMath.js EDGE_LOOK.rail), so a railed edge reads as "you bounce here" from 100 m on every palette.
+ * The posts are fixed in the world and melt into their average where they get denser than the pixels (fwidth),
+ * so a far rail never shimmers; the near fade above still clears a rail beside the eye.
  */
 import { MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
-import { uv, uniform, clamp, mix, float, vec2, vec3, texture, smoothstep, positionWorld, cameraPosition, pow, abs, sin, cos, max } from 'three/tsl';
+import { uv, uniform, clamp, mix, float, vec2, vec3, texture, smoothstep, positionWorld, cameraPosition, pow, abs, sin, cos, max, min, fract, fwidth } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { fitPeriod } from '../spectrum.js';
+import { EDGE_LOOK } from '../edgesMath.js';
 
 /** Tube numbers; LOOK.railTube overrides any key. */
 export const RAIL_TUBE = Object.freeze({
@@ -53,9 +60,21 @@ export function createRailMaterial(pal, art = null) {
   m.colorNode = coreCol.mul(core.mul(T.coreGain).add(0.2))
     .add(wallCol.mul(wall).mul(T.wallGain))
     .add(vec3(1, 0.97, 0.99).mul(streak.add(low).add(glint))).mul(u.pulse.add(1));
+  // the barrier: a bright top line, a solid foot and posts every postM (fitted to the lap so the wrap is seamless)
+  const B = { ...EDGE_LOOK.rail, ...((LOOK.edges && LOOK.edges.rail) || {}) };
+  const up = uv().x, H = LOOK.railHeightM;
+  const topLine = smoothstep(H - B.topM - 0.02, H - B.topM + 0.02, up);
+  const foot = float(1).sub(smoothstep(B.baseM * 0.6, B.baseM, up));
+  const xp = uv().y.div(lap ? fitPeriod(lap, B.postM) : B.postM), fw = min(fwidth(xp), float(1));
+  const share = B.postW / B.postM, tri = abs(fract(xp).sub(0.5)).mul(2);
+  const postRaw = smoothstep(float(1 - share).sub(fw), float(1 - share).add(fw), tri);
+  const post = mix(postRaw, float(share), smoothstep(B.postDense[0], B.postDense[1], fw));
+  const hot = (k) => mix(coreCol, vec3(1, 0.98, 1), k).mul(u.pulse.add(1));
+  m.colorNode = mix(mix(m.colorNode, hot(B.postWhite), post), hot(B.topWhite), max(topLine, foot.mul(0.5)));
   const near = smoothstep(LOOK.railNearM[0], LOOK.railNearM[1], positionWorld.distance(cameraPosition));
-  m.opacityNode = clamp(float(T.bodyAlpha).add(wall.mul(T.wallAlpha)).add(streak.mul(0.6)).add(low.mul(0.3))
-    .add(core.mul(T.coreAlpha)).add(glint.mul(0.5)), 0, 1).mul(near);
+  m.opacityNode = max(clamp(float(B.bodyAlpha).add(wall.mul(T.wallAlpha)).add(streak.mul(0.6)).add(low.mul(0.3))
+    .add(core.mul(T.coreAlpha)).add(glint.mul(0.5)), 0, 1),
+  max(topLine.mul(B.topAlpha), max(post.mul(B.postAlpha), foot.mul(B.baseAlpha)))).mul(near);
   return { material: m, uniforms: u };
 }
 

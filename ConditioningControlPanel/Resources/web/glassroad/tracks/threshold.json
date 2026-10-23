@@ -190,7 +190,7 @@
       "side": "L",
       "from": 51,
       "to": 53,
-      "open": {"ds":13,"len":5},
+      "open": {"ds":11.5,"len":8},
       "land": {"from":78,"to":84},
       "pad": {"node":82,"ds":3,"x":-1}
     }

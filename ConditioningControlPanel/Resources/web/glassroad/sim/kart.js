@@ -18,7 +18,7 @@ import { updateDrift, cancelDrift, driftYaw, maybeStartDrift } from './drift.js'
 import { hop, gravityMps2 } from './hop.js';
 import { takeoff, land } from './air.js';
 import { baseYaw, gripYaw } from './steer.js';
-import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt } from './routes.js';
+import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch } from './routes.js';
 
 export { applyBoost };
 
@@ -96,7 +96,8 @@ export function step(st, a, track, feel, dt, ev) {
   updateDrift(st, a, feel, dt, ev, wasGround, speed, slipDeg);
 
   if (wasGround && a.hopPressed && !stalled) {
-    hop(st, feel, ev, V, qa.normal, speed, track);
+    // just before a drop shortcut's kicker lip the hop sees that lip too (the trick's early window)
+    hop(st, feel, ev, V, qa.normal, speed, hopTrack(track, qa, V, speed, feel.get('trick.earlyS')));
     maybeStartDrift(st, a, feel, speed, ev);
   }
   const air = st[S.airborne] > 0;
@@ -112,11 +113,13 @@ export function step(st, a, track, feel, dt, ev) {
   // off its own road in the air: a drop shortcut's landing road beneath it (sim/routes.js)
   let under = null;
   if (air && track.routes && track.routes.length) {
+    let lq = qb;
     if (!(qb.onRoad && qb.height > -snap - 0.5)) {
-      under = beneath(track, st, P, QR);
+      under = beneath(track, st, P, QR); lq = QR;
       if (under && QR.height <= 0) qb = QR;
     } else under = onLanding(track, st, qb);      // the plain probe (its far search) already found it
     if (under && firstBeneath(st, under)) { ev.emit('route-drop', { id: under.id }); if (wasEdge) ev.emit('edge-exit', { to: 'route' }); }
+    if (under) airCatch(track, lq, V, feel, dt);  // the glass catch: the flight eases toward the landing road's middle
   }
   const road = !has(qb.flags, 'jump'), n = qb.normal, vn = v3dot(V, n);
   const ground = qb.onRoad && qb.height >= -(snap + Math.abs(vn) * dt) &&
@@ -125,23 +128,27 @@ export function step(st, a, track, feel, dt, ev) {
     v3addScaled(P, P, n, -qb.height); v3reject(V, V, n);
     if (air) land(st, a, feel, ev, V, n, speed, dt);
     if (air && under && onLanding(track, st, qb) === under) landRoute(track, st, under, qb, F, feel, ev, prevS);
-  } else if (!air) takeoff(st, ev, road && qb.edgeDist < 0 ? 'edge' : 'lip');
-  else st[S.airTime] += dt;
+  } else if (!air) {
+    // a drop shortcut's kicker lip (sim/routes.js edgeAt): driving off the opening throws the kart up a little,
+    // a 'lip' take-off, so a hop right after it pays the trick
+    const kick = road && qb.edgeDist < 0 && edgeAt(track, qb, qb.lateral, gap(feel, 'kart.radiusM')) === 'kicker';
+    if (kick) v3addScaled(V, V, n, gap(feel, 'route.kickUpMps'));
+    takeoff(st, ev, !kick && road && qb.edgeDist < 0 ? 'edge' : 'lip');
+  } else st[S.airTime] += dt;
 
   // rails (and open sides under Gentle, the soft rails)
   const radius = gap(feel, 'kart.radiusM');
   let lat = qb.lateral, ed = qb.edgeDist;
-  // a drop shortcut's open edge is a low kerb for a kart on the ground: only a hop clears it
-  const edgeKind = ed < radius ? edgeAt(track, qb, lat) : null, kerb = edgeKind === 'rail' || (edgeKind === 'kerb' && !air);
+  // a drop shortcut's open side is a rail but for its kicker opening, which lets every kart through (Gentle too)
+  const edgeKind = ed < radius ? edgeAt(track, qb, lat, radius) : null, kerb = edgeKind === 'rail';
   // a kart above the rail top, or already beyond the rail line in the air, flies past it (polish 4)
   const overRail = air && (qb.height > gap(feel, 'wall.topM') || ed < 0);
-  if (road && !overRail && (qb.railed || kerb || feel.get('gentle.on')) && ed < radius && qb.height > -radius) {
+  const soft = feel.get('gentle.on') && edgeKind !== 'kicker';
+  if (road && !overRail && (qb.railed || kerb || soft) && ed < radius && qb.height > -radius) {
     const b = track.frameAt(qb.s, FR).b, side = lat >= 0 ? 1 : -1, pen = radius - ed;
     v3addScaled(P, P, b, -side * pen); lat -= side * pen; ed = radius;
     const into = v3dot(V, b) * side;
-    if (into > 0 && edgeKind === 'kerb' && !qb.railed && !feel.get('gentle.on')) {
-      v3addScaled(V, V, b, -side * into);            // the kerb only stops the slide: the nose keeps aiming out
-    } else if (into > 0) {
+    if (into > 0) {
       const keep = feel.get('wall.normalKeep');
       v3addScaled(V, V, b, -side * into * (1 + keep));
       if (v3dot(F, b) * side > 0) v3norm(F, v3reject(F, F, b));   // the nose turns along the rail

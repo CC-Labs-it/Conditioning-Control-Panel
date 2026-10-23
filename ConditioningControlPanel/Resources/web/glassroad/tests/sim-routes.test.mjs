@@ -9,7 +9,7 @@ import { S, RESPAWN, createState, setPos, setQuat, setVel } from '../sim/state.j
 import { step } from '../sim/kart.js';
 import { updateRespawn } from '../sim/respawn.js';
 import { createProgress, STEP_MAX_M } from '../sim/progress.js';
-import { registeredSkip } from '../sim/routes.js';
+import { registeredSkip, edgeAt } from '../sim/routes.js';
 import { createActions } from '../core/actions.js';
 import { qfromBasis, wrap } from '../core/math.js';
 import { makeFeel, DT } from './sim-fake.mjs';
@@ -79,7 +79,7 @@ test('routes: threshold carries one drop shortcut, left open over the lower stra
   assert.ok(JSON_TRACK.nodes[r.to].flags.includes('rail') && JSON_TRACK.nodes[r.from - 1].flags.includes('rail'));
   const drop = JSON_TRACK.nodes[r.from].p[1] - JSON_TRACK.nodes[r.land.from].p[1];
   assert.ok(drop >= 10 && drop <= 16, 'drop ' + drop);
-  assert.ok(r.openS1 - r.openS0 >= 4 && r.openS1 - r.openS0 <= 6, 'the opening is 4 to 6 m: ' + (r.openS1 - r.openS0).toFixed(1));
+  assert.ok(r.openS1 - r.openS0 >= 7 && r.openS1 - r.openS0 <= 9, 'the opening is about 8 m (EDGES lane): ' + (r.openS1 - r.openS0).toFixed(1));
   assert.ok(r.openS0 >= r.fromS && r.openS1 <= r.toS);
   assert.ok(r.pad.s >= r.land.fromS && r.pad.s <= r.land.toS);
 });
@@ -131,10 +131,15 @@ test('routes: the skip credits the jumped checkpoint once, and the lap still cou
   assert.ok(r.lapTimes[0] < 42, 'a shortcut lap ' + r.lapTimes[0].toFixed(1) + ' s');
 });
 
-test('routes: without a hop the kerb holds the kart on the upper road', () => {
-  const { names, st } = drive({ hop: false, maxS: 4 });
-  assert.ok(!names.includes('route-land') && !names.includes('drop'), names.filter((n) => /route|drop|edge/.test(n)).join(','));
-  assert.ok(st[S.s] < 700 && st[S.s] > 580, 'still on the helix at s ' + st[S.s]);
+test('routes: the opening is a kicker lip, the rest of the open side a rail (EDGES lane: no kerb, no hop needed)', () => {
+  const q = (s) => { const f = track.frameAt(s); return track.query(f.p[0] - f.b[0] * 6, f.p[1] - f.b[1] * 6, f.p[2] - f.b[2] * 6, f.seg); };
+  assert.equal(edgeAt(track, q((R0.openS0 + R0.openS1) / 2), -6), 'kicker');
+  assert.equal(edgeAt(track, q(R0.openS0 - 3), -6), 'rail');
+  assert.equal(edgeAt(track, q(R0.openS1 + 1.5), -6), 'rail');
+  assert.equal(edgeAt(track, q(R0.openS0 - 0.5), -6, 0.7), 'kicker', 'a body over the opening never scrapes the rail end');
+  assert.equal(edgeAt(track, q((R0.openS0 + R0.openS1) / 2), 6), null, 'the far side is a plain rail');
+  const { names } = drive({ hop: false, lineM: 6, maxS: 6 });
+  assert.ok(names.includes('route-land'), 'driven through, no hop: ' + names.filter((n) => /route|drop|edge|wall/.test(n)).join(','));
 });
 
 test('routes: an unregistered or backwards jump never credits a checkpoint', () => {

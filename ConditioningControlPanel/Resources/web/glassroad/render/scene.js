@@ -25,6 +25,7 @@ import { Q } from './quality.js';
 import { createPalette } from './materials/palette.js';
 import { createRoadMaterial } from './materials/road.js';
 import { createRailMaterial } from './materials/rails.js';
+import { createEdges } from './edges.js';
 import { createPadMaterial } from './materials/pads.js';
 import { createSkyMaterial, SKY_PALETTES } from './materials/sky.js';
 import { buildCountdown, buildFinish, buildScatter } from './dressing.js';
@@ -143,6 +144,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const roadMesh = add(meshFrom(track.meshes.road, road.material));
   const rails = createRailMaterial(pal, art);
   add(meshFrom(track.meshes.rails, rails.material));
+  // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
+  let edges = null;
+  try { edges = createEdges(scene, track, pal, { pulse: rails.uniforms.pulse }); } catch (e) { console.warn('[glassroad/world] edges failed: ' + (e && e.message)); }
   const pad = createPadMaterial(LOOK.padColour, art && art.tex('boost-chevron-mask')), lip = createPadMaterial(LOOK.lipColour);
   const padMesh = add(meshFrom(track.meshes.pads, pad.material));
   add(meshFrom(track.meshes.jumps, lip.material));
@@ -380,6 +384,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       if (media) media.update(dt, { camera: view.camera, gentle, scrollMul: scroll, contrastMul: contrast });
     }
     if (routes) routes.update(dt, { gentle, paused: !!view.paused, scroll });
+    if (edges) edges.update(dt, { gentle, paused: !!view.paused });
     particles.update(dt);
     wakes.update(dt);
     lines.update(dt, k, fx, kart);
@@ -400,6 +405,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (spirals) spirals.dispose();
     if (media) media.dispose();
     if (routes) routes.dispose();
+    if (edges) edges.dispose();
     if (musicRoad) musicRoad.dispose();
     if (wordVis) wordVis.dispose();
     if (wordFx) wordFx.dispose();
