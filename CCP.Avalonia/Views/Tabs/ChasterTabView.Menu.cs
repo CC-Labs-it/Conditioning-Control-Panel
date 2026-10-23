@@ -1,8 +1,7 @@
 // PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: 5. the menu (BuildMenu, Row,
 // PaintRowLit, PriceToggle_Changed :1176-1290), ApplyPriceToggles (:1149) and the red flash switch
 // (ChkFlashDodge_Changed :1168), on Core TabPrices / TabPageText / TabMenuCopy.
-// ponytail: the row trailer (hover popup, Row_MouseEnter/Leave) and FxRow / FxKeyTurned (Fx.cs) are not
-// ported (views-tab-chaster).
+// ponytail: FxRow / FxKeyTurned (Fx.cs) are not ported (views-tab-chaster).
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -124,6 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ToolTip.SetTip(row, tip);
             }
             row.Click += PriceToggle_Changed;
+            row.PointerEntered += Row_PointerEntered;
+            row.PointerExited += Row_PointerExited;
             _priceToggles[price.Id] = row;
             return row;
         }

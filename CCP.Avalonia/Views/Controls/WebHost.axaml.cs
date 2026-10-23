@@ -27,8 +27,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// possible here, unlike what the first pass of these views assumed) and
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
-    /// NewWindowRequested, GoBack/GoForward, Stop and Refresh; nothing needs
-    /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
+    /// GoBack/GoForward, Stop and Refresh; those are not wrapped. The trailer constructor
+    /// also accepts browser options and popup suppression and exposes navigation success internally. It has NO zoom factor, no document-created script
     /// injection, and no fullscreen-element signal.
     ///
     /// The whole point is the fallback. A Linux box without webkit2gtk installed is the DEFAULT,
@@ -203,7 +203,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly TextBlock _txtReason, _txtSource;
         private readonly NativeWebView? _web;
 
-        public WebHost()
+        // Keep the native adapter while its owner moves between the warm host and popup.
+        internal IDisposable? PreserveForMove() => _web?.BeginReparenting();
+        internal event Action<Uri?, bool>? NavigationResult;
+
+        public WebHost() : this(null, false) { }
+
+        internal WebHost(Action<WebViewEnvironmentRequestedEventArgs>? configure, bool suppressNewWindows)
         {
             AvaloniaXamlLoader.Load(this);
             _webSlot = this.FindControl<Panel>("WebSlot")!;
@@ -229,7 +235,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.NavigationStarted += OnNavigationStarted;
-                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
+                    _web.EnvironmentRequested += (_, e) => configure?.Invoke(e);
+                    _web.NewWindowRequested += (_, e) => { if (suppressNewWindows) e.Handled = true; };
+                    _web.NavigationCompleted += (_, e) =>
+                    {
+                        var url = e.Request ?? _web?.Source;
+                        OnNavigationCompleted(url);
+                        NavigationResult?.Invoke(url, e.IsSuccess);
+                    };
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);

@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:p="using:Avalonia.Controls.Primitives"
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.ChasterTabView">
     <UserControl.Resources>
         <ControlTheme x:Key="CirceCta" TargetType="Button">
@@ -137,6 +138,7 @@
         </ControlTheme>
     </UserControl.Resources>
 
+    <Grid>
     <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="26,22,26,20" MaxWidth="1080" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
             <!-- header: the name, and the account -->
@@ -597,4 +599,30 @@
             </StackPanel>
         </Grid>
     </ScrollViewer>
+        <Grid x:Name="TrailerWarmHost" Width="320" Height="190" IsVisible="False" IsHitTestVisible="False">
+            <fx:ChasterTrailerView x:Name="TrailerWeb"/>
+        </Grid>
+        <Popup x:Name="Trailer" Placement="Bottom" VerticalOffset="6" IsLightDismissEnabled="False">
+            <Border x:Name="TrailerCard" Width="320" Background="#FF1A1230" BorderBrush="{DynamicResource GlassBorderBrush}"
+                    BorderThickness="1" Padding="8" PointerEntered="Trailer_PointerEntered" PointerExited="Trailer_PointerExited">
+                <p:VisualLayerManager EnableAdornerLayer="True">
+                    <StackPanel>
+                        <Grid x:Name="TrailerPlate" Height="190" ClipToBounds="True" Background="#FF120C1F">
+                            <Image x:Name="TrailerArt" Stretch="UniformToFill" RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                        </Grid>
+                        <Grid Margin="6,8,6,0" ColumnDefinitions="*,Auto">
+                            <TextBlock x:Name="TxtTrailerFlavour" FontFamily="Fredoka, Segoe UI" FontSize="14" FontWeight="Medium"
+                                       Foreground="{DynamicResource TextLightBrush}" TextWrapping="Wrap"/>
+                            <Border x:Name="TrailerBadgeHost" Grid.Column="1" VerticalAlignment="Top" Margin="8,0,0,0"/>
+                        </Grid>
+                        <Grid Margin="6,4,6,4" ColumnDefinitions="*,Auto">
+                            <TextBlock x:Name="TxtTrailerWhy" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" Opacity="0.85"
+                                       TextWrapping="Wrap"/>
+                            <Border x:Name="TrailerFigureAnchor" Grid.Column="1" Width="56" Height="22" VerticalAlignment="Bottom" Margin="8,0,0,0"/>
+                        </Grid>
+                    </StackPanel>
+                </p:VisualLayerManager>
+            </Border>
+        </Popup>
+    </Grid>
 </UserControl>

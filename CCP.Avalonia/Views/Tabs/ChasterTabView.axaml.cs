@@ -4,7 +4,7 @@
 // the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
 // Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
 // ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
-// limits, the row trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
+// limits and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
 // menu (Menu.cs), how-it-works/hint/reset (Help.cs) and the price box (PriceEdit.cs) are partials.
 // The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
 // bursts included) are later slices. Unlink, the switch + consent and pause are real (slice 2).
@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LadderInit();
             NumbersInit();
             KeysInit();
+            TrailerInit();
             Refresh();
             LadderRenderSample();
         }
@@ -70,6 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             Refresh();
             LadderOnShown();
+            TrailerWeb.Start();
             // WPF FxOnShown (Fx.cs:159-160): the word lands, then idles.
             HeroTitle.PlayEntry();
             HeroTitle.Start();
@@ -120,7 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             NumbersPanel.IsVisible = linked;
             MenuPanel.IsVisible = linked;
             if (linked) { RefreshNumbers(); ApplyPriceToggles(); RefreshPresets(); }
-            if (linked) RefreshAdded(); else HideLadder();
+            if (linked) RefreshAdded(); else { HideLadder(); HideTrailer(); }
             SwitchPill.IsVisible = linked;
             PausePill.IsVisible = linked;
             PaintPause(CoreSettings.Current.ChasterPaused);
