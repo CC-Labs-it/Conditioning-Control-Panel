@@ -3,8 +3,9 @@
  * A source tags its steer with `steerKind`: 'key' (digital), 'stick' (gamepad) or 'touch'. The action
  * map (core/actions.js) shapes each tagged source before the sources are merged:
  * - key: a held key BUILDS instead of snapping: it starts at input.keyStart and ramps to full over
- *   input.keyRampS on an ease-in (input.keyRampPow, 1 = linear); a release or a change of side starts
- *   over. A tap is a small correction, full lock needs a held key (polish 4: progressive).
+ *   input.keyRampS on an ease-in (input.keyRampPow, 1 = linear). A fresh tap starts small. Reversing
+ *   a committed hold keeps a bounded part of the ramp, so counter-steering does not start from a tap.
+ *   A short neutral crossover is allowed; releasing or tapping the same side starts over.
  * - stick / touch: a power curve |x|^p (input.stickPow / input.touchPow): gentle near centre, full at
  *   the edge. expo() stays for callers that want the Phase A blend.
  * Never mirrors or inverts (owner law: left stays left); sign in = sign out. Bots never pass here.
@@ -39,16 +40,36 @@ export function keyRampValue(heldS, start, rampS, pow = 1) {
   return start + (1 - start) * (pow === 1 ? t : Math.pow(t, Math.max(0.5, pow)));
 }
 
+// A deliberate hold can carry at most 45% of its ramp into the opposite side. Commitment uses real
+// held time, never inherited ramp time: alternating taps cannot build full lock. The short crossover
+// covers the gap between lifting one key and pressing the other, while neutral still outputs zero.
+const REVERSE = Object.freeze({ commitS: 0.18, carry: 0.45, crossoverS: 0.08 });
+
 /** One digital source's ramp state. step(raw, dtS, start, rampS) -> shaped steer. */
 export function createKeyRamp() {
-  let side = 0, held = 0;
+  let side = 0, held = 0, pressed = 0, releasedSide = 0, releasedHeld = 0, releasedAge = 0;
   return {
     step(raw, dtS, start, rampS, pow = 1) {
-      const s = raw > 0 ? 1 : raw < 0 ? -1 : 0;
-      if (s !== side) { side = s; held = 0; } else if (s) held += Math.max(0, dtS);
-      return s ? s * keyRampValue(held, start, rampS, pow) : 0;
+      const s = raw > 0 ? 1 : raw < 0 ? -1 : 0, dt = Math.max(0, dtS);
+      if (!s) {
+        if (side) {
+          releasedSide = pressed >= REVERSE.commitS ? side : 0;
+          releasedHeld = held; releasedAge = 0;
+        }
+        releasedAge += dt;
+        side = 0; held = 0; pressed = 0;
+        return 0;
+      }
+      if (s !== side) {
+        const reverse = side ? s === -side && pressed >= REVERSE.commitS
+          : s === -releasedSide && releasedAge + dt <= REVERSE.crossoverS;
+        const carry = side ? held : releasedHeld;
+        held = reverse ? Math.min(carry, Math.max(0, rampS) * REVERSE.carry) : 0;
+        side = s; pressed = 0; releasedSide = 0; releasedHeld = 0; releasedAge = 0;
+      } else { held += dt; pressed += dt; }
+      return s * keyRampValue(held, start, rampS, pow);
     },
-    reset() { side = 0; held = 0; },
+    reset() { side = 0; held = 0; pressed = 0; releasedSide = 0; releasedHeld = 0; releasedAge = 0; },
   };
 }
 

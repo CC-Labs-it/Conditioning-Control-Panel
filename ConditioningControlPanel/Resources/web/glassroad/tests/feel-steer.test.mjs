@@ -101,7 +101,7 @@ test('steer curve: expo is odd, fixed at 0 and 1, finer near centre', () => {
   near(expo(2, 0.35), 1, 1e-12, 'clamped');
 });
 
-test('steer curve: a held key builds from keyStart to full over keyRampS; a side change starts over', () => {
+test('steer curve: a held key builds from keyStart to full; a short correction changing side starts over', () => {
   const { keyStart: s0, keyRampS: rs } = INPUT_DEFAULTS;
   assert.equal(keyRampValue(0, s0, rs), s0);
   near(keyRampValue(rs / 2, s0, rs), s0 + (1 - s0) / 2, 1e-12);
