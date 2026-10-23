@@ -19,8 +19,8 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// org.freedesktop.Notifications Notify / ActionInvoked / NotificationClosed, raw over
 /// Tmds.DBus.Protocol like <see cref="PortalPanicShortcut"/>. No server (or not Linux): the in-app
 /// toast when the window is visible, otherwise dropped and logged once.
-/// ponytail: Windows has no Avalonia toast API, so it always takes the fallback; add a WinRT
-/// toast if balloons matter there.
+/// shortcut: Windows has no Avalonia toast API, so it always takes the fallback; the WPF balloon twin
+/// is lane win-avalonia-parity-b (parity row shell-windows-win32-gaps).
 /// </summary>
 internal static class OsNotifications
 {

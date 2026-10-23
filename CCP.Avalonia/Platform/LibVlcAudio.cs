@@ -50,7 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// The Avalonia head's answer to <see cref="CoreAudio"/>: one shared LibVLC, one
     /// MediaPlayer per one-shot, disposed when the clip ends. Ducking lowers OTHER apps'
     /// PulseAudio/PipeWire sink-inputs through <c>pactl</c> on Linux and restores them on
-    /// Unduck, with WPF's ref count and generation rules.
+    /// Unduck, with WPF's ref count and generation rules; on Windows the same state machine drives
+    /// <see cref="WasapiDuck"/>, WPF's WASAPI session sweep.
     /// </summary>
     internal sealed class LibVlcAudio
     {
@@ -77,6 +78,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
             _vlc = new LibVLC(options.Append("--quiet").ToArray());
+            if (OperatingSystem.IsWindows()) _wasapi = new WasapiDuck();
             Shared ??= _vlc;
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
@@ -84,14 +86,20 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
         internal LibVlcAudio(Func<string, string> pactl) { _vlc = null!; _pactl = pactl; }
 
+        /// <summary>Ducking only, with the Windows session sweep stubbed: for the WASAPI test.</summary>
+        internal LibVlcAudio(WasapiDuck wasapi) { _vlc = null!; _wasapi = wasapi; }
+
+        // Windows: WPF's WASAPI session sweep instead of pactl (null on Linux, which keeps pactl,
+        // and in the pactl test ctor on every OS).
+        private readonly WasapiDuck? _wasapi;
+
         public void Seed()
         {
             Instance = this;
             LayeredAudio.Instance = new LayeredAudio(path => new LayeredAudio.VlcLayerPlayer(_vlc, path));
             CoreAudio.PlayOneShotProvider = (path, volume, tag, started, finished) => PlayOneShot(path, volume, tag, started, finished);
             CoreAudio.PlayStoppableProvider = PlayOneShot;
-            // ponytail: Windows ducking stays unseeded (no-op) until AudioService's WASAPI sweep is ported.
-            if (!OperatingSystem.IsLinux()) return;
+            if (!OperatingSystem.IsLinux() && _wasapi == null) return;
             CoreAudio.DuckProvider = Duck;
             CoreAudio.UnduckProvider = Unduck;
             CoreAudio.DuckGenerationProvider = () => { lock (_duckLock) return _duckGeneration; };
@@ -269,7 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private static void Fire(Action? a) { try { a?.Invoke(); } catch { } }
 
-        // ---- ducking (Linux, pactl) ----
+        // ---- ducking (Linux pactl; Windows WASAPI through _wasapi) ----
 
         private readonly object _duckLock = new();
         private long _duckGeneration;
@@ -292,7 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 var keep = 1 - Math.Clamp(strength, 0, 100) / 100.0;
                 // As WPF: our own layers are in-process, so the sweep skips them - duck them directly.
                 LayeredAudio.Instance?.ApplyDuck((float)(1 - keep));
-                Enqueue(() => DuckSweep(keep));
+                Enqueue(_wasapi == null ? () => DuckSweep(keep) : () => _wasapi.Sweep(keep, () => IsDucked));
             }
         }
 
@@ -306,7 +314,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _isDucked = false;
                 _duckWatchdog?.Dispose();
                 LayeredAudio.Instance?.ReleaseDuck();
-                Enqueue(Restore);
+                Enqueue(_wasapi == null ? Restore : _wasapi.Restore);
             }
         }
 
@@ -339,7 +347,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 if (_pactlWarned) return;
                 _pactlWarned = true;
-                Log.Warning("[Audio] ducking via pactl unavailable: {E}", ex.Message);
+                Log.Warning("[Audio] ducking unavailable: {E}", ex.Message);
             }
         }, TaskScheduler.Default);
 

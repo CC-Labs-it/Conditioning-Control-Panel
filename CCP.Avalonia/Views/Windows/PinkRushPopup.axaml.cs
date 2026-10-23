@@ -55,9 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             this.FindControl<TextBlock>("TxtPinkRushTitle")!.Text = CoreMods.PinkRushName;
             this.FindControl<TextBlock>("TxtPinkRushSubtitle")!.Text = CoreMods.PinkRushDescription;
 
-            // ponytail: needs Helpers.PassiveToastWindow (Win32 WS_EX_NOACTIVATE), which kept this
-            // toast from stealing mouse capture from fullscreen games (ccp-bugs #1000), wired when
-            // a per-platform equivalent lands. ShowActivated="False" is the portable half.
+            // Helpers.PassiveToastWindow: keeps this toast from stealing mouse capture from
+            // fullscreen games (ccp-bugs #1000). Win32 only; ShowActivated="False" is the portable half.
+            Platform.Win32Window.ApplyPassiveToast(this);
 
             _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _countdownTimer.Tick += CountdownTimer_Tick;

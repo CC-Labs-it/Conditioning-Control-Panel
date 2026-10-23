@@ -348,12 +348,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // wedge watchdog before the first window existed. Both are VideoService, and both only
             // guard an in-process LibVLC decoder - browser mode never armed them at all.
 
-            // ponytail: the WPF original installed an HwndSource hook returning MA_NOACTIVATE for
-            // WM_MOUSEACTIVATE. LOST BEHAVIOUR, no X11 equivalent in the head today: a click on
-            // the game window will raise it inside the keep-above band, and the count bubbles -
-            // separate topmost windows - can disappear behind it until the next spawn restacks
-            // them. Needs an X11Overlay capability (deny focus-on-click / _NET_WM_USER_TIME), and
-            // this layer may not edit X11Overlay.cs, so it is its own change.
+            // The WPF original installed an HwndSource hook returning MA_NOACTIVATE for
+            // WM_MOUSEACTIVATE; Win32Window does the same on Windows. Still LOST on X11: a click on
+            // the game window raises it inside the keep-above band, and the count bubbles can
+            // disappear behind it until the next spawn restacks them. shortcut: needs an X11Overlay
+            // capability (deny focus-on-click / _NET_WM_USER_TIME).
+            Platform.Win32Window.DenyMouseActivate(this);
 
             try
             {

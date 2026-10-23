@@ -174,6 +174,8 @@ namespace ConditioningControlPanel.Avalonia
             Mods = new ModService();
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
+            // WPF App.xaml.cs:2559: mod-tinted OS title bars right after the mod service starts (Windows only).
+            Platform.Win32Window.RegisterDarkTitleBars();
         }
 
         /// <summary>The cclabs catalogue client (WPF App.Catalogue): the same Core client and inputs as WPF's

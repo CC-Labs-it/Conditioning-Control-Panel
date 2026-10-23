@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal sealed class PulseMicSource : IMicSource
     {
-        /// <summary>The seeded engine (null until <see cref="Seed"/> ran on Linux).</summary>
+        /// <summary>The seeded engine (null until <see cref="Seed"/> ran on Linux or Windows).</summary>
         internal static SpeechEngine? Speech { get; private set; }
 
         private readonly string? _sourceOverride;
@@ -29,8 +29,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Seed <see cref="CoreSpeech"/> from one engine, as WPF App.xaml.cs:519 does.</summary>
         internal static void Seed()
         {
-            if (!OperatingSystem.IsLinux()) return; // ponytail: Windows Avalonia has no mic source yet; reuse WPF's NAudio one when it gets one
-            var mic = new PulseMicSource();
+            IMicSource? mic = OperatingSystem.IsLinux() ? new PulseMicSource()
+                : OperatingSystem.IsWindows() ? new WinMmMicSource() // WPF's NAudio WaveInEvent twin
+                : null;
+            if (mic == null) return;
             Use(new SpeechEngine(mic, SpeechEngine.DefaultModelRoots), mic);
         }
 
