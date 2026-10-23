@@ -24,7 +24,7 @@
  * pattern-matching prose. Sentences are the UI's job, never this file's.
  * ==========================================================================*/
 
-import { netRequest, identity } from '../bridge.js';
+import { netRequest, netInfo, identity } from '../bridge.js';
 
 /** The one place the base path is written down. */
 export const BASE = '/v2/pbp';
@@ -51,6 +51,14 @@ export const ROUTES = Object.freeze({
   claimTimeout: (id) => `${BASE}/match/${encodeURIComponent(id)}/claim_timeout`,
   heartbeat: (id) => `${BASE}/match/${encodeURIComponent(id)}/heartbeat`,
   history: () => `${BASE}/history`,
+  watch: (id) => `${BASE}/watch/${encodeURIComponent(id)}`,
+  watchUpto: (id, n) => `${BASE}/watch/${encodeURIComponent(id)}/upto/${Math.max(0, Math.trunc(Number(n) || 0))}`,
+  watchChunk: (id, n) => `${BASE}/watch/${encodeURIComponent(id)}/chunk/${Math.max(0, Math.trunc(Number(n) || 0))}`,
+  react: (id) => `${BASE}/watch/${encodeURIComponent(id)}/react`,
+  reactions: (id, b) => `${BASE}/watch/${encodeURIComponent(id)}/reactions/${Math.max(0, Math.trunc(Number(b) || 0))}`,
+  fx: (id) => `${BASE}/match/${encodeURIComponent(id)}/fx`,
+  ladder: () => `${BASE}/ladder`,
+  ladderMe: () => `${BASE}/ladder/me`,
 });
 
 /** Machine-readable `error` values. The UI maps these to sentences, not the reverse. */
@@ -77,6 +85,14 @@ export const ApiError = Object.freeze({
   Server: 'server_error',
   /** A 2xx whose body was not the JSON this file expects. */
   Malformed: 'malformed_response',
+  /** 403 on a watch route: a private game, a player who said no, or a friend's invite. */
+  NotWatchable: 'not_watchable',
+  /** 403 on a watch route: the caller is one of the two players. */
+  YourMatch: 'your_match',
+  /** 425 on a public watch route: that chunk (or bucket) is not old enough yet. Ask again shortly. */
+  NotReady: 'not_ready',
+  /** 410 on upto: the event list was trimmed past that instant (a long game's opening). Ask later. */
+  Gone: 'gone',
 });
 
 /**
@@ -120,9 +136,15 @@ function envelope(ok, status, data, error, extra) {
 function classify(status, data) {
   if (status === 0) return ApiError.Offline;
   if (status === 409) return ApiError.Stale;
+  // the watch routes word their refusals; the server's word is the one the UI needs there
+  if (status === 403 && data && (data.error === ApiError.NotWatchable || data.error === ApiError.YourMatch)) return data.error;
   if (status === 401 || status === 403) return ApiError.Unauthorized;
   if (status === 429) return ApiError.RateLimited;
+  if (status === 425) return ApiError.NotReady;
+  if (status === 410) return ApiError.Gone;
   if (status === 404) {
+    // A route behind a server flag says so in words (`PBP_WATCH` off).
+    if (data && data.error === ApiError.NotDeployed) return ApiError.NotDeployed;
     // A 404 that came back with a body the server clearly wrote is "no such
     // match"; a bare one is the route not being there at all. The difference
     // matters while the server is still being deployed piece by piece.
@@ -133,9 +155,9 @@ function classify(status, data) {
 }
 
 /** One call. Resolves an envelope; never rejects. */
-async function call(method, path, body) {
+async function call(method, path, body, via) {
   let res;
-  try { res = await transport(method, path, body === undefined ? null : body); }
+  try { res = await (via || transport)(method, path, body === undefined ? null : body); }
   catch (err) { return envelope(false, 0, null, ApiError.Offline); }
   const status = (res && res.status) | 0;
   let data = null;
@@ -181,9 +203,22 @@ export function timeControl(initialMs, incrementMs) {
   };
 }
 
+/**
+ * "Let people watch my games" (Options, default on). Asked at every call that
+ * can put this player in a public match; only a NO travels (`watchable: false`),
+ * so a server without spectating never sees a field it does not know.
+ */
+let letPeopleWatch = () => true;
+export function setWatchPolicy(fn) { letPeopleWatch = (typeof fn === 'function') ? fn : () => true; }
+function withWatch(body) {
+  let yes = true;
+  try { yes = letPeopleWatch() !== false; } catch { yes = true; }
+  return yes ? body : Object.assign(body, { watchable: false });
+}
+
 /** Sit down in the lobby, advertising a time control. */
 export function lobbyEnter(tc) {
-  return call('POST', ROUTES.lobbyEnter(), withIdentity({ time_control: tc }));
+  return call('POST', ROUTES.lobbyEnter(), withWatch(withIdentity({ time_control: tc })));
 }
 
 /** Stand up again. Best-effort at every call site: a lost goodbye must not wedge anything. */
@@ -203,7 +238,7 @@ export function lobbyList() {
  * server's word rides on `serverError`).
  */
 export function join(target) {
-  return call('POST', ROUTES.join(), withIdentity({ target }));
+  return call('POST', ROUTES.join(), withWatch(withIdentity({ target })));
 }
 
 /**
@@ -211,7 +246,7 @@ export function join(target) {
  * or `{ waiting: true }` (you are in the queue; ask again).
  */
 export function quick(tc) {
-  return call('POST', ROUTES.quick(), withIdentity({ time_control: tc }));
+  return call('POST', ROUTES.quick(), withWatch(withIdentity({ time_control: tc })));
 }
 
 /**
@@ -223,12 +258,13 @@ export function challenge(target, tc, color) {
   const body = { target };
   if (tc) body.time_control = tc;
   if (color === 'w' || color === 'b' || color === 'random') body.color = color;
-  return call('POST', ROUTES.challenge(), withIdentity(body));
+  // a challenge to a lobby row is a public, listed game; the server ignores it on a friend's invite
+  return call('POST', ROUTES.challenge(), withWatch(withIdentity(body)));
 }
 
 /** Take one up. Answers `{ match_id, color }`. */
 export function acceptChallenge(id) {
-  return call('POST', ROUTES.challengeAccept(id), withIdentity({}));
+  return call('POST', ROUTES.challengeAccept(id), withWatch(withIdentity({})));
 }
 
 /** Turn one down. Either side may: the challenger declining his own is a cancel. */
@@ -306,4 +342,118 @@ export function heartbeat(id) { return call('POST', ROUTES.heartbeat(id), withId
 export function history(limit) {
   const n = Math.min(50, Math.max(1, Math.trunc(Number(limit) || 50)));
   return call('GET', withUid(`${ROUTES.history()}?limit=${n}`), undefined);
+}
+
+/**
+ * The ladder (contract section 5): the top 50 rated accounts, PUBLIC and
+ * CDN-cached a minute, `{ rows: [{ rank, display_name, rating, games }], total }`,
+ * names only. Rides the public road like the tape.
+ */
+export function ladder() { return call('GET', ROUTES.ladder(), undefined, publicTransport); }
+
+/** Your own place: `{ rated, rating, rank, games, best, total }`; rank null until you are on it. */
+export function ladderMe() { return call('GET', withUid(ROUTES.ladderMe()), undefined); }
+
+/* ------------------------------------------------------------- spectating */
+
+/*
+ * SPECTATE v2 (2026-10-14): THE TAPE. Everything older than the 15 s delay is
+ * immutable, so the game is served in 5 s chunks the CDN caches for good. Two
+ * kinds of route, and the difference matters:
+ *
+ *   AUTH   GET watch/:id (join + 30 s heartbeat, counts the watcher), POST
+ *          watch/:id/react, POST match/:id/fx (a seat). Same identity and
+ *          transport as every other pbp call.
+ *   PUBLIC GET watch/:id/upto/:n, watch/:id/chunk/:n, watch/:id/reactions/:b.
+ *          NO auth header, NO unified_id in the query, nothing that varies by
+ *          caller: one cached answer serves everybody, which is the whole point.
+ *          425 `not_ready` is a normal answer (ask again shortly).
+ */
+
+/**
+ * The public road. Direct to the server with no credentials when the page knows
+ * the server base (a standalone page, or a host that hands one over); else
+ * through the bridge, which still works (the server ignores auth on these
+ * routes) but cannot share the browser cache. Swappable for tests.
+ */
+function directPublic(method, path) {
+  let base = '';
+  try { base = netInfo().serverBase || ''; } catch { base = ''; }
+  let f = null;
+  try { f = (typeof fetch === 'function') ? fetch : null; } catch { f = null; }
+  if (!base || !f) return netRequest(method, path, null);
+  return f(base + path, { method, credentials: 'omit', cache: 'default' })
+    .then((r) => r.text().then((t) => ({ status: r.status | 0, body: t }), () => ({ status: r.status | 0, body: '' })))
+    .catch(() => ({ status: 0, body: '' }));
+}
+let publicTransport = directPublic;
+
+/** Swap the public road out (smoke tests). Pass null to restore. */
+export function setPublicTransport(fn) { publicTransport = (typeof fn === 'function') ? fn : directPublic; }
+
+/** The reaction ids the stands may send. No free text, ever. */
+export const REACTIONS = Object.freeze(['fire', 'wow', 'laugh', 'clap', 'heart', 'eyes']);
+
+/** Fx kinds the server accepts on POST match/:id/fx (the ramp's layer names). */
+export const FX_KINDS = Object.freeze(['flash', 'gifRain', 'video', 'glitch', 'melt', 'spiral', 'blur', 'overlay']);
+
+/**
+ * Join the stands, and the 30 s heartbeat that keeps this watcher counted:
+ * `{ ok, match_id, t0_ms, chunk_ms, delay_ms, server_now_ms, ready_chunk,
+ * watchers, status, players: { w, b }, time_control }`. server_now_ms is the
+ * server's REAL now here (v1 sent the cutoff). 404 `not_deployed` while
+ * PBP_WATCH is off; 403 `not_watchable` / `your_match`; 404 `not_found`.
+ */
+export function watchHead(id) {
+  return call('GET', withUid(ROUTES.watch(id)), undefined);
+}
+
+/** v1's name for the same route, kept for any caller still using it. */
+export const watch = watchHead;
+
+/** PUBLIC. Every move before the end of chunk n, the clocks at that instant, and the end when it falls inside. */
+export function watchUpto(id, n) { return call('GET', ROUTES.watchUpto(id, n), undefined, publicTransport); }
+
+/** PUBLIC. Chunk n's events in time order: move, fx, end. */
+export function watchChunk(id, n) { return call('GET', ROUTES.watchChunk(id, n), undefined, publicTransport); }
+
+/** PUBLIC. Bucket b's reaction counts, once that 3 s bucket is in the past: `{ b, r }`. */
+export function reactions(id, b) { return call('GET', ROUTES.reactions(id, b), undefined, publicTransport); }
+
+/**
+ * AUTH, spectators only. `counts` is { id: n }; unknown ids are dropped and each
+ * count is clamped 1..10 here as the server will. Resolves null-shaped when
+ * there was nothing worth sending.
+ */
+export function react(id, counts) {
+  const r = {};
+  for (const k of REACTIONS) {
+    const n = Math.trunc(Number(counts && counts[k]) || 0);
+    if (n > 0) r[k] = Math.min(10, n);
+  }
+  if (!Object.keys(r).length) return Promise.resolve(envelope(false, 0, null, 'empty'));
+  return call('POST', ROUTES.react(id), withIdentity({ r }));
+}
+
+/**
+ * SEAT auth. The turn player's Distraction record:
+ * `{ ply, from_ms_ago, heat: [[dt, h0_99]], fired: [[dt, kind, hold?]] }`.
+ * Only known kinds travel, and nothing about media ever does (no urls, no
+ * niches, no ids): the stands fetch their own pictures. 204 on success.
+ */
+export function postFx(matchId, body) {
+  const b = body || {};
+  const heat = (Array.isArray(b.heat) ? b.heat : [])
+    .filter((x) => Array.isArray(x) && Number.isFinite(Number(x[0])) && Number.isFinite(Number(x[1])))
+    .map((x) => [Math.max(0, Math.round(Number(x[0]))), Math.min(99, Math.max(0, Math.round(Number(x[1]))))]);
+  const fired = (Array.isArray(b.fired) ? b.fired : [])
+    .filter((x) => Array.isArray(x) && Number.isFinite(Number(x[0])) && FX_KINDS.includes(x[1]))
+    .map((x) => (Number.isFinite(Number(x[2])) && Number(x[2]) > 0
+      ? [Math.max(0, Math.round(Number(x[0]))), x[1], Math.round(Number(x[2]))]
+      : [Math.max(0, Math.round(Number(x[0]))), x[1]]));
+  return call('POST', ROUTES.fx(matchId), withIdentity({
+    ply: Math.max(0, Math.trunc(Number(b.ply) || 0)),
+    from_ms_ago: Math.max(0, Math.round(Number(b.from_ms_ago) || 0)),
+    heat, fired,
+  }));
 }

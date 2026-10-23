@@ -560,6 +560,17 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>Gets the current avatar set number</summary>
         public int CurrentAvatarSet => _currentAvatarSet;
 
+        /// <summary>The picker card's look label for a set: the companion's name or the legacy title,
+        /// mod-aware and NOT upper-cased (WPF AvatarTubeWindow.Avatar.cs:940-941). The tube's own
+        /// caption (UpdateTitleDisplay) upper-cases the companion branch of this.</summary>
+        internal static string AvatarSetTitle(int setNumber)
+        {
+            if (CompanionForAvatarSet(setNumber) is { } companionId)
+                return CoreMods.MakeModAware(CompanionDefinition.GetById(companionId)
+                    .GetDisplayName(CoreSettings.Current.SlutModeEnabled));
+            return CoreMods.MakeModAware(Loc.Get(AvatarTitleKeys[Math.Clamp(setNumber - 1, 0, AvatarTitleKeys.Length - 1)]));
+        }
+
         /// <summary>
         /// True while ANY speech bubble (AI or ordinary "Preset" bark/chatter) is currently being
         /// displayed. Unlike <see cref="HasBubbleUp"/> this also covers non-AI bubbles, so the bark
@@ -1092,9 +1103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var companionId = CompanionForAvatarSet(_currentAvatarSet);
             if (companionId.HasValue)
             {
-                var def = CompanionDefinition.GetById(companionId.Value);
-                var name = def.GetDisplayName(CoreSettings.Current.SlutModeEnabled);
-                _txtAvatarTitle.Text = CoreMods.MakeModAware(name).ToUpperInvariant();
+                _txtAvatarTitle.Text = AvatarSetTitle(_currentAvatarSet).ToUpperInvariant();
 
                 CoreSettings.Current.CompanionProgressData.TryGetValue((int)companionId.Value, out var progress);
                 _txtAvatarLevel.IsVisible = true;
@@ -1104,8 +1113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 return;
             }
 
-            int titleIndex = Math.Clamp(_currentAvatarSet - 1, 0, AvatarTitleKeys.Length - 1);
-            _txtAvatarTitle.Text = CoreMods.MakeModAware(Loc.Get(AvatarTitleKeys[titleIndex]));
+            _txtAvatarTitle.Text = AvatarSetTitle(_currentAvatarSet);
             // Sets 1-2 are generic sprites: showing a level there reads as a PERSONA level and is
             // the confusion WPF hides it for.
             _txtAvatarLevel.IsVisible = false;

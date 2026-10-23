@@ -286,7 +286,11 @@ const SERVER_CONTRACT = Object.freeze({
   // Read by the route, in the order it reads them.
   fields: ['unified_id', 'code', 'role', 'token', 'sha256', 'mime', 'bytes',
     'reason', 'note', 'at_match_ms'],
-  optional: ['evidence'],
+  // `source` since 2026-10-21 (Scrolller licence clause 3.4): {kind:'own'} or
+  // {kind:'scrolller', post_id?, url?, subreddit?}; absent = unknown.
+  optional: ['evidence', 'source'],
+  sourceKinds: ['own', 'scrolller'],
+  scrolllerSourceFields: ['kind', 'post_id', 'url', 'subreddit'],
   reasons: ['csam', 'nonconsensual', 'gore', 'illegal', 'other'],
   noteMax: 500,
   evidenceKind: 'thumb_strip',
@@ -464,6 +468,106 @@ const goodSession = {
 }
 
 /* ===========================================================================
+ * 3c2. THE SOURCE (Scrolller licence clause 3.4, 2026-10-21). Scrolller media
+ * may not be stored on our servers: its report names the post and carries NO
+ * frames, unless the reason is csam / illegal. Own media is unchanged.
+ * ========================================================================= */
+{
+  const ev = { kind: 'thumb_strip', mime: 'image/webp', w: 320, h: 180, frames: 1, b64: 'AAAA' };
+  const SCR_ID = 'scrolller/EroticHypnosis/abc123';
+  const SCR_URL = 'https://images.scrolller.com/x/abc123-320x180.webp';
+  const body = (artifact, reason, evidence = ev) => report.buildReportBody({
+    session: goodSession, artifact: Object.assign({ sha: SHA_A, mime: 'image/webp', bytes: 10 }, artifact),
+    reason, note: reason === 'other' ? 'words' : '', evidence,
+  });
+
+  // own: a receivedStore row (the recap tags every one `from: 'received'`)
+  const own = body({ from: 'received', url: 'https://ccp.cache/recv/' + SHA_A + '.webp' }, 'gore');
+  ok(own.source && own.source.kind === 'own' && Object.keys(own.source).length === 1,
+    'a transferred file reports source {kind:"own"}', JSON.stringify(own.source));
+  ok(own.evidence && own.evidence.b64 === 'AAAA', 'and own media still sends its evidence');
+  ok(body({ from: 'received' }, 'other').evidence, 'own media keeps evidence under every reason');
+
+  // scrolller + a reason that is not csam / illegal: no frames at all
+  for (const reason of ['other', 'gore', 'nonconsensual']) {
+    const b = body({ id: SCR_ID, url: SCR_URL }, reason);
+    ok(b.source && b.source.kind === 'scrolller', 'scrolller media reports source scrolller (' + reason + ')');
+    ok(!('evidence' in b), 'and sends NO evidence under ' + reason + ', even when the caller passed some');
+  }
+  // scrolller + csam / illegal: evidence kept
+  for (const reason of ['csam', 'illegal']) {
+    const b = body({ id: SCR_ID }, reason);
+    ok(b.source.kind === 'scrolller' && b.evidence && b.evidence.b64 === 'AAAA',
+      'scrolller media under ' + reason + ' still sends its evidence');
+  }
+  ok(report.evidenceAllowed({ kind: 'scrolller' }, 'other') === false
+    && report.evidenceAllowed({ kind: 'scrolller' }, 'csam') === true
+    && report.evidenceAllowed({ kind: 'scrolller' }, 'illegal') === true
+    && report.evidenceAllowed({ kind: 'own' }, 'other') === true
+    && report.evidenceAllowed(null, 'gore') === true,
+  'evidenceAllowed: only scrolller under a non csam / illegal reason says no');
+
+  // unknown: no source key at all
+  const unknown = body({ url: 'https://example.com/a.webp' }, 'gore');
+  ok(!('source' in unknown), 'an item the page cannot place carries NO source key');
+  ok(unknown.evidence, 'and keeps its evidence (the server holds a frame 24 h only)');
+  ok(!('source' in body({}, 'gore')), 'a bare artifact carries no source either');
+
+  // the fields: post_id / subreddit from the id, url only https on scrolller
+  const full = body({ id: SCR_ID, url: SCR_URL }, 'other').source;
+  ok(full.post_id === 'abc123' && full.subreddit === 'EroticHypnosis' && full.url === SCR_URL,
+    'post_id and subreddit come from scrolller/<sub>/<postId>, url rides along', JSON.stringify(full));
+  const extra = Object.keys(full).filter((k) => SERVER_CONTRACT.scrolllerSourceFields.indexOf(k) < 0);
+  ok(extra.length === 0, 'and the scrolller source carries nothing else', extra.join(','));
+  ok(SERVER_CONTRACT.sourceKinds.indexOf(full.kind) >= 0 && SERVER_CONTRACT.sourceKinds.indexOf(own.source.kind) >= 0,
+    'both kinds are ones the route knows');
+
+  const seg = report.parseScrolllerId('scrolller/Hypno_2/p-9_x:3');
+  ok(seg && seg.subreddit === 'Hypno_2' && seg.post_id === 'p-9_x', 'a :k segment suffix is dropped',
+    JSON.stringify(seg));
+  ok(report.plainSubreddit('r/Hypno_2') === 'Hypno_2' && report.plainSubreddit('/r/X') === 'X'
+    && report.plainSubreddit('a/b') === '', 'plainSubreddit drops an r/ lead and refuses a path');
+  ok(report.parseScrolllerId('scrolller/onlysub') === null, 'an id without a post is not a scrolller id');
+  ok(report.parseScrolllerId('local/x/y') === null, 'nor is any other prefix');
+  ok(report.parseScrolllerId('scrolller/bad sub/12').subreddit === '', 'a subreddit with a space is dropped');
+  const onlyId = body({ id: 'scrolller/Sub/77' }, 'other').source;
+  ok(onlyId.kind === 'scrolller' && onlyId.post_id === '77' && !('url' in onlyId),
+    'an id alone fills post_id + subreddit and no url');
+
+  ok(report.scrolllerHttpsUrl('https://scrolller.com/r/x') === 'https://scrolller.com/r/x', 'the apex host is scrolller');
+  ok(report.scrolllerHttpsUrl('https://v.scrolller.com/a.mp4') !== '', 'a subdomain is scrolller');
+  ok(report.scrolllerHttpsUrl('http://images.scrolller.com/a.webp') === '', 'plain http is refused');
+  ok(report.scrolllerHttpsUrl('https://scrolller.com.evil.example/a.webp') === '', 'a lookalike host is refused');
+  ok(report.scrolllerHttpsUrl('https://evilscrolller.com/a.webp') === '', 'a suffix without the dot is refused');
+  ok(report.scrolllerHttpsUrl('https://u:p@images.scrolller.com/a.webp') === '', 'a url with credentials is refused');
+  ok(report.scrolllerHttpsUrl('not a url') === '', 'garbage is refused');
+
+  const http = body({ url: 'http://images.scrolller.com/a.webp' }, 'gore');
+  ok(http.source && http.source.kind === 'scrolller' && !('url' in http.source) && !('evidence' in http),
+    'an http scrolller url still marks the item scrolller (no frames) but its url is not sent');
+  const proxied = body({ url: 'https://1234.discordsays.com/scrolller-media/a.webp' }, 'other');
+  ok(proxied.source && proxied.source.kind === 'scrolller' && !('url' in proxied.source),
+    'the Discord Activity proxy path is scrolller too, without a url');
+  const both = body({ from: 'received', id: SCR_ID }, 'other');
+  ok(both.source.kind === 'scrolller' && !('evidence' in both),
+    'a scrolller signal outranks from:received (the stricter rule wins)');
+  ok(body({ id: SCR_ID, subreddit: 'r/Other' }, 'other').source.subreddit === 'EroticHypnosis',
+    'the id\'s subreddit wins over a loose field');
+  ok(body({ from: 'scrolller', subreddit: 'r/Loose', postId: 'q1' }, 'other').source.subreddit === 'Loose'
+    && body({ from: 'scrolller', postId: 'q1' }, 'other').source.post_id === 'q1',
+  'loose subreddit / postId fields fill in when there is no id');
+
+  // submitReport says which source went out (the recap's "media host" line)
+  const post = () => Promise.resolve({ status: 200, body: '{"ok":true,"id":"GR-3333333333"}' });
+  const rs = await report.submitReport({ session: goodSession, artifact: { sha: SHA_A, id: SCR_ID }, reason: 'gore', post });
+  ok(rs.ok && rs.sourceKind === 'scrolller', 'submitReport reports sourceKind scrolller');
+  const ro = await report.submitReport({ session: goodSession, artifact: { sha: SHA_A, from: 'received' }, reason: 'gore', post });
+  ok(ro.sourceKind === 'own', 'and own for a transferred file');
+  const ru = await report.submitReport({ session: goodSession, artifact: { sha: SHA_A }, reason: 'gore', post });
+  ok(ru.sourceKind === '', 'and nothing when no source went out');
+}
+
+/* ===========================================================================
  * 3d. evidenceFor with no canvas at all — the WebView2-less path.
  * ========================================================================= */
 {
@@ -496,6 +600,11 @@ const rowB = { sha: SHA_B, kind: 'image', mime: 'image/webp', bytes: 20, url: 'h
     'an artifact that LANDED this match is reportable even without a render record (flashes have none)');
   ok(landedOnly[0].rendered === false && landedOnly[0].flagged === false,
     'and it is honestly marked as neither rendered nor flagged');
+  ok(landedOnly[0].from === 'received' && report.reportSourceFor(landedOnly[0]).kind === 'own',
+    'every shortlist row is a transfer, so its report says source own (licence clause 3.4)');
+  const scr = recap.reportCandidates({ landed: [Object.assign({ id: 'scrolller/Sub/9' }, rowB)] });
+  ok(scr[0].id === 'scrolller/Sub/9' && report.reportSourceFor(scr[0]).kind === 'scrolller',
+    'a row that names a Scrolller post keeps the id, and the stricter rule applies');
 
   // The cross-session reuse win: `decline:'have'` means the artifact never
   // "lands" this match, but it can still render — so `held` is the lookup.
@@ -924,7 +1033,7 @@ const fakeStore = (landed, held) => ({
     ok(typeof S.recap[k] === 'string' && S.recap[k].length > 0, 'S.recap.' + k + ' exists');
   }
   for (const k of ['reasonHead', 'noteHead', 'notePlaceholder', 'noteNeeded', 'submit', 'submitting',
-    'deduped', 'failed', 'retry', 'givenUp', 'cancel', 'evidenceNote']) {
+    'deduped', 'failed', 'retry', 'givenUp', 'cancel', 'evidenceNote', 'evidenceNoteHost', 'hostToo']) {
     ok(typeof S.report[k] === 'string' && S.report[k].length > 0, 'S.report.' + k + ' exists');
   }
   ok(typeof S.report.done === 'function' && S.report.done('GR-X').indexOf('GR-X') >= 0,

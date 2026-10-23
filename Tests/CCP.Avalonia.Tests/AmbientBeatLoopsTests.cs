@@ -68,7 +68,7 @@ public sealed class AmbientBeatLoopsTests
     {
         "Controls/HoverBubbleBar.cs", "Controls/PremiumGateFx.cs", "Views/Chaos/ChaosHudWindow.axaml.cs",
         "Views/Chaos/ChaosOverlayWindow.axaml.cs", "Views/Chaos/ChaosSlotPickerWindow.axaml.cs",
-        "Views/Controls/DailyQuestCard.axaml.cs", "Views/Controls/EmiDock.axaml.cs",
+        "Views/Controls/EmiDock.axaml.cs",
         "Views/Dialogs/AwarenessPresetDetailDialog.axaml.cs", "Views/Dialogs/ColorEditorDialog.axaml.cs",
         "Views/Dialogs/TubeFitDialog.axaml.cs", "Views/Dialogs/WardrobeEditorDialog.axaml.cs",
         "Views/Features/FeatureCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
@@ -78,7 +78,7 @@ public sealed class AmbientBeatLoopsTests
         "Views/Windows/ItemUnlockedPopup.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
         "Views/Windows/LockCardWindow.axaml.cs", "Views/Windows/MainShellWindow.Animations.cs",
         "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MainShellWindow.NavRail.cs",
-        "Views/Windows/MainShellWindow.TabFxTakeoverLabStatus.cs", "Views/Windows/MantraWindow.axaml.cs",
+        "Views/Windows/MantraWindow.axaml.cs",
         "Views/Windows/SettingsPaletteWindow.axaml.cs", "Views/Windows/TeaseRevealPopup.axaml.cs",
     };
 
@@ -350,11 +350,14 @@ public sealed class AmbientBeatLoopsTests
             Dispatcher.UIThread.RunJobs();
             shell.SetAwarenessStatusPulse(true);
             var dot = shell.Named<Control>("AwarenessTab")!.FindControl<Control>("AwarenessStatusDot")!;
-            var glow = Assert.IsType<DropShadowEffect>(dot.Effect);
+            Assert.Null(dot.Effect);
+            var glow = shell.Named<Control>("AwarenessTab")!.FindControl<Border>("AwarenessStatusGlow")!;
+            Assert.True(glow.IsVisible);
             Assert.Equal(0.22, glow.Opacity, 3);
             Step(time, 2.8);
             Assert.Equal(0.95, glow.Opacity, 3);
             shell.SetAwarenessStatusPulse(false);
+            Assert.False(glow.IsVisible);
             Assert.Null(dot.Effect);
         }
         finally
