@@ -285,6 +285,18 @@ public sealed class GameWindowTests
             Assert.Equal("http://pbp.test/v2/pbp/lobby", fake.Seen!.RequestUri!.ToString());
             Assert.Equal("tok", fake.Seen.Headers.GetValues("X-Auth-Token").Single());
 
+            w.Web.OnWebMessage(new JObject { ["type"] = "pbp:net", ["id"] = "escape",
+                ["path"] = "/v2/pbp/../user/me" }.ToString());
+            Assert.Equal("forbidden_path", (string?)sent.Last()["body"]);
+            var beforeWatch = fake.Seen;
+            w.Web.OnWebMessage(new JObject { ["type"] = "pbp:net", ["id"] = "watch",
+                ["path"] = "/v2/pbp/watch/m_0123456789abcdef/chunk/0" }.ToString());
+            Assert.True(w.PbpPending.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotSame(beforeWatch, fake.Seen);
+            Assert.False(fake.Seen!.Headers.Contains("X-Auth-Token"));
+            Assert.Equal(200, (int)sent.Single(o => (string?)o["id"] == "watch")["status"]!);
+
             var now = DateTime.UtcNow;
             Assert.Equal("ok", w.CheckPbpWatch(now));
             Assert.Equal("ping", w.CheckPbpWatch(now.AddSeconds(25)));
@@ -310,6 +322,126 @@ public sealed class GameWindowTests
             Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
             Directory.Delete(lib, true);
         }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PieceByPiece_EscapeKeepsOnlyReadyFrames_ThenDoubleTapPanics(bool ready) => Run((shell, _) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        CoreSettings.Current.PanicKeyEnabled = true;
+        bool shellClosed = false;
+        shell.Closed += (_, _) => shellClosed = true;
+        var w = GameWindow.Launch(GameWindow.PbpId)!;
+        w.Activate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(w, GameWindow.PbpInFront());
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        if (ready) w.HandleMessage("{\"type\":\"ready\"}");
+        sent.Clear();
+        var t0 = new DateTime(2026, 1, 1, 12, 0, 0);
+        shell.HandlePanicKeyPress(t0);
+        Assert.True(GameWindow.IsAnyOpen());
+        if (ready) Assert.Equal("pbp:escape", (string?)Assert.Single(sent)["type"]);
+        else
+        {
+            Assert.Empty(sent);   // a key kept during boot never becomes a delayed pause
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.DoesNotContain(sent, o => (string?)o["type"] == "pbp:escape");
+        }
+        shell.HandlePanicKeyPress(t0.AddSeconds(1));
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(shellClosed);   // ending the game does not quit the panel
+    });
+
+    [Theory]
+    [InlineData(0, true, false, false, 0)]
+    [InlineData(0, false, false, true, 0)]
+    [InlineData(0, true, true, true, 0.5)]
+    [InlineData(0, false, true, true, 0)]
+    [InlineData(1, true, true, true, 0)]
+    [InlineData(2, true, true, true, 0)]
+    public void PieceByPiece_MotionCapsAndGentleIntro(int level, bool osAnimations, bool gentle, bool reduced, double speed)
+        => RunBoard(() =>
+    {
+        var s = CoreSettings.Current;
+        s.MotionLevel = (global::ConditioningControlPanel.Models.MotionLevel)level;
+        s.GentleVisuals = gentle;
+        s.GentleSpeed = 0.2;
+        var w = GameWindow.Launch(GameWindow.PbpId)!;
+        w.PbpOsAnimations = () => Task.FromResult(osAnimations);
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
+        Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
+    });
+
+    [Fact]
+    public void PieceByPiece_WatchPreferencesValidatePersistAndReachNextBoot() => RunBoard(() =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.PbpLetPeopleWatch, s.PbpWatchEffects, s.PbpWatchAmount);
+        try
+        {
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            void Setting(string key, JToken value) => w.HandleMessage(new JObject
+                { ["type"] = "pbp:setting", ["key"] = key, ["value"] = value }.ToString());
+            var panicEnabled = s.PanicKeyEnabled;
+            Setting("letPeopleWatch", false);
+            Setting("watchEffects", false);
+            Setting("watchAmount", "more");
+            Setting("watchEffects", "true");   // typed whitelist, no coercion
+            Setting("watchAmount", "huge");
+            Setting("PanicKeyEnabled", false);   // the page cannot change an arbitrary preference
+            Assert.Equal(panicEnabled, s.PanicKeyEnabled);
+            Assert.Equal((false, false, "more"), (s.PbpLetPeopleWatch, s.PbpWatchEffects, s.PbpWatchAmount));
+            var persisted = new SettingsService().Current;
+            Assert.Equal((false, false, "more"),
+                (persisted.PbpLetPeopleWatch, persisted.PbpWatchEffects, persisted.PbpWatchAmount));
+            w.Close();
+            var next = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            next.Posted += json => sent.Add(JObject.Parse(json));
+            next.HandleMessage("{\"type\":\"ready\"}");
+            var frame = sent.Single(o => (string?)o["type"] == "pbp:settings");
+            Assert.False((bool)frame["letPeopleWatch"]!);
+            Assert.False((bool)frame["watchEffects"]!);
+            Assert.Equal("more", (string?)frame["watchAmount"]);
+        }
+        finally
+        {
+            (s.PbpLetPeopleWatch, s.PbpWatchEffects, s.PbpWatchAmount) = old;
+            CoreSettings.Service?.Save();
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PieceByPiece_SlowOsQueryKeepsBootOrder_AndClosedBoardPostsNothing(bool close) => RunBoard(() =>
+    {
+        var answer = new TaskCompletionSource<bool>();
+        var w = GameWindow.Launch(GameWindow.PbpId)!;
+        int queries = 0;
+        w.PbpOsAnimations = () => { queries++; return answer.Task; };
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Empty(sent);
+        Assert.Equal(1, queries);
+        if (close) w.Close();
+        answer.SetResult(false);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(w.PbpPending.IsCompletedSuccessfully);
+        if (close) Assert.Empty(sent);
+        else Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
     });
 
     // These tests exercise the real board and settings bridge, without the unrelated main shell FX.

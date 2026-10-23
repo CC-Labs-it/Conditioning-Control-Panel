@@ -122,21 +122,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// PanicPolicy.GameClaimsEscapeAsPause, including a second Escape within 2 s being a full panic (which
         /// closes the game through PanicSurfaces "games"). The kept press is handed to the page as well
         /// (KeptEscapePage.Dtrh), since its own keydown never comes while the web view is out of focus.
-        /// ponytail: race, board and Breakout keep closing on Escape here until their hosts post kept-escape.</summary>
+        /// ponytail: race and Breakout keep closing on Escape here until their hosts post kept-escape.</summary>
         internal bool TryGamePauseOnEscape(DateTime now)
         {
             try
             {
                 var dtrh = Games.GameWindow.DtrhInFront();
+                var board = Games.GameWindow.PbpInFront();
                 bool claim = PanicPolicy.GameClaimsEscapeAsPause(CoreSettings.Current.PanicKey,
-                    gameInFront: dtrh != null, engineRunning: CoreEngine.IsRunning,
+                    gameInFront: dtrh != null || board != null, engineRunning: CoreEngine.IsRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(), lastClaimUtc: _lastGameEscapeClaim, nowUtc: now);
                 if (!claim) { _lastGameEscapeClaim = null; return false; }
                 _lastGameEscapeClaim = now;
-                Serilog.Log.Information("Panic: Escape kept by Down the Rabbit Hole as its pause (again within 2 s = full panic)");
-                if (PanicPolicy.KeptEscapeGoesTo(claim, false, false, false, false, false, false,
-                        dtrhInFront: dtrh != null, dtrhReady: dtrh?.DtrhReady == true) == PanicPolicy.KeptEscapePage.Dtrh)
-                    dtrh!.PostKeptEscape();
+                Serilog.Log.Information("Panic: Escape kept by {Game} as its pause (again within 2 s = full panic)",
+                    board != null ? "Piece by Piece" : "Down the Rabbit Hole");
+                switch (PanicPolicy.KeptEscapeGoesTo(claim, false, false, board != null, board?.IsReady == true, false, false,
+                            dtrhInFront: dtrh != null, dtrhReady: dtrh?.DtrhReady == true))
+                {
+                    case PanicPolicy.KeptEscapePage.Board: board!.PostPbpKeptEscape(); break;
+                    case PanicPolicy.KeptEscapePage.Dtrh: dtrh!.PostKeptEscape(); break;
+                }
                 return true;
             }
             catch (Exception ex)

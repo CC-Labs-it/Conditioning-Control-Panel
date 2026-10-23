@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -59,7 +59,7 @@ public static class PbpHostRules
                 ? ""
                 : o["body"]!.ToString(Newtonsoft.Json.Formatting.None));
         string? refusal = null;
-        if (!path.StartsWith(AllowedPathPrefix, StringComparison.Ordinal)) refusal = "forbidden_path";
+        if (!HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out _)) refusal = "forbidden_path";
         else if (method != "GET" && method != "POST") refusal = "forbidden_method";
         return new NetCall(id, method, path, body, refusal);
     }
@@ -76,11 +76,9 @@ public static class PbpHostRules
         if (string.IsNullOrEmpty(baseUrl)) return (0, "");
         try
         {
-            var verb = call.Method == "POST" ? HttpMethod.Post : HttpMethod.Get;
-            using var request = new HttpRequestMessage(verb, baseUrl + call.Path);
-            if (call.Method == "POST") request.Content = new StringContent(call.Body, Encoding.UTF8, "application/json");
-            if (!string.IsNullOrEmpty(authToken)) request.Headers.Add("X-Auth-Token", authToken);
-            request.Headers.Add("X-Client-Version", appVersion);
+            if (!HostNetPathRule.TryBuild(baseUrl, call.Path, AllowedPathPrefix, out var target) || target == null)
+                return (0, "forbidden_path");
+            using var request = PbpNetRelay.Build(target, call.Method, call.Path, call.Body, authToken, appVersion);
             using var response = await http.SendAsync(request, ct).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             return ((int)response.StatusCode, text);
