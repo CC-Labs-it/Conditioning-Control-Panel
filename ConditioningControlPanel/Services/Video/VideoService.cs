@@ -3093,6 +3093,7 @@ namespace ConditioningControlPanel.Services
             _safetyTimer?.Stop();
             _fallbackSafetyTimer?.Stop();
             _fallbackSafetyTimer = null;
+            if (!isVoutRetry) CarryMaxLenCap(replay: false);   // a new clip starts a fresh cap; a vout heal carried its own
             _maxLenCapTimer?.Stop();
             _maxLenCapTimer = null;
 
@@ -6822,6 +6823,9 @@ namespace ConditioningControlPanel.Services
 
             var maxSec = App.Settings?.Current?.VideoMaxDurationSeconds ?? 0;
             _cutClock = maxSec > 0 ? new Video.VideoPlaybackClock() : null;
+            var carriedMs = _cutCarriedMs;   // a replay of the same clip keeps what it already played (BUG-7NAKK79CZ2)
+            _cutCarriedMs = 0;
+            _cutBaseMs = maxSec > 0 ? carriedMs : 0;
             if (maxSec <= 0) return;
 
             var capRun = _videoRunId;
@@ -6857,7 +6861,7 @@ namespace ConditioningControlPanel.Services
                 }
                 var playedMs = _browserActive ? Browser.PlayedMs
                     : _cutClock?.PlayedMs ?? 0;
-                if (!Video.VideoLengthCap.Reached(maxSec, playedMs)) return;
+                if (!Video.VideoLengthCap.Reached(maxSec, carriedMs + playedMs)) return;
                 _maxLenCapTimer?.Stop();
                 _maxLenCapTimer = null;
                 if (_videoPlaying)
@@ -6872,7 +6876,20 @@ namespace ConditioningControlPanel.Services
             _maxLenArm.Interval = _maxLenCapTimer.Interval;
             _maxLenArm.Remaining = TimeSpan.Zero;
 
-            App.Logger?.Debug("VideoService: Max video-length cap timer started for {Max}s", maxSec);
+            App.Logger?.Debug("VideoService: Max video-length cap timer started for {Max}s ({Carried:F0}s already played)", maxSec, carriedMs / 1000.0);
+        }
+
+        /// <summary>Played milliseconds of the current clip carried into its next replay (vout heal,
+        /// browser-to-LibVLC fallback), consumed by the next <see cref="StartMaxLengthCapTimer"/> so the
+        /// replay gets only what is left of the user's max, not a fresh allowance (BUG-7NAKK79CZ2).</summary>
+        private long _cutCarriedMs;
+        /// <summary>The carry the running cap started from, so a second replay keeps both runs.</summary>
+        private long _cutBaseMs;
+
+        private void CarryMaxLenCap(bool replay)
+        {
+            var playedMs = _browserActive ? Browser.PlayedMs : _cutClock?.PlayedMs ?? 0;
+            _cutCarriedMs = replay && _cutClock != null ? _cutBaseMs + playedMs : 0;
         }
 
         /// <summary>
@@ -7173,6 +7190,7 @@ namespace ConditioningControlPanel.Services
                         _fallbackSafetyTimer?.Stop();
                         _fallbackSafetyTimer = null;
                         _videoPlaying = false;
+                        CarryMaxLenCap(replay: true);   // before CloseAll drops the clock: the replay continues the clip's cap
                         CloseAll(reason: "vout self-heal");
                         App.InteractionQueue?.ExtendTimeout(300, InteractionQueueService.InteractionType.Video);
                         App.Logger?.Information("VideoService: vout self-heal - replaying {File} on a fresh LibVLC instance",

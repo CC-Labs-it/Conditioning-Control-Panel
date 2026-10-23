@@ -2651,3 +2651,7 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
 ## avalonia-port/wire-win-quiz-report: +21
 - win-quiz-report: run-row hover (#15FFFFFF) and a real pointer click on a report row are now tested through an open gate. Stays stub because both heads hide BtnStartQuiz; whether to show it or delete it is an open product decision.
 - QuizPastRunsReportTests fail-proven (failproof-5-no-hover.log).
+
+## avalonia-port/video-max-cap-links: +192
+- BUG-7NAKK79CZ2: the user's max video length now ends app-started web-video takeovers (Core `VideoMaxCap.TakeoverStopAfter`, wired into the WPF BrowserMediaService), and a heal or fallback replay continues the clip's cap on both heads.
+- Tests: Core VideoMaxCapTests plus the headless MandatoryVideoOverlay heal-at-cap test, both fail-proven. Linux gate green; one known Windows flake (PhrasePoolCustody).

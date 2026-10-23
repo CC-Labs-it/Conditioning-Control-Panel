@@ -1265,3 +1265,18 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   > - docs/avalonia-test-plan.md lists every area with tester steps and the WPF behaviour to compare against.
 - Unchanged: performance, settings-migration test, Linux package, Windows installer ships Avalonia only, WPF kept as
   compiling reference, CI green, stack PR rules, decisions log.
+## 2026-10-14: The user's max video length also ends app-started web videos (avalonia-port/video-max-cap-links)
+- Bug BUG-7NAKK79CZ2 (= WPF ccp-bugs #1438): a 25-minute web video played under a 20m 3s "Duration filter" max. Every
+  mandatory-video path already armed the cap; the uncapped path was the browser web-video takeover (autonomy WebVideo, AI
+  effect, chaos HT link, remote `play_hypnotube`), whose hard stop was only clip length + 15 s (max 1 h).
+- WPF main fixed the takeover itself (#1438, `Services/Video/VideoLengthCap.cs`): the cut counts PLAYED time from the
+  takeover's first playback (`BrowserMediaService.OnMediaProgress` playedSeconds), never for User/AvatarLink or a video the
+  player asked for in chat, also when the page reports no length. The 2026-10-15 main sync took that over this branch's
+  wall-clock `VideoMaxCap.TakeoverStopAfter`, which was deleted (two cuts would let pauses eat the allowance, which #1438 forbids).
+- Kept from this branch (advised by: supervisor): a replay of the same mandatory clip (vout heal, browser->LibVLC fallback)
+  continues the clip's cap instead of restarting it - WPF carries the played milliseconds into the next
+  `StartMaxLengthCapTimer` (`CarryMaxLenCap`, read before the teardown drops the clock); Avalonia's
+  `MandatoryVideoScheduler.Guard` adds `capSpentBefore` via Core `VideoMaxCap.CapLeft`.
+- Avalonia has no web-video takeover yet; when it is ported it must follow WPF `VideoLengthCap.BrowserTakeoverSeconds`.
+- Tests: `Tests/CCP.Core.Tests/VideoMaxCapTests.cs`, `Tests/CCP.Avalonia.Tests/MandatoryVideoOverlayTests.cs` (heal replay
+  ends at the cap), each fail-proven. Live tester step: ~/ccp-port/evidence/live-queue/media.md.
