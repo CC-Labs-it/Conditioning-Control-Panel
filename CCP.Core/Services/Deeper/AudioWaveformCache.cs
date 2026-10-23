@@ -3,7 +3,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using NAudio.Wave;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Deeper
 {
@@ -14,9 +14,11 @@ namespace ConditioningControlPanel.Services.Deeper
     }
 
     /// <summary>
-    /// Decodes audio files via NAudio's MediaFoundationReader and emits a peak-bucket
-    /// summary suitable for timeline rendering. Caches the result to disk keyed on
-    /// (path, size, last-write-time) so repeated opens of the same file are instant.
+    /// Emits a peak-bucket summary of an audio file suitable for timeline rendering.
+    /// Caches the result to disk keyed on (path, size, last-write-time) so repeated
+    /// opens of the same file are instant. Decoding needs a codec Core cannot reach,
+    /// so the head supplies <see cref="Decoder"/> (WPF: NAudio MediaFoundationReader)
+    /// and feeds its samples through <see cref="BucketPeaks"/>.
     /// </summary>
     public static class AudioWaveformCache
     {
@@ -24,13 +26,16 @@ namespace ConditioningControlPanel.Services.Deeper
 
         public static string CacheFolder => MediaDurationCache.CacheFolder;
 
+        /// <summary>The head's decoder: audio path -> peaks. Throws on decode failure.</summary>
+        public static Func<string, AudioWaveformResult>? Decoder { get; set; }
+
         /// <summary>
         /// Loads peaks for the given audio file, using a disk cache when available.
         /// Throws on decode failure (callers should catch and fall back to a flat strip).
         /// </summary>
         public static Task<AudioWaveformResult> LoadAsync(string audioPath)
         {
-            // No ConfigureAwait(false) — the only callers are WPF UI code that
+            // No ConfigureAwait(false) — the callers are head UI code that
             // assigns the result to DependencyObjects (WaveformPath.Data) on
             // the awaiting thread. Forcing the continuation off the UI thread
             // here previously caused intermittent cross-thread exceptions.
@@ -56,25 +61,28 @@ namespace ConditioningControlPanel.Services.Deeper
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Debug("AudioWaveformCache: cache read failed for {Path}: {Error}", audioPath, ex.Message);
+                    Log.Debug("AudioWaveformCache: cache read failed for {Path}: {Error}", audioPath, ex.Message);
                 }
             }
 
             var fresh = Decode(audioPath);
 
             try { WriteCache(cachePath, fresh); }
-            catch (Exception ex) { App.Logger?.Debug("AudioWaveformCache: cache write failed: {Error}", ex.Message); }
+            catch (Exception ex) { Log.Debug("AudioWaveformCache: cache write failed: {Error}", ex.Message); }
 
             return fresh;
         }
 
-        private static AudioWaveformResult Decode(string audioPath)
-        {
-            using var reader = new MediaFoundationReader(audioPath);
-            var channels = reader.WaveFormat.Channels;
-            var sampleRate = reader.WaveFormat.SampleRate;
-            var durationSec = reader.TotalTime.TotalSeconds;
+        private static AudioWaveformResult Decode(string audioPath) =>
+            (Decoder ?? throw new InvalidOperationException("AudioWaveformCache: no decoder registered"))(audioPath);
 
+        /// <summary>
+        /// The bucket rule: 6 peaks a second clamped to 64..4096, each the loudest
+        /// absolute sample (any channel) in its slice. <paramref name="read"/> fills the
+        /// buffer with interleaved float samples and returns how many it wrote (0 = end).
+        /// </summary>
+        public static AudioWaveformResult BucketPeaks(int channels, int sampleRate, double durationSec, Func<float[], int> read)
+        {
             int peakCount = Math.Clamp((int)(durationSec * 6), 64, 4096);
             var peaks = new float[peakCount];
 
@@ -84,7 +92,6 @@ namespace ConditioningControlPanel.Services.Deeper
             double framesPerBucket = (durationSec * sampleRate) / peakCount;
             if (framesPerBucket <= 0) framesPerBucket = 1;
 
-            var sp = reader.ToSampleProvider();
             var buf = new float[8192];
             int currentBucket = 0;
             double frameInBucket = 0;
@@ -92,9 +99,9 @@ namespace ConditioningControlPanel.Services.Deeper
 
             while (currentBucket < peakCount)
             {
-                int read = sp.Read(buf, 0, buf.Length);
-                if (read == 0) break;
-                int frames = read / channels;
+                int n = read(buf);
+                if (n == 0) break;
+                int frames = n / channels;
                 for (int f = 0; f < frames; f++)
                 {
                     float frameMax = 0;

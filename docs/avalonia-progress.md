@@ -2624,3 +2624,8 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/emidesk-core-e: +344
 
 EmiChains data/rules and EmiNudges moved to CCP.Core (git mv); WPF keeps the DispatcherTimer player as EmiChainPlayer and seeds EmiNudgeWorld.QuietProbe at startup. Avalonia reads EmiChains.RestFace. Core tests: moved EmiNudgeMachineTests + new QuietProbe/EmiChains tests. No UI change; no parity rows moved.
+
+## avalonia-port/deeper-core-d: +194
+- Cloud session, local review (ACCEPT) + gate.
+- AudioWaveformCache (DPK2 cache + bucket rule) moved to Core behind a Decoder seam; WPF NAudio decoder registered at startup; 10 Core tests.
+- Review fixes: withdrew unbacked pass counts from Verification limits; WPF sample provider built lazily again (pre-move parity). rgate GATE-OK.
