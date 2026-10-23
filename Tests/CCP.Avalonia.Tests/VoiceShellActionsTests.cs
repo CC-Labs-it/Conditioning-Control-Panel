@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia;
@@ -127,6 +130,8 @@ public sealed class VoiceShellActionsTests
     [Fact]
     public Task ConfirmationWaitsForTheClipAndTheEchoTail() => RunAsync(async shell =>
     {
+        var clock = new SteppedClock();
+        shell.VoiceTime = clock;
         var s = CoreSettings.Current;
         var saved = (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted, CoreAudio.PlayStoppableProvider, s.AvatarEnabled);
         var clip = Path.GetTempFileName();
@@ -141,10 +146,14 @@ public sealed class VoiceShellActionsTests
             var quiet = shell.VoiceWaitQuiet(true);
             Assert.False(quiet.IsCompleted);
             Assert.NotNull(finished);
-            await Task.Delay(400); // a fixed 300 ms wait would already have completed
+            clock.Advance(TimeSpan.FromMilliseconds(400)); // a fixed 300 ms wait would already have completed
             Assert.False(quiet.IsCompleted);
             finished();
+            Dispatcher.UIThread.RunJobs();
             Assert.False(quiet.IsCompleted); // still owes the 300 ms echo tail
+            clock.Advance(TimeSpan.FromMilliseconds(299));
+            Assert.False(quiet.IsCompleted);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
             await quiet.WaitAsync(TimeSpan.FromSeconds(2));
         }
         finally
@@ -153,6 +162,34 @@ public sealed class VoiceShellActionsTests
             File.Delete(clip);
         }
     });
+
+    private sealed class SteppedClock : TimeProvider
+    {
+        private long _now;
+        private readonly List<Timer> _timers = new();
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => _now;
+        public override ITimer CreateTimer(TimerCallback cb, object? state, TimeSpan due, TimeSpan period)
+        {
+            var t = new Timer(this, cb, state, _now + (long)due.TotalMilliseconds);
+            lock (_timers) _timers.Add(t);
+            return t;
+        }
+        public void Advance(TimeSpan by)
+        {
+            _now += (long)by.TotalMilliseconds;
+            Timer[] due;
+            lock (_timers) { due = _timers.Where(t => t.Due <= _now).ToArray(); _timers.RemoveAll(due.Contains); }
+            foreach (var t in due) t.Cb(t.State);
+        }
+        private sealed class Timer(SteppedClock c, TimerCallback cb, object? state, long due) : ITimer
+        {
+            public readonly TimerCallback Cb = cb; public readonly object? State = state; public readonly long Due = due;
+            public bool Change(TimeSpan d, TimeSpan p) => false;
+            public void Dispose() { lock (c._timers) c._timers.Remove(this); }
+            public ValueTask DisposeAsync() { Dispose(); return default; }
+        }
+    }
 
     private static void Run(Action<MainShellWindow> body) =>
         RunAsync(shell => { body(shell); return Task.CompletedTask; }).GetAwaiter().GetResult();

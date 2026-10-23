@@ -4,7 +4,10 @@
 //
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
-// Sherpa KWS is preferred when installed; Vosk remains WPF's fallback. Intents with no
+// Sherpa KWS is preferred when installed; Vosk remains WPF's fallback.
+// ponytail: no bark voice lines - PickVoiceLine is unset (WPF AutonomyService.VoiceCommandHost.cs:28,
+// App.Bark.PickVoiceLine; BarkEngine has none yet), so confirmations are text-only and the clip wait
+// below only fires once a voiced line exists. Intents with no
 // seam here (keyword triggers, shake, deeper) are left out of the grammar.
 
 using System;
@@ -52,11 +55,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         });
 
         private Task _voiceClip = Task.CompletedTask;
+        internal TimeProvider VoiceTime = TimeProvider.System;
 
         // Adapted from parity/trunk f705e05a2: wait for her recorded confirmation before opening the mic.
         internal void VoiceSay(string text, string? audio)
         {
-            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var done = new TaskCompletionSource();   // inline: the echo tail starts the moment the clip ends
             _voiceClip = done.Task;
             Dispatcher.UIThread.Post(() =>
             {
@@ -66,11 +70,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
-        internal async Task VoiceWaitQuiet(bool waitForStart)
-        {
-            await Task.WhenAny(_voiceClip, Task.Delay(5000)).ConfigureAwait(false);
-            await Task.Delay(300).ConfigureAwait(false); // WPF speaker-echo tail
-        }
+        // The clip (capped at 5 s), then WPF's 300 ms speaker-echo tail.
+        internal Task VoiceWaitQuiet(bool waitForStart) =>
+            Task.WhenAny(_voiceClip, Task.Delay(TimeSpan.FromSeconds(5), VoiceTime))
+                .ContinueWith(_ => Task.Delay(TimeSpan.FromMilliseconds(300), VoiceTime),
+                    CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default)
+                .Unwrap();
 
         /// <summary>True while the wake-word loop owns (or is waiting to own) the mic.</summary>
         internal bool WakeLoopArmed => _wakeLoopCts != null;
