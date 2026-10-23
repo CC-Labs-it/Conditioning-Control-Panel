@@ -2659,3 +2659,7 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
 ## avalonia-port/wire-views-settings-performance: +368
 - Settings > Performance: AutoPerformanceMode escalates via Core PerformanceTierRule (shared with WPF); GPU decode is read by the mandatory-video player; a motion change repaints the shell chrome.
 - Row stays stub: ChkUnifiedOverlay and chrome FX refresh -> wire-views-settings-performance-b.
+
+## avalonia-port/wire-win-mini-player: +103
+- win-mini-player: stub -> wired. Library thumbnail double-click and context-menu Preview open MiniPlayerWindow owned by the shell; closing it re-activates the shell only while we own the foreground (or none, as WPF).
+- AssetsTabTests: 2 tests, fail-proven (evidence/wire-win-mini-player/fail-proofs.txt).
