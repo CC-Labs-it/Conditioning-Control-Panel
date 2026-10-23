@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Helpers;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Quiz;
 using Serilog;
@@ -196,12 +197,29 @@ public sealed class WebAssetServer : IDisposable
     /// null = the prefix is not served.</summary>
     public Func<string?>? AssetsRoot { get; init; }
 
+    internal string? ModRoot { get; set; } = DtrhModContent.ModDtrhRoot();
+
     /// <summary>The file a URL path names, or null if it is missing or lies outside its root, symlinks followed.</summary>
     internal string? ResolveFile(string urlPath)
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
+        if (rel.StartsWith("ccp.mod/", StringComparison.Ordinal))
+        {
+            if (ModRoot is not { } modRoot) return null;
+            root = Path.GetFullPath(modRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            rel = rel["ccp.mod/".Length..];
+        }
+        if (rel.StartsWith("ccp.spirals/", StringComparison.Ordinal))
+        {
+            var file = rel["ccp.spirals/".Length..];
+            if (!file.StartsWith("loom_", StringComparison.Ordinal) || !file.EndsWith(".gif", StringComparison.Ordinal)) return null;
+            var slug = file[5..^4];
+            var gif = DtrhLoomStore.GifPathFor(slug);
+            return gif != null && File.Exists(gif) && LinksStayInside(gif,
+                Path.GetFullPath(DtrhLoomStore.SpiralsFolder) + Path.DirectorySeparatorChar) ? gif : null;
+        }
         if (asset)
         {
             if (AssetsRoot?.Invoke() is not { Length: > 0 } assets) return null;
@@ -215,7 +233,19 @@ public sealed class WebAssetServer : IDisposable
         if (rel.Length == 0 || rel.EndsWith('/')) rel += "index.html";
         if (rel.Contains('\0')) return null;
         var full = Path.GetFullPath(Path.Combine(root, rel));
-        if (!Inside(full, root) || !File.Exists(full) || !LinksStayInside(full, root)) return null;
+        if (!Inside(full, root) || !LinksStayInside(full, root)) return null;
+        if (!File.Exists(full))
+        {
+            // audio-web is lazy content: root-relative race pops must see installed packs.
+            if (!asset && rel.StartsWith("dtrh/assets/", StringComparison.Ordinal)
+                && rel.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase)
+                && !rel.Split('/', '\\').Any(seg => seg is ".." or "."))
+            {
+                var packed = ContentLocator.Resolve(Path.Combine("Resources", "web", rel));
+                if (File.Exists(packed)) return packed;
+            }
+            return null;
+        }
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
     }

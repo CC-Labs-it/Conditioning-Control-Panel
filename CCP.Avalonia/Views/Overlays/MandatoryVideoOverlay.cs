@@ -145,6 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // bouncing text, and arm the attention checks.
             if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
+            Games.GameWindow.PauseRacesForVideo(true);
             _attention = s.AttentionChecksEnabled;
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
@@ -822,6 +823,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _fill = null;
                 if (_didDuck) { _didDuck = false; CoreAudio.Unduck(); }
                 BouncingTextOverlay.PauseForVideo(false);
+                Games.GameWindow.PauseRacesForVideo(false);
                 if (FillCount > 0) Log.Information("VideoService: blur fill {Avg:F3} ms/frame over {N} frames", FillMs / FillCount, FillCount);
             }
             finally { _closing = false; }

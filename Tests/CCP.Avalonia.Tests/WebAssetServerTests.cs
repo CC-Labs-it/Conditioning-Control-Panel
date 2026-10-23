@@ -21,6 +21,56 @@ public class WebAssetServerTests
         return (new WebAssetServer(root), root);
     }
 
+    [Fact]
+    public async Task RaceAudioPackIsServedWithTokenAndRanges()
+    {
+        using var server = Make().server;
+        var relative = "Resources/web/dtrh/assets/bubbles/sfx/race-test-" + Guid.NewGuid().ToString("N") + ".mp3";
+        var packed = Path.Combine(ConditioningControlPanel.Services.ContentLocator.ContentRoot, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(packed)!);
+        await File.WriteAllBytesAsync(packed, new byte[] { 1, 2, 3, 4 });
+        try
+        {
+            using var http = Client(false);
+            var pagePath = relative["Resources/web/".Length..];
+            Assert.Equal(HttpStatusCode.Forbidden, (await http.GetAsync($"http://127.0.0.1:{server.Port}/" + pagePath)).StatusCode);
+            using var req = new HttpRequestMessage(HttpMethod.Get, server.Url(pagePath));
+            req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(1, 2);
+            using var response = await http.SendAsync(req);
+            Assert.Equal(HttpStatusCode.PartialContent, response.StatusCode);
+            Assert.Equal("audio/mpeg", response.Content.Headers.ContentType!.MediaType);
+            Assert.Equal(new byte[] { 2, 3 }, await response.Content.ReadAsByteArrayAsync());
+            Assert.Null(server.ResolveFile("/dtrh/assets/../../settings.json"));
+        }
+        finally { File.Delete(packed); }
+    }
+
+    [Fact]
+    public void RaceSpiralRouteServesOnlyWhitelistedGifs()
+    {
+        using var server = Make().server;
+        var store = ConditioningControlPanel.Services.Chaos.DtrhLoomStore.SpiralsFolder;
+        Directory.CreateDirectory(store);
+        var gif = Path.Combine(store, "loom_race-route-test.gif");
+        File.WriteAllBytes(gif, new byte[] { 1 });
+        try
+        {
+            Assert.Equal(gif, server.ResolveFile("/ccp.spirals/loom_race-route-test.gif"));
+            Assert.Null(server.ResolveFile("/ccp.spirals/loom_race-route-test.json"));
+            Assert.Null(server.ResolveFile("/ccp.spirals/loom_../settings.gif"));
+            if (!OperatingSystem.IsWindows())
+            {
+                var link = Path.Combine(store, "loom_race-route-link.gif");
+                var outside = Path.GetFullPath(Path.Combine(store, "..", "race-route-outside.gif"));
+                File.WriteAllBytes(outside, new byte[] { 1 });
+                File.CreateSymbolicLink(link, outside);
+                try { Assert.Null(server.ResolveFile("/ccp.spirals/loom_race-route-link.gif")); }
+                finally { File.Delete(link); File.Delete(outside); }
+            }
+        }
+        finally { File.Delete(gif); }
+    }
+
     static HttpClient Client(bool cookies = true) =>
         new(new HttpClientHandler { UseCookies = cookies, CookieContainer = new CookieContainer() });
 

@@ -25,7 +25,7 @@ namespace CCP.Avalonia.Tests;
 /// <summary>The shared game host (WPF LauncherHost.LaunchGame -> BreakoutHostService.LaunchDemo ->
 /// ChaosWebViewHost): the launcher's Play opens it after the leash check, the page protocol answers
 /// ready with init and media-request with a deal, exit-done closes it, and the panic registry closes it.</summary>
-public sealed class GameWindowTests
+public sealed partial class GameWindowTests
 {
     private static void Run(Action<MainShellWindow, LauncherWindow> body)
     {
@@ -60,7 +60,7 @@ public sealed class GameWindowTests
             }
             finally
             {
-                GameWindow.CloseAllForPanic();
+                foreach (var game in GameWindow.OpenWindowsForTests()) game.Close();
                 LauncherWindow.Instance?.Close();
                 shell.Close();
                 (GameWindow.Server, CoreAccount.IsLoggedInProvider, CoreAudio.PlayOneShotProvider) = (oldServer, oldIn, oldAudio);
@@ -378,7 +378,7 @@ public sealed class GameWindowTests
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "init", "manifest" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Where(o => (string?)o["type"] != "favorites").Select(o => (string?)o["type"]));
         Assert.Equal(new[] { 3 }, sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
         sent.Clear();
@@ -388,7 +388,11 @@ public sealed class GameWindowTests
         Assert.True(w.RaceRunActive);
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");
         w.HandleMessage("{\"type\":\"run-ended\",\"score\":5000,\"durationSec\":60}");   // a second end pays nothing
-        var pay = Assert.Single(sent);
+        Assert.Equal("meta", (string?)sent[0]["type"]);
+        Assert.Equal(1, (int)sent[0]["rev"]!);
+        Assert.NotNull(sent[0]["state"]!["bestScore"]);
+        var pay = Assert.Single(sent.Where(o => (string?)o["type"] == "payout-result"));
+        Assert.Equal(2, sent.Count);
         Assert.Equal("payout-result", (string?)pay["type"]);
         Assert.Equal(250, (int)pay["baseXp"]!);                 // min(5000 / 5, 250 * 1 min)
         Assert.Equal(7, (int)pay["sparksEarned"]!);

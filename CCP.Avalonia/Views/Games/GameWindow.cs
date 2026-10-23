@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (Spec.Id == JustDropId) { LoadJustDrop(); return; }
             _server = server;
+            if (IsRace) server.ModRoot = DtrhModContent.ModDtrhRoot(); // WPF pins the mod mapping at launch.
             PageUrl = new Uri(server.Url(Spec.Page, Spec.Query));
             Web.Navigate(PageUrl);
         }
@@ -250,7 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open) all = Open.ToArray();
             foreach (var w in all)
             {
-                try { w.Close(); }
+                try { if (w.IsRace) w.CloseRaceGracefully(); else w.Close(); }
                 catch (Exception ex) { Log.Warning(ex, "[Game] panic close of {Id} failed", w.Spec.Id); }
             }
         }
