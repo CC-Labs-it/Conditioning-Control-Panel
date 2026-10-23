@@ -20,10 +20,15 @@ public class WaveOutTeardownTests
         public readonly List<string> Calls = new();
         public PlaybackState State = PlaybackState.Playing;
 
-        public FakePlayer(bool reportsOut = true, PlaybackState state = PlaybackState.Playing)
+        private readonly ManualResetEventSlim? _driverHangs;
+        public volatile bool StopReturned;
+
+        public FakePlayer(bool reportsOut = true, PlaybackState state = PlaybackState.Playing,
+                          ManualResetEventSlim? driverHangs = null)
         {
             _reportsOut = reportsOut;
             State = state;
+            _driverHangs = driverHangs;
         }
 
         public event EventHandler<StoppedEventArgs>? PlaybackStopped;
@@ -39,9 +44,15 @@ public class WaveOutTeardownTests
             lock (Calls) Calls.Add("stop");
             var wasRunning = State != PlaybackState.Stopped;
             State = PlaybackState.Stopped;
-            // Like WaveOutEvent: the playback thread raises the event a moment later, elsewhere.
+            // Like WaveOutEvent: its own playback thread raises the event a moment later. A dedicated
+            // thread, not a ThreadPool item: a starved pool on a loaded runner held the report past
+            // the 2 s wait and the teardown abandoned a healthy device (flakes.md).
             if (wasRunning && _reportsOut)
-                ThreadPool.QueueUserWorkItem(_ => { Thread.Sleep(20); PlaybackStopped?.Invoke(this, new StoppedEventArgs()); });
+                new Thread(() => { Thread.Sleep(20); PlaybackStopped?.Invoke(this, new StoppedEventArgs()); })
+                    { IsBackground = true }.Start();
+            // A driver that does not answer waveOutReset.
+            _driverHangs?.Wait(30_000);
+            StopReturned = true;
         }
 
         public void Dispose() { lock (Calls) Calls.Add("dispose"); }
@@ -121,13 +132,16 @@ public class WaveOutTeardownTests
     [Fact]
     public void Release_ReturnsAtOnce_EvenWhenTheDeviceNeverReportsOut()
     {
-        var player = new FakePlayer(reportsOut: false);
+        // The caller (the UI thread on engine stop) never waits on the driver: Release is back
+        // while Stop is still stuck in it. No wall clock, so a cold JIT on a loaded runner cannot
+        // fail it; a Release that called Stop inline would sit out the hang and see StopReturned.
+        var driverHangs = new ManualResetEventSlim(false);   // not disposed: the teardown thread may not have reached Wait yet
+        var player = new FakePlayer(reportsOut: false, driverHangs: driverHangs);
 
-        var started = DateTime.UtcNow;
         WaveOutTeardown.Release(player, new FakeSource(), "test");
 
-        // The caller (the UI thread on engine stop) never waits on the driver.
-        Assert.True(DateTime.UtcNow - started < TimeSpan.FromMilliseconds(500));
+        Assert.False(player.StopReturned);
+        driverHangs.Set();
     }
 
     [Fact]
