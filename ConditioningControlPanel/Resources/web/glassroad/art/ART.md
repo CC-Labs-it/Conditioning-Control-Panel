@@ -1778,3 +1778,38 @@ The selected design must stay under 2,000 triangles, use metres, +Y up and -Z fo
 The rig's head attachment is `head_attach` under `EMI_root`; a hand-held prop uses the existing `shoulderL` or `shoulderR` palm transform. There are no joints literally named head or hand. Do not add bones. Umbrellas are authored open; host-owned morph or the permitted single child handles open/close, and a non-bone rotor child handles beanie spin. Screen, face pixels and antenna remain unchanged. Fit checks after selection must cover every accepted action, antenna sweep, palm contact and the low rear chase camera.
 
 Runtime manifest rows: none until a selected mesh is exported and measured. Added runtime triangles: 0. Added runtime `texBytes`: 0.
+
+## Wave 4: The Keep dressing
+
+Original geometry and procedural masks by CC Labs, 2026-10-23. Private source generators and Blender masters are retained in `C:/Projects/glassroad-art/keep/`. No downloaded art, licensed stock, text, or baked lighting appears in these assets.
+
+Black glass, hot magenta seams and iron are host palette values. Every new texture is linear R8 and sampled from `.r`; material slots `keep_iron`, `keep_blackglass`, and `keep_seam` remain neutral and tintable. The review sheets demonstrate a suggested palette only. Texture residency uses conservative RGBA8 fallback bytes including every mip. Load exactly one tier.
+
+The 48 m padlock and 30 m chain pile match the approved 30-55 m chess-hero height class. They remain beside the road. Both have LOD0 below 6,000 and LOD1 below 1,500 triangles. Origins are base centre, metres, glTF Y up and -Z forward. `boundRadiusM` encloses all decoded world-space vertices. Keep the original chess assets unchanged.
+
+The portcullis arch is STATIC SUPPORT ONLY. The separate moving hazard supplies the grille. The arch guarantees a centred 14 m-wide by 14 m-high empty corridor; total size is 20.4 x 23 x 4.8 m. It has no `move`, skeleton, or animation. Place the moving portcullis in the same road frame, independently.
+
+### Texture replacement, never additive palettes
+
+Each row declares `variantOf` and `replaces`. While Keep is loaded, evict the corresponding baseline row before loading the selected Keep tier. A `.r` luminance mask replaces the W2 RGB galaxy in the same sky slot, so the host must colour it explicitly. Keep does not add a nebula layer. The active `sky-deep-stars`, `sky-spiral-open-mask`, and `sky-spiral-deep-mask` are reused. Normals, boost chevrons, jump lip, and road rim are reused unchanged. There are no duplicate shared textures in this delivery.
+
+| Keep texture | Replaces | Desktop texBytes | Phone texBytes |
+|---|---|---:|---:|
+| keep-road-seams-mask | road-bands-mask | 5,592,404 | 349,524 |
+| keep-road-roughness | road-glass-roughness | 1,398,100 | 87,380 |
+| keep-rail-mask | rail-glow-mask | 699,052 | 43,692 |
+| keep-sky-galaxy | sky-deep-galaxy | 11,184,812 | 2,796,204 |
+
+Road UVs match W1/W2: seams cover 12 x 16 m, roughness 4 x 4 m, rail 0.9 x 8 m. All repeat in road direction. Sky is equirectangular, repeat U and clamp V, with zero-valued seam and pole edges. Seams and roughness are tileable in both axes. ETC1S road masks; UASTC galaxy; complete mip chains and strict KTX2 validation.
+
+Phone budget after W3 water and the two W4 hazard masks, including menu: 134,128,972 bytes (127.915 MiB). Replace 18,874,368 baseline bytes with 3,276,800 Keep bytes. Result: 118,531,404 bytes (113.040 MiB), below 128 MiB. This bound assumes the four replaced textures are evicted and only one track theme is resident. Models add zero texture bytes.
+
+### Models
+
+| Asset | LOD0 tris | LOD1 tris | LOD0 boundRadiusM | texBytes |
+|---|---:|---:|---:|---:|
+| keep-colossus-padlock | 1,972 | 764 | 48.001 | 0 |
+| keep-colossus-chainpile | 5,400 | 1,480 | 37.723 | 0 |
+| keep-portcullis-arch | 3,472 | 1,384 | 23.088 | 0 |
+
+Packed GLBs use lossless meshopt. Packed and independently decoded glTF validation: zero errors. Native masters reopen successfully; finite coordinates, no loose vertices or zero-length edges. Final evidence is rendered from the decoded packed artifacts. Gameplay integration and runtime theme eviction remain the host lane.
