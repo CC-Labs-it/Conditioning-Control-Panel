@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -457,39 +458,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         /// <summary>
-        /// Browse for a spiral anywhere on disk. WPF blocks on <c>OpenFileDialog</c> and then shows
-        /// a confirmation MessageBox; Avalonia's picker is async, and there is no MessageBox on this
-        /// head, so the gallery highlight is the confirmation.
+        /// WPF SpiralFeatureControl.xaml.cs:508-550: pick, save, repaint, refresh overlays, then confirm.
         /// </summary>
-        private async void BtnSelectGif_Click(object? sender, RoutedEventArgs e)
+        internal Func<Task<string?>>? SpiralFilePicker;
+        internal Func<string, string, Task>? SpiralSelectionNotice;
+        internal Task SpiralSelectionTask { get; private set; } = Task.CompletedTask;
+
+        private void BtnSelectGif_Click(object? sender, RoutedEventArgs e)
+            => SpiralSelectionTask = SelectSpiralFileAsync();
+
+        private async Task<string?> PickSpiralFileAsync()
+        {
+            var provider = TopLevel.GetTopLevel(this)?.StorageProvider;
+            if (provider is null || !provider.CanOpen) return null;
+
+            IStorageFolder? start = null;
+            var currentPath = CoreSettings.Current.SpiralPath;
+            if (!string.IsNullOrEmpty(currentPath) && File.Exists(currentPath))
+            {
+                var dir = Path.GetDirectoryName(currentPath);
+                if (!string.IsNullOrEmpty(dir))
+                    start = await provider.TryGetFolderFromPathAsync(dir);
+            }
+
+            var picked = await provider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Loc.Get("title_select_spiral_gif"),
+                AllowMultiple = false,
+                SuggestedStartLocation = start,
+                FileTypeFilter = new[]
+                {
+                    new FilePickerFileType("GIF Files") { Patterns = new[] { "*.gif" } },
+                    new FilePickerFileType("All Image Files") { Patterns = new[] { "*.gif", "*.png", "*.jpg", "*.jpeg" } },
+                },
+            });
+
+            return picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
+        }
+
+        private async Task SelectSpiralFileAsync()
         {
             try
             {
-                var provider = TopLevel.GetTopLevel(this)?.StorageProvider;
-                if (provider is null || !provider.CanOpen) return;
-
-                IStorageFolder? start = null;
-                var currentPath = CoreSettings.Current.SpiralPath;
-                if (!string.IsNullOrEmpty(currentPath) && File.Exists(currentPath))
-                {
-                    var dir = Path.GetDirectoryName(currentPath);
-                    if (!string.IsNullOrEmpty(dir))
-                        start = await provider.TryGetFolderFromPathAsync(dir);
-                }
-
-                var picked = await provider.OpenFilePickerAsync(new FilePickerOpenOptions
-                {
-                    Title = Loc.Get("title_select_spiral_gif"),
-                    AllowMultiple = false,
-                    SuggestedStartLocation = start,
-                    FileTypeFilter = new[]
-                    {
-                        new FilePickerFileType("GIF Files") { Patterns = new[] { "*.gif" } },
-                        new FilePickerFileType("All Image Files") { Patterns = new[] { "*.gif", "*.png", "*.jpg", "*.jpeg" } },
-                    },
-                });
-
-                var file = picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
+                var file = await (SpiralFilePicker ?? PickSpiralFileAsync)();
                 if (string.IsNullOrEmpty(file)) return;
 
                 CoreSettings.Current.SpiralPath = file!;
@@ -498,7 +509,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 // Reflect the new choice in the gallery (highlights it if it lives in the Spirals
                 // folder, otherwise just clears the Default highlight).
                 RefreshLibrary();
-                Overlays.SpiralOverlay.Refresh(this);   // WPF App.Overlay.RefreshOverlays()
+                try { Overlays.SpiralOverlay.Refresh(this); }
+                catch (Exception ex) { Log.Warning(ex, "Spiral select: RefreshOverlays failed"); }
+                if (SpiralSelectionNotice is { } notice)
+                    await notice("Spiral Selected", $"Selected: {Path.GetFileName(file)}");
+                else
+                    await Dialogs.MessageDialog.ShowAsync(TopLevel.GetTopLevel(this) as Window,
+                        "Spiral Selected", $"Selected: {Path.GetFileName(file)}");
             }
             catch (Exception ex)
             {

@@ -27,6 +27,126 @@ namespace CCP.Avalonia.Tests;
 public sealed class AssetsTabTests
 {
     [Fact]
+    public Task SpiralPickerConfirmsAfterSavingAndCancelLeavesTheChoiceAlone() => Run(async (shell, tab, s) =>
+    {
+        var control = new ConditioningControlPanel.Avalonia.Views.Features.SpiralFeatureControl();
+        var host = new Window { Content = control };
+        host.Show(shell);
+        var previous = s.SpiralPath;
+        var notices = new List<string>();
+        try
+        {
+            var path = Path.Combine(ConditioningControlPanel.CorePaths.EffectiveAssets, "images", "a.png");
+            control.SpiralFilePicker = () => Task.FromResult<string?>(path);
+            control.SpiralSelectionNotice = (title, message) =>
+            {
+                Assert.Equal(path, s.SpiralPath); // save/repaint precede the confirmation
+                Assert.Equal("Spiral Selected", title);
+                notices.Add(message);
+                return Task.CompletedTask;
+            };
+            var button = control.FindControl<Button>("BtnSelectGif")!;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await control.SpiralSelectionTask;
+            Assert.Equal(new[] { "Selected: a.png" }, notices);
+            control.SpiralFilePicker = () => Task.FromResult<string?>(null);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await control.SpiralSelectionTask;
+            Assert.Equal(path, s.SpiralPath);
+            Assert.Single(notices);
+        }
+        finally { host.Close(); s.SpiralPath = previous; }
+    });
+
+    [Fact]
+    public Task InstalledPacksHaveTypedFoldersCountsSelectionsAndPreviews() => Run(async (shell, tab, s) =>
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-assets-pack-").FullName;
+        var old = ContentPackStore.Current;
+        var manifest = new InstalledPackManifest { PackId = "test-pack", PackName = "Test pack" };
+        var packDir = Path.Combine(root, ".packs", "pack-folder");
+        Directory.CreateDirectory(Path.Combine(packDir, "content"));
+        Png(Path.Combine(packDir, "content", "a.enc"));
+        Png(Path.Combine(packDir, "content", "z.enc"));
+        File.WriteAllBytes(Path.Combine(packDir, "content", "v.enc"), new byte[16]);
+        File.WriteAllText(Path.Combine(packDir, ContentPackStore.ManifestFileName), "fixture");
+        foreach (var (name, obfuscated, type) in new[] { ("z.png", "z.enc", "image"), ("a.png", "a.enc", "image"), ("v.mp4", "v.enc", "video") })
+            manifest.Files.Add(new PackFileEntry { OriginalName = name, ObfuscatedName = obfuscated, FileType = type, Extension = Path.GetExtension(name) });
+        var store = new ContentPackStore(() => root, () => s, () => { },
+            _ => Newtonsoft.Json.JsonConvert.SerializeObject(manifest), File.ReadAllBytes);
+        ContentPackStore.Current = store;
+        try
+        {
+            s.DisabledAssetPaths.Add("pack:test-pack/z.png");
+            shell.ShowTab("settings");
+            shell.ShowTab("assets");
+            var packs = tab.AssetTree.Single(n => n.IsPackFolder);
+            var pack = Assert.Single(packs.Children);
+            Assert.Equal("test-pack", pack.Name); // WPF: unknown built-in name falls back to id
+            Assert.Equal(new[] { "image", "video" }, pack.Children.Select(n => n.PackFileType));
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 4, 3), tab.TxtAssetCounts.Text);
+            tab.AssetTreeView.SelectedItem = pack.Children[0];
+            await tab.ThumbnailLoads;
+            Assert.Equal(new[] { "a.png", "z.png" }, tab.CurrentFolderFiles.Select(f => f.Name));
+            Assert.All(tab.CurrentFolderFiles, f => Assert.NotNull(f.Thumbnail));
+            Assert.False(tab.CurrentFolderFiles[1].IsChecked);
+            Assert.False(Directory.Exists(Path.Combine(root, ".temp"))); // thumbnails decrypt to streams
+
+            var cb = await Realized(shell, () => tab.ThumbnailsItemsControl.GetVisualDescendants().OfType<CheckBox>()
+                .FirstOrDefault(c => c.DataContext == tab.CurrentFolderFiles[0]));
+            PressSpace(shell, cb);
+            Assert.Contains("pack:test-pack/a.png", s.DisabledAssetPaths);
+            Assert.False(pack.Children[0].IsChecked);
+            Assert.True(pack.IsChecked); // video remains enabled
+            tab.BtnSelectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.DoesNotContain("pack:test-pack/z.png", s.DisabledAssetPaths);
+            tab.SetFolderEnabled(packs, false);
+            Assert.Equal(3, s.DisabledAssetPaths.Count(k => k.StartsWith("pack:test-pack/", StringComparison.Ordinal)));
+            Assert.Empty(s.DisabledAssetFolders);
+            tab.SetFolderEnabled(packs, true);
+            tab.SetFolderEnabled(pack.Children[1], false);
+            foreach (var file in tab.CurrentFolderFiles) tab.ToggleFile(file);
+            Assert.False(pack.IsChecked); // aggregate counts must not keep an empty group checked
+            Assert.False(packs.IsChecked);
+            tab.SetFolderEnabled(packs, true);
+            var preset = new AssetPreset { Name = "Pack selection", DisabledAssetPaths = new() { "pack:test-pack/z.png" } };
+            s.AssetPresets.Add(preset);
+            tab.InitializeAssetPresets();
+            Assert.Equal(4, preset.EnabledImageCount);
+            Assert.Equal(3, preset.EnabledVideoCount);
+            Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 5, 3), tab.TxtAssetCounts.Text);
+
+            // Real context-menu handler opens the existing owned player from a decrypted temp.
+            var menu = new MenuItem { DataContext = tab.CurrentFolderFiles[0] };
+            typeof(AssetsTabView).GetMethod("ThumbnailItem_Preview_Click", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .Invoke(tab, new object[] { menu, new RoutedEventArgs(MenuItem.ClickEvent) });
+            var preview = Assert.Single(shell.OwnedWindows.OfType<MiniPlayerWindow>());
+            var temp = Assert.Single(Directory.GetFiles(Path.Combine(root, ".temp")));
+            Assert.True(File.Exists(temp));
+            PanicSurfaces.All.Single(surface => surface.Id == "asset-preview").Stop(shell);
+            Assert.False(preview.IsVisible);
+            Assert.False(File.Exists(temp));
+
+            // A refresh keeps the selected virtual folder; inactive packs disappear on the next visit.
+            tab.RefreshAssetTree();
+            await tab.ThumbnailLoads;
+            Assert.Equal(2, tab.CurrentFolderFiles.Count);
+            store.DeactivatePack("test-pack");
+            tab.RefreshAssetTree();
+            Assert.DoesNotContain(tab.AssetTree, n => n.IsPackFolder);
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
+            ContentPackStore.Current = old;
+            s.InstalledPackIds.Remove("test-pack");
+            s.ActivePackIds.Remove("test-pack");
+            s.PackGuidMap.Remove("test-pack");
+            try { Directory.Delete(root, true); } catch { }
+        }
+    });
+
+    [Fact]
     public Task DoorBuildsTreeAndSpaceOnAFolderCheckboxDisablesItsFiles() => Run(async (shell, tab, s) =>
     {
         var images = tab.AssetTree.Single(n => n.Name == "images");
