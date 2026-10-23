@@ -223,6 +223,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void MainTutorial_ContentClick(object? sender, global::Avalonia.Input.PointerPressedEventArgs e)
             => e.Handled = true;
 
+        // WPF MainWindow.xaml.cs:1486: restore the browser before replaying the show.
+        private void BtnFirstShowReplay_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            CloseTutorialOverlay();
+            OpenWelcomeShow(this);
+        }
+
         private void CloseTutorialOverlay() => SetTutorialOverlay(false);
 
         /// <summary>

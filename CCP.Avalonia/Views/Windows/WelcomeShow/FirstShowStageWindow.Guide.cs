@@ -51,6 +51,7 @@ internal sealed partial class FirstShowStageWindow
             }
         }
         catch (Exception ex) { Log.Debug(ex, "First show guide: could not follow the app window"); }
+        SyncBubbleInput(); // the guide must leave every shell control clickable
         if (!_stage.Children.Contains(_highlight)) _stage.Children.Insert(0, _highlight);
         if (!_main.IsVisible) _main.Show();
         if (_main.WindowState == WindowState.Minimized) _main.WindowState = WindowState.Normal;

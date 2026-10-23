@@ -51,6 +51,18 @@ internal sealed class FirstShowEffects : Control, IDisposable
     private const int MaxSparks = 900;
     /// <summary>Test seam: MotionFx.AllowParticles.</summary>
     internal Func<bool> Particles = () => global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowParticles;
+    internal Point? BubbleCenter => _actors.LastOrDefault(a => a.Bubble && !a.Gone) is { } a ? new Point(a.X, a.Y) : null;
+    internal int FillBubbleInputRects(PixelRect[] rects, double scale)
+    {
+        if (_disposed || _time >= S.GatherAt) return 0;
+        int count = 0;
+        foreach (var a in _actors.Where(a => a.Bubble && !a.Gone && a.Alpha >= .002).Take(rects.Length))
+        {
+            int left = (int)Math.Floor((a.X - a.W * .52) * scale), top = (int)Math.Floor((a.Y - a.H * .52) * scale);
+            rects[count++] = new PixelRect(left, top, (int)Math.Ceiling(a.W * 1.04 * scale), (int)Math.Ceiling(a.H * 1.04 * scale));
+        }
+        return count;
+    }
     internal int SparkCount => _sparks.Count;
     internal int WordCount => _actors.Count(a => a.Text != null);
     internal bool HasSpiral => _spiral != null;

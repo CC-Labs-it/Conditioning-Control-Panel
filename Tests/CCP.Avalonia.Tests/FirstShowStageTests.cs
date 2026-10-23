@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -19,6 +20,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
 using ConditioningControlPanel.Services.Fyp;
+using ConditioningControlPanel.Services.FirstShow;
 using Xunit;
 using S = ConditioningControlPanel.Services.FirstShow.FirstShowScript;
 
@@ -242,7 +244,15 @@ public sealed class FirstShowStageTests
             Assert.True(card.TutorialPreview);
             t += .05; stage.Frame();
             Assert.NotNull(stage.HighlightTarget);
-            stage.FoundHelp();
+            var helpAt = stage.GuideTarget.TranslatePoint(new Point(stage.GuideTarget.Bounds.Width / 2, stage.GuideTarget.Bounds.Height / 2), shell)!.Value;
+            shell.MouseMove(helpAt);
+            Assert.True(stage.GuideTarget.IsPointerOver);
+            for (int i = 0; i < (int)(S.HoverSeconds / .05) - 1; i++) { t += .05; stage.Frame(); }
+            Assert.Equal(Loc.Get("first_show_guideHelp"), stage.SpeechText);
+            shell.MouseMove(new Point(1, 1)); // leaving resets the dwell
+            t += .05; stage.Frame();
+            shell.MouseMove(helpAt);
+            for (int i = 0; i < (int)(S.HoverSeconds / .05) + 2; i++) { t += .05; stage.Frame(); }
             Assert.Equal(Loc.Get("first_show_foundHelp"), stage.SpeechText);
             Click(stage, 0);                                       // "next"
             Assert.False(card.TutorialPreview);
@@ -265,6 +275,100 @@ public sealed class FirstShowStageTests
             Dispatcher.UIThread.RunJobs();
             service.SaveImmediate(); CoreSettings.ServiceProvider = old;
         }
+    });
+
+    [Fact]
+    public Task SpeechWaitsForTheCardToSettleAndOnlySpeaksOnce() => Run(stage =>
+    {
+        var played = new List<(string Path, string Tag)>();
+        stage.Audio.Master = () => 50;
+        stage.Audio.Play = (path, _, tag) => { played.Add((path, tag)); return () => { }; };
+        double t = S.GreetAfter + .1; stage.Clock = () => t;
+        stage.Frame(); // motion off: the initial greeting is already settled
+        played.Clear();
+        Click(stage, 0); // the preset picker moves her to the centre
+        stage.Frame();
+        Assert.DoesNotContain(played, p => p.Tag == "first-show-voice");
+        t += .2; stage.Frame();
+        var voice = Assert.Single(played.Where(p => p.Tag == "first-show-voice"));
+        Assert.Equal(FirstShowVoice.WriteWav(FirstShowVoice.RenderBurst(FirstShowVoice.MakeScore(stage.SpeechText, "celebration"))), File.ReadAllBytes(voice.Path));
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        t += .2; stage.Frame();
+        Assert.Single(played.Where(p => p.Tag == "first-show-voice"));
+        var transforms = (TransformGroup)EmiDeskService.Instance.Window!.FindControl<Grid>("BodyRoot")!.RenderTransform!;
+        var bob = transforms.Children.OfType<TranslateTransform>().Last().Y;
+        var ambientBob = Math.Sin(t * 2.5) * 3 + Math.Sin(t * 1.1) * 2;
+        Assert.True(Math.Abs(bob - ambientBob) > .1); // WPF's 1.4 s speaking emphasis
+        t += 1.5; stage.Frame();
+        bob = transforms.Children.OfType<TranslateTransform>().Last().Y;
+        Assert.Equal(Math.Sin(t * 2.5) * 3 + Math.Sin(t * 1.1) * 2, bob, 6);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BubbleInputRegionsPopAndClearBeforeTheGuideAndEscapeStopsWithoutFocus() => Run(async stage =>
+    {
+        await stage.Bundled();
+        var cues = new List<string>();
+        stage.Audio.Master = () => 50;
+        stage.Audio.Play = (path, _, tag) => { if (tag == "first-show-cue") cues.Add(Path.GetFileName(path)); return () => { }; };
+        PixelRect[] regions = Array.Empty<PixelRect>();
+        stage.ApplyInputRegions = (rects, count) => regions = rects.Take(count).ToArray();
+        double t = 0; stage.Clock = () => t;
+        stage.Start(); t = S.BubblesAt; stage.Frame(); t += .31; stage.Frame();
+        var fx = stage.Effects!;
+        var at = fx.BubbleCenter!.Value;
+        var region = Assert.Single(regions);
+        Assert.True(region.Contains(new PixelPoint((int)(at.X * stage.RenderScaling), (int)(at.Y * stage.RenderScaling))));
+        stage.MouseDown(at, MouseButton.Left);
+        stage.MouseUp(at, MouseButton.Left);
+        Assert.Null(fx.BubbleCenter);
+        Assert.Empty(regions);
+        Assert.Equal(1, cues.Count(p => p == "Pop3.mp3"));
+        t += S.BubbleEvery; stage.Frame(); t += .31; stage.Frame();
+        Assert.Single(regions);
+        t = S.GatherAt; stage.Frame();
+        Assert.Empty(regions); // gathering bubbles cannot capture shell clicks
+        stage.EscapeDown = () => true;
+        stage.Frame();
+        Assert.False(FirstShowService.IsActive);
+        Assert.False(EmiDeskService.Instance.Window!.PresentationActive);
+    });
+
+    [Fact]
+    public Task HelpAndBookReplayCloseTheirSurfaceBeforeOpeningTheShow() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var service = new SettingsService();
+        var old = CoreSettings.ServiceProvider;
+        CoreSettings.ServiceProvider = () => service;
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        var shell = new MainShellWindow();
+        var book = new EmiBookWindow();
+        try
+        {
+            int opened = 0;
+            shell.SetTutorialOverlay(true);
+            shell.OpenWelcomeShow = owner =>
+            {
+                Assert.Same(shell, owner);
+                Assert.False(shell.FindControl<Control>("MainTutorialOverlay")!.IsVisible);
+                Assert.True(shell.FindControl<global::ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!.BrowserContainer.IsVisible);
+                opened++; return true;
+            };
+            shell.FindControl<Button>("BtnFirstShowReplay")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, opened);
+            book.Show();
+            book.ReplayFirstShow = () => { Assert.False(book.IsVisible); opened++; return true; };
+            book.FindControl<Button>("BtnFirstShow")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, opened);
+        }
+        finally
+        {
+            book.Close(); shell.RequestExit(); Dispatcher.UIThread.RunJobs();
+            service.SaveImmediate(); CoreSettings.ServiceProvider = old;
+        }
+        return Task.CompletedTask;
     });
 
     private static void Click(FirstShowStageWindow stage, int i) => stage.ChoiceButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

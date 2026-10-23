@@ -342,8 +342,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>WPF BtnCompleteGuide: the website manual (EmiCodex.OpenManualInBrowser). Test seam.</summary>
         internal static Action OpenManual = ConditioningControlPanel.Avalonia.Views.Windows.Codex.OpenManualInBrowser;
 
+        internal Func<bool> ReplayFirstShow = () => WelcomeShow.FirstShowService.Open(
+            (Application.Current?.ApplicationLifetime as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow);
+
         private void WireControls()
         {
+            this.FindControl<Button>("BtnFirstShow")!.Click += (_, _) => { CloseBook(); ReplayFirstShow(); };
             _btnClose.Click += (_, _) => CloseBook();
             this.FindControl<Button>("BtnCompleteGuide")!.Click += (_, _) => OpenManual();
             _btnPrev.Click += (_, _) => Step(-1);
