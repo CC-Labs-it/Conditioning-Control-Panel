@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Helpers;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Quiz;
 using Serilog;
 
@@ -80,8 +81,13 @@ public sealed class WebAssetServer : IDisposable
 
     /// <summary>The URL a page loads a library file by (WPF DtrhAssetManifest.AssetUrl's https://ccp.assets/&lt;rel&gt;):
     /// same origin as the page, so the token cookie covers it; each path segment escaped.</summary>
-    public string AssetUrl(string rel) =>
-        $"http://127.0.0.1:{Port}/{AssetsPrefix}" + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
+    public string AssetUrl(string rel) => $"http://127.0.0.1:{Port}" + AssetPath(rel);
+
+    /// <summary><see cref="AssetUrl"/> without the origin ("/ccp.assets/images/a.png"): what DtRH's hostMedia.js
+    /// counts as local (its LOCAL_URL_RE knows https://ccp.*/ and root-relative urls, not 127.0.0.1), so the
+    /// page's WebGL layer may draw it.</summary>
+    public static string AssetPath(string rel) =>
+        "/" + AssetsPrefix + string.Join('/', rel.Replace('\\', '/').Split('/').Select(Uri.EscapeDataString));
 
     /// <summary>Per-port so two runs on 127.0.0.1 (cookies ignore the port) never overwrite each other.</summary>
     string CookieName => $"ccp_t_{Port}";
@@ -203,7 +209,7 @@ public sealed class WebAssetServer : IDisposable
             rel = rel[AssetsPrefix.Length..];
             // Media only, never the app's own dot-folders (.temp, .packs), never the profile itself.
             if (!MediaTypeSniffer.MediaExtensions.Contains(Path.GetExtension(rel))
-                || rel.Split('/', '\\').Any(seg => seg.StartsWith('.'))
+                || (rel.Split('/', '\\').Any(seg => seg.StartsWith('.')) && !IsRemoteCopy(rel))
                 || HoldsUserData(root)) return null;
         }
         if (rel.Length == 0 || rel.EndsWith('/')) rel += "index.html";
@@ -212,6 +218,14 @@ public sealed class WebAssetServer : IDisposable
         if (!Inside(full, root) || !File.Exists(full) || !LinksStayInside(full, root)) return null;
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
+    }
+
+    /// <summary>The one dot-folder file served: DtRH's copy of an online entry, <c>.temp/ccp_temp_remote_*</c>
+    /// (Core DtrhRemoteMedia; WPF's ccp.assets maps the whole folder). Pack decrypts there stay unserved.</summary>
+    static bool IsRemoteCopy(string rel)
+    {
+        var seg = rel.Split('/', '\\');
+        return seg.Length == 2 && seg[0] == ".temp" && DtrhRemoteMedia.IsCopyFile(seg[1]);
     }
 
     /// <summary>The user's unchecked assets (Settings DisabledAssetPaths), never served.</summary>

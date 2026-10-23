@@ -420,7 +420,15 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>Everything off NOW, bypassing throttles and unchanged-send suppression.</summary>
-        public void PanicStop() => _mixer.PanicStop();
+        public void PanicStop()
+        {
+            _mixer.PanicStop();
+            // A per-toy test drives the provider AROUND the mixer, so the mixer's stop cannot end it:
+            // cancel it here (its finally zeroes the toy).
+            try { System.Threading.Interlocked.Exchange(ref _aroundMixerCts, new CancellationTokenSource()).Cancel(); } catch { }
+        }
+
+        private CancellationTokenSource _aroundMixerCts = new();
 
         /// <summary>Play a rendered pattern with an explicit priority (the DtRH director's tiers).</summary>
         public async Task PlayPatternAsync(double intensity, int durationMs, VibrationMode mode,
@@ -612,6 +620,8 @@ namespace ConditioningControlPanel.Services
             var device = _deviceManager.Find(deviceKey);
             if (device == null || !device.IsConnected || !device.Enabled) return false;
 
+            using var panicLinked = CancellationTokenSource.CreateLinkedTokenSource(token, _aroundMixerCts.Token);
+            token = panicLinked.Token;
             durationMs = Math.Clamp(durationMs, 100, 8000);
             // Same contract as TestAsync: works with the master toggle off (AllowTestWindow only
             // waives Settings.Enabled), but premium is still required.
@@ -1079,12 +1089,19 @@ namespace ConditioningControlPanel.Services
         /// <summary>Startup auto-connect (WPF App.AutoConnectHapticsAsync). Mock is the legacy enum's
         /// default, so only a REAL provider (Lovense and/or Buttplug) justifies connecting at launch;
         /// a short delay lets the app finish starting. Never throws: the user can connect by hand.</summary>
+        /// <summary>A CCP_USERDATA_DIR sandbox, as DiscordRichPresenceService.Sandboxed. Test seam.</summary>
+        internal static Func<bool> AutoConnectSandboxed = () =>
+            SandboxNet.Active || Environment.GetEnvironmentVariable("CCP_USERDATA_DIR") != null;
+
         public async Task AutoConnectOnStartupAsync(int delayMs = 2000)
         {
             try
             {
                 var v2 = Settings.V2;
                 if (!Settings.AutoConnect || !(v2.Provider("lovense").Enabled || v2.Provider("buttplug").Enabled)) return;
+                // A sandboxed run (tests, a copied real profile) must never dial the user's own Intiface/Lovense
+                // on localhost, which SandboxNet lets through. Connecting by hand still works.
+                if (AutoConnectSandboxed()) { Log.Information("Haptics auto-connect skipped: sandboxed run"); return; }
                 await Task.Delay(delayMs);
                 Log.Information("Auto-connecting haptics: Provider={Provider}", Settings.Provider);
                 if (await ConnectAsync()) Log.Information("Haptics auto-connected successfully to {Provider}", ProviderName);

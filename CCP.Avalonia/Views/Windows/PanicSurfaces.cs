@@ -63,6 +63,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
+            // Keep the tip order; append incoming stops before the final fire-and-forget camera stop.
+            new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
+            // WPF ForceShutdown :3176 closes the rain, including outside a run.
+            new("gif-cascade", _ => Chaos.ChaosGifCascadeOverlay.CloseActive()),
+            // WPF ForceShutdown :3177 drops the queue and closes the window, run or not.
+            new("chaos-announcer", _ => Chaos.ChaosAnnouncerOverlay.CloseActive()),
+            new("chaos-dvd", _ => Chaos.ChaosDvdOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosDvdOverlay.CloseActive (:3179)
+            new("chaos-cursor-glow", _ => Chaos.ChaosCursorGlowOverlay.CloseActive()),   // WPF ForceShutdown :3183 closes the halo
+            new("chaos-vibe-trail", _ => Chaos.ChaosVibeTrailOverlay.CloseActive()),   // WPF ForceShutdown :3184; also when no run owns it
+            new("chaos-estim", _ => Chaos.ChaosEStimOverlay.CloseActive()),   // lightning + cursor halo (WPF ChaosModeService.cs:3185)
+            new("chaos-field-fx", _ => Overlays.ChaosFieldFxOverlay.CloseActive()),   // WPF ChaosModeService teardown CloseActive
+            new("chaos-skia-fx", _ => Chaos.ChaosSkiaFxOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosSkiaFxOverlay.CloseActive; also outside a run
+            new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
             new("camera", _ => MainShellWindow.StopCameraForPanic()),     // decision C: last, fire-and-forget
         };
 
