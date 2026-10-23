@@ -23,12 +23,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
     /// <para>Takeaway replay uses the bare player, fullscreen and panel duck/restore. The window's
     /// fullscreen is the host's (WPF HostOwnedFullscreen): a strip with the toggle in both modes, Esc from
-    /// either focus state, Topmost rented while active. Remaining: native ownership by the panel and
-    /// Chromium's autoplay/no-throttle flags (WebKitGTK has no equivalent).</para>
+    /// either focus state, Topmost rented while active. Native ownership follows the visible panel and releases while it is ducked;
+    /// Chromium autoplay/no-throttle flags are set on WebView2 (WebKitGTK has no equivalent).</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
         internal const string JustDropId = "justdrop";
+
+        // WPF JustDropHostService.Launch: a live session must keep its audio and clock moving
+        // under payload windows. ponytail: NativeWebView exposes these flags only on WebView2.
+        internal const string JustDropBrowserArguments = "--autoplay-policy=no-user-gesture-required "
+            + "--disable-background-timer-throttling --disable-backgrounding-occluded-windows";
 
         /// <summary>WPF ChaosWebViewHost HostEscapeMessageType (:1231): consumed by the host, never the page's.</summary>
         internal const string HostEscapeMessageType = "ccp-host-escape";
@@ -172,6 +177,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             };
             window.Show();
             if (duck) { shell.WindowState = WindowState.Minimized; window.Activate(); }
+            // Attach AFTER our deliberate minimize, so native ownership cannot cascade-hide the player.
+            window.AttachJustDropOwner(shell);
             return window;
         }
 

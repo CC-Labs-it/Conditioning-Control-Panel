@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -85,7 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _takeawayMoreCount = Math.Max(0, tray.Children.Count - pinned);
             if (_takeawayMoreCount > 0)
             {
-                _takeawayMoreLabel = new TextBlock { Text = TakeawayText.More(_takeawayMoreCount, false), VerticalAlignment = VerticalAlignment.Center };
+                _takeawayMoreLabel = new TextBlock { Text = TakeawayText.More(_takeawayMoreCount, false), VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = this.FindResource("PinkBrush") as IBrush, FontSize = 11.5, FontWeight = FontWeight.Bold };
                 var more = TakeawayChip("SdTakeawayChipAccent", () => SetTakeawayTrayOpen(!_takeawayTrayOpen));
                 more.Name = "TakeawayMore"; more.Classes.Add("takeaway-affordance"); more.Child = _takeawayMoreLabel;
                 ToolTip.SetTip(more, Loc.Get("tooltip_takeaway_more"));
@@ -96,8 +99,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var door = TakeawayChip("SdTakeawayChipDoor", () => { if (JustDropService.DoorAvailable) OpenJustDrop(); });
                 door.Name = "TakeawayDoor"; door.Classes.Add("takeaway-affordance");
-                var line = Line(); var plus = IconGlyph.Of(IconKind.Add, size: 15); plus.Margin = new Thickness(0, 0, 6, 0); line.Children.Add(plus);
-                line.Children.Add(new TextBlock { Text = Loc.Get("sd_takeaway_order"), FontWeight = FontWeight.Bold, FontSize = 11.5 });
+                var line = Line(); var plus = IconGlyph.Of(IconKind.Add, brush: "PinkBrush", size: 15); plus.Margin = new Thickness(0, 0, 6, 0); line.Children.Add(plus);
+                line.Children.Add(new TextBlock { Text = Loc.Get("sd_takeaway_order"), FontWeight = FontWeight.Bold, FontSize = 11.5, Foreground = this.FindResource("PinkBrush") as IBrush });
+                PrepareTakeawayLift(door);
                 door.Child = line; ToolTip.SetTip(door, Loc.Get("tooltip_takeaway_order_drop")); shelf.Children.Add(door);
             }
             Takeaway<TextBlock>("TxtTakeawayCount")!.Text = orders.Count > 0 ? Loc.GetF("sd_takeaway_kept", orders.Count) : "";
@@ -124,7 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             copy.Name = "TakeawayCopy";
             copy.Child = IconGlyph.Of(IconKind.Link, size: 10);
             ToolTip.SetTip(copy, Loc.Get("tooltip_takeaway_copy_link"));
-            var icon = IconGlyph.Of(IconKind.Box, size: row ? 13 : 12);
+            var icon = IconGlyph.Of(row ? IconKind.Options : IconKind.Box, size: row ? 13 : 12);
             if (row)
             {
                 var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto,Auto") };
@@ -136,6 +140,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             else
             {
+                PrepareTakeawayLift(chip);
                 var line = Line(); title.MaxWidth = 120; icon.Margin = new Thickness(0, 0, 6, 0);
                 line.Children.Add(icon); line.Children.Add(title);
                 line.Children.Add(TakeawayTextBlock(TakeawayText.Meta(order), "SdTakeawayChipMeta"));
@@ -158,6 +163,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Log.Debug("Takeaway clipboard failed: {Kind}", ex.GetType().Name);
                 App.Notifications.Show(Loc.Get("toast_taste_link_copy_failed"), NotificationType.Warning, TimeSpan.FromSeconds(4));
             }
+        }
+
+        // WPF PreparePresetCardFx -> MotionFx.HoverLift: only pinned receipts and the shop,
+        // 1.02 / 150 ms quadratic out. Takeaway never gets the selected PRESET's ambient sheen.
+        private static void PrepareTakeawayLift(Border chip)
+        {
+            var scale = new ScaleTransform(1, 1);
+            chip.RenderTransform = scale;
+            chip.RenderTransformOrigin = RelativePoint.Center;
+            void Lift(bool on)
+            {
+                scale.Transitions = AmbientFxCanvas.Env.AllowTransitions ? new Transitions
+                {
+                    new DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+                    new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+                } : null;
+                scale.ScaleX = scale.ScaleY = on ? 1.02 : 1;
+            }
+            chip.PointerEntered += (_, _) => Lift(true);
+            chip.PointerExited += (_, _) => Lift(false);
+            chip.DetachedFromVisualTree += (_, _) => { scale.Transitions = null; scale.ScaleX = scale.ScaleY = 1; };
         }
 
         private static StackPanel Line() => new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };

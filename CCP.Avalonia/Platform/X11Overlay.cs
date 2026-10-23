@@ -76,6 +76,38 @@ internal static class X11Overlay
     [DllImport(LibX11)] private static extern int XRaiseWindow(IntPtr display, IntPtr window);
     [DllImport(LibX11)] private static extern int XSendEvent(IntPtr display, IntPtr window, bool propagate, long mask, IntPtr sendEvent);
 
+    [DllImport(LibX11)] private static extern int XSetTransientForHint(IntPtr display, IntPtr window, IntPtr owner);
+    [DllImport(LibX11)] private static extern int XDeleteProperty(IntPtr display, IntPtr window, IntPtr property);
+    [DllImport(LibX11)] private static extern int XMapWindow(IntPtr display, IntPtr window);
+
+    // Reuse this shim's locked connection and nonfatal X error handler for native ownership.
+    internal static bool SetTransientOwner(Window window, Window? owner)
+    {
+        if (!TryGetXid(window, out var xid)) return false;
+        var parent = IntPtr.Zero;
+        if (owner is not null && !TryGetXid(owner, out parent)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            if (owner is null) XDeleteProperty(_display, xid, XInternAtom(_display, "WM_TRANSIENT_FOR", false));
+            else XSetTransientForHint(_display, xid, parent);
+            XFlush(_display);
+        }
+        if (owner is not null) RestackAbove(window, owner);
+        return true;
+    }
+
+    internal static void MapOwnedWindow(Window window)
+    {
+        if (!TryGetXid(window, out var xid)) return;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return;
+            XMapWindow(_display, xid);
+            XFlush(_display);
+        }
+    }
+
     [DllImport(LibXfixes)] private static extern int XFixesQueryExtension(IntPtr display, out int eventBase, out int errorBase);
     [DllImport(LibXfixes)] private static extern IntPtr XFixesCreateRegion(IntPtr display, IntPtr rectangles, int count);
     [DllImport(LibXfixes)] private static extern void XFixesSetWindowShapeRegion(IntPtr display, IntPtr window, int shapeKind, int xOffset, int yOffset, IntPtr region);

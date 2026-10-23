@@ -343,7 +343,7 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Style Selector="^:pointerover">
+            <Style Selector="^:pointerover, ^:focus-visible">
                 <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
             </Style>
         </ControlTheme>
@@ -351,7 +351,7 @@
         <ControlTheme x:Key="SdTakeawayChipDoor" TargetType="Border" BasedOn="{StaticResource SdTakeawayChip}">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink40Brush}"/>
-            <Style Selector="^:pointerover">
+            <Style Selector="^:pointerover, ^:focus-visible">
                 <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
                 <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
             </Style>
@@ -360,7 +360,7 @@
         <ControlTheme x:Key="SdTakeawayChipAccent" TargetType="Border" BasedOn="{StaticResource SdTakeawayChip}">
             <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink40Brush}"/>
-            <Style Selector="^:pointerover">
+            <Style Selector="^:pointerover, ^:focus-visible">
                 <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
             </Style>
         </ControlTheme>
@@ -405,7 +405,7 @@
             <Setter Property="Margin" Value="8,0,0,0"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Opacity" Value="0.55"/>
-            <Style Selector="^:pointerover">
+            <Style Selector="^:pointerover, ^:focus-visible">
                 <Setter Property="Opacity" Value="1"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink40Brush}"/>
                 <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
@@ -422,7 +422,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Style Selector="^:pointerover">
+            <Style Selector="^:pointerover, ^:focus-visible">
                 <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
                 <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
             </Style>

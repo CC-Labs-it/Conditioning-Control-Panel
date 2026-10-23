@@ -75,6 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var window = new GameWindow(spec);
             window.Load(Server());
             window.Show();
+            if (id == JustDropId && Windows.MainShellWindow.Current is { } shell) window.AttachJustDropOwner(shell);
             return window;
         }
 
@@ -84,7 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal GameWindow(Game spec)
         {
             Spec = spec;
-            Web = new WebHost();
+            // EnvironmentRequested may fire on visual attachment; options must precede Content.
+            Web = new WebHost { AdditionalBrowserArguments = spec.Id == JustDropId ? JustDropBrowserArguments : null };
             Title = Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;

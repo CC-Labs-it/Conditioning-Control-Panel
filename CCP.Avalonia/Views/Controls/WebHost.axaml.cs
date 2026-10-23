@@ -99,6 +99,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Func<Uri, (string Name, string Value)?>? RequestHeader { get; set; }
 
+        /// <summary>Per-host Chromium startup flags; ignored by non-Chromium adapters.</summary>
+        internal string? AdditionalBrowserArguments { get; set; }
+
+        internal void ConfigureEnvironment(WebViewEnvironmentRequestedEventArgs e)
+        {
+            if (e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe && LinuxChoice != "wpe")
+                wpe.PreferWebKitGtkInstead = true;
+            if (e is WindowsWebView2EnvironmentRequestedEventArgs windows && AdditionalBrowserArguments is { } arguments)
+                windows.AdditionalBrowserArguments = arguments;
+        }
+
         /// <summary>Requests <see cref="RequestHeader"/> actually stamped (the engine accepted the header; never the value).</summary>
         internal int StampedRequests { get; private set; }
 
@@ -224,11 +235,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web = new NativeWebView();
                     // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
                     // throws EntryPointNotFoundException in an async void, which takes the whole app down.
-                    if (LinuxChoice != "wpe")
-                        _web.EnvironmentRequested += (_, e) =>
-                        {
-                            if (e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
-                        };
+                    _web.EnvironmentRequested += (_, e) => ConfigureEnvironment(e);
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
