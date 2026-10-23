@@ -116,6 +116,7 @@ public sealed class MandatoryVideoOverlayTests
                             .SetupWithoutStarting();
 
                     Task<Window> Open(bool strict) => OpenClip(v, o, strict);
+                    Task Framed() => Until(() => o.FirstFrameMs >= 0);
 
                     // Strict with a live global panic listener: a close and the panic key are
                     // refused here (the global path stops it).
@@ -241,7 +242,7 @@ public sealed class MandatoryVideoOverlayTests
                     w.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, "");
                     Assert.True(o.GracePaused && resume.IsFocused, "paused, Resume focused");
                     clock.Step(1);
-                    s.PanicKey = Key.Enter.ToString();
+                    s.PanicKey = "Enter";   // stored by its alias: Avalonia prints Key.Enter as "Return"
                     w.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
                     s.PanicKey = "F12";
                     Assert.False(v.IsPlaying, "panic key Enter stops the clip instead of resuming");
@@ -253,11 +254,29 @@ public sealed class MandatoryVideoOverlayTests
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
                     Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output replays the clip once");
-                    await Until(() => o.FirstFrameMs >= 0);
+                    await Framed();
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
                     Assert.False(v.IsPlaying, "lost again after the replay: the clip ends");
                     Assert.Empty(o.Windows);
+
+                    // BUG-7NAKK79CZ2: the heal replay continues the clip's max-length cap instead of restarting it.
+                    // 14 s cap (under the 10 s clip's 15 s overrun guard); 9 s played (fake clock), output lost -> replay;
+                    // 6 s more ends it at the cap. 5 s of real-time margin each side (P08).
+                    s.VideoMaxDurationSeconds = 14;
+                    w = await Open(strict: false);
+                    o.PlayedSkew = 9;
+                    o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
+                    o.GuardTick();
+                    Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output at 9 s replays the clip");
+                    await Framed();
+                    o.GuardTick();
+                    Assert.True(v.IsPlaying, "the replay keeps the 5 s of cap left");
+                    o.PlayedSkew = 6;
+                    o.GuardTick();
+                    Assert.False(v.IsPlaying, "9 s + 6 s past a 14 s cap: the replayed clip ends at the cap");
+                    Assert.Empty(o.Windows);
+                    s.VideoMaxDurationSeconds = 0;
 
                     // The global panic press (WPF HandlePanicKeyPress): with PanicOverridesAll off the first
                     // press grace-pauses the clip and the next one stops it; with it on, panic wins at once.
