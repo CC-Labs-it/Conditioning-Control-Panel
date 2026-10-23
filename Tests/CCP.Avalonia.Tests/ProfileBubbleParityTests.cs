@@ -236,13 +236,23 @@ public sealed class ProfileBubbleParityTests : IDisposable
         return Task.CompletedTask;
     });
 
-    /// <summary>WPF OnBubbleFlashDisplayed / OnBubbleSubliminalDisplayed: a flash tilts the bubble, a subliminal dips it.</summary>
-    [Fact]
-    public Task FlashWobblesAndSubliminalShimmersTheBubble() => AvaloniaTestDispatcher.RunAsync(() =>
+    /// <summary>WPF OnBubbleFlashDisplayed / OnBubbleSubliminalDisplayed: a flash tilts the bubble, a subliminal dips it.
+    /// Motion Off: WPF MotionFx.AllowTransitions gate, nothing tilts or dims.</summary>
+    [Theory]
+    [InlineData(MotionLevel.Full, true)]
+    [InlineData(MotionLevel.Off, false)]
+    public Task FlashWobblesAndSubliminalShimmersTheBubble(MotionLevel motion, bool animates) => AvaloniaTestDispatcher.RunAsync(() =>
     {
-        var shell = Shell(MotionLevel.Full);
+        var shell = Shell(motion);
+        var savedFlash = (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider,
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire);
         try
         {
+            // The startup seam App.axaml.cs uses; the burst itself is stubbed (no overlay windows in a test).
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire = (_, _) => { };
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.SeedCore(() => shell,
+                () => global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
+                    ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash));
             var visual = shell.FindControl<Grid>("ProfileBubbleVisual")!;
             double Angle() => visual.RenderTransform is TransformGroup g
                 ? g.Children.OfType<RotateTransform>().Single().Angle
@@ -259,20 +269,26 @@ public sealed class ProfileBubbleParityTests : IDisposable
                 }
             }
 
-            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
-                ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash);
+            CoreFlash.ShowProvider!();
             Run();
-            Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
+            if (animates) Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
+            else Assert.Equal(0, maxTilt);
             Assert.Equal(1, minOpacity);
 
             maxTilt = 0;
             global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
                 ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
             Run();
-            Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
+            if (animates) Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
+            else Assert.Equal(1, minOpacity);
             Assert.Equal(0, maxTilt);
         }
-        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        finally
+        {
+            (CoreFlash.ShowProvider, CoreFlash.AmbientShowProvider, CoreFlash.IsBusyProvider,
+                global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.Fire) = savedFlash;
+            shell.Close(); Dispatcher.UIThread.RunJobs();
+        }
         return Task.CompletedTask;
     });
 
