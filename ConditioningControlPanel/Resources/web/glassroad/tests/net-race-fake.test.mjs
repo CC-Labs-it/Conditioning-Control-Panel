@@ -113,7 +113,7 @@ test('two clients and a kept bot race through a fake room', async (t0) => {
   assert.equal(clients[0].racers.list.find((r) => r.meta.seat === 2).kind, 'local');
   assert.equal(clients[1].racers.list.find((r) => r.meta.seat === 2).kind, 'remote');
 
-  let maxErr = 0, maxJump = 0, gave = false, fired = false, sawEffect = false;
+  let maxErr = 0, maxJump = 0, gave = false, fired = false, sawEffect = false, armed = false;
   const lastShown = [null, null];
   for (let step = 0; step < 60 * 40; step++) {
     t += 1000 / 60;
@@ -124,6 +124,11 @@ test('two clients and a kept bot race through a fake room', async (t0) => {
       const P = c.racers.player, ctx = { racers: c.racers.list, items: c.items, standings: c.standings, race: c.race };
       c.ai.drive(P, ctx, DT, c.a);
       if (!fired && c.seat === 0 && c.race.timeS > 6) { c.racers.player.item.id = 'spiral'; c.racers.player.item.rolling = false; c.a.item = true; fired = true; }
+      // the kept bot is handed a Spiral once B keeps it (its own pickups depend on the bots' line, which feel work moves)
+      if (!armed && c.seat === 1 && gave) {
+        const kb = c.racers.list.find((r) => r.meta.seat === 2);
+        if (kb && kb.kind === 'local') { if (!kb.item.id) { kb.item.id = 'spiral'; kb.item.rolling = false; } armed = true; }
+      }
       c.race.update(DT, c.a, P.st);
       c.racers.step(DT, c.a, c.race, { ai: c.ai, items: c.items, standings: c.standings });
       c.contact.update(DT, c.racers.list, c.race);

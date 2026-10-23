@@ -13,9 +13,14 @@
  * line aims ai.water.leadS seconds of lateral flow against the push, takes an inside or outside line on the
  * stream bend (per persona and seed), holds a chosen lane from ai.water.lipLeadM before the chute with a
  * small wheel down it, never drifts on water, never counts a pool as stuck (no rescue there).
+ * Stepping stones (wave 2): a field plan next to the court plan, one per row of track.fields. ai.stones.commitM
+ * before a field the bot picks the lane nearest its own lateral (the persona's inside bias pulls a near tie to the
+ * centre lane), eases onto it and holds that x through the field: no lane change, wander, drift, steer noise or
+ * lift from holdLeadM before the field to its end (vmax never under ai.stones.minMps), no steer in the air over a
+ * gap, the plan dropped leaveM after the field.
  */
 import { S, BOOST, RESPAWN } from './state.js';
-import { clamp, lerp, wrap, damp } from '../core/math.js';
+import { clamp, lerp, wrap, damp, smoothstep } from '../core/math.js';
 import { applyBoost } from './boost.js';
 import { gap } from './gaps.js';
 import { ITEMS } from './itemTable.js';
@@ -59,6 +64,15 @@ const GAPS = {
   'ai.water.chuteSteerMax': 0.3,   // the wheel stays within this on the chute
   'ai.water.bendDegPerM': 0.25,    // a stream run turning more than this on average is the stream bend
   'ai.water.chuteDownDeg': 3,      // a straight stream run dropping more than this on average is the chute
+  // stepping stones (wave 2): a field plan next to the court plan, one per row of track.fields ([] = none)
+  'ai.stones.approachM': 60,   // the line starts easing toward the nearest safe lane this far before a field (the court's LEAD)
+  'ai.stones.blendM': 15,      // the line is fully on the (provisional) lane this far into the approach: 45 m of straight running before the deck edge
+  'ai.stones.commitM': 25,     // the lane nearest the kart's own lateral is confirmed this far before a field (a late commit, as the court's)
+  'ai.stones.minMps': 16,      // the planned speed never drops under this inside the field and holdLeadM before it
+  'ai.stones.laneHoldS': 1.5,  // a picked lane is held at least this long; before the field a bot knocked more than 2 m off it may pick again, inside never
+  'ai.stones.holdLeadM': 20,   // no drift, steer noise or lift from this far before the field to its end
+  'ai.stones.leaveM': 6,       // the plan is dropped this far after the field
+  'ai.stones.settleS': 0.45,   // the lane target sits short of the lane by this much of the sideways speed: the bot arrives with the nose straight
 };
 // feel.get throws on a missing key, and a feel never gains keys (set refuses them), so a miss is
 // remembered per feel: no throw per bot per tick.
@@ -182,6 +196,47 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     return null;
   }
 
+  // stepping stones (wave 2): one plan per field (track.fields, [] or undefined = none). The lanes are sorted and
+  // kept 1 m inside the road at the field start (the outer margins are void); the stones themselves sit on the lanes
+  // by construction, so inside a plan the lane is the line and the open-edge band is not consulted.
+  const fields = (track.fields || []).filter((f) => f && Array.isArray(f.lanes) && f.lanes.length && Number.isFinite(f.fromS) && Number.isFinite(f.toS) && f.toS > f.fromS)
+    .map((f) => {
+      const hw = typeof track.frameAt === 'function' ? track.frameAt(f.fromS, FR0).w / 2 : Infinity;
+      const lanes = f.lanes.map((x) => clamp(x, -hw + 1, hw - 1)).sort((a, b) => a - b);
+      let centre = lanes[0];
+      for (const x of lanes) if (Math.abs(x) < Math.abs(centre)) centre = x;
+      // the safe lanes (a safe line always): the deck has no lip, so the entry void must be short enough to coast over
+      // at the design speed without the kick (snap height), every gap along the lane and the exit void within the kick's
+      // reach (stones.clearGapM); a field where no lane qualifies keeps them all
+      const feelOr = (k, d) => { try { return feel.get(k); } catch (e) { return d; } };
+      const clearM = feelOr('stones.clearGapM', 4) + 0.5, v = feelOr('stones.minClearMps', 14);
+      const entryM = Math.sqrt(2 * gap(feel, 'kart.snapM') / feelOr('hop.gravityMps2', 28)) * v;
+      const safe = f.lanes.filter((lx) => {
+        const rows = (f.stones || []).filter((st) => st && Math.abs(st.x - lx) < 0.5 && Number.isFinite(st.s)).sort((a, b) => a.s - b.s);
+        if (!rows.length) return false;
+        if (rows[0].s - f.fromS > entryM) return false;
+        for (let i = 1; i < rows.length; i++) if (rows[i].s - (rows[i - 1].s + rows[i - 1].len) > clearM) return false;
+        const last = rows[rows.length - 1];
+        return f.toS - (last.s + last.len) <= clearM;
+      }).map((x) => clamp(x, -hw + 1, hw - 1));
+      return { field: f, fromS: f.fromS, toS: f.toS, lanes, centre, safe: safe.length ? safe : lanes };
+    });
+  /** The field plan covering s, from approachM before its start to leaveM after its end, or null. */
+  function fieldAt(s) {
+    const lead = fg(feel, 'ai.stones.approachM'), tail = fg(feel, 'ai.stones.leaveM');
+    for (let i = 0; i < fields.length; i++) { const p = fields[i]; if (wrap(s - (p.fromS - lead), L) <= p.toS - p.fromS + lead + tail) return p; }
+    return null;
+  }
+  /** The safe lane nearest x; the persona's inside bias pulls a near tie toward the centre lane. */
+  function pickLane(p, x, persona) {
+    let best = p.safe[0], bd = Infinity;
+    for (let i = 0; i < p.safe.length; i++) {
+      const lx = p.safe[i], d = Math.abs(lx - x) - (lx === p.centre ? persona.inside * 1.2 : 0);
+      if (d < bd) { bd = d; best = lx; }
+    }
+    return best;
+  }
+
   const bots = new Map();
 
   function bot(i) {
@@ -192,7 +247,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       b = { rand, persona, line: (rand() * 2 - 1), phase: rand() * Math.PI * 2, n1: rand() * 6.28, n2: rand() * 6.28,
         t: 0, driftT: -1, driftCool: 0, driftDir: 0, holdT: 0, itemCool: 0, stuckT: 0, reverseT: 0,
         launched: false, launch: rand(), setupSide: 0, wantDrift: false, why: {}, routeLap: -1, route: null, routes: 0,
-        waterInside: false, chuteLane: 0 };
+        waterInside: false, chuteLane: 0, field: null };
       // water picks on their own stream (the drift / item / launch rolls keep their sequence)
       const wr = rng(seed * 7919 + i * 104729 + 1013904223);
       b.waterInside = wr() < persona.inside;
@@ -226,7 +281,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     b.t += dt;
     const ph = st[S.respawnPhase];
     if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) {
-      b.courtRoute = null;
+      b.courtRoute = null; b.field = null;
       b.driftT = -1; b.reverseT = 0; b.stuckT = 0; out.throttle = 1; return;
     }
 
@@ -269,6 +324,23 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       b.courtRoute = courts.choose(court, seed, r.i, lap, lat + clamp(lateralV * 0.6, -4, 4)); b.courtCommitted = true;
     }
     const nearLip = lipAhead(s, fg(feel, 'ai.jumpGuardM'));
+    // stepping stones (wave 2): from approachM out the line eases toward the nearest safe lane; at commitM the lane is
+    // confirmed from where the kart is and where it slides (the court's late-commit rule) and held through the field
+    // and leaveM past it. Before the commit a bot knocked more than 2 m off its lane (a bump) may pick again once
+    // laneHoldS has run; after the commit never.
+    const fp = fieldAt(s);
+    if (!fp) b.field = null;
+    else {
+      const slide = clamp((b.latV || 0) * 0.6, -3, 3), commitS = fp.fromS - fg(feel, 'ai.stones.commitM');
+      if (!b.field || b.field.plan !== fp) b.field = { plan: fp, lane: pickLane(fp, lat + slide, p), t: 0, committed: false };
+      else b.field.t += dt;
+      if (!b.field.committed && s >= commitS) { b.field.lane = pickLane(fp, lat + slide, p); b.field.committed = true; b.field.t = 0; }
+      else if (!b.field.committed && b.field.t >= fg(feel, 'ai.stones.laneHoldS') && Math.abs(lat - b.field.lane) > 2) {
+        b.field.lane = pickLane(fp, lat + slide, p); b.field.t = 0;
+      }
+    }
+    const inField = !!fp && s >= fp.fromS && s < fp.toS;
+    const inHold = inField || (!!fp && s >= fp.fromS - fg(feel, 'ai.stones.holdLeadM') && s < fp.toS);
 
     // polish 4: a drop shortcut, rolled once a lap as the bot nears its open edge
     if (routeDrive(r, b, ctx, dt, out, s, speed, blind)) return;
@@ -292,7 +364,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       const lineM = Math.min(fg(feel, 'ai.water.lineM'), half[kWater] - fg(feel, 'ai.railMarginM') - 0.5);
       target = run.side * (b.waterInside ? lineM : -lineM) + wander * 0.5;
     }
-    const wide = onWater || onChute ? null : driftSetup(b, s, speed, la, nearLip || !!court);
+    const wide = onWater || onChute ? null : driftSetup(b, s, speed, la, nearLip || !!court || inHold);
     if (wide !== null) target = wide;
     // aim against the lateral flow ahead: it will carry the kart that far over the next leadS seconds
     target -= flowL[at(s + la)] * fg(feel, 'ai.water.leadS');
@@ -327,6 +399,17 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     lineLimits(s, limitLook, LIM);
     if (b.courtRoute) target = courts.target(b.courtRoute, s, la, target);
     target = clamp(target, LIM.lo, LIM.hi);
+    // stepping stones: ease onto the picked lane over the first blendM of the commit zone, hold it (no avoid shift,
+    // no wander, no open-edge band: the lane is inside the road by construction) and let go over leaveM after the field
+    if (b.field) {
+      const a0 = fp.fromS - fg(feel, 'ai.stones.approachM');
+      const enter = smoothstep(a0, a0 + fg(feel, 'ai.stones.blendM'), s + la * 0.5);
+      const leave = smoothstep(fp.toS, fp.toS + fg(feel, 'ai.stones.leaveM'), s);
+      // damped: aim short of the lane by the slide, so the sideways speed is gone at the entry (airborne over the
+      // gaps the kart cannot steer, and 5 m/s of slide carried a bot clean across its 5 m stone into the slit)
+      const aim = b.field.lane - clamp((b.latV || 0) * fg(feel, 'ai.stones.settleS'), -2.5, 2.5);
+      target = lerp(target, aim, enter * (1 - leave));
+    }
 
     // steer: pure pursuit on the target point
     const f = track.frameAt(s + la, FR);
@@ -340,8 +423,10 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     yawParams(r.feel, YP);
     const soft = Math.max(0.2, calmOf(speed, YP) * YP.user);
     let steer = Math.atan2(x, Math.max(z, 0.1)) * feel.get('ai.steerGain') / soft;
-    if (blind > 0) steer += blind * feel.get('ai.blindSteerNoise') * (0.6 * Math.sin(1.7 * b.t + b.n1) + 0.4 * Math.sin(3.1 * b.t + b.n2));
+    if (blind > 0 && !inHold) steer += blind * feel.get('ai.blindSteerNoise') * (0.6 * Math.sin(1.7 * b.t + b.n1) + 0.4 * Math.sin(3.1 * b.t + b.n2));
     out.steer = clamp(steer, -1, 1);
+    // stepping stones: airborne over a gap the kart keeps its heading (the lane was picked at the commit)
+    if (inField && st[S.airborne] > 0) out.steer = 0;
     // on the chute itself the wheel stays small: the lane was chosen at the lip, gravity does the rest
     if (onChute && run === chute) { const m = fg(feel, 'ai.water.chuteSteerMax'); out.steer = clamp(out.steer, -m, m); }
     // heading against the road here (+ = nose right of travel) and sideways speed across it
@@ -370,12 +455,14 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       vmax = Math.min(vmax, Math.sqrt(v * v + 2 * coast * d));
     }
     if (b.courtRoute && b.courtRoute.band.x !== 0 && s < court.first + 3 && Math.abs(lat - b.courtRoute.band.x) > 1) vmax = Math.min(vmax, 20);
+    // stepping stones: the throttle stays down into and through the field (a lift before a gap is a fall)
+    if (inHold) vmax = Math.max(vmax, fg(feel, 'ai.stones.minMps'));
     out.throttle = 1;
     if (!nearLip && speed > vmax) {
       out.throttle = 0;
       if (speed > vmax + 3) out.brake = clamp((speed - vmax) / 6, 0, 1);
     }
-    if (blind > 0) out.throttle *= lerp(1, feel.get('ai.blindThrottle'), blind);
+    if (blind > 0 && !inHold) out.throttle *= lerp(1, feel.get('ai.blindThrottle'), blind);
 
     // stuck (nose in a rail, facing the wrong way): back out
     if (b.reverseT > 0) {
@@ -392,7 +479,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       if (b.stuckT > fg(feel, 'ai.stuckS')) { b.stuckT = 0; b.reverseT = fg(feel, 'ai.reverseS'); }
     } else b.stuckT = 0;
 
-    driftLogic(r, b, dt, out, s, lat, speed, la, nearLip || !!court || onWater || onChute, blind);
+    driftLogic(r, b, dt, out, s, lat, speed, la, nearLip || !!court || onWater || onChute || inHold, blind);
     // a trick pays a boost on landing: never into an open edge ahead (polish 6: a boost cannot brake for an open bend)
     if (st[S.airborne] > 0 && st[S.airTime] > 0 && st[S.airTime] <= 0.1 && !b.trickRolled) { b.trickRolled = true; if (b.rand() < feel.get('trick.botChance') && !openAhead(s, fg(feel, 'ai.trickOpenM'))) out.hopPressed = true; } else if (st[S.grounded] > 0) b.trickRolled = false;
     if (r.item) itemLogic(r, b, ctx, dt, out);
@@ -549,5 +636,5 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     b.itemCool = feel.get('ai.itemCooldownS');
   }
 
-  return { drive, reset, personaOf: (i) => bot(i).persona.id, botOf: (i) => bot(i), water: () => runs };
+  return { drive, reset, personaOf: (i) => bot(i).persona.id, botOf: (i) => bot(i), water: () => runs, fields: () => fields };
 }
