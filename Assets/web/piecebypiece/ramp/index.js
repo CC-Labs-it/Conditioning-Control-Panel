@@ -38,6 +38,7 @@ import { createMeter, createThinkClock, surgeLevel, RAMP_TUNING, clamp01, thinkR
 import { createSchedule, videoHoldMs, sustainedFor } from './schedule.js';
 import { createLayerStack } from './layers/index.js';
 import { createFixtureMedia } from './media.js';
+import { createAmbient } from './ambient.js';
 import { presentation, onPresentation } from '../game/preferences.js';
 
 const TICK_MS = 90;            // scheduling cadence; layers animate on their own
@@ -154,6 +155,35 @@ export function attachRamp(opts = {}) {
   const UNSET = Number.NaN;
   const applied = { melt: UNSET, blur: UNSET, spiral: UNSET, overlay: UNSET };
 
+  // THE STANDS (spectate v2, 2026-10-14). In a watched game nothing is scheduled
+  // here: the turn player's heat and fired kinds arrive on the bus off the tape
+  // (fx-heat / fx-fire, net/watch.js) at the moments they happened, and this
+  // page dresses them in the SPECTATOR's own pictures. With no pictures at all
+  // the media layers stay silent (never a blank card or a noise tile) and only
+  // the media-free ones (melt, blur, spiral, overlay) ride the heat.
+  let replay = false;
+  // watch-effects from the HUD; on by default. media:false = the host says no picture source is picked
+  let watchFx = { on: true, amount: 'normal', media: true };
+  let replayTurn = 'w';
+  let replayTarget = 0;       // the last heat sample off the tape
+  let replayHeat = 0;         // eased toward it, so 1 s samples do not step
+  let replayAcc = 0;          // the Amount dial as a running share of fires to show
+  let lastHeatEmit = 0;       // ramp-heat on a player's page: once a second during their own turn
+  // Players on pages that post no fx record (older than spectate v2): the stands run a calm one of their
+  // own for that side until its first record arrives (ramp/ambient.js; Options, on by default).
+  const ambient = createAmbient();
+  let ambientOn = presentation().watchAmbient !== false;
+  const REPLAY_EASE_MS = 700;
+  const DEFAULT_STRENGTH = 1;   // game/preferences.js presentation().strength when nothing is saved
+  const MEDIA_KINDS = new Set(['flash', 'gifRain', 'video']);
+  const hasKind = (k) => { try { return !!(media && typeof media.has === 'function' && media.has(k)); } catch { return false; } };
+  /** Does the spectator have anything to show? (The HUD asks the player to pick a source when not.) */
+  const hasPictures = () => watchFx.media !== false && (hasKind('image') || hasKind('gif'));
+  const hasAnyMedia = () => watchFx.media !== false && (hasPictures() || hasKind('video'));
+  /** Whether Distraction runs at all: the stands' own switch in a watched game, the Experience pick otherwise. */
+  const wanted = () => (replay ? !!watchFx.on : presentation().experience === 'distraction');
+  const emit = (type, p) => { try { if (bus) bus.emit(type, p); } catch { /* a listener is not our problem */ } };
+
   const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
   /** The side the ramp is acting on: whoever is on the move. */
@@ -172,7 +202,9 @@ export function attachRamp(opts = {}) {
     return clamp01(liveMeter(t) + meter.kickFor(actingSide(), t));
   }
   /** The sustained stack at this meter, with the player's Strength on it. */
-  const susFor = (m) => sustainedFor(m, tuning, { cardLive: stack.cardLive, strength: dials.strength });
+  /** The stands use the DEFAULT Strength (the slider is seat-only): intensity there is watchAmount alone. */
+  const strengthNow = () => (replay ? DEFAULT_STRENGTH : dials.strength);
+  const susFor = (m) => sustainedFor(m, tuning, { cardLive: stack.cardLive, strength: strengthNow() });
 
   /**
    * Is the acting side sitting on its own move with a live board in front of it?
@@ -244,8 +276,16 @@ export function attachRamp(opts = {}) {
     const live = stack.cardLive;
     if (cardWasLive && !live) nextCardAt = t + tuning.think.cardGapMs;   // a breath between washes
     cardWasLive = live;
-    if (live || !counting || reducedMotion || t < nextCardAt || think.ms < think.fullMs * tuning.think.cardAt) return;
-    stack.videoCard({ holdMs: videoHoldMs(m, tuning, hostHoldSec), side: actingSide() });
+    if (live || !counting || t < nextCardAt || think.ms < think.fullMs * tuning.think.cardAt) return;
+    const holdMs = videoHoldMs(m, tuning, hostHoldSec);
+    if (reducedMotion) {
+      // nothing is drawn here, but the stands still get the card the schedule called for
+      emit('ramp-fired', { kind: 'video', holdMs });
+      nextCardAt = t + holdMs + tuning.think.cardGapMs;
+      return;
+    }
+    stack.videoCard({ holdMs, side: actingSide() });
+    if (stack.cardLive) emit('ramp-fired', { kind: 'video', holdMs });
     // a pool with every picture already up declines: try again after a breath, not every beat
     nextCardAt = t + tuning.think.cardGapMs;
     cardWasLive = stack.cardLive;
@@ -297,12 +337,63 @@ export function attachRamp(opts = {}) {
     }
   }
 
+  /* ---- the stands: replay what the tape says the turn player saw --------- */
+
+  /** A move in a watched game: THE BREATH, as on the player's own screen. */
+  function replayRest() {
+    replayTarget = 0;
+    replayHeat = 0;
+    stack.rest(tuning.think.snapMs / 2);
+    snap();
+  }
+
+  /** One fired effect off the tape, in this page's own pictures, through the Amount dial. */
+  function replayFire(p) {
+    if (!enabled || !replay || reducedMotion || !p) return;
+    if ((p.side === 'w' || p.side === 'b') && p.side !== replayTurn) return;   // the record of a turn that is over
+    const kind = String(p.kind || '');
+    if (!MEDIA_KINDS.has(kind)) return;   // the sustained layers ride the heat; a grab sticker needs a hand we cannot see
+    if (kind === 'video') {
+      if (!hasAnyMedia() || stack.cardLive) return;
+      const holdMs = Number.isFinite(p.holdMs) && p.holdMs > 0 ? p.holdMs : videoHoldMs(replayHeat, tuning, hostHoldSec);
+      stack.videoCard({ holdMs, side: replayTurn });
+      return;
+    }
+    if (!hasPictures()) return;   // no source picked: silent, never a noise tile
+    replayAcc += amountRate(watchFx.amount);
+    while (replayAcc >= 1) { replayAcc -= 1; stack.oneshot(kind, { heat: replayHeat }); }
+  }
+
+  /** The stands' own pictures for a side that sends no record: `n` owed, through the Amount dial. */
+  function ambientFire(n) {
+    if (!n || !enabled || !replay || !ambientOn || reducedMotion || !hasPictures()) return;
+    replayAcc += n * amountRate(watchFx.amount);
+    while (replayAcc >= 1) { replayAcc -= 1; stack.oneshot(ambient.kind, { heat: replayHeat }); }
+  }
+
+  function replayTick(t, dt) {
+    if (ambientOn && ambient.active()) {
+      replayTarget = ambient.heat(t);
+      ambientFire(ambient.tick(t));
+    }
+    const k = Math.min(1, Math.max(0, dt) / REPLAY_EASE_MS);
+    replayHeat = clamp01(replayHeat + (replayTarget - replayHeat) * k);
+    const m = overrideMeter != null ? clamp01(overrideMeter) : replayHeat;
+    applySustained(susFor(m));
+    stack.boardMask();
+    if (t - lastBoardPush >= BOARD_PUSH_MS) { lastBoardPush = t; pushToBoard(m); }
+  }
+
   function tick() {
     rafId = 0;
     if (disposed) return;
     schedulePump();
     if (!enabled) return;
     const t = now();
+    if (replay) {
+      if (t - lastTick >= TICK_MS) { ticks += 1; const dt = lastTick ? t - lastTick : 0; lastTick = t; replayTick(t, dt); }
+      return;
+    }
     if (t - lastTick >= TICK_MS) {
       lastTick = t;
       ticks += 1;
@@ -323,7 +414,10 @@ export function attachRamp(opts = {}) {
       });
       // reduced motion keeps the still layers (the melt, the blur, the veils)
       // and drops everything that pops, falls or rushes at the player
-      if (!reducedMotion) for (const kind of out.fire) stack.oneshot(kind, { heat: out.heat });
+      // (reduced motion draws none of them, but what the schedule fired is still told to the stands)
+      for (const kind of out.fire) { if (!reducedMotion) stack.oneshot(kind, { heat: out.heat }); emit('ramp-fired', { kind, holdMs: 0 }); }
+      // what the stands replay (the HUD's fx sender posts it while anybody watches)
+      if (counting && t - lastHeatEmit >= 1000) { lastHeatEmit = t; emit('ramp-heat', { heat: m }); }
       applySustained(out.sustained);
       stack.boardMask();
       thinkCard(t, m, counting);
@@ -342,10 +436,39 @@ export function attachRamp(opts = {}) {
 
   /* ---- bus wiring --------------------------------------------------------- */
   const handlers = {
-    newgame() { resetMatch(); },
+    newgame() { leaveReplay(); resetMatch(); },
     local(p) {
       localSides = Array.isArray(p?.sides) ? p.sides.filter(s => s === 'w' || s === 'b') : ['w', 'b'];
+      // the stands: nothing of ours climbs, the tape says what the turn player saw
+      replay = p?.mode === 'watch';
+      replayTarget = replayHeat = replayAcc = 0;
+      ambient.reset(now());
+      paintStrength();
       resetMatch();
+    },
+    // out of the stands: the person's own Experience pick is back in charge
+    'watch-leave'() { leaveReplay(); },
+    'watch-closed'() { leaveReplay(); },
+    // THE STANDS, off the tape (net/watch.js). Only the turn player's record counts.
+    // Any record from a side, current or not, means that side's page posts them: its ambient ends.
+    'fx-heat'(p) {
+      if (!replay || !p) return;
+      ambient.noteFx(p.side);
+      if ((p.side === 'w' || p.side === 'b') && p.side !== replayTurn) return;
+      replayTarget = clamp01(Number(p.heat));
+    },
+    'fx-fire'(p) { if (replay && p) ambient.noteFx(p.side); replayFire(p); },
+    // an effect still ahead on the tape: let a host pool that is running low ask for more now
+    'fx-soon'(p) {
+      if (replay && p) ambient.noteFx(p.side);
+      if (!replay || !enabled || !p || !MEDIA_KINDS.has(String(p.kind || ''))) return;
+      try { if (media && typeof media.request === 'function') media.request(); } catch { /* best effort */ }
+    },
+    // the stands' own switch and Amount dial (HUD: Options in watch mode)
+    'watch-effects'(p) {
+      if (!p) return;
+      watchFx = { on: p.on !== false, amount: (p.amount === 'less' || p.amount === 'more') ? p.amount : 'normal', media: p.media !== false };
+      if (replay) setEnabled(watchFx.on);
     },
     // An online seat the lobby could only guess, corrected by the server's first
     // word (net/match.js): the climb belongs to the player's real side.
@@ -374,14 +497,19 @@ export function attachRamp(opts = {}) {
       // for the player lets go now and stays quiet until their own turn card.
       // The board's seeding `turn` at start() is not a move, so it never rests.
       lastBeat = now();
-      if (seeding) { think.reset(); return; }
+      if (p && (p.side === 'w' || p.side === 'b')) replayTurn = p.side;
+      if (seeding) { think.reset(); if (replay) ambient.reset(now(), replayTurn); return; }
       if (surge || meter.over) return;   // the fall owns the screen now
+      // the stands: the breath, then what the ambient owes the move (it pops after the fade)
+      if (replay) { replayRest(); ambientFire(ambient.move(replayTurn, now())); return; }
       rest();
     },
     // A capture still counts (it makes the next climb faster) but no longer
     // bursts: it lands on a move, and a move is the breath. The capture replay
     // owns that moment. A check no longer flashes for the same reason.
-    capture(p) { meter.noteCapture(p, now()); },
+    // (The stands' ambient owes the move a picture for either; it shows after the breath.)
+    capture(p) { meter.noteCapture(p, now()); if (replay) ambient.capture(p && p.by); },
+    check(p) { if (replay) ambient.check(p && p.side); },
     grab(p) { if (enabled) stack.grab(p); },
     dragmove(p) { if (enabled) stack.dragmove(p); },
     drop(p) { if (enabled) stack.drop(p); },
@@ -404,7 +532,7 @@ export function attachRamp(opts = {}) {
   }
 
   function setEnabled(on) {
-    enabled = !!on && !meter.over && presentation().experience === 'distraction';
+    enabled = !!on && !meter.over && wanted();
     if (!enabled) {
       surge = null;
       stack.clear();
@@ -435,11 +563,22 @@ export function attachRamp(opts = {}) {
     setEnabled(true);
   }
 
-  /** The player's Strength reaches the pictures as a CSS multiplier (ramp.css). */
+  /** The player's Strength reaches the pictures as a CSS multiplier (ramp.css); the stands get the default. */
   function paintStrength() {
     for (const el of [root, front]) {
-      try { if (el) el.style.setProperty('--pbp-strength', String(dials.strength)); } catch { /* gone */ }
+      try { if (el) el.style.setProperty('--pbp-strength', String(strengthNow())); } catch { /* gone */ }
     }
+  }
+
+  /** Leave / a closed watch / a new deal: replay off and zeroed, back to the person's own Experience. */
+  function leaveReplay() {
+    if (!replay) return;
+    replay = false;
+    replayTarget = replayHeat = replayAcc = 0;
+    localSides = ['w', 'b'];
+    paintStrength();
+    setEnabled(false);
+    setEnabled(true);   // on only when their own Experience is Distraction
   }
 
   const unsubPresentation = onPresentation(p => {
@@ -450,13 +589,16 @@ export function attachRamp(opts = {}) {
       for (const k of Object.keys(applied)) applied[k] = UNSET;
       if (enabled) applySustained(susFor(liveMeter()));
     }
+    const wasAmbient = ambientOn;
+    ambientOn = p.watchAmbient !== false;
+    if (wasAmbient && !ambientOn && replay && ambient.active()) replayTarget = 0;
     const wasReduced = reducedMotion;
     reducedMotion = p.reducedMotion;
     if (reducedMotion && !wasReduced) {
       stack.clear();
       for (const k of Object.keys(applied)) applied[k] = UNSET;
     }
-    setEnabled(p.experience === 'distraction');
+    setEnabled(replay ? watchFx.on : p.experience === 'distraction');
   });
 
   function dispose() {
@@ -483,6 +625,8 @@ export function attachRamp(opts = {}) {
       heat: liveHeat(t),
       think: { ms: think.ms, lift: think.lift(), fullMs: think.fullMs, counting: thinking() && !resting },
       resting,
+      replay: replay ? { heat: replayHeat, target: replayTarget, turn: replayTurn, effects: { ...watchFx }, pictures: hasPictures(), strength: strengthNow(),
+        ambient: { on: ambientOn, active: ambient.active(), ...ambient.debug() } } : null,
       dials: { ...dials },
       surge: surge ? { ms: t - surge.at } : null,
       override: overrideMeter,

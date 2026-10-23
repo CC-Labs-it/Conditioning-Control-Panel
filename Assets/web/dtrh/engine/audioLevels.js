@@ -22,7 +22,11 @@ const KEY = 'sf-audio-levels';
 // tutorial = the Cheshire FTUE visual-novel narration (cheshireVn.js), its own
 // voice separate from the biome drift 'voice' group so the guide can be ducked
 // independently of the in-run narration.
-const DEFAULTS = { video: 0.45, voice: 0.85, tutorial: 0.85, fx: 0.48, drops: 0.4, music: 1 };
+// music halved and the guide down 40% (owner, 2026-10-12: both sat on top of the fall).
+const DEFAULTS = { video: 0.45, voice: 0.85, tutorial: 0.51, fx: 0.48, drops: 0.4, music: 0.5 };
+// The defaults a saved set may still be carrying untouched; moved to the new ones once.
+const OLD_DEFAULTS = { tutorial: 0.85, music: 1 };
+const TUNE_KEY = 'sf-audio-levels-tune';
 
 // Most groups are 0..1 gains. 'music' is a MULTIPLIER over the speed-following
 // drone bed, so it clamps to 0..2 - 100% is the default curve, 200% doubles it,
@@ -37,7 +41,14 @@ try {
     for (const k of Object.keys(DEFAULTS)) {
       if (typeof raw[k] === 'number' && isFinite(raw[k])) levels[k] = clamp(k, raw[k]);
     }
+    if (localStorage.getItem(TUNE_KEY) !== '2') {
+      for (const k of Object.keys(OLD_DEFAULTS)) {
+        if (Math.abs(levels[k] - OLD_DEFAULTS[k]) < 0.005) levels[k] = DEFAULTS[k];
+      }
+      localStorage.setItem(KEY, JSON.stringify(levels));
+    }
   }
+  localStorage.setItem(TUNE_KEY, '2');
 } catch (e) { /* fresh defaults */ }
 
 const subs = new Set();

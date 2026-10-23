@@ -40,7 +40,9 @@ public sealed class FlashDriftTests
                 s.FlashMotionStyle = FlashMotionStyle.Still;
                 PrizeOwnership.IsGranted = _ => false;
                 var unowned = new FlashFeatureControl();
-                Assert.False(unowned.FindControl<Border>("BoxFlashV2")!.IsVisible);
+                // Nothing owned: the box stays up for the Get it row's offer (WPF RefreshV2Box), motion row hidden.
+                Assert.True(unowned.FindControl<Border>("BoxFlashV2")!.IsVisible);
+                Assert.False(unowned.FindControl<Grid>("RowMotion")!.IsVisible);
 
                 PrizeOwnership.IsGranted = id => id == PrizeOwnership.FlashDriftBounce;
                 var card = new FlashFeatureControl();
