@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 using ConditioningControlPanel.Services.Transfer;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.GoonGame
 {
@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Services.GoonGame
     ///
     /// Threading: subscribe callbacks arrive on service worker threads and page messages arrive on
     /// the WebView2 UI thread, so every outbound frame goes through <see cref="Post"/>, which
-    /// marshals onto the Dispatcher exactly like <c>GoonHostService.ReplyNetPost</c>.
+    /// marshals onto the UI thread through <see cref="CoreDispatch"/>.
     /// <c>ChaosWebViewHost.Post</c> touches <c>CoreWebView2</c> directly and is NOT thread-safe.
     /// </summary>
     internal static class GoonCacheBridge
@@ -68,7 +68,8 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         private static readonly object Lock = new();
 
-        private static ChaosWebViewHost? _host;
+        /// <summary>The page's post (WPF: <c>ChaosWebViewHost.Post</c>), called on the UI thread only.</summary>
+        private static Action<object>? _host;
         private static Timer? _timer;
 
         private static bool _stateDirty;
@@ -143,12 +144,12 @@ namespace ConditioningControlPanel.Services.GoonGame
         // ============================ lifecycle ============================
 
         /// <summary>Bind to a live page. Idempotent; re-attaching to the same host is a no-op.</summary>
-        public static void Attach(ChaosWebViewHost? host)
+        public static void Attach(Action<object>? host)
         {
             if (host == null) return;
             lock (Lock)
             {
-                if (ReferenceEquals(_host, host)) return;
+                if (Equals(_host, host)) return;   // delegate equality: same page, same Post
                 DetachLocked();
                 _host = host;
                 _lastSig = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -164,7 +165,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             var svc = TransferCompressionService.Instance;
             svc.Changed += OnServiceChanged;
             svc.Progress += OnServiceProgress;
-            App.Logger?.Information("GoonCacheBridge: attached");
+            Log.Information("GoonCacheBridge: attached");
             // The page's assets screen may mount before it says hello; give it a state to render.
             PostState();
         }
@@ -180,7 +181,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 if (_host == null && _timer == null) return;
                 DetachLocked();
             }
-            App.Logger?.Information("GoonCacheBridge: detached");
+            Log.Information("GoonCacheBridge: detached");
         }
 
         private static void DetachLocked()
@@ -248,7 +249,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 if (relist) SendList();
                 DispatchPageJob();
             }
-            catch (Exception ex) { App.Logger?.Debug("GoonCacheBridge.OnTick: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("GoonCacheBridge.OnTick: {E}", ex.Message); }
         }
 
         /// <summary>
@@ -305,7 +306,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     _lastSig = sig;
                 }
             }
-            catch (Exception ex) { App.Logger?.Debug("GoonCacheBridge.Rebuild: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("GoonCacheBridge.Rebuild: {E}", ex.Message); }
         }
 
         private static void FlushDeltas()
@@ -396,7 +397,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     lanes = new { video = lv, still = ls, page = lp },
                 });
             }
-            catch (Exception ex) { App.Logger?.Debug("GoonCacheBridge.PostState: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("GoonCacheBridge.PostState: {E}", ex.Message); }
         }
 
         // ============================ page -> host ============================
@@ -431,7 +432,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                         bool dec = (bool?)caps?["gif"] == true || (bool?)caps?["awebp"] == true
                                    || (bool?)caps?["mp4"] == true;
                         _pageCanEncode = (enc && dec) || (bool?)caps?["recorderMp4"] == true;
-                        App.Logger?.Information("GoonCacheBridge: page hello (lane B available: {Can})", _pageCanEncode);
+                        Log.Information("GoonCacheBridge: page hello (lane B available: {Can})", _pageCanEncode);
                         _ = Task.Run(async () => { try { await svc.RefreshAsync().ConfigureAwait(false); } catch { } });
                         break;
 
@@ -485,11 +486,11 @@ namespace ConditioningControlPanel.Services.GoonGame
                         break;
 
                     default:
-                        App.Logger?.Debug("GoonCacheBridge: unknown cache-req op '{Op}'", op);
+                        Log.Debug("GoonCacheBridge: unknown cache-req op '{Op}'", op);
                         return;
                 }
             }
-            catch (Exception ex) { App.Logger?.Warning("GoonCacheBridge.cache-req({Op}): {E}", op, ex.Message); }
+            catch (Exception ex) { Log.Warning("GoonCacheBridge.cache-req({Op}): {E}", op, ex.Message); }
             lock (Lock) _stateDirty = true;
         }
 
@@ -571,7 +572,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                     Post(new { type = "cache-list", seq = f, last = f == frames - 1, total, items = page });
                 }
             }
-            catch (Exception ex) { App.Logger?.Warning("GoonCacheBridge.SendList: {E}", ex.Message); }
+            catch (Exception ex) { Log.Warning("GoonCacheBridge.SendList: {E}", ex.Message); }
         }
 
         // ============================ lane-B dispatch ============================
@@ -610,9 +611,9 @@ namespace ConditioningControlPanel.Services.GoonGame
                     prevMs = PreviewMs,
                     prevBitrate = PreviewBitrate,
                 });
-                App.Logger?.Information("GoonCacheBridge: encode-request {Rel}", job.Rel);
+                Log.Information("GoonCacheBridge: encode-request {Rel}", job.Rel);
             }
-            catch (Exception ex) { App.Logger?.Debug("GoonCacheBridge.DispatchPageJob: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("GoonCacheBridge.DispatchPageJob: {E}", ex.Message); }
         }
 
         /// <summary>
@@ -696,7 +697,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             }
 
             if (error != null)
-                App.Logger?.Warning("GoonCacheBridge: cache-put {Job} {Part} seq {Seq} refused ({E})", jobId, part, seq, error);
+                Log.Warning("GoonCacheBridge: cache-put {Job} {Part} seq {Seq} refused ({E})", jobId, part, seq, error);
             Post(new { type = "cache-put-result", jobId, part, seq, ok = error == null, error });
         }
 
@@ -761,13 +762,13 @@ namespace ConditioningControlPanel.Services.GoonGame
 
             if (prvBlob != null && !TransferInboxStore.LooksLikeMp4(prvBlob))
             {
-                App.Logger?.Debug("GoonCacheBridge: encode-done {Job} preview is not an mp4 - dropped", jobId);
+                Log.Debug("GoonCacheBridge: encode-done {Job} preview is not an mp4 - dropped", jobId);
                 prvBlob = null;
             }
 
             if (error != null)
             {
-                App.Logger?.Warning("GoonCacheBridge: encode-done {Job} refused ({E})", jobId, error);
+                Log.Warning("GoonCacheBridge: encode-done {Job} refused ({E})", jobId, error);
                 Post(new { type = "cache-put-result", jobId, seq = -1, ok = false, error });
                 return;
             }
@@ -784,7 +785,7 @@ namespace ConditioningControlPanel.Services.GoonGame
             // Magic check BEFORE anything is written: the lane's whole contract is "an mp4 came back".
             if (!TransferInboxStore.LooksLikeMp4(blob))
             {
-                App.Logger?.Warning("GoonCacheBridge: encode-done {Job} is not an mp4 - rejected", jobId);
+                Log.Warning("GoonCacheBridge: encode-done {Job} is not an mp4 - rejected", jobId);
                 TransferCompressionService.Instance.CompletePageJob(jobId, false, null, null, 0, 0, 0,
                     TransferFailReasons.EncodeFailed);
                 Post(new { type = "cache-put-result", jobId, seq = -1, ok = false, error = "bad-format" });
@@ -807,7 +808,7 @@ namespace ConditioningControlPanel.Services.GoonGame
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Warning("GoonCacheBridge.encode-done({Job}): {E}", jobId, ex.Message);
+                    Log.Warning("GoonCacheBridge.encode-done({Job}): {E}", jobId, ex.Message);
                     Post(new { type = "cache-put-result", jobId, seq = -1, ok = false, error = "io-failed" });
                 }
                 lock (Lock) _stateDirty = true;
@@ -818,7 +819,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         private static void AbandonPutLocked(string why)
         {
             if (_putJobId != null && _putParts.Count > 0)
-                App.Logger?.Debug("GoonCacheBridge: dropped {N} buffered parts for {Job} ({Why})",
+                Log.Debug("GoonCacheBridge: dropped {N} buffered parts for {Job} ({Why})",
                     _putParts.Count, _putJobId, why);
             _putJobId = null;
             _putParts.Clear();
@@ -838,26 +839,25 @@ namespace ConditioningControlPanel.Services.GoonGame
 
         // ============================ helpers ============================
 
-        /// <summary>Marshal onto the Dispatcher — every caller here may be on a worker thread, and
+        /// <summary>Marshal onto the UI thread (CoreDispatch) — every caller here may be on a worker thread, and
         /// <c>ChaosWebViewHost.Post</c> touches CoreWebView2 directly.</summary>
+        /// <remarks>Differs from the pre-move WPF code, which always queued (BeginInvoke) and dropped the frame once
+        /// dispatcher shutdown had started. The WPF CoreDispatch provider (App.xaml.cs) runs the action inline when
+        /// already on the UI thread, and also inline once shutdown has started. So a frame posted from the UI thread can
+        /// overtake frames still queued from workers, and a post during shutdown reaches the host off the UI thread;
+        /// the try/catch below logs that case. Accepted in review (P3); not exercised by a test.</remarks>
         private static void Post(object msg)
         {
-            try
+            CoreDispatch.Post(() =>
             {
-                var disp = Application.Current?.Dispatcher;
-                if (disp == null || disp.HasShutdownStarted) return;
-                disp.BeginInvoke(() =>
+                try
                 {
-                    try
-                    {
-                        ChaosWebViewHost? h;
-                        lock (Lock) h = _host;
-                        h?.Post(msg);
-                    }
-                    catch (Exception ex) { App.Logger?.Debug("GoonCacheBridge.Post: {E}", ex.Message); }
-                });
-            }
-            catch (Exception ex) { App.Logger?.Debug("GoonCacheBridge.Post dispatch: {E}", ex.Message); }
+                    Action<object>? h;
+                    lock (Lock) h = _host;
+                    h?.Invoke(msg);
+                }
+                catch (Exception ex) { Log.Debug("GoonCacheBridge.Post: {E}", ex.Message); }
+            });
         }
 
         /// <summary>Where the page can actually fetch this item's sendable bytes. Ready entries live
@@ -885,7 +885,7 @@ namespace ConditioningControlPanel.Services.GoonGame
         private static string? PresetNameFor(string? id)
         {
             if (string.IsNullOrEmpty(id)) return null;
-            try { return App.Settings?.Current?.AssetPresets?.FirstOrDefault(p => p.Id == id)?.Name; }
+            try { return CoreSettings.Current.AssetPresets?.FirstOrDefault(p => p.Id == id)?.Name; }
             catch { return null; }
         }
     }
