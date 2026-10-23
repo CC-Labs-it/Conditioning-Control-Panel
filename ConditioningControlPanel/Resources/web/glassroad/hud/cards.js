@@ -20,6 +20,7 @@ import { howtoHtml } from './howto.js';
 import { cleanOptions, loadOptions, saveOptions, stepOption, cycleOption, choiceLabel, STEER_SENS } from './options.js';
 import { controlRows, deviceView, pauseHint } from './labels.js';
 import { PROFILES, nextProfile } from '../input/padmap.js';
+import { createLobby } from './lobby.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const btn = (act, label, cls = '', extra = '') => '<button type="button" class="c-btn ' + cls + '" data-act="' + act + '"' + extra + '>' + label + '</button>';
@@ -61,6 +62,11 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   })();
   const howtoDue = () => !howtoSeen && !opts.howtoOff && !howtoSkip;
   const BACKS = ['options', 'controls', 'howto'];
+  // B2-d: the online lobby draws in this card as kind 'lobby' (hud/lobby.js); its Back returns to the opener
+  const lobby = createLobby({ doc, card, title, note, extra, emit, focusFirst: () => focusFirst(), exit: () => {
+    const p = stack.lobby || { kind: 'menu', data: {} };
+    stack.lobby = null; show(p.kind, p.data); emit('back', { from: 'lobby', to: p.kind });
+  } });
 
   function show(k, d = {}) {
     kind = k; data = d || {};
@@ -90,7 +96,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       note.textContent = (data.track || 'Threshold') + ', ' + (data.laps || 3) + ' laps';
       extra.innerHTML = '<div class="c-doors">' +
         btn('race', '<b>Race</b><em>You and 7 bots</em>', 'c-door hot') +
-        btn('online', '<b>Online</b><em>Rooms and friends</em><span class="c-stamp">soon</span>', 'c-door soon', ' aria-disabled="true"') +
+        btn('online', '<b>Race online</b><em>Tables and friends</em>', 'c-door') +
         '</div><div class="c-links">' + btn('options', 'Options', 'c-link') + btn('controls', 'Controls', 'c-link') +
         btn('howto', 'How to play', 'c-link') + btn('back', 'Back', 'c-link') + '</div>';
     } else if (k === 'pause') {
@@ -112,6 +118,9 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       title.textContent = 'How to race';
       note.hidden = true;
       extra.innerHTML = '<div class="hw-wrap">' + howtoHtml(devices || {}, { off: opts.howtoOff }) + '</div>';
+    } else if (k === 'lobby') {
+      lobby.show(data);                              // draws and focuses itself
+      return;
     } else if (k === 'results') {
       const me = data.me || {}, o = ordinal(me.place || 0);
       const flag = kit && kit.ok('flag-finish') ? '<img class="c-flag" src="' + kit.url('flag-finish') + '" alt="" draggable="false">' : '';
@@ -196,6 +205,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   function act(el) {
     if (!el) return;
     const a = el.dataset.act;
+    if (a.startsWith('lb-')) { lobby.act(el); return; }
     if (a === 'toggle') {
       const key = el.dataset.key, on = !(opts[key]);
       setOption(key, on);
@@ -212,7 +222,12 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       el.classList.toggle('on', on); el.setAttribute('aria-pressed', String(on));
       return;
     }
-    if (a === 'online') { note.textContent = 'Online opens later'; emit('online', {}); return; }
+    if (a === 'online') {
+      if (kind !== 'lobby') stack.lobby = { kind, data };
+      show('lobby', { view: 'home' });
+      emit('online', { lobby });
+      return;
+    }
     if (a === 'layout') {
       const pad = devices && devices.pad;
       if (pad) devices.setLayout(pad.id, nextProfile(pad.profile));   // devices tells the hud, which refreshes this card
@@ -277,6 +292,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   /** Pad or arrow navigation on the visible card. */
   function nav(dir) {
     if (card.hidden) return;
+    if (kind === 'lobby' && lobby.nav(dir)) return;   // back, and left / right on the lobby's form rows
     if (dir === 'throttle') { if (kind === 'howto') howtoGo(); return; }   // boot.js: a throttle press on a card
     if (dir === 'back') { if (BACKS.includes(kind)) back(); return; }
     const list = focusables();
@@ -301,7 +317,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
 
   doc.addEventListener('keydown', (e) => {
     if (card.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
-    if (e.key === 'Escape') { if (BACKS.includes(kind)) back(); return; }   // never swallowed
+    if (e.key === 'Escape') { if (BACKS.includes(kind)) back(); else if (kind === 'lobby') lobby.back(); return; }   // never swallowed
     if (kind === 'start') {
       if (e.repeat || e.key === 'Shift' || e.key === 'Tab' || e.key === 'CapsLock') return;
       e.preventDefault(); if (ready) emit('start', {}); return;
@@ -319,6 +335,8 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
   return {
     show, nav, refreshDevice,
     get kind() { return card.hidden ? null : kind; },
+    /** The online lobby (hud/lobby.js): boot calls lobby.use({ api, connect, identity, friends }) or configureLobby. */
+    get lobby() { return lobby; },
     get options() { return { ...opts }; },
     setReady(r, n) { ready = !!r; if (n) waitNote = n; if (kind === 'start' && !card.hidden) show('start', data); },
     /** The warming card's stage line and bar (p 0..1), updated in place: no re-show, no card-in replay. */
