@@ -13,6 +13,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>Open the game (clip, count bubbles, then the answer window) and call
         /// <paramref name="onComplete"/> once with the answer's outcome (WPF BubbleCountWindow.ShowOnAllMonitors).</summary>
         void Show(string path, int difficulty, bool strict, Action<bool> onComplete);
+        /// <summary>A playback startup failure is a skip, never a failed answer.</summary>
+        void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped)
+            => Show(path, difficulty, strict, onComplete);
         /// <summary>Full-screen retry/mercy message for <paramref name="ms"/>, then <paramref name="then"/>
         /// (WPF ShowFullscreenMessage).</summary>
         void ShowMessage(string text, int ms, Action then);
@@ -54,7 +57,8 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _leadIn, _queued;
+        private ITimer? _scheduler, _leadIn, _queued, _interactionTimeout;
+        private int _gameId;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount;
 
@@ -198,7 +202,10 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
             CoreProgression.TrackBubbleCountGameStarted();
-            try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict, OnComplete); }
+            var id = ++_gameId;
+            try { _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
+                ok => { if (id == _gameId) { ++_gameId; OnComplete(ok); } },
+                () => { if (id == _gameId) { _retryCount = 0; Idle(); } }); }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
             return true;
         }
@@ -245,8 +252,22 @@ namespace ConditioningControlPanel.Services
             });
         }
 
+        /// <summary>WPF InteractionQueue.ExtendTimeout: leave the clip plus answer time before
+        /// releasing a stuck game. Metadata corrections replace the previous deadline.</summary>
+        public void ExtendTimeout(double seconds)
+        {
+            if (!IsBusy || !double.IsFinite(seconds) || seconds <= 0) return;
+            Dispose(ref _interactionTimeout);
+            _interactionTimeout = After(TimeSpan.FromSeconds(seconds), mine =>
+            {
+                if (ReferenceEquals(mine, _interactionTimeout)) ForceCleanup();
+            });
+        }
+
         private void Idle()
         {
+            ++_gameId;
+            Dispose(ref _interactionTimeout);
             IsBusy = false;
             CoreBubbles.Resume();
         }

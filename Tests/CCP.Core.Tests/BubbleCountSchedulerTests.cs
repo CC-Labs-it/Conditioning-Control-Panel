@@ -17,6 +17,12 @@ public sealed class BubbleCountSchedulerTests
         public readonly List<(string Path, int Difficulty, bool Strict, Action<bool> Done)> Shown = new();
         public readonly List<(string Text, Action Then)> Messages = new();
         public int Closes;
+        public Action? Skipped;
+        public void Show(string path, int difficulty, bool strict, Action<bool> done, Action skipped)
+        {
+            Show(path, difficulty, strict, done);
+            Skipped = skipped;
+        }
         public double LastVideoDurationSeconds { get; set; } = 60;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
         public void ShowMessage(string text, int ms, Action then) => Messages.Add((text, then));
@@ -175,6 +181,65 @@ public sealed class BubbleCountSchedulerTests
             Assert.Single(host.Shown);
         }
         finally { CoreEngine.BubbleCount = prev; }
+    });
+
+    [Fact]
+    public void Startup_skip_is_not_a_strict_loss_and_old_skip_cannot_close_next_game() => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        var skip = host.Skipped!;
+        skip(); skip();
+        Assert.False(b.IsBusy);
+        Assert.Empty(host.Messages);
+        b.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        skip();
+        Assert.True(b.IsBusy);
+        b.ForceCleanup();
+    });
+
+    [Fact]
+    public void Metadata_replaces_interaction_deadline_and_teardown_cancels_it() => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        b.ExtendTimeout(30 + 120);
+        clock.Advance(TimeSpan.FromSeconds(10));
+        b.ExtendTimeout(300 + 120);
+        clock.Advance(TimeSpan.FromSeconds(150));
+        Assert.True(b.IsBusy);
+        clock.Advance(TimeSpan.FromSeconds(270));
+        Assert.False(b.IsBusy);
+        Assert.Equal(1, host.Closes);
+        Assert.Empty(host.Messages);
+        b.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        b.ExtendTimeout(2);
+        host.Shown[1].Done(true);
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Equal(1, host.Closes);
+    });
+
+    [Fact]
+    public void Late_answer_from_closed_game_cannot_fail_a_new_strict_game() => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var b = new BubbleCountScheduler(host, clock, () => Clips);
+        b.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        var stale = host.Shown[0].Done;
+        b.ForceCleanup();
+        b.Trigger(forceTest: true);
+        clock.Advance(BubbleCountScheduler.LeadIn);
+        stale(false);
+        Assert.Empty(host.Messages);
+        Assert.True(b.IsBusy);
+        b.ForceCleanup();
     });
 
     /// <summary>WPF TriggerGame :321: a game due over a video / lock card queues and plays once it

@@ -47,11 +47,12 @@ namespace ConditioningControlPanel.Services
         private Timer? _reaper;
         private Timer? _saveTimer;
         private int _reaping;
-        private readonly LibVLC _libVlc;
+        private readonly LibVLC? _libVlc;
         private readonly object _saveLock = new();
         private bool _dirty;
 
-        public VideoMetadataCache(LibVLC libVlc)
+        /// <summary>Null keeps cache reads/writes available to a browser-only head; misses cannot be parsed.</summary>
+        public VideoMetadataCache(LibVLC? libVlc)
         {
             _libVlc = libVlc;
             Load();
@@ -92,7 +93,7 @@ namespace ConditioningControlPanel.Services
             var key = ComputeKey(path);
             if (key == null) return null;
             if (_byKey.TryGetValue(key, out var cached)) return cached;
-            if (_unparseable.ContainsKey(key)) return null;
+            if (_libVlc == null || _unparseable.ContainsKey(key)) return null;
             // A refill fires one of these per uncached video (24+ on a cold cache) and
             // does it again on the next refill. Collapse repeats so the queue behind the
             // gate can't grow past one entry per distinct video.
@@ -134,7 +135,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public void StoreDuration(string path, double seconds)
         {
-            if (seconds <= 0) return;
+            if (!double.IsFinite(seconds) || seconds <= 0) return;
             try
             {
                 var key = ComputeKey(path);
@@ -153,7 +154,7 @@ namespace ConditioningControlPanel.Services
             Media? media = null;
             try
             {
-                media = new Media(_libVlc, path, FromType.FromPath);
+                media = new Media(_libVlc!, path, FromType.FromPath);
                 var result = await media.Parse(MediaParseOptions.ParseLocal, timeout: ParseTimeoutMs)
                     .ConfigureAwait(false);
 

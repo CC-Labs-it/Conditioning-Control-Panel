@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -51,7 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// <para><b>Video.</b> One decoder on the shared LibVLC (<c>LibVlcAudio.Shared</c>) through
     /// <see cref="VlcFrameSink"/>, its frames shown in an <c>Image</c> in every game window (WPF ran
-    /// one muted player per secondary). Browser mode (WebView2) is not ported: every clip plays here.</para>
+    /// one muted player per secondary). BrowserVideoSurface hosts accepted files when WebHost is available.</para>
     ///
     /// <para><b>Wired:</b> the pop sound (<c>CoreAudio.PlayOneShot</c> at the WPF
     /// <c>(master * bubbles) ^ 1.5</c> volume), the monitor set (<c>DualMonitorEnabled</c> from
@@ -59,8 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// finished game asks for the count and resolves on the answer instead of being written off.</para>
     ///
     /// <para><b>Stubbed:</b> the VideoService lease/wedge watchdog/native poison cooldown (HwndHost
-    /// teardown safety with no counterpart here), the metadata-cache duration (LengthChanged corrects
-    /// the 30 s fallback within a second) and VideoDiag.</para>
+    /// teardown safety with no counterpart here) and VideoDiag.</para>
     ///
     /// <para><c>Loaded</c> became <c>Opened</c>: WPF's Loaded fires synchronously inside Show(),
     /// which ShowOnAllMonitors' completion de-duplication leans on, and Avalonia's Opened is the
@@ -72,6 +73,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Difficulty _difficulty;
         private readonly bool _strictMode;
         private readonly Action<bool> _onComplete;
+        private readonly Action? _onSkipped;
+        private readonly Action<double>? _extendTimeout;
+        private bool _closed, _durationInitialized, _useBrowser;
+        private BrowserVideoSurface? _browser;
+        private static BubbleCountWindow? _browserOwner;
+        internal BrowserVideoSurface? Browser => _browser;
+        internal int TargetCount => _targetBubbleCount;
+        internal TimeSpan? SafetyInterval => _safetyTimer?.Interval;
+        internal TimeSpan? SpawnInterval => _bubbleSpawnTimer?.Interval;
         private readonly Screen? _screen;
         private readonly bool _isPrimary;
 
@@ -140,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         public BubbleCountWindow(string videoPath, Difficulty difficulty,
             bool strictMode, Action<bool> onComplete,
-            Screen? screen = null, bool isPrimary = true)
+            Screen? screen = null, bool isPrimary = true, Action? onSkipped = null, Action<double>? extendTimeout = null)
         {
             AvaloniaXamlLoader.Load(this);
 
@@ -153,6 +163,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _difficulty = difficulty;
             _strictMode = strictMode;
             _onComplete = onComplete;
+            _onSkipped = onSkipped;
+            _extendTimeout = extendTimeout;
             // Screens can be empty under a headless platform, so this stays nullable and every
             // read of it is guarded. WPF's Screen.PrimaryScreen! could not be null.
             _screen = screen ?? Screens?.Primary ?? Screens?.All.FirstOrDefault();
@@ -220,7 +232,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// count and, in strict mode, start the WRONG! WATCH AGAIN retry loop for a game the user
         /// never saw. When null, a skip falls back to the completion callback (old behaviour).</param>
         public static void ShowOnAllMonitors(string videoPath, Difficulty difficulty,
-            bool strictMode, Action<bool> onComplete, Action? onSkipped = null)
+            bool strictMode, Action<bool> onComplete, Action? onSkipped = null, Action<double>? extendTimeout = null)
         {
             // The completion callback must reach the caller EXACTLY once. Every window shares this
             // delegate and CloseAllWindows invokes it, which can happen INSIDE the Show() below
@@ -231,6 +243,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (System.Threading.Interlocked.Exchange(ref completionDelivered, 1) != 0) return;
                 onComplete?.Invoke(ok);
+            };
+
+            Action skip = () =>
+            {
+                if (System.Threading.Interlocked.Exchange(ref completionDelivered, 1) != 0) return;
+                if (onSkipped != null) onSkipped(); else onComplete(false);
             };
 
             // Reset shared state
@@ -250,6 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 try
                 {
+                    window._gameCompleted = true;
                     window._safetyTimer?.Stop();
                     window._bubbleSpawnTimer?.Stop();
                     window.Close();
@@ -266,8 +285,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // NOT WPF's onComplete(false): here empty means "no topology reported", not "no display".
             try
             {
-                var primaryWindow = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, null, true);
+                var primaryWindow = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, null, true, skip, extendTimeout);
+                primaryWindow._useBrowser = BrowserVideoSurface.TryAcquire(primaryWindow, videoPath);
+                if (primaryWindow._useBrowser) _browserOwner = primaryWindow;
                 primaryWindow.Show();
+                if (primaryWindow._closed) return;
                 primaryWindow.WindowState = WindowState.Maximized;
 
                 if (CoreSettings.Current.DualMonitorEnabled)
@@ -280,7 +302,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     var primary = all.FirstOrDefault(s => s.IsPrimary) ?? all.FirstOrDefault();
                     foreach (var screen in all.Where(s => s != primary))
                     {
-                        var secondary = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, screen, false);
+                        var secondary = new BubbleCountWindow(videoPath, difficulty, strictMode, complete, screen, false, skip)
+                        { _useBrowser = primaryWindow._useBrowser };
                         secondary.Show();
                         secondary.WindowState = WindowState.Maximized;
                     }
@@ -293,8 +316,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch
             {
-                // No-op when the window already delivered one from inside Show().
-                complete(false);
+                ForceCloseAll();
+                skip();
             }
         }
 
@@ -311,19 +334,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             try
             {
+                StopPlayer();
                 var windowsCopy = _allWindows.ToList();
                 _allWindows.Clear();
                 foreach (var window in windowsCopy)
                 {
                     try
                     {
+                        window._gameCompleted = true;
                         window._safetyTimer?.Stop();
                         window._bubbleSpawnTimer?.Stop();
                         window.Close();
                     }
                     catch { }
                 }
-                StopPlayer();
             }
             finally
             {
@@ -357,11 +381,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             try
             {
-                // WPF: a missing clip aborts the game (a loss, as there).
+                // Nothing was seen: a missing clip is a skip, including in strict mode.
                 if (string.IsNullOrWhiteSpace(_videoPath) || !File.Exists(_videoPath))
                 {
-                    if (_isPrimary) CloseAllWindows(false);
+                    if (_isPrimary) SkipGame();
                     return;
+                }
+                if (_useBrowser)
+                {
+                    if (StartBrowserPlayback()) return;
+                    if (!_isPrimary) return; // A missing mirror must never start another audible decoder.
+                    BrowserVideoSurface.Release(this);
+                    _browserOwner = null;
+                    _useBrowser = false;
                 }
                 if (!_isPrimary)
                 {
@@ -369,11 +401,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _videoImage.Source = _sink?.Bitmap;
                     return;
                 }
-                if (!StartPlayback()) CloseAllWindows(false);
+                if (!StartPlayback()) SkipGame();
             }
             catch
             {
-                if (_isPrimary) CloseAllWindows(false);
+                if (_isPrimary) SkipGame();
             }
         }
 
@@ -381,31 +413,93 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Replace the estimated duration with the one the player actually reports, and re-scale
         /// the game clock around it. Only the primary owns the clock.
         /// </summary>
-        private void AdoptRealDuration(double seconds)
+        internal void AdoptRealDuration(double seconds, bool storeMetadata = true)
         {
-            if (!_isPrimary || _videoEnded || _isCleaningUp) return;
-            if (seconds <= 0 || Math.Abs(seconds - _videoDurationSeconds) < 0.5) return;
-
+            if (!_isPrimary || _closed || _gameCompleted || _videoEnded || _isCleaningUp) return;
+            if (!double.IsFinite(seconds) || seconds <= 0 || seconds > TimeSpan.MaxValue.TotalSeconds - 120) return;
+            if (storeMetadata) MandatoryVideoOverlay.MetadataCache?.StoreDuration(_videoPath, seconds);
+            if (_durationInitialized && Math.Abs(seconds - _videoDurationSeconds) < 0.5) return;
+            _durationInitialized = true;
             _videoDurationSeconds = seconds;
             LastVideoDurationSeconds = seconds;
             CalculateTargetBubbles();
             _sharedTargetCount = _targetBubbleCount;
-            StartSafetyTimer(_videoDurationSeconds);
+            foreach (var window in _allWindows) window._targetBubbleCount = _targetBubbleCount;
+            if (_bubbleSpawnTimer != null)
+                _bubbleSpawnTimer.Interval = TimeSpan.FromMilliseconds(seconds * 700 / Math.Max(1, _targetBubbleCount));
+            StartSafetyTimer(seconds);
+            _extendTimeout?.Invoke(seconds + 120);
         }
 
-        /// <summary>WPF's primary LibVLC start: the 30 s fallback clock (the metadata cache is not
-        /// ported; LengthChanged corrects it), bubbles, then Play at master volume. False when no
-        /// LibVLC is available, which ends the game as a start failure does in WPF.</summary>
+        private void InitializeDuration()
+        {
+            var cached = MandatoryVideoOverlay.LengthOf(_videoPath);
+            var seconds = cached is > 0 && double.IsFinite(cached.Value) ? cached.Value : FallbackDurationSeconds;
+            // The cache hit and fallback use exactly the same clock reconciliation as player metadata.
+            AdoptRealDuration(seconds, storeMetadata: false);
+            StartBubbleSpawning();
+        }
+
+        private bool StartBrowserPlayback()
+        {
+            var url = BrowserVideoSurface.Map(_videoPath);
+            if (url == null || (_browser = BrowserVideoSurface.Create()) == null) return false;
+            _videoImage.IsVisible = false;
+            _videoContainer.Children.Add(_browser.View);
+            _browser.Message += OnBrowserMessage;
+            _browser.Failed += () => Dispatcher.UIThread.Post(() =>
+            {
+                if (!_closed && !_gameCompleted && !_videoEnded && _isPrimary)
+                {
+                    if (_browser?.Playing == true) OnVideoEnded(); else SkipGame();
+                }
+            });
+            if (_isPrimary) InitializeDuration(); else _targetBubbleCount = _sharedTargetCount;
+            _browser.Start(url, _isPrimary, CoreSettings.Current.MasterVolume);
+            return true;
+        }
+
+        private void OnBrowserMessage(JsonElement message)
+        {
+            if (!_isPrimary || _closed || _gameCompleted || _videoEnded) return;
+            switch (message.GetProperty("type").GetString())
+            {
+                case "meta":
+                    if (message.TryGetProperty("durationMs", out var d) && d.TryGetDouble(out var ms)) AdoptRealDuration(ms / 1000);
+                    break;
+                case "ended":
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (_closed || _gameCompleted || _videoEnded) return;
+                        if (_browser?.Playing == true) OnVideoEnded(); else SkipGame();
+                    });
+                    break;
+                case "key":
+                    if (message.TryGetProperty("key", out var key))
+                    {
+                        var name = key.GetString();
+                        if (Enum.TryParse<Key>(name == " " ? "Space" : name, ignoreCase: true, out var parsed))
+                            OnKeyDown(this, new KeyEventArgs { Key = parsed,
+                                KeyModifiers = message.TryGetProperty("alt", out var alt) && alt.ValueKind == JsonValueKind.True ? KeyModifiers.Alt : KeyModifiers.None });
+                    }
+                    break;
+            }
+        }
+
+        private void SkipGame()
+        {
+            if (_closed || _gameCompleted) return;
+            _gameCompleted = true;
+            ForceCloseAll();
+            if (_onSkipped != null) _onSkipped(); else _onComplete(false);
+        }
+
+        /// <summary>One audible LibVLC decoder; secondary windows only share its frames.</summary>
         private bool StartPlayback()
         {
             var vlc = LibVlcAudio.Shared;
             if (vlc == null) return false;
-            _videoDurationSeconds = FallbackDurationSeconds;
-            LastVideoDurationSeconds = _videoDurationSeconds;
-            CalculateTargetBubbles();
-            _sharedTargetCount = _targetBubbleCount;
-            StartSafetyTimer(_videoDurationSeconds);
-            StartBubbleSpawning();
+            InitializeDuration();
 
             var player = new MediaPlayer(vlc) { EnableHardwareDecoding = true };
             player.Volume = Math.Clamp(CoreSettings.Current.MasterVolume, 0, 100);
@@ -416,15 +510,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // LibVLC raises these on its own thread; the game is torn down only on the UI thread.
             player.LengthChanged += (_, a) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) AdoptRealDuration(a.Length / 1000.0); });
             player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
-            player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (ReferenceEquals(player, _player)) OnVideoEnded(); });
+            player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                if (!ReferenceEquals(player, _player)) return;
+                if ((_sink?.FrameCount ?? 0) > 0) OnVideoEnded(); else SkipGame();
+            });
             _media = new Media(vlc, _videoPath, FromType.FromPath);
-            player.Play(_media);
-            return true;
+            return player.Play(_media);
         }
 
         /// <summary>Stop joins the decoder thread, so after it no callback touches the frame buffer.</summary>
         private static void StopPlayer()
         {
+            foreach (var window in _allWindows)
+            {
+                window._browser?.Dispose();
+                window._browser = null;
+            }
+            if (_browserOwner != null) BrowserVideoSurface.Release(_browserOwner);
+            _browserOwner = null;
             var player = _player;
             _player = null;
             if (player != null)
@@ -463,9 +567,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _safetyTimer.Tick += (s, e) =>
             {
                 _safetyTimer?.Stop();
-                if (!_videoEnded && !_isCleaningUp)
+                if (!_closed && !_gameCompleted && !_videoEnded && !_isCleaningUp)
                 {
-                    OnVideoEnded();
+                    if (_useBrowser && _browser?.Playing != true) SkipGame(); else OnVideoEnded();
                 }
             };
             _safetyTimer.Start();
@@ -530,7 +634,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                if (_screen == null) return;
+                if (_closed || _gameCompleted || _videoEnded || _screen == null) return;
 
                 // Convert relative position to screen coordinates. WorkingArea excludes the panel,
                 // and it is in PHYSICAL pixels - as is Window.Position - so the WPF original's
@@ -612,7 +716,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnVideoEnded()
         {
-            if (_videoEnded || _isCleaningUp) return;
+            if (_closed || _gameCompleted || _videoEnded || _isCleaningUp) return;
             _videoEnded = true;
 
             _safetyTimer?.Stop();
@@ -626,6 +730,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             // WPF paused the players: the windows are only HIDDEN for the result screen.
             try { _player?.SetPause(true); } catch { }
+            foreach (var window in _allWindows) window._browser?.Pause();
 
             // Clear remaining bubbles on all windows (bubbles are separate windows now).
             // Dispose directly: the shared animation timer that would otherwise finish their
@@ -668,6 +773,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _strictMode,
                 success =>
                 {
+                    if (_closed || _gameCompleted) return;
                     _gameCompleted = true;
                     CloseAllWindows(success);
                 });
@@ -698,6 +804,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void CloseAllWindows(bool success)
         {
+            if (_closed) return;
             lock (_cleanupLock)
             {
                 if (_isCleaningUp) return;
@@ -713,6 +820,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     try
                     {
+                        window._gameCompleted = true;
                         window._safetyTimer?.Stop();
                         window._bubbleSpawnTimer?.Stop();
                         window.Close();
@@ -734,6 +842,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            _allWindows.Remove(this); // Do not recursively close this window while resolving a native close.
+            if (!_gameCompleted && !_isCleaningUp && _isPrimary) SkipGame();
+            _closed = true;
+            _gameCompleted = true;
+            _browser?.Dispose();
+            _browser = null;
             _safetyTimer?.Stop();
             _safetyTimer = null;
             _bubbleSpawnTimer?.Stop();

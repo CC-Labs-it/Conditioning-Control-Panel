@@ -1,6 +1,11 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Text.Json;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services.Video.Browser;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -22,6 +27,187 @@ namespace CCP.Avalonia.Tests;
 /// (Assets/bubblecount-2s.mp4); only a missing libvlc skips, and never on Linux CI.</summary>
 public sealed class BubbleCountGameTests
 {
+    [Theory]
+    [InlineData("ended")]
+    [InlineData("error")]
+    public Task Browser_metadata_ended_and_silent_secondary_share_one_clock(string terminal) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        game.Cache.StoreDuration(game.Clip, 60);
+        var deadlines = new List<double>();
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Medium, true,
+            _ => game.Completed++, () => game.Skipped++, deadlines.Add);
+        var primary = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = Assert.Single(game.Surfaces);
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        Assert.Equal(60, BubbleCountWindow.LastVideoDurationSeconds);
+        Assert.Equal(TimeSpan.FromSeconds(65), primary.SafetyInterval);
+        Assert.Equal(new[] { 180.0 }, deadlines);
+        Assert.Equal(0.75, browser.Volume);
+
+        var secondary = new BubbleCountWindow(game.Clip, BubbleCountScheduler.Difficulty.Medium, true,
+            _ => game.Completed++, isPrimary: false);
+        typeof(BubbleCountWindow).GetField("_useBrowser", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(secondary, true);
+        secondary.Show();
+        var mirror = secondary.Browser!;
+        mirror.View.OnNavigationCompleted(new Uri("about:blank"));
+        Assert.Equal(0, mirror.Volume);
+        Send(mirror, "meta", 900000);
+        Send(mirror, "ended");
+        Assert.Equal(60, BubbleCountWindow.LastVideoDurationSeconds);
+        Send(browser, "meta", 120000);
+        Assert.Equal(120, BubbleCountWindow.LastVideoDurationSeconds);
+        Assert.Equal(120, game.Cache.TryGetDuration(game.Clip));
+        Assert.Equal(TimeSpan.FromSeconds(125), primary.SafetyInterval);
+        Assert.Equal(primary.TargetCount, secondary.TargetCount);
+        Assert.InRange(primary.TargetCount, 16, 24);
+        Assert.Equal(TimeSpan.FromMilliseconds(120 * 700.0 / primary.TargetCount), primary.SpawnInterval);
+        var target = primary.TargetCount;
+        Send(browser, "meta", 120000); // repeats must not reroll targets or restart deadlines
+        Send(browser, "meta", 0);
+        primary.AdoptRealDuration(double.NaN);
+        primary.AdoptRealDuration(double.PositiveInfinity);
+        Assert.Equal(target, primary.TargetCount);
+        Assert.Equal(new[] { 180.0, 240.0 }, deadlines);
+        Send(browser, "playing");
+        Send(browser, terminal); Send(browser, terminal);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Single(BubbleCountResultWindow.OpenWindows);
+        Assert.Equal(0, game.Completed);
+        Assert.Equal(0, game.Skipped);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Browser_start_failure_skips_once_and_late_async_callbacks_are_inert() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var script = new TaskCompletionSource<string?>();
+        BrowserVideoSurface.Create = () => { var s = new BrowserVideoSurface(_ => script.Task); game.Surfaces.Add(s); return s; };
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            _ => game.Completed++, () => game.Skipped++);
+        var window = Assert.Single(BubbleCountWindow.OpenWindows);
+        var browser = Assert.Single(game.Surfaces);
+        browser.View.OnNavigationCompleted(new Uri("about:blank"));
+        Send(browser, "error"); Send(browser, "error");
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, game.Skipped);
+        Assert.Equal(0, game.Completed);
+        Assert.Empty(BubbleCountWindow.OpenWindows);
+        Assert.Empty(BubbleCountResultWindow.OpenWindows);
+        Assert.False(BrowserVideoSurface.SessionActive);
+        var duration = BubbleCountWindow.LastVideoDurationSeconds;
+        script.SetResult(null); // initialization resumes after teardown
+        await Task.Yield();
+        Send(browser, "meta", 999000); Send(browser, "ended");
+        window.AdoptRealDuration(999);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Equal(duration, BubbleCountWindow.LastVideoDurationSeconds);
+        Assert.Null(window.SafetyInterval);
+        Assert.Equal(1, game.Skipped);
+        Assert.Empty(BubbleCountResultWindow.OpenWindows);
+    });
+
+    [Fact]
+    public Task Browser_gate_rejects_competing_owner_unmapped_file_and_missing_provider() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        var owner = new object();
+        Assert.True(BrowserVideoSurface.TryAcquire(owner, game.Clip));
+        var competing = new object();
+        Assert.False(BrowserVideoSurface.TryAcquire(competing, game.Clip));
+        BrowserVideoSurface.Release(competing);
+        Assert.True(BrowserVideoSurface.SessionActive);
+        BrowserVideoSurface.Release(owner);
+        Assert.False(BrowserVideoSurface.SessionActive);
+        Assert.Null(BrowserVideoSurface.Map(Path.Combine(Path.GetTempPath(), "outside.mp4")));
+        game.Settings.Current.AudioOutputDeviceId = "headphones";
+        Assert.False(BrowserVideoSurface.TryAcquire(owner, game.Clip));
+        game.Settings.Current.AudioOutputDeviceId = "";
+        BrowserVideoSurface.Seed(); // headless never offers a native browser, even if packages exist
+        Assert.False(BrowserVideoGate.ShouldUseBrowser(game.Clip));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Browser_unseen_end_and_native_close_never_open_an_answer() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        using var game = new BrowserGame();
+        for (var i = 0; i < 2; i++)
+        {
+            BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+                _ => game.Completed++, () => game.Skipped++);
+            var window = Assert.Single(BubbleCountWindow.OpenWindows);
+            var browser = window.Browser!;
+            browser.View.OnNavigationCompleted(new Uri("about:blank"));
+            if (i == 0) Send(browser, "ended"); else window.Close();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(BrowserVideoSurface.SessionActive);
+            Send(browser, "playing"); Send(browser, "ended");
+            Assert.Empty(BubbleCountResultWindow.OpenWindows);
+        }
+        Assert.Equal(2, game.Skipped);
+        Assert.Equal(0, game.Completed);
+        return Task.CompletedTask;
+    });
+
+    private static void Send(BrowserVideoSurface surface, string type, double durationMs = 0) =>
+        surface.View.OnWebMessage(JsonSerializer.Serialize(new { session = surface.SessionId, type, durationMs }));
+
+    private static void EnsureApp()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+    }
+
+    private sealed class BrowserGame : IDisposable
+    {
+        private readonly Func<string>? _assets = CorePaths.EffectiveAssetsProvider;
+        private readonly Func<SettingsService?>? _settings = CoreSettings.ServiceProvider;
+        private readonly Func<string, string?, bool>? _gate = BrowserVideoGate.EngineAccepts;
+        private readonly Func<BrowserVideoSurface?> _create = BrowserVideoSurface.Create;
+        private readonly FieldInfo _cacheField = typeof(MandatoryVideoOverlay).GetField("_lengths", BindingFlags.Static | BindingFlags.NonPublic)!;
+        private readonly object? _oldCache;
+        private readonly string _dir = Directory.CreateTempSubdirectory("ccp-bcount-browser-").FullName;
+        internal readonly SettingsService Settings = new();
+        internal readonly VideoMetadataCache Cache = new(null!); // Store/TryGet never need a decoder.
+        internal readonly List<BrowserVideoSurface> Surfaces = new();
+        internal int Completed, Skipped;
+        internal string Clip { get; }
+        internal BrowserGame()
+        {
+            Clip = Path.Combine(_dir, "clip.mp4");
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), Clip);
+            _oldCache = _cacheField.GetValue(null);
+            _cacheField.SetValue(null, Cache);
+            CorePaths.EffectiveAssetsProvider = () => _dir;
+            CoreSettings.ServiceProvider = () => Settings;
+            Settings.Current.BrowserVideoEngineEnabled = true;
+            Settings.Current.AudioOutputDeviceId = "";
+            Settings.Current.DualMonitorEnabled = false;
+            Settings.Current.MasterVolume = 75;
+            BrowserVideoGate.EngineAccepts = (p, _) => BrowserVideoSurface.Map(p) != null;
+            BrowserVideoSurface.Create = () => { var s = new BrowserVideoSurface(_ => Task.FromResult<string?>("true")); Surfaces.Add(s); return s; };
+            Cache.StoreDuration(Clip, 30);
+        }
+        public void Dispose()
+        {
+            BubbleCountWindow.ForceCloseAll();
+            BubbleCountResultWindow.ForceCloseAll();
+            BrowserVideoSurface.Create = _create;
+            BrowserVideoGate.EngineAccepts = _gate;
+            CorePaths.EffectiveAssetsProvider = _assets;
+            CoreSettings.ServiceProvider = _settings;
+            _cacheField.SetValue(null, _oldCache);
+            Directory.Delete(_dir, true);
+        }
+    }
+
     [Fact]
     public async Task PlaysAnswersAndHonoursStrictAndPanic()
     {
