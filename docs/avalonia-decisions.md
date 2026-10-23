@@ -1202,6 +1202,7 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
 
 ## 2026-10-22: cloud settings backup: absolute paths stay on this machine (avalonia-port/cloud-settings-backup)
+- 2026-10-23 follow-up (`cloud-backup-list-paths`, supersedes the whole-list rules below): upload AudioLayers/CornerGifOverlays/KeywordTriggers without item paths (including legacy AudioFilePath); restore backup settings with local paths matched by track/slot index or trigger/action ID, blank unmatched paths, and retain local-only items only when the backup list is absent.
 - Question: Backup now / Restore from cloud on Linux share the account's single backup slot with Windows; absolute
   paths in it mean nothing on the other OS. Design asked of oracle-deep (Q1, ~/ccp-port/briefs/oracle-cloud-backup-contract-d.md).
 - Option A (chosen, oracle-deep): a Core list of absolute-path fields (`CloudSettingsBackup.AbsolutePathFields`:

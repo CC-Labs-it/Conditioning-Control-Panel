@@ -120,23 +120,19 @@ namespace ConditioningControlPanel.Services
 
         // ---- new: absolute paths are machine-local ----
 
-        /// <summary>Settings that hold an absolute path, a list of them, or list items carrying one
-        /// (AudioLayerTrack.Path, CornerGifOverlaySetting.GifPath, PlayAudioAction.FilePath). Never uploaded; a
-        /// restore keeps this machine's values, whatever the backup carries (frozen WPF still uploads its Windows
-        /// paths). Whole lists, so a restore never drops this machine's file from an item.
-        /// The asset lists are NOT here: they are relative and forward-slashed, so they travel.</summary>
+        /// <summary>Whole settings that hold machine-local absolute paths. Item paths in the
+        /// three portable lists are handled separately. Relative asset lists travel unchanged.</summary>
         public static readonly IReadOnlyList<string> AbsolutePathFields = new[]
         {
             nameof(AppSettings.CustomAssetsPath), nameof(AppSettings.StartupVideoPath), nameof(AppSettings.SpiralPath),
             nameof(AppSettings.MindWipeAudioPath), nameof(AppSettings.WallpaperOriginalPath), nameof(AppSettings.WallpaperSourceFolder),
             nameof(AppSettings.BlinkTrainerFolders), nameof(AppSettings.DeeperRecentFiles), nameof(AppSettings.DeeperLastDirectory),
-            nameof(AppSettings.AudioLayers), nameof(AppSettings.CornerGifOverlays), nameof(AppSettings.KeywordTriggers),
         };
 
         private static readonly System.Reflection.PropertyInfo[] PathProperties =
             AbsolutePathFields.Select(n => typeof(AppSettings).GetProperty(n)!).ToArray();
 
-        /// <summary>The upload JSON: the settings minus WPF's exclusions minus <see cref="AbsolutePathFields"/>.</summary>
+        /// <summary>The upload JSON: settings without WPF exclusions, whole path settings or list-item paths.</summary>
         internal static JObject StripForUpload(AppSettings settings)
         {
             var obj = JObject.Parse(JsonConvert.SerializeObject(settings, Formatting.None));
@@ -146,15 +142,28 @@ namespace ConditioningControlPanel.Services
                 if (IsExcludedFromBackup(key) || AbsolutePathFields.Contains(key, StringComparer.OrdinalIgnoreCase))
                     obj.Remove(key);
             }
+            foreach (var item in obj.SelectTokens("AudioLayers[*]").OfType<JObject>())
+            {
+                item.Remove(nameof(AudioLayerTrack.Path));
+                item.Remove(nameof(AudioLayerTrack.DisplayName)); // computed from Path, not persisted meaningfully
+            }
+            foreach (var item in obj.SelectTokens("CornerGifOverlays[*]").OfType<JObject>())
+                item.Remove(nameof(CornerGifOverlaySetting.GifPath));
+            foreach (var item in obj.SelectTokens("KeywordTriggers[*]").OfType<JObject>())
+            {
+                item.Remove(nameof(KeywordTrigger.AudioFilePath)); // legacy dispatch fallback
+                foreach (var action in item.SelectTokens("Actions[*]").OfType<JObject>())
+                    if ((string?)action["type"] == "PlayAudio") action.Remove("filePath");
+            }
             return obj;
         }
 
         /// <summary>
         /// What a restore keeps from this machine: WPF's manual-restore identity/progression list
         /// (MainWindow.CloudBackup.cs:138-157), <see cref="PreserveLocalOnlyFields"/>, then every
-        /// <see cref="AbsolutePathFields"/> value.
+        /// <see cref="AbsolutePathFields"/> value and matched list-item paths.
         /// </summary>
-        internal static void KeepLocal(AppSettings current, AppSettings restored)
+        internal static void KeepLocal(AppSettings current, AppSettings restored, JObject backup)
         {
             restored.UnifiedId = current.UnifiedId;
             restored.PlayerLevel = current.PlayerLevel;
@@ -178,6 +187,26 @@ namespace ConditioningControlPanel.Services
                 var v = p.GetValue(current);
                 if (v is List<string> list) v = new List<string>(list);
                 p.SetValue(restored, v);
+            }
+
+            // No stable id/name on tracks or corner slots: their persisted order is the key.
+            // Check JSON presence: a missing old list keeps local items; an explicit [] clears it.
+            bool Missing(string name) => backup.GetValue(name, StringComparison.OrdinalIgnoreCase) == null;
+            if (Missing(nameof(AppSettings.AudioLayers))) restored.AudioLayers = new(current.AudioLayers);
+            else for (var i = 0; i < restored.AudioLayers.Count; i++)
+                restored.AudioLayers[i].Path = current.AudioLayers.ElementAtOrDefault(i)?.Path ?? "";
+            if (Missing(nameof(AppSettings.CornerGifOverlays))) restored.CornerGifOverlays = new(current.CornerGifOverlays);
+            else for (var i = 0; i < restored.CornerGifOverlays.Count; i++)
+                restored.CornerGifOverlays[i].GifPath = current.CornerGifOverlays.ElementAtOrDefault(i)?.GifPath ?? "";
+            if (Missing(nameof(AppSettings.KeywordTriggers))) restored.KeywordTriggers = new(current.KeywordTriggers);
+            else foreach (var trigger in restored.KeywordTriggers)
+            {
+                // Both trigger and action ids survive renames/reordering; never guess by path.
+                var local = current.KeywordTriggers.FirstOrDefault(t => !string.IsNullOrEmpty(trigger.Id) && t.Id == trigger.Id);
+                trigger.AudioFilePath = local?.AudioFilePath ?? "";
+                foreach (var audio in trigger.Actions.OfType<PlayAudioAction>())
+                    audio.FilePath = local?.Actions.OfType<PlayAudioAction>()
+                        .FirstOrDefault(a => !string.IsNullOrEmpty(audio.Id) && a.Id == audio.Id)?.FilePath ?? "";
             }
         }
 
@@ -256,7 +285,7 @@ namespace ConditioningControlPanel.Services
                 var restored = JsonConvert.DeserializeObject<AppSettings>(json,
                     new JsonSerializerSettings { ObjectCreationHandling = ObjectCreationHandling.Replace });
                 if (restored == null) return null;
-                KeepLocal(current, restored);
+                KeepLocal(current, restored, JObject.Parse(json));
                 Log.Information("Settings restored from cloud");
                 return restored;
             }
