@@ -32,6 +32,7 @@ stick down + X drops, Start; the d-pad, A and B work the cards). Touch: tap the 
 | `?bot=1` | the AI drives the player too (smoke tests and attract mode): the menu starts the race after 2.5 s, results go round again after 5 s |
 | `&botFall=1` | with `bot=1`: the player steers off the first open corner once, to show a drop and the rescue |
 | `?seed=N` | seeds the item rolls and the bots (default: random, shown as `__glassroad.seed`) |
+| `?r=<token>` | a friend's race link (NET.md section 13): the lobby card claims it and seats you, waits for the host, or says why not |
 | `?touch=1` / `?touch=0` | force the touch layer on or off |
 | `?art=0` / `?shadows=0` / `?spirals=0` | dev: race the greybox, drop the shadow map, or drop the spiral gates |
 

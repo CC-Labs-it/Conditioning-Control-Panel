@@ -280,3 +280,36 @@ A flagged row gets no stake payout and no board entry. Leaving never costs.
 `wsUrl = RACE_ROOM_WS + '/room/' + roomId` (local: `ws://127.0.0.1:8810/room/<roomId>`). Ghost routes wait for B3.
 Errors: `{ error }` with `bad` 400, `auth` 401, `tier` 403, `friends` 403, `gone` 404, `full` 409, `started` 409,
 `stakes-off` 409, `rate` 429. `startsIn` = seconds to the auto start, or null.
+
+## 13. Race a friend through a link (private preview, 2026-10-23; brief `C:/wt-glassroad-run/BRIEF-LINK.md`)
+
+Only PRIME accounts may claim a link; a link lives 24 h and seats 8 guests. All under `/v2/race/`, both auth doors,
+each route with its own `race_rate:` / `race_rate_ip:` bucket. Errors keep `{ error }`; new code `preview` 403.
+
+| Route | Body | 200 | Who |
+|---|---|---|---|
+| POST /v2/race/link | `{}` | `{ token, url, exp, maxUses, uses }`; idempotent (a live link comes back unchanged) | preview: uid in `RACE_PREVIEW_UIDS`; `RACE_ACCESS=all`: anyone signed in |
+| POST /v2/race/link/revoke | `{}` | `{ ok: true }` (drops the link, its host key and `race_guest:<uid>`) | the link's host |
+| GET /v2/race/link/:token | | `{ live: true, name, exp, left }` or 404 `{ error: 'gone' }`; `Cache-Control: no-store` | PUBLIC (no auth, IP cap only) |
+| POST /v2/race/link/claim | `{ token, look?, platform? }` | the seat body (section 12 join shape) plus `host`, or `{ waiting: true, retryMs: 3000, host }` | signed in, Prime (the host claiming their own link is exempt) |
+| GET /v2/race/access | | `{ ok, host, tier }`: ok = the preview admits the caller, host = may mint, tier = effective tier | signed in, never refused for preview |
+
+- Token: 16 random bytes base64url (22 chars); shape `/^[A-Za-z0-9_-]{16,64}$/`, anything else is `gone` (the client
+  never sends one: `net/lobbyApi.js` `LINK_TOKEN`). `url = (RACE_LINK_BASE || 'https://app.cclabs.app') + '/r/' + token`.
+- Store: `race_link:<token>` = `{ host, hostName, exp, max: 8, guests: [uid] }` EX 24 h, `race_link_host:<uid>` = token
+  EX 24 h. `name` = hostName, `left` = max - guests.
+- Claim refusals: `gone` (unknown, expired, revoked, or a block either way), `tier` (not Prime), `full` (8 guests and the
+  caller is not one). Once per uid: a repeat claim never takes another slot. A claim adds the caller to `guests`,
+  `race_guest:<host>` (EX = the link's life left) and `race_preview:<uid>` = 1 EX 7 days. Seated only when the host
+  sits in a friends room that has not started; else waiting, and the client polls claim on `retryMs`.
+- seatIn also admits a friends room caller who is in `race_guest:<room.host>`.
+- PREVIEW GATE: unless `RACE_ACCESS=all`, every authed route except link/claim, access and the public lookup answers
+  403 `preview` to a caller in neither `RACE_PREVIEW_UIDS` nor `race_preview:<uid>`. `/v2/race/result` and the public
+  ghost GET are untouched; with `RACE_ACCESS=all` everything is exactly section 12.
+
+Client (`hud/lobby.js`, pure parts in `hud/lobbyMath.js`): a friends room host whose `access().host` is true gets
+Invite link (makeLink, copy the url, else a selectable line, then "Link copied. 8 seats, 24 h.") and Revoke. The Race
+online door answers a `preview` refusal with "Online racing is in a closed preview.". `?r=<token>` (boot.js): the
+lobby card claims it; seated goes straight into the room, `waiting` shows "Waiting for <host> to open a room." and
+polls until seated or Cancel, `tier` "Racing a friend needs Prime.", `gone` "This link has expired.", `full` "That
+race is full.". After the first claim answer `r` leaves the address bar (history.replaceState).
