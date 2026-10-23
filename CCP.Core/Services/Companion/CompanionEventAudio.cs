@@ -7,20 +7,7 @@ namespace ConditioningControlPanel.Services.Companion;
 // ponytail: only this lookup is ported; the frozen WPF CompanionPhraseService stays in its head.
 public static class CompanionEventAudio
 {
-    public static string? Folder
-    {
-        get
-        {
-            if (CoreMods.ActiveModPackage?.InstalledPath is { } root)
-            {
-                var packaged = Path.Combine(root, "resources", "sounds", "event_audio");
-                if (Directory.Exists(packaged)) return packaged;
-            }
-            if (CoreMods.ActiveModId is not { Length: > 0 } id) return null;
-            var relative = Path.Combine(CompanionContentResolver.PerModRelativeDir(id), "event_audio");
-            return ContentLocator.DirectoryExists(relative) ? ContentLocator.ResolveDirectory(relative) : null;
-        }
-    }
+    public static string? Folder => ModCompanionContent.ResolveActive(CompanionChannel.EventAudio).Path;
 
     public static string? Resolve(string? text)
     {

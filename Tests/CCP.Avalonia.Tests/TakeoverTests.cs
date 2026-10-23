@@ -229,7 +229,8 @@ public sealed class TakeoverTests
         });
 
     [Fact]
-    public Task PopQuizDefersTakeoverAndMindWipeRechecksBothSwitches() => WithArmedShell((shell, _) =>
+    // The "switched off during the announcement" recheck is Core's (AutonomySchedulerTests.MindWipeDisabledDuringAnnouncementDoesNotRun).
+    public Task PopQuizDefersTakeoverAndShellPerformsMindWipe() => WithArmedShell((shell, _) =>
     {
         Assert.False(shell.Autonomy.IsBusy());
         var quiz = new PopQuizWindow();
@@ -247,11 +248,6 @@ public sealed class TakeoverTests
         CoreMindWipe.TriggerOnceProvider = () => calls++;
         try
         {
-            (s.MindWipeEnabled, s.AutonomyCanTriggerMindWipe) = (true, false);
-            shell.PerformAutonomy(AutonomyActionType.MindWipe);
-            (s.MindWipeEnabled, s.AutonomyCanTriggerMindWipe) = (false, true);
-            shell.PerformAutonomy(AutonomyActionType.MindWipe);
-            Assert.Equal(0, calls);
             (s.MindWipeEnabled, s.AutonomyCanTriggerMindWipe) = (true, true);
             shell.PerformAutonomy(AutonomyActionType.MindWipe);
             Assert.Equal(1, calls);

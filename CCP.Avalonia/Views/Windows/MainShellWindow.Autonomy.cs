@@ -143,11 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF: TriggerGame(forceTest: true) - runs with the engine stopped and the card off.
                 case AutonomyActionType.BubbleCount: CoreEngine.BubbleCount?.Trigger(forceTest: true); break;
                 case AutonomyActionType.Comment: MakeAutonomyComment(); break;
-                case AutonomyActionType.MindWipe:
-                    // WPF #1458: the card may have been switched off during the announcement.
-                    if (CoreSettings.Current.AutonomyCanTriggerMindWipe && CoreSettings.Current.MindWipeEnabled)
-                        CoreMindWipe.TriggerOnce();
-                    break;
+                // WPF #1458's "switched off during the announcement" recheck is AutonomyScheduler.Run's.
+                case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
                 case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
             }
         }
