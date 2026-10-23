@@ -81,7 +81,7 @@ namespace ConditioningControlPanel.Services.Commands
                         ?? (fired >= AiCommandService.MaxCommandsPerResponse ? $"follow-up cap reached ({AiCommandService.MaxCommandsPerResponse})" : null);
                     if (why != null)
                     {
-                        Log.Information("GetBackToMeCommand: {Reason} - nested {Cmd} blocked", why, subCommand.Command);
+                        Log.Information("GetBackToMeCommand: {Reason} - nested {Cmd} blocked", why, subCommand?.Command);   // a null entry is logged, never thrown on
                         if (subCommand != null) AiCommandService.NoteBlockedFollowUp(subCommand.Command);
                         continue;
                     }

@@ -141,6 +141,16 @@ public sealed class AiCommandGateTests : IDisposable
         Assert.Contains(_feed, l => l.Contains("Follow-up flash_image blocked"));
     }
 
+    /// <summary>Fix wave 2 #10: a null nested entry (a malformed reply) is refused and logged; the log line read
+    /// subCommand.Command before the null check, so the NullReferenceException dropped every command after it.</summary>
+    [Fact]
+    public async Task ANullNestedCommandIsSkippedAndTheRestStillFire()
+    {
+        Run(FollowUp(null!, Flash()));
+        await PastTheDelay();
+        Assert.Single(_flashes);
+    }
+
     [Fact]
     public async Task FourthNestedCommandIsRefused()
     {
