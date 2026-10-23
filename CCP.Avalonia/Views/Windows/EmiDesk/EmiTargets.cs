@@ -93,7 +93,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _ => null,
         };
 
-        private static MainShellWindow? Shell =>
+        /// <summary>Test seam: the shared headless app's lifetime cannot be replaced once initialised.</summary>
+        internal static MainShellWindow? ShellForTests;
+
+        private static MainShellWindow? Shell => ShellForTests ??
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow;
 
         private static void Nav(string tab)

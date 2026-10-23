@@ -65,6 +65,24 @@ public sealed class EmiRingInputTests
     });
 
     [Fact]
+    public Task SilentCloseHidesAtOnceAndCutsAFoldShort() => WithRing((ring, _) =>
+    {
+        int closed = 0;
+        ring.RingClosed += (_, _) => closed++;
+        Assert.True(ring.IsVisible);
+        ring.CloseRing(animate: false);             // panic: no fold, no cue
+        Assert.False(ring.IsOpen);
+        Assert.False(ring.IsVisible);
+        Assert.Equal(1, closed);
+        ring.OpenRing();
+        ring.CloseRing();                           // a fold starts...
+        Assert.True(ring.IsVisible);
+        ring.CloseRing(animate: false);             // ...and panic cuts it
+        Assert.False(ring.IsVisible);
+        Assert.Equal(2, closed);
+    });
+
+    [Fact]
     public Task CardPressStaysOpenAndEscapeFoldsEvenWithoutFocus() => WithRing((ring, read) =>
     {
         read(default, false, false);

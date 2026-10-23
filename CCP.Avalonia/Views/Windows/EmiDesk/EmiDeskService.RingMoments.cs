@@ -166,7 +166,7 @@ internal sealed partial class EmiDeskService
     public void StopRingSpeechForPanic()
     {
         StopRingNudges();
-        _window?.CloseRing();
+        _window?.CloseRing(animate: false);   // WPF has no fold or cue on panic
         _window?.CancelChain();
         Fire("panicPressed");
     }

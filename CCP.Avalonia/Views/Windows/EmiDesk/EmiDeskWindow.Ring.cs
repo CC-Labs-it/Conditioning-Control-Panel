@@ -64,9 +64,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] ring-open bookkeeping failed"); }
         }
 
-        public void CloseRing()
+        public void CloseRing(bool animate = true)
         {
-            try { _ring?.CloseRing(); }
+            try { _ring?.CloseRing(animate); }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] CloseRing failed"); }
         }
 

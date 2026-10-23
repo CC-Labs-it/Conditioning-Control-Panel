@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using System.Linq;
 using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -54,10 +53,8 @@ public sealed class EmiRingDoorTests
         var saved = (CoreAccount.HasLabAccessProvider, CoreAi.IsAvailableProvider, JustDropService.DoorAvailable);
         var state = ConditioningControlPanel.Services.EmiDesk.EmiState.Current;
         var usage = state.Usage.ToArray(); var score = state.OpenScore.ToArray(); var at = state.UsageAt.ToArray();
-        var app = Application.Current!;
-        var lifetime = app.ApplicationLifetime;
         var shell = new MainShellWindow();
-        app.ApplicationLifetime = new ClassicDesktopStyleApplicationLifetime { MainWindow = shell };
+        EmiTargets.ShellForTests = shell;
         try
         {
             CoreAccount.HasLabAccessProvider = () => true;
@@ -74,7 +71,7 @@ public sealed class EmiRingDoorTests
         finally
         {
             IntakeHostWindow.CloseAllForPanic(); GameWindow.CloseAllForPanic(); shell.Close();
-            app.ApplicationLifetime = lifetime;
+            EmiTargets.ShellForTests = null;
             state.Usage.Clear(); foreach (var p in usage) state.Usage[p.Key] = p.Value;
             state.OpenScore.Clear(); foreach (var p in score) state.OpenScore[p.Key] = p.Value;
             state.UsageAt.Clear(); foreach (var p in at) state.UsageAt[p.Key] = p.Value;

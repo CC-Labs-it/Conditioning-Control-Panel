@@ -355,7 +355,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <see cref="IsOpen"/> is false and <see cref="RingClosed"/> has already fired. Everything
         /// after that point is a picture catching up, and a card in flight is not clickable.</para>
         /// </summary>
-        public void CloseRing()
+        /// <param name="animate">False hides at once with no fold and no cue (panic).</param>
+        public void CloseRing(bool animate = true)
         {
             try
             {
@@ -363,8 +364,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // the gesture that armed them.
                 RemoveHooks();
 
-                // A fold already owns this closing. Not a second RingClosed, not a second fold.
-                if (_folding) return;
+                // A fold already owns this closing. Not a second RingClosed, not a second fold;
+                // a silent close cuts the fold short.
+                if (_folding) { if (!animate) HideNow(); return; }
                 if (!_open && !IsVisible) return;
 
                 _open = false;
@@ -383,7 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // No fold when there is nothing to fold, when the window is already gone, or when the
                 // app is on its way down: an animation racing a dispatcher shutdown is a hang, and a
                 // fan that lingers after she has poofed reads as a crash (SEAMS: the ring folds first).
-                if (_closingForGood || !IsVisible || _cards.Count == 0)
+                if (!animate || _closingForGood || !IsVisible || _cards.Count == 0)
                 {
                     HideNow();
                     return;
@@ -1184,7 +1186,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 // Windows' shim updates click-through as the pointer moves between cards and gaps.
-                ApplyInputRegion();
+                // X11's XFixes region only changes with layout, which RefreshInputRegions sends.
+                if (OperatingSystem.IsWindows()) ApplyInputRegion();
                 if (ReadPointer() is not { } r) return;
                 bool press = r.Pressed && !_wasDown, escape = r.Escape && !_wasEsc;
                 _wasDown = r.Pressed;
@@ -1199,7 +1202,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // Local fallback when native input regions are unavailable. A right-click over a card
             // is intentionally inert in WPF, just like the left press before its pick on release.
             if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
-            if (_open && Array.TrueForAll(_hotPx, h => !h.Contains(this.PointToScreen(e.GetPosition(this))))) CloseRing();
+            // Same Position + DIP*scale mapping that built _hotPx (PointToScreen differs headless).
+            var p = e.GetPosition(this);
+            var at = new PixelPoint(Position.X + (int)Math.Round(p.X * DipScale), Position.Y + (int)Math.Round(p.Y * DipScale));
+            if (_open && Array.TrueForAll(_hotPx, h => !h.Contains(at))) CloseRing();
         }
 
         internal static Easing PopMoveEasing { get; } = new RingPopEase();
