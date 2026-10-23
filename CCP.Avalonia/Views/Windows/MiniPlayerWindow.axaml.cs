@@ -208,8 +208,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _mediaPlayer.LengthChanged += (s, e) => Dispatcher.UIThread.Post(UpdateTimeDisplay);
 
                 _media = new Media(libVLC, filePath, FromType.FromPath);
-                // No audio for preview, as WPF (Services.LibVlcSilence.NoAudioOption).
-                _media.AddOption(":no-audio");
+                // No audio for preview, as WPF.
+                _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
                 _mediaPlayer.Play(_media);
 
                 _videoControls.IsVisible = true;
