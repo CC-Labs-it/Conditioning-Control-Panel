@@ -1638,3 +1638,22 @@ Contact validation checks actual decoded triangles and vertices over 8,140 poses
 Desktop and phone share the two vehicle GLBs. Added texture allocation is 0 MiB. Persistent running totals remain 196.416664 MiB desktop and 119.104164 MiB phone; with one selected menu backdrop 205.416664/127.014320 MiB. Existing kart maps and the classic face atlas remain shared and counted once. Render targets and decoder buffers are outside these texture totals.
 
 Packed GLBs preserve decoded attributes, exact rest transforms and inverse binds, and pass finite, normal, degenerate and Khronos core checks with the existing non-root skin warning. Animated bounds cover all 26 clips at exported keys plus 60 fps, with 10 mm padding. Fresh Blender imports preserve triangle totals, the 15 required joints, two materials and vertex colors; editable masters stay private. Actual runtime views cover front, rear, sides, top, grip, seated cutaway, takeoff, apex, landing, settling, bump, hit and item poses. Sources, masters, contact sheets and preview movies are excluded from the public art tree.
+
+## Wave 3 waterfall spouts
+
+Six original themed waterfall-source props, one per track. All files are meshopt-compressed GLB, metres, Y up, front -Z and base-centred. Each contains exactly one locator named `spout`; place the 6 m sheet centred on that node along local X and flow down -Y. Locator positions in the manifest are measured after packing. The host supplies water colour and animation. No textures or baked water are included.
+
+| Asset | Tris | Draws | Height m | Bound radius m | texBytes |
+|---|---:|---:|---:|---:|---:|
+| spout-keep | 4,768 | 3 | 12.230 | 12.232 | 0 |
+| spout-mainframe | 3,412 | 4 | 10.246 | 10.761 | 0 |
+| spout-quarantine | 2,612 | 4 | 11.800 | 12.066 | 0 |
+| spout-switchboard | 2,432 | 3 | 10.700 | 11.310 | 0 |
+| spout-threshold | 4,730 | 3 | 10.427 | 10.705 | 0 |
+| spout-boudoir | 5,642 | 4 | 9.500 | 11.096 | 0 |
+
+Threshold retains the approved pawn sculpture, using an allowed LOD reduction, a forward tip and the requested white material tint. New collar and spillway parts are original. Other props are original geometry: perfume flask with removed stopper and foam rim, chained padlock sluice, cable-wrapped data elbow, sealed IV bag and open line, and brass valve wheel on an instrument panel.
+
+Sources and rights: original project-authored geometry. The pawn uses the already approved project chess asset, without a replacement sculpt. No external textures, third-party pixels or borrowed designs. Native Blender masters, reproducible source, source hash, decoded verification files and contact sheets stay in the private art workspace.
+
+Validation: 12 Khronos checks across six packed and six decoded GLBs have zero errors and zero warnings. All six packed assets were decoded, imported into fresh Blender and rendered from front, three-quarter, rear, left, right, top, sky-context and low rear views. Final contact sheets were inspected. All six native masters reopen; finite geometry, no zero-length edges or loose vertices; fresh imports contain zero degenerate triangles. Partial open edges on tube ends are intentional game geometry. Blender 5.2.1 LTS, four render threads. Runtime integration remains the engine lane.

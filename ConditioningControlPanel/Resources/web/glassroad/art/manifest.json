@@ -7248,5 +7248,11 @@
     "attachmentContract": "models/emi-vehicle-variants.json",
     "compression": "meshopt-lossless",
     "boundScope": "animated replacement vehicle only; union with retained rider and optional outfit"
-  }
+  },
+  {"id":"spout-keep","file":"models/spout-keep.glb","kind":"prop","tris":4768,"texBytes":0,"boundRadiusM":12.232,"materialSlots":["keep_edges","keep_iron","keep_seal"],"palette":"all","draws":3,"sizeM":[12.2,12.23003,4.99995],"track":"keep","spout":{"node":"spout","positionM":[0,2.78,-2.5],"sheetWidthM":6,"flowDirection":[0,-1,0]}},
+  {"id":"spout-mainframe","file":"models/spout-mainframe.glb","kind":"prop","tris":3412,"texBytes":0,"boundRadiusM":10.761,"materialSlots":["mainframe_cables","mainframe_flange","mainframe_shell","mainframe_socket"],"palette":"all","draws":4,"sizeM":[7.60002,10.24562,7.6399],"track":"mainframe","spout":{"node":"spout","positionM":[0,5.08,-3.87],"sheetWidthM":6,"flowDirection":[0,-1,0]}},
+  {"id":"spout-quarantine","file":"models/spout-quarantine.glb","kind":"prop","tris":2612,"texBytes":0,"boundRadiusM":12.066,"materialSlots":["quarantine_bag","quarantine_frame","quarantine_line","quarantine_seal"],"palette":"all","draws":4,"sizeM":[6.76014,11.8,5.68001],"track":"quarantine","spout":{"node":"spout","positionM":[0,2.97,-2.84],"sheetWidthM":6,"flowDirection":[0,-1,0]}},
+  {"id":"spout-switchboard","file":"models/spout-switchboard.glb","kind":"prop","tris":2432,"texBytes":0,"boundRadiusM":11.31,"materialSlots":["switchboard_brass","switchboard_panel","switchboard_steel"],"palette":"all","draws":3,"sizeM":[8.0001,10.7,4.99991],"track":"switchboard","spout":{"node":"spout","positionM":[0,2.45,-2.5],"sheetWidthM":6,"flowDirection":[0,-1,0]}},
+  {"id":"spout-threshold","file":"models/spout-threshold.glb","kind":"prop","tris":4730,"texBytes":0,"boundRadiusM":10.705,"materialSlots":["pawn_silicone","threshold_collar","threshold_ink"],"palette":"all","draws":3,"sizeM":[7.6,10.42712,7.09988],"track":"threshold","spout":{"node":"spout","positionM":[0,3.8,-3.54992],"sheetWidthM":6,"flowDirection":[0,-1,0]}},
+  {"id":"spout-boudoir","file":"models/spout-boudoir.glb","kind":"prop","tris":5642,"texBytes":0,"boundRadiusM":11.096,"materialSlots":["boudoir_foam","boudoir_glass","boudoir_ink","boudoir_metal"],"palette":"all","draws":4,"sizeM":[12.64998,9.5,11.99998],"track":"boudoir","spout":{"node":"spout","positionM":[-1.225,4.58,-5.92],"sheetWidthM":6,"flowDirection":[0,-1,0]}}
 ]
