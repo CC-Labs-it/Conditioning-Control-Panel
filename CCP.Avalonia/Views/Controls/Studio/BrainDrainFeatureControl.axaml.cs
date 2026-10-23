@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using ConditioningControlPanel.Avalonia.Views.Features;
@@ -43,7 +44,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             // (Empty) and BtnRefreshAudio are inert until the service lands, and WithheldNotice
             // stays hidden (OverlayService.BrainDrainWithheld is false anyway).
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
+
+            // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
+            // OverlayService re-sorts on the settings hook), so unlike the rows above it shows no
+            // false "running" state and is wired now. This head has no Brain Drain blur overlay
+            // yet, so the z-order rule (Core BrainDrainKeepClear) has nothing to act on here.
+            _keepClear = this.FindControl<CheckBox>("ChkKeepClear")!;
+            LoadKeepClear();
+            _keepClear.IsCheckedChanged += (_, _) =>
+            {
+                var on = _keepClear.IsChecked ?? false;
+                if (CoreSettings.Current.BrainDrainKeepPicturesClear == on) return;
+                CoreSettings.Current.BrainDrainKeepPicturesClear = on;
+                CoreSettings.Save();
+            };
         }
+
+        private readonly CheckBox _keepClear;
+
+        // WPF re-reads on Loaded and on its settings rebind hook; the Studio tab keeps this control
+        // alive, so a Reset or cloud restore (CurrentReplaced) must repaint the toggle.
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            if (CoreSettings.Service is { } svc) svc.CurrentReplaced += LoadKeepClear;
+            LoadKeepClear();
+        }
+
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= LoadKeepClear;
+            base.OnDetachedFromVisualTree(e);
+        }
+
+        private void LoadKeepClear() => _keepClear.IsChecked = CoreSettings.Current.BrainDrainKeepPicturesClear;
 
         /// <summary>
         /// Repaint the clip-library readout. An empty pool makes the whole audio half a silent

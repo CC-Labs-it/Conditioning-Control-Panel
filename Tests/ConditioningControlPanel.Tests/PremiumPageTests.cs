@@ -100,7 +100,7 @@ public class PremiumPageTests
     }
 
     [Fact]
-    public void The_groups_follow_the_price_tag_and_Graded_Intake_is_Prime()
+    public void The_groups_follow_the_price_tag_and_Graded_Intake_is_Basic()
     {
         foreach (var f in ExclusiveFeature.All)
         {
@@ -108,7 +108,7 @@ public class PremiumPageTests
             if (f.Tier == 1) Assert.Equal(PremiumGroup.Basic, g);
             else if (f.Tier == 2) Assert.Equal(PremiumGroup.Prime, g);
         }
-        Assert.Equal(PremiumGroup.Prime, PremiumShelfOrder.GroupOf("gradedintake", 0));
+        Assert.Equal(PremiumGroup.Basic, PremiumShelfOrder.GroupOf("gradedintake", 0));
         Assert.Equal(PremiumGroup.Free, PremiumShelfOrder.GroupOf("backroom", 0));
         Assert.Equal(PremiumGroup.Free, PremiumShelfOrder.GroupOf("justdrop", 0));
     }
