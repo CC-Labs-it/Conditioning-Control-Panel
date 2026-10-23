@@ -73,6 +73,10 @@ namespace ConditioningControlPanel.Views.Tabs
         private bool _overTrailer;
         /// <summary>What the calendar was built for, so a tick that changes nothing redraws nothing.</summary>
         private (DateTime Start, DateTime End, DateTime Today)? _calendarKey;
+
+        /// <summary>The sheet's days with their squares, so a raffle card that arrives later dots
+        /// its counted days in place, without redrawing a cross.</summary>
+        private readonly List<(LockDay Day, Border Square, int Number)> _calendarCells = new();
         private FrameworkElement? _tonightCell;
         private FrameworkElement? _tonightMark;
         private FrameworkElement? _keyCell;
@@ -137,6 +141,7 @@ namespace ConditioningControlPanel.Views.Tabs
                 chaster.Booked += OnBooked;
                 chaster.LinkChanged += OnLinkChanged;
                 chaster.LockChanged += OnLockChanged;
+                chaster.RaffleChanged += OnRaffleChanged;
                 _tick.Start();
                 _clockTick.Start();
             }
@@ -145,6 +150,7 @@ namespace ConditioningControlPanel.Views.Tabs
                 chaster.Booked -= OnBooked;
                 chaster.LinkChanged -= OnLinkChanged;
                 chaster.LockChanged -= OnLockChanged;
+                chaster.RaffleChanged -= OnRaffleChanged;
                 _tick.Stop();
                 _clockTick.Stop();
             }
@@ -161,6 +167,18 @@ namespace ConditioningControlPanel.Views.Tabs
         {
             OnTabShown();
             if (App.Chaster?.IsLinked == true) FxLinked();
+        }));
+
+        // A new raffle card (a push verified, or the page's own read): the sheet's dots follow it.
+        // Another CCP account, or none: the page's own card goes too, so the card repaints empty.
+        private void OnRaffleChanged() => Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_raffleCard != null && PageRaffleCard == null)
+            {
+                _raffleCard = null;
+                PaintLadder();
+            }
+            RefreshCalendarRaffle();
         }));
 
         // A push moves the lock AND empties the tab, so both halves are re-read.
@@ -488,11 +506,13 @@ namespace ConditioningControlPanel.Views.Tabs
             var key = (lockSpan.Start.Date, lockSpan.End.Date, today.Date);
             if (_calendarKey == key && CalendarRow.Visibility == Visibility.Visible)
             {
+                MarkRaffleDays();
                 RefreshTag(App.Chaster?.BalanceSeconds ?? 0);
                 return;
             }
             _calendarKey = key;
             Calendar.Children.Clear();
+            _calendarCells.Clear();
             FxCalendarReset();
 
             var cells = LockCalendar.CellsFor(lockSpan.Start, lockSpan.End, today);
@@ -502,18 +522,49 @@ namespace ConditioningControlPanel.Views.Tabs
                 var dayNumber = (day.Date - lockSpan.Start.Date).Days + 1;
                 var square = Cell(day, dayNumber, elided);
                 Calendar.Children.Add(square);
+                _calendarCells.Add((day, square, dayNumber));
                 if (day.Today) _tonightCell = square;
                 if (day.IsKey) _keyCell = square;
             }
+            MarkRaffleDays();
             CalendarRow.Visibility = Visibility.Visible;
             RefreshTag(App.Chaster?.BalanceSeconds ?? 0);
             PlaceCalendarTag();
             if (IsVisible) { FxCalendarDrawIn(); StartCalendarLoops(); }
         }
 
+        /// <summary>A raffle card came in or went: re-dot the sheet in place. Never a rebuild, so
+        /// the crosses do not vanish and draw in again.</summary>
+        internal void RefreshCalendarRaffle() => MarkRaffleDays();
+
+        /// <summary>The raffle's counted days (the card the billboard reads, else the page's own
+        /// while it is still this account's) dotted on the squares they fall on: a crossed day is
+        /// a day served, not a day counted. The key line shows while any square carries a dot.</summary>
+        private void MarkRaffleDays()
+        {
+            var raffleDays = ChasterRaffle.CountedDates(App.Chaster?.LastRaffleCard ?? PageRaffleCard);
+            var utcNow = DateTime.UtcNow;
+            var any = false;
+            foreach (var (day, square, number) in _calendarCells)
+            {
+                if (day.IsKey || square.Child is not Grid plate) continue;
+                var counted = LockCalendar.CountsForRaffle(day.Date, raffleDays, utcNow);
+                any |= counted;
+                var dot = plate.Children.OfType<Ellipse>().FirstOrDefault(e => Equals(e.Tag, RaffleDotTag));
+                if (counted && dot == null) plate.Children.Add(RaffleDot());
+                else if (!counted && dot != null) plate.Children.Remove(dot);
+                if (day.Elided) continue;
+                if (day.Served) square.ToolTip = Loc.GetF(counted ? "chaster_cal_served_raffle" : "chaster_cal_served", number);
+                else if (day.Today) square.ToolTip = Loc.Get("chaster_chain_tonight") + (counted ? Environment.NewLine + Loc.Get("chaster_cal_raffle_key") : "");
+            }
+            CalendarRaffleKey.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private void ClearCalendar()
         {
             _calendarKey = null;
+            _calendarCells.Clear();
+            CalendarRaffleKey.Visibility = Visibility.Collapsed;
             Calendar.Children.Clear();
             FxCalendarReset();
             CalendarRow.Visibility = Visibility.Collapsed;
@@ -523,7 +574,7 @@ namespace ConditioningControlPanel.Views.Tabs
         /// <summary>A day on the sheet: a ruled square with its number in the corner, and on it a
         /// marker cross (served), a padlock stamp (still to serve), a red ring (tonight) or the
         /// gold sticker (the key).</summary>
-        private FrameworkElement Cell(LockDay day, int dayNumber, int elided)
+        private Border Cell(LockDay day, int dayNumber, int elided)
         {
             var plate = new Grid { Width = CellSize, Height = CellSize };
             var square = new Border
@@ -584,6 +635,17 @@ namespace ConditioningControlPanel.Views.Tabs
             }
             return square;
         }
+
+        /// <summary>The raffle counted this day: a small dot in the raffle strip's pink, bottom
+        /// centre, clear of the cross, the ring and the number. Tagged so tests can find it.</summary>
+        private static Ellipse RaffleDot() => new()
+        {
+            Width = 6, Height = 6, Fill = PipCounted, Tag = RaffleDotTag, IsHitTestVisible = false,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, 3),
+        };
+
+        internal const string RaffleDotTag = "raffle-day";
 
         /// <summary>A crossed-out day in red marker: two strokes that bend a little and do not
         /// quite meet, different from one day to the next, with a splat where the pen lifted.

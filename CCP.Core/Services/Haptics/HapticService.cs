@@ -434,6 +434,27 @@ namespace ConditioningControlPanel.Services
             try { await seq.Completion; } catch (OperationCanceledException) { }
         }
 
+        /// <summary>
+        /// The pattern lab's Play on "All toys". Same contract as TestAsync/TestDeviceAsync: the
+        /// master toggle is waived for the length of the pattern, premium is not. False means
+        /// nothing played.
+        /// </summary>
+        public async Task<bool> TestPatternAsync(double intensity, int durationMs, VibrationMode mode)
+        {
+            if (_disposed) return false;
+            durationMs = Math.Clamp(durationMs, 100, 8000);
+            _mixer.AllowTestWindow(durationMs + 2000);
+            if (!_mixer.IsGateOpen) return false;
+
+            var steps = HapticPatterns.Render(mode, Math.Clamp(intensity, MinPerceptibleIntensity, 1.0),
+                                              durationMs, priority: 5);
+            await _mixer.Play(steps, isTest: true).Completion;
+            return true;
+        }
+
+        /// <summary>True when only the Test buttons can reach a toy: the master toggle is off.</summary>
+        public bool IsMasterOff => !Settings.Enabled;
+
         private HapticSequence PostEvent(HapticEventKind kind, double? intensityOverride,
                                          int? durationOverride, VibrationMode? modeOverride, int priority)
         {
@@ -569,7 +590,7 @@ namespace ConditioningControlPanel.Services
                 new(1100, new HapticPulse(0.6, 60, 440, 100, 5)),
                 new(2200, new HapticPulse(1.0, 60, 740, 120, 5)),
             };
-            await _mixer.Play(steps).Completion;
+            await _mixer.Play(steps, isTest: true).Completion;
             Log.Information("TestAsync: Test pattern completed");
             return HapticTestResult.Success;
         }
@@ -814,7 +835,7 @@ namespace ConditioningControlPanel.Services
             for (int i = 0; i < intensities.Length; i++)
                 values[i] = Math.Clamp(intensities[i], 0f, 1f);
 
-            _mixer.PlayLayerEnvelope(HapticLayer.Pattern, values, totalDurationMs, target);
+            _mixer.PlayLayerEnvelope(HapticLayer.Pattern, values, totalDurationMs, target, isTest: true);
             return Task.FromResult(true);
         }
 
@@ -1058,12 +1079,19 @@ namespace ConditioningControlPanel.Services
         /// <summary>Startup auto-connect (WPF App.AutoConnectHapticsAsync). Mock is the legacy enum's
         /// default, so only a REAL provider (Lovense and/or Buttplug) justifies connecting at launch;
         /// a short delay lets the app finish starting. Never throws: the user can connect by hand.</summary>
+        /// <summary>A CCP_USERDATA_DIR sandbox, as DiscordRichPresenceService.Sandboxed. Test seam.</summary>
+        internal static Func<bool> AutoConnectSandboxed = () =>
+            SandboxNet.Active || Environment.GetEnvironmentVariable("CCP_USERDATA_DIR") != null;
+
         public async Task AutoConnectOnStartupAsync(int delayMs = 2000)
         {
             try
             {
                 var v2 = Settings.V2;
                 if (!Settings.AutoConnect || !(v2.Provider("lovense").Enabled || v2.Provider("buttplug").Enabled)) return;
+                // A sandboxed run (tests, a copied real profile) must never dial the user's own Intiface/Lovense
+                // on localhost, which SandboxNet lets through. Connecting by hand still works.
+                if (AutoConnectSandboxed()) { Log.Information("Haptics auto-connect skipped: sandboxed run"); return; }
                 await Task.Delay(delayMs);
                 Log.Information("Auto-connecting haptics: Provider={Provider}", Settings.Provider);
                 if (await ConnectAsync()) Log.Information("Haptics auto-connected successfully to {Provider}", ProviderName);
