@@ -2935,3 +2935,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-assets: +329
 - Library browses installed Content Packs (tree, decrypted thumbnails with LRU cache, checks, previews); tree shaping moved to Core `AssetPackTree`.
 - Content Packs root shows a Box glyph; full remote gate green.
+
+## avalonia-port/wire-win-webcam-calibration-b: +493
+- Calibration mouth prompts fire from real capture (Core MouthOpenDetector, WPF order) and verify/bubble cursors draw the shared Core GazeCursorTrail comet.
+- Review fixes: frame-run-tagged mouth events, cached trail paints, all 10 new tests fail-proven remotely.
