@@ -27,11 +27,15 @@ public sealed class SessionRunnerTests : IDisposable
     private readonly SessionLogService _logs = new();
     private readonly SessionRunner _runner;
     private SessionLog? _ready;
+    private bool _bubblesRunning;
+    private readonly Action? _bubbleStart = CoreBubbles.StartAction, _bubbleStop = CoreBubbles.StopAction;
 
     public SessionRunnerTests()
     {
         Assert.StartsWith(Path.GetTempPath(), _logs.LogsFolder);   // RoadmapTestProfile sandbox
         DeleteLogs();
+        CoreBubbles.StartAction = () => _bubblesRunning = true;
+        CoreBubbles.StopAction = () => _bubblesRunning = false;
         PhrasePoolCustody.Seed();   // the head's job (Program.cs), not the runner's
         _runner = new SessionRunner(_logs);
         _logs.LogReady += (_, e) => _ready = e.Log;
@@ -42,6 +46,8 @@ public sealed class SessionRunnerTests : IDisposable
     {
         _runner.Stop();
         CoreEngine.Stop();
+        CoreBubbles.StartAction = _bubbleStart;
+        CoreBubbles.StopAction = _bubbleStop;
         CoreSession.IsSessionRunningProvider = null;
         CoreSession.NoteUserPhrasePoolEdit = null;
         CoreSession.ReapplyPhrasePoolOverrides = null;
@@ -65,6 +71,211 @@ public sealed class SessionRunnerTests : IDisposable
             LockCardEnabled = true, LockCardFrequency = 7, LockCardPhrases = { "zzlock" },
         },
     };
+
+    [Fact]
+    public void SessionSpiralHoldsDelayedStartAndRestoresUserSettings()
+    {
+        var s = CoreSettings.Current;
+        s.SpiralEnabled = true;
+        s.SpiralOpacity = 73;
+        var session = OneMinute();
+        session.DurationMinutes = 20;
+        session.Settings.SpiralEnabled = true;
+        session.Settings.SpiralStartMinute = 8;
+        session.Settings.SpiralOpacity = 10;
+        session.Settings.SpiralOpacityEnd = 40;
+        _runner.Start(session);
+        Assert.False(s.SpiralEnabled); // even if the user's engine had it on
+        _runner.Tick(TimeSpan.FromMinutes(4));
+        Assert.False(s.SpiralEnabled);
+        _runner.Tick(TimeSpan.FromMinutes(12));
+        Assert.True(s.SpiralEnabled); // +/-3 minute randomized start has passed
+        Assert.NotNull(_runner.SpiralOpacity);
+        Assert.InRange(_runner.SpiralOpacity.Value, 10, 40);
+        Assert.Equal(73, s.SpiralOpacity); // the ramp never rewrites the user's alpha
+        _runner.Stop();
+        Assert.True(s.SpiralEnabled);
+        Assert.Equal(73, s.SpiralOpacity);
+    }
+
+    [Fact]
+    public void SessionCornerGifHonorsTimelineLiveEditsPauseAndTerminalHandback()
+    {
+        var shown = 0;
+        var hidden = new System.Collections.Generic.List<bool>();
+        var s = CoreSettings.Current;
+        var allowed = s.SessionCornerGifAllowed;
+        s.SessionCornerGifAllowed = true;
+        s.SpiralEnabled = true;
+        CoreCornerGif.ShowSessionHandler = (_, _, _, _) => shown++;
+        CoreCornerGif.HideSessionHandler = handBack => hidden.Add(handBack);
+        CoreCornerGif.StandaloneActiveProvider = () => false;
+        CoreCornerGif.SpiralVisibleProvider = () => false;
+        try
+        {
+            var session = OneMinute();
+            session.DurationMinutes = 20;
+            var ss = session.Settings;
+            ss.CornerGifEnabled = true;
+            ss.CornerGifStartMinute = 2;
+            ss.CornerGifEndMinute = 10;
+            ss.CornerGifOpacity = 20;
+            _runner.Start(session);
+            Assert.False(_runner.IsCornerGifShown);
+            _runner.UpdateCornerGif(size: 220, position: CornerPosition.TopRight, opacity: 35);
+            Assert.Equal(20, ss.CornerGifOpacity); // WPF ignores opacity edits before the overlay starts
+            _runner.Tick(TimeSpan.FromMinutes(2));
+            Assert.True(_runner.IsCornerGifShown && CoreCornerGif.SessionActive);
+            Assert.Equal(1, shown);
+            _runner.UpdateCornerGif(opacity: 35);
+            Assert.Equal((220, CornerPosition.TopRight, 35), (ss.CornerGifSize, ss.CornerGifPosition, ss.CornerGifOpacity));
+            _runner.UpdateCornerGif(size: 240);
+            Assert.Equal(3, shown);
+            _runner.Pause();
+            Assert.False(CoreCornerGif.SessionActive);
+            Assert.Equal(new[] { false }, hidden); // no standalone repaint on pause
+            _runner.Resume(); // real elapsed is before minute 2
+            Assert.False(_runner.IsCornerGifShown);
+            _runner.Tick(TimeSpan.FromMinutes(3));
+            Assert.True(_runner.IsCornerGifShown);
+            _runner.Tick(TimeSpan.FromMinutes(10));
+            Assert.False(CoreCornerGif.SessionActive);
+            Assert.Equal(new[] { false, true }, hidden);
+            _runner.Tick(TimeSpan.FromMinutes(11));
+            Assert.False(_runner.IsCornerGifShown); // never reopen after the end minute
+            _runner.Stop();
+            Assert.Equal(2, hidden.Count); // paid once
+        }
+        finally
+        {
+            _runner.Stop();
+            s.SessionCornerGifAllowed = allowed;
+            CoreCornerGif.ShowSessionHandler = null;
+            CoreCornerGif.HideSessionHandler = null;
+            CoreCornerGif.StandaloneActiveProvider = CoreCornerGif.SpiralVisibleProvider = null;
+        }
+    }
+
+    [Fact]
+    public void CornerPolicyReasksMastersAndOccupancyAndPanicKeepsHandbackDebt()
+    {
+        var s = CoreSettings.Current;
+        s.SpiralEnabled = true;
+        s.SessionCornerGifAllowed = false;
+        bool occupied = false, fullscreen = false;
+        int handbacks = 0;
+        CoreCornerGif.StandaloneActiveProvider = () => occupied;
+        CoreCornerGif.SpiralVisibleProvider = () => fullscreen;
+        CoreCornerGif.HideSessionHandler = handback => { if (handback) handbacks++; };
+        try
+        {
+            var session = OneMinute();
+            session.Settings.CornerGifEnabled = true;
+            _runner.Start(session);
+            Assert.False(_runner.IsCornerGifShown);
+            s.SessionCornerGifAllowed = true;
+            occupied = true;
+            _runner.RefreshCornerGifPolicy();
+            Assert.False(_runner.IsCornerGifShown);
+            occupied = false;
+            fullscreen = true;
+            CoreCornerGif.RaiseStandaloneChanged();
+            Assert.False(_runner.IsCornerGifShown);
+            fullscreen = false;
+            CoreCornerGif.RaiseStandaloneChanged();
+            Assert.True(_runner.IsCornerGifShown);
+            _runner.Pause();
+            CoreCornerGif.RaiseStandaloneChanged();
+            Assert.False(CoreCornerGif.SessionActive); // settings edits cannot repaint during a pause
+            _runner.Resume();
+            Assert.True(CoreCornerGif.SessionActive);
+            _runner.PanicCloseCornerGif();
+            Assert.False(CoreCornerGif.SessionActive);
+            Assert.Equal(0, handbacks);
+            _runner.Stop();
+            Assert.Equal(1, handbacks);
+        }
+        finally
+        {
+            _runner.Stop();
+            CoreCornerGif.HideSessionHandler = null;
+            CoreCornerGif.StandaloneActiveProvider = CoreCornerGif.SpiralVisibleProvider = null;
+        }
+    }
+
+    [Fact]
+    public void SessionBubblesHoldDelayedStartRampPauseAndRestore()
+    {
+        var s = CoreSettings.Current;
+        s.BubblesEnabled = true;
+        s.BubblesFrequency = 41;
+        var session = OneMinute();
+        session.DurationMinutes = 20;
+        var ss = session.Settings;
+        ss.BubblesEnabled = true;
+        ss.BubblesStartMinute = 2;
+        ss.BubblesFrequency = 3;
+        _runner.Start(session);
+        Assert.False(_bubblesRunning || s.BubblesEnabled);
+        _runner.Tick(TimeSpan.FromMinutes(2));
+        Assert.True(_bubblesRunning);
+        Assert.Equal(3, s.BubblesFrequency);
+        _runner.Tick(TimeSpan.FromMinutes(7));
+        Assert.Equal(4, s.BubblesFrequency);
+        _runner.Pause();
+        Assert.False(_bubblesRunning);
+        _runner.Resume();
+        Assert.True(_bubblesRunning);
+        _runner.Stop();
+        Assert.False(_bubblesRunning);
+        Assert.True(s.BubblesEnabled);
+        Assert.Equal(41, s.BubblesFrequency);
+    }
+
+    [Fact]
+    public void IntermittentBubblesUseBurstRateAndEndOnWallTime()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 20;
+        var ss = session.Settings;
+        ss.BubblesEnabled = ss.BubblesIntermittent = true;
+        ss.BubblesBurstCount = 1;
+        ss.BubblesPerBurst = 4;
+        _runner.Start(session);
+        Assert.False(_bubblesRunning);
+        var now = DateTime.Now;
+        _runner.Tick(TimeSpan.FromMinutes(5), now); // first burst always falls at minute 2..4
+        Assert.True(_bubblesRunning);
+        Assert.Equal(8, CoreSettings.Current.BubblesFrequency);
+        _runner.Tick(TimeSpan.FromMinutes(5), now.AddMinutes(3));
+        Assert.False(_bubblesRunning || CoreSettings.Current.BubblesEnabled);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ImmediateSessionFeaturesMatchTemplateAndConstantsHaveNoRampHold(bool enabled)
+    {
+        var session = OneMinute();
+        session.Settings.SpiralEnabled = session.Settings.BubblesEnabled = enabled;
+        session.Settings.SpiralOpacity = session.Settings.SpiralOpacityEnd = 16;
+        _runner.Start(session);
+        _runner.Tick(TimeSpan.FromSeconds(1));
+        Assert.Equal(enabled, CoreSettings.Current.SpiralEnabled);
+        Assert.Equal(enabled, _bubblesRunning);
+        Assert.Null(_runner.SpiralOpacity);
+    }
+
+    [Theory]
+    [InlineData(false, true, false, false, true, false, false)]
+    [InlineData(true, false, false, false, true, false, false)]
+    [InlineData(true, true, true, false, true, false, false)]
+    [InlineData(true, true, false, true, false, false, false)]
+    [InlineData(true, true, false, true, true, true, false)]
+    [InlineData(true, true, false, false, false, true, true)]
+    public void CornerAdmissionMatchesWpf(bool template, bool master, bool standalone, bool spiralArt,
+        bool spiralMaster, bool fullscreen, bool expected) =>
+        Assert.Equal(expected, CornerGifAdmission.AllowSessionCornerGif(template, master, standalone, spiralArt, spiralMaster, fullscreen));
 
     private static JObject SettingsJson() =>
         JObject.Parse(JsonConvert.SerializeObject(CoreSettings.Current, Formatting.Indented));   // = settings.json

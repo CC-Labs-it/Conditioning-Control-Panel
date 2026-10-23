@@ -182,10 +182,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var want = ChkSessionCornerGif.IsChecked ?? false;
             if (s.SessionCornerGifAllowed == want) return;
             s.SessionCornerGifAllowed = want;
+            App.Sessions?.RefreshCornerGifPolicy();
             CoreSettings.Save();
-            // ponytail: WPF then calls SessionEngine.Active.RefreshCornerGifPolicy()
-            // (ConditioningControlPanel/Services/Session/SessionEngine.cs), still in the WPF head,
-            // so the change lands on the next session rather than the running one.
+
         }
 
         private void SliderOpacity_Changed(object? sender, RangeBaseValueChangedEventArgs e)

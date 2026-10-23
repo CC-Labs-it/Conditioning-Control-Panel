@@ -31,16 +31,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// ponytail: needs JustDropOrdersService and the tab FX clock, wired when those move to
     /// Core. Reveal spoilers and the Catalogue chip are wired. The remaining wiring points,
     /// all named in the XAML, are:
-    ///   BtnSelectCornerGif / ChkCornerGifEnabled / RbCornerTL..BR /
-    ///   SliderCornerGifSize + SliderCornerGifOpacity / CmbRackSort.SelectionChanged /
-    ///   preset chip clicks and IsVisibleChanged -> OnPresetsTabVisibilityChanged (the card-sheen
-    ///   clock, started on show, dropped on hide).
-    ///
-    /// Two handlers that look view-only are NOT wired on purpose. SliderCornerGif*_ValueChanged
-    /// stamps "{n}px" / "{n}%" into TxtCornerGifSize / TxtCornerGifOpacity, but it also writes
-    /// AppSettings, and those two labels carry {loc:Str} - assigning .Text over a live loc binding
-    /// is the documented trap that loses the value on the next language change. They come back
-    /// with the settings service.
+    ///   card sheen on visibility changes (the tab FX clock).
+    /// Session corner-GIF options and live updates are in PresetsTabView.CornerGif.cs.
     /// </summary>
     public partial class PresetsTabView : UserControl
     {
@@ -50,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // x:Name fields, and Load leaves every one of them permanently null - a silent no-op
             // that compiles, renders and reviews clean.
             InitializeComponent();
+            InitializeCornerGif();
             RestoreRackSortSelection();
             CmbRackSort.SelectionChanged += CmbRackSort_SelectionChanged;
             TxtRackSearch.TextChanged += TxtRackSearch_TextChanged;
@@ -1037,6 +1030,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void SelectSession(Session session)
         {
+            if (!ReferenceEquals(_selectedSession, session)) ChkCornerGifEnabled.IsChecked = false;
             _selectedSession = session;
             _selectedPreset = null;
             RefreshPresetsList();
@@ -1048,10 +1042,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnExportSession.IsEnabled = true;   // WPF SessionIO.cs:973
             SessionSpoilerPanel.IsVisible = false;
             SetRevealLabel("btn_reveal_details");
-            // ponytail: WPF shows it when session.HasCornerGifOption. The standalone overlay exists
-            // (CornerGifOverlay) but SessionRunner has no session-scoped corner GIF (WPF SessionEngine's
-            // start/end minute, admission and handback), so the option would promise a picture that never appears.
-            CornerGifOptionPanel.IsVisible = false;
+            CornerGifOptionPanel.IsVisible = session.HasCornerGifOption;
+            TxtCornerGifDesc.Text = session.CornerGifDescription;
 
             // WPF MainWindow.SessionIO.cs:927-972 (SelectSession).
             TxtDetailTitle.Text = $"{(string.IsNullOrWhiteSpace(session.Icon) ? "🎬" : session.Icon)} {SessionName(session)}";

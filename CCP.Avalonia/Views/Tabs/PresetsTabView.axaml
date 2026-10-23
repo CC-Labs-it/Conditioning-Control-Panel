@@ -962,7 +962,7 @@
                                         <Grid ColumnDefinitions="*,50">
                                             <Slider x:Name="SliderCornerGifSize" Minimum="100" Maximum="600" Value="300"
                                                     VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="TxtCornerGifSize" Grid.Column="1" Text="{loc:Str label_300px}"
+                                            <TextBlock x:Name="TxtCornerGifSize" Grid.Column="1" Text="300px"
                                                        Foreground="{DynamicResource TextSecondaryBrush}" FontSize="10" VerticalAlignment="Center"
                                                        HorizontalAlignment="Right"/>
                                         </Grid>

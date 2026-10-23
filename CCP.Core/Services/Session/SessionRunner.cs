@@ -13,17 +13,17 @@ namespace ConditioningControlPanel.Services
     /// <see cref="SessionSettingsSnapshot"/>, <see cref="PhrasePoolCustody"/>, <see cref="CoreEngine"/> and
     /// <see cref="SessionLogService"/>. Drives flash, subliminal (+ whispers flag), bouncing text and lock cards.
     ///
-    /// Also pause/resume (100 XP per pause), the flash ramp and the pink tint (ramp + ±3 min random start).
+    /// Also pause/resume, flash/spiral/pink ramps, session bubbles and corner GIFs.
     ///
     /// Pop quiz follows WPF: the user-level AppSettings toggle, not the per-session PopQuiz* fields
     /// (dead in WPF too, BuiltInPrograms.cs:430).
     ///
-    /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
-    /// corner GIF, ducking, phase events,
+    /// ponytail: not driven here - video, bubble count, mind wipe, brain drain,
+    /// ducking, phase events,
     /// EMI Desk, Discord, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
-    public sealed class SessionRunner
+    public sealed partial class SessionRunner
     {
         private readonly DeferredStartQueue _deferred = new();
         private readonly Stopwatch _stopwatch = new();
@@ -49,6 +49,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The ramped pink tint in percent once it has started, else null. WPF drives the overlay
         /// with it directly (SetSustainedOverlayOpacity) and never writes PinkFilterOpacity (#471).</summary>
         public double? PinkOpacity { get; private set; }
+        public double SpiralStartMinute { get; private set; }
+        public double? SpiralOpacity { get; private set; }
 
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
@@ -90,7 +92,8 @@ namespace ConditioningControlPanel.Services
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;
+            SpiralStartMinute = RandomizedStart(session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute, _random);
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
             _startTime = DateTime.Now;
@@ -101,9 +104,12 @@ namespace ConditioningControlPanel.Services
             try { s.RecordSessionStart(s.ActiveModId); } catch { }
             CoreSettings.SaveImmediate();
 
+            CaptureCornerGifUserState(s);
             _snapshot = SessionSettingsSnapshot.Capture(s);
             _custody = PhrasePoolCustody.Begin(s, session.Settings, CoreMods.ActiveModId, session);
             Apply(session.Settings, s);
+            ApplyBubbles(session, s);
+            StartCornerGif(session.Settings);
 
             _timer = new Timer(_ => CoreDispatch.Post(() => Tick(Elapsed)), null, 1000, 1000);
             SessionLog.BeginSession(session);
@@ -176,6 +182,10 @@ namespace ConditioningControlPanel.Services
             if (s.PopQuizEnabled) CoreEngine.PopQuiz?.Start();
             else CoreEngine.PopQuiz?.Stop();
 
+            // WPF ApplySessionSettings: a deferred spiral must hide the user's running one.
+            s.SpiralEnabled = ss.SpiralEnabled && ss.SpiralStartMinute == 0;
+            if (s.SpiralEnabled) s.SpiralOpacity = ss.SpiralOpacity;
+
             // SessionEngine.cs:1479: a delayed tint stays off until its randomised minute (Tick).
             s.PinkFilterEnabled = ss.PinkFilterEnabled && ss.PinkFilterStartMinute == 0;
             if (s.PinkFilterEnabled) s.PinkFilterOpacity = ss.PinkFilterStartOpacity;
@@ -202,6 +212,8 @@ namespace ConditioningControlPanel.Services
             LockCardScheduler.Instance.Stop();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
+            PauseCornerGif();
+            CoreBubbles.Stop();
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
 
@@ -220,6 +232,8 @@ namespace ConditioningControlPanel.Services
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
+            ResumeCornerGif(ss);
+            if (CoreSettings.Current.BubblesEnabled) CoreBubbles.Start();
             Log.Information("Session resumed");
         }
 
@@ -232,7 +246,7 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>WPF MainTimer_Tick (SessionEngine.cs:609-662): complete, phase, deferred starts.
         /// The timer posts it with the real clock; tests call it with any elapsed.</summary>
-        internal void Tick(TimeSpan elapsed)
+        internal void Tick(TimeSpan elapsed, DateTime? wallTime = null)
         {
             var session = CurrentSession;
             if (!IsRunning || IsPaused || session == null) return;
@@ -256,6 +270,14 @@ namespace ConditioningControlPanel.Services
                 s.PinkFilterEnabled = true;
                 Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
             }
+            if (session.Settings.SpiralEnabled && !s.SpiralEnabled && minutes >= SpiralStartMinute)
+            {
+                if (session.Settings.SpiralOpacity == session.Settings.SpiralOpacityEnd)
+                    s.SpiralOpacity = session.Settings.SpiralOpacity;
+                s.SpiralEnabled = true;
+            }
+            TickBubbles(session.Settings, minutes, wallTime ?? DateTime.Now);
+            TickCornerGif(session.Settings, minutes);
             Ticked?.Invoke();
         }
 
@@ -276,6 +298,12 @@ namespace ConditioningControlPanel.Services
             if (ss.FlashEnabled && ss.FlashScale != 100) scale = ss.FlashScale;
             CoreSettings.Current.SetSessionFlashRamp(opacity, frequency, scale);
 
+            // WPF #897: only a ramp holds the live alpha; constants keep the Studio slider live.
+            if (ss.SpiralEnabled && ss.SpiralOpacity != ss.SpiralOpacityEnd && minutes >= SpiralStartMinute)
+            {
+                var spiral = RampCurves.ApplyCurve((minutes - SpiralStartMinute) / (total - SpiralStartMinute), curve);
+                SpiralOpacity = Lerp(ss.SpiralOpacity, ss.SpiralOpacityEnd, spiral);
+            }
             if (ss.PinkFilterEnabled && minutes >= PinkStartMinute)
             {
                 var pink = RampCurves.ApplyCurve((minutes - PinkStartMinute) / (total - PinkStartMinute), curve);
@@ -293,6 +321,7 @@ namespace ConditioningControlPanel.Services
             var session = CurrentSession;
             if (!IsRunning || session == null) return;
             IsRunning = IsPaused = false;
+            StopCornerGif();
             _custody?.Release();
             _stopwatch.Stop();
             _timer?.Dispose();
@@ -302,7 +331,7 @@ namespace ConditioningControlPanel.Services
 
             var s = CoreSettings.Current;
             s.ClearSessionFlashRamp();   // SessionEngine.cs:390, ahead of the restore
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;
             _snapshot?.RestoreTo(s);
             _snapshot = null;
             _custody?.Restore(s);

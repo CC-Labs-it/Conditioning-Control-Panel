@@ -3,9 +3,9 @@
 // OnSessionProgressUpdated (:1838), OnSessionStarted (:1891), OnSessionStopped (:1936) and
 // BtnStopSession_Click (:1983); plus the stop-session branch of BtnStart_Click (MainWindow.StartStop.cs:58).
 // The head owns one Core SessionRunner (App.Sessions), which runs only the ported subset - flash,
-// subliminal, bouncing text, lock cards (docs/avalonia-decisions.md).
+// subliminal, bouncing text, lock cards, bubbles, spiral, pink filter and corner GIFs.
 // BtnPauseSession_Click (:2021) too.
-// ponytail: dropped, each with no service on this head: corner-GIF options, remote gates, program/punch-card/Bark/profile-sync hooks, the takeaway-shelf refresh, the
+// ponytail: remote gates, remaining punch-card/Bark hooks, the takeaway-shelf refresh, the
 // Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).
 // ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
 // "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (gen != _engineGen || App.Sessions is not { IsRunning: false } runner) return;
                 try
                 {
+                    Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOptions(session);
                     runner.Start(session);
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
@@ -147,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RefreshSessionFeatureLock(force: false);
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
+            SpiralOverlay.Refresh(this);
             if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
             var remaining = runner.Remaining;
             var showCountdown = CoreSettings.Current.ShowSessionCountdown != false;

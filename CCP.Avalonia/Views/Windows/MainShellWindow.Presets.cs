@@ -19,9 +19,8 @@
 //
 //   3. BtnCatalogue_Click is a browser launch, not a service call, and is restored below.
 //
-// The rest of the list is genuinely blocked, for the reasons the old header gave: the session
-// engine (start/stop/pause and every OnSession* callback), the overlay services the feature cards
-// drive, FeaturePopupWindow, the corner-GIF picker, and the styled/media-drop dialogs.
+// Session lifecycle and corner-GIF controls live in SessionRun.cs, Core SessionRunner and
+// PresetsTabView.CornerGif.cs. Remaining gaps are tracked in docs/cloud/fin-shell-presets.md.
 //
 // The handlers named by MainShellWindow.axaml are real methods, because a missing one is a XAML
 // compile error, not a runtime gap.
