@@ -92,7 +92,9 @@ public sealed partial class FriendsService
     internal static FriendEvent? FeedLine(SenderReceipt r)
     {
         if (ReceiptKind.IsLeash(r.Kind)) return null;
-        var key = "rc:" + (r.Id ?? "req-out:" + r.To) + ":" + r.State;
+        // A request receipt has no item id: its time is part of the key, so a second accepted claim by the
+        // same account (removed, then claimed the link again) is a new line, not a duplicate.
+        var key = "rc:" + (r.Id ?? "req-out:" + r.To + ":" + new DateTimeOffset(FriendsFeedRules.Utc(r.AtUtc)).ToUnixTimeSeconds()) + ":" + r.State;
         FriendEventKind? kind = (r.Kind, r.State) switch
         {
             (ReceiptKind.Request, ReceiptState.Accepted) => FriendEventKind.RequestAccepted,
