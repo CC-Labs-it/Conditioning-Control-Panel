@@ -2526,6 +2526,15 @@ namespace ConditioningControlPanel
                 Logger?.Warning(ex, "Settings migration failed (non-fatal, defaults apply)");
             }
 
+            // The last session crashed or was killed before it handed the user's settings back:
+            // put them back now, before anything reads them (SessionSettingsJournal).
+            try
+            {
+                if (Services.SessionSettingsJournal.HealOnLaunch(UserDataPath, Settings.Current))
+                    Settings.Save();
+            }
+            catch (Exception ex) { Logger?.Warning(ex, "Session settings heal failed (non-fatal)"); }
+
             // One Descent: stamp this install's age once, from whatever on-disk evidence still
             // exists. Silent — nothing in the UI reads it. Must run after Settings so it can read
             // and persist the field, and early enough that the first profile sync of the session

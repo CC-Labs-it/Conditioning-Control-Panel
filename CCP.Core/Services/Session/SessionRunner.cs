@@ -60,6 +60,14 @@ namespace ConditioningControlPanel.Services
         /// re-queues the standalone slots. A hide-only close (pause, live edit) keeps the debt.</summary>
         private bool _cornerHandbackOwed;
 
+        /// <summary>Where the crash journal goes (<see cref="SessionSettingsJournal"/>); the head seeds
+        /// CorePaths.UserData. Null (tests, renders) writes none.</summary>
+        public string? JournalDir { get; set; }
+
+        /// <summary>Runs right before the settings snapshot: the head hands back the values a running
+        /// Takeover pulse borrowed (WPF AutonomyService.SettleSettingPulses).</summary>
+        public Action? SettleBeforeSnapshot { get; set; }
+
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
 
@@ -111,8 +119,24 @@ namespace ConditioningControlPanel.Services
             try { s.RecordSessionStart(s.ActiveModId); } catch { }
             CoreSettings.SaveImmediate();
 
+            // Main 8fe2a80a0: a Takeover pulse from the last 30 s hands its boosted values back first,
+            // or the snapshot keeps them and the restore makes them the user's for good.
+            try { SettleBeforeSnapshot?.Invoke(); }
+            catch (Exception ex) { Log.Debug(ex, "[Session] Takeover pulse settle failed"); }
             _snapshot = SessionSettingsSnapshot.Capture(s);
             _custody = PhrasePoolCustody.Begin(s, session.Settings, CoreMods.ActiveModId, session);
+            // Main 8a89eaeb0: on disk too, so a crash or kill mid-session cannot leave the session's
+            // values in settings.json for good (healed at the next launch).
+            if (JournalDir is { } journalDir)
+            {
+                try
+                {
+                    var pools = _custody.UserPoolsWhileOverriding();
+                    SessionSettingsJournal.Write(journalDir, SessionSettingsJournal.Build(
+                        _snapshot.Saved, s.ActiveModId, pools?.Subliminal, pools?.BouncingText, pools?.LockCard));
+                }
+                catch (Exception ex) { Log.Warning(ex, "[Session] Settings journal not written"); }
+            }
             Apply(session.Settings, s);
 
             // SessionEngine.cs:198: raised at start whenever admitted (WPF does not read the start
@@ -420,6 +444,7 @@ namespace ConditioningControlPanel.Services
             _snapshot = null;
             _custody?.Restore(s);
             _custody = null;
+            if (JournalDir is { } journalDir) SessionSettingsJournal.Clear(journalDir);
             CoreEngine.Stop();   // MainWindow.Presets.cs:1951
             CoreSettings.Save();   // WPF leaves the restore to the next save; persist it now
 

@@ -449,6 +449,14 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                // Main 8a89eaeb0 / 36370021a: a session or intensity ramp that crashed or was killed before
+                // it handed the user's settings back gets them back now, before anything reads them.
+                try
+                {
+                    if (SessionSettingsJournal.HealOnLaunch(CorePaths.UserData, Settings.Current))
+                        Settings.Save();
+                }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Session settings heal failed (non-fatal)"); }
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -717,7 +725,13 @@ namespace ConditioningControlPanel.Avalonia
                 // The plain engine (Start/Stop) is CoreEngine; the one SessionRunner seeds
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
-                Sessions = new SessionRunner(new SessionLogService());
+                Sessions = new SessionRunner(new SessionLogService())
+                {
+                    // Main 8a89eaeb0: the crash journal (healed above at the next launch).
+                    JournalDir = CorePaths.UserData,
+                    // Main 8fe2a80a0: a Takeover pulse hands its boosted tint back before the snapshot.
+                    SettleBeforeSnapshot = () => Views.Windows.MainShellWindow.Current?.SettleAutonomyPulses(),
+                };
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)
