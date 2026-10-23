@@ -2636,3 +2636,7 @@ EmiChains data/rules and EmiNudges moved to CCP.Core (git mv); WPF keeps the Dis
 
 ## avalonia-port/goongame-core-e: +402
 Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportBase/GoonDispatch, GoonLoopbackTransport, Rounds/*) git-mv to CCP.Core; host/join/paint-stall rules extracted to GoonHostRules (one copy, WPF calls it); DispatcherTimers -> TimeProvider; GoonDispatch.ShutdownStarted seeded in WPF App(). Tests: GoonPaintStallRuleTests moved, GoonHostGateTests, GoonMatchEngineTests (one-thread loopback match, fail-proven). Gate: local Linux GATE-OK; Windows red only on known flakes.
+
+## avalonia-port/tester-test-plan: +675
+- docs/avalonia-test-plan.md: tester steps per ledger area (open/click/expect, WPF file:line, row ids), the live queue rewritten in plain words, safety steps flagged for an agent live check before the shipping switch.
+- Every ledger row id is listed with its WPF reference. Only tester reports move a row to verified.
