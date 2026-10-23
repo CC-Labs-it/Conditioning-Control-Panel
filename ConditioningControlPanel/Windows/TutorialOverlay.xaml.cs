@@ -1210,24 +1210,8 @@ namespace ConditioningControlPanel
             }
         }
 
-        private static bool TextMatches(string actual, string expected)
-        {
-            actual = (actual ?? "").Trim();
-            expected = (expected ?? "").Trim();
-            if (expected.Length == 0) return false;
-
-            if (string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase)) return true;
-
-            if (double.TryParse(actual, NumberStyles.Any, CultureInfo.InvariantCulture, out var av) &&
-                double.TryParse(expected, NumberStyles.Any, CultureInfo.InvariantCulture, out var ev))
-            {
-                return Math.Abs(av - ev) < 0.5;
-            }
-
-            // Substring fallback for non-numeric (e.g. "Pulse" matches "Pulse curve").
-            return actual.Length >= expected.Length &&
-                   actual.IndexOf(expected, StringComparison.OrdinalIgnoreCase) >= 0;
-        }
+        private static bool TextMatches(string actual, string expected) =>
+            TutorialAdvanceRules.TextMatches(actual, expected);
 
         private static string? GetSelectorValue(Selector sel, bool matchByTag)
         {

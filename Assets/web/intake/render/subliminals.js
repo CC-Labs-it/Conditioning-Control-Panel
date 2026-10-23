@@ -111,6 +111,8 @@ export function createSubliminals(opts = {}) {
   const AUDIO_LRU_MAX = 10;
   const MAX_CLIP_SECONDS = 8;   // clip length guard (skip long clips)
   let actx = null, gain = null, audioDead = false;
+  const onPause = (e) => { if (actx) (e.detail ? actx.suspend() : actx.resume()).catch(() => {}); };
+  window.addEventListener('intake-pause', onPause);
   const bufCache = new Map();    // audio-uri -> AudioBuffer (insertion-ordered LRU)
   const decoding = new Set();    // in-flight decode keys (avoid duplicate fetches)
 
@@ -148,7 +150,7 @@ export function createSubliminals(opts = {}) {
   }
 
   function playAudio(uri) {
-    if (!uri || !ensureAudio()) return;
+    if (paused() || !uri || !ensureAudio()) return;
     try { if (actx.state === 'suspended') actx.resume().catch(() => {}); } catch (_e) {}
 
     const cached = bufCache.get(uri);
@@ -178,6 +180,7 @@ export function createSubliminals(opts = {}) {
   /* ----- pause gate: freeze or a briefing / interstitial overlay ----------- */
   function paused() {
     try {
+      if (document.body?.classList.contains('ix-paused')) return true;
       if (document.body && document.body.classList.contains('ix-freeze')) return true;
       const ov = document.getElementById('intake-overlay');
       if (ov && !ov.hidden && ov.offsetParent !== null) return true;
@@ -294,6 +297,7 @@ export function createSubliminals(opts = {}) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      window.removeEventListener('intake-pause', onPause);
       clearTimeout(timer); timer = 0;
       safeRemove(root); root = null;
       bufCache.clear(); decoding.clear();
