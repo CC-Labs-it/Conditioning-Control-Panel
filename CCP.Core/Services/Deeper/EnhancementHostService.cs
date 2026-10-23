@@ -20,13 +20,15 @@ namespace ConditioningControlPanel.Services.Deeper
         /// seeds the factory. Unseeded = the dry-run logger (nothing reaches a screen or a device).</summary>
         public static volatile Func<IActionDispatcher>? DispatcherFactory;
 
-        /// <summary>WPF App.Webcam. Null = webcam rules never fire (the engine says so once).</summary>
+        /// <summary>Creates the head's webcam adapter for each bind. The host disposes it on unbind
+        /// if it implements IDisposable. Null = webcam rules never fire (the engine says so once).</summary>
         public static volatile Func<IEnhancementWebcam?>? WebcamProvider;
 
         public Enhancement? LoadedEnhancement { get; private set; }
         public string? LoadedFilePath { get; private set; }
 
         private EnhancementEngine? _engine;
+        private IEnhancementWebcam? _webcamEvents;
         private RecordingActionDispatcher? _activeRecorder;
         private IPlaybackTimeSource? _activeSource;
         private Action? _detachActiveSource;
@@ -194,8 +196,8 @@ namespace ConditioningControlPanel.Services.Deeper
                 // BlinkDetected/GazeTarget/etc. rules silently when playback started
                 // before the webcam did, even though the user later started tracking
                 // mid-session and saw the events register everywhere else.
-                var webcam = WebcamProvider?.Invoke();
-                _engine = new EnhancementEngine(LoadedEnhancement, source, _activeRecorder, webcam, EmitDiagnostic);
+                _webcamEvents = WebcamProvider?.Invoke();
+                _engine = new EnhancementEngine(LoadedEnhancement, source, _activeRecorder, _webcamEvents, EmitDiagnostic);
                 _engine.PlaybackCompleted += OnEnginePlaybackCompleted;
                 _engine.Start();
                 Log.Information("Deeper engine bound and started");
@@ -247,6 +249,10 @@ namespace ConditioningControlPanel.Services.Deeper
                 Log.Debug("EnhancementHostService.UnbindEngine error: {Error}", ex.Message);
             }
             _engine = null;
+            var webcam = _webcamEvents;
+            _webcamEvents = null;
+            try { (webcam as IDisposable)?.Dispose(); }
+            catch (Exception ex) { Log.Debug("EnhancementHostService webcam cleanup error: {Error}", ex.Message); }
             if (_activeRecorder != null)
             {
                 try { _activeRecorder.ActionLogged -= OnRecorderActionLogged; } catch { }

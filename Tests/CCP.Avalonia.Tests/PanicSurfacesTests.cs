@@ -21,7 +21,12 @@ public sealed class PanicSurfacesTests
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
+            // Shipped font setup: whichever class boots the process-wide app first decides fonts,
+            // and the subliminal card (closed by panic) fails to resolve its face on a bare bootstrap.
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;
@@ -76,51 +81,49 @@ public sealed class PanicSurfacesTests
         finally { PanicSurfaces.All = prev; }
     }
 
-    /// <summary>Surfaces a panic must never lose. Dropping one fails here; a new surface needs no edit.</summary>
+    /// <summary>Surfaces a panic must never lose: the record independent of the registry, so deleting a
+    /// registry line fails here. One id per line, sorted, so parallel additions merge cleanly. Ordering
+    /// contracts live on the registry entries (<c>After</c>), not here.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-flash", "gif-cascade", "chaos-announcer", "chaos-dvd", "chaos-cursor-glow", "chaos-vibe-trail", "chaos-estim", "chaos-field-fx", "chaos-skia-fx", "chaos-intro", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "flash", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "speak-cue", "companion-transcript", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
-    };
-
-    /// <summary>The order that is contract: (stops first, stops later). WPF refs are
-    /// ConditioningControlPanel/MainWindow/MainWindow.xaml.cs unless named otherwise. Only surfaces that
-    /// carry an ordering constraint belong here; register anything else with one line in PanicSurfaces.</summary>
-    private static readonly (string First, string Then, string Why)[] Before =
-    {
-        // Avalonia decision (PanicSurfaces.cs "intake" comment): say-it loops end before the capture abort reads as silence.
-        ("intake", "voice-capture", "intake loops end before the mic abort"),
-        // decisions "Panic <-> mic": capture and the command chain end before anything can react to them.
-        ("voice-capture", "ai-followups", "mic first"),
-        // WPF :1553 FirstShowService.Stop() runs before CancelPendingAi and the rest of HandlePanicKeyPress.
-        ("first-show", "ai-followups", "the welcome show ends first"),
-        // WPF :1543 CancelPendingAi() is the first stop in HandlePanicKeyPress, long before the tail's StopEngine (:1827).
-        ("ai-followups", "engine", "AI cancel early"),
-        // WPF :1714-1721 game surfaces + Lab minigames close BEFORE RunPanicStopTail (:1722); the engine stop never reaches them.
-        ("blink-trainer", "engine", "Lab minigames before the engine"),
-        ("gaze-minigame", "engine", "Lab minigames before the engine"),
-        ("chaos", "engine", "WPF GameSurfaces.cs:50 'chaos' closes before the tail"),
-        // WPF :1808 KillAllAudio (App.xaml.cs:1780 Mantra.Dispose) runs before StopEngine (:1827).
-        ("mantra", "engine", "audio killed before the engine stop"),
-        // WPF :1786 remote haptics and :1992 haptics PanicStop come before StopEngine (:1827).
-        ("haptics", "engine", "toys to zero before the engine stop"),
-        ("remote-haptics", "engine", "toys to zero before the engine stop"),
-        // WPF :1811 Autonomy.CancelActivePulses before StopEngine (:1827).
-        ("takeover", "engine", "takeover pulses cancelled before the engine stop"),
-        // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
-        ("engine", "pink-rush", "pink rush ends after the engine"),
-        // WPF :1963-1967: session corner GIF (engine-owned) first, standalone slots LAST as the final word.
-        ("engine", "corner-gif", "standalone corner slots after the session's"),
-        // WPF :1977-1981: the tube is silenced after the corner GIFs.
-        ("corner-gif", "tube-speech", "tube after corner GIFs"),
-        // WPF :2030 StopAdHocEffects closes lock cards after the media stops; engine before lock cards.
-        ("engine", "lock-cards", "engine before lock cards"),
-        // WPF MainWindow.Leash.cs LeashOnPanicPress is the first thing a panic press does: the task parks before
-        // the tail's StopEngine and lock-card close, so nothing it drives comes back by itself.
-        ("leash-task", "engine", "leash task parks before the engine stop"),
-        ("leash-task", "lock-cards", "leash task parks before its lock card closes"),
-        // gaze minigame ends before the camera it reads (PanicSurfaces.cs comment).
-        ("gaze-minigame", "camera", "gaze ends before the camera stops"),
+        "ai-followups",
+        "attention-test",
+        "blink-trainer",
+        "camera",
+        "chaos",
+        "chaos-announcer",
+        "chaos-cursor-glow",
+        "chaos-dvd",
+        "chaos-estim",
+        "chaos-field-fx",
+        "chaos-flash",
+        "chaos-intro",
+        "chaos-skia-fx",
+        "chaos-vibe-trail",
+        "companion-transcript",
+        "corner-gif",
+        "deeper-editor-audio",
+        "engine",
+        "first-show",
+        "flash",
+        "games",
+        "gaze-minigame",
+        "gif-cascade",
+        "haptics",
+        "intake",
+        "knock-cards",
+        "leash-task",
+        "lock-cards",
+        "mantra",
+        "pink-rush",
+        "possession",
+        "program-session",
+        "remote-haptics",
+        "speak-cue",
+        "takeover",
+        "tour",
+        "tube-speech",
+        "voice-capture",
     };
 
     [Fact]
@@ -134,16 +137,51 @@ public sealed class PanicSurfacesTests
     }
 
     /// <summary>Reordering two constrained lines fails here. Intake first and camera last (decision C:
-    /// fire-and-forget, nothing after it may wait on it) are exact.</summary>
+    /// fire-and-forget, nothing after it may wait on it) are exact; every <c>After</c> rule on an entry
+    /// (WPF cite beside it in PanicSurfaces.cs) must name a registered surface that stops earlier.</summary>
     [Fact]
     public void TheOrderingConstraintsHold()
     {
         var ids = PanicSurfaces.All.Select(x => x.Id).ToList();
         Assert.Equal("intake", ids[0]);
         Assert.Equal("camera", ids[^1]);
-        var broken = Before.Where(c => !(ids.IndexOf(c.First) is >= 0 and var a && ids.IndexOf(c.Then) is var b && a < b))
-            .Select(c => $"{c.First} before {c.Then} ({c.Why})").ToList();
+        var broken = PanicSurfaces.All.SelectMany((s, i) => (s.After ?? Array.Empty<string>())
+                .Where(f => !(ids.IndexOf(f) is >= 0 and var a && a < i))
+                .Select(f => $"{f} before {s.Id}")).ToList();
         Assert.True(broken.Count == 0, "Panic order broken: " + string.Join("; ", broken));
+    }
+
+    /// <summary>"first>then" WPF/decision ordering pairs that must stay declared on the registry (cites beside
+    /// each <c>After</c> in PanicSurfaces.cs): the record independent of the registry, so retargeting or deleting a
+    /// rule fails here. One pair per line, sorted; new rules on entries need no edit here.</summary>
+    private static readonly string[] PinnedOrder =
+    {
+        "ai-followups>engine",
+        "blink-trainer>engine",
+        "chaos>engine",
+        "corner-gif>tube-speech",
+        "engine>corner-gif",
+        "engine>lock-cards",
+        "engine>pink-rush",
+        "first-show>ai-followups",
+        "gaze-minigame>camera",
+        "gaze-minigame>engine",
+        "haptics>engine",
+        "intake>voice-capture",
+        "leash-task>engine",
+        "leash-task>lock-cards",
+        "mantra>engine",
+        "remote-haptics>engine",
+        "takeover>engine",
+        "voice-capture>ai-followups",
+    };
+
+    [Fact]
+    public void TheWpfOrderingRulesStayDeclared()
+    {
+        var rules = PanicSurfaces.All.SelectMany(s => (s.After ?? Array.Empty<string>()).Select(f => $"{f}>{s.Id}")).ToHashSet();
+        var lost = PinnedOrder.Where(p => !rules.Contains(p)).ToList();
+        Assert.True(lost.Count == 0, "Ordering rules no longer declared on PanicSurfaces.All: " + string.Join(", ", lost));
     }
 
     /// <summary>P23: comments and string literals never count as code.</summary>

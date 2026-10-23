@@ -85,6 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Deeper drift is not a canvas at all and is not in the registry.
             EnsureTabFx(tab);
             ApplyDeeperGlyphDrift(tab);
+            ApplyLockdownPulse(tab);
 
             if (_tabFxCanvases.Count == 0) return;
             try
