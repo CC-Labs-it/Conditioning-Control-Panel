@@ -480,7 +480,7 @@
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <TextBlock Text="&#x2190;" FontSize="13" FontWeight="Bold" Margin="0,-2,4,0"
                                            Foreground="{DynamicResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="{loc:Str nav_back_label}" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock x:Name="TxtNavBackLabel" Text="{loc:Str nav_back_label}" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextLightBrush}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
@@ -620,7 +620,7 @@
                                 </Border>
                             </ControlTemplate>
                         </Button.Template>
-                        <TextBlock Text="{loc:Str nav_door_webapp}" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock x:Name="TxtNavWebAppLabel" Text="{loc:Str nav_door_webapp}" FontSize="11" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextLightBrush}" HorizontalAlignment="Center"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </Button>
