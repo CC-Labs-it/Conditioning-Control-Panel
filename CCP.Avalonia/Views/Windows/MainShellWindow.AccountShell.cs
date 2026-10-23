@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/MainWindow/MainWindow.AccountShell.cs.
 // Account navigation lives in Settings/TabNavigation, Rich Presence in SettingsTabView and
 // ProfilePrivacyPanel, and notifications in App startup. The legacy quick-provider buttons and
-// shell check-updates handler have no live WPF caller (docs/cloud/fin-shell-account-shell.md).
+// shell check-updates handler have no live WPF caller (ledger row shell-account-shell, docs/avalonia-parity.md).
 
 using System;
 using Avalonia.Controls;
