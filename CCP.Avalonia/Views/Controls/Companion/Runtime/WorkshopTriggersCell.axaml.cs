@@ -1,6 +1,8 @@
 using System;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.VisualTree;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
@@ -9,7 +11,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
     ///
     /// WPF forwards the controls to MainWindow. This head keeps the toggle's local visibility
     /// and interval label here, and hoists phrase-preset selection/save/delete to the Workshop host.
-    /// Edit Phrases, Manage Phrases and the live avatar trigger timer still await their runtime.
+    /// Manage Phrases forwards to the owning shell. Edit Phrases and the live avatar trigger timer
+    /// still await their runtime.
     /// </summary>
     public partial class WorkshopTriggersCell : UserControl
     {
@@ -24,6 +27,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             this.FindControl<ComboBox>("CmbPhrasePresets")!.SelectionChanged += (_, _) => PhrasePresetSelectionChanged?.Invoke(this, EventArgs.Empty);
             this.FindControl<Button>("BtnSavePhrasePreset")!.Click += (_, _) => SavePhrasePresetRequested?.Invoke(this, EventArgs.Empty);
             this.FindControl<Button>("BtnDeletePhrasePreset")!.Click += (_, _) => DeletePhrasePresetRequested?.Invoke(this, EventArgs.Empty);
+            // WPF forwards the real Phrase Manager action to its owning shell.
+            this.FindControl<Button>("BtnManagePhrases")!.Click += (sender, e) =>
+                this.FindAncestorOfType<MainShellWindow>()?.BtnManagePhrases_Click(sender, e);
 
             var toggle = this.FindControl<CheckBox>("ChkTriggerModeCompanion")!;
             var panel = this.FindControl<StackPanel>("TriggerSettingsPanelCompanion")!;

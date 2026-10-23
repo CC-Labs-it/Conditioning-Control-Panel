@@ -359,22 +359,39 @@ namespace ConditioningControlPanel
                 (byte)(a.B + (b.B - a.B) * t));
         }
 
+        // The drone and tones obey the master volume (ccp-bugs #1432) as a SAMPLE gain. Never
+        // WaveOutEvent.Volume here: that moves the whole app's volume in the Windows mixer.
+        private const float DroneFundamentalGain = 0.05f, DroneHarmonicGain = 0.02f, ToneGain = 0.15f;
+
+        private static float MasterGain() =>
+            (float)Math.Clamp((App.Settings?.Current?.MasterVolume ?? 100) / 100.0, 0.0, 1.0);
+
+        private void OnMasterVolumeChanged(int level)
+        {
+            float g = Math.Clamp(level / 100f, 0f, 1f);
+            var fundamental = _droneFundamental;
+            var harmonic = _droneHarmonic;
+            if (fundamental != null) fundamental.Gain = DroneFundamentalGain * g;
+            if (harmonic != null) harmonic.Gain = DroneHarmonicGain * g;
+        }
+
         private void StartDrone()
         {
             try
             {
+                float g = MasterGain();
                 _droneFundamental = new SignalGenerator(44100, 1)
                 {
                     Type = SignalGeneratorType.Sin,
                     Frequency = 90,
-                    Gain = 0.05f
+                    Gain = DroneFundamentalGain * g
                 };
 
                 _droneHarmonic = new SignalGenerator(44100, 1)
                 {
                     Type = SignalGeneratorType.Sin,
                     Frequency = 180,
-                    Gain = 0.02f
+                    Gain = DroneHarmonicGain * g
                 };
 
                 _droneMixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(44100, 1));
@@ -385,6 +402,11 @@ namespace ConditioningControlPanel
                 App.Audio?.ApplyPreferredDevice(_droneOutput);
                 _droneOutput.Init(_droneMixer);
                 _droneOutput.Play();
+
+                var watch = Services.Audio.MasterVolumeWatch.Shared;
+                watch.EnsureHooked();
+                watch.Changed -= OnMasterVolumeChanged;
+                watch.Changed += OnMasterVolumeChanged;
             }
             catch (Exception ex)
             {
@@ -394,6 +416,7 @@ namespace ConditioningControlPanel
 
         private void StopDrone()
         {
+            try { Services.Audio.MasterVolumeWatch.Shared.Changed -= OnMasterVolumeChanged; } catch { }
             try
             {
                 _droneOutput?.Stop();
@@ -414,7 +437,7 @@ namespace ConditioningControlPanel
                 {
                     Type = SignalGeneratorType.Sin,
                     Frequency = frequency,
-                    Gain = 0.15f
+                    Gain = ToneGain * MasterGain()
                 };
 
                 var take = new OffsetSampleProvider(gen)

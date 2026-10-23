@@ -32,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             SizeChanged += (_, e) => { if (e.WidthChanged) ApplyShelfLayout(e.NewSize.Width); };
             // WPF CompanionRuntimeContext: the hero reaches the shell and this navigator through us.
             if (HeroZone.ViewModel is { } hero) hero.Host = this;
+            ConversationZone.Room = this;
             // Z2/Z3 over the brain (WPF CompanionRoomVm builds ChatThresholdRuntimeVm / MemoryDiaryRuntimeVm).
             ChatZone.ViewModel = ChatThresholdViewModel.CreateLive();
             MemoryZone.ViewModel = MemoryDiaryViewModel.CreateLive();
@@ -156,6 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             try
             {
                 WorkshopZone.RefreshPhrasePresets();
+                ConversationZone.Resume();   // WPF ConversationPage IsVisibleChanged -> Vm.Resume
                 // WPF CompanionTabView.IsVisibleChanged -> CompanionRoom.Sync(): the hero re-reads
                 // what changed while the tab was hidden (level, mute, awareness, AI pill, mod art).
                 HeroZone.ApplyAvatarArt();
@@ -188,6 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             try
             {
+                ConversationZone.Park();
                 HeroZone.StopAmbientLoop();
                 AwarenessZone.StopCursorBlink();
                 AwarenessZone.StopRefresh();
