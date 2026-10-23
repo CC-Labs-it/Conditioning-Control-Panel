@@ -231,7 +231,7 @@ public sealed class GazeMinigameTests
             panic();
             Assert.False(flash.IsVisible);
             Assert.Empty(FlashOverlay.Active);
-            Assert.True(FlashOverlay.Generation > generation);
+            Assert.Equal(generation + 1, FlashOverlay.Generation);
             Assert.False(CoreFlash.IsRunning);
         });
 
@@ -470,6 +470,7 @@ public sealed class GazeMinigameTests
         var old = (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory, tracker.Calibration,
             CoreAudio.PlayOneShotProvider, CoreSession.IsEngineRunningProvider, s.FlashEnabled, CoreFlash.IsRunning);
         var timing = (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay);
+        var stoppedHook = CoreEngine.StoppedHook;
         var clock = new SteppedClock();
         var dir = Directory.CreateTempSubdirectory("gaze-reward-");
         var feedback = new TaskCompletionSource();
@@ -480,6 +481,8 @@ public sealed class GazeMinigameTests
             s.WebcamConsentVersion = WebcamConsent.ConsentVersion;
             WebcamTracker.SourceFactory = () => new BlankSource();
             tracker.Calibration = new WebcamCalibrationData();
+            // App wires this desktop cleanup through the shell's OnEngineStopped, even when idle.
+            CoreEngine.StoppedHook = () => AvApp.StopDesktopOverlays(final: false);
             CoreSession.IsEngineRunningProvider = () => false;
             CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => { };
             s.FlashEnabled = false; // no background timer races; Start still marks the schedule running
@@ -517,7 +520,7 @@ public sealed class GazeMinigameTests
             }
             void Panic()
             {
-                PanicSurfaces.All.Single(x => x.Id == "gaze-minigame").Stop(null);
+                PanicSurfaces.StopAll("test-gaze-reward");
                 Assert.False(win.IsVisible);
                 feedback.TrySetResult();
                 global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -536,6 +539,7 @@ public sealed class GazeMinigameTests
             (s.WebcamConsentGiven, s.WebcamConsentVersion, WebcamTracker.SourceFactory, tracker.Calibration,
                 CoreAudio.PlayOneShotProvider, CoreSession.IsEngineRunningProvider, s.FlashEnabled, _) = old;
             if (old.Item8) CoreFlash.Start();
+            CoreEngine.StoppedHook = stoppedHook;
             (GazeMinigameWindow.Clock, GazeMinigameWindow.Delay) = timing;
             File.Delete(Path.Combine(CorePaths.UserData, GazeMinigameSettings.FileName));
             dir.Delete(true);

@@ -64,7 +64,7 @@ public sealed class ShellTrayTests
                 Assert.False(CoreEngine.IsRunning);
                 Assert.False(CoreFlash.IsRunning);
                 Assert.False(CoreSubliminal.IsRunning);
-                Assert.True(FlashOverlay.Generation > generation);   // queued spawns invalidated (panic's gaze-reward cleanup bumps it too)
+                Assert.Equal(generation + 1, FlashOverlay.Generation);   // queued spawns invalidated once
                 Assert.True(CoreSettings.Current.FlashEnabled && CoreSettings.Current.SubliminalEnabled && CoreSettings.Current.BouncingTextEnabled);
                 Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
                 Assert.True(shell.IsVisible);
@@ -93,6 +93,24 @@ public sealed class ShellTrayTests
             return Task.CompletedTask;
         });
     }
+
+    [Fact]
+    public Task PanicInvalidatesFlashesExactlyOnceWithStoppedEngine() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        // No windows: prove the same invalidation also covers rewards after the engine stopped.
+        var stoppedHook = CoreEngine.StoppedHook;
+        try
+        {
+            CoreEngine.StoppedHook = () => global::ConditioningControlPanel.Avalonia.App.StopDesktopOverlays(final: false);
+            CoreEngine.Stop();
+            Assert.False(CoreEngine.IsRunning);
+            var generation = FlashOverlay.Generation;
+            PanicSurfaces.StopAll("test-stopped-engine");
+            Assert.Equal(generation + 1, FlashOverlay.Generation);
+        }
+        finally { CoreEngine.StoppedHook = stoppedHook; }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public async Task CloseWithoutATrayHostReallyCloses()

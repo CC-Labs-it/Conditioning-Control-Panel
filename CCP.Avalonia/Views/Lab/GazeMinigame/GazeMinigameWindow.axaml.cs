@@ -1598,10 +1598,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 w._gameRunning = false;
                 w.Close();
             }
-            // These one-shots can outlive both the game and a stopped engine. CloseAll also
-            // invalidates queued flash spawns; a suspended schedule must not resume on panic.
+            // These one-shots can outlive both the game and a stopped engine. The engine panic
+            // surface calls StopDesktopOverlays even when idle: it invalidates flash spawns once.
+            // A suspended schedule must not resume on panic.
             CoreFlash.Stop();
-            FlashOverlay.CloseAll(final: false);
             BubbleOverlay.Stop();
             CoreMindWipe.Stop();
             OverlayPulse.Cancel();
