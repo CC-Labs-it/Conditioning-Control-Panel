@@ -58,6 +58,14 @@ public class ScrolllerRelayTests
     public void Route_matrix(bool scrolller, bool enabled, bool cached, bool fresh, int want)
         => Assert.Equal((ScrolllerRelayRoute)want, ScrolllerRelay.Decide(scrolller ? "https://images.scrolller.com/a.jpg" : null, enabled, cached, fresh));
 
+    [Theory]
+    [InlineData(true, false, true, (int)ScrolllerRelayRoute.NotFound)]       // uncached: never a fetch
+    [InlineData(true, false, false, (int)ScrolllerRelayRoute.NotFound)]
+    [InlineData(true, true, true, (int)ScrolllerRelayRoute.ServeCached)]     // cached: headers only
+    [InlineData(false, true, true, (int)ScrolllerRelayRoute.Block)]          // the off switch still wins
+    public void A_head_never_fetches(bool enabled, bool cached, bool fresh, int want)
+        => Assert.Equal((ScrolllerRelayRoute)want, ScrolllerRelay.Decide("https://images.scrolller.com/a.mp4", enabled, cached, fresh, headOnly: true));
+
     [Fact]
     public void A_frame_has_every_media_url_rewritten_at_any_depth_and_nothing_else()
     {

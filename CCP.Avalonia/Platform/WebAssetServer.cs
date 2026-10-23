@@ -105,16 +105,39 @@ public sealed class WebAssetServer : IDisposable
             HttpListenerContext ctx;
             try { ctx = await _listener.GetContextAsync().ConfigureAwait(false); }
             catch (Exception) { return; } // listener stopped
-            // A relayed Scrolller fetch can take seconds: it waits on its own slots, never on the page's files.
+            // A relayed Scrolller fetch can take minutes: it waits on its own slots, never on the page's files, and the
+            // slot is taken INSIDE the task, so nothing a request waits on ever stalls this accept loop.
             bool relay = ctx.Request.Url?.AbsolutePath.StartsWith(ScrolllerRelay.PathPrefix, StringComparison.Ordinal) == true;
-            var slots = relay ? _relayInFlight : _inFlight;
-            await slots.WaitAsync().ConfigureAwait(false);
-            _ = Task.Run(async () =>
+            _ = Task.Run(() => HandleAsync(ctx, relay));
+        }
+    }
+
+    /// <summary>How long a request waits for a free slot before it is answered 503 + Retry-After.</summary>
+    internal TimeSpan SlotWait { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Cancelled by <see cref="Dispose"/>: every queued request and every relay fetch stops with the server.</summary>
+    readonly CancellationTokenSource _closing = new();
+
+    async Task HandleAsync(HttpListenerContext ctx, bool relay)
+    {
+        var slots = relay ? _relayInFlight : _inFlight;
+        bool held = false;
+        try
+        {
+            held = await slots.WaitAsync(SlotWait, _closing.Token).ConfigureAwait(false);
+            if (!held)
             {
-                try { if (relay) await ServeRelayAsync(ctx).ConfigureAwait(false); else Serve(ctx); }
-                catch (Exception ex) { Log.Debug(ex, "WebAssetServer: request failed"); }
-                finally { try { ctx.Response.Close(); } catch { } slots.Release(); }
-            });
+                ctx.Response.StatusCode = 503;
+                ctx.Response.Headers.Add("Retry-After", "2");
+                return;
+            }
+            if (relay) await ServeRelayAsync(ctx).ConfigureAwait(false); else Serve(ctx);
+        }
+        catch (Exception ex) { Log.Debug(ex, "WebAssetServer: request failed"); }
+        finally
+        {
+            try { ctx.Response.Close(); } catch { }
+            if (held) slots.Release();
         }
     }
 
@@ -178,7 +201,10 @@ public sealed class WebAssetServer : IDisposable
         var res = ctx.Response;
         var url = ScrolllerRelay.FromRelayPath(ctx.Request.RawUrl);
         var cached = url == null || !ScrolllerPolicy.Enabled ? null : ScrolllerCached(url);
-        var route = ScrolllerRelay.Decide(url, ScrolllerPolicy.Enabled, cached != null, url != null && ScrolllerMayFetchFresh(url));
+        // HEAD: headers of a cached copy only; an uncached url is a 404, never a fetch (and never a charge).
+        bool head = ctx.Request.HttpMethod == "HEAD";
+        var route = ScrolllerRelay.Decide(url, ScrolllerPolicy.Enabled, cached != null,
+            url != null && !head && ScrolllerMayFetchFresh(url), head);
         string? path = cached;
         switch (route)
         {
@@ -186,8 +212,16 @@ public sealed class WebAssetServer : IDisposable
             case ScrolllerRelayRoute.Block:
             case ScrolllerRelayRoute.Refuse: res.StatusCode = 403; return;
             case ScrolllerRelayRoute.FetchThenServe:
-                using (var budget = new CancellationTokenSource(RelayFetchBudget))
-                    path = await ScrolllerFetch(url!, budget.Token).ConfigureAwait(false);
+                // Bounded by the budget and by the server's life. HttpListener gives no signal for a client that leaves
+                // before the first byte is written, so a page that goes away mid-fetch is noticed at the write below
+                // (it throws, the answer ends); the fetch itself lands in the device cache like WPF's whole fetch.
+                using (var budget = CancellationTokenSource.CreateLinkedTokenSource(_closing.Token))
+                {
+                    budget.CancelAfter(RelayFetchBudget);
+                    try { path = await ScrolllerFetch(url!, budget.Token).ConfigureAwait(false); }
+                    catch (OperationCanceledException) { path = null; }
+                }
+                if (_closing.IsCancellationRequested) { res.Abort(); return; }
                 break;
         }
         if (path == null || !File.Exists(path)) { res.StatusCode = 502; return; }
@@ -337,5 +371,9 @@ public sealed class WebAssetServer : IDisposable
         return true;
     }
 
-    public void Dispose() => _listener.Close();
+    public void Dispose()
+    {
+        try { _closing.Cancel(); } catch (ObjectDisposedException) { }
+        _listener.Close();
+    }
 }
