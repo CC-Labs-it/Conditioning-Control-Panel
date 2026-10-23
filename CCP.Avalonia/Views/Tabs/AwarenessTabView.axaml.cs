@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// and write <c>AppSettings</c> for real and save.</para>
     ///
     /// <para>The master and keyboard switches drive the Windows keyboard/audio runtime.
-    /// ponytail: ScreenOcr, highlight windows, other response actions and recent-app chips remain
+    /// ponytail: ScreenOcr, highlight windows and other response actions remain
     /// wire-shell-keyword-triggers-b; Linux has no keyword source yet.</para>
     /// </summary>
     public partial class AwarenessTabView : UserControl
@@ -155,6 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 UpdateStatusIndicator(masterOn);
                 RefreshAwarenessPulseFeed();
+                RefreshAwarenessSeenAppChips();
                 RefreshAwarenessPresetCards();
             }
             catch (Exception ex)
@@ -190,8 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// Master switch. Writes the setting, keeps the keyboard sub-toggle and the status
-        /// indicator in step, and saves - the whole of ChkAwarenessMaster_Changed except starting
-        /// anything.
+        /// indicator in step, and saves. Starts the head runtime through KeywordTriggerHead.Sync.
         /// </summary>
         private void ChkAwarenessMaster_Changed(object? sender, RoutedEventArgs e)
         {
@@ -336,9 +336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerAppScope");
             }
 
-            // ponytail: WPF also rebuilds the "recently focused" chips from
-            // KeywordTriggerService.GetRecentForegroundApps(). That ring is fed by a foreground-
-            // window poll (Win32) and lives with the service, so the chip row stays empty here.
+            RefreshAwarenessSeenAppChips();
         }
 
         private void TxtAwarenessAppList_LostFocus(object? sender, RoutedEventArgs e) => CommitAppList();
@@ -359,6 +357,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             settings.KeywordTriggerApps = parsed;
             CoreSettings.Save();
             TxtAwarenessAppList.Text = string.Join(", ", parsed);
+            RefreshAwarenessSeenAppChips();
         }
 
         // ------------------------------------------------------------------ highlight colour

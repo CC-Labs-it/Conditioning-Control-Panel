@@ -1366,6 +1366,31 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             timer.Start();
         }
 
+        private int _voiceGeneration;
+        public bool IsSpeakingAudio { get; private set; }
+
+        // WPF IsSpeakingAudio: a voice can outlast its bubble. Keyword comments must wait for both.
+        private Action PlayVoiceClip(string path, float volume, string source, Action? onFinished = null)
+        {
+            var generation = ++_voiceGeneration;
+            IsSpeakingAudio = true;
+            Action stop;
+            try
+            {
+                stop = CoreAudio.PlayStoppable(path, volume, source, onFinished: () => RunOnAvatar(() =>
+                {
+                    if (generation == _voiceGeneration) IsSpeakingAudio = false;
+                    onFinished?.Invoke();
+                }));
+            }
+            catch { IsSpeakingAudio = false; throw; }
+            return () =>
+            {
+                if (generation == _voiceGeneration) IsSpeakingAudio = false;
+                stop();
+            };
+        }
+
         /// <summary>
         /// The voice for one bubble, with WPF's volume curves verbatim: a bark voiceline at
         /// master^1.5 * 0.85, a phrase clip at * 0.56, the canned giggle at * 0.7. MasterVolume 0
@@ -1394,7 +1419,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (!File.Exists(phraseAudioPath)) return;
                     handedOff = true;
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
-                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
+                    _stopSpoken = PlayVoiceClip(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
                                           barkVoice ? "bark-voice" : "phrase-audio", onFinished: onSpoken);
                     return;
                 }
@@ -1423,7 +1448,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                        ?? System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resources", "sounds", name);
             if (!File.Exists(path)) return;
             _stopSpoken();   // as above: one clip at a time, so panic's single stop reaches it
-            _stopSpoken = CoreAudio.PlayStoppable(path, curvedVolume * 0.7f, "giggle");
+            _stopSpoken = PlayVoiceClip(path, curvedVolume * 0.7f, "giggle");
         }
 
         // =========================================================================================

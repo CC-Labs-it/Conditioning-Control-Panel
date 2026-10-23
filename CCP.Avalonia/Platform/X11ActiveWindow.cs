@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -53,19 +54,7 @@ internal static class X11ActiveWindow
         if (Disabled) return "";
         try
         {
-            if (!_tried)
-            {
-                _tried = true;
-                if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY"))) return "";
-                _display = XOpenDisplay(IntPtr.Zero);
-                if (_display == IntPtr.Zero) return "";
-                _root = XDefaultRootWindow(_display);
-                _active = XInternAtom(_display, "_NET_ACTIVE_WINDOW", false);
-                _netWmName = XInternAtom(_display, "_NET_WM_NAME", false);
-                _utf8 = XInternAtom(_display, "UTF8_STRING", false);
-                _wmName = XInternAtom(_display, "WM_NAME", false);
-            }
-            if (_display == IntPtr.Zero) return "";
+            if (!EnsureDisplay()) return "";
 
             var previous = XSetErrorHandler(IgnoreErrors);
             try
@@ -77,6 +66,47 @@ internal static class X11ActiveWindow
             finally { XRestoreErrorHandler(previous); }
         }
         catch { return ""; }   // no libX11 on this machine: nothing to observe
+    }
+
+    private static bool EnsureDisplay()
+    {
+        if (Disabled || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return false;
+        if (!_tried)
+        {
+            _tried = true;
+            if (!OperatingSystem.IsLinux() || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISPLAY"))) return false;
+            _display = XOpenDisplay(IntPtr.Zero);
+            if (_display == IntPtr.Zero) return false;
+            _root = XDefaultRootWindow(_display);
+            _active = XInternAtom(_display, "_NET_ACTIVE_WINDOW", false);
+            _netWmName = XInternAtom(_display, "_NET_WM_NAME", false);
+            _utf8 = XInternAtom(_display, "UTF8_STRING", false);
+            _wmName = XInternAtom(_display, "WM_NAME", false);
+        }
+        if (_display == IntPtr.Zero) return false;
+
+        return true;
+    }
+
+    /// <summary>Process name only, for Awareness's in-memory recent-app picker. No title read.</summary>
+    internal static (string? Process, bool Own) ReadProcess()
+    {
+        try
+        {
+            if (!EnsureDisplay()) return (null, false);
+            var previous = XSetErrorHandler(IgnoreErrors);
+            try
+            {
+                var window = ReadWindow(_root, _active);
+                if (window == IntPtr.Zero) return (null, false);
+                var pid = ReadWindow(window, XInternAtom(_display, "_NET_WM_PID", false)).ToInt64();
+                if (pid <= 0 || pid > int.MaxValue) return (null, false);
+                using var process = Process.GetProcessById((int)pid);
+                return (process.ProcessName, pid == Environment.ProcessId);
+            }
+            finally { XRestoreErrorHandler(previous); }
+        }
+        catch { return (null, false); }
     }
 
     private static IntPtr ReadWindow(IntPtr window, IntPtr property)

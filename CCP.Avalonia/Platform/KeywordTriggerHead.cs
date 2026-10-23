@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -14,17 +15,42 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-/// <summary>Keyboard/audio slice of WPF KeywordTriggerService. OCR and the other actions remain a follow-up.</summary>
+/// <summary>Keyboard/audio/comment slice of WPF KeywordTriggerService. OCR and other actions remain a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
     private static bool _subscribed;
     private static int _generation;
+    private static readonly DispatcherTimer AppSampler = new() { Interval = TimeSpan.FromSeconds(2) };
+    static KeywordTriggerHead() => AppSampler.Tick += (_, _) => SampleForeground();
+
+    // WPF samples from its input sources every two seconds. Linux has no key source yet, so
+    // this process-only sample keeps the app-list picker usable while the engine is armed.
+    internal static Func<(string? Process, bool Own)> ForegroundSource = ReadForeground;
+    internal static void SampleForeground()
+    {
+        if (!Engine.IsActive || !CoreSettings.Current.KeywordTriggersEnabled ||
+            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        var app = ForegroundSource();
+        Engine.RememberForeground(app.Process, app.Own);
+    }
+
+    private static (string? Process, bool Own) ReadForeground()
+    {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return (null, false);
+        if (OperatingSystem.IsWindows())
+        {
+            GetWindowThreadProcessId(GetForegroundWindow(), out var id);
+            return Foreground(id);
+        }
+        return X11ActiveWindow.ReadProcess();
+    }
     internal static void Sync()
     {
         if (CoreSettings.Current.KeywordTriggersEnabled)
         {
             Engine.Start();
+            AppSampler.Start();
             if (!_subscribed && OperatingSystem.IsWindows() &&
                 string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))
             {
@@ -37,7 +63,7 @@ internal static class KeywordTriggerHead
     }
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
-    internal static void Stop() { DetachKeyboard(); Engine.Stop(); }
+    internal static void Stop() { AppSampler.Stop(); DetachKeyboard(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
 
     /// <summary>WPF MainWindow.Awareness.cs:493: Keyboard off drops only the key source; the engine and a playing clip stay.</summary>
     internal static void DetachKeyboard()
@@ -115,6 +141,18 @@ internal static class KeywordTriggerHead
 internal sealed class KeywordAudioRuntime
 {
     private readonly KeywordTextInput _input = new();
+    private readonly LinkedList<string> _seenApps = new();
+    internal IReadOnlyList<string> RecentForegroundApps => _seenApps.ToArray();
+
+    internal void RememberForeground(string? process, bool own)
+    {
+        if (!IsActive || own || string.IsNullOrWhiteSpace(process) || !CoreSettings.Current.KeywordTriggersEnabled ||
+            !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return;
+        var existing = _seenApps.FirstOrDefault(a => string.Equals(a, process, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) _seenApps.Remove(existing);
+        _seenApps.AddFirst(existing ?? process);
+        while (_seenApps.Count > 8) _seenApps.RemoveLast();
+    }
     private KeywordCooldowns _cooldowns = new();
     internal KeywordCooldowns Cooldowns { get => _cooldowns; set => _cooldowns = value; }   // tests swap it: shared static engine
     private CancellationTokenSource? _audio;
@@ -134,6 +172,7 @@ internal sealed class KeywordAudioRuntime
         var s = CoreSettings.Current;
         if (!IsActive || !s.KeywordTriggersEnabled ||
             !(CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("awareness"))) return false;
+        RememberForeground(process, own);
         if (KeywordMatchRules.AppAllowed(s, process, own)) return true;
         _input.Clear(); // never join text typed on either side of a blocked app
         return false;
@@ -177,14 +216,15 @@ internal sealed class KeywordAudioRuntime
                 PlayCount = t.AudioPlayCount, DelayBetweenMs = t.AudioDelayBetweenMs, DuckSystemAudio = t.DuckAudio };
         }
         if (audio != null) Play(audio);
+        var comment = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().FirstOrDefault(a => a.Enabled);
+        if (comment != null) _ = KeywordAvatarComment.DispatchAsync(comment, fired[0]);
     }
 
     /// <summary>
     /// WPF FireDemoTrigger: the tour's synthetic Highlight + AvatarComment fire, same entitlement gate as
-    /// Start (#887), no settings touched, no cooldowns. Pulse feed + TriggerFired only.
+    /// Start (#887), no settings touched, no cooldowns. Records before dispatch, like WPF.
     /// </summary>
-    // ponytail: WPF also dispatches both actions (highlight box, avatar comment); they land with
-    // wire-shell-keyword-triggers-b.
+    // WPF passes null OCR words here: its HighlightAction deliberately draws nothing in the demo.
     internal void FireDemo(string keyword, string source)
     {
         if (string.IsNullOrWhiteSpace(keyword)) return;
@@ -200,6 +240,7 @@ internal sealed class KeywordAudioRuntime
         {
             Fires.Record(demo, source, Now());
             TriggerFired?.Invoke(demo);
+            _ = KeywordAvatarComment.DispatchAsync((AvatarCommentAction)demo.Actions[1], demo);
         }
         catch (Exception ex) { Log.Debug(ex, "FireDemo failed"); }
     }
