@@ -202,6 +202,102 @@ public sealed class HapticsHeadTests
         });
     }
 
+    /// <summary>WPF HapticsTabView.xaml:901 + Features/AdaptiveSideArt.cs: the Tier-1 vibe.png plate sits
+    /// beside the 780-capped settings column on a wide page, folds to zero (lifting the cap) below
+    /// 1000px, and only comes back past the #1321 hysteresis margin.</summary>
+    [Fact]
+    public void Tier1SideArtShowsWideAndFoldsBelowTheThreshold()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            WithHaptics(premium: true, mock: true, (_, _) =>
+            {
+                var tab = new HapticsTabView();
+                var host = new Window { Content = tab, Width = 1400, Height = 900 };
+                host.Show();
+                void Layout() { for (var i = 0; i < 3; i++) { host.UpdateLayout(); Dispatcher.UIThread.RunJobs(); } }
+                try
+                {
+                    // The page's outer StackPanel is centred (as on WPF), so the region is as wide as its
+                    // content, not the window: size the Grid the rule watches directly.
+                    var grid = tab.HapticsTier1Grid;
+                    grid.Width = 1200;
+                    Layout();
+                    Assert.True(tab.HapticsSideArt.IsVisible);
+                    Assert.True(tab.HapticsSideArt.Bounds.Width > 300, $"plate {tab.HapticsSideArt.Bounds.Width}");
+                    Assert.IsType<global::Avalonia.Media.ImageBrush>(tab.HapticsSideArt.Background);   // vibe.png painted
+                    Assert.Equal(780, grid.ColumnDefinitions[0].MaxWidth);
+
+                    grid.Width = 900;
+                    Layout();
+                    Assert.False(tab.HapticsSideArt.IsVisible);
+                    Assert.Equal(0, grid.ColumnDefinitions[1].Width.Value);
+                    Assert.True(double.IsPositiveInfinity(grid.ColumnDefinitions[0].MaxWidth));   // settings retake the width
+                    Assert.True(tab.HapticsConnectionBox.Bounds.Width > 860, $"settings {tab.HapticsConnectionBox.Bounds.Width}");
+
+                    grid.Width = 1020;   // past the threshold but inside the #1321 margin: hold
+                    Layout();
+                    Assert.False(tab.HapticsSideArt.IsVisible);
+
+                    grid.Width = 1200;
+                    Layout();
+                    Assert.True(tab.HapticsSideArt.IsVisible);
+                    Assert.Equal(new GridLength(2, GridUnitType.Star), grid.ColumnDefinitions[1].Width);
+                    Assert.Equal(780, grid.ColumnDefinitions[0].MaxWidth);
+                }
+                finally { host.Close(); }
+            });
+        });
+    }
+
+    /// <summary>A buzz the page starts (pattern Play on one toy) ends when the page hides, and a
+    /// per-toy test, which drives the provider around the mixer, ends on the panic stop.</summary>
+    [Fact]
+    public void PagePreviewStopsOnHideAndToyTestStopsOnPanic()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            WithHaptics(premium: true, mock: true, (h, _) =>
+            {
+                h.Settings.Enabled = true;
+                Assert.True(h.ConnectAsync().Result);
+                var tab = new HapticsTabView();
+                var host = new Window { Content = tab };
+                host.Show();
+                try
+                {
+                    Assert.True(tab.CmbPatternToy.Items.Count > 1);
+                    tab.CmbPatternToy.SelectedIndex = 1;   // one toy: the around-the-mixer path
+                    Assert.False(tab.PreviewRunning);
+                    tab.BtnPatternPlay.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Assert.True(tab.PreviewRunning);
+                    tab.IsVisible = false;
+                    Assert.False(tab.PreviewRunning);
+                    Assert.True(tab.LastPreview.Wait(3000));   // the cancelled Play really ended (P56)
+                    Dispatcher.UIThread.RunJobs();
+                    tab.IsVisible = true;
+
+                    // Called synchronously: it has linked the panic token and is parked in its 8 s loop
+                    // when it returns, so no wait is needed to know the test is in flight.
+                    var key = h.DeviceManager.Devices[0].DeviceKey;
+                    var test = h.TestDeviceAsync(key, VibrationMode.Constant, 0.6, 8000);
+                    Assert.False(test.IsCompleted);
+                    h.PanicStop();
+                    Assert.True(test.Wait(3000));
+                }
+                finally { host.Close(); }
+            });
+        });
+    }
+
     /// <summary>WPF HapticsSetupWindow.xaml.cs, from the Studio rack's "?" (MainWindow.Haptics.cs:668):
     /// pick Mock, Next commits the provider, Connect is refused without premium (gate_premium_locked),
     /// then with premium connects, lists the (virtual) toys, swaps Connect for Done, Test buzz reaches

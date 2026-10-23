@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using Microsoft.Win32;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Newtonsoft.Json;
@@ -69,17 +70,6 @@ namespace ConditioningControlPanel.Services
     //             positive: red lipstick on the inner lip. Documented as v2
     //             follow-up that would need a dedicated model.
     // ─────────────────────────────────────────────────────────────────────────────
-
-    public enum WebcamTrackingState
-    {
-        Stopped,
-        Starting,
-        Tracking,
-        FaceLost,
-        CameraInUse,
-        CameraDenied,
-        Error
-    }
 
     /// <summary>
     /// Local, offline webcam-based eye and gaze tracking. Powers Lab Box 1
@@ -375,6 +365,15 @@ namespace ConditioningControlPanel.Services
         public bool IsRunning => _state == WebcamTrackingState.Tracking || _state == WebcamTrackingState.FaceLost;
         public WebcamCalibrationData? Calibration { get; private set; }
 
+        private readonly object _monitorLock = new();
+        private System.Windows.Forms.Screen[] _gazeScreens = Array.Empty<System.Windows.Forms.Screen>();
+        private System.Windows.Forms.Screen? _gazeScreen;
+        private string? _gazeMonitorName;
+        private bool _gazeMonitorFallback;
+        private int _gazeMonitorRevision;
+        internal int GazeMonitorRevision => Volatile.Read(ref _gazeMonitorRevision);
+
+
         /// <summary>
         /// Returns the System.Windows.Forms.Screen that matches the monitor the
         /// current calibration ran on, or null when (a) no calibration is loaded,
@@ -385,21 +384,59 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public System.Windows.Forms.Screen? GetCalibratedScreen()
         {
-            var name = Calibration?.MonitorBounds?.DeviceName;
-            if (string.IsNullOrEmpty(name)) return null;
-            try
+            lock (_monitorLock)
             {
-                foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+                RefreshGazeMonitor();
+                return string.IsNullOrEmpty(_gazeMonitorName) || _gazeMonitorFallback ? null : _gazeScreen;
+            }
+        }
+
+        internal System.Windows.Forms.Screen? GetGazeScreen()
+        {
+            lock (_monitorLock)
+            {
+                RefreshGazeMonitor();
+                return _gazeScreen;
+            }
+        }
+
+        private void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatch(() =>
+        {
+            if (!_disposed) RefreshGazeMonitor(force: true);
+        });
+
+        private void RefreshGazeMonitor(bool force = false)
+        {
+            lock (_monitorLock)
+            {
+                try
                 {
-                    if (string.Equals(screen.DeviceName, name, StringComparison.OrdinalIgnoreCase))
-                        return screen;
+                    var screens = System.Windows.Forms.Screen.AllScreens;
+                    var name = Calibration?.MonitorBounds?.DeviceName;
+                    bool sameName = string.Equals(name, _gazeMonitorName, StringComparison.OrdinalIgnoreCase);
+                    bool sameScreens = screens.Length == _gazeScreens.Length;
+                    for (int i = 0; sameScreens && i < screens.Length; i++)
+                        sameScreens = screens[i].DeviceName == _gazeScreens[i].DeviceName
+                            && screens[i].Bounds == _gazeScreens[i].Bounds
+                            && screens[i].Primary == _gazeScreens[i].Primary;
+                    if (!force && sameName && sameScreens) return;
+
+                    var choice = WebcamMonitorRule.Select(name, screens.Select(s => s.DeviceName).ToArray(),
+                        Array.FindIndex(screens, s => s.Primary));
+                    if (sameName && _gazeMonitorFallback && !choice.TemporaryFallback)
+                        App.Logger?.Information("WebcamTrackingService: calibrated monitor {Name} returned", name);
+                    // Runtime-only resolution. Never overwrite the saved monitor or calibration geometry.
+                    _gazeScreens = screens;
+                    _gazeMonitorName = name;
+                    _gazeMonitorFallback = choice.TemporaryFallback;
+                    _gazeScreen = choice.Index >= 0 ? screens[choice.Index] : null;
+                    Interlocked.Increment(ref _gazeMonitorRevision);
+                }
+                catch (Exception ex)
+                {
+                    App.Logger?.Warning(ex, "WebcamTrackingService: monitor enumeration failed");
                 }
             }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning(ex, "WebcamTrackingService.GetCalibratedScreen: enumeration failed");
-            }
-            return null;
         }
 
         /// <summary>
@@ -810,6 +847,7 @@ namespace ConditioningControlPanel.Services
         {
             App.Logger?.Information("WebcamTrackingService: constructed");
             Calibration = WebcamCalibrationData.Load();
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         }
 
         /// <summary>
@@ -1058,42 +1096,18 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>
         /// Fold a newly-measured per-axis linear correction (from the bubble
-        /// test) into the calibration's GazeTrim. The new fit was measured
-        /// with the existing trim ACTIVE, so the two compose (apply old,
-        /// then new): for x' = x + a0 + a1·u then x'' = x' + b0 + b1·u',
-        /// the composition is c0 = a0 + b0 + b1·a0, c1 = a1 + b1 + a1·b1.
-        /// Composed coefficients are clamped so repeated tests can't wind
-        /// the map up into something wild.
+        /// test) into the calibration's GazeTrim (composition and clamps:
+        /// Core GazeTrimData.Compose).
         /// </summary>
         public void ApplyGazeTrim(double x0, double x1, double y0, double y1,
             double centerX, double centerY, bool persist)
         {
-            const double MaxOffset = 300;   // DIPs
-            const double MaxScale = 0.35;   // ±35% stretch, total
-
             lock (_stateLock)
             {
                 var current = Calibration;
                 if (current == null) return;
 
-                double cx0 = x0, cx1 = x1, cy0 = y0, cy1 = y1;
-                if (current.GazeTrim is { } old)
-                {
-                    cx0 = old.X0 + x0 + x1 * old.X0;
-                    cx1 = old.X1 + x1 + old.X1 * x1;
-                    cy0 = old.Y0 + y0 + y1 * old.Y0;
-                    cy1 = old.Y1 + y1 + old.Y1 * y1;
-                }
-                var composed = new GazeTrimData
-                {
-                    X0 = Math.Clamp(cx0, -MaxOffset, MaxOffset),
-                    X1 = Math.Clamp(cx1, -MaxScale, MaxScale),
-                    Y0 = Math.Clamp(cy0, -MaxOffset, MaxOffset),
-                    Y1 = Math.Clamp(cy1, -MaxScale, MaxScale),
-                    CenterX = centerX,
-                    CenterY = centerY,
-                    CapturedAt = DateTime.UtcNow,
-                };
+                var composed = GazeTrimData.Compose(current.GazeTrim, x0, x1, y0, y1, centerX, centerY, DateTime.UtcNow);
                 var updated = current.WithGazeTrim(composed);
                 if (persist) updated.Save();
                 Calibration = updated;
@@ -1129,6 +1143,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_disposed) return;
             _disposed = true;
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             try { Stop(); } catch (Exception ex) { App.Logger?.Warning(ex, "WebcamTrackingService.Dispose: Stop() threw"); }
             App.Logger?.Information("WebcamTrackingService: disposed");
         }
@@ -1980,7 +1995,12 @@ namespace ConditioningControlPanel.Services
                 var f = _gaze.Follow(p.X, p.Y);
                 p = new System.Windows.Point(f.X, f.Y);
 
-                Dispatch(() => OnGazeMove?.Invoke(p));
+                Dispatch(() =>
+                {
+                    // Also catches a changed screen set before the display event reaches this dispatcher.
+                    RefreshGazeMonitor();
+                    OnGazeMove?.Invoke(p);
+                });
                 if (_longStare.Push(DateTime.UtcNow, p.X, p.Y) is { } stare)
                 {
                     var stareCenter = new System.Windows.Point(stare.X, stare.Y);

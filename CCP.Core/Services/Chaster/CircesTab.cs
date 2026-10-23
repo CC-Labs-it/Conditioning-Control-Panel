@@ -96,6 +96,15 @@ public sealed class TabState
     /// <summary>The raffle's day ledger: per UTC day, what CCP booked and what it put on the lock,
     /// sent with the raffle verify. See <see cref="ChasterLadder.Claims"/>.</summary>
     [JsonProperty("ladder")] public LadderLedger? Ladder { get; set; }
+
+    /// <summary>The raffle month ("yyyy-MM", UTC) the server last said was running. While it is
+    /// this month, a raffle day's first slip-up lands even in credit (<see cref="CircesTab.Book"/>).</summary>
+    [JsonProperty("raffle_month")] public string? RaffleMonth { get; set; }
+
+    /// <summary>Credit set aside while a raffle day's first slip-up goes to the lock. It comes back
+    /// onto the balance once the balance is down to zero again (the push landed, or a credit or
+    /// the jackpot cleared it). 0 when nothing is set aside.</summary>
+    [JsonProperty("parked_credit")] public int ParkedCreditSeconds { get; set; }
 }
 
 public enum TabRefusal
@@ -177,8 +186,16 @@ public static class CircesTab
     /// <summary>Book one event. <paramref name="seconds"/> is signed: positive costs, negative
     /// earns back. <paramref name="runStartUtc"/> is when this run of the app began; only lines
     /// from the same run fold together, so the bill at close stays this run's bill.</summary>
+    ///
+    /// <para>RAFFLE DAYS (owner, 2026-10-17, wobberjockey's ticket): a raffle day counts only when
+    /// CCP time reached the lock that UTC day, and a credit used to cancel every slip-up before
+    /// the push, so a player in credit was silently out of the raffle. With
+    /// <paramref name="raffleDay"/> on, the first slip-up of a UTC day on which nothing has gone
+    /// to the lock yet is pushed whole: the credit is set aside (<see cref="TabState.ParkedCreditSeconds"/>)
+    /// and pays for the slip-ups after it, as before.</para>
     public static TabBooking Book(TabState state, string eventId, int seconds,
-        DateTime nowUtc, DateTime localNow, DateTime runStartUtc, bool safetyExit, TabLimits? limits = null)
+        DateTime nowUtc, DateTime localNow, DateTime runStartUtc, bool safetyExit, TabLimits? limits = null,
+        bool raffleDay = false)
     {
         var caps = limits ?? TabLimits.Default;
         if (seconds == 0 || string.IsNullOrEmpty(eventId)) return new(0, TabRefusal.Nothing);
@@ -196,18 +213,37 @@ public static class CircesTab
             applied = Math.Min(seconds, Math.Min(room, backlogRoom));
             if (applied == 0) return new(0, room == 0 ? TabRefusal.DailyCap : TabRefusal.Backlog);
             state.DayAddedSeconds += applied;
+            if (state.ParkedCreditSeconds > 0)
+            {
+                // A raffle day already has its slip-up on the way: the set-aside credit pays this one.
+                var paid = Math.Min(applied, state.ParkedCreditSeconds);
+                state.ParkedCreditSeconds -= paid;
+                state.BalanceSeconds += applied - paid;
+            }
+            else
+            {
+                if (raffleDay && state.BalanceSeconds < 0 && state.PendingSeconds <= 0 && !LandedOn(state, nowUtc))
+                {
+                    state.ParkedCreditSeconds = -state.BalanceSeconds;
+                    state.BalanceSeconds = 0;
+                }
+                state.BalanceSeconds += applied;
+            }
         }
         else
         {
             // The floor: lock time CCP did not add is never CCP's to take. A credit can clear the
             // tab and then reach back only as far as what earlier pushes put on the lock.
             var floor = -Math.Max(0, state.PushedNetSeconds);
-            applied = Math.Max(seconds, Math.Min(0, floor - state.BalanceSeconds));
+            applied = Math.Max(seconds, Math.Min(0, floor - (state.BalanceSeconds - state.ParkedCreditSeconds)));
             if (applied == 0) return new(0, TabRefusal.Floor);
             state.DayCreditSeconds += -applied;
+            // While a raffle day's slip-up waits for its push, a credit joins the set-aside one
+            // rather than shrinking what lands.
+            if (state.ParkedCreditSeconds > 0) state.ParkedCreditSeconds += -applied;
+            else state.BalanceSeconds += applied;
         }
 
-        state.BalanceSeconds += applied;
         Record(state, eventId, applied, nowUtc, runStartUtc);
         var clamped = applied != seconds;
         if (!clamped) return new(applied, TabRefusal.None);
@@ -229,8 +265,21 @@ public static class CircesTab
         if (state.BalanceSeconds <= 0) return new(0, TabRefusal.Nothing);
         var applied = -state.BalanceSeconds;
         state.BalanceSeconds = 0;
+        Unpark(state);
         Record(state, JackpotEventId, applied, nowUtc, runStartUtc);
         return new(applied, TabRefusal.None);
+    }
+
+    /// <summary>Whether anything CCP sent landed on the lock on this UTC day (the raffle's day).</summary>
+    public static bool LandedOn(TabState state, DateTime nowUtc) =>
+        state.Ladder?.Days is { } days && days.TryGetValue(ChasterLadder.DayKey(nowUtc), out var d) && d != null && d.Pushed > 0;
+
+    /// <summary>The set-aside credit comes back once nothing is owed any more.</summary>
+    private static void Unpark(TabState state)
+    {
+        if (state.ParkedCreditSeconds <= 0 || state.BalanceSeconds > 0) return;
+        state.BalanceSeconds -= state.ParkedCreditSeconds;
+        state.ParkedCreditSeconds = 0;
     }
 
     /// <summary>What to send the lock right now, if anything. Live since 2026-09-23 (owner): a
@@ -271,6 +320,7 @@ public static class CircesTab
             // The catch-up is on the lock too: the push ceiling and the ladder count all of it.
             NotePushed(state, DayKey(localNow), push.Total);
             ChasterLadder.NoteAdded(state, push.Total, nowUtc ?? localNow.ToUniversalTime());
+            Unpark(state);
         }
         else
         {
@@ -314,6 +364,7 @@ public static class CircesTab
         if (state.PendingDay != null) NotePushed(state, state.PendingDay, seconds);
         // Counted as landed, so counted as added: the total never goes the player's way by hiding it.
         ChasterLadder.NoteAdded(state, seconds, nowUtc ?? DateTime.UtcNow);
+        Unpark(state);
         ClearPending(state);
         return seconds;
     }
@@ -353,6 +404,7 @@ public static class CircesTab
     /// </summary>
     public static bool Sanitise(TabState state, TabLimits limits)
     {
+        var parkedBefore = state.ParkedCreditSeconds;
         var before = (state.BalanceSeconds, state.PendingSeconds, state.PushedNetSeconds, state.DayAddedSeconds, state.DayCreditSeconds, state.PushDaySeconds, state.RemoteDaySeconds, state.ForgivableSeconds);
         state.BalanceSeconds = Math.Min(state.BalanceSeconds, limits.BacklogSeconds);
         state.BalanceSeconds = Math.Max(state.BalanceSeconds, -Math.Max(0, state.PushedNetSeconds));
@@ -368,8 +420,13 @@ public static class CircesTab
         state.PushDaySeconds = Math.Max(0, state.PushDaySeconds);
         state.RemoteDaySeconds = Math.Max(0, state.RemoteDaySeconds);
         state.ForgivableSeconds = Math.Max(0, state.ForgivableSeconds);
+        // Set-aside credit counts against the floor like any other credit.
+        state.ParkedCreditSeconds = Math.Clamp(state.ParkedCreditSeconds, 0,
+            Math.Max(0, state.PushedNetSeconds + Math.Min(0, state.BalanceSeconds)));
+        Unpark(state);
         state.Entries ??= new List<TabEntry>();
-        return before != (state.BalanceSeconds, state.PendingSeconds, state.PushedNetSeconds, state.DayAddedSeconds, state.DayCreditSeconds, state.PushDaySeconds, state.RemoteDaySeconds, state.ForgivableSeconds);
+        return parkedBefore != state.ParkedCreditSeconds
+            || before != (state.BalanceSeconds, state.PendingSeconds, state.PushedNetSeconds, state.DayAddedSeconds, state.DayCreditSeconds, state.PushDaySeconds, state.RemoteDaySeconds, state.ForgivableSeconds);
     }
 
     /// <summary>"+0:30", "-10:00", "+1:05:00". The number that flashes when a price lands, and the

@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///  - The mod-id → pack-id mapping comes from Core <c>ModService.PackIdForMod</c>; pack sizes and install state come from
     ///    <see cref="ModPickerCatalog"/> on this head.
     ///  - Install, uninstall, activate and export go through the head's <c>App.Mods</c>
-    ///    (Core ModService), exactly as WPF. Catalogue sharing is still a stub (no catalogue client).
+    ///    (Core ModService), exactly as WPF. Share-to-catalogue goes through MainShellWindow.ModCatalogue (Core ModCatalogueAsset).
     ///  - <c>Visibility</c> -> <c>IsVisible</c>; <c>DragMove()</c> -> <c>BeginMoveDrag(e)</c>;
     ///    <c>ColorConverter.ConvertFromString</c> -> <c>Color.Parse</c>;
     ///    <c>BitmapImage</c> -> <c>Bitmap</c> (<c>DecodePixelWidth</c> becomes
@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             this.FindControl<Button>("BtnCreate")!.Click += (_, _) => BtnCreate_Click();
             _btnDownloadPack.Click += (_, _) => _ = BtnDownloadPack_Click();
             _btnActivate.Click += (_, _) => BtnActivate_Click();
-            _btnShare.Click += (_, _) => BtnShare_Click();
+            _btnShare.Click += (_, _) => ShareTask = BtnShare_Click();
             _btnTubeFit.Click += (_, _) => BtnTubeFit_Click();
             _btnUninstall.Click += (_, _) => BtnUninstall_Click();
             _btnInstall.Click += (_, _) => BtnInstall_Click();
@@ -445,8 +445,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // Can't uninstall built-in mods or active mod
             _btnUninstall.IsVisible = !mod.IsBuiltIn && !isActive;
 
-            // ponytail: Share needs the catalogue client (not ported); hidden rather than a dead button.
-            _btnShare.IsVisible = false;
+            // WPF ModManagerDialog.xaml.cs:459: custom installed mods can share their creator-hosted archive.
+            _btnShare.IsVisible = !mod.IsBuiltIn && !string.IsNullOrEmpty(mod.InstalledPath);
 
             // Built-in mods whose media still has to come down off the release.
             UpdatePackPanel(mod);
@@ -557,12 +557,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             return cut > 0 ? relative[..cut] : "root";
         }
 
-        private void BtnShare_Click()
-        {
-            if (_selectedMod == null) return;
+        /// <summary>The share started by the last click, so tests await it instead of polling.</summary>
+        internal Task? ShareTask { get; private set; }
 
-            // ponytail: needs MainWindow.ShareModToCatalogueAsync (catalogue client), wired when it
-            // moves to Core. WPF disabled the button for the upload and refreshed the status badge.
+        private async Task BtnShare_Click()
+        {
+            if (_selectedMod == null || Owner is not MainShellWindow shell) return;
+            _btnShare.IsEnabled = false;
+            try
+            {
+                await shell.ShareModToCatalogueAsync(_selectedMod, this);
+                RefreshModList();
+            }
+            finally { _btnShare.IsEnabled = true; }
         }
 
         private void BtnActivate_Click()

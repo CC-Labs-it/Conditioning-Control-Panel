@@ -256,7 +256,7 @@ export const CHESHIRE = {
         text: 'Ooh. The glittery one, quick. QUICK. That’s real gold, banked on the spot.',
         covers: ['bubble:golden'] },
       { at: { progress: 0.62 }, mode: 'say', id: 'r210', pose: 'base', mood: 'practical, toys', prop: 'cards',
-        text: 'Cards drift through the tube now. Grab one as you pass and it’s yours. Toys dock at the bottom of your view... press their key when you want them.' },
+        text: 'Cards drift through the tube now. Grab one as you pass and it’s yours. Toys dock at the bottom of your view.' },
       { at: { progress: 0.78 }, mode: 'say', id: 'r211', pose: 'curled', mood: 'told-you-so, velvet',
         text: 'Deeper now than you’ve ever been. Notice how it pays down here? [whispers] Told you.' },
       { at: { progress: 0.92 }, mode: 'say', id: 'r212', pose: 'lean_fwd', mood: 'closing stretch, coaxing',
