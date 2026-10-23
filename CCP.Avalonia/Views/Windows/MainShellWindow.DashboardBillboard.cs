@@ -67,9 +67,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             slot.Children.Clear();
             slot.Children.Add(cardHost);
             _billboardHost = cardHost;
-            if (Dash is { } dash) dash.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) SyncFeaturedPoll(); };
-            Opened += (_, _) => SyncFeaturedPoll();
-            PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) SyncFeaturedPoll(); };
+            // Methods, not lambdas, for the same reason as Closed above (ShellMemoryTests).
+            if (Dash is { } dash) dash.PropertyChanged += OnFeaturedPollProperty;
+            Opened += OnFeaturedPollOpened;
+            PropertyChanged += OnFeaturedPollProperty;
             cardHost.Begin();
             SyncFeaturedPoll();
         }
@@ -112,6 +113,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             foreach (var p in providers)
                 p.Changed += (_, _) => Dispatcher.UIThread.Post(() => Shell()?._billboardHost?.MarkDirty());
             return providers;
+        }
+
+        private void OnFeaturedPollOpened(object? sender, EventArgs e) => SyncFeaturedPoll();
+
+        private void OnFeaturedPollProperty(object? sender, global::Avalonia.AvaloniaPropertyChangedEventArgs e)
+        {
+            if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) SyncFeaturedPoll();
         }
 
         private void SyncFeaturedPoll() => Platform.PbpFeaturedFeed.SetActive(

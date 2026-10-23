@@ -74,11 +74,15 @@ public sealed class PbpFeaturedTests
             shell.ShowTab("settings");
             Dispatcher.UIThread.RunJobs();
             Assert.True(PbpFeaturedFeed.Active);
-            var provider = new FeaturedProvider(id => Assert.Equal(Match, id));
+            string? watched = null;
+            var provider = new FeaturedProvider(id => watched = id);
             var card = Assert.Single(provider.Current(new BillboardContext(BillboardTier.Free, DateTime.UtcNow, DateTime.Now)));
             Assert.Equal("Ann vs Bo", card.Title);
             provider.Invoke(card.Action.Target);
-            shell.WatchFeatured(Match);
+            Assert.Equal(Match, watched);
+            // The real path: the deck card's button -> RunBillboardAction -> provider -> WatchFeatured (signed out: login).
+            Assert.Equal(FeaturedCards.CardId, shell.BillboardHost.CurrentCard!.Spec.Id);
+            shell.BillboardHost.Cta.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Single(shell.OwnedWindows.OfType<LoginDialog>()).Close(false);
             shell.WindowState = WindowState.Minimized;
@@ -86,6 +90,17 @@ public sealed class PbpFeaturedTests
             shell.WindowState = WindowState.Normal;
             Assert.True(PbpFeaturedFeed.Active);
             Assert.Equal(1, asks); // a quick return does not ask early
+            // The match ends: Changed -> MarkDirty, and the next card change drops the featured card.
+            PbpFeaturedFeed.Fetch = _ => { asks++; return Task.FromResult((200, (string?)"{\"match\":null}")); };
+            typeof(PbpFeaturedFeed).GetField("_lastAskUtc", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+                .SetValue(null, DateTime.MinValue);
+            shell.WindowState = WindowState.Minimized;
+            shell.WindowState = WindowState.Normal;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, asks);
+            Assert.True(shell.BillboardHost.Deck.IsDirty);
+            shell.BillboardHost.Advance();
+            Assert.DoesNotContain(shell.BillboardHost.Deck.Cards, c => c.Spec.Id == FeaturedCards.CardId);
             shell.Close();
             Assert.False(PbpFeaturedFeed.Active);
             provider.Detach();
