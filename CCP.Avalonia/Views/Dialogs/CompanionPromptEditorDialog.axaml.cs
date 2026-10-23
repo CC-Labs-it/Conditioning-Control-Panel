@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///    <c>StringConverters.IsNotNullOrEmpty</c> on <c>IsVisible</c>.
     ///  - Settings load and save for real against <see cref="CoreSettings"/>, knowledge links
     ///    included, and every flagged field is recorded through <see cref="CoreModerationLog"/>.
-    ///    The community-prompt lookup is the one stub left (see <c>UpdateActivePromptBadge</c>).
+    ///    Installed community prompts are read through the same Core loader as WPF.
     ///  - <c>PromptValidator</c> lives in Core and runs for real on Save.
     ///  - <c>MessageBox.Show</c> becomes this head's <see cref="MessageDialog"/>, which is awaited,
     ///    so Remove / Reset All / Cancel are async void. The X button's three-way
@@ -166,11 +166,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             if (!string.IsNullOrEmpty(settings.ActiveCommunityPromptId))
             {
-                // ponytail: a community prompt IS active, but its display name needs
-                // ConditioningControlPanel/Services/Companion/CommunityPromptService.GetInstalledPrompt,
-                // which is head-only. Painting "unknown prompt" here would be an invented answer -
-                // WPF says that only when the lookup MISSES - so the badge keeps its XAML default
-                // until the service crosses.
+                var prompt = InstalledCommunityPrompts.Load(
+                    System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName),
+                    settings.ActiveCommunityPromptId, settings.ActiveCommunityPromptId);
+                if (prompt != null)
+                {
+                    // A community name is literal text, not a localization key. Remove the
+                    // XAML binding so a language change cannot replace it with "Default".
+                    txt.ClearValue(TextBlock.TextProperty);
+                    txt.Text = prompt.Name;
+                    txt.Foreground = new SolidColorBrush(Color.FromRgb(147, 112, 219));
+                }
+                else
+                {
+                    BindLoc(txt, "label_unknown_prompt");
+                    txt.Foreground = new SolidColorBrush(Color.FromRgb(255, 107, 107));
+                }
                 return;
             }
 
