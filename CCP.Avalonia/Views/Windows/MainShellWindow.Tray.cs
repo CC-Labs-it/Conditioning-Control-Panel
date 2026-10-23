@@ -135,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 && TrayHostPresent())
             {
                 e.Cancel = true;
+                Platform.StartupLadder.Hold();   // hidden time does not spend a startup modal's budget
                 Hide();
                 HideAvatarTube();
                 if (!_shownFirstMinimizeNotification)

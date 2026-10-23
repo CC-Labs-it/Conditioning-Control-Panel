@@ -83,8 +83,8 @@ public sealed class AppUpdaterTests
                 Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", "http://127.0.0.1:9/api");
                 Assert.Equal("http://127.0.0.1:9/api", AppUpdater.ApiBase());
 
-                StartupLadder.ResetForTests();
-                StartupLadder.Time = TimeProvider.System;
+                StartupLadder.ResetForTests();   // stepped ladder clock (P08)
+                var clock = (StartupLadder.TestClock)StartupLadder.Time;
                 AppUpdater.Handler = feed;
                 AppUpdater.OpenUrl = (_, url) => { opened = url; return Task.CompletedTask; };
                 CoreReleaseContent.AppVersionProvider = () => "6.11.3";
@@ -101,7 +101,8 @@ public sealed class AppUpdaterTests
                 await Task.Delay(1500);
                 Assert.Null(AppUpdater.OpenDialog);   // waits behind the age gate
                 CoreSettings.Current.HasAcceptedAgeVerification = true;
-                for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++) await Task.Delay(50);
+                for (var i = 0; i < 100 && AppUpdater.OpenDialog is null; i++)
+                { clock.Advance(TimeSpan.FromMilliseconds(250)); await Task.Delay(50); }
                 var dialog = AppUpdater.OpenDialog;
                 Assert.NotNull(dialog);   // offered once at startup, as WPF App.xaml.cs:4903
                 Assert.Equal(Loc.Get("btn_download_installer_manually"),

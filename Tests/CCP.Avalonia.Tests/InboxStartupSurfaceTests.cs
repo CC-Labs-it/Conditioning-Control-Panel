@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -71,6 +72,44 @@ public sealed class InboxStartupSurfaceTests
         shell.CheckIntakePassNudge(); Assert.Empty(StartupLadder.Inbox.Items);
     });
 
+    [Fact]
+    public Task NudgeRowDrawsTheFluentTicket() => Run(shell =>
+    {
+        StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromMinutes(10));
+        shell.CheckIntakePassNudge();
+        var host = new Window { Content = new ConditioningControlPanel.Avalonia.Views.Controls.InboxFlyout() };
+        try
+        {
+            host.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.Contains(host.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(),
+                g => g.Kind == FluentIcons.Common.Symbol.TicketDiagonal);
+        }
+        finally { host.Close(); }
+    });
+
+    [Fact]
+    public Task TrayHiddenShellParksAStartupModalUntilShown() => Run(shell =>
+    {
+        shell.Show(); shell.CreateTray(); shell.TrayHostPresent = () => true;
+        try
+        {
+            shell.Close(); // X goes to the tray
+            Assert.False(shell.IsVisible);
+            bool shown = false, abandoned = false;
+            StartupLadder.EnqueueModal("tray-wait", 10, _ => { shown = true; return Task.CompletedTask; }, () => abandoned = true);
+            Dispatcher.UIThread.RunJobs();
+            var clock = (StartupLadder.TestClock)StartupLadder.Time;
+            clock.Advance(TimeSpan.FromMinutes(6)); Dispatcher.UIThread.RunJobs();
+            Assert.False(abandoned);
+            Assert.False(shown);
+            shell.ShowFromTray();
+            clock.Advance(TimeSpan.FromMilliseconds(500)); Dispatcher.UIThread.RunJobs();
+            Assert.True(shown);
+            Assert.False(abandoned);
+        }
+        finally { shell.TrayHostPresent = () => false; shell.Tray?.Dispose(); }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -95,6 +134,7 @@ public sealed class InboxStartupSurfaceTests
         StartupLadder.Inbox.Open(Assert.Single(StartupLadder.Inbox.Items));
         var popup = shell.OwnedWindows.OfType<AnnouncementPopup>().Single();
         popup.FindControl<Button>("BtnDownload")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs(); // the popup posts its action behind the fade (Background)
         Assert.True(shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.GradedIntakeTabView>("GradedIntakeTab")!.IsVisible);
         Assert.Equal("server-slot", CoreSettings.Current.DismissedAnnouncementId);
         Assert.Equal(IntakePassService.CurrentWeekKey(), CoreSettings.Current.IntakeNudgeDismissedWeek);

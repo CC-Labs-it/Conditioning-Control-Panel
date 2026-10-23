@@ -20,7 +20,12 @@ internal static partial class StartupLadder
     private static int _generation;
     internal static Func<Window?> ModalOwner = () => MainShellWindow.Current;
     internal static Func<bool> WindowReady = () => ModalOwner() is { IsVisible: true };
-    internal static void Attach(MainShellWindow owner) => ModalOwner = () => owner;
+    // Weak: a static strong capture kept the last closed shell alive (ShellMemoryTests).
+    internal static void Attach(MainShellWindow owner)
+    {
+        var weak = new WeakReference<MainShellWindow>(owner);
+        ModalOwner = () => weak.TryGetTarget(out var shell) ? shell : null;
+    }
     public static bool IsModalUp => _modalUp;
     public static bool IsLadderIdle => !_pumpRunning && !_modalUp && Queue.IsEmpty;
     public static event Action? Drained;
@@ -114,7 +119,9 @@ internal static partial class StartupLadder
         _modalTimer = null;
         Queue.Clear();
         Shows.Clear();
-        _pumpRunning = _modalUp = MainShellWindow.IsStartupDialogShowing = false;
+        // Only clear the shell flag the ladder itself raised: tests set it to stand in for a wizard.
+        if (_modalUp) MainShellWindow.IsStartupDialogShowing = false;
+        _pumpRunning = _modalUp = false;
         Drained = null;
         ModalOwner = () => MainShellWindow.Current;
         WindowReady = () => ModalOwner() is { IsVisible: true };

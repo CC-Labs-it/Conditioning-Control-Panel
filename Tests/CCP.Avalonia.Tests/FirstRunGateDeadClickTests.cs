@@ -111,6 +111,9 @@ public sealed class FirstRunGateDeadClickTests
         var deadline = System.DateTime.UtcNow.AddSeconds(5);
         while (!condition() && System.DateTime.UtcNow < deadline)
         {
+            // The age gate and wizard wait on the startup ladder's stepped clock (750 ms settle).
+            (ConditioningControlPanel.Avalonia.Platform.StartupLadder.Time as ConditioningControlPanel.Avalonia.Platform.StartupLadder.TestClock)
+                ?.Advance(System.TimeSpan.FromMilliseconds(250));
             Dispatcher.UIThread.RunJobs();
             await Task.Delay(20);
         }
@@ -123,6 +126,7 @@ public sealed class FirstRunGateDeadClickTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         MainShellWindow? shell = null;
@@ -139,6 +143,7 @@ public sealed class FirstRunGateDeadClickTests
             foreach (var w in shell?.OwnedWindows.ToList() ?? new()) w.Close();
             shell?.RequestExit();
             Dispatcher.UIThread.RunJobs();
+            ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
             service.SaveImmediate();   // cancels the 500ms debounce so it cannot land in a later test's file
             CoreSettings.ServiceProvider = null;
         }

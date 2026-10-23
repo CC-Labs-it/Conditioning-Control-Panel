@@ -955,7 +955,7 @@ namespace ConditioningControlPanel.Avalonia
                     // Only with a tray host to come back through; without one the window stays up.
                     if (!panelHidden && Settings.Current.StartMinimized && shell.TrayHostPresent())
                     {
-                        void ToTray(object? s, EventArgs e) { shell.Opened -= ToTray; shell.Hide(); }
+                        void ToTray(object? s, EventArgs e) { shell.Opened -= ToTray; Platform.StartupLadder.Hold(); shell.Hide(); }
                         shell.Opened += ToTray;
                     }
                 }

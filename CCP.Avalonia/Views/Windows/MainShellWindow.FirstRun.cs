@@ -71,13 +71,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnAgeGateShellOpened(object? sender, EventArgs e)
         {
             Opened -= OnAgeGateShellOpened;
-            Platform.StartupLadder.EnqueueModal("age-gate", 5, async _ =>
-            {
-                var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
-                if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
-                CoreSettings.Current.HasAcceptedAgeVerification = true;
-                CoreSettings.Save();
-            }, () => ExitWithoutBill());
+            // WPF App.xaml.cs:3992: an abandoned slot asks the gate anyway, it never exits on its own.
+            Platform.StartupLadder.EnqueueModal("age-gate", 5, _ => AskAgeGate(),
+                () => Dispatcher.UIThread.Post(() => _ = AskAgeGate(), DispatcherPriority.Normal));
+        }
+
+        private async Task AskAgeGate()
+        {
+            var ok = IsVisible && await Dialogs.MessageDialog.ConfirmAsync(this, "Age Verification", AgeGateBody, defaultToCancel: true);
+            if (!ok) { ExitWithoutBill(); return; }   // WPF App.xaml.cs:3835 Shutdown, no bill
+            CoreSettings.Current.HasAcceptedAgeVerification = true;
+            CoreSettings.Save();
         }
 
         /// <summary>Test seam: stands in for <see cref="WelcomeShow.FirstShowService.Open"/>.</summary>
