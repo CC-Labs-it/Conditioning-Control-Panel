@@ -401,6 +401,8 @@ public sealed class GameWindowTests
             Setting("PanicKeyEnabled", false);   // the page cannot change an arbitrary preference
             Assert.Equal(panicEnabled, s.PanicKeyEnabled);
             Assert.Equal((false, false, "more"), (s.PbpLetPeopleWatch, s.PbpWatchEffects, s.PbpWatchAmount));
+            Assert.True(CoreSettings.Service!.HasPendingSave);   // asked to persist; Save() debounces 500 ms
+            CoreSettings.Service.SaveImmediate();
             var persisted = new SettingsService().Current;
             Assert.Equal((false, false, "more"),
                 (persisted.PbpLetPeopleWatch, persisted.PbpWatchEffects, persisted.PbpWatchAmount));
