@@ -738,7 +738,7 @@ public sealed partial class FriendsDrawer : Border
                 copied.Text = Loc.Get("friends_copied");
                 copied.Foreground = Mint;
                 _copyReset?.Dispose();
-                _copyReset = DispatcherTimer.RunOnce(() => { copied.Text = Loc.Get("friends_my_code"); copied.Foreground = Dim; }, TimeSpan.FromSeconds(2));
+                _copyReset = After(() => { copied.Text = Loc.Get("friends_my_code"); copied.Foreground = Dim; }, TimeSpan.FromSeconds(2));
                 Pop(copy, Lilac);
             };
             var mine = new StackPanel { Orientation = Orientation.Horizontal, Children = { Tagged(Label(code, 12, Lilac, Mono, FontWeight.SemiBold), "friends-my-code"), copy } };
@@ -770,13 +770,15 @@ public sealed partial class FriendsDrawer : Border
     }
 
 
+    /// <summary>One-shot UI timer for the copy reset and result holds; tests swap it to step time (P08).</summary>
+    internal Func<Action, TimeSpan, IDisposable> After { get; set; } = (a, t) => DispatcherTimer.RunOnce(a, t);
     private readonly Dictionary<string, IDisposable> _resultTimers = new();
     private void ShowTimed(string rowId, string text, bool good)
     {
         if (_resultTimers.Remove(rowId, out var previous)) previous.Dispose();
         _results[rowId] = (text, good);
         Render();
-        _resultTimers[rowId] = DispatcherTimer.RunOnce(() => { _resultTimers.Remove(rowId); if (_results.Remove(rowId)) Render(); },
+        _resultTimers[rowId] = After(() => { _resultTimers.Remove(rowId); if (_results.Remove(rowId)) Render(); },
             TimeSpan.FromSeconds(FriendsDrawerRules.ResultHoldSeconds));
     }
     /// <summary>The window a word outside the drawer flies over. The drawer lives in a popup (not a Window) and is

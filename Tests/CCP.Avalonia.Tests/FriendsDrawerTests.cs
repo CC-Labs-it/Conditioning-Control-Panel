@@ -72,6 +72,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task TheCardsPickersSendAPokeAWatchAndAnInvite() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         var (svc, wire) = Service();
         var d = new FriendsRailChip(svc).Drawer;
         await svc.RefreshAsync();
@@ -139,6 +140,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task ASendAnsweredAfterTheDrawerFoldsFliesOverTheChipsWindow() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         if (global::Avalonia.Application.Current is null)
             global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
@@ -231,6 +233,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task TheDrawerListsFriendsRequestsAndBlockedAndTheChipCountsOnline() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         var (svc, _) = Service();
         var chip = new FriendsRailChip(svc);
         await svc.RefreshAsync();
@@ -249,6 +252,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task TheDrawerWearsPlatesTheLockDayAndTheBellAndPlaysItsCues() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         if (global::Avalonia.Application.Current is null)   // the plates decode the launcher art (P45)
             global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
@@ -298,6 +302,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task AClickInsideTheDrawerKeepsItOpen() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
@@ -331,6 +336,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task BlockAsksFirstAndAcceptAndUnblockGoToTheWire() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         var (svc, wire) = Service();
         var d = new FriendsDrawer(svc);
         await svc.RefreshAsync();
@@ -349,6 +355,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task RemoveAsksFirstAndReportGoesToTheWire() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         var (svc, wire) = Service();
         var d = new FriendsDrawer(svc);
         await svc.RefreshAsync();
@@ -368,6 +375,7 @@ public sealed partial class FriendsDrawerTests
     [InlineData(false)]
     public Task TheFriendsPageAsksOnceAndRespectsBothAnswers(bool share) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         var (svc, _) = Service();
         var previousAsked = PresenceAsk.Asked;
         var previousMark = PresenceAsk.MarkAsked;
@@ -410,6 +418,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task ThePresenceSwitchFlipsSharingAndAnswersTheAsk() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         var (svc, _) = Service();
         var marked = 0;
         var before = PresenceAsk.MarkAsked;
@@ -428,6 +437,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task SignedOutShowsTheSignInButtonAndNoCode() => AvaloniaTestDispatcher.RunAsync(() =>
     {
+        JuiceApp();
         var d = new FriendsDrawer(Service(account: null).Svc);
         Assert.NotNull(Tagged<Button>(d, "friends-sign-in"));
         Assert.Null(Tagged<TextBlock>(d, "friends-my-code"));
@@ -439,6 +449,7 @@ public sealed partial class FriendsDrawerTests
     [Fact]
     public Task RemovingAFriendThrowsAFloatingWordOverTheWindowThatClosesItself() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         if (global::Avalonia.Application.Current is null)
             global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
@@ -492,6 +503,7 @@ public sealed partial class FriendsDrawerTests
     [InlineData(false)]
     public Task TheAddBoxOffersSubscribersTheInviteLink(bool subscriber) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        JuiceApp();
         var (svc, _) = Service();
         var d = new FriendsRailChip(svc).Drawer;
         await svc.RefreshAsync();

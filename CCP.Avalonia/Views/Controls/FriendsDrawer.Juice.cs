@@ -190,7 +190,7 @@ public sealed partial class FriendsDrawer
         row.Child = host;
         row.PointerEntered += (_, _) =>
         {
-            if (!open) row.Background = ButtonHover;
+            if (!open) row.Background = RowHover;
             if (Amount <= 0 || !_isOpen || _juiceParked) return;
             var slide = new TranslateTransform(-90, 0);
             var band = new Rectangle
@@ -228,6 +228,8 @@ public sealed partial class FriendsDrawer
         double k = Amount;
         if (k <= 0 || !_isOpen || _juiceParked) return;
         var scale = new ScaleTransform(1, 1);
+        // Fluent's Button theme eases RenderTransform (TransformOperationsTransition), which would swallow the pop.
+        from.Transitions = null;
         from.RenderTransformOrigin = RelativePoint.Center;
         from.RenderTransform = scale;
         Tween(from, 380, p => scale.ScaleX = scale.ScaleY = p < 110.0 / 380

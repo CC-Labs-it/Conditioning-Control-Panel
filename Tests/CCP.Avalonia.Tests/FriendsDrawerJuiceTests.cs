@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -28,6 +29,7 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class FriendsDrawerTests
 {
+    // Every drawer test: request rows measure their pills, which needs a font manager whatever test ran first.
     private static void JuiceApp()
     {
         if (Application.Current == null)
@@ -112,6 +114,7 @@ public sealed partial class FriendsDrawerTests
             {
                 var row = Tagged<Border>(d, tag)!;
                 row.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, row, null!, row, default, 0, default, default));
+                Assert.Equal(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF), Assert.IsType<SolidColorBrush>(row.Background).Color);
                 var sheen = Tagged<Rectangle>(row, "friends-sheen");
                 Assert.NotNull(sheen);
                 Step(d, 260);
@@ -258,7 +261,7 @@ public sealed partial class FriendsDrawerTests
         var (svc, wire) = Service();
         wire.HoldSends = new TaskCompletionSource();
         await svc.RefreshAsync();
-        var d = new FriendsTabView(svc).Drawer;
+        var d = new FriendsDrawer(svc);
         var host = new Window { Content = d, Width = 800, Height = 700 };
         try
         {
@@ -297,6 +300,8 @@ public sealed partial class FriendsDrawerTests
         var (svc, _) = Service();
         await svc.RefreshAsync();
         var d = new FriendsDrawer(svc);
+        var timers = new StepTimers();
+        d.After = timers.After;
         var host = new Window { Content = d, Width = 500, Height = 650 };
         try
         {
@@ -306,7 +311,9 @@ public sealed partial class FriendsDrawerTests
             await Until(() => label.Text == Loc.Get("friends_copied"));
             Assert.Equal(Loc.Get("friends_copied"), label.Text);
             Assert.NotEmpty(Tagged<Canvas>(d, "friends-fx")!.Children);
-            await Task.Delay(2200, TestContext.Current.CancellationToken);
+            timers.Step(1900);
+            Assert.Equal(Loc.Get("friends_copied"), label.Text);
+            timers.Step(200);
             Assert.Equal(Loc.Get("friends_my_code"), label.Text);
         }
         finally { d.OnClosed(); host.Close(); CoreSettings.Current.MotionLevel = motion; }
@@ -347,15 +354,36 @@ public sealed partial class FriendsDrawerTests
         await svc.RefreshAsync();
         wire.MutationBody = """{"ok":false,"reason":"try_later"}""";
         var d = new FriendsDrawer(svc);
+        var timers = new StepTimers();
+        d.After = timers.After;
         var request = svc.Snapshot.Incoming[0];
         await d.AnswerRequestAsync(request, "accept");
-        await Task.Delay(3000, TestContext.Current.CancellationToken);
+        timers.Step(3000);
         await d.AnswerRequestAsync(request, "accept");
-        await Task.Delay(2300, TestContext.Current.CancellationToken);
+        timers.Step(2300);
         Assert.NotNull(Tagged<TextBlock>(d, "friends-result"));
-        await Task.Delay(3000, TestContext.Current.CancellationToken);
+        timers.Step(3000);
         Assert.Null(Tagged<TextBlock>(d, "friends-result"));
     });
+
+    /// <summary>Stepped one-shot timers for FriendsDrawer.After (P08: no real waits).</summary>
+    private sealed class StepTimers
+    {
+        private readonly List<(TimeSpan Due, Action Fire, bool[] Dead)> _queue = new();
+        private TimeSpan _now;
+        public IDisposable After(Action fire, TimeSpan delay)
+        {
+            var dead = new bool[1];
+            _queue.Add((_now + delay, fire, dead));
+            return new Off(dead);
+        }
+        public void Step(double ms)
+        {
+            _now += TimeSpan.FromMilliseconds(ms);
+            foreach (var t in _queue.Where(t => t.Due <= _now && !t.Dead[0]).ToList()) { t.Dead[0] = true; t.Fire(); }
+        }
+        private sealed class Off(bool[] dead) : IDisposable { public void Dispose() => dead[0] = true; }
+    }
 
     [Fact]
     public Task FriendsGermanRequestPillsLeaveRoomForTheAge() => AvaloniaTestDispatcher.RunAsync(async () =>
