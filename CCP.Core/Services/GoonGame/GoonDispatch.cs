@@ -12,12 +12,24 @@ namespace ConditioningControlPanel.Services.GoonGame
     /// harness) <see cref="CoreDispatch.Post"/> runs inline, which keeps ordering and is what
     /// makes the loopback transport usable from a plain test harness. A callback that throws is
     /// logged, never allowed to reach the dispatcher's unhandled-exception path.
+    ///
+    /// A dispatcher that has begun shutting down drops the callback (a queued BeginInvoke on a
+    /// dying dispatcher is a classic shutdown crash in this codebase); the head says so through
+    /// <see cref="ShutdownStarted"/>.
     /// </summary>
     internal static class GoonDispatch
     {
+        /// <summary>True once the head's UI thread is shutting down. Unseeded = never.</summary>
+        public static volatile Func<bool>? ShutdownStarted;
+
+        public static bool ShuttingDown
+        {
+            get { try { return ShutdownStarted?.Invoke() == true; } catch { return true; } }
+        }
+
         public static void Post(Action action)
         {
-            if (action == null) return;
+            if (action == null || ShuttingDown) return;
             CoreDispatch.Post(() =>
             {
                 try { action(); }

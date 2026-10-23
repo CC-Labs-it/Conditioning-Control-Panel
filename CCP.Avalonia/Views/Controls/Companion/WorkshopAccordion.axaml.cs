@@ -1,4 +1,5 @@
 using System;
+using Avalonia.LogicalTree;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Companion;
 using Avalonia.Controls;
@@ -45,9 +46,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 try
                 {
-                    // The hero follows through its own CompanionCore.Switched hook (WPF SyncHero).
-                    CompanionCore.SwitchCompanion((CompanionId)index);
-                    // ponytail: the tube's SwitchToCompanionAvatar still needs its head port.
+                    // One switch owner: the shell also refreshes the room and the tube avatar set.
+                    if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow shell &&
+                        this.FindLogicalAncestorOfType<CompanionRoomView>() is { } room)
+                        shell.SwitchCompanionFromRoster(index, room);
+                    else
+                        // Standalone drawer hosts still switch through Core; hero/roster hooks
+                        // follow Core switches and level-ups independently of the shell.
+                        CompanionCore.SwitchCompanion((CompanionId)index);
                 }
                 catch (Exception ex) { Log.Warning(ex, "Workshop: companion switch failed"); }
             };
