@@ -35,6 +35,17 @@ internal static class Win32Overlay
     private const uint LwaAlpha = 2;
     private const uint SwpNoSize = 0x1, SwpNoMove = 0x2, SwpNoActivate = 0x10;
 
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    // WPF MainWindow.Launcher.cs: DWM cloak, set before Show, composes no panel/chrome at boot.
+    internal static bool SetBootCloak(IntPtr hwnd, bool cloaked)
+    {
+        if (!OperatingSystem.IsWindows() || hwnd == IntPtr.Zero) return false;
+        int value = cloaked ? 1 : 0;
+        return DwmSetWindowAttribute(hwnd, 13 /* DWMWA_CLOAK */, ref value, sizeof(int)) == 0;
+    }
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] internal static extern uint GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongW")] private static extern uint SetWindowLong(IntPtr hwnd, int index, uint value);
     [DllImport("user32.dll")] private static extern bool GetLayeredWindowAttributes(IntPtr hwnd, out uint colorKey, out byte alpha, out uint flags);

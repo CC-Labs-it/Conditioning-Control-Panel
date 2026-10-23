@@ -10,6 +10,8 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Startup;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -30,6 +32,7 @@ public sealed class LauncherWindowTests
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
+            StartupLadder.ResetForTests();
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             // A welcomed, 18+-accepted install: the age gate would exit a panel it finds hidden.
@@ -53,6 +56,7 @@ public sealed class LauncherWindowTests
                 (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (oldIn, oldLab);
                 shell.Close();
                 CoreSettings.ServiceProvider = null;
+                StartupLadder.ResetForTests();
             }
         });
     }
@@ -402,6 +406,117 @@ public sealed class LauncherWindowTests
     });
 
     // ---- slice 2: boot surface, second-instance handoff, tray row, skip box
+
+    [Fact]
+    public void BootIsQuiet_AndTheLauncherDoorSharesTheOneTimeTrayNotice() => Run(shell =>
+    {
+        var oldSink = OsNotifications.Sink;
+        var notices = new System.Collections.Generic.List<string>();
+        OsNotifications.Sink = (_, body) => notices.Add(body);
+        try
+        {
+            LauncherWindow.Boot = BootDecision.LauncherFirst;
+            LauncherWindow.RouteBoot(shell);
+            Assert.Empty(notices);
+            LauncherWindow.Instance!.OpenPanel();
+            LauncherWindow.BackToLauncher(shell);
+            Assert.Equal(new[] { Loc.Get("tray_balloon_body") }, notices);
+            LauncherWindow.Instance!.OpenPanel();
+            LauncherWindow.BackToLauncher(shell);
+            Assert.Single(notices);
+        }
+        finally { OsNotifications.Sink = oldSink; }
+    }, pumpUntilIdle: false);
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HiddenBoot_CloaksBeforeOpenedWork_AndRestoresOnlyAfterTucking(bool chrome) => Run(_ =>
+    {
+        LauncherWindow.Boot = BootDecision.LauncherFirst;
+        var panel = new MainShellWindow { ShowActivated = chrome, ShowInTaskbar = chrome };
+        var calls = new System.Collections.Generic.List<bool>();
+        bool opened = false;
+        panel.Opened += (_, _) =>
+        {
+            opened = true;
+            Assert.True(panel.BuildingHiddenForBoot);
+            Assert.True(StartupLadder.Held);
+            Assert.False(panel.ShowActivated);
+            Assert.False(panel.ShowInTaskbar);
+            Assert.Equal(new[] { true }, calls);
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "opened-card", Open = () => Assert.Fail("card escaped the hold") });
+        };
+        try
+        {
+            panel.PrepareLauncherBoot(on =>
+            {
+                if (on) Assert.False(panel.IsVisible);
+                else
+                {
+                    Assert.True(opened);
+                    Assert.False(panel.IsVisible); // restore the native shape only after Hide
+                    Assert.False(panel.BuildingHiddenForBoot);
+                    Assert.Equal(chrome, panel.ShowActivated);
+                    Assert.Equal(chrome, panel.ShowInTaskbar);
+                }
+                calls.Add(on);
+            });
+            Assert.True(StartupLadder.Held); // before Show, not just in the routing callback
+            panel.Show();
+            Assert.Equal(new[] { true, false }, calls);
+            Assert.False(panel.IsVisible);
+            Assert.True(LauncherWindow.Instance!.IsVisible);
+            Assert.Contains(StartupLadder.Inbox.Items, i => i.Key == "opened-card");
+        }
+        finally { panel.Close(); }
+    }, pumpUntilIdle: false);
+
+    [Fact]
+    public void LockdownStartingDuringBoot_KeepsThePanelUpAndReleasesTheHold() => Run(_ =>
+    {
+        LauncherWindow.Boot = BootDecision.LauncherFirst;
+        var panel = new MainShellWindow();
+        var ld = LockdownService.Current = new LockdownService();
+        bool cloaked = false;
+        try
+        {
+            panel.PrepareLauncherBoot(on => cloaked = on);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            panel.Show();
+            Assert.True(panel.IsVisible);
+            Assert.Null(LauncherWindow.Instance);
+            Assert.False(cloaked);
+            Assert.False(panel.BuildingHiddenForBoot);
+            Assert.True(panel.ShowActivated);
+            Assert.True(panel.ShowInTaskbar);
+            Assert.False(StartupLadder.Held);
+        }
+        finally { ld.Deactivate(); panel.Close(); }
+    }, pumpUntilIdle: false);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LauncherBoot_InboxesStartupCards_AndPanelOrTrayReleasesTheHold(bool viaTray) => Run(shell =>
+    {
+        LauncherWindow.Boot = BootDecision.LauncherFirst;
+        LauncherWindow.RouteBoot(shell);
+        int opened = 0;
+        var card = new InboxItem { Key = "boot-card", Open = () => opened++ };
+        StartupLadder.PresentOrInbox(card);
+        StartupLadder.PresentOrInbox(card);
+        Assert.True(StartupLadder.Held);
+        Assert.Equal(0, opened);
+        Assert.Single(StartupLadder.Inbox.Items, i => i.Key == card.Key);
+        if (viaTray) shell.ShowFromTray();
+        else LauncherWindow.Instance!.OpenPanel();
+        Assert.True(shell.IsVisible);
+        Assert.False(StartupLadder.Held);
+        StartupLadder.PresentOrInbox(new InboxItem { Key = "after-panel", Open = () => opened++ });
+        Assert.Equal(1, opened);
+        Assert.Contains(StartupLadder.Inbox.Items, i => i.Key == card.Key); // filed cards stay until requested
+    }, pumpUntilIdle: false);
 
     [Fact]
     public void BootIntoTheLauncher_TucksThePanel() => Run(shell =>

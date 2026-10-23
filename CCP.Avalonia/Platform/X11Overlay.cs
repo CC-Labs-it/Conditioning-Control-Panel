@@ -288,6 +288,32 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>Boot-only cloak. HWND uses WPF's DWM attribute; X11 empties the bounding
+    /// shape before map, so it also works without a compositor. Restore only after routing/hiding.</summary>
+    internal static void SetBootCloak(TopLevel window, bool cloaked)
+    {
+        try
+        {
+            if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            {
+                if (!Win32Overlay.SetBootCloak(hwnd, cloaked))
+                    Serilog.Log.Warning("[Launcher] DWM boot cloak {On} was refused", cloaked);
+                return;
+            }
+            if (!TryGetXid(window, out var xid)) return; // headless/native Wayland has no XID
+            lock (Gate)
+            {
+                if (!EnsureDisplay()) return;
+                var region = cloaked ? XFixesCreateRegion(_display, IntPtr.Zero, 0) : IntPtr.Zero;
+                try { XFixesSetWindowShapeRegion(_display, xid, 0 /* ShapeBounding */, 0, 0, region); }
+                finally { if (region != IntPtr.Zero) XFixesDestroyRegion(_display, region); }
+                // This display is a separate connection: finish before Avalonia's Show can map it.
+                XSync(_display, false);
+            }
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "[Launcher] boot cloak {On} failed", cloaked); }
+    }
+
     /// <summary>Whole-window alpha applied by the COMPOSITOR (<c>_NET_WM_WINDOW_OPACITY</c>), the X11
     /// form of a layered window's alpha. Unlike a visual Opacity it costs the app no re-render:
     /// measured on XWayland/GLX, re-rendering the overlays every fade frame stalled the UI

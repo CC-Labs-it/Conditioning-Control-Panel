@@ -96,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             WindowState = WindowState.Normal;
             Activate();
             ShowAvatarTube();
+            Platform.StartupLadder.Release();
         }
 
         /// <summary>MainWindow.Launcher.cs RequestExit: the one real exit; OnDesktopExit saves. Circe's bill
@@ -137,17 +138,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 e.Cancel = true;
                 Hide();
                 HideAvatarTube();
-                if (!_shownFirstMinimizeNotification)
-                {
-                    _shownFirstMinimizeNotification = true;
-                    Platform.OsNotifications.Show(Loc.Get("app_title"), Loc.Get("tray_balloon_body"), ShowFromTray);
-                }
+                ShowFirstMinimizeNotification();
             }
             // WPF WindowChrome.cs:180: a confirmed library delete still in its undo grace is honoured.
             if (!e.Cancel) try { CommitPendingDeeperDeletesOnExit(); } catch { }
             // WPF WindowChrome.cs:176: the Companion drawers' state, when quitting from that tab.
             if (!e.Cancel) try { PersistCompanionDrawerStatesOnExit(); } catch { }
             base.OnClosing(e);
+        }
+
+        private void ShowFirstMinimizeNotification()
+        {
+            if (_shownFirstMinimizeNotification) return;
+            _shownFirstMinimizeNotification = true;
+            Platform.OsNotifications.Show(Loc.Get("app_title"), Loc.Get("tray_balloon_body"), ShowFromTray);
         }
 
         /// <summary>Windows always has a tray; Linux has one only while a StatusNotifierWatcher owns its name.</summary>

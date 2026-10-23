@@ -157,38 +157,49 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// WPF CheckForUpdatesInBackgroundAsync (:4858): report a previous install that did not take
         /// (reads WPF's own update_attempt/update_result markers), light the pill, then offer the
         /// notification dialog once (App.xaml.cs:4903). WPF queues it last on its StartupLadder;
-        /// this head has no ladder, so it waits until the age gate is accepted and the first-run
-        /// wizard / age-gate modals are closed. A skipped version never gets here (CheckAsync).
+        /// this head waits for the launcher hold to release, the age gate to be accepted and
+        /// the first-run wizard / age-gate modals to close. A skipped version never gets here (CheckAsync).
         /// </summary>
         internal static async Task StartupAsync(MainShellWindow shell)
         {
+            bool closed = false;
+            void OnClosed(object? sender, EventArgs e) => closed = true;
+            shell.Closed += OnClosed;
             try
             {
                 await Task.Delay(500);
                 var outcome = ReleaseFeed.ConsumePendingUpdateOutcome(UserData, CoreReleaseContent.AppVersion);
                 if (outcome is { Succeeded: false })
+                {
+                    if (!await WaitForStartupPanelAsync(shell, () => closed)) return;
                     UpdateFailedDialog.ShowFor(shell, Loc.Get("title_update_failed"),
                         Loc.GetF("msg_update_install_failed", outcome.Version, CoreReleaseContent.AppVersion));
+                }
 
                 var info = await CheckAsync(force: false);
                 if (info?.IsNewer != true) return;
                 shell.ShowUpdatePill(info.Version);
 
-                var closed = false;
-                shell.Closed += (_, _) => closed = true;
-                while (!closed && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible || StartupModalOpen()))
-                    await Task.Delay(500);
-                if (!closed && !_busy) await OfferAsync(shell, info);
+                if (await WaitForStartupPanelAsync(shell, () => closed) && !_busy) await OfferAsync(shell, info);
             }
             catch (Exception ex)
             {
                 Log.Warning(ex, "Background update check failed");
             }
+            finally { shell.Closed -= OnClosed; }
+        }
+
+        private static async Task<bool> WaitForStartupPanelAsync(MainShellWindow shell, Func<bool> closed)
+        {
+            while (!closed() && (!CoreSettings.Current.HasAcceptedAgeVerification || !shell.IsVisible
+                || shell.BuildingHiddenForBoot || StartupLadder.Held || StartupModalOpen()))
+                await Task.Delay(500);
+            return !closed();
         }
 
         private static bool StartupModalOpen() =>
             (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Windows
-                .Any(w => w is FirstRunWizard or MessageDialog && w.IsVisible) == true;
+                .Any(w => w is FirstRunWizard or MessageDialog or UpdateFailedDialog && w.IsVisible) == true;
 
         /// <summary>The notification dialog: Install (Windows) / Download (elsewhere), or Later = quiet for 24h.</summary>
         private static async Task OfferAsync(Window owner, UpdateInfo info)

@@ -911,7 +911,7 @@ namespace ConditioningControlPanel.Avalonia
                     catch (Exception ex) { Serilog.Log.Error(ex, "Deferred corner-GIF restore failed"); }
                 }, DispatcherPriority.ApplicationIdle);
                 // Boot surface (WPF App.xaml.cs:3403-3419): the launcher, a game or the panel. A boot
-                // into the launcher shows the panel unactivated and off the taskbar only so its Opened
+                // into the launcher cloaks the panel, unactivated and off the taskbar, so its Opened
                 // work runs (WPF ShowHiddenForBoot), then RouteBoot tucks it away. A Lockdown in force
                 // keeps the panel up (PanelStartsHidden); any routing failure shows it.
                 try
@@ -929,20 +929,7 @@ namespace ConditioningControlPanel.Avalonia
                 Serilog.Log.Information("[Launcher] boot surface {Surface} game {GameId}, panel shown: {Shown}", boot.Surface, boot.GameId, !panelHidden);
                 if (panelHidden)
                 {
-                    bool activated = shell.ShowActivated, inTaskbar = shell.ShowInTaskbar;
-                    shell.ShowActivated = false;
-                    shell.ShowInTaskbar = false;
-                    shell.BuildingHiddenForBoot = true;
-                    void Route(object? s, EventArgs e)
-                    {
-                        shell.Opened -= Route;
-                        Views.Windows.LauncherWindow.RouteBoot(shell);
-                        // Restored only once the panel is tucked away, so it never reaches the taskbar.
-                        shell.BuildingHiddenForBoot = false;
-                        shell.ShowActivated = activated;
-                        shell.ShowInTaskbar = inTaskbar;
-                    }
-                    shell.Opened += Route;
+                    shell.PrepareLauncherBoot();
                 }
                 // Tray: restore, wake, Stop everything (the no-hotkey panic control) and the real Exit.
                 try

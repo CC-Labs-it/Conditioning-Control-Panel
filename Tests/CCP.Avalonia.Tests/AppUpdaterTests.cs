@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -12,6 +13,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -54,6 +56,63 @@ public sealed class AppUpdaterTests
             Assert.Equal(honoured, AppUpdater.ApiBase() != null);   // sandboxed: refused = no network
         }
         finally { Environment.SetEnvironmentVariable("CCP_UPDATE_API_URL", null); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedUpdateReport_WaitsForLauncherHold_AndStopsWhenPanelCloses(bool closePanel)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var service = new SettingsService();
+            var oldService = CoreSettings.ServiceProvider;
+            var oldVersion = CoreReleaseContent.AppVersionProvider;
+            CoreSettings.ServiceProvider = () => service;
+            CoreSettings.Current.Welcomed = true;
+            CoreSettings.Current.HasAcceptedAgeVerification = true;
+            CoreReleaseContent.AppVersionProvider = () => "6.11.3";
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                StartupLadder.Hold();
+                // A failed installer marker, confined to the test assembly's CCP_USERDATA_DIR.
+                File.WriteAllText(ReleaseFeed.AttemptFilePath(CorePaths.UserData), "99.0.0");
+                File.WriteAllText(ReleaseFeed.AttemptResultFilePath(CorePaths.UserData), "1");
+                var startup = AppUpdater.StartupAsync(shell);
+                await Task.Delay(800);
+                Assert.Empty(shell.OwnedWindows.OfType<UpdateFailedDialog>());
+                Assert.False(startup.IsCompleted);
+                if (closePanel) shell.Close();
+                else StartupLadder.Release();
+                for (int i = 0; i < 60 && !shell.OwnedWindows.OfType<UpdateFailedDialog>().Any() && !startup.IsCompleted; i++)
+                    await Task.Delay(50);
+                if (closePanel)
+                {
+                    Assert.True(startup.IsCompleted);
+                    Assert.Empty(shell.OwnedWindows.OfType<UpdateFailedDialog>());
+                }
+                else
+                    Assert.Single(shell.OwnedWindows.OfType<UpdateFailedDialog>());
+                foreach (var dialog in shell.OwnedWindows.ToArray()) dialog.Close();
+                shell.Close();
+                Assert.Same(startup, await Task.WhenAny(startup, Task.Delay(3000)));
+                await startup;
+            }
+            finally
+            {
+                foreach (var dialog in shell.OwnedWindows.ToArray()) dialog.Close();
+                shell.Close();
+                StartupLadder.ResetForTests();
+                CoreSettings.ServiceProvider = oldService;
+                CoreReleaseContent.AppVersionProvider = oldVersion;
+            }
+        });
     }
 
     [Fact]

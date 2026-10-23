@@ -18,13 +18,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so ModalUp /
-    /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
+    /// ponytail: no modal ladder or game-host park on this head, so ModalUp /
+    /// LadderBusy / GameHostUp stay false and Route never answers Defer; port the
     /// pump when the startup modals move onto a shared ladder.
     /// </summary>
     internal static class StartupLadder
     {
         public static StartupInbox Inbox { get; } = new();
+
+        /// <summary>WPF LauncherHost holds startup surfaces before the hidden boot show.</summary>
+        public static bool Held { get; private set; }
+        public static void Hold() => Held = true;
+        public static void Release() => Held = false;
 
         private static DateTime? _firstLaunchUntilUtc;
         private static DateTime? _lastPassiveUtc;
@@ -55,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
+            LauncherHolding = Held,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
@@ -125,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: forget the quiet window, the passive pacing, the passive windows up and every row.</summary>
         internal static void ResetForTests()
         {
+            Held = false;
             _firstLaunchUntilUtc = null;
             _lastPassiveUtc = null;
             _held.Clear();

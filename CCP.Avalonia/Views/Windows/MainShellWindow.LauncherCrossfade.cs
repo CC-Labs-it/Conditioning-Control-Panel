@@ -10,6 +10,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
 public partial class MainShellWindow
 {
+    /// <summary>WPF ShowHiddenForBoot, prepared before the lifetime calls Show. The panel's
+    /// Opened work runs under the cloak; only after routing/hiding do we restore its chrome.</summary>
+    internal void PrepareLauncherBoot(Action<bool>? cloak = null)
+    {
+        bool activated = ShowActivated, inTaskbar = ShowInTaskbar;
+        cloak ??= on => Platform.X11Overlay.SetBootCloak(this, on);
+        Platform.StartupLadder.Hold(); // before Opened: a fast startup card must not cover the launcher
+        ShowActivated = false;
+        ShowInTaskbar = false;
+        BuildingHiddenForBoot = true;
+        cloak(true);
+        void Route(object? sender, EventArgs e)
+        {
+            Opened -= Route;
+            try { LauncherWindow.RouteBoot(this); }
+            finally
+            {
+                BuildingHiddenForBoot = false;
+                ShowActivated = activated;
+                ShowInTaskbar = inTaskbar;
+                cloak(false);
+            }
+        }
+        Opened += Route;
+    }
+
+    /// <summary>WPF HideForLauncher: tuck without stopping the engine/session; boot is quiet.</summary>
+    internal void HideForLauncher(bool quiet = false)
+    {
+        if (LockdownActive) return;
+        Hide();
+        HideAvatarTube();
+        RestoreLauncherPanelOpacity();
+        if (!quiet) ShowFirstMinimizeNotification();
+    }
+
     // WPF MainWindow.Launcher.cs: the panel fades down for 180 ms, up for 260 ms.
     // Rides the window's shared 30 fps frame beat (FrameClock) only while the transition runs.
     private FrameClock _launcherFadeClock = null!;
