@@ -247,12 +247,17 @@ internal static class BackRoomHostService
     /// <summary>True once the Breakout page has said <c>ready</c>; frames posted before that are queued.</summary>
     internal static bool IsBreakoutReady => IsBreakoutActive && _host?.IsReady == true;
 
-    /// <summary>The frame that hands Breakout an Escape the panel kept as its pause. The page
-    /// listens for this exact name (shared/host-escape.js via play.html).</summary>
+    /// <summary>The room page is in front, excluding the race hosted in the same window.</summary>
+    internal static bool IsRoomInFront => IsRoomActive && !_racePage && _host?.IsForeground == true;
+
+    /// <summary>True once the room page has said <c>ready</c>; never queue a pause during boot.</summary>
+    internal static bool IsRoomReady => IsRoomActive && !_racePage && _host?.IsReady == true;
+
+    /// <summary>The frame that hands Breakout or the room an Escape the panel kept as its pause.</summary>
     internal const string KeptEscapeType = "kept-escape";
 
     /// <summary>
-    /// Hand Breakout an Escape the panel kept as its pause. The game pauses on its own keydown,
+    /// Hand the active page an Escape the panel kept as its pause. It pauses on its own keydown,
     /// which never comes while its WebView2 is out of keyboard focus; the page plays this once as
     /// its own Escape unless the real key reached it too. MainWindow asks
     /// PanicPolicy.KeptEscapeGoesTo first. The page gets the keyboard back as well, so Enter on
@@ -588,6 +593,9 @@ internal static class BackRoomHostService
             // No door endpoint exists yet: null = unknown, and the page learns `closed` from its
             // first station-request (CONTRACT section 3, 403 closed).
             open = (bool?)null,
+            // The plan list (contract C1 via PlanCatalog) for the end cards (C10): Breakout demo
+            // end, bank cash-out. A page shows a price only when this is present.
+            plans = Vault.PlanCatalog.ToWire(Vault.PlanCatalog.Current),
         };
     }
 
