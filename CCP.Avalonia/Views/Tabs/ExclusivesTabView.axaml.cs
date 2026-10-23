@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -124,6 +126,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ------------------------------------------------------------------
 
         private (ExclusiveFeature Feature, bool Shown, ExclusiveGateState State, bool FreeToday)[]? _vaultState;
+        private (ExclusiveFeature Feature, bool Shown, ExclusiveGateState State, bool FreeToday)[] _vaultProbe = new (ExclusiveFeature, bool, ExclusiveGateState, bool)[ExclusiveFeature.All.Count];
+        private ExclusiveCardRow?[] _vaultCards = new ExclusiveCardRow?[ExclusiveFeature.All.Count];
+        private ObservableCollection<object>? _vaultRows;
         private string? _vaultMod;
         private string? _vaultLanguage;
 
@@ -137,39 +142,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var mod = CoreMods.ActiveModId;
             var language = LocalizationManager.Instance.CurrentLanguage;
-            var state = ExclusiveFeature.All.Select(f =>
+            var state = _vaultProbe;
+            bool rebuild = _vaultState == null || _vaultMod != mod || _vaultLanguage != language;
+            bool changed = rebuild;
+            // Probe every door, including hidden ones, without allocating on unchanged visits.
+            for (int i = 0; i < state.Length; i++)
             {
+                var f = ExclusiveFeature.All[i];
                 var gate = f.GateState();
-                return (Feature: f, Shown: f.Shown(), State: gate, FreeToday: f.IsFreeToday(gate));
-            }).ToArray();
-            // WPF keeps its cards and caches decoded art. An unchanged visit must not replace
-            // ItemsSource: that decodes every image and re-templates the entire shelf on the UI thread.
-            // Still probe the live gates on every visit, including doors absent from the shelf.
+                state[i] = (f, f.Shown(), gate, f.IsFreeToday(gate));
+                changed |= _vaultState == null || _vaultState[i] != state[i];
+            }
             RefreshTierPlates();
-            if (_vaultState != null && _vaultMod == mod && _vaultLanguage == language
-                && _vaultState.SequenceEqual(state)) return;
+            if (!changed) return;
 
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
             var rows = new List<object>();
-            var cards = state.Where(s => s.Shown).Select(s => new ExclusiveCardRow(s.Feature, s.State, s.FreeToday));
+            if (rebuild) _vaultCards = new ExclusiveCardRow?[state.Length];
+            for (int i = 0; i < state.Length; i++)
+            {
+                var entry = state[i];
+                if (_vaultCards[i] is { } existing) existing.UpdateGate(entry.State, entry.FreeToday);
+                else if (entry.Shown || i == 0)
+                    _vaultCards[i] = new ExclusiveCardRow(entry.Feature, entry.State, entry.FreeToday);
+            }
+            var cards = state.Select((entry, i) => entry.Shown ? _vaultCards[i] : null).OfType<ExclusiveCardRow>();
             foreach (var (group, items) in Services.UI.PremiumShelfOrder.Arrange(cards, r => r.Feature.Key, r => r.Tier, r => !r.IsLocked))
             {
-                rows.Add(new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count));
+                var header = rebuild ? null : _vaultRows!.OfType<ExclusiveGroupRow>().FirstOrDefault(r => r.Group == group);
+                if (header == null) header = new ExclusiveGroupRow(group, items.Count(r => !r.IsLocked), items.Count);
+                else header.UpdateCount(items.Count(r => !r.IsLocked), items.Count);
+                rows.Add(header);
                 rows.AddRange(items);
             }
-            this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = rows;
+            if (rebuild)
+                this.FindControl<ItemsControl>("ExclusivesShelf")!.ItemsSource = _vaultRows = new ObservableCollection<object>(rows);
+            else
+            {
+                // WPF retains cards when access reorders the shelf. Move only the affected rows;
+                // replacing ItemsSource would re-template every card and decode its art again.
+                for (int i = _vaultRows!.Count - 1; i >= 0; i--)
+                    if (!rows.Contains(_vaultRows[i])) _vaultRows.RemoveAt(i);
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    int old = _vaultRows.IndexOf(rows[i]);
+                    if (old < 0) _vaultRows.Insert(i, rows[i]);
+                    else if (old != i) _vaultRows.Move(old, i);
+                }
+                foreach (var part in _fxParts) Dress(part);
+            }
 
-            var spot = new ExclusiveCardRow(state[0].Feature, state[0].State, state[0].FreeToday);
+            var spot = _vaultCards[0]!;
             this.FindControl<TextBlock>("TxtSpotArtGlyph")!.Text = spot.Art == null ? spot.Feature.Emoji : "";
             var spotArt = this.FindControl<Image>("SpotArtImage")!;
-            var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
-            spotArt.Source = banner ?? spot.Art;
-            // WPF ApplySpotlightArt: the Ken Burns zoom centres on a banner, on the focal point of card art.
-            spotArt.RenderTransformOrigin = banner != null
-                ? RelativePoint.Center
-                : new RelativePoint(spot.Feature.FocalX, spot.Feature.FocalY, RelativeUnit.Relative);
+            if (rebuild)
+            {
+                var banner = ModArt.TryLoad(ArtName(spot.Feature.BannerArtResource), 1400);
+                spotArt.Source = banner ?? spot.Art;
+                // WPF ApplySpotlightArt: banner centre, otherwise the card art's focal point.
+                spotArt.RenderTransformOrigin = banner != null
+                    ? RelativePoint.Center
+                    : new RelativePoint(spot.Feature.FocalX, spot.Feature.FocalY, RelativeUnit.Relative);
+            }
             this.FindControl<TextBlock>("TxtSpotTitle")!.Text = spot.Title;
             this.FindControl<TextBlock>("TxtSpotTagline")!.Text = spot.Tagline;
             this.FindControl<Border>("SpotBadge")!.IsVisible = spot.HasBadge;
@@ -195,6 +231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
             // Publish only after a successful repaint. ModChanged clears this even for a same-id reload.
+            _vaultProbe = _vaultState ?? new (ExclusiveFeature, bool, ExclusiveGateState, bool)[state.Length];
             (_vaultState, _vaultMod, _vaultLanguage) = (state, mod, language);
         }
 
@@ -394,7 +431,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// One shelf card: an <see cref="ExclusiveFeature"/> plus the state
     /// MainWindow.Exclusives.cs paints onto it (ApplyExclusiveCardState / VaultLivery.Apply).
     /// </summary>
-    public sealed class ExclusiveCardRow
+    public sealed class ExclusiveCardRow : INotifyPropertyChanged
     {
         public ExclusiveCardRow(ExclusiveFeature feature) : this(feature, feature.GateState()) { }
 
@@ -413,8 +450,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         public ExclusiveFeature Feature { get; }
-        public ExclusiveGateState State { get; }
-        public bool FreeToday { get; }
+        public ExclusiveGateState State { get; private set; }
+        public bool FreeToday { get; private set; }
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        internal void UpdateGate(ExclusiveGateState state, bool freeToday)
+        {
+            if (State == state && FreeToday == freeToday) return;
+            (State, FreeToday) = (state, freeToday);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+        }
         public Bitmap? Art { get; }
         public bool HasArt => Art != null;
         public bool IsAvailable => ExclusivesTabView.IsOnThisBuild(Feature.Key);
@@ -481,7 +526,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// sign (none for Free), the plan's name and one line in its colour, and "n of m yours". Commerce
     /// colours: they never follow the mod accent.
     /// </summary>
-    public sealed class ExclusiveGroupRow(Services.UI.PremiumGroup group, int open, int total)
+    public sealed class ExclusiveGroupRow(Services.UI.PremiumGroup group, int open, int total) : INotifyPropertyChanged
     {
         private static readonly Color BasicGold = Color.FromRgb(0xFF, 0xC8, 0x5A);
         private static readonly Color PrimeCyan = Color.FromRgb(0x6F, 0xE8, 0xFF);
@@ -503,7 +548,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         public string Title => Loc.Get($"premium_group_{Key}");
         public string Sub => Loc.Get($"premium_group_{Key}_sub");
-        public string Count { get; } = Loc.GetF("premium_group_count", open, total);
+        public string Count { get; private set; } = Loc.GetF("premium_group_count", open, total);
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        internal void UpdateCount(int open, int total)
+        {
+            var count = Loc.GetF("premium_group_count", open, total);
+            if (Count == count) return;
+            Count = count;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Count)));
+        }
         /// <summary>Loaded once per row (ModArt keeps no cache); WPF builds its headers once.</summary>
         public Bitmap? Sign { get; } = group == Services.UI.PremiumGroup.Free ? null : ModArt.TryLoad($"features/tier_badge_t{(group == Services.UI.PremiumGroup.Basic ? 1 : 2)}.png", 240);
         public bool HasSign => Sign != null;

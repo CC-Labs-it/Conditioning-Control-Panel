@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -52,6 +53,58 @@ public sealed class ExclusivesRefreshTests(ITestOutputHelper output)
         }
         finally { host.Close(); Dispatcher.UIThread.RunJobs(); }
         return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task GateChangesRetainArtAndRealizedCards() => WithVault((view, shelf, _) =>
+    {
+        var row = Fyp(shelf);
+        var banner = view.FindControl<Image>("SpotArtImage")!.Source;
+        var containers = ((WrapPanel)shelf.ItemsPanelRoot!).Children.ToArray();
+        var group = shelf.Items.OfType<ExclusiveGroupRow>().First();
+        var count = group.Count;
+        var samples = new double[20];
+        for (int i = 0; i < samples.Length; i++)
+        {
+            view.IsVisible = false;
+            Dispatcher.UIThread.RunJobs();
+            bool gifted = i % 2 == 0;
+            CoreEntitlement.IsFreeTodayProvider = key => gifted && key == "fyp";
+            var clock = Stopwatch.StartNew();
+            view.IsVisible = true;
+            view.RefreshVault();
+            ((Window)view.Parent!).UpdateLayout();
+            samples[i] = clock.Elapsed.TotalMilliseconds;
+            Dispatcher.UIThread.RunJobs();
+        }
+        Array.Sort(samples);
+        output.WriteLine($"Headless changed-gate refresh + layout (20 visits): median={(samples[9] + samples[10]) / 2:F3} ms; p95={samples[18]:F3} ms");
+        Assert.Same(row, Fyp(shelf));
+        Assert.Same(banner, view.FindControl<Image>("SpotArtImage")!.Source);
+        Assert.Equal(containers, ((WrapPanel)shelf.ItemsPanelRoot!).Children.ToArray());
+        CoreEntitlement.HasPremiumProvider = () => true;
+        view.RefreshVault();
+        Assert.False(row.IsLocked);
+        Assert.False(row.FreeToday);
+        Assert.NotEqual(count, group.Count);
+        var padlock = view.GetVisualDescendants().OfType<Control>()
+            .Single(c => c.Name == "VeilLock" && ReferenceEquals(c.DataContext, row));
+        Assert.False(padlock.IsEffectivelyVisible);
+        CoreEntitlement.HasPremiumProvider = () => false;
+        CoreEntitlement.IsFreeTodayProvider = key => key == "remote";
+        view.RefreshVault();
+        Assert.True(padlock.IsEffectivelyVisible);
+        var order = shelf.Items.OfType<ExclusiveCardRow>().Select(r => r.Feature.Key).ToList();
+        Assert.True(order.IndexOf("remotecontrol") < order.IndexOf("fyp"));
+        ExclusiveFeature.ArcademyDoorProvider = () => true;
+        view.RefreshVault();
+        var arcademy = shelf.Items.OfType<ExclusiveCardRow>().Single(r => r.Feature.Key == "arcademy");
+        ExclusiveFeature.ArcademyDoorProvider = () => false;
+        view.RefreshVault();
+        Assert.DoesNotContain(arcademy, shelf.Items.OfType<ExclusiveCardRow>());
+        ExclusiveFeature.ArcademyDoorProvider = () => true;
+        view.RefreshVault();
+        Assert.Same(arcademy, shelf.Items.OfType<ExclusiveCardRow>().Single(r => r.Feature.Key == "arcademy"));
     });
 
     private static ExclusiveCardRow Fyp(ItemsControl shelf) => shelf.Items.OfType<ExclusiveCardRow>().Single(r => r.Feature.Key == "fyp");
