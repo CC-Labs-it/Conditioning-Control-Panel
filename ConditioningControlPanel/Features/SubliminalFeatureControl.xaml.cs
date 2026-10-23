@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Features
                 Helpers.FontPickerHelper.Populate(CmbFont, s.SubliminalFont, "Arial");
             }
             finally { _isLoading = false; }
+            RefreshSilentHint();
         }
 
         private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -128,6 +129,7 @@ namespace ConditioningControlPanel.Features
             if (s == null) return;
             s.SubAudioEnabled = ChkWhispers.IsChecked ?? false;
             App.Settings?.Save();
+            RefreshSilentHint();
         }
 
         private void SliderWhisperVol_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -181,6 +183,7 @@ namespace ConditioningControlPanel.Features
             {
                 Owner = Window.GetWindow(this) ?? Application.Current.MainWindow
             };
+            dialog.MarkSilentLines(t => App.Subliminal?.HasRecordedVoice(t) ?? true);
             if (dialog.ShowDialog() == true && dialog.ResultData != null)
             {
                 // Remember hand-added phrases (and forget removed ones) so the cross-mod prune
@@ -203,6 +206,27 @@ namespace ConditioningControlPanel.Features
                 s.SubliminalPool = dialog.ResultData;
                 App.Settings?.Save();
                 App.Logger?.Information("Subliminal pool updated: {Count} items", dialog.ResultData.Count);
+                RefreshSilentHint();
+            }
+        }
+
+        /// <summary>The one line under the Audio Whispers switch: shown while the switch is on and at
+        /// least one ENABLED message has no recorded voice on the active mod.</summary>
+        private void RefreshSilentHint()
+        {
+            try
+            {
+                var s = App.Settings?.Current;
+                var sub = App.Subliminal;
+                var show = s != null && sub != null && ChkWhispers.IsChecked == true
+                    && Services.SpokenClipRule.AnySilent(
+                        s.SubliminalPool.Where(kvp => kvp.Value).Select(kvp => kvp.Key).ToList(),
+                        sub.HasRecordedVoice);
+                TxtWhispersSilentHint.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Subliminal silent hint failed: {Error}", ex.Message);
             }
         }
 
@@ -264,7 +288,7 @@ namespace ConditioningControlPanel.Features
         /// </summary>
         private void OnModChanged(object? sender, Models.ModPackage mod)
         {
-            Dispatcher.BeginInvoke(new Action(ApplyFeatureArt));
+            Dispatcher.BeginInvoke(new Action(() => { ApplyFeatureArt(); RefreshSilentHint(); }));
         }
 
     }

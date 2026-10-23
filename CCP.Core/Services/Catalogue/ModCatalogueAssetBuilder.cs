@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json.Linq;
 using SkiaSharp;
@@ -10,27 +9,10 @@ namespace ConditioningControlPanel.Services;
 /// <summary>WPF ccp-mod/v1 metadata envelope; the binary remains hosted by its creator.</summary>
 public static class ModCatalogueAssetBuilder
 {
-    public const string Schema = "ccp-mod/v1";
+    public const string Schema = ModCatalogueAsset.Schema;
     public static JObject Build(ModPackage mod, string downloadUrl)
     {
-        var m = mod.Manifest;
-        var asset = new JObject
-        {
-            ["mod_id"] = m.Id, ["name"] = m.Name, ["version"] = m.Version, ["author"] = m.Author,
-            ["download"] = new JObject { ["provider"] = "mega", ["url"] = downloadUrl,
-                ["installed_size_bytes"] = SafeDirectorySize(mod.InstalledPath!) },
-        };
-        if (!string.IsNullOrWhiteSpace(m.Description)) asset["description"] = m.Description;
-        if (!string.IsNullOrWhiteSpace(m.MinAppVersion)) asset["min_app_version"] = m.MinAppVersion;
-        var thumb = TryBuildPreviewThumb(mod);
-        if (thumb != null) asset["preview_thumb_b64"] = thumb;
-        return asset;
-    }
-
-    private static long SafeDirectorySize(string dir)
-    {
-        try { return new DirectoryInfo(dir).EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length); }
-        catch { return 0; }
+        return ModCatalogueAsset.Build(mod, downloadUrl, TryBuildPreviewThumb(mod));
     }
 
     private static string? TryBuildPreviewThumb(ModPackage mod)

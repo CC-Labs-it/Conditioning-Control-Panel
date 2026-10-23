@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using SkiaSharp;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -21,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 defaultTags: mod.Manifest.Tags == null ? null : string.Join(", ", mod.Manifest.Tags));
             if (!await dialog.ShowDialogSafe<bool>(owner ?? this) || !dialog.Confirmed) return;
             JObject asset;
-            try { asset = ModCatalogueAssetBuilder.Build(mod, dialog.DownloadUrl); }
+            try { asset = ModCatalogueAsset.Build(mod, dialog.DownloadUrl, TryBuildModPreviewThumb(mod)); }
             catch (Exception ex)
             {
                 Log.Warning(ex, "[Catalogue] Mod asset build failed");
@@ -32,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 result = await App.Catalogue.SubmitCatalogueAssetAsync(CatalogueKindMods, asset,
-                    ModCatalogueAssetBuilder.Schema, dialog.Creator, dialog.Tags, default);
+                    ModCatalogueAsset.Schema, dialog.Creator, dialog.Tags, default);
             }
             catch (Exception ex)
             {
@@ -43,6 +45,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (result is SubmissionResult.Success)
                 App.Notifications.Show(Loc.Get("catalogue_toast_mod_success"), Helpers.NotificationType.Success, TimeSpan.FromSeconds(10));
             else ShowCatalogueSubmissionResultToast(result);
+        }
+
+        // UI-thread-local bitmap only; no mutable Skia bitmap crosses threads.
+        internal static string? TryBuildModPreviewThumb(ModPackage mod)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(mod.Manifest.PreviewImage) || mod.InstalledPath == null) return null;
+                var path = Path.Combine(mod.InstalledPath, "resources", mod.Manifest.PreviewImage);
+                using var codec = SKCodec.Create(path);
+                if (codec == null || codec.Info.Width <= 0 || codec.Info.Height <= 0) return null;
+                var scale = Math.Min(1f, 160f / codec.Info.Width);
+                var size = codec.GetScaledDimensions(scale);
+                using var decoded = new SKBitmap(size.Width, size.Height);
+                if (codec.GetPixels(decoded.Info, decoded.GetPixels()) != SKCodecResult.Success) return null;
+                // WPF DecodePixelWidth=160 always yields 160 px wide, scaling small previews up too.
+                var height = Math.Max(1, (int)Math.Round(codec.Info.Height * 160d / codec.Info.Width));
+                using var thumb = decoded.Resize(new SKImageInfo(160, height),
+                    new SKSamplingOptions(SKFilterMode.Linear));
+                if (thumb == null) return null;
+                using var image = SKImage.FromBitmap(thumb);
+                using var data = image.Encode(SKEncodedImageFormat.Jpeg, 80);
+                return data == null || data.Size > 64 * 1024 ? null : Convert.ToBase64String(data.ToArray());
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "[Catalogue] Mod preview thumb failed");
+                return null;
+            }
         }
 
         /// <summary>WPF HandleModDropAsync (ModCatalogue.cs:84): read the manifest, confirm with
