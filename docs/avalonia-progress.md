@@ -2931,3 +2931,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-animations: +127
 - Lockdown plate pulse follows ShowTab (start on arrival, restart on re-select, stop/restore on departure and close); glow moved to a sibling BoxShadow Border.
 - Season shimmer / skill-tree clocks confirmed already owned by their views; ledger row corrected.
+
+## avalonia-port/wire-shell-assets: +329
+- Library browses installed Content Packs (tree, decrypted thumbnails with LRU cache, checks, previews); tree shaping moved to Core `AssetPackTree`.
+- Content Packs root shows a Box glyph; full remote gate green.
