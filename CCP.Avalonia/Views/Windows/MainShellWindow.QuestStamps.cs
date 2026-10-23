@@ -451,10 +451,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Background = StampInk(0x992D4A2D),
                 IsVisible = false,
-                Child = new IconGlyph
+                Child = new Panel
                 {
-                    Kind = IconKind.Checkmark, Foreground = QuestStampDoneInk, Size = 60,
-                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                    Children =
+                    {
+                        // ponytail: WPF :674 DropShadowEffect (blur 8, depth 2, 315 deg) as an unblurred sibling glyph;
+                        // the card fades, so no Effect under it (P82).
+                        new IconGlyph
+                        {
+                            Kind = IconKind.Checkmark, Foreground = Brushes.Black, Size = 60, Opacity = 0.6, Tag = "stamp-tick-shadow",
+                            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                            RenderTransform = new TranslateTransform(Math.Sqrt(2), Math.Sqrt(2)),
+                        },
+                        new IconGlyph
+                        {
+                            Kind = IconKind.Checkmark, Foreground = QuestStampDoneInk, Size = 60,
+                            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                        },
+                    },
                 },
             };
             static Border Chip(Control content, HorizontalAlignment side) => new()

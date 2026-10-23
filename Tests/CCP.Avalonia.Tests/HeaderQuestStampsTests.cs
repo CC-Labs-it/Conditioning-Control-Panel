@@ -119,6 +119,15 @@ public sealed class HeaderQuestStampsTests
         Dispatcher.UIThread.RunJobs();
         Assert.Contains(Cell(shell, "d0").Children, c => c is IconGlyph { Kind: FluentIcons.Common.Symbol.Checkmark });
         Assert.Contains(popup.Child.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "done");
+        var tickShadow = popup.Child.GetVisualDescendants().OfType<IconGlyph>().Single(g => Equals(g.Tag, "stamp-tick-shadow")); // WPF :674
+        Assert.True(tickShadow.IsEffectivelyVisible);
+        Assert.Equal(FluentIcons.Common.Symbol.Checkmark, tickShadow.Kind);
+        Assert.Equal(Colors.Black, Assert.IsAssignableFrom<ISolidColorBrush>(tickShadow.Foreground).Color);
+        var tickOffset = Assert.IsType<TranslateTransform>(tickShadow.RenderTransform);
+        Assert.Equal(Math.Sqrt(2), tickOffset.X, 6);
+        Assert.Equal(Math.Sqrt(2), tickOffset.Y, 6);
+        Assert.Same(tickShadow.Parent, popup.Child.GetVisualDescendants().OfType<IconGlyph>()
+            .Single(g => g.Kind == FluentIcons.Common.Symbol.Checkmark && !Equals(g.Tag, "stamp-tick-shadow")).Parent);
         AssertReward();
         Assert.DoesNotContain(shell.Named<Grid>("QuestStampHost")!.GetVisualDescendants(), v => v.Effect != null);
         shell.MouseMove(new Point(500, 250));
@@ -351,12 +360,19 @@ public sealed class HeaderQuestStampsTests
         Assert.False(shell.StampAnimationsRunning); // the discarded cell has no remaining clock
         var popup = Hover(shell, "d0");
         Assert.True(shell.StampAnimationsRunning);
+        clock.Advance(shell, 100); // mid-zoom and mid-lift, so the resets below are not vacuous
+        var hostScale = Assert.IsType<ScaleTransform>(shell.Named<Grid>("QuestStampHost")!.RenderTransform);
+        Assert.True(Scale(Cell(shell, "d0")).ScaleX > 1);
+        Assert.True(hostScale.ScaleX > 1);
+        Assert.Equal(20, Cell(shell, "d0").ZIndex);
         var surface = PanicSurfaces.All.Single(s => s.Id == "quest-stamps");
         Assert.Null(surface.OwnsTheScreen);
         surface.Stop(shell);
         Assert.False(popup.IsOpen);
         Assert.False(shell.StampAnimationsRunning);
         Assert.Equal(1, Scale(Cell(shell, "d0")).ScaleX);
+        Assert.Equal(1, hostScale.ScaleX);
+        Assert.Equal(0, Cell(shell, "d0").ZIndex);
         popup = Hover(shell, "d1");
         shell.Close();
         Assert.False(popup.IsOpen);
