@@ -56,6 +56,21 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
 
+        /// <summary>WPF App.xaml.cs:3126: arm before the shell; a missing tube leaves the line retryable.</summary>
+        internal static void StartDescentCountdown()
+        {
+            DescentCountdown = new Services.Descent.DescentCountdownService
+            {
+                Speaker = line =>
+                {
+                    if (Views.AvatarTube.AvatarTubeWindow.Live is not { } avatar) return false;
+                    avatar.GigglePriority(line, playSound: false, aiGenerated: false);
+                    return true;
+                },
+            };
+            DescentCountdown.Start();
+        }
+
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
         /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
         internal static void StartRichPresence()
@@ -568,9 +583,7 @@ namespace ConditioningControlPanel.Avalonia
                 // After the version seed (the proxy client's headers carry it). Fail closed; the
                 // startup validate runs on the UI thread as WPF's does (App.xaml.cs OnStartup).
                 // WPF App.xaml.cs:2856. Start() arms nothing without a cached ceremony timestamp.
-                // ponytail: no Speaker - the tube's speech coupling is not ported, so phase lines stay unsaid.
-                DescentCountdown = new Services.Descent.DescentCountdownService();
-                DescentCountdown.Start();
+                StartDescentCountdown();
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).
                 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")))

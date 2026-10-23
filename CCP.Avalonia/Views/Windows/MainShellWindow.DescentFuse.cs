@@ -2,15 +2,13 @@
 // hover readout and the corner clock, driven by Core DescentCountdownService (App.DescentCountdown).
 // Plus the live zero opener of WPF Services/Descent/DescentShowDirector.cs:130-170.
 //
-// ponytail: the chrome dimming is not ported - DescentFuseChrome (WPF head) and this head's
-// RefreshThemeAwareElements do not share a dim step, so the neutral chrome never darkens here.
 // ponytail: zero opens only the Live show; the catch-up crack, the post-zero retry and the
 // ceremony focus/hand-off (DescentShowDirector, DescentMigrationService) remain WPF-only.
 using System;
-using Avalonia.Animation;
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Styling;
+using Avalonia.Threading;
 using ConditioningControlPanel.Services.Descent;
 using Serilog;
 
@@ -21,6 +19,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly IBrush FuseGoldBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xB0, 0x52));
         private static readonly IBrush FuseNeutralDigits = new SolidColorBrush(Color.FromRgb(0xC9, 0xC4, 0xD6));
 
+        private int _fuseLastDimStep;
+        private bool _fuseClosed;
         private TextBlock? _fuseTooltipDigits;
         private global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop? _fuseBreath;
 
@@ -31,12 +31,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var fuse = App.DescentCountdown;
                 if (fuse is null) return;
-                fuse.PhaseChanged += (_, e) => ApplyFusePhase(e.Current);
-                fuse.Tick += (_, remaining) => OnFuseTick(remaining);
-                fuse.ZeroReached += (_, _) => _ = OpenLiveFuseShow();
+                void PhaseChanged(object? sender, DescentFusePhaseChangedEventArgs e) { if (!_fuseClosed) ApplyFusePhase(e.Current); }
+                void Tick(object? sender, TimeSpan remaining) { if (!_fuseClosed) OnFuseTick(remaining); }
+                void Zero(object? sender, EventArgs e) { if (!_fuseClosed) _ = OpenLiveFuseShow(); }
+                var settings = CoreSettings.Current;
+                void SettingsChanged(object? sender, PropertyChangedEventArgs e)
+                {
+                    if (e.PropertyName != nameof(settings.DescentMigrationCompleted)) return;
+                    // An ack can arrive after zero has disarmed the countdown's timer.
+                    if (Dispatcher.UIThread.CheckAccess()) RefreshFuseChrome();
+                    else Dispatcher.UIThread.Post(RefreshFuseChrome);
+                }
+                fuse.PhaseChanged += PhaseChanged;
+                fuse.Tick += Tick;
+                fuse.ZeroReached += Zero;
+                settings.PropertyChanged += SettingsChanged;
+                Closed += (_, _) =>
+                {
+                    _fuseClosed = true;
+                    fuse.PhaseChanged -= PhaseChanged;
+                    fuse.Tick -= Tick;
+                    fuse.ZeroReached -= Zero;
+                    settings.PropertyChanged -= SettingsChanged;
+                    _fuseBreath?.Stop();
+                };
+                // AttachModSwitch already painted the live step; avoid a second palette rewrite.
+                _fuseLastDimStep = fuse.DimStep;
                 ApplyFusePhase(fuse.LastAnnouncedPhase);
             }
             catch (Exception ex) { Log.Debug("[Fuse] Header surfaces could not be wired: {E}", ex.Message); }
+        }
+
+        private void RefreshFuseChrome()
+        {
+            if (_fuseClosed) return;
+            var step = App.DescentCountdown?.DimStep ?? 0;
+            if (step == _fuseLastDimStep) return;
+            _fuseLastDimStep = step;
+            RefreshThemeAwareElements();
         }
 
         private void OnFuseTick(TimeSpan remaining)
@@ -48,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (Named<TextBlock>("FuseCornerDigits") is { } digits) digits.Text = text;
                 ApplyFusePresence();
             }
+            RefreshFuseChrome();
         }
 
         /// <summary>WPF ApplyFusePhase: the whole surface state for a phase, from scratch.</summary>
@@ -109,6 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ApplyFusePresence();
                 }
             }
+            RefreshFuseChrome();
         }
 
         private static Border NewFuseTip(TextBlock digits) => new()
