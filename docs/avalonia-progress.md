@@ -2693,3 +2693,7 @@ Premium room canvas enrolled in the shell ambient registry under `premium` (WPF 
 
 ## avalonia-port/wire-views-tab-deeper: +201
 - Deeper webcam setup card: consent manage/revoke, calibrate, quick recal and tracker start/stop delegate to the Blink Trainer handlers as WPF does (MainWindow.BlinkTrainer.cs:1410-1488); consent colours/text and calibration line follow live state; Devices link opens Settings → Devices. Row stays stub; follow-up wire-views-tab-deeper-b (Import, Tutorial/Tour, status-chip telemetry).
+
+## avalonia-port/wire-dialogs-username-picker: +93
+- Headless tests pin the already-ported UsernamePickerDialog (length rules, colours, Cancel); not wired: WPF has no live caller.
+- Remote gate green (run 38714794266); row stays `stub`.
