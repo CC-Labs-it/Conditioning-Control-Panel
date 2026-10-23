@@ -60,7 +60,18 @@ public sealed class GazeMinigameTests
     [InlineData("mixed", false)]
     [InlineData("mp4", true)]
     [InlineData("gif", true)]
-    public void Start_RunsOnTheTracker_GazeScoresTheRound_PanicClosesTheGame(string kind, bool panicInRound) => AvaloniaTestDispatcher.Run(() =>
+    public void Start_RunsOnTheTracker_GazeScoresTheRound_PanicClosesTheGame(string kind, bool panicInRound)
+    {
+        // Seed the shared LibVLC so video panes really start players (InlineLoopVideoTests.WithClip).
+        if (kind is "mp4" or "mixed")
+        {
+            try { _ = new LibVlcAudio("--aout=dummy"); }
+            catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
+        }
+        AvaloniaTestDispatcher.Run(() => Body(kind, panicInRound));
+    }
+
+    private static void Body(string kind, bool panicInRound)
     {
         EnsureApp();
         var s = CoreSettings.Current;
@@ -126,6 +137,10 @@ public sealed class GazeMinigameTests
                 Assert.Equal(Stretch.Uniform, rightVideo.Stretch);
                 Assert.Contains(win.CorrectIsLeftForTest ? "focus" : "noise", leftVideo.ClipPath!);
                 Assert.Contains(win.CorrectIsLeftForTest ? "noise" : "focus", rightVideo.ClipPath!);
+                Assert.True(leftVideo.HasPlayer && rightVideo.HasPlayer, "video panes started no player");
+                Assert.Equal(baselinePlayers + 2, InlineLoopVideo.LivePlayers);
+                Assert.InRange(leftVideo.StartOffset!.Value, 0f, 0.5f);   // WPF random start in the first half
+                Assert.InRange(rightVideo.StartOffset!.Value, 0f, 0.5f);
             }
             else
             {
@@ -190,7 +205,7 @@ public sealed class GazeMinigameTests
             try { File.Delete(Path.Combine(CorePaths.UserData, GazeMinigameSettings.FileName)); } catch { }
             try { dir.Delete(true); } catch { }
         }
-    });
+    }
 
     [Theory]
     [InlineData(false, BuiltInMods.CCPDefaultId, null, "GOOD")]
