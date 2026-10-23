@@ -9,6 +9,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -288,6 +289,48 @@ public sealed class MantraWindowSessionTests
             (MantraWindow.DroneOpener, CoreAudio.PlayOneShotProvider) = (opener, play);
         }
         return Task.CompletedTask;
+    });
+
+    /// <summary>WPF StartMantraSession's catch: a failed open is not silent, it shows WPF's "Mantras" warning
+    /// with the exception message.</summary>
+    [Fact]
+    public Task FailedOpenShowsWpfsWarning() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<AvApp>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+
+        var factory = MainShellWindow.NewMantraWindow;
+        MainShellWindow.NewMantraWindow = () => throw new InvalidOperationException("no window");
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            shell.StartMantraSession(3);
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && !shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>().Any())
+            {
+                Dispatcher.UIThread.RunJobs();
+                await Task.Yield();
+            }
+
+            var dialog = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            var texts = dialog.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Contains("Mantras", texts);
+            Assert.Contains("Couldn't start the mantra session:\n\nno window", texts);
+            Assert.Empty(shell.OwnedWindows.OfType<MantraWindow>());
+        }
+        finally
+        {
+            MainShellWindow.NewMantraWindow = factory;
+            foreach (var w in shell?.OwnedWindows.ToArray() ?? Array.Empty<Window>()) w.Close();
+            shell?.Close();
+            AvApp.Mantra.EndSession();
+        }
     });
 
     /// <summary>Panic (PanicSurfaces "mantra", WPF KillAllAudio -> Mantra?.Dispose()): the session ends,

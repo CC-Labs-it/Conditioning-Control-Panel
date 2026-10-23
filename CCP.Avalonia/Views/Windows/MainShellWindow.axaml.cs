@@ -131,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeOfflineModeUI(); // MainShellWindow.OfflineMode.cs (WPF MainWindow.Settings.cs:122)
             InitializeHelpButtons(); // MainShellWindow.HelpButtons.cs (WPF MainWindow.Presets.cs:35 SetupHelpButtons)
             InitializeDashboardFx(); // MainShellWindow.DashboardFx.cs (WPF MainWindow ctor -> InitializeDashboardFx)
+            InitializeMotionChrome(); // MainShellWindow.SectionChrome.cs (WPF CmbMotionLevel_SelectionChanged, chrome half)
             InitDashboardBrowserFold(); // MainShellWindow.DashboardFold.cs (WPF MainWindow.xaml.cs:3505)
             InitializeRememberButton(); // MainShellWindow.Remember.cs (WPF MainWindow.xaml.cs:3508)
             InitializeMicActivePill(); // MainShellWindow.SheListening.cs (WPF MainWindow.xaml.cs:3594 WireMicActivePill)
@@ -147,12 +148,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
             Closed += (_, _) =>
             {
+                StopLockdownPulse();
                 App.CatalogueLookup.ClearOpener(OpenCatalogueEnhancement);
                 if (Platform.X11PanicKey.PushToTalk == OnPushToTalkKey)
                     Platform.X11PanicKey.PushToTalk = null;
             };
             // WPF MainWindow.xaml.cs:3531-3535: one forced share-status poll per launch.
             Opened += (_, _) => PollCatalogueStatuses(force: true);
+            // WPF MainWindow.xaml.cs:3837 (end of MainWindow_Loaded): MainShellWindow.PendingRegistration.cs.
+            Opened += (_, _) => ArmPendingRegistration();
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open
@@ -349,7 +353,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   private System.Windows.Media.Imaging.BitmapImage? LoadQuestImage(…)
 //   private void CenterOnPrimaryScreen(…)
 //   private async void MainWindow_Loaded(…)
-//   private async Task CheckPendingRegistrationAsync(…)
 //   private async Task CheckFirstRunAssetsPromptAsync(…)
 //   private static bool HasAnyLocalMedia(…)
 //   private const int WM_GETMINMAXINFO

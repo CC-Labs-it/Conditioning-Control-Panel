@@ -36,6 +36,9 @@ internal static class FriendsHead
         var url = BaseUrl(userDataDir, overrideUrl);
         Services.Invites.InviteApi.DefaultIdentity = Identity;
         Services.Invites.InviteApi.DefaultBaseUrl = () => url;
+        // WPF App.xaml.cs:459: the open-tables listing (GoonOpenTables) rides the same proxy and door.
+        Services.Lobby.LobbyWire.DefaultIdentity = Identity;
+        Services.Lobby.LobbyWire.DefaultBaseUrl = () => url;
     }
 
     internal static FriendsService? Create(string? userDataDir, string? overrideUrl)

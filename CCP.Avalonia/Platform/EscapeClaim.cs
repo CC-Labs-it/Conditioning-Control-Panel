@@ -117,11 +117,13 @@ internal static class EscapeClaim
         }
     }
 
-    private static bool CcpInFront()
+    /// <param name="noForegroundCounts">Answer for a zero foreground handle: false here (a panic press is
+    /// never lost), true for the preview's re-activate (WPF MainWindow.Assets.cs:1241 activates then).</param>
+    internal static bool CcpInFront(bool noForegroundCounts = false)
     {
         if (!OperatingSystem.IsWindows()) return false;
         var fg = GetForegroundWindow();
-        if (fg == IntPtr.Zero) return false;
+        if (fg == IntPtr.Zero) return noForegroundCounts;
         GetWindowThreadProcessId(fg, out var pid);
         return pid != 0 && pid == (uint)Environment.ProcessId;
     }

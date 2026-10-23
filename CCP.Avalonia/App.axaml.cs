@@ -161,16 +161,19 @@ namespace ConditioningControlPanel.Avalonia
         /// one-shot Hypnotube migration on CoreSettings.Current; with KnownVideoLinksProvider seeded
         /// below from the same Core title table WPF's AvatarTubeWindow.KnownVideoLinks starts from,
         /// that is the write WPF makes at launch (StartModsTests pins it against the Core golden).
-        /// The other CoreModsHooks stay unseeded: each targets a WPF service this head does not have
-        /// yet (Brain, Bark, Companion, DTRH/Arcademy hosts, ModResourceResolver's cache, the portrait
-        /// loader, the voice-line index, BambiSprite), and unseeded means "nothing to invalidate".
-        /// Seed each when its counterpart lands here.
+        /// The brain is built after the mod service, so its callback reads Brain lazily as WPF does.
+        /// The shared prompt prefix is also invalidated when a mod changes its content. BarkHead and
+        /// CompanionHead seed their own hooks later; the remaining head cache/host hooks stay unseeded.
+        /// ponytail: the remaining startup services and global hotkeys are the follow-up lane.
         /// </summary>
         internal static void StartMods()
         {
             // WPF seeds this with AvatarTubeWindow.KnownVideoLinks, which at startup is a copy of
             // the same Core table; this head has no per-mod link reload, so the table itself.
             CoreModsHooks.KnownVideoLinksProvider = () => HypnotubeDefaultLinks.KnownVideoTitles;
+            // WPF App.xaml.cs:317/327: discard stale voice context on a switch or content replacement.
+            CoreModsHooks.ModSwitched = name => Brain?.OnModSwitched(name);
+            CoreModsHooks.InvalidateStablePrompt = BambiSprite.InvalidateStablePrompt;
             Mods = new ModService();
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
@@ -644,6 +647,14 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
                 Platform.LeashHead.StartDemoIfAsked();   // Debug + sandbox only (WPF CCP_LEASH_DEMO)
+                // WPF App.xaml.cs V2Purchase: pure constructor, the counter is read when a Get it row shows.
+                // The cache is per account (WPF MainWindow.Login.cs:128/316 Invalidate on sign-in/out).
+                if (Platform.V2PurchaseHead.Create(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                        Environment.GetEnvironmentVariable(Platform.V2PurchaseHead.EnvVar)) is { } v2Purchase)
+                {
+                    Platform.V2PurchaseHead.Service = v2Purchase;
+                    CoreAccount.UnifiedIdentityChanged += (_, _) => v2Purchase.Invalidate();
+                }
                 // WPF App.xaml.cs:3010-3013: the task runner the gate's action starts.
                 try { Platform.LeashTaskHost.Start(Platform.LeashHead.Service as ConditioningControlPanel.Services.Leash.LeashService); }
                 catch (Exception exRunner) { Serilog.Log.Warning(exRunner, "[Leash] task runner could not be built"); }
@@ -969,8 +980,8 @@ namespace ConditioningControlPanel.Avalonia
                 shell.StartPanicKey();
                 // EMI Desk summon chord (WPF MainWindow.xaml.cs:246 arms it from the shell's Loaded).
                 Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
-                // Do-not-disturb reads the foreground app from X (WPF DoNotDisturbGuard: user32).
-                ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.X11Windows.ForegroundProcess;
+                // Do-not-disturb reads the foreground app: user32 on Windows (as WPF DoNotDisturbGuard), X elsewhere.
+                ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.Win32Windows.ForegroundSource;
                 // Linux: one toast naming the distro's install command for any missing runtime library
                 // (docs/avalonia-linux-install.md). dlopen off the UI thread; nothing when all load.
                 Dispatcher.UIThread.Post(async () =>

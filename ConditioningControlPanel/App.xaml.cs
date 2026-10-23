@@ -254,6 +254,18 @@ namespace ConditioningControlPanel
             // Chaos bubble payloads are Core data; what firing one does is this head's.
             Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
+            // Goon Game seams (CCP.Core/Services/GoonGame): the Scrolller downloader and the
+            // Discord link both live in this head.
+            Services.GoonGame.GoonOnlineMedia.Materialize = (url, ct) => Services.Fyp.Online.RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true);
+            Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = Services.Fyp.Online.RemoteMediaCache.ReleaseTempFile;
+            Services.GoonGame.GoonAvatarCache.OwnDiscordProvider = () =>
+                Discord is { IsAuthenticated: true } d ? (true, d.Avatar, d.GetAvatarUrl(128)) : (false, null, null);
+            // Own-media transfer (CCP.Core/Services/Media/Transfer): the library walk, the webp
+            // header check and the WinRT video engine are this head's.
+            Services.Transfer.AssetCompressionPlanner.ActivePool = Services.Chaos.DtrhAssetManifest.EnumerateActive;
+            Services.Transfer.AssetCompressionPlanner.IsAnimatedWebp = Services.AnimatedWebp.IsAnimated;
+            Services.Transfer.WinRtVideoTranscoder.Install();
+
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.
             // These run lazily on every read, so the mod system coming up after localization is
@@ -286,8 +298,12 @@ namespace ConditioningControlPanel
                 op.Abort();
                 return (false, null);
             };
+            // The Goon Game match engine moved to Core; it drops UI callbacks once the dispatcher dies.
+            Services.GoonGame.GoonDispatch.ShutdownStarted = () =>
+                Current?.Dispatcher is { } gd && (gd.HasShutdownStarted || gd.HasShutdownFinished);
 
             Services.Deeper.EnhancementResolver.LibraryMatchProvider = (path, type) => EnhancementLibrary?.FindMatch(path, type);
+            Services.Deeper.AudioWaveformCache.Decoder = Services.Deeper.MediaDurationProbe.DecodeWaveform;
             Services.SettingsPaletteIndex.JustDropDoorAvailableProvider = () => Services.JustDrop.JustDropService.DoorAvailable;
             Services.SettingsPaletteIndex.GameAvailableProvider = id => Services.Launcher.LauncherCatalogue.Find(id)?.Available == true;
             Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
@@ -389,11 +405,33 @@ namespace ConditioningControlPanel
             // EmiLineEngine lives in Core; the two ask probes it used to read off App land here.
             Services.EmiDesk.EmiLineEngine.AskSituationProbe = () => EmiDesk?.AskSituationOk() == true;
             Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = Services.EmiDesk.EmiOffers.EffectFeasible;
+            // EmiNudgeWorld lives in Core too; whether the desktop is quiet is the head's call.
+            Services.EmiDesk.EmiNudgeWorld.QuietProbe = () => EmiDesk?.NudgeQuiet() == true;
             // The V2 client lives in Core; its 409-merged recovery re-runs head sign-in.
             Services.V2AuthService.MergedRecovery = Services.MergedAccountRecovery.TryHandleAsync;
             // Goon signaling moved to Core with its transports; its 409-merged recovery stays here.
             Services.GoonGame.GoonSignalingClient.MergedAccountHook = Services.MergedAccountRecovery.TryHandle;
             Services.MergedAccountRecoveryHead.Seed();
+            // The 401 path lives in Core too (AuthRecovery, ex ProfileSyncService.HandleUnauthorizedAsync). Its hooks
+            // run off the UI thread, so both hop back: a recovery restarts the heartbeat; the re-validate is
+            // Patreon first, then Discord (invite-code / email sessions have no provider to mint from).
+            Services.AuthRecovery.Recovered = () => Current?.Dispatcher.BeginInvoke(() => ProfileSync?.StartHeartbeat());
+            Services.AuthRecovery.ProviderRevalidate = () => Current?.Dispatcher.InvokeAsync(async () =>
+            {
+                if (Patreon?.IsAuthenticated == true)
+                {
+                    Logger?.Information("[Auth] Re-validating Patreon to have the server re-issue the auth token");
+                    await Patreon.ValidateSubscriptionAsync(forceRefresh: true);
+                    return true;
+                }
+                if (Discord?.IsAuthenticated == true)
+                {
+                    Logger?.Information("[Auth] Re-validating Discord to have the server re-issue the auth token");
+                    await Discord.ValidateAndRefreshUserAsync(forceRefresh: true);
+                    return true;
+                }
+                return false;
+            }).Task.Unwrap() ?? Task.FromResult(false);
             Services.Arcademy.ArcademySyncService.MergedRecovery = Services.MergedAccountRecovery.TryHandle;
             // The Patreon/SubscribeStar lifecycle lives in Core too; validate prizes land here.
             Services.ProviderSubscription.PrizesSink = Services.ProfileSyncService.ApplyValidatePrizes;
@@ -483,6 +521,7 @@ namespace ConditioningControlPanel
             Services.Invites.InviteApi.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
             Services.Lobby.LobbyWire.DefaultIdentity = Services.BackRoom.BackRoomApi.AppIdentity;
             Services.Lobby.LobbyWire.DefaultBaseUrl = () => Services.BackRoom.BackRoomApi.BaseUrl;
+            Services.Stakes.StakeAppHooks.Seed();
             Services.BackRoom.BackRoomApi.MergedReply = MergedAccountRecovery.TryHandle;
             Services.BackRoom.BackRoomApi.DefaultApplyPrizes = (account, revision, grants) => Ownership?.ApplySnapshot(account, revision, grants);
             Services.WardrobeCatalog.ProgressProvider = () => Achievements?.Progress;
@@ -624,7 +663,7 @@ namespace ConditioningControlPanel
             // The Deeper engine and its host moved to Core; the effects and the tracker stay here.
             Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Services.Deeper.RealActionDispatcher();
             Services.Deeper.EnhancementHostService.WebcamProvider = () =>
-                Webcam == null ? null : (_deeperWebcam ??= new Services.Deeper.EnhancementWebcamAdapter(Webcam));
+                Webcam == null ? null : new Services.Deeper.WebcamEnhancementEvents(Webcam);
 
             // Speech capability, for the views that ask whether voice input is worth offering.
             // SpeechService itself stays here - it owns a capture device. Reading ModelStatus
@@ -1240,7 +1279,6 @@ namespace ConditioningControlPanel
         public static BugReportService BugReport { get; private set; } = null!;
         public static WallpaperService? Wallpaper { get; private set; }
         public static WebcamTrackingService Webcam { get; private set; } = null!;
-        private static Services.Deeper.EnhancementWebcamAdapter? _deeperWebcam;
         public static NotificationService Notifications { get; private set; } = null!;
         public static AttentionCheckService AttentionCheck { get; private set; } = null!;
         public static FocusGameService FocusGame { get; private set; } = null!;
