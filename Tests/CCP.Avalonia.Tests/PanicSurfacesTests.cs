@@ -80,7 +80,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
+        "remote-haptics", "takeover", "program-session", "scheduler", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are
@@ -107,6 +107,8 @@ public sealed class PanicSurfacesTests
         ("remote-haptics", "engine", "toys to zero before the engine stop"),
         // WPF :1811 Autonomy.CancelActivePulses before StopEngine (:1827).
         ("takeover", "engine", "takeover pulses cancelled before the engine stop"),
+        // Avalonia decision 2026-10-23 (WPF never notes a panic): the manual-stop memory is set before the engine stops.
+        ("scheduler", "engine", "panic counts as a manual stop for the scheduler"),
         // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
         ("engine", "pink-rush", "pink rush ends after the engine"),
         // WPF :1963-1967: session corner GIF (engine-owned) first, standalone slots LAST as the final word.

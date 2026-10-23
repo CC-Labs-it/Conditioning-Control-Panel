@@ -47,6 +47,56 @@ public sealed class ShellStartStopLifecycleTests
         Assert.False(CoreEngine.IsRunning); Assert.Equal(30, s.FlashOpacity);
     });
 
+    /// <summary>decisions 2026-10-23: a panic inside the window counts as a manual Stop. A run the user started
+    /// by hand (AutoStarted false) is the one the 30 s tick would otherwise start again.</summary>
+    private static DateTime[] PanicInsideMondayWindow(MainShellWindow shell)
+    {
+        var clock = new[] { new DateTime(2026, 10, 19, 17, 0, 0) };   // Monday
+        shell.EngineNow = () => clock[0];
+        var s = CoreSettings.Current; s.SchedulerEnabled = true; s.SchedulerStartTime = "16"; s.SchedulerEndTime = "22";
+        s.SchedulerMonday = s.SchedulerTuesday = true;
+        Click(shell, "BtnStart"); Assert.True(CoreEngine.IsRunning); Assert.False(shell.Scheduler.AutoStarted);
+        PanicSurfaces.StopAll("test", shell); Dispatcher.UIThread.RunJobs();
+        Assert.False(CoreEngine.IsRunning); Assert.True(shell.Scheduler.ManuallyStoppedDuringSchedule);
+        return clock;
+    }
+
+    [Fact]
+    public Task PanicInsideTheWindowKeepsTheSchedulerFromRestarting() => Run(shell =>
+    {
+        var clock = PanicInsideMondayWindow(shell);
+        clock[0] = clock[0].AddSeconds(30); shell.TickEngineScheduler(); Dispatcher.UIThread.RunJobs();
+        Assert.False(CoreEngine.IsRunning);
+    });
+
+    [Fact]
+    public Task PanicMemoryClearsWhenTheWindowEndsAndTheNextWindowStarts() => Run(shell =>
+    {
+        var clock = PanicInsideMondayWindow(shell);
+        clock[0] = new DateTime(2026, 10, 19, 22, 30, 0); shell.TickEngineScheduler(); Dispatcher.UIThread.RunJobs();
+        Assert.False(shell.Scheduler.ManuallyStoppedDuringSchedule); Assert.False(CoreEngine.IsRunning);
+        clock[0] = new DateTime(2026, 10, 20, 17, 0, 0); shell.TickEngineScheduler(); Dispatcher.UIThread.RunJobs();
+        Assert.True(CoreEngine.IsRunning);
+    });
+
+    [Fact]
+    public Task PanicOutsideTheWindowLeavesNoManualStopMemory() => Run(shell =>
+    {
+        shell.EngineNow = () => new DateTime(2026, 10, 19, 15, 0, 0);
+        var s = CoreSettings.Current; s.SchedulerEnabled = true; s.SchedulerStartTime = "16"; s.SchedulerEndTime = "22";
+        s.SchedulerMonday = true;
+        Click(shell, "BtnStart"); Assert.True(CoreEngine.IsRunning);
+        PanicSurfaces.StopAll("test", shell); Dispatcher.UIThread.RunJobs();
+        Assert.False(CoreEngine.IsRunning); Assert.False(shell.Scheduler.ManuallyStoppedDuringSchedule);
+    });
+
+    [Fact]
+    public void PanicNotesTheSchedulerBeforeTheEngineStops()
+    {
+        var ids = PanicSurfaces.All.Select(x => x.Id).ToList();
+        Assert.InRange(ids.IndexOf("scheduler"), 0, ids.IndexOf("engine") - 1);
+    }
+
     private sealed class LayerPlayer : ConditioningControlPanel.Avalonia.Platform.LayeredAudio.ILayerPlayer
     {
         public int Volume { get; set; }

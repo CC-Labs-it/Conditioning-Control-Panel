@@ -1200,3 +1200,6 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Follow-up: drop the WPE `LinuxDependencies` entry, `linux_dep_wpe_unavailable` and the Flatpak WPE line once WPEPlatform lands or WPE is retired.
 - Tests: `Tests/CCP.Avalonia.Tests/WebHostProbeTests.cs`, `Tests/CCP.Core.Tests/LinuxDependenciesTests.cs`
   (GstAudioSinkDependencyTests), each new row fail-proven by mutation.
+
+## 2026-10-23: Panic and the Scheduler (avalonia-port/panic-scheduler-stop)
+**2026-10-23 — Panic and the Scheduler.** Q: When a panic stops the engine inside a scheduled window, should the scheduler start it again on its next 30 s tick? WPF does whenever it didn't start that run itself (it never calls the manual-stop memory on panic). Options: (a) WPF parity; (b) panic counts as a manual Stop: no auto-start for the rest of the current window, the next window or a manual Start clears it; (c) a separate panic-only suppression (same effect as b). Choice: (b), as the PanicSurfaces "scheduler" surface (key, tray, safe word, leash gate). WPF is unchanged (frozen). Advised by oracle-deep.
