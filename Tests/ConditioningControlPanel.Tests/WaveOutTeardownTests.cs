@@ -157,7 +157,7 @@ public class WaveOutTeardownTests
     }
 
     [Fact]
-    public async Task Release_ReturnsAtOnce_EvenWhenTheDeviceNeverReportsOut()
+    public async Task Release_ReturnsAtOnce_BeforeTheDeviceReportsOut()
     {
         var player = new FakePlayer();
         var source = new FakeSource();
@@ -193,19 +193,20 @@ public class WaveOutTeardownTests
         }
         finally
         {
+            // Report out only after Release has returned, so the teardown finishes at once
+            // instead of sitting out the real 2,000 ms deadline (no real-time wait in the test).
+            player.ReportOut();
             allowStopToReturn.Set();
             await caller.WaitAsync(watchdog);
             await stopEntered.Task.WaitAsync(watchdog);
-            // Observe the actual teardown exit, including its never-reported abandonment.
-            // Do not leave a two-second background wait behind for the next test.
+            // Observe the actual teardown exit; do not leave a background thread for the next test.
             if (teardownThread != null && teardownThread != callerThread)
                 await Task.Factory.StartNew(() => teardownThread.Join(), CancellationToken.None,
                     TaskCreationOptions.LongRunning, TaskScheduler.Default).WaitAsync(watchdog);
         }
 
-        Assert.False(player.ReportedOut);
-        Assert.Equal(new[] { "stop" }, player.Calls);
-        Assert.Equal(0, source.Disposed);
+        Assert.Equal(new[] { "stop", "report", "dispose" }, player.Calls);
+        Assert.Equal(1, source.Disposed);
     }
 
     [Fact]
