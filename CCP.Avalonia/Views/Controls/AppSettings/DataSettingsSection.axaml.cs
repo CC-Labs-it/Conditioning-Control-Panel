@@ -331,18 +331,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     Log.Warning("[RESET] no settings.json to move aside (already at defaults)");
                 }
 
-                foreach (var temp in SafeGlob(dir, "settings.json*.tmp"))
-                {
-                    try { File.Delete(temp); Log.Information("[RESET] deleted stale temp {Temp}", temp); }
-                    catch (Exception ex) { Log.Warning("[RESET] could not delete temp {Temp}: {E}", temp, ex.Message); }
-                }
-
-                var marker = settingsPath + ".restored";
-                if (File.Exists(marker))
-                {
-                    try { File.Delete(marker); Log.Information("[RESET] cleared cloud-restore marker"); }
-                    catch (Exception ex) { Log.Warning("[RESET] could not clear restore marker: {E}", ex.Message); }
-                }
+                // Temps, the cloud-restore marker, the session / ramp journals and the remote / Lockdown
+                // recovery files: each would hand old settings back on the next launch (FactoryResetSweep).
+                FactoryResetSweep.Delete(dir, LogSweep);
 
                 // Tell the next launch that the missing settings.json is DELIBERATE, so it does
                 // not offer to restore the cloud backup of the settings the user just asked to be
@@ -369,11 +360,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
             // Belt and braces: a temp created by a save that was already mid-flight when the sweep
             // above ran would be promoted to settings.json on the next launch, undoing the reset.
-            foreach (var temp in SafeGlob(dir, "settings.json*.tmp"))
-            {
-                try { File.Delete(temp); Log.Warning("[RESET] deleted late temp {Temp}", temp); }
-                catch (Exception ex) { Log.Warning("[RESET] could not delete late temp {Temp}: {E}", temp, ex.Message); }
-            }
+            // SealForReset waited out any write already in flight, so this sweep is the last word.
+            FactoryResetSweep.Delete(dir, LogSweep);
 
             // Hard exit on purpose - see the method docs. Serilog buffers, so flush first or the
             // whole [RESET] trail above is lost exactly when it matters.
@@ -382,10 +370,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             return true;   // unreachable; Exit does not come back. Here for the compiler only.
         }
 
-        private static string[] SafeGlob(string dir, string pattern)
+        private static void LogSweep(string path, string? error)
         {
-            try { return Directory.Exists(dir) ? Directory.GetFiles(dir, pattern) : Array.Empty<string>(); }
-            catch { return Array.Empty<string>(); }
+            if (error == null) Log.Information("[RESET] deleted {Path}", path);
+            else Log.Warning("[RESET] could not delete {Path}: {E}", path, error);
         }
 
         /// <summary>
@@ -397,7 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// <summary>The detached delayed relaunch. Off Windows the exe goes in as "$1" through
         /// ArgumentList: .NET splits a single Arguments string by Windows rules, which do not
         /// honour single quotes, so <c>-c 'sleep 4; ...'</c> reached sh as a syntax error.</summary>
-        internal static ProcessStartInfo RelaunchStartInfo(string exe, int delaySeconds = 4)
+        internal static ProcessStartInfo RelaunchStartInfo(string exe, int delaySeconds = FactoryResetSweep.RelaunchDelaySeconds)
         {
             var psi = OperatingSystem.IsWindows()
                 ? new ProcessStartInfo
