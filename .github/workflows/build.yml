@@ -137,7 +137,6 @@ jobs:
           name: linux-head-render
           path: ${{ runner.temp }}/render/
 
-  # The "behaves identically on Windows" gate.
   # --perf-bench on a real X server (xvfb), not headless: startup, per-tab switch median/p95, working set.
   # The numbers are report-only (docs/avalonia-perf.md; Linux is never compared against WPF). The missing-tab
   # step is NOT report-only: it proves the bench can fail (exit 3), so a broken tab lookup cannot pass silently.
@@ -178,6 +177,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  # The "behaves identically on Windows" gate.
   windows:
     runs-on: windows-latest
     steps:

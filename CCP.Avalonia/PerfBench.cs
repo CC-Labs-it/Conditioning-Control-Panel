@@ -54,6 +54,14 @@ namespace ConditioningControlPanel.Avalonia
         private static async Task<int> Measure(string outPath, string[] tabs)
         {
             var w = new MainShellWindow();
+            // Closed on every exit path before the loop ends: a shell still mapped at process exit crashed
+            // the runtime's teardown (exit 139).
+            try { return await Measure(w, outPath, tabs); }
+            finally { w.Close(); }
+        }
+
+        private static async Task<int> Measure(MainShellWindow w, string outPath, string[] tabs)
+        {
             var opened = new TaskCompletionSource();
             w.Opened += (_, _) => opened.TrySetResult();
             w.Show();
@@ -99,8 +107,6 @@ namespace ConditioningControlPanel.Avalonia
             }, new JsonSerializerOptions { WriteIndented = true });
             System.IO.File.WriteAllText(outPath, json);
             Console.WriteLine(json);
-            // Closed before the loop ends: a shell still mapped at process exit crashed the runtime's teardown (exit 139).
-            w.Close();
             return 0;
         }
 
