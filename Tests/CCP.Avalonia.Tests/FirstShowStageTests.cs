@@ -59,6 +59,26 @@ public sealed class FirstShowStageTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF FirstShowDesktopWindow is layered: a click on a painted bubble pops it, every other pixel falls
+    /// through. The click-through stage's input region is the live bubbles while they float, empty once they gather.</summary>
+    [Fact]
+    public Task TheStageTakesClicksOnlyOnLiveBubbles() => Run(async stage =>
+    {
+        var pics = Enumerable.Range(0, 4).Select(i => ContentLocator.Resolve(Path.Combine("Resources", "web", "backroom", "stations", "slot", "fallback", $"gif{i}.webp"))).ToArray();
+        stage.BundledPictures = () => pics;
+        double t = S.GreetAfter + .1; stage.Clock = () => t; stage.Frame();
+        await stage.Bundled();
+        Click(stage, 0);   // "ready"
+        Assert.Equal(0, stage.PopRegionCount);
+        t += S.BubblesAt + .01; stage.Frame();
+        Assert.True(stage.PopRegionCount > 0);
+        var r = stage.PopRects[0];
+        Assert.True(r.Width > 0 && r.Height > 0);
+        Assert.True(r.Width < stage.Bounds.Width * stage.RenderScaling / 4);   // a bubble, not the screen
+        t += S.GatherAt; stage.Frame();
+        Assert.Equal(0, stage.PopRegionCount);
+    });
+
     /// <summary>WPF Load :145 / Bundled :206 -> Confirm :222 -> Start: pictures load through the seams, the
     /// warning names the stop key, "ready" starts the show, and the flash beat plays its cue.</summary>
     [Theory]
