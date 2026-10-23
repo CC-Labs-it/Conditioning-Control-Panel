@@ -67,6 +67,13 @@ public sealed class TakeawayShelfTests
         Assert.Equal(JustDropService.TasteUrl("code1"), await shell.Clipboard!.TryGetTextAsync());
         Assert.False(GameWindow.IsAnyOpen());
         var door = (Border)shelf.Children[^1];
+        // The shop opens windowed, its strip offering Fullscreen (WPF HostOwnedFullscreen, Launch(ShopPath)).
+        door.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+        var shop = GameWindow.OpenForTests(GameWindow.JustDropId)!;
+        Assert.NotEqual(WindowState.FullScreen, shop.WindowState);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_fullscreen"), ((TextBlock)shop.FullscreenToggle!.Content!).Text);
+        shop.Close();
+        Dispatcher.UIThread.RunJobs();
         JustDropService.SetServerEnabledForTests(false);
         door.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
         Assert.False(GameWindow.IsAnyOpen());
@@ -93,8 +100,24 @@ public sealed class TakeawayShelfTests
         Assert.Equal(WindowState.Minimized, shell.WindowState);
         toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(WindowState.FullScreen, live.WindowState);
-        // Esc route 2: a focused page reports the key; the host consumes it.
-        live.HandleMessage("{\"type\":\"" + GameWindow.HostEscapeMessageType + "\"}");
+        Assert.True(live.Topmost);
+        // Topmost is rented while active only; headless never (de)activates, so raise it the platform's way.
+        static void Raise(Window w, string m) => typeof(WindowBase).GetMethod(m,
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(w, null);
+        Raise(live, "HandleDeactivated");
+        Assert.False(live.Topmost);
+        Raise(live, "HandleActivated");
+        Assert.True(live.Topmost);
+        live.WindowState = WindowState.Normal;   // the window manager leaves fullscreen by itself
+        Assert.False(live.Topmost);
+        toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        // Esc route 2: a focused page reports the key; the host consumes it. Through the engine's seams,
+        // so the bridge must be injected on load and the same-origin guard must let the page through.
+        var scripts = new System.Collections.Generic.List<string>();
+        live.Web.ScriptSinkForTests = scripts.Add;
+        live.Web.OnNavigationCompleted(live.PageUrl);
+        Assert.Contains(GameWindow.EscapeBridgeScript, scripts);
+        live.Web.OnWebMessage("{\"type\":\"" + GameWindow.HostEscapeMessageType + "\"}");
         Assert.Equal(WindowState.Normal, live.WindowState);
         // The shared game panic surface closes the real replay host and restores what it ducked.
         var surface = Assert.Single(PanicSurfaces.All, s => s.Id == "games");

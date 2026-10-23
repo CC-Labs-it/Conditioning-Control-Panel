@@ -146,6 +146,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             + "var w=window.chrome&&window.chrome.webview;if(w&&w.dispatchEvent){w.dispatchEvent(new MessageEvent('message',{data:m}));}}catch(e){}})("
             + json + ");");
 
+        /// <summary>Test seam: sees every script asked to run, engine or not (headless has none).</summary>
+        internal Action<string>? ScriptSinkForTests;
+
         /// <summary>The seam the engine's WebMessageReceived routes through (headless tests drive it).</summary>
         internal void OnWebMessage(string? body)
         {
@@ -172,6 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
+            ScriptSinkForTests?.Invoke(javaScript);
             if (_web is null || string.IsNullOrEmpty(javaScript)) return null;
             try { return await _web.InvokeScript(javaScript); }
             catch (Exception ex)

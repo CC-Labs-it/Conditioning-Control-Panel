@@ -80,7 +80,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             };
             DockPanel.SetDock(strip, Dock.Top);
             UpdateJustDropToggle();
-            PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) UpdateJustDropToggle(); };
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property != WindowStateProperty) return;
+                UpdateJustDropToggle();
+                // The window manager can leave fullscreen on its own: the rental ends with it.
+                Topmost = WindowState == WindowState.FullScreen && IsActive;
+            };
             // Esc route 1 (WPF HookHostFullscreenInput :694-704): while the host holds the keyboard.
             AddHandler(KeyDownEvent, (_, e) =>
             {
