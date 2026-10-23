@@ -13,7 +13,7 @@
  */
 import { MeshBasicNodeMaterial, Color, DoubleSide } from 'three/webgpu';
 import { vec3, float, vertexColor, normalWorld, positionWorld, cameraPosition, normalize, dot, max, abs, pow, mix, clamp,
-  smoothstep, texture, uv, uniform, faceDirection, reflect, attribute, positionLocal } from 'three/tsl';
+  smoothstep, texture, uv, uniform, faceDirection, reflect, attribute, positionGeometry } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { worldLook } from '../colossiMath.js';
 import { currentArt } from '../art.js';
@@ -83,7 +83,7 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   const H = normalize(Lv.add(V));
   const wearMap = finish.metalness > 0.5 ? currentArt()?.detail('detail-gold-wear') : null;
   // Source-local scalar variation needs no UV changes on the immutable watch/chess models.
-  const wear = wearMap ? texture(wearMap, positionLocal.xy.div(0.22)).r : float(0);
+  const wear = wearMap ? texture(wearMap, positionGeometry.xy.div(0.22)).r : float(0);
   const specPower = float(finish.exponent).mul(wear.mul(-0.22).add(1));
   const spec = pow(max(dot(Nf, H), 0), specPower).mul(W.specGain * finish.gain).mul(wear.mul(-0.15).add(1));
   const edge = max(float(1).sub(abs(dot(Nf, V))), 0);   // never negative under pow (NaN guard)
