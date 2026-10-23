@@ -119,6 +119,31 @@ public sealed class EnhancementsProTests
     });
 
     [Fact]
+    public Task RealLeftClickTogglesAndRightClickDoesNot() => OnUi((tab, s, p, w) =>
+    {
+        // WPF opens on MouseLeftButtonDown of the header (MainWindow.Enhancements.cs:1119); drive a real pointer.
+        var parent = new StackPanel();
+        tab.AddProSection(parent, "ditzy_data_pro", IconKind.ChartMultiple, "label_pro_lifetime_title", () => new TextBlock { Text = "built" });
+        var click = new Window { Width = 400, Height = 300, Content = parent };
+        click.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            var button = (Border)parent.Children[0];
+            var panel = (Border)parent.Children[1];
+            var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), click)!.Value;
+            click.MouseDown(at, MouseButton.Right); click.MouseUp(at, MouseButton.Right);
+            Assert.False(panel.IsVisible);
+            click.MouseDown(at, MouseButton.Left); click.MouseUp(at, MouseButton.Left);
+            Assert.True(panel.IsVisible);
+            Assert.Equal("built", Assert.IsType<TextBlock>(panel.Child).Text);
+            click.MouseDown(at, MouseButton.Left); click.MouseUp(at, MouseButton.Left);
+            Assert.False(panel.IsVisible);
+        }
+        finally { click.Close(); }
+    });
+
+    [Fact]
     public Task LifetimeShowsAllCountersAndMondayFirstActivityWithoutInventingLegacyDays() => OnUi((tab, s, p, w) =>
     {
         s.TotalConditioningMinutes = 90;
