@@ -108,6 +108,17 @@ public sealed class BubbleCountGameTests
         Assert.Null(window.SafetyInterval);
         Assert.Equal(1, game.Skipped);
         Assert.Empty(BubbleCountResultWindow.OpenWindows);
+
+        // WPF BrowserUnsafeVideoCache.Add (BubbleCountWindow.xaml.cs:1062): the failed file is marked,
+        // so the next game for it takes LibVLC instead of skipping on the browser forever.
+        Assert.True(BrowserUnsafeVideoCache.Contains(game.Clip));
+        Assert.False(BrowserVideoGate.ShouldUseBrowser(game.Clip));
+        Assert.Equal(LibVlcAudio.Shared != null, BubbleCountHost.Instance.CanPlay(game.Clip));
+        BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
+            _ => game.Completed++, () => game.Skipped++);
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        Assert.Single(game.Surfaces);
+        Assert.All(BubbleCountWindow.OpenWindows, w => Assert.Null(w.Browser));
     });
 
     [Fact]
@@ -139,6 +150,7 @@ public sealed class BubbleCountGameTests
         using var game = new BrowserGame();
         for (var i = 0; i < 2; i++)
         {
+            BrowserUnsafeVideoCache.ResetForTests(); // the unseen end marked the clip; give the close case a browser again
             BubbleCountWindow.ShowOnAllMonitors(game.Clip, BubbleCountScheduler.Difficulty.Easy, true,
                 _ => game.Completed++, () => game.Skipped++);
             var window = Assert.Single(BubbleCountWindow.OpenWindows);
@@ -191,7 +203,8 @@ public sealed class BubbleCountGameTests
             Settings.Current.AudioOutputDeviceId = "";
             Settings.Current.DualMonitorEnabled = false;
             Settings.Current.MasterVolume = 75;
-            BrowserVideoGate.EngineAccepts = (p, _) => BrowserVideoSurface.Map(p) != null;
+            BrowserUnsafeVideoCache.ResetForTests();
+            BrowserVideoGate.EngineAccepts = BrowserVideoSurface.Accepts; // the real gate minus the native provider
             BrowserVideoSurface.Create = () => { var s = new BrowserVideoSurface(_ => Task.FromResult<string?>("true")); Surfaces.Add(s); return s; };
             Cache.StoreDuration(Clip, 30);
         }
@@ -201,6 +214,7 @@ public sealed class BubbleCountGameTests
             BubbleCountResultWindow.ForceCloseAll();
             BrowserVideoSurface.Create = _create;
             BrowserVideoGate.EngineAccepts = _gate;
+            BrowserUnsafeVideoCache.ResetForTests(); // drop the debounced save of a marked temp clip
             CorePaths.EffectiveAssetsProvider = _assets;
             CoreSettings.ServiceProvider = _settings;
             _cacheField.SetValue(null, _oldCache);

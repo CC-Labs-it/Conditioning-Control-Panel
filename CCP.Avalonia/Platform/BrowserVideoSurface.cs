@@ -26,8 +26,10 @@ internal sealed class BrowserVideoSurface : IDisposable
         return null;
     };
 
-    internal static void Seed() => BrowserVideoGate.EngineAccepts = (path, key) =>
-        WebHost.IsAvailable && !BrowserUnsafeVideoCache.Contains(path, key) && Map(path) != null;
+    internal static void Seed() => BrowserVideoGate.EngineAccepts = (path, key) => WebHost.IsAvailable && Accepts(path, key);
+
+    /// <summary>The engine half below provider availability (tests seed this without a native browser).</summary>
+    internal static bool Accepts(string path, string? key) => !BrowserUnsafeVideoCache.Contains(path, key) && Map(path) != null;
 
     internal static string? Map(string path)
     {

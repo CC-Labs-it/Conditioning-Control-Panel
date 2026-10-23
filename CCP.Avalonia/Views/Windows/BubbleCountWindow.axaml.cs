@@ -13,6 +13,7 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Video.Browser;
 using LibVLCSharp.Shared;
 using Difficulty = ConditioningControlPanel.Services.BubbleCountScheduler.Difficulty;
 
@@ -449,10 +450,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _browser.Message += OnBrowserMessage;
             _browser.Failed += () => Dispatcher.UIThread.Post(() =>
             {
-                if (!_closed && !_gameCompleted && !_videoEnded && _isPrimary)
-                {
-                    if (_browser?.Playing == true) OnVideoEnded(); else SkipGame();
-                }
+                if (!_closed && !_gameCompleted && !_videoEnded && _isPrimary) EndBrowserGame("browser failed");
             });
             if (_isPrimary) InitializeDuration(); else _targetBubbleCount = _sharedTargetCount;
             _browser.Start(url, _isPrimary, CoreSettings.Current.MasterVolume);
@@ -470,8 +468,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case "ended":
                     Dispatcher.UIThread.Post(() =>
                     {
-                        if (_closed || _gameCompleted || _videoEnded) return;
-                        if (_browser?.Playing == true) OnVideoEnded(); else SkipGame();
+                        if (!_closed && !_gameCompleted && !_videoEnded) EndBrowserGame("ended before playing");
                     });
                     break;
                 case "key":
@@ -484,6 +481,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                     break;
             }
+        }
+
+        /// <summary>WPF OnBrowserFailure (BubbleCountWindow.xaml.cs:1053): mid-clip ends the video; before any
+        /// frame the game is skipped and the file marked browser-unsafe so the next game takes LibVLC.
+        /// WPF blames the file only for page decode errors and stands the engine down after renderer
+        /// crashes; WebHost reports neither a crash nor an error code, so every pre-playing failure blames it.</summary>
+        private void EndBrowserGame(string reason)
+        {
+            if (_browser?.Playing == true) { OnVideoEnded(); return; }
+            BrowserUnsafeVideoCache.Add(_videoPath, reason);
+            SkipGame();
         }
 
         private void SkipGame()

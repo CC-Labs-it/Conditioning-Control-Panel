@@ -84,8 +84,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF VideoService.MetadataCache: created on first use on the shared LibVLC; a miss starts
         /// a background parse and the clip is kept this refill.</summary>
         private static VideoMetadataCache? _lengths;
-        internal static VideoMetadataCache MetadataCache =>
-            _lengths ??= new VideoMetadataCache(LibVlcAudio.Shared);
+        internal static VideoMetadataCache MetadataCache
+        {
+            get
+            {
+                _lengths ??= new VideoMetadataCache(LibVlcAudio.Shared);
+                if (LibVlcAudio.Shared is { } vlc) _lengths.AttachDecoder(vlc); // built before LibVLC loaded
+                return _lengths;
+            }
+        }
 
         internal static double? LengthOf(string path)
         {

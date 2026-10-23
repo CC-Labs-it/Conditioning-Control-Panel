@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Services
         private Timer? _reaper;
         private Timer? _saveTimer;
         private int _reaping;
-        private readonly LibVLC? _libVlc;
+        private LibVLC? _libVlc;
         private readonly object _saveLock = new();
         private bool _dirty;
 
@@ -57,6 +57,9 @@ namespace ConditioningControlPanel.Services
             _libVlc = libVlc;
             Load();
         }
+
+        /// <summary>A cache built before LibVLC loaded starts parsing misses once a decoder exists.</summary>
+        public void AttachDecoder(LibVLC libVlc) => _libVlc ??= libVlc;
 
         private sealed class CondemnedMedia
         {
