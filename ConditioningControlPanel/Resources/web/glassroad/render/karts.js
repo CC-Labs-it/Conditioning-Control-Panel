@@ -20,10 +20,16 @@
  * kind's colour, sets stars orbiting EMI's head for the stun and glows the rim in the kind's hue (hue drifts,
  * lightness held; Gentle holds it still and halves it). A throw winds up and lunges. Self items (Surge, Glass,
  * Echo, Golden) wrap the kart in an aura (fresnel shell with climbing bands, additive) plus rising motes.
+ * ART5, the R4 rig: one AnimationMixer per kart clone plays Astra's 26 clips, picked by kartPose.js
+ * directorStep from the same edges and bus kinds the reactions hear (art/models/emi-kart-event-bindings.json).
+ * The clips own every joint, so the procedural head, arm and antenna writes and the hop, land, bump, boost,
+ * cheer and throw body motion stand down (react.rig); the steering bank (not under a lean clip), the polish 4
+ * item hit turns, flips and hops, faces, marks, stars, rim and aura stay on top. Bots wear Astra's outfits and
+ * ride the Petal / Trinket variants (render/wardrobe.js, one stable look per seat; setLook re-dresses a seat).
  */
 import {
   Group, Mesh, Sprite, SpriteNodeMaterial, MeshBasicNodeMaterial, CanvasTexture, SRGBColorSpace, Quaternion, Vector2, Vector3,
-  Euler, Color, SphereGeometry, AdditiveBlending,
+  Euler, Color, SphereGeometry, AdditiveBlending, AnimationMixer, LoopOnce, LoopRepeat, PropertyBinding,
 } from 'three/webgpu';
 import {
   texture, uv, uniform, vec2, float, pow, abs, sin, atan, smoothstep, min, normalView, positionViewDirection, positionLocal,
@@ -36,14 +42,16 @@ import { buildKart } from './dressing.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
   createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor,
-  hitRimRgb, stunStar, kindHex,
+  hitRimRgb, stunStar, kindHex, holdFace, rigTable, rigNumbers, createDirector, directorEvent, directorStep,
 } from './kartPose.js';
+import { dressKart, lookForSeat } from './wardrobe.js';
+import { lookForTier } from './wardrobeMath.js';
 import { HIT_LOOK, AURA_LOOK, ITEM_TIERS } from './items/look.js';
 import { createFaceCanvas, faceCell, FACE_LOOK, MARK_LOOK, markCell, createMarkAtlas } from './faces.js';
 
 const QX = new Quaternion(), QH = new Quaternion(), QI = new Quaternion(), EU = new Euler(), V = new Vector3(), AX = new Vector3();
 const UPY = new Vector3(0, 1, 0), FZ = new Vector3(0, 0, 1), RX = new Vector3(1, 0, 0), GC = new Color();
-const BUS_EVENTS = ['bump', 'wall', 'countdown', 'go', 'finish', 'item-hit', 'item-fire', 'race-result', 'racer-event'];
+const BUS_EVENTS = ['bump', 'wall', 'countdown', 'go', 'finish', 'item-hit', 'item-fire', 'item-roll', 'race-result', 'racer-event'];
 const RIM = [0, 0, 0], STAR = [0, 0, 0, 0];
 
 /** The stun ring: n sprites on the mark atlas's spark cell sharing one material (k fades it, rot turns them). */
@@ -75,6 +83,52 @@ function auraMesh(geo) {
 /** art/palettes.json `karts` (seven colourways); null keeps the LOOK.kartTints fallback. */
 const KART_TABLE = await fetch(new URL('../art/palettes.json', import.meta.url))
   .then((r) => (r.ok ? r.json() : null)).then((j) => (j && j.karts) || null).catch(() => null);
+
+/** The R4 rig contract (art/models/emi-kart-event-bindings.json): null keeps the procedural pose. */
+const RIG_T = await fetch(new URL('../art/models/emi-kart-event-bindings.json', import.meta.url))
+  .then((r) => (r.ok ? r.json() : null)).then((j) => (j && j.actions ? rigTable(j) : null)).catch(() => null);
+
+/**
+ * A landing clip's rider separation over time ([[t, m]...]) from its rider_mount track, for landingStart:
+ * the distance from the rest position in kart_root space (the joint's local axes are not the model's).
+ */
+function sepCurve(clip, rest) {
+  const name = PropertyBinding.sanitizeNodeName('rider_mount') + '.position';
+  const tr = clip && clip.tracks.find((t) => t.name === name);
+  if (!tr) return null;
+  const out = [];
+  for (let k = 0; k < tr.times.length; k++) out.push([tr.times[k], V.set(tr.values[k * 3], tr.values[k * 3 + 1], tr.values[k * 3 + 2]).distanceTo(rest)]);
+  return out;
+}
+
+/** The mixer and one action per bound clip on a kart clone; null without clips or the contract. */
+function makeRig(gltf, model) {
+  if (!RIG_T || !gltf || !gltf.animations || !gltf.animations.length) return null;
+  const rider = model.getObjectByName('rider_mount');
+  if (!rider) return null;
+  const rest = rider.position.clone();
+  for (const c of ['landing_squash', 'landing_heavy']) {
+    if (RIG_T[c] && !RIG_T[c].sep) RIG_T[c].sep = sepCurve(gltf.animations.find((a) => a.name === c), rest);
+  }
+  const mixer = new AnimationMixer(model), actions = {};
+  for (const clip of gltf.animations) {
+    const e = RIG_T[clip.name];
+    if (!e) continue;
+    const a = mixer.clipAction(clip);
+    if (e.loop) a.setLoop(LoopRepeat, Infinity);
+    else { a.setLoop(LoopOnce, 1); a.clampWhenFinished = true; }
+    actions[clip.name] = a;
+  }
+  return { mixer, actions, cur: null, rider, rest, bank: 1 };
+}
+
+/** Start a director change on the mixer: the old clip fades out (frozen for a landing: the captured pose), the new one fades in at `from`. */
+function playRig(rig, ch) {
+  const next = ch.clip ? rig.actions[ch.clip] || null : null, prev = rig.cur, fade = Math.max(ch.fade, 1e-3);
+  if (prev && prev !== next) { if (ch.land) prev.timeScale = 0; prev.fadeOut(fade); }
+  if (next) { next.reset(); next.timeScale = 1; next.time = ch.from || 0; next.fadeIn(fade); next.play(); }
+  rig.cur = next;
+}
 
 function tagSprite(name, hex) {
   const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
@@ -161,9 +215,16 @@ function poseHead(h, o) {
   h.b.position.copy(h.pos).add(V.set(0, o.hBob, 0).applyQuaternion(h.Pi));
 }
 
-/** greyGeo: the greybox kart geometry for when the art set is missing. */
-export function buildKarts(art, count, greyGeo) {
-  const R = rivalNumbers(LOOK), RR = reactNumbers(LOOK), list = [];
+/** The seed for the bot looks: opts.seed, else ?seed= in the page url, else 0. */
+const urlSeed = () => { try { return new URLSearchParams(globalThis.location.search).get('seed') || 0; } catch { return 0; } };
+
+/**
+ * greyGeo: the greybox kart geometry for when the art set is missing. opts: { seed (the race seed: bot looks),
+ * looks (per seat a wanted { outfit, vehicle }, e.g. a remote player's; undefined = the seat's own pick) }.
+ */
+export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] } = {}) {
+  const R = rivalNumbers(LOOK), RR = reactNumbers(LOOK), RN = rigNumbers(LOOK), list = [];
+  const kartGltf = art && art.model ? art.model('emi-teacup-kart') : null;
   const auraGeo = new SphereGeometry(1, 32, 20);
   // one head mark atlas for every kart (none without a document, e.g. under node)
   let markTex = null;
@@ -182,9 +243,14 @@ export function buildKarts(art, count, greyGeo) {
       o.material = surf.material;
       mats.push(o.material); rims.push(surf.uniforms.rim);
     });
-    const accessory = art3d && look ? attachAccessory(art, model, look.accessory) : null;
+    // ART5: the seat's outfit and vehicle (render/wardrobe.js); an outfit brings its own headpiece, so the
+    // old head accessory only stays on a rival with no outfit
+    const want = lookForTier(lookForSeat(i, seed, looks[i]), Q.name);
+    const dress = art3d ? dressKart(art, model, want, { tint: look ? look.cup : null, tintMix: LOOK.vehicleTintMix }) : null;
+    const accessory = art3d && look && !(dress && dress.outfit) ? attachAccessory(art, model, look.accessory) : null;
     const face = art3d ? faceScreen(art, model, look ? look.hex : LOOK.emiColour) : null;
     const head = art3d ? headRig(model) : null;
+    const rig = art3d ? makeRig(kartGltf, model) : null;
     const bones = {};
     for (const n of ['ant0', 'ant1', 'ant2', 'shoulderL', 'shoulderR']) {
       const b = model.getObjectByName(n);
@@ -199,7 +265,8 @@ export function buildKarts(art, count, greyGeo) {
     root.add(aura.mesh);
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
-      tag: null, tagName: '', pose: createPose(), react: createReact(i), pend: [], mem: {}, ghost: 0, mark,
+      dress, rig, dir: createDirector(),
+      tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura,
     });
   }
@@ -215,7 +282,7 @@ export function buildKarts(art, count, greyGeo) {
     if (pt) particles = pt;
     if (bus) for (const name of BUS_EVENTS) offs.push(bus.on(name, (p) => { for (const [i, kind, a] of reactionsFor(name, p)) queue(i, kind, a); }));
     // dev (?bot=1 only): the bus on the page so screenshot scripts can play an item hit or a fire
-    if (bus && globalThis.location && /[?&]bot=1(?:&|$)/.test(globalThis.location.search)) globalThis.__glassroadBus = bus;
+    if (bus && globalThis.location && /[?&]bot=1(?:&|$)/.test(globalThis.location.search)) { globalThis.__glassroadBus = bus; globalThis.__glassroadKarts = list; globalThis.__glassroadSetLook = setLook; }
   }
 
   function setName(k, name) {
@@ -266,17 +333,29 @@ export function buildKarts(art, count, greyGeo) {
     root.visible = true;
     root.position.set(st[S.posX], st[S.posY], st[S.posZ]);
     root.quaternion.set(st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]);
-    stepPose(p, st, dt, LOOK, { topMps, gentle, squash, spinRad: fxv ? fxv.spinRad || 0 : 0 });
-    for (const [kind, a] of observeKart(r, st, fxv)) reactTo(r, kind, a, RR, gentle);
-    for (const [kind, a] of k.pend) { prep(k, kind, a, fxv); reactTo(r, kind, a, RR, gentle); }
+    const rig = k.rig, spinOwned = rig && k.dir.cur === 'spin_out';
+    stepPose(p, st, dt, LOOK, { topMps, gentle, squash: rig ? 0 : squash, spinRad: fxv && !spinOwned ? fxv.spinRad || 0 : 0 });
+    const sep = rig ? rig.rider.position.distanceTo(rig.rest) : 0;
+    for (const [kind, a] of observeKart(r, st, fxv)) { reactTo(r, kind, a, RR, gentle); if (rig) directorEvent(k.dir, kind, a, RIG_T, RN, sep); }
+    for (const [kind, a] of k.pend) { prep(k, kind, a, fxv); reactTo(r, kind, a, RR, gentle); if (rig) directorEvent(k.dir, kind, a, RIG_T, RN, sep); }
     k.pend.length = 0;
     const o = stepReact(r, st, dt, RR, { gentle, lean: p.lean, fxv });
+    if (rig) {
+      // the clips own every joint; the body keeps the steering bank (not while a lean clip leans), the item
+      // hit turns, flips and hops (polish 4) and the hit squash, layered over the rig
+      const ch = directorStep(k.dir, st, dt, RIG_T, RN, gentle);
+      if (ch) { playRig(rig, ch); if (ch.face) holdFace(r, ch.face, RIG_T[ch.clip].dur); }
+      const leanClip = k.dir.cur === 'lean_left' || k.dir.cur === 'lean_right';
+      rig.bank += ((leanClip ? 0 : 1) - rig.bank) * (1 - Math.exp(-dt / 0.15));
+      rig.mixer.update(dt);
+    }
     body.position.set(0, o.lift, 0);
     body.quaternion.setFromAxisAngle(UPY, p.yawAdd + o.yaw)
-      .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff + o.roll)).multiply(QX.setFromAxisAngle(RX, p.pitch + o.pitch));
+      .multiply(QX.setFromAxisAngle(FZ, p.roll * o.stiff * (rig ? rig.bank : 1) + o.roll)).multiply(QX.setFromAxisAngle(RX, (rig ? 0 : p.pitch) + o.pitch));
     body.scale.set(1 + o.sq / 2, 1 - o.sq, 1 + o.sq / 2);
     const near = k.i === 0 || distM <= Q.kartLodM;
-    if (near) {
+    if (near && rig) { if (k.face) k.face.set(o.face, o.blink, r.t); }
+    else if (near) {
       // EMI frame: +Z up the antenna, Y forward; the sway rolls about Y, the arms lift about Y (mirrored)
       const arms = p.arms + (o.arms - p.arms) * o.armsK, ant = p.ant * o.stiff;
       turn(k.bones.ant0, UPY, -ant * 0.5); turn(k.bones.ant1, UPY, -ant * 0.3); turn(k.bones.ant2, UPY, -ant * 0.2);
@@ -370,7 +449,12 @@ export function buildKarts(art, count, greyGeo) {
 
   function hide(k) { k.root.visible = false; k.pend.length = 0; }
   /** A fresh reaction state on every kart (Again, Restart, Menu): no cheer, sulk or daze carries over. */
-  function resetReactions() { for (const k of list) { k.react = createReact(k.i); k.pend.length = 0; } }
+  function resetReactions() {
+    for (const k of list) {
+      k.react = Object.assign(createReact(k.i), { rig: !!k.rig }); k.pend.length = 0; k.dir = createDirector();
+      if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.cur = null; }
+    }
+  }
 
   function dispose() {
     for (const off of offs) off();
@@ -382,9 +466,22 @@ export function buildKarts(art, count, greyGeo) {
       if (k.stars) k.stars.material.dispose();
       k.aura.material.dispose();
       if (k.accessory) k.accessory.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
+      if (k.dress) k.dress.dispose();
+      if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.mixer.uncacheRoot(k.model); }
     }
     if (markTex) markTex.dispose();
     auraGeo.dispose();
   }
-  return { list, pose, hide, attach, resetReactions, dispose };
+  /** Re-dress seat i (multiplayer: a remote player's { outfit, vehicle } ids; an unknown id gets the default look). */
+  function setLook(i, want) {
+    const k = list[i];
+    if (!k || !k.dress) return null;
+    k.dress.dispose();
+    k.dress = dressKart(art, k.model, lookForTier(lookForSeat(i, seed, want), Q.name), { tint: k.look ? k.look.cup : null, tintMix: LOOK.vehicleTintMix });
+    if (k.accessory) k.accessory.visible = !k.dress.outfit;
+    return lookOf(k);
+  }
+  const lookOf = (k) => ({ outfit: k.dress ? k.dress.outfit : null, vehicle: k.dress ? k.dress.vehicle : null });
+
+  return { list, pose, hide, attach, resetReactions, setLook, looks: () => list.map(lookOf), dispose };
 }

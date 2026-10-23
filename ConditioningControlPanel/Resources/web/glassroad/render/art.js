@@ -26,9 +26,12 @@ export const WANT = [
   'head-bow', 'head-cat-ears', 'head-halo', 'head-spiral-crown',
   // polish 2: Astra's wave 3 face atlas for emi_screen (render/faces.js draws the same 16 ids until it lands)
   'emi-faces',
+  // ART5: the bot wardrobe and the two vehicle variants on the R4 kart rig (render/wardrobe.js)
+  'emi-outfit-croupier', 'emi-outfit-pool', 'emi-outfit-varsity', 'emi-outfit-labcoat', 'emi-outfit-cheer', 'emi-outfit-swim',
+  'emi-outfit-drone-protocol', 'emi-outfit-snow-day', 'emi-vehicle-petal', 'emi-vehicle-trinket',
 ];
 /** Wanted before they ship: missing from the manifest is quiet (not in failed); a broken file still counts. */
-const LATER = new Set(['emi-faces']);
+const LATER = new Set([]);
 
 let current = null;
 /** The last art set loadArt resolved (null before, or with ?art=0): modules built after boot's

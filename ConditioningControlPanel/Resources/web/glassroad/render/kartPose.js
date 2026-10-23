@@ -233,7 +233,9 @@ const spr = () => ({ x: 0, v: 0 });
 
 export function createReact(i = 0) {
   return {
-    i, t: 0, rs: (i * 7919 + 17) % 2147483647 || 1,
+    // rig: the R4 clips own the joints and the hop, land, bump, boost, cheer and throw motion (ART5); only the
+    // faces, marks, stars, rim, aura and the polish 4 item hit body motion stay procedural
+    i, t: 0, rs: (i * 7919 + 17) % 2147483647 || 1, rig: false,
     was: { init: false, air: false, boost: 0, place: 0, effect: null, shield: null, vyMin: 0 },
     hopT: -1, sq: spr(), twT: -1, twS: 1, twRad: 0, twFull: false, twSign: i & 1 ? -1 : 1, trick: true,
     spYaw: 0, tr: spr(), tp: spr(), hr: spr(), hp: spr(), hy: spr(), hb: spr(), vyPrev: null,
@@ -291,6 +293,7 @@ const BUS = {
   'item-hit': (p) => (p.verdict && p.verdict !== 'hit' ? [[p.victim, 'saved', { verdict: p.verdict }]]
     : p.verdict === 'hit' ? [[p.victim, 'itemHit', { kind: p.kind || null, durationS: p.durationS || 0 }]] : []),
   'item-fire': (p) => [[p.racer, 'fire', { id: p.id || null, mode: p.mode || null }]],
+  'item-roll': (p) => [[p.racer, 'armed', { id: p.id || null }]],
   'race-result': (p) => (p.rows || []).map((row) => [row.i, 'finish', { place: row.place, count: p.rows.length }]),
 };
 const FROM_BOTS = new Set(['wall', 'finish']);
@@ -311,13 +314,14 @@ export function observeKart(r, st, fxv) {
   const place = (fxv && fxv.place) | 0, effect = (fxv && fxv.effect) || null, shield = (fxv && fxv.shield) || null;
   if (w.init) {
     if (air && !w.air) out.push([st[S.hopT] < 0.2 ? 'hop' : 'airborne', {}]);
-    if (!air && w.air && !rescue) out.push(['land', { fall: Math.max(0, -w.vyMin) }]);
+    if (!air && w.air && !rescue) out.push(['land', { fall: Math.max(0, -w.vyMin), airTime: w.airT }]);
     if (boost !== w.boost && boost !== BOOST.NONE) out.push(['boost', { kind: boost }]);
     if (place && w.place && place !== w.place) out.push([place < w.place ? 'overtake' : 'overtaken', { place }]);
     if (effect !== w.effect) out.push(['effect', { kind: effect }]);
     if (shield && shield !== w.shield) out.push(['shield', { kind: shield }]);
   }
   w.vyMin = air ? Math.min(w.air ? w.vyMin : 0, st[S.velY]) : 0;
+  w.airT = air ? st[S.airTime] : w.airT || 0;
   w.init = true; w.air = air; w.boost = boost; w.place = place; w.effect = effect; w.shield = shield;
   return out;
 }
@@ -334,18 +338,18 @@ const knock = (r, roll, pitch, R, g) => {
 const SELF_FACE = { golden: 'heart', surge: 'determined', glass: 'smug', echo: 'wink' };
 
 const REACT = {
-  hop(r, a, R) { r.hopT = 0; r.twT = 0; r.twS = R.hopTwistS; r.twFull = false; r.twRad = R.hopTwistRad * (r.twSign = -r.twSign); r.trick = false; },
+  hop(r, a, R) { if (r.rig) { r.trick = false; return; } r.hopT = 0; r.twT = 0; r.twS = R.hopTwistS; r.twFull = false; r.twRad = R.hopTwistRad * (r.twSign = -r.twSign); r.trick = false; },
   airborne(r) { r.trick = false; },
-  land(r, a, R) { r.hopT = -1; r.sq.x = Math.max(r.sq.x, landSquash(a.fall || 0, R)); r.sq.v = 0; if ((a.fall || 0) > 9) timed(r, 'grin', R.faceShortS); },
+  land(r, a, R) { r.hopT = -1; if (!r.rig) { r.sq.x = Math.max(r.sq.x, landSquash(a.fall || 0, R)); r.sq.v = 0; } if ((a.fall || 0) > 9) timed(r, 'grin', R.faceShortS); },
   // a.lx / a.lz: the hit point in kart-local metres (karts.js fills them from the bump point)
   bump(r, a, R, g) {
     const dv = a.dv || 0;
     if (dv < R.bumpMinMps) return;
     const t = tiltAway(a.lx || 0, a.lz || 0, dv, R);
-    knock(r, t.roll, t.pitch, R, g);
+    if (!r.rig) knock(r, t.roll, t.pitch, R, g);
     if (dv >= R.dizzyMps) { r.dizT = 0; r.sprays.push(['stars', R.starCount]); marked(r, 'swirl', R.dizzyS); }
     else { timed(r, 'x-eyes', R.faceShortS); marked(r, 'sweat', R.markS); if (dv >= R.sweatMps) r.sprays.push(['sweat', R.sweatCount]); }
-    if (dv >= R.bumpSpinMps) spinOut(r, R.bumpSpinS, g);
+    if (dv >= R.bumpSpinMps && !r.rig) spinOut(r, R.bumpSpinS, g);   // the rig plays spin_out instead
   },
   wall(r, a, R, g) {
     if ((a.dv || 0) < R.wallMinMps) return;
@@ -357,8 +361,8 @@ const REACT = {
     if (!a.kind) return;
     if (SELF_FACE[a.kind]) timed(r, SELF_FACE[a.kind], R.faceHoldS);
     if (a.kind === 'golden') r.wigT = 0;
-    else if (a.kind === 'shatter') { knock(r, 0.18, -0.1, R, g); r.sprays.push(['stars', R.starCount >> 1]); }
-    else if (!SELF_FACE[a.kind]) knock(r, 0.08, 0.12, R, g);
+    else if (a.kind === 'shatter') { if (!r.rig) knock(r, 0.18, -0.1, R, g); r.sprays.push(['stars', R.starCount >> 1]); }
+    else if (!SELF_FACE[a.kind] && !r.rig) knock(r, 0.08, 0.12, R, g);
   },
   shield(r, a, R) { if (a.kind === 'golden') { r.wigT = 0; timed(r, 'heart', R.faceHoldS); } else timed(r, 'grin', R.faceShortS); },
   saved(r, a, R) { if (a.verdict !== 'mercy') timed(r, a.verdict === 'decoy' ? 'wink' : 'smug', R.faceHoldS); },
@@ -374,7 +378,7 @@ const REACT = {
     r.hitHopM = (r.hitFlip ? R.hitFlipHopM : style === 'stomp' ? R.hitHopM * 0.5 : R.hitHopM) * g;
     r.twSign = -r.twSign;
     r.sq.x = Math.max(r.sq.x, style === 'stomp' ? R.hitStompSquash : R.hitSquash); r.sq.v = 0;
-    knock(r, R.hitKnock * r.twSign, -R.hitKnock * 0.6, R, g);
+    if (!r.rig) knock(r, R.hitKnock * r.twSign, -R.hitKnock * 0.6, R, g);   // the rig's hit_recoil clip tilts
     r.shockUntil = r.t + R.faceShortS;
     r.stunUntil = r.t + clamp(a.durationS || 0, R.stunMinS, R.stunMaxS);
     r.rimUntil = r.t + R.rimHoldS;
@@ -388,14 +392,14 @@ const REACT = {
       if (a.id === 'surge') r.surgeAt = r.t;
       return;
     }
-    r.fireT = 0;
+    if (!r.rig) r.fireT = 0;   // the rig plays item_throw / item_lob
     timed(r, 'determined', R.faceShortS);
   },
   boost(r, a, R) {
     if (a.kind >= BOOST.DRIFT1 && a.kind <= BOOST.DRIFT3) { timed(r, 'sparkle', R.faceShortS + 0.25 * a.kind); if (a.kind === BOOST.DRIFT3) marked(r, 'spark', R.markS); }
     else timed(r, a.kind === BOOST.LAUNCH ? 'cheer' : 'grin', a.kind === BOOST.LAUNCH ? R.faceHoldS : R.faceShortS);
   },
-  overtake(r, a, R) { timed(r, 'smug', R.faceHoldS); r.liftT = 0; r.liftM = R.overtakeHopM; r.liftS = R.overtakeHopS; marked(r, 'spark', R.markS); },
+  overtake(r, a, R) { timed(r, 'smug', R.faceHoldS); if (!r.rig) r.liftT = 0; r.liftM = R.overtakeHopM; r.liftS = R.overtakeHopS; marked(r, 'spark', R.markS); },
   overtaken(r, a, R) { timed(r, 'sad', R.faceHoldS); marked(r, 'sweat', R.markS); },
   // a countdown opens a new race: last race's cheer or sulk, daze and hops never carry over
   countdown(r, a, R) { r.finish = 0; r.dizT = -1; r.mark = null; r.wigT = -1; r.liftT = -1; r.glT = 0; r.hitT = -1; r.stunUntil = 0; r.shockUntil = 0; r.fireT = -1; r.surgeAt = -1; r.glYaw = 0; r.glUp = 1; timed(r, a.n === 1 ? 'determined' : 'neutral', R.glanceS); },
@@ -533,12 +537,12 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0, fxv = null }
   const idle = !air && st[S.speedPct] < R.idleBelowPct;
   r.idleT = idle ? r.idleT + dt : 0;
   const bk = Math.min(1, r.idleT), breath = Math.sin(TAU * R.breathHz * r.t + r.i) * bk;
-  sq += r.melt * R.meltSq + breath * R.breathSq;
+  if (!r.rig) sq += r.melt * R.meltSq + breath * R.breathSq;   // the rig breathes in idle_bob
   // a throw: wind-up squash, then the lunge stretch
   let fm = null;
   if (r.fireT >= 0) { r.fireT += dt; fm = fireMotion(r.fireT, R); if (r.fireT > R.fireWindS + R.fireLungeS) r.fireT = -1; sq += fm.sq; }
   // yaw: hop twist, a full saucer turn on long air, the Spiral's slow spin (it finishes the turn it is on)
-  if (air && !r.trick && st[S.airTime] > R.trickAirS) { r.trick = true; r.twT = 0; r.twS = R.trickSpinS; r.twFull = true; r.twRad = TAU * r.twSign; }
+  if (air && !r.trick && !r.rig && st[S.airTime] > R.trickAirS) { r.trick = true; r.twT = 0; r.twS = R.trickSpinS; r.twFull = true; r.twRad = TAU * r.twSign; }
   let yaw = 0;
   if (r.twT >= 0) { r.twT += dt; const u = r.twT / r.twS; yaw += twistAt(u, r.twRad, r.twFull); if (u >= 1) r.twT = -1; }
   if (r.effect === 'spiral' || r.spYaw) {
@@ -557,11 +561,11 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0, fxv = null }
     const u = r.wigT / R.wiggleS;
     if (u >= 1) r.wigT = -1; else roll += R.wiggleRad * g * Math.sin(TAU * R.wiggleHz * r.wigT) * (1 - u);
   }
-  r.boostLean = ease(r.boostLean, boosting && !air ? R.boostLeanRad : 0, 0.15);
+  r.boostLean = ease(r.boostLean, boosting && !air && !r.rig ? R.boostLeanRad : 0, 0.15);
   pitch += r.boostLean;
   let lift = 0;
   if (r.liftT >= 0) { r.liftT += dt; const u = r.liftT / r.liftS; if (u >= 1) r.liftT = -1; else lift += 4 * r.liftM * u * (1 - u); }
-  if (r.finish > 0) lift += R.cheerHopM * Math.abs(Math.sin(Math.PI * R.cheerHz * r.t));
+  if (r.finish > 0 && !r.rig) lift += R.cheerHopM * Math.abs(Math.sin(Math.PI * R.cheerHz * r.t));
   if (hm) { roll += hm.roll; lift += hm.lift; }
   if (fm) pitch += fm.pitch * g;
   // EMI's head: springs toward targets, pushed by vertical speed changes (lags on a hop, bobs on a landing)
@@ -611,4 +615,131 @@ export function stepReact(r, st, dt, R, { gentle = false, lean = 0, fxv = null }
   o.stunK = r.stunK < 0.005 ? 0 : r.stunK; o.rimK = r.rimK < 0.005 ? 0 : r.rimK; o.hitKind = r.hitKind;
   o.aura = r.auraShown; o.auraK = r.auraShown ? r.auraK : 0;
   return o;
+}
+
+/** Hold face id for holdS (a rig clip's own face; a strong mood still wins, pickFace). */
+export const holdFace = (r, id, holdS) => { if (id) timed(r, id, holdS); };
+
+// ---- the R4 rig (ART5): which of Astra's 26 clips plays, from the sim's events and state ----
+// art/models/emi-kart-event-bindings.json is the contract: priorities, cooldowns, fades and faces come from
+// it (rigTable); the selection below follows its signals. One primary clip at a time, crossfaded by the mixer
+// (render/karts.js). A landing starts its clip where the rider's separation matches what the kart really
+// had in the air (landingStart), so an early landing never reopens the full-air gap.
+
+/** Rig numbers; LOOK.rig (render/look.js) overrides any of them. */
+export const RIG_DEFAULTS = {
+  heavyAirS: 0.6,            // land tier 2 and up (feel.json air.mediumS) plays landing_heavy
+  spinMps: 7.5, bumpMinMps: 1, wallMinMps: 3,
+  maxEnter: 0.98, maxExit: 0.9, idleBelow: 0.03, airGlideS: 0.3,
+  landSkipM: 0.004,          // less rider separation than this at touchdown: no landing clip (a zero gap stays zero)
+  landFadeS: 0.06,           // the frozen incoming pose blends into the matched landing frame
+  gentleFadeS: 0.3,
+  // Gentle: the calm clips only; separation, spin and knock clips give way to the assembled rest
+  gentleClips: ['idle_bob', 'lean_left', 'lean_right', 'wave', 'cheer', 'sulk', 'item_ready', 'countdown_ready'],
+};
+
+export const rigNumbers = (L) => ({ ...RIG_DEFAULTS, ...((L && L.rig) || {}) });
+
+/** The bindings json -> { clip: { dur, loop, hold, pri, cd, inS, outS, face, sep } } (sep: a landing's separation curve, filled by karts.js). */
+export function rigTable(bindings) {
+  const T = {};
+  for (const a of (bindings && bindings.actions) || []) {
+    const f = a.faceTimeline && a.faceTimeline[0];
+    T[a.clip] = {
+      clip: a.clip, dur: a.durationSec || 0, loop: a.playback === 'loop', hold: a.playback === 'hold', pri: a.priority | 0,
+      cd: (a.interruption && a.interruption.cooldownSec) || 0, inS: (a.entry && a.entry.fadeSec) || 0,
+      outS: (a.exit && a.exit.fadeSec) || 0, face: (f && f.id) || null, sep: null,
+    };
+  }
+  return T;
+}
+
+/** The landing clip time whose rider separation first falls to sep (curve = [[t, sepM]...], falling); 0 at or above the start. */
+export function landingStart(sep, curve) {
+  if (!curve || !curve.length || sep >= curve[0][1]) return 0;
+  for (let k = 1; k < curve.length; k++) {
+    const [t0, s0] = curve[k - 1], [t1, s1] = curve[k];
+    if (s1 <= sep) return s0 === s1 ? t1 : t0 + (t1 - t0) * clamp((s0 - sep) / (s0 - s1), 0, 1);
+  }
+  return curve[curve.length - 1][0];
+}
+
+export function createDirector() {
+  return { cur: null, own: false, t: 0, now: 0, cool: {}, req: null, armed: false, countdown: false, finish: 0, maxOn: false };
+}
+
+/** One reaction kind (observeKart edges, reactionsFor bus kinds) -> a clip request; sep = the rider's separation now (m). */
+export function directorEvent(d, kind, a, T, N, sep = 0) {
+  a = a || {};
+  let c = null, from = 0;
+  if (kind === 'hop') c = 'jump_takeoff';
+  else if (kind === 'airborne') c = 'ramp_takeoff';
+  else if (kind === 'land') {
+    c = (a.airTime || 0) >= N.heavyAirS ? 'landing_heavy' : 'landing_squash';
+    const e = T[c];
+    if (e && e.sep) { from = landingStart(sep, e.sep); if (sep < N.landSkipM || from >= e.dur - 0.05) c = null; }
+  } else if (kind === 'bump' || kind === 'wall') {
+    const dv = a.dv || 0, side = kind === 'bump' ? a.lx || 0 : a.side || 0;
+    if (dv >= N.spinMps) c = 'spin_out';
+    else if (dv >= (kind === 'bump' ? N.bumpMinMps : N.wallMinMps)) c = side < 0 ? 'bump_left' : 'bump_right';
+  } else if (kind === 'itemHit') c = 'hit_recoil';
+  else if (kind === 'fire') { d.armed = false; c = a.mode === 'throw' ? 'item_throw' : a.mode === 'lob' ? 'item_lob' : null; }
+  else if (kind === 'armed') d.armed = true;
+  else if (kind === 'boost') c = 'boost_recoil';
+  else if (kind === 'overtake') c = 'wave';
+  else if (kind === 'countdown') { d.countdown = a.n === 1; d.finish = 0; d.armed = false; }
+  else if (kind === 'go') d.countdown = false;
+  else if (kind === 'finish') { if (a.place && a.count) d.finish = a.place <= 3 ? 1 : a.place >= a.count && a.count >= 4 ? -1 : 0; }
+  if (!c || !T[c] || (d.cool[c] ?? -1) > d.now) return;
+  if (!d.req || T[c].pri >= T[d.req.clip].pri) d.req = { clip: c, from };
+}
+
+/** The clip state asks for now (rescue, finish, air, countdown, held item, top speed, drift lean, idle), or null. */
+export function rigStateWant(d, st, N) {
+  const air = st[S.airborne] > 0.5, sp = st[S.speedPct], ph = st[S.respawnPhase];
+  d.maxOn = !air && st[S.grounded] > 0 && ph === RESPAWN.NONE && sp >= (d.maxOn ? N.maxExit : N.maxEnter);
+  if (ph === RESPAWN.PULL) return 'rescue_pull';
+  if (ph === RESPAWN.HOVER) return 'rescue_hover';
+  if (ph === RESPAWN.RELEASE) return 'rescue_release';
+  if (d.finish) return d.finish > 0 ? 'cheer' : 'sulk';
+  if (air && st[S.airTime] >= N.airGlideS) return 'air_glide';
+  if (d.countdown) return 'countdown_ready';
+  if (d.armed) return 'item_ready';
+  if (d.maxOn) return 'max_speed';
+  if (st[S.driftDir]) return st[S.driftDir] < 0 ? 'lean_left' : 'lean_right';
+  if (!air && sp < N.idleBelow) return 'idle_bob';
+  return null;
+}
+
+/**
+ * One frame: pick the primary clip. The higher priority wins; a fresh event beats a running clip of the same
+ * priority (outside its cooldown); a running clip beats a state of the same priority. Returns null (no change)
+ * or { clip (null = back to rest), fade, from, face, land }.
+ */
+export function directorStep(d, st, dt, T, N, gentle = false) {
+  d.now += dt; d.t += dt;
+  const ok = (c) => !!(c && T[c] && (!gentle || N.gentleClips.includes(c)));
+  const air = st[S.airborne] > 0.5, prev = d.cur ? T[d.cur] : null;
+  let live = null;
+  if (prev && d.own && ok(d.cur)) {
+    if (d.cur === 'jump_takeoff' || d.cur === 'ramp_takeoff') { if (air && !(d.t >= prev.dur && st[S.airTime] >= N.airGlideS)) live = d.cur; }
+    else if (d.t < prev.dur) live = d.cur;
+  }
+  const want = rigStateWant(d, st, N), w = ok(want) ? want : null;
+  const req = d.req && ok(d.req.clip) ? d.req : null;
+  d.req = null;
+  let pick = live, own = !!live, from = 0;
+  const fresh = req && (!pick || T[req.clip].pri > T[pick].pri || (T[req.clip].pri === T[pick].pri && (d.cool[pick] ?? -1) <= d.now));
+  if (fresh) { pick = req.clip; own = true; from = req.from; }
+  if (w && (!pick || T[w].pri > T[pick].pri)) { pick = w; own = false; from = 0; }
+  const restart = !!fresh && pick === req.clip;
+  if (!restart && pick === d.cur) return null;
+  const land = pick === 'landing_squash' || pick === 'landing_heavy';
+  let fade = pick ? T[pick].inS : prev ? prev.outS : 0;
+  if (prev && !live && d.own && d.t >= prev.dur) fade = Math.max(fade, prev.outS);
+  if (land) fade = Math.max(fade, N.landFadeS);
+  if (gentle) fade = Math.max(fade, N.gentleFadeS);
+  d.cur = pick; d.own = own; d.t = from;
+  if (pick && own) d.cool[pick] = d.now + T[pick].cd;
+  return { clip: pick, fade, from, land, face: pick && own && !T[pick].loop ? T[pick].face : null };
 }

@@ -29,7 +29,9 @@ export const LOOK = {
   // road bands (u = lateral metres, v = s metres)
   bandLenM: 14, bandWarpPerM: 0.35, bandWarpAmp: 0.15, bandScrollMps: 6, roadAlpha: 0.72,
   seamGain: 0.35, beatBreath: 0.06, beatBreathRise: 0.15, roadGain: 0.8,
-  railHeightM: 0.9, railAlpha: 0.25, railGain: 0.9, railNearM: [4, 16],
+  // EDGES lane: the rail is 1.2 m (track/mesh.js RAIL_H); LOOK.edges overrides render/edgesMath.js EDGE_LOOK (rail posts,
+  // top line, the open-edge strip, haze and end posts)
+  railHeightM: 1.2, railAlpha: 0.25, railGain: 0.9, railNearM: [4, 16], edges: {},
   padStripeM: 1.5, padScrollMps: 8, padPulseGain: 1.5, padColour: '#ffd36b', lipColour: '#ffffff',
   // kart greybox (saucer radius about eyeBack / 9)
   saucerR: 0.72, cupColour: '#fff4fa', saucerColour: '#ffd36b', emiColour: '#ff8cc6', faceColour: '#2a1630',
@@ -68,6 +70,9 @@ export const LOOK = {
   // B1 karts (render/karts.js, render/kartPose.js). Tint 0 is the player; the mix keeps the porcelain readable
   kartTints: ['#ffffff', '#ff7eb6', '#7fc8ff', '#ffc46b', '#b48cff', '#7fe8c0', '#ff9a7a', '#e6e0ff'],
   kartTintMix: 0.8, ghostEmissive: '#fff4fa', ghostGain: 0.45, ghostRiseS: 0.15,
+  // ART5: a rival's Petal / Trinket porcelain mixes this far toward its cup colourway (render/wardrobe.js);
+  // LOOK.rig may override render/kartPose.js RIG_DEFAULTS (clip thresholds, fades, the Gentle clip list)
+  vehicleTintMix: 0.6,
   leanPerRadps: 0.13, leanMaxRad: 0.2, leanTcS: 0.12, driftLeanRad: 0.1, boostPitchRad: 0.05, pitchTcS: 0.2,
   wobbleRad: 0.26, wobbleHz: 3.2, wobbleTcS: 0.35, wobbleGentle: 0.4, botSquashGoneS: 0.25,
   antSwayPerMps2: 0.012, antSwayMaxRad: 0.5, antTcS: 0.09, armsUpRad: 0.9, armsTcS: 0.18,
