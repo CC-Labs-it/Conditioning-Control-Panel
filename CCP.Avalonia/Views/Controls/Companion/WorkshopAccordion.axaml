@@ -35,9 +35,8 @@
        x:FieldModifier="internal"      ->  dropped; x:Name alone. The seam button exists for
                                            MainWindow partials, which this head does not have yet.
        d:DataContext / MockWorkshopAccordionVm
-                                       ->  not ported (the mock, CompanionObservable and
-                                           CompanionRelayCommand are a separate chunk of the head).
-                                           x:DataType gives the compiled bindings their types. -->
+                                       ->  WorkshopPreviewVm supplies the synthetic cells to the
+                                           page-state harness; x:DataType types compiled bindings. -->
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"

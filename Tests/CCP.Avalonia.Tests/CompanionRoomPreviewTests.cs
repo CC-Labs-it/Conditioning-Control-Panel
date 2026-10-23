@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -9,6 +10,7 @@ using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Companion.Brain;
 using ConditioningControlPanel.Views.Controls.Companion;
 using Xunit;
 
@@ -161,8 +163,8 @@ public sealed class CompanionRoomPreviewTests
             var awareness = room.OfType<AwarenessPrivacyView>().Single();
             var engineView = room.OfType<EngineRoomDrawer>().Single();
             Assert.True(heroView.IsEnabled && personality.IsEnabled && awareness.IsEnabled && engineView.IsEnabled);
-            Assert.False(room.OfType<AiPermissionsGrid>().Single().IsEnabled);
-            Assert.False(room.OfType<WorkshopAccordion>().Single().IsEnabled);
+            Assert.True(room.OfType<AiPermissionsGrid>().Single().IsEnabled);
+            Assert.True(room.OfType<WorkshopAccordion>().Single().IsEnabled);
 
             var expected = new (string Key, int Level, bool Enabled, bool AiLocked, bool Plate, bool Traits,
                 bool Dormant, bool Wire, AwarenessIntensity Dial, CompanionProviderMode Provider, bool LoggedIn)[]
@@ -230,4 +232,135 @@ public sealed class CompanionRoomPreviewTests
         finally { window.Close(); }
         return Task.CompletedTask;
     });
+    [Fact]
+    public void WorkshopExhibitMatchesWpfRowsAndCommandsAreInert()
+    {
+        var vm = new WorkshopPreviewVm();
+        Assert.False(vm.IsExpanded);
+        Assert.Equal(Loc.Get("companion_workshop_drawer_note"), vm.DrawerNote);
+        Assert.Equal(new[] { "ROSTER", "BEHAVIOR", "TRIGGERS & PHRASES", "HER LIBRARY", "COMMUNITY", "AWARENESS FINE-TUNING" },
+            vm.Cells.Select(c => c.Key));
+        Assert.All(vm.Cells, c => { Assert.Equal(c.Key, c.Title); Assert.Null(c.Content); });
+        Assert.Equal(new[] { 6, 7, 4, 2, 3, 3 }, vm.Cells.Select(c => c.Rows.Count));
+        var expected = new (string Label, string? Value)[]
+        {
+            ("Synthetic Blowdoll", "Lv 12"), ("Perfect Fuckpuppet", "[100]"),
+            ("Brainwashed Slavedoll", "[125]"), ("Platinum Puppet", "[150]"), ("Bambi Cow", "[75]"), ("assign personality", null),
+            ("Idle interval", "120s"), ("Bubble time", "2s"), ("Chat shortcut", "Ctrl+T"), ("Camera shortcut", "Ctrl+Alt+K"),
+            ("Mute whispers", "on"), ("Pause in browser", "off"),
+            ("idle interval is set by her Proactivity trait — override here", null),
+            ("Trigger mode · interval", "60s"), ("Edit trigger phrases", null), ("Manage phrases", "128 active"),
+            ("Phrase presets · save / delete", null), ("Hypnotube link pool", "Bambi Sleep scope"), ("+ add link", "14 links"),
+            ("Browse shared companions", null), ("Import / Export", null), ("Refresh installed", "2"),
+            ("Cooldown", "90s"), ("Max cooldown", "off"), ("Privacy notice · full text", null)
+        };
+        var rows = vm.Cells.SelectMany(c => c.Rows).ToArray();
+        Assert.Equal(expected, rows.Select(r => (r.Label, r.Value)));
+        Assert.Equal(new[] { 0.38, 0.20, 0.45, 0.0 }, rows.Where(r => r.IsSlider).Select(r => r.SliderFraction));
+        Assert.Equal(rows[12], Assert.Single(rows.Where(r => r.IsCaption)));
+        var before = Newtonsoft.Json.JsonConvert.SerializeObject(ConditioningControlPanel.CoreSettings.Current);
+        foreach (var row in rows)
+        {
+            if (row.IsSlider || row.IsCaption) Assert.Null(row.ActivateCommand);
+            else { Assert.True(row.ActivateCommand!.CanExecute(null)); row.ActivateCommand.Execute(null); }
+        }
+        vm.FocusCellCommand.Execute(CompanionRoomAnchors.WorkshopRosterCell);
+        Assert.False(vm.IsExpanded); // WPF mock headings record a tag, never navigate.
+        Assert.Equal(before, Newtonsoft.Json.JsonConvert.SerializeObject(ConditioningControlPanel.CoreSettings.Current));
+        vm.IsExpanded = true;
+        Assert.False(new WorkshopPreviewVm().IsExpanded);
+    }
+
+    [Fact]
+    public Task EveryVariantSeatsFreshWorkshopAndDeepLinksOpenIt() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var window = Create();
+        try
+        {
+            window.Show();
+            var room = window.RoomView;
+            var shop = room.FindControl<WorkshopAccordion>("WorkshopZone")!;
+            IWorkshopAccordionVm? previous = null;
+            foreach (var key in new[] { "default", "freeTier", "dormant", "empty", "drained", "disabled" })
+            {
+                Assert.True(window.ShowVariant(key));
+                Assert.True(shop.IsEnabled);
+                var vm = Assert.IsType<WorkshopPreviewVm>(shop.ViewModel);
+                Assert.NotSame(previous, vm);
+                Assert.False(vm.IsExpanded);
+                Assert.All(vm.Cells, c => Assert.Null(c.Content));
+                Assert.Equal(6, vm.Cells.Count);
+                room.FindControl<CompanionHeroCard>("HeroZone")!.ViewModel!.SwitchCommand.Execute(null);
+                Assert.True(vm.IsExpanded);
+                window.UpdateLayout();
+                Assert.Equal(6, shop.FindControl<ItemsControl>("CellHost")!.ItemCount);
+                vm.IsExpanded = false;
+                room.FindControl<AwarenessPrivacyView>("AwarenessZone")!.ViewModel!.FineTuningCommand.Execute(null);
+                Assert.True(vm.IsExpanded);
+                previous = vm;
+            }
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PreviewPermissionsKeepWpfDefaultsAndNeverWriteOrForget() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var window = Create();
+        var previousBrain = ConditioningControlPanel.Avalonia.App.Brain;
+        var dir = Directory.CreateTempSubdirectory("ccp-preview-memory-").FullName;
+        using var store = new MemoryStore(Path.Combine(dir, "memory.json"));
+        using var brain = new CompanionBrain(new ConditioningControlPanel.Services.AiService("http://127.0.0.1:9"),
+            memory: store, store: new CompanionSessionStore(Path.Combine(dir, "session.json"), Path.Combine(dir, "legacy.json")));
+        brain.Session.Append(TurnKind.UserChat, "keep this preview sentinel");
+        ConditioningControlPanel.Avalonia.App.Brain = brain;
+        try
+        {
+            window.Show();
+            var grid = window.RoomView.FindControl<AiPermissionsGrid>("PermissionsZone")!;
+            var before = Newtonsoft.Json.JsonConvert.SerializeObject(ConditioningControlPanel.CoreSettings.Current);
+            var effects = grid.FindControl<CheckBox>("ChkCapEffects")!;
+            var memory = grid.FindControl<CheckBox>("ChkChatMemoryEnabled")!;
+            var cap = grid.FindControl<Slider>("SliderMaxHapticIntensity")!;
+            Assert.True(grid.IsEnabled);
+            Assert.False(effects.IsChecked);
+            Assert.True(memory.IsChecked);
+            Assert.Equal(0.6, cap.Value);
+            Assert.Equal("60%", grid.FindControl<TextBlock>("TxtMaxHapticIntensity")!.Text);
+            foreach (var tag in new[] { "Flash", "Video", "Audio", "Bubbles", "Subliminal", "Overlay", "LockCard", "Bounce", "Haptic", "GetBackToMe" })
+            {
+                var box = grid.FindControl<CheckBox>("ChkAllow" + tag)!;
+                Assert.False(box.IsChecked);
+                box.IsChecked = true;
+            }
+            effects.IsChecked = true;
+            memory.IsChecked = false;
+            cap.Value = 0.2;
+            Assert.False(grid.FindControl<Border>("EffectPermsPanel")!.IsVisible); // WPF shim does nothing
+            Assert.Equal("60%", grid.FindControl<TextBlock>("TxtMaxHapticIntensity")!.Text);
+            foreach (var name in new[] { "BtnClearChatMemory", "BtnLabEffectsSetupLocal", "BtnEffectsLockCta" })
+                grid.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // A settings-replacement refresh and a state-strip click must not repaint the local controls.
+            grid.SyncFromSettings();
+            window.ShowVariant("disabled");
+            Assert.True(effects.IsChecked);
+            Assert.False(memory.IsChecked);
+            Assert.Equal(0.2, cap.Value);
+            Assert.Equal(before, Newtonsoft.Json.JsonConvert.SerializeObject(ConditioningControlPanel.CoreSettings.Current));
+            Assert.Equal("keep this preview sentinel", Assert.Single(brain.Session.Turns).Text);
+            Assert.Empty(window.OwnedWindows); // no memory confirmation or setup wizard
+            // Live grids still restore the saved setting; the preview flag is per instance.
+            var live = new AiPermissionsGrid();
+            Assert.Equal(ConditioningControlPanel.CoreSettings.Current.CompanionPrompt!.ChatMemoryEnabled,
+                live.FindControl<CheckBox>("ChkChatMemoryEnabled")!.IsChecked);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.App.Brain = previousBrain;
+            window.Close();
+        }
+        return Task.CompletedTask;
+    });
+
 }

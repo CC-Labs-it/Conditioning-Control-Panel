@@ -16,8 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     ///
     /// <para>PORTED from ConditioningControlPanel/Views/Controls/Companion/CompanionRoomPreviewWindow.xaml.cs.
     /// The strip, label, width toggle and every page state cross: chat, diary, attention, hero,
-    /// personality, awareness and engine exhibits per key. The Workshop mock is the named follow-up
-    /// in the parity ledger.</para>
+    /// personality, awareness, engine and Workshop exhibits per key. Permissions stay local to the
+    /// harness, just as WPF's MainWindow-only shims do.</para>
     ///
     /// <para><b>Nothing constructs this window here — and nothing constructs it on WPF either.</b>
     /// Checked before assuming: its one entry point is
@@ -45,7 +45,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 
         // Factories preserve the WPF strip order and combinations (MockCompanionRoomVm.cs:94-161) and
         // create fresh exhibits on every switch. Attention: Plenty 0.72, Saving 0.30, Drained 0.0 + spent.
-        // ponytail: the Workshop zone (MockWorkshopAccordionVm.Collapsed in every state) has no mock here.
         private static AttentionGaugeViewModel Plenty() => AttentionGaugeViewModel.CreatePreview(0.72);
         private static ChatThresholdViewModel Chat(CompanionZoneState state, bool fresh = false) => ChatThresholdViewModel.CreatePreview(state, fresh);
 

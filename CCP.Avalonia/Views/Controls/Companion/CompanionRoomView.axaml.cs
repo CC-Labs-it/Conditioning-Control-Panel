@@ -72,10 +72,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             MemoryZone.ViewModel = memory; // DataContextChanged -> ForgetConfirm.Bind disarms the two-step
             ChatZone.ScrollThreadToEnd();
             ChatZone.PlayDormantShimmer();
-            // ponytail: the Workshop has no preview mock here yet (WPF MockWorkshopAccordionVm's
-            // synthetic cells) and the permissions grid writes real settings, so both stay inert.
-            foreach (var live in new Control[] { PermissionsZone, WorkshopZone })
-                live.IsEnabled = false;
+            WorkshopZone.ViewModel = new WorkshopPreviewVm();
+            PermissionsZone.UsePreview();
         }
 
         // =====================================================================================
