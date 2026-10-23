@@ -107,15 +107,24 @@
             <StackPanel>
 
                 <!-- ============================ HERO ============================
-                     ponytail: the remote_control.png plates are dropped - this head ships no
-                     Resources/features PNGs, so the hero ImageBrush, the side-art column and the
-                     ImgRemoteControlFeature mirror all have nothing to paint. WPF's
-                     AdaptiveSideArt.CollapseBelow=1000 collapses that column at the width this
-                     head renders at anyway. Re-add as an avares:// ImageBrush when the art moves,
-                     and restore the 3*/2* grid with it. -->
+                     HeroArtPlate is painted in code (ApplyFeatureArt: ModArt.TryLoad, a mod's
+                     features/remote_control.png first), which replaces WPF's ImgRemoteControlFeature
+                     mirror. ponytail: the side-art column stays out - WPF's
+                     AdaptiveSideArt.CollapseBelow=1000 collapses it at the width this head renders
+                     at, and that behaviour is its own row (feat-adaptive-side-art). -->
                 <Border Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
                         BorderBrush="{StaticResource TabHueBorderBrush}" BorderThickness="2" Margin="0,0,0,10">
                     <Grid ColumnDefinitions="*,Auto">
+                        <Border x:Name="HeroArtPlate" Grid.Column="0" Grid.ColumnSpan="2"
+                                CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
+                                Opacity="0.9">
+                            <Border.OpacityMask>
+                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                                    <GradientStop Color="#00000000" Offset="0"/>
+                                    <GradientStop Color="#E6000000" Offset="0.55"/>
+                                </LinearGradientBrush>
+                            </Border.OpacityMask>
+                        </Border>
 
                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="18,0,12,0"
                                     ToolTip.Tip="{loc:Str desc_remote_control}">
@@ -588,6 +597,19 @@
                                               Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Margin="16,0,0,0"
                                               IsCheckedChanged="ChkRemoteShareAvatar_Changed"/>
+                                </Grid>
+
+                                <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
+
+                                <Grid Height="34" Background="Transparent" ColumnDefinitions="*,Auto"
+                                      ToolTip.Tip="{loc:Str desc_remote_share_media_sources}">
+                                    <TextBlock Grid.Column="0" Text="{loc:Str label_remote_share_media_sources}"
+                                               FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <CheckBox Grid.Column="1" x:Name="ChkRemoteShareMediaSources"
+                                              Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                              Margin="16,0,0,0"
+                                              IsCheckedChanged="ChkRemoteShareMediaSources_Changed"/>
                                 </Grid>
                             </StackPanel>
                         </Grid>

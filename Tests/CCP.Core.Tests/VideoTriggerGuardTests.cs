@@ -1,7 +1,7 @@
 using System;
 using ConditioningControlPanel.Services;
 using Xunit;
-using static ConditioningControlPanel.Services.VideoCooldownRules;
+using static ConditioningControlPanel.Services.VideoTriggerRules;
 
 namespace CCP.Core.Tests;
 
@@ -17,7 +17,7 @@ namespace CCP.Core.Tests;
 /// was logged anywhere, which is exactly the shape of the report.
 ///
 /// The dispatcher call is now fire-and-forget with its own catch, and the guard no longer trusts the
-/// flag indefinitely. <see cref="VideoCooldownRules.EvaluateTriggerGuard"/> is that escape hatch, pulled out
+/// flag indefinitely. <see cref="VideoTriggerRules.EvaluateTriggerGuard"/> is that escape hatch, pulled out
 /// as pure logic so it can be tested without LibVLC (the same seam MandatoryVideoScheduler.EvaluateGrace uses).
 /// </summary>
 public class VideoTriggerGuardTests

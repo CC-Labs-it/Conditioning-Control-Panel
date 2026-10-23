@@ -4,7 +4,7 @@ namespace ConditioningControlPanel.Services
 {
     /// <summary>
     /// The timing rules of WPF VideoService that hold something off for a while: the post-poisoning
-    /// cooldown (#766), the stale-trigger escape (#1135) and the grace pause's timer re-phasing (#735).
+    /// cooldown (#766) and the grace pause's timer re-phasing (#735).
     /// Pure, so they are tested without LibVLC or a dispatcher.
     /// </summary>
     internal static class VideoCooldownRules
@@ -22,35 +22,6 @@ namespace ConditioningControlPanel.Services
             if (armedTicks == 0) return 0;
             var elapsed = (nowTicks - armedTicks) / TimeSpan.TicksPerMillisecond;
             return elapsed >= NativePoisonCooldownMs ? 0 : NativePoisonCooldownMs - elapsed;
-        }
-
-        // ---- the trigger guard (#1135) ----
-
-        /// <summary>How long a trigger may sit between claiming the in-progress guard and reaching
-        /// PlayVideo before the next trigger declares it dead and takes over. Generously past the real
-        /// path (an off-thread pick, which decrypts a whole pack clip, plus the 800ms freeze delay) and
-        /// far short of the InteractionQueue's 5-minute stuck detector.</summary>
-        internal static readonly TimeSpan TriggerStallCeiling = TimeSpan.FromSeconds(45);
-
-        internal enum TriggerGuardDecision
-        {
-            /// <summary>No trigger is in flight; claim the guard and go.</summary>
-            Proceed,
-            /// <summary>A trigger really is mid-flight; this one is a genuine overlap and is dropped.</summary>
-            Skip,
-            /// <summary>The in-flight trigger is older than anything real can be: it died on the way
-            /// to PlayVideo and latched the guard. Clear it and let this trigger through.</summary>
-            ClearStaleAndProceed
-        }
-
-        /// <summary>The in-progress guard with its escape hatch: without it the guard could latch for
-        /// good and silently eat every later video (#1135 "video bubbles do nothing").</summary>
-        internal static TriggerGuardDecision EvaluateTriggerGuard(bool triggerInProgress, TimeSpan sinceTriggerStarted)
-        {
-            if (!triggerInProgress) return TriggerGuardDecision.Proceed;
-            return sinceTriggerStarted < TriggerStallCeiling
-                ? TriggerGuardDecision.Skip
-                : TriggerGuardDecision.ClearStaleAndProceed;
         }
 
         // ---- grace pause timers (#735); the decision itself is MandatoryVideoScheduler.EvaluateGrace ----
