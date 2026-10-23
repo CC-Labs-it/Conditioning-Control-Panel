@@ -358,23 +358,22 @@ namespace ConditioningControlPanel.Services
                 cleanText.ToUpper().Replace("\u2019", "'"),
             };
 
-            // Check active mod's audio directory first
-            var modPath = App.Mods?.ActiveMod?.InstalledPath;
-            if (modPath != null)
-            {
-                var modAudioDir = Path.Combine(modPath, "resources", "sounds", "flashes_audio");
-                if (Directory.Exists(modAudioDir))
+            // Active mod's audio directory first, then the default sub_audio directory - Bambi-voiced,
+            // so never for CCP Default. Those mods get the recorded neutral clips instead
+            // (Resources/Audio/backroom/words). The order lives in SpokenClipRule.
+            return SpokenClipRule.Resolve(
+                App.Mods?.ActiveModId,
+                modClip: () =>
                 {
-                    var result = SearchAudioDirectory(modAudioDir, cleanText, textVariants, extensions, isModCache: true);
-                    if (result != null) return result;
-                }
-            }
-
-            // Fall back to default sub_audio directory - Bambi-voiced, so never for CCP Default.
-            // Those mods get the recorded neutral clips instead (Resources/Audio/backroom/words).
-            if (!ModAudioPolicy.UsesSharedSubAudio(App.Mods?.ActiveModId))
-                return BackRoom.BackRoomVoice.FindNeutralClip(keyword);
-            return SearchAudioDirectory(_audioPath, cleanText, textVariants, extensions, isModCache: false);
+                    var modPath = App.Mods?.ActiveMod?.InstalledPath;
+                    if (modPath == null) return null;
+                    var modAudioDir = Path.Combine(modPath, "resources", "sounds", "flashes_audio");
+                    return Directory.Exists(modAudioDir)
+                        ? SearchAudioDirectory(modAudioDir, cleanText, textVariants, extensions, isModCache: true)
+                        : null;
+                },
+                sharedClip: () => SearchAudioDirectory(_audioPath, cleanText, textVariants, extensions, isModCache: false),
+                neutralClip: () => BackRoom.BackRoomVoice.FindNeutralClip(keyword));
         }
 
         private string? SearchAudioDirectory(string directory, string cleanText, string[] textVariants, string[] extensions, bool isModCache)
@@ -906,11 +905,14 @@ namespace ConditioningControlPanel.Services
             foreach (var trigger in OrderedByPresetPriority(triggers))
             {
                 if (!trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword)) continue;
-                if (trigger.MatchType == KeywordMatchType.Regex) continue;
                 if (IsKeywordMuted(trigger.Keyword)) continue; // per-keyword hard cooldown
                 if (trigger.IsOnCooldown) continue;             // per-trigger cooldown
 
-                var words = FindMatchedWords(trigger.Keyword, allWords);
+                // #1456: regex triggers used to be skipped here, so they only ever fired from the
+                // keyboard. They now run the same pattern over the scan's text.
+                var words = trigger.MatchType == KeywordMatchType.Regex
+                    ? FindRegexMatchedWords(trigger.Keyword, allWords)
+                    : FindMatchedWords(trigger.Keyword, allWords);
                 if (words != null && words.Count > 0)
                 {
                     firedTriggers.Add(trigger);
@@ -1199,6 +1201,76 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// Regex keyword over one OCR scan (#1456). The scan's tokens are joined with single
+        /// spaces, in scan order, into the same kind of free text the keyboard matcher sees, and
+        /// the pattern runs over it with the keyboard's options (case-insensitive, 100 ms
+        /// timeout). Each match becomes ONE hit whose rect is the union of the tokens it
+        /// touches on the first token's screen, so the highlight draws one box per match. A bad
+        /// pattern, a timeout or an empty match finds nothing.
+        /// </summary>
+        internal static List<OcrWordHit>? FindRegexMatchedWords(string pattern, List<OcrWordHit> wordHits)
+        {
+            if (wordHits == null || wordHits.Count == 0 || string.IsNullOrEmpty(pattern)) return null;
+
+            var sb = new System.Text.StringBuilder();
+            var starts = new int[wordHits.Count];
+            for (int i = 0; i < wordHits.Count; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                starts[i] = sb.Length;
+                sb.Append(wordHits[i].Text ?? "");
+            }
+            var text = sb.ToString();
+
+            var results = new List<OcrWordHit>();
+            try
+            {
+                foreach (Match m in Regex.Matches(text, pattern, RegexOptions.IgnoreCase,
+                             TimeSpan.FromMilliseconds(100)))
+                {
+                    if (m.Length == 0) continue;
+                    int end = m.Index + m.Length;
+                    OcrWordHit? first = null;
+                    int minX = 0, minY = 0, maxRight = 0, maxBottom = 0;
+                    for (int i = 0; i < wordHits.Count; i++)
+                    {
+                        var w = wordHits[i];
+                        int wEnd = starts[i] + (w.Text ?? "").Length;
+                        if (wEnd <= m.Index || starts[i] >= end) continue;
+                        var r = w.ScreenRect;
+                        if (first == null)
+                        {
+                            first = w;
+                            minX = r.X; minY = r.Y; maxRight = r.Right; maxBottom = r.Bottom;
+                        }
+                        else if (ReferenceEquals(w.Screen, first.Screen))
+                        {
+                            if (r.X < minX) minX = r.X;
+                            if (r.Y < minY) minY = r.Y;
+                            if (r.Right > maxRight) maxRight = r.Right;
+                            if (r.Bottom > maxBottom) maxBottom = r.Bottom;
+                        }
+                    }
+                    if (first == null) continue; // the match sat only on joining spaces
+
+                    results.Add(new OcrWordHit
+                    {
+                        Text = m.Value,
+                        ScreenRect = new System.Drawing.Rectangle(minX, minY, maxRight - minX, maxBottom - minY),
+                        Screen = first.Screen,
+                    });
+                }
+            }
+            catch
+            {
+                // Bad pattern or timeout: same as the keyboard path, the trigger simply does not fire.
+                return null;
+            }
+
+            return results.Count > 0 ? results : null;
+        }
+
+        /// <summary>
         /// Case-insensitive whole-word comparison of an OCR token against a single
         /// keyword word. Leading/trailing punctuation on the OCR token is stripped
         /// before comparing so "sit." / "sit," / "'sit'" all match the keyword "sit"
@@ -1449,7 +1521,8 @@ namespace ConditioningControlPanel.Services
 
             // Duck once up-front if any audio action wants it.
             bool anyDuck = actions.OfType<PlayAudioAction>().Any(a => a.DuckSystemAudio);
-            if (anyDuck && App.Settings?.Current?.AudioDuckingEnabled == true)
+            if (anyDuck && !HoldsAudio(App.IsEngineRunning, App.IsSessionRunning)
+                && App.Settings?.Current?.AudioDuckingEnabled == true)
             {
                 App.Audio?.Duck(App.Settings?.Current?.DuckingLevel ?? 80);
                 duckGen = App.Audio?.DuckGeneration ?? -1;
@@ -1493,6 +1566,7 @@ namespace ConditioningControlPanel.Services
             switch (action)
             {
                 case PlayAudioAction audio:
+                    if (AudioHeldForEngineOff(trigger, "PlayAudio")) return 0;
                     return await DispatchPlayAudioAsync(audio);
 
                 case VisualEffectAction visual:
@@ -1793,7 +1867,8 @@ namespace ConditioningControlPanel.Services
                 }
 
                 double audioDuration = 0;
-                if (!string.IsNullOrEmpty(trigger.AudioFilePath) && File.Exists(trigger.AudioFilePath))
+                if (!string.IsNullOrEmpty(trigger.AudioFilePath) && File.Exists(trigger.AudioFilePath)
+                    && !AudioHeldForEngineOff(trigger, "legacy audio"))
                 {
                     for (int i = 0; i < trigger.AudioPlayCount; i++)
                     {
@@ -1890,7 +1965,7 @@ namespace ConditioningControlPanel.Services
 
                     case KeywordVisualEffect.MindWipe:
                         // Only trigger if audio files exist (TriggerOnce shows a MessageBox when empty)
-                        if (App.MindWipe?.AudioFileCount > 0)
+                        if (App.MindWipe?.AudioFileCount > 0 && !AudioHeldForEngineOff(trigger, "MindWipe"))
                             App.MindWipe.TriggerOnce();
                         break;
 
@@ -1931,10 +2006,28 @@ namespace ConditioningControlPanel.Services
             if (string.IsNullOrEmpty(path)) return 0;
             var resolved = ResolveAudioPath(path);
             if (string.IsNullOrEmpty(resolved) || !File.Exists(resolved)) return 0;
-            return PlayTriggerAudio(resolved, volumePercent);
+            return PlayTriggerAudio(resolved, volumePercent, asked: true);
         }
 
-        private double PlayTriggerAudio(string path, int volumePercent)
+        /// <summary>
+        /// ccp-bugs #1414: a keyword trigger never plays AUDIO while neither the engine nor a
+        /// session is running (its own clip, the legacy flat clip, and the Mind Wipe effect, which
+        /// is a sound and nothing else). Highlights, avatar comments, haptics, XP and the picture
+        /// effects are untouched, and so is the Test button (<see cref="PreviewAudioClip"/>).
+        /// </summary>
+        internal static bool HoldsAudio(bool engineRunning, bool sessionRunning) =>
+            !Audio.EngineOffAudioLog.IsRunning(engineRunning, sessionRunning);
+
+        private static bool AudioHeldForEngineOff(KeywordTrigger trigger, string what)
+        {
+            if (!HoldsAudio(App.IsEngineRunning, App.IsSessionRunning)) return false;
+            App.Logger?.Information("KeywordTrigger '{Kw}': {What} held, the engine is not running",
+                trigger?.Keyword, what);
+            Audio.EngineOffAudioLog.NoteHeld("keyword-trigger", what);
+            return true;
+        }
+
+        private double PlayTriggerAudio(string path, int volumePercent, bool asked = false)
         {
             lock (_audioLock)
             {
@@ -1961,6 +2054,7 @@ namespace ConditioningControlPanel.Services
                     _triggerPlayer.Init(_triggerAudioFile);
                     _triggerPlayer.Play();
                     App.Audio?.NoteOutputSuccess();
+                    Audio.EngineOffAudioLog.Note("keyword-trigger", path, asked);
 
                     App.Logger?.Information("PlayTriggerAudio: playing '{Path}' curved={Curve:0.00} master={Master:0.00} thread={Thread}",
                         Path.GetFileName(path), curvedVolume, masterVolume, System.Threading.Thread.CurrentThread.ManagedThreadId);

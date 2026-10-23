@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.V2GetItRow"
+             ToolTip.Tip="{loc:Str tooltip_v2_get}">
+    <!-- WPF Controls/V2GetItRow.xaml: one line of what the prize adds, the price in Sparkle Points
+         and a button. Every state comes from Core V2PurchaseRule; this file only draws it. -->
+    <StackPanel Margin="0,2,0,2" AutomationProperties.AutomationId="V2GetRow">
+        <TextBlock x:Name="TxtBlurb" TextWrapping="Wrap" FontSize="12" Opacity="0.85"
+                   Foreground="{DynamicResource TextLightBrush}"/>
+        <Grid Margin="0,6,0,0" ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Grid.Column="0" x:Name="TxtStatus" TextWrapping="Wrap" FontSize="11.5"
+                       VerticalAlignment="Center" Margin="0,0,10,0" Opacity="0.82"
+                       Foreground="{DynamicResource TextLightBrush}"
+                       AutomationProperties.AutomationId="V2GetStatus"/>
+
+            <StackPanel Grid.Column="1" x:Name="PricePlate" Orientation="Horizontal"
+                        VerticalAlignment="Center" Margin="0,0,10,0" IsVisible="False">
+                <!-- WPF draws the wallet's diamond as a Path at the wallet's gold; Fluent icon here (decision 2026-10-10). -->
+                <fx:IconGlyph Kind="Diamond" Variant="Filled" Foreground="#FFD580" Size="14"
+                              VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <TextBlock x:Name="TxtPrice" Text="0" FontSize="14" FontWeight="Bold" Foreground="#FFF0CA"
+                           VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="V2GetPrice"
+                           AutomationProperties.Name="{loc:Str v2_get_confirm_title}"/>
+            </StackPanel>
+
+            <!-- A TextBlock inside, not Content: Avalonia's Button would read '_' as an access key. -->
+            <Button Grid.Column="2" x:Name="BtnGet" Theme="{StaticResource SmallPinkButton}"
+                    MinWidth="74" AutomationProperties.AutomationId="V2GetButton">
+                <TextBlock x:Name="TxtGet"/>
+            </Button>
+        </Grid>
+    </StackPanel>
+</UserControl>
