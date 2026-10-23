@@ -5774,6 +5774,8 @@ Application State:
             // and here is a straight dispose - the board has nothing to flush and no verdict to
             // protect, so there is no graceful wind-down whose 1200ms timer would never tick.
             try { Services.PieceByPiece.PieceByPieceHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Glassroad (3D race preview): the same straight dispose.
+            try { Services.Glassroad.GlassroadHostService.Close(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // If the companion is on its own UI thread (AvatarOwnThread), shut its Dispatcher down so the
             // STA thread's Dispatcher.Run() returns and the thread exits cleanly. Background thread, so it
