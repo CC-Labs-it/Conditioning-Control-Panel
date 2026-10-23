@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
-            new("voice-capture", sh => sh?.CancelVoicePrompt()),
+            new("voice-capture", sh => { sh?.CancelVoicePrompt(); Platform.PulseMicSource.Wake?.StopListening(); }),
             new("ai-followups", _ => MainShellWindow.CancelPendingAi()),
             // WPF MainWindow.xaml.cs:1726: standalone Lab minigames first; the engine stop never reaches them.
             new("blink-trainer", _ => Overlays.BlinkTrainerSession.Stop()),

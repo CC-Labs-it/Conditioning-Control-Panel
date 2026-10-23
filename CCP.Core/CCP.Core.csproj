@@ -56,6 +56,7 @@
     <!-- Vosk: the speech engine (Services/Speech/SpeechEngine.cs). Managed side is netstandard2.0.
          Its build/ targets add libvosk to Core's output, picked by the BUILD MACHINE's OS (not the RID),
          and that file copies on to every consumer; heads still reference Vosk themselves. -->
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.3" />
     <PackageReference Include="Vosk" Version="0.3.38" />
     <!-- Webcam detectors (Services/Webcam/FaceModels.cs): managed halves only. Each head brings its
          own OpenCV + ONNX Runtime natives, so nothing native ships from here. -->

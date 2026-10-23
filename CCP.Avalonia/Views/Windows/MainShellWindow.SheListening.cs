@@ -8,8 +8,7 @@
 // The mic opens through MainShellWindow.VoiceCommands.cs (the wake loop / push-to-talk feeding
 // Core VoiceCommands) exactly under WPF's conditions; every repaint here reconciles it, so arm,
 // Stop, revoke and an entitlement lapse all open or close it. The title-bar mic pill (WPF
-// MainWindow.LabTab.cs UpdateMicPill) lives here too. ponytail: not here - sherpa wake engine
-// (calibration shows WPF's "not installed" notice).
+// MainWindow.LabTab.cs UpdateMicPill) lives here too; calibration uses the shared sherpa engine.
 //
 // _slLoading, not _isLoading: a partial-class field is declared once, and Avalonia's CheckBox
 // raises IsCheckedChanged on a programmatic set, so seeding needs its own guard.
@@ -104,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // "Revoke consent" only means something once consent exists.
             tab.SL_PrivacyCard.IsVisible = s.MicConsentGiven;
 
+            RefreshWakeEngineStatus();
             RefreshSheListeningDeviceChips();
             RefreshSheListeningStatus();
         }
@@ -285,7 +285,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (Named<Border>("MicActivePill") is not { } pill) return;
             var s = CoreSettings.Current;
-            pill.IsVisible = (s.MicConsentGiven && s.SpeechWakeWordEnabled) || VoiceSpeech?.IsListening == true;
+            pill.IsVisible = (s.MicConsentGiven && s.SpeechWakeWordEnabled) || VoiceSpeech?.IsListening == true || VoiceWake?.IsListening == true;
         }
 
         private Services.Speech.SpeechEngine? _micPillEngine;
@@ -296,6 +296,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _micPillEngine = VoiceSpeech;
             if (_micPillEngine != null) _micPillEngine.ListeningChanged += OnMicListeningChanged;
+            var wake = VoiceWake;
+            if (wake != null) wake.ListeningChanged += OnMicListeningChanged;
+            Closed += (_, _) => { if (wake != null) wake.ListeningChanged -= OnMicListeningChanged; };
             Closed += (_, _) => { if (_micPillEngine != null) _micPillEngine.ListeningChanged -= OnMicListeningChanged; };
             if (Named<Border>("MicActivePill") is { } pill)
                 pill.KeyDown += (_, e) =>   // P17: the privacy stop is keyboard-reachable
@@ -310,10 +313,73 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnMicListeningChanged(object? sender, bool listening) =>
             global::Avalonia.Threading.Dispatcher.UIThread.Post(UpdateMicPill);
 
-        /// <summary>WPF SL_Calibrate_Click's first branch: this head has no sherpa wake engine
-        /// (App.WakeWord), so it is never configured and WPF's notice is the whole answer.</summary>
-        internal void SL_Calibrate_Click()
-            => _ = Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word",
-                "The offline wake-word model isn't installed yet, so there's nothing to calibrate.");
+        private bool _calibratingWake;
+
+        private void RefreshWakeEngineStatus()
+        {
+            if (_calibratingWake || SheListeningPage is not { } tab) return;
+            var wake = VoiceWake;
+            var active = wake?.IsAvailable == true; // lazy init; never reset a live native handle
+            tab.TxtSL_WakeEngineStatus.Text = active
+                ? "Active — open-source 'Hey Bambi' wake engine installed."
+                : wake?.IsConfigured == true
+                    ? "Model found but the engine didn't start — see logs. Using the built-in recognizer."
+                    : "Drop the sherpa-onnx KWS model into Resources\\Models\\sherpa-kws\\ to enable (see the README there).";
+            tab.TxtSL_WakeEngineStatus.Foreground = new SolidColorBrush(active
+                ? Color.FromRgb(0x90, 0xEE, 0x90) : Color.FromRgb(0x88, 0x88, 0x88));
+        }
+
+        internal async void SL_Calibrate_Click()
+        {
+            if (_calibratingWake || SheListeningPage is not { } tab) return;
+            var wake = VoiceWake;
+            if (wake?.IsConfigured != true)
+            {
+                await Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word",
+                    "The offline wake-word model isn't installed yet, so there's nothing to calibrate.");
+                return;
+            }
+            if (!CoreSettings.Current.MicConsentGiven)
+            {
+                var dlg = new Dialogs.MicConsentDialog();
+                await dlg.ShowDialogSafe(this);
+                if (!dlg.ConsentGiven || !CoreSettings.Current.MicConsentGiven) return;
+            }
+            _calibratingWake = true;
+            tab.BtnSL_Calibrate.IsEnabled = false;
+            void Status(string text) => tab.TxtSL_WakeEngineStatus.Text = text;
+            try
+            {
+                StopVoiceInput(); // free the single mic before calibration owns it
+                for (int i = 0; i < 20 && (wake.IsListening || VoiceSpeech?.IsListening == true); i++)
+                    await System.Threading.Tasks.Task.Delay(25);
+                tab.TxtSL_WakeEngineStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xA0, 0xFF));
+                Status("Listening… say “Hey Bambi” 5 times, pausing between each.");
+                var progress = new Progress<Services.Speech.SherpaWakeService.CalibrationProgress>(p =>
+                    global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        if (!_calibratingWake || p.Phase == "listen" && !wake.IsListening) return;
+                        Status(p.Phase == "analyze" ? "Got it — finding your best sensitivity…"
+                            : $"Listening… say “Hey Bambi” clearly  ({p.Captured}/{p.Target})");
+                    }));
+                var result = await wake.CalibrateAsync(5, progress);
+                tab.TxtSL_WakeEngineStatus.Foreground = new SolidColorBrush(result.Success
+                    ? Color.FromRgb(0x90, 0xEE, 0x90) : Color.FromRgb(0xFF, 0xB0, 0xB0));
+                Status(result.Message);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Wake calibration failed");
+                tab.TxtSL_WakeEngineStatus.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xB0, 0xB0));
+                Status("Calibration failed — see logs.");
+            }
+            finally
+            {
+                _calibratingWake = false;
+                tab.BtnSL_Calibrate.IsEnabled = true;
+                RefreshVoiceInputModes();
+                UpdateMicPill();
+            }
+        }
     }
 }

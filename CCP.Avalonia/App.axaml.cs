@@ -1156,6 +1156,7 @@ namespace ConditioningControlPanel.Avalonia
 
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 
+            try { Platform.PulseMicSource.Wake?.Dispose(); } catch { }
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 

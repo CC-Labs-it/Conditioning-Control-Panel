@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         /// <summary>The seeded engine (null until <see cref="Seed"/> ran on Linux).</summary>
         internal static SpeechEngine? Speech { get; private set; }
+        internal static SherpaWakeService? Wake { get; private set; }
 
         private readonly string? _sourceOverride;
 
@@ -38,6 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// (the lock-card tests hand in a WAV-fed pair, never a real microphone).</summary>
         internal static void Use(SpeechEngine engine, IMicSource mic)
         {
+            Wake?.Dispose();
+            Wake = new SherpaWakeService(mic);
             Speech = engine;
             CoreSpeech.IsAvailableProvider = () => engine.IsAvailable;
             CoreSpeech.HasCaptureDeviceProvider = () => mic.HasDevice;

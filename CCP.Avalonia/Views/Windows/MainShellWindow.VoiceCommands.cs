@@ -4,8 +4,7 @@
 //
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
-// ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path), no bark voice lines (text confirmations), no
-// echo wait on her clip (confirmations here are text-only; a 300 ms tail stands in). Intents with no
+// Sherpa KWS is preferred when installed; Vosk remains WPF's fallback. Intents with no
 // seam here (keyword triggers, shake, deeper) are left out of the grammar.
 
 using System;
@@ -25,6 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class MainShellWindow
     {
         private static SpeechEngine? VoiceSpeech => Platform.PulseMicSource.Speech;
+        private static SherpaWakeService? VoiceWake => Platform.PulseMicSource.Wake;
 
         private VoiceCommands? _voiceCommands;
         private int _voiceBusyFlag;
@@ -44,13 +44,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             OnRefused = () => LockdownService.Current?.NotifyEscapeAttempt(EscapeKinds.Stop),
             ShowListening = line => _avatarTubeWindow?.ShowListeningBubble(line),
             HideListening = () => _avatarTubeWindow?.HideListeningBubble(),
-            Say = (text, audio) => Dispatcher.UIThread.Post(() => _avatarTubeWindow?.GigglePriority(text,
-                playSound: audio != null, aiGenerated: false, phraseAudioPath: audio, barkVoice: audio != null)),
-            WaitQuiet = _ => Task.Delay(300),
+            Say = VoiceSay,
+            WaitQuiet = VoiceWaitQuiet,
             ActiveModId = () => CoreMods.ActiveModId,
             OnUi = a => Dispatcher.UIThread.InvokeAsync(a).GetTask(),
             HelpFromAvailable = true,
         });
+
+        private Task _voiceClip = Task.CompletedTask;
+
+        // Adapted from parity/trunk f705e05a2: wait for her recorded confirmation before opening the mic.
+        internal void VoiceSay(string text, string? audio)
+        {
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _voiceClip = done.Task;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_avatarTubeWindow is not { } tube) { done.TrySetResult(); return; }
+                tube.GigglePriority(text, playSound: audio != null, aiGenerated: false, phraseAudioPath: audio,
+                    barkVoice: audio != null, onSpoken: () => done.TrySetResult());
+            });
+        }
+
+        internal async Task VoiceWaitQuiet(bool waitForStart)
+        {
+            await Task.WhenAny(_voiceClip, Task.Delay(5000)).ConfigureAwait(false);
+            await Task.Delay(300).ConfigureAwait(false); // WPF speaker-echo tail
+        }
 
         /// <summary>True while the wake-word loop owns (or is waiting to own) the mic.</summary>
         internal bool WakeLoopArmed => _wakeLoopCts != null;
@@ -149,8 +169,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (s.MasterVolume > 0) _preMuteMasterVolume = s.MasterVolume;
                 (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = (0, false, true);
+                (_avatarTubeWindow ?? AvatarTube.AvatarTubeWindow.Live)?.StopSpokenAudio();
             }
             else (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = (_preMuteMasterVolume > 0 ? _preMuteMasterVolume : 70, true, false);
+            (_avatarTubeWindow ?? AvatarTube.AvatarTubeWindow.Live)?.UpdateQuickMenuState();
             MasterVolumeChanged();
         }
 
@@ -185,6 +207,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try { _voicePromptCts?.Cancel(); } catch { }
             try { VoiceSpeech?.StopListening(); } catch { }
+            try { VoiceWake?.StopListening(); } catch { }
         }
 
         /// <summary>WPF RefreshVoiceInputModes: reconcile the wake loop and push-to-talk with settings,
@@ -194,7 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var entitled = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("voice");
-                var (wake, ptt) = _windowClosed ? (false, false)
+                var (wake, ptt) = _windowClosed || _calibratingWake ? (false, false)
                     : VoiceInputRules.ModesToRun(CoreSettings.Current, entitled, CoreSpeech.IsAvailable);
                 // A lapse / disarm mid-command ends a wake/PTT turn; Takeover's own mantra is not that
                 // session and keeps running unless consent itself is gone.
@@ -247,7 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 _wakeWaitCts?.Cancel();
-                for (int i = 0; i < 24 && sp.IsListening; i++) await Task.Delay(25).ConfigureAwait(false);
+                for (int i = 0; i < 24 && (sp.IsListening || VoiceWake?.IsListening == true); i++) await Task.Delay(25).ConfigureAwait(false);
                 if (allowCommands)
                 {
                     if (await VoiceCmds.TryHandleVoiceCommandAsync(cts.Token).ConfigureAwait(false)) return;
@@ -391,15 +414,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         await Task.Delay(500, loopCt).ConfigureAwait(false);
                         continue;
                     }
+                    var useKws = VoiceWake?.IsAvailable == true;
                     var grammar = VoiceInputRules.ExpandWakeVariants(words);
                     foreach (var alias in VoiceCmds.Grammar())
                         if (!grammar.Contains(alias, StringComparer.OrdinalIgnoreCase)) grammar.Add(alias);
 
                     string? heard = null;
+                    bool kwsHit = false;
                     using (var waitCts = CancellationTokenSource.CreateLinkedTokenSource(loopCt))
                     {
                         _wakeWaitCts = waitCts;
-                        try { heard = await sp.WaitForWakeWordAsync(grammar, waitCts.Token).ConfigureAwait(false); }
+                        try
+                        {
+                            if (useKws) kwsHit = await VoiceWake!.WaitForWakeAsync(waitCts.Token).ConfigureAwait(false);
+                            else heard = await sp.WaitForWakeWordAsync(grammar, waitCts.Token).ConfigureAwait(false);
+                        }
                         catch (OperationCanceledException) { }
                         catch (Exception ex)
                         {
@@ -409,8 +438,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         finally { _wakeWaitCts = null; }
                     }
                     if (loopCt.IsCancellationRequested) break;
-                    if (string.IsNullOrWhiteSpace(heard)) continue;
-                    Log.Information("Wake word heard ({Chars} chars of transcript)", heard.Length);
+                    if (!kwsHit && string.IsNullOrWhiteSpace(heard)) continue;
+                    Log.Information("Wake word heard ({Engine})", kwsHit ? "sherpa KWS" : "Vosk");
                     Dispatcher.UIThread.Post(() => OnWakeWordHeard(heard));
                     await Task.Delay(400, loopCt).ConfigureAwait(false);   // let the prompt claim the mic
                 }

@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Threading;
@@ -92,7 +95,69 @@ public sealed class VoiceShellActionsTests
         }
     });
 
-    private static void Run(Action<MainShellWindow> body) => AvaloniaTestDispatcher.Run(() =>
+    [Fact]
+    public void MuteCutsTheLiveClipButKeepsItsCaptionAndUnmuteDoesNotReplay() => Run(shell =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted, CoreAudio.PlayStoppableProvider, s.AvatarEnabled);
+        var clip = Path.GetTempFileName();
+        var stopped = 0;
+        shell.SetAvatarEnabled(true);
+        var tube = shell.Tube!;
+        try
+        {
+            (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted) = (70, false, false);
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, finished) => () => { stopped++; finished?.Invoke(); };
+            tube.GigglePriority("caption stays", phraseAudioPath: clip, barkVoice: true);
+            Dispatcher.UIThread.RunJobs();
+            shell.VoiceAction("mute")!();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, stopped);
+            Assert.Equal("caption stays", tube.FindControl<TextBlock>("TxtSpeech")!.Text);
+            shell.VoiceAction("unmute")!();
+            Assert.Equal(1, stopped);
+        }
+        finally
+        {
+            (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted, CoreAudio.PlayStoppableProvider, s.AvatarEnabled) = saved;
+            File.Delete(clip);
+        }
+    });
+
+    [Fact]
+    public Task ConfirmationWaitsForTheClipAndTheEchoTail() => RunAsync(async shell =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted, CoreAudio.PlayStoppableProvider, s.AvatarEnabled);
+        var clip = Path.GetTempFileName();
+        Action? finished = null;
+        shell.SetAvatarEnabled(true);
+        try
+        {
+            (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted) = (70, false, false);
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, done) => { finished = done; return () => done?.Invoke(); };
+            shell.VoiceSay("confirmation", clip);
+            Dispatcher.UIThread.RunJobs();
+            var quiet = shell.VoiceWaitQuiet(true);
+            Assert.False(quiet.IsCompleted);
+            Assert.NotNull(finished);
+            await Task.Delay(400); // a fixed 300 ms wait would already have completed
+            Assert.False(quiet.IsCompleted);
+            finished();
+            Assert.False(quiet.IsCompleted); // still owes the 300 ms echo tail
+            await quiet.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            (s.MasterVolume, s.AvatarMuted, s.CompanionVoiceLinesMuted, CoreAudio.PlayStoppableProvider, s.AvatarEnabled) = saved;
+            File.Delete(clip);
+        }
+    });
+
+    private static void Run(Action<MainShellWindow> body) =>
+        RunAsync(shell => { body(shell); return Task.CompletedTask; }).GetAwaiter().GetResult();
+
+    private static Task RunAsync(Func<MainShellWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
@@ -101,7 +166,7 @@ public sealed class VoiceShellActionsTests
         var shell = new MainShellWindow();
         shell.Show();
         Dispatcher.UIThread.RunJobs();
-        try { body(shell); }
+        try { await body(shell); }
         finally
         {
             shell.Close();
