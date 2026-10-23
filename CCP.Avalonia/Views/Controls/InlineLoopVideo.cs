@@ -35,9 +35,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Render-proof constructor: no clip, a blank surface.</summary>
         public InlineLoopVideo() : this(null) { }
 
-        public InlineLoopVideo(string? clipPath)
+        /// <param name="randomStart">WPF GazeMinigameWindow.xaml.cs:976-989: once playing, jump to a
+        /// random point in the first half of the clip.</param>
+        public InlineLoopVideo(string? clipPath, bool randomStart = false)
         {
             _path = clipPath;
+            if (randomStart) StartOffset = (float)(Random.Shared.NextDouble() * 0.5);
             Stretch = Stretch.UniformToFill;
         }
 
@@ -47,6 +50,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal bool IsPlaying => _player?.IsPlaying == true;
         internal long Time => _player?.Time ?? -1;
         internal int FrameCount => _sink?.FrameCount ?? 0;
+        /// <summary>Position (0-0.5) applied on the first Playing event; null = start at 0.</summary>
+        internal float? StartOffset { get; }
         /// <summary>UI thread, per blitted frame: lets tests wait on frames, not on a clock.</summary>
         internal event Action? FrameShown;
         /// <summary>Players created and not yet disposed, process-wide: the leak check.</summary>
@@ -97,6 +102,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 _sink = new VlcFrameSink(player, () => _media, bmp => Source = bmp, () => { InvalidateVisual(); FrameShown?.Invoke(); });
                 // EndReached re-play is WPF's fallback in case :input-repeat isn't honoured.
                 player.EndReached += OnEndReached;
+                if (StartOffset != null) player.Playing += OnFirstPlaying;
                 _media = new Media(vlc, _path, FromType.FromPath);
                 _media.AddOption(":input-repeat=65535"); // loop natively
                 _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);           // muted; Mute would silence every player
@@ -120,6 +126,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             });
         }
 
+        private void OnFirstPlaying(object? sender, EventArgs e)
+        {
+            // LibVLC thread; seek on the UI thread, only if this player is still ours (WPF's alive flag).
+            var player = sender as MediaPlayer;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (player == null || !ReferenceEquals(player, _player)) return;
+                player.Playing -= OnFirstPlaying;
+                try { player.Position = StartOffset!.Value; } catch { /* short clips may reject Position */ }
+            });
+        }
+
         /// <summary>Stop joins the decoder thread, so after it no callback touches the frame buffer
         /// (the BubbleCountWindow / MiniPlayerWindow teardown order).</summary>
         private void Teardown()
@@ -129,6 +147,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (player != null)
             {
                 player.EndReached -= OnEndReached;
+                player.Playing -= OnFirstPlaying;
                 try { player.Stop(); } catch { }
                 try { player.Dispose(); } catch { }
                 System.Threading.Interlocked.Decrement(ref LivePlayers);

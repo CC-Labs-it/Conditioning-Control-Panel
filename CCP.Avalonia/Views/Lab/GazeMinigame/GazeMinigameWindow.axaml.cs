@@ -995,8 +995,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             {
                 // Own IsVisible alone controls InlineLoopVideo's pause; removing the panes below
                 // detaches both players before the feedback screen can hide their ancestor.
-                var leftView = new InlineLoopVideo(leftPath) { Stretch = Stretch.Uniform };
-                var rightView = new InlineLoopVideo(rightPath) { Stretch = Stretch.Uniform };
+                var leftView = new InlineLoopVideo(leftPath, randomStart: true) { Stretch = Stretch.Uniform };
+                var rightView = new InlineLoopVideo(rightPath, randomStart: true) { Stretch = Stretch.Uniform };
                 _leftPane.Children.Add(leftView);
                 _rightPane.Children.Add(rightView);
                 AnimateAssetIn(leftView);
@@ -1017,7 +1017,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
 
         private Image BuildImageView(string path)
         {
-            var img = new GazeRoundImage(path);
+            // Decode no larger than the pane (CornerGif's fitLongSide): two GIFs per round.
+            var b = _leftPane.Bounds;
+            var img = new GazeRoundImage(path, (int)Math.Ceiling(Math.Max(b.Width, b.Height) * RenderScaling));
             _roundImages.Add(img);
             return img;
         }

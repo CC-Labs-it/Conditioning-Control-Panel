@@ -21,22 +21,27 @@ internal sealed class GazeRoundImage : Image, IDisposable
 
     internal Task Decoding { get; } = Task.CompletedTask;
 
-    internal GazeRoundImage(string path)
+    /// <param name="fitLongSide">Pane long side in pixels (0 = decoder default), as CornerGif passes.</param>
+    internal GazeRoundImage(string? path, int fitLongSide = 0)
     {
         Stretch = Stretch.Uniform;
         HorizontalAlignment = HorizontalAlignment.Stretch;
         VerticalAlignment = VerticalAlignment.Stretch;
+        if (path == null) return;
         try { Source = new Bitmap(path); }
         catch (Exception ex) { Log.Warning(ex, "GazeMinigame: failed to load image {Path}", path); }
         if (Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase))
-            Decoding = Decode(path);
+            Decoding = Decode(path, fitLongSide);
     }
 
-    private async Task Decode(string path)
+    /// <summary>Render-proof constructor: an empty pane.</summary>
+    internal GazeRoundImage() : this(null) { }
+
+    private async Task Decode(string path, int fitLongSide)
     {
         // ponytail: same bounded decoder as MiniPlayer/CornerGif; uniform first-frame delay,
-        // at most 120 frames and 1280px long side, rather than WPF's unbounded GIF playback.
-        var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path));
+        // at most 120 frames and the pane's long side, rather than WPF's unbounded GIF playback.
+        var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide));
         if (_disposed || frames.Count < 2)
         {
             foreach (var frame in frames) frame.Dispose();
