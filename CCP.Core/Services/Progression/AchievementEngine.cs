@@ -130,6 +130,9 @@ internal sealed class AchievementEngine
             if (level >= milestone) TryUnlock(id);
     }
 
+    /// <summary>A pop or batch credited at least one 100-pop milestone; the head shows the WPF popup.</summary>
+    public event Action<int>? BubbleMilestone;
+
     /// <summary>WPF TrackBubblePopped: flush every ten pops (#1071), even when XP is exhausted.</summary>
     public void TrackBubblePopped() => TrackBubblesPopped(1, flush: false);
 
@@ -144,7 +147,8 @@ internal sealed class AchievementEngine
         var after = Progress.TotalBubblesPopped;
         _isDirty = true;
         if (after >= AchievementRules.PopTheThoughtBubbles) TryUnlock("pop_the_thought");
-        SparklePointRewards.CreditBubbleMilestones(before, after);
+        // WPF ShowBubbleMilestoneNotification: at most one popup, for the highest hundred reached.
+        if (SparklePointRewards.CreditBubbleMilestones(before, after) > 0) BubbleMilestone?.Invoke(after - after % 100);
         if (flush || after % 10 == 0) Save();
     }
 

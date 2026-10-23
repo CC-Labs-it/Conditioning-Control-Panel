@@ -44,10 +44,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <param name="name">Achievement.Name.</param>
         /// <param name="flavorText">Achievement.FlavorText.</param>
         /// <param name="imageName">Achievement.ImageName - the file under Resources/achievements/.</param>
-        /// <param name="headerIcon">Optional emoji replacing the trophy.</param>
+        /// <param name="headerIcon">Optional icon replacing the trophy.</param>
         /// <param name="headerText">Optional shout replacing "ACHIEVEMENT UNLOCKED!".</param>
         public AchievementPopup(string name, string flavorText, string imageName,
-                                string? headerIcon = null, string? headerText = null)
+                                IconEntry? headerIcon = null, string? headerText = null)
         {
             AvaloniaXamlLoader.Load(this);
 
@@ -57,7 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // Custom header text/icon if provided. The WPF original ran headerIcon through
             // EmojiImage/Twemoji; here it maps through IconMap (fluent icons, CLAUDE.md trap 3).
-            if (headerIcon != null) this.FindControl<IconGlyph>("TxtHeaderIcon")!.Emoji = headerIcon;
+            if (headerIcon is { } icon) this.FindControl<IconGlyph>("TxtHeaderIcon")!.Apply(icon);
             if (headerText != null) this.FindControl<TextBlock>("TxtHeaderText")!.Text = headerText;
 
             LoadAchievementImage(imageName);

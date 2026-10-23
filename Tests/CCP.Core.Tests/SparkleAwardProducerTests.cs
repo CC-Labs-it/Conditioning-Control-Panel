@@ -73,15 +73,18 @@ public sealed class SparkleAwardProducerTests : IDisposable
         var path = Path.Combine(RoadmapTestProfile.DirectoryPath, Guid.NewGuid() + ".json");
         var engine = new AchievementEngine(new AchievementStore(path));
         engine.Progress.TotalBubblesPopped = before;
+        var popups = new List<int>();
+        engine.BubbleMilestone += popups.Add;
 
         if (count == 1) engine.TrackBubblePopped();
         else engine.TrackBubblesPopped(count);
 
         Assert.Equal(before + Math.Max(0, count), engine.Progress.TotalBubblesPopped);
         Assert.Equal(40 + points, _settings.SkillPoints);
-        if (points == 0) Assert.Empty(_awards);
+        if (points == 0) { Assert.Empty(_awards); Assert.Empty(popups); }
         else
         {
+            Assert.Equal((before + count) / 100 * 100, Assert.Single(popups));   // WPF: one popup, highest hundred
             Assert.Equal(new SparklePointAward(points, 40 + points, SparklePointSource.BubbleMilestone), Assert.Single(_awards));
             Assert.Equal(40 + points, Assert.Single(_observedBalances));
             Assert.Equal(before + count, new AchievementStore(path).Load().TotalBubblesPopped);

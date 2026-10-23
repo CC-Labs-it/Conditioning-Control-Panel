@@ -1065,6 +1065,19 @@ namespace ConditioningControlPanel.Avalonia
             engine.Unlocked += (_, a) => Dispatcher.UIThread.Post(() => ShowAchievementPopup(a));
             engine.Unlocked += (_, a) => ShowWardrobeRewardToasts(a);
             engine.Unlocked += (_, a) => AnnounceAchievement(a, discord ?? Platform.AccountSeed.Discord);
+            engine.BubbleMilestone += n => Dispatcher.UIThread.Post(() => ShowBubbleMilestonePopup(n), DispatcherPriority.ApplicationIdle);
+        }
+
+        /// <summary>WPF AchievementService.ShowBubbleMilestoneNotification (AchievementService.cs:466).</summary>
+        internal static void ShowBubbleMilestonePopup(int totalBubbles)
+        {
+            try
+            {
+                new Views.Windows.AchievementPopup(Loc.GetF("achievement_bubble_milestone_name", totalBubbles),
+                    Loc.Get("achievement_bubble_milestone_flavor"), "bubble_pop.png",
+                    new Controls.IconEntry(IconKind.Sparkle, IconVariant.Filled), Loc.Get("achievement_bubble_milestone_header")).Show();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to show bubble milestone popup"); }
         }
 
         /// <summary>WPF PlayAchievementSound + the DiscordShareAchievements post (App.xaml.cs:4180-4205).

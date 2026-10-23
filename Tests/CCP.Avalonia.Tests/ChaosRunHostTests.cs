@@ -444,4 +444,32 @@ public sealed class ChaosRunHostTests
             return Task.CompletedTask;
         });
     }
+
+    /// <summary>WPF ChaosModeService.cs:1837/1866: a prism pop and a treat pop each count toward the
+    /// lifetime pop total that pays the 100-pop sparkle milestones.</summary>
+    [Fact]
+    public async Task Chaos_treat_and_prism_pops_count_toward_lifetime_pops()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            var prop = typeof(global::ConditioningControlPanel.Avalonia.App).GetProperty("Achievements",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)!;
+            var (achWas, firerWas) = (prop.GetValue(null), EffectPayload.Firer);
+            var dir = System.IO.Directory.CreateTempSubdirectory("ccp-chaos-pops-").FullName;
+            try
+            {
+                var engine = new AchievementEngine(new AchievementStore(System.IO.Path.Combine(dir, "a.json")));
+                prop.SetValue(null, engine);
+                EffectPayload.Firer = null;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload() } });
+                ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload(), IsPrism = true } });
+                Assert.Equal(2, engine.Progress.TotalBubblesPopped);
+            }
+            finally { ChaosRunHost.ForceShutdown(); prop.SetValue(null, achWas); EffectPayload.Firer = firerWas; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
 }

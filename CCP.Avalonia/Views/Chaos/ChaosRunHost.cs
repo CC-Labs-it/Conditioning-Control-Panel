@@ -189,6 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 double prismPts = ChaosFieldMath.ApplyPrismPop(_state, spec);
                 ShowPopScore(prismPts);
                 _state.PushEvent($"🔮 prism! 10x · {spec.Payload.DisplayName} fires");
+                App.Achievements?.TrackBubblePopped();   // WPF ChaosModeService.cs:1837
                 return;
             }
             spec.Payload.Fire();   // benign pop = a treat
@@ -198,6 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 34,
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
             ShowPopScore(pts);
+            App.Achievements?.TrackBubblePopped();   // WPF ChaosModeService.cs:1866
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
         }
 
