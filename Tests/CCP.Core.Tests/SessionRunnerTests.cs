@@ -29,6 +29,12 @@ public sealed class SessionRunnerTests : IDisposable
     private SessionLog? _ready;
     private bool _bubblesRunning;
     private readonly Action? _bubbleStart = CoreBubbles.StartAction, _bubbleStop = CoreBubbles.StopAction;
+    // P02: every process-wide value these tests change goes back as it was.
+    private readonly (bool, int, bool, int, bool) _settings = (CoreSettings.Current.SpiralEnabled, CoreSettings.Current.SpiralOpacity,
+        CoreSettings.Current.BubblesEnabled, CoreSettings.Current.BubblesFrequency, CoreSettings.Current.SessionCornerGifAllowed);
+    private readonly Action<string, CornerPosition, int, int>? _showCorner = CoreCornerGif.ShowSessionHandler;
+    private readonly Action<bool>? _hideCorner = CoreCornerGif.HideSessionHandler;
+    private readonly Func<bool>? _standalone = CoreCornerGif.StandaloneActiveProvider, _spiralVisible = CoreCornerGif.SpiralVisibleProvider;
 
     public SessionRunnerTests()
     {
@@ -48,6 +54,12 @@ public sealed class SessionRunnerTests : IDisposable
         CoreEngine.Stop();
         CoreBubbles.StartAction = _bubbleStart;
         CoreBubbles.StopAction = _bubbleStop;
+        var s = CoreSettings.Current;
+        (s.SpiralEnabled, s.SpiralOpacity, s.BubblesEnabled, s.BubblesFrequency, s.SessionCornerGifAllowed) = _settings;
+        CoreCornerGif.ShowSessionHandler = _showCorner;
+        CoreCornerGif.HideSessionHandler = _hideCorner;
+        CoreCornerGif.StandaloneActiveProvider = _standalone;
+        CoreCornerGif.SpiralVisibleProvider = _spiralVisible;
         CoreSession.IsSessionRunningProvider = null;
         CoreSession.NoteUserPhrasePoolEdit = null;
         CoreSession.ReapplyPhrasePoolOverrides = null;
@@ -104,7 +116,6 @@ public sealed class SessionRunnerTests : IDisposable
         var shown = 0;
         var hidden = new System.Collections.Generic.List<bool>();
         var s = CoreSettings.Current;
-        var allowed = s.SessionCornerGifAllowed;
         s.SessionCornerGifAllowed = true;
         s.SpiralEnabled = true;
         CoreCornerGif.ShowSessionHandler = (_, _, _, _) => shown++;
@@ -146,14 +157,7 @@ public sealed class SessionRunnerTests : IDisposable
             _runner.Stop();
             Assert.Equal(2, hidden.Count); // paid once
         }
-        finally
-        {
-            _runner.Stop();
-            s.SessionCornerGifAllowed = allowed;
-            CoreCornerGif.ShowSessionHandler = null;
-            CoreCornerGif.HideSessionHandler = null;
-            CoreCornerGif.StandaloneActiveProvider = CoreCornerGif.SpiralVisibleProvider = null;
-        }
+        finally { _runner.Stop(); } // Dispose restores the handlers and settings
     }
 
     [Fact]
@@ -195,12 +199,7 @@ public sealed class SessionRunnerTests : IDisposable
             _runner.Stop();
             Assert.Equal(1, handbacks);
         }
-        finally
-        {
-            _runner.Stop();
-            CoreCornerGif.HideSessionHandler = null;
-            CoreCornerGif.StandaloneActiveProvider = CoreCornerGif.SpiralVisibleProvider = null;
-        }
+        finally { _runner.Stop(); }
     }
 
     [Fact]

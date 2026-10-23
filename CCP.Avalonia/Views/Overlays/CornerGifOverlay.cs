@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static Visual? _host;
         private static DispatcherTimer? _pump;
         private static bool _refused;
+        private static volatile int _stopEpoch;
 
         internal static Task? LastDecode { get; private set; }
         internal static IReadOnlyCollection<int> ShownSlots => Windows.Keys;
@@ -133,7 +134,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // Asked again at draw time: the runner may have closed it while this was queued.
                 if (CoreCornerGif.SessionActive && host() is { } h) ShowSession(h, path, position, size, opacity);
             });
-            CoreCornerGif.HideSessionHandler = handBack => Dispatcher.UIThread.Post(() => HideSession(handBack));
+            // A panic's StopAll runs before this posted close: the handback must not bring a yielded slot back.
+            CoreCornerGif.HideSessionHandler = handBack =>
+            {
+                var epoch = _stopEpoch;
+                Dispatcher.UIThread.Post(() => HideSession(handBack && epoch == _stopEpoch));
+            };
             CoreCornerGif.StandaloneActiveProvider = () => HasStandaloneOverlays;
             CoreCornerGif.SpiralVisibleProvider = () => SpiralOverlay.IsShowing;
         }
@@ -191,6 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// shell exit. The settings are untouched (a panic stops what is on screen, it does not reconfigure).</summary>
         public static void StopAll()
         {
+            _stopEpoch++;
             foreach (var i in Windows.Keys.ToList()) Close(i);
             foreach (var i in Seq.Keys.ToList()) Seq[i]++;
             Queue.Clear();

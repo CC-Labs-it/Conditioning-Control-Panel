@@ -20,7 +20,7 @@
 //   3. BtnCatalogue_Click is a browser launch, not a service call, and is restored below.
 //
 // Session lifecycle and corner-GIF controls live in SessionRun.cs, Core SessionRunner and
-// PresetsTabView.CornerGif.cs. Remaining gaps are tracked in docs/cloud/fin-shell-presets.md.
+// PresetsTabView.CornerGif.cs. Remaining gaps are tracked in the shell-presets row of docs/avalonia-parity.md.
 //
 // The handlers named by MainShellWindow.axaml are real methods, because a missing one is a XAML
 // compile error, not a runtime gap.
@@ -43,14 +43,14 @@
 //   private void SelectPreset(…)
 //   internal void SessionCard_Click(…)
 //   private Models.Session? _selectedSession
-//   internal void ChkCornerGifEnabled_Changed(…)
-//   internal void BtnSelectCornerGif_Click(…)
-//   private System.Windows.Threading.DispatcherTimer? _cornerGifSizeDebounce
-//   internal void SliderCornerGifSize_ValueChanged(…)
-//   internal void RbCornerPos_Checked(…)
-//   internal void SliderCornerGifOpacity_ValueChanged(…)
-//   private string _selectedCornerGifPath
-//   private Models.CornerPosition GetSelectedCornerPosition(…)
+//   internal void ChkCornerGifEnabled_Changed(…)   RESTORED in PresetsTabView.CornerGif.cs InitializeCornerGif
+//   internal void BtnSelectCornerGif_Click(…)   RESTORED in PresetsTabView.CornerGif.cs (picker -> SelectCornerGifPath)
+//   private System.Windows.Threading.DispatcherTimer? _cornerGifSizeDebounce   RESTORED as PresetsTabView.CornerGif.cs CornerGifSizeDebounce
+//   internal void SliderCornerGifSize_ValueChanged(…)   RESTORED in PresetsTabView.CornerGif.cs InitializeCornerGif
+//   internal void RbCornerPos_Checked(…)   RESTORED in PresetsTabView.CornerGif.cs InitializeCornerGif
+//   internal void SliderCornerGifOpacity_ValueChanged(…)   RESTORED in PresetsTabView.CornerGif.cs InitializeCornerGif
+//   private string _selectedCornerGifPath   RESTORED in PresetsTabView.CornerGif.cs
+//   private Models.CornerPosition GetSelectedCornerPosition(…)   RESTORED as PresetsTabView.CornerGif.cs SelectedCornerPosition
 //   internal void BtnRevealSpoilers_Click(…)
 //   private bool ShowStyledDialog(…)
 //   private MediaDropChoice ShowMediaDropChoiceDialog(…)

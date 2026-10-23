@@ -12,7 +12,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class PresetsTabView
 {
     private string _selectedCornerGifPath = "";
-    private readonly DispatcherTimer _cornerGifSizeDebounce = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    /// <summary>WPF's 400 ms resting-slider debounce. Tests read it and call <see cref="FlushCornerGifSize"/> (P08).</summary>
+    internal readonly DispatcherTimer CornerGifSizeDebounce = new() { Interval = TimeSpan.FromMilliseconds(400) };
 
     private void InitializeCornerGif()
     {
@@ -31,14 +32,10 @@ public partial class PresetsTabView
         SliderCornerGifSize.ValueChanged += (_, e) =>
         {
             TxtCornerGifSize.Text = $"{(int)e.NewValue}px";
-            _cornerGifSizeDebounce.Stop();
-            if (App.Sessions?.IsRunning == true) _cornerGifSizeDebounce.Start();
+            CornerGifSizeDebounce.Stop();
+            if (App.Sessions?.IsRunning == true) CornerGifSizeDebounce.Start();
         };
-        _cornerGifSizeDebounce.Tick += (_, _) =>
-        {
-            _cornerGifSizeDebounce.Stop();
-            if (App.Sessions?.IsRunning == true) App.Sessions.UpdateCornerGif(size: (int)SliderCornerGifSize.Value);
-        };
+        CornerGifSizeDebounce.Tick += (_, _) => FlushCornerGifSize();
         SliderCornerGifOpacity.ValueChanged += (_, e) =>
         {
             TxtCornerGifOpacity.Text = $"{(int)e.NewValue}%";
@@ -50,7 +47,13 @@ public partial class PresetsTabView
                 if (radio.IsChecked == true && App.Sessions?.IsRunning == true)
                     App.Sessions.UpdateCornerGif(position: SelectedCornerPosition());
             };
-        DetachedFromVisualTree += (_, _) => _cornerGifSizeDebounce.Stop();
+        DetachedFromVisualTree += (_, _) => CornerGifSizeDebounce.Stop();
+    }
+
+    internal void FlushCornerGifSize()
+    {
+        CornerGifSizeDebounce.Stop();
+        if (App.Sessions?.IsRunning == true) App.Sessions.UpdateCornerGif(size: (int)SliderCornerGifSize.Value);
     }
 
     internal void SelectCornerGifPath(string path)

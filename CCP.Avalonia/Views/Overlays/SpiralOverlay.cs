@@ -157,6 +157,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Windows.Clear();
             _shownOn = Array.Empty<int>();
             QuestMinutes.Follow(false);
+            // WPF OverlayService.cs:2068: a session corner GIF that stood down for the spiral comes back.
+            // Posted and re-checked, so a close-then-reshow (move, repaint) does not flash it up.
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (IsShowing) return;
+                try { App.Sessions?.RefreshCornerGifPolicy(); }
+                catch (Exception ex) { Log.Warning(ex, "Spiral: session corner-GIF policy refresh failed"); }
+            });
         }
 
         /// <summary>WPF AchievementService:276 - quest minutes while the spiral is on screen.</summary>
