@@ -6,6 +6,9 @@
  * and OUT). How much of each comes from render/wordBubblesMath.js popJuice: the pop streak grows it, a row
  * or a finished line doubles it up and adds a flare (a white-gold core) that asks photosafe first. Gentle:
  * about half of everything and no flare. One instanced draw for every streak; nothing allocates per frame.
+ * Polish 6 (JUICE): the player's item use (`item-fire`, racer 0) throws a RELEASE at the kart on the same
+ * pools: a small burst in the item's tint, a ring under the saucer and a few streaks (ITEM_RELEASE numbers;
+ * Gentle about half, no new material).
  */
 import { Sprite, SpriteNodeMaterial, InstancedBufferAttribute, DynamicDrawUsage, AdditiveBlending, Vector3 } from 'three/webgpu';
 import { instancedDynamicBufferAttribute, uv, vec3, float, mix, smoothstep, abs } from 'three/tsl';
@@ -15,6 +18,18 @@ import { popJuice, POP_JUICE as J } from './wordBubblesMath.js';
 const CAP = 96;
 const PINK = [1, 0.55, 0.84], WHITE = [1, 0.96, 0.99], GOLD = [1, 0.84, 0.36], CYAN = [0.7, 0.95, 1];
 const GOLD_POP = ['#ffd36b', '#fff1c2', '#ffffff', '#ffc2df'];
+
+/** Polish 6: the release at the kart when the player uses an item: burst count, speed, ring size, streaks, tints. */
+export const ITEM_RELEASE = Object.freeze({
+  count: 18, speedMps: 3.2, sizeM: 0.15, ringM: 2.2, streaks: 6, liftM: 0.5,
+  tint: Object.freeze({ flash: '#fff4c2', spiral: '#7fe8ff', brainDrain: '#9dff9a', freeze: '#9fe6ff', blackout: '#b9a6ff', pink: '#ff5fa8',
+    melt: '#ff7fbf', shatter: '#e0b0ff', surge: '#ffd36b', glass: '#e8f6ff', echo: '#9dff9a', golden: '#ffd36b' }),
+});
+/** The release burst colours for an item id: its tint, white and the tint again (unknown ids: the pop colours). */
+export function releaseColours(id) {
+  const t = ITEM_RELEASE.tint[id];
+  return t ? [t, '#ffffff', t] : LOOK.popColours;
+}
 
 /** @returns {{ object: Sprite, update(dt: number, camera: object): void, clear(): void, dispose(): void }} */
 export function createWordPopFx(scene, { particles = null, wakes = null, kart = null, bus = null, feel = null, photosafe = null } = {}) {
@@ -52,6 +67,21 @@ export function createWordPopFx(scene, { particles = null, wakes = null, kart = 
   };
   const gentle = () => !!(feel && feel.get('gentle.on'));
   const off = bus ? bus.on('word-pop', (e) => { if (e && e.p && pending.length < 8) pending.push(e); }) : null;
+  const fires = [];
+  const offFire = bus ? bus.on('item-fire', (e) => { if (e && e.racer === 0 && fires.length < 4) fires.push(e.id || null); }) : null;
+  const REL_P = [0, 0, 0], REL_E = { p: REL_P };
+
+  /** The player's item leaves the kart: a tinted burst, a ring under the saucer and a few streaks. */
+  function release(id, g) {
+    if (!kart || !kart.visible) return;
+    REL_P[0] = kart.position.x; REL_P[1] = kart.position.y + ITEM_RELEASE.liftM; REL_P[2] = kart.position.z;
+    const few = g ? 0.55 : 1;
+    if (particles) particles.burst(REL_P, Math.round(ITEM_RELEASE.count * few), { colours: releaseColours(id), speed: ITEM_RELEASE.speedMps,
+      sizeM: ITEM_RELEASE.sizeM, sparkle: 0.6, petal: 0.1, g: 0.2, near: true });
+    if (wakes) wakes.ring([kart.position.x, kart.position.y, kart.position.z], kart.quaternion, ITEM_RELEASE.ringM,
+      { gentle: g, gain: LOOK.ringGain * 0.7, colour: ITEM_RELEASE.tint[id] || null });
+    spawn(REL_E, { streaks: Math.round(ITEM_RELEASE.streaks * few), gold: id === 'golden' || id === 'surge', flare: false, level: 0.2 }, g);
+  }
 
   function spawn(e, j, g) {
     const n = j.streaks;
@@ -91,6 +121,7 @@ export function createWordPopFx(scene, { particles = null, wakes = null, kart = 
       R.set(me[0], me[1], me[2]); U.set(me[4], me[5], me[6]); F.set(me[8], me[9], me[10]); CAM.set(me[12], me[13], me[14]);
     }
     if (pending.length) { const g = gentle(); for (const e of pending) pop(e, g); pending.length = 0; }
+    if (fires.length) { const g = gentle(); for (const id of fires) release(id, g); fires.length = 0; }
     const P = aPos.array, V = aV.array, C = aC.array;
     let n = 0;
     for (let i = 0; i < CAP; i++) {
@@ -118,7 +149,7 @@ export function createWordPopFx(scene, { particles = null, wakes = null, kart = 
     object: sprite,
     update,
     get live() { return liveN; },
-    clear() { age.fill(9); pending.length = 0; sprite.count = 0; sprite.visible = false; },
-    dispose() { if (off) off(); scene.remove(sprite); m.dispose(); },
+    clear() { age.fill(9); pending.length = 0; fires.length = 0; sprite.count = 0; sprite.visible = false; },
+    dispose() { if (off) off(); if (offFire) offFire(); scene.remove(sprite); m.dispose(); },
   };
 }

@@ -89,6 +89,14 @@ export function wordPopPlan(p, feel) {
   return plan;
 }
 
+/** Self items used by the player (polish 6): Surge boosts, Glass rings, Echo doubles, Golden sparkles. */
+const SELF_FIRE = {
+  surge: () => [one('boost', 1, 0.92)],
+  glass: () => [one('bubble-pop', 0.8, 0.84), one('pad', 0.45, 1.1, 0.03)],
+  echo: () => [one('fire-throw', 0.5, 1.2), one('fire-throw', 0.3, 1.2, 0.09)],
+  golden: () => [one('item-box', 0.7, 1.2), one('drift-release', 0.5, 1.3, 0.04)],
+};
+
 const fg = (feel, path, def) => { try { const v = feel?.get(path); return v === undefined ? def : v; } catch (e) { return def; } };
 const one = (id, vol = 1, rate = 1, at = 0) => ({ id, vol, rate, at });
 
@@ -153,7 +161,8 @@ export function sfxPlan(name, p = {}, o = {}) {
     case 'item-fire': {
       const { racer, id, mode, target } = p;
       if (racer !== 0 && target === 0 && (mode === 'throw' || mode === 'lob')) return null;   // incoming warning: synth
-      if (mode === 'self') return id === 'surge' ? [one('boost', 1, 0.92)] : null;
+      // polish 6: every self item answers from the shipped bank too (a release at the kart), each its own figure
+      if (mode === 'self') return SELF_FIRE[id] ? SELF_FIRE[id]() : [one('drift-release', 0.55, 1.15)];
       if (mode === 'throw') return [one('fire-throw')];
       if (mode === 'lob') return [one('fire-lob')];
       if (mode === 'drop') return [one('fire-drop')];

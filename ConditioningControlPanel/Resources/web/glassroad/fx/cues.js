@@ -55,6 +55,27 @@ export function boostLadder(feel, { kind = 'drift', tier = 0, amount = 0 } = {})
   };
 }
 
+/** Polish 6: how a bump between the player and a kart is felt (numbers here, not in feel.json: BEAT owns it). */
+export const BUMP_LOOK = Object.freeze({
+  fullDvMps: 10,                         // closing speed of a full-size bump (the audio mix's bumpFullDvMps)
+  shakeFromMul: 1.6,                     // no shake under this many cue-minimums: a real bump thuds, a hard one shakes
+  sideAmpM: Object.freeze([0.07, 0.2]),  // side shake peak from the shake threshold to fullDvMps
+});
+
+/**
+ * A bump's feel from its closing speed dv against the cue minimum: null for a graze (under the minimum), else
+ * { level 0..1 (minimum..fullDvMps), sideM (0 under shakeFromMul), rumbleTier 1 | 2 }.
+ */
+export function bumpFeel(dv, minDv, L = BUMP_LOOK) {
+  const d = Number(dv) || 0, min = Math.max(Number(minDv) || 0, 1e-3);
+  if (d < min) return null;
+  const level = Math.min(1, Math.max(0, (d - min) / Math.max(L.fullDvMps - min, 1e-3)));
+  const from = min * L.shakeFromMul;
+  const k = Math.min(1, Math.max(0, (d - from) / Math.max(L.fullDvMps - from, 1e-3)));
+  const sideM = d < from ? 0 : L.sideAmpM[0] + (L.sideAmpM[1] - L.sideAmpM[0]) * k;
+  return { level, sideM, rumbleTier: level >= 0.35 ? 2 : 1 };
+}
+
 export const FX_CUES = {
   // 1. countdown: bands brighten and bloom steps up per pulse; go releases both
   countdown(fx, { n = 3 }) {
@@ -178,12 +199,14 @@ export const FX_CUES = {
     if (verdict === 'hit') { fx.shake.kick('hit'); fx.fire('thud', fx.gentle.kick(rumbleOf(fx, 3)), 0, 0, j(fx, 'landGoneS') * 2); }
     else if (verdict === 'glass' || verdict === 'golden') fx.fire('thud', fx.gentle.kick(rumbleOf(fx, 1)), 0, 0, j(fx, 'landGoneS'));
   },
+  // polish 6: a bump is felt by how hard it was (bumpFeel): a graze nothing, a real bump a thud, a hard one a
+  // short SIDE shake (fx.side, the camera's x; Gentle removes it) growing with the closing speed
   bump(fx, { a = -1, b = -1, dv = 0 }) {
     if (a !== 0 && b !== 0) return;
-    const min = fx.feel.get('contact.cueMinDvMps');
-    if (dv < min) return;
-    if (dv >= 2 * min) fx.shake.kick('hit');
-    fx.fire('thud', fx.gentle.kick(rumbleOf(fx, dv >= 3 * min ? 2 : 1)), 0, 0, j(fx, 'landGoneS'));
+    const f = bumpFeel(dv, fx.feel.get('contact.cueMinDvMps'));
+    if (!f) return;
+    if (f.sideM > 0 && fx.side) fx.side(f.sideM, a === 0 ? 1 : -1);
+    fx.fire('thud', fx.gentle.kick(rumbleOf(fx, f.rumbleTier)), 0, 0, j(fx, 'landGoneS') * (1 + f.level));
   },
   // slipstream: a thin wake of speed lines while the charge builds; the boost itself is a boost-start
   slipstream(fx, { racer = -1, state }) {
