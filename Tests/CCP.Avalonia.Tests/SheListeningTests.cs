@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls;
+using IconKind = FluentIcons.Common.Symbol;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -46,6 +48,9 @@ public sealed class SheListeningTests
                 Assert.False(s.SpeechWakeWordEnabled);
                 Assert.Equal("Mic off", tab.SL_StatusTitle.Text);
                 Assert.StartsWith("Tap Start listening", tab.SL_StatusSub.Text);
+                var masterLabel = Assert.IsType<IconLabel>(tab.BtnSL_MicMaster.Content);
+                Assert.Equal(IconKind.Play, masterLabel.Kind);
+                Assert.Equal("Start listening", masterLabel.Text);
 
                 // Voice free day: arming defaults to the wake word and the hero says the mic is open
                 // (MainShellWindow.VoiceCommands.cs is the consumer; VoiceCommandsTests proves it opens).
@@ -53,6 +58,8 @@ public sealed class SheListeningTests
                 Master();
                 Assert.True(s.SpeechWakeWordEnabled);
                 Assert.Equal("She's listening", tab.SL_StatusTitle.Text);
+                Assert.Equal(IconKind.Stop, masterLabel.Kind);
+                Assert.Equal("Stop listening", masterLabel.Text);
                 Assert.Equal("The mic is open. Call her, then say a command.", tab.SL_StatusSub.Text);
                 Assert.NotEqual(Loc.Get("set2_chip_off"), tab.TxtSL_WakeWordChip.Text);
                 // WPF UpdateMicPill / SetSheListeningStatusPulse: the pill lights and the disc breathes.
