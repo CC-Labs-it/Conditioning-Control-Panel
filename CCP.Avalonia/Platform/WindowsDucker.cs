@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _rescan?.Dispose();
                 _rescan = new Timer(_ => Rescan(), null, RescanMs, RescanMs);
             }
-            try { LayeredAudio.Instance?.ApplyDuck(amount); } catch { }
+            try { LayeredAudio.Instance?.ApplyDuckGain(amount); } catch { }   // never ApplyDuck here: Volume is the whole session
             Enqueue(() => DuckSweep(rescan: false));
         }
 
@@ -105,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _ducked = false;
                 DisposeDuckTimers();
             }
-            try { LayeredAudio.Instance?.ReleaseDuck(); } catch { }
+            try { LayeredAudio.Instance?.ReleaseDuckGain(); } catch { }
             Enqueue(Restore);
         }
 
@@ -169,9 +169,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
                         {
                             if (!_ducked) return 0;
                             // Never overwrite a surviving entry: it is the TRUE original (volumes ratcheted to 0 otherwise).
-                            if (!_originals.TryAdd(s.Pid, volume)) continue;
+                            if (_originals.ContainsKey(s.Pid)) continue;
+                            // A parked restore still owes this app its TRUE original: that stays the original,
+                            // never the live (still ducked) level, or the journal and the unduck lose it.
+                            if (_pending.Remove(s.Pid, out var owed)) volume = owed;
+                            _originals[s.Pid] = volume;
                             _names[s.Pid] = name;
-                            _pending.Remove(s.Pid);
                         }
                         toLower.Add((s, volume));
                     }
@@ -203,24 +206,34 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 names = new Dictionary<int, string>(_names);
             }
             if (wanted.Count == 0) { Journal(); return; }
+            HashSet<int> busy;
+            lock (_lock) busy = retry ? new HashSet<int>(_originals.Keys) : new HashSet<int>();
             var restored = new HashSet<int>();
             try
             {
                 Sweep(sessions =>
                 {
-                    var live = new Dictionary<int, string>();
+                    void Set(int pid, float volume, int stored)
+                    {
+                        foreach (var s in sessions)
+                            if (s.Pid == pid) try { s.SetVolume(volume); restored.Add(stored); } catch { }
+                    }
+                    // Same PID first.
+                    foreach (var (pid, volume) in wanted)
+                        if (pid != _ownPid && pid != 0) Set(pid, volume, pid);
+                    // WPF: the name fallback looks only at sessions that are not themselves owed (nor, on a
+                    // retry, held ducked right now), so a gone entry never lands on an app with its own entry.
+                    var nameToPid = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                     foreach (var s in sessions)
-                        try { if (s.Pid != 0 && !live.ContainsKey(s.Pid)) live[s.Pid] = _nameOf(s.Pid); } catch { }
+                    {
+                        if (s.Pid == 0 || s.Pid == _ownPid || wanted.ContainsKey(s.Pid) || busy.Contains(s.Pid)) continue;
+                        try { var n = _nameOf(s.Pid); if (n.Length > 0) nameToPid.TryAdd(n, s.Pid); } catch { }
+                    }
                     foreach (var (pid, volume) in wanted)
                     {
-                        names.TryGetValue(pid, out var name);
-                        var target = global::ConditioningControlPanel.Services.Audio.DuckRecoveryRule.Match(pid, name, live, _ownPid);
-                        if (target == null) continue;
-                        foreach (var s in sessions)
-                        {
-                            if (s.Pid != target.Value) continue;
-                            try { s.SetVolume(volume); restored.Add(pid); } catch { }
-                        }
+                        if (restored.Contains(pid) || !names.TryGetValue(pid, out var name) || string.IsNullOrEmpty(name)) continue;
+                        if (!nameToPid.Remove(name, out var fresh)) continue;
+                        Set(fresh, volume, pid);
                     }
                     return restored.Count;
                 });
@@ -283,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _generation++;
                 DisposeDuckTimers();
             }
-            try { LayeredAudio.Instance?.ReleaseDuck(); } catch { }
+            try { LayeredAudio.Instance?.ReleaseDuckGain(); } catch { }
             Enqueue(Restore);
         }
 

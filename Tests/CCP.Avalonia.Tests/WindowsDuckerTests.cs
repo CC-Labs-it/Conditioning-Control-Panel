@@ -123,6 +123,80 @@ public sealed class WindowsDuckerTests : IDisposable
     }
 
     [Fact]
+    public void ADuckOfAnAppWithAParkedRestoreKeepsItsTrueOriginal()
+    {
+        var d = Make();
+        d.Duck(80);
+        d.Drain();
+        var parkedAt = _vol[10];                 // 0.16, the ducked level
+        _vol.Remove(10);                         // its session went away: the hand-back is parked
+        d.Unduck(-1);
+        d.Drain();
+        _vol[10] = parkedAt;                     // it plays again, still at the ducked level
+        d.Duck(80);
+        d.Drain();
+        Assert.Equal(0.8f, ReadJournal()[10], 3);   // the TRUE original, not 0.16
+        d.Unduck(-1);
+        d.Drain();
+        Assert.Equal(0.8f, _vol[10], 3);
+    }
+
+    [Fact]
+    public void AGoneEntryNeverLandsOnALiveAppThatHasItsOwnEntry()
+    {
+        _vol[11] = 0.5f;
+        _name[11] = "Spotify";                   // a second Spotify process, ducked too
+        var d = Make();
+        d.Duck(80);
+        d.Drain();
+        _vol.Remove(10);                         // the first one exits
+        d.Unduck(-1);
+        d.Drain();
+        Assert.Equal(0.5f, _vol[11], 3);         // its own original, not 10's
+        Assert.Equal(0.8f, ReadJournal()[10], 3);   // 10 is parked, not "restored" onto 11
+    }
+
+    [Fact]
+    public void OurOwnLayersDuckByAPerPlayerGainNeverThroughVolume()
+    {
+        // Volume on a LibVLC player is the whole process's WASAPI session on Windows (measured), so
+        // the Windows ducker must never reach LayeredAudio.ApplyDuck.
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "WindowsDucker.cs"));
+        Assert.DoesNotContain("ApplyDuck(", src);
+        Assert.DoesNotContain("ReleaseDuck(", src);
+        Assert.Contains("ApplyDuckGain(", src);
+
+        var players = new List<FakeLayer>();
+        var layers = new LayeredAudio(_ => { var f = new FakeLayer(); players.Add(f); return f; });
+        var s = ConditioningControlPanel.CoreSettings.Current;
+        var saved = (s.AudioLayers, s.AudioLayersEnabled);
+        var file = Path.GetTempFileName();
+        try
+        {
+            s.AudioLayers = new() { new ConditioningControlPanel.Models.AudioLayerTrack { Path = file, Volume = 100 } };
+            s.AudioLayersEnabled = true;
+            layers.Start();
+            var volume = players[0].Volume;
+            layers.ApplyDuckGain(0.8f);
+            Assert.Equal(-13.98f, players[0].Db, 2);
+            Assert.Equal(volume, players[0].Volume);   // the session volume is never touched
+            layers.ApplyDuckGain(1f);
+            Assert.Equal(-20f, players[0].Db, 2);      // LibVLC's preamp floor
+            layers.ReleaseDuckGain();
+            Assert.Equal(0f, players[0].Db);
+        }
+        finally { (s.AudioLayers, s.AudioLayersEnabled) = saved; layers.Dispose(); File.Delete(file); }
+    }
+
+    private sealed class FakeLayer : LayeredAudio.ILayerPlayer
+    {
+        public int Volume { get; set; } = -1;
+        public float Db = float.NaN;
+        float LayeredAudio.ILayerPlayer.DuckDb { set => Db = value; }
+        public void Dispose() { }
+    }
+
+    [Fact]
     public void WindowsDuckingIsSeededOnlyFromAppStartUp()
     {
         var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "LibVlcAudio.cs"));

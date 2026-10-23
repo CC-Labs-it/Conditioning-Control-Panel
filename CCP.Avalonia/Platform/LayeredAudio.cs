@@ -22,12 +22,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
     internal sealed class LayeredAudio : IDisposable
     {
         /// <summary>One looping track. The seam exists so the state machine is testable without libvlc.</summary>
-        internal interface ILayerPlayer : IDisposable { int Volume { set; } }
+        internal interface ILayerPlayer : IDisposable
+        {
+            int Volume { set; }
+            /// <summary>The duck as a per-player gain in dB (0 = none), never through Volume (see ApplyDuckGain).</summary>
+            float DuckDb { set { } }
+        }
 
         private readonly Func<string, ILayerPlayer> _open;
         private readonly object _lock = new();
         private readonly Dictionary<AudioLayerTrack, ILayerPlayer> _players = new();
         private float _duckFactor = 1f;
+        private float _duckDb;
         private bool _disposed;
 
         internal static LayeredAudio? Instance { get; set; }
@@ -56,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     {
                         var p = _open(track.Path);
                         p.Volume = VolumeFor(track.Volume, s);
+                        if (_duckDb != 0) p.DuckDb = _duckDb;
                         _players[track] = p;
                     }
                     catch (Exception ex) { Log.Warning("LayeredAudio: could not load '{Path}': {Error}", track.Path, ex.Message); }
@@ -98,6 +105,27 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             lock (_lock) { _duckFactor = 1f; SetMasterVolumeLive(); }
         }
+
+        /// <summary>
+        /// Windows: LibVLC's Player.Volume (and Mute) is this process's WASAPI session volume, shared by
+        /// every player and remembered by Windows (measured: two players at 100 and 30 share ONE session,
+        /// which went to 0.027 and read 30 on both). So the duck never goes through Volume there; it is a
+        /// per-player equalizer preamp, a DSP gain that leaves the session alone (measured: 1.000 before
+        /// and after -14 dB). LibVLC caps the preamp at -20 dB, so a 100% duck is -20 dB, not silence.
+        /// </summary>
+        public void ApplyDuckGain(float amount)
+        {
+            lock (_lock) { _duckDb = DuckDb(amount); foreach (var p in _players.Values) p.DuckDb = _duckDb; }
+        }
+
+        public void ReleaseDuckGain()
+        {
+            lock (_lock) { _duckDb = 0; foreach (var p in _players.Values) p.DuckDb = 0; }
+        }
+
+        /// <summary>A duck amount (0-1) as a gain in dB, floored at LibVLC's -20 dB preamp limit.</summary>
+        internal static float DuckDb(float amount) =>
+            amount <= 0 ? 0f : (float)Math.Max(-20.0, 20 * Math.Log10(Math.Max(1e-6, 1 - Math.Clamp(amount, 0f, 1f))));
 
         /// <summary>LibVLC volume 0-100 for a track, from WPF's linear gain chain.</summary>
         private int VolumeFor(int trackPercent, AppSettings s)
@@ -211,6 +239,40 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 Schedule(c, 0);
                 lock (c) { if (c.Disposed) return; LibVlcAudio.ApplyPreferredDevice(c.Player); }
                 ApplyVolume(c);
+                if (_duckDb != 0) ApplyDuckDb(c);
+            }
+
+            private volatile float _duckDb;
+
+            public float DuckDb
+            {
+                set
+                {
+                    Copy[] playing;
+                    lock (_gate)
+                    {
+                        if (_disposed) return;
+                        _duckDb = value;
+                        playing = _live.Where(c => c.Playing).ToArray();
+                    }
+                    foreach (var c in playing) ApplyDuckDb(c);
+                }
+            }
+
+            private void ApplyDuckDb(Copy c)
+            {
+                lock (c)
+                {
+                    if (c.Disposed) return;
+                    try
+                    {
+                        if (_duckDb == 0) { c.Player.UnsetEqualizer(); return; }
+                        using var eq = new Equalizer();   // flat bands; SetEqualizer copies it
+                        eq.SetPreamp(_duckDb);
+                        c.Player.SetEqualizer(eq);
+                    }
+                    catch (Exception ex) { Log.Debug("LayeredAudio: duck gain {Db} dB: {E}", _duckDb, ex.Message); }
+                }
             }
 
             /// <summary>Start the next pass <see cref="OverlapMs"/> before this one ends, measured from its
