@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -36,7 +37,10 @@ public sealed class CompanionConversationFinishTests
     private static void Click(Control host, string name) =>
         host.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-    private static async Task Until(Func<bool> ready)
+    private static string Owned(Window w) =>
+        "owned: " + string.Join(", ", w.OwnedWindows.Select(o => o.GetType().Name + "(" + Owned(o) + ")"));
+
+    private static async Task Until(Func<bool> ready, Func<string>? why = null)
     {
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (!ready() && DateTime.UtcNow < deadline)
@@ -44,7 +48,7 @@ public sealed class CompanionConversationFinishTests
             Dispatcher.UIThread.RunJobs();
             await Task.Yield();
         }
-        Assert.True(ready(), "Timed out waiting for the UI operation");
+        Assert.True(ready(), "Timed out waiting for the UI operation " + why?.Invoke());
     }
 
     [Fact]
@@ -78,12 +82,15 @@ public sealed class CompanionConversationFinishTests
             var page = shell.Named<PersonalityPage>("CompanionPersonalityTab")!;
             var picker = Assert.IsType<CompanionPickerCard>(page.FindControl<ContentControl>("PickerHost")!.Content);
             Assert.True(picker.IsEffectivelyVisible);
+            // WPF PersonalityPage.xaml:41-43 cards the picker so it does not sit flush on the presets.
+            var card = Assert.IsType<Border>(page.FindControl<ContentControl>("PickerHost")!.Parent);
+            Assert.Equal(new Thickness(16), card.Padding);
             Assert.False(dust.IsTicking);
             Click(picker, "BtnMorePersonality");
             Dispatcher.UIThread.RunJobs();
             var advanced = Assert.Single(shell.OwnedWindows.OfType<CompanionPromptEditorDialog>());
             advanced.Close();
-            await Until(() => !shell.OwnedWindows.Any());
+            await Until(() => !shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Any(), () => Owned(shell));
             Assert.Equal(s.ActivePersonalityPresetId,
                 (picker.FindControl<ComboBox>("CmbPersonality")!.SelectedItem as ComboBoxItem)?.Tag);
 
@@ -99,11 +106,12 @@ public sealed class CompanionConversationFinishTests
                 picker.FindControl<TextBlock>("TxtPerk")!.Text);
 
             // The hosted perk door opens a real picker, registered with panic.
+            var perkBefore = shell.OwnedWindows.Count + 1;
             Click(picker, "BtnPerkChange");
             Dispatcher.UIThread.RunJobs();
-            Assert.Single(shell.OwnedWindows);
+            Assert.Equal(perkBefore, shell.OwnedWindows.Count);
             PanicSurfaces.All.Single(p => p.Id == "companion-perk-picker").Stop(shell);
-            await Until(() => !shell.OwnedWindows.Any());
+            await Until(() => shell.OwnedWindows.Count == perkBefore - 1, () => Owned(shell));
         }
         finally
         {
@@ -143,7 +151,7 @@ public sealed class CompanionConversationFinishTests
             Dispatcher.UIThread.RunJobs();
             Assert.Single(shell.OwnedWindows.OfType<KnowledgeLinkEditorDialog>());
             PanicSurfaces.All.Single(p => p.Id == "companion-knowledge-editor").Stop(shell);
-            await Until(() => !shell.OwnedWindows.Any());
+            await Until(() => !shell.OwnedWindows.OfType<KnowledgeLinkEditorDialog>().Any(), () => Owned(shell));
             Assert.Single(s.GlobalKnowledgeBaseLinks);
 
             // Changes elsewhere appear on the next visit, without replacing the shared control.
@@ -191,6 +199,9 @@ public sealed class CompanionConversationFinishTests
                 var dialog = new CompanionPromptEditorDialog();
                 dialog.Show(owner);
                 var editor = dialog.FindControl<KnowledgeLinksEditor>("KnowledgeLinks")!;
+                // The links sit in a collapsed Expander, as in WPF: open it the way a user does.
+                editor.GetLogicalAncestors().OfType<Expander>().First().IsExpanded = true;
+                Dispatcher.UIThread.RunJobs();
                 await Add(editor, dialog);
                 Assert.Empty(service.Current.GlobalKnowledgeBaseLinks);
                 Click(dialog, save ? "BtnSave" : "BtnCancel");
