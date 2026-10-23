@@ -218,4 +218,62 @@ public sealed class HeaderQuestStampsTests
         }
     });
 
+    // WPF MainWindow.QuestStamps.cs ZoomStamp :576 (170 ms in), ShowStampPopup :889 (fade 150 / slide 180),
+    // MotionFx.HoverLift (1.02), PlayStampStampedPop :540 (420 ms pop, 650 ms gold flash, then detached).
+    [Fact]
+    public Task StampMotionFollowsWpfTimingsOnASteppedClock() => Shell((shell, quests) =>
+    {
+        var clock = new SteppedClock();
+        MainShellWindow.QuestStampFxTime = clock;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            static ScaleTransform Scale(MainShellWindow s) => (ScaleTransform)((TransformGroup)Cell(s, "d0").RenderTransform!).Children[0];
+            void Step(int ms) { clock.Now += TimeSpan.FromMilliseconds(ms).Ticks; shell.StepQuestStampFx(); }
+            var popup = Hover(shell, "d0");
+            var card = (Border)popup.Child!;
+            Assert.Equal(1, Scale(shell).ScaleX);
+            Assert.Equal(0, card.Opacity);
+            Assert.Equal(-7, ((TranslateTransform)card.RenderTransform!).Y);
+            Assert.Equal(20, card.BoxShadow[0].Blur);
+            Step(85);
+            Assert.InRange(Scale(shell).ScaleX, 1.01, 1.49);
+            Step(100);
+            Assert.Equal(1.5, Scale(shell).ScaleX);
+            Assert.Equal(1, card.Opacity);
+            Assert.Equal(0, ((TranslateTransform)card.RenderTransform!).Y);
+            Assert.Equal(1.02, ((ScaleTransform)shell.Named<Grid>("QuestStampHost")!.RenderTransform!).ScaleX, 3);
+
+            shell.MouseMove(new Point(500, 250));
+            Dispatcher.UIThread.RunJobs();
+            Step(300);
+            Assert.Equal(1, Scale(shell).ScaleX);
+            Assert.Equal(0, shell.QuestStampTweens);
+
+            var definition = QuestDefinition.DailyQuests.Find(d => d.Id == "pop_parade_d")!;
+            quests.TrackBubblesPopped(definition.TargetValue);
+            Dispatcher.UIThread.RunJobs();
+            Border Flash() => Cell(shell, "d0").Children.OfType<Border>().SingleOrDefault(b => Equals(b.Tag, "stamp-flash"))!;
+            Assert.Equal(0.7, Scale(shell).ScaleX, 3);
+            Assert.Equal(0.9, Flash().Opacity, 3);
+            Assert.Equal(Color.FromRgb(0xFF, 0xD7, 0x00), Flash().BoxShadow[0].Color);
+            Assert.Null(Cell(shell, "d1").Children.OfType<Border>().FirstOrDefault(b => Equals(b.Tag, "stamp-flash")));
+            Step(189);
+            Assert.Equal(1.35, Scale(shell).ScaleX, 2);
+            Step(231);
+            Assert.Equal(1, Scale(shell).ScaleX, 3);
+            Assert.NotNull(Flash());
+            Step(230);
+            Assert.Null(Flash());
+            Assert.Equal(0, shell.QuestStampTweens);
+        }
+        finally { MainShellWindow.QuestStampFxTime = TimeProvider.System; }
+    });
+
+    private sealed class SteppedClock : TimeProvider
+    {
+        public long Now;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
 }

@@ -1,5 +1,4 @@
 // Adapted from parity/trunk 7b6f94800e90a90fa443fb47efcfaeedc17eff0e and WPF MainWindow.QuestStamps.cs.
-// ponytail: finite stamp animations and popup shadow remain in wire-shell-quest-stamps-b.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -109,6 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Closed += (_, _) =>
                     {
                         _questStampsClosed = true;
+                        _stampTweens.Clear();
+                        _stampFxClock?.Stop();
                         try
                         {
                             UnhookQuestStampService();
@@ -213,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             info.Cell = cell;
             _stampInfos[info.Key] = info;
             host.Children.Add(cell);
+            TrackStampCompletion(info);
         }
 
         internal static double QuestStampFraction(int current, int target) =>
@@ -288,20 +290,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return CoreMods.MakeModAware(text) ?? text;
         }
 
-        private void ZoomStamp(QuestStampInfo? info, bool on)
-        {
-            if (info?.Cell == null || info.Scale == null || info.Rotate == null) return;
-            info.Cell.ZIndex = on ? 20 : 0;
-            info.Scale.ScaleX = info.Scale.ScaleY = on ? QuestStampHoverScale : 1;
-            info.Rotate.Angle = QuestStampRestAngle(info.Key) * (on ? 0.25 : 1);
-        }
-
         private static double QuestStampRestAngle(string key) => key switch
         {
             "d0" => -4, "d1" => 3, "d2" => -2, _ => 5,
         };
 
-        private void LiftStampHost(bool on) => _stampHostScale.ScaleX = _stampHostScale.ScaleY = on ? 1.02 : 1;
 
         private void EnsureStampPopup()
         {
@@ -327,6 +320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Child = new IconGlyph
                 {
                     Kind = IconKind.Checkmark, Foreground = QuestStampDoneInk, Size = 60,
+                Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 8, OffsetX = 1.41, OffsetY = 1.41 },
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 },
             };
@@ -392,6 +386,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 BorderThickness = new Thickness(1.5),
                 IsHitTestVisible = false,
                 Child = new StackPanel { Children = { artFrame, body } },
+                RenderTransform = _stampPopSlide = new TranslateTransform(0, -6),
+                // WPF DropShadowEffect black, blur 20, depth 5 at 315 degrees, opacity 0.55.
+                BoxShadow = new BoxShadows(new BoxShadow { OffsetX = 3.54, OffsetY = 3.54, Blur = 20, Color = Color.FromArgb(0x8C, 0, 0, 0) }),
             };
             _stampPopup = new Popup
             {
@@ -462,7 +459,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _stampPopRemaining!.Text = info.Completed ? "done" : left > 0 ? $"{left} to go" : "";
         }
 
-        private void ShowStampPopup(QuestStampInfo info)
+        private void ShowStampPopup(QuestStampInfo info, bool animate)
         {
             try
             {
@@ -470,7 +467,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_stampPopup == null || _stampPopCard == null) return;
                 PaintStampPopup(info);
                 _stampPopup.IsOpen = true;
-                _stampPopCard.Opacity = 1;
+                AnimateStampPopupIn(animate);
             }
             catch (Exception ex) { Log.Debug("[QuestStamps] card open failed: {E}", ex.Message); }
         }
@@ -493,7 +490,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     ZoomStamp(previous, false);
                 _hoveredStampKey = key;
                 ZoomStamp(info, true);
-                ShowStampPopup(info);
+                ShowStampPopup(info, animate: _stampPopup?.IsOpen != true);
             }
             catch (Exception ex) { Log.Debug("[QuestStamps] hover in: {E}", ex.Message); }
         }
@@ -519,7 +516,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 ZoomStamp(info, true);
                 if (_stampPopup?.IsOpen == true) PaintStampPopup(info);
-                else ShowStampPopup(info);
+                else ShowStampPopup(info, animate: true);
                 return;
             }
             _hoveredStampKey = null;
