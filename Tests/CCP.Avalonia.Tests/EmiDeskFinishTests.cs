@@ -200,11 +200,9 @@ public sealed class EmiDeskFinishTests
     [Fact]
     public Task AssetsChipBringsTheShellToAssetsWithoutChangingTheMediaSource() => WithDesk(desk =>
     {
-        var app = Application.Current!;
-        var previous = app.ApplicationLifetime;
+        var previous = EmiOffers.ShellLookup;
         var main = new MainShellWindow();
-        var lifetime = new ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown, MainWindow = main };
-        app.ApplicationLifetime = lifetime;
+        EmiOffers.ShellLookup = () => main;
         try
         {
             Assert.True(EmiOffers.EffectFeasible("assets"));
@@ -215,7 +213,7 @@ public sealed class EmiDeskFinishTests
             CoreSettings.Current.MediaSource = "mixed";
             Assert.False(EmiOffers.EffectFeasible("assets"));
         }
-        finally { main.Close(); app.ApplicationLifetime = previous; }
+        finally { main.Close(); EmiOffers.ShellLookup = previous; }
         return Task.CompletedTask;
     }, "assets");
 

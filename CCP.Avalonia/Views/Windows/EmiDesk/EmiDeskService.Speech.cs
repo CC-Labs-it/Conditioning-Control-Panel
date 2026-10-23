@@ -76,6 +76,7 @@ internal sealed partial class EmiDeskService
     {
         CancelGreeting();
         _summonVia = string.Equals(why, "hotkey", StringComparison.OrdinalIgnoreCase) ? "hotkey" : "rail";
+        // shortcut: no caller passes "tour" yet (TutorialService.cs:19, narrator not ported); kept for WPF parity.
         _summonTouring = string.Equals(why, "tour", StringComparison.OrdinalIgnoreCase);
         _greetingTimer = new DispatcherTimer
         {

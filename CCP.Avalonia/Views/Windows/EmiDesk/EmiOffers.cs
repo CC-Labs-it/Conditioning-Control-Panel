@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     internal static class EmiOffers
     {
         private static readonly string[] ImageExts = { ".gif", ".png", ".jpg", ".jpeg", ".webp", ".bmp" };
+        private static readonly string[] VideoExts = { ".mp4", ".webm", ".mkv", ".avi", ".mov", ".wmv", ".m4v" };
 
         /// <summary>WPF EffectFeasible: can this effect happen right now. Unknown refuses.</summary>
         public static bool EffectFeasible(string? effect)
@@ -106,8 +107,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             catch (Exception ex) { Log.Warning(ex, "[EmiDesk] effect {Effect} failed", e); }
         }
 
-        private static MainShellWindow? Shell =>
-            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow;
+        // Tests swap it: Avalonia refuses a new ApplicationLifetime once the headless app is initialized.
+        internal static Func<MainShellWindow?> ShellLookup = () => MainShellWindow.Current;
+        private static MainShellWindow? Shell => ShellLookup();
 
         // WPF SetBedtime: the next LOCAL 06:00, persisted as UTC. Exactly 06:00 means tomorrow.
         internal static DateTime BedtimeUntil(DateTime now)
@@ -126,8 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             {
                 var dir = Path.Combine(CorePaths.EffectiveAssets, "videos");
                 return Directory.Exists(dir) && Directory.EnumerateFiles(dir, "*.*", SearchOption.AllDirectories)
-                    .Any(f => new[] { ".mp4", ".webm", ".mkv", ".avi", ".mov", ".wmv", ".m4v" }
-                        .Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
+                    .Any(f => VideoExts.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
             }
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] video scan failed"); return false; }
         }
