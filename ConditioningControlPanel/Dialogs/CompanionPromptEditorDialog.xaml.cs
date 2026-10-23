@@ -70,6 +70,14 @@ namespace ConditioningControlPanel
         private static string Persist(TextBox box, string? shownDefault)
             => Services.Companion.ActivePersonaPromptText.PersistedField(box?.Text, shownDefault);
 
+        /// <summary>One box's opening text: see
+        /// <see cref="Services.Companion.ActivePersonaPromptText.EditorField"/>.</summary>
+        private static string Shown(bool customOn, string? stored, string? runningDefault)
+            => Services.Companion.ActivePersonaPromptText.EditorField(customOn, stored, runningDefault);
+
+        /// <summary>Whether the custom prompt was the one in use when the boxes were filled.</summary>
+        private bool _customWasOn;
+
         /// <summary>
         /// CCBill AI Addendum: show the full content-policy banner until the user
         /// clicks "Got it", then collapse to a slim non-dismissable reminder. State is
@@ -170,22 +178,19 @@ namespace ConditioningControlPanel
             var settings = App.Settings?.Current?.CompanionPrompt ?? new CompanionPromptSettings();
 
             ChkUseCustom.IsChecked = settings.UseCustomPrompt;
+            _customWasOn = settings.UseCustomPrompt;
             // Provider toggle, model name, host URL, and effect permissions all live
             // in the AI Brain panel on the Companion tab — this dialog is personality-only.
 
-            // Load values, falling back to defaults if empty
-            TxtPersonality.Text = string.IsNullOrWhiteSpace(settings.Personality)
-                ? _defaults.Personality : settings.Personality;
-            TxtExplicitReaction.Text = string.IsNullOrWhiteSpace(settings.ExplicitReaction)
-                ? _defaults.ExplicitReaction : settings.ExplicitReaction;
-            TxtSlutMode.Text = string.IsNullOrWhiteSpace(settings.SlutModePersonality)
-                ? _defaults.SlutModePersonality : settings.SlutModePersonality;
-            TxtKnowledgeBase.Text = string.IsNullOrWhiteSpace(settings.KnowledgeBase)
-                ? _defaults.KnowledgeBase : settings.KnowledgeBase;
-            TxtContextReactions.Text = string.IsNullOrWhiteSpace(settings.ContextReactions)
-                ? _defaults.ContextReactions : settings.ContextReactions;
-            TxtOutputRules.Text = string.IsNullOrWhiteSpace(settings.OutputRules)
-                ? _defaults.OutputRules : settings.OutputRules;
+            // The stored custom text only while it is the prompt in use; otherwise the running
+            // persona, so a fork starts from what the companion says now (#1417).
+            bool on = settings.UseCustomPrompt;
+            TxtPersonality.Text = Shown(on, settings.Personality, _defaults.Personality);
+            TxtExplicitReaction.Text = Shown(on, settings.ExplicitReaction, _defaults.ExplicitReaction);
+            TxtSlutMode.Text = Shown(on, settings.SlutModePersonality, _defaults.SlutModePersonality);
+            TxtKnowledgeBase.Text = Shown(on, settings.KnowledgeBase, _defaults.KnowledgeBase);
+            TxtContextReactions.Text = Shown(on, settings.ContextReactions, _defaults.ContextReactions);
+            TxtOutputRules.Text = Shown(on, settings.OutputRules, _defaults.OutputRules);
 
             UpdateEnabledState();
             _hasUnsavedChanges = false;
@@ -204,12 +209,20 @@ namespace ConditioningControlPanel
             // now, so writing them back verbatim would freeze a mod's paragraph into the user's
             // own settings on an open-look-Save, and the persona could never show through again.
             // Blank keeps the meaning it has always had: follow whatever the default is.
-            settings.Personality = Persist(TxtPersonality, _defaults.Personality);
-            settings.ExplicitReaction = Persist(TxtExplicitReaction, _defaults.ExplicitReaction);
-            settings.SlutModePersonality = Persist(TxtSlutMode, _defaults.SlutModePersonality);
-            settings.KnowledgeBase = Persist(TxtKnowledgeBase, _defaults.KnowledgeBase);
-            settings.ContextReactions = Persist(TxtContextReactions, _defaults.ContextReactions);
-            settings.OutputRules = Persist(TxtOutputRules, _defaults.OutputRules);
+            //
+            // Off when it opened and still off: the boxes showed the running persona, not the
+            // stored text, so there is nothing of the user's in them to write. Leave the stored
+            // custom prompt as it was.
+            if (_customWasOn || settings.UseCustomPrompt)
+            {
+                settings.Personality = Persist(TxtPersonality, _defaults.Personality);
+                settings.ExplicitReaction = Persist(TxtExplicitReaction, _defaults.ExplicitReaction);
+                settings.SlutModePersonality = Persist(TxtSlutMode, _defaults.SlutModePersonality);
+                settings.KnowledgeBase = Persist(TxtKnowledgeBase, _defaults.KnowledgeBase);
+                settings.ContextReactions = Persist(TxtContextReactions, _defaults.ContextReactions);
+                settings.OutputRules = Persist(TxtOutputRules, _defaults.OutputRules);
+            }
+            _customWasOn = settings.UseCustomPrompt;
 
             // Un-ticking "use custom prompt" here is the same intent as the quick menu's
             // "Disable custom prompt": drop the community id too, or the Companion tab keeps
