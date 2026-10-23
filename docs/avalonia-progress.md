@@ -2617,3 +2617,6 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/decision-tester-verification: +37
 - decisions log entry: tester verification + proposed goal text
+
+## avalonia-port/ledger-dedupe: +54
+- Parity ledger: 64 duplicate row ids merged (honest status, newer text first, union of paths/notes), section row counts fixed.
