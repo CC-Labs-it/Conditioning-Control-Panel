@@ -361,12 +361,11 @@ namespace ConditioningControlPanel
             for (int i = 0; i < LocalizationManager.AvailableLanguages.Length; i++)
             {
                 var (code, displayName, shortName) = LocalizationManager.AvailableLanguages[i];
-                combo.Items.Add(new ComboBoxItem
-                {
-                    Content = shortLabels ? $"🌐 {shortName}" : displayName,
-                    Tag = code,
-                    ToolTip = displayName
-                });
+                // The flag sits left of the name in the dropdown and in the closed box
+                // (Controls/LanguageFlag: vectors, since Windows has no emoji flags).
+                var item = new ComboBoxItem { Tag = code, ToolTip = displayName };
+                ConditioningControlPanel.Controls.LanguageFlag.Dress(item, code, shortLabels ? shortName : displayName);
+                combo.Items.Add(item);
                 if (code == currentLang)
                     selectedIndex = i;
             }

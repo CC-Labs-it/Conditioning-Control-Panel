@@ -25,8 +25,8 @@
                 <StackPanel>
                     <TextBlock Text="{loc:Str companion_v2_memory}" FontSize="15" FontWeight="SemiBold" Foreground="#FF69B4"/>
                     <TextBlock Text="{loc:Str companion_v2_memory_note}" FontSize="12" Foreground="{DynamicResource TextSecondaryBrush}" TextWrapping="Wrap" Margin="0,2,0,10"/>
-                    <!-- ponytail: WPF puts PreferredNameEditor + ConversationRecap (Companion V2) above the diary;
-                         neither exists on this head (parity row views-companion-v2-conversation). -->
+                    <ContentControl x:Name="NameHost" Focusable="False"/>
+                    <ContentControl x:Name="RecapHost" Focusable="False"/>
                     <ContentControl x:Name="MemoryHost" Focusable="False"/>
                 </StackPanel>
             </Border>
