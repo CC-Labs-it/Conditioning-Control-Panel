@@ -9,6 +9,10 @@
  * the boost. The rubber band is soft and only on top speed. mods.blind adds steer noise and lifts the
  * throttle. Items through the ITEMS API (input.item edge, input.back), less often than people.
  * Personalities and the few numbers feel.json lacks sit in GAPS below (reported as feel gaps). No three.js.
+ * Water (wave 1): the track's flow and stream / pool kinds are sampled per 2 m at build from track.query; the
+ * line aims ai.water.leadS seconds of lateral flow against the push, takes an inside or outside line on the
+ * stream bend (per persona and seed), holds a chosen lane from ai.water.lipLeadM before the chute with a
+ * small wheel down it, never drifts on water, never counts a pool as stuck (no rescue there).
  */
 import { S, BOOST, RESPAWN } from './state.js';
 import { clamp, lerp, wrap, damp } from '../core/math.js';
@@ -17,6 +21,7 @@ import { gap } from './gaps.js';
 import { ITEMS } from './itemTable.js';
 import { bendSpeed, yawParams, calmOf } from './steer.js';
 import { createCourtPaths } from './court-paths.js';
+import { makeQuery } from '../track/query.js';
 
 const YP = {};                       // steering law numbers, read once per bot per tick
 
@@ -46,6 +51,14 @@ const GAPS = {
   'ai.trickOpenM': 120,        // polish 6: no trick (its landing boost) with an open edge this close ahead
   'ai.padRiskM': 140,          // polish 6: a pad with an open bend this close after it
   'ai.padRiskPct': 0.85,       // that bend's planned speed under this share of top: the bots steer round the pad
+  // water (wave 1): the bots read the track's flow (query.flow, sampled per 2 m at build) and its stream / pool nodes
+  'ai.water.leadS': 0.8,       // aim this many seconds of the lateral flow ahead against the push
+  'ai.water.lineM': 3.5,       // the inside or outside line on a stream bend sits this far off the centre
+  'ai.water.lipLeadM': 40,     // hold the chute lane from this far before the lip
+  'ai.water.laneM': 3.5,       // the chute lanes: left / centre / right, this far apart
+  'ai.water.chuteSteerMax': 0.3,   // the wheel stays within this on the chute
+  'ai.water.bendDegPerM': 0.25,    // a stream run turning more than this on average is the stream bend
+  'ai.water.chuteDownDeg': 3,      // a straight stream run dropping more than this on average is the chute
 };
 // feel.get throws on a missing key, and a feel never gains keys (set refuses them), so a miss is
 // remembered per feel: no throw per bot per tick.
@@ -59,12 +72,12 @@ const fg = (feel, k) => {
   }
 };
 
-// feel gap: personalities (multipliers on the ai.* numbers)
+// feel gap: personalities (multipliers on the ai.* numbers; inside = chance of the inside line on the stream bend)
 export const PERSONAS = Object.freeze([
-  { id: 'steady', spread: 0.5, cut: 0.8, drift: 0.5, tier: 1, item: 0.8, wander: 0.6 },
-  { id: 'drifter', spread: 0.8, cut: 1.0, drift: 1.0, tier: 2, item: 0.9, wander: 0.8 },
-  { id: 'thrower', spread: 0.7, cut: 0.9, drift: 0.6, tier: 1, item: 1.4, wander: 1.0 },
-  { id: 'cutter', spread: 1.0, cut: 1.3, drift: 0.8, tier: 2, item: 1.0, wander: 0.7 },
+  { id: 'steady', spread: 0.5, cut: 0.8, drift: 0.5, tier: 1, item: 0.8, wander: 0.6, inside: 0.75 },
+  { id: 'drifter', spread: 0.8, cut: 1.0, drift: 1.0, tier: 2, item: 0.9, wander: 0.8, inside: 0.35 },
+  { id: 'thrower', spread: 0.7, cut: 0.9, drift: 0.6, tier: 1, item: 1.4, wander: 1.0, inside: 0.5 },
+  { id: 'cutter', spread: 1.0, cut: 1.3, drift: 0.8, tier: 2, item: 1.0, wander: 0.7, inside: 0.9 },
 ]);
 
 /** Seeded 0..1 generator (mulberry32). */
@@ -132,6 +145,43 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     return { s: pd.s, x: pd.x, w: pd.w, risky };
   });
 
+  // water (wave 1): the ground's flow and kind per 2 m, read once from the track query on the centreline
+  // (a track with no flow yet, or no query, reads as dry); then the stream runs, each classed once:
+  // 'bend' (the stream bend, side + right), 'chute' (a straight stream dropping away), 'stream' (flat), 'pool'
+  const flowA = new Float32Array(N), flowL = new Float32Array(N), surf = new Uint8Array(N), down = new Float32Array(N);
+  const runs = [];
+  if (typeof track.query === 'function' && typeof track.frameAt === 'function') {
+    const Q = makeQuery(), F = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
+    for (let k = 0; k < N; k++) {
+      const f = track.frameAt(k * STEP, F);
+      down[k] = Math.asin(clamp(-f.t[1], -1, 1)) * 180 / Math.PI;
+      const q = track.query(f.p[0], f.p[1], f.p[2], f.seg, Q);
+      if (!q) continue;
+      surf[k] = q.surface === 'stream' ? 1 : q.surface === 'pool' ? 2 : 0;
+      const fl = surf[k] === 1 && Array.isArray(q.flow) ? q.flow : null;
+      flowA[k] = fl && Number.isFinite(fl[0]) ? fl[0] : 0;
+      flowL[k] = fl && Number.isFinite(fl[1]) ? fl[1] : 0;
+    }
+    let k0 = 0;
+    while (k0 < N && surf[k0] !== 0) k0++;          // start on dry ground so a run across s = 0 stays whole
+    if (k0 < N) for (let i = 0; i < N;) {
+      const k = (k0 + i) % N, kind = surf[k];
+      if (!kind) { i++; continue; }
+      let n = 0, sumBend = 0, sumDown = 0;
+      while (n < N - i && surf[(k0 + i + n) % N] === kind) { const kk = (k0 + i + n) % N; sumBend += bend[kk]; sumDown += down[kk]; n++; }
+      const s0 = wrap(k * STEP, L), meanBend = sumBend / n, meanDown = sumDown / n;
+      const cls = kind === 2 ? 'pool' : Math.abs(meanBend) >= fg(feel, 'ai.water.bendDegPerM') ? 'bend'
+        : meanDown >= fg(feel, 'ai.water.chuteDownDeg') ? 'chute' : 'stream';
+      runs.push({ kind: cls, s0, s1: s0 + n * STEP, side: cls === 'bend' ? Math.sign(meanBend) : 0 });
+      i += n;
+    }
+  }
+  /** The water run under s (lead metres before it count too), or null. */
+  function runAt(s, lead = 0) {
+    for (let i = 0; i < runs.length; i++) { const r = runs[i], d = wrap(s - r.s0 + lead, L); if (d < r.s1 - r.s0 + lead) return r; }
+    return null;
+  }
+
   const bots = new Map();
 
   function bot(i) {
@@ -141,7 +191,12 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       const persona = i === 0 ? PERSONAS[0] : PERSONAS[(i + seed) % PERSONAS.length];
       b = { rand, persona, line: (rand() * 2 - 1), phase: rand() * Math.PI * 2, n1: rand() * 6.28, n2: rand() * 6.28,
         t: 0, driftT: -1, driftCool: 0, driftDir: 0, holdT: 0, itemCool: 0, stuckT: 0, reverseT: 0,
-        launched: false, launch: rand(), setupSide: 0, wantDrift: false, why: {}, routeLap: -1, route: null, routes: 0 };
+        launched: false, launch: rand(), setupSide: 0, wantDrift: false, why: {}, routeLap: -1, route: null, routes: 0,
+        waterInside: false, chuteLane: 0 };
+      // water picks on their own stream (the drift / item / launch rolls keep their sequence)
+      const wr = rng(seed * 7919 + i * 104729 + 1013904223);
+      b.waterInside = wr() < persona.inside;
+      b.chuteLane = Math.floor(wr() * 3) - 1;
       bots.set(i, b);
     }
     return b;
@@ -224,8 +279,23 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     const cutK = clamp(Math.abs(bendLa) / feel.get('ai.driftCurveDegPerM'), 0, 1);
     let target = b.line * feel.get('ai.lineSpreadM') * p.spread + wander + Math.sign(bendLa) * feel.get('ai.cornerCutM') * p.cut * cutK;
     if (nearLip) target *= 0.3;
-    const wide = driftSetup(b, s, speed, la, nearLip || !!court);
+    // water: the run under the kart (the chute counts from lipLeadM before its lip); no drift on water
+    const kWater = at(s), onWater = surf[kWater] !== 0;
+    const run = runAt(s, 0), chute = (run && run.kind === 'chute') ? run : runAt(s, fg(feel, 'ai.water.lipLeadM'));
+    const onChute = !!chute && chute.kind === 'chute';
+    const onBend = !!run && run.kind === 'bend';
+    if (onChute) {
+      // hold the chosen lane into and down the chute: no wander, no cut
+      target = b.chuteLane * Math.min(fg(feel, 'ai.water.laneM'), half[kWater] - fg(feel, 'ai.railMarginM') - 0.5);
+    } else if (onBend) {
+      // inside (let the river carry you round) or outside (speed, arrive wide), rolled once per bot
+      const lineM = Math.min(fg(feel, 'ai.water.lineM'), half[kWater] - fg(feel, 'ai.railMarginM') - 0.5);
+      target = run.side * (b.waterInside ? lineM : -lineM) + wander * 0.5;
+    }
+    const wide = onWater || onChute ? null : driftSetup(b, s, speed, la, nearLip || !!court);
     if (wide !== null) target = wide;
+    // aim against the lateral flow ahead: it will carry the kart that far over the next leadS seconds
+    target -= flowL[at(s + la)] * fg(feel, 'ai.water.leadS');
 
     // around slower karts and live traps ahead
     const avoidM = feel.get('ai.avoidM'), shift = feel.get('ai.avoidShiftM');
@@ -272,6 +342,8 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     let steer = Math.atan2(x, Math.max(z, 0.1)) * feel.get('ai.steerGain') / soft;
     if (blind > 0) steer += blind * feel.get('ai.blindSteerNoise') * (0.6 * Math.sin(1.7 * b.t + b.n1) + 0.4 * Math.sin(3.1 * b.t + b.n2));
     out.steer = clamp(steer, -1, 1);
+    // on the chute itself the wheel stays small: the lane was chosen at the lip, gravity does the rest
+    if (onChute && run === chute) { const m = fg(feel, 'ai.water.chuteSteerMax'); out.steer = clamp(out.steer, -m, m); }
     // heading against the road here (+ = nose right of travel) and sideways speed across it
     const f0 = track.frameAt(s, FR0);
     const ft = fx * f0.t[0] + fy * f0.t[1] + fz * f0.t[2], fb = fx * f0.b[0] + fy * f0.b[1] + fz * f0.b[2];
@@ -311,12 +383,16 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       out.throttle = 0; out.brake = 1; out.steer = -out.steer;
       return;
     }
-    if (ph === RESPAWN.NONE && race.timeS > 2 && st[S.speedPct] < fg(feel, 'ai.stuckPct')) {
+    // a pool is never "stuck": the landing takes speed on purpose and no rescue is asked for there (the throttle
+    // stays on through it by itself: the bot only lifts for a bend or the court ahead)
+    const onPool = surf[kWater] === 2;
+    if (onPool) b.stuckT = 0;
+    else if (ph === RESPAWN.NONE && race.timeS > 2 && st[S.speedPct] < fg(feel, 'ai.stuckPct')) {
       b.stuckT += dt;
       if (b.stuckT > fg(feel, 'ai.stuckS')) { b.stuckT = 0; b.reverseT = fg(feel, 'ai.reverseS'); }
     } else b.stuckT = 0;
 
-    driftLogic(r, b, dt, out, s, lat, speed, la, nearLip || !!court, blind);
+    driftLogic(r, b, dt, out, s, lat, speed, la, nearLip || !!court || onWater || onChute, blind);
     // a trick pays a boost on landing: never into an open edge ahead (polish 6: a boost cannot brake for an open bend)
     if (st[S.airborne] > 0 && st[S.airTime] > 0 && st[S.airTime] <= 0.1 && !b.trickRolled) { b.trickRolled = true; if (b.rand() < feel.get('trick.botChance') && !openAhead(s, fg(feel, 'ai.trickOpenM'))) out.hopPressed = true; } else if (st[S.grounded] > 0) b.trickRolled = false;
     if (r.item) itemLogic(r, b, ctx, dt, out);
@@ -473,5 +549,5 @@ export function createAi(track, feel, { seed = 1 } = {}) {
     b.itemCool = feel.get('ai.itemCooldownS');
   }
 
-  return { drive, reset, personaOf: (i) => bot(i).persona.id, botOf: (i) => bot(i) };
+  return { drive, reset, personaOf: (i) => bot(i).persona.id, botOf: (i) => bot(i), water: () => runs };
 }
