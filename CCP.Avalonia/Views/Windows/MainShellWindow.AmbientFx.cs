@@ -17,12 +17,13 @@
 // window activation itself (see its Evaluate()). A constant nothing reads would be a lie about a
 // knob that does not exist here.
 //
-// Registered by this batch: "enhancements" (MainShellWindow.EnhancementsFx.cs) and
-// "availablesubjects" (MainShellWindow.SubjectsFx.cs), "settings" (MosaicFx, InitializeDashboardFx), "programs" (ProgramsTabView.Ignition.cs). "play"
-// and "exclusives" belong to files this layer does not own and are still unregistered.
+// Registered canvases: settings (dashboard + favorites), programs (ignition), enhancements,
+// available subjects and premium (the vault room). WPF Play has no ambient canvas since the
+// Rabbit Hole hero moved to the launcher on 2026-09-18; its badges/rims self-gate on visibility.
 
 using System;
 using System.Collections.Generic;
+using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls;
 using Serilog;
 
@@ -64,6 +65,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "enhancements": EnsureEnhancementsFx(); break;
                     case "availablesubjects": EnsureSubjectsFx(); break;
                     case "deeper": EnsureDeeperFx(); break;
+                    // WPF EnsureExclusivesBuilt registers against "premium" (the old
+                    // "exclusives" key redirects there). The view already composes its room.
+                    case "premium":
+                        RegisterTabFx("premium", Named<Tabs.ExclusivesTabView>("ExclusivesTab")
+                            ?.FindControl<AmbientFxCanvas>("ExclusivesAmbientFx"));
+                        break;
                 }
             }
             catch (Exception ex) { Log.Debug("EnsureTabFx({T}): {E}", tab, ex.Message); }

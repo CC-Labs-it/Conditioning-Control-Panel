@@ -18,7 +18,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so ModalUp /
+    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so
     /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
     /// pump when the startup modals move onto a shared ladder.
     /// </summary>
@@ -55,6 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
+            ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
@@ -142,6 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
             public DateTimeOffset Now = new(2026, 10, 7, 12, 0, 0, TimeSpan.Zero);
             public readonly List<Timer> Timers = new();
             public override DateTimeOffset GetUtcNow() => Now;
+            public override long GetTimestamp() => Now.UtcTicks;          // stepped too, so GetElapsedTime follows Advance
+            public override long TimestampFrequency => TimeSpan.TicksPerSecond;
 
             public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
             {

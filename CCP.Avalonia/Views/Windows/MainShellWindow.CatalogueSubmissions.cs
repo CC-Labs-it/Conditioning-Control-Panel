@@ -1,23 +1,6 @@
-// PARTIALLY PORTED from ConditioningControlPanel/MainWindow/MainWindow.CatalogueSubmissions.cs
-// (223 lines). Sorted member by member against the fifteen Core seams; the file splits cleanly in
-// two along the read/write line, and the READ half is restored below.
-//
-// THE READ HALF IS HERE AND IS REAL. Every one of its inputs is in Core: the record shape is
-// CCP.Core/Models/DeeperSubmissionRecord.cs and the three per-kind dictionaries are fields of
-// AppSettings (CataloguePresetSubmissions / CatalogueSessionSubmissions / CatalogueModSubmissions,
-// AppSettings.cs:2347-2375), which CoreSettings.Current hands over. Nothing here touches a control,
-// so the x:Name hazard does not apply to this partial at all.
-//
-// Callers: MainShellWindow.CatalogueStatus.cs (CreateCatalogueStatusBadge, the /mine polls), which
-// paints the preset detail pill and session rack pill (PresetsTabView) and the Mod Manager row pill.
-//
-// THE WRITE HALF: RecordCatalogueSubmission is ported (catalogue U3). Its callers, the preset/session/
-// mod Share buttons, are split out of U4 and not wired yet; whoever wires them repaints through
-// RefreshCatalogueShareBadges (MainShellWindow.CatalogueStatus.cs) as WPF does. The status polls, accepted toast
-// (15 s, not WPF's sticky one) and ResolveCatalogueDisplayName are in MainShellWindow.CatalogueStatus.cs.
-//
-// Checked and NOT the blocker: CoreReleaseContent. It answers pack ids, install stamps and pack
-// info; the catalogue submission flow reads none of those.
+// PORTED from ConditioningControlPanel/MainWindow/MainWindow.CatalogueSubmissions.cs.
+// Preset/session Share callers are in PresetIO; custom-mod Share is in ModCatalogue.
+// CatalogueStatus owns the mine polls, badges and keyed sticky acceptance notifications.
 
 using System;
 using System.Collections.Generic;
@@ -80,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF MainWindow.CatalogueSubmissions.cs:63: remember a share's server id/status. Only
         /// Success/Duplicate carry one; other outcomes are no-ops. WPF ends with RefreshCatalogueShareBadges
-        /// (MainShellWindow.CatalogueStatus.cs, instance); the Share caller does that when it lands.</summary>
+        /// (MainShellWindow.CatalogueStatus.cs, instance); PresetIO's Share caller does that; mod share repaints by refreshing the Mod Manager list.</summary>
         internal static void RecordCatalogueSubmission(string kind, string key, SubmissionResult result)
         {
             try

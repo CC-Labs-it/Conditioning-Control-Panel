@@ -2329,3 +2329,522 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 
 ## avalonia-port/goongame-core-c: +208
 - Cloud session unit (goongame-core-c); reviewed and gated locally.
+
+## avalonia-port/compositor-core-b: +33
+- Cloud session unit (compositor-core-b); reviewed and gated locally. GlyphFallback font tests skip visibly without a covering font.
+
+## avalonia-port/chaos-effect-banner: +556
+- Chaos effect-banner strip ported: Core `ChaosEffectBannerStrip` (order, de-dup, fade/throb timing) and a click-through Avalonia window, created and closed by ChaosRunHost at the WPF lifecycle points.
+- No banner without a compositor, or when the platform refuses the window. The refusal is remembered per run (one Warning, no rebuild on each Show).
+- Row chaos-effect-banner changed from missing to stub: no effect calls Show on this head yet.
+
+## avalonia-port/companion-transcript: +81
+- Her Room History transcript: panic closes it (PanicSurfaces "companion-transcript"), stored-dialogue + panic tests (fail-proven), ledger row missing -> wired.
+
+## avalonia-port/main-20261015: +69256
+- Main sync #7: WPF main + release 7.1.14 (f7f0f612b) merged (releases 7.1.6-7.1.14); delta ledger docs/avalonia-main-sync-20261015.md (80 ported-by-merge, 195 needs-port in 18 sync7-* lanes, 34 n/a). Red by design; gated in -compat.
+
+## avalonia-port/main-20261015-compat: +317
+- Compat for main sync #7: Scrolller cluster + 13 helpers into Core (licence switch now reaches the Avalonia online-media path), App.* in Core as seams, head hooks (sweeper, idle voice, funnel), Avalonia vault card/update button follow 7.1.14, WPF scan tests via SourceRoots/Assets. rgate green except the listed RaceTrackPlayer flake (run 39709240603).
+
+## avalonia-port/possession-core-c: +319 vs base
+- Cloud session unit (possession-core-c); reviewed and gated locally.
+
+## avalonia-port/deeper-core-b: +337
+- Cloud session unit (deeper-core-b); reviewed and gated locally. Review follow-up: 2 tests (effect/haptic lines, cancelled recording dispatch).
+
+## avalonia-port/deeper-core-b: +342
+- Cloud session unit (deeper-core-b); reviewed and gated locally. Review follow-up: 2 tests (effect/haptic lines, cancelled recording dispatch).
+## avalonia-port/video-core-b: +334
+- Cloud session unit (video-core-b); reviewed and gated locally.
+
+## avalonia-port/video-core-b: +334
+- Cloud session unit (video-core-b); reviewed and gated locally.
+
+## avalonia-port/emidesk-core-c: +47
+- Cloud session unit (emidesk-core-c); reviewed and gated locally.
+
+## avalonia-port/emidesk-core-c: +47
+- Cloud session unit (emidesk-core-c); reviewed and gated locally.
+## avalonia-port/dtrh-feel-sync: merge of 46e9e908d
+- Imports the head dev's DTRH feel rework (dtrh-feel/01..17, 27 commits). It had one conflict, in DtrhAssetManifest (resolved by keeping both the loop field and CorePaths.UserData). The 24 new web files are under Assets/web/dtrh, KeptEscapePage.Dtrh is in Core PanicPolicy, and the node tests pass 81/81.
+
+## avalonia-port/dtrh-feel-port: +77
+- DTRH feel rework delta ledger (27 rows: 22 ported-by-merge, 5 needs-port -> lane game-dtrh-host), parity row game-dtrh (missing), DtrhMotionWire git mv to Core with fail-proven Core tests. Local gate GATE-OK (P97 fallback; Windows runs in PR CI).
+
+## avalonia-port/sparkle-wallet: +688
+- Header Sparkle wallet + invite/help popups on BeatLoops; balance from SkillPoints, award cue via SparklePointRewards (moved to Core).
+- ctrl-sparkle-wallet -> stub (EmiFace), shell-sparkle-wallet -> stub (no Avalonia award producer yet).
+
+## avalonia-port/chaos-bubble-field: +458
+- Chaos bubble variants and payloads moved to CCP.Core (uint tints; Fire goes through the head-seeded EffectPayload.Firer). WPF fire bodies are now in EffectPayloadFiring.
+- New ChaosFieldMath (spawn cadence, pop points) is used by WPF ChaosModeService and has tests proven to fail when broken. Avalonia seeds Firer with a logging no-op; the bubble field is the next lane.
+
+## avalonia-port/chaos-pop-text: +440
+- Chaos pop text ported: pooled click-through combat-text overlay with WPF timing/tint, pool closed on run teardown.
+- Row stays stub until bubble field/toys/payout callers are ported; live overlay steps queued.
+
+## avalonia-port/overlay-speak-cue: +499
+- Speak cue overlay + Core SpeakCueState ported (fade, anchor, panic, render-all); row stays stub until Deeper runtime gives it a caller.
+
+## avalonia-port/ci-skip-cloud: +19
+- Push-triggered port workflows (distro-check, reference-render, snapshot-lock) skip avalonia-port/cloud-** and gate-** branches; workflow_dispatch kept.
+- Decision entry reserves the cloud-/gate- prefixes for throwaway branches and notes that gate pushes already carry [skip ci].
+
+## avalonia-port/flake-clocks: +52
+- ChasterFlash coalescing and MatchClock scheduled fire run on a TimeProvider seam; ChasterBill coalescing test and the P108 GoonClock dispatch test are deterministic (stepped clocks), both fail-proven; rgate 39687660015 green.
+
+## avalonia-port/panic-key-sweep: +185
+- Panic key matched by Key value (alias-aware, Enter/Return) on MandatoryVideoOverlay, BubbleCount game/result, FirstShowStage via one helper `Platform/HotkeyNames`.
+- Panic bound to Enter now beats the focused control; headless tests fail-proven.
+
+## avalonia-port/chaos-fx-window: +498
+- Chaos FX window (vignette, edge glow, heat tint) ported with Core envelope maths; heat tint wired into ChaosRunHost; run-end close tested (fail-proven).
+- Row chaos-fx-window: missing -> stub (no user path to StartRun yet).
+
+## avalonia-port/launcher-edge: +134
+- Rounded launcher (DWM round on Windows, transparent + 8 px clip elsewhere, square when maximised); glint turns in the unit box like WPF RelativeTransform.
+- Edge timing (flare/breath/glint/idle 14 s/focus 4 s/park) covered by 4 fail-proven tests (focus gap on a stepped clock); win-launcher-edge -> wired.
+
+## avalonia-port/v2-get-it-row: +290
+- V2GetItRow ported (Core V2PurchaseRule via git mv); Flashes v2 box shows the Get it row: owned hides it, signed out offers sign-in, signed in reads "Not available" until feat-backroom-counter-buy.
+- ctrl-v2-get-it-row missing -> stub; new row feat-backroom-counter-buy.
+
+## avalonia-port/inline-loop-video: +362
+- InlineLoopVideo (muted looping LibVLC surface via VlcFrameSink) is now in the HelpPopover clip poster; ctrl-inline-loop-video -> wired, lifecycle and leak tests fail-proven; review fixes drop wall-clock asserts.
+
+## avalonia-port/overlay-takeover-announcer: +617
+- Takeover cue overlay ported: Core TakeoverCueQueue (queue + WPF timings), Skia bloom/sparks + shake on a click-through X11 window, shown on the announce roll.
+- Panic and shell close clear the queue and close it; ledger overlay-takeover-announcer -> wired.
+- Review fixes: the topmost re-raise runs on real elapsed time and the alpha is written only when it changes; the test drives performable actions.
+
+## avalonia-port/overlay-takeover-announcer: +617
+- Takeover cue overlay ported: Core TakeoverCueQueue (queue + WPF timings), Skia bloom/sparks + shake on a click-through X11 window, shown on the announce roll.
+- Panic and shell close clear the queue and close it; ledger overlay-takeover-announcer -> wired.
+- Review fixes: the topmost re-raise runs on real elapsed time and the alpha is written only when it changes; the test drives performable actions.
+## avalonia-port/companion-barks: +1016
+- BarkEngine extracted into Core; Avalonia BarkHost plays default-voice barks (bouncing-text, doorbell triggers, mute/panic).
+- Review fixes: ordinary barks via Giggle (no chat log), honest test claims, EMI mirror listed; rgate GATE-OK (run 38460174466), committed 5f2c3ddfb.
+
+## avalonia-port/companion-barks: +1016
+- BarkEngine extracted into Core; Avalonia BarkHost plays default-voice barks (bouncing-text, doorbell triggers, mute/panic).
+- Review fixes: ordinary barks via Giggle (no chat log), honest test claims, EMI mirror listed; rgate GATE-OK (run 38460174466), committed 5f2c3ddfb.
+
+## avalonia-port/adaptive-side-art: +278
+- AdaptiveSideArt.CollapseBelow ported to Avalonia and applied to 21 side-art views with WPF thresholds; row feat-adaptive-side-art updated (not verified).
+- Headless resize test fail-proven; source-scan test pins all 21 thresholds to WPF; rgate GATE-OK.
+
+## avalonia-port/lock-title: +635
+- LockTitle ported (padlock letters, candy/ice, entry/idle/jolt/rattle with WPF timings on one FrameClock parked when hidden/detached) and wired into the Chaster hero; ctrl-lock-title -> wired.
+- LockTitleTests (curves + stepped-clock lifecycle, fail-proven, incl. the 4 Chaster tab hooks); no shadow (P82 ratchet), no booking sparks.
+
+## avalonia-port/banner-link-overrun: +40
+- Banner web link stays inside its line at the narrower header (lead + link in one embedded DockPanel; link ellipsizes like WPF); headless test narrows HeaderBannerHost explicitly.
+
+## avalonia-port/chaos-gif-cascade: +798
+- Chaos gif rain ported: Core GifCascade maths (WPF timing/caps/motion) + click-through FrameClock overlay ticking every frame; panic surface gif-cascade. Row stub (no caller yet).
+- Review P3s fixed: spawn band uses the window's DesktopScaling (mixed DPI).
+
+## avalonia-port/chaos-boon-bar: +420
+- Chaos run-pick ribbon (ChaosBoonBarOverlay) ported: opened at BeginRun, rebuilt live in pick order with newcomer pop-in (Core ChaosBoonBarRules), closed at run end/panic.
+- Row chaos-boon-bar missing -> stub (no user path starts a run yet); live steps queued in live-queue/overlays.md.
+
+## avalonia-port/chaos-cursor-glow: +410
+- Rabbit Caller cursor halo ported: Core maths (size/breath/follow), click-through topmost Avalonia overlay with Arm/Disarm/MoveToPx/CloseActive seam, closed by ChaosRunHost teardown and panic (PanicSurfaces).
+- Row chaos-cursor-glow missing -> stub (nothing arms it until the Rabbit Caller skill/run loop exist).
+
+## avalonia-port/emi-desk-extras: +518
+- Emi desk toss on Avalonia: drag lift cue, fling detection, landing squash and the land face, using the new Core `EmiToss` (EmiFlingDetector + EmiTossRules.LandingScale), which WPF now calls too.
+- Row win-emi-desk-extras missing -> stub (land body frame and dizzy chain missing; Tube has no user path).
+
+## avalonia-port/chaos-bubble-field-b: +418
+- Chaos bubble field: SpawnTick cadence, treat/prism pops and score on BubbleOverlay, cleared by panic/stop (Core ApplyTreatPop/ApplyPrismPop); manual pause holds the field and swallows clicks.
+- Still no live bubbles, FALL IN or payout (next: chaos-payout-fallin).
+
+## avalonia-port/game-dtrh-host: +897
+- Down the Rabbit Hole opens on Avalonia behind the Lab door. Start-up sends init with motionLevel and the media manifest; the run lifecycle and payout use Core `DtrhRunWire`, which the WPF host now calls too; a window closed mid-descent banks its last snapshot.
+- Escape with DtRH in front pauses it (kept-escape); a second Escape inside 2 s closes it. Slice B covers meta, online media, the art/audio origins, watchdog and barks.
+
+## avalonia-port/chaos-announcer: +618
+- Chaos announcer: Core queue/timing shared by both heads; Avalonia click-through overlay on the shared beat, T-10 s/Relapse announces, panic closes it (row stub).
+- Review fix: ChaosOverlayWindow calls the real announcer (stand-ins gone); line centred on the work area incl. left-docked panels.
+
+## avalonia-port/companion-picker-card: +689
+- CompanionPickerCard ported (live + preview faces, PerkPicker, Core `CompanionPerks.Active/TrySelect` shared with WPF SetPerk); left unhosted per ruling B, rendered by render-all. Row views-companion-picker-card: missing -> stub (hosting -> lane companion-picker-host, needs a WPF reference render).
+- Test CompanionPickerCardTests (selection -> settings fail-proven); local gate GATE-OK, Windows not gated (P97).
+
+## avalonia-port/chaos-vibe-trail: +482
+- VibePopping pointer glow + fading trail overlay ported (Core `ChaosVibeTrail` maths, click-through Avalonia window, panic surface); row stays stub until the vibe window starts it.
+
+## avalonia-port/chaster-help-price-edit: +693
+- Chaster tab: menu boards (rows write ChasterPrices, red flash switch), how-it-works card, menu hint, Reset times and a per-row price editor on Core TabPriceEdit. Esc belongs to the box (Windows only; X11 has no claim yet), and a starting lock closes and freezes it.
+- `ChasterMenuTests` (2 tests, 6 breaks each turned a test red); the render frame shows the menu states; views-chaster-help-price-edit -> wired.
+
+## avalonia-port/marquee-reads: +490
+- Home marquee Barnum interludes are wired: cadence, split, picker and banner pool are in Core; only one act (NeonWarmUp, fade path) is ported. Row shell-marquee-reads missing -> stub.
+- The loop clock stops while Home is hidden (as in WPF). Rest of the acts and FX: marquee-reads-b.
+
+## avalonia-port/chaos-flash-overlay: +483
+- Chaos braindrain wash on Avalonia: a faint desktop-wide click-through image or GIF wash per stage screen, on the WPF fade curve (new Core `ChaosFlashWash`), refused without a compositor, closed by panic, run end and exit.
+- Row chaos-flash-overlay missing -> stub (no caller on this head yet).
+
+## avalonia-port/chaos-field-fx: +641
+- chaos-field-fx missing -> stub: Core ChaosFieldFxModel (fail-proven tests) + click-through Avalonia overlay on the shared FrameClock, hidden/paused when idle, refuses without compositor.
+- Panic and run teardown close it (PanicSurfaces chaos-field-fx); nothing draws on it until the bubble field lands.
+
+## avalonia-port/chaos-unlock-card: +588
+- Unlock-card rules moved to Core (WPF delegates); hub purchases show WPF's queued top-center unlock card on Avalonia.
+- Interactive mid-run overlay + lesson pause deferred to chaos-unlock-card-b (row stays stub).
+
+## avalonia-port/chaos-wave-timer: +418
+- Pocket Watch wave countdown overlay ported (Core readout rules shared with WPF), hooked to ChaosRunHost ticks; panic/run end close it; it refuses to show without click-through or transparency.
+- Row chaos-wave-timer missing -> stub; live steps queued in live-queue/overlays.md.
+
+## avalonia-port/game-dtrh-host-b: +774
+- DtRH online half moved to Core `DtrhRemoteMedia` (online media copied locally, manifest re-posted as copies land, loops lane, 30 min loops-dry back-off); WPF now calls it; WebAssetServer serves only `.temp/ccp_temp_remote_*` copies.
+- DtRH manifest uses root-relative asset urls so hostMedia.js counts the library as local (it never did on Avalonia); delta rows 16/22/24 -> ported-here.
+
+## avalonia-port/friends-landing: +389
+- FriendsLanding on Avalonia: the poke-received word plus Emi line, sent beat, and Tell over the game/panel/launcher, routed by the Core router; LandingRules.SentWord/PokeThrowsWord (fail-proven).
+- feat-friends-landing -> wired; knock/inbox/flavour folded to win-knock-card, toasts to feat-friends-open-tables.
+
+## avalonia-port/chaos-payout-fallin: +215
+- The Chaos hub's FALL IN starts a real run. Its end banks the WPF payout: XP, Sparks, reveals, the rank card and the loop-tip gold. The maths is in Core `ChaosPayout`, which WPF also uses. Panic pays nothing.
+- Fail-proven: `ChaosPayoutTests` (Core) and the headless test that clicks FALL IN, steps ticks to the end and checks the payout. Live panic steps are queued in live-queue/safety.md. The hub has no startup opener yet (its only opener is the recap), so no user path reaches FALL IN.
+
+## avalonia-port/chaos-estim-overlay: +576
+- Chaos E-Stim lightning (click-through, refuses without a compositor) and the X11Pointer cursor halo are ported visual-only, with Core `ChaosEStimMath`. Run end and panic close both. Rows are stub because nothing calls them on this head yet.
+
+## avalonia-port/brain-drain-keep-clear: +150
+- Keep-pictures-clear rule moved to Core (tests now run on Linux); the Avalonia Brain Drain card has the option row, saved to the same setting and repainted on Reset/cloud restore.
+- No blur overlay on this head yet, so the setting has no effect there; ledger row is stub.
+
+## avalonia-port/chaos-skia-fx: +723
+- chaos-skia-fx: Avalonia click-through sparkle/bloom overlay. The WPF `ChaosFxLayer` sim and painter moved to Core and is shared by both heads. The frame loop runs only while effects are live; refused without a compositor; panic closes it (`PanicSurfaces` `chaos-skia-fx`, ChaosRunHost).
+- Row stays stub until FALL IN or the bubble field emits effects. Tests are fail-proven (15 deliberate breaks, each caught). rgate GATE-OK, Windows included.
+
+## avalonia-port/leash-receipts-hold: +836
+- Hold-to-cut: Core LeashHoldFlow; the ring and the "Cut the leash?" window run from the panic key (X11 key-up added). Early release never cuts, and the panic still fires on the first press.
+- Holder receipts list (LeashSentList) ported but not hosted yet; the row is stub until the holder card lands.
+
+## avalonia-port/chaos-dvd-overlay: +674
+- Chaos DVD bounce: Core ChaosDvdFlock (fail-proven maths) + one click-through host window on the existing frame source; panic/run-end close it; refuses without a compositor.
+- Rows chaos-dvd-overlay + chaos-dvd-host missing -> stub (no caller until the ChaosModeService toy layer lands).
+
+## avalonia-port/theme-converters: +1
+- theme-converters row missing -> wired: every WPF shared converter maps to an Avalonia built-in (IsVisible bool, `!` negation) or is made unnecessary by native colour emoji/IconGlyph; no new converter.
+
+## avalonia-port/chaos-toy-button: +610
+- Chaos toy hero buttons: per-toy topmost no-activate window, click + key trigger (after panic), Core cooldown/charge rules, panic closes them.
+- Row chaos-toy-button missing -> stub (no run start path, effects absent); live steps in live-queue/safety.md.
+
+## avalonia-port/chaos-bubble-host: +1
+- chaos-bubble-host row missing -> stub: ambient half mapped onto BubbleOverlay; chaos bubbles, flash/subliminal hosting, z fixer and the shared-host toggle listed as missing (pending lane chaos-bubble-field-b).
+
+## avalonia-port/goongame-core-d: +194
+- Cloud session unit (goongame-core-d); reviewed and gated locally.
+
+## avalonia-port/deeper-core-c: +519
+- Cloud session unit (deeper-core-c); reviewed and gated locally.
+
+## avalonia-port/bureau-core-a: +490
+- Cloud session unit (bureau-core-a); reviewed and gated locally.
+
+## avalonia-port/compositor-core-c: +90
+- Cloud session unit (compositor-core-c); reviewed and gated locally.
+
+## avalonia-port/launcher-media-dialog: +805
+- Cloud session unit (launcher-media-dialog); reviewed and gated locally.
+- Review fixes: Done/link hover paint, Yes on consent, video volume follows master, stale veil comment.
+
+## avalonia-port/prizes-core-a: +171
+- Cloud session unit (prizes-core-a); reviewed and gated locally.
+
+## avalonia-port/remix-core-a: +158
+- Cloud session unit (remix-core-a); reviewed and gated locally.
+
+## avalonia-port/emidesk-core-d: +185
+- Cloud session unit (emidesk-core-d); reviewed and gated locally.
+
+## avalonia-port/video-core-c: +257
+- Cloud session unit (video-core-c); reviewed and gated locally.
+
+## avalonia-port/marquee-reads-b: +752
+- Home marquee interludes: all five WPF read acts, NeonWarmUp flicker + tag breath, baked strip glow, return sheen on the shell's support banner (WPF SweepBannerSheen); Photosafe drops flicker/jitter.
+- shell-marquee-reads -> wired; MarqueeGlyphRot moved to Core, CanPlay rule in Core.
+
+## avalonia-port/friends-feed: +557
+- Friends drawer "What happened" feed, per-friend send trails, chip unread badge, tray unread count, accept-after-fold honesty word (feat-friends-feed -> partial).
+- No Core changes (rules already in Core); 4 fail-proven tests; Windows not gated (P97 local fallback).
+
+## avalonia-port/friends-open-tables: +259
+- Friends drawer: open Goon tables (hosting row first, pink wash, Join/lock, 30 s poll while open); LobbyWire seeded on this head.
+- Join, the launcher badge and the corner notices are still stub/missing (no Goon host or Goon tile on this head; notices go to the -b lane).
+
+## avalonia-port/friends-open-tables: +259
+- Friends drawer: open Goon tables (hosting row first, pink wash, Join/lock, 30 s poll while open); LobbyWire seeded on this head.
+- Join, the launcher badge and the corner notices are still stub/missing (no Goon host or Goon tile on this head; notices go to the -b lane).
+
+## avalonia-port/friends-open-tables: +259
+- Friends drawer: open Goon tables (hosting row first, pink wash, Join/lock, 30 s poll while open); LobbyWire seeded on this head.
+- Join, the launcher badge and the corner notices are still stub/missing (no Goon host or Goon tile on this head; notices go to the -b lane).
+## avalonia-port/companion-v2-conversation: +989
+- Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
+- Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+
+## avalonia-port/companion-v2-conversation: +989
+- Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
+- Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+
+## avalonia-port/companion-v2-conversation: +989
+- Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
+- Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+
+## avalonia-port/companion-v2-conversation: +989
+- Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
+- Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/decision-tester-verification: +37
+- decisions log entry: tester verification + proposed goal text
+
+## avalonia-port/ledger-dedupe: +54
+- Parity ledger: 64 duplicate row ids merged (honest status, newer text first, union of paths/notes), section row counts fixed.
+
+## avalonia-port/emidesk-core-e: +344
+
+EmiChains data/rules and EmiNudges moved to CCP.Core (git mv); WPF keeps the DispatcherTimer player as EmiChainPlayer and seeds EmiNudgeWorld.QuietProbe at startup. Avalonia reads EmiChains.RestFace. Core tests: moved EmiNudgeMachineTests + new QuietProbe/EmiChains tests. No UI change; no parity rows moved.
+
+## avalonia-port/deeper-core-d: +194
+- Cloud session, local review (ACCEPT) + gate.
+- AudioWaveformCache (DPK2 cache + bucket rule) moved to Core behind a Decoder seam; WPF NAudio decoder registered at startup; 10 Core tests.
+- Review fixes: withdrew unbacked pass counts from Verification limits; WPF sample provider built lazily again (pre-move parity). rgate GATE-OK.
+
+## avalonia-port/stakes-core: +112
+- Stake wire, bridge and settlement maths (plus V2WalletAdoption) moved into CCP.Core with git mv. The WPF App gates are now in StakeAppHooks, seeded at startup. StakeTests (25) run in CCP.Core.Tests and are fail-proven.
+- feat-stakes missing -> stub. Next lane is stakes-host: route the Avalonia GameWindow `stake-*` frames to StakeBridge.ForApp and seed the head gates.
+
+## avalonia-port/goongame-core-e: +402
+Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportBase/GoonDispatch, GoonLoopbackTransport, Rounds/*) git-mv to CCP.Core; host/join/paint-stall rules extracted to GoonHostRules (one copy, WPF calls it); DispatcherTimers -> TimeProvider; GoonDispatch.ShutdownStarted seeded in WPF App(). Tests: GoonPaintStallRuleTests moved, GoonHostGateTests, GoonMatchEngineTests (one-thread loopback match, fail-proven). Gate: local Linux GATE-OK; Windows red only on known flakes.
+
+## avalonia-port/tester-test-plan: +675
+- docs/avalonia-test-plan.md: tester steps per ledger area (open/click/expect, WPF file:line, row ids), the live queue rewritten in plain words, safety steps flagged for an agent live check before the shipping switch.
+- Every ledger row id is listed with its WPF reference. Only tester reports move a row to verified.
+
+## avalonia-port/video-core-f: +113
+- Moved six video memory-render helpers (`DisplayAspectFrom`, `FitToAspect`, `StagingBytesFor`, `ComputeSnapshotDims`,
+  `IsSnapshotFrame`, `IsRebuildCurrent`) from WPF `VideoService` into `CCP.Core/Services/Video/VideoRenderMath.cs`, unchanged.
+  WPF calls them through `using static`.
+- `BlurSurfaceFrameTests` (24 cases) moved to `Tests/CCP.Core.Tests`, so they now run on Linux CI.
+- Review accepted (side-by-side equal). The two P3s were left as they are, with reasons given in the body.
+
+## avalonia-port/wire-win-quiz-report: +21
+- win-quiz-report: run-row hover (#15FFFFFF) and a real pointer click on a report row are now tested through an open gate. Stays stub because both heads hide BtnStartQuiz; whether to show it or delete it is an open product decision.
+- QuizPastRunsReportTests fail-proven (failproof-5-no-hover.log).
+
+## avalonia-port/video-max-cap-links: +192
+- BUG-7NAKK79CZ2: the user's max video length now ends app-started web-video takeovers (Core `VideoMaxCap.TakeoverStopAfter`, wired into the WPF BrowserMediaService), and a heal or fallback replay continues the clip's cap on both heads.
+- Tests: Core VideoMaxCapTests plus the headless MandatoryVideoOverlay heal-at-cap test, both fail-proven. Linux gate green; one known Windows flake (PhrasePoolCustody).
+
+## avalonia-port/wire-views-settings-performance: +368
+- Settings > Performance: AutoPerformanceMode escalates via Core PerformanceTierRule (shared with WPF); GPU decode is read by the mandatory-video player; a motion change repaints the shell chrome.
+- Row stays stub: ChkUnifiedOverlay and chrome FX refresh -> wire-views-settings-performance-b.
+
+## avalonia-port/wire-win-mini-player: +103
+- win-mini-player: stub -> wired. Library thumbnail double-click and context-menu Preview open MiniPlayerWindow owned by the shell; closing it re-activates the shell only while we own the foreground (or none, as WPF).
+- AssetsTabTests: 2 tests, fail-proven (evidence/wire-win-mini-player/fail-proofs.txt).
+
+## avalonia-port/wire-win-knock-card: +120
+- Knock card: the sender's proxy picture fades in over the initials (WPF LandingChrome.Avatar). Join, Not now and the x lift 1.02 over 150 ms quad-out and snap at Motion Off (WPF MotionFx.HoverLift).
+- Tests: KnockCardTests cover the picture fetch (no network) and the hover lift with motion Off and Full. Each was fail-proven.
+- Ledger: win-knock-card stub -> wired. rgate GATE-OK.
+
+## avalonia-port/possession-core-d: +211
+- Warden bark rules (`WardenRules`) and reactive consent/Start-Stop rules (`PossessionReactiveRules`) moved into CCP.Core; WPF head calls them, no private copies.
+- PossessionBarkRulesTests git-mv'd to CCP.Core.Tests (runs on Linux); 6 new pure-rule tests.
+- Review ACCEPT (54); P3 fix: run labels use WardenRules.Knock/Stare. rgate GATE-OK.
+
+## avalonia-port/wire-views-daily-quest-card: +239
+
+- Daily quest card gets WPF MotionFx motion: bar fill tween (0.6 s QuadOut, resize snaps), hover lift 1.02/150 ms, gold BoxShadow glow (blur 18, 0.5) fading out; MotionLevel.Off snaps and skips the glow.
+- Test: DailyQuestCardMotionTests (Full + Off, stepped clock), fail-proven. Ledger views-daily-quest-card: stub -> wired.
+- Not run: real-pointer desktop feel.
+
+## avalonia-port/settings-migration-test: +616
+- Settings migration test over a real WPF profile (local only; CI runs a synthetic variant): 768 keys and 9568 files survive startup+shutdown.
+- It found and fixed 3 losses: Companion drawers reset on exit, built-in preset action ids re-minted each load, Circe-neutral voice lines reverted (LockedMod/overrides now ship).
+
+## avalonia-port/linux-package-wired: +28
+- linux-package -> wired: the installed tarball reaches the First run window under kwin --virtual (splash 0.46 s, wizard 5.80 s, 749 MiB installed); AUR test-local passes.
+- Hand-install steps for the tarball added to docs/avalonia-linux-install.md (the .desktop Exec needs a PATH launcher).
+
+## avalonia-port/wire-shell-ambient-fx: +107
+Premium room canvas enrolled in the shell ambient registry under `premium` (WPF MainWindow.Exclusives.cs:379; `exclusives` redirects). Settings/Programs already enrolled; WPF Play has no canvas. Ledger shell-ambient-fx names the unenrolled WPF `chaster` and `appsettings` canvases and their owning rows. Test TabAmbientRegistryTests.PremiumRoomRegistersOnceAndParksThroughRealNavigation (fail-proven). rgate: local Linux green, Windows run 38586062437 green.
+
+## avalonia-port/wire-views-tab-deeper: +201
+- Deeper webcam setup card: consent manage/revoke, calibrate, quick recal and tracker start/stop delegate to the Blink Trainer handlers as WPF does (MainWindow.BlinkTrainer.cs:1410-1488); consent colours/text and calibration line follow live state; Devices link opens Settings → Devices. Row stays stub; follow-up wire-views-tab-deeper-b (Import, Tutorial/Tour, status-chip telemetry).
+
+## avalonia-port/wire-dialogs-username-picker: +93
+- Headless tests pin the already-ported UsernamePickerDialog (length rules, colours, Cancel); not wired: WPF has no live caller.
+- Remote gate green (run 38714794266); row stays `stub`.
+
+## avalonia-port/wire-views-tab-haptics: +315
+- views-tab-haptics: stub/wired duplicate rows merged into one row, now wired. The Tier-1 side-art column is back (WPF HapticsTabView.xaml:901), using a head port of AdaptiveSideArt and the #1321 rule moved to Core SideArtCollapse, which WPF now delegates to.
+- Trunk HC10 haptics part: page Test/Play stop on rack module switch (unlike WPF) and HapticService.PanicStop also cancels a per-toy test; tests fail-proven, no wide render of the plate yet.
+
+## avalonia-port/wire-win-mantra: +71
+- win-mantra stub -> wired: Programs Mantra door click-through test; StartMantraSession failure dialog ported (WPF text).
+- Review fixes: ledger names the kept-enrollment blocker (shell-programs-tab); test waits bounded by wall time (P73). rgate 39688519974 green except known RaceTrackPlayer flake.
+
+## avalonia-port/wire-views-tab-presets: +870
+
+Presets tab row views-tab-presets goes from stub to wired: the corner-GIF option panel, the session corner GIF in Core SessionRunner with a CornerGifOverlay session slot, the card sheen, and the rack hover reveal (out of the Tab order at rest). Fix round: a Fluent Folder icon on Select GIF, and gate fixes in ContentHitTest and ShellMemory. Fail-proofs: ~/ccp-port/evidence/review-wire-views-tab-presets/failproof.log.
+- Round 2: ContentHitTest skip narrowed to `.rackActions` (fail-proven).
+
+## avalonia-port/wire-views-tab-remote-control: +762
+Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), title-bar pill, share-media-sources row, tube emote bubble, hero art; Core RemoteRelay opt-in + re-publish (in-flight opt-in across a stop dropped). Row views-tab-remote-control: wired. Tests RemoteDirectoryTabTests, RemoteDirectoryOptInTests (fail-proven). Gate: rgate run 38563034446 GATE-OK; the fix round (run 39689830908) has Linux green and only unrelated Windows failures (P94).
+
+## avalonia-port/wire-shell-roadmap: +116
+- shell-roadmap: the photo-confirm/submit and locked-track tests prove the ported WPF roadmap flow, and the stale duplicate stub row is gone.
+- The photo-submit test now resets the static roadmap and removes its diary photo (review P02, fail-proven). Photo test stubs the chime; ledger no longer over-claims fail-proof.
+
+## avalonia-port/wire-dialogs-companion-phrase-editor: +353
+- The Phrase Manager shows real voice-line and bark rows from Core `CompanionVoiceLines`, which WPF shares. Its bulk enable/disable persists to settings.json.
+- Manage Phrases opens from the Companion room's Workshop Triggers cell. Tests cover the disk round-trip and the real navigation path.
+
+## avalonia-port/wire-dialogs-companion-prompt-editor: +179
+- Installed community prompt badge wired (purple name / red unknown), shared Core loader with one folder-name constant; WPF forwards to it.
+
+## avalonia-port/wire-dialogs-display-name: +989
+- DisplayNameDialog row: stub -> wired. The welcome mode now has its caller: the shell arms WPF CheckPendingRegistrationAsync on Opened, followed by HandlePostAuthAsync and the name loop over the Core LegacyAccountApi (V1).
+- The 401 recovery is Core `AuthRecovery`, shared by both heads: rename recovers the session without retrying; delete retries once.
+- Review fixes: an unparseable restore-session 200 is no longer a recovery (WPF parity); time-bounded test waits; no armed timer in shell tests; the WPF 401 test now points at Core AuthRecovery.
+- Gate: the local gate fallback passed (P97). Windows was not gated before push.
+
+## avalonia-port/wire-win-tutorial-overlay: +394
+- Tutorial overlay auto-advance triggers (click, text, selection, slider, CoreTutorialEvents) via shared Core TutorialAdvanceRules; row stays stub.
+- Triggers unreachable on this head until Deeper tours host an overlay; remote gate green.
+
+## avalonia-port/wire-ctrl-spiral-embed-view: +509
+- Spiral §9 embed bridge shared in Core; Avalonia SpiralEmbedView on WebHost wired into Spiral tab (row stays stub: no descent publisher yet).
+- Failed embed -> waiting room with WPF give-up latch; Navigated -> host shown + splash hidden; both tab-level tests fail-proven.
+
+## avalonia-port/wire-shell-catalogue-submissions: +503
+- Cloud session (codex), local review FIX, local fix commit 6f6e89466.
+- Review fix: share and toast-fade tests await a Task / removal seam instead of 5 Task.Delay polls (P08/P73); Share hidden without InstalledPath (WPF :459); previews always 160 px wide like DecodePixelWidth; ledger row labels fail-proven vs asserted.
+- rgate: only failure is Core GoonClockAndRounds, which already fails on the base (fix is in flake-clocks, P108). The other gate steps were run by hand (see body).
+- Review fix 2 (dcd62bbe0): Deeper acceptance is a keyed sticky (fail-proven, rcheck); mod-catalogue row wired. rgate 39697111817 red only on P108 + listed RaceTrack flake; skipped steps green via rcheck 39700816833.
+
+## avalonia-port/wire-shell-enhancements: +974
+- Enhancements tab: the four owned PRO analytics expanders (Lifetime Dashboard, Season Rewind, Bestie Records, Brain Drain Report), aggregation shared with WPF through Core `EnhancementAnalytics`.
+- Season Rewind deltas use Fluent arrows; row stays stub (purchase + lucky toast in wire-shell-enhancements-b).
+
+## avalonia-port/wire-shell-lab: +146
+- Lab Lockdown: level-chip glow stays crimson during the run and returns to the live accent on exit; shell close drops the theme/flash, and queued work can't re-theme a closed shell (3 headless tests, fail-proven).
+- shell-lab row stays stub: it now lists the possession readout and rules card (shell-possession) and the missing game hosts (wire-shell-lab-b).
+
+## avalonia-port/wire-dialogs-mod-picker: +196
+- Mod picker catalogue cards keep their shipped art; Download/close/retry/upgrader paths covered by real-click tests (row stays stub: WPF has no caller).
+
+## avalonia-port/wire-views-tab-awareness: +227
+- Awareness app-scope list commits on Enter/blur through the shared Core AwarenessAppScopeRules and persists; WPF delegates to the same rules.
+- Editor test is deterministic and fail-proven; ledger numbers corrected with a stored green log.
+
+## avalonia-port/wire-views-tab-available-subjects: +500
+- Lobby tab ports the current Open/Playing/Friends frame with Core LobbyPageRules, narrow switcher and gated Remote host; pills get an explicit template; redraws on every tab open.
+- Still stub: live discovery, Chess/Goon host and Join flows (follow-up wire-views-tab-available-subjects-b).
+
+## avalonia-port/wire-shell-tab-fx-takeover-lab-status: +261
+- Status dots breathe on effect-free sibling BoxShadow layers with motion/perf/visibility gates; Haptics glow on arrival fail-proven.
+- Review fixes: redundant seed dropped, ratchet trimmed, padlock/Env gaps moved to owning rows; row stays stub; last rgate 39701865337 red only on listed P108 flake.
+
+## avalonia-port/wire-win-emi-codex: +132
+- Core `EmiCodexRules` (content probes + offer brakes with WPF's per-brake reason), WPF delegates; Avalonia caller deferred to wire-win-emi-codex-b.
+- Foreign test bootstrap change reverted; remote gate run 39688213091 green.
+
+## avalonia-port/wire-views-tab-graded-intake: +434
+- Graded intake on Avalonia serves downloaded pack audio via the loopback origin and sends the bubble sprite plus the enabled subliminal/whisper payload (Core `IntakeSubliminals`, shared with WPF).
+- Row `views-tab-graded-intake` stays stub; EmiDesk hold, crash relaunch and punch card remain.
+
+## avalonia-port/wire-shell-lab-tab: +250
+- Shared webcam state chips (Devices, Play, Blink Trainer, Deeper) driven by Core WebcamStatus; Play Eyes cards dim while capture is off.
+- Review fixes: consent refusal stays Stopped like WPF; live-capture Play cards tested; Skia headless setup and ledger corrected.
+
+## avalonia-port/wire-theme-controls: +312
+- Shared rounded Deeper themes app-wide; Action/Secondary/Outline get WPF 80ms press / 150ms BackEase(0.3) release, sampled on a stepped clock in tests.
+- theme-controls stays stub; HudPlank and ToggleStyle timings left for wire-theme-controls-b.
+
+## avalonia-port/wire-views-profile-privacy-panel: +512
+- Profile privacy dialog: the six audience switches save and push per-field, account-owned consent via Core SyncPush (scoped, unlike WPF's all-six push; decision 2026-10-13, oracle-deep pending). The Discord button runs the real Account settings link flow.
+- Row stays stub: link-notice CTA, post-link achievement-sharing offer, own-card DM button and the privacy-sync scope go to lane -b.
+
+## avalonia-port/wire-shell-profile-bubble: +459
+- Header bubble shows avatar presets, the WPF tier-badge hover enlargement and 8 s one-shot wobble, a level-up burst on the shared EventBurstLayer, and the copy-link prompt when the browser won't open (skipped in a sandbox).
+- Review fixes: no idle frame clock for the wobble, sandbox-refused link never writes the clipboard, menu-restack tested, ledger row no longer claims Core FxBurstAnchorRules. Fail-proven; rgate green apart from two listed flakes.
+
+## avalonia-port/wire-views-companion-ai-permissions-grid: +434
+- The Engine Room live-actions feed is fed by the Core command sink (shared AiLiveActionFeed rules). The V2 permissions grid is stacked; Forget/memory-off clear history; the lock CTA opens Settings > Account.
+- The lock band repaints on tier change and on re-show, as WPF does. rgate 39698040401: Linux green; the one Windows flake is in flakes.md (P94).
+
+## avalonia-port/wire-views-tab-companion: +205
+- Workshop roster card clicks switch the companion through Core `CompanionCore.SwitchCompanion`, refresh the hero and ring, and put the companion's avatar set on the tube (WPF `SwitchToCompanionAvatar`, saved globally and per mod).
+- `CompanionRosterSwitchTests` fail-proven for both the Core switch and the tube set. Rows stay stub; remaining work is in wire-views-tab-companion-b.
+
+## avalonia-port/wire-shell-app-startup: +101
+- Startup seeds brain mod-switch + BambiSprite prompt-invalidation hooks (WPF App.xaml.cs:317/327).
+- Two StartModsTests facts fail-proven via real ActivateMod; GATE-OK; row stays stub.
+
+## avalonia-port/wire-ctrl-attention-check: +156
+- Dormant attention ring: pulse on shared BeatLoop, BoxShadow glows, headless tests; row stays stub (WPF never shows it).
+- Review fixes: ring glow dark at progress 0 and pulses with the ring (fail-proven); glow assertions fail-proven.
+
+## avalonia-port/wire-shell-nav-rail: +310
+- Nav rail hue bevels + mod-aware rail captions (Core NavRailPaintRules/ModAwareLabelRules); row stays stub, follow-up wire-shell-nav-rail-b.
+- Review fixes: closed-rail relabel guard proven by test, Back/Web App mod caption test, test-builder churn dropped. Ledger: per-fact fail-proof status, one follow-up lane.
+
+## avalonia-port/wire-win-feature-intro: +75
+- Feature-intro cards wait in the Inbox while the first-run wizard, welcome-back offer or an update dialog is up; the card now looks like WPF's and scrolls on small screens.
+- Manually opened What's New or a pending manual update check no longer holds cards (as in WPF).
+
+## avalonia-port/wire-views-companion-hero-card: +105
+- The Companion hero Tutorial chip starts the Companion tour; a headless click test (fail-proven in rcheck 39688790545) covers it, including panic abandonment.
+- Review fixes: overlay accessor instead of reflection, v2-pages precondition and fail-proof run cited in the parity row.
+
+## avalonia-port/wire-views-companion-keyword-triggers: +159
+- Keyword drawer reveal: 24px header alignment and a two-cycle pink pulse on the shared beat (Motion Off suppresses it, detach clears it); tests click the real Awareness link, scroll + pulse fail-proven.
+- Row stays stub and names follow-up lane -b (OCR interval push, highlight overlay, service lifecycle); shell row left to its lane.
+
+## avalonia-port/wire-win-emi-options: +251
+- Emi options panel folds on Windows via non-consuming WH_MOUSE_LL/WH_KEYBOARD_LL hooks (WPF parity); X11 keeps the 30 ms poll; 3 fail-proven tests.
+- Duplicate win-emi-options ledger row collapsed (stays stub).
+
+## avalonia-port/wire-feat-subliminal: +207
+- Advanced Steals Focus now reaches subliminal cards: passive show, then a focus request that keeps clicks passing through.
+- Review fixes: the test drives the real setting, and a refused X11 focus request is retried once after the map, then warned (both fail-proven).
+
+## avalonia-port/wire-shell-programs-fx: +157
+- Program reward-rail halo breath and once-per-day node ignite on the shared beat (WPF ProgramsTab.cs:779-867), motion/visibility gated.
+- Review fixes: WPF ignite alpha, single breath gate, no test PNG; fail-proof log cited, views-tab-programs cross-ref, stock test harness.
+
+## avalonia-port/wire-views-tab-she-listening: +73
+- She's Listening: master Start/Stop uses Fluent Play/Stop; the Video cheat-sheet row shows only the runnable pause/resume phrase.
+- Side art is left to lane adaptive-side-art; voice seams, sherpa KWS and calibration go to lane -b.
+
+## avalonia-port/wire-views-settings-performance-b: +215
+- Lockdown tab pulse (shared Core LockdownPulse timeline) starts on Lockdown entry, stops on leave / motion below Full, as WPF; start, Off-stop and close-stop each fail-proven.
+- Ledger row views-settings-performance stays stub; unified overlay compositor left to lane -c.
+
+## avalonia-port/cloud-merge-wire-shell-animations
+- Merged wire-views-settings-performance-b at 6095620b4e54a91477fdff126b61425d83f893d6 into the held shell-animations lane at f917157399f89034d14d10aea8e39922b579d81a.
+- Kept shell animation lifecycles and Lockdown restart-on-reselect, with the shared Core pulse timeline, sibling glow opacity restoration and live performance/motion stop gates. All parent test cases and assertions retained.
+- Consolidated the parity ledger to one row per id, preserving source evidence and capping surface statuses at wired; retained all panic surfaces in incoming-tip order.
