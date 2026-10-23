@@ -44,6 +44,8 @@ namespace ConditioningControlPanel.Services.Commands
             }
 
             var delay = Math.Clamp(_data.Delay, 1, MaxDelaySec);
+            // A panic while this waits cancels it: nothing AI-driven comes back after a panic.
+            var panicsAtSchedule = AiCommandService.PanicCount;
 
             try
             {
@@ -53,6 +55,11 @@ namespace ConditioningControlPanel.Services.Commands
 
                 // Consent can have changed during the delay: re-gate before asking the AI anything.
                 _cancellationToken.ThrowIfCancellationRequested();
+                if (!AiCommandAdmission.FollowUpStands(panicsAtSchedule, AiCommandService.PanicCount))
+                {
+                    Log.Information("GetBackToMeCommand: a panic came first, follow-up dropped");
+                    return false;
+                }
                 if (AiCommandService.Refusal(AICommandType.getbacktome) is { } refusal)
                 {
                     Log.Information("GetBackToMeCommand: {Reason} - follow-up dropped", refusal);
@@ -67,15 +74,18 @@ namespace ConditioningControlPanel.Services.Commands
                 foreach (var subCommand in _data.Commands ?? new())
                 {
                     if (_cancellationToken.IsCancellationRequested) break;
-                    var why = AiCommandService.Refusal(AICommandType.getbacktome) ?? AiCommandService.Refusal(subCommand.Command)
+                    // Nested commands meet the same gate as a top-level one (switches, panic quiet,
+                    // output moderation; main 61eeb4d0d) and the same per-reply cap.
+                    var why = AiCommandService.Refusal(AICommandType.getbacktome)
+                        ?? (subCommand == null || !AiCommandService.Admits(subCommand) ? "refused by the AI command gate" : null)
                         ?? (fired >= AiCommandService.MaxCommandsPerResponse ? $"follow-up cap reached ({AiCommandService.MaxCommandsPerResponse})" : null);
                     if (why != null)
                     {
                         Log.Information("GetBackToMeCommand: {Reason} - nested {Cmd} blocked", why, subCommand.Command);
-                        AiCommandService.NoteBlockedFollowUp(subCommand.Command);
+                        if (subCommand != null) AiCommandService.NoteBlockedFollowUp(subCommand.Command);
                         continue;
                     }
-                    var cmd = CommandFactory.CreateCommand(subCommand, _cancellationToken, _depth + 1);
+                    var cmd = CommandFactory.CreateCommand(subCommand!, _cancellationToken, _depth + 1);
                     if (cmd == null) continue;
                     fired++;
                     await cmd.ExecuteAsync();
@@ -97,8 +107,9 @@ namespace ConditioningControlPanel.Services.Commands
         {
             if (!string.IsNullOrEmpty(text))
             {
-                // Operator-supplied text — not AI-generated, so no AI badge.
-                ShowAvatarMessage(text, aiGenerated: false);
+                // The model wrote this line inside its getbacktome command, so it wears the AI
+                // badge (it passed output moderation with the command; main 61eeb4d0d).
+                ShowAvatarMessage(text, aiGenerated: true);
             }
             // R2-NEW-H-1: migrate to typed AI API. Refusals are silently dropped on
             // this remote-control surface (the local user didn't directly prompt — a
@@ -106,6 +117,9 @@ namespace ConditioningControlPanel.Services.Commands
             // ModerationLog. IsAiGenerated propagates so canned fallbacks don't wear
             // the AI badge.
             if (AiProvider?.Invoke() is not { } ai) return;
+            // The reply's own commands dispatch one level deeper, so a getbacktome in it counts
+            // against the depth cap instead of starting a fresh chain (main 61eeb4d0d).
+            AiCommandAdmission.EnterFollowUp(_depth + 1);
             // Scoped to this async method: the reply's own commands, executed inside the call, see this
             // follow-up's token and are dropped if a panic cancels it meanwhile (audit #1987).
             // Restored explicitly so the scope ends with the round trip, not with the method.

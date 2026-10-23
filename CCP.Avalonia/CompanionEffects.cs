@@ -92,16 +92,18 @@ namespace ConditioningControlPanel.Avalonia
             MantraLockScreenCommand.Surface = (phrase, repeats) => Start(() =>
             {
                 if (LockCardWindow.IsAnyOpen()) return false;   // never stacks (WPF), so nothing showed
-                LockCardWindow.ShowOnAllMonitors(phrase, repeats, strictMode: true, isTest: false,
+                // Strict follows the user's own Lock Card switch, never forced (owner 2026-10-22).
+                LockCardWindow.ShowOnAllMonitors(phrase, repeats, strictMode: CoreSettings.Current.LockCardStrict, isTest: false,
                     voiceMode: CoreSettings.Current.LockCardVoiceMode);
                 return LockCardWindow.IsAnyOpen();
             });
             // Without WPF's BypassLevelCheck the tint shows only while the engine does; refused otherwise.
-            PinkCommand.Surface = (on, intensity) => Start(() =>
+            // Null opacity for "off" (and an "on" with no intensity): the saved opacity is the user's.
+            PinkCommand.Surface = (on, opacity) => Start(() =>
             {
                 var s = CoreSettings.Current;
                 var (oldOpacity, oldEnabled) = (s.PinkFilterOpacity, s.PinkFilterEnabled);
-                s.PinkFilterOpacity = intensity;
+                if (opacity is int o) s.PinkFilterOpacity = o;
                 s.PinkFilterEnabled = on;
                 if (Host is { } host) PinkFilterOverlay.Refresh(host);
                 if (on && !PinkFilterOverlay.IsShowing)

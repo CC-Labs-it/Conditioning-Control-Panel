@@ -43,6 +43,16 @@ public class PanicAftermathTests
     }
 
     [Fact]
+    public void Every_panic_bumps_the_count_an_ai_follow_up_checks()
+    {
+        var before = PanicAftermath.PanicCount;
+        PanicAftermath.ArmQuiet(Panic);
+        Assert.True(PanicAftermath.PanicCount > before);
+        PanicAftermath.EndQuiet();
+        Assert.True(PanicAftermath.PanicCount > before);   // a START never rewinds it
+    }
+
+    [Fact]
     public void Trigger_mode_stays_silent_in_the_quiet_tick_queue_and_lead_in()
     {
         var speech = Source("AvatarTube", "AvatarTubeWindow.Speech.cs");

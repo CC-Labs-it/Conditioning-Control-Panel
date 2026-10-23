@@ -43,9 +43,13 @@ namespace ConditioningControlPanel.Services.Commands
                 return;
             }
 
-            if (Refusal(commandData.Command) is { } refusal)
+            // Master switch, per-effect switch, the post-panic quiet and output moderation of the
+            // text the effect would show (AiCommandAdmission, main 61eeb4d0d). Nested getbacktome
+            // commands pass the same gate through Admits.
+            var verdict = Judge(commandData);
+            if (verdict != AiCommandAdmission.Verdict.Run)
             {
-                Log.Information("AiCommandService: {Reason} - dropping {Cmd}", refusal, commandData.Command);
+                Log.Information("AiCommandService: {Cmd} refused ({Verdict})", commandData.Command, verdict);
                 return;
             }
 
@@ -72,7 +76,9 @@ namespace ConditioningControlPanel.Services.Commands
 
             try
             {
-                var command = CommandFactory.CreateCommand(commandData, cts.Token, depth: 0);
+                // The depth rides the async flow: a getbacktome in a follow-up's own reply counts
+                // against the cap instead of starting a fresh chain.
+                var command = CommandFactory.CreateCommand(commandData, cts.Token, depth: AiCommandAdmission.FollowUpDepth);
                 if (command == null)
                 {
                     // Unreachable on WPF (the per-effect gate refuses every type the factory lacks);
@@ -129,6 +135,56 @@ namespace ConditioningControlPanel.Services.Commands
                 return "master toggle off or no Tier 2";
             if (!IsEffectAllowed(command, settings)) return $"effect {command} disabled by user";
             return null;
+        }
+
+        /// <summary>The head's post-panic quiet (WPF PanicAftermath.TriggersSilenced). Unseeded: no quiet
+        /// on this head, the panic's CancelAll still drops every pending command.</summary>
+        public static volatile Func<bool>? PanicQuietProvider;
+
+        /// <summary>The head's panic counter (WPF PanicAftermath.PanicCount): a follow-up remembers it when
+        /// scheduled and never fires once a panic overtook it. Unseeded: 0 (the Avalonia panic cancels
+        /// pending follow-ups through <see cref="CancelAll"/> instead).</summary>
+        public static volatile Func<long>? PanicCountProvider;
+
+        internal static long PanicCount
+        {
+            get { try { return PanicCountProvider?.Invoke() ?? 0; } catch { return -1; } }
+        }
+
+        /// <summary>The live verdict for one AI command: current switches, Lab access, the post-panic
+        /// quiet and the output guard (main 61eeb4d0d).</summary>
+        internal static AiCommandAdmission.Verdict Judge(AiCommandData commandData)
+        {
+            var settings = CoreSettings.Current?.CompanionPrompt;
+            bool quiet;
+            try { quiet = PanicQuietProvider?.Invoke() == true; }
+            catch { quiet = true; }   // a quiet that cannot be read refuses
+            return AiCommandAdmission.Decide(commandData,
+                masterOn: settings != null && ConditioningControlPanel.Services.Companion.AiEffectControlGate.IsOn(settings, CoreAccount.HasLabAccess),
+                effectAllowed: settings != null && IsEffectAllowed(commandData.Command, settings),
+                panicQuiet: quiet,
+                textBlocked: TextBlocked);
+        }
+
+        /// <summary>TRUE when the command may run now (see <see cref="Judge"/>).</summary>
+        internal static bool Admits(AiCommandData commandData) => Judge(commandData) == AiCommandAdmission.Verdict.Run;
+
+        /// <summary>Output moderation for text inside an effect, the same guard the chat reply passes
+        /// (CoreModerationLog.Guard never null: unseeded it is the stock guard). A guard that throws refuses.</summary>
+        private static bool TextBlocked(string text)
+        {
+            try
+            {
+                var check = CoreModerationLog.Guard.CheckOutput(text);
+                if (check.Allow || !check.Category.HasValue) return false;
+                CoreModerationLog.Record(check.Category.Value, source: "output", modelHint: "effect");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("AiCommandService: effect text check failed ({Type})", ex.GetType().Name);
+                return true;
+            }
         }
 
         /// <summary>A Live actions line for a refused follow-up command (no avatar bubble).</summary>
