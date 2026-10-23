@@ -307,6 +307,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             host.Background = src == null
                 ? null
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
+            // See FeatureCard.ApplyArt: invalidate the retained plate on an artwork change.
+            host.CacheMode = new BitmapCache();
         }
 
         // ============================== geometry ==============================

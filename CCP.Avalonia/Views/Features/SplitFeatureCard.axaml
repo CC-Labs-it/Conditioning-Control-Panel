@@ -36,10 +36,16 @@
 
         <Grid x:Name="ContentRoot">
             <!-- The two art halves. Full-bleed brushes, polygon-clipped in code. -->
+            <!-- Retain the resampled picture between tab shows. Text, controls and FX stay outside
+                 the cache; code resets it for new artwork, and the renderer tracks bounds and clips. -->
             <Border x:Name="HalfHostA" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    RenderOptions.BitmapInterpolationMode="HighQuality">
+                <Border.CacheMode><BitmapCache/></Border.CacheMode>
+            </Border>
             <Border x:Name="HalfHostB" CornerRadius="11"
-                    RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                    RenderOptions.BitmapInterpolationMode="HighQuality">
+                <Border.CacheMode><BitmapCache/></Border.CacheMode>
+            </Border>
 
             <!-- Per-half hover wash: opacity flips on pointer move, geometry rides the seam. -->
             <Path x:Name="HoverWashA" Fill="#14FFFFFF" Opacity="0" IsHitTestVisible="False"/>

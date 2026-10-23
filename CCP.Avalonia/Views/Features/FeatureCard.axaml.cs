@@ -171,6 +171,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _imgIconHost.Background = src is null
                 ? null
                 : new ImageBrush(src) { Stretch = Stretch.UniformToFill, AlignmentY = AlignmentY.Center };
+            // ponytail: Avalonia 12.1 retains a BitmapCache across hidden-tab artwork changes. Replace
+            // the cache with the picture so a mod switch cannot resurrect the previous plate.
+            _imgIconHost.CacheMode = new BitmapCache();
             _imgIconHost.IsVisible = src is not null;
             _glyphHost.IsVisible = src is null && !string.IsNullOrEmpty(Glyph);
         }

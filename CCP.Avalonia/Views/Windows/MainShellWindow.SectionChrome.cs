@@ -141,21 +141,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal const byte SectionEdgeLineAlpha = 0xE6;
         internal const double SectionEdgeLiftWhite = 0.35;
 
-        /// <summary>WPF PaintSectionInk (:192): the four section Color resources and their brushes
-        /// (the SectionInkBrush family consumers bind with DynamicResource), swapped at once.</summary>
+        /// <summary>WPF PaintSectionInk (:192): publish the four section colors and brushes together.
+        /// Avalonia resource notifications have no key filter: eight individual writes re-resolved
+        /// every DynamicResource in every tab eight times, including hidden pages.</summary>
         internal static void PaintSectionInk(string? section)
         {
             var res = global::Avalonia.Application.Current?.Resources;
             if (res == null) return;
-            Set("SectionInk", NavStripRules.Ink(section));
-            Set("SectionTint", NavStripRules.Tint(section));
-            Set("SectionRule", NavStripRules.Rule(section));
-            Set("SectionOutline", NavStripRules.Outline(section));
-
-            void Set(string key, global::Avalonia.Media.Color c)
+            var ink = res.MergedDictionaries.OfType<SectionInkResources>().FirstOrDefault();
+            if (ink == null)
             {
-                res[key] = c;
-                res[key + "Brush"] = new global::Avalonia.Media.SolidColorBrush(c);
+                ink = new SectionInkResources();
+                res.MergedDictionaries.Add(ink); // empty: no resource notification yet
+            }
+            ink.Show(section);
+        }
+
+        /// <summary>A single resource notification after all eight values are ready. The palette
+        /// is owned by the application's resources, so there is no static application/window root.</summary>
+        internal sealed class SectionInkResources : ResourceProvider
+        {
+            private ResourceDictionary _palette = new();
+            private string? _section;
+            public override bool HasResources => _palette.Count != 0;
+            public override bool TryGetResource(object key, global::Avalonia.Styling.ThemeVariant? theme, out object? value)
+                => _palette.TryGetResource(key, theme, out value);
+
+            public void Show(string? section)
+            {
+                if (HasResources && string.Equals(section, _section, StringComparison.Ordinal)) return;
+                var next = new ResourceDictionary();
+                Set("SectionInk", NavStripRules.Ink(section));
+                Set("SectionTint", NavStripRules.Tint(section));
+                Set("SectionRule", NavStripRules.Rule(section));
+                Set("SectionOutline", NavStripRules.Outline(section));
+                _section = section;
+                _palette = next;
+                RaiseResourcesChanged();
+
+                void Set(string key, global::Avalonia.Media.Color c)
+                {
+                    next[key] = c;
+                    next[key + "Brush"] = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(c);
+                }
             }
         }
 
