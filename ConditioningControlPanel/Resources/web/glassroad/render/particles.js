@@ -24,6 +24,9 @@
  * burst), drift-boost (the mini-turbo burst: a cone thrown back, stars round the saucer, a tier halo), trick
  * (confetti thrown up at takeoff) and trick-land (a ring and confetti). Once a kart has had drift-tier or
  * drift-boost events, the state-edge fallbacks for the same moments stand down (no double bursts).
+ * Polish 5 (numbers in atlas.js BIRTH_LOOK): every particle is born over about 50 ms, from a third of its size
+ * and no alpha, eased out, so nothing pops in as a hard tick; drift spark streaks are a touch fatter at tier 1.
+ * The ring keeps a high-water mark: only the slots below it are drawn and uploaded (addUpdateRange).
  */
 import { Sprite, SpriteNodeMaterial, AdditiveBlending, InstancedBufferAttribute, DynamicDrawUsage, Color, Vector3 } from 'three/webgpu';
 import {
@@ -40,7 +43,7 @@ import { LENS } from './lensMath.js';
 import {
   CELLS, GRID, ATLAS_PX, MAX_LOD, FXART_LOOK, FAMILIES, UPRIGHT, ALIGNED, cellIndex, cellInset, legacyShape, sparkFamily, pickCell,
   familyOf, hitFamily, FX2_LOOK, hitColours, juiceLook, juiceHues, burstBoost, gentleGrow, tierShare,
-  p4Look, tierColour, trickKey,
+  p4Look, tierColour, trickKey, BIRTH_LOOK, birthK, birthSize, sparkWidth, ringSlot,
 } from './atlas.js';
 
 export const SHAPE = Object.freeze({ disc: 0, sparkle: 1, petal: 2 });
@@ -112,7 +115,9 @@ export function createParticles(feel, art = currentArt()) {
     // straight alpha, white RGB: the additive blend multiplies the tint by coverage once
     const idx = floor(rot.x.add(0.5));
     // a shockwave ring is a thin outline, not an area: it may open ringCapMul times wider than a sprite
-    m.scaleNode = select(idx.equal(cellIndex('ring', at.cells)), lensScale(sizeN, lensD, { ...LENS, nearFrac: LENS.nearFrac * LENS.ringCapMul, farFrac: LENS.farFrac * LENS.ringCapMul }), m.scaleNode);
+    const sc = select(idx.equal(cellIndex('ring', at.cells)), lensScale(sizeN, lensD, { ...LENS, nearFrac: LENS.nearFrac * LENS.ringCapMul, farFrac: LENS.farFrac * LENS.ringCapMul }), m.scaleNode);
+    // a spark streak keeps its width share in rot.y (it turns along its velocity, so it has no angle of its own)
+    m.scaleNode = select(idx.equal(cellIndex('spark', at.cells)), vec2(sc.mul(rot.y), sc), vec2(sc, sc));
     const vv = cameraViewMatrix.mul(vec4(instancedDynamicBufferAttribute(aVel, 'vec3'), 0)).xy;
     m.rotationNode = select(idx.equal(cellIndex('spark', at.cells)), atan(vv.y, vv.x).sub(Math.PI / 2), rot.y);
     m.opacityNode = c.a.mul(atlasCoverage(at, idx)).mul(lensAlpha(lensD));
@@ -121,7 +126,10 @@ export function createParticles(feel, art = currentArt()) {
     m.opacityNode = c.a.mul(shapeNode(rot.x)).mul(lensAlpha(lensD));
   }
   const sprite = new Sprite(m);
-  sprite.count = max0; sprite.frustumCulled = false; sprite.renderOrder = 2;
+  sprite.count = 0; sprite.frustumCulled = false; sprite.renderOrder = 2;
+  const BL = BIRTH_LOOK, attrs = [aPos, aCol, aSize, aRot, aVel];
+  let widthNow = 1, hw = 0;
+  const alive = (i) => life[i] > 0;
 
   let head = 0, hue = 0;
   const cols = new Map(), info = new Map(), tmp = new Vector3(), dir = new Vector3(), carry = new Vector3();
@@ -133,8 +141,8 @@ export function createParticles(feel, art = currentArt()) {
   const cellOf = (name) => {
     let v = info.get(name);
     if (!v) {
-      v = at ? { code: cellIndex(name, at.cells), size: A.cellSize[name] ?? 1, upright: UPRIGHT.has(name) || ALIGNED.has(name) }
-        : { code: legacyShape(name), size: 1, upright: false };
+      v = at ? { code: cellIndex(name, at.cells), size: A.cellSize[name] ?? 1, upright: UPRIGHT.has(name) || ALIGNED.has(name), aligned: name === 'spark' }
+        : { code: legacyShape(name), size: 1, upright: false, aligned: false };
       info.set(name, v);
     }
     return v;
@@ -143,12 +151,15 @@ export function createParticles(feel, art = currentArt()) {
   /** World-space emit; cell = an atlas cell name (render/atlas.js CELLS). */
   /** hex2: the colour it ends as (a ramp from hex), gr: how much it grows over its life (0 = shrinks as before). */
   function emit(x, y, z, vx, vy, vz, hex, sz, lifeS, cell = 'disc', g = 1, sp = 0, hex2 = null, gr = 0) {
-    const i = head; head = (head + 1) % cap();
+    const r = ringSlot(head, hw, cap(), alive), i = r.i;
+    head = r.head; hw = r.hw;
     const p = aPos.array, cl = aCol.array, k = rgb(hex), ci = cellOf(cell);
     p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z;
     vel[i * 3] = vx; vel[i * 3 + 1] = vy; vel[i * 3 + 2] = vz;
-    cl[i * 4] = k[0]; cl[i * 4 + 1] = k[1]; cl[i * 4 + 2] = k[2]; cl[i * 4 + 3] = 1;
-    aRot.array[i * 2] = ci.code; aRot.array[i * 2 + 1] = ci.upright ? 0 : Math.random() * 6.283;
+    // born clear and small (polish 5): update() opens it over BIRTH_LOOK.birthS
+    cl[i * 4] = k[0]; cl[i * 4 + 1] = k[1]; cl[i * 4 + 2] = k[2]; cl[i * 4 + 3] = 0;
+    aRot.array[i * 2] = ci.code; aRot.array[i * 2 + 1] = ci.aligned ? widthNow : ci.upright ? 0 : Math.random() * 6.283;
+    aSize.array[i] = sz * ci.size * (gr > 0 ? 0.4 : 1) * BL.sizeFrom;
     size[i] = sz * ci.size; life[i] = maxLife[i] = lifeS; grav[i] = g; spin[i] = ci.upright ? 0 : sp; light[i] = lightNow;
     grow[i] = gr; hasRamp[i] = hex2 ? 1 : 0;
     if (hex2) { const e = rgb(hex2); ramp[i * 3] = e[0] - k[0]; ramp[i * 3 + 1] = e[1] - k[1]; ramp[i * 3 + 2] = e[2] - k[2]; }
@@ -178,6 +189,7 @@ export function createParticles(feel, art = currentArt()) {
     const r = LOOK.saucerR, [lo0, hi0] = LOOK.sparkSpeedMps, fam = sparkFamily(tier, petal);
     const lo = lo0 * J.sparkSpeedMul, hi = hi0 * J.sparkSpeedMul;
     const accent = tier >= 3 ? '#ffffff' : tierCol(tier + 1), ember = B.emberShare * extra(), stars = P4.sparkTierStars[Math.min(Math.max(tier, 1), 3) - 1];
+    widthNow = sparkWidth(tier, BL);
     for (let k = 0; k < n; k++) {
       const side = k & 1 ? 1 : -1, pick = Math.random(), c = Math.random();
       const cell = at && Math.random() < stars ? 'star' : at ? pickCell(fam, pick) : pick < petal ? 'petal' : k % 3 === 0 ? 'disc' : 'spark';
@@ -190,6 +202,7 @@ export function createParticles(feel, art = currentArt()) {
           sz * B.emberSizeMul, lifeS * B.emberLifeMul, at ? pickCell(FAMILIES.ember, Math.random()) : 'spark', -0.15, rnd(-1, 1) * LOOK.sparkSpin * 0.3, hex);
       }
     }
+    widthNow = 1;
   }
 
   /** Polish 3: a drift tier-up: a radial ring of sparks in the new tier colour with white and stars, and a halo. */
@@ -453,28 +466,37 @@ export function createParticles(feel, art = currentArt()) {
   }
 
   function update(dt) {
-    const n = cap(), drag0 = Math.exp(-LOOK.particleDrag * dt), drag1 = Math.exp(-P4.confettiDrag * dt), g0 = LOOK.particleGravityMps2 * dt;
+    const n = Math.min(hw, cap()), drag0 = Math.exp(-LOOK.particleDrag * dt), drag1 = Math.exp(-P4.confettiDrag * dt), g0 = LOOK.particleGravityMps2 * dt;
     const p = aPos.array, cl = aCol.array, sz = aSize.array, rt = aRot.array;
+    let last = -1;
     for (let i = 0; i < n; i++) {
-      if (life[i] <= 0) { sz[i] = 0; continue; }
+      if (life[i] <= 0) { sz[i] = 0; cl[i * 4 + 3] = 0; continue; }
       life[i] -= dt;
+      if (life[i] <= 0) { sz[i] = 0; cl[i * 4 + 3] = 0; continue; }
+      last = i;
       const j = i * 3;
       const drag = light[i] ? drag1 : drag0;
       vel[j] *= drag; vel[j + 1] = vel[j + 1] * drag - g0 * grav[i]; vel[j + 2] *= drag;
       p[j] += vel[j] * dt; p[j + 1] += vel[j + 1] * dt; p[j + 2] += vel[j + 2] * dt;
       rt[i * 2 + 1] += spin[i] * dt;
       const t = Math.max(0, life[i] / maxLife[i]);
-      cl[i * 4 + 3] = t < 0.85 ? t / 0.85 : 1;          // no pop-in: full at birth, eased out
+      // polish 5: born over BL.birthS (alpha from 0, size from BL.sizeFrom), then eased out as before
+      const bk = birthK(maxLife[i] - life[i], BL);
+      cl[i * 4 + 3] = (t < 0.85 ? t / 0.85 : 1) * bk;
       if (hasRamp[i]) {
         // the ramp is stored as (end - start); step the colour by this frame's share of the life
         const s = maxLife[i] > 0 ? Math.min(dt, life[i] + dt) / maxLife[i] : 0;
         cl[i * 4] += ramp[i * 3] * s; cl[i * 4 + 1] += ramp[i * 3 + 1] * s; cl[i * 4 + 2] += ramp[i * 3 + 2] * s;
       }
-      sz[i] = size[i] * (grow[i] > 0 ? 0.4 + grow[i] * (1 - t) : 0.5 + 0.5 * t);
+      sz[i] = size[i] * (grow[i] > 0 ? 0.4 + grow[i] * (1 - t) : 0.5 + 0.5 * t) * birthSize(bk, BL);
     }
-    sprite.count = n;
-    aPos.needsUpdate = true; aCol.needsUpdate = true; aSize.needsUpdate = true; aRot.needsUpdate = true;
-    if (at) aVel.needsUpdate = true;
+    // the high-water mark falls back to the last live slot, so a quiet cloud draws and uploads little
+    const was = n;
+    if (last + 1 < hw) { hw = last + 1; if (head >= hw) head = 0; }
+    sprite.count = hw;
+    if (was <= 0) return;
+    // upload only the slots this pass touched (the ones it just cleared above the new mark included)
+    for (const a of at ? attrs : attrs.slice(0, 4)) { a.clearUpdateRanges(); a.addUpdateRange(0, was * a.itemSize); a.needsUpdate = true; }
   }
   const api = { object: sprite, atlas: !!at, kart, dust, burst, hit, halo, event, update, dispose() { m.dispose(); } };
   // dev only (?bot=1): shot scripts reach the live particles through the boot debug record (never read by the

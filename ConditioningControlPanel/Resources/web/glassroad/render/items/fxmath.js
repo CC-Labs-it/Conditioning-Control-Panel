@@ -69,6 +69,40 @@ export function flashRect(cover, aspect, { corner = false, scale = SCREEN_LOOK.f
   return { cx: 0.5 + ox * (r * 2 - 1), cy: 0.5 + oy, hw: w / 2, hh: h / 2 };
 }
 
+const sstep = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+
+/**
+ * Polish 5 (V2): the clear lane at a view point (x, y in view heights from the centre, y down): 1 inside the soft
+ * tapered capsule from the next bend down to the kart and the bottom edge, 0 outside. render/screenfx.js runs
+ * the same formula per pixel.
+ */
+export function laneMask(x, y, L = SCREEN_LOOK) {
+  const K = L.lane, t = clamp01((y - K.topY) / (K.bottomY - K.topY));
+  const d = Math.hypot(x, y - (K.topY + t * (K.bottomY - K.topY))), r = K.rTop + (K.rBottom - K.rTop) * t;
+  return 1 - sstep(r, r + K.soft, d);
+}
+
+/** The share of a screen effect kept at a view point: 1 out at the frame, 1 - lane.clear in the lane. */
+export const laneKeep = (x, y, L = SCREEN_LOOK) => 1 - L.lane.clear * laneMask(x, y, L);
+
+/**
+ * Polish 5 Flash panes in screen uv (x of width, y of height): two soft panes at the sides sharing paneShare of
+ * the cover (mirror: the shader draws the second at 1 - cx), clear of the lane; the Gentle corner card keeps
+ * flashRect's single small card (mirror false).
+ * @returns {{ cx: number, cy: number, hw: number, hh: number, mirror: boolean }}
+ */
+export function flashPanes(cover, aspect, { corner = false, scale = SCREEN_LOOK.flashCornerScale, seed = 0 } = {}) {
+  const L = SCREEN_LOOK;
+  if (corner) return { ...flashRect(cover, aspect, { corner, scale, seed }), mirror: false };
+  const r = flashRect(Math.max(0, cover) * L.flashPaneShare * 0.5, aspect, { seed });
+  // two panes side by side never meet in the middle: shrink both on a narrow view
+  const room = 0.5 - L.flashMargin - 0.04, k = Math.min(1, room / (2 * r.hw));
+  const hw = r.hw * k, hh = r.hh * k;
+  const s = Math.sin(seed * 12.9898) * 43758.5453, n = s - Math.floor(s);
+  const cy = Math.min(1 - hh - 0.02, Math.max(hh + 0.02, L.flashPaneY + 0.03 * (n * 2 - 1)));
+  return { cx: L.flashMargin + hw, cy, hw, hh, mirror: true };
+}
+
 /** Shatter: a brief tilt (radians), settling to 0. t = seconds into the effect, a = amount. */
 export function shatterTilt(t, a) {
   return SCREEN_LOOK.shatterTiltRad * clamp01(a) * Math.sin(Math.PI * 2 * SCREEN_LOOK.shatterTiltHz * t) * Math.exp(-2 * t);

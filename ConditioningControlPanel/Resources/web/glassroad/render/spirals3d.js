@@ -13,6 +13,8 @@
  * Polish 4: thin bright cores sized to each arm's real width, a soft glow sprite layer under them (same
  * draw, shrunk near the lens), and an aura disc behind each gate (one more draw) that dims the sky behind
  * the arms, wears a turning coloured rim and keeps the road window clear; Gentle halves the aura.
+ * Polish 5 (atlas.js GATE_LENS): every gate particle fades and shrinks over the last metres before the camera,
+ * so a landing through a gate keeps the road and the kart readable; far off the gate stays whole.
  * onPass({ id, index, params, gentle }) fires when the player crosses a gate (hand it to gateScreen.play).
  *
  * Use (the integrator wires it):
@@ -33,6 +35,7 @@ import {
   SPIRAL_LOOK, LOOM_GOLDEN_K, loadLoom, loadSpectrum, paletteFor, gateParams, loopS, buildParticles, loomState, hueRows, gateFrames, axialOf, lateralOf, pickSlots, crossed,
   budgetFor, burstCount, depthAlpha, burstEnvelope, makeRng, toHex, hexRgb,
 } from './spiralMath.js';
+import { GATE_LENS } from './atlas.js';
 
 const TAU = Math.PI * 2, GOLD_K = LOOM_GOLDEN_K;
 const LOOM = await loadLoom();
@@ -150,7 +153,9 @@ function buildGate(g, gf, params, seed, L) {
   const camD = pos.distance(cameraPosition);
   // a glow sprite shrinks to nothing close to the lens (a wide soft sprite at the eye is all overdraw)
   const glowNear = smoothstep(L.nearM, L.glowNearM, camD);
-  m.scaleNode = a1.w.mul(mix(tw.mul(0.25).add(0.9), glowNear, glow));
+  // polish 5: the lens share (atlas.js gateLensK / gateLensSize mirror it)
+  const lensK = smoothstep(GATE_LENS.fromM, GATE_LENS.toM, camD);
+  m.scaleNode = a1.w.mul(mix(tw.mul(0.25).add(0.9), glowNear, glow)).mul(mix(float(GATE_LENS.shrinkTo), float(1), lensK));
   const col = vec3(dot(u.h0, a1.xyz), dot(u.h1, a1.xyz), dot(u.h2, a1.xyz)).clamp(0, 1);
   m.colorNode = col.mul(mix(mix(float(L.gain), float(L.glitterGain), glitter), float(L.glowGain), glow));
   const near = smoothstep(L.nearM, L.nearM + L.nearSpanM, camD), far = smoothstep(L.farFadeM * 0.6, L.farFadeM, camD).oneMinus();
@@ -162,7 +167,7 @@ function buildGate(g, gf, params, seed, L) {
   const inU = smoothstep(halfW + L.corridorSideM, halfW + L.corridorSideM + L.corridorSoftM, abs(dot(rel, u.b))).oneMinus();
   const inH = smoothstep(L.corridorUpM, L.corridorUpM + L.corridorSoftM, dot(rel, u.n).add(upM)).oneMinus();
   const road = float(1).sub(inU.mul(inH).mul(1 - L.corridorAlpha));
-  m.opacityNode = u.alpha.mul(a2.z).mul(shine).mul(near).mul(far).mul(edge).mul(flow).mul(road).mul(particleShape(glitter, glow));
+  m.opacityNode = u.alpha.mul(a2.z).mul(shine).mul(near).mul(lensK).mul(far).mul(edge).mul(flow).mul(road).mul(particleShape(glitter, glow));
   const sprite = new Sprite(m);
   sprite.count = Math.min(P.n, budgetFor(Q.name, 0, L));
   sprite.frustumCulled = false; sprite.renderOrder = 2;

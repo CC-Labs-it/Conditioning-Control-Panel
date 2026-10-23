@@ -126,6 +126,15 @@ export const SCREEN_LOOK = {
   flashAlpha: 0.9, flashRound: 0.06, flashPaper: '#fff3fa', flashInk: '#ff4fa3', flashOffset: [0.06, -0.04],
   flashPop: 0.08, flashCornerAt: [0.16, 0.5], flashShadow: 0.25,
   flashCornerScale: 0.35,  // only when fx sends no params.scale (Gentle sends items.gentleFlashScale)
+  // ---- polish 5 (V2): the lane to the kart and the next bend stays clear; effects live round the frame ----
+  // the lane in view heights from the view centre, y down: a soft tapered capsule from the bend (topY, rTop) to the
+  // bottom edge under the kart (bottomY, rBottom), soft over `soft`; `clear` is the share of an effect taken out in it
+  lane: Object.freeze({ topY: -0.1, bottomY: 0.5, rTop: 0.13, rBottom: 0.34, soft: 0.12, clear: 0.9 }),
+  // Flash: light that blooms in from the frame (elliptical radius from..to, 1 = the edge middles) and two soft
+  // picture panes at the sides sharing paneShare of the cover (one pane, small, in the Gentle corner); soft edges
+  // feather view heights wide with an ink glow just inside, a faint halo of paper light outside
+  flashFrame: Object.freeze([0.5, 1.2]), flashFrameAlpha: 0.55, flashPaneShare: 0.75, flashPaneY: 0.42, flashMargin: 0.03,
+  flashFeather: 0.06, flashRim: 0.35, flashHalo: 0.22,
   // Spiral: turning arms over the middle
   spiralArms: 5, spiralTwist: 6, spiralTurnRadps: 1.6, spiralAlpha: 0.42, spiralR: [0.12, 0.62],
   spiralColour: '#ff8fd0', spiralDim: 0.55,

@@ -440,3 +440,59 @@ export function stepWheel(w, p, right, on, t, P = P4_LOOK) {
 
 /** Trick grade key: 'great', anything else reads as 'good'. */
 export const trickKey = (grade) => (grade === 'great' ? 'great' : 'good');
+
+// ---- polish 5 wave 1 (FX lane, V4): a particle is born, it never pops in ----
+
+/**
+ * The birth of every particle: over birthS it grows from sizeFrom of its size and from no alpha, eased out,
+ * so a spark reads as a glint that opens instead of a hard white tick. Drift spark cells are drawn a touch
+ * fatter across their streak (sparkWidth, by drift tier 1..3; anything else 1). The ring buffer keeps a
+ * high-water mark: only the slots below it are drawn and uploaded each frame.
+ */
+export const BIRTH_LOOK = Object.freeze({ birthS: 0.05, sizeFrom: 0.35, sparkWidth: Object.freeze([1.4, 1.15, 1]) });
+
+/** Birth progress 0..1 at age ageS (eased out, so most of the opening is in the first half). */
+export function birthK(ageS, B = BIRTH_LOOK) {
+  if (!(B.birthS > 0)) return 1;
+  const x = Math.min(1, Math.max(0, ageS / B.birthS));
+  return 1 - (1 - x) * (1 - x);
+}
+
+/** The size share at birth progress k: sizeFrom at k = 0, whole at k = 1. */
+export const birthSize = (k, B = BIRTH_LOOK) => B.sizeFrom + (1 - B.sizeFrom) * k;
+
+/** Width across a drift spark streak by tier (1 for tier 0 and every other emitter). */
+export function sparkWidth(tier, B = BIRTH_LOOK) {
+  const t = tier | 0;
+  return t >= 1 ? B.sparkWidth[Math.min(t, 3) - 1] : 1;
+}
+
+/**
+ * The ring slot for the next particle: the ring runs over [0, hw); while the slot under the head is still alive
+ * and there is room below cap, the ring grows into fresh space instead (hw is the high-water mark). Pure: takes
+ * and returns { head, hw, i } (i is the slot to write). alive(i) says whether slot i still has life.
+ */
+export function ringSlot(head, hw, cap, alive) {
+  if (hw > cap) hw = cap;
+  if (head >= hw) head = 0;
+  if (hw < cap && (hw === 0 || alive(head))) return { head, hw: hw + 1, i: hw };
+  const i = head;
+  return { head: (head + 1) % Math.max(1, hw), hw, i };
+}
+
+// ---- polish 5 wave 1 (FX lane, V3): spiral gate particles thin out at the lens ----
+
+/**
+ * A gate particle fades and shrinks over the last fromM..toM metres before the camera (distance to the camera),
+ * full beyond toM: a landing through a gate keeps the road and the kart readable, the gate far off stays whole.
+ */
+export const GATE_LENS = Object.freeze({ fromM: 1.5, toM: 12, shrinkTo: 0.45 });
+
+/** The gate lens share 0..1 at camera distance d (smoothstep fromM..toM). */
+export function gateLensK(d, G = GATE_LENS) {
+  const x = Math.min(1, Math.max(0, (d - G.fromM) / (G.toM - G.fromM)));
+  return x * x * (3 - 2 * x);
+}
+
+/** The size share at lens share k: shrinkTo at the lens, whole at k = 1. */
+export const gateLensSize = (k, G = GATE_LENS) => G.shrinkTo + (1 - G.shrinkTo) * k;

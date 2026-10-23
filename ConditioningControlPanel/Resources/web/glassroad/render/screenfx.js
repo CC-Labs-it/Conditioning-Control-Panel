@@ -25,6 +25,11 @@
  * effect's icon in a disc, its ring draining the same way), both over the never-blind floor. The hit itself
  * tints the view toward the kind's colour for a beat (fx/effects.js screen.hit): the hue moves, the
  * luminance of every pixel stays, strongest at the edges.
+ * Polish 5 (V2): a clear lane, a soft tapered capsule from the next bend down to the kart and the bottom edge
+ * (fxmath.laneMask, SCREEN_LOOK.lane), keeps the road readable: Flash, Spiral, Pink and Blackout take lane.clear
+ * of their strength out inside it and keep it at the frame. Flash is no longer a card in the middle: light blooms
+ * in from the frame and the picture shows on two soft panes at the sides (one small pane in the Gentle corner),
+ * with feathered edges, an ink glow just inside and a faint halo of paper light; no hard edge, no drop shadow.
  */
 import { TextureLoader, SRGBColorSpace, Color, NearestFilter, CanvasTexture, Vector2 } from 'three/webgpu';
 import {
@@ -33,7 +38,7 @@ import {
 } from 'three/tsl';
 import { currentArt } from './art.js';
 import { SCREEN_LOOK as L } from './items/look.js';
-import { screenAmounts, irisRadius, flashRect, shatterTilt, frostThreshold, shatterPhase, spiralOpen, pinkHeart, meterLook, SCREEN_KINDS } from './items/fxmath.js';
+import { screenAmounts, irisRadius, flashPanes, shatterTilt, frostThreshold, shatterPhase, spiralOpen, pinkHeart, meterLook, SCREEN_KINDS } from './items/fxmath.js';
 import { HIT_LOOK } from './items/look.js';
 import { ITEMS } from '../sim/itemTable.js';
 import { maskLook } from './atlas.js';
@@ -80,8 +85,9 @@ export function createScreenFx(three, art = currentArt()) {
     rx: uniform(0.5), ry: uniform(0.5), rw: uniform(0.2), rh: uniform(0.2),
     frostThr: uniform(1), crack: uniform(0), slide: uniform(0), spiralR: uniform(0), heartR: uniform(L.pinkHeartR[0]),
     meterK: uniform(0), remain: uniform(0), meterRgb: uniform(new Color(1, 1, 1)), badgeS: uniform(1),
-    hitK: uniform(0), hitRgb: uniform(new Color(1, 1, 1)), badgeCell: uniform(new Vector2(0, 0)),
+    hitK: uniform(0), hitRgb: uniform(new Color(1, 1, 1)), badgeCell: uniform(new Vector2(0, 0)), mirror: uniform(1),
   };
+  const K = L.lane;
   const amt = {};
   let clock = 0;
 
@@ -93,9 +99,14 @@ export function createScreenFx(three, art = currentArt()) {
         const asp = u.aspect, toH = vec2(asp, 1);
         const c = uv0.sub(0.5).mul(toH);
         const rad = length(c);
-        // where to read: Shatter tilts about the centre, Spiral twirls the middle (not under Gentle's dim),
-        // Melt runs down (reads from above) and wobbles
-        const twirl = u.spiral.mul(u.dimOnly.oneMinus()).mul(L.spiralTwirlRad).mul(smoothstep(0, max(u.spiralR, 0.001), rad).oneMinus());
+        // polish 5: the clear lane (fxmath.laneMask): keep = the share of an effect left at this pixel
+        const laneT = clamp(c.y.sub(K.topY).div(K.bottomY - K.topY), 0, 1);
+        const laneD = length(vec2(c.x, c.y.sub(laneT.mul(K.bottomY - K.topY).add(K.topY))));
+        const laneR = laneT.mul(K.rBottom - K.rTop).add(K.rTop);
+        const keep = smoothstep(laneR, laneR.add(K.soft), laneD).oneMinus().mul(K.clear).oneMinus();
+        // where to read: Shatter tilts about the centre, Spiral twirls the middle (not under Gentle's dim, and not in
+        // the lane), Melt runs down (reads from above) and wobbles
+        const twirl = u.spiral.mul(keep).mul(u.dimOnly.oneMinus()).mul(L.spiralTwirlRad).mul(smoothstep(0, max(u.spiralR, 0.001), rad).oneMinus());
         const ct = cos(u.tilt.add(twirl)), st = sin(u.tilt.add(twirl));
         const rc = vec2(c.x.mul(ct).sub(c.y.mul(st)), c.x.mul(st).add(c.y.mul(ct)));
         // blue noise per pixel (-0.5..0.5) jitters every fade edge below
@@ -189,11 +200,13 @@ export function createScreenFx(three, art = currentArt()) {
         // Pink: the wash closes in from the edges round a heart, full outside it and softer within
         const hp = vec2(c.x, c.y.negate().add(0.06)).div(u.heartR).add(vec2(0, 0.55));
         const hsd = heartSd(hp), outHeart = smoothstep(L.pinkHeartSoft * -0.3, L.pinkHeartSoft, hsd);
-        const low = mix(vec3(0.5), col, u.pink.mul(L.pinkContrast).oneMinus()).mul(vec3(...L.pinkTint)).add(L.pinkLift);
-        col.assign(mix(col, low, u.pink.mul(outHeart.mul(0.75).add(0.25))));
-        col.assign(mix(col, rgb(L.pinkEdgeTint), u.pink.mul(outHeart).mul(L.pinkEdgeAlpha)));
+        // polish 5: the wash and its edge tint leave the lane (keep); the heart's rim line keeps half in it
+        const pk = u.pink.mul(keep);
+        const low = mix(vec3(0.5), col, pk.mul(L.pinkContrast).oneMinus()).mul(vec3(...L.pinkTint)).add(L.pinkLift);
+        col.assign(mix(col, low, pk.mul(outHeart.mul(0.75).add(0.25))));
+        col.assign(mix(col, rgb(L.pinkEdgeTint), pk.mul(outHeart).mul(L.pinkEdgeAlpha)));
         // a soft glowing line traces the heart
-        col.addAssign(rgb(L.pinkEdgeTint).mul(smoothstep(0, L.pinkRimW, abs(hsd)).oneMinus().mul(u.pink).mul(L.pinkRimAlpha)));
+        col.addAssign(rgb(L.pinkEdgeTint).mul(smoothstep(0, L.pinkRimW, abs(hsd)).oneMinus().mul(u.pink).mul(keep.add(1).mul(0.5)).mul(L.pinkRimAlpha)));
         // Freeze: frost crystallises in from the edges; facets glint along the advancing front
         const ice = frostT ? smoothstep(X.frostVeinBand[0], X.frostVeinBand[1], frostM) : abs(mx_noise_float(c.mul(L.frostNoise * 4))).oneMinus().pow(10);
         const facet = mx_worley_noise_float(c.mul(L.frostCells)), front = frost.mul(frost.oneMinus()).mul(4);
@@ -204,30 +217,39 @@ export function createScreenFx(three, art = currentArt()) {
         const reveal = smoothstep(u.spiralR.sub(0.2), u.spiralR.add(0.001), rad).oneMinus().mul(smoothstep(0, L.spiralHole, rad));
         const arm = sin(atan(c.y, c.x).mul(L.spiralArms).add(log(rad.add(0.02)).mul(L.spiralTwist)).sub(u.t.mul(L.spiralTurnRadps)));
         const bands = mix(rgb(L.spiralBands[0]), rgb(L.spiralBands[1]), smoothstep(-L.spiralEdge, L.spiralEdge, arm));
-        const spun = mix(col, bands, reveal.mul(u.spiral).mul(L.spiralFullAlpha));
-        const dim = col.mul(reveal.mul(u.spiral).mul(L.spiralDim).oneMinus());
+        const spun = mix(col, bands, reveal.mul(u.spiral).mul(keep).mul(L.spiralFullAlpha));
+        const dim = col.mul(reveal.mul(u.spiral).mul(keep).mul(L.spiralDim).oneMinus());
         col.assign(mix(spun, dim, u.dimOnly));
-        // Flash: a rounded card with a soft shadow; the picture turns slowly
-        const half = vec2(u.rw, u.rh).mul(toH), p = uv0.sub(vec2(u.rx, u.ry)).mul(toH);
+        // Flash (polish 5): light blooms in from the frame (not in the Gentle corner mode), the picture turns slowly
+        // on soft panes at the sides (the second mirrored), and the lane to the kart and the bend stays clear
+        const fk = u.flash.mul(keep), F = L.flashFeather;
+        const radE = length(c.div(vec2(asp.mul(0.5), 0.5)));
+        const frame = smoothstep(L.flashFrame[0], L.flashFrame[1], radE).mul(u.mirror);
+        col.assign(mix(col, rgb(L.flashPaper), frame.mul(fk).mul(L.flashFrameAlpha)));
+        const wx = mix(u.rx, select(uv0.x.lessThan(0.5), u.rx, u.rx.oneMinus()), u.mirror);
+        const half = vec2(u.rw, u.rh).mul(toH), p = uv0.sub(vec2(wx, u.ry)).mul(toH);
         const q = abs(p).sub(half).add(L.flashRound);
         const d = length(max(q, 0)).add(min(max(q.x, q.y), 0)).sub(L.flashRound);
-        const inside = smoothstep(0, 0.004, d).oneMinus().mul(u.flash);
-        col.assign(col.mul(smoothstep(0, 0.04, d).oneMinus().mul(L.flashShadow).mul(u.flash).oneMinus()));
+        const inside = dz(smoothstep(-F, F, d).oneMinus());
         const cu = p.div(half.y.mul(2)), ca = u.t.mul(0.5);
         const iuv = vec2(cu.x.mul(cos(ca)).sub(cu.y.mul(sin(ca))), cu.x.mul(sin(ca)).add(cu.y.mul(cos(ca)))).mul(0.95).add(0.5);
         const ic = texture(icon, clamp(iuv, 0, 1));
-        const ink = smoothstep(-0.012, -0.006, d);
-        const pic = mix(mix(rgb(L.flashPaper), ic.rgb, ic.a), rgb(L.flashInk), ink);
-        col.assign(mix(col, pic, inside.mul(L.flashAlpha)));
+        // an ink glow just inside the feathered edge, a faint halo of paper light just outside it
+        const rim = smoothstep(-F * 3, -F * 0.5, d).mul(inside);
+        const pic = mix(mix(rgb(L.flashPaper), ic.rgb, ic.a), rgb(L.flashInk), rim.mul(L.flashRim));
+        const halo = smoothstep(0, F * 4, d).oneMinus().mul(inside.oneMinus());
+        col.assign(mix(col, rgb(L.flashPaper), halo.mul(fk).mul(L.flashHalo)));
+        col.assign(mix(col, pic, inside.mul(fk).mul(L.flashAlpha)));
         // Blackout: everything outside the iris goes dim
         const ic0 = uv0.sub(vec2(...L.irisAt)).mul(toH);
         // fx-iris: white is the aperture (radius irisMaskR of the mask), scaled so it sits at u.iris
         const open = irisT ? texture(irisT, ic0.mul(X.irisMaskR).div(u.iris).add(0.5)).r.oneMinus()
           : smoothstep(u.iris.sub(L.irisSoft), u.iris.add(L.irisSoft), length(ic0));
-        const shut = dz(open).mul(min(u.black.mul(3), 1));
+        // polish 5: the lane to the kart and the bend stays open through the iris
+        const shut = dz(open).mul(min(u.black.mul(3), 1)).mul(keep);
         col.assign(mix(col, col.mul(L.keepImage), shut));
         // a soft rim of light rides the closing iris edge
-        col.addAssign(rgb(L.irisRimColour).mul(open.mul(open.oneMinus()).mul(4).pow(L.irisRimPow).mul(u.black).mul(L.irisRimAlpha)));
+        col.addAssign(rgb(L.irisRimColour).mul(open.mul(open.oneMinus()).mul(4).pow(L.irisRimPow).mul(u.black).mul(keep).mul(L.irisRimAlpha)));
         // the hit: the view's hue swings toward the kind's colour, each pixel keeping its own luminance
         If(u.hitK.greaterThan(0.001), () => {
           const tl = luminance(col), hl = max(luminance(u.hitRgb), 0.05);
@@ -298,7 +320,8 @@ export function createScreenFx(three, art = currentArt()) {
     u.frostThr.value = frostThreshold(a.freeze);
     u.spiralR.value = spiralOpen(a.spiral);
     u.heartR.value = pinkHeart(a.pink);
-    const r = flashRect(a.cover, u.aspect.value, { corner: a.corner, scale: a.cornerScale, seed: a.seed });
+    const r = flashPanes(a.cover, u.aspect.value, { corner: a.corner, scale: a.cornerScale, seed: a.seed });
+    u.mirror.value = r.mirror ? 1 : 0;
     const pop = 1 - L.flashPop * (1 - Math.min(1, a.flash));
     // the card rises a little as it pops in and sinks as it goes
     u.rx.value = r.cx; u.ry.value = r.cy + L.flashPop * 0.8 * (1 - Math.min(1, a.flash)); u.rw.value = r.hw * pop; u.rh.value = r.hh * pop;
