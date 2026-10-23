@@ -1,5 +1,4 @@
 using System;
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -65,22 +64,7 @@ namespace ConditioningControlPanel
         private const double FaucetRingBox = 34;
         private const double FaucetRingRadius = 15;
 
-        // ---- the charge-hold's numbers -----------------------------------------
-
-        /// <summary>Floor of the hold budget: a press below this reads as a slip, not a decision.</summary>
-        private const double ChargeFloorMs = 700;
-
-        /// <summary>Ceiling of the hold budget (owner call): past this a hold is a chore.</summary>
-        private const double ChargeCapMs = 1400;
-
-        /// <summary>XP per extra millisecond of hold — the "held/4" half of the budget.</summary>
-        private const double ChargeXpPerMs = 4.0;
-
-        /// <summary>Rungs in the rising tone ladder (faucet_charge_1..6.wav).</summary>
-        private const int ChargeRungs = 6;
-
-        /// <summary>Completed pours in a day past which the celebration takes the compact cut.</summary>
-        private const int ChargeCompactAfter = 3;
+        private const int ChargeRungs = VatFaucetChargePolicy.RungCount;
 
         // ---- state ------------------------------------------------------------
 
@@ -107,13 +91,12 @@ namespace ConditioningControlPanel
         private bool _faucetChargeCompact;
 
         /// <summary>
-        /// Completed pours on <see cref="_faucetPourDayUtc"/> — the compact-cut
+        /// Completed pours on the current UTC day — the compact-cut
         /// counter. In-memory on purpose: forgetting it on restart only ever spends
         /// one more sparkle burst, and the alternative is a settings row describing
         /// something nobody would ever want to read back.
         /// </summary>
-        private int _faucetPoursToday;
-        private string _faucetPourDayUtc = string.Empty;
+        private readonly VatFaucetChargePolicy _faucetChargePolicy = new();
 
         private static readonly Random FaucetRng = new();
 
@@ -620,15 +603,13 @@ namespace ConditioningControlPanel
 
                 _faucetCharging = true;
                 _faucetChargeRungsPlayed = 0;
-                _faucetChargeCompact = FaucetPourCountToday() >= ChargeCompactAfter;
+                _faucetChargeCompact = _faucetChargePolicy.IsCompact(DateTime.UtcNow);
 
                 // THE BUDGET: 700ms + held/4, capped at 1400ms (owner call). The
                 // compact cut shortens the ring rather than removing it — the fourth
                 // pour of an evening still answers the press, it just stops making a
                 // ceremony of it (house book law IX).
-                double budget = Math.Min(ChargeCapMs, ChargeFloorMs + held / ChargeXpPerMs);
-                if (_faucetChargeCompact) budget *= 0.6;
-                _faucetChargeBudgetMs = Math.Max(220, budget);
+                _faucetChargeBudgetMs = VatFaucetChargePolicy.BudgetMilliseconds(held, _faucetChargeCompact);
                 _faucetChargeStart = DateTime.UtcNow;
 
                 StopFaucetWobble();
@@ -672,7 +653,7 @@ namespace ConditioningControlPanel
                     // tone would desynchronise from the ring on every hold of a
                     // different size; six pre-rendered rungs stepped by ring progress
                     // cannot (and it is the house book's chime-ladder idiom anyway).
-                    int want = Math.Min(ChargeRungs, (int)(t * ChargeRungs) + 1);
+                    int want = VatFaucetChargePolicy.RungsAt(t);
                     while (_faucetChargeRungsPlayed < want)
                         PlayChargeRung(_faucetChargeRungsPlayed++);
 
@@ -1077,22 +1058,7 @@ namespace ConditioningControlPanel
 
         // ---- the compact cut's counter ------------------------------------------
 
-        private int FaucetPourCountToday()
-        {
-            string day = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            if (!string.Equals(_faucetPourDayUtc, day, StringComparison.Ordinal))
-            {
-                _faucetPourDayUtc = day;
-                _faucetPoursToday = 0;
-            }
-            return _faucetPoursToday;
-        }
-
-        private void NoteFaucetPourToday()
-        {
-            FaucetPourCountToday();
-            _faucetPoursToday++;
-        }
+        private void NoteFaucetPourToday() => _faucetChargePolicy.NotePour(DateTime.UtcNow);
 
         // ============================== feedback ===============================
 

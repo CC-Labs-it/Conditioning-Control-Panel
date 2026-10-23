@@ -79,8 +79,8 @@ public sealed class PanicSurfacesTests
     /// <summary>Surfaces a panic must never lose. Dropping one fails here; a new surface needs no edit.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "haptics",
-        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
+        "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer", "gaze-minigame", "mantra", "chaos", "chaos-intro", "profile-faucet", "haptics",
+        "remote-haptics", "takeover", "program-session", "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "companion-transcript", "possession", "attention-test", "deeper-editor-audio", "knock-cards", "camera",
     };
 
     /// <summary>The order that is contract: (stops first, stops later). WPF refs are

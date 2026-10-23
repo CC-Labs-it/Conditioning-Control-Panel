@@ -66,6 +66,19 @@ namespace ConditioningControlPanel.Avalonia
             Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
         }
 
+        /// <summary>WPF ProfileSyncService.TryAdoptFromProfilePoll: a server lead on a clean ledger moves level/XP;
+        /// save and repaint the header like WPF's ProfileLoaded raise.</summary>
+        internal static void AdoptFromProfilePoll(int level, double xp, string? season, Func<Views.Windows.MainShellWindow?> shell)
+        {
+            try
+            {
+                if (!Services.ProfileAdopt.AdoptCleanLedger(CoreSettings.Current, level, xp, season, "profile poll")) return;
+                CoreSettings.Save();
+                Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "profile poll adopt failed"); }
+        }
+
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
         /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
         internal static void StartRichPresence()
@@ -579,8 +592,12 @@ namespace ConditioningControlPanel.Avalonia
                 DescentCountdown.Start();
                 Descent = new Services.Descent.DescentService
                 {
-                    // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
-                    ProgressionReceived = (_, _, _, epoch) => AdoptServerCurveEpoch(epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow),
+                    // WPF App.xaml.cs:3074: the curve before the level, then the clean-ledger adopt.
+                    ProgressionReceived = (level, xp, season, epoch) =>
+                    {
+                        AdoptServerCurveEpoch(epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow);
+                        AdoptFromProfilePoll(level, xp, season, () => desktop.MainWindow as Views.Windows.MainShellWindow);
+                    },
                 };
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).

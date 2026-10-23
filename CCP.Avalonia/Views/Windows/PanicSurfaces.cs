@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
             new("chaos-intro", _ => Chaos.ChaosIntroWindow.CloseForPanic()),   // the modal first-run card (WPF left it up)
             // WPF PanicStopEverySurface (:1992): the toys go to zero, bypassing throttles and gates.
+            new("profile-faucet", sh => sh?.CancelFaucetCharge(silent: true)), // cancel the ladder before audio/haptics teardown
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
@@ -58,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :1980-1981 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence()),
             new("lock-cards", _ => MainShellWindow.StopLockCards()),      // WPF LockCardService.Stop(dismissOpenCards: true)
+            new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("possession", _ => Possession.PossessionRuntime.UndoAllLive()),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing

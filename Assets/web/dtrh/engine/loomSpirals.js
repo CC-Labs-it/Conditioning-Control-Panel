@@ -19,9 +19,10 @@
  *
  * A SAVED SPIRAL IS PREFERRED AS PARAMS TOO: loom-list entries carry the `.json`
  * sidecar, so the player's own weave is redrawn from its params rather than
- * fetched as a multi-megabyte gif. Only the race sets a book and only the race
- * passes payloadFx a `spiralFx`, so the Descent still draws exactly the gifs it
- * always has.
+ * fetched as a multi-megabyte gif. The Descent sets a book too since 2026-10-12
+ * (game/chaosRun.js: woven in the chamber's own colours), so its spiral pops and
+ * its pinned centre spiral are live weaves; the stock gifs are only the floor
+ * for a machine where WebGL refuses.
  * ==========================================================================*/
 
 let spirals = [];   // [{ slug, url, params }]

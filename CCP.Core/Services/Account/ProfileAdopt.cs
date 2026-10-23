@@ -201,6 +201,44 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// The clean-ledger adopt from the profile poll (WPF ProfileSyncService.TryAdoptFromServerProgression,
+        /// :438-490): any positive server lead, but only while nothing was earned here since the last agreed
+        /// figure. Never downward, only level/XP, and never while a migration submit is unacked or the server
+        /// quotes another season. Run AFTER <see cref="ApplyCurveEpoch"/>. True when level/XP moved.
+        /// </summary>
+        public static bool AdoptCleanLedger(AppSettings settings, int serverLevel, double serverTotalXp, string? serverSeason, string source)
+        {
+            if (settings.OfflineMode || string.IsNullOrEmpty(settings.UnifiedId)) return false;
+            if (serverLevel <= 0 || serverTotalXp <= 0 || double.IsNaN(serverTotalXp)) return false;
+            if (DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) return false;
+            if (serverSeason != null && !string.Equals(serverSeason, settings.CurrentSeason ?? string.Empty, StringComparison.Ordinal))
+            {
+                Log.Debug("{Source} adopt: server season {SS} is not the local scope {LS} — skipping",
+                    source, serverSeason, settings.CurrentSeason ?? "(none)");
+                return false;
+            }
+
+            var preLevel = settings.PlayerLevel;
+            var localTotalXp = TotalXp(settings);
+            if (serverTotalXp <= localTotalXp + 0.01) return false;     // never downward or sideways
+            var watermark = ActiveXpWatermark(settings);
+            if (watermark <= 0) return false;                            // clean cannot be proven
+            if (localTotalXp > watermark + 0.01)
+            {
+                Log.Debug("{Source} adopt: local ledger is dirty ({Local} > agreed {Agreed}) — leaving the {Server} XP lead to the sync merge",
+                    source, (int)localTotalXp, (int)watermark, (int)serverTotalXp);
+                return false;
+            }
+
+            settings.PlayerLevel = serverLevel;
+            settings.PlayerXP = XpCurve.GetCurrentLevelXP(serverLevel, serverTotalXp, Epoch(settings));
+            RecordAgreedServerXp(settings, serverTotalXp, TotalXp(settings), source);
+            Log.Information("{Source} adopt: clean ledger, server ahead — Level {LL} ({LX} XP) -> Level {SL} ({SX} XP)",
+                source, preLevel, (int)localTotalXp, serverLevel, (int)serverTotalXp);
+            return true;
+        }
+
+        /// <summary>
         /// The read-before-write adopt (WPF ProfileSyncService.ReadServerProfileBeforePushAsync) after the curve
         /// epoch: level/XP take-higher, the season key forward only (clearing the watermark), and the watermark
         /// when the server's season is the one we sync under. Nothing else. Returns true when the season advanced.
