@@ -28,7 +28,8 @@ import { createRailMaterial } from './materials/rails.js';
 import { createEdges } from './edges.js';
 import { createPadMaterial } from './materials/pads.js';
 import { createSkyMaterial, SKY_PALETTES } from './materials/sky.js';
-import { buildCountdown, buildFinish, buildScatter } from './dressing.js';
+import { buildCountdown, buildFinish, buildScatter, reelTexture } from './dressing.js';
+import { buildTerrace } from './terrace.js';
 import { buildColossi } from './colossi.js';
 import { buildShowcaseDressing } from './showcaseDressing.js';
 import { buildShadows, CATCH_LAYER } from './shadows.js';
@@ -163,6 +164,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const scatter = buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
   add(scatter ? scatter.object : props(track));
   add(createNearDressing(track, { phone: Q.name === 'phone' }).object);   // VIEW: near cues, in the scene before the boot warm
+  let terrace = null, terraceScreen = null;
+  try {
+    if (art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
+      terraceScreen = reelTexture();
+      terrace = buildTerrace(art, track, pal, { phone: Q.name === 'phone', samples, screenMap: terraceScreen,
+        avoid: [...(colossi ? colossi.placed : []), ...(scatter && scatter.heroes ? scatter.heroes.bodies : []), ...(scatter ? scatter.placed : [])] });
+      scene.add(terrace.object);
+    }
+  } catch (e) { console.warn('[glassroad/world] terrace failed: ' + (e && e.message)); }
   const countdown = buildCountdown(art, track, pal), finish = buildFinish(art, track, pal);
   if (countdown) {
     add(countdown.object);
@@ -422,9 +432,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (roadWords) roadWords.dispose();
     if (wordRush) wordRush.dispose();
     showcaseDressing.dispose();
+    if (terrace) terrace.dispose();
+    if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles

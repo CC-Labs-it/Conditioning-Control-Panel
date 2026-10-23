@@ -195,7 +195,7 @@ export function buildFinish(art, track, pal) {
 }
 
 /** The slot cabinet's reel screen: three lit reels (spiral, heart, seven) on a deep violet glass. */
-function reelTexture() {
+export function reelTexture() {
   const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const g = cv.getContext('2d');
   const bg = g.createLinearGradient(0, 0, 0, 256);

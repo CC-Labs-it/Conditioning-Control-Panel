@@ -32,6 +32,8 @@ export const WANT = [
   // ART5: the bot wardrobe and the two vehicle variants on the R4 kart rig (render/wardrobe.js)
   'emi-outfit-croupier', 'emi-outfit-pool', 'emi-outfit-varsity', 'emi-outfit-labcoat', 'emi-outfit-cheer', 'emi-outfit-swim',
   'emi-outfit-drone-protocol', 'emi-outfit-snow-day', 'emi-vehicle-petal', 'emi-vehicle-trinket',
+  // Starting terrace: the delivered cabinet rows, selected by the current quality tier.
+  'threshold-slot-row-lod0', 'threshold-slot-row-lod1',
 ];
 /** Wanted before they ship: missing from the manifest is quiet (not in failed); a broken file still counts. */
 const LATER = new Set([]);
