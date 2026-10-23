@@ -13,6 +13,7 @@ namespace CCP.Core.Tests;
 /// bookkeeping tests moved with it (from ConditioningControlPanel.Tests/PossessionDeckWpfTests.cs);
 /// the rest pin that what WPF read from App.* now reaches the head through the seams.
 /// </summary>
+[Collection(SessionStatics.Name)]   // shares PossessionRemember statics with PossessionRememberTests
 public class PossessionDirectorTests
 {
     private static AppSettings Haunted(PossessionIntensity intensity = PossessionIntensity.Eerie, bool photosafe = false) => new()

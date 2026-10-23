@@ -22,7 +22,22 @@ namespace ConditioningControlPanel.Services.AIService
     /// </summary>
     public static class OllamaSetupService
     {
-        private const string DefaultHost = "http://localhost:11434/";
+        /// <summary>The host every wizard step (detect, pull, smoke test) talks to.</summary>
+        internal const string DefaultHost = "http://localhost:11434/";
+
+        /// <summary>
+        /// What a successful wizard writes: the local provider, the model it pulled and the HOST
+        /// it verified. The host used to be left out, so a blank Host box stayed blank after
+        /// "all set" and the app only worked through LocalAiService's silent fallback. Pure.
+        /// </summary>
+        internal static void ApplyVerifiedSetup(Models.CompanionPromptSettings prompt, string verifiedHost, string model)
+        {
+            prompt.AiProvider = Models.AiProviderType.Local;
+            prompt.AiModel = model;
+            if (!string.IsNullOrWhiteSpace(verifiedHost))
+                prompt.AiOllamaHost = NormalizeHost(verifiedHost.Trim());
+        }
+
         private const string OllamaInstallerUrl = "https://ollama.com/download/OllamaSetup.exe";
 
         // Tracks a headless `ollama serve` process this app spawned, so it can
