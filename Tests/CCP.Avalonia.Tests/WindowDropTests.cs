@@ -35,11 +35,13 @@ public sealed class WindowDropTests
         File.WriteAllBytes(video, new byte[] { 1, 2, 3 });
 
         var oldVideo = ConditioningControlPanel.CoreEngine.Video;
+        var stale = true;
         var scheduler = new MandatoryVideoScheduler(new SilentVideoHost(), library: () =>
-            Directory.Exists(Path.Combine(assets, "videos")) ? Directory.GetFiles(Path.Combine(assets, "videos")) : Array.Empty<string>());
+            stale ? new[] { "stale1.mp4", "stale2.mp4" }
+            : Directory.Exists(Path.Combine(assets, "videos")) ? Directory.GetFiles(Path.Combine(assets, "videos")) : Array.Empty<string>());
         // A stale queue must be discarded even when it still has playable entries.
-        typeof(MandatoryVideoScheduler).GetField("_queue", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .SetValue(scheduler, new System.Collections.Generic.Queue<string>(new[] { "stale.mp4" }));
+        Assert.NotNull(scheduler.PickNext());
+        stale = false;
         ConditioningControlPanel.CoreEngine.Video = scheduler;
         try
         {
@@ -53,7 +55,7 @@ public sealed class WindowDropTests
         Assert.True(File.Exists(Path.Combine(assets, "videos", "clip.mp4")));
         Assert.True(File.Exists(video));   // copied, never moved
         Assert.Equal("assets", shell.CurrentTab);
-        var next = typeof(MandatoryVideoScheduler).GetMethod("PickNext", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(scheduler, null);
+        var next = scheduler.PickNext();
         Assert.Equal(Path.Combine(assets, "videos", "clip.mp4"), next);
         done.Close();
         }
@@ -84,6 +86,8 @@ public sealed class WindowDropTests
         project.Metadata.Name = name;
         File.WriteAllText(enh, EnhancementSerializer.Save(project));
         string? saved = null;
+        var startTimer = MainShellWindow.StartDeeperRevealTimer;
+        MainShellWindow.StartDeeperRevealTimer = _ => { };   // the test steps the 1800 ms expiry itself
         try
         {
             Drop(shell, enh);
@@ -97,10 +101,11 @@ public sealed class WindowDropTests
             Assert.Single(Directory.GetFiles(DeeperLocalLibrary.DefaultFolder, name + "*.ccpenh.json"));
             await WaitFor(() => Toast(shell, Loc.Get("deeper_import_already_in_library")));
             Assert.True(Assert.Single(model.FilteredEntries.Where(r => r.Entry.FilePath == saved)).IsHighlighted);
-            await Task.Delay(1900);
+            shell.PendingDeeperRevealExpiry!();
+            Assert.Null(shell.PendingDeeperRevealExpiry);
             Assert.False(Assert.Single(model.FilteredEntries.Where(r => r.Entry.FilePath == saved)).IsHighlighted);
         }
-        finally { if (saved != null) File.Delete(saved); }
+        finally { MainShellWindow.StartDeeperRevealTimer = startTimer; if (saved != null) File.Delete(saved); }
     });
 
     [Theory]
@@ -116,8 +121,7 @@ public sealed class WindowDropTests
             ask.GetVisualDescendants().OfType<Button>().Select(b => b.Name));
         Click(ask, "BtnEdit");
         var editor = await WaitFor(() => shell.OwnedWindows.OfType<DeeperEditorWindow>().SingleOrDefault());
-        var project = (Enhancement)typeof(DeeperEditorWindow).GetField("_enhancement",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!;
+        var project = editor.Project;
         Assert.Equal(type, project.MediaType);
         Assert.Equal(media, project.MediaSource);
         Assert.False(Directory.Exists(assets));

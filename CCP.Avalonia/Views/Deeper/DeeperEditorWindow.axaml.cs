@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     public partial class DeeperEditorWindow : Window
     {
         private Enhancement _enhancement = new();
+        internal Enhancement Project => _enhancement;
         private string? _filePath;
 
         /// <summary>

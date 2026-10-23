@@ -104,6 +104,10 @@ public partial class MainShellWindow
 
 
         private string? _deeperHighlightedPath;
+        /// <summary>Tick seam: the latest reveal's 1800 ms expiry, so tests step it instead of sleeping.</summary>
+        internal Action? PendingDeeperRevealExpiry { get; private set; }
+        /// <summary>Tests replace this with a no-op so no real 1800 ms timer races the assertions.</summary>
+        internal static Action<DispatcherTimer> StartDeeperRevealTimer = t => t.Start();
         private void RevealDeeperLibraryRow(string path)
         {
             var row = DeeperModel?.FilteredEntries.FirstOrDefault(r => Tabs.DeeperTabViewModel.PathsEqual(r.Entry.FilePath, path));
@@ -112,13 +116,19 @@ public partial class MainShellWindow
             row.IsHighlighted = true;
             var list = Named<Tabs.DeeperTabView>("DeeperTab")?.FindControl<ItemsControl>("DeeperLibraryList");
             list?.ContainerFromIndex(DeeperModel!.FilteredEntries.IndexOf(row))?.BringIntoView();
-            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1800) };
-            timer.Tick += (_, _) => { timer.Stop(); row.IsHighlighted = false;
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1800) }; // WPF MainWindow.DeeperHub.cs:771
+            void Expire()
+            {
+                timer.Stop(); row.IsHighlighted = false;
+                if (PendingDeeperRevealExpiry == Expire) PendingDeeperRevealExpiry = null;
                 if (Tabs.DeeperTabViewModel.PathsEqual(_deeperHighlightedPath, path))
                 {
                     _deeperHighlightedPath = null;
                     foreach (var current in DeeperModel!.FilteredEntries.Where(r => Tabs.DeeperTabViewModel.PathsEqual(r.Entry.FilePath, path))) current.IsHighlighted = false;
-                } };
-            timer.Start();
+                }
+            }
+            timer.Tick += (_, _) => Expire();
+            PendingDeeperRevealExpiry = Expire;
+            StartDeeperRevealTimer(timer);
         }
 }
