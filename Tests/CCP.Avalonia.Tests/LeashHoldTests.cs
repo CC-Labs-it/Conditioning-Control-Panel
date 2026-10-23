@@ -247,6 +247,72 @@ public sealed class LeashHoldTests
         }
     });
 
+    /// <summary>A leashed shell with a bound test portal session (no D-Bus) and the X11 key state <paramref name="key"/>.</summary>
+    private static void WithPortalShell(Func<bool?> key, Action<MainShellWindow, Clock> body) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (!OperatingSystem.IsLinux()) return;   // the GlobalShortcuts portal and the hold clock are Linux-only
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        (CoreSettings.Current.PanicKeyEnabled, CoreSettings.Current.MasterVolume) = (false, 0);
+        var (oldSvc, oldClock, oldKey) = (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown);
+        var clock = new Clock();
+        var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+        svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+        (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (svc, clock, key);
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            Dispatcher.UIThread.RunJobs();            // the ctor's queued work runs here, not inside a later test's hold
+            PortalPanicShortcut.SetSessionForTests("/test/session", null);
+            body(shell, clock);
+        }
+        finally
+        {
+            LeashCutConfirmWindow.Current?.Close();
+            LeashHoldRing.Dismiss();
+            shell?.LeashHoldReleased();               // a never-shown window raises no Closed, so stop its clock here
+            shell?.Close();
+            Dispatcher.UIThread.RunJobs();
+            PortalPanicShortcut.SetSessionForTests(null, null);
+            (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldKeyDown) = (oldSvc, oldClock, oldKey);
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+    });
+
+    [Fact]
+    public void UnprovenPortalHold_NoX11Listener_EndsOnFirstTick_NeverAsks() => WithPortalShell(() => null, (shell, clock) =>
+    {
+        // A portal that never sent Deactivated, and no X11 listener (key state unknown): treat as released.
+        shell.OnPortalPanicPressed();
+        Assert.True(MainShellWindow.KeepPortalBound);
+        for (int t = 250; t <= 6000; t += 250) { clock.Now += TimeSpan.FromMilliseconds(250); shell.LeashHoldClockTick(); }
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(LeashCutConfirmWindow.Current);
+        Assert.False(LeashHoldRing.IsShown);
+        Assert.False(MainShellWindow.KeepPortalBound);
+    });
+
+    [Fact]
+    public void LostDeactivated_HoldEnds_PortalNoLongerKeptBound_NextPressStillPanics() => WithPortalShell(() => false, (shell, clock) =>
+    {
+        var presses = 0;
+        Action down = () => { presses++; shell.OnPortalPanicPressed(); };
+        PortalPanicShortcut.Route("/test/session", "panic", true, down, () => { }, clock.Now.UtcDateTime);
+        Assert.True(PortalPanicShortcut.IsHeld);
+        Assert.True(MainShellWindow.KeepPortalBound);   // a live hold keeps the session until it ends
+        clock.Now += TimeSpan.FromMilliseconds(250);
+        shell.LeashHoldClockTick();                     // X11 says up; no Deactivated ever arrives
+        Assert.True(PortalPanicShortcut.IsHeld);        // the portal still believes it is held ...
+        Assert.False(MainShellWindow.KeepPortalBound);  // ... but no effect and no hold: the grab goes
+        PortalPanicShortcut.Route("/test/session", "panic", true, down, () => { }, (clock.Now + LeashHoldToCut.RepeatGap * 2).UtcDateTime);
+        Assert.Equal(2, presses);                       // the panic key never goes dead
+    });
+
     /// <summary>Continues a running hold from 2 s to 4.75 s.</summary>
     private static void Hold2(MainShellWindow shell, Clock clock)
     {

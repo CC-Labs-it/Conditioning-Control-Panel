@@ -169,7 +169,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static bool _portalFailed, _portalAllowed;
         private static DispatcherTimer? _portalWatch;
 
-        internal static bool KeepPortalBound => AnyEffectRunning || PortalPanicShortcut.IsHeld;
+        // The shell's live hold, not PortalPanicShortcut.IsHeld: that stays true after a lost Deactivated.
+        internal static bool KeepPortalBound => AnyEffectRunning || PortalHoldLive;
 
         private static bool AnyEffectRunning =>
             CoreEngine.IsRunning || CoreFlash.IsRunning || CoreSubliminal.IsRunning || BouncingTextOverlay.IsRunning

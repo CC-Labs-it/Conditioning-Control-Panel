@@ -27,14 +27,12 @@ public sealed class PortalLeashHoldTests
             Assert.False(PortalPanicShortcut.ReportsRelease);
             Assert.True(PortalPanicShortcut.Route("/test/session", "panic", true, down, up, T0));
             Assert.True(PortalPanicShortcut.IsHeld);
-            Assert.True(MainShellWindow.KeepPortalBound);
             PortalPanicShortcut.Route("/test/session", "panic", true, down, up, T0.AddMilliseconds(100)); // a repeat
             Assert.Equal((1, 0), (presses, releases));
             PortalPanicShortcut.Route("/test/session", "panic", false, down, up, T0.AddSeconds(1));
             Assert.False(PortalPanicShortcut.IsHeld);
             Assert.True(PortalPanicShortcut.ReportsRelease);
             Assert.Equal((1, 1), (presses, releases));
-            Assert.False(MainShellWindow.KeepPortalBound);
             PortalPanicShortcut.Route("/test/session", "panic", false, down, up, T0.AddSeconds(2));
             Assert.Equal(1, releases); // a stale release must not end a different listener's hold
             PortalPanicShortcut.Route("/test/session", "panic", true, down, up, T0.AddSeconds(3));

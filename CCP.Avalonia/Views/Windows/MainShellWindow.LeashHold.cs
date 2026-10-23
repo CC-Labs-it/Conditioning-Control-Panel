@@ -10,7 +10,8 @@
 // The portal supplies Activated/Deactivated instead of physical X11 key state. Its existing effects-only
 // binding policy stays intact; a hold that started while bound keeps the session until release. A portal
 // hold skips the X11 key check only once that compositor has proven it sends Deactivated; until then a
-// portal press is timed like an X11 press, so a portal that never reports release never asks.
+// portal hold needs the X11 key proven down on every tick: up OR unknown (no X11 listener) ends it, so a
+// portal that never reports release never asks. Only a live portal hold keeps the grab (KeepPortalBound).
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -29,7 +30,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private readonly LeashHoldFlow _leashHold = new();
         private DispatcherTimer? _leashHoldClock;
-        private bool _leashHoldFromPortal;
+        private bool _leashHoldFromPortal, _leashHoldPortalUnproven;
+        private static bool _portalHoldLive;
+
+        /// <summary>A portal hold is being timed on the leash clock: the portal stays bound until it ends.</summary>
+        internal static bool PortalHoldLive => _portalHoldLive;
 
         private static bool LeashHoldLeashed
         {
@@ -66,14 +71,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>The held clock (250 ms): the key is still down. Off the leash, the hold ends (WPF :49-53).</summary>
         internal void LeashHoldClockTick()
         {
-            if (!_leashHold.Held || !LeashHoldLeashed || (!_leashHoldFromPortal && LeashHoldKeyDown() == false)) { LeashHoldReleased(); return; }
+            var key = _leashHoldFromPortal ? true : LeashHoldKeyDown();
+            if (!_leashHold.Held || !LeashHoldLeashed || key == false || (key == null && _leashHoldPortalUnproven)) { LeashHoldReleased(); return; }
             ApplyLeashHold(_leashHold.Down(LeashHoldTime.GetUtcNow().UtcDateTime, true));
         }
 
         /// <summary>The panic key came up: the hold ends, the ring goes, nothing is asked or cut.</summary>
         internal void LeashHoldReleased()
         {
-            _leashHoldFromPortal = false;
+            _leashHoldFromPortal = _leashHoldPortalUnproven = _portalHoldLive = false;
             _leashHoldClock?.Stop();
             ApplyLeashHold(_leashHold.Up());
         }
@@ -85,7 +91,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_leashHold.Held) LeashHoldReleased();
             HandlePanicKeyPress(DateTime.Now);
             _leashHoldFromPortal = PortalPanicShortcut.ReportsRelease;
+            _leashHoldPortalUnproven = !_leashHoldFromPortal;
             LeashHoldPressed();
+            _portalHoldLive = _leashHoldClock?.IsEnabled == true;
         }
 
         internal void OnPortalPanicReleased() => LeashHoldReleased();
