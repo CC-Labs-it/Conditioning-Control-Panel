@@ -2943,3 +2943,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/companion-v2-pages-b: +678
 - Companion v2: room collapsed; Personality/Permissions/Links pages adopt the live zones; Awareness tab hosts the privacy card.
 - Cell->page map, Takeover<->Permissions links; Personality Advanced row opens the prompt editor; rest -> companion-v2-pages-c.
+
+## avalonia-port/wire-feat-pbp-host: +215
+- Piece by Piece whisper clips: Core `PbpWhisperClips` shared with WPF, authenticated sub-audio/words routes, settings frame sends whisper URLs (row stays stub).
+- Review fixes: tests moved not copied, unchecked brain-drain clips no longer offered (fallback works), settings test GETs the offered clip, parity row cites in-tree evidence.
