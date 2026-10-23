@@ -7,10 +7,16 @@
  * hint +-WINDOW segments are searched; a result further than FAR_M from the curve searches them all.
  * height and lateral are measured in the rolled frame; p is the foot of the normal on the road plane
  * (lateral not clamped, so p runs past the edge when the kart does).
+ *
+ * Polish 6 (stacked courses): query.below(px, py, pz, out?) -> the same result for the nearest road UNDER P,
+ * or null: a segment whose plan footprint (samples +- half width) holds P, whose surface faces up
+ * (normal y > BELOW_UP) and lies below P (height >= -BELOW_PASS_M, so a kart a tick past it still counts),
+ * on the road (no gap, inside the edges). The highest such road wins (the smallest height). A falling kart
+ * lands on it (sim/kart.js); nothing beneath keeps the edge drop and rescue.
  */
 import { makeFrame, frameAtSegU } from './frames.js';
 
-const WINDOW = 4, FAR_M = 25;
+const WINDOW = 4, FAR_M = 25, BELOW_UP = 0.5, BELOW_PASS_M = 1.5, BELOW_END_M = 0.5;
 
 export function makeQuery() {
   return { seg: 0, segT: 0, s: 0, lateral: 0, height: 0, normal: [0, 1, 0], onRoad: false, edgeDist: 0, surface: 'glass', flags: null, railed: false, p: [0, 0, 0] };
@@ -28,12 +34,25 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes) {
     for (let k = 0; k <= SUB; k++) { const j = (i * SUB + k) * 3; r = Math.max(r, Math.hypot(S[j] - x, S[j + 1] - y, S[j + 2] - z)); }
     centre[i * 3] = x; centre[i * 3 + 1] = y; centre[i * 3 + 2] = z; radius[i] = r;
   }
+  // plan boxes per segment for below(): x0, z0, x1, z1 over the samples, grown by the widest half width, and the lowest y
+  const box = new Float64Array(N * 4), minY = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    const hw = Math.max(widthAt(i, 0), widthAt(i, 0.5), widthAt(i, 1)) / 2 + 1;
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity, y0 = Infinity;
+    for (let k = 0; k <= SUB; k++) {
+      const j = (i * SUB + k) * 3;
+      x0 = Math.min(x0, S[j]); x1 = Math.max(x1, S[j]); z0 = Math.min(z0, S[j + 2]); z1 = Math.max(z1, S[j + 2]); y0 = Math.min(y0, S[j + 1]);
+    }
+    box[i * 4] = x0 - hw; box[i * 4 + 1] = z0 - hw; box[i * 4 + 2] = x1 + hw; box[i * 4 + 3] = z1 + hw; minY[i] = y0 - hw;
+  }
   const fr = makeFrame(), c = [0, 0, 0], d1 = [0, 0, 0], d2 = [0, 0, 0];
-  let bestD2 = 0, bestSeg = 0, bestU = 0;
+  // polish 6: the running best lives in a typed scratch (best[0] d2, best[1] seg, best[2] u); doubles kept in the
+  // closure context boxed a fresh heap number on every store (the top garbage source of a race)
+  const best = new Float64Array(3);
 
   const scanSeg = (i, px, py, pz) => {
     const dc = Math.hypot(px - centre[i * 3], py - centre[i * 3 + 1], pz - centre[i * 3 + 2]) - radius[i];
-    if (dc > 0 && dc * dc >= bestD2) return;
+    if (dc > 0 && dc * dc >= best[0]) return;
     for (let k = 0; k < SUB; k++) {
       const j = (i * SUB + k) * 3;
       const ax = S[j], ay = S[j + 1], az = S[j + 2];
@@ -43,21 +62,18 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes) {
       let f = ee > 0 ? (wx * ex + wy * ey + wz * ez) / ee : 0;
       f = f < 0 ? 0 : f > 1 ? 1 : f;
       const dx = wx - ex * f, dy = wy - ey * f, dz = wz - ez * f, dd = dx * dx + dy * dy + dz * dz;
-      if (dd < bestD2) { bestD2 = dd; bestSeg = i; bestU = (k + f) / SUB; }
+      if (dd < best[0]) { best[0] = dd; best[1] = i; best[2] = (k + f) / SUB; }
     }
   };
   const scan = (px, py, pz, hint) => {
-    bestD2 = Infinity;
+    best[0] = Infinity;
     if (hint >= 0) for (let o = -WINDOW; o <= WINDOW; o++) scanSeg(((hint + o) % N + N) % N, px, py, pz);
     else for (let i = 0; i < N; i++) scanSeg(i, px, py, pz);
   };
 
-  return function query(px, py, pz, hintSeg = -1, out = makeQuery()) {
-    const hint = hintSeg >= 0 && hintSeg < N ? hintSeg | 0 : -1;
-    scan(px, py, pz, hint);
-    if (hint >= 0 && bestD2 > FAR_M * FAR_M) scan(px, py, pz, -1);
-    // Newton on f(u) = (P - c(u)) . c'(u), stepping into a neighbour segment once if u leaves [0, 1]
-    let seg = bestSeg, u = bestU, hops = 0;
+  /** Newton on f(u) = (P - c(u)) . c'(u) from (seg, u), stepping into a neighbour segment once if u leaves [0, 1]; fills out. */
+  function solve(seg, u, px, py, pz, out) {
+    let hops = 0;
     for (let it = 0; it < 6; it++) {
       sp.pos(seg, u, c); sp.deriv(seg, u, d1); sp.deriv2(seg, u, d2);
       const wx = px - c[0], wy = py - c[1], wz = pz - c[2];
@@ -90,5 +106,53 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes) {
     out.railed = !gap && (fl.includes('rail') || fl.includes(lat >= 0 ? 'railR' : 'railL'));
     out.p[0] = fr.p[0] + fr.b[0] * lat; out.p[1] = fr.p[1] + fr.b[1] * lat; out.p[2] = fr.p[2] + fr.b[2] * lat;
     return out;
+  }
+
+  function query(px, py, pz, hintSeg = -1, out = makeQuery()) {
+    const hint = hintSeg >= 0 && hintSeg < N ? hintSeg | 0 : -1;
+    scan(px, py, pz, hint);
+    if (hint >= 0 && best[0] > FAR_M * FAR_M) scan(px, py, pz, -1);
+    return solve(best[1] | 0, best[2], px, py, pz, out);
+  }
+
+  const tmp = makeQuery();
+  /** The nearest road under P (see the header), written into out; null when there is none. Allocates nothing. */
+  query.below = function below(px, py, pz, out = makeQuery()) {
+    let found = false, bestH = Infinity;
+    for (let i = 0; i < N; i++) {
+      const o = i * 4;
+      if (px < box[o] || px > box[o + 2] || pz < box[o + 1] || pz > box[o + 3] || minY[i] > py + BELOW_PASS_M) continue;
+      // the nearest sample point in plan on this segment
+      let bd = Infinity, bu = 0;
+      for (let k = 0; k < SUB; k++) {
+        const j = (i * SUB + k) * 3;
+        const ax = S[j], az = S[j + 2], ex = S[j + 3] - ax, ez = S[j + 5] - az, wx = px - ax, wz = pz - az, ee = ex * ex + ez * ez;
+        let f = ee > 0 ? (wx * ex + wz * ez) / ee : 0;
+        f = f < 0 ? 0 : f > 1 ? 1 : f;
+        const dx = wx - ex * f, dz = wz - ez * f, dd = dx * dx + dz * dz;
+        if (dd < bd) { bd = dd; bu = (k + f) / SUB; }
+      }
+      // the road surface there must lie below P, not over it
+      sp.pos(i, bu, c);
+      if (c[1] > py + BELOW_PASS_M + 1) continue;
+      solve(i, bu, px, py, pz, tmp);
+      // P must lie over this stretch, not past its end (a ramp's lip, a road that stops): fr is solve's frame
+      const along = (px - fr.p[0]) * fr.t[0] + (py - fr.p[1]) * fr.t[1] + (pz - fr.p[2]) * fr.t[2];
+      if (along > BELOW_END_M || along < -BELOW_END_M) continue;
+      if (!tmp.onRoad || tmp.normal[1] < BELOW_UP || tmp.height < -BELOW_PASS_M || tmp.height >= bestH) continue;
+      bestH = tmp.height; found = true;
+      copyQuery(out, tmp);
+    }
+    return found ? out : null;
   };
+  return query;
+}
+
+/** Copy query result a into o (arrays copied in place). */
+export function copyQuery(o, a) {
+  o.seg = a.seg; o.segT = a.segT; o.s = a.s; o.lateral = a.lateral; o.height = a.height;
+  o.normal[0] = a.normal[0]; o.normal[1] = a.normal[1]; o.normal[2] = a.normal[2];
+  o.onRoad = a.onRoad; o.edgeDist = a.edgeDist; o.surface = a.surface; o.flags = a.flags; o.railed = a.railed;
+  o.p[0] = a.p[0]; o.p[1] = a.p[1]; o.p[2] = a.p[2];
+  return o;
 }

@@ -29,6 +29,7 @@ import { ITEM_LOOK as L, ITEM_TIERS, MOTE_TINT } from './look.js';
 import {
   tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool, cardEdgeGlow, shellFit, nearCapR, impactSeen,
   breathe, trailPush, trailLook, trapWarn, lobMark, impactPhase, confettiAt, boxGlint, launchPop, launchFlare, impactFountain,
+  iconFps, iconLive,
 } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
 import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, cardEdge, blobShadow, confettiCloud } from './materials.js';
@@ -76,7 +77,9 @@ let frame = 0;
 export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
   const top = ITEM_TIERS.high, start = tierOf(Q.name);
   const root = new Group(); root.name = 'item-visuals'; scene.add(root);
-  const icons = createLivingIcons({ px: start.iconPx, fps: start.iconFps });
+  // polish 6: webgl2 redraws the icon atlas at most 15 fps (the backend is known only after boot, so read it per tick)
+  const backendOf = () => (globalThis.__glassroad && globalThis.__glassroad.backend) || '';
+  const icons = createLivingIcons({ px: start.iconPx, fps: () => iconFps(tierOf(Q.name).iconFps, backendOf()) });
   // motes: bubble rings, pop sprays, throw ribbons, lob dots, box glints and impact glows share one draw
   const bubbles = bubbleCloud(top.bubbles + 24, icons.texture);
   const motes = moteCloud(top.bubbles * top.motes + 24 * Math.ceil(L.popMotes * L.impactMotesMul) + 8 * (2 * L.trailPts + L.lobDots + 1) + 12 * L.fountain.high + 24);
@@ -157,16 +160,20 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
   const confT = [];
   const kartModel = art && art.model ? art.model('emi-teacup-kart') : null;
   const ghostGeo = new SphereGeometry(0.7, 16, 10).scale(1, 0.8, 1).translate(0, 0.6, 0);
+  // polish 6: every copy wears the one ghost material (opacity per object) and the whole pool exists from boot,
+  // so the warm links every program an Echo can need (a material per copy linked 6 programs mid-race)
+  const ghostLook = ghost(L.echoColour);
   const copies = createPool(top.copies * 4, () => {
-    const g = ghost(L.echoColour);
     let obj;
-    if (kartModel) { obj = cloneSkinned(kartModel.scene); obj.traverse((m) => { if (m.isMesh) { m.material = g.material; m.frustumCulled = false; } }); }
-    else obj = new Mesh(ghostGeo, g.material);
+    const meshes = [];
+    if (kartModel) { obj = cloneSkinned(kartModel.scene); obj.traverse((m) => { if (m.isMesh) { m.material = ghostLook.material; m.frustumCulled = false; meshes.push(m); } }); }
+    else { obj = new Mesh(ghostGeo, ghostLook.material); meshes.push(obj); }
     root.add(obj);
-    return { obj, u: g.uniforms };
+    return { obj, set(a) { for (const m of meshes) m.userData.echoA = a; } };
   }, (e) => { e.obj.visible = false; });
   // one of each pooled look exists from boot so the warm links it (pass 4: the first echo copy froze Firefox ~55 s in)
-  for (const p of [puddles, waves, marks, shadows, copies]) p.prime(1);
+  for (const p of [puddles, waves, marks, shadows]) p.prime(1);
+  copies.prime(copies.cap);
   boxes[0] = buildBox(0); boxes[0].visible = false;
 
   // ---- helpers ----
@@ -178,7 +185,13 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
       motes.push(x + OFF[0], y + OFF[1], z + OFF[2], m.size, c[0], c[1], c[2], m.alpha * alpha);
     }
   }
-  let drawn = 0, cam = null;
+  let drawn = 0, cam = null, camFx = 0, camFy = 0, camFz = -1;
+  /** True when a bubble at (x, y, z), radius R, is in view and big enough for its icon's life to show. */
+  function iconSeen(x, y, z, R) {
+    if (!cam || !cam.position) return true;
+    const p = cam.position, dx = x - p.x, dy = y - p.y, dz = z - p.z, d = Math.hypot(dx, dy, dz);
+    return iconLive(R, d, d > 1e-6 ? (dx * camFx + dy * camFy + dz * camFz) / d : 1, cam.fov || 0);
+  }
   /** R shrunk so a bubble at (x, y, z) stays under nearMaxFrac of the view's height (no camera: unchanged). */
   function capR(x, y, z, R) {
     if (!cam || !cam.position) return R;
@@ -190,7 +203,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
     if (!free) R = capR(x, y, z, R);
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     const cell = mode >= MODE.shell ? -1 : cellOf(id);
-    if (cell >= 0) icons.use(id);
+    if (cell >= 0) icons.use(id, iconSeen(x, y, z, R));
     const br = mode >= MODE.shell ? 1 : breathe(timeS, seed, gentle());
     if (!bubbles.push(x, y, z, (R * 2 * br) / (mode >= MODE.shell ? L.shellFill : L.iconFill), cell, alpha, mode, seed)) return;
     drawn++;
@@ -203,7 +216,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
     R = capR(x, y, z, R);
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     if (!shells.push(x, y, z, R, alpha, seed)) return;
-    icons.use(id);
+    icons.use(id, iconSeen(x, y, z, R));
     // the living icon breathes inside its still glass
     bubbles.push(x, y, z, 2 * R * fit.carrier * breathe(timeS, seed, gentle()), cellOf(id), alpha, MODE.bare, seed);
     drawn++;
@@ -216,6 +229,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
   function update(view, dt, karts = [], camera = null) {
     dt = Math.max(0, Math.min(dt || 0, 0.1));
     cam = camera;
+    if (cam && cam.matrixWorld) { const e = cam.matrixWorld.elements; camFx = -e[8]; camFy = -e[9]; camFz = -e[10]; }
     const soft = gentle(), rate = soft ? 0.5 : 1;
     timeS += dt * rate;
     bubbles.uniforms.time.value = timeS;
@@ -388,7 +402,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
         W.set(side * L.echoSideM + sway, 0, back * L.echoBackM).applyQuaternion(QT);
         e.obj.position.copy(V).add(W); e.obj.quaternion.copy(QT); e.obj.visible = true;
         const flicker = soft ? 0 : Math.sin(timeS * L.echoFlickerHz * 6.283 + j * 2) * L.echoFlickerAmp;
-        e.u.opacity.value = L.echoAlpha * fade * (1 + flicker);
+        e.set(L.echoAlpha * fade * (1 + flicker));
       }
     }
 
@@ -458,7 +472,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null } = {}) {
       if (edge) edge.material.dispose();
       puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());
       marks.each((e) => e.mesh.material.dispose()); shadows.each((e) => e.mesh.material.dispose()); confetti.dispose();
-      copies.each((e) => { e.obj.traverse((m) => { if (m.isMesh && m.material) m.material.dispose(); }); });
+      ghostLook.material.dispose();
       for (const m of spare) m.dispose();
     },
   };

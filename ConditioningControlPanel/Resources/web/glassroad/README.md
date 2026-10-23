@@ -46,7 +46,7 @@ works only while racing (`status.reason` says why not) and returns `dev.status`.
 | Call | What the player does |
 |---|---|
 | `__glassroad.dev.drift()` | put on the outside lane at the next bend ahead, drifting into it at tier 2, tier 3 a few ticks later; hop held about 1 s, then let go: a tier 3 drift boost. `{ holdS }` sets the hold; `{ release: false }` ends the script with the slide still charged |
-| `__glassroad.dev.drop()` | put 36 m before the drop shortcut on its open side and steered over the kicker lip: kicker, flight, the catch on the lower road. `{ leadM, speedPct }` |
+| `__glassroad.dev.drop()` | the dare (a gap off the outside of the coil's first turn, side L): put 3 m before the opening at 25 m/s, nose 35 deg out, steered at the landing pad: kicker, flight, the catch on the coil's last turn (route-land, then route-skip). `{ leadM, speedPct, yawDeg }` |
 | `__glassroad.dev.stop()` | hands back at once |
 | `__glassroad.dev.status` | `{ kind, phase (placed, drifting, approach, flight, boost, held, caught, missed, cancel ..., timeout, refused), ok, reason, s, tier, land: { clean, skipM }, events }` |
 

@@ -350,3 +350,30 @@ export function tierSlots(slots, tier, M = MEDIA_DEFAULTS) {
   const T = typeof tier === 'string' ? tierOf(tier, M) : tier;
   return slots.filter((s) => !(T.phoneOnly && s.frame === 'billboard' && !s.phone));
 }
+
+/**
+ * One halo slot's pose for the orbit, written into sl.C, sl.X, sl.Y, sl.Z in place (no allocation: the halo turns
+ * every frame). Same numbers as haloSlots(spec, frame, count, orbit)[i]; sl must come from haloSlots.
+ */
+export function haloPoseInto(spec, frame, count, orbit, i, sl) {
+  const f = frame, up = spec.upM ?? 30, R = spec.radiusM ?? 26, tilt = (spec.tiltDeg ?? 35) * Math.PI / 180;
+  const th = orbit + (i / count) * Math.PI * 2, ct = Math.cos(th), st = Math.sin(th), cl = Math.cos(tilt), sn = Math.sin(tilt);
+  const C = sl.C, Z = sl.Z, Y = sl.Y, X = sl.X;
+  for (let k = 0; k < 3; k++) {
+    const radial = f.t[k] * ct + f.b[k] * st;
+    C[k] = f.p[k] + f.n[k] * up + radial * R;
+    Z[k] = -radial * cl - f.n[k] * sn;
+  }
+  let l = Math.hypot(Z[0], Z[1], Z[2]) || 1;
+  Z[0] /= l; Z[1] /= l; Z[2] /= l;
+  // axesFrom(Z, f.n): Y = n minus its Z part, X = Y x Z, then Y = Z x X
+  const d = f.n[0] * Z[0] + f.n[1] * Z[1] + f.n[2] * Z[2];
+  let y0 = f.n[0] - Z[0] * d, y1 = f.n[1] - Z[1] * d, y2 = f.n[2] - Z[2] * d;
+  if (Math.hypot(y0, y1, y2) < 1e-6) { if (Math.abs(Z[1]) < 0.9) { y0 = 0; y1 = 1; y2 = 0; } else { y0 = 0; y1 = 0; y2 = 1; } }
+  l = Math.hypot(y0, y1, y2) || 1; y0 /= l; y1 /= l; y2 /= l;
+  let x0 = y1 * Z[2] - y2 * Z[1], x1 = y2 * Z[0] - y0 * Z[2], x2 = y0 * Z[1] - y1 * Z[0];
+  l = Math.hypot(x0, x1, x2) || 1; X[0] = x0 / l; X[1] = x1 / l; X[2] = x2 / l;
+  y0 = Z[1] * X[2] - Z[2] * X[1]; y1 = Z[2] * X[0] - Z[0] * X[2]; y2 = Z[0] * X[1] - Z[1] * X[0];
+  l = Math.hypot(y0, y1, y2) || 1; Y[0] = y0 / l; Y[1] = y1 / l; Y[2] = y2 / l;
+  return sl;
+}

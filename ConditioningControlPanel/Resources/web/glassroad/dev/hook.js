@@ -8,9 +8,10 @@
  *                                   holds hop and counter-steers, then lets go after holdS (default 1 s), at the
  *                                   bend end or near the inside rail: a tier 3 drift boost. release: false ends
  *                                   the script there with the slide still charged (the next hands decide).
- *   dev.drop({ leadM, speedPct })   the player is put leadM before the drop shortcut's opening, on its open side,
- *                                   and steered over the kicker lip: kicker, flight, the glass catch on the lower
- *                                   road (route-land). Hands go back on the catch, a miss or a timeout.
+ *   dev.drop({ leadM, speedPct, yawDeg })  the player is put leadM before the shortcut's opening (polish 6: the
+ *                                   dare, side L of the coil's first turn), on its open side, nose yawDeg out and
+ *                                   steered at the landing pad: kicker, flight, the glass catch on the lower road
+ *                                   (route-land). Hands go back on the catch, a miss or a timeout.
  *   dev.stop()                      hands back at once.
  *   dev.status                      { kind, phase, ok, reason, s, tier, land: { clean, skipM } | null, events: [] }
  * A placement keeps the lap, sets the last checkpoint before the new spot (no lap credit for the jump) and
@@ -70,16 +71,18 @@ export function lastLineBefore(track, s) {
 }
 
 /**
- * Put a kart state on the road at s, lat metres right of the centreline, nose along the road, moving at
- * speedMps. Keeps the lap; clears drift, boost, air and respawn. @returns {Float32Array} st
+ * Put a kart state on the road at s, lat metres right of the centreline, nose along the road (or yawDeg off it,
+ * + = right), moving that way at speedMps. Keeps the lap; clears drift, boost, air and respawn. @returns {Float32Array} st
  */
-export function placeKart(st, track, feel, s, lat, speedMps) {
+export function placeKart(st, track, feel, s, lat, speedMps, yawDeg = 0) {
   const L = track.lengthM, sw = wrap(s, L), f = track.frameAt(sw, frame());
   const lap = st[S.lap];
+  const c = Math.cos(yawDeg * Math.PI / 180), sn = Math.sin(yawDeg * Math.PI / 180);
+  const t = [0, 1, 2].map((k) => f.t[k] * c + f.b[k] * sn), b = [0, 1, 2].map((k) => f.b[k] * c - f.t[k] * sn);
   st.fill(0);
   setPos(st, [f.p[0] + f.b[0] * lat, f.p[1] + f.b[1] * lat, f.p[2] + f.b[2] * lat]);
-  setQuat(st, qfromBasis([0, 0, 0, 1], f.b, f.n, [-f.t[0], -f.t[1], -f.t[2]]));
-  setVel(st, [f.t[0] * speedMps, f.t[1] * speedMps, f.t[2] * speedMps]);
+  setQuat(st, qfromBasis([0, 0, 0, 1], b, f.n, [-t[0], -t[1], -t[2]]));
+  setVel(st, [t[0] * speedMps, t[1] * speedMps, t[2] * speedMps]);
   st[S.engineV] = speedMps;
   st[S.speedPct] = speedMps / feel.get('speed.topMps');
   st[S.seg] = f.seg; st[S.latchSeg] = f.seg; st[S.s] = sw; st[S.lateral] = lat;
@@ -131,9 +134,9 @@ export function createDevHook({ track, feel, bus, player, race, emit, onPlace = 
     Object.assign(status, { kind, phase: no ? 'refused' : 'placed', ok: !no, reason: no || '', tier: 0, land: null, events: [] });
     return !no;
   }
-  function put(s, lat, speed) {
+  function put(s, lat, speed, yawDeg = 0) {
     const P = player();
-    placeKart(P.st, track, feel, s, lat, speed);
+    placeKart(P.st, track, feel, s, lat, speed, yawDeg);
     copyState(P.prev, P.st); copyState(P.view, P.st);
     if (P.progress && P.progress.reset) {
       // progress keeps its own last s: a reset puts it here, then the checkpoint and lap come back
@@ -164,15 +167,16 @@ export function createDevHook({ track, feel, bus, player, race, emit, onPlace = 
       Object.assign(status, { phase: 'drifting', s: Math.round(bend.s), bend: { s: Math.round(bend.s), endS: Math.round(bend.endS), dir: bend.dir, deg: bend.deg } });
       return status;
     },
-    /** The drop shortcut: kicker, flight, catch. */
-    drop({ leadM = 36, speedPct = 0.85 } = {}) {
+    /** The shortcut (polish 6: the dare, a gap off the outside of the coil's first turn): a cut, kicker, flight, catch. */
+    drop({ leadM = 3, speedPct = 0.83, yawDeg = 35 } = {}) {
       if (!begin('drop')) return status;
       const r = track.routes && track.routes[0];
       if (!r) { end('no route', false); return status; }
       const side = r.side === 'L' ? -1 : 1, top = feel.get('speed.topMps');
       const half = track.frameAt(r.openS0, frame()).w / 2;
-      put(r.openS0 - leadM, side * half * 0.35, top * speedPct);
-      job = { kind: 'drop', t: 0, r, side, half, aimS: (r.openS0 + r.openS1) / 2, flew: false };
+      // a few metres before the opening, already cutting out toward it (the line a brave player takes)
+      put(r.openS0 - leadM, side * half * 0.25, top * speedPct, side * yawDeg);
+      job = { kind: 'drop', t: 0, r, side, half, aimS: r.pad.s, aimX: r.pad.x || 0, flew: false };
       Object.assign(status, { phase: 'approach', s: Math.round(r.openS0 - leadM), route: r.id });
       return status;
     },
@@ -199,11 +203,11 @@ export function createDevHook({ track, feel, bus, player, race, emit, onPlace = 
       else if (job.t > 6) end('timeout', false);
       return true;
     }
-    // drop: aim past the open edge in the middle of the opening; in the air the glass catch steers
+    // drop: on the ground aim at the landing pad across the gap; in the air the glass catch steers
     const airborne = st[S.airborne] > 0;
     if (airborne) { job.flew = true; status.phase = 'flight'; }
     a.throttle = 1; a.hop = false;
-    a.steer = airborne ? 0 : job.flew ? steerTo(st, track, st[S.s] + 14, 0) : steerTo(st, track, job.aimS, job.side * (job.half + 2), 1.6);
+    a.steer = airborne ? 0 : job.flew ? steerTo(st, track, st[S.s] + 14, 0) : steerTo(st, track, job.aimS, job.aimX, 1.6);
     if (job.t > 8) end('timeout', false);
     return true;
   }

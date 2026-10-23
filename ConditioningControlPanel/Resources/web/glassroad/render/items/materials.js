@@ -165,9 +165,11 @@ export function meltPuddle(mask, melt = null) {
   return { material: m, uniforms: u };
 }
 
-/** Echo copy: an additive rim-lit ghost. */
+/** Echo copy: an additive rim-lit ghost. ONE material serves every copy (a material per copy linked fresh
+ *  programs when the pool grew mid-race, 200-250 ms on webgl2): opacity is read per drawn object from
+ *  mesh.userData.echoA, which the caller writes on every mesh of a copy. */
 export function ghost(hex) {
-  const u = { opacity: uniform(0) };
+  const u = { opacity: uniform(0).onObjectUpdate(({ object }) => (object && object.userData.echoA) || 0) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   const fres = pow(float(1).sub(abs(normalView.dot(positionViewDirection))), 1.5);
   m.colorNode = col3(hex).mul(fres.mul(0.8).add(0.2)).mul(u.opacity);

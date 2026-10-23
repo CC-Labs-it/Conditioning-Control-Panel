@@ -21,7 +21,8 @@ const unit = (v) => near(Math.hypot(...v), 1, 1e-6);
 test('media: the layout follows the polish 3 corridors', () => {
   assert.equal(layout.track, 'threshold');
   const fs = layout.billboards.map((b) => b.f);
-  assert.deepEqual(fs, [0.06, 0.2, 0.25, 0.38, 0.42, 0.52, 0.64, 0.76, 0.8, 0.92]);
+  // polish 6: refit to the stacked course (render/colossiMath.js corridorBoards)
+  assert.deepEqual(fs, [0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]);
   layout.billboards.forEach((b, i) => {
     if (i) assert.notEqual(b.side, layout.billboards[i - 1].side, b.id + ' alternates sides');
     assert.ok(b.heightM >= 8 && b.heightM <= 14, b.id + ' height');
@@ -31,7 +32,7 @@ test('media: the layout follows the polish 3 corridors', () => {
   assert.ok(layout.billboards.some((b) => b.kind === 'portrait') && layout.billboards.some((b) => b.kind === 'landscape'));
   assert.equal(layout.halo.f, 0);
   assert.ok(layout.halo.count >= 8 && layout.halo.count <= 12);
-  assert.ok(layout.tunnel.from >= 0.55 && layout.tunnel.to <= 0.61 && layout.tunnel.to > layout.tunnel.from);
+  assert.ok(layout.tunnel.from >= 0.88 && layout.tunnel.to <= 0.93 && layout.tunnel.to > layout.tunnel.from);
 });
 
 test('media: every billboard places, faces the oncoming kart and clears every road stretch with its stalk', () => {
@@ -74,7 +75,7 @@ test('media: the tunnel lines its corridor with screens facing in, and its glass
   const L = tr.lengthM;
   assert.ok(T.rings.length >= 6 && T.slots.length === T.rings.length * 3);
   for (const sl of T.slots) {
-    assert.ok(sl.s > 0.55 * L && sl.s < 0.61 * L);
+    assert.ok(sl.s > layout.tunnel.from * L && sl.s < layout.tunnel.to * L);
     const f = tr.frameAt(sl.s), axis = V3.add(f.p, V3.mul(f.n, T.heightM * 0.4));
     assert.ok(V3.dot(sl.Z, V3.sub(axis, sl.C)) > 0, sl.id + ' faces in');
     assert.ok(V3.dot(sl.Z, f.t) < 0, sl.id + ' turned toward oncoming karts');

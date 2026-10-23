@@ -7,6 +7,12 @@
  * road normal from the track query, so banked and magnet surfaces need nothing special on the ground:
  * the kart is slerped to that normal, and on a magnet surface airborne gravity is minus it.
  * Rails bounce (normal x wall.normalKeep out, tangent kept); open sides drop after the edge grace.
+ * Polish 6 (stacked courses): a kart in the air off its own road lands on whatever road is beneath it
+ * (track.query.below, sim/falls.js); only nothing beneath lets the edge drop and rescue run.
+ * Polish 6, THE LOOP: on the ground there is no gravity along the road, so a magnet stretch holds a kart at any
+ * speed; in the air there gravity is minus the road normal. The road also carries the kart round: the nose eases
+ * toward its own line a little way up the road (loop.guideTcS, loop.guideAheadS) and the engine keeps a forward floor (loop.carryPct of top, reached at
+ * loop.carryMps2), so nobody stalls upside down at the top.
  * No three.js; every tuning number comes from feel each tick (sim/gaps.js for the few it lacks).
  */
 import { S, BOOST, RESPAWN, getPos, getVel, getQuat, setPos, setVel, setQuat } from './state.js';
@@ -18,14 +24,15 @@ import { updateDrift, cancelDrift, driftYaw, maybeStartDrift } from './drift.js'
 import { hop, gravityMps2 } from './hop.js';
 import { takeoff, land } from './air.js';
 import { baseYaw, gripYaw } from './steer.js';
-import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch } from './routes.js';
+import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway } from './routes.js';
+import { fallBeneath, fallLand, resetFall } from './falls.js';
 
 export { applyBoost };
 
 const P = v3(), V = v3(), Q = q4(), F = v3(), U = v3(), N = v3(), FP = v3(), RP = v3(), QY = q4();
 // out objects pre-shaped: the track fills arrays in place (CONTRACT.md Frame, Query)
 const qOut = () => ({ normal: [0, 0, 0], p: [0, 0, 0] }), fOut = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });
-const QA = qOut(), QB = qOut(), QR = qOut(), FR = fOut();
+const QA = qOut(), QB = qOut(), QR = qOut(), QD = qOut(), FR = fOut(), FL = fOut();
 const FWD = [0, 0, -1], UP = [0, 1, 0];
 const has = (flags, f) => !!flags && flags.indexOf(f) >= 0;
 
@@ -37,7 +44,7 @@ export function spawn(st, track, feel, slot = 0) {
   st[S.seg] = pose.seg; st[S.latchSeg] = pose.seg; st[S.s] = pose.s; st[S.lateral] = pose.lateral;
   st[S.grounded] = 1; st[S.hopT] = 1e3;          // the last hop was long ago
   st[S.sectionIdx] = track.sectionAt(pose.s);
-  resetRoute(st);
+  resetRoute(st); resetFall(st);
   return st;
 }
 
@@ -68,6 +75,18 @@ export function step(st, a, track, feel, dt, ev) {
   if (stalled) yaw = 0;
   st[S.yawRate] = yaw;
   qrotate(F, qaxis(QY, U, -yaw * dt), F);         // + yaw turns right: clockwise seen from above
+  const loop = wasGround && has(qa.flags, 'magnet');
+  if (loop) {
+    // aim at the kart's own line a little way up the road: the wheel's sideways shift never walks it into a rail
+    const la = Math.max(4, Math.abs(fwd0) * gap(feel, 'loop.guideAheadS')), f = track.frameAt(qa.s + la, FL);
+    const ax = f.p[0] + f.b[0] * qa.lateral - P[0], ay = f.p[1] + f.b[1] * qa.lateral - P[1], az = f.p[2] + f.b[2] * qa.lateral - P[2];
+    const al = Math.hypot(ax, ay, az) || 1;
+    if ((F[0] * ax + F[1] * ay + F[2] * az) / al > 0.3) {
+      const k = 1 - Math.exp(-dt / gap(feel, 'loop.guideTcS'));
+      F[0] += (ax / al - F[0]) * k; F[1] += (ay / al - F[1]) * k; F[2] += (az / al - F[2]) * k;
+      v3norm(F, v3reject(F, F, U));
+    }
+  }
 
   // a drop shortcut's soft catch caps thrust for a moment; a clean landing pays its boost as it ends
   const cc = catchCap(st, feel, dt);
@@ -75,7 +94,7 @@ export function step(st, a, track, feel, dt, ev) {
     applyBoost(st, BOOST.PAD, 0, feel, ev, { amount: gap(feel, 'route.cleanAmount'), holdS: gap(feel, 'route.cleanHoldS') });
     ev.emit('route-boost', {});
   }
-  engine(st, a, feel, dt, top, wasGround && qa.surface === 'haze', ev, typeof cc === 'number' ? cc : 1);
+  engine(st, a, feel, dt, top, wasGround && qa.surface === 'haze', ev, typeof cc === 'number' ? cc : 1, loop);
 
   // on the ground: forward speed chases engineV, lateral bleeds into the heading, slip costs engineV
   let slipDeg = 0;
@@ -111,15 +130,21 @@ export function step(st, a, track, feel, dt, ev) {
   let qb = track.query(P[0], P[1], P[2], qa.seg, QB);
   const snap = gap(feel, 'kart.snapM');
   // off its own road in the air: a drop shortcut's landing road beneath it (sim/routes.js)
-  let under = null;
+  let under = null, fall = false;
+  const own = qb.onRoad && qb.height > -snap - 0.5;
   if (air && track.routes && track.routes.length) {
     let lq = qb;
-    if (!(qb.onRoad && qb.height > -snap - 0.5)) {
+    if (!own) {
       under = beneath(track, st, P, QR); lq = QR;
       if (under && QR.height <= 0) qb = QR;
     } else under = onLanding(track, st, qb);      // the plain probe (its far search) already found it
     if (under && firstBeneath(st, under)) { ev.emit('route-drop', { id: under.id }); if (wasEdge) ev.emit('edge-exit', { to: 'route' }); }
     if (under) airCatch(track, lq, V, feel, dt);  // the glass catch: the flight eases toward the landing road's middle
+  }
+  // polish 6: any other road beneath a flying kart off its own road holds off the edge drop and catches it
+  if (air && !under && !own && fallBeneath(track, st, P, QD, ev, wasEdge)) {
+    fall = true;
+    if (QD.height <= 0) qb = QD;
   }
   const road = !has(qb.flags, 'jump'), n = qb.normal, vn = v3dot(V, n);
   const ground = qb.onRoad && qb.height >= -(snap + Math.abs(vn) * dt) &&
@@ -128,6 +153,8 @@ export function step(st, a, track, feel, dt, ev) {
     v3addScaled(P, P, n, -qb.height); v3reject(V, V, n);
     if (air) land(st, a, feel, ev, V, n, speed, dt);
     if (air && under && onLanding(track, st, qb) === under) landRoute(track, st, under, qb, F, feel, ev, prevS);
+    else if (air && fall && qb === QD) fallLand(track, st, qb, ev);
+    else if (air) resetFall(st);
   } else if (!air) {
     // a drop shortcut's kicker lip (sim/routes.js edgeAt): driving off the opening throws the kart up a little,
     // a 'lip' take-off, so a hop right after it pays the trick
@@ -140,7 +167,9 @@ export function step(st, a, track, feel, dt, ev) {
   const radius = gap(feel, 'kart.radiusM');
   let lat = qb.lateral, ed = qb.edgeDist;
   // a drop shortcut's open side is a rail but for its kicker opening, which lets every kart through (Gentle too)
-  const edgeKind = ed < radius ? edgeAt(track, qb, lat, radius) : null, kerb = edgeKind === 'rail';
+  const edgeKind = ed < radius ? edgeAt(track, qb, lat, radius) : null;
+  // polish 6: on the ground the opening holds a kart turning away from it (sim/routes.js turnsAway)
+  const kerb = edgeKind === 'rail' || (edgeKind === 'kicker' && !air && turnsAway(st, lat, feel));
   // a kart above the rail top, or already beyond the rail line in the air, flies past it (polish 4)
   const overRail = air && (qb.height > gap(feel, 'wall.topM') || ed < 0);
   const soft = feel.get('gentle.on') && edgeKind !== 'kicker';
@@ -161,7 +190,7 @@ export function step(st, a, track, feel, dt, ev) {
   }
 
   // edge grace and drop
-  const past = !st[S.grounded] && road && ed < 0 && !under;   // road beneath (a drop shortcut) is no edge
+  const past = !st[S.grounded] && road && ed < 0 && !under && !fall;   // road beneath (a drop shortcut, a lower deck) is no edge
   if (past && !wasEdge) ev.emit('edge-enter', { side: lat >= 0 ? 1 : -1 });
   const lim = track.limits || {};
   if (!past) st[S.edgeT] = 0;
@@ -170,10 +199,10 @@ export function step(st, a, track, feel, dt, ev) {
   const drop = !grace && (fell || st[S.edgeT] >= feel.get('drop.edgeGraceS'));
   if (drop) {
     if (wasEdge || past) ev.emit('edge-exit', { to: 'drop' });
-    cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st);
+    cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st); resetFall(st);
     st[S.respawnPhase] = RESPAWN.PULL; st[S.respawnT] = 0; st[S.edgeT] = 0;
     ev.emit('drop', { seg: qb.seg, cause: fell ? 'fallY' : 'edge' });
-  } else if (wasEdge && !past && !under) ev.emit('edge-exit', { to: 'road' });
+  } else if (wasEdge && !past && !under && !fall) ev.emit('edge-exit', { to: 'road' });
 
   // boost pads: once per entry, on the ground
   if (st[S.grounded] && !drop && track.boosts) {
@@ -196,7 +225,7 @@ export function step(st, a, track, feel, dt, ev) {
 
 /* Engine value: five-band ramp under throttle (crawl floor speed.minMps), brake then reverse, coast.
  * Haze cuts thrust and the cap unless a boost runs; a running boost holds its floor (sim/boost.js). */
-function engine(st, a, feel, dt, top, haze, ev, capMul = 1) {
+function engine(st, a, feel, dt, top, haze, ev, capMul = 1, loop = false) {
   const boosting = st[S.boostKind] !== BOOST.NONE;
   const mul = (haze && !boosting ? 1 - feel.get('offroad.hazeThrustLoss') : 1) * (st[S.stalled] > 0 ? feel.get('stall.thrustMul') : 1);
   const cap = top * mul * capMul, brakeR = feel.get('engine.brakeMps2'), coast = feel.get('engine.coastMps2') * dt;
@@ -216,5 +245,9 @@ function engine(st, a, feel, dt, top, haze, ev, capMul = 1) {
   const floor = boostFloor(st, feel, top, dt, ev);
   if (boosting) e = e > cap ? Math.max(cap, floor) : Math.max(e, floor);
   else if (e > cap) e = Math.max(cap, e - coast);
+  if (loop && e >= 0) {                             // the loop carries the kart through (never stalls inside it)
+    const carry = gap(feel, 'loop.carryPct') * top;
+    if (e < carry) e = Math.min(carry, e + gap(feel, 'loop.carryMps2') * dt + (a.brake > 0 ? brakeR * a.brake * dt : 0));
+  }
   st[S.engineV] = e;
 }

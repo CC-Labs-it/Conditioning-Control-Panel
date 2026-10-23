@@ -4,15 +4,15 @@
   "billboards": [
     { "id": "bb-06", "f": 0.06, "side": 1, "kind": "portrait", "heightM": 13, "offM": 9, "liftM": 2.5, "angleDeg": 30, "program": 0, "phone": true },
     { "id": "bb-20", "f": 0.2, "side": -1, "kind": "landscape", "heightM": 8.5, "offM": 10, "liftM": 3, "angleDeg": 28, "program": 1, "phone": false },
-    { "id": "bb-25", "f": 0.25, "side": 1, "kind": "landscape", "heightM": 9, "offM": 9, "liftM": 3, "angleDeg": 30, "program": 2, "phone": true },
-    { "id": "bb-38", "f": 0.38, "side": -1, "kind": "portrait", "heightM": 14, "offM": 11, "liftM": 2, "angleDeg": 32, "program": 3, "phone": false },
-    { "id": "bb-42", "f": 0.42, "side": 1, "kind": "portrait", "heightM": 12, "offM": 10, "liftM": 2.5, "angleDeg": 30, "program": 5, "phone": true },
-    { "id": "bb-52", "f": 0.52, "side": -1, "kind": "landscape", "heightM": 9, "offM": 9, "liftM": 3, "angleDeg": 28, "program": 4, "phone": true },
-    { "id": "bb-64", "f": 0.64, "side": 1, "kind": "landscape", "heightM": 8, "offM": 12, "liftM": 3, "angleDeg": 30, "program": 0, "phone": false },
+    { "id": "bb-24", "f": 0.24, "side": 1, "kind": "landscape", "heightM": 9, "offM": 9, "liftM": 3, "angleDeg": 30, "program": 2, "phone": true },
+    { "id": "bb-35", "f": 0.35, "side": -1, "kind": "portrait", "heightM": 14, "offM": 11, "liftM": 2, "angleDeg": 32, "program": 3, "phone": false },
+    { "id": "bb-37", "f": 0.37, "side": 1, "kind": "portrait", "heightM": 12, "offM": 10, "liftM": 2.5, "angleDeg": 30, "program": 5, "phone": true },
+    { "id": "bb-57", "f": 0.575, "side": -1, "kind": "landscape", "heightM": 9, "offM": 9, "liftM": 3, "angleDeg": 28, "program": 4, "phone": true },
+    { "id": "bb-68", "f": 0.68, "side": 1, "kind": "landscape", "heightM": 8, "offM": 12, "liftM": 3, "angleDeg": 30, "program": 0, "phone": false },
     { "id": "bb-76", "f": 0.76, "side": -1, "kind": "portrait", "heightM": 13, "offM": 9, "liftM": 2.5, "angleDeg": 32, "program": 1, "phone": true },
-    { "id": "bb-80", "f": 0.8, "side": 1, "kind": "landscape", "heightM": 9.5, "offM": 11, "liftM": 3, "angleDeg": 30, "program": 3, "phone": false },
-    { "id": "bb-92", "f": 0.92, "side": -1, "kind": "portrait", "heightM": 12, "offM": 10, "liftM": 2.5, "angleDeg": 30, "program": 2, "phone": true }
+    { "id": "bb-81", "f": 0.808, "side": 1, "kind": "landscape", "heightM": 9.5, "offM": 11, "liftM": 3, "angleDeg": 30, "program": 3, "phone": false },
+    { "id": "bb-99", "f": 0.99, "side": -1, "kind": "portrait", "heightM": 12, "offM": 10, "liftM": 2.5, "angleDeg": 30, "program": 2, "phone": true }
   ],
-  "halo": { "f": 0, "count": 12, "kind": "landscape", "heightM": 6.5, "radiusM": 24, "upM": 22, "tiltDeg": 40, "orbitRadps": 0.05 },
-  "tunnel": { "from": 0.55, "to": 0.6, "stepM": 9, "padM": 3.5, "heightM": 11, "wallDeg": 30, "facingDeg": 28, "wallKind": "landscape", "wallHeightM": 3.6, "ceilKind": "landscape", "ceilHeightM": 4.4 }
+  "halo": { "f": 0, "count": 10, "kind": "landscape", "heightM": 6, "radiusM": 20, "upM": 20, "tiltDeg": 40, "orbitRadps": 0.05 },
+  "tunnel": { "from": 0.89, "to": 0.93, "stepM": 9, "padM": 3.5, "heightM": 11, "wallDeg": 30, "facingDeg": 28, "wallKind": "landscape", "wallHeightM": 3.6, "ceilKind": "landscape", "ceilHeightM": 4.4 }
 }

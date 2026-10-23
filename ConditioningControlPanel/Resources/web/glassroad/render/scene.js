@@ -48,6 +48,7 @@ import { createMusicRoad } from './musicRoad.js';
 import { createWordBubbles } from './wordBubbles.js';
 import { createWordPopFx } from './wordPopFx.js';
 import { createRoadWords } from './roadWords.js';
+import { createNearDressing } from './nearDressing.js';
 import { createWordRush } from './wordRush.js';
 
 const FWD = new Vector3();
@@ -161,6 +162,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (colossi) add(colossi.object);
   const scatter = buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
   add(scatter ? scatter.object : props(track));
+  add(createNearDressing(track, { phone: Q.name === 'phone' }).object);   // VIEW: near cues, in the scene before the boot warm
   const countdown = buildCountdown(art, track, pal), finish = buildFinish(art, track, pal);
   if (countdown) {
     add(countdown.object);

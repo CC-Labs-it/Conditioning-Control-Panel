@@ -2,7 +2,7 @@
  * CENTRE of the track, a slight tendency to AUTOPILOT, in case they trance"). Pure: no DOM, no three.js.
  *
  * It reshapes the PLAYER's actions only, between the input sample and the sim (boot.js), never a bot's and never
- * the sim law. Three layers, all off in mode 'off':
+ * the sim law. Four layers, all off in mode 'off':
  *   PULL    a gentle steer back toward the centre that grows with |lateral| past assist.pullFromHalf of the half
  *           width, plus a little heading alignment with the road a short way ahead.
  *   AUTO    no steer input for assist.autoSteerAfterS: steering that follows the drive line (pure pursuit on the
@@ -10,6 +10,9 @@
  *   CRUISE  no input at all for assist.cruiseAfterS: a soft cruise throttle (assist.cruisePct of top speed, lifted
  *           and gently braked for a bend ahead the same way the bots plan one), so a tranced player keeps rolling
  *           with the song. It never boosts, never hops or drifts, never fires an item.
+ *   EASE    (polish 6) the throttle held into a bend the kart cannot take at its speed: the throttle lifts and the
+ *           brake gets a light dab (Strong a firmer one) so the kart holds its line. Never under a boost, on a
+ *           jump lip, in a drift, or while the player brakes or steers for a shortcut's opening.
  * No fight: a steer the player makes always wins. While the stick is held, an assist that agrees adds a little
  * (fading as the stick goes to full lock), one that disagrees is dropped, so the kart never turns less, or the
  * other way, than the player asks. ANY steer input drops AUTO at once and ANY input drops CRUISE at once (no ease
@@ -18,9 +21,10 @@
  *   createAssist(track, feel, { mode }) -> { apply(a, st, dt, phase) -> actions, setMode(m), reset(), view, mode }
  * apply() copies `a` into its own actions object (no allocation) and returns that; `a` itself is never written.
  */
-import { S, RESPAWN } from './state.js';
+import { S, RESPAWN, BOOST } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { bendSpeed, yawParams, calmOf } from './steer.js';
+import { gap } from './gaps.js';
 
 /** The option values in the order the Options card cycles them (the first is the default). */
 export const ASSIST_MODES = Object.freeze(['light', 'strong', 'off']);
@@ -34,6 +38,11 @@ export const assistMode = (m) => (Object.prototype.hasOwnProperty.call(MODE, m) 
 
 const STEP = 2;                                   // m between bend table samples
 const ROUTE_NOSE = 0.035;                         // rad: a nose turned this far out toward an opening counts as steering for it
+// polish 6: the autopilot steers round a boost pad that would carry it into a bend it cannot take
+const PAD_RISK_M = 140, PAD_RISK_PCT = 0.85, PAD_CLEAR_M = 1.2, PAD_RAIL_M = 2, PAD_LOOK_M = 50;
+// polish 6 EASE: the bend limit (sim/steer.js bendSpeed at this grip share), how far ahead (s of speed), the lift band
+// (m/s over the limit from full throttle to none), and the brake dab cap (light; Strong x its cap multiplier)
+const EASE_SHARE = 1, EASE_LOOK_S = 1.6, EASE_LIFT_MPS = 3, EASE_BRAKE = 0.15;
 const YP = {};
 
 export function createAssist(track, feel, { mode = 'light' } = {}) {
@@ -47,9 +56,10 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     for (let k = 0; k < N; k++) {
       const s = k * STEP;
       track.frameAt(s - W / 2, A); track.frameAt(s + W / 2, B);
-      const d = clamp(A.t[0] * B.t[0] + A.t[1] * B.t[1] + A.t[2] * B.t[2], -1, 1);
+      // the turn in the road's own plane (polish 6): a loop or a crest pitches the road but is no bend to steer or brake for
+      const d = A.t[0] * B.t[0] + A.t[1] * B.t[1] + A.t[2] * B.t[2];
       const side = B.t[0] * A.b[0] + B.t[1] * A.b[1] + B.t[2] * A.b[2];
-      bend[k] = (Math.acos(d) * 180 / Math.PI / W) * (side >= 0 ? 1 : -1);
+      bend[k] = Math.atan2(side, Math.abs(d)) * 180 / Math.PI / W;
       const f = track.frameAt(s, A);
       half[k] = f.w / 2;
     }
@@ -57,6 +67,12 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     for (const j of track.jumps || []) for (let d = -40; d <= (j.landS > j.s ? j.landS - j.s : 20) + 6; d += STEP) lip[Math.floor(wrap(j.s + d, L) / STEP) % N] = 1;
   }
   const at = (s) => Math.floor(wrap(s, L) / STEP) % N;
+  const pads = (track.boosts || []).map((pd) => {
+    yawParams(feel, YP);
+    let risky = false;
+    for (let d = 0; d <= PAD_RISK_M && !risky; d += STEP) risky = bendSpeed(bend[at(pd.s + d)], YP, feel.get('assist.cruiseCornerShare')) < PAD_RISK_PCT * feel.get('speed.topMps');
+    return { s: pd.s, x: pd.x, w: pd.w, risky };
+  });
   // drop shortcuts (track.routes): from assist.routeApproachM before an opening to its far end, a player who
   // steers toward that opening gets no centre pull (EDGES lane: the pull used to drag the player off the shortcut)
   const zones = (track.routes || []).map((r) => ({ from: r.openS0, len: r.openS1 - r.openS0, side: r.side === 'L' ? -1 : 1 }));
@@ -133,13 +149,33 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
 
     // steering help only on the ground, rolling forward, out of a drift
     if (backwards || st[S.grounded] <= 0 || st[S.driftDir] !== 0 || speed < 2) return out;
-    // the player steering for a drop shortcut's opening (stick toward it, or the nose already turned out that way)
+    // the player steering for a drop shortcut's opening (stick toward it, or the nose already turned out that way
+    // with the stick not held the other way: polish 6, an opening on the OUTSIDE of a turn sees every kart's nose
+    // point out while it turns in, and the lip holds a kart turning away, sim/routes.js turnsAway)
     const z = steerIn && zones.length ? zoneAt(s, g('routeApproachM')) : null;
-    if (z && (Math.sign(a.steer) === z.side || Math.atan2(ax.fx * f0.b[0] + ax.fy * f0.b[1] + ax.fz * f0.b[2], ft) * z.side > ROUTE_NOSE)) {
+    if (z && (Math.sign(a.steer) === z.side || (a.steer * z.side > -gap(feel, 'route.holdSteer') &&
+      Math.atan2(ax.fx * f0.b[0] + ax.fy * f0.b[1] + ax.fz * f0.b[2], ft) * z.side > ROUTE_NOSE))) {
       out.steer = a.steer;
       return out;
     }
     view.active = true;
+    // EASE (polish 6, the coil and the column bring r 20-45 turns): throttle held into a bend the kart cannot take
+    // at this speed, the assist lifts it and dabs the brake, so the kart holds its line instead of running wide
+    // onto the rail (or an open edge). Not on a lip, not under a boost, never when the player brakes.
+    if (a.throttle > dead && a.brake <= dead && !lip[at(s)] && st[S.boostKind] === BOOST.NONE) {
+      yawParams(feel, YP);
+      const dabMax = EASE_BRAKE * m.cap, decel = feel.get('engine.coastMps2') + feel.get('engine.brakeMps2') * dabMax * 0.5;
+      let vmax = Infinity;
+      for (let d = 0, look = Math.max(20, speed * EASE_LOOK_S); d <= look; d += STEP) {
+        const v = bendSpeed(bend[at(s + d)], YP, EASE_SHARE);
+        if (v < Infinity) vmax = Math.min(vmax, Math.sqrt(v * v + 2 * decel * d));
+      }
+      const over = speed - vmax;
+      if (over > 0) {
+        out.throttle = a.throttle * clamp(1 - over / EASE_LIFT_MPS, 0, 1);
+        if (over > EASE_LIFT_MPS) out.brake = clamp((over - EASE_LIFT_MPS) / 6, 0, dabMax);
+      }
+    }
     const h = half[at(s)];
     // PULL: past pullFromHalf of the half width, back toward the centre
     const free = g('pullFromHalf') * h, ex = clamp((Math.abs(lat) - free) / Math.max(0.5, h - free), 0, 1);
@@ -158,7 +194,12 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
       const k = at(s + la), bk = bend[k];
       const cutK = clamp(Math.abs(bk) / feel.get('ai.driftCurveDegPerM'), 0, 1);
       const band = g('lineBandHalf') * Math.min(h, half[k]);
-      const target = lip[k] || lip[at(s)] ? 0 : clamp(Math.sign(bk) * g('lineCutM') * cutK, -band, band);
+      let target = lip[k] || lip[at(s)] ? 0 : clamp(Math.sign(bk) * g('lineCutM') * cutK, -band, band);
+      for (let i = 0; i < pads.length; i++) {
+        const pd = pads[i], edge = pd.w / 2 + PAD_CLEAR_M;
+        if (!pd.risky || wrap(pd.s - s, L) > Math.max(la * 2, PAD_LOOK_M) || Math.abs(target - pd.x) >= edge) continue;
+        target = clamp(pd.x + (target >= pd.x ? edge : -edge), -(Math.min(h, half[k]) - PAD_RAIL_M), Math.min(h, half[k]) - PAD_RAIL_M);
+      }
       const f = track.frameAt(s + la, FA);
       const tx = f.p[0] + f.b[0] * target - st[S.posX], ty = f.p[1] + f.b[1] * target - st[S.posY], tz = f.p[2] + f.b[2] * target - st[S.posZ];
       const x = tx * ax.rx + ty * ax.ry + tz * ax.rz, z = tx * ax.fx + ty * ax.fy + tz * ax.fz;

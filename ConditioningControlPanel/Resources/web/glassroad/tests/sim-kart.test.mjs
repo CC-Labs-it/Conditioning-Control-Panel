@@ -4,6 +4,7 @@ import { S, BOOST } from '../sim/state.js';
 import { step, applyBoost, spawn } from '../sim/kart.js';
 import { createState } from '../sim/state.js';
 import { gripYaw } from '../sim/steer.js';
+import { gap } from '../sim/gaps.js';
 import { qrotate, v3dot, qlook } from '../core/math.js';
 import { DT, makeFeel, fakeTrack, place, recorder, acts, run } from './sim-fake.mjs';
 
@@ -94,7 +95,8 @@ test('walls: tangent kept, normal x0.4 out, engine -12%, drift and boost cancell
   assert.equal(hit.payload.side, 1);
   near(v3dot(vel(st), b), -0.4 * into, 0.3, 'bounced out');
   near(st[S.engineV], preE * 0.88, 0.2, 'engine loss');
-  assert.ok(st[S.lateral] <= tr.frameAt(0).w / 2 - 0.69);
+  // the rail stops the saucer one kart radius short of the edge (sim/gaps.js kart.radiusM; polish 6 shrank it)
+  assert.ok(st[S.lateral] <= tr.frameAt(0).w / 2 - gap(feel, 'kart.radiusM') + 0.01, 'held a kart radius off the edge');
 
   const d = place(tr, { lateral: 5, headingDeg: 25, speed: 30, engine: 30 }), r2 = recorder();
   d[S.driftDir] = 1; applyBoost(d, BOOST.PAD, 0, feel, r2);

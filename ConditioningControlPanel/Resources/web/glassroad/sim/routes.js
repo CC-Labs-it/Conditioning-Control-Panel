@@ -65,6 +65,17 @@ export function edgeAt(track, q, lat, slackM = 0) {
   return null;
 }
 
+/**
+ * Polish 6 (the dare on the OUTSIDE of a tight turn): a grounded kart turning AWAY from an opening (its slewed
+ * stick, or its drift, toward the other side by at least route.holdSteer) is not going for it; the lip then holds
+ * it like the rail either side, so a kart that runs wide through the turn scrapes along instead of falling in.
+ * A kart steering for the opening, or running straight at it, still goes through. lat = its side of the road.
+ */
+export function turnsAway(st, lat, feel) {
+  const turn = st[S.driftDir] ? st[S.driftDir] : st[S.steerSlew];
+  return turn * (lat >= 0 ? 1 : -1) <= -gap(feel, 'route.holdSteer');
+}
+
 const KF = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 
 /**
@@ -137,8 +148,10 @@ export function landRoute(track, st, r, q, F, feel, ev, prevS) {
   const clean = ds <= gap(feel, 'route.cleanLenM') / 2 && Math.abs(q.lateral - r.pad.x) <= gap(feel, 'route.cleanLatM') &&
     along >= Math.cos(gap(feel, 'route.cleanDeg') * Math.PI / 180);
   const top = feel.get('speed.topMps'), keep = gap(feel, 'route.catchPct') * top;
-  if (st[S.engineV] > keep) st[S.engineV] = keep;
-  m.hold = gap(feel, 'route.catchHoldS'); m.clean = clean; m.air = -1; m.route = -1;
+  // polish 6: a 'gap' route (a sideways hop across to a road alongside) keeps its speed: no soft catch, no clean boost
+  const soft = r.kind !== 'gap';
+  if (soft && st[S.engineV] > keep) st[S.engineV] = keep;
+  m.hold = soft ? gap(feel, 'route.catchHoldS') : 0; m.clean = soft && clean; m.air = -1; m.route = -1;
   const fromS = track.nodeS[st[S.latchSeg] | 0];
   st[S.latchSeg] = q.seg;                            // a landing bounce now belongs to the lower road
   ev.emit('route-land', { id: r.id, clean, skipM: Math.round(wrap(q.s - fromS, L)), s: q.s, x: q.lateral });
@@ -160,14 +173,16 @@ export function catchLeftS(st) { const m = MEM.get(st); return m ? m.hold : 0; }
 /**
  * Is a forward jump of s from prevS to s the registered skip of a route? The take-off may be anywhere on
  * the open edge or up to route.takeoffSlackM past it (the kart flies on along the upper road while it
- * falls); the landing must be on the landing stretch.
+ * falls); the landing must be on the landing stretch or up to LAND_RUN_M past it (polish 6: a hard catch bounces
+ * once and the flight runs on over the road before progress, which waits for the ground, judges the skip).
  */
+const LAND_RUN_M = 20;
 export function registeredSkip(track, prevS, s, slackM = 45) {
   const rs = track.routes, L = track.lengthM;
   if (!rs || !rs.length) return null;
   for (const r of rs) {
     const fromOk = wrap(prevS - r.fromS, L) <= wrap(r.toS - r.fromS, L) + slackM;
-    const landOk = wrap(s - r.land.fromS, L) <= wrap(r.land.toS - r.land.fromS, L) + 1;
+    const landOk = wrap(s - r.land.fromS, L) <= wrap(r.land.toS - r.land.fromS, L) + LAND_RUN_M;
     if (fromOk && landOk) return r;
   }
   return null;

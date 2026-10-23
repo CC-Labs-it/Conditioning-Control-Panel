@@ -118,7 +118,7 @@
 @keyframes hud-place-ink { from { color: var(--pink); } }
 
 /* drift pips under the kart, speed bottom right */
-.hud-pips { position: absolute; left: 50%; bottom: 23%; transform: translateX(-50%); display: flex; gap: 6px; }
+.hud-pips { position: absolute; left: 50%; bottom: 11%; transform: translateX(-50%); display: flex; gap: 6px; }
 .hud-pips i { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid rgba(253, 247, 255, 0.5);
   transition: background-color 0.12s, border-color 0.12s; }
 .hud-pips i.on { background: var(--pip, #fff); border-color: var(--pip, #fff); }

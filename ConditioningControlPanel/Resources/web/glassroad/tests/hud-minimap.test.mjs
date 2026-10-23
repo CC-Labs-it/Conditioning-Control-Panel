@@ -41,3 +41,38 @@ test('the real track fits inside the map box and thins to a short loop', () => {
   }
   assert.equal(thinLoop(xz, 10000), xz);
 });
+
+// ---- polish 6: the stacked course ----
+import { bandOf, deckRuns, nearestOnLoop, thinLoopY, DECK_EDGES_M } from '../hud/minimap.js';
+
+test('decks: heights fall in three bands, runs cover a band and meet the next', () => {
+  assert.deepEqual([0, 6.9, 7, 14, 20.9, 21, 28, 60].map((y) => bandOf(y)), [0, 0, 1, 1, 1, 2, 2, 2]);
+  assert.equal(DECK_EDGES_M.length, 2);
+  const y = [0, 0, 0, 14, 14, 28, 28, 14, 0, 0];
+  assert.deepEqual(deckRuns(y, 2), [[4, 7]]);
+  assert.deepEqual(deckRuns(y, 1), [[2, 5], [6, 8]]);
+  // the ground run wraps the lap line
+  assert.deepEqual(deckRuns(y, 0), [[7, 13]]);
+  assert.deepEqual(deckRuns([1, 2, 3], 0), [[0, 3]], 'one band: the whole loop');
+  assert.deepEqual(deckRuns([1, 2, 3], 2), []);
+});
+
+test('decks: the player keeps its own deck where two pass over each other', () => {
+  // a figure of eight in plan: points 2 and 7 sit at the same x, z on different decks
+  const xz = [0, 0, 10, 0, 20, 0, 30, 0, 30, 10, 20, 10, 20, 5, 20, 0.5, 20, -5, 10, -5];
+  assert.equal(nearestOnLoop(xz, 20, 0.2, 2), 2, 'near its last place, the lower pass');
+  assert.equal(nearestOnLoop(xz, 20, 0.2, 7, 1), 7, 'the upper pass when it came from there');
+  assert.equal(nearestOnLoop(xz, 30, 9, -1), 4, 'no hint: the nearest in plan');
+  assert.equal(nearestOnLoop(xz, 0, 0, 5, 1, 3), 0, 'a far jump (a rescue) searches everything');
+  assert.equal(nearestOnLoop([], 0, 0), -1);
+  const t = thinLoopY(new Float32Array(2000), new Float32Array(1000).map((_, i) => i), 100);
+  assert.equal(t.xz.length, 200); assert.equal(t.y.length, 100); assert.equal(t.y[50], 500);
+});
+
+test('decks: threshold stacks on three bands', () => {
+  const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8')));
+  const y = [];
+  for (let i = 0; i < track.nodeCount; i++) y.push(track.frameAt(track.nodeS[i]).p[1]);
+  assert.deepEqual([...new Set(y.map((v) => bandOf(v)))].sort(), [0, 1, 2]);
+  for (const b of [0, 1, 2]) assert.ok(deckRuns(y, b).length >= 1);
+});

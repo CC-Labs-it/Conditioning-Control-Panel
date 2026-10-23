@@ -2,6 +2,8 @@
  * made it to the shortcut"). The opening is about 8 m with a kicker lip: a player who steers for it and holds the
  * throttle lands on the lower road, through the real Steer assist, from cruise to boosted speed. A kart that does
  * not steer for it (the centre line, the hands-off autopilot and cruise, the bots' normal line) never falls in.
+ * Polish 6: the dare sits on the OUTSIDE of the coil's r 20 first turn, so a kart running wide there is held by the
+ * lip while it turns away (sim/routes.js turnsAway) and the assist eases off for the bend (sim/assist.js EASE).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -62,15 +64,19 @@ function run({ lat0 = 0, v0 = 30, boosted = false, mode = 'light', hands, maxS =
   return { names, st, landed: names.includes('route-land'), fell: names.includes('drop') };
 }
 
-/** Hands that steer for the opening: the nose at a point `pastM` beyond its edge, `dsM` along it from the middle. */
-const forOpening = (dsM, pastM = 2) => (st) => {
-  const f = track.frameAt(MID + dsM), x = SIDE * (f.w / 2 + pastM);
-  return pursue(st, f.p[0] + f.b[0] * x, f.p[2] + f.b[2] * x);
-};
+/** The landing road's s nearest (in plan) to the opening's middle + dsM (polish 6: the dare lands on the turn inside). */
+function landAt(dsM) {
+  const o = track.frameAt(MID + dsM);
+  let best = R0.land.fromS, bd = Infinity;
+  for (let s = R0.land.fromS; s <= R0.land.toS; s += 1) { const f = track.frameAt(s), d = (f.p[0] - o.p[0]) ** 2 + (f.p[2] - o.p[2]) ** 2; if (d < bd) { bd = d; best = s; } }
+  return best;
+}
+/** Hands that go for the dare: the nose at the landing road beside the opening, `dsM` along it from the middle, `pastM` on. */
+const forOpening = (dsM, pastM = 6) => { const ls = landAt(dsM) + pastM; return (st) => { const f = track.frameAt(ls); return pursue(st, f.p[0], f.p[2]); }; };
 
-test('shortcut: the opening is about 8 m, a kicker lip, no kerb', () => {
+test('shortcut: the opening is at least 8 m, a kicker lip, no kerb', () => {
   const w = R0.openS1 - R0.openS0;
-  assert.ok(w >= 7 && w <= 9, 'opening ' + w);
+  assert.ok(w >= 8 && w <= 30, 'opening ' + w);
   assert.ok(R0.openS0 >= R0.fromS && R0.openS1 <= R0.toS);
 });
 

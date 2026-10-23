@@ -31,40 +31,40 @@ const ease = (x) => Math.sin(clamp01(x) * Math.PI / 2);         // equal-power r
 /**
  * Engine layer weights at a speed (0..maxPct): idle fades out, cruise holds the middle with a
  * small dip at the top, air rises over the upper half. A boost leans on the air layer.
+ * Polish 6: no closure per call; pass out to reuse one result record.
  * @returns {{idle: number, cruise: number, air: number}}
  */
-export function engineLayers(speedPct, flags = {}, feel = null) {
-  const g = (k) => mixGet(feel, k);
+export function engineLayers(speedPct, flags = {}, feel = null, out = null) {
   const n = clamp01(Number(speedPct) || 0);
-  const idle = Math.cos(clamp01(n / g('engIdleOutPct')) * Math.PI / 2);
-  const up = ease((n - g('engCruiseFromPct')) / (g('engCruiseFullPct') - g('engCruiseFromPct')));
-  const dip = 1 - g('engCruiseDip') * clamp01((n - g('engCruiseDipPct')) / (1 - g('engCruiseDipPct')));
-  let air = ease((n - g('engAirFromPct')) / (g('engAirFullPct') - g('engAirFromPct')));
-  if (flags.boosting) air = Math.min(1, air + g('engBoostAir'));
+  const idle = Math.cos(clamp01(n / mixGet(feel, 'engIdleOutPct')) * Math.PI / 2);
+  const up = ease((n - mixGet(feel, 'engCruiseFromPct')) / (mixGet(feel, 'engCruiseFullPct') - mixGet(feel, 'engCruiseFromPct')));
+  const dip = 1 - mixGet(feel, 'engCruiseDip') * clamp01((n - mixGet(feel, 'engCruiseDipPct')) / (1 - mixGet(feel, 'engCruiseDipPct')));
+  let air = ease((n - mixGet(feel, 'engAirFromPct')) / (mixGet(feel, 'engAirFullPct') - mixGet(feel, 'engAirFromPct')));
+  if (flags.boosting) air = Math.min(1, air + mixGet(feel, 'engBoostAir'));
   if (flags.onRoad === false) air *= 0.6;
+  // out (optional): a record the caller reuses every frame, filled in place (no allocation)
+  if (out) { out.idle = Math.max(0, idle); out.cruise = up * dip; out.air = air; return out; }
   return { idle: Math.max(0, idle), cruise: up * dip, air };
 }
 
 /** Engine pitch in semitones: speed sweeps low..high, drift / air / boost add a little, the whole travel is capped. */
 export function enginePitchSemis(speedPct, flags = {}, feel = null) {
-  const g = (k) => mixGet(feel, k);
   const n = clamp01(Number(speedPct) || 0);
-  const lo = g('engSemisLow');
-  let s = lo + (g('engSemisHigh') - lo) * n;
-  if (flags.drifting && flags.driftTier > 0) s += (Math.min(flags.driftTier, 3) / 3) * g('engDriftSemis');
-  if (flags.airborne) s += g('engAirborneSemis');
-  if (flags.boosting) s += g('engBoostSemis');
-  return Math.min(lo + g('engPitchTravelSemis'), Math.max(lo, s));
+  const lo = mixGet(feel, 'engSemisLow');
+  let s = lo + (mixGet(feel, 'engSemisHigh') - lo) * n;
+  if (flags.drifting && flags.driftTier > 0) s += (Math.min(flags.driftTier, 3) / 3) * mixGet(feel, 'engDriftSemis');
+  if (flags.airborne) s += mixGet(feel, 'engAirborneSemis');
+  if (flags.boosting) s += mixGet(feel, 'engBoostSemis');
+  return Math.min(lo + mixGet(feel, 'engPitchTravelSemis'), Math.max(lo, s));
 }
 
 export const semisToRate = (s) => Math.pow(2, (Number(s) || 0) / 12);
 
 /** The engine low-pass: darker at idle, open at speed, wider on a boost. */
 export function engineCutHz(speedPct, flags = {}, feel = null) {
-  const g = (k) => mixGet(feel, k);
   const n = clamp01(Number(speedPct) || 0);
-  const hz = g('engLpLowHz') + (g('engLpHighHz') - g('engLpLowHz')) * n * n;
-  return Math.min(20000, hz * (flags.boosting ? g('engLpBoostMul') : 1));
+  const hz = mixGet(feel, 'engLpLowHz') + (mixGet(feel, 'engLpHighHz') - mixGet(feel, 'engLpLowHz')) * n * n;
+  return Math.min(20000, hz * (flags.boosting ? mixGet(feel, 'engLpBoostMul') : 1));
 }
 
 /** The bubble pop ladder: the next rung (state { rung, t } is updated in place). */

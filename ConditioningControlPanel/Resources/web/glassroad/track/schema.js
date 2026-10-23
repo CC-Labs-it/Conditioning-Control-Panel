@@ -131,7 +131,8 @@ export function validate(t) {
     else t.routes.forEach((r, i) => {
       const at = 'routes[' + i + ']';
       if (!r || !isStr(r.id)) { err(at + '.id missing'); return; }
-      if (r.kind !== 'drop') err(at + '.kind must be drop');
+      // polish 6: 'gap' is a sideways hop across to a road alongside (the sim keeps its speed)
+      if (r.kind !== 'drop' && r.kind !== 'gap') err(at + '.kind must be drop or gap');
       if (r.side !== 'L' && r.side !== 'R') err(at + '.side must be L or R');
       if (!inRange(r.from) || !isInt(r.to) || r.to <= r.from || r.to > N) { err(at + ' needs from < to within the nodes'); return; }
       if (!r.land || !inRange(r.land.from) || !inRange(r.land.to) || r.land.to < r.land.from) { err(at + '.land needs from <= to'); return; }

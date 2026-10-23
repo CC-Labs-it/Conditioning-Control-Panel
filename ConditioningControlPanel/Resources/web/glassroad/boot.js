@@ -64,6 +64,10 @@ const qs = new URLSearchParams(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
 // ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
 const DEV = devAllowed(location.search);
+// ?hitch=1 (dev/hitch-check.mjs): per-frame section times in window.__hitch (ms), read by the check's rAF probe
+const HT = qs.get('hitch') === '1' ? (window.__hitch = { sim: 0, fx: 0, audio: 0, cam: 0, world: 0, render: 0, hud: 0, steps: 0 }) : null;
+let hT = 0;
+const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
 // server (port 8790) tries the private song folder it mounts at /private-audio/. Nothing ships a chart yet.
 const DEV_HOST = location.port === '8790' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
@@ -144,12 +148,12 @@ function peekCamera(camera, track, pk, aspect) {
   camera.updateMatrixWorld();
 }
 
-/** The closed centreline as x, z pairs for the minimap. */
+/** The closed centreline for the minimap: x, z pairs and the height per point (polish 6: the decks layer). */
 function centreline(track, stepM = 4) {
-  const n = Math.max(8, Math.floor(track.lengthM / stepM)), xz = new Float32Array(n * 2);
+  const n = Math.max(8, Math.floor(track.lengthM / stepM)), xz = new Float32Array(n * 2), y = new Float32Array(n);
   const f = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
-  for (let i = 0; i < n; i++) { track.frameAt(i * track.lengthM / n, f); xz[i * 2] = f.p[0]; xz[i * 2 + 1] = f.p[2]; }
-  return xz;
+  for (let i = 0; i < n; i++) { track.frameAt(i * track.lengthM / n, f); xz[i * 2] = f.p[0]; xz[i * 2 + 1] = f.p[2]; y[i] = f.p[1]; }
+  return { xz, y };
 }
 
 async function boot() {
@@ -261,7 +265,7 @@ async function boot() {
   }
   buildRun();
   const hudItem = { id: null, rolling: false, rollT: 0, rollS: 1 };
-  hud.setTrack({ xz: centreline(track) });
+  hud.setTrack(centreline(track));
   // dev (?bot=1): the racers and the track for scripted runs (dev drive scripts); not enumerable
   // debug.hands = { steer, throttle, brake, hop, hopPressed } overrides the AI's hands on the player (hopPressed
   // lasts one step); null hands the player back to the AI
@@ -592,7 +596,9 @@ async function boot() {
   function frame(now) {
     requestAnimationFrame(frame);
     if (!renderer.frameDue(now)) return;                          // the Frame cap option skips this one
+    if (HT) hT = performance.now();
     const { steps, alpha, frameDt, renderTime } = clock.frame(now);
+    if (HT) HT.steps = steps;
     const a = actions.sample();                                   // 1. input
     const nav = gamepad.takeNav();
     const card = hud.card;
@@ -638,12 +644,14 @@ async function boot() {
       items.update(clock.dt, racers.list, standings, race);       //    pickups, use, flights, hits, mods
       hopLatch.spent(a); itemLatch.spent(a);
     }
+    if (HT) hLap('sim');
     if (online) online.s.update({ paused, assist: assist.mode !== 'off' });   //    online: clock slew, pings, uploads
     queue.flush(bus);                                             // 3. events
     const frozen = paused && !online;                             //    online the pause card freezes nothing
     const fxDt = frozen ? 0 : frameDt;                            //    the pause card freezes every effect too
     fx.update(fxDt, P.st, race);                                  // 4. fx
     effects.update(fxDt);                                         //    the local screen effect
+    if (HT) hLap('fx');
     const fs = fx.state;
     const pst = P.st;
     audio.update(pst[S.speedPct], {                               // 5. audio
@@ -661,11 +669,13 @@ async function boot() {
         rumbleSent = rm; rumbleT = ms / 1000;
       }
     } else { rumbleT = 0; rumbleSent = 0; }
+    if (HT) hLap('audio');
 
     racers.interpolate(alpha);                                    // 6. camera
     if (online) online.s.drawRemotes();                           //    remote karts at this frame's server time (100 ms back)
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
+    if (HT) hLap('cam');
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
     // the song position the player hears (frozen while paused: the context is suspended)
@@ -690,13 +700,15 @@ async function boot() {
     if (chipA < 1) dimChips(chipA);
     let goPoint = null;
     if (kartV && rph && (rph === 'countdown' || rph === 'ready' || (goAt > 0 && now - goAt < 1500))) {
-      kartV.copy(world.kart.position); kartV.y += 0.9;
+      kartV.copy(world.kart.position); kartV.y += 0.6;
       kartV.project(cam.camera);
       const k = kartPoint(kartV.x, kartV.y, kartV.z);
       if (k) { kartAt.x = k.x; kartAt.y = k.y; goPoint = kartAt; }
     }
+    if (HT) hLap('world');
     renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
     renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
+    if (HT) hLap('render');
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud
     for (let i = 0; i < racers.list.length; i++) { const s = racers.list[i].view; mapXz[i * 2] = s[S.posX]; mapXz[i * 2 + 1] = s[S.posZ]; }
@@ -714,6 +726,7 @@ async function boot() {
       hud.setCard('results', result);
       if (BOT) botT = now + 5000;
     }
+    if (HT) hLap('hud');
     debug.phase = paused ? 'paused' : state === 'race' ? race.phase : state;
     debug.lap = pst[S.lap]; debug.s = pst[S.s]; debug.timeS = race.timeS; debug.speedPct = pst[S.speedPct];
     debug.place = place; debug.item = it.id;
