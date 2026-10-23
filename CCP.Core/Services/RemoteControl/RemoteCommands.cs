@@ -89,19 +89,21 @@ namespace ConditioningControlPanel.Services
             }
         };
 
-        /// <summary>WPF PanicAftermath.PanicPause: the pause a LOCAL panic left (session, run, pause number).</summary>
-        private static (object Session, int Run, int Pauses)? _panicPause;
+        /// <summary>The pause a LOCAL panic left (WPF MainWindow._panicPause, rules in <see cref="Safety.PanicAftermath"/>).</summary>
+        private static Safety.PanicAftermath.PanicPause? _panicPause;
 
         /// <summary>WPF NoteLocalPanicPause: every local panic stop calls it after pausing the session; a remote
         /// panic never does (the controller may resume its own panic, owner 2026-10-19).</summary>
         public static void NoteLocalPanicPause(SessionRunner? r) =>
-            _panicPause = r is { IsRunning: true, IsPaused: true, CurrentSession: { } cs } ? (cs, r.Run, r.PauseCount) : null;
+            _panicPause = Safety.PanicAftermath.MarkPause(r?.CurrentSession, r?.Run ?? 0, r?.IsRunning == true, r?.IsPaused == true, r?.PauseCount ?? 0);
 
-        /// <summary>WPF LocalPanicHoldsSession: the same run of the same session still sits in the very pause a
-        /// local panic left, so a remote resume_session or start_session must not undo it.</summary>
+        /// <summary>WPF LocalPanicHoldsSession: a remote resume_session or start_session must not undo that pause.</summary>
         public static bool LocalPanicHoldsSession(SessionRunner? r) =>
-            _panicPause is { } m && r is { IsRunning: true, IsPaused: true, CurrentSession: { } cs }
-            && ReferenceEquals(m.Session, cs) && m.Run == r.Run && m.Pauses == r.PauseCount;
+            r?.IsRunning == true && Safety.PanicAftermath.RemoteResumeRefused(_panicPause, r.CurrentSession, r.Run, r.IsPaused, r.PauseCount);
+
+        /// <summary>The head's half of WPF StopAllRemoteEffects :1034: stop the session when <c>force</c> (a panic)
+        /// or when the controller started the running one (IsSessionRemoteStarted, #878); the subject's own stays.</summary>
+        public static volatile Action<bool>? StopSessionHook;
 
         public static string? Execute(string action, JObject? p)
         {
@@ -185,6 +187,7 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
+            try { StopSessionHook?.Invoke(force); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] remote session stop failed"); }
             CoreMindWipe.Stop();   // WPF StopAllRemoteEffects / StopRemoteEffects: App.MindWipe?.Stop() on both paths
             // As WPF, Lockdown or not: this only reduces restraint, and LockdownService.Deactivate restores
             // the pre-lockdown values when the timer ends.

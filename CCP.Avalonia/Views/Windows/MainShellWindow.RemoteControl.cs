@@ -4,8 +4,8 @@
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives, and the session verbs (StartSessionFromRemote & co, :1287-1420).
-// ponytail: still missing here - IsSessionRemoteStarted (the controller-owned run mark; no teardown reads it
-// on this head yet), the directory opt-in chain, tray minimise/restore
+// The remote end/leave teardown stops a session only when the controller started it (IsSessionRemoteStarted).
+// ponytail: still missing here - the directory opt-in chain, tray minimise/restore
 // for remote, the taskbar flash on join (no Avalonia API), the RemoteHud pill and the browser
 // blindfold (no embedded browser under the overlay on this head).
 
@@ -56,9 +56,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Func<string, Session?, string?> sessionVerb = RemoteSessionVerb;
             RemoteCommands.SessionVerb = sessionVerb;
             RemoteCommands.FindSession = FindRemoteSession;
+            Action<bool> stopSession = StopRemoteSession;
+            RemoteCommands.StopSessionHook = stopSession;
             Closed += (_, _) =>
             {
                 if (RemoteCommands.SessionVerb == sessionVerb) (RemoteCommands.SessionVerb, RemoteCommands.FindSession) = (null, null);
+                if (RemoteCommands.StopSessionHook == stopSession) RemoteCommands.StopSessionHook = null;
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
@@ -76,6 +79,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Session? FindRemoteSession(string id) => Named<PresetsTabView>("PresetsTab")?.FindSession(id)
             ?? Session.GetAllSessions().FirstOrDefault(s => s.Id == id && s.IsAvailable);
 
+        /// <summary>WPF _remoteStartedSession: the session object the controller's start_session ran.</summary>
+        private Session? _remoteStartedSession;
+
+        /// <summary>WPF IsSessionRemoteStarted (:1280): the running session is the one the controller started.</summary>
+        internal bool IsSessionRemoteStarted => _remoteStartedSession != null
+            && App.Sessions is { IsRunning: true } r && ReferenceEquals(r.CurrentSession, _remoteStartedSession);
+
+        /// <summary>WPF StopAllRemoteEffects (RemoteControlService.cs:1034): a panic, or a remote end/leave over
+        /// the controller's own session, stops it; a session the subject started is not the remote's to end.</summary>
+        private void StopRemoteSession(bool force)
+        {
+            if (force || IsSessionRemoteStarted) RemoteSessionVerb("stop_session", null);
+            else if (App.Sessions?.IsRunning == true) Serilog.Log.Information("[RemoteControl] Leaving the subject's own session running: the controller did not start it");
+        }
+
         /// <summary>WPF MainWindow.StartSessionFromRemote / PauseSessionFromRemote / ResumeSessionFromRemote /
         /// StopSessionFromRemote (:1287-1420) and the start_session panic refusal (RemoteControlService.cs:1517).
         /// UI thread; returns the refusal the controller sees, or null.</summary>
@@ -88,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (RemoteCommands.LocalPanicHoldsSession(runner)) return "panic";
                     if (session == null) return "no session";
                     if (runner.IsRunning) runner.Stop(completed: false);   // WPF: StopSession(completed: false) first
+                    _remoteStartedSession = session;   // WPF: marked before the start lands
                     StartSession(session);
                     return null;
                 case "pause_session":

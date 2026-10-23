@@ -62,7 +62,21 @@ public sealed class RemoteSessionVerbShellTests
                 Assert.Null(RemoteCommands.Execute("start_session", JObject.FromObject(new { session_id = "no-such-session" })));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal("remote_session", runner.CurrentSession!.Id);   // WPF's generic fallback
-                Assert.Null(RemoteCommands.Execute("stop_session", null));
+                Assert.True(shell.IsSessionRemoteStarted);
+
+                // WPF StopAllRemoteEffects :1034 (#878): the remote ending stops the controller's own session...
+                RemoteCommands.StopEffects(force: false);
+                Assert.False(runner.IsRunning);
+
+                // ...but never the subject's own; a panic (force) stops either.
+                shell.StartSession(named);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(runner.IsRunning);
+                Assert.False(shell.IsSessionRemoteStarted);
+                RemoteCommands.StopEffects(force: false);
+                Assert.True(runner.IsRunning);
+                RemoteCommands.StopEffects(force: true);
+                Assert.False(runner.IsRunning);
             }
             finally
             {
@@ -74,7 +88,8 @@ public sealed class RemoteSessionVerbShellTests
                 CoreEngine.Stop();
                 shell.Close();
             }
-            Assert.Null(RemoteCommands.SessionVerb);   // the closed shell takes its seam with it
+            Assert.Null(RemoteCommands.SessionVerb);   // the closed shell takes its seams with it
+            Assert.Null(RemoteCommands.StopSessionHook);
             return Task.CompletedTask;
         });
     }

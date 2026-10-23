@@ -27,7 +27,7 @@ public class PanicAftermathTests
         Assert.False(PanicAftermath.IsQuiet(Panic + 300_000, until));
         Assert.False(PanicAftermath.IsQuiet(Panic, 0));                 // never armed
 
-        var src = Source("Services", "Safety", "PanicAftermath.cs");
+        var src = SourceRoots.ReadProductFile("Services", "Safety", "PanicAftermath.cs");   // moved to CCP.Core
         Assert.Contains("Environment.TickCount64", src);
         Assert.DoesNotContain("UtcNow", src);
     }

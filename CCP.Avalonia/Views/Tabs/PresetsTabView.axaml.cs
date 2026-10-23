@@ -303,10 +303,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             UseSessionManager(lib);
         }
 
-        /// <summary>WPF RevealSessionInLibrary: select the session by id; null when it is not in the rack.</summary>
         /// <summary>WPF FindSessionByIdCallback: an available session of the rack by id, nothing selected.</summary>
         internal Session? FindSession(string sessionId) => _availableSessions.FirstOrDefault(s => s.Id == sessionId && s.IsAvailable);
 
+        /// <summary>WPF RevealSessionInLibrary: select the session by id; null when it is not in the rack.</summary>
         internal Session? RevealSession(string sessionId)
         {
             var found = _availableSessions.FirstOrDefault(s => s.Id == sessionId);
