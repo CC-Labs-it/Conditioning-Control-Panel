@@ -82,6 +82,7 @@
         </ControlTheme>
 
         <ControlTheme x:Key="EditorComboBox" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="ItemContainerTheme" Value="{StaticResource EditorComboBoxItem}"/>
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
             <Setter Property="Background" Value="{DynamicResource PanelBgBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>

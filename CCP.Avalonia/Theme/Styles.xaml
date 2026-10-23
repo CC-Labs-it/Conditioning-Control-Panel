@@ -582,9 +582,9 @@
     <Setter Property="Padding" Value="8,6"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="FocusAdorner" Value="{x:Null}"/>
-    <!-- WPF binds these to the ComboBox, whose implicit chrome sets Left/Center. -->
-    <Setter Property="HorizontalContentAlignment" Value="Left"/>
-    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <!-- Logical ancestry crosses the popup host, as WPF AncestorType=ItemsControl does. -->
+    <Setter Property="HorizontalContentAlignment" Value="{ReflectionBinding HorizontalContentAlignment, RelativeSource={RelativeSource AncestorType=ItemsControl, Tree=Logical}}"/>
+    <Setter Property="VerticalContentAlignment" Value="{ReflectionBinding VerticalContentAlignment, RelativeSource={RelativeSource AncestorType=ItemsControl, Tree=Logical}}"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="ComboBoxItem">
         <Border x:Name="Bd" CornerRadius="6" Margin="0,1"
@@ -644,6 +644,11 @@
     <!-- [IsVisible=True] only lifts these to StyleTrigger priority: values Fluent sets inline in its
          template have Template priority, which an unconditional selector cannot override. -->
     <Style Selector="^[IsVisible=True]">
+      <Style Selector="^ /template/ Popup#PART_Popup">
+        <Setter Property="fx:InputPopupFx.Animation" Value="Slide"/>
+        <Setter Property="fx:InputPopupFx.OpenRequested" Value="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+        <Setter Property="IsOpen" Value="{Binding (fx:InputPopupFx.IsPresented), RelativeSource={RelativeSource Self}}"/>
+      </Style>
       <Style Selector="^ /template/ ContentControl#ContentPresenter">
         <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
       </Style>
@@ -806,6 +811,7 @@
 
   <!-- Inputs.xaml:441-470 ContextMenu: elevated surface, 20% accent border, r10, 4px padding. -->
   <ControlTheme x:Key="InputContextMenuTheme" TargetType="ContextMenu" BasedOn="{StaticResource {x:Type ContextMenu}}">
+    <Setter Property="WindowManagerAddShadowHint" Value="True"/>
     <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink20Brush}"/>
@@ -842,6 +848,15 @@
     <Setter Property="FocusAdorner" Value="{x:Null}"/>
     <!-- StyleTrigger priority over Fluent's inline template values (see InputComboBoxTheme). -->
     <Style Selector="^[IsVisible=True]">
+      <Style Selector="^ /template/ Popup#PART_Popup">
+        <Setter Property="fx:InputPopupFx.Animation" Value="Fade"/>
+        <Setter Property="fx:InputPopupFx.OpenRequested" Value="{Binding IsSubMenuOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+        <Setter Property="IsOpen" Value="{Binding (fx:InputPopupFx.IsPresented), RelativeSource={RelativeSource Self}}"/>
+        <!-- WPF Right aligns the top edges; Avalonia Right would center vertically. -->
+        <Setter Property="Placement" Value="RightEdgeAlignedTop"/>
+        <Setter Property="HorizontalOffset" Value="4"/>
+        <Setter Property="VerticalOffset" Value="-6"/>
+      </Style>
       <Style Selector="^ /template/ ContentControl#PART_IconPresenter">
         <Setter Property="Margin" Value="0,0,8,0"/>
       </Style>
@@ -908,6 +923,11 @@
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="FocusAdorner" Value="{x:Null}"/>
     <Style Selector="^[IsVisible=True]">
+      <Style Selector="^ /template/ Popup#PART_Popup">
+        <Setter Property="fx:InputPopupFx.Animation" Value="Fade"/>
+        <Setter Property="fx:InputPopupFx.OpenRequested" Value="{Binding IsSubMenuOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+        <Setter Property="IsOpen" Value="{Binding (fx:InputPopupFx.IsPresented), RelativeSource={RelativeSource Self}}"/>
+      </Style>
       <Style Selector="^ /template/ ContentPresenter#PART_HeaderPresenter">
         <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"/>
       </Style>
