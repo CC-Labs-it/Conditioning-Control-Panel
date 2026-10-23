@@ -246,6 +246,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
+                    // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
+                    // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. Before the tree: the first load too.
+                    Platform.ScrolllerWebHostGate.Attach(_web);
                     _webSlot.Children.Add(_web);
                 }
                 catch (Exception ex)
