@@ -2839,3 +2839,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-tab-she-listening: +73
 - She's Listening: master Start/Stop uses Fluent Play/Stop; the Video cheat-sheet row shows only the runnable pause/resume phrase.
 - Side art is left to lane adaptive-side-art; voice seams, sherpa KWS and calibration go to lane -b.
+
+## avalonia-port/wire-views-settings-performance-b: +215
+- Lockdown tab pulse (shared Core LockdownPulse timeline) starts on Lockdown entry, stops on leave / motion below Full, as WPF; start, Off-stop and close-stop each fail-proven.
+- Ledger row views-settings-performance stays stub; unified overlay compositor left to lane -c.
