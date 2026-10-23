@@ -2603,3 +2603,14 @@ goldens from pre-move code, fail-proofed 5 ways; review ACCEPT; stale quiz ponyt
 ## avalonia-port/companion-v2-conversation: +989
 - Companion V2 conversation page ported (mounted above the room; collapse -> companion-v2-pages-b); name editor + recap on Companion > AI; pure rules in Core ConversationRules shared with WPF.
 - Review fixes (style scope, hover/disabled brushes, WPF name/flavor sources); row views-companion-v2-conversation missing -> stub.
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).
+
+## avalonia-port/post-push-nits: +6
+- Lands two review nits that were committed after their branches were pushed: the BillboardShowcase test tidy (w161) and the hybrid-gate decision wording (w124).

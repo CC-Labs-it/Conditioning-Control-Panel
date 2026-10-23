@@ -1110,14 +1110,15 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
   `MainShellWindow.UiUpdates.cs`. With B, every day CCP was open would read 0 minutes and be charged as idle on the
   user's real lock, which WPF never does. Switch to B in the same lane that ports the tracker.
 - Test: `ChasterMinutesTests.IdleDayIsNeverCharged_WhileTheDayLogHasNoMinutesSource` (fail-proven: wiring B turns it red).
+
 ## 2026-10-13: Hybrid remote gate: Windows jobs on GitHub, Linux half local (avalonia-port/ci-hybrid-gate)
 - Question: every rgate run took ~15 GitHub jobs (5 Linux + 5 Windows Avalonia shards, core-linux, core-guards, coverage),
   so two lanes gating at once exhausted the Free plan's 20-job pool. How do lane gates free that pool?
 - Options: (A) keep every gate fully remote; (B) gate fully locally again; (C) hybrid: GitHub runs only what Linux cannot
   (the Windows jobs) and the Linux half runs locally (`bin/gate`, already the CI-equivalent Linux gate) in parallel.
 - Choice: C (advised by: user + main session). `build.yml` gains a `workflow_dispatch` input `scope` (all | windows, default
-  all). With `scope=windows` every ubuntu job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is skipped;
-  `windows`, `avalonia-windows` and the Windows coverage entry always run (coverage keeps `!cancelled()`, so a skipped
+  all). With `scope=windows` every Linux-side job (core-guards, core-linux, avalonia-linux, the Linux coverage entry) is
+  skipped; `windows`, `avalonia-windows` and the Windows coverage entry (itself on `ubuntu-latest`) always run (coverage keeps `!cancelled()`, so a skipped
   avalonia-linux does not skip it). Push and pull_request runs have no inputs, so they stay full. `bin/rgate` dispatches
   `scope=windows` when it sees the input; `RGATE_FULL=1` forces the old all-remote run.
 - Choice (chaster-minutes): A, because the input WPF relies on was missing here: the day log's minutes come from
