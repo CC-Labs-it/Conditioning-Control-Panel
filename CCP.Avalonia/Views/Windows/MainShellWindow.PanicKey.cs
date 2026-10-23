@@ -75,7 +75,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF LeashPanicKeyWhilePanicOff: panic always works on a leash. The leash part alone runs
                 // (the task parks, a lines card it opened closes, its window closes, the gate stands back);
                 // the session, effects and exit ladder are untouched. The hold-to-cut rides LeashHoldPressed.
-                if (LeashHoldLeashed) PanicKeyLeashOnly();
+                if (LeashHoldLeashed) PanicKeyLeashOnly(fromKey: true);
                 return;
             }
             // WPF MainWindow.xaml.cs:1557: a game's pause, BEFORE everything below: a pause is not a panic.
@@ -86,8 +86,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // grace-pause rungs below return before the stop pass ("chaster-hold"). A game's pause above is no panic.
             PanicChasterHold.Open("panic key");
             // WPF MainWindow.xaml.cs:1567 LeashOnPanicPress, before the lock-card rung: the leash task parks first,
-            // or a Lines task reopens the card the press just dismissed.
-            try { Platform.LeashTaskHost.OnPanicPress(this); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
+            // or a Lines task reopens the card the press just dismissed. fromKey: only this physical press may be the
+            // Escape that closes the Ctrl+K palette (the stop pass's own "leash-task" never skips).
+            try { Platform.LeashTaskHost.OnPanicPress(this, fromKey: true); } catch (Exception ex) { Serilog.Log.Warning("Leash panic failed: {E}", ex.Message); }
 
             // Same evaluation order as WPF: asking the palette closes it, so never ask with a card up.
             bool lockCardOpen = LockCardWindow.IsAnyOpen();
@@ -142,11 +143,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF LeashPanicKeyWhilePanicOff (MainWindow.Leash.cs): the panic key while leashed when the
         /// panic itself cannot run (switched off, or Lockdown holding the keys). Also the voice panic's
-        /// <see cref="VoicePanicReach.Reach.LeashOnly"/>. Never throws.</summary>
-        internal void PanicKeyLeashOnly()
+        /// <see cref="VoicePanicReach.Reach.LeashOnly"/>, which never skips for the palette (<paramref name="fromKey"/>
+        /// false: "red" is no Escape). Never throws.</summary>
+        internal void PanicKeyLeashOnly(bool fromKey = false)
         {
             Serilog.Log.Information("Panic while leashed with the panic unable to run - leash safety only");
-            try { Platform.LeashTaskHost.OnPanicPress(this, panicRuns: false); }
+            try { Platform.LeashTaskHost.OnPanicPress(this, panicRuns: false, fromKey: fromKey); }
             catch (Exception ex) { Serilog.Log.Warning("Leash panic-off stop failed: {E}", ex.Message); }
         }
 
