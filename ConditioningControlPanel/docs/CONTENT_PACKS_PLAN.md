@@ -46,7 +46,7 @@ total ≈ 850 MB–1 GB vs 1.66 GB today — and patches (X.Y.1+) are installer-
 - Packs + `content-manifest.json` uploaded as assets on the `vX.Y.0` release
   (this cycle: the **existing v6.6.0 release**, next cycle v6.7.0, etc.).
 - Client derives the URL from its own version — **no GitHub API call, no rate limits**:
-  `https://github.com/CodeBambi/Conditioning-Control-Panel---CSharp-WPF/releases/download/v{major}.{minor}.0/<asset>`
+  `https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/download/v{major}.{minor}.0/<asset>`
 - `content-manifest.json` per pack: `{ id, file, sizeBytes, sha256, contentVersion, targetRoot }`.
   `contentVersion` only bumps when the pack's bytes actually change → a user who has
   6.6-cycle packs and updates into 6.7 re-downloads **nothing** unless we changed the audio.

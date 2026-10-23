@@ -24,15 +24,7 @@ namespace ConditioningControlPanel.Services.Possession;
 /// <summary>The companion as Lockdown's warden. See <see cref="IPossessionWarden"/>.</summary>
 public sealed class Warden : IPossessionWarden
 {
-    // The tube is a shared, user-visible actor: the bark system, the bubble egg and the chat window all
-    // move it. These cooldowns keep the haunt from feeling like the companion is having a seizure.
-    private static readonly TimeSpan AppearanceCooldown = TimeSpan.FromSeconds(90);
-    private static readonly TimeSpan StareCooldown = TimeSpan.FromSeconds(60);
-
-    /// <summary>Hard ceiling on any single verb. A glide that never returns (tube thread wedged, handle
-    /// died mid-flight) must not hold the director's effect slot for the rest of the lockdown.</summary>
-    private static readonly TimeSpan VerbTimeout = TimeSpan.FromSeconds(15);
-
+    // Cooldowns, the verb timeout and the beats are WardenRules (CCP.Core).
     private DateTime _lastAppearance = DateTime.MinValue;
     private DateTime _lastStare = DateTime.MinValue;
 
@@ -135,7 +127,7 @@ public sealed class Warden : IPossessionWarden
                 // known render-thread hazard (see the bubble egg's #628 notes).
                 if (App.Video?.IsPlaying == true) return false;
                 if (Volatile.Read(ref _busy) != 0) return false;
-                return DateTime.UtcNow - _lastAppearance >= AppearanceCooldown;
+                return WardenRules.CanAppear(DateTime.UtcNow, _lastAppearance);
             }
             catch { return false; }
         }
@@ -151,7 +143,7 @@ public sealed class Warden : IPossessionWarden
         if (Interlocked.Exchange(ref _busy, 1) != 0) return;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(VerbTimeout);
+        cts.CancelAfter(WardenRules.VerbTimeout);
         var token = cts.Token;
         try
         {
@@ -162,15 +154,13 @@ public sealed class Warden : IPossessionWarden
             await tube.GlideToScreenRectAsync(rect, token).ConfigureAwait(true);
             if (token.IsCancellationRequested) return;
 
-            // The beat: the pause is the whole point. Something arrives, considers the card, and only
-            // THEN does the card go. Without it the fall reads as a glitch instead of an act.
-            await Task.Delay(500, token).ConfigureAwait(true);
+            // The beat: the pause is the whole point (WardenRules.KnockBeatMs).
+            await Task.Delay(WardenRules.KnockBeatMs, token).ConfigureAwait(true);
 
-            // The knock itself: two 12 px shoves toward the target and back. Small on purpose - the
-            // card falling is the payoff, the tube only has to look like the cause.
+            // The knock itself: two small shoves toward the target and back.
             if (tube.TryGetTubeScreenRect(out var here))
             {
-                double dx = rect.X + rect.Width / 2.0 > here.X + here.Width / 2.0 ? 12 : -12;
+                double dx = WardenRules.KnockShove(rect.X + rect.Width / 2.0, here.X + here.Width / 2.0);
                 for (int i = 0; i < 2 && !token.IsCancellationRequested; i++)
                 {
                     await tube.GlideToScreenPointAsync(new Point(here.X + dx, here.Y), token).ConfigureAwait(true);
@@ -178,7 +168,7 @@ public sealed class Warden : IPossessionWarden
                 }
             }
 
-            NameIt("knock");
+            NameIt(WardenRules.Knock);
         }
         catch (OperationCanceledException) { /* lockdown ended / timed out mid-knock */ }
         catch (Exception ex) { App.Logger?.Warning("Possession warden knock failed: {Error}", ex.Message); }
@@ -199,11 +189,11 @@ public sealed class Warden : IPossessionWarden
     {
         var tube = Tube;
         if (tube == null) return;
-        if (DateTime.UtcNow - _lastStare < StareCooldown) return;
+        if (!WardenRules.CanStare(DateTime.UtcNow, _lastStare)) return;
         if (Interlocked.Exchange(ref _busy, 1) != 0) return;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(VerbTimeout);
+        cts.CancelAfter(WardenRules.VerbTimeout);
         var token = cts.Token;
         try
         {
@@ -214,16 +204,15 @@ public sealed class Warden : IPossessionWarden
             _lastAppearance = DateTime.UtcNow;
             _lastStare = DateTime.UtcNow;
 
-            var centre = new Point(
-                window.X + window.Width / 2.0 - self.Width / 2.0,
-                window.Y + window.Height / 2.0 - self.Height / 2.0);
+            var (cx, cy) = WardenRules.StareSpot(window.X, window.Y, window.Width, window.Height, self.Width, self.Height);
+            var centre = new Point(cx, cy);
             await tube.GlideToScreenPointAsync(centre, token).ConfigureAwait(true);
             if (token.IsCancellationRequested) return;
 
-            Say("stare", reason);
+            Say(WardenRules.Stare, reason);
 
             // Linger: the line has to finish and the silence after it is what makes it a stare.
-            await Task.Delay(2500, token).ConfigureAwait(true);
+            await Task.Delay(WardenRules.StareLingerMs, token).ConfigureAwait(true);
         }
         catch (OperationCanceledException) { /* lockdown ended / timed out mid-stare */ }
         catch (Exception ex) { App.Logger?.Warning("Possession warden stare failed: {Error}", ex.Message); }
@@ -247,7 +236,7 @@ public sealed class Warden : IPossessionWarden
         {
             if (_leaveTask is { IsCompleted: false }) return Task.CompletedTask;
             var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(VerbTimeout);
+            cts.CancelAfter(WardenRules.VerbTimeout);
             _leaveCts = cts;
             return _leaveTask = LeaveCoreAsync(cts, Volatile.Read(ref _returnEpoch));
         }
@@ -292,7 +281,7 @@ public sealed class Warden : IPossessionWarden
             // than riding down the screen with her.
             LeaveNote();
 
-            NameIt("leave");
+            NameIt(WardenRules.Leave);
         }
         catch (OperationCanceledException) { /* lockdown ended mid-exit; ReturnAsync still restores */ }
         catch (Exception ex) { App.Logger?.Warning("Possession warden leave failed: {Error}", ex.Message); }
@@ -323,7 +312,7 @@ public sealed class Warden : IPossessionWarden
         ClearNote();
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(VerbTimeout);
+        cts.CancelAfter(WardenRules.VerbTimeout);
         try
         {
             // ReturnHomeAsync no-ops when the tube never left home, which is what makes the double
@@ -332,7 +321,7 @@ public sealed class Warden : IPossessionWarden
             if (_hasLeft)
             {
                 _hasLeft = false;
-                NameIt("return");
+                NameIt(WardenRules.Return);
             }
         }
         catch (OperationCanceledException) { _hasLeft = false; }
@@ -378,7 +367,7 @@ public sealed class Warden : IPossessionWarden
     {
         try
         {
-            _ = Task.Delay(2000, ct).ContinueWith(t =>
+            _ = Task.Delay(WardenRules.GoHomeDelayMs, ct).ContinueWith(t =>
             {
                 if (t.IsCanceled) return;
                 if (Application.Current?.Dispatcher == null
@@ -397,25 +386,9 @@ public sealed class Warden : IPossessionWarden
     //  to come back. Crimson, not ember - ember is the verb (the room is DOING something right now), and
     //  a note is the opposite of that; it is the Lockdown theme sitting still.
     //
-    //  Three variants, localized (loc-additions/companion.json, all 9 languages). They are loc keys and
-    //  not bark lines because the note is TEXT ON SCREEN with no audio and no per-mod substitution - the
-    //  bark packs own what she SAYS, the language files own what the room WRITES.
+    //  Three variants, localized (loc-additions/companion.json, all 9 languages); keys and English
+    //  fallbacks are WardenRules.NoteKeys / NoteFallbacks.
     // =================================================================================================
-
-    private static readonly string[] NoteKeys =
-    {
-        "possession_tube_note_1",
-        "possession_tube_note_2",
-        "possession_tube_note_3",
-    };
-
-    /// <summary>English fallbacks, for the case where the key is missing from a language file.</summary>
-    private static readonly string[] NoteFallbacks =
-    {
-        "back soon. you are not.",
-        "stepped out. you did not.",
-        "gone a moment. you have longer.",
-    };
 
     private static readonly Random NoteRng = new();
 
@@ -427,15 +400,11 @@ public sealed class Warden : IPossessionWarden
             var tube = Tube;
             if (tube == null) return;
 
-            int i = NoteRng.Next(NoteKeys.Length);
+            int i = NoteRng.Next(WardenRules.NoteKeys.Length);
             string text;
-            try { text = Localization.Loc.Get(NoteKeys[i]); }
+            try { text = Localization.Loc.Get(WardenRules.NoteKeys[i]); }
             catch { text = string.Empty; }
-
-            // Loc.Get hands back the KEY when a language file is missing it; a card reading
-            // "possession_tube_note_2" would be the single least in-character thing in the feature.
-            if (string.IsNullOrWhiteSpace(text) || string.Equals(text, NoteKeys[i], StringComparison.Ordinal))
-                text = NoteFallbacks[i];
+            text = WardenRules.NoteText(i, text);
 
             tube.ShowPossessionNote(text);
         }
@@ -513,18 +482,9 @@ public sealed class Warden : IPossessionWarden
         if (App.Bark != null) { NameIt(verb); return; }
         try
         {
-            App.AvatarWindow?.GigglePriority(FallbackStareLine(reason), playSound: false,
+            App.AvatarWindow?.GigglePriority(WardenRules.FallbackStareLine(reason), playSound: false,
                 aiGenerated: false, mood: "possessive");
         }
         catch { /* the tube may be tearing down */ }
     }
-
-    private static string FallbackStareLine(string reason) => reason switch
-    {
-        EscapeKinds.Close => "still trying the door? i can see you doing it~",
-        EscapeKinds.Minimize => "you can hide the window. you cannot hide from me~",
-        EscapeKinds.Stop => "no. we are not stopping. look at me~",
-        EscapeKinds.SystemKey => "that key does nothing. i do~",
-        _ => "i am watching you. i have been the whole time~",
-    };
 }
