@@ -1,7 +1,8 @@
 /* sim/respawn.js - the rescue timeline after a drop (plan section 6, CONTRACT.md section 4).
  *
  * Anchor: node latchSeg (latched at TAKE-OFF), or the first landing node when that node is a jump lip
- * or inside a gap; never inside a vertical loop (the node before its magnet run). The kart faces respawn.aheadNodes
+ * or inside a gap; never inside a vertical loop (the node before its magnet run), never over a court hole
+ * (sim/court-paths.js) and never inside a stone field (the last node before it, sim/stones.js). The kart faces respawn.aheadNodes
  * nodes further on. PULL draws it to a hover point
  * above the anchor, arriving exactly at pullS; HOVER holds; RELEASE lowers it to the road and lets it
  * go at releasePct x top; GRACE (no drop, no wall cancel) runs while kart.step drives again.
@@ -10,12 +11,13 @@ import { S, RESPAWN, getPos, getQuat, setPos, setQuat, setVel } from './state.js
 import { v3, q4, v3sub, v3norm, v3reject, v3addScaled, v3lerp, v3scale, qslerp, qlook, smoothstep } from '../core/math.js';
 import { gap } from './gaps.js';
 import { courtRescueNode } from './court-paths.js';
+import { fieldRescueNode } from './stones.js';
 
 const fOut = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] });
 const A = fOut(), B = fOut(), F = v3(), H = v3(), P = v3(), Q = q4(), QC = q4(), V = v3(), ZERO = [0, 0, 0];
 
 /** Anchor node index for the current latch. */
-export function anchorNode(st, track) {
+export function anchorNode(st, track, aheadNodes = 0) {
   const n = track.nodeCount;
   let i = (((st[S.latchSeg] | 0) % n) + n) % n;
   const s = track.nodeS[i];
@@ -30,7 +32,8 @@ export function anchorNode(st, track) {
   // polish 6: never inside a vertical loop (magnet run): back to the last node before the run, on the entry straight
   const mag = (k) => { const f = track.nodeFlags ? track.nodeFlags(k) : null; return !!f && f.indexOf('magnet') >= 0; };
   for (let k = 0; k < n && mag(i); k++) i = (i - 1 + n) % n;
-  return courtRescueNode(track, i);
+  // wave 2 STONES: never inside a stone field either (the last deck node before it: retry the stones)
+  return fieldRescueNode(track, courtRescueNode(track, i), aheadNodes);
 }
 
 export function updateRespawn(st, track, feel, dt, events) {
@@ -41,7 +44,7 @@ export function updateRespawn(st, track, feel, dt, events) {
     if (st[S.respawnT] >= feel.get('respawn.graceS')) { st[S.respawnPhase] = RESPAWN.NONE; st[S.respawnT] = 0; }
     return;
   }
-  const i = anchorNode(st, track), ahead = (i + feel.get('respawn.aheadNodes')) % track.nodeCount;
+  const i = anchorNode(st, track, feel.get('respawn.aheadNodes')), ahead = (i + feel.get('respawn.aheadNodes')) % track.nodeCount;
   track.frameAt(track.nodeS[i], A); track.frameAt(track.nodeS[ahead], B);
   v3norm(F, v3reject(F, v3sub(F, B.p, A.p), A.n));
   qlook(Q, F, A.n);

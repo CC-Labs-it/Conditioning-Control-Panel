@@ -20,6 +20,13 @@
  * emits `splash`; on the pool thrust is capped and the engine is dragged toward that cap. Events `surface { kind,
  * from }` (once per ground surface change) and `chute { s }` (once per chute entry). Per-kart water memory lives
  * in a WeakMap on the state array (the state layout is frozen).
+ * Wave 2 STONES (sim/stones.js): inside a stone field the query answers `stone` on a stone and `hole.lip` over the
+ * void. A grounded kart stepping off supported ground (the deck before the field or a stone) into that void is kicked
+ * up by stones.kickUpMps along the road normal ('lip' take-off); the road's own edges and court holes never kick.
+ * Over a lip void the kart counts as on its own road while it is still within the snap band of the deck (no fall
+ * probe, no hole latch, no edge glow at every stone edge); below that band the ordinary hole fall runs. Events
+ * `stone { id, s, x }` (a stone the kart was not on before) and `void { s, x }` (once per flight, first below the
+ * deck over a void). Per-kart stone memory lives in a WeakMap too.
  * No three.js; every tuning number comes from feel each tick (sim/gaps.js for the few it lacks).
  */
 import { S, BOOST, RESPAWN, getPos, getVel, getQuat, setPos, setVel, setQuat } from './state.js';
@@ -34,8 +41,16 @@ import { baseYaw, gripYaw } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
+import { lipLeave } from './stones.js';
 
 export { applyBoost };
+
+// wave 2 STONES: per-kart memory (the state layout is frozen): the stone the kart stands on (or last stood on while
+// airborne, so a hop on the same stone is not a new `stone`), and whether this flight already dropped below the deck
+const STONES = new WeakMap();
+const stoneMem = (st) => { let m = STONES.get(st); if (!m) { m = { on: null, voided: false }; STONES.set(st, m); } return m; };
+/** Forget a kart's stone state (spawn, drop). */
+export function resetStones(st) { const m = STONES.get(st); if (m) { m.on = null; m.voided = false; } }
 
 // wave 1 WATER: per-kart memory (the state layout is frozen): the applied current [along, lat] in the road frame,
 // the last ground surface kind and whether the kart is on a chute (for the once-per-entry events)
@@ -63,7 +78,7 @@ export function spawn(st, track, feel, slot = 0) {
   st[S.seg] = pose.seg; st[S.latchSeg] = pose.seg; st[S.s] = pose.s; st[S.lateral] = pose.lateral;
   st[S.grounded] = 1; st[S.hopT] = 1e3;          // the last hop was long ago
   st[S.sectionIdx] = track.sectionAt(pose.s);
-  resetRoute(st); resetFall(st); resetWater(st);
+  resetRoute(st); resetFall(st); resetWater(st); resetStones(st);
   return st;
 }
 
@@ -173,9 +188,15 @@ export function step(st, a, track, feel, dt, ev) {
   v3addScaled(P, P, V, dt);
   let qb = track.query(P[0], P[1], P[2], qa.seg, QB);
   const snap = gap(feel, 'kart.snapM');
+  // wave 2 STONES: over a field's void the kart is still on its own road while within the snap band of the deck
+  // (a lip kick across a gap lands on the next stone); below that band it has fallen through: `void` once per flight
+  const sm = stoneMem(st);
+  const lipVoid = !!qb.hole && qb.hole.lip === true;
+  const overLip = lipVoid && qb.height > -snap;
+  if (air && lipVoid && !overLip && !sm.voided) { sm.voided = true; ev.emit('void', { s: qb.s, x: qb.lateral }); }
   // off its own road in the air: a drop shortcut's landing road beneath it (sim/routes.js)
   let under = null, fall = false;
-  const own = qb.onRoad && qb.height > -snap - 0.5;
+  const own = (qb.onRoad || overLip) && qb.height > -snap - 0.5;
   if (air && track.routes && track.routes.length) {
     let lq = qb;
     if (!own) {
@@ -210,10 +231,22 @@ export function step(st, a, track, feel, dt, ev) {
   } else if (!air) {
     // a drop shortcut's kicker lip (sim/routes.js edgeAt): driving off the opening throws the kart up a little,
     // a 'lip' take-off, so a hop right after it pays the trick
-    const kick = road && qb.edgeDist < 0 && edgeAt(track, qb, qb.lateral, gap(feel, 'kart.radiusM')) === 'kicker';
-    if (kick) v3addScaled(V, V, n, gap(feel, 'route.kickUpMps'));
-    takeoff(st, ev, !kick && road && (qb.edgeDist < 0 || qb.hole) ? 'edge' : 'lip');
+    // wave 2 STONES: every step from supported ground (deck or stone) into a field's void is a kicker lip too
+    // (sim/stones.js lipLeave), the kick is stones.kickUpMps
+    const lip = road && lipLeave(qa, qb);
+    const kick = !lip && road && qb.edgeDist < 0 && edgeAt(track, qb, qb.lateral, gap(feel, 'kart.radiusM')) === 'kicker';
+    // the kick never carries a kart further than stones.flightCapM before it is level with the deck again (a pad
+    // boost at 35 m/s with the full kick flew a whole stone-and-gap period and came down in the next void)
+    if (lip) v3addScaled(V, V, n, Math.min(feel.get('stones.kickUpMps'), feel.get('stones.flightCapM') * feel.get('hop.gravityMps2') / (2 * Math.max(1, speed))));
+    else if (kick) v3addScaled(V, V, n, gap(feel, 'route.kickUpMps'));
+    takeoff(st, ev, !kick && !lip && road && (qb.edgeDist < 0 || qb.hole) ? 'edge' : 'lip');
   } else st[S.airTime] += dt;
+  // wave 2 STONES: a stone the kart was not on before (a landing or the deck handing over to the first stone)
+  if (ground) {
+    const id = qb.stone ? qb.stone.id : null;
+    if (id !== null && id !== sm.on) ev.emit('stone', { id, s: qb.s, x: qb.lateral });
+    sm.on = id; sm.voided = false;
+  }
 
   // rails (and open sides under Gentle, the soft rails)
   const radius = gap(feel, 'kart.radiusM');
@@ -243,7 +276,7 @@ export function step(st, a, track, feel, dt, ev) {
 
   // edge grace and drop
   if (ground || under || fall) HOLE_FALL.delete(st);
-  else if (qb.hole && qb.height <= 0) HOLE_FALL.add(st);
+  else if (qb.hole && qb.height <= (lipVoid ? -snap : 0)) HOLE_FALL.add(st);   // a lip void latches below the snap band
   // Keep a real hole fall latched after passing under its far lip; a hop above it does not count.
   const holeFall = HOLE_FALL.has(st);
   const past = !st[S.grounded] && road && (ed < 0 || holeFall) && !under && !fall;
@@ -255,7 +288,7 @@ export function step(st, a, track, feel, dt, ev) {
   const drop = !grace && (fell || st[S.edgeT] >= (holeFall ? Math.min(HOLE_GRACE_S, feel.get('drop.edgeGraceS')) : feel.get('drop.edgeGraceS')));
   if (drop) {
     if (wasEdge || past) ev.emit('edge-exit', { to: 'drop' });
-    cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st); resetFall(st); resetWater(st);
+    cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st); resetFall(st); resetWater(st); resetStones(st);
     st[S.respawnPhase] = RESPAWN.PULL; st[S.respawnT] = 0; st[S.edgeT] = 0;
     HOLE_FALL.delete(st);
     ev.emit('drop', { seg: qb.seg, cause: fell ? 'fallY' : holeFall ? 'hole' : 'edge' });

@@ -82,14 +82,23 @@ export function step(state, actions, track, feel, dt, events) /* -> void; one fi
 // or RELEASE it leaves motion alone (respawn owns the kart). During GRACE it never drops or wall-cancels.
 // Walls: a side is railed per the track; with feel gentle.on the open sides act as rails too (soft rails).
 // Pads: grounded and inside a boost rectangle (s in [pad.s, pad.s + len], |lateral - x| <= w / 2) starts PAD once per entry.
+// Stones (wave 2, sim/stones.js): on the ground, any step from supported ground (the previous ground query was
+// onRoad: the deck before the field or a stone) to a query whose hole has `lip: true` kicks the kart up by
+// stones.kickUpMps along the road normal and takes off as 'lip' (the deck hands over to a void on the staggered
+// lanes; the road's own edges and court holes never kick). Over a lip void the kart stays "on its own road" while within kart.snapM of the deck (no fall probe, no hole
+// latch, no edge glow); below that band the hole-fall latch runs as today (drop cause 'hole', or the fall onto the road
+// beneath through sim/falls.js when the track offers one). Emits stone { id, s, x } when the kart lands on or first
+// drives onto a stone it was not on before (a hop that lands on the same stone is silent) and void { s, x } once per
+// flight when it first drops below that band over a void (before the drop or the fall).
 export function applyBoost(state, kind /* BOOST.* */, tier /* 1..3, 0 for PAD */, feel, events) /* emits boost-start */
 
 // sim/respawn.js
 export function updateRespawn(state, track, feel, dt, events) /* -> void; call every tick after step */
 // PULL (pullS) -> HOVER (hoverS) -> RELEASE (releaseS, leaves at releasePct * top) -> GRACE (graceS) -> NONE.
 // Anchor: node latchSeg (latched at TAKE-OFF), facing node latchSeg + respawn.aheadNodes. If the anchor is a
-// jump lip or inside a gap, use the first landing node after the gap. Emits rescue-pull, rescue-hover,
-// rescue-release, then land { tier: 1, airTime: 0 } when the kart touches down.
+// jump lip or inside a gap, use the first landing node after the gap. Never over a court hole (court-paths.js
+// courtRescueNode) and never inside a stone field: the last node before it (stones.js fieldRescueNode).
+// Emits rescue-pull, rescue-hover, rescue-release, then land { tier: 1, airTime: 0 } when the kart touches down.
 
 // sim/race.js
 export function createRace(track, feel, events) /* -> Race */
@@ -269,6 +278,8 @@ Escape only pauses; the page never sends `exit` on Escape.
 | `surface` | `{ kind, from }` (ground surface kind changed: glass, grip, haze, stream, pool) | kart | fx (fov lift entering stream) |
 | `splash` | `{ s, x, speed, down }` (landing onto a pool, down = vertical m/s, positive down) | kart | fx (fov dip, white ring), audio |
 | `chute` | `{ s }` (first drive onto a stream node steeper than water.chuteGradeDeg) | kart | fx (fov lean, lip spray) |
+| `stone` | `{ id, s, x }` (wave 2 STONES: the kart lands on, or first drives onto, a stone it was not on before; a hop landing on the same stone is silent) | kart | fx (soft tick, 2 cm bob; the tick only on Gentle) |
+| `void` | `{ s, x }` (once per flight: the kart first drops below the deck over a field's void, before the drop or the fall) | kart | fx (fov dip, short darkening) |
 
 ## 9. Frame loop (boot.js, every requestAnimationFrame)
 

@@ -34,13 +34,27 @@ export function createContact(track, feel, events) {
   // water wave 1: the kick also waits through a court approach (a slipstream kick at the aperture entry
   // pushed a bot onto a hole line faster than it could reach a supported band; the player gets the same hold)
   function courtAt(st) {
-    const cs = track.courts;
-    if (!cs || !cs.length) return false;
+    const cs = track.courts || [];
     for (const c of cs) {
       if (!c.holes || !c.holes.length) continue;
       const end = Math.max(...c.holes.map((h) => h.s + h.len));
       if (wrap(st[S.s] - (c.fromS - COURT_LEAD_M), L) <= end - c.fromS + COURT_LEAD_M) return true;
     }
+    // wave 2 STONES: and from stones.leadM before a stone field to its end (a kick at the entry at the wrong
+    // lateral is a fall off the stones)
+    const fs = track.fields;
+    if (!fs || !fs.length) return false;
+    const lead = feel.get('stones.leadM');
+    for (const f of fs) if (wrap(st[S.s] - (f.fromS - lead), L) <= f.toS - f.fromS + lead) return true;
+    return false;
+  }
+
+  /** Inside a stone field (or stones.leadM before it): a shove there keeps only stones.shoveMul of its sideways part. */
+  function onStones(st) {
+    const fs = track.fields;
+    if (!fs || !fs.length) return false;
+    const lead = feel.get('stones.leadM');
+    for (const f of fs) if (wrap(st[S.s] - (f.fromS - lead), L) <= f.toS - f.fromS + lead) return true;
     return false;
   }
 
@@ -108,8 +122,15 @@ export function createContact(track, feel, events) {
           const c = Math.max(0, closing);
           const p = Math.min(feel.get('contact.maxPushMps'), feel.get('contact.pushMps') + feel.get('contact.pushPerDv') * c);
           const ka = (c + p) * sa, kb = (c + p) * sb;   // take the closing speed out, then push apart
-          push(ra, -U[0] * ka, -U[1] * ka, -U[2] * ka);
-          push(rb, U[0] * kb, U[1] * kb, U[2] * kb);
+          // wave 2 STONES: on the stones the sideways part of the shove is mostly lost (a full push threw a kart
+          // 3.5 m across a 5 m stone into the slit between lanes); the along-road part stays
+          let lx = 0, ly = 0, lz = 0;
+          if (onStones(a) || onStones(b)) {
+            const ub = U[0] * f.b[0] + U[1] * f.b[1] + U[2] * f.b[2], keep = 1 - feel.get('stones.shoveMul');
+            lx = f.b[0] * ub * keep; ly = f.b[1] * ub * keep; lz = f.b[2] * ub * keep;
+          }
+          push(ra, -(U[0] - lx) * ka, -(U[1] - ly) * ka, -(U[2] - lz) * ka);
+          push(rb, (U[0] - lx) * kb, (U[1] - ly) * kb, (U[2] - lz) * kb);
           const loss = 1 - feel.get('contact.engineLoss');
           a[S.engineV] *= loss; b[S.engineV] *= loss;
           cool.set(key, feel.get('contact.cooldownS'));

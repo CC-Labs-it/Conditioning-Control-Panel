@@ -113,6 +113,15 @@ water and the current is added on top. A chute is a stream steeper than `water.c
 - `route.airMaxMps` 5: ... at most this fast ...
 - `route.airAccel` 6: ... changing by at most this many m/s per second (a hard aim for the opening still lands, a wild exit still misses).
 
+## stones (wave 2 STONES: stepping stones over the void, `sim/stones.js` + `sim/kart.js`; SIM owns these keys)
+A stone field (`track.fields`) replaces the road deck with lanes of 5 x 5 m stones over a void; every stone edge is a kicker lip.
+- `stones.kickUpMps` 3.5: a grounded kart stepping off supported ground (the deck at the field start or any stone edge) into the field's void is thrown up this fast along the road normal, a 'lip' take-off (a hop at the lip still pays the trick). Never fires at the road's own edges or a court hole.
+- `stones.clearGapM` 4: the gap along a lane the kick is tuned for (the generator's gapM).
+- `stones.minClearMps` 14: the design speed that clears that gap lane-straight; `tests/sim-stones.test.mjs` pins `clearSpeed(clearGapM, kickUpMps, hop.gravityMps2, kart.snapM)` under it (12.3 m/s today) and that 10 m/s comes down below the next deck.
+- `stones.flightCapM` 7.5: the kick is capped so the bare arc (back to deck height) never runs further than this along the road: kickUp = min(kickUpMps, flightCapM x gravity / (2 x speed)). A pad boost at 35 m/s with the full kick flew the whole 9 m stone-and-gap period and came down in the next void.
+- `stones.shoveMul` 0.3: on the stones (and leadM before them) a kart-to-kart shove keeps this much of its sideways part, all of its along-road part (sim/contact.js onStones; a full shove threw a bot 3.5 m across a 5 m stone into the slit between lanes).
+- `stones.leadM` 25: the slipstream kick holds from this far before a field to its end (as the court lead does), so no boost fires at the entry at the wrong lateral.
+
 ## hop
 Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every drift); now 0.40 m, 0.33 s, lands soft.
 - `hop.upMps` 4.8: hop up speed (5.5 before).
