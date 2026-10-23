@@ -33,6 +33,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public static EmiTarget? Find(string? id) =>
             All.FirstOrDefault(t => string.Equals(t.Id, id, StringComparison.Ordinal));
 
+        /// <summary>Every navigation route teaches the same ring as a card pick (WPF NoteTabOpened).</summary>
+        public static void NoteTabOpened(string? tabKey)
+        {
+            try
+            {
+                if (EmiDoors.TargetForTab(tabKey) is { } id) EmiState.NoteUsage(id);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] tab open not counted for {Tab}", tabKey); }
+        }
+
+        /// <summary>A rack open scores its module, never Studio (WPF NoteRackOpened).</summary>
+        public static void NoteRackOpened(string? rackKey)
+        {
+            try
+            {
+                if (EmiDoors.TargetForRack(rackKey) is { } id) EmiState.NoteUsage(id);
+            }
+            catch (Exception ex) { Log.Debug(ex, "[EmiDesk] rack open not counted for {Rack}", rackKey); }
+        }
+
         private static (Func<bool> Available, Func<bool> Locked, Action Open) Free(Action open) => (Always, Never, open);
 
         /// <summary>A premium door: WPF's PremiumOk probe and PremiumPrompt refusal, over Core TierGate.</summary>
