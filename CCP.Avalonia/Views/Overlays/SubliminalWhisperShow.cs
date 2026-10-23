@@ -27,10 +27,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal static class SubliminalWhisperShow
     {
         /// <summary>The UI marks the exact lookup Whisper uses, irrespective of mute/volume.</summary>
-        internal static bool HasRecordedVoice(string text) => FindRecordedVoice(text) != null;
+        /// WPF SubliminalService.HasRecordedVoice: blank is silent, a lookup failure is silent.
+        internal static bool HasRecordedVoice(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            try { return FindRecordedVoice(text) != null; }
+            catch { return false; }
+        }
 
         private static string? FindRecordedVoice(string text) => SubliminalWhisper.FindLinkedAudio(text,
-            SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath), SubAudioDir, App.Mods?.ActiveModId);
+            SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath), SubAudioDir, App.Mods?.ActiveModId, ListAudioFiles);
+
+        // WPF ListAudioFiles: a 60 s listing cache, keyed here by directory (a mod switch changes it).
+        private static readonly System.Collections.Generic.Dictionary<string, (DateTime At, string[] Files)> Listings = new();
+
+        private static string[]? ListAudioFiles(string directory, bool _)
+        {
+            lock (Listings)
+            {
+                if (Listings.TryGetValue(directory, out var hit) && (DateTime.UtcNow - hit.At).TotalSeconds <= 60)
+                    return hit.Files;
+                if (!Directory.Exists(directory)) return null;
+                var files = Directory.GetFiles(directory);
+                Listings[directory] = (DateTime.UtcNow, files);
+                return files;
+            }
+        }
 
         private static readonly Random Rng = new();
         private static Action? _stopWhisper;
