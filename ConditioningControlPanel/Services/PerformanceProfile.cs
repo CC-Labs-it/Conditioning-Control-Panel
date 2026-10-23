@@ -19,10 +19,6 @@ namespace ConditioningControlPanel.Services;
 /// </summary>
 public static class PerformanceProfile
 {
-    // Load thresholds for automatic escalation (number of active heavy elements).
-    private const int BalancedThreshold = 8;
-    private const int PerformanceThreshold = 16;
-
     /// <summary>
     /// Live count of heavy on-screen elements (flash windows + ambient bubbles). Cheap to read.
     /// </summary>
@@ -41,16 +37,9 @@ public static class PerformanceProfile
             if (settings == null)
                 return PerformanceTier.Quality;
 
-            if (settings.PerformanceMode)
-                return PerformanceTier.Performance;
-
-            if (!settings.AutoPerformanceMode)
-                return PerformanceTier.Quality;
-
-            var count = HeavyElementCount;
-            if (count >= PerformanceThreshold) return PerformanceTier.Performance;
-            if (count >= BalancedThreshold) return PerformanceTier.Balanced;
-            return PerformanceTier.Quality;
+            // The rule lives in Core (shared with the Avalonia head); the count stays lazy.
+            return Services.UI.PerformanceTierRule.Resolve(settings.PerformanceMode, settings.AutoPerformanceMode,
+                settings.PerformanceMode || !settings.AutoPerformanceMode ? 0 : HeavyElementCount);
         }
     }
 
