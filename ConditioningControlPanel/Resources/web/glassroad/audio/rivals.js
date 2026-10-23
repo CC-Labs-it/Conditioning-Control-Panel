@@ -13,6 +13,7 @@ import { engineLayers, enginePitchSemis, semisToRate } from './sfxmap.js';
 
 export function createRivals(ctx, out, feel) {
   let voices = [], slots = [], samples = null;
+  const layersOut = { idle: 0, cruise: 0, air: 0 }, flOut = { boosting: false };   // reused by every voice, every frame
   const rec = () => !!samples && samples.has('engine-cruise') && samples.has('engine-air');
 
   function make() {
@@ -55,6 +56,7 @@ export function createRivals(ctx, out, feel) {
     while (voices.length < n) { voices.push(make()); slots.push(-1); }
     allocVoices(slots, rivals, Math.min(n, voices.length));
     const tc = mixGet(feel, 'rivalGlideS');
+    const w = layersOut, fl = flOut;
     voices.forEach((v, k) => {
       const i = k < n ? slots[k] : -1;
       const r = i >= 0 ? rivals.find((x) => x.i === i) : null;
@@ -63,8 +65,8 @@ export function createRivals(ctx, out, feel) {
       const jump = v.who !== i;                   // a new racer on this voice: set pitch at once, fade in
       v.who = i;
       if (v.layers) {
-        const fl = { boosting: !!r.boosting };
-        const w = engineLayers(r.speedPct, fl, feel);
+        fl.boosting = !!r.boosting;
+        engineLayers(r.speedPct, fl, feel, w);
         const rate = semisToRate(enginePitchSemis(r.speedPct, fl, feel) + t.detune / 100);
         for (const key of ['cruise', 'air']) {
           const l = v.layers[key];

@@ -355,8 +355,20 @@ async function boot() {
    * go lands on a bar downbeat (S3): the song is offset against go, go never moves.
    */
   let songToken = 0;
+  // a song the player dropped on the page (solo only): no chart, so the beat shake runs on its analysis
+  // (audio/songShape.js analyzeBuffer) and there are no words. Online the room's chart wins.
+  let pickedSong = null;
   async function playSong(align = null) {
     const my = ++songToken;
+    if (pickedSong && !online && audio.music) {
+      if (await audio.music.playFile(pickedSong)) {
+        if (my !== songToken) return;
+        debug.chart = 'file:' + pickedSong.name;
+        armWords();
+        return;
+      }
+      if (my !== songToken) return;
+    }
     for (const url of CHARTS) {
       if (my !== songToken || !audio.music) return;
       if (await audio.music.playChart(url, { align })) {
@@ -397,7 +409,7 @@ async function boot() {
     const started = audio.start(); unpause(); resetAll(); begin();
     // solo: the song would start with the count; it waits (or starts part way in) so go is a downbeat
     const align = (song) => goDownbeat(song, goS) - race.goInS;
-    if (CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
+    if (pickedSong || CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
   function toMenu() {
     if (online && lobbyUi) lobbyUi.leave();       // quit mid-race online: leave the room (online-left tears down)
@@ -556,6 +568,16 @@ async function boot() {
     window.addEventListener('blur', () => setPaused(true));
     document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
   }
+  // drop an audio file anywhere: it is the race song from now on (solo); mid-race it starts at once
+  const audioFile = (e) => { const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; return f && /^audio\//.test(f.type) ? f : null; };
+  window.addEventListener('dragover', (e) => { if (!online && e.dataTransfer && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  window.addEventListener('drop', (e) => {
+    const f = online ? null : audioFile(e);
+    if (!f) return;
+    e.preventDefault();
+    pickedSong = f;
+    if (state === 'race') Promise.resolve(audio.start()).then(() => playSong()).catch((err) => console.warn('[glassroad] song', err));
+  });
 
   // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
   hud.setLoading('Preparing shaders', 0.55);
