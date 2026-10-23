@@ -91,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 case "ready":
                     IsReady = true;
+                    _dtrhLastHeartbeatUtc = DtrhUtcNow(); // WPF OnPageReady :275: loading does not spend the deadline
                     OnDtrhPageReady();
                     return true;
                 case "heartbeat":

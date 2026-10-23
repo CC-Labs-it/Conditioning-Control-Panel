@@ -895,6 +895,20 @@ public sealed class GameWindowTests
     });
 
     [Fact]
+    public void Dtrh_Heartbeat_SlowReadyRestartsTheClock() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        // WPF OnPageReady (DtrhHostService.cs:275): a 25 s page load must not spend the hub's 20 s deadline.
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        GameWindow.DtrhUtcNow = () => now;
+        var w = GameWindow.Launch("dtrh")!;
+        now = now.AddSeconds(25);
+        w.Web.OnNavigationCompleted(w.PageUrl);
+        w.Web.OnWebMessage("{\"type\":\"ready\"}");
+        Assert.Equal("ok", w.CheckDtrhHeartbeat(now));
+        Assert.True(GameWindow.IsAnyOpen());
+    });
+
+    [Fact]
     public void Dtrh_Heartbeat_PanicDuringRecoveryCloseCannotRelaunch() => RunDtrh(lab: true, (_, _, _, _) =>
     {
         var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
