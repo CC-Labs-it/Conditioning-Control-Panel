@@ -146,6 +146,22 @@ public sealed class FeatureCardCompletionTests
         finally { shell.Close(); }
     });
 
+    [Fact]
+    public void SwappedHintSurvivesALanguageChange() => WithDashboard((window, dash) =>
+    {
+        var hint = dash.FindControl<TextBlock>("DashToggleHint")!;
+        var was = LocalizationManager.Instance.CurrentLanguage;
+        try
+        {
+            dash.FindControl<CheckBox>("InvertDashboardClicks")!.IsChecked = true;
+            LocalizationManager.Instance.SetLanguage("de");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Loc.Get("dash_click_swapped"), hint.Text);
+            Assert.NotEqual(Loc.Get("dash_toggle_hint"), hint.Text);
+        }
+        finally { LocalizationManager.Instance.SetLanguage(was); }
+    });
+
     [Theory]
     [InlineData("fx.flash.drift_bounce", true, false)]
     [InlineData("fx.flash.pendulum", true, false)]

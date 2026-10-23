@@ -255,7 +255,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SetWallFeature(key, !IsWallFeatureOn(key));
             var s = CoreSettings.Current;
             // WPF NoteDashboardToggleUsed: stop saving once the gesture is learned.
-            if (s.DashboardToggleHintUses < 3)
+            if (global::ConditioningControlPanel.Services.DashboardToggleHintRule.ShouldShow(s.DashboardToggleHintUses))
             {
                 s.DashboardToggleHintUses++;
                 CoreSettings.Save();

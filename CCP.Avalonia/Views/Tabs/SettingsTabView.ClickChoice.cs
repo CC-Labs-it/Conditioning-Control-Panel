@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
@@ -22,6 +23,10 @@ public partial class SettingsTabView
         _clickChoiceClose.Tick += (_, _) => ClickChoiceCloseElapsed();
         Loaded += (_, _) => { RefreshClickPreference(); RefreshV2Badges(); };
         Unloaded += (_, _) => CloseClickChoice();
+        // DashToggleHint's text is chosen in code (swapped or not), so it is re-read on a language
+        // change rather than carrying a {loc:Str} binding that would snap back to dash_toggle_hint.
+        AttachedToVisualTree += (_, _) => LocalizationManager.Instance.LanguageChanged += OnClickChoiceLanguageChanged;
+        DetachedFromVisualTree += (_, _) => LocalizationManager.Instance.LanguageChanged -= OnClickChoiceLanguageChanged;
         PropertyChanged += (_, e) =>
         {
             if (e.Property != IsVisibleProperty) return;
@@ -29,6 +34,8 @@ public partial class SettingsTabView
             else { RefreshClickPreference(); RefreshV2Badges(); }
         };
     }
+
+    private void OnClickChoiceLanguageChanged(object? sender, EventArgs e) => RefreshClickPreference();
 
     internal void RefreshClickPreference()
     {
@@ -39,8 +46,7 @@ public partial class SettingsTabView
             InvertDashboardClicks.IsChecked = invert;
             ClickChoiceDescription.Text = Loc.Get(invert ? "dash_click_swapped" : "dash_click_default");
             DashToggleHint.Text = Loc.Get(invert ? "dash_click_swapped" : "dash_toggle_hint");
-            // WPF DashboardToggleHintRule.MaxUses: retire the logo caption after three toggles.
-            DashToggleHint.IsVisible = CoreSettings.Current.DashboardToggleHintUses < 3;
+            DashToggleHint.IsVisible = DashboardToggleHintRule.ShouldShow(CoreSettings.Current.DashboardToggleHintUses);
         }
         finally { _refreshingClickChoice = false; }
     }
@@ -127,8 +133,8 @@ public partial class SettingsTabView
         // ponytail: svc-prize-ownership has no snapshot/GrantsChanged yet. Re-read the existing
         // ownership seam on load, Home return and wall repaint; Release remains unowned.
         CardFlash.ShowV2Badge = PrizeOwnership.IsGranted(PrizeOwnership.FlashDriftBounce)
-            || PrizeOwnership.IsGranted("fx.flash.pendulum") || PrizeOwnership.IsGranted("fx.jackpot_remix");
-        CardBubblePop.ShowV2Badge = PrizeOwnership.IsGranted("fx.bubble.rain")
-            || PrizeOwnership.IsGranted("fx.bubble.spiral_in");
+            || PrizeOwnership.IsGranted(PrizeOwnership.FlashPendulum) || PrizeOwnership.IsGranted(PrizeOwnership.JackpotRemix);
+        CardBubblePop.ShowV2Badge = PrizeOwnership.IsGranted(PrizeOwnership.BubbleRain)
+            || PrizeOwnership.IsGranted(PrizeOwnership.BubbleSpiralIn);
     }
 }
