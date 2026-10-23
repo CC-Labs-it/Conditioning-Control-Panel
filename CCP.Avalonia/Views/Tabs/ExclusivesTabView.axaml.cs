@@ -48,9 +48,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LoadBackdrop();
             RefreshVault();
 
-            // The tab is permanently mounted on WPF and MainWindow parks its canvas through
-            // RegisterTabFx. No tab host on this head: the view runs its own room and stops it on
-            // unload. The canvas self-gates on motion, tier and window focus regardless.
+            // The shell enrolls the room in RegisterTabFx on first arrival at "premium",
+            // matching WPF EnsureExclusivesBuilt. This view composes it and stops it on unload;
+            // the canvas also self-gates on motion, tier and window focus.
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
