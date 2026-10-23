@@ -1,8 +1,8 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), PvP stakes (no Core
-// StakeBridge on this head), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// media-flavour / media-more / online-media), PvP stakes (Core StakeBridge.ForApp
+// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.Quiz;
