@@ -2687,3 +2687,6 @@ Goon match engine (GoonMatchService, MatchClock, GoonSuddenDeath, GoonTransportB
 ## avalonia-port/linux-package-wired: +28
 - linux-package -> wired: the installed tarball reaches the First run window under kwin --virtual (splash 0.46 s, wizard 5.80 s, 749 MiB installed); AUR test-local passes.
 - Hand-install steps for the tarball added to docs/avalonia-linux-install.md (the .desktop Exec needs a PATH launcher).
+
+## avalonia-port/wire-shell-ambient-fx: +107
+Premium room canvas enrolled in the shell ambient registry under `premium` (WPF MainWindow.Exclusives.cs:379; `exclusives` redirects). Settings/Programs already enrolled; WPF Play has no canvas. Ledger shell-ambient-fx names the unenrolled WPF `chaster` and `appsettings` canvases and their owning rows. Test TabAmbientRegistryTests.PremiumRoomRegistersOnceAndParksThroughRealNavigation (fail-proven). rgate: local Linux green, Windows run 38586062437 green.
