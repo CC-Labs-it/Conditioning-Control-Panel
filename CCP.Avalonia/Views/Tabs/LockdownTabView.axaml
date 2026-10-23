@@ -601,19 +601,19 @@
                         <!-- SIDE ART = the lockdown plate, moved out of the card body. It keeps its
                              own pink border instead of the velvet outline because on WPF
                              StartLockdownPulse animates LockdownImageBorderBrush and
-                             LockdownImageGlow directly. Those two x:Names are gone here (Avalonia
-                             cannot name a brush or an effect), and the plate ships without its
+                             LockdownImageGlow directly. The Avalonia glow is a sibling BoxShadow border
+                             (no animated Effect), and the plate ships without its
                              Image child until the art moves to avares://. -->
-                        <Border Grid.Column="1" x:Name="LockdownImageBorder" Margin="10,0,0,10" CornerRadius="12"
-                                BorderThickness="2" ClipToBounds="True" Background="#12FFFFFF"
-                                BorderBrush="#FF1493"
-                                VerticalAlignment="Stretch" MinHeight="200" MaxHeight="520">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#FF1493" BlurRadius="14" OffsetX="0" OffsetY="0" Opacity="0.7"/>
-                            </Border.Effect>
-                            <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="64" Opacity="0.55"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <Grid Grid.Column="1" Margin="10,0,0,10" MinHeight="200" MaxHeight="520">
+                            <Border x:Name="LockdownImageGlow" CornerRadius="12" IsHitTestVisible="False"
+                                    BoxShadow="0 0 14 0 #FF1493" Opacity="0.7"/>
+                            <Border x:Name="LockdownImageBorder" CornerRadius="12"
+                                    BorderThickness="2" ClipToBounds="True" Background="#12FFFFFF"
+                                    BorderBrush="#FF1493">
+                                <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="64" Opacity="0.55"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </Grid>
                     </Grid>
                 </StackPanel>
 
