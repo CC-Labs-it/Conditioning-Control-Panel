@@ -1516,6 +1516,7 @@ internal sealed class ChaosWebViewHost : IDisposable
             if (_web.CoreWebView2 == null) { App.Logger?.Warning("{Tag}: WebView2 core null", _opts.LogTag); return; }
 
             var core = _web.CoreWebView2;
+            global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerWebGate.Attach(core);
             var settings = core.Settings;
             settings.AreDevToolsEnabled = false;
             settings.AreDefaultContextMenusEnabled = false;

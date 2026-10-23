@@ -146,8 +146,11 @@ public sealed class IntakePageTests
             File.WriteAllText(Path.Combine(web, "w.png"), "x");
             Directory.CreateDirectory(Path.Combine(assets, "images"));
             Directory.CreateDirectory(Path.Combine(assets, ".temp"));
-            foreach (var f in new[] { "images/a.gif", "images/off.png", "images/page.html", ".temp/t.png" })
+            foreach (var f in new[] { "images/a.gif", "images/off.png", "images/page.html", ".temp/t.png", ".temp/ccp_temp_remote_1.webm", ".temp/ccp_temp_2.png", "images/.temp/ccp_temp_remote_1.webm" })
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(assets, f))!);
                 File.WriteAllText(Path.Combine(assets, f), "x");
+            }
             File.WriteAllText(Path.Combine(outside, "secret.png"), "x");
             File.CreateSymbolicLink(Path.Combine(assets, "images", "link.png"), Path.Combine(outside, "secret.png"));
             Directory.CreateSymbolicLink(Path.Combine(assets, "images", "out"), outside);
@@ -157,6 +160,10 @@ public sealed class IntakePageTests
             Assert.Equal(Path.Combine(assets, "images", "a.gif"), server.ResolveFile(P("images/a.gif")));
             Assert.Null(server.ResolveFile(P("images/page.html")));     // not media
             Assert.Null(server.ResolveFile(P(".temp/t.png")));          // the app's own folder
+            Assert.Null(server.ResolveFile(P(".temp/ccp_temp_2.png")));  // a pack decrypt stays unserved
+            // ...except DtRH's copy of an online entry (Core DtrhRemoteMedia), which the tube draws
+            Assert.Equal(Path.Combine(assets, ".temp", "ccp_temp_remote_1.webm"), server.ResolveFile(P(".temp/ccp_temp_remote_1.webm")));
+            Assert.Null(server.ResolveFile(P("images/.temp/ccp_temp_remote_1.webm")));
             Assert.Null(server.ResolveFile(P("images/off.png")));       // unchecked in the Assets tree
             Assert.Null(server.ResolveFile(P("../settings.json")));
             Assert.Null(server.ResolveFile(P("../" + Path.GetFileName(web) + "/w.png")));

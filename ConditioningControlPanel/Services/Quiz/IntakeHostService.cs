@@ -71,6 +71,24 @@ namespace ConditioningControlPanel.Services.Quiz
 
         public static bool IsActive => _host != null;
 
+        /// <summary>True while the game window is in front and can keep Escape as its pause.</summary>
+        public static bool IsInFront => _host?.IsForeground == true;
+
+        /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+        public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+        /// <summary>Hand the page a kept Escape after PanicPolicy.KeptEscapeGoesTo allows it,
+        /// then return keyboard focus so the pause card works without another click.</summary>
+        public static void PostKeptEscape()
+        {
+            try
+            {
+                _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+                _host?.FocusWeb();
+            }
+            catch (Exception ex) { App.Logger?.Debug("IntakeHost: kept Escape post failed: {E}", ex.Message); }
+        }
+
         /// <summary>The page reported boot-error this app session (a genuine load/init failure).
         /// The Lab entry point can check this to route to the classic quiz instead.</summary>
         public static bool BootFailedThisSession { get; private set; }
@@ -163,6 +181,9 @@ namespace ConditioningControlPanel.Services.Quiz
             try
             {
                 if (_host == null) return;
+                // Panic and every other host close: the mic closes and the wake word comes back NOW,
+                // not after the page's goodbye.
+                ReleaseSpeechMic("closing");
                 if (_host.IsReady && !_exiting)
                 {
                     _exiting = true;
@@ -1044,7 +1065,8 @@ namespace ConditioningControlPanel.Services.Quiz
             {
                 CancelExitWatchdog();
                 StopHeartbeatWatch();
-                StopSpeechBridge("closed", notifyPage: false);   // never leave the mic open behind a closed window
+                // Never leave the mic open behind a closed window, never keep the wake word's mic.
+                ReleaseSpeechMic("closed");
                 try { _host?.Dispose(); } catch { }
                 _host = null;
                 _exiting = false;
