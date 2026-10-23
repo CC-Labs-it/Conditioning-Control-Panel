@@ -4,10 +4,8 @@
 // and MainWindow.PresetIO.cs (CreateCatalogueStatusBadge, RefreshCatalogueShareBadges): the /mine
 // status polls and the share-status pill. Recording a NEW submission (the write side) is U3's.
 //
-// Deviation: WPF's accepted toast is ShowSticky (persists until dismissed, remembered in
-// DismissedNotificationKeys). This head's NotificationService has no sticky toast, so it is a
-// 15 s toast; the record's AcceptedNotified flag still makes it once-only.
-// ponytail: add ShowSticky to Helpers/NotificationService when a second caller needs it.
+// Deeper acceptance uses WPF's keyed sticky toast. The other catalogue kinds still use a
+// 15 s toast (their remaining parity is tracked by shell-catalogue-submissions).
 
 using System;
 using System.Collections.Generic;
@@ -55,11 +53,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Task CheckDeeperSubmissionStatusesAsync(bool force = false) =>
             PollAsync(CatalogueKindDeeper, CoreSettings.Current.DeeperSubmissions, force,
                 () => App.Catalogue.FetchMySubmissionsAsync(default),
-                (id, key) => App.Notifications.Show(
-                    Loc.GetF("deeper_submission_accepted_toast_fmt", Path.GetFileNameWithoutExtension(key)),
-                    Helpers.NotificationType.Success, TimeSpan.FromSeconds(15),
+                (id, key) => App.Notifications.ShowSticky("deeper_submission_accepted_" + id,
+                    Loc.GetF("deeper_submission_accepted_toast_fmt", ResolveDeeperSubmissionName(key)),
+                    Helpers.NotificationType.Success,
                     Loc.Get("deeper_submission_accepted_action_view"), () => ShowTab("deeper")),
                 RefreshDeeperLibraryRows);
+
+        private string ResolveDeeperSubmissionName(string canonicalPath)
+        {
+            var name = DeeperModel?.FindEntry(canonicalPath)?.Name;
+            return string.IsNullOrEmpty(name) ? Path.GetFileNameWithoutExtension(canonicalPath) : name;
+        }
 
         // The two WPF polls are the same loop over a different dictionary and endpoint.
         private async Task PollAsync(string kind, Dictionary<string, DeeperSubmissionRecord>? dict, bool force,

@@ -4,8 +4,7 @@
 // (App.Catalogue), so every head submits through the same code.
 //
 // The status side lives in MainShellWindow.CatalogueStatus.cs: CheckDeeperSubmissionStatusesAsync
-// (the /api/enhancements/mine poll) and the one-time accepted toast with a View action (15 s, not
-// WPF's sticky one). The library row's badge: DeeperTabViewModel.ResolveSubmissionBadge.
+// (the /api/enhancements/mine poll) and the one-time keyed sticky accepted toast with a View action. The library row's badge: DeeperTabViewModel.ResolveSubmissionBadge.
 // WPF's IsAcceptedStatus / CanonicalSubmissionKey copies are the catalogue pair one file over
 // (byte-identical bodies).
 

@@ -8,7 +8,10 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Helpers;
+using NotificationType = ConditioningControlPanel.Avalonia.Helpers.NotificationType;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -56,6 +59,101 @@ public sealed class NotificationServiceTests
             Assert.Empty(host.Children);
             window.Close();
         });
+    }
+
+    [Fact]
+    public Task StickyToastsQueueInOrderDeduplicateAndHaveNoExpiry() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var key = "sticky-queue-" + Guid.NewGuid();
+        var service = new NotificationService();
+        var host = new StackPanel();
+        service.Show("ordinary", duration: TimeSpan.FromSeconds(30));
+        service.ShowSticky(key, "accepted");
+        service.ShowSticky(key, "duplicate");
+        service.ShowSticky(" ", "invalid");
+        service.AttachHost(host);
+        service.ShowSticky(key, "duplicate after attach");
+        Assert.Equal(new[] { "ordinary", "accepted" }, host.Children.Select(Message));
+        Assert.True(Assert.IsType<DispatcherTimer>(host.Children[0].Tag).IsEnabled);
+        // Ordinary notifications own their expiry timer; sticky ones never start one.
+        Assert.Null(host.Children[1].Tag);
+        Find(host.Children[0], "ToastDismiss").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Find(host.Children[1], "ToastDismiss").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        CoreSettings.Current.DismissedNotificationKeys.Remove(key);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task StickyDismissalPersistsAndSuppressesTheNextServiceInstance() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var key = "sticky-dismiss-" + Guid.NewGuid();
+        var settings = new SettingsService(); // CCP_USERDATA_DIR sandbox, never the real profile
+        CoreSettings.ServiceProvider = () => settings;
+        try
+        {
+            var host = new StackPanel();
+            var service = new NotificationService();
+            service.AttachHost(host);
+            service.ShowSticky(key, "accepted");
+            Find(Assert.Single(host.Children), "ToastDismiss").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Contains(key, settings.Current.DismissedNotificationKeys);
+            Assert.True(settings.HasPendingSave);
+            settings.SaveImmediate();
+            var reloaded = new SettingsService();
+            Assert.Contains(key, reloaded.Current.DismissedNotificationKeys);
+            CoreSettings.ServiceProvider = () => reloaded;
+            var next = new NotificationService();
+            var nextHost = new StackPanel();
+            next.ShowSticky(key, "before attach");
+            next.AttachHost(nextHost);
+            next.ShowSticky(key, "after attach");
+            Assert.Empty(nextHost.Children);
+            reloaded.Current.DismissedNotificationKeys.Remove(key);
+            reloaded.SaveImmediate();
+        }
+        finally { CoreSettings.ServiceProvider = oldProvider; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public async Task StickyActionClearsWithoutRememberingDismissalEvenWhenItThrows()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var key = "sticky-action-" + Guid.NewGuid();
+            var service = new NotificationService();
+            var host = new StackPanel();
+            service.AttachHost(host);
+            var invoked = 0;
+            service.ShowSticky(key, "accepted", actionLabel: "View", action: () =>
+            {
+                invoked++;
+                throw new InvalidOperationException("test callback");
+            });
+            var toast = Assert.Single(host.Children);
+            Find(toast, "ToastAction").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(1, invoked);
+            Assert.False(toast.IsHitTestVisible);
+            Assert.DoesNotContain(key, CoreSettings.Current.DismissedNotificationKeys);
+            await Task.Delay(400); // WPF's 220 ms fade removes the old toast
+            Assert.Empty(host.Children);
+            service.ShowSticky(key, "condition recurred");
+            Assert.Equal("condition recurred", Message(Assert.Single(host.Children)));
+            Find(host.Children[0], "ToastDismiss").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CoreSettings.Current.DismissedNotificationKeys.Remove(key);
+        });
+    }
+
+    private static void Setup()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
     }
 
     private static string Message(Control toast) =>
