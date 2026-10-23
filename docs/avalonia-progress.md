@@ -2717,3 +2717,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-shell-roadmap: +116
 - shell-roadmap: the photo-confirm/submit and locked-track tests prove the ported WPF roadmap flow, and the stale duplicate stub row is gone.
 - The photo-submit test now resets the static roadmap and removes its diary photo (review P02, fail-proven). Photo test stubs the chime; ledger no longer over-claims fail-proof.
+
+## avalonia-port/wire-dialogs-companion-phrase-editor: +353
+- The Phrase Manager shows real voice-line and bark rows from Core `CompanionVoiceLines`, which WPF shares. Its bulk enable/disable persists to settings.json.
+- Manage Phrases opens from the Companion room's Workshop Triggers cell. Tests cover the disk round-trip and the real navigation path.
