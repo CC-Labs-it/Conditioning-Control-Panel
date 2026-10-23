@@ -24,6 +24,7 @@ import { LOOK } from '../look.js';
 import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
 import { ROAD_AA } from '../roadAaMath.js';
 import { createMusicTiles } from './musicTiles.js';
+import { createMusicBands } from './musicBands.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -268,6 +269,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // road, the shatter's cracks, an echo's shimmer on the edge of its side
   const ring = exp(au.sub(mu.ripAge.mul(M.rippleMps)).div(M.rippleW).pow(2).negate()).mul(mu.ripAmp);
   const wave = exp(dAhead.sub(mu.waveD).div(M.waveW).pow(2).negate()).mul(mu.waveAmp);
+  const beatBands = createMusicBands({ p, halfWidth: half, trueEdge, distance: dist, ahead: dAhead, music: mu, energy: env, tileMask: tiles.mask, wave });
   const echo = mix(mu.echoR, mu.echoL, step(uL, float(0)));
   const shimmer = echo.mul(edgeW).mul(sin(p.y.mul(1.9).sub(mu.t.mul(11))).mul(0.5).add(0.5));
   const music = ring.mul(float(1).sub(edgeW)).add(wave).add(crack).add(shimmer);
@@ -330,7 +332,10 @@ export function createRoadMaterial(pal, art = null, track = null) {
     .add(vec3(1, 0.96, 0.98).mul(tiles.glaze).mul(u.sheen))
     .add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)).mul(LOOK.roadGain));
   const glassBody = mix(surface.add(deepCol), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
-  const litCol = glassBody.add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish).mul(float(1).sub(gutter.mul(E.gutterDark)));
+  // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
+  // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
+  const musicBody = beatBands.apply(glassBody);
+  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen)).add(polish).mul(float(1).sub(gutter.mul(E.gutterDark)));
   const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);
   const ribbonAlpha = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
