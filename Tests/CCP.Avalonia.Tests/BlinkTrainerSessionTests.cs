@@ -221,6 +221,107 @@ public sealed class BlinkTrainerSessionTests
         return done();
     }
 
+    // 1x1, two frames (red, then blue), 100 ms each; the MiniPlayerPreviewTests fixture.
+    private static readonly byte[] TwoFrameGif =
+    {
+        0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+        0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF,
+        0x21, 0xFF, 0x0B, 0x4E, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2E, 0x30, 0x03, 0x01, 0x00, 0x00, 0x00,
+        0x21, 0xF9, 0x04, 0x00, 0x0A, 0x00, 0x00, 0x00,
+        0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00,
+        0x21, 0xF9, 0x04, 0x00, 0x0A, 0x00, 0x00, 0x00,
+        0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x4C, 0x01, 0x00,
+        0x3B,
+    };
+
+    /// <summary>WPF BuildTile -> AnimatedWebp.AttachAnimation: a GIF tile loops on the overlay; Stop drops the loop.</summary>
+    [Fact]
+    public async System.Threading.Tasks.Task GifAsset_LoopsOnTheOverlay_AndStopDropsTheLoop()
+    {
+        await WithSessionAsync(async (dir, made) =>
+        {
+            File.Delete(Path.Combine(dir, "a.png"));
+            File.WriteAllBytes(Path.Combine(dir, "loop.gif"), TwoFrameGif);
+            Assert.True(WebcamTracker.Instance.Start());
+            Assert.True(BlinkTrainerSession.Start(new Window()));
+            await BlinkTrainerSession.AnimationDecode;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(BlinkTrainerSession.AnimatedTiles > 0);
+            var child = Assert.Single(Assert.Single(made).Host.Children);
+            var tile = child as Image ?? ((UniformGrid)child).Children.OfType<Image>().First();
+            var shown = tile.Source;
+            BlinkTrainerSession.StepAnimations();
+            Assert.NotNull(tile.Source);
+            Assert.NotSame(shown, tile.Source);
+            BlinkTrainerSession.Stop();
+            Assert.Equal(0, BlinkTrainerSession.AnimatedTiles);
+        });
+    }
+
+    /// <summary>WPF BlinkTrainerService.Start -> SeasonRecapService.TrackFeature(BlinkTrainer): the e_bl day-log event.</summary>
+    [Fact]
+    public void SessionStart_CreditsTheBlinkDayLogEvent()
+    {
+        WithSession((dir, _) =>
+        {
+            var prop = typeof(AvApp).GetProperty("FeatureDayLog", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            var oldLog = prop.GetValue(null);
+            using var log = new FeatureDayLogService(() => null, Path.Combine(dir, "feature_day_log.json"));
+            prop.SetValue(null, log);
+            try
+            {
+                Assert.True(WebcamTracker.Instance.Start());
+                Assert.True(BlinkTrainerSession.Start(new Window()));
+                var today = DateTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.Equal(1, log.Log.GetOrAddDay(today).Get("e_bl"));
+            }
+            finally
+            {
+                BlinkTrainerSession.Stop();
+                prop.SetValue(null, oldLog);
+            }
+        });
+    }
+
+    /// <summary>WPF UpdateWebcamStatusChips (MainWindow.LabTab.cs:356): the Play, Blink Trainer and Deeper
+    /// chips follow the tracker, hidden tabs included.</summary>
+    [Fact]
+    public void WebcamStatusChips_FollowTheTracker_OnPlayBlinkTrainerAndDeeper()
+    {
+        WithSession((_, _) =>
+        {
+            var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            shell.Show();
+            try
+            {
+                Dispatcher.UIThread.RunJobs();
+                var chips = new[]
+                {
+                    (shell.FindControl<UserControl>("PlayTab")!, "WebcamStatusChipPlayDot", "TxtWebcamStatusChipPlay"),
+                    (shell.FindControl<UserControl>("BlinkTrainerTab")!, "WebcamStatusChipBlinkTrainerDot", "TxtWebcamStatusChipBlinkTrainer"),
+                    (shell.FindControl<UserControl>("DeeperTab")!, "WebcamStatusChipDeeperDot", "TxtWebcamStatusChipDeeper"),
+                };
+                void AssertChips(string key, bool green)
+                {
+                    foreach (var (tab, dot, text) in chips)
+                    {
+                        Assert.Equal(Loc.Get(key), tab.FindControl<TextBlock>(text)!.Text);
+                        var fill = tab.FindControl<global::Avalonia.Controls.Shapes.Ellipse>(dot)!.Fill as global::Avalonia.Media.ISolidColorBrush;
+                        Assert.Equal(green, fill?.Color == global::Avalonia.Media.Color.FromRgb(0x3E, 0xE8, 0x7A));
+                    }
+                }
+                // No initial check: an earlier test's refused start leaves the shared tracker's LastError ("Error").
+                Assert.True(WebcamTracker.Instance.Start());
+                Dispatcher.UIThread.RunJobs();
+                AssertChips("rf_webcam_tracking", true);
+                WebcamTracker.Instance.Stop();
+                Dispatcher.UIThread.RunJobs();
+                AssertChips("rf_webcam_stopped", false);
+            }
+            finally { shell.RequestExit(); }
+        });
+    }
+
     [Fact]
     public void Revoke_DeletesTheCalibrationFile()
     {

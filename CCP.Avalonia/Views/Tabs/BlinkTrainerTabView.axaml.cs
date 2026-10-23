@@ -721,6 +721,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (BtnBlinkTrainerStartStopTracker.Content is TextBlock tb)
                 tb.Text = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracker" : "Start tracker";
+            Windows.MainShellWindow.PaintWebcamStatusChip(WebcamStatusChipBlinkTrainerDot, TxtWebcamStatusChipBlinkTrainer);
         }
     }
 }

@@ -105,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             DeeperWebcamConsentCard.BorderBrush = new SolidColorBrush(consented
                 ? Color.FromRgb(0x4A, 0xDE, 0x80) : Color.FromRgb(0xFF, 0xD0, 0x80));
             BtnDeeperWebcamStartStopTracker.Content = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracker" : "Start tracker";
+            MainShellWindow.PaintWebcamStatusChip(WebcamStatusChipDeeperDot, TxtWebcamStatusChipDeeper);
         }
 
 

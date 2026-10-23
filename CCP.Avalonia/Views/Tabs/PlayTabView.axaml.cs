@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged += OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged += OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged += OnIntakePassStateChanged;
+            Platform.WebcamTracker.Instance.StateChanged += PaintWebcamChip;
             RefreshPlayCards();
         }
 
@@ -65,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged -= OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged -= OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged -= OnIntakePassStateChanged;
+            Platform.WebcamTracker.Instance.StateChanged -= PaintWebcamChip;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -156,6 +158,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }, DispatcherPriority.Background);
         }
 
+        /// <summary>WPF UpdateWebcamStatusChips paints the Play chip too (MainWindow.LabTab.cs:371).</summary>
+        private void PaintWebcamChip() => MainShellWindow.PaintWebcamStatusChip(WebcamStatusChipPlayDot, TxtWebcamStatusChipPlay);
+
         /// <summary>WPF MainWindow.PlayTab.cs:83-120 RefreshPlayCards: the tier lockbands (same loc
         /// keys as the refusal), the FREE TODAY stamps and the Graded Intake's four pass states.
         /// Presentation only - TierGate refuses inside each door. Never throws.</summary>
@@ -163,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             try
             {
+                PaintWebcamChip();
                 // BreakoutAccess.FullAllowed (WPF Services/BackRoom/BreakoutAccess.cs:9).
                 PlayLockBreakout.IsVisible = !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
                 PlayLockGaze.IsVisible = !TierGate.RequiresLab(Loc.Get("label_gaze_minigame")).Allowed;

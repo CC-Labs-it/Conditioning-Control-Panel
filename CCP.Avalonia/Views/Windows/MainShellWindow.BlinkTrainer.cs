@@ -14,16 +14,43 @@
 // the seeded CoreWebcam verb), Quick Recal over the gaze feed, the 16-point calibration
 // (WebcamCalibrationWindow), the help popover, and the status pulse (the page calls
 // SetBlinkTrainerStatusPulse in MainShellWindow.TabFxTakeoverLabStatus.cs). STILL MISSING:
-// ToggleWebcamFromHotkey (global hotkey), GIF/animated webp animation (first frame only), the
-// explicit tracking-monitor pick, the SeasonRecap credit and the Deeper status chip repaint (WPF
-// UpdateWebcamStatusChips, MainWindow.LabTab.cs:356). The loading splash is live in
+// ToggleWebcamFromHotkey (global hotkey) and the explicit tracking-monitor pick (follow-up
+// wire-shell-blink-trainer-b-next). Ported below: UpdateWebcamStatusChips (MainWindow.LabTab.cs:356),
+// the read-only chip on Play, Blink Trainer and Deeper. The loading splash is live in
 // MainShellWindow.WebcamSplash.cs; the Deeper hub webcam twins now relay to the same Blink Trainer
 // actions and refresh consent/calibration/tracker state on both cards.
+
+using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
+using Avalonia.Data;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Localization;
+using ConditioningControlPanel.Avalonia.Platform;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // The camera actions are shared by the two page launchers; see the header.
+        /// <summary>WPF WebcamStateText (MainWindow.LabTab.cs:389) over what this head's tracker
+        /// reports: running, starting, a failed start, or stopped. It has no FaceLost / CameraInUse
+        /// split, so a failed start is the generic error line.</summary>
+        internal static string WebcamStateKey(WebcamTracker t) =>
+            t.IsRunning ? "rf_webcam_tracking"
+            : t.IsStarting ? "rf_webcam_starting"
+            : !string.IsNullOrEmpty(t.LastError) ? "rf_webcam_error"
+            : "rf_webcam_stopped";
+
+        /// <summary>WPF UpdateWebcamStatusChips (MainWindow.LabTab.cs:356): green dot while the
+        /// tracker runs, muted otherwise, and the state line. Display only. Each page calls it with its
+        /// own two parts on show and on every tracker state change. The text stays a {loc} binding so
+        /// a language switch re-renders it.</summary>
+        internal static void PaintWebcamStatusChip(Ellipse dot, TextBlock label)
+        {
+            bool live = WebcamTracker.Instance.IsRunning;
+            dot.Fill = live
+                ? new SolidColorBrush(dot.TryFindResource("SuccessGreen", out var g) && g is Color c ? c : Color.FromRgb(0x3E, 0xE8, 0x7A))
+                : dot.TryFindResource("TextMutedBrush", out var m) && m is IBrush muted ? muted : Brushes.Gray;
+            label.Bind(TextBlock.TextProperty, (Binding)new StrExtension(WebcamStateKey(WebcamTracker.Instance)).ProvideValue(null!));
+        }
     }
 }

@@ -43,8 +43,8 @@
 //   internal void ChkBlinkRecalShortcut_Changed(…)
 //   private void SyncBlinkRecalToggles(…)
 //   private void UpdateLabTrackerUi(…)
-//   private void UpdateWebcamStatusChips(…)
-//   private static string WebcamStateText(…)
+//   private void UpdateWebcamStatusChips(…)            PORTED: MainShellWindow.BlinkTrainer.cs (PaintWebcamStatusChip)
+//   private static string WebcamStateText(…)           PORTED: MainShellWindow.BlinkTrainer.cs (WebcamStateKey)
 //   internal void OpenDeviceSettings(…)               ALREADY LIVE (MainShellWindow.Settings.cs:82)
 //   internal void RefreshDeviceSettingsLists(…)
 //   private string? _quickRecalTooltipBase
