@@ -36,13 +36,12 @@
        x:Name on the two ImageBrushes (TakeoverHeroArtBrush / TakeoverSideArtBrush) - AVLN2000,
          only a StyledElement can be named, so the two BORDERS carry the names instead
          (TakeoverHeroArt / TakeoverSideArt) and the brushes are built in code.
-       feat:AdaptiveSideArt.CollapseBelow - an attached behaviour that
-         lives in the WPF head. The 3*/2* split with MaxWidth="780" is kept verbatim.
+       feat:AdaptiveSideArt.CollapseBelow - kept (Helpers/AdaptiveSideArt.cs), same threshold as WPF.
        x:FieldModifier="internal" - no host re-publishes these fields on this head. The x:Names are
          kept so the eventual wiring is a one-line change.
 
      No {Binding} survives the emoji change, so this file needs no x:DataType. -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -145,9 +144,9 @@
                      Column 0 is capped at 780 so a slider stops being a ~1100px runway; the width
                      that buys back becomes the art plate and the "How it works" guide, which used
                      to be a bare `*` column that never got out of the way. On WPF, below 900px the
-                     rail collapses (Features/AdaptiveSideArt.cs); that attached behaviour is a
-                     WPF-head service, so the split is fixed here. -->
-                <Grid>
+                     rail collapses (Features/AdaptiveSideArt.cs); same here
+                     (Helpers/AdaptiveSideArt.cs). -->
+                <Grid sideart:AdaptiveSideArt.CollapseBelow="900">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="3*" MaxWidth="780"/>
                         <ColumnDefinition Width="2*"/>
