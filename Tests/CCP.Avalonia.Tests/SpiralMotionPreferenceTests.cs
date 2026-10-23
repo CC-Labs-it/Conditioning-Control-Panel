@@ -38,4 +38,23 @@ public sealed class SpiralMotionPreferenceTests
         }
         finally { (s.MotionLevel, s.GentleVisuals, s.PerformanceMode) = old; }
     }
+
+    [Fact]
+    public void OsAnimationFlagIsCachedForPerFrameReaders()
+    {
+        var oldProbe = UiMotionPreference.OsProbe;
+        var calls = 0;
+        try
+        {
+            UiMotionPreference.OsProbe = () => { System.Threading.Interlocked.Increment(ref calls); return true; };
+            UiMotionPreference.CacheStamp = long.MinValue;
+            for (var i = 0; i < 100; i++) Assert.True(UiMotionPreference.AnimationsEnabled);
+            Assert.InRange(calls, 1, 3); // parallel readers may race the first probe; uncached would be 100
+        }
+        finally
+        {
+            UiMotionPreference.OsProbe = oldProbe;
+            UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    }
 }
