@@ -2927,3 +2927,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 - Merged wire-views-settings-performance-b at 6095620b4e54a91477fdff126b61425d83f893d6 into the held shell-animations lane at f917157399f89034d14d10aea8e39922b579d81a.
 - Kept shell animation lifecycles and Lockdown restart-on-reselect, with the shared Core pulse timeline, sibling glow opacity restoration and live performance/motion stop gates. All parent test cases and assertions retained.
 - Consolidated the parity ledger to one row per id, preserving source evidence and capping surface statuses at wired; retained all panic surfaces in incoming-tip order.
+
+## avalonia-port/wire-shell-animations: +127
+- Lockdown plate pulse follows ShowTab (start on arrival, restart on re-select, stop/restore on departure and close); glow moved to a sibling BoxShadow Border.
+- Season shimmer / skill-tree clocks confirmed already owned by their views; ledger row corrected.
