@@ -19,6 +19,7 @@
 
 import { modTint, modCompanion, modPortrait } from '../modContent.js';
 import { audioUrl, altSrcFor } from '../shared/audioSrc.js';
+import { getLevel, onLevels } from '../engine/audioLevels.js';
 
 const TINT = {
   'builtin-bambisleep': { a: '255,105,180', b: '255,60,120' },
@@ -206,13 +207,18 @@ export function createVnPortrait(hud, opts = {}) {
       // a missing/blocked mp3 must unblock the beat immediately, not stall on waitVoice's timeout
       // (failVoice spends the one other-host retry first, if there is one)
       audioEl.addEventListener('error', failVoice);
+      // the guide's voice rides the 'tutorial' level, live (it used to play at a fixed 1.0)
+      onLevels((group) => {
+        if (group !== 'tutorial' || !gain || !actx || !voicePlaying) return;
+        try { gain.gain.setTargetAtTime(getLevel('tutorial'), actx.currentTime, 0.05); } catch (e) { /* ignore */ }
+      });
     } catch (e) { actx = null; }
   }
   function startVoice(url) {
     ensureVoiceGraph(); if (!actx || !url) return;
     try {
       if (actx.state === 'suspended') actx.resume();
-      if (gain) { try { gain.gain.cancelScheduledValues(actx.currentTime); gain.gain.setValueAtTime(1, actx.currentTime); } catch (e) {} }
+      if (gain) { try { gain.gain.cancelScheduledValues(actx.currentTime); gain.gain.setValueAtTime(getLevel('tutorial'), actx.currentTime); } catch (e) {} }
       audioEl.src = url; audioEl.currentTime = 0; voicePlaying = true; voSwapping = false;
       // if play() rejects (404/autoplay block) 'ended' never fires - clear the flag and resolve the wait so the beat doesn't hang ~12s
       audioEl.play().catch(failVoice);
