@@ -71,14 +71,19 @@ public sealed class WorkshopTriggersCellTests
 
             var confirmed = "";
             cell.Confirm = (title, msg) => { confirmed = msg; return Task.FromResult(true); };
-            await cell.DeletePhrasePresetAsync();
+            var delete = cell.FindControl<Button>("BtnDeletePhrasePreset")!;
+            delete.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal(Loc.GetF("msg_delete_phrase_preset_confirm_0", "Mine"), confirmed);
             Assert.Empty(s.PhrasePresets);
             Assert.Null(s.CurrentPhrasePresetId);
 
             var informed = "";
             cell.Inform = (title, msg) => { informed = msg; return Task.CompletedTask; };
-            await cell.DeletePhrasePresetAsync();
+            delete.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal(Loc.Get("msg_please_select_a_preset_to_delete"), informed);
         }
         finally

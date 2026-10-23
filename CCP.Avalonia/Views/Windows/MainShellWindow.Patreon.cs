@@ -35,8 +35,7 @@
 //   private void InitializePatreonTab(…)
 //   internal void BtnDetachCompanion_Click(…)
 //   internal void BtnCustomizeCompanion_Click(…)
-//   internal void BtnManagePhrases_Click(…)
-//   private void UpdatePhraseCountDisplay(…)
+//   (BtnManagePhrases_Click is restored below; UpdatePhraseCountDisplay lives in WorkshopTriggersCell)
 //   (RestoreCompanionSectionStates / PersistCompanionDrawerStates and the two drawer keys are
 //    ported: CompanionRoomView.Restore/PersistDrawerStates, called from MainShellWindow.CompanionFx.cs)
 //   internal void SliderIdleInterval_ValueChanged(…)
@@ -94,10 +93,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        // WPF MainWindow.Patreon.cs:1312. ponytail: UpdatePhraseCountDisplay skipped - the
-        // Companion tab's TxtPhraseCount needs CompanionPhraseService, still head-side.
-        internal void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
-            => _ = new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+        // WPF MainWindow.Patreon.cs:1312; the count refreshes after the editor closes (:1324).
+        internal async void BtnManagePhrases_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            await new Dialogs.CompanionPhraseEditorDialog().ShowDialogSafe(this);
+            RoomView()?.RefreshPhraseCount();
+        }
 
         /// <summary>WPF MainWindow.Patreon.cs RefreshEntitlementVeils. Called on every navigation, on
         /// sign-in/out (UpdateQuickLoginUI), on either provider's TierChanged and on the ? box's
