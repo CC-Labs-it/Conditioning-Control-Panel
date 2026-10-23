@@ -65,9 +65,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     ///         pinned to that one path, and the engine's own media document supplies the
     ///         &lt;video&gt; element that <see cref="PollBrowserTimeAsync"/> already reads and
     ///         drives - so duration, playhead, play/pause and seek describe the file. LOCAL AUDIO
-    ///         is not: <see cref="InitializeAudioAsync"/> still needs a decoder (NAudio, or
-    ///         whatever replaces it) for both the waveform peaks and a duration, and until one
-    ///         lands the transport REFUSES on that branch rather than miming a clock.</item>
+    ///         is real too: <see cref="InitializeAudioAsync"/> plays through LibVLC
+    ///         (<see cref="DeeperLocalAudio"/>) and draws Core AudioWaveformCache peaks decoded
+    ///         by the same LibVLC.</item>
     ///   <item><b>The browser preview.</b> Real: the https pre-flight, a per-navigation host
     ///         fence, and the page's own &lt;video&gt; driven and read back through
     ///         <c>WebHost.InvokeScriptAsync</c>, so duration, playhead, play/pause and seek
@@ -109,9 +109,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private bool _isDirty;
         private bool _suppressDirty;
 
-        // ponytail: the waveform peaks still need a decoder (WPF AudioWaveformCache, NAudio). Local
-        // audio PLAYBACK is real (_localAudio); remote AND local video poll the page's media element.
-        private double[]? _waveformPeaks;
+        // Local audio: peaks from AudioWaveformCache, PLAYBACK through _localAudio; remote AND local
+        // video poll the page's media element.
+        private float[]? _waveformPeaks;
         private IDeeperLocalAudio? _localAudio;
 
         /// <summary>Open editors (UI thread): the panic sweep and the player's one-editor-per-file
@@ -942,16 +942,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _playheadTimer?.Start();
         }
 
-        /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Playback, duration, seek and end-of-clip
-        /// are real through <see cref="DeeperLocalAudio"/>. ponytail: the waveform peak extractor
-        /// (AudioWaveformCache) is not; wiring peaks in later is one assignment to
-        /// <c>_waveformPeaks</c>.</summary>
+        /// <summary>WPF DeeperEditorWindow.xaml.cs:1189. Peaks come from Core AudioWaveformCache (this
+        /// head decodes through LibVLC, App seeds the decoder); playback, duration, seek and
+        /// end-of-clip are real through <see cref="DeeperLocalAudio"/>.</summary>
         private async Task InitializeAudioAsync(string path)
         {
             BrowserPreview.IsVisible = false;
             VideoPreview.IsVisible = false;
             PreviewPlaceholder.IsVisible = false;
             WaveformCanvas.IsVisible = true;
+
+            // WPF awaited the peaks before opening the reader; here the decode runs beside playback
+            // so a first (uncached) LibVLC decode never holds the transport back.
+            _waveformLoad = LoadWaveformAsync(path);
 
             IDeeperLocalAudio? audio = null;
             try { audio = await DeeperLocalAudio.Open(path); }
@@ -984,6 +987,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             RebuildEffectVisuals();
             RebuildRuleVisuals();
             UpdatePlayheadPosition();
+        }
+
+        internal Task? _waveformLoad;
+
+        /// <summary>WPF DeeperEditorWindow.xaml.cs:1196-1211: peaks from AudioWaveformCache, then the
+        /// waveform path; a decode failure only logs and leaves the flat strip. The transport owns the
+        /// duration here (WPF read it from the peaks first, then the reader).</summary>
+        private async Task LoadWaveformAsync(string path)
+        {
+            try
+            {
+                var data = await AudioWaveformCache.LoadAsync(path);
+                if (_playbackDisposed || !string.Equals(_enhancement.MediaSource, path, StringComparison.Ordinal)) return;
+                _waveformPeaks = data.Peaks;
+                UpdateWaveformPath();
+            }
+            catch (Exception ex) { Log.Warning(ex, "DeeperEditor: waveform decode failed"); }
         }
 
         private void DisposeLocalAudio()

@@ -803,6 +803,8 @@ namespace ConditioningControlPanel.Avalonia
                 ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 // WPF App.xaml.cs:313: the race charts a track through this head's decoder (LibVLC, not NAudio).
                 ConditioningControlPanel.Services.Race.TrackDecoder.DecodeProvider = Views.Games.RaceTrackPlayer.Decode;
+                // WPF App.xaml.cs:291 seeds AudioWaveformCache.Decoder with NAudio; here the same LibVLC decode feeds the editor's peaks.
+                ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder = ConditioningControlPanel.Services.Deeper.AudioWaveformCache.DecodeViaTrackDecoder;
                 // WPF App.xaml.cs:513 (main 03af6e8bb): a preset that switches the online selection re-deals every channel.
                 ConditioningControlPanel.Services.AssetPresetService.OnlineChannelsReset = ConditioningControlPanel.Services.Fyp.Online.FypOnlineCoordinator.ResetAllChannels;
                 // programs-3a decision: refuse programs whose required tasks this head never raises

@@ -120,6 +120,42 @@ public sealed class DeeperRowsTests
         return Task.CompletedTask;
     });
 
+    /// <summary>Ledger #12 (WPF DeeperEditorWindow.xaml.cs:1196-1211): an audio clip's peaks come from
+    /// AudioWaveformCache and become the editor's waveform; a failed decode leaves the flat strip.</summary>
+    [Fact]
+    public Task EditorAudioClipDrawsTheCachedWaveformPeaks() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("ccp-deeper-wave-").FullName;
+        var path = Path.Combine(dir, "clip.mp3");
+        File.WriteAllBytes(path, new byte[16]);
+        var peaks = new[] { 0.1f, 0.9f, 0.4f };
+        string? decoded = null;
+        var originalOpen = DeeperLocalAudio.Open;
+        var originalDecoder = AudioWaveformCache.Decoder;
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(new FakeAudio());
+        AudioWaveformCache.Decoder = p => { decoded = p; return new AudioWaveformResult { Peaks = peaks, DurationSeconds = 95 }; };
+        var editor = new DeeperEditorWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = path }, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            var load = editor._waveformLoad;
+            Assert.NotNull(load);
+            await load!.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(path, decoded);
+            var field = typeof(DeeperEditorWindow).GetField("_waveformPeaks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            Assert.Equal(peaks, (float[]?)field.GetValue(editor));
+        }
+        finally
+        {
+            editor.Close();
+            DeeperLocalAudio.Open = originalOpen;
+            AudioWaveformCache.Decoder = originalDecoder;
+            Directory.Delete(dir, true);
+        }
+    });
+
     /// <summary>MediaPlayer as the transport sees it: Playing fires on every start AND resume.</summary>
     private sealed class FakeEngine : DeeperLocalAudio.IEngine
     {
