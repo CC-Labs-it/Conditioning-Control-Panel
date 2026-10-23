@@ -141,13 +141,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// it as a plain module would land on the right panel while silently saying nothing.
         /// ShowTab("haptics") selects the same row itself, so the landing is identical.</para>
         ///
-        /// <para>ponytail: WPF opens with <c>Services.EmiDesk.EmiTargets.NoteRackOpened(rackKey)</c>,
-        /// so opening Flashes scores Flashes rather than the Studio. The rack map is in Core now
-        /// (<c>EmiDoors.RackTargets</c>); the call that scores through it is the one thing still
-        /// missing here.</para>
+        /// <para>Like WPF, every rack route teaches EMI's ring through NoteRackOpened;
+        /// opening Flashes scores Flashes rather than the Studio through Core EmiDoors.TargetForRack.</para>
         /// </summary>
         internal void OpenStudioModule(string rackKey)
         {
+            EmiDesk.EmiTargets.NoteRackOpened(rackKey);
+
             if (string.Equals(rackKey, "haptics", StringComparison.OrdinalIgnoreCase))
             {
                 ShowTab("haptics");
