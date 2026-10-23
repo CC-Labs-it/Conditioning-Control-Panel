@@ -37,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
+    /// attention input and no-activate z-order.
     /// </summary>
     internal sealed class MandatoryVideoOverlay : IMandatoryVideoHost
     {

@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Startup;
 using Serilog;
@@ -18,18 +19,42 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         private const string IntroKey = "remotemedia";
         private static int _claimed;
+        private static (string Surface, Window? Owner)? _pending;
+        private static bool ModalUp => AppUpdater.IsUpdateDialogActive || MainShellWindow.IsStartupDialogShowing;
 
         /// <summary>Test seam: what opening the card does (default: the intro popup).</summary>
         internal static Action<Window?> ShowCard = owner => FeatureIntroPopup.ShowIfFirstTime(IntroKey, owner);
 
         /// <summary>Test seam: forget this launch's claim.</summary>
-        internal static void ResetForTests() => Interlocked.Exchange(ref _claimed, 0);
+        internal static void ResetForTests()
+        {
+            Interlocked.Exchange(ref _claimed, 0);
+            _pending = null;
+        }
+
+        /// <summary>WPF FlushPendingRemoteMediaOffer: recheck the source and modal gates after
+        /// the updater or first-run wizard releases the screen. A second modal re-parks it.</summary>
+        internal static void FlushPending()
+        {
+            try
+            {
+                if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(FlushPending); return; }
+                if (_pending is not { } pending) return;
+                _pending = null;
+                Offer(pending.Surface, pending.Owner);
+            }
+            catch (Exception ex) { Log.Warning(ex, "RemoteMedia: pending offer flush failed"); }
+        }
 
         internal static void Offer(string surface, Window? owner = null)
         {
             try
             {
+                if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => Offer(surface, owner)); return; }
                 if (!string.Equals(CoreSettings.Current.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
+                // WPF App.OfferRemoteMediaSource: do not let the intro's modal guard silently
+                // consume this launch's offer. Keep the first request until the modal unwinds.
+                if (ModalUp) { _pending ??= (surface, owner); return; }
                 Log.Information("RemoteMedia: empty assets at {Surface} - offering the online source", surface);
                 FeatureIntros.All.TryGetValue(IntroKey, out var card);
                 StartupLadder.PresentOrInbox(new InboxItem
@@ -40,6 +65,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     Summary = "Your folders are empty - she can stream from the online pool instead.",
                     Open = () =>
                     {
+                        // A held passive card / Inbox row can be opened after another modal starts.
+                        if (ModalUp) { _pending ??= (surface, owner); return; }
                         if (Interlocked.CompareExchange(ref _claimed, 1, 0) != 0) return;
                         ShowCard(owner);
                     },
