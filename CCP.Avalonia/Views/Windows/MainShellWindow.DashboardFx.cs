@@ -4,7 +4,7 @@
 // re-evaluation funnel, ApplyDashboardFxLoops (:171): a motion-level or performance change
 // (Env.MotionGateChanged) and window activation/minimise re-run every dashboard card's RefreshFx and
 // the vault CTA breath (ApplyVaultCtaBreath, :213). WPF reaches the same funnel through
-// ApplyChromeFxLoops; this head has no chrome-FX funnel yet, so the dashboard hooks its own.
+// ApplyChromeFxLoops; here the dashboard keeps its own hook beside ChromeFx's ApplyChromeFxLoops.
 //
 // STILL MISSING (each a WPF member of MainWindow.DashboardFx.cs):
 //   the "? box" doorbell + hover flip - ApplyMysteryFx/ApplyMysteryBreath/ApplyMysteryBadgeVisibility/

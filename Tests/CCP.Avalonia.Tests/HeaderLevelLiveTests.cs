@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -35,6 +36,8 @@ public sealed class HeaderLevelLiveTests
         s.MotionLevel = MotionLevel.Off;  // instant widths, so the bar is assertable
         double Need(int level) => XpCurve.GetXPForLevel(level, XpCurve.EpochOf(s));
 
+        var oldClock = BeatLoop.Time;
+        var clock = new SteppedClock();
         var shell = new MainShellWindow();
         try
         {
@@ -61,16 +64,25 @@ public sealed class HeaderLevelLiveTests
             Assert.Equal($"5 / {(int)Need(11)} XP", Text("TxtXP"));
             Assert.Equal($"{Loc.Get("label_level")} 11", Text("ProfileMenuLevel"));   // the bubble rail agrees
 
-            s.MotionLevel = MotionLevel.Full;          // the fill tweens instead of snapping
+            s.MotionLevel = MotionLevel.Full;          // the fill tweens and the readout counts (WPF Odometer)
+            BeatLoop.Time = clock;
             ProgressionBank.Add(1, "Quest");
             Dispatcher.UIThread.RunJobs();
+            Assert.Equal($"5 / {(int)Need(11)} XP", Text("TxtXP"));   // counts up from the last value shown
+            clock.Now += TimeSpan.FromSeconds(0.35).Ticks;
+            BeatLoop.StepAll();
+            Assert.Equal($"6 / {(int)Need(11)} XP", Text("TxtXP"));   // 5 + 1 x QuadEaseOut(0.5) = 5.75
+            clock.Now += TimeSpan.FromSeconds(0.35).Ticks;
+            BeatLoop.StepAll();
             Assert.Equal($"6 / {(int)Need(11)} XP", Text("TxtXP"));
+            Assert.DoesNotContain(BeatLoop.Running, b => ReferenceEquals(b.Owner, shell.FindControl<TextBlock>("TxtXP")));
             Assert.NotNull(bar.Transitions);
         }
         finally
         {
             shell.Close();
             Dispatcher.UIThread.RunJobs();
+            BeatLoop.Time = oldClock;
             s.OfflineMode = false;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = null;
@@ -134,4 +146,11 @@ public sealed class HeaderLevelLiveTests
             CoreSettings.ServiceProvider = null;
         }
     });
+
+    private sealed class SteppedClock : TimeProvider
+    {
+        public long Now;
+        public override long GetTimestamp() => Now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+    }
 }

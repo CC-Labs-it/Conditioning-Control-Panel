@@ -11,7 +11,7 @@
 // The profile menu's Level/XP rail is painted from the same numbers.
 //
 // STILL MISSING vs WPF, so the row stays a stub:
-//   the XP odometer (MotionFx.Odometer - the readout snaps), the meniscus (AnimateXpMeniscus,
+//   the meniscus (AnimateXpMeniscus,
 //   ApplyXpMeniscusPulse), PopLevelChip, the level-up burst (FireBurstAt) and THE BANK hold
 //   (MainWindow.BankFx.cs); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
 //   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
@@ -20,6 +20,7 @@
 // (MainShellWindow.Login.cs), and the login dialog's ProfileLoad is awaited before a repaint.
 
 using System;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -27,6 +28,7 @@ using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -37,6 +39,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private double _xpFraction;
         private Transitions? _xpFillTransition;
+        private const double XpOdometerSeconds = 0.7;
+        private double _lastXpShown = double.NaN;
+        private int _lastXpLevelShown = -1;
+        private BeatLoop? _xpOdometer;
 
         /// <summary>WPF ctor subscriptions to App.Progression.XPChanged/LevelUp; the events are static,
         /// so they come off again when the window closes.</summary>
@@ -68,7 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var xp = s.PlayerXP;
                 var needed = XpCurve.GetXPForLevel(level, XpCurve.EpochOf(s));
                 if (Named<TextBlock>("TxtLevelLabel") is { } label) label.Text = $"LVL {level}";
-                if (Named<TextBlock>("TxtXP") is { } txt) txt.Text = $"{(int)xp} / {(int)needed} XP";
+                if (Named<TextBlock>("TxtXP") is { } txt) AnimateXpReadout(txt, xp, needed, level);
                 _xpFraction = Math.Min(1.0, needed > 0 ? xp / needed : 0);
                 FillXpBar(animate: true);
 
@@ -83,6 +89,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
             }
             catch (Exception ex) { Log.Debug("UpdateLevelDisplay: {E}", ex.Message); }
+        }
+
+        /// <summary>
+        /// The readout half of WPF AnimateXpDisplay (MainWindow.ChromeFx.cs:668) + MotionFx.Odometer: counts
+        /// the numerator from the last value shown at this level (else 0) over 0.7 s QuadraticEaseOut, on the
+        /// shared beat; writes the text outright when motion is Off or there is nothing to count.
+        /// </summary>
+        private void AnimateXpReadout(TextBlock txt, double xp, double needed, int level)
+        {
+            double from = !double.IsNaN(_lastXpShown) && level == _lastXpLevelShown ? _lastXpShown : 0;
+            _lastXpShown = xp;
+            _lastXpLevelShown = level;
+            _xpOdometer?.Stop();
+            _xpOdometer = null;
+            if (!AmbientFxCanvas.Env.AllowTransitions || Math.Abs(xp - from) < 0.5)
+            {
+                txt.Text = $"{(int)xp} / {(int)needed} XP";
+                return;
+            }
+            var format = "{0:F0} / " + (int)needed + " XP";
+            BeatLoop? odometer = null;
+            odometer = new BeatLoop(txt, t =>
+            {
+                double p = Math.Min(1, t / XpOdometerSeconds);
+                double eased = 1 - (1 - p) * (1 - p);
+                txt.Text = string.Format(CultureInfo.CurrentCulture, format, from + (xp - from) * eased);
+                if (p >= 1) odometer?.Stop();
+            });
+            _xpOdometer = odometer;
+            odometer.Start();
         }
 
         /// <summary>FillXpBarTo: the fill is a fraction of the bar's parent grid (not the rounded track).</summary>

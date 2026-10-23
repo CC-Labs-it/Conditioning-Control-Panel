@@ -1,25 +1,28 @@
-// PORTED-IN-PART: WPF MainWindow.ChromeFx.cs. START clipping and banner message sheens are live.
-// ponytail: the rest is wire-shell-chrome-fx-b. Restore in this order, on BeatLoop (no infinite
-// animations), gated by ChromeBannerSheen/Pr4aAmbientAllowed:
-//   1. START sheen and XP gloss - SweepStartSheen, _startSheenTimer, ApplyXpSheen, ParkSheen.
-//   2. breathing glows - ApplyNavGlowBreath, ApplyStartButtonGlow and their Min/Max/Breath constants.
-//   3. tab transition + card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab, CollapseOutgoingTab,
+// PORTED-IN-PART: WPF MainWindow.ChromeFx.cs. Live on the shared 30 fps beat (BeatLoop, no infinite
+// Animation): the START glow breath and 8 s START sheen, the XP gloss (all gated by ChromeAmbientAllowed =
+// focus + not minimised + Env.AllowAmbientLoops, re-applied on Activated/Deactivated/WindowState/
+// MotionGateChanged), the banner message sheen, the START sheen clip; the XP odometer is in HeroFx.
+// ponytail: still wire-shell-chrome-fx-b-next:
+//   1. tab transition + card stagger - AnimateTabIn, SlideTabIn, FadeOutgoingTab, CollapseOutgoingTab,
 //      StaggerTabCards, StaggerCleanupTimer_Tick, FindStaggerTargets, TabFadeOutMs/TabFadeInMs/TabSlidePx;
 //      caller is ShowTab, which still snaps panels on and off.
-//   4. nav rail hover/active - NavButton_MouseEnter/Leave, NudgeNavIcon, ApplyNavActiveGlow,
-//      SetNavIndicator, NavIconHoverScale/NavIconHoverMs.
-//   5. XP meter - AnimateXpDisplay, FillXpBarTo, _lastXpShown; caller is the Progression XP refresh.
-// Gone for good: _chromeFxWindowActive / OnChromeFxWindowStateish (re-expressed by Pr4aAmbientAllowed).
+//   2. THE BANK's hold on the XP readout (TryHoldXpDisplay, MainWindow.BankFx.cs) and the remaining
+//      banner attention/read callers.
+// Nav rail hover/active state and the XP meniscus are owned by NavRail / HeroFx.
+// Gone for good: _chromeFxWindowActive / OnChromeFxWindowStateish (re-expressed by ChromeAmbientAllowed).
 
 using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using System.Linq;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
+using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
@@ -28,17 +31,146 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private BeatLoop? _bannerSheenBeat;
         private DateTime _lastBannerSheenUtc = DateTime.MinValue;
 
+        // WPF MainWindow.ChromeFx.cs:41-48, verbatim.
+        private const double StartGlowMinOpacity = 0.32;
+        private const double StartGlowMaxOpacity = 0.72;
+        private const double StartGlowBreathSeconds = 4.6;
+        private const double StartSheenSeconds = 0.85;
+        private const int StartSheenIntervalSeconds = 8;
+        private const double XpSheenSeconds = 6.0;
+        private static readonly double[] XpSheenStarts = { -0.30, -0.15, 0.00 };
+
+        private BeatLoop? _startChromeBeat;
+        private BeatLoop? _xpGlossBeat;
+        private long _startSheenCycle = -1;
+        private bool _startSheenThisCycle;
+
+        /// <summary>WPF ChromeAmbientAllowed: window focus + not minimised + motion and tier.</summary>
+        internal bool ChromeAmbientAllowed => IsActive && WindowState != WindowState.Minimized && Env.AllowAmbientLoops;
+
+        internal bool StartChromeBreathing => _startChromeBeat?.IsRunning == true;
+        internal bool XpGlossRunning => _xpGlossBeat?.IsRunning == true;
+
         private void InitializeChromeFx()
         {
             // A message sheen is finite interaction motion, so Reduced and low performance
-            // retain it as WPF does. No ambient loop or animated Effect is introduced.
-            Deactivated += (_, _) => ParkBannerSheen();
-            Closed += (_, _) => ParkBannerSheen();
+            // retain it as WPF does. The ambient loops re-evaluate on every focus/state change
+            // (WPF OnChromeFxWindowStateish) and on the motion/performance picker (RefreshChromeFx).
+            Activated += (_, _) => ApplyChromeFxLoops();
+            Deactivated += (_, _) => { ParkBannerSheen(); ApplyChromeFxLoops(); };
+            // A static event: subscribe while open, never root a closed shell (P41).
+            Opened += (_, _) => { Env.MotionGateChanged -= ApplyChromeFxLoops; Env.MotionGateChanged += ApplyChromeFxLoops; ApplyChromeFxLoops(); };
+            Closed += (_, _) => { ParkBannerSheen(); Env.MotionGateChanged -= ApplyChromeFxLoops; StopChromeLoops(); };
             PropertyChanged += (_, e) =>
             {
                 if ((e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
                     || (e.Property == IsVisibleProperty && !IsVisible)) ParkBannerSheen();
+                if (e.Property == WindowStateProperty || e.Property == IsActiveProperty) ApplyChromeFxLoops();
             };
+        }
+
+        /// <summary>WPF ApplyChromeFxLoops (:161): the START glow + sheen and the XP gloss.</summary>
+        private void ApplyChromeFxLoops()
+        {
+            try
+            {
+                ApplyStartButtonGlow();
+                ApplyXpSheen();
+            }
+            catch (Exception ex) { Log.Debug("ApplyChromeFxLoops: {E}", ex.Message); }
+        }
+
+        private void StopChromeLoops()
+        {
+            _startChromeBeat?.Stop();
+            _startChromeBeat = null;
+            _xpGlossBeat?.Stop();
+            _xpGlossBeat = null;
+        }
+
+        /// <summary>
+        /// WPF ApplyStartButtonGlow (:535) + the 8 s _startSheenTimer/SweepStartSheen (:590). The glow layer
+        /// is hidden outright when the tier disallows glow or motion is Off, rests at the minimum when
+        /// ambient loops are not allowed, and otherwise breathes 0.32-0.72 over 4.6 s (Alternate, SineEaseInOut).
+        /// Every 8 s the sheen makes one 0.85 s pass, except while a session runs (the CTA is STOP then).
+        /// </summary>
+        private void ApplyStartButtonGlow()
+        {
+            var glow = Named<Border>("StartGlowLayer");
+            var host = Named<Grid>("StartSheenHost");
+            var band = Named<Border>("StartSheen");
+            var slide = (band?.RenderTransform as TransformGroup)?.Children.OfType<TranslateTransform>().FirstOrDefault();
+            if (glow is null || host is null || band is null || slide is null) return;
+            var tier = Env.CurrentTier;
+            bool wanted = Env.AllowGlow(tier) && Env.Level != MotionLevel.Off;
+            glow.IsVisible = wanted;
+            // WPF's DropShadowEffect (BlurRadius min(22, tier cap), FxGlowColor) as the layer's own BoxShadow:
+            // an Effect under a breathing layer is re-blurred every frame (P82).
+            glow.BoxShadow = wanted
+                ? new BoxShadows(new BoxShadow { Blur = Math.Min(22, Env.MaxGlowBlurRadius(tier)), Color = Env.GlowColor })
+                : default;
+
+            bool run = wanted && ChromeAmbientAllowed;
+            if (run && StartChromeBreathing) return;   // not running: always re-rest (Off -> Reduced shows the floor)
+            _startChromeBeat?.Stop();
+            _startChromeBeat = null;
+            glow.Opacity = wanted ? StartGlowMinOpacity : 0;
+            band.Opacity = 0;
+            slide.X = 0;
+            if (!run) return;
+            _startSheenCycle = -1;
+            _startChromeBeat = new BeatLoop(host, t =>
+            {
+                glow.Opacity = StartGlowMinOpacity
+                    + (StartGlowMaxOpacity - StartGlowMinOpacity) * BeatLoop.Breath(t, StartGlowBreathSeconds);
+                long cycle = (long)(t / StartSheenIntervalSeconds);
+                if (cycle != _startSheenCycle)
+                {
+                    // A DispatcherTimer's first tick is one interval in; the session check is per pass.
+                    _startSheenCycle = cycle;
+                    _startSheenThisCycle = cycle > 0 && !CoreEngine.IsRunning;
+                }
+                double progress = (t - cycle * StartSheenIntervalSeconds) / StartSheenSeconds;
+                if (!_startSheenThisCycle || progress >= 1 || host.Bounds.Width <= 0)
+                {
+                    band.Opacity = 0;
+                    slide.X = 0;
+                    return;
+                }
+                SheenAt(host.Bounds.Width, band, slide, progress, 0.30);
+            });
+            _startChromeBeat.Start();
+        }
+
+        /// <summary>WPF ApplyXpSheen (:725): three gradient-stop offsets travel +1.30 over 6 s, repeating;
+        /// parked at Opacity 0 with the authored offsets otherwise.</summary>
+        private void ApplyXpSheen()
+        {
+            var sheen = Named<Border>("XPBarSheen");
+            if (sheen?.Background is not LinearGradientBrush { GradientStops: { Count: 3 } stops }) return;
+            bool run = ChromeAmbientAllowed;
+            if (run == XpGlossRunning) return;
+            _xpGlossBeat?.Stop();
+            _xpGlossBeat = null;
+            for (int i = 0; i < 3; i++) stops[i].Offset = XpSheenStarts[i];
+            sheen.Opacity = run ? 1 : 0;
+            if (!run) return;
+            _xpGlossBeat = new BeatLoop(sheen, t =>
+            {
+                double travel = 1.30 * (t % XpSheenSeconds) / XpSheenSeconds;
+                for (int i = 0; i < 3; i++) stops[i].Offset = XpSheenStarts[i] + travel;
+            });
+            _xpGlossBeat.Start();
+        }
+
+        /// <summary>WPF SweepSheen (:607) at <paramref name="progress"/> (0..1): the band travels from
+        /// -bandWidth to width + bandWidth/4 on SineEaseInOut and fades 0 -> peak -> peak -> 0.</summary>
+        private static void SheenAt(double width, Border band, TranslateTransform slide, double progress, double peak)
+        {
+            double bandWidth = double.IsNaN(band.Width) || band.Width <= 0 ? 80 : band.Width;
+            double eased = (1 - Math.Cos(Math.PI * progress)) / 2;
+            slide.X = -bandWidth + (width + bandWidth * 1.25) * eased;
+            band.Opacity = BeatLoop.Keys(progress, new[] { (0.0, 0.0), (0.20, peak), (0.75, peak), (1.0, 0.0) });
         }
 
         internal void SweepBannerSheen(bool force = false)
@@ -54,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (host is null || band is null || slide is null || host.Bounds.Width <= 0 || !band.IsEffectivelyVisible) return;
                 _lastBannerSheenUtc = now;
                 ParkBannerSheen();
-                double width = host.Bounds.Width, bandWidth = band.Width;
+                double width = host.Bounds.Width;
                 _bannerSheenBeat = new BeatLoop(band, seconds =>
                 {
                     if (!IsActive || WindowState == WindowState.Minimized || CoreSettings.Current.MotionLevel == Models.MotionLevel.Off)
@@ -63,9 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         return;
                     }
                     double progress = Math.Clamp(seconds / 0.75, 0, 1);
-                    double eased = (1 - Math.Cos(Math.PI * progress)) / 2;
-                    slide.X = -bandWidth + (width + bandWidth * 1.25) * eased;
-                    band.Opacity = BeatLoop.Keys(progress, new[] { (0.0, 0.0), (0.20, 0.22), (0.75, 0.22), (1.0, 0.0) });
+                    SheenAt(width, band, slide, progress, 0.22);
                     if (progress >= 1) ParkBannerSheen();
                 });
                 _bannerSheenBeat.Start();
