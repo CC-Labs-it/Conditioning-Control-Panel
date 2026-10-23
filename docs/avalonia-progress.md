@@ -2775,3 +2775,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-views-tab-graded-intake: +434
 - Graded intake on Avalonia serves downloaded pack audio via the loopback origin and sends the bubble sprite plus the enabled subliminal/whisper payload (Core `IntakeSubliminals`, shared with WPF).
 - Row `views-tab-graded-intake` stays stub; EmiDesk hold, crash relaunch and punch card remain.
+
+## avalonia-port/wire-shell-lab-tab: +250
+- Shared webcam state chips (Devices, Play, Blink Trainer, Deeper) driven by Core WebcamStatus; Play Eyes cards dim while capture is off.
+- Review fixes: consent refusal stays Stopped like WPF; live-capture Play cards tested; Skia headless setup and ledger corrected.
