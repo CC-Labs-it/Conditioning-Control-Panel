@@ -1732,3 +1732,29 @@ Threshold retains the approved pawn sculpture, using an allowed LOD reduction, a
 Sources and rights: original project-authored geometry. The pawn uses the already approved project chess asset, without a replacement sculpt. No external textures, third-party pixels or borrowed designs. Native Blender masters, reproducible source, source hash, decoded verification files and contact sheets stay in the private art workspace.
 
 Validation: 12 Khronos checks across six packed and six decoded GLBs have zero errors and zero warnings. All six packed assets were decoded, imported into fresh Blender and rendered from front, three-quarter, rear, left, right, top, sky-context and low rear views. Final contact sheets were inspected. All six native masters reopen; finite geometry, no zero-length edges or loose vertices; fresh imports contain zero degenerate triangles. Partial open edges on tube ends are intentional game geometry. Blender 5.2.1 LTS, four render threads. Runtime integration remains the engine lane.
+## Water kit W3: stepping stones and turntables
+
+Twelve original procedural GLBs: six static platforms and a matching rotating variant for each. No external geometry or pixels, no textures, no text in surfaces. Author: CCP art pipeline. Original project work, available under the repository licence.
+
+Every platform is 5 x 5 m at maximum footprint bounds. The deck is Y=0.55 m, the complete perimeter lip crest is Y=0.80 m, and the lip rises 0.25 m. This includes the circle, capsule and all six hex sides. Decorative inlays are shallow and are not collision features. Dark hulls close the undersides. Units are metres, Y up, forward -Z, base-centre root.
+
+### Host attachment and motion
+
+platform_root is at [0,0,0]. Static mesh is its child. Each turntable adds rotating_platform at [0,0.55,0]; every platform mesh is a descendant. Spin this node about local Y on the host's shared race clock. Apply that same support transform to the kart while attached. There are no animation clips, bones or built-in physics. Rotating and static variants have identical resting silhouettes. The host owns collision and the lip hop.
+
+### Runtime inventory
+
+| Asset pair | Tris each | Material draws | Bound radius m | Texture bytes |
+|---|---:|---:|---:|---:|
+| stone-threshold + rotating | 188 | 4 | 3.471 | 0 |
+| stone-boudoir + rotating | 1844 | 4 | 2.577 | 0 |
+| stone-keep + rotating | 1260 | 3 | 3.399 | 0 |
+| stone-mainframe + rotating | 1332 | 4 | 2.856 | 0 |
+| stone-quarantine + rotating | 1877 | 4 | 3 | 0 |
+| stone-switchboard + rotating | 5044 | 4 | 2.577 | 0 |
+
+Material roles are surface, lip, underside and detail (Keep uses three roles). Materials are scalar, host-tintable PBR values. No bundled image residency; family texBytes total is 0. All exports use EXT_meshopt_compression with 16-bit position quantization. Quantized bounds differ by less than 0.0001 m vertically.
+
+Validation: all twelve packed and decompressed GLBs pass the Khronos validator with zero errors. Actual packed-accessor coordinates are finite, there are no degenerate triangles, all bounds and pivot/parenting gates pass, and every model has zero textures. Fresh Blender reimport verifies all twelve exports. Fixed front/back/left/right/top/perspective plus low-behind and underside renders come from the packed artifacts after decompression.
+
+Private editable masters, deterministic source, manifest fragment, detailed validation and contact sheets stay under C:/Projects/glassroad-art/stones/. Contact sheets belong in the PR body only. No game files changed by this family.
