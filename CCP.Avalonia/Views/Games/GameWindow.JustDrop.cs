@@ -22,11 +22,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// Nothing is served from disk; navigation stays on the site's https origin (WPF PrimaryHost); every
     /// page message goes to Core <see cref="JustDropService"/>; a panic closes it with every other game
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
-    /// <para>ponytail: native document-start/fullscreen hooks still need a WebHost engine seam; the host strip remains reachable without an engine.</para>
+    /// <para>ponytail: the Esc bridge runs after each completed load (no document-start seam), and page element fullscreen
+    /// is left to the engine (no fullscreen-element signal); the host strip remains reachable without an engine.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
         internal const string JustDropId = "justdrop";
+
+        /// <summary>WPF ChaosWebViewHost.HostEscapeMessageType: the bridge's envelope, consumed by the host.</summary>
+        internal const string JustDropEscapeMessage = "ccp-host-escape";
+
+        /// <summary>WPF ChaosWebViewHost.EscapeBridgeScript (Esc route 2 of 2): a capture-phase listener that only
+        /// reports the key (no preventDefault), so a focused native page still hands Esc to the host. Guarded
+        /// against a second install, since it runs after every completed load rather than once at document start.</summary>
+        internal const string JustDropEscapeBridge =
+            "(function(){try{if(window.__ccpHostEsc)return;window.__ccpHostEsc=1;window.addEventListener('keydown',function(e){"
+            + "if(e.key!=='Escape'&&e.keyCode!==27)return;"
+            + "try{window.chrome.webview.postMessage({type:'" + JustDropEscapeMessage + "'});}catch(_){}"
+            + "},true);}catch(_){}})();";
 
         internal const string JustDropBrowserArguments = "--autoplay-policy=no-user-gesture-required "
             + "--disable-background-timer-throttling --disable-backgrounding-occluded-windows";
@@ -96,6 +109,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 SetJustDropFullscreen(false);
                 e.Handled = true;
             }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            Web.NavigationCompleted += url => _ = Web.InvokeScriptAsync(JustDropEscapeBridge);   // after the carrier shim
             Activated += (_, _) => { if (WindowState == WindowState.FullScreen) Topmost = true; };
             Deactivated += (_, _) => Topmost = false;
             PropertyChanged += (_, e) =>
@@ -173,6 +187,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF OnPageMessage (:227): the raw envelope to Core, so the source/version checks stay in one place.</summary>
         private void HandleJustDrop(JObject o)
         {
+            if ((string?)o["type"] == JustDropEscapeMessage)
+            {
+                // Host chrome, not page business (WPF ChaosWebViewHost.OnWebMessage): never forwarded to Core.
+                if (WindowState == WindowState.FullScreen) SetJustDropFullscreen(false);
+                return;
+            }
             try { JustDropService.HandleWebMessage(o.ToString(Formatting.None)); }
             catch (Exception ex) { Log.Warning(ex, "[Game] justdrop: message handling failed"); }
         }

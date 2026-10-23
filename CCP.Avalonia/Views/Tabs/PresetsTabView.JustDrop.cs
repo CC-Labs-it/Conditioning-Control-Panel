@@ -19,6 +19,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class PresetsTabView
 {
     private bool _takeawayLoading;
+    private IReadOnlyList<JustDropOrdersService.Order>? _takeawayOrders;
+
+    /// <summary>The drawn receipts again in the new language (every label is a Loc lookup at paint time).</summary>
+    private void RepaintTakeawayForLanguage()
+    {
+        if (_takeawayOrders is { } orders) PaintTakeaway(orders);
+    }
 
     internal async Task RefreshTakeawayAsync()
     {
@@ -32,12 +39,13 @@ public partial class PresetsTabView
     /// <summary>WPF PaintTakeawayShelf: newest three, overflow containing every order, shop last.</summary>
     internal void PaintTakeaway(IReadOnlyList<JustDropOrdersService.Order> orders)
     {
+        _takeawayOrders = orders;
         TakeawayShelf.Children.Clear();
         TakeawayTray.Children.Clear();
         TakeawayTrayHost.IsVisible = false;
         foreach (var order in orders)
         {
-            if (TakeawayShelf.Children.Count < 3) TakeawayShelf.Children.Add(TakeawayReceipt(order, tray: false));
+            if (TakeawayShelf.Children.Count < 3) TakeawayShelf.Children.Add(LiftOnHover(TakeawayReceipt(order, tray: false)));
             TakeawayTray.Children.Add(TakeawayReceipt(order, tray: true));
         }
         if (orders.Count > 3)
@@ -57,6 +65,7 @@ public partial class PresetsTabView
             var door = TakeawayChip("SdTakeawayChipDoor", new IconLabel
             { Kind = IconKind.Add, Text = Loc.Get("sd_takeaway_order") }, () => Shell?.ShowTab("justdrop"));
             door.Name = "TakeawayShop";
+            LiftOnHover(door);
             ToolTip.SetTip(door, Loc.Get("tooltip_takeaway_order_drop"));
             TakeawayShelf.Children.Add(door);
         }
@@ -117,6 +126,30 @@ public partial class PresetsTabView
         });
         chip.Tag = order;
         ToolTip.SetTip(chip, Loc.Get("tooltip_takeaway_replay"));
+        return chip;
+    }
+
+    internal const double TakeawayLiftScale = 1.02;
+
+    /// <summary>WPF PreparePresetCardFx (MainWindow.TabFxPresetsQuestsAchievements.cs:320) on a shelf receipt and the
+    /// shop chip: MotionFx.HoverLift, 1.02 from the centre over 150 ms quadratic ease-out; Motion Off snaps.</summary>
+    private static Border LiftOnHover(Border chip)
+    {
+        var scale = new ScaleTransform(1, 1);
+        chip.RenderTransformOrigin = RelativePoint.Center;
+        chip.RenderTransform = scale;
+        void Lift(bool on)
+        {
+            if (!AmbientFxCanvas.Env.AllowTransitions) scale.Transitions = null;
+            else scale.Transitions ??= new global::Avalonia.Animation.Transitions
+            {
+                new global::Avalonia.Animation.DoubleTransition { Property = ScaleTransform.ScaleXProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new global::Avalonia.Animation.Easings.QuadraticEaseOut() },
+                new global::Avalonia.Animation.DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(150), Easing = new global::Avalonia.Animation.Easings.QuadraticEaseOut() },
+            };
+            scale.ScaleX = scale.ScaleY = on ? TakeawayLiftScale : 1;
+        }
+        chip.PointerEntered += (_, _) => Lift(true);
+        chip.PointerExited += (_, _) => Lift(false);
         return chip;
     }
 
