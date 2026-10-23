@@ -9,6 +9,20 @@ namespace ConditioningControlPanel.Services
     /// </summary>
     public static class HypnotubeDefaultLinks
     {
+        /// <summary>WPF New Enhancement's walkthrough sample: first TikTok title in insertion order.</summary>
+        public static string SelectTikTokTutorialVideo(IReadOnlyDictionary<string, string>? links)
+        {
+            try
+            {
+                if (links != null)
+                    foreach (var pair in links)
+                        if (pair.Key.IndexOf("tiktok", StringComparison.OrdinalIgnoreCase) >= 0)
+                            return pair.Value;
+            }
+            catch { /* a malformed title table does not prevent the dialog opening */ }
+            return "https://hypnotube.com/video/bambis-naughty-tiktok-collection-117314.html";
+        }
+
         /// <summary>
         /// Default hypnotube link URLs for the Sissy Hypno content mode, comma-separated.
         /// Shown in the companion tab link pool editor so users see the defaults and format.
