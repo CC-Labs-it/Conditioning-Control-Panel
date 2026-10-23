@@ -57,6 +57,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static bool _helpButtonsHooked;
 
+        private void BtnFirstShowReplay_Click(object? sender, RoutedEventArgs e)
+        {
+            CloseTutorialOverlay();
+            OpenWelcomeShow(this);
+        }
+
         private void InitializeHelpButtons()
         {
             if (_helpButtonsHooked) return;

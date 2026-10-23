@@ -18,6 +18,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Fx;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -35,10 +36,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// effects over the primary screen. The stage is transparent and click-through (<see cref="X11Overlay"/>); EMI is
 /// the real <see cref="EmiDeskWindow"/> presenting; her speech card is its own window so its buttons stay
 /// clickable (WPF :30). Timings are <see cref="FirstShowScript"/>'s; the guide after the verdict is the Guide
-/// partial. ponytail: bubble pops need input rects on the click-through stage (WPF's layered canvas took the click).</summary>
+/// partial. Native input is limited to live bubble regions; every other stage point stays click-through.</summary>
 internal sealed partial class FirstShowStageWindow : Window
 {
-    private readonly Canvas _stage = new() { Background = null };
+    private readonly Canvas _stage = new() { Background = Brushes.Transparent };
     private EmiDeskWindow? _emi;
     private readonly Border _bubble = new()
     {
@@ -68,6 +69,11 @@ internal sealed partial class FirstShowStageWindow : Window
     private double _scale;
     private readonly bool _redirected;
     private FirstShowEffects? _effects;
+    private readonly BrainDrainVisual _drain = new() { Opacity = 0 };
+    private int _drainPhase;
+    private string? _pendingSpeech;
+    internal Action<PixelRect[]> SetInputRects;
+    internal BrainDrainVisual Drain => _drain;
     private CancellationTokenSource? _load;
     private bool _closed, _greeted, _centered, _playing, _ending, _serious, _moving, _bundled;
     private double _last, _moveAt, _showStart = double.NaN, _showFrozen, _settledAt, _x, _y;
@@ -92,6 +98,11 @@ internal sealed partial class FirstShowStageWindow : Window
     public FirstShowStageWindow(MainShellWindow? main)
     {
         Clock = () => _life.Elapsed.TotalSeconds;
+        SetInputRects = rects =>
+        {
+            if (!X11Overlay.SetInputRects(this, rects, rects.Length) && !_closed && FirstShowService.RequireClickThrough)
+                Close(); // A failed native region must never leave a desktop-sized input surface.
+        };
         _main = main;
         _panic = CoreSettings.Current?.PanicKey ?? "Escape";
         Title = "CCP - Emi show";
@@ -108,6 +119,7 @@ internal sealed partial class FirstShowStageWindow : Window
         catch (Exception ex) { Log.Debug(ex, "First show stage: override-redirect failed"); }
         Position = _screenPx.Position; Width = _screenPx.Width / _scale; Height = _screenPx.Height / _scale;
         Content = _stage;
+        _drain.Notice.Opacity = 0; // WPF show: keep the light fallback veil, without session status chrome.
         _logo.BorderBrush = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, .7, RelativeUnit.Relative),
@@ -116,6 +128,7 @@ internal sealed partial class FirstShowStageWindow : Window
         try { using var art = global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/ccp_banner.png")); _logo.Child = new Image { Source = new Bitmap(art), Stretch = Stretch.Uniform }; }
         catch (Exception ex) { Log.Debug("First show logo: {Error}", ex.Message); }
         _logo.RenderTransformOrigin = new RelativePoint(.5, .5, RelativeUnit.Relative);
+        _stage.Children.Add(_drain);
         _stage.Children.Add(_logo);
         _loadingPanel.Children.Add(_loadingBar); _loadingPanel.Children.Add(_loadingStatus);
         _bubbleContent.Children.Add(_speech); _bubbleContent.Children.Add(_loadingPanel); _bubbleContent.Children.Add(_choices);
@@ -130,8 +143,15 @@ internal sealed partial class FirstShowStageWindow : Window
         // P51: Tunnel, and only the stop keys, so a focused choice button cannot swallow them.
         AddHandler(KeyDownEvent, OnStopKey, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
         _speechWindow.AddHandler(KeyDownEvent, OnStopKey, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
-        _stage.PointerPressed += (_, e) => { if (_playing && ShowTime < S.GatherAt) _effects?.Pop(e.GetPosition(_stage).X, e.GetPosition(_stage).Y); };
+        _stage.PointerPressed += (_, e) => PopBubble(e.GetPosition(_stage));
     }
+    private void PopBubble(Point point)
+    {
+        if (!_playing || ShowTime >= S.GatherAt) return;
+        _effects?.Pop(point.X, point.Y);
+        UpdateInputRects();
+    }
+    private void UpdateInputRects() => SetInputRects(_playing ? _effects?.BubbleInputRects(_scale) ?? Array.Empty<PixelRect>() : Array.Empty<PixelRect>());
     /// <summary>Make the stage input-transparent and passive, then show it. False when the platform refuses.</summary>
     internal bool Launch()
     {
@@ -157,6 +177,7 @@ internal sealed partial class FirstShowStageWindow : Window
     internal void BeginEntrance(EmiDeskWindow emi) { _emi = emi; emi.PresentAt(ToScreen(_x, _y), 0, 0, "idle", "^_^"); emi.RunPresentationEntrance(); }
     private void Say(string text, bool serious = false)
     {
+        _pendingSpeech = text;
         _loadingPanel.IsVisible = false; _serious = serious; _speech.Inlines?.Clear(); _speech.Text = text;
         if (_speechWindow.IsVisible) _speechWindow.Hide();
     }
@@ -283,13 +304,15 @@ internal sealed partial class FirstShowStageWindow : Window
     private void Adopt(FirstShowEffects effects)
     {
         if (_effects != null) { _stage.Children.Remove(_effects); _effects.Dispose(); }
-        effects.Width = Width; effects.Height = Height; _stage.Children.Insert(0, effects); _effects = effects;
+        effects.UseSharedDrain = true;
+        effects.Width = Width; effects.Height = Height; _stage.Children.Insert(1, effects); _effects = effects;
     }
     // WPF Confirm :222-231: the warning, with the stop key in red.
     private void Confirm()
     {
         Ask(Text("warning"), true);
         SetInlines(new Run(Text("warning")), new LineBreak(), new LineBreak(), PanicRun(), new Run(" " + Text("panicHint")));
+        _pendingSpeech = SpeechText;
         AddButton(Text("ready"), Start); AddButton(Text("later"), Close);
     }
     internal void Start()
@@ -363,7 +386,28 @@ internal sealed partial class FirstShowStageWindow : Window
             _logo.Opacity = Math.Clamp(reveal * (m == 0 ? 1 : .95 + .05 * Math.Sin(now * 1.7)), 0, 1);
             _logo.RenderTransform = new ScaleTransform(.82 + .18 * reveal, .82 + .18 * reveal);
         }
+        UpdateInputRects();
+        if (_closed) return;
+        UpdateDrain(time);
         Place();
+    }
+    private void UpdateDrain(double time)
+    {
+        int phase = _playing && time >= S.DrainAt && time < S.WordsAt ? (time < S.DrainDeepAt ? 1 : 2) : 0;
+        if (phase != _drainPhase)
+        {
+            _drainPhase = phase;
+            if (phase == 0) _drain.Dispose();
+            else
+            {
+                var backend = X11Overlay.BackendOf(TryGetPlatformHandle());
+                var excluded = new[] { TryGetPlatformHandle()?.Handle ?? IntPtr.Zero,
+                    _speechWindow.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero, _emi?.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero };
+                _drain.Start(new(_screenPx, 70, phase == 2 && CoreSettings.Current.MotionLevel != MotionLevel.Off, 4, 25, excluded), DesktopCapture.Factory(backend));
+            }
+        }
+        _drain.Width = Width; _drain.Height = Height;
+        _drain.Opacity = phase == 0 ? 0 : Math.Clamp((_effects?.DrainAlpha ?? 0) / (70 / 255.0), 0, 1);
     }
     private ShowSize BodySize() => _emi == null ? new ShowSize(0, 0) : new ShowSize(_emi.BodyWidth, _emi.BodyWidth * EmiDeskWindow.BodyAspect);
     private RectD SafeBounds()
@@ -400,6 +444,11 @@ internal sealed partial class FirstShowStageWindow : Window
         var pixel = ToScreen(rect.Left, rect.Top);
         _speechWindow.Position = new PixelPoint((int)Math.Round(pixel.X), (int)Math.Round(pixel.Y));
         _speechWindow.Width = rect.Width; _speechWindow.Height = rect.Height;
+        if (_pendingSpeech is { } line)
+        {
+            _pendingSpeech = null;
+            _audio.Speak(line, _serious ? "idle" : "celebration");
+        }
         if (_speechWindow.IsVisible) return;
         try { if (_emi?.IsVisible == true) _speechWindow.Show(_emi); else _speechWindow.Show(); }
         catch (Exception ex) { Log.Debug(ex, "First show speech window failed to show"); }
@@ -410,6 +459,8 @@ internal sealed partial class FirstShowStageWindow : Window
         if (_closed) return;
         ClearGuideTarget();
         _closed = true;
+        SetInputRects(Array.Empty<PixelRect>());
+        _drain.Dispose(); _pendingSpeech = null;
         if (OperatingSystem.IsWindows()) Win32PanicKey.KeyDown -= OnGlobalKey;
         _clock.Stop();
         try { _speechWindow.Close(); } catch (Exception ex) { Log.Debug(ex, "First show speech window close failed"); }

@@ -21,8 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// :167, Animate :211) are WPF's, timings from <see cref="S"/>. WPF stepped the production compositor layers, none of
 /// which exist on this head, so <see cref="Render"/> draws with plain calls (no Effect: P82): pictures, bubbles,
 /// pink tint, spiral, floating words, subliminal flash, the ChaosFxLayer sparks (burst, ripple, trail), gather, cues.
-/// Brain drain: WPF blurred a live desktop capture (BrainDrainCapturePump); this head has no capture, so the
-/// 11-15 s beat is a milky veil with the same .3 s edges, kept lighter than WPF's blur alpha (see DrainAlpha).</summary>
+/// Brain drain uses the shared capture visual in the stage, with the light veil when capture is unavailable.</summary>
 internal sealed class FirstShowEffects : Control, IDisposable
 {
     private sealed record Media(List<Bitmap> Frames, double Delay);
@@ -51,6 +50,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
     private const int MaxSparks = 900;
     /// <summary>Test seam: MotionFx.AllowParticles.</summary>
     internal Func<bool> Particles = () => global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowParticles;
+    internal bool UseSharedDrain;
     internal int SparkCount => _sparks.Count;
     internal int WordCount => _actors.Count(a => a.Text != null);
     internal bool HasSpiral => _spiral != null;
@@ -185,6 +185,25 @@ internal sealed class FirstShowEffects : Control, IDisposable
         }
         a.Frame = a.Media == null || !moving ? 0 : (int)(age / a.Media.Delay) % a.Media.Frames.Count;
     }
+    // Window-relative physical pixels. Inscribed strips keep the corners outside each circular
+    // Pop target click-through. Rebuilt after movement, expiry, gather and each pop.
+    internal PixelRect[] BubbleInputRects(double scale)
+    {
+        var rects = new List<PixelRect>();
+        if (_disposed || _time >= S.GatherAt) return rects.ToArray();
+        foreach (var a in _actors.Where(a => a.Bubble && !a.Gone && a.Alpha >= .002))
+        {
+            double radius = a.W * .5 * Math.Min(1, a.Scale) * scale, cx = a.X * scale, cy = a.Y * scale;
+            for (int y = (int)Math.Ceiling(cy - radius); y + 2 <= cy + radius; y += 2)
+            {
+                double dy = Math.Max(Math.Abs(y - cy), Math.Abs(y + 2 - cy));
+                double half = Math.Sqrt(Math.Max(0, radius * radius - dy * dy));
+                int left = Math.Max(0, (int)Math.Ceiling(cx - half)), right = Math.Min((int)(W * scale), (int)Math.Floor(cx + half));
+                if (right > left && y >= 0 && y + 2 <= H * scale) rects.Add(new PixelRect(left, y, right - left, 2));
+            }
+        }
+        return rects.ToArray();
+    }
     /// <summary>WPF Pop (:310): a click on a live bubble pops it.</summary>
     public void Pop(double x, double y)
     {
@@ -216,7 +235,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
     {
         if (_disposed) return;
         var all = new Rect(0, 0, W, H);
-        if (DrainAlpha > 0) dc.FillRectangle(new ImmutableSolidColorBrush(Color.FromRgb(236, 228, 244), DrainAlpha), all);
+        if (!UseSharedDrain && DrainAlpha > 0) dc.FillRectangle(new ImmutableSolidColorBrush(Color.FromRgb(236, 228, 244), DrainAlpha), all);
         if (_time >= S.PinkAt && _time < S.RevealAt)
         {
             double fade = Math.Clamp((_time - S.PinkAt) / .8, 0, 1) * Math.Clamp((S.RevealAt - _time) / 3, 0, 1);

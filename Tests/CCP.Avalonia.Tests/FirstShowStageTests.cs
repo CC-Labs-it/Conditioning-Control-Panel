@@ -267,6 +267,130 @@ public sealed class FirstShowStageTests
         }
     });
 
+    [Fact]
+    public Task EachLandedLineSpeaksOnceAndReplayNeverDuplicatesTheStage() => Run(stage =>
+    {
+        CoreSettings.Current.MasterVolume = 50;
+        var clips = new List<string>();
+        stage.Audio.Play = (path, volume, tag) =>
+        {
+            if (tag == "first-show-voice")
+            {
+                Assert.Equal(.5f, volume);
+                Assert.Equal(EmiVoxSynthesis.WriteWav(EmiVoxSynthesis.RenderBurst(EmiVoxSynthesis.MakeScore(stage.SpeechText, "celebration"))), File.ReadAllBytes(path));
+                clips.Add(path);
+            }
+            return () => { };
+        };
+        double t = 1; stage.Clock = () => t;
+        for (int i = 0; i < 4; i++) { stage.Frame(); t += .3; }
+        Assert.Single(clips);
+        Assert.True(FirstShowService.Open());
+        Assert.Same(stage, FirstShowService.Window);
+        stage.Start();
+        double start = t;
+        foreach (var beat in S.Beats)
+        {
+            t = start + beat; stage.Frame();
+            for (int i = 0; i < 4; i++) { t += .2; stage.Frame(); }
+        }
+        Assert.Equal(1 + S.Beats.Length, clips.Count);
+        Assert.Equal(clips.Count, clips.Distinct().Count());
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task ClosingOrPanicStopsSpeechAndDeletesItsCache(bool panic) => Run(stage =>
+    {
+        CoreSettings.Current.MasterVolume = 50;
+        int stopped = 0;
+        stage.Audio.Play = (_, _, _) => () => stopped++;
+        stage.Audio.Speak("hello", "idle");
+        stage.Audio.Cue("flash");
+        var dir = stage.Audio.CacheDirectory;
+        Assert.Single(Directory.GetFiles(dir));
+        if (panic) PanicSurfaces.StopAll("test"); else stage.Close();
+        Assert.Equal(2, stopped);
+        Assert.False(Directory.Exists(dir));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task LiveBubbleRegionsReachPopAndClearOnGatherAndClose() => Run(async stage =>
+    {
+        var regions = Array.Empty<PixelRect>();
+        stage.SetInputRects = rects => regions = rects;
+        await stage.Bundled();
+        double t = 1; stage.Clock = () => t; stage.Start();
+        t += S.BubblesAt + .1; stage.Frame();
+        t += .1; stage.Frame();
+        Assert.NotEmpty(regions);
+        var bubble = regions[regions.Length / 2];
+        Assert.False(ConditioningControlPanel.Avalonia.Platform.Win32Overlay.Hits(regions, regions.Length, 0, 0));
+        Assert.True(ConditioningControlPanel.Avalonia.Platform.Win32Overlay.Hits(regions, regions.Length, bubble.X + bubble.Width / 2, bubble.Y));
+        // Native input delivers this point to the transparent stage canvas, whose handler calls Pop.
+        var before = regions.Length;
+        stage.MouseDown(new Point(bubble.X + bubble.Width / 2, bubble.Y), MouseButton.Left);
+        stage.MouseUp(new Point(bubble.X + bubble.Width / 2, bubble.Y), MouseButton.Left);
+        Assert.True(regions.Length < before);
+        t += .8; stage.Frame(); t += .1; stage.Frame();
+        Assert.NotEmpty(regions);
+        t = 1 + S.GatherAt; stage.Frame(); Assert.Empty(regions);
+        stage.Close(); Assert.Empty(regions);
+    });
+
+    [Fact]
+    public Task DrainUsesTheSharedVisualOnlyDuringTheSceneAndStopsOnClose() => Run(async stage =>
+    {
+        await stage.Bundled();
+        double t = 1; stage.Clock = () => t; stage.Start();
+        t += S.DrainAt + .4; stage.Frame();
+        var first = stage.Drain.Pump!;
+        Assert.NotNull(first);
+        Assert.Equal(1, stage.Drain.Opacity, 5);
+        Assert.True(stage.Drain.Veil.IsVisible); // headless/Wayland has no capture factory
+        t = 1 + S.DrainDeepAt + .4; stage.Frame();
+        Assert.True(first.Stopped);
+        var deep = stage.Drain.Pump!;
+        t = 1 + S.WordsAt; stage.Frame();
+        Assert.True(deep.Stopped); Assert.Null(stage.Drain.Pump);
+        Assert.Equal(0, stage.Drain.Opacity);
+    });
+
+    [Fact]
+    public Task HelpAndBookReplayButtonsUseTheExistingService() => Run(stage =>
+    {
+        CoreSettings.Current.Welcomed = true;
+        CoreSettings.Current.HasAcceptedAgeVerification = true;
+        var shell = new MainShellWindow();
+        EmiBookWindow? book = null;
+        try
+        {
+            shell.Show(); shell.SetTutorialOverlay(true);
+            shell.FindControl<Button>("BtnFirstShowReplay")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(shell.FindControl<Border>("MainTutorialOverlay")!.IsVisible);
+            Assert.Same(stage, FirstShowService.Window);
+            book = new EmiBookWindow(null); book.Show();
+            book.FindControl<Button>("BtnFirstShow")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(book.IsVisible);
+            Assert.Same(stage, FirstShowService.Window);
+        }
+        finally { book?.Kill(); shell.RequestExit(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task UnsupportedNativeInputRefusesTheStageBeforeBorrowingEmi() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        FirstShowService.RequireClickThrough = true;
+        Assert.False(FirstShowService.Open()); // headless, like native Wayland, has no native input region seam
+        Assert.False(FirstShowService.IsActive);
+        return Task.CompletedTask;
+    });
+
     private static void Click(FirstShowStageWindow stage, int i) => stage.ChoiceButtons[i].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
     private static async Task Until(Func<bool> probe)

@@ -345,6 +345,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void WireControls()
         {
             _btnClose.Click += (_, _) => CloseBook();
+            this.FindControl<Button>("BtnFirstShow")!.Click += (_, _) =>
+            {
+                CloseBook();
+                WelcomeShow.FirstShowService.Open((Application.Current?.ApplicationLifetime
+                    as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainShellWindow);
+            };
             this.FindControl<Button>("BtnCompleteGuide")!.Click += (_, _) => OpenManual();
             _btnPrev.Click += (_, _) => Step(-1);
             _btnNext.Click += (_, _) => Step(+1);
