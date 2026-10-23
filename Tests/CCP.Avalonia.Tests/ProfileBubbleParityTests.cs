@@ -232,6 +232,60 @@ public sealed class ProfileBubbleParityTests : IDisposable
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF OnBubbleFlashDisplayed / OnBubbleSubliminalDisplayed: a flash tilts the bubble, a subliminal dips it.</summary>
+    [Fact]
+    public Task FlashWobblesAndSubliminalShimmersTheBubble() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var shell = Shell(MotionLevel.Full);
+        try
+        {
+            var visual = shell.FindControl<Grid>("ProfileBubbleVisual")!;
+            double Angle() => visual.RenderTransform is TransformGroup g
+                ? g.Children.OfType<RotateTransform>().Single().Angle
+                : (visual.RenderTransform as RotateTransform)?.Angle ?? 0;
+            double maxTilt = 0, minOpacity = 1;
+            void Run()
+            {
+                for (int i = 0; i < 60; i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                    maxTilt = Math.Max(maxTilt, Math.Abs(Angle()));
+                    minOpacity = Math.Min(minOpacity, visual.Opacity);
+                }
+            }
+
+            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
+                ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureFlash);
+            Run();
+            Assert.True(maxTilt > 1, $"a flash never tilted the bubble (max {maxTilt})");
+            Assert.Equal(1, minOpacity);
+
+            maxTilt = 0;
+            global::ConditioningControlPanel.Avalonia.App.NoteFeatureUsed(
+                ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureSubliminal);
+            Run();
+            Assert.True(minOpacity < 0.95, $"a subliminal never dipped the bubble (min {minOpacity})");
+            Assert.Equal(0, maxTilt);
+        }
+        finally { shell.Close(); Dispatcher.UIThread.RunJobs(); }
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF tier grow: BackEase EaseOut Amplitude 0.45 (overshoot ~1.11), not Avalonia's amplitude-1 BackEaseOut (~1.37).</summary>
+    [Fact]
+    public Task TierGrowUsesWpfBackEaseAmplitude() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var ease = new MainShellWindow.ProfileTierGrowEase();
+        Assert.Equal(0, ease.Ease(0), 6);
+        Assert.Equal(1, ease.Ease(1), 6);
+        double peak = Enumerable.Range(0, 1001).Max(i => ease.Ease(i / 1000.0));
+        double wpf = Enumerable.Range(0, 1001).Max(i => { double x = 1 - i / 1000.0; return 1 - (x * x * x - x * 0.45 * Math.Sin(Math.PI * x)); });
+        Assert.Equal(wpf, peak, 6);
+        Assert.True(peak > 1.05 && peak < 1.2, $"overshoot {peak}");
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task FailedProfileBrowserOpenCopiesTheLinkAndShowsTheWpfPrompt() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

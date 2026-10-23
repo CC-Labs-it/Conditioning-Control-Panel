@@ -110,16 +110,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             _profileTierGrow = new CancellationTokenSource();
             // Run on the image: Avalonia's transform animator requires a Visual.
-            // ponytail: BackEaseOut has no WPF Amplitude=0.45 knob; exact curve is in lane-b.
             _ = new Animation
             {
-                Duration = TimeSpan.FromMilliseconds(260), Easing = new BackEaseOut(),
+                Duration = TimeSpan.FromMilliseconds(260), Easing = new ProfileTierGrowEase(),
                 Children =
                 {
                     new KeyFrame { Cue = new Cue(0), Setters = { new Setter(ScaleTransform.ScaleXProperty, 0.35), new Setter(ScaleTransform.ScaleYProperty, 0.35) } },
                     new KeyFrame { Cue = new Cue(1), Setters = { new Setter(ScaleTransform.ScaleXProperty, 1.0), new Setter(ScaleTransform.ScaleYProperty, 1.0) } },
                 },
             }.RunAsync(big, _profileTierGrow.Token);
+        }
+
+        /// <summary>WPF BackEase { EaseOut, Amplitude = 0.45 }: 1 - f(1 - t), f(x) = x^3 - x * A * sin(pi x).
+        /// Avalonia's BackEaseOut has no Amplitude (fixed at 1).</summary>
+        internal sealed class ProfileTierGrowEase : Easing
+        {
+            internal const double Amplitude = 0.45;
+            public override double Ease(double progress)
+            {
+                var x = 1 - progress;
+                return 1 - (x * x * x - x * Amplitude * Math.Sin(Math.PI * x));
+            }
         }
 
         private void ProfileTierBadge_MouseLeave(object? sender, PointerEventArgs e) => HideProfileTierBig();
