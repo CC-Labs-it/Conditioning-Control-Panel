@@ -769,7 +769,7 @@ internal static partial class PieceByPieceHostService
         try
         {
             int configured = App.Settings?.Current?.VideoMinDurationSeconds ?? 0;
-            return Math.Clamp(configured > 0 ? configured : DefaultVideoHoldSec, 10, 30);
+            return PbpHostRules.VideoHoldSec(configured);
         }
         catch { return DefaultVideoHoldSec; }
     }

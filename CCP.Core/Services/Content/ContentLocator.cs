@@ -2,6 +2,7 @@ using System;
 using Serilog;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace ConditioningControlPanel.Services
 {
@@ -30,6 +31,22 @@ namespace ConditioningControlPanel.Services
         /// Mirrors the install-dir layout. Not guaranteed to exist.
         /// </summary>
         public static string ContentRoot { get; } = SafeContentRoot();
+
+        /// <summary>The downloaded mirror of Resources/web, shared by both web-view heads.</summary>
+        public static string ContentWebRoot => string.IsNullOrEmpty(ContentRoot)
+            ? string.Empty : Path.Combine(ContentRoot, "Resources", "web");
+
+        /// <summary>Only the intake's recorded clips and borrowed DtRH sounds may use the web pack mirror.
+        /// Manifests and scripts always stay in the installed page tree.</summary>
+        public static bool IsIntakeWebAudio(string rel)
+        {
+            if (rel.Split('/', '\\').Any(segment => segment.StartsWith('.'))) return false;
+            if (!(rel.StartsWith("intake/assets/vo/", StringComparison.Ordinal)
+                || rel.StartsWith("intake/assets/sfx/", StringComparison.Ordinal)
+                || rel.StartsWith("intake/assets/music/", StringComparison.Ordinal)
+                || rel.StartsWith("dtrh/assets/", StringComparison.Ordinal))) return false;
+            return Path.GetExtension(rel).ToLowerInvariant() is ".mp3" or ".ogg" or ".wav" or ".m4a";
+        }
 
         private static string SafeInstallRoot()
         {
