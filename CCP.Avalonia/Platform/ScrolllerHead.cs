@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// 24 h day limit. The off switch DELETES every copy (Core <see cref="ScrolllerPolicyService.Accept"/> calls
 /// <see cref="PurgeAll"/>). The copies on this head: the device cache, DtRH's <c>&lt;assets&gt;/.temp/ccp_temp_remote_*</c>
 /// copies, and any other <c>ccp_temp_remote_*</c> file in the temp folders. Each step is guarded on its own.
-/// <para>Not here (WPF has them): the away watcher (no fresh fetch while the screen is locked), the wallpaper and
+/// <para>The away watcher is <see cref="ScrolllerAwayHost"/>. Not here (WPF has them): the wallpaper and
 /// the in-memory RemoteMediaCache (this head has neither surface).</para>
 /// </summary>
 internal static class ScrolllerHead
