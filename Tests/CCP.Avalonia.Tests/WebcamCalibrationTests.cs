@@ -354,7 +354,18 @@ public sealed class WebcamCalibrationTests
         var win = new WebcamQuickRecalWindow();
         Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
         Assert.Equal(screen.Bounds.Position, win.Position);
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
-        Assert.Equal(WindowStartupLocation.CenterScreen, new WebcamQuickRecalWindow().WindowStartupLocation);   // unknown monitor: left alone
+        // WPF App.GetWebcamCalibrationScreen/ApplyCalibrationScreenPlacement (App.xaml.cs:1408-1457): the user's
+        // monitor choice, and an unplugged saved monitor falls back to primary - never left to CenterScreen.
+        var s = CoreSettings.Current;
+        var oldScreen = s.WebcamCalibrationScreen;
+        try
+        {
+            s.WebcamCalibrationScreen = "unplugged-display";
+            var primary = System.Linq.Enumerable.FirstOrDefault(new global::Avalonia.Controls.Window().Screens.All, x => x.IsPrimary) ?? screen;
+            var fallback = new WebcamQuickRecalWindow();
+            Assert.Equal(WindowStartupLocation.Manual, fallback.WindowStartupLocation);
+            Assert.Equal(primary.Bounds.Position, fallback.Position);
+        }
+        finally { s.WebcamCalibrationScreen = oldScreen; }
     });
 }

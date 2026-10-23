@@ -140,17 +140,20 @@ public sealed class ShellLabTabTests
     });
 
     [Fact]
-    public void FlashLingerIsIndependentOfClickAndPopAndGazePopNeverMultiplies() => AvaloniaTestDispatcher.Run(() =>
+    public void FlashLingerIsIndependentOfClickAndPopAndGazeTakesOnlyTheFirstHydraStep() => AvaloniaTestDispatcher.Run(() =>
     {
         LabWebcamStatusTests.Setup();
         var s = CoreSettings.Current;
         var old = (s.FlashGazePopEnabled, s.FlashGazeLingerEnabled, s.FlashGazeLingerExtensionMs,
             s.BubbleGazePopEnabled, s.VideoGazeClickEnabled, s.RestrictGazeContentToCalibratedScreen,
             s.FlashExitStyle, s.FlashClickable, s.CorruptionMode, s.HydraLimit, FlashOverlay.Clock, FlashOverlay.Multiply);
+        var oldLinked = s.HydraLinkedTiming;
         var clock = new Clock();
         var gaze = new GazeFocus { Clock = clock, CanRun = () => true };
-        var w = new FlashOverlayWindow();
-        int multiplied = 0;
+        var w = new FlashOverlayWindow { HydraGeneration = 1 };
+        var w2 = new FlashOverlayWindow();
+        int multiplied = 0, childGeneration = -1;
+        var childLifetime = TimeSpan.Zero;
         try
         {
             (s.FlashGazePopEnabled, s.FlashGazeLingerEnabled, s.FlashClickable) = (false, true, false);
@@ -158,7 +161,7 @@ public sealed class ShellLabTabTests
             (s.FlashExitStyle, s.CorruptionMode, s.HydraLimit) = (FlashExitStyle.None, true, 10);
             s.FlashGazeLingerExtensionMs = 1500;
             FlashOverlay.Clock = clock;
-            FlashOverlay.Multiply = (_, n, _, _) => multiplied += n;
+            FlashOverlay.Multiply = (_, n, life, gen) => { multiplied += n; childLifetime = life; childGeneration = gen; };
             w.Show();
             FlashOverlay.Active.Add((w, new PixelRect(100, 100, 100, 100)));
             w.Run(1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10));
@@ -189,14 +192,65 @@ public sealed class ShellLabTabTests
             Assert.Contains(FlashOverlay.Active, x => x.Window == w);
             clock.Advance(1); gaze.Tick();
             Assert.DoesNotContain(FlashOverlay.Active, x => x.Window == w);
-            Assert.Equal(0, multiplied); // WPF #784: gaze cannot sustain a hydra chain
+            Assert.Equal(0, multiplied); // WPF #784: gaze cannot sustain a hydra chain (generation 1)
+
+            // WPF FlashService.cs:2955: gaze still takes the first step off an original flash, and
+            // linked children inherit the parent's boosted remaining lifetime (ChildLifetime).
+            s.HydraLinkedTiming = true;
+            w2.Show();
+            FlashOverlay.Active.Add((w2, new PixelRect(400, 100, 100, 100)));
+            w2.Run(1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
+            clock.Advance(1000);
+            w2.BoostLifetime(5000);
+            FlashOverlay.Pop(w2, fromGaze: true);
+            Assert.Equal((2, 1), (multiplied, childGeneration));
+            Assert.Equal(5000, childLifetime.TotalMilliseconds, 0);
         }
         finally
         {
+            s.HydraLinkedTiming = oldLinked;
+            w2.Close(); FlashOverlay.Active.RemoveAll(x => x.Window == w2);
             gaze.Stop(); w.Close(); FlashOverlay.Active.RemoveAll(x => x.Window == w);
             (s.FlashGazePopEnabled, s.FlashGazeLingerEnabled, s.FlashGazeLingerExtensionMs,
                 s.BubbleGazePopEnabled, s.VideoGazeClickEnabled, s.RestrictGazeContentToCalibratedScreen,
                 s.FlashExitStyle, s.FlashClickable, s.CorruptionMode, s.HydraLimit, FlashOverlay.Clock, FlashOverlay.Multiply) = old;
+        }
+    });
+
+    [Fact]
+    public void BlinkOnVideoTargetClicksNothingButClearsDwellAndCoolsDown() => AvaloniaTestDispatcher.Run(() =>
+    {
+        LabWebcamStatusTests.Setup();
+        var s = CoreSettings.Current;
+        var old = (s.VideoGazeClickEnabled, s.FlashGazePopEnabled, s.FlashGazeLingerEnabled, s.BubbleGazePopEnabled, s.RestrictGazeContentToCalibratedScreen);
+        var clock = new Clock();
+        var gaze = new GazeFocus { Clock = clock, CanRun = () => true, DwellMs = 0 };
+        var canvas = new Canvas { Width = 800, Height = 600 };
+        var win = new Window { Content = canvas, Width = 800, Height = 600 };
+        // No libvlc needed: put one attention target straight into the overlay's live list.
+        var targets = (System.Collections.Generic.List<MandatoryVideoOverlay.Target>)typeof(MandatoryVideoOverlay)
+            .GetField("_targets", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(MandatoryVideoOverlay.Instance)!;
+        int hits = 0;
+        try
+        {
+            (s.VideoGazeClickEnabled, s.FlashGazePopEnabled, s.FlashGazeLingerEnabled, s.BubbleGazePopEnabled, s.RestrictGazeContentToCalibratedScreen) = (true, false, false, false, false);
+            win.Show();
+            var t = new MandatoryVideoOverlay.Target(canvas, "x", 40, 999, new Random(1)) { OnHit = () => hits++ };
+            targets.Add(t);
+            Dispatcher.UIThread.RunJobs();
+            gaze.EvaluateDesiredState();
+            gaze.HandleGazeMove(t.GazeBounds.Center);
+            gaze.HandleBlink();
+            gaze.Tick();
+            Assert.Equal(0, hits); // WPF GazeFocusService.cs:453,478: no click, dwell cleared, 250 ms cooldown
+            clock.Advance(GazeFocus.CooldownMs);
+            gaze.Tick();
+            Assert.Equal(1, hits);
+        }
+        finally
+        {
+            gaze.Stop(); targets.Clear(); win.Close();
+            (s.VideoGazeClickEnabled, s.FlashGazePopEnabled, s.FlashGazeLingerEnabled, s.BubbleGazePopEnabled, s.RestrictGazeContentToCalibratedScreen) = old;
         }
     });
 

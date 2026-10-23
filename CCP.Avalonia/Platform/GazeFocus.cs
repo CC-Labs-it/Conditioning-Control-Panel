@@ -195,10 +195,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 var now = Clock.GetUtcNow();
                 if (now < _cooldownUntil || _faceLost || _lastGazePoint is not { } p) return;
                 var target = FindBestTarget(p);
-                if (target is not AmbientBubble && target is not FlashOverlayWindow) return; // WPF: blinks never click video
-                ClearTarget();
+                if (target is null) return;
+                ClearTarget(); // WPF: a blink on video clicks nothing but still clears the dwell and cools down
                 if (target is AmbientBubble b) Pop(b);
-                else if (CoreSettings.Current.FlashGazePopEnabled) FlashOverlay.Pop((FlashOverlayWindow)target, fromGaze: true);
+                else if (target is FlashOverlayWindow fw && CoreSettings.Current.FlashGazePopEnabled) FlashOverlay.Pop(fw, fromGaze: true);
                 _cooldownUntil = now.AddMilliseconds(CooldownMs);
             }
             catch (Exception ex) { Log.Debug("GazeFocus blink handler error: {Error}", ex.Message); }
