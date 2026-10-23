@@ -462,16 +462,40 @@ public class AwarenessReviewFixTests : IDisposable
 
     /// <summary>The media watcher's restart guard has to clear, or the SMTC signal never comes back.</summary>
     [Fact]
-    public void TheMediaWatcherIsRestartableAfterStop()
+    public async Task TheMediaWatcherIsRestartableAfterStop()
     {
-        using var watcher = new SmtcMediaWatcher();
-        var started = typeof(SmtcMediaWatcher).GetField("_started", BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(started);
+        // SmtcMediaWatcher delegates its lifecycle to Core's MediaSessionWatcher; drive that with fakes.
+        var sample = new MediaSample("Song", "Artist", "Playing", TimeSpan.Zero);
+        using var watcher = new MediaSessionWatcher(() => Task.FromResult(true),
+            () => Task.FromResult<MediaSample?>(sample), new InertClock());
 
         watcher.Start();
+        var first = watcher.StartCompletion;
+        await first;
         watcher.Stop();
+        Assert.Null(watcher.Current);
 
-        Assert.False((bool)started!.GetValue(watcher)!);
+        watcher.Start();
+        Assert.NotSame(first, watcher.StartCompletion); // a second Start re-arms instead of no-op
+        await watcher.StartCompletion;
+        await watcher.PollAsync();
+
+        Assert.True(watcher.IsAvailable);
+        Assert.Equal(sample, watcher.Current);
+    }
+
+    /// <summary>Timers that never fire: the test polls by hand, so no background read races it.</summary>
+    private sealed class InertClock : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            => new InertTimer();
+
+        private sealed class InertTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 
     // =====================================================================================

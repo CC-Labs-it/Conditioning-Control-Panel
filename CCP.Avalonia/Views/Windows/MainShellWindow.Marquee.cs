@@ -66,8 +66,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>
         /// True while a startup modal owns the screen. FeatureIntroPopup reads this to refuse to
-        /// stack a card on a modal. Set around the first-run wizard (FirstRunWizard.axaml.cs);
-        /// WPF's other startup modals have no ladder on this head yet.
+        /// stack a card on a modal. Set around the first-run wizard and the welcome-back offer;
+        /// WPF's other startup modals (What's New, season recap) have no startup caller here yet.
         /// </summary>
         public static bool IsStartupDialogShowing { get; set; }
 
