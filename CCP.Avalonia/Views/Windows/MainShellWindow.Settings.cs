@@ -3,7 +3,7 @@
 // Tours use TutorialHead/CoreTutorial, and folder migration uses the shared PackFolderMover.
 // Save plays the tick/ripple (FlashSaveAbsorb, HeroFx) and shell tours are narrated by EMI
 // (EmiTourNarrator, attached in TutorialHead.StartOnShell).
-// ponytail: the book offer after a tour ending (WPF EmiCodex.MaybeOfferSoon) is wire-shell-settings-b-next.
+// ponytail: the book offer after a tour ending (WPF EmiCodex.MaybeOfferSoon) is wire-views-settings-emidesk-b.
 
 using System;
 using System.Collections.Generic;

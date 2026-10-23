@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 /// <see cref="TutorialHead.StartOnShell"/> (WPF MainWindow.Settings.cs:570) and detached when the
 /// overlay closes (:577). Narration is additive: a narrator that throws never takes the tour with it.
 /// ponytail: the book offer after the ending line (WPF EmiCodex.MaybeOfferSoon) waits for the codex
-/// offer path on this head (wire-shell-settings-b-next).
+/// offer path on this head (wire-views-settings-emidesk-b).
 /// </summary>
 internal sealed class EmiTourNarrator : IDisposable
 {
