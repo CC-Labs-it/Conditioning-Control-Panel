@@ -554,8 +554,10 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
-                // ponytail: no MockToast (mock toys log only), no funscript playhead (FunScriptService.
-                // SubscribePlaybackTime unseeded: no video time source here), no EMI Desk.
+                // ponytail: no MockToast (mock toys log only), no EMI Desk.
+                // WPF App.xaml.cs:3060: the funscript follows the mandatory video's playhead.
+                ConditioningControlPanel.Services.Haptics.FunScriptService.SubscribePlaybackTime =
+                    Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);
                 _ = CoreHaptics.Service.AutoConnectOnStartupAsync();
                 StartRichPresence();

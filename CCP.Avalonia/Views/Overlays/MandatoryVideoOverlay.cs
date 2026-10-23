@@ -97,6 +97,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// PanicHookIsInstalled). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
 
+        /// <summary>WPF VideoService.PrimaryPlaybackTimeMsChanged (:685): the playhead the funscript
+        /// follows (FunScriptService.SubscribePlaybackTime, seeded in App). Raised on LibVLC's thread.</summary>
+        internal event Action<long>? PlaybackTimeMsChanged;
+
+        internal void RaisePlaybackTime(long ms)
+        {
+            try { PlaybackTimeMsChanged?.Invoke(ms); }
+            catch (Exception ex) { Log.Debug("PlaybackTimeMsChanged handler error: {Error}", ex.Message); }
+        }
+
+        /// <summary>The FunScriptService.SubscribePlaybackTime seam (WPF App.xaml.cs:3060-3066).</summary>
+        internal static Action? SubscribePlaybackTime(Action<long> handler)
+        {
+            Instance.PlaybackTimeMsChanged += handler;
+            return () => Instance.PlaybackTimeMsChanged -= handler;
+        }
+
         internal IReadOnlyList<Window> Windows => _surfaces.Select(s => s.Window).ToList();
         internal IReadOnlyList<Surface> Surfaces => _surfaces;
         internal IReadOnlyList<Window> Messages => _messages;
@@ -188,7 +205,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
-            _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
+            _player.TimeChanged += (_, e) =>
+            {
+                Interlocked.Exchange(ref _watchedMs, e.Time);
+                RaisePlaybackTime(e.Time);
+            };
             _player.EndReached += (_, _) =>
             {
                 var len = _player?.Length ?? 0;
