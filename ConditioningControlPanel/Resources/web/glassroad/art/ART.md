@@ -1605,3 +1605,36 @@ Desktop and phone use the same geometry. Eight outfits add 0 MiB persistent text
 CC Labs original work. Reference pixels and meshes are not redistributed in these outfits. The croupier tailoring comes from the Back Room counter/card-table EMI; the pool tailoring comes from the newer continuous runtime waistcoat, not the old plate costume in its GLB. Arcademy references are art/emi/{varsity,labcoat,cheer,swim} and its Drone Protocol/Snow Day theme palettes.
 
 Private sources and editable Blender masters stay in the art workspace. Contact sheets and actual Three.js motion captures are attached to the unpublished draft review release and PR description. The selected Petal cup and Trinket box replacements are a separate art family. They share the same rider bones; a Petal vehicle with the largest outfit totals 9,798 tris and six draws. Each racer selects one outfit and one vehicle. Packed GLBs pass a fresh meshopt decode, exact rig/bind comparison, finite/normal/degenerate checks and the Khronos core validator. Fresh Blender imports preserve the triangle totals, 15 required bones, rigid weights and vertex colours; eight editable masters are saved privately. The existing non-root skin warning is retained. Runtime composite views cover front, rear, sides, top, jump, impact and item poses, plus 190 px headwear readability and both selected vehicles. The geometry budget increase from the earlier 1,500-triangle wardrobe target to a 2,200 review cap is an implementation tradeoff for recognizable hats and clean antenna channels; the largest final outfit is 2,026 tris. Integration and a real race playtest remain Claude's lane.
+
+## EMI vehicle variants (2026-10-23)
+
+Petal porcelain and Trinket box are original modular replacements for the approved R4 cup and saucer. Petal has sculpted porcelain flutes, a continuous loop handle, a scalloped plate and restrained gold trim. Trinket has a rounded plum enamel shell, an ivory liner, a brass latch and inset supporting posts on a clockwork plate. Both have a real floor beneath EMI's feet.
+
+| Vehicle | Added tris | Draws | Added texture bytes | GLB bytes | Animated radius m | Assembled tris before wardrobe |
+|---|---:|---:|---:|---:|---:|---:|
+| Petal porcelain | 4492 | 2 | 0 | 58272 | 0.899 | 7772 |
+| Trinket box | 3480 | 2 | 0 | 51344 | 0.898 | 6760 |
+
+These models replace the original 1,612 cup/saucer triangles, leaving 3,280 EMI and screen triangles. The assembled racer uses four draws before wardrobe. The largest reviewed combination is Petal plus the revision2 Varsity outfit: 9,798 triangles and six draws. These are measured art costs above the original kart target, not a new phone performance claim. Manifest radii cover each animated vehicle mesh only; the host must union them with the retained rider and optional outfit bounds.
+
+### Replacement and binding
+
+Requires the seated R4 EMI base with SHA256 `7362bfc8d07d36b079e0d086fda15378ca3d5d269bcd3b4fad64df8fb65776f1` and the approved classic faces. Exact joint names, hashes, contact surfaces and replacement counts are in `models/emi-vehicle-variants.json`. Reject mismatched source geometry or skeletons.
+
+Resolve JOINTS_0 against the base skin by bone name, using normalized weights. Remove a triangle only when all three vertices have full weight on `cup_body` or `saucer_body`; assert no mixed retained/removed triangle. The `kart_surface` primitive changes from 4,476 to 2,864 triangles. The complete 416-triangle `emi_screen` primitive remains. Clone only the index buffers on a derived runtime instance. Never drop the complete surface primitive or mutate the immutable cached source.
+
+Map the vehicle's temporary 15-joint skin to the cloned kart's existing Bone objects by exact name, then discard its temporary rig. Keep the replacement mesh beside the existing kart mesh with identity local transforms and identity bindMatrix, using its copied inverse-bind matrices. Do not calculate binds from a posed racer. Cup, liner, handle and inset supports follow `cup_body`; plate follows `saucer_body`. Every other EMI bone, vertex, material and action remains unchanged.
+
+One vehicle is selected per racer, with one optional independent wardrobe outfit. The GLBs contain no duplicated EMI, images or animations. Reuse the existing 26 clips and event ownership contract, including Gentle, motion-off and adapted landing behavior. Do not add animation clocks or retarget the approved reaction transforms. Host integration and a real race playtest remain pending in Claude's engine lane.
+
+### Seating and support
+
+The real inner floor stays at Y 0.320 m and covers the usable radius 0.362 m. Both palm support surfaces stay at Y 0.510 m across the measured riding contact patches. The exact original 32-sided foot polygon remains at radius 0.220 m, Y 0.105 m, above a flat saucer seat at Y 0.105 m covering radius 0.480 m. Trinket's posts stand on that central ring rather than spreading feet beyond its support envelope. This preserves the approved opposing cup/plate tilt and layered separation without new clips.
+
+Contact validation checks actual decoded triangles and vertices over 8,140 poses per vehicle: exported keys, 120 fps samples and adjacent-key midpoints. There are no missing floor, brim or seat samples. Maximum planted sole gap is 0.130 mm, maximum palm gap 0.084 mm, and the support-envelope difference is zero. Released jump/reaction phases intentionally separate the rider. These sampled checks do not replace the pending host playtest.
+
+### Residency and review
+
+Desktop and phone share the two vehicle GLBs. Added texture allocation is 0 MiB. Persistent running totals remain 196.416664 MiB desktop and 119.104164 MiB phone; with one selected menu backdrop 205.416664/127.014320 MiB. Existing kart maps and the classic face atlas remain shared and counted once. Render targets and decoder buffers are outside these texture totals.
+
+Packed GLBs preserve decoded attributes, exact rest transforms and inverse binds, and pass finite, normal, degenerate and Khronos core checks with the existing non-root skin warning. Animated bounds cover all 26 clips at exported keys plus 60 fps, with 10 mm padding. Fresh Blender imports preserve triangle totals, the 15 required joints, two materials and vertex colors; editable masters stay private. Actual runtime views cover front, rear, sides, top, grip, seated cutaway, takeoff, apex, landing, settling, bump, hit and item poses. Sources, masters, contact sheets and preview movies are excluded from the public art tree.
