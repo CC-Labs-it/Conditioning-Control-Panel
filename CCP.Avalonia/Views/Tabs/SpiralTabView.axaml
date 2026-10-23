@@ -46,11 +46,6 @@
          Effect sits under a loop.
          ================================================================ -->
 
-    <UserControl.Resources>
-        <!-- ponytail: local copy of ConditioningControlPanel/App.xaml:Font.Mono, hoist when a second view needs it -->
-        <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
-    </UserControl.Resources>
-
     <Grid Background="#0A0514">
 
         <!-- The fog / reveal canvas.

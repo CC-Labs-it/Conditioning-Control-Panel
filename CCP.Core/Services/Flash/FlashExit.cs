@@ -83,6 +83,11 @@ public static class FlashExit
         };
     }
 
+    /// <summary>Gentle visuals: every style leaves as the plain fade (Style = Mix marks it), no
+    /// swell, spin, flicker or white, over <paramref name="durationSec"/>.</summary>
+    public static FlashExitState Gentle(double durationSec, int seed)
+        => new() { Style = FlashExitStyle.Mix, DurationSec = durationSec, Reduced = true, Seed = seed };
+
     /// <summary>Advance the clock. True when something visible changed (the layer goes dirty).</summary>
     public static bool Step(FlashExitState s, double dt)
     {

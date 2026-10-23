@@ -25,7 +25,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
+        /// <summary>WPF BannerSheenSeconds (:47) and SweepBannerSheen's peak opacity.</summary>
+        internal const double BannerSheenMs = 750, BannerSheenPeak = 0.22;
+
         private BeatLoop? _bannerSheenBeat;
+        internal bool BannerSheenSweeping => _bannerSheenBeat?.IsRunning == true;
         private DateTime _lastBannerSheenUtc = DateTime.MinValue;
 
         private void InitializeChromeFx()
@@ -41,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
         }
 
+        /// <summary>WPF SweepBannerSheen: message rotations, announcements and the Home marquee's
+        /// return share one finite sweep and the Core twenty-second throttle (force bypasses it).</summary>
         internal void SweepBannerSheen(bool force = false)
         {
             try
@@ -54,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (host is null || band is null || slide is null || host.Bounds.Width <= 0 || !band.IsEffectivelyVisible) return;
                 _lastBannerSheenUtc = now;
                 ParkBannerSheen();
-                double width = host.Bounds.Width, bandWidth = band.Width;
+                double bandWidth = band.Width;
                 _bannerSheenBeat = new BeatLoop(band, seconds =>
                 {
                     if (!IsActive || WindowState == WindowState.Minimized || CoreSettings.Current.MotionLevel == Models.MotionLevel.Off)
@@ -62,12 +68,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         ParkBannerSheen();
                         return;
                     }
-                    double progress = Math.Clamp(seconds / 0.75, 0, 1);
+                    double progress = Math.Clamp(seconds * 1000 / BannerSheenMs, 0, 1);
                     double eased = (1 - Math.Cos(Math.PI * progress)) / 2;
-                    slide.X = -bandWidth + (width + bandWidth * 1.25) * eased;
-                    band.Opacity = BeatLoop.Keys(progress, new[] { (0.0, 0.0), (0.20, 0.22), (0.75, 0.22), (1.0, 0.0) });
+                    slide.X = -bandWidth + (host.Bounds.Width + bandWidth * 1.25) * eased;
+                    band.Opacity = BeatLoop.Keys(progress, new[] { (0.0, 0.0), (0.20, BannerSheenPeak), (0.75, BannerSheenPeak), (1.0, 0.0) });
                     if (progress >= 1) ParkBannerSheen();
-                });
+                }) { OnParked = ParkBannerSheen };
                 _bannerSheenBeat.Start();
             }
             catch (Exception ex) { ParkBannerSheen(); Log.Debug("SweepBannerSheen: {E}", ex.Message); }
