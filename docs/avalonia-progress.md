@@ -2919,3 +2919,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 - EnhancementEngine, IPlaybackTimeSource and the Logging/Recording dispatchers move to CCP.Core behind small seams (IEnhancementWebcam, IEnhancementRunCleanup, PlaybackRect/Point); SpeakPromptPlan holds the speak effect's rules; WPF keeps RealActionDispatcher, SpeakPromptSession UI and a WebcamEnhancementEvents adapter.
 - Fix over trunk: RecordingActionDispatcher forwards Stop cleanup (Stop test fail-proven; the other new tests are asserted, not fail-proven).
 - Review fix: corrected the "WPF installs no CoreDispatch.PostProvider" claim (App.xaml.cs:266) in the adapter, gaze test and PR body. rgate GATE-OK (Windows run 38569267565 green; two earlier runs hit unrelated flakes / disk-full).
+
+## avalonia-port/wire-win-emi-ring: +205
+- Tab/rack opens outside the ring now teach EMI card ranking (Core EmiDoors maps shared with WPF).
+- Review fixes: one ledger row, rack hook fail-proven alone.
