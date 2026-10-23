@@ -122,7 +122,9 @@ namespace ConditioningControlPanel.Avalonia.Controls
                     face.RenderTransform = slide = new TranslateTransform();
                 double from = slide.Y, to = Travel(enabled, pressed, hovered);
                 // WPF: release springs past rest by the overshoot (upward) at 60%, then settles;
-                // press and hover glide with QuadraticEase EaseOut. A fresh set replaces the running one.
+                // press and hover glide with QuadraticEase EaseOut. A fresh set replaces the running one,
+                // which would snap back to the old target, so pin the mid-glide value first.
+                slide.Transitions = null; slide.Y = from;
                 slide.Transitions = ms <= 0 || Math.Abs(to - from) < 0.01 ? null : new Transitions
                 {
                     new DoubleTransition
@@ -149,6 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
                 drop.RenderTransformOrigin = new RelativePoint(0.5, 0, RelativeUnit.Relative);
                 if (drop.RenderTransform is not ScaleTransform scale)
                     drop.RenderTransform = scale = new ScaleTransform();
+                double scaleFrom = scale.ScaleY;
+                scale.Transitions = null; scale.ScaleY = scaleFrom;
                 scale.Transitions = ms <= 0 ? null : new Transitions
                 {
                     new DoubleTransition { Property = ScaleTransform.ScaleYProperty, Duration = TimeSpan.FromMilliseconds(ms) },

@@ -283,6 +283,21 @@ public sealed class SharedDeeperThemeTests
                     Assert.Equal(-3, slide.Y, 3);
                     clock.Step(1140);
                     Assert.Equal(-2, slide.Y, 3);
+                    // A press that lands mid-hover-glide starts from where the face is, not the hover target.
+                    window.MouseMove(new Point(5, 5)); Dispatcher.UIThread.RunJobs();
+                    clock.Step(2000); clock.Step(2200);
+                    Assert.Equal(0, slide.Y, 3);
+                    window.MouseMove(new Point(100, 50)); Dispatcher.UIThread.RunJobs();
+                    clock.Step(3000); clock.Step(3060);   // half of HoverMs, QuadraticEaseOut: 0 -> -1.5
+                    Assert.Equal(-1.5, slide.Y, 2);
+                    window.MouseDown(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                    clock.Step(3061);
+                    Assert.InRange(slide.Y, -1.6, -1.3);
+                    clock.Step(3300);
+                    Assert.Equal(2, slide.Y, 3);
+                    window.MouseUp(new Point(100, 50), MouseButton.Left); Dispatcher.UIThread.RunJobs();
+                    clock.Step(4000); clock.Step(4300);
+                    Assert.Equal(-2, slide.Y, 3);
                     // Disabled: flat, no shadow.
                     button.IsEnabled = false; Dispatcher.UIThread.RunJobs();
                     Assert.Equal(0, Travel(), 3); Assert.Equal(0, Drop(), 3);
