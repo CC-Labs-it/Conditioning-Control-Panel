@@ -46,12 +46,23 @@ public partial class AvatarTubeWindow
         return sets.ToArray();
     }
 
+    // Parsed once and never fatal, like WPF CirceEmotes.cs:279-309.
+    private static (string Mod, int Set)[]? _registeredEmoteSets;
     private static IEnumerable<(string Mod, int Set)> RegisteredEmoteSets()
     {
-        using var stream = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/avatar_emotes_registry.json"));
-        using var reader = new StreamReader(stream);
-        var registry = JObject.Parse(reader.ReadToEnd());
-        return registry["sets"]!.Select(e => ((string)e["modId"]!, (int)e["avatarSet"]!)).ToArray();
+        if (_registeredEmoteSets != null) return _registeredEmoteSets;
+        try
+        {
+            using var stream = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/avatar_emotes_registry.json"));
+            using var reader = new StreamReader(stream);
+            var registry = JObject.Parse(reader.ReadToEnd());
+            return _registeredEmoteSets = registry["sets"]!.Select(e => ((string)e["modId"]!, (int)e["avatarSet"]!)).ToArray();
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Warning(ex, "Avatar emote registry unreadable; no emote sets");
+            return _registeredEmoteSets = Array.Empty<(string, int)>();
+        }
     }
 
     private static int? SingleEmoteSet()

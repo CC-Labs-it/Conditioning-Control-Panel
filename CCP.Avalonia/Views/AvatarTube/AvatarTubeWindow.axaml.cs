@@ -87,8 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// <c>CoreAudio.PlayOneShot</c> exists - see its own remarks for the four things it drops.</para>
     ///
     /// <para>Windowing, speech queue, chat/brain, awareness and look selection live in the adjacent
-    /// partials. Remaining WPF parity work is tracked in docs/avalonia-parity.md and
-    /// docs/cloud/fin-avatar-tube-window.md.</para>
+    /// partials. Remaining WPF parity work is tracked in docs/avalonia-parity.md.</para>
     ///
     /// <para><b>The tube does not track a face.</b> Nothing here reads a camera. The webcam face
     /// tracker that drives the avatar's gaze on the WPF head is a device, so it stays in a head;
@@ -560,7 +559,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// caption (UpdateTitleDisplay) upper-cases the companion branch of this.</summary>
         internal static string AvatarSetTitle(int setNumber)
         {
-            if (CoreMods.ActiveModPackage?.Manifest.CustomAvatarSets?.FirstOrDefault(c => c.SetNumber == setNumber) is { } custom)
+            if (CoreMods.ActiveModPackage?.Manifest.CustomAvatarSets?.FirstOrDefault(c => c.SetNumber == setNumber) is { } custom
+                && !string.IsNullOrWhiteSpace(custom.Label)) // WPF Avatar.cs:938 falls through
                 return CoreMods.MakeModAware(custom.Label);
             if (CompanionForAvatarSet(setNumber) is { } companionId)
                 return CoreMods.MakeModAware(CompanionDefinition.GetById(companionId)

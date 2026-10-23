@@ -226,7 +226,8 @@ public sealed class AvatarTubeFinishTests
         var position = shell.Position;
         tube.Attach();
         Dispatcher.UIThread.RunJobs();
-        Assert.True(shell.Position.X > position.X || shell.Width < width);
+        Assert.True(shell.Position.X > position.X); // left dock: main moves right...
+        Assert.True(shell.Width < width);            // ...and narrows (TubePlacement.cs MakeRoomPlacement)
         tube.Detach();
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(position, shell.Position);
@@ -241,8 +242,10 @@ public sealed class AvatarTubeFinishTests
         shell.Position = area.Position;
         shell.Width = area.Width / shell.DesktopScaling;
         Dispatcher.UIThread.RunJobs();
+        var before = shell.Position;
         tube.Attach();
         Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.Position.X > before.X); // make-room moved the shell first
         shell.Position += new PixelVector(25, 0);
         Dispatcher.UIThread.RunJobs();
         var wanted = shell.Position;
@@ -251,6 +254,45 @@ public sealed class AvatarTubeFinishTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(wanted, shell.Position);
         Assert.Equal(width, shell.Width);
+    });
+
+    [Fact]
+    public Task ShowingTheTubeAgainRearmsMakeRoomAfterAUserTakeover() => Run((shell, tube, _) =>
+    {
+        tube.Detach();
+        var area = shell.Screens.ScreenFromWindow(shell)!.WorkingArea;
+        var fullWidth = area.Width / shell.DesktopScaling;
+        shell.Position = area.Position;
+        shell.Width = fullWidth;
+        Dispatcher.UIThread.RunJobs();
+        tube.Attach();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.Position.X > area.X);
+        // The user drags main back over the tube's spot: make-room stands down (WPF Windowing.cs:897-900).
+        shell.Position = area.Position;
+        shell.Width = fullWidth;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(area.Position, shell.Position);
+        tube.Hide();
+        Dispatcher.UIThread.RunJobs();
+        tube.Show(); // WPF Speech.cs:1174 re-arms on show
+        Dispatcher.UIThread.RunJobs();
+        shell.Height += 1; // any parent change re-runs placement
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.Position.X > area.X);
+    });
+
+    [Fact]
+    public Task BlankCustomLabelFallsBackToTheCompanionOrLegacyTitle() => Run((_, _, change) =>
+    {
+        var expected = AvatarTubeWindow.AvatarSetTitle(1);
+        Assert.False(string.IsNullOrWhiteSpace(expected));
+        change(new ModPackage(new ModManifest
+        {
+            Id = "tube-test",
+            CustomAvatarSets = new() { new() { SetNumber = 1, Label = " " } },
+        }, null, false));
+        Assert.Equal(expected, AvatarTubeWindow.AvatarSetTitle(1)); // WPF Avatar.cs:938
     });
 
     [Fact]
