@@ -46,6 +46,9 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>The one session runner (WPF MainWindow._sessionEngine), or null on the headless render path.</summary>
         internal static SessionRunner? Sessions { get; set; }
+
+        /// <summary>WPF App.IntakePunchCard; null until startup (tests set their own).</summary>
+        internal static IntakePunchCard? IntakePunchCard { get; set; }
         /// <summary>The app-lifetime media recap (WPF App.MediaHistory), or null on the headless render path.</summary>
         internal static MediaHistoryService? MediaHistory { get; set; }
         /// <summary>THE FUSE (WPF App.DescentCountdown). Built before the shell so its spark can subscribe.</summary>
@@ -700,6 +703,9 @@ namespace ConditioningControlPanel.Avalonia
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
                 Sessions = new SessionRunner(new SessionLogService());
+                // WPF App.xaml.cs:2672: the intake punch card stamps silently (its UI is off in WPF too).
+                IntakePunchCard = new IntakePunchCard(System.IO.Path.Combine(CorePaths.UserData, Models.IntakePunchCardState.FileName));
+                IntakePunchCard.Attach(Sessions);
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)

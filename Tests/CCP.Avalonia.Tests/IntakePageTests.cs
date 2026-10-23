@@ -8,6 +8,8 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -129,6 +131,69 @@ public sealed class IntakePageTests
             });
         }
         finally { Directory.Delete(root, true); }
+    }
+
+    /// <summary>WPF IntakeHostService.OnQuizResult tail: the draft queues half a punch on its session id,
+    /// and the toast's "Run it now" opens Sessions with that session selected and asks to start it.</summary>
+    [Fact]
+    public async Task RunItNowQueuesThePunchAndAsksToStartTheDraftedSession()
+    {
+        var root = Directory.CreateTempSubdirectory("intake-run-now-").FullName;
+        Directory.CreateDirectory(Path.Combine(root, "custom"));
+        Directory.CreateDirectory(Path.Combine(root, "built-in"));
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            EnsureApp();
+            var card = AvApp.IntakePunchCard = new IntakePunchCard(Path.Combine(root, IntakePunchCardState.FileName));
+            var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+            var shell = new MainShellWindow();
+            var host = shell.Named<Panel>("NotificationHost")!;
+            AvApp.Notifications.AttachHost(host);
+            shell.Show();
+            try
+            {
+                var presets = shell.Named<PresetsTabView>("PresetsTab")!;
+                var manager = new SessionManager(new SessionFileService(Path.Combine(root, "custom"), Path.Combine(root, "built-in")));
+                manager.LoadAllSessions();
+                presets.UseSessionManager(manager);
+                var session = new Session { Id = "intake-run-now", Name = "Run Now Draft", DurationMinutes = 1, IsAvailable = true };
+                Assert.NotEqual("presets", shell.CurrentTab);
+
+                GradedIntakeTabView.OnSessionDrafted(shell, session, Path.Combine(root, "custom", "run-now.session.json"));
+                Assert.Equal("intake-run-now", Assert.Single(card.State.PendingDrafts).SessionId);
+
+                var action = host.GetLogicalDescendants().OfType<Button>().Single(b => b.Name == "ToastAction");
+                action.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                var ask = await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().SingleOrDefault());
+                Assert.Equal("presets", shell.CurrentTab);
+                Assert.EndsWith("Start Run Now Draft?", ask.FindControl<TextBlock>("TxtTitle")!.Text);
+                ask.FindControl<Button>("BtnCancel")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await WaitFor(() => shell.OwnedWindows.OfType<MessageDialog>().Any() ? null : shell);
+                Assert.False(runner.IsRunning);   // the normal confirmation: nothing starts by surprise
+            }
+            finally
+            {
+                foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
+                shell.Close();
+                runner.Stop();
+                CoreSession.IsSessionRunningProvider = null;
+                AvApp.Sessions = null;
+                AvApp.IntakePunchCard = null;
+            }
+        });
+        Directory.Delete(root, true);
+    }
+
+    private static async Task<T> WaitFor<T>(Func<T?> probe) where T : class
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (sw.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            Dispatcher.UIThread.RunJobs();
+            if (probe() is { } hit) return hit;
+            await Task.Yield();
+        }
+        throw new TimeoutException("side effect never appeared");
     }
 
     /// <summary>ccp.assets/ is media from the user's library and nothing else: no other file types,

@@ -225,6 +225,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try { presets?.RegisterExternallySavedSession(session, path); }
             catch (Exception ex) { Log.Warning(ex, "IntakeHost: drafted session saved but the Sessions list refresh failed"); }
 
+            // WPF IntakeHostService.cs:550: half a punch, redeemed only when this session runs.
+            App.IntakePunchCard?.NotifyIntakeCompleted(session.Id);
+
             var sessionId = session.Id;
             App.Notifications.Show(
                 $"Session drafted: \"{session.Name}\" - run it to stamp your punch card.",

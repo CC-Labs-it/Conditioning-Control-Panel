@@ -68,6 +68,10 @@ namespace ConditioningControlPanel.Services
         public TimeSpan Remaining => CurrentSession is { } cs && IsRunning
             ? TimeSpan.FromMinutes(cs.DurationMinutes) - Elapsed : TimeSpan.Zero;
 
+        /// <summary>SessionEngine.ProgressPercent (SessionEngine.cs:123), from the last tick's elapsed.</summary>
+        public double ProgressPercent => CurrentSession is { DurationMinutes: > 0 } cs && IsRunning
+            ? Math.Min(100, _lastElapsed.TotalMinutes / cs.DurationMinutes * 100) : 0;
+
         /// <summary>SessionEngine.ElapsedTime: frozen while paused.</summary>
         public TimeSpan Elapsed => !IsRunning ? TimeSpan.Zero
             : IsPaused ? _pausedElapsed
