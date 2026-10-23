@@ -59,8 +59,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderDriftSpeed.ValueChanged += SliderDriftSpeed_Changed;
 
             // WPF OnLoaded: Configure, then RowChanged re-measures the box (OnGetRowChanged -> RefreshV2Box).
-            RowGetFlashesV2.RowChanged += (_, _) => RefreshV2Box();
-            RowGetFlashesV2.Configure(ConditioningControlPanel.Services.Prizes.V2PurchaseRule.FlashesPrizeId, "v2_get_flash_blurb");
+            RowGetFlashesV2.RowChanged += (_, _) => OnGetRowChanged();
+            RowGetFlashesV2.Configure(ConditioningControlPanel.Services.Prizes.V2PurchaseRule.FlashesPrizeId, "v2_get_flash_blurb", "section_flash_v2");
 
             LoadFromSettings();
 
@@ -144,8 +144,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        // WPF rebuilds on PrizeGrants.GrantsChanged; ownership never changes at runtime on this head
-        // (PrizeOwnership), so the rebuild on load/rebind is all there is to do.
+        // WPF rebuilds on PrizeGrants.GrantsChanged. On this head ownership changes at runtime only
+        // when a Get it buy lands its grants (PrizeOwnership.ApplySnapshot), and that is exactly when
+        // the row turns Hidden: rebuild then, so the bought Drift & Bounce shows at once.
+        private void OnGetRowChanged()
+        {
+            if (!RowGetFlashesV2.IsRowHidden || RowMotion.IsVisible
+                || !Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)) { RefreshV2Box(); return; }
+            var wasLoading = _isLoading;
+            _isLoading = true;
+            try { BuildMotionPicker(); }
+            finally { _isLoading = wasLoading; }
+        }
 
         /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
         /// no row is left (only the motion row and the Get it row exist here).</summary>
