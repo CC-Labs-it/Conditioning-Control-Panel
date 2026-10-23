@@ -95,6 +95,38 @@ public sealed class ScrolllerRelayLoadTests : IDisposable
     }
 
     [Fact]
+    public async Task A_head_on_an_uncached_url_is_a_404_and_never_fetches()
+    {
+        using var s = MakeHanging();
+        using var http = await Signed(s);
+        var head = await http.SendAsync(new HttpRequestMessage(HttpMethod.Head, Relay(s, 1)));
+        Assert.Equal(HttpStatusCode.NotFound, head.StatusCode);
+        Assert.Equal(0, Volatile.Read(ref _started));
+    }
+
+    [Fact]
+    public async Task A_head_on_a_cached_url_answers_headers_only()
+    {
+        var file = Path.Combine(_dir, "c.jpg");
+        File.WriteAllBytes(file, new byte[10]);
+        var web = Path.Combine(_dir, "web");
+        Directory.CreateDirectory(web);
+        File.WriteAllText(Path.Combine(web, "index.html"), "<p>hi</p>");
+        using var s = new WebAssetServer(web)
+        {
+            ScrolllerCached = _ => file,
+            ScrolllerMayFetchFresh = _ => true,
+            ScrolllerFetch = (_, _) => { Interlocked.Increment(ref _started); return Task.FromResult<string?>(null); },
+        };
+        using var http = await Signed(s);
+        var head = await http.SendAsync(new HttpRequestMessage(HttpMethod.Head, Relay(s, 1)));
+        Assert.Equal(HttpStatusCode.OK, head.StatusCode);
+        Assert.Equal(10, head.Content.Headers.ContentLength);
+        Assert.Empty(await head.Content.ReadAsByteArrayAsync());
+        Assert.Equal(0, Volatile.Read(ref _started));
+    }
+
+    [Fact]
     public async Task Closing_the_server_cancels_its_relay_fetches()
     {
         var s = MakeHanging();

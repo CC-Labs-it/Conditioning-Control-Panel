@@ -201,7 +201,10 @@ public sealed class WebAssetServer : IDisposable
         var res = ctx.Response;
         var url = ScrolllerRelay.FromRelayPath(ctx.Request.RawUrl);
         var cached = url == null || !ScrolllerPolicy.Enabled ? null : ScrolllerCached(url);
-        var route = ScrolllerRelay.Decide(url, ScrolllerPolicy.Enabled, cached != null, url != null && ScrolllerMayFetchFresh(url));
+        // HEAD: headers of a cached copy only; an uncached url is a 404, never a fetch (and never a charge).
+        bool head = ctx.Request.HttpMethod == "HEAD";
+        var route = ScrolllerRelay.Decide(url, ScrolllerPolicy.Enabled, cached != null,
+            url != null && !head && ScrolllerMayFetchFresh(url), head);
         string? path = cached;
         switch (route)
         {

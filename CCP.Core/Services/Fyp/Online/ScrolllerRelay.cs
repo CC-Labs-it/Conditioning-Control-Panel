@@ -78,12 +78,14 @@ internal static class ScrolllerRelay
     }
 
     /// <summary>The whole rule, pure: no Scrolller media url = 404; switch off = 403; cached beats the share; then a
-    /// fresh fetch only when allowed.</summary>
-    internal static ScrolllerRelayRoute Decide(string? url, bool enabled, bool cached, bool mayFetchFresh)
+    /// fresh fetch only when allowed. A HEAD (<paramref name="headOnly"/>) never fetches: an uncached url is a 404, so asking
+    /// about a clip never downloads or charges it.</summary>
+    internal static ScrolllerRelayRoute Decide(string? url, bool enabled, bool cached, bool mayFetchFresh, bool headOnly = false)
     {
         if (url == null) return ScrolllerRelayRoute.NotFound;
         if (!enabled) return ScrolllerRelayRoute.Block;
         if (cached) return ScrolllerRelayRoute.ServeCached;
+        if (headOnly) return ScrolllerRelayRoute.NotFound;
         return mayFetchFresh ? ScrolllerRelayRoute.FetchThenServe : ScrolllerRelayRoute.Refuse;
     }
 
