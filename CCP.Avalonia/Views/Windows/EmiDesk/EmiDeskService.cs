@@ -19,7 +19,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     ///
     /// <para>ponytail: not here yet, each a named WPF member: the moment bus (<c>Fire</c>, greeting,
     /// backSoon/weekend/bedtime beats; EmiLineEngine and EmiState are in Core, unwired here), the nudge machine, the
-    /// knock (<c>TryKnock</c>) and the tube hand-off (<c>TubeDeskVisibility</c>). The system-wide chord
+    /// knock (<c>TryKnock</c>) and the tube hand-off wiring (the <c>TubeDeskVisibility</c> rule itself is in
+    /// CCP.Core; only the head call that hides/restores the desk is missing). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
     /// </summary>
     internal sealed class EmiDeskService

@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Controls.Billboard
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = true, Mute = true };
             _sink = new VlcFrameSink(_player, () => _media, OnFirstBitmap, () => _video?.InvalidateVisual());
             _media = new Media(vlc, _art!.VideoPath, FromType.FromPath);
-            _media.AddOption(":no-audio");
+            _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
             _media.AddOption(":input-repeat=65535");   // WPF MediaEnded -> Position 0 -> Play
             _player.EncounteredError += (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => Fail("decoder error"));
             return true;

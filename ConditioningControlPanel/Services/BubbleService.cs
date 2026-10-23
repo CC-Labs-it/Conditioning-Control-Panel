@@ -12,6 +12,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using NAudio.Wave;
+using ConditioningControlPanel.Controls;   // BookedFlashColour.Wpf: Core 0xAARRGGBB -> WPF Color
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Chaos;
@@ -1190,7 +1191,7 @@ public class BubbleService : IDisposable
                     // (#476). 1.2x (~4s) still reads as a lingering wash on the calm dashboard.
                     Payload = new OverlayPayload("braindrain", braindrainOpacity: 0.30) { Strength = 60, DurationMult = 1.2 },
                     SizePx = 200,
-                    Tint = System.Windows.Media.Color.FromRgb(0x9A, 0x40, 0xFF),
+                    Tint = 0xFF9A40FFu,
                     Label = "GLITCH",
                     IsLive = false,
                     FuseMs = 0,
@@ -1205,8 +1206,7 @@ public class BubbleService : IDisposable
                     VariantId = BrainDrainBubble.VariantId,   // ships braindrain_melt.png
                     Payload = new BrainDrainMeltPayload(),
                     SizePx = 220,
-                    Tint = System.Windows.Media.Color.FromRgb(
-                        BrainDrainBubble.TintR, BrainDrainBubble.TintG, BrainDrainBubble.TintB),
+                    Tint = 0xFF000000u | ((uint)BrainDrainBubble.TintR << 16) | ((uint)BrainDrainBubble.TintG << 8) | BrainDrainBubble.TintB,
                     Label = "◍",
                     IsLive = false,
                     FuseMs = 0,
@@ -3040,7 +3040,7 @@ internal class Bubble
     {
         bool hasTint = _spec != null && !_hasVariantSprite;
         var tint = _spec != null
-            ? new SkiaSharp.SKColor(_spec.Tint.R, _spec.Tint.G, _spec.Tint.B)
+            ? new SkiaSharp.SKColor(_spec.Tint.Wpf().R, _spec.Tint.Wpf().G, _spec.Tint.Wpf().B)
             : new SkiaSharp.SKColor(0xE8, 0xE8, 0xF0);
 
         // Glow: the DropShadow that wins on the sprite (or the spotlight halo), resolved from flags.
@@ -3093,7 +3093,7 @@ internal class Bubble
             LabelFontDip = (float)Math.Max(14, _size * 0.30),
             HasShine = ChaosSkiaFxOverlay.Enabled && !_hasVariantSprite && _spec != null,
             IsEcho = _spec?.IsEcho == true,
-            EchoColor = _spec != null ? new SkiaSharp.SKColor(_spec.Tint.R, _spec.Tint.G, _spec.Tint.B, 110) : default,
+            EchoColor = _spec != null ? new SkiaSharp.SKColor(_spec.Tint.Wpf().R, _spec.Tint.Wpf().G, _spec.Tint.Wpf().B, 110) : default,
             HasFace = _bubbleFaceImg?.Source != null,
             TeaseInnerDip = (float)FaceDiameter,
             HasGlow = hasGlow,
@@ -4685,7 +4685,7 @@ internal class Bubble
                 // Additive pop burst on the Skia FX layer, in this bubble's payload colour.
                 // A live snap reads as a bigger "release"; teases/brittles burst on their own paths.
                 if (ChaosSkiaFxOverlay.Enabled)
-                    ChaosSkiaFxOverlay.Burst(popPx, _spec.IsLive ? SnapColor : _spec.Tint, _spec.IsLive ? 1.3 : 1.0);
+                    ChaosSkiaFxOverlay.Burst(popPx, _spec.IsLive ? SnapColor : _spec.Tint.Wpf(), _spec.IsLive ? 1.3 : 1.0);
             }
             catch (Exception ex) { Diag.Swallowed(ex); }
             // Mimic prism: the shadow pop — the copied bubble ghosts out underneath the burst.
@@ -4704,7 +4704,7 @@ internal class Bubble
             if (_isDarter)
             {
                 _wasQuickCatch = _telegraphRemainingMs <= 0 && _darterActiveMs <= _spec.QuickWindowMs;
-                ShowChaosLabel("TIME SLOW", _spec.Tint);                                      // catch → fires the slow-mo power-up
+                ShowChaosLabel("TIME SLOW", _spec.Tint.Wpf());                                      // catch → fires the slow-mo power-up
                 _onDarterCaught?.Invoke(this);
             }
             else if (_isFreeze) { ShowChaosEffectLabel(); _onFreezeCaught?.Invoke(this); }   // good pickup → fires the freeze power-up
@@ -4904,7 +4904,7 @@ internal class Bubble
     private void ShowChaosEffectLabel()
     {
         if (_spec == null) return;
-        ShowChaosLabel(ChaosBubbleVariants.PopWordFor(_spec.VariantId), _spec.Tint);
+        ShowChaosLabel(ChaosBubbleVariants.PopWordFor(_spec.VariantId), _spec.Tint.Wpf());
     }
 
     /// <summary>Flash an explicit word + colour at this bubble's centre.</summary>
@@ -4942,7 +4942,7 @@ internal class Bubble
         // per-variant sprite is supplying its own art.
         if (!_hasVariantSprite)
         {
-            var t = _spec.Tint;
+            var t = _spec.Tint.Wpf();
             var tintBrush = new RadialGradientBrush(
                 Color.FromArgb(150, t.R, t.G, t.B),
                 Color.FromArgb(90, t.R, t.G, t.B))
@@ -4999,7 +4999,7 @@ internal class Bubble
         // The Echo: a doubled, ghosted outline — the second one is already in there.
         if (_spec.IsEcho)
         {
-            var gc = _spec.Tint;
+            var gc = _spec.Tint.Wpf();
             _grid.Children.Add(new System.Windows.Shapes.Ellipse
             {
                 Width = _size, Height = _size,
@@ -5105,7 +5105,7 @@ internal class Bubble
         // ring (animated down to lock-on in AnimateFrame). Kept within the window bounds.
         if (_spec.IsDarter)
         {
-            var tc = Color.FromRgb(_spec.Tint.R, _spec.Tint.G, _spec.Tint.B);
+            var tc = Color.FromRgb(_spec.Tint.Wpf().R, _spec.Tint.Wpf().G, _spec.Tint.Wpf().B);
             _bubbleImage.Effect = new DropShadowEffect { Color = tc, BlurRadius = 26, ShadowDepth = 0, Opacity = 0.9 };
             _telegraphRing = new System.Windows.Shapes.Ellipse
             {
@@ -5204,7 +5204,7 @@ internal class Bubble
     {
         if (_spec?.Payload is not FlashPayload flash || _bubbleFaceImg?.Source == null) return;
         flash.ImagePath = _flashFacePath;
-        flash.OriginPx = CenterPx;
+        flash.OriginPx = (CenterPx.X, CenterPx.Y);
         flash.FaceDiameterPx = FaceDiameter * _dpiScale;
     }
 
