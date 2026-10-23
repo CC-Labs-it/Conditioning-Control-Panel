@@ -2734,3 +2734,7 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 ## avalonia-port/wire-win-tutorial-overlay: +394
 - Tutorial overlay auto-advance triggers (click, text, selection, slider, CoreTutorialEvents) via shared Core TutorialAdvanceRules; row stays stub.
 - Triggers unreachable on this head until Deeper tours host an overlay; remote gate green.
+
+## avalonia-port/wire-ctrl-spiral-embed-view: +509
+- Spiral §9 embed bridge shared in Core; Avalonia SpiralEmbedView on WebHost wired into Spiral tab (row stays stub: no descent publisher yet).
+- Failed embed -> waiting room with WPF give-up latch; Navigated -> host shown + splash hidden; both tab-level tests fail-proven.
