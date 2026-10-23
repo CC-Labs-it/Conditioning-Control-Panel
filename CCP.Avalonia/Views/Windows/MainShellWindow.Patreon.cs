@@ -133,7 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.Patreon.cs:92, over the shared Core flag pass. Skipped while the seam is
         /// unseeded: WPF never runs it before App.Patreon exists, and a head that cannot read the account
         /// must not wipe a patron's settings. ponytail: this head runs none of the lapsed engines (no
-        /// keyword hook, OCR, autonomy, mantra chant or haptics mixer), so there is nothing to stop yet.</summary>
+        /// keyword hook, OCR or haptics mixer), so there is nothing to stop yet.</summary>
         private bool _lapseUnsaved;   // cleared in memory, not yet written by an entitlement event
 
         private void EnforceEntitlementLapse(bool persist)
@@ -150,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _lapseUnsaved = false;
                 }
                 // WPF MainWindow.Patreon.cs:108 - the lapse stops the engine, not just the flag.
+                if (cleared.Contains("mantra-chant")) Platform.MantraChantService.Instance.Stop();
                 if (cleared.Contains("awareness-mode")) App.WindowAwareness.Stop();
                 // WPF Patreon.cs:152 - the mirror case: entitlement resolving late re-arms what the
                 // settings (and consent) already ask for. Start() re-checks everything itself.

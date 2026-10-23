@@ -55,6 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF IsReady: the page said ready and is not on its way out.</summary>
         internal bool DtrhReady => IsReady && !_dtrhExiting && !_closing;
 
+        // WPF VideoService.LockedChaosRun: calm attribution links stay closed during a DtRH run.
+        internal static bool IsDtrhRunning { get { lock (Open) return Open.Any(w => w.IsDtrh && w._dtrhRunActive); } }
+
         /// <summary>WPF IsInFront: the open DtRH window when it is the active one, else null.</summary>
         internal static GameWindow? DtrhInFront()
         {

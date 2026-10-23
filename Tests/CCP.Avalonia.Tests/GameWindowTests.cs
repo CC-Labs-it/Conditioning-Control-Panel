@@ -673,7 +673,9 @@ public sealed class GameWindowTests
             Assert.Empty(sent);
             w.HandleMessage("{\"type\":\"run-started\",\"difficulty\":\"Easy\"}");
             Assert.True(w.DtrhRunActive);
+            Assert.True(GameWindow.IsDtrhRunning);
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");
+            Assert.False(GameWindow.IsDtrhRunning);
             w.HandleMessage("{\"type\":\"run-ended\",\"score\":300,\"durationSec\":180}");   // a second end pays nothing
             var pay = Assert.Single(sent);
             Assert.Equal("payout-result", (string?)pay["type"]);

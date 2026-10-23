@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the tube's voice); Autonomy.CancelActivePulses; the session PAUSE + StopEngine (StartStop.cs:443-516:
         /// SkillTree, LockCardWindow.ForceCloseAll). Run in registry order.</summary>
         internal static readonly HashSet<string> BlinkStopIds = new()
-            { "blink-trainer", "mantra", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
+            { "blink-trainer", "mantra-chant", "mantra", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
 
         /// <summary>Test seam: replaces the restart-camera + "Recalibrate?" offer after the stop pass.</summary>
         internal Func<Task>? BlinkRecalOfferForTests;

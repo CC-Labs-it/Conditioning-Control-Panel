@@ -434,6 +434,9 @@
                                         </Grid>
                                     </Border>
 
+                                    <Button x:Name="BtnCompanionPermissions" Theme="{StaticResource OutlineButton}" Margin="2,0,0,8">
+                                        <TextBlock Text="{loc:Str companion_page_permissions_live_here}" TextWrapping="Wrap"/>
+                                    </Button>
                                     <!-- ============ SUBSECTION 3: BEHAVIORS (folded into an expander) ============ -->
                                     <Expander IsExpanded="False" Margin="0,0,0,10" HorizontalAlignment="Stretch"
                                               Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold">
@@ -585,6 +588,13 @@
                                                         <TextBlock Grid.Column="1" x:Name="TxtWallpaperFolder" Foreground="{StaticResource TextMutedBrush}" FontSize="11"
                                                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,0,0"/>
                                                     </Grid>
+
+                                                    <StackPanel x:Name="TxtWallpaperCredit" IsVisible="False" Margin="0,2,0,0">
+                                                        <Button x:Name="BtnWallpaperCredit" Theme="{StaticResource OutlineButton}" Padding="0" HorizontalAlignment="Left">
+                                                            <TextBlock Text="Media from Scrolller" FontSize="10.5"/>
+                                                        </Button>
+                                                        <TextBlock Text="{loc:Str label_online_media_credit}" FontSize="10.5" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"/>
+                                                    </StackPanel>
 
                                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 

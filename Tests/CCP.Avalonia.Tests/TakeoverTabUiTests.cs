@@ -103,4 +103,107 @@ public sealed class TakeoverTabUiTests
         }
         return Task.CompletedTask;
     });
+    private sealed class ChantVoice : global::ConditioningControlPanel.Avalonia.Platform.MindWipePlayer.IVoice
+    {
+        public double Level;
+        public bool Stopped;
+        public double Volume { set => Level = value; }
+        public void Dispose() => Stopped = true;
+    }
+
+    [Fact]
+    public Task ChantControlsReachPlaybackAndLapseStopsIt() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.MantraChantEnabled, s.MantraChantVolume, s.MantraChantGapSeconds, s.AvatarMuted, s.MasterVolume);
+        var premium = CoreEntitlement.HasPremiumProvider;
+        var free = CoreEntitlement.IsFreeTodayProvider;
+        var chant = MantraChantService.Instance;
+        var hooks = (chant.HasVoiced, chant.Next, chant.Resolve, chant.Play);
+        var voice = new ChantVoice();
+        var shell = new MainShellWindow();
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            CoreEntitlement.IsFreeTodayProvider = _ => false;
+            (s.MantraChantEnabled, s.AvatarMuted, s.MasterVolume) = (false, false, 80);
+            chant.HasVoiced = () => true;
+            chant.Next = () => new global::ConditioningControlPanel.Models.MantraEntry { PromptAudio = "ask" };
+            chant.Resolve = p => p;
+            chant.Play = (_, level, _) => { voice.Volume = level; return voice; };
+            shell.Show();
+            shell.ShowTab("bambitakeover");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            var toggle = tab.FindControl<CheckBox>("ChkMantraChant")!;
+            toggle.IsChecked = true;
+            Assert.True(chant.IsRunning);
+            tab.FindControl<Slider>("SldMantraChantVolume")!.Value = 25;
+            Assert.Equal(.2, voice.Level, 5);
+            tab.FindControl<Slider>("SldMantraChantGap")!.Value = 9;
+            Assert.Equal(9, s.MantraChantGapSeconds);
+            toggle.IsChecked = false;
+            Assert.False(chant.IsRunning);
+            Assert.True(voice.Stopped);
+            toggle.IsChecked = true;
+            CoreEntitlement.HasPremiumProvider = () => false;
+            shell.RefreshEntitlementVeils(persist: true);
+            Assert.False(chant.IsRunning);
+            Assert.False(toggle.IsChecked);
+        }
+        finally
+        {
+            chant.Stop();
+            (chant.HasVoiced, chant.Next, chant.Resolve, chant.Play) = hooks;
+            CoreEntitlement.HasPremiumProvider = premium;
+            CoreEntitlement.IsFreeTodayProvider = free;
+            (s.MantraChantEnabled, s.MantraChantVolume, s.MantraChantGapSeconds, s.AvatarMuted, s.MasterVolume) = saved;
+            shell.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PermissionsLinkNavigatesAndWallpaperCreditRechecksConsentOnShow() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.StrictLockEnabled);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("bambitakeover");
+            var tab = shell.GetLogicalDescendants().OfType<global::ConditioningControlPanel.Avalonia.Views.Tabs.BambiTakeoverTabView>().Single();
+            foreach (var (source, consent, visible) in new[] { ("local", true, false), ("online", false, false), ("online", true, true), ("mixed", true, true) })
+            {
+                shell.ShowTab("settings");
+                (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented) = (source, consent, false);
+                shell.ShowTab("bambitakeover");
+                Assert.Equal(visible, tab.FindControl<StackPanel>("TxtWallpaperCredit")!.IsVisible);
+            }
+            var launched = new List<string>();
+            tab.WallpaperCreditOpenerForTests = target => { launched.Add(target); return Task.FromResult(true); };
+            s.StrictLockEnabled = false;
+            tab.FindControl<Button>("BtnWallpaperCredit")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(new[] { "https://scrolller.com" }, launched);
+            s.StrictLockEnabled = true;
+            tab.FindControl<Button>("BtnWallpaperCredit")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(launched);
+            s.StrictLockEnabled = false;
+            tab.FindControl<Button>("BtnCompanionPermissions")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.GetLogicalDescendants().OfType<Control>().First(c => c.Name == "CompanionTab").IsVisible);
+        }
+        finally { shell.Close(); (s.MediaSource, s.RemoteMediaConsented, s.FypOnlineConsented, s.StrictLockEnabled) = saved; }
+        return Task.CompletedTask;
+    });
+
 }

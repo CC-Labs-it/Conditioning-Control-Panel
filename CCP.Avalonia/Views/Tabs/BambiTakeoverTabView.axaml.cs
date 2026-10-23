@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -48,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// user edit. Starts true: the .axaml gives every Slider a Value, which raises ValueChanged
         /// during InitializeComponent, before settings are read.</summary>
         private bool _isLoading = true;
+        internal Func<string, Task<bool>>? WallpaperCreditOpenerForTests;
 
         public BambiTakeoverTabView()
         {
@@ -61,6 +63,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnOpenDeviceSettings.Click += (_, _) => Shell?.OpenDeviceSettings();   // Settings -> Devices
             BtnAutonomyOpenModels.Click += (_, _) => Shell?.OpenSpeechModelFolder();
             BtnWallpaperFolder.Click += BtnWallpaperFolder_Click;
+            BtnCompanionPermissions.Click += (_, _) => Shell?.ShowTab("permissions");
+            BtnWallpaperCredit.Click += async (_, _) =>
+            {
+                if (CoreSettings.Current.StrictLockEnabled || Windows.MainShellWindow.LockdownActive
+                    || Chaos.ChaosRunHost.IsActive || Games.GameWindow.IsDtrhRunning) return;
+                await (WallpaperCreditOpenerForTests?.Invoke("https://scrolller.com")
+                    ?? Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), "https://scrolller.com"));
+            };
 
             // Triggers + session toggles. WPF split these across Checked/Unchecked; Avalonia 11
             // raises one IsCheckedChanged for both edges.
@@ -284,6 +294,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ? Loc.Get("label_wallpaper_folder_default")
                 : s.WallpaperSourceFolder;
 
+            // WPF WallpaperService.RemoteMediaEnabled: the source and explicit media consent own the credit.
+            TxtWallpaperCredit.IsVisible = s.MediaSource != null && s.MediaSource != "local" && s.HasRemoteMediaConsent;
             ChkWallpaperKeep.IsChecked = s.WallpaperEnabled;
             // Clamp before assigning, like the other Takeover bars (#485).
             s.WallpaperPulseSeconds = Math.Clamp(s.WallpaperPulseSeconds,
@@ -598,8 +610,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (s.MantraChantEnabled == on) return;
             s.MantraChantEnabled = on;
             CoreSettings.Save();
-            // ponytail: WPF then calls App.MantraChant.Start()/Stop() and re-reads the hint. Needs
-            // ConditioningControlPanel/Services/MantraChantService.cs.
+            if (on) Platform.MantraChantService.Instance.Start();
+            else Platform.MantraChantService.Instance.Stop();
+            TxtMantraChantHint.Text = Loc.Get(Platform.MantraChantService.Instance.CanChant()
+                ? "desc_mantra_chant" : "desc_mantra_chant_none");
         }
 
         private void SldMantraChantVolume_Changed(object? sender, RangeBaseValueChangedEventArgs e)
@@ -608,7 +622,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_isLoading) return;
             CoreSettings.Current.MantraChantVolume = e.NewValue;
             CoreSettings.Save();
-            // ponytail: WPF also live-applies to a clip already playing (App.MantraChant.ApplyVolume).
+            Platform.MantraChantService.Instance.ApplyVolume();
         }
 
         private void SldMantraChantGap_Changed(object? sender, RangeBaseValueChangedEventArgs e)

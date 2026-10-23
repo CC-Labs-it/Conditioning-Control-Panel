@@ -111,6 +111,7 @@ internal static class PanicWatchdog
         Step("ai follow-ups", () => ConditioningControlPanel.Services.Commands.AiCommandService.CancelAll());
         // Conditional, as WPF (#668): with the standalone Audio Layers master on, the bed is the user's.
         Step("audio layers", () => { if (!CoreSettings.Current.AudioLayersEnabled) LayeredAudio.Instance?.Stop(); });
+        Step("mantra chant", () => MantraChantService.Instance.StopEmergency());
         Step("mind wipe", () => CoreMindWipe.StopProvider?.Invoke());
         Step("unduck", () => LibVlcAudio.Instance?.ForceUnduck());
         Log.Information("PANIC FALLBACK complete");

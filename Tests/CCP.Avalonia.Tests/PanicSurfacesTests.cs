@@ -80,7 +80,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "intake", "leash-task", "tour", "games", "first-show", "voice-capture", "ai-followups", "blink-trainer",
-        "gaze-minigame", "mantra", "chaos", "chaos-intro", "haptics", "remote-haptics", "takeover", "program-session",
+        "gaze-minigame", "mantra-chant", "mantra", "chaos", "chaos-intro", "haptics", "remote-haptics", "takeover", "program-session",
         "engine", "pink-rush", "corner-gif", "tube-speech", "lock-cards", "possession", "attention-test", "deeper-editor-audio",
         "knock-cards", "chaos-flash", "gif-cascade", "chaos-announcer", "chaos-dvd", "chaos-cursor-glow", "chaos-vibe-trail", "chaos-estim",
         "chaos-field-fx", "chaos-skia-fx", "speak-cue", "companion-transcript", "camera",
