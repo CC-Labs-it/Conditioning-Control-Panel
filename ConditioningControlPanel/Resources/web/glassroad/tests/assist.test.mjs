@@ -118,7 +118,7 @@ test('a player who steers is never fought: their side always wins and the assist
 test('any input takes over the same step: autopilot and cruise drop to zero at once', () => {
   let grab = Infinity;
   const r = solo({ hands: (t) => (t >= grab ? { steer: -0.2 } : {}) });
-  r.run(14);
+  r.run(9);     // on the start straight, before the stream (its current adds steer the step the hands arrive)
   const before = r.trace[r.trace.length - 1];
   assert.ok(before.auto === 1 && before.cruise === 1, 'hands off: both eased in');
   grab = r.t;
@@ -130,14 +130,14 @@ test('any input takes over the same step: autopilot and cruise drop to zero at o
 });
 
 test('the centre pull: Strong pulls harder than Light, Off not at all; it grows past a third of the half width', () => {
-  // the straightest railed, level 150 m of Threshold (found, so a new course keeps the test): a kart placed off
+  // the straightest railed, level 130 m of Threshold (found, so a new course keeps the test; 150 m no longer fits between the last corner and the first stream bend): a kart placed off
   // centre at 20 m/s, nose along the road, throttle held and no steer for 1.5 s (before the autopilot at 2 s)
   const track = threshold(), feel = makeFeel();
   let S0 = 0, bestTurn = Infinity;
   for (let s0 = 0; s0 < track.lengthM; s0 += 10) {
     let turn = 0, ok = true;
     const a0 = track.frameAt(s0);
-    for (let d = 10; d <= 150 && ok; d += 10) {
+    for (let d = 10; d <= 130 && ok; d += 10) {
       const fb = track.frameAt(s0 + d);
       ok = (fb.flags || []).includes('rail') && Math.abs(fb.t[1]) < 0.05 && Math.abs(fb.roll) < 0.05;
       turn = Math.max(turn, Math.acos(Math.min(1, a0.t[0] * fb.t[0] + a0.t[1] * fb.t[1] + a0.t[2] * fb.t[2])));

@@ -4,10 +4,10 @@
   "billboards": [
     { "id": "bb-06", "f": 0.06, "side": 1, "kind": "portrait", "heightM": 13, "offM": 9, "liftM": 2.5, "angleDeg": 30, "program": 0, "phone": true },
     { "id": "bb-20", "f": 0.2, "side": -1, "kind": "landscape", "heightM": 8.5, "offM": 10, "liftM": 3, "angleDeg": 28, "program": 1, "phone": false },
-    { "id": "bb-24", "f": 0.24, "side": 1, "kind": "landscape", "heightM": 9, "offM": 9, "liftM": 3, "angleDeg": 30, "program": 2, "phone": true },
+    { "id": "bb-24", "f": 0.27, "side": 1, "kind": "landscape", "heightM": 9, "offM": 9, "liftM": 3, "angleDeg": 30, "program": 2, "phone": true },
     { "id": "bb-35", "f": 0.35, "side": -1, "kind": "portrait", "heightM": 14, "offM": 11, "liftM": 2, "angleDeg": 32, "program": 3, "phone": false },
     { "id": "bb-37", "f": 0.37, "side": 1, "kind": "portrait", "heightM": 12, "offM": 10, "liftM": 2.5, "angleDeg": 30, "program": 5, "phone": true },
-    { "id": "bb-57", "f": 0.575, "side": -1, "kind": "landscape", "heightM": 9, "offM": 9, "liftM": 3, "angleDeg": 28, "program": 4, "phone": true },
+    { "id": "bb-57", "f": 0.575, "side": -1, "kind": "landscape", "heightM": 9, "offM": 8, "liftM": 1, "angleDeg": 28, "program": 4, "phone": true },
     { "id": "bb-68", "f": 0.68, "side": 1, "kind": "landscape", "heightM": 8, "offM": 12, "liftM": 3, "angleDeg": 30, "program": 0, "phone": false },
     { "id": "bb-76", "f": 0.76, "side": -1, "kind": "portrait", "heightM": 13, "offM": 9, "liftM": 2.5, "angleDeg": 32, "program": 1, "phone": true },
     { "id": "bb-81", "f": 0.808, "side": 1, "kind": "landscape", "heightM": 9.5, "offM": 11, "liftM": 3, "angleDeg": 30, "program": 3, "phone": false },

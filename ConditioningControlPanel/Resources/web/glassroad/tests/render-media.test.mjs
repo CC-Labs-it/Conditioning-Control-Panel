@@ -22,7 +22,7 @@ test('media: the layout follows the polish 3 corridors', () => {
   assert.equal(layout.track, 'threshold');
   const fs = layout.billboards.map((b) => b.f);
   // polish 6: refit to the stacked course (render/colossiMath.js corridorBoards)
-  assert.deepEqual(fs, [0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]);
+  assert.deepEqual(fs, [0.06, 0.2, 0.27, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]);
   layout.billboards.forEach((b, i) => {
     if (i) assert.notEqual(b.side, layout.billboards[i - 1].side, b.id + ' alternates sides');
     assert.ok(b.heightM >= 8 && b.heightM <= 14, b.id + ' height');

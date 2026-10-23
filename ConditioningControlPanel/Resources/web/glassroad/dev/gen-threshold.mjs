@@ -28,10 +28,17 @@ const DEG = Math.PI / 180;
 export const PIECES = [
   // induction: ground level, the climb onto deck 1, the bridge over the start straight
   { id: 'start', len: 90, y: 0, w: 20, sec: 0, pad: { at: 0.45, x: 0 } },
-  { id: 'sweepA', turn: 90, r: 45, roll: 25, y: 1, sec: 0 },
-  { id: 'L2', len: 24, y: 3, sec: 0 },
+  // water wave 1: the first sweep from u 0.15 and all of L2 are a STREAM; the current runs +5 m/s along and
+  // -2.5 m/s to the left (the outside of the right turn), eased in over the first two stream nodes and out
+  // over the last two (STREAM_RAMP). The hairpin after it stays glass.
+  { id: 'sweepA', turn: 90, r: 45, roll: 25, y: 1, sec: 0, stream: { from: 0.15, flow: [5, -2.5] } },
+  { id: 'L2', len: 24, y: 3, sec: 0, stream: { from: 0, flow: [5, -2.5] } },
   { id: 'hairpin', turn: 180, r: 36, roll: 28, y: 10, sec: 0 },
-  { id: 'bridge', len: 124, y: 14, sec: 0, pad: { at: 0.35, x: -3 } },
+  // WATER FIT (2026-10-23): the chute and pool below need 124 m on the return lane's axis where the old auto L4a
+  // had 51 m, so the bridge grew 124 -> 162 and the two corners after the jump tightened (sweepE
+  // and sweepF r 42 -> 24); sweepD (the court entry) keeps r 40: at r 22 a boosted bot slid into the left hole.
+  // The dare, the court and the start are untouched and the loop closes exactly
+  { id: 'bridge', len: 162, y: 14, sec: 0, pad: { at: 0.35, x: -3 } },
   // deepening: up round the column onto the top deck, the wheel and its hoop, the dare, down the keyhole
   { id: 'column', turn: -360, r: 28, roll: 18, y: 28, ease: 'lin', w: 16.25, speed: 0.92, sec: 1 },
   { id: 'deck', len: 40, y: 28, sec: 1, pad: { at: 0.55, x: 0 } },
@@ -48,14 +55,20 @@ export const PIECES = [
   { id: 'c2', turn: 180, r: 28.75, w: 14, roll: 20, y: 13, ease: 'dive', sec: 1, alongside: true },
   { id: 'c3', turn: 180, r: 37.5, w: 16, roll: 18, y: 23, sec: 1, alongside: true },
   // release: down the return lane, round under the deck and the column, the jump, home along the ground
-  { id: 'L4a', auto: true, y: 6, w: 14, ease: 'lin', sec: 2, alongside: true },
+  // water wave 1: the old auto L4a (y 23 -> 6) is now the approach (the lip in view), the CHUTE (a stream falling
+  // 14 m over 24 m, max grade about 41 deg, flow 8 m/s along), the POOL (still water, 20 m wide, catches a fall
+  // from the coil) and L4b, the closure straight. L4a and the chute still run alongside the coil.
+  { id: 'L4a', len: 30, y: 21, w: 14, ease: 'lin', sec: 2, alongside: true },
+  { id: 'chute', len: 24, y: 7, w: 14, ease: 'smooth', surface: 'stream', flow: [8, 0], speed: 1.3, sec: 2, alongside: true },
+  { id: 'pool', len: 40, y: 6, w: 20, surface: 'pool', sec: 2 },
+  { id: 'L4b', auto: true, y: 6, w: 14, sec: 2 },
   { id: 'sweepD', turn: 90, r: 40, roll: 25, y: 2, ease: 'lin', sec: 2 },
   { id: 'L4d', auto: true, y: 2, sec: 2, pad: { at: 0.86, x: 0 } },
   { id: 'kicker', len: 30, y: 5, ease: 'kick', sec: 2 },
   { id: 'gap', len: 12, y: -1, ease: 'lin', jump: true, sec: 2 },
   { id: 'landing', len: 24, y: -1, sec: 2 },
-  { id: 'sweepE', turn: -90, r: 42, roll: 24, y: 0, speed: 0.9, sec: 2 },
-  { id: 'sweepF', turn: -90, r: 42, roll: 24, y: 0, speed: 0.85, sec: 2 },
+  { id: 'sweepE', turn: -90, r: 24, roll: 24, y: 0, speed: 0.9, sec: 2 },
+  { id: 'sweepF', turn: -90, r: 24, roll: 24, y: 0, speed: 0.85, sec: 2 },
   { id: 'home', len: 60, y: 0, w: 20, sec: 2 },
 ];
 const SECTIONS = [
@@ -69,15 +82,19 @@ const W = 17.5, TOP = 30, G = 28;
 const LOOP_SIDE_GAP_M = 4;
 /** Lanes marked alongside keep at least this much plan gap between edges and this much height between them. */
 const ALONGSIDE_GAP_M = 1.5, ALONGSIDE_DY_M = 2.5;
-/** Length window (metres): about today's 1350 m lap, +-25% at most. */
-const LENGTH_M = [1150, 1650];
+/** Length window (metres): about the old 1350 m ring, +-25% at most (tests/gen-threshold.test.mjs holds the same window). */
+const LENGTH_M = [1150, 1687];
+/** Water: a stream run's flow ramps over its first and last STREAM_RAMP nodes (1/3, 2/3, 1 ... 1, 2/3, 1/3). */
+const STREAM_RAMP = 3;
+/** Water checks: the chute may not exceed this grade, the pool must be at least this long. */
+const CHUTE_GRADE_DEG = 45, POOL_MIN_M = 35;
 
 // Item box rows: piece, place along it (0..1), box x positions (metres, + right). 3 to 4 across, away
 // from the jump (kicker to landing), the open corner and the loops; the checks below hold those margins.
 const BOX_ROWS = [
   { piece: 'start', at: 0.8, xs: [-5, -1.7, 1.7, 5] },
   { piece: 'L2', at: 0.6, xs: [-3.5, 0, 3.5] },
-  { piece: 'bridge', at: 0.12, xs: [-4.5, -1.5, 1.5, 4.5] },
+  { piece: 'bridge', at: 0.2, xs: [-4.5, -1.5, 1.5, 4.5] },   // water wave 1: 0.12 sat where every kart still hugs the hairpin's outer rail
   { piece: 'L4a', at: 0.2, xs: [-3.5, 0, 3.5] },
   { piece: 'home', at: 0.6, xs: [-4.5, -1.5, 1.5, 4.5] },
 ];
@@ -104,7 +121,7 @@ const ROUTES = [
 // sweepF: the open corner keeps only its inside open (its outside railed: a boosted kart off the jump cannot
 // slide off it, SIM 16:23)
 const FALLS = [
-  { piece: 'bridge', side: 'both', from: 0.47, to: 0.64 },
+  { piece: 'bridge', side: 'both', from: 0.4, to: 0.55 },
   { piece: 'sweepF', side: 'L', from: 0, to: 1 },
 ];
 const ROUTE_DROP_M = [10, 16];
@@ -205,12 +222,27 @@ export function build(pieces = PIECES) {
       const flags = p.jump ? ['jump'] : p.open ? ['open'] : p.loop ? ['rail', 'magnet'] : ['rail'];
       // Aperture Court opens out on the flat return, then gathers before the launch ramp.
       const courtWidth = p.id === 'L4d' ? W + (34 - W) * Math.min(1, d / 17, (L - d) / 20) : 0;
-      nodes.push({ p: [r2(x), r2(y), r2(z)], roll: r2(roll), w: r2(courtWidth || p.w || W), flags, speed: p.speed || 1.0, surface: 'glass' });
-      meta.push({ piece: pi, u, s: sAcc + d, sec: p.sec });
+      // water: a piece-wide surface (`surface`, optional `flow`) or a stream from `stream.from` with a ramped flow
+      const onStream = p.stream && u >= p.stream.from - 1e-9;
+      const surface = onStream ? 'stream' : p.surface || 'glass';
+      const flow = onStream ? p.stream.flow.slice() : surface === 'stream' && p.flow ? p.flow.slice() : null;
+      nodes.push({ p: [r2(x), r2(y), r2(z)], roll: r2(roll), w: r2(courtWidth || p.w || W), flags, speed: p.speed || 1.0, surface, ...(flow ? { flow } : {}) });
+      meta.push({ piece: pi, u, s: sAcc + d, sec: p.sec, ramp: !!onStream });
     }
     sAcc += L; y0 = y1;
   });
   nodes[0].flags.unshift('start');
+  // stream ramps: each run of ramped stream nodes eases its flow in and out over STREAM_RAMP nodes
+  for (let i = 0; i < nodes.length; i++) {
+    if (!meta[i].ramp || (i > 0 && meta[i - 1].ramp)) continue;
+    let M = 0;
+    while (i + M < nodes.length && meta[i + M].ramp) M++;
+    for (let j = 0; j < M; j++) {
+      const f = Math.min((j + 1) / STREAM_RAMP, (M - j) / STREAM_RAMP, 1);
+      nodes[i + j].flow = nodes[i + j].flow.map((v) => r2(v * f));
+    }
+    i += M - 1;
+  }
 
   const N = nodes.length;
   const sections = [];
@@ -373,6 +405,23 @@ export function checks({ track, closure, lengthM, lipPiece, meta, pieces }) {
     if (s > lipS - ITEM_JUMP_CLEAR_M && s < landS + ITEM_JUMP_CLEAR_M) errs.push('box near the jump at node ' + it.node);
     for (const b of track.boosts) { const bs = meta[b.node].s; if (s > bs - ITEM_PAD_CLEAR_M && s < bs + b.len + ITEM_PAD_CLEAR_M) errs.push('box on a pad at node ' + it.node); }
   }
+  // water: the chute's steepest segment, the pool's length, every stream node carries a flow, pools carry none
+  const pieceNodes = (id) => meta.map((m, i) => (pieces[m.piece].id === id ? i : -1)).filter((i) => i >= 0);
+  let chuteGrade = 0;
+  for (const i of pieceNodes('chute')) {
+    const a = P[i], b = P[(i + 1) % N], run = Math.hypot(b[0] - a[0], b[2] - a[2]);
+    chuteGrade = Math.max(chuteGrade, Math.atan2(Math.abs(b[1] - a[1]), run) / DEG);
+  }
+  const chuteP = pieces.find((p) => p.id === 'chute');
+  if (chuteP) chuteGrade = Math.max(chuteGrade, Math.atan(1.5 * Math.abs(chuteP.y - pieces[pieces.indexOf(chuteP) - 1].y) / chuteP.len) / DEG);
+  if (chuteGrade > CHUTE_GRADE_DEG) errs.push('chute grade ' + chuteGrade.toFixed(1) + ' deg over ' + CHUTE_GRADE_DEG);
+  const poolP = pieces.find((p) => p.id === 'pool');
+  if (poolP && pieceLen(poolP) < POOL_MIN_M) errs.push('pool ' + pieceLen(poolP) + ' m is under ' + POOL_MIN_M);
+  track.nodes.forEach((n, i) => {
+    if (n.surface === 'stream' && !(n.flow && (n.flow[0] || n.flow[1]))) errs.push('stream node ' + i + ' has no flow');
+    if (n.surface !== 'stream' && n.flow) errs.push('flow on a ' + n.surface + ' node ' + i);
+  });
+  const waterNodes = track.nodes.filter((n) => n.surface === 'stream' || n.surface === 'pool').length;
   if (closure.closeErr > 0.01) errs.push('loop does not close: ' + closure.closeErr);
   if (Math.abs(closure.headErr) > 0.01 && Math.abs(closure.headErr - 360) > 0.01) errs.push('heading does not close: ' + closure.headErr);
   for (const p of pieces) if (p.auto && p.len < 30) errs.push('auto straight ' + p.id + ' too short: ' + p.len.toFixed(1));
@@ -470,6 +519,10 @@ export function checks({ track, closure, lengthM, lipPiece, meta, pieces }) {
     openOver: over.map((e) => e.node + e.side + (e.ahead >= 0 ? '>' + e.route : '<behind') + ' dy ' + e.dy).join(' '),
     lipPitchDeg: r2(pitch / DEG), jumpLand: report.join(' '),
     items: track.items.filter((i) => i.kind === 'box').length + ' boxes, ' + track.items.filter((i) => i.kind === 'bubble').length + ' bubbles', autos: pieces.filter((p) => p.auto).map((p) => p.id + '=' + p.len.toFixed(1)),
+    water: { nodes: waterNodes, chuteGradeDeg: r2(chuteGrade), ranges: ['sweepA', 'L2', 'L4a', 'chute', 'pool', 'L4b'].map((id) => {
+      const ix = pieceNodes(id), from = ix.length ? meta[ix[0]].s : 0, to = ix.length ? (ix[ix.length - 1] + 1 < N ? meta[ix[ix.length - 1] + 1].s : L) : 0;
+      return id + ' s ' + from.toFixed(0) + '..' + to.toFixed(0);
+    }) },
     yRange: [Math.min(...P.map((p) => p[1])), Math.max(...P.map((p) => p[1]))] } };
 }
 

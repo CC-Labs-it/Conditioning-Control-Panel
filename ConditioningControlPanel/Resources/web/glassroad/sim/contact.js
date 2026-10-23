@@ -18,6 +18,7 @@ import { grantBoost } from './grant.js';
 const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 const QO = { normal: [0, 0, 0], p: [0, 0, 0] };
 const U = [0, 0, 0];
+const COURT_LEAD_M = 25;   // the slipstream kick holds from here before a court to the end of its last hole
 
 export function createContact(track, feel, events) {
   const L = track.lengthM;
@@ -29,6 +30,18 @@ export function createContact(track, feel, events) {
   function openAt(st) {
     const f = track.nodeFlags ? track.nodeFlags(st[S.seg] | 0) : null;
     return !!f && f.indexOf('rail') < 0 && !(f.indexOf('railL') >= 0 && f.indexOf('railR') >= 0) && f.indexOf('jump') < 0;
+  }
+  // water wave 1: the kick also waits through a court approach (a slipstream kick at the aperture entry
+  // pushed a bot onto a hole line faster than it could reach a supported band; the player gets the same hold)
+  function courtAt(st) {
+    const cs = track.courts;
+    if (!cs || !cs.length) return false;
+    for (const c of cs) {
+      if (!c.holes || !c.holes.length) continue;
+      const end = Math.max(...c.holes.map((h) => h.s + h.len));
+      if (wrap(st[S.s] - (c.fromS - COURT_LEAD_M), L) <= end - c.fromS + COURT_LEAD_M) return true;
+    }
+    return false;
   }
 
   function weight(r) {
@@ -128,7 +141,7 @@ export function createContact(track, feel, events) {
         if (!w.inWake) { w.inWake = true; events.emit('slipstream', { racer: r.i, state: 'in' }); }
         w.charge += dt;
         // polish 6: the boost waits for railed road (a slipstream kick on an open bend throws the kart off it)
-        if (w.charge >= chargeS && openAt(r.st)) w.charge = chargeS;
+        if (w.charge >= chargeS && (openAt(r.st) || courtAt(r.st))) w.charge = chargeS;
         else if (w.charge >= chargeS) {
           const ok = grantBoost(r.st, feel.get('contact.slipAmount'), feel.get('contact.slipHoldS'), 'slip', r.feel, r.events || events);
           events.emit('slipstream', { racer: r.i, state: ok ? 'fire' : 'out' });

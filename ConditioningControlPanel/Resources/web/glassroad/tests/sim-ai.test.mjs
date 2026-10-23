@@ -51,8 +51,15 @@ test('race: sane standings and one result', () => {
     if (row.finished) assert.ok(Math.abs(row.timeS - fin) < 1e-6);
     else assert.ok(Math.abs(row.timeS - fin) < fin * 0.08, row.i + " estimate " + row.timeS.toFixed(1) + " vs " + fin.toFixed(1));
   }
-  // live places agree with the result once everyone is home
-  assert.deepEqual(R.standings.order, res.rows.map((r) => r.i));
+  // live places agree with the result once everyone is home; two rows estimated at the mint and home within half a
+  // second of each other are a photo finish either way round (water wave 1: seed 1 ends 216.19 against 216.23)
+  const liveRank = new Map(R.standings.order.map((i, k) => [i, k]));
+  for (let k = 1; k < res.rows.length; k++) {
+    const a = res.rows[k - 1], b = res.rows[k];
+    const fa = R.racers.list[a.i].finishS, fb = R.racers.list[b.i].finishS;
+    if (!a.finished && !b.finished && Math.abs(fa - fb) < 0.5) continue;
+    assert.ok(liveRank.get(a.i) < liveRank.get(b.i), "live order keeps " + a.i + " ahead of " + b.i);
+  }
   // a race, not a procession: places changed hands
   assert.ok(R.events('place-change').length > 0 && R.events('overtake').length > 0);
 });

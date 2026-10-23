@@ -16,8 +16,8 @@ test('track: length and node arc lengths', () => {
   assert.equal(tr.nodeS[0], 0);
   assert.equal(tr.nodeS[N], tr.lengthM);
   for (let i = 0; i < N; i++) assert.ok(tr.nodeS[i + 1] > tr.nodeS[i] + 5, 'node ' + i);
-  // polish 6: the stacked course, within +-25% of the 1350 m ring it replaced
-  assert.ok(tr.lengthM > 1150 && tr.lengthM < 1650, 'length ' + tr.lengthM);
+  // polish 6: the stacked course, within +-25% of the 1350 m ring it replaced (water wave 1: + the chute and pool)
+  assert.ok(tr.lengthM > 1150 && tr.lengthM < 1700, 'length ' + tr.lengthM);
   for (let i = 0; i < N; i++) assert.ok(dist(tr.frameAt(tr.nodeS[i]).p, json.nodes[i].p) < 1e-6, 'passes node ' + i);
 });
 

@@ -4,7 +4,12 @@
  */
 
 export const FLAGS = Object.freeze(['start', 'rail', 'railL', 'railR', 'open', 'magnet', 'boost', 'jump', 'glide', 'pit', 'flow']);
-export const SURFACES = Object.freeze(['glass', 'grip', 'haze']);
+/* Water wave 1: 'stream' (a road of moving water, optional `flow: [along, lat]` m/s) and 'pool' (still water). */
+export const SURFACES = Object.freeze(['glass', 'grip', 'haze', 'stream', 'pool']);
+/** The float the road mesh carries per vertex (track/mesh.js `surface` attribute): the index in SURFACES. */
+export const surfaceId = (s) => Math.max(0, SURFACES.indexOf(s));
+/** Flow bounds (m/s): |along| <= FLOW_MAX[0], |lat| <= FLOW_MAX[1]; lat positive = road right, the query's lateral sign. */
+export const FLOW_MAX = Object.freeze([12, 6]);
 export const SPACING_M = Object.freeze([8, 15]);
 /** Track `items` kinds known to the engine (B1): an item box row member, a pickup bubble. Others warn. */
 export const ITEM_KINDS = Object.freeze(['box', 'bubble']);
@@ -40,6 +45,13 @@ export function validate(t) {
     if (!isNum(n.w) || n.w < 4 || n.w > 40) err(at + '.w must be 4..40 m');
     if (!isNum(n.speed) || n.speed < 0.3 || n.speed > 1.5) err(at + '.speed must be 0.3..1.5');
     if (!SURFACES.includes(n.surface)) err(at + '.surface must be one of ' + SURFACES.join('|'));
+    if (n.flow !== undefined) {
+      if (!Array.isArray(n.flow) || n.flow.length !== 2 || !n.flow.every(isNum)) err(at + '.flow must be [along, lat] numbers');
+      else {
+        if (n.surface !== 'stream') err(at + '.flow is only legal on a stream node');
+        if (Math.abs(n.flow[0]) > FLOW_MAX[0] || Math.abs(n.flow[1]) > FLOW_MAX[1]) err(at + '.flow outside |along| <= ' + FLOW_MAX[0] + ', |lat| <= ' + FLOW_MAX[1]);
+      }
+    } else if (n.surface === 'stream') warn(at + ' stream node with no flow');
     if (!Array.isArray(n.flags)) { err(at + '.flags must be an array'); return; }
     for (const f of n.flags) if (!FLAGS.includes(f)) err(at + ' unknown flag ' + f);
     if (new Set(n.flags).size !== n.flags.length) err(at + ' duplicate flags');

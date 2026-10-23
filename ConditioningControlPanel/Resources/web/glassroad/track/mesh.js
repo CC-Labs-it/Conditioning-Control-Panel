@@ -13,16 +13,23 @@
  */
 import { makeFrame } from './frames.js';
 import { supportIntervals } from './courts.js';
+import { surfaceId } from './schema.js';
 
 // RAIL_H: 1.2 m since the EDGES lane (was 0.9: a railed edge read too like an open one); render/look.js railHeightM matches
 const COLS = 4, THICK_M = 0.25, RAIL_H = 1.2, RAIL_T = 0.08, DECAL_M = 0.02, LIP_M = 3, STRIP_STEP_M = 1;
 /** Edge numbers (EDGES lane): the open-edge strip width, the haze curtain's depth and flare, the rail end post. */
 export const EDGE_MESH = Object.freeze({ stripM: 1.2, hazeM: 7, hazeOutM: 2.2, capW: 0.34, capH: 2.1, capSkipM: 3 });
 
-function builder() {
-  const P = [], Nn = [], U = [], I = [];
+/* water: the road builder also carries a float `surface` (schema SURFACES index: 0 glass, 1 grip, 2 haze, 3 stream,
+ * 4 pool) and a vec2 `flow` ([along, lat] m/s) per vertex; the other MeshData keep their four arrays. */
+function builder(water = false) {
+  const P = [], Nn = [], U = [], I = [], SF = [], FL = [];
   return {
-    v(p, n, u, v) { P.push(p[0], p[1], p[2]); Nn.push(n[0], n[1], n[2]); U.push(u, v); return P.length / 3 - 1; },
+    v(p, n, u, v, sf = 0, fa = 0, fl = 0) {
+      P.push(p[0], p[1], p[2]); Nn.push(n[0], n[1], n[2]); U.push(u, v);
+      if (water) { SF.push(sf); FL.push(fa, fl); }
+      return P.length / 3 - 1;
+    },
     /** Quad a b c d (a b one row, c d the next, a c on the same side); winding follows normal of a. */
     quad(a, b, c, d) {
       const ax = P[a * 3], ay = P[a * 3 + 1], az = P[a * 3 + 2];
@@ -34,7 +41,9 @@ function builder() {
     },
     get size() { return P.length / 3; },
     done() {
-      return { positions: new Float32Array(P), normals: new Float32Array(Nn), uvs: new Float32Array(U), indices: new Uint32Array(I) };
+      const m = { positions: new Float32Array(P), normals: new Float32Array(Nn), uvs: new Float32Array(U), indices: new Uint32Array(I) };
+      if (water) { m.surface = new Float32Array(SF); m.flow = new Float32Array(FL); }
+      return m;
     },
   };
 }
@@ -67,22 +76,28 @@ export function buildMeshes(track, dl) {
   const row = (q) => q % Q;              // row index of the start of quad q (wrapped)
   const rowS = (q) => dl.s[row(q)] + Math.floor(q / Q) * L;
 
-  // road
-  const road = builder();
+  // road (water: every road vertex of a row carries its node's surface id and the flow lerped at that row)
+  const road = builder(true), fw = [0, 0];
+  const rowWater = (r) => {
+    const seg = r >= Q ? dl.seg[Q - 1] : dl.seg[r], k = r >= Q ? dl.rows : r - seg * dl.rows;
+    track.flowAt(seg, k / dl.rows, fw);
+    return surfaceId(track.nodeSurface(seg));
+  };
   for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q])) {
     const top = [], bot = [], el = [], er = [];
     for (let k = 0; k <= nq; k++) {
       const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);
       const c = at(dl.c, r), n = at(dl.n, r), b = at(dl.b, r), h = dl.w[r] / 2, nn = neg(n);
+      const sf = rowWater(r), fa = fw[0], fl = fw[1];
       const tr = [], br = [];
       for (let i = 0; i <= COLS; i++) {
         const x = -h + (2 * h * i) / COLS;
-        tr.push(road.v(off(c, b, x, n, 0), n, x, v));
-        br.push(road.v(off(c, b, x, n, -THICK_M), nn, x, v));
+        tr.push(road.v(off(c, b, x, n, 0), n, x, v, sf, fa, fl));
+        br.push(road.v(off(c, b, x, n, -THICK_M), nn, x, v, sf, fa, fl));
       }
       top.push(tr); bot.push(br);
-      el.push([road.v(off(c, b, -h, n, 0), neg(b), 0, v), road.v(off(c, b, -h, n, -THICK_M), neg(b), THICK_M, v)]);
-      er.push([road.v(off(c, b, h, n, 0), b, 0, v), road.v(off(c, b, h, n, -THICK_M), b, THICK_M, v)]);
+      el.push([road.v(off(c, b, -h, n, 0), neg(b), 0, v, sf, fa, fl), road.v(off(c, b, -h, n, -THICK_M), neg(b), THICK_M, v, sf, fa, fl)]);
+      er.push([road.v(off(c, b, h, n, 0), b, 0, v, sf, fa, fl), road.v(off(c, b, h, n, -THICK_M), b, THICK_M, v, sf, fa, fl)]);
     }
     for (let k = 0; k < nq; k++) {
       const rawS = rowS(q0 + k), offsetS = Math.floor(rawS / L) * L;
@@ -99,9 +114,9 @@ export function buildMeshes(track, dl) {
     if (!closed) {
       for (const [k, sign] of [[0, -1], [nq, 1]]) {
         const r = row(q0 + k), c = at(dl.c, r), n = at(dl.n, r), b = at(dl.b, r), h = dl.w[r] / 2;
-        const t = at(dl.t, r), tn = [t[0] * sign, t[1] * sign, t[2] * sign];
-        const a = road.v(off(c, b, -h, n, 0), tn, -h, 0), bb = road.v(off(c, b, h, n, 0), tn, h, 0);
-        const cc = road.v(off(c, b, -h, n, -THICK_M), tn, -h, THICK_M), d = road.v(off(c, b, h, n, -THICK_M), tn, h, THICK_M);
+        const t = at(dl.t, r), tn = [t[0] * sign, t[1] * sign, t[2] * sign], sf = rowWater(r), fa = fw[0], fl = fw[1];
+        const a = road.v(off(c, b, -h, n, 0), tn, -h, 0, sf, fa, fl), bb = road.v(off(c, b, h, n, 0), tn, h, 0, sf, fa, fl);
+        const cc = road.v(off(c, b, -h, n, -THICK_M), tn, -h, THICK_M, sf, fa, fl), d = road.v(off(c, b, h, n, -THICK_M), tn, h, THICK_M, sf, fa, fl);
         road.quad(a, bb, cc, d);
       }
     }
@@ -173,6 +188,7 @@ function courtStrip(m, track, s0, s1, holes, offsetS) {
     const a = cuts[j - 1], b = cuts[j];
     if (b - a < 1e-8) continue;
     const f0 = track.frameAt(a), f1 = track.frameAt(b), fm = track.frameAt((a + b) / 2), half = fm.w / 2;
+    const w0 = [surfaceId(f0.surface), ...track.flowAt(f0.seg, f0.segT, [0, 0])], w1 = [surfaceId(f1.surface), ...track.flowAt(f1.seg, f1.segT, [0, 0])];
     for (const [lo, hi] of supportIntervals(track.courts, (a + b) / 2, half)) {
       const left0 = Math.abs(lo + half) < 1e-6 ? -f0.w / 2 : lo, left1 = Math.abs(lo + half) < 1e-6 ? -f1.w / 2 : lo;
       const right0 = Math.abs(hi - half) < 1e-6 ? f0.w / 2 : hi, right1 = Math.abs(hi - half) < 1e-6 ? f1.w / 2 : hi;
@@ -181,8 +197,8 @@ function courtStrip(m, track, s0, s1, holes, offsetS) {
         let prev = null;
         for (let k = 0; k <= cols; k++) {
           const x0 = left0 + (right0 - left0) * k / cols, x1 = left1 + (right1 - left1) * k / cols;
-          const ids = [m.v(off(f0.p, f0.b, x0, f0.n, depth), depth ? neg(f0.n) : f0.n, x0, a + offsetS),
-            m.v(off(f1.p, f1.b, x1, f1.n, depth), depth ? neg(f1.n) : f1.n, x1, b + offsetS)];
+          const ids = [m.v(off(f0.p, f0.b, x0, f0.n, depth), depth ? neg(f0.n) : f0.n, x0, a + offsetS, ...w0),
+            m.v(off(f1.p, f1.b, x1, f1.n, depth), depth ? neg(f1.n) : f1.n, x1, b + offsetS, ...w1)];
           if (prev) m.quad(prev[0], ids[0], prev[1], ids[1]);
           prev = ids;
         }
@@ -198,17 +214,17 @@ function courtWalls(m, track) {
       let prev = null;
       const n = Math.max(1, Math.ceil(h.len / STRIP_STEP_M)), x = h.x + side * h.w / 2;
       for (let k = 0; k <= n; k++) {
-        const s = h.s + h.len * k / n, f = track.frameAt(s), normal = f.b.map((v) => -side * v);
-        const ids = [0, -THICK_M].map((d) => m.v(off(f.p, f.b, x, f.n, d), normal, x, s));
+        const s = h.s + h.len * k / n, f = track.frameAt(s), normal = f.b.map((v) => -side * v), wf = [surfaceId(f.surface), ...track.flowAt(f.seg, f.segT, [0, 0])];
+        const ids = [0, -THICK_M].map((d) => m.v(off(f.p, f.b, x, f.n, d), normal, x, s, ...wf));
         if (prev) m.quad(prev[0], prev[1], ids[0], ids[1]);
         prev = ids;
       }
     }
     for (const [s, sign] of [[h.s, 1], [h.s + h.len, -1]]) {
-      const f = track.frameAt(s), normal = f.t.map((v) => sign * v);
+      const f = track.frameAt(s), normal = f.t.map((v) => sign * v), wf = [surfaceId(f.surface), ...track.flowAt(f.seg, f.segT, [0, 0])];
       const ids = [0, -THICK_M].flatMap((d) => [-1, 1].map((side) => {
         const x = h.x + side * h.w / 2;
-        return m.v(off(f.p, f.b, x, f.n, d), normal, x, s);
+        return m.v(off(f.p, f.b, x, f.n, d), normal, x, s, ...wf);
       }));
       m.quad(ids[0], ids[1], ids[2], ids[3]);
     }

@@ -6,7 +6,7 @@ import { validate as validateJson } from './schema.js';
 import { DEG, qfromBasis, wrap } from '../core/math.js';
 import { createSpline, createScalar } from './spline.js';
 import { buildRefNormals, frameAtSegU, makeFrame } from './frames.js';
-import { createQuery } from './query.js';
+import { createQuery, flowAt } from './query.js';
 import { buildDriveline, buildChecklines } from './driveline.js';
 import { buildMeshes } from './mesh.js';
 import { buildCourts } from './courts.js';
@@ -18,7 +18,8 @@ export function loadTrack(json, { validate = true } = {}) {
     if (!r.ok) throw new Error('track invalid: ' + r.errors.join('; '));
   }
   if (json.loop !== true) throw new Error('track invalid: only closed loops are supported');
-  const nodes = json.nodes.map((n) => ({ p: n.p.slice(), roll: n.roll * DEG, w: n.w, flags: n.flags.slice(), speed: n.speed, surface: n.surface }));
+  // water wave 1: a stream node's flow ([along, lat] m/s) rides along for the query and the road mesh
+  const nodes = json.nodes.map((n) => ({ p: n.p.slice(), roll: n.roll * DEG, w: n.w, flags: n.flags.slice(), speed: n.speed, surface: n.surface, flow: n.flow ? n.flow.slice() : null }));
   const N = nodes.length;
   const sp = createSpline(nodes.map((n) => n.p), nodes.map((n) => n.flags.includes('jump')));
   const refN = buildRefNormals(sp, nodes.map((n) => n.flags.includes('magnet')));
@@ -74,6 +75,9 @@ export function loadTrack(json, { validate = true } = {}) {
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
     nodeFlags: (i) => nodes[((i % N) + N) % N].flags,
+    nodeSurface: (i) => nodes[((i % N) + N) % N].surface,
+    /** Water flow at (seg, segT) into out, see track/query.js flowAt. */
+    flowAt: (seg, segT, out) => flowAt(nodes, ((seg % N) + N) % N, segT, out),
     frameAt,
     query: createQuery(sp, refN, rollAt, widthAt, nodes, courts),
     checklines: null,

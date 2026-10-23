@@ -1,7 +1,9 @@
 /* track/query.js - the ground probe. No three.js.
  *
  * query(px, py, pz, hintSeg = -1, out?) -> { seg, segT, s, lateral, height, normal, onRoad, edgeDist,
- *   surface, flags, railed, p }
+ *   surface, flags, railed, flow, p }
+ * Water wave 1: flow = [along, lat] m/s, an array the result owns; [0, 0] off a stream node, otherwise the
+ * node's flow lerped by segT toward the next node's (zero when that one is not a stream), see flowAt.
  * Nearest centreline point by a coarse pass over the arc-length sample polyline (bounding spheres prune
  * whole segments), then Newton on the exact curve until (P - c) . t = 0. With hintSeg >= 0 only the
  * hint +-WINDOW segments are searched; a result further than FAR_M from the curve searches them all.
@@ -20,7 +22,22 @@ import { holeAt, holeDistance } from './courts.js';
 const WINDOW = 4, FAR_M = 25, BELOW_UP = 0.5, BELOW_PASS_M = 1.5, BELOW_END_M = 0.5;
 
 export function makeQuery() {
-  return { seg: 0, segT: 0, s: 0, lateral: 0, height: 0, normal: [0, 1, 0], onRoad: false, edgeDist: 0, hole: null, holeDist: Infinity, surface: 'glass', flags: null, railed: false, p: [0, 0, 0] };
+  return { seg: 0, segT: 0, s: 0, lateral: 0, height: 0, normal: [0, 1, 0], onRoad: false, edgeDist: 0, hole: null, holeDist: Infinity, surface: 'glass', flags: null, railed: false, flow: [0, 0], p: [0, 0, 0] };
+}
+
+/**
+ * The water flow at (seg, segT) written into out ([along, lat] m/s): [0, 0] unless nodes[seg] is a stream with a
+ * flow, else that flow lerped by segT toward the next node's flow (a non-stream neighbour counts as [0, 0], so a
+ * stream eases out over its last segment). Shared by the query and the road mesh.
+ */
+export function flowAt(nodes, seg, segT, out = [0, 0]) {
+  const a = nodes[seg], af = a && a.surface === 'stream' ? a.flow : null;
+  if (!af) { out[0] = 0; out[1] = 0; return out; }
+  const b = nodes[(seg + 1) % nodes.length], bf = b && b.surface === 'stream' && b.flow ? b.flow : null;
+  const t = segT < 0 ? 0 : segT > 1 ? 1 : segT;
+  out[0] = af[0] + ((bf ? bf[0] : 0) - af[0]) * t;
+  out[1] = af[1] + ((bf ? bf[1] : 0) - af[1]) * t;
+  return out;
 }
 
 export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = []) {
@@ -106,6 +123,8 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = []) {
     out.onRoad = !gap && !out.hole && out.edgeDist >= 0;
     out.surface = fr.surface;
     out.flags = fl;
+    if (!out.flow) out.flow = [0, 0];
+    flowAt(nodes, seg, fr.segT, out.flow);
     out.railed = !gap && (fl.includes('rail') || fl.includes(lat >= 0 ? 'railR' : 'railL'));
     out.p[0] = fr.p[0] + fr.b[0] * lat; out.p[1] = fr.p[1] + fr.b[1] * lat; out.p[2] = fr.p[2] + fr.b[2] * lat;
     return out;
@@ -169,6 +188,8 @@ export function copyQuery(o, a) {
   o.normal[0] = a.normal[0]; o.normal[1] = a.normal[1]; o.normal[2] = a.normal[2];
   o.onRoad = a.onRoad; o.edgeDist = a.edgeDist; o.surface = a.surface; o.flags = a.flags; o.railed = a.railed;
   o.hole = a.hole; o.holeDist = a.holeDist;
+  if (!o.flow) o.flow = [0, 0];
+  if (a.flow) { o.flow[0] = a.flow[0]; o.flow[1] = a.flow[1]; } else { o.flow[0] = 0; o.flow[1] = 0; }
   o.p[0] = a.p[0]; o.p[1] = a.p[1]; o.p[2] = a.p[2];
   return o;
 }

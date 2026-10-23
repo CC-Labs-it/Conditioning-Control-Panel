@@ -115,3 +115,21 @@ test('slipstream: charge in the wake, fire a slip boost, cooldown, out when leav
   c2.update(DT, [lead, t2], RACING);
   assert.deepEqual(rec2.all('slipstream').filter((e) => e.payload.racer === 3).map((e) => e.payload.state), ['in', 'out']);
 });
+
+test('slipstream: the kick waits through a court approach and fires once the holes are behind', () => {
+  const feel = makeFeel(), tr = fakeTrack(), rec = recorder();
+  tr.courts = [{ fromS: 120, toS: 200, holes: [{ id: 'h', s: 150, x: -7, w: 6, len: 8 }] }];
+  const c = createContact(tr, feel, rec);
+  const lead = racer(0, tr, feel, { s: 108, lateral: 0, speed: 28 }), tail = racer(1, tr, feel, { s: 100, lateral: 0.5, speed: 28 });
+  for (const r of [lead, tail]) r.st[S.speedPct] = 28 / feel.get('speed.topMps');
+  const n = Math.ceil(feel.get('contact.slipChargeS') / DT) + 4;
+  for (let i = 0; i < n; i++) { rec.t += DT; c.update(DT, [lead, tail], RACING); }
+  const states = () => rec.all('slipstream').filter((e) => e.payload.racer === 1).map((e) => e.payload.state);
+  assert.deepEqual(states(), ['in'], 'charged but held inside the court lead');
+  assert.equal(tail.st[S.boostKind], BOOST.NONE);
+  // past the last hole: the held charge fires on the next tick
+  lead.st[S.s] = 170; tail.st[S.s] = 162;
+  rec.t += DT; c.update(DT, [lead, tail], RACING);
+  assert.deepEqual(states(), ['in', 'fire']);
+  assert.equal(tail.st[S.boostKind], BOOST.PAD);
+});

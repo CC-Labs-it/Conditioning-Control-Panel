@@ -32,12 +32,13 @@ export function createCourtPaths(track) {
         hash = (hash + seed + Math.imul(racer + 1, 31) + Math.imul(lap, 17)) >>> 0;
         band = plan.bands[hash % plan.bands.length];
       }
-      return { plan, band };
+      // reached: the line was picked from where the kart actually is (a late commit), so the entry blend is already over
+      return { plan, band, reached: lateral !== null };
     },
     target(route, s, ahead, desired = 0) {
       const { plan, band } = route;
       if (band.x === 0 && s < plan.court.fromS) return desired;
-      const enter = smoothstep(plan.court.fromS - LEAD, plan.first - 6, s + ahead);
+      const enter = route.reached ? 1 : smoothstep(plan.court.fromS - LEAD, plan.first - 6, s + ahead);
       // Do not aim across a hole just because the pursuit point already lies beyond its end.
       const leave = smoothstep(plan.last + CLEAR, plan.court.toS - 4, s);
       const lane = band.x === 0 ? clamp(desired, band.lo + 0.1, band.hi - 0.1)

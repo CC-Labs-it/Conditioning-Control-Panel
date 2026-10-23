@@ -28,7 +28,7 @@ test('a small valid track passes', () => {
 });
 
 test('enums are the plan 3.1 sets', () => {
-  assert.deepEqual([...SURFACES], ['glass', 'grip', 'haze']);
+  assert.deepEqual([...SURFACES], ['glass', 'grip', 'haze', 'stream', 'pool']);
   for (const f of ['start', 'rail', 'railL', 'railR', 'open', 'magnet', 'boost', 'jump', 'glide', 'pit', 'flow']) assert.ok(FLAGS.includes(f));
 });
 
