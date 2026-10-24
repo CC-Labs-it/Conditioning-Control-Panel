@@ -1,7 +1,7 @@
 /* GOONWORKS runtime construction. Every resource exists before the renderer warms the scene. */
 import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry,
   OctahedronGeometry, BufferGeometry, Float32BufferAttribute, BufferAttribute, MeshBasicNodeMaterial,
-  Matrix4, Quaternion, Vector3, BackSide } from 'three/webgpu';
+  Matrix4, Quaternion, Vector3, BackSide, FrontSide } from 'three/webgpu';
 import { vec3, float, uv, positionWorld, normalWorld, normalize, abs, mix, smoothstep, min } from 'three/tsl';
 import { goonworksWorldPlan } from './goonworksWorld.js';
 import { createGoonworksMaterial, createGoonworksTubeMaterial, createGoonworksPlatformMaterial, GOONWORKS_PALETTE as C } from './goonworksMaterials.js';
@@ -80,6 +80,9 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   const data=goonworksRibbonShell(track),shell=new BufferGeometry();
   shell.setAttribute('position',new BufferAttribute(data.positions,3));shell.setAttribute('normal',new BufferAttribute(data.normals,3));shell.setAttribute('uv',new BufferAttribute(data.uvs,2));shell.setIndex(new BufferAttribute(data.indices,1));shell.computeBoundingSphere();extraGeometry.push(shell);
   const shellMat=createGoonworksMaterial(C.fuchsia),up=normalize(normalWorld).y;
+  // This mesh contains outward side and underside triangles only. Its back faces must never
+  // compete with the white driving surface when a distant camera quantizes their depth together.
+  shellMat.side=FrontSide;
   const sideInk=float(1).sub(smoothstep(.015,.042,min(abs(uv().x),abs(uv().x.sub(.25))))).mul(float(1).sub(smoothstep(.3,.7,abs(up))));
   shellMat.colorNode=mix(shellMat.colorNode,vec3(.009,.002,.012),sideInk);owned.push(shellMat);
   const ribbon=new Mesh(shell,shellMat);ribbon.name='goonworks-thick-ribbon';group.add(ribbon);

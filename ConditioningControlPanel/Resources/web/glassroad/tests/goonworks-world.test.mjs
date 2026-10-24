@@ -61,9 +61,23 @@ test('GOONWORKS screens show meaningful clear picture area from driver height at
   assert.ok(report.every(r=>!r.blockers.some(([id])=>id===r.id+'-cabinet')),'Pictures must sit in front of their own backing');
 });
 const hooks=(await import('node:module')).registerHooks({resolve(specifier,context,next){const files={'three/webgpu':'three.webgpu.min.js','three/tsl':'three.tsl.min.js'};return files[specifier]?{url:new URL('../vendor/three/build/'+files[specifier],import.meta.url).href,shortCircuit:true}:next(specifier,context);}});
-const{buildGoonworks,goonworksRibbonShell}=await import('../render/goonworks.js');hooks.deregister();
+const{buildGoonworks,goonworksRibbonShell,applyGoonworksRoad}=await import('../render/goonworks.js');
+const{FrontSide,DoubleSide,MeshBasicNodeMaterial}=await import('three/webgpu');hooks.deregister();
+test('GOONWORKS opaque road and tube skins cull hidden faces and keep outward triangle winding',()=>{
+  const road={material:new MeshBasicNodeMaterial({side:DoubleSide})},owner=applyGoonworksRoad(road,null,track);
+  assert.equal(road.material.side,FrontSide);assert.equal(road.material.depthWrite,true);owner.dispose();road.material.dispose();
+  for(const[name,mesh]of[['road',track.meshes.road],['ribbon underside',goonworksRibbonShell(track)],['inner tube',goonworksTubeShell(track,false)],['outer tube',goonworksTubeShell(track,true)]]){
+    const P=mesh.positions,N=mesh.normals,I=mesh.indices;
+    for(let i=0;i<I.length;i+=3){const a=I[i]*3,b=I[i+1]*3,c=I[i+2]*3;
+      const x=[P[b]-P[a],P[b+1]-P[a+1],P[b+2]-P[a+2]],y=[P[c]-P[a],P[c+1]-P[a+1],P[c+2]-P[a+2]];
+      const facing=(x[1]*y[2]-x[2]*y[1])*N[a]+(x[2]*y[0]-x[0]*y[2])*N[a+1]+(x[0]*y[1]-x[1]*y[0])*N[a+2];
+      assert.ok(facing>=-.0001,name+' triangle '+i/3+' winds against its outward normal');
+    }
+  }
+});
 test('GOONWORKS renderer prebuilds finite batches and has pause-safe platform feedback and disposal',()=>{
   const world=buildGoonworks(track);assert.ok(world.stats.parts>700);assert.equal(world.platforms.length,plan.platforms.length);
+  for(const name of['goonworks-thick-ribbon','goonworks-rabbit-inner-shell','goonworks-rabbit-outer-shell'])assert.equal(world.group.getObjectByName(name).material.side,FrontSide,name);
   world.group.traverse(o=>{if(o.isInstancedMesh)assert.ok(o.instanceMatrix.array.every(Number.isFinite),o.name);});
   const p=world.platforms[0],start=p.holder.position.clone();world.hit(p.row.id);world.update(.1,{paused:true});assert.deepEqual(p.holder.position.toArray(),start.toArray());
   world.update(.1,{});assert.ok(p.holder.position.distanceTo(start)>0);world.reset();assert.deepEqual(p.holder.position.toArray(),start.toArray());world.dispose();world.dispose();
