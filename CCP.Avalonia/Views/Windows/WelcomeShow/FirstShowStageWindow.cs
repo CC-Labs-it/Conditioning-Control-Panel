@@ -149,12 +149,12 @@ internal sealed partial class FirstShowStageWindow : Window
     }
     private void OnGlobalKey(int vk, string? name)
     {
-        if (vk == 0x1B || string.Equals(name, _panic, StringComparison.OrdinalIgnoreCase))
+        if (vk == 0x1B || vk == ConditioningControlPanel.Input.VirtualKeys.Of(_panic))   // alias-aware: "Enter" is vk 0x0D
             Dispatcher.UIThread.Post(() => { if (!_closed) Close(); });
     }
     internal void OnStopKey(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape || string.Equals(e.Key.ToString(), _panic, StringComparison.OrdinalIgnoreCase)) { e.Handled = true; Close(); }
+        if (e.Key == Key.Escape || HotkeyNames.Matches(e.Key, _panic)) { e.Handled = true; Close(); }
     }
     private double ShowTime => double.IsNaN(_showStart) ? _showFrozen : Clock() - _showStart;
     private Point ToScreen(double x, double y) => new(Position.X + x * _scale, Position.Y + y * _scale);
