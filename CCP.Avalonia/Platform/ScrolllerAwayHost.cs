@@ -61,10 +61,10 @@ internal static class ScrolllerAwayHost
         private const string ClassName = "CCP.Avalonia.ScrolllerAway";
 
         private static WndProc? _proc;   // kept alive: the window calls it
-        private static IntPtr _hwnd, _notify;
+        private static IntPtr _hwnd, _notify, _suspend;
 
-        /// <summary>True once the window exists and both notifications are registered (tests).</summary>
-        internal static bool Hooked => _hwnd != IntPtr.Zero && _notify != IntPtr.Zero;
+        /// <summary>True once the window exists and all three notifications are registered (tests).</summary>
+        internal static bool Hooked => _hwnd != IntPtr.Zero && _notify != IntPtr.Zero && _suspend != IntPtr.Zero;
 
         internal static void Start()
         {
@@ -84,11 +84,15 @@ internal static class ScrolllerAwayHost
             var guid = ConsoleDisplayState;
             _notify = RegisterPowerSettingNotification(_hwnd, ref guid, 0);
             if (_notify == IntPtr.Zero) Log.Debug("ScrolllerAway: no display state ({Err})", Marshal.GetLastWin32Error());
+            // A message-only window gets no broadcast PBT_APMSUSPEND / RESUME: suspend and resume have to be asked for.
+            _suspend = RegisterSuspendResumeNotification(_hwnd, 0);
+            if (_suspend == IntPtr.Zero) Log.Debug("ScrolllerAway: no suspend events ({Err})", Marshal.GetLastWin32Error());
         }
 
         internal static void Stop()
         {
             if (_notify != IntPtr.Zero) { try { UnregisterPowerSettingNotification(_notify); } catch { } _notify = IntPtr.Zero; }
+            if (_suspend != IntPtr.Zero) { try { UnregisterSuspendResumeNotification(_suspend); } catch { } _suspend = IntPtr.Zero; }
             if (_hwnd != IntPtr.Zero)
             {
                 try { WTSUnRegisterSessionNotification(_hwnd); } catch { }
@@ -167,6 +171,12 @@ internal static class ScrolllerAwayHost
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool UnregisterPowerSettingNotification(IntPtr handle);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr RegisterSuspendResumeNotification(IntPtr recipient, int flags);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool UnregisterSuspendResumeNotification(IntPtr handle);
     }
 
     // ---- Linux (logind) ------------------------------------------------------------------

@@ -52,7 +52,7 @@ public sealed class ScrolllerAwayHostTests : IDisposable
     }
 
     [Fact]
-    public void On_windows_the_message_window_registers_both_notifications()
+    public void On_windows_the_message_window_registers_lock_display_and_suspend_notifications()
     {
         if (!OperatingSystem.IsWindows()) return;
         try

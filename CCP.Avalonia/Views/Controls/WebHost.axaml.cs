@@ -147,10 +147,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// event on <c>chrome.webview</c>. Every hosted page shares this one carrier script.</summary>
         public Task<string?> PostJsonAsync(string json)
         {
-            // A Scrolller media url becomes this head's loopback relay (Core ScrolllerRelay); a remote site gets none.
-            var origin = ConditioningControlPanel.Services.Fyp.Online.ScrolllerRelay.LoopbackOrigin(CurrentUrl ?? Source);
-            return PostRewrittenAsync(origin == null ? json : ConditioningControlPanel.Services.Fyp.Online.ScrolllerRelay.RewriteJson(json, origin));
+            return PostRewrittenAsync(ScrolllerFrame(json, CurrentUrl ?? Source));
         }
+
+        /// <summary>The frame rule, pure. A Windows view that WPF's gate answers gets the raw Scrolller urls (as WPF: cached
+        /// copies, whole pictures, clips and ranges passed through and charged by the real bytes). Linux (the engine blocks
+        /// scrolller.com) and a view whose gate is missing or not reported yet get this head's loopback relay.</summary>
+        internal static bool FramesUseRelay(bool? gate, bool windows) => !(windows && gate == true);
+
+        /// <summary>One host -&gt; page frame with its Scrolller urls as <see cref="FramesUseRelay"/> says (Core ScrolllerRelay
+        /// for the relay; a remote site never gets a relay url).</summary>
+        internal string ScrolllerFrame(string json, Uri? page)
+            => FramesUseRelay(_scrolllerGate, OperatingSystem.IsWindows())
+               && ConditioningControlPanel.Services.Fyp.Online.ScrolllerRelay.LoopbackOrigin(page) is { } origin
+                ? ConditioningControlPanel.Services.Fyp.Online.ScrolllerRelay.RewriteJson(json, origin)
+                : json;
 
         /// <summary><see cref="PostJsonAsync"/> after the Scrolller rewrite (every host's frames, the Core relay rule).</summary>
         private Task<string?> PostRewrittenAsync(string json) => InvokeScriptAsync(
@@ -247,8 +258,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
-                    // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. Before the tree: the first load too.
-                    Platform.ScrolllerWebHostGate.Attach(_web);
+                    // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
+                    Platform.ScrolllerWebHostGate.Attach(_web, NewScrolllerEngine);
                     _webSlot.Children.Add(_web);
                 }
                 catch (Exception ex)
@@ -285,6 +296,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var target = e.Request;
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
+            // No Scrolller gate on this engine (yet, or at all): nothing but this head's own pages loads.
+            if (!ScrolllerGateAllows(_scrolllerGate, target))
+            {
+                e.Cancel = true;
+                Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
+                return;
+            }
+            if (target?.Scheme != "about") _loadedOnThisEngine = true;
             // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
             if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
@@ -311,6 +330,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
             if (_web is null) return;
+            if (_scrolllerGate is null) return;   // held: the gate's report loads Source
             try { _web.Navigate(url); }
             catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
         }
@@ -331,6 +351,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private bool _explicitNavigate;
 
+        /// <summary>The Scrolller gate on this engine: null = not reported yet (every navigation held), true = gated,
+        /// false = it could not be had (only this head's own pages load).</summary>
+        private bool? _scrolllerGate;
+        internal bool? ScrolllerGate => _scrolllerGate;
+
+        /// <summary>Which engine the gate's reports belong to, and whether a page started loading on it.</summary>
+        private int _scrolllerEngine;
+        private bool _loadedOnThisEngine;
+
+        /// <summary>A new engine behind this view, or the old one gone (UI thread). Avalonia.Controls.WebView destroys
+        /// the native control on every detach (nothing here calls BeginReparenting), so a view that is unloaded and
+        /// loaded again (a tab switch, a moved view) gets a NEW engine: it is held again until its own gate reports,
+        /// and a late report from an older engine is dropped. Returns that engine's report.</summary>
+        internal Action<bool> NewScrolllerEngine()
+        {
+            _scrolllerGate = null;
+            _loadedOnThisEngine = false;
+            var engine = ++_scrolllerEngine;
+            return gated => OnScrolllerGate(engine, gated);
+        }
+
+        /// <summary>One engine's gate report (UI thread): the held page loads now. A rebuilt engine already carries
+        /// the same Source (assigning it again does nothing), so its held page is loaded with Navigate.</summary>
+        internal void OnScrolllerGate(int engine, bool gated)
+        {
+            if (engine != _scrolllerEngine) return;
+            _scrolllerGate = gated;
+            var src = Source;
+            if (ReloadAfterGate(_web?.Source, src, _loadedOnThisEngine) && ConditioningControlPanel.Services.SandboxNet.Allows(src))
+            {
+                try { _web!.Navigate(src!); }
+                catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
+                return;
+            }
+            ApplySource();
+        }
+
+        /// <summary>Pure: the engine already names the page (a rebuilt engine) and nothing loaded on it yet (held or
+        /// refused while the gate had not reported) = load it again with Navigate.</summary>
+        internal static bool ReloadAfterGate(Uri? engineSource, Uri? source, bool loadedOnThisEngine)
+            => source != null && !loadedOnThisEngine && engineSource != null && engineSource == source;
+
+        /// <summary>The navigation rule while the gate is missing, pure: a gated engine loads anything; an ungated one only
+        /// this head's own loopback pages (they get Scrolller through the relay only) and about: pages.</summary>
+        internal static bool ScrolllerGateAllows(bool? gate, Uri? target)
+            => gate == true || (target is { IsAbsoluteUri: true } t
+                && (t.Scheme == "about" || (t.Scheme == Uri.UriSchemeHttp && t.Host == "127.0.0.1")));
+
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
@@ -346,6 +414,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // A sandbox never loads a real site (see OnNavigationStarted); the panel may still name it.
             if (_web is not null)
             {
+                if (_scrolllerGate is null) return;   // held until the Scrolller gate reports (OnScrolllerGate)
                 if (!_explicitNavigate) _web.Source = ConditioningControlPanel.Services.SandboxNet.Allows(src) ? src! : null!;
                 return;
             }

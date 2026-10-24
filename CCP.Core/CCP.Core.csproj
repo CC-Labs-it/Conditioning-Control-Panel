@@ -45,6 +45,10 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog" Version="3.1.1" />
+    <!-- Services/Fyp/Online/ScrolllerWebGate (moved from the WPF head): the Scrolller licence gate on every WebView2 core,
+         shared by both heads (the Avalonia head hooks the core behind its web view's platform handle). Only the managed
+         Microsoft.Web.WebView2.Core is used, and only on Windows. Same version as the WPF head. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2535.41" />
     <!-- Discord Rich Presence (Services/Account/DiscordRichPresenceService.cs): the client WPF ships, managed only
          (named pipe on Windows, discord-ipc-N unix socket on Linux). Same version as the WPF head's reference. -->
     <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
