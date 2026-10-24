@@ -48,7 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// bubble labels (WPF BubbleService.cs:4500,4574) are not drawn. The hold and the Snap Chain window
     /// run on wall time (<c>BubbleOverlay.Field.Clock</c>), as WPF does (:4531, ChaosModeService :2000).
     /// The FX window receives pop, defuse, combo and detonation pulses plus heat tint.
-    /// ponytail: freeze burst/edge hold and mandatory-video re-raise await their run features.</para>
+    /// ponytail: freeze burst/edge hold, periodic KeepChromeTopmost reassertion and mandatory-video
+    /// re-raise await their run features.</para>
     ///
     /// <para><see cref="Tick"/> is the stepped clock: the DispatcherTimer only calls it, tests call
     /// it directly. It does nothing while the overlay is hidden (P01).</para>
