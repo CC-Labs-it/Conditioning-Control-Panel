@@ -39,7 +39,6 @@ public sealed class AmbientBeatLoopsTests
     /// a file NOT in this list that gains one fails, and so does a listed file that lost it.</summary>
     private static readonly string[] NotYetMoved =
     {
-        "Views/Controls/AttentionCheckControl.axaml.cs",
         "Views/Controls/Companion/ChatThresholdView.axaml",
         "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/SeasonRecapCard.axaml.cs",
@@ -76,9 +75,9 @@ public sealed class AmbientBeatLoopsTests
         "Views/Tabs/LockdownTabView.axaml.cs", "Views/Tabs/QuestsTabView.Fx.cs", "Views/Tabs/StudioTabView.axaml.cs",
         "Views/Windows/AnnouncementPopup.axaml.cs", "Views/Windows/FeatureIntroPopup.axaml.cs",
         "Views/Windows/ItemUnlockedPopup.axaml.cs", "Views/Windows/LauncherWindow.Fx.cs",
-        "Views/Windows/LockCardWindow.axaml.cs", "Views/Windows/MainShellWindow.Animations.cs",
+        "Views/Windows/LockCardWindow.axaml.cs",
         "Views/Windows/MainShellWindow.Lockdown.cs", "Views/Windows/MainShellWindow.NavRail.cs",
-        "Views/Windows/MainShellWindow.TabFxTakeoverLabStatus.cs", "Views/Windows/MantraWindow.axaml.cs",
+        "Views/Windows/MantraWindow.axaml.cs",
         "Views/Windows/SettingsPaletteWindow.axaml.cs", "Views/Windows/TeaseRevealPopup.axaml.cs",
     };
 
@@ -86,7 +85,7 @@ public sealed class AmbientBeatLoopsTests
     private static readonly string[] XamlEffects =
     {
         "Views/AvatarTube/AvatarTubeWindow.axaml", "Views/Chaos/ChaosHubWindow.axaml", "Views/Chaos/ChaosOverlayWindow.axaml",
-        "Views/Chaos/ChaosSlotPickerWindow.axaml", "Views/Controls/AttentionCheckControl.axaml",
+        "Views/Chaos/ChaosSlotPickerWindow.axaml",
         "Views/Controls/Companion/ChatThresholdView.axaml", "Views/Controls/Companion/CompanionHeroCard.axaml",
         "Views/Controls/Companion/MakeHerYoursView.axaml", "Views/Controls/Companion/RelationshipConstellation.axaml",
         "Views/Controls/Companion/Themes/CompanionTheme.axaml", "Views/Controls/DailyQuestCard.axaml", "Views/Controls/EmiDock.axaml",
@@ -193,12 +192,19 @@ public sealed class AmbientBeatLoopsTests
     private static T F<T>(object o, string name) =>
         (T)o.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(o)!;
 
-    private static void Setup()
+    internal static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+        {
+            var options = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+            // Lifecycle/curve tests use the bundled face for Windows-only font names on Linux.
+            var mappings = new Dictionary<string, FontFamily>(options.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+            options.FontFamilyMappings = mappings;
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(options)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        }
     }
 
     private static void Step(SteppedTime time, double seconds)
@@ -285,6 +291,83 @@ public sealed class AmbientBeatLoopsTests
     });
 
     [Fact]
+    public Task LockdownPulseFollowsTabNavigation() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var old = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            var plate = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageBorder")!;
+            var resting = plate.BorderBrush;
+            var glow = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageGlow")!;
+            var restingShadow = glow.BoxShadow;
+            var restingOpacity = glow.Opacity;
+            Assert.Null(plate.Effect);
+            shell.ShowTab("LOCKDOWN");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.LockdownPulsing);
+            Step(time, 0.75);
+            var midpoint = ((ISolidColorBrush)plate.BorderBrush!).Color;
+            Assert.NotEqual(((ISolidColorBrush)resting!).Color, midpoint);
+            shell.ShowTab("not-a-tab");
+            Assert.True(shell.LockdownPulsing); // invalid navigation keeps the current tab
+            shell.ShowTab("lockdown");
+            Assert.True(shell.LockdownPulsing);
+            // WPF stops and restarts on every switch, so re-selecting Lockdown begins again at #FF1493.
+            Assert.Equal(Color.FromRgb(0xFF, 0x14, 0x93), ((ISolidColorBrush)plate.BorderBrush!).Color);
+            shell.ShowTab("settings");
+            Assert.False(shell.LockdownPulsing);
+            Assert.Same(resting, plate.BorderBrush);
+            Assert.Equal(restingShadow, glow.BoxShadow);
+            Assert.Equal(restingOpacity, glow.Opacity);
+            var quests = shell.Named<QuestsTabView>("QuestsTab")!;
+            var enhancements = shell.Named<EnhancementsTabView>("EnhancementsTab")!;
+            shell.ShowTab("quests");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(quests.AmbientRunning);
+            shell.ShowTab("enhancements");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(quests.AmbientRunning);
+            Assert.True(enhancements.FxRunning);
+            shell.ShowTab("settings");
+            Assert.False(enhancements.FxRunning);
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            shell.ShowTab("lockdown");
+            Assert.False(shell.LockdownPulsing);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.PerformanceMode = true;
+            shell.ShowTab("settings");
+            shell.ShowTab("lockdown");
+            Assert.False(shell.LockdownPulsing);
+            CoreSettings.Current.PerformanceMode = false;
+            shell.ShowTab("settings");
+            shell.ShowTab("lockdown");
+            Assert.True(shell.LockdownPulsing);
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.LockdownPulsing);
+        }
+        finally
+        {
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            BeatLoop.Time = TimeProvider.System;
+            CoreSettings.ServiceProvider = old;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ShellLoopsBreatheOnTheBeat() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
@@ -323,7 +406,12 @@ public sealed class AmbientBeatLoopsTests
             var plate = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageBorder")!;
             Step(time, 1.5);
             Assert.Equal(Color.FromRgb(0xFF, 0x69, 0xB4), ((ISolidColorBrush)plate.BorderBrush!).Color);
-            Assert.Equal(22, ((DropShadowEffect)plate.Effect!).BlurRadius, 3);
+            var pulseGlow = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageGlow")!;
+            Assert.Null(plate.Effect);
+            Assert.Null(pulseGlow.Effect);
+            Assert.Equal(22, pulseGlow.BoxShadow[0].Blur, 3);
+            Assert.Equal(1, pulseGlow.Opacity);
+            Assert.Equal(255, pulseGlow.BoxShadow[0].Color.A);
             Step(time, 1.5);
             Assert.Equal(Color.FromRgb(0xFF, 0x14, 0x93), ((ISolidColorBrush)plate.BorderBrush!).Color);
             shell.StopLockdownPulse();
@@ -349,16 +437,15 @@ public sealed class AmbientBeatLoopsTests
             shell.ShowTab("awareness");
             Dispatcher.UIThread.RunJobs();
             shell.SetAwarenessStatusPulse(true);
-            // Awareness breathes a sibling Border's BoxShadow, never an Effect on the dot (P82).
-            var awareness = shell.Named<Control>("AwarenessTab")!;
-            var dot = awareness.FindControl<Control>("AwarenessStatusDot")!;
-            var glow = awareness.FindControl<Border>("AwarenessStatusGlow")!;
+            var dot = shell.Named<Control>("AwarenessTab")!.FindControl<Control>("AwarenessStatusDot")!;
             Assert.Null(dot.Effect);
+            var glow = shell.Named<Control>("AwarenessTab")!.FindControl<Border>("AwarenessStatusGlow")!;
+            Assert.True(glow.IsVisible);
             Assert.Equal(0.22, glow.Opacity, 3);
             Step(time, 2.8);
             Assert.Equal(0.95, glow.Opacity, 3);
             shell.SetAwarenessStatusPulse(false);
-            Assert.Equal(0, glow.Opacity);
+            Assert.False(glow.IsVisible);
             Assert.Null(dot.Effect);
         }
         finally

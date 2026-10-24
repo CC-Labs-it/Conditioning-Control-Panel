@@ -51,7 +51,7 @@ public sealed class AwarenessStatusPulseTests
             var dot = view.FindControl<Ellipse>("AwarenessStatusDot")!;
             var glow = view.FindControl<Border>("AwarenessStatusGlow");
             Assert.NotNull(glow);
-            Assert.Equal(0, glow.Opacity);
+            Assert.False(glow.IsVisible);
             view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked = true;
             Assert.True(s.KeywordTriggersEnabled); // real consent-gated master editor
             Dispatcher.UIThread.RunJobs();
@@ -81,7 +81,7 @@ public sealed class AwarenessStatusPulseTests
 
             host.ShowTab("settings"); Dispatcher.UIThread.RunJobs();
             Assert.False(loop.IsRunning);
-            Assert.Equal(0, glow.Opacity);
+            Assert.False(glow.IsVisible);
             host.ShowTab("awareness"); Dispatcher.UIThread.RunJobs();
             Assert.Single(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
             host.WindowState = WindowState.Minimized; Dispatcher.UIThread.RunJobs();
@@ -92,7 +92,7 @@ public sealed class AwarenessStatusPulseTests
             // Headless never deactivates a window when another activates; drive the platform callback.
             typeof(WindowBase).GetMethod("HandleDeactivated", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(host, null); Dispatcher.UIThread.RunJobs();
             Assert.False(host.IsActive);
-            Assert.Equal(0, glow.Opacity);
+            Assert.False(glow.IsVisible);
             Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
             typeof(WindowBase).GetMethod("HandleActivated", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(host, null); Dispatcher.UIThread.RunJobs();
             Assert.True(host.IsActive);
@@ -101,15 +101,15 @@ public sealed class AwarenessStatusPulseTests
             s.MotionLevel = MotionLevel.Full; AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.Single(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
             s.PerformanceMode = true; AmbientFxCanvas.Env.RaiseMotionGateChanged();
-            Assert.Equal(0, glow.Opacity);
+            Assert.False(glow.IsVisible);
             s.PerformanceMode = false; AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.Single(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
             view.FindControl<CheckBox>("ChkAwarenessMaster")!.IsChecked = false; Dispatcher.UIThread.RunJobs();
             Assert.Equal("Off", view.FindControl<TextBlock>("TxtAwarenessStatus")!.Text);
-            Assert.Equal(0, glow.Opacity);
+            Assert.False(glow.IsVisible);
             Assert.DoesNotContain(BeatLoop.Running, x => ReferenceEquals(x.Owner, glow));
             AmbientFxCanvas.Env.RaiseMotionGateChanged(); // an Off dot must not restart on a gate change
-            Assert.Equal(0, glow.Opacity);
+            Assert.False(glow.IsVisible);
         }
         finally
         {

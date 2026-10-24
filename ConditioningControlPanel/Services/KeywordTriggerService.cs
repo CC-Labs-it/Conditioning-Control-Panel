@@ -682,11 +682,14 @@ namespace ConditioningControlPanel.Services
         /// have to mean the same thing or the list silently fails to match.
         /// </summary>
         public static bool MatchesAppList(IEnumerable<string>? list, string processName)
-            => Awareness.AwarenessAppList.MatchesAppList(list, processName);
+            => Awareness.AwarenessAppScopeRules.MatchesAppList(list, processName);
 
-        /// <summary>The same parser the Avalonia app-scope editor uses.</summary>
+        /// <summary>
+        /// Splits the comma / semicolon / newline separated text the Awareness tab collects into a
+        /// clean list of process names, de-duplicated and with any ".exe" dropped.
+        /// </summary>
         public static List<string> ParseAppList(string? text)
-            => Awareness.AwarenessAppList.ParseAppList(text);
+            => Awareness.AwarenessAppScopeRules.ParseAppList(text);
 
         private DateTime _lastSampleAt = DateTime.MinValue;
 
@@ -750,43 +753,11 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
 
-            if (!TryResolveForegroundApp(out var process, out var isOwn))
-            {
-                // An allow list promises triggers fire ONLY somewhere named. A window that will not
-                // name itself is not somewhere named, so it fails closed. A block list makes the
-                // opposite promise - only the listed apps are off limits - so it fails open.
-                var allowUnknown = scope != AwarenessAppScope.OnlyListed;
-                if (!allowUnknown) LogSuppressed(source, "foreground window could not be identified");
-                return allowUnknown;
-            }
-
-            if (isOwn && ignoreOwnFocus)
-            {
-                LogSuppressed(source, "Control Panel itself has focus");
-                return false;
-            }
-
-            switch (scope)
-            {
-                case AwarenessAppScope.ExceptListed:
-                    if (MatchesAppList(settings.KeywordTriggerApps, process))
-                    {
-                        LogSuppressed(source, $"'{process}' is on the block list");
-                        return false;
-                    }
-                    return true;
-
-                case AwarenessAppScope.OnlyListed:
-                    if (!MatchesAppList(settings.KeywordTriggerApps, process))
-                    {
-                        LogSuppressed(source, $"'{process}' is not on the allow list");
-                        return false;
-                    }
-                    return true;
-
-                default:
-                    return true;
-            }
+            var known = TryResolveForegroundApp(out var process, out var isOwn);
+            var reason = Awareness.AwarenessAppScopeRules.SuppressionReason(scope, settings.KeywordTriggerApps,
+                process, known, isOwn, ignoreOwnFocus);
+            if (reason != null) LogSuppressed(source, reason);
+            return reason == null;
         }
 
         #endregion

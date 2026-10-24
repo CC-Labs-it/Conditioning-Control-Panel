@@ -338,18 +338,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (e.Key != Key.Enter) return;
             CommitAppList();
+            // WPF acknowledges Enter by moving focus off the canonicalized box.
             TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
         }
 
         private void CommitAppList()
         {
             if (_isLoading) return;
-            var settings = CoreSettings.Current;
-            var parsed = AwarenessAppList.ParseAppList(TxtAwarenessAppList.Text);
-            if (parsed.SequenceEqual(settings.KeywordTriggerApps, StringComparer.OrdinalIgnoreCase)) return;
-            settings.KeywordTriggerApps = parsed;
-            CoreSettings.Save();
-            TxtAwarenessAppList.Text = string.Join(", ", parsed);
+            try
+            {
+                var settings = CoreSettings.Current;
+                var parsed = AwarenessAppScopeRules.ParseAppList(TxtAwarenessAppList.Text);
+                if (parsed.SequenceEqual(settings.KeywordTriggerApps ?? new(), StringComparer.OrdinalIgnoreCase)) return;
+                settings.KeywordTriggerApps = parsed;
+                CoreSettings.Save();
+                TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
+                    parsed.Count, settings.KeywordTriggerAppScope);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerApps");
+            }
         }
 
         // ------------------------------------------------------------------ highlight colour
