@@ -128,10 +128,16 @@ public sealed class FavoritesRailShellTests
                 w.Show();
                 Dispatcher.UIThread.RunJobs();
                 var link = w.Named<Button>("BannerWebLink")!;
-                // The inline link must fit inside its line (review P2: "web app" drew as "web ap").
+                // The inline link must fit inside its line (review P2: "web app" drew as "web ap"),
+                // also once the header narrows (the Sparkle wallet column took ~150 DIP; test order
+                // moves the natural width), where WPF's CharacterEllipsis trims the link's tail.
                 var line = w.Named<TextBlock>("TxtBannerWeb")!;
-                Assert.True(link.Bounds.Right <= line.Bounds.Width,
-                    $"banner link {link.Bounds} overruns its line {line.Bounds}");
+                AssertLinkInsideLine(link, line);
+                w.Named<Border>("HeaderBannerHost")!.MaxWidth = 340;
+                Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
+                Assert.True(line.Bounds.Width < 330, $"header did not narrow: {line.Bounds}");
+                AssertLinkInsideLine(link, line);
                 Assert.True(link.Focus());
                 w.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
                 Dispatcher.UIThread.RunJobs();
@@ -146,6 +152,14 @@ public sealed class FavoritesRailShellTests
             }
             return Task.CompletedTask;
         });
+    }
+
+    private static void AssertLinkInsideLine(Button link, TextBlock line)
+    {
+        // TranslatePoint is null once Avalonia's trimming dropped the link out of the line.
+        var right = link.TranslatePoint(new Point(link.Bounds.Width, 0), line);
+        Assert.True(right is { } r && link.Bounds.Width > 0 && r.X <= line.Bounds.Width + 0.5,
+            $"banner link {link.Bounds} (right edge {right}) overruns or left its line {line.Bounds}");
     }
 
     private static bool HasPadlock(Button chip) =>
