@@ -89,6 +89,44 @@ public sealed class TakeoverTests
         });
     }
 
+    [Fact]
+    public Task MindWipeRechecksSwitchesAfterUiPost() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var old = (s.AutonomyConsentGiven, s.AutonomyModeEnabled, s.AutonomyCanTriggerMindWipe, s.MindWipeEnabled);
+        var provider = CoreMindWipe.TriggerOnceProvider;
+        var entitlement = CoreEntitlement.HasPremiumProvider;
+        var shell = new MainShellWindow();
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = () => true;
+            s.AutonomyConsentGiven = s.AutonomyModeEnabled = true;
+            Assert.True(shell.Autonomy.Start(withTimer: false));
+            var calls = 0;
+            CoreMindWipe.TriggerOnceProvider = () => calls++;
+            foreach (var (takeover, enabled) in new[] { (false, true), (true, false), (true, true) })
+            {
+                s.AutonomyCanTriggerMindWipe = takeover;
+                s.MindWipeEnabled = enabled;
+                shell.PerformAutonomy(AutonomyActionType.MindWipe);
+            }
+            Assert.Equal(1, calls);
+        }
+        finally
+        {
+            shell.Autonomy.Stop();
+            shell.RequestExit();
+            CoreMindWipe.TriggerOnceProvider = provider;
+            CoreEntitlement.HasPremiumProvider = entitlement;
+            (s.AutonomyConsentGiven, s.AutonomyModeEnabled, s.AutonomyCanTriggerMindWipe, s.MindWipeEnabled) = old;
+        }
+        return Task.CompletedTask;
+    });
+
     private sealed class FakeBubbleCountHost : IBubbleCountHost
     {
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) { }

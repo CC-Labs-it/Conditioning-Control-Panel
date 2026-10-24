@@ -139,7 +139,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // WPF: TriggerGame(forceTest: true) - runs with the engine stopped and the card off.
                 case AutonomyActionType.BubbleCount: CoreEngine.BubbleCount?.Trigger(forceTest: true); break;
                 case AutonomyActionType.Comment: MakeAutonomyComment(); break;
-                case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
+                case AutonomyActionType.MindWipe:
+                    // Recheck after the UI post too: either box may have changed since selection.
+                    if (CoreSettings.Current.AutonomyCanTriggerMindWipe && CoreSettings.Current.MindWipeEnabled)
+                        CoreMindWipe.TriggerOnce();
+                    break;
                 case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
             }
         }
@@ -182,6 +186,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             "Teehee~", "I'm always watching~", "*bounces* Pay attention to me~",
         };
 
+        private readonly TakeoverComment _takeoverComment = new();
+
         /// <summary>WPF MakeComment / MakeAICommentAsync: AI through GigglePriority, a preset through
         /// the low-priority Giggle (dropped under an AI request or bubble).</summary>
         private async void MakeAutonomyComment()
@@ -192,9 +198,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 try
                 {
-                    var r = await App.Ai.GetBambiReplyExAsync("Say something random and teasing to get attention. Be playful.");
+                    var r = await TakeoverComment.GenerateAsync(App.Ai, App.Brain);
                     // Refusals are dropped silently on this surface (WPF R2-NEW-H-1).
-                    if (r.Refusal == null && !string.IsNullOrEmpty(r.Text) && Autonomy.IsEnabled)
+                    if (r.Refusal == null && Autonomy.IsEnabled && _takeoverComment.TryAccept(r.Text))
                         _avatarTubeWindow?.GigglePriority(r.Text, false, aiGenerated: r.IsAiGenerated);
                 }
                 catch (Exception ex) { Log.Warning("Autonomy: AI comment failed: {Error}", ex.Message); }

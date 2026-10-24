@@ -64,6 +64,32 @@ public class AutonomySchedulerTests : IDisposable
         for (var i = 0; i < seconds; i++) { _now = _now.AddSeconds(1); s.Tick(); }
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void AnnouncedMindWipeRechecksBothSwitches(bool takeover, bool enabled)
+    {
+        var settings = CoreSettings.Current;
+        var oldEnabled = settings.MindWipeEnabled;
+        var scheduler = Make();
+        try
+        {
+            settings.AutonomyCanTriggerFlash = false;
+            settings.AutonomyCanTriggerMindWipe = settings.MindWipeEnabled = true;
+            settings.AutonomyAnnouncementChance = 100;
+            scheduler.CanPerform = a => a == AutonomyActionType.MindWipe;
+            Assert.True(scheduler.Start(withTimer: false));
+            scheduler.TestTrigger();
+            Assert.Empty(_performed);
+            settings.AutonomyCanTriggerMindWipe = takeover;
+            settings.MindWipeEnabled = enabled;
+            Advance(scheduler, 2);
+            Assert.Equal(takeover && enabled ? 1 : 0, _performed.Count);
+        }
+        finally { scheduler.Stop(); settings.MindWipeEnabled = oldEnabled; }
+    }
+
     [Fact]
     public void RandomTriggerFiresWithinTheJitteredInterval()
     {

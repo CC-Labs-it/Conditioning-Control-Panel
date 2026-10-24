@@ -350,6 +350,9 @@ namespace ConditioningControlPanel.Services
 
         private void Run(AutonomyActionType a, bool announced)
         {
+            // The user may switch either box off during the two-second announcement.
+            if (a == AutonomyActionType.MindWipe &&
+                !(CoreSettings.Current.AutonomyCanTriggerMindWipe && CoreSettings.Current.MindWipeEnabled)) return;
             Log.Information("Autonomy: performing {Action}", a);
             try { Perform?.Invoke(a, announced); }
             catch (Exception ex) { Log.Warning(ex, "Autonomy: {Action} failed", a); }
