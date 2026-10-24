@@ -46,14 +46,23 @@ import { WEATHER_BY_ID, rollWeather } from './weather.js';
 import { REGIONS, REGION_COUNT, regionForWave, profileForWave, PROFILE_NEUTRAL, setRegionCycle } from './regions.js';
 import { rollBiomeIds, biomeForWave, biomeById, BIOMES_ALL, setBiomeCycle } from './biomes.js';
 import { createBiomeMech } from './biomeMech.js';
-import { setAudioColor } from '../engine/audioBus.js';
+import { setAudioColor, setDepthTone, failureDip, getAudioCtx, getMasterOut } from '../engine/audioBus.js';
+import { createFeelAudio, attachFeelEvents } from './feelAudio.js';
 import { getVoice, setVoiceDefault, onVoice, getLevel } from '../engine/audioLevels.js';
 import { createChaosField } from './chaosField.js';
 import { createFieldFx } from './fieldFx.js';
 import { createPayloadFx } from './payloadFx.js';
+import { listensFor, rollProc, restFor, regrab, canDeepen, estimChance } from './toyProcs.js';
+import { setLifePaused } from './bubbleLife.js';
+import { setLoomBook } from '../engine/loomSpirals.js';
+import { createLoomBook } from '../race/loomBook.js';
+import { createLoomSpiralFx } from '../race/loomSpiralFx.js';
+import { motionOff } from '../shared/motion.js';
+import { sourceCredit } from '../shared/sourceCredit.js';
 import { createScreenShake } from './screenShake.js';
 import { createChaosHud } from './chaosHud.js';
 import { createOverlays } from './overlays.js';
+import { countDetail } from './momentFeel.js';
 import { createWarren } from './warren.js';
 import { createLessonTracker } from './lessons.js';
 import { createSessionMetrics } from '../engine/sessionMetrics.js';
@@ -65,7 +74,7 @@ import { createHubGuide } from './hubGuide.js';
 import { createCheshireVn, CHESHIRE_DISABLED } from './cheshireVn.js';
 import { createCheshireGuide } from './cheshireGuide.js';
 import { CHESHIRE } from '../assets/vn/cheshire_script.js';
-import { setDucked, isMuted } from '../shared/audioMute.js';
+import { setDucked, isMuted, isDucked } from '../shared/audioMute.js';
 import { lessonById, boonDefById, DIARY_CODEX, DIARY_VERBS, RANKS } from './catalog.js';
 
 // ---- first-discovery lesson copy (catalog is the single source of truth) ----
@@ -401,6 +410,33 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     const b = biomeAt(waveIndex);
     return (b && b.style) || regionForWave(waveIndex).style || null;
   };
+  // ---- the Loom weaves this game's spirals (owner: every game's spirals come from the Loom) ----
+  // The chamber's own six colours become the weave's threads and ground, so a spiral pop and
+  // the pinned centre spiral belong to the room they appear in.
+  const loomHex = (n) => '#' + (((n >>> 0) & 0xffffff).toString(16)).padStart(6, '0');
+  const loomDark = (n, k) => loomHex(
+    (Math.round(((n >> 16) & 255) * (1 - k)) << 16) | (Math.round(((n >> 8) & 255) * (1 - k)) << 8) | Math.round((n & 255) * (1 - k)));
+  const LOOM_HOUSE = { threads: ['#ff69b4', '#e56cc0', '#b78cff'], ground: loomDark(0x12061a, 0.35), outer: loomDark(0x12061a, 0.8) };
+  function loomPalette() {
+    let p = null;
+    try { const s = st ? styleForWaveNow(st.waveIndex) : null; p = s && s.palette; } catch (e) { p = null; }
+    if (!p || p.colLine == null) return LOOM_HOUSE;
+    const threads = [];
+    for (const n of [p.colLine, p.colSpiral, p.colRibbon]) {
+      if (n == null) continue;
+      const h = loomHex(n);
+      if (!threads.includes(h)) threads.push(h);
+    }
+    if (threads.length < 2) threads.push(LOOM_HOUSE.threads[0]);
+    const fog = p.colFog != null ? p.colFog : 0x12061a;
+    return { threads, ground: loomDark(fog, 0.35), outer: loomDark(fog, 0.8) };
+  }
+  const loomRoom = () => {
+    try { const b = activeBiome(); return (b && b.id) || (st ? 'chamber' + regionForWave(st.waveIndex).id : 'warren'); }
+    catch (e) { return 'warren'; }
+  };
+  let loomBook = null, spiralFx = null;
+
   const profileForWaveNow = (waveIndex) => {
     const b = biomeAt(waveIndex);
     return (b && b.profile) || profileForWave(waveIndex);
@@ -538,6 +574,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   // commentary line and the native (WPF-voiced) bark stands down - one voice
   // at a time. Unclaimed events pass through untouched.
   const bark = (event, data) => {
+    // Feel seam: every game moment is also a window 'dtrh:feel' {kind:'moment', event}, voiced or not.
+    feelEvent({ ...(data || {}), kind: 'moment', event });
     try { if (guide && guide.onEvent(event, data)) return; } catch (e) { /* the tee must never eat a bark */ }
     bridge.send({ type: 'bark', event, ...(data || {}) });
   };
@@ -549,6 +587,10 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   // ~2s cadence like the liveness heartbeat; all pattern/cooldown thinking is C#-side.
   setInterval(() => {
     const running = state === 'running' && !heldNow();
+    // Feel pass: the same depth signal warms the mix (master low-pass + drone bed).
+    // Held (drafts, pause) keeps the last depth; only leaving the run opens it back up.
+    if (running) setDepthTone(intensity());
+    else if (state !== 'drafting' && state !== 'running') setDepthTone(0);
     bridge.send({
       type: 'haptic-state',
       running,
@@ -563,7 +605,52 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   // NOTE: region-mode wave drafts now prefer the draft ROOM (openDraftRoom -
   // one tube per boon); this presenter serves the scripted run-1 draft, the
   // Court's Landing, and 4-choice drafts.
+  // ---- feel pass (game/feelAudio.js): the pop ladder, arrivals, the landing root ----
+  const feel = createFeelAudio({
+    getCtx: getAudioCtx,
+    getOut: getMasterOut,
+    silent: () => isMuted() || isDucked(),
+    level: () => getLevel('fx'),
+    voiceActive: () => { try { return !!(ctx && ctx.drift && ctx.drift.isSpeaking && ctx.drift.isSpeaking()); } catch (e) { return false; } },
+  });
+  /** The one hook other lanes listen to: window 'dtrh:feel', detail.kind = pop | detonate | arrive. */
+  const feelEvent = (detail) => {
+    try { window.dispatchEvent(new CustomEvent('dtrh:feel', { detail })); } catch (e) { /* ignore */ }
+  };
+  /** Feel wave 2: the one place the run state changes, so every change is a 'phase' feel event
+   *  (countdown, running, drafting, recap, warren, requesting; 'surfacing' rides on top of running). */
+  const setState = (next) => {
+    if (next === state) return;
+    state = next;
+    surfPhaseStep = -1;
+    feelEvent({ kind: 'phase', state: next });
+  };
+  /** The Surfacing as a phase: once on entry, then once per SURF_PHASE_STEP of melt (cheap, no per-frame event). */
+  const SURF_PHASE_STEP = 0.1;
+  let surfPhaseStep = -1;
+  const surfacingPhase = (melt) => {
+    const step = Math.floor(melt / SURF_PHASE_STEP);
+    if (step === surfPhaseStep) return;
+    surfPhaseStep = step;
+    feelEvent({ kind: 'phase', state: 'surfacing', progress: +melt.toFixed(2) });
+  };
+  const FEEL_GOLD_KINDS = new Set(['golden', 'droplet', 'material', 'heart']);
+  /** Wrap a field pop callback: after the game has counted it, voice the rung the streak reached. */
+  const withPopFeel = (handler, xyAt) => (...args) => {
+    const before = st ? st.combo : 0;
+    handler(...args);
+    if (!st || state !== 'running') return;
+    const spec = args[0] || {};
+    const gold = FEEL_GOLD_KINDS.has(spec.kind);
+    if (!gold && st.combo <= before) return;   // the pop did not count (held, absorbed): no note
+    feel.pop(st.combo, { gold });
+    feelEvent({ kind: 'pop', streak: st.combo, x: args[xyAt], y: args[xyAt + 1], gold });
+  };
+  const onFeelEvent = (e) => { if (e && e.detail && e.detail.kind === 'arrive') feel.arrive(); };
+  window.addEventListener('dtrh:feel', onFeelEvent);
+  let detachFeelAudio = attachFeelEvents(feel);   // moments, phases, holds, ticks, the countdown
   const presentDraft = (o) => {
+    feel.resolve();   // a landing: the ladder comes home to its root
     if (ctx && ctx.boonPick) ctx.boonPick.open({ ...o, sfx });
     else overlays.showDraft(o);
   };
@@ -823,6 +910,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
 
     // Snap Chain: inside the post-snap window a trigger can't take anything.
     // Rubber Up (crafted) rides the same gate on its own dt-based window.
+    if (!(st.rubberSec > 0 || performance.now() < st.invulnUntil)) wakeToys('detonate-pre', { x, y });   // Rubber Up (crafted) takes the first one nothing else holds
     if (st.rubberSec > 0 || performance.now() < st.invulnUntil) {
       hudUi.toast(st.rubberSec > 0
         ? `🛡 the rubber holds (${NAME_OF[spec.variantId] || spec.variantId})`
@@ -831,6 +919,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       bark('detonated-absorbed', { variant: spec.variantId, strength: spec.strength, runDetonations: st.runDetonations, combo: st.combo, difficulty: diff, shields: st.shields });
       return;
     }
+    wakeToys('detonate', { x, y });   // Snap Field: the rest of the live ones may let go
     if (st.shields >= 1) {
       st.shields -= 1;
       st.heat = Math.max(0, st.heat - 0.2);
@@ -860,10 +949,12 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     st.combo = 0;
     st.lastComboBig = 0;
     st.heat = 0;
-    sfx('trigger', 0.55);
-    pulse('255,50,50', 0.4 + s * 0.35);
-    // P1: the fall STUMBLES - a brightness punch + the speed boost dies on the spot.
-    ctx.fx.pulseFlash(0.5 + s * 0.3);
+    // Feel pass: failure SUBTRACTS. No sting and no red pulse: the whole mix closes
+    // and opens back (audioBus.failureDip), and the field dims on the same event.
+    failureDip();
+    feelEvent({ kind: 'detonate', x, y, strength: s });
+    // P1: the fall STUMBLES - the speed boost dies on the spot. The old brightness
+    // punch is gone with the sting: it fought the field's dim on the same event.
     ctx.director.killBoost();
     // Heat Warp: a big streak dying while the tube runs hot cracks real lightning
     if (comboWarp >= 0.6 || comboBefore >= 15) ctx.fx.strikeNow();
@@ -889,6 +980,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       sonarCd = 0.9;
       field.sonarAt(x, y, 330);
     }
+    // only a pop from your own hand asks the dock: a toy's own pops would feed themselves
+    if (src === 'pointer') wakeToys('pop', { x, y });
 
     if (spec.kind === 'heart') {
       lessons.onSpecialPopped();
@@ -1049,9 +1142,11 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     if (!estimArced && src === 'pointer') {
       const est = toys.find((t) => t.id === 'e_stim');
       if (est) {
-        const chance = est.maxed ? 0.30 : [0.10, 0.15, 0.20][Math.min(est.level, 3) - 1] || 0.10;
+        const chance = estimChance(est.level, est.maxed, st.estimChargeMult);   // Overload doubles it
         if (Math.random() < chance) {
           field.dischargeAt(x, y, { maxTargets: 3, reach: 600, chain: est.maxed });
+          est.wokeAt = performance.now();   // the dock tile swells for it too
+          hudUi.toyWake({ glyph: est.glyph, name: est.name, x, y });
           sfx('estim_zap', 0.5);
           pulse('156,92,255', 0.20);
           ctx.fx.strikeNow();
@@ -1128,6 +1223,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     }
     if (st.defuseInvulnMs > 0) st.invulnUntil = performance.now() + st.defuseInvulnMs;
     lessons.onDefuseCompleted(fuseSecLeft, viaChannel);   // last_breath / snap_field / blindfold
+    if (viaChannel) wakeToys('defuse', { x, y });           // a defuse by your own hold
     happy.onDefuseCompleted(hpIo);                        // run 1: the whitelist opens
     countRegenPop();
     // Trust Exercise: a snap pings the dark too.
@@ -1195,6 +1291,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     hudUi.toast(extended ? '🐇 caught in the slow! +0.8s'
       : quick ? '⚡ quick catch! time slows' : '🐇 white rabbit caught! time slows');
     bark('darter-caught', { points: Math.round(pts), combo: st.combo, quick });
+    wakeToys('rabbit', null);
     checkComboMilestone();
   }
 
@@ -1295,6 +1392,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       hudUi.toast(`💨 ${name} faded away`);
     }
     pulse('150,150,175', 0.10);
+    wakeToys('expire', null);   // The Pump answers a treat that slipped away
     hudNow();
   }
 
@@ -1315,6 +1413,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       pulse('255,200,60', 0.4);
       hudUi.toast(`🔥 streak ×${combo}!`);
       bark('combo-milestone', { combo, difficulty: cfg.difficulty });
+      wakeToys('milestone', { streak: combo });
     } else {
       const frac = (combo % 10) / 10;
       pulse('255,170,80', 0.04 + 0.08 * frac);
@@ -1378,21 +1477,49 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       power: t.power ?? 0,
       level: t.level ?? 1,
       maxed: !!t.maxed,
-      chargesLeft: (t.cooldownSec ?? 0) <= 0 ? Math.max(3, Math.round(t.power ?? 0)) : -1,
-      chargesMax: (t.cooldownSec ?? 0) <= 0 ? Math.max(3, Math.round(t.power ?? 0)) : -1,
+      chargesLeft: -1,   // toys wake on their own: nothing to count down
+      chargesMax: -1,
       cooldownLeft: 0,
       effectActive: false,
     }));
   }
 
+  // ---- the dock toys wake on their own (toyProcs.js; owner, 2026-10-12) ----
+  // No key and no button fires a toy any more. Each run event below asks the dock; a toy
+  // that listens for it, is rested and is not already running rolls its chance and, on a
+  // win, runs exactly what a press used to run (useToy).
+  let procAt = null;   // { x, y } of the event that woke the toy, when it has a place
+  function toyRunning(id) {
+    return id === 'vibe_popping' ? vibeRemainingSec > 0
+      : id === 'freeze_trigger' ? st.freezeRemainingSec > 0
+      : id === 'porn_dvd' ? !!(field && field.dvdActive())
+      : id === 'the_wand' ? wandDrawSec > 0
+      : id === 'the_pump' ? pumpRemainingSec > 0
+      : id === 'rubber_up' ? st.rubberSec > 0
+      : id === 'slippery_slope' ? st.slipperySec > 0
+      : false;
+  }
+  /** A run event happened: let the dock answer. Returns true if anything woke. */
+  function wakeToys(event, info) {
+    if (!st || state !== 'running' || !toys.length || st.activesDisabled || heldNow()) return false;
+    let woke = false;
+    for (const t of toys.slice()) {
+      if (!listensFor(t.id, event, info)) continue;
+      if (t.cooldownLeft > 0 || t.chargesLeft === 0 || toyRunning(t.id)) continue;
+      if (!rollProc(t)) continue;
+      procAt = info && info.x != null ? { x: info.x, y: info.y } : null;
+      useToy(t);
+      hudUi.toyWake({ glyph: t.glyph, name: t.name, x: procAt && procAt.x, y: procAt && procAt.y });
+      procAt = null;
+      woke = true;
+    }
+    return woke;
+  }
+
   function useToy(t) {
     if (!st || state !== 'running' || heldNow()) return;
-    if (st.activesDisabled) {
-      sfx('toy_denied', 0.4);
-      hudUi.toast('🫦 the urge holds your hands — no toys');
-      return;
-    }
-    if (t.cooldownLeft > 0 || t.chargesLeft === 0) { sfx('toy_denied', 0.4); return; }
+    if (st.activesDisabled) return;   // the urge: the toys sleep
+    if (t.cooldownLeft > 0 || t.chargesLeft === 0) return;
 
     switch (t.id) {
       case 'vibe_popping':
@@ -1404,12 +1531,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         hudUi.toast('🔸 it buzzes. sweep');
         break;
       case 'freeze_trigger':
-        if (t.chargesLeft <= 0) { sfx('toy_denied', 0.4); return; }
-        t.chargesLeft--;
         sfx('freeze_trigger', 0.6);
         activateFreeze();
         if (t.maxed) field.snapAll(false);
-        t.cooldownLeft = 3;   // anti-doubletap between charges
         hudUi.toast('❄ everything holds still');
         break;
       case 'porn_dvd': {
@@ -1431,12 +1555,20 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         hudUi.toast(t.maxed ? '✋ snapped. all of it.' : '✋ snapped — every live one let go');
         break;
       case 'rabbit_caller':
-        rabbitCallPending = Math.max(1, Math.round(t.power));
-        rabbitCallMaxed = t.maxed;
-        sfx('toy_ready', 0.5);
-        t.cooldownLeft = t.cooldownSec;
-        hudUi.toast('🐇 the whistle hangs — your next click calls them');
+      {
+        // no armed click any more: they come at once, around where the last one was caught
+        const n = Math.max(1, Math.round(t.power));
+        const cx = procAt ? procAt.x : window.innerWidth * (0.3 + Math.random() * 0.4);
+        const cy = procAt ? procAt.y : window.innerHeight * (0.3 + Math.random() * 0.4);
+        for (let i = 0; i < n; i++) {
+          markDiscovered('bubble:darter');
+          field.spawn(buildDarter(intensity(), { atX: cx + randInt(-90, 90), atY: cy + randInt(-90, 90) }));
+        }
+        if (t.maxed) { rabbitStormSec = 10.0; rabbitStormAccum = 0; }
+        sfx('rabbit_spawn', 0.5);
+        hudUi.toast(t.maxed ? `🐇 ${n} more answered… and the burrow is emptying` : `🐇 ${n} more answered the whistle`);
         break;
+      }
       case 'e_stim':
         estimCharges = Math.max(1, Math.round(t.power)) * Math.max(1, st.estimChargeMult);
         estimMaxed = t.maxed;
@@ -1451,13 +1583,10 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         // Reworked: 2s of DRAWING - the cursor lays a shimmering ink trail that
         // lingers 4 more seconds and pops/defuses whatever touches it. The tube
         // glares while the hand draws. Charge-based like the freeze.
-        if (t.chargesLeft <= 0) { sfx('toy_denied', 0.4); return; }
-        t.chargesLeft--;
         wandDrawSec = 2.0;
         field.wandInkStart(t.maxed);
         ctx.fx.holdFlash(true, 0.5);
         sfx('vibe_buzz', 0.6);
-        t.cooldownLeft = 3;   // anti-doubletap between charges
         pulse('255,180,240', 0.25);
         hudUi.toast('🪄 draw — the line lingers');
         break;
@@ -1500,6 +1629,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         hudUi.toast('🍬 he smelled it — here he comes');
         break;
     }
+    if (!t.crafted) t.cooldownLeft = restFor(t.id);   // asleep until rested (the dock shows it)
+    t.wokeAt = performance.now();
     lessons.onToyFired();   // first_play
     // Grab-in-the-tube: a grabbed toy carries 3 uses. Spend one (freeze/wand already
     // decremented their own charge above); when the last is gone, drop it from the
@@ -1606,12 +1737,13 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
           count: 1, text: cfg.thoughtTexts[(Math.random() * cfg.thoughtTexts.length) | 0] });
       }
     }
+    if (st.waveIndex > 0) wakeToys('chamber', null);   // Sugar Cube: once the next chamber is open
     let changed = false;
     for (const t of toys) {
       if (t.cooldownLeft > 0) {
         t.cooldownLeft = Math.max(0, t.cooldownLeft - dt);
         changed = true;
-        if (t.cooldownLeft <= 0 && t.chargesLeft !== 0) sfx('toy_ready', 0.45);
+        // (no chime when a rest ends: nothing is waiting on the player's hand)
       }
       const on = t.id === 'vibe_popping' ? vibeRemainingSec > 0
         : t.id === 'freeze_trigger' ? st.freezeRemainingSec > 0
@@ -1647,6 +1779,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     if (ctx.spawner && ctx.spawner.setSurfacing) ctx.spawner.setSurfacing(0);
     if (surfDomOn) {
       surfDomOn = false;
+      // a relapse walked the Surfacing back mid-run: tell the listeners the fall is plain again
+      if (state === 'running' && surfPhaseStep >= 0) { surfPhaseStep = -1; feelEvent({ kind: 'phase', state: 'running' }); }
       ctx.hud.classList.remove('cf-surfacing');
       ctx.hud.style.removeProperty('--surf-melt');
       ctx.hud.style.removeProperty('--surf-drain');
@@ -2407,6 +2541,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   }
 
   function openDraftRoom(options) {
+    feel.resolve();   // a landing: the ladder comes home to its root
     draftRoomActive = true;
     draftRoomSkip = false;
     draftRoomDoors = options.length;
@@ -2608,6 +2743,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
 
     // DOM: one class + two eased vars (styles.css does the rest)
     if (!surfDomOn) { surfDomOn = true; ctx.hud.classList.add('cf-surfacing'); }
+    surfacingPhase(surfMelt);
     ctx.hud.style.setProperty('--surf-melt', surfMelt.toFixed(3));
     ctx.hud.style.setProperty('--surf-drain', surfDrain.toFixed(3));
 
@@ -2919,7 +3055,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     // The draft table: hold the field, clear it with a burst, deal the cards.
     clearRoomHazards();   // grant a live drop + stop any video BEFORE the run parks
     drafting = true;
-    state = 'drafting';
+    setState('drafting');
     syncHeld();
     field.clearAll(true);
     ctx.powerupDrops?.clearLive();   // safety net: fade any drop clearRoomHazards didn't take
@@ -2967,7 +3103,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     clearRoomHazards();   // grant a live drop + stop any video BEFORE the Landing parks
     finalLandingActive = true;
     drafting = true;
-    state = 'drafting';
+    setState('drafting');
     syncHeld();
     field.clearAll(true);
     ctx.powerupDrops?.clearLive();   // safety net: fade any drop clearRoomHazards didn't take
@@ -3072,17 +3208,15 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   function addConsumable(id, level) {
     const def = boonDefById(id);
     if (!def || !def.levelValues || !def.levelValues.length) return;
-    // Recharge path: already holding this active -> top its charges back up instead
-    // of docking a duplicate. When the dock is full, the drop picker offers a recharge
-    // of a partly-spent held toy (see canOfferPowerup) rather than a toy with no slot.
+    // Re-grab: already holding this toy -> it goes one level deeper for this fall instead
+    // of docking a duplicate (toyProcs.js regrab), and wakes rested. When the dock is full
+    // the drop picker offers a held toy that can still deepen (see canOfferPowerup).
     const held = toys.find((t) => t.id === id);
     if (held) {
-      held.chargesLeft = held.chargesMax;
-      held.cooldownLeft = 0;
-      if (held.pickRef) held.pickRef.spent = false;   // un-grey the ribbon tile if it had drained
+      const deeper = regrab(held, def.levelValues);
       hudUi.setPicks(st.runPicks);
       hudUi.updateToys(toys, toyStatus());
-      return true;   // signals a recharge (vs a fresh dock) to the grab toast
+      return deeper ? 'deeper' : 'rested';   // tells the grab toast which it was
     }
     if (dockUsed() >= st.consumableSlots) return;   // dock full (canOfferPowerup should have vetoed; crafted toys don't count)
     const lvl = Math.max(1, level | 0);
@@ -3099,8 +3233,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       key: String(toys.length + 1),                       // slot 1 -> "1", etc.
       cooldownSec: def.cooldownSec ?? 0,
       power, level: lvl, maxed: lvl >= def.levelValues.length,
-      chargesLeft: chargesMax, chargesMax,
-      cooldownLeft: 0, effectActive: false, consumable: true, pickRef: pick,
+      // a grabbed toy lasts the whole fall: no uses to count (-1), it only rests between wakes
+      chargesLeft: -1, chargesMax: -1, misses: 0,
+      cooldownLeft: 0, effectActive: false, consumable: false, pickRef: pick,
     });
     st.runEquipment.add(id);
     st.runPicks.push(pick);
@@ -3140,15 +3275,15 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
 
     const acquire = () => {
       if (state !== 'running') return;   // card dismissed after the run ended: skip the apply/anim
-      let recharged = false;
+      let regrabbed = '';
       if (kind === 'consumable') {
-        recharged = addConsumable(id, level) === true;
+        regrabbed = addConsumable(id, level) || '';
         try { hudUi.flyArtToSlot(id, screenPos, 'consumable'); } catch (e) { /* ignore */ }
       } else {
         applyGrabbedPassive(id);
         try { hudUi.flyArtToSlot(id, screenPos, 'relic'); } catch (e) { /* ignore */ }
       }
-      hudUi.toast('◈ ' + def.name + (recharged ? ' recharged' : ''));
+      hudUi.toast('◈ ' + def.name + (regrabbed === 'deeper' ? ' goes deeper' : regrabbed === 'rested' ? ' is rested' : ''));
     };
 
     if (first) {
@@ -3221,7 +3356,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       syncHeld();
       overlays.showReadyGo(() => {
         drafting = false;
-        state = 'running';
+        setState('running');
         syncHeld();
       }, { onTick: (b) => sfx(b === 'GO!' ? 'sink' : 'countdown_tick', 0.45) });
       return;
@@ -3232,7 +3367,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     // A brief "Ready? -> GO!" beat before the next loop resumes.
     overlays.showReadyGo(() => {
       drafting = false;
-      state = 'running';
+      setState('running');
       syncHeld();
       if (!scripted && st.welcomeShower) spawnWelcomeShower();
       if (!scripted) announceFinalLoopIfEntering();
@@ -3647,7 +3782,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       if (heldNow() || state !== 'running') return false;
       scriptedDraftActive = true;
       drafting = true;
-      state = 'drafting';
+      setState('drafting');
       syncHeld();
       field.clearAll(true);
       ctx.powerupDrops?.clearLive();   // scripted table parks the fall too - clear any live drop
@@ -3740,7 +3875,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         id, name: def.name, glyph: def.glyph, desc: def.desc,
         key: String(toys.length + 1),
         cooldownSec: 0, power: 0, level: 1, maxed: false,
-        chargesLeft: 1, chargesMax: 1,
+        chargesLeft: 1, chargesMax: 1, misses: 0,
         cooldownLeft: 0, effectActive: false,
         consumable: true, crafted: true, pickRef: null,
       });
@@ -3789,7 +3924,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   }
 
   function beginCountdown(short) {
-    state = 'countdown';
+    setState('countdown');
     st = freshState();
     setRegionCycle(!!st.endless);   // The Bottomless Fall: bonus loops wrap I->IV instead of clamping to Court
     setBiomeCycle(!!st.endless);    // ...and the biome art wraps in lockstep
@@ -3823,6 +3958,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     // a passing video lingers for its 'video spotlight time' (S.spotSeconds)
     // instead of bolting through. (Was off mid-run; restored by request.)
     if (ctx.spawner) ctx.spawner.setAutoSpotlight(true);
+    if (ctx.spawner && ctx.spawner.picturesFirst) ctx.spawner.picturesFirst();   // pictures first, clips sparse later
     buildToys();
     syncPhys();
     wireStickyFingers();
@@ -3860,9 +3996,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     if (!short) sfx('fall_in', 0.28);
     overlays.showCountdown({
       short,
-      onTick: (b) => sfx(b === 'GO!' ? 'sink' : 'countdown_tick', 0.5),
+      onTick: (b) => { sfx(b === 'GO!' ? 'sink' : 'countdown_tick', 0.5); feelEvent(countDetail(b)); },
       onGo: () => {
-        state = 'running';
+        setState('running');
         // Descent is live: wake the drift whisper + special tube moods (the hub kept them idle).
         try { ctx.setRunActive && ctx.setRunActive(true); } catch (e) { /* ignore */ }
         // #647: the OPTIONAL centre spiral rides the whole fall (no-op when the toggle is off).
@@ -3923,13 +4059,14 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
   function abandonRun() {
     if (state !== 'running' || !st) return false;
     const booked = booker.end(runSummary(), { abandoned: true });
-    if (booked) state = 'recap';
+    if (booked) setState('recap');
     return booked;
   }
 
   function endRun(ranFullCourse) {
     if (state !== 'running') return;
-    state = 'recap';
+    setState('recap');
+    try { sourceCredit.clear(); } catch (e) { /* ignore */ }   // the run's Scrolller cards leave with it; anything re-shown touches it back
     setRegionCycle(false); setBiomeCycle(false);   // The Bottomless Fall: disarm cycling so the next (normal) run clamps to Court
     // Surfaced: hush the drift whisper + calm the tube for the recap/hub idle.
     try { ctx.setRunActive && ctx.setRunActive(false); } catch (e) { /* ignore */ }
@@ -4013,7 +4150,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         // run 1 -> run 2 must leave the classroom behind).
         overlays.hideRecap();
         shortNextCountdown = true;
-        state = 'requesting';
+        setState('requesting');
         bridge.send({ type: 'request-run', setup: warren.currentSetup() });
       },
       onSurface: () => returnToWarren(),
@@ -4043,7 +4180,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     try { ctx.setRunActive && ctx.setRunActive(false); } catch (e) { /* ignore */ }
     if (ctx.spawner) ctx.spawner.setAutoSpotlight(true);
     ctx.director.setTimeFactor(0.3);
-    state = 'warren';
+    setState('warren');
     drafting = false;
     // an aborted draft room never commits: drop its state + chrome so the next
     // run's first draft doesn't inherit a stale skip flag
@@ -4067,9 +4204,15 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
      * the idling tunnel; a descent starts when the host answers request-run. */
     attach(sceneCtx) {
       ctx = sceneCtx;
+      window.addEventListener('dtrh:feel', onFeelEvent);   // same fn: a re-attach never doubles it
+      try { detachFeelAudio(); } catch (e) { /* ignore */ }
+      detachFeelAudio = attachFeelEvents(feel);
       preloadRecipeArt();   // warm the ingredient photos so a deep-run recipe plaster draws them, not glyphs
       ffx = createFieldFx(ctx.hud);
-      payloadFx = createPayloadFx({ hud: ctx.hud, fx: ctx.fx, media: ctx.media, flashBurst: ctx.flashBurst });
+      loomBook = createLoomBook({ seed: (Math.random() * 0xffffffff) >>> 0, room: loomRoom, palette: loomPalette });
+      setLoomBook(loomBook.draw);
+      spiralFx = createLoomSpiralFx({ reducedMotion: motionOff(), log: (m) => bridge.log(m) });
+      payloadFx = createPayloadFx({ hud: ctx.hud, fx: ctx.fx, media: ctx.media, flashBurst: ctx.flashBurst, spiralFx });
       // The screen-shake consumer rocks the 3D canvas only (never the hud - see
       // screenShake.js). Seeded from the live cfg when a run-config already landed.
       shakeFx = createScreenShake({ el: ctx.canvas });
@@ -4136,8 +4279,8 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       });
       field = createChaosField({
         hud: ctx.hud, fx: ffx,
-        canChannel, onBenignPopped, onFreezeCaught,
-        onDefused, onDetonated, onTreatExpired, onChannelBroken,
+        canChannel, onBenignPopped: withPopFeel(onBenignPopped, 1), onFreezeCaught,
+        onDefused: withPopFeel(onDefused, 3), onDetonated, onTreatExpired, onChannelBroken,
         onDarterCaught, onTeaseTouched, onTeaseDenied, onBrittleShattered, onBoundEnraged,
         onRabbitSmacked: (first) => lessons.onRabbitSmacked(first),
         // Autoplay duo: the logo found a corner - the whole screen pays.
@@ -4154,7 +4297,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         },
       });
       hudUi = createChaosHud(ctx.hud, {
-      onToyUse: (id) => { const t = toys.find((x) => x.id === id); if (t) useToy(t); },
+      onToyUse: null,   // the dock is a display now: toys wake on their own (toyProcs.js)
       onWeatherClick: () => rerollWeather(),
       // hover tooltips stand down whenever something else holds the world
       // (pause / drafts / lesson cards / VN beats / junction rooms / recap)
@@ -4277,7 +4420,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
         getMediaStats: () => (hostState ? hostState.mediaStats : null),
         runSetup,
         onDescend: (setup) => {
-          state = 'requesting';
+          setState('requesting');
           bridge.send({ type: 'request-run', setup });
         },
         onExit: () => { if (requestExit) requestExit(); else bridge.send({ type: 'exit' }); },
@@ -4294,10 +4437,10 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       window.addEventListener('pointerdown', onPointerDownGlobal, true);
       window.addEventListener('pointerdown', onGlobalPointerDownCapture, true);
       window.addEventListener('contextmenu', onContextMenu);
-      window.addEventListener('keydown', onToyKey);
+      // (no toy keys: the dock toys wake on their own)
       hudUi.setVisible(false);
       ctx.director.setTimeFactor(0.3);   // the tunnel idles at a crawl under the hub
-      state = 'warren';
+      setState('warren');
       warren.show('menu');
       // Seed the options panel from whatever snapshot already landed pre-attach.
       try { ctx.syncOptionUnlocks && ctx.syncOptionUnlocks((hostState && hostState.meta && hostState.meta.purchasedDials) || []); } catch (e) { /* ignore */ }
@@ -4435,7 +4578,7 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     /** DtRH intensity feeds the director (demoted to a presentation adapter). */
     moodIntensity() { return state === 'running' ? intensity() : 0; },
 
-    setPaused(v) { paused = !!v; syncHeld(); },
+    setPaused(v) { paused = !!v; setLifePaused(paused); syncHeld(); },
     /** THE HOURGLASS (crafted): may Esc truly FREEZE the fall right now? Outside
      *  a live descent there's nothing to hold, so the pause always freezes. */
     canHoldPause() { return state !== 'running' || craftedCount('the_hourglass') >= 1; },
@@ -4465,17 +4608,18 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
     getMeta() { return hostState ? hostState.meta : null; },
     /** Veto an offer: only while running, and passives/new toys never re-offer this
      *  run. A consumable with a free dock slot is offered fresh; once the dock is full
-     *  we instead offer a RECHARGE of a partly-spent held active (grabbing it refills
-     *  that toy - see addConsumable) rather than a toy there's no room for. Passives
+     *  we instead offer a held toy that can still go DEEPER (grabbing it adds a level
+     *  for this fall - see addConsumable) rather than a toy there's no room for. Passives
      *  always fit - they pin to the relic strip. */
     canOfferPowerup(id, kind) {
       if (state !== 'running' || !st) return false;
       const held = st.runEquipment.has(id);
       if (kind === 'consumable') {
         if (!held) return dockUsed() < st.consumableSlots;   // fresh toy needs an open pocket (crafted toys don't count)
-        if (dockUsed() < st.consumableSlots) return false;   // room to spare: prefer new toys, not a refill
-        const t = toys.find((x) => x.id === id);              // pockets full: offer a recharge...
-        return !!t && t.chargesLeft < t.chargesMax;           // ...only if this one has a spent charge
+        if (dockUsed() < st.consumableSlots) return false;   // room to spare: prefer new toys
+        const t = toys.find((x) => x.id === id);              // pockets full: offer one that can deepen
+        const d = boonDefById(id);
+        return canDeepen(t, d && d.levelValues);
       }
       if (held) return false;   // passives never re-offer
       return true;
@@ -4515,7 +4659,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       if (m.rankUp && RANK[m.rankUp] != null) {
         bridge.send({ type: 'meta-command', op: 'set-num', key: 'lastRankSeen', value: RANK[m.rankUp] });
       }
-      overlays?.showPayout(m);
+      // THE PLAN ROW (brief C10): the payout card may close with a Daily Gift line; the init payload's
+      // C1 `plans` (when the host sent one) is the only source of a price.
+      overlays?.showPayout(m, { plans: (m && m.plans) || (hostState && hostState.plans) || null });
     },
 
     isRunning: () => state === 'running',
@@ -4525,6 +4671,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       window.removeEventListener('pointerdown', onGlobalPointerDownCapture, true);
       window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('keydown', onToyKey);
+      window.removeEventListener('dtrh:feel', onFeelEvent);
+      try { detachFeelAudio(); } catch (e) { /* ignore */ }
+      setDepthTone(0);
       hideDraftRoomChrome();
       if (draftDom && draftDom.root.parentNode) draftDom.root.parentNode.removeChild(draftDom.root);
       draftDom = null; draftRoomActive = false; bonusRoomActive = false;
@@ -4538,6 +4687,9 @@ export function createChaosGame({ bridge, hostState, runSetup, requestExit, modI
       field?.dispose();
       ffx?.dispose();
       payloadFx?.dispose();
+      setLoomBook(null);                       // leave no weaver and no GL context behind
+      try { spiralFx?.dispose(); } catch (e) { /* best effort */ }
+      loomBook = null; spiralFx = null;
       shakeFx?.dispose();   // drops any jolt in flight and clears the canvas transform
       vn?.dispose();   // closes the VN AudioContext + removes its overlay/listeners (else it leaks per attach and hits Chromium's context ceiling)
       try { if (window.__sfPayloadFx === payloadFx) delete window.__sfPayloadFx; } catch { /* seam cleanup */ }

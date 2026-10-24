@@ -15,7 +15,7 @@ namespace ConditioningControlPanel
     // on MEGA and the catalogue stores metadata + the download link (ccp-mod/v1).
     public partial class MainWindow
     {
-        private const string CatalogueSchemaMod = "ccp-mod/v1";
+        private const string CatalogueSchemaMod = ModCatalogueAsset.Schema;
 
         // Preview thumb limits: keep the JSON envelope small.
         private const int ModPreviewMaxPixels = 160;
@@ -120,38 +120,7 @@ namespace ConditioningControlPanel
         // re-zipped hash wouldn't match the bytes actually hosted on MEGA.
         private static JObject BuildModCatalogueAsset(ModPackage mod, string downloadUrl)
         {
-            var m = mod.Manifest;
-            var asset = new JObject
-            {
-                ["mod_id"] = m.Id,
-                ["name"] = m.Name,
-                ["version"] = m.Version,
-                ["author"] = m.Author,
-                ["download"] = new JObject
-                {
-                    ["provider"] = "mega",
-                    ["url"] = downloadUrl,
-                    ["installed_size_bytes"] = SafeDirectorySize(mod.InstalledPath!),
-                },
-            };
-            if (!string.IsNullOrWhiteSpace(m.Description)) asset["description"] = m.Description;
-            if (!string.IsNullOrWhiteSpace(m.MinAppVersion)) asset["min_app_version"] = m.MinAppVersion;
-
-            var thumb = TryBuildPreviewThumb(mod);
-            if (thumb != null) asset["preview_thumb_b64"] = thumb;
-
-            return asset;
-        }
-
-        private static long SafeDirectorySize(string dir)
-        {
-            try
-            {
-                return new DirectoryInfo(dir)
-                    .EnumerateFiles("*", SearchOption.AllDirectories)
-                    .Sum(f => f.Length);
-            }
-            catch { return 0; }
+            return ModCatalogueAsset.Build(mod, downloadUrl, TryBuildPreviewThumb(mod));
         }
 
         // Downscaled JPEG of the mod's previewImage (if it ships one), base64.
