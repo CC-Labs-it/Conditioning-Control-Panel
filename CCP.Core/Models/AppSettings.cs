@@ -8611,6 +8611,13 @@ namespace ConditioningControlPanel.Models
             set { _goonShareDiscordDm = value; OnPropertyChanged(); }
         }
 
+        // Machine-local consent ownership: a fresh install must never send defaults for an audience
+        // it has not chosen. Each bit belongs to the account that explicitly changed that switch.
+        [JsonProperty("consentOwnedAccount")]
+        public string? ConsentOwnedAccount { get; set; }
+        [JsonProperty("consentOwnedFields")]
+        public long ConsentOwnedFields { get; set; }
+
         private bool _goonRichPresence = false;
         /// <summary>
         /// Show Goon Game activity in Discord Rich Presence (fixed strings only — never the

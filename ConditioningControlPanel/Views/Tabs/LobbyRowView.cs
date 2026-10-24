@@ -24,17 +24,17 @@ public sealed class LobbyRowView
     public string Summary { get; }
     public bool HasSummary => Summary.Length > 0;
     /// <summary>The second line on a card: game, then the settings.</summary>
-    public string Line => HasSummary ? GameLabel + " · " + Summary : GameLabel;
+    public string Line => LobbyPageRules.Line(GameLabel, Summary);
     /// <summary>The game's feature art, small: light and coloured, readable on a dark card.</summary>
     public ImageSource? Art => ArtFor(Row.Game);
     /// <summary>Stable identity across polls, for the "new table" pop.</summary>
-    public string Id => Row.Game + "|" + (Row.Key ?? Row.HostName + "|" + Row.OpponentName) + "|" + Row.State;
+    public string Id => LobbyPageRules.Id(Row);
     public bool Friend => Row.Friend;
     public string ButtonText { get; }
     public bool HasButton { get; }
     /// <summary>The join would be refused by the game's gate: the button shows with a lock.</summary>
     public bool Locked { get; }
-    public double ButtonOpacity => Locked ? 0.55 : 1.0;
+    public double ButtonOpacity => LobbyPageRules.ButtonOpacity(Locked);
 
     // ---- polish wave 10 (depth): a lobby table is a FLOATING card, its Join / Watch button a
     // RAISED plank. The page template binds these (the card rim, the float band under the card
@@ -63,12 +63,10 @@ public sealed class LobbyRowView
         Row = row;
         GameIcon = IconFor(row.Game);
         GameLabel = loc(LabelKey(row.Game));
-        Title = row.State == LobbyRowState.Playing && !string.IsNullOrEmpty(row.OpponentName)
-            ? string.Format(loc("lobby_row_versus"), row.HostName, row.OpponentName)
-            : row.HostName;
+        Title = LobbyPageRules.Title(row, loc);
         Summary = LobbySummary.For(row, loc);
-        HasButton = row.CanJoin || row.CanWatch;
-        Locked = row.CanJoin && !gates.CanJoin(row.Game);
+        HasButton = LobbyPageRules.HasButton(row);
+        Locked = LobbyPageRules.Locked(row, gates);
         ButtonText = row.CanJoin ? (Locked ? "\U0001F512 " : "") + loc("lobby_btn_join") : loc("lobby_btn_watch");
     }
 
@@ -113,12 +111,7 @@ public sealed class LobbyRowView
         }
     }
 
-    public static string LabelKey(LobbyGame g) => g switch
-    {
-        LobbyGame.Chess => "lobby_game_chess",
-        LobbyGame.Goon => "lobby_game_goon",
-        _ => "lobby_game_remote",
-    };
+    public static string LabelKey(LobbyGame g) => LobbyPageRules.LabelKey(g);
 
     public static List<LobbyRowView> From(IEnumerable<LobbyRow> rows, LobbyGates gates, Func<string, string>? loc = null) =>
         rows.Select(r => new LobbyRowView(r, gates, loc)).ToList();

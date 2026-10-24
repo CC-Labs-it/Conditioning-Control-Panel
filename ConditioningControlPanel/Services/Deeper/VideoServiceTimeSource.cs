@@ -141,7 +141,12 @@ namespace ConditioningControlPanel.Services.Deeper
         public void Pause() => _video.PausePrimary();
         public void Play() => _video.PlayPrimary();
 
-        public Rect GetVideoRect()
+        public PlaybackRect GetVideoRect() => ToPlaybackRect(GetVideoRectDips());
+
+        internal static PlaybackRect ToPlaybackRect(Rect r) =>
+            r.IsEmpty ? PlaybackRect.Empty : new PlaybackRect(r.X, r.Y, r.Width, r.Height);
+
+        private Rect GetVideoRectDips()
         {
             try
             {
@@ -163,9 +168,7 @@ namespace ConditioningControlPanel.Services.Deeper
                 var outer = new Rect(originPx.X / sx, originPx.Y / sy, w.ActualWidth, w.ActualHeight);
 
                 var aspect = GetVideoAspect();
-                if (aspect <= 0) return outer; // native size not known yet -> full area
-
-                return FitContain(outer, aspect);
+                return aspect <= 0 ? outer : FitContain(outer, aspect); // native size not known yet -> full area
             }
             catch { return Rect.Empty; }
         }
