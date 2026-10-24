@@ -63,7 +63,10 @@ test('Keep is solid architecture with instanced decks, walls, halls and a tower,
   assert.ok(fortress.plan.boxes.some((p) => p.name === 'cell-bars'));
   assert.ok(fortress.plan.boxes.some((p) => p.name === 'collapsed-wall'));
   assert.ok(fortress.group.getObjectByName('keep-tower-volume'));
-  assert.equal(fortress.plan.mounts.length, 54);
+  assert.equal(fortress.plan.mounts.length, 70);
+  assert.equal(fortress.plan.interiors.length, 2);
+  for (const name of ['barrel-vault', 'winding-stair-ledge', 'iron-lock-body', 'forged-chain-link', 'hanging-cage-bars', 'climbing-vine-leaf', 'masonry-crack', 'chipped-masonry'])
+    assert.ok(fortress.plan.boxes.some((p) => p.name === name), name);
   const solids = [], matrix = new Matrix4();
   fortress.group.updateMatrixWorld(true);
   fortress.group.traverse((o) => {
@@ -76,9 +79,24 @@ test('Keep is solid architecture with instanced decks, walls, halls and a tower,
     }
   });
   const point = new Vector3();
+  const contains = (solid, p) => {
+    if (p.distanceTo(solid.center) > solid.radius) return false;
+    point.copy(p).applyMatrix4(solid.inverse);
+    return Math.abs(point.y) < .499 && (solid.cylinder ? Math.hypot(point.x, point.z) < .999 : Math.abs(point.x) < .499 && Math.abs(point.z) < .499);
+  };
+  const openBricks = fortress.plan.missingBricks.filter((p) => !solids.some((o) => contains(o, new Vector3(...p))));
+  assert.ok(openBricks.length >= 50, 'missing bricks are real openings through the outer masonry');
+  for (const room of fortress.plan.interiors) for (let s = room.s0 + 6; s < room.s1 - 6; s += 15) {
+    const f = track.frameAt(s), p = new Vector3();
+    assert.ok(Array.from({ length: 44 }, (_, i) => f.p[1] + 10 + i * .25).some((y) => solids.some((o) => contains(o, p.set(f.p[0], y, f.p[2])))), `vault closes interior sky at ${s}`);
+    for (const side of [-1, 1]) {
+      p.set(f.p[0] + f.b[0] * side * (f.w / 2 + 3.5), f.p[1] + 5, f.p[2] + f.b[2] * side * (f.w / 2 + 3.5));
+      assert.ok(solids.some((o) => contains(o, p)), `interior has a physical side wall at ${s}`);
+    }
+  }
   for (let s = 0; s < track.lengthM; s += 3) {
     const f = track.frameAt(s);
-    for (const x of [0, -f.w / 2 + 0.7, f.w / 2 - 0.7]) for (const height of [0.03, 1.4]) for (const solid of solids) {
+    for (const x of [0, -f.w / 2 + 0.7, f.w / 2 - 0.7]) for (const height of [0.03, 1.4, 6.5]) for (const solid of solids) {
       point.fromArray(f.p).addScaledVector(new Vector3(...f.b), x).addScaledVector(new Vector3(...f.n), height);
       if (point.distanceTo(solid.center) > solid.radius) continue;
       point.applyMatrix4(solid.inverse);
