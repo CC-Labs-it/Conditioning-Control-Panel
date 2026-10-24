@@ -10,7 +10,7 @@ export function phraseEnvelope(age, gentle = false) {
 
 // Open luminous brackets and a three-ring badge distinguish these from item boxes and laser walls.
 // Everything exists before the loading warmup. There is no collision geometry or shader added on contact.
-export function createPhraseGates(scene, track, { feel, photosafe, doc = globalThis.document } = {}) {
+export function createPhraseGates(scene, track, { feel, photosafe, bus = null, doc = globalThis.document } = {}) {
   const gates = phraseGateLayout(track), contact = createPhraseGateContact(gates), object = new Group();
   object.name = 'phrase-gates';
   const box = new BoxGeometry(1, 1, 1), ring = new TorusGeometry(1, .07, 6, 40);
@@ -94,6 +94,7 @@ export function createPhraseGates(scene, track, { feel, photosafe, doc = globalT
       age = 0; last = gate;
       const row = animated.find(v => v.gate === gate); row.hitAge = 0; row.soft = gentle;
       if (label) { word.textContent = gate.text; echoes.forEach(e => e.textContent = gate.text); label.style.display = 'block'; }
+      bus?.emit('phrase-gate', { id: gate.id, course: track.id, index: gates.indexOf(gate), gentle });
     } else if (age >= 0) age += Math.max(0, dt);
     for (const row of animated) {
       if (row.hitAge >= 0 && row.gate !== gate) row.hitAge += Math.max(0, dt);

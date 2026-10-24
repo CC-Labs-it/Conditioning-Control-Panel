@@ -269,6 +269,7 @@ Escape only pauses; the page never sends `exit` on Escape.
 | `rescue-hover` | `{}` | respawn | fx |
 | `rescue-release` | `{}` | respawn | fx (release pulse), audio (duck lifts over juice.duckLiftS) |
 | `pad` | `{ index }` | kart | fx (padRing, bandBright via photosafe), audio |
+| `phrase-gate` | `{ id, course, index, gentle }` (local forward crossing only) | phrase gate visual, same frame as pulse/text start | themed pentatonic note on existing SFX bus |
 | `section` | `{ from, to }` (section indices) | progress | fx (paletteMix over juice.paletteFadeS), audio (chord), hud |
 | `checkpoint` | `{ idx }` | progress | hud |
 | `wall` | `{ dv, side }` (dv = normal speed lost, m/s) | kart | fx (hit shake when large), audio (volume dv / wall.cueFullDvMps) |
