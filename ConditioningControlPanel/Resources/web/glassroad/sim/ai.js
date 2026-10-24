@@ -119,7 +119,7 @@ function trapsOf(items) {
   return (v && v.traps) || NO_TRAPS;
 }
 
-export function createAi(track, feel, { seed = 1 } = {}) {
+export function createAi(track, feel, { seed = 1, forkChoice = null } = {}) {
   const courts = createCourtPaths(track);
   const L = track.lengthM, N = Math.ceil(L / STEP);
   // per 2 m: signed bend (deg/m, + right), half width, open left / right, gap
@@ -276,6 +276,54 @@ export function createAi(track, feel, { seed = 1 } = {}) {
   }
   const LIM = { lo: 0, hi: 0 };
 
+  // Split roads use their physical distance for pursuit. No position or progress writes.
+  const forkProbe = makeQuery();
+  function forkDrive(r, b, ctx, dt, out) {
+    if (!track.forks?.length) return false;
+    const st = r.st, held = track.forkAtSeg(st[S.seg]), lap = st[S.lap] | 0, s = st[S.s];
+    if (held) b.fork = held;
+    if (b.fork && !held && (s > b.fork.toS - 2 || s < b.fork.fromS - 65 || s > b.fork.fromS + b.fork.mouthM + 30)) b.fork = null;
+    if (!b.fork) for (const f of track.forks) {
+      if (s < f.fromS - 60 || s > f.fromS + 4) continue;
+      const choose = typeof forkChoice === 'function' ? forkChoice({ fork: f, racer: r, lap, seed })
+        : forkChoice === 'all' || forkChoice === f.id || (forkChoice !== 'none' && forkChoice === null && (r.i + f.index + lap + seed) % 3 === 0);
+      if (choose) { b.fork = f; break; }
+    }
+    const f = b.fork;
+    if (!f) return false;
+    const local = held ? f.localS(s) : f.query(st[S.posX], st[S.posY], st[S.posZ], st[S.seg], forkProbe).forkS;
+    const speed = Math.hypot(st[S.velX], st[S.velY], st[S.velZ]), look = clamp(speed * .65, 10, 19);
+    let aim;
+    if (!held && s < f.fromS - look) aim = track.frameAt(s + look).p;
+    else if (local + look > f.lengthM) aim = track.frameAt(f.toS + local + look - f.lengthM).p;
+    else aim = f.frameAt(local + look).p;
+    const tx = aim[0] - st[S.posX], ty = aim[1] - st[S.posY], tz = aim[2] - st[S.posZ];
+    const qx = st[S.quatX], qy = st[S.quatY], qz = st[S.quatZ], qw = st[S.quatW];
+    const rx = 1 - 2 * (qy * qy + qz * qz), ry = 2 * (qx * qy + qw * qz), rz = 2 * (qx * qz - qw * qy);
+    const fx = -2 * (qx * qz + qw * qy), fy = -2 * (qy * qz - qw * qx), fz = -(1 - 2 * (qx * qx + qy * qy));
+    const x = tx * rx + ty * ry + tz * rz, z = tx * fx + ty * fy + tz * fz;
+    yawParams(r.feel, YP);
+    const soft = Math.max(.2, calmOf(speed, YP) * YP.user);
+    out.steer = clamp(Math.atan2(x, Math.max(z, .1)) * feel.get('ai.steerGain') / soft, -1, 1);
+    let vmax = 28;
+    for (let d = 0; d < 50; d += 8) {
+      const a = f.frameAt(local + d), c = f.frameAt(local + d + 6);
+      const angle = Math.acos(clamp(a.t[0]*c.t[0]+a.t[1]*c.t[1]+a.t[2]*c.t[2], -1, 1)) * 180 / Math.PI / 6;
+      const v = bendSpeed(angle, YP, .65);
+      vmax = Math.min(vmax, Math.sqrt(v*v + 2 * feel.get('engine.coastMps2') * d));
+    }
+    out.throttle = speed < vmax ? 1 : 0;
+    out.brake = speed > vmax + 2 ? clamp((speed - vmax) / 5, 0, 1) : 0;
+    b.driftT = -1; b.route = null; b.field = null; b.courtRoute = null;
+    if (b.reverseT > 0) { b.reverseT -= dt; out.throttle = 0; out.brake = 1; out.steer = -out.steer; }
+    else if (speed < 2 && st[S.respawnPhase] === RESPAWN.NONE) {
+      b.stuckT += dt; if (b.stuckT > 2) { b.stuckT = 0; b.reverseT = .8; }
+    } else b.stuckT = 0;
+    b.why = { fork: f.id, localS: local, targetMps: vmax };
+    if (r.item) itemLogic(r, b, ctx, dt, out);
+    return true;
+  }
+
   function drive(r, ctx, dt, out) {
     out.steer = 0; out.throttle = 0; out.brake = 0; out.hop = false; out.hopPressed = false; out.pause = false; out.item = false; out.back = false;
     const race = ctx && ctx.race, st = r.st, b = bot(r.i);
@@ -286,6 +334,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       b.courtRoute = null; b.field = null;
       b.driftT = -1; b.reverseT = 0; b.stuckT = 0; out.throttle = 1; return;
     }
+    if (forkDrive(r, b, ctx, dt, out)) return;
 
     // launch at go, by chance (the player's launch is race.js's)
     if (!b.launched && r.meta && r.meta.isBot) {

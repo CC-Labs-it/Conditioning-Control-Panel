@@ -166,6 +166,34 @@ export function validate(t) {
     });
   }
 
+  if (t.forks !== undefined) {
+    if (!Array.isArray(t.forks)) err('forks must be an array');
+    else {
+      const ids = new Set();
+      t.forks.forEach((fork, i) => {
+        const at = 'forks[' + i + ']';
+        if (!fork || !isStr(fork.id) || ids.has(fork.id)) { err(at + ' needs a unique id'); return; }
+        ids.add(fork.id);
+        if (!inRange(fork.from) || !inRange(fork.to) || fork.to <= fork.from) { err(at + ' needs main node indices from < to without wrapping'); return; }
+        if (!Array.isArray(fork.points) || fork.points.length < 4 || fork.points.length > 256) { err(at + '.points needs 4..256 points'); return; }
+        for (const key of ['label', 'kind']) if (fork[key] !== undefined && !isStr(fork[key])) err(at + '.' + key + ' must be a string');
+        fork.points.forEach((p, j) => {
+          const where = at + '.points[' + j + ']';
+          if (!p || !Array.isArray(p.p) || p.p.length !== 3 || !p.p.every(isNum)) { err(where + '.p must be 3 numbers'); return; }
+          if (!isNum(p.w) || p.w < 4 || p.w > 120) err(where + '.w must be 4..120 m');
+          if (p.roll !== undefined && (!isNum(p.roll) || Math.abs(p.roll) > 60)) err(where + '.roll must be -60..60 degrees');
+          if (p.surface !== undefined && !SURFACES.includes(p.surface)) err(where + '.surface is unknown');
+          if (p.flags !== undefined && (!Array.isArray(p.flags) || p.flags.some(f => !['rail', 'railL', 'railR', 'open'].includes(f)) || new Set(p.flags).size !== p.flags.length ||
+            (p.flags.includes('open') && p.flags.length > 1) || (p.flags.includes('rail') && p.flags.length > 1))) err(where + '.flags must describe ordinary rails or open sides');
+          if (p.flow !== undefined && (p.surface !== 'stream' || !Array.isArray(p.flow) || p.flow.length !== 2 || !p.flow.every(isNum) || Math.abs(p.flow[0]) > 12 || Math.abs(p.flow[1]) > 6)) err(where + '.flow requires a bounded stream current');
+          const previous = fork.points[j - 1]?.p;
+          if (previous?.length === 3 && previous.every(isNum) && Math.hypot(...p.p.map((v, k) => v - previous[k])) < .5) err(where + ' coincides with its previous point');
+          if ((j === 0 || j === fork.points.length - 1) && Math.hypot(...p.p.map((v, k) => v - nodes[j === 0 ? fork.from : fork.to].p[k])) > .01) err(where + ' endpoint must match its main node');
+        });
+      });
+    }
+  }
+
   if (t.courts !== undefined) {
     if (!Array.isArray(t.courts)) err('courts must be an array');
     else {

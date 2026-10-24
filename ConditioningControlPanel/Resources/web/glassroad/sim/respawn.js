@@ -18,6 +18,8 @@ const A = fOut(), B = fOut(), F = v3(), H = v3(), P = v3(), Q = q4(), QC = q4(),
 
 /** Anchor node index for the current latch. */
 export function anchorNode(st, track, aheadNodes = 0) {
+  const fork = track.forkAtSeg?.(st[S.latchSeg]);
+  if (fork) return Math.min(fork.baseSeg + fork.segmentCount - 1, st[S.latchSeg] | 0);
   const n = track.nodeCount;
   let i = (((st[S.latchSeg] | 0) % n) + n) % n;
   const s = track.nodeS[i];
@@ -44,8 +46,12 @@ export function updateRespawn(st, track, feel, dt, events) {
     if (st[S.respawnT] >= feel.get('respawn.graceS')) { st[S.respawnPhase] = RESPAWN.NONE; st[S.respawnT] = 0; }
     return;
   }
-  const i = anchorNode(st, track, feel.get('respawn.aheadNodes')), ahead = (i + feel.get('respawn.aheadNodes')) % track.nodeCount;
-  track.frameAt(track.nodeS[i], A); track.frameAt(track.nodeS[ahead], B);
+  const i = anchorNode(st, track, feel.get('respawn.aheadNodes')), fork = track.forkAtSeg?.(i), ahead = (i + feel.get('respawn.aheadNodes')) % track.nodeCount;
+  let anchorS = track.nodeS[i];
+  if (fork) {
+    const local = Math.min(fork.lengthM - 2, fork.nodeS[i - fork.baseSeg]);
+    fork.frameAt(local, A); fork.frameAt(Math.min(fork.lengthM, local + 12), B); anchorS = fork.mainS(local);
+  } else { track.frameAt(track.nodeS[i], A); track.frameAt(track.nodeS[ahead], B); }
   v3norm(F, v3reject(F, v3sub(F, B.p, A.p), A.n));
   qlook(Q, F, A.n);
   const hoverM = gap(feel, 'respawn.hoverM'), top = feel.get('speed.topMps');
@@ -55,7 +61,7 @@ export function updateRespawn(st, track, feel, dt, events) {
   const t = (st[S.respawnT] = t0 + dt);
   setVel(st, ZERO);
   st[S.airborne] = 0; st[S.grounded] = 0; st[S.edgeT] = 0; st[S.steerSlew] = 0; st[S.yawRate] = 0;
-  st[S.seg] = i; st[S.segT] = 0; st[S.s] = track.nodeS[i]; st[S.lateral] = 0;
+  st[S.seg] = i; st[S.segT] = 0; st[S.s] = anchorS; st[S.lateral] = 0;
 
   if (ph === RESPAWN.PULL) {
     const left = feel.get('respawn.pullS') - t0;
