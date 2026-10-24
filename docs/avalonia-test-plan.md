@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## 9. Main sync 7 Gentle window visuals
+
+1. WPF `46582ed13`: with Gentle visuals off, confirm normal file-video speed, immediate exits, normal lock-card appearance, and bouncing-text corner rings. Enable Gentle visuals at 0.5 speed and 0.75-second fade: video fades in from black, runs at half speed without the length guard cutting it short, and attention targets span the longer playback. Natural completion fades the desktop back in; Esc, engine stop and panic immediately drop all remaining black covers. Solve a lock card and confirm its delayed fade-out; panic during the fade, then open another card and confirm no old callback closes it. Corner achievements still fire but rings do not appear. Chaos impact rises over 300 ms; bolts hold their shape and residue glows steadily before fading. Browser-video and EmberAttribution checks remain blocked by their missing hosts. Rows: `sync7-gentle-visuals`.

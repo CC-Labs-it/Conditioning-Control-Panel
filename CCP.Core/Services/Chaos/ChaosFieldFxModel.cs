@@ -45,6 +45,7 @@ public sealed class ChaosFieldFxModel
         public bool Eased;
         public FieldFxColor Color;
         public double[]? Flicker;
+        public ChaosFxRamp? Gentle;
     }
 
     private struct Dot { public double X, Y, Start, Life; public bool Warm, Used; }
@@ -82,13 +83,21 @@ public sealed class ChaosFieldFxModel
     public void Residue(double x, double y, double r, double lifeMs, double now, Random? rng = null)
     {
         rng ??= Random.Shared;
-        int steps = Math.Max(2, (int)(lifeMs / 90));
+        ChaosFxRamp? gentle = null;
+        if (!Safety.GentleVisuals.AllowFlicker)
+        {
+            int rise = Safety.GentleVisuals.RiseMs(0), fade = Safety.GentleVisuals.FadeMs(90);
+            double hold = Math.Max(0, lifeMs - rise - fade);
+            gentle = new(0, (rise, 0.8), (rise + hold, 0.8), (rise + hold + fade, 0));
+            lifeMs = gentle.DurationMs;
+        }
+        int steps = gentle == null ? Math.Max(2, (int)(lifeMs / 90)) : 0;
         var flicker = new double[steps];
         for (int i = 0; i < steps; i++) flicker[i] = 0.55 + rng.NextDouble() * 0.45;
         _transients.Add(new Transient
         {
             Kind = FieldFxKind.Residue, X = x, Y = y, R = r, Start = now, Life = Math.Max(1, lifeMs),
-            Color = ResidueColor, Flicker = flicker,
+            Color = ResidueColor, Flicker = flicker, Gentle = gentle,
         });
     }
 
@@ -158,7 +167,7 @@ public sealed class ChaosFieldFxModel
                 }
                 case FieldFxKind.Residue:
                     into.Add(new FieldFxPrim(FieldFxKind.Residue, t.X, t.Y, 0, 0, t.R, 0,
-                        ResidueOpacity(t.Flicker!, now - t.Start, t.Life), t.Color));
+                        t.Gentle?.Sample(now - t.Start) ?? ResidueOpacity(t.Flicker!, now - t.Start, t.Life), t.Color));
                     break;
             }
         }

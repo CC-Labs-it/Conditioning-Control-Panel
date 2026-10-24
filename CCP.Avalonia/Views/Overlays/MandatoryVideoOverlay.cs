@@ -1,4 +1,5 @@
 using System;
+using ConditioningControlPanel.Services.Safety;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -61,6 +62,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
+        private double _playRate = 1;
+        private bool _naturalEnd;
+        private readonly List<Window> _fadingWindows = new();
+        internal void DropGentleFades()
+        {
+            foreach (var w in _fadingWindows.ToArray()) { w.Content = null; w.Close(); }
+            _fadingWindows.Clear();
+        }
         private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
         private long _watchedMs;
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
@@ -122,6 +131,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private void Play(string path, bool strict)
         {
             if (_surfaces.Count > 0) CloseAll();
+            DropGentleFades();
+            _playRate = GentleWindowRules.PlaybackRate(GentleVisuals.On, GentleVisuals.Speed);
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
             _sinceFrame.Reset();
@@ -204,12 +215,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
-                    Scheduler.Ended();
+                    if (_player != live) return;
+                    _naturalEnd = FirstFrameMs >= 0;
+                    try { Scheduler.Ended(); }
+                    finally { _naturalEnd = false; }
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
             _media = new Media(vlc, path, FromType.FromPath);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
+            if (_playRate < 1)
+            {
+                try { _player.SetRate((float)_playRate); }
+                catch (Exception ex) { Log.Debug(ex, "VideoService: gentle SetRate failed"); }
+            }
+            if (GentleVisuals.On)
+            {
+                double fadeSeconds = GentleVisuals.FadeSeconds;
+                foreach (var x in _surfaces) ((Control)x.Window.Content!).Opacity = 0;
+                bool lifted = false;
+                void Lift()
+                {
+                    if (lifted || _player != live) return;
+                    lifted = true;
+                    foreach (var x in _surfaces)
+                    {
+                        // Fade the content over the black window: equivalent to the WPF owned curtain.
+                        var content = (Control)x.Window.Content!;
+                        content.Transitions = new global::Avalonia.Animation.Transitions
+                        {
+                            new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty,
+                                Duration = TimeSpan.FromSeconds(fadeSeconds) }
+                        };
+                        content.Opacity = 1;
+                    }
+                }
+                live.Playing += (_, _) => Dispatcher.UIThread.Post(Lift);
+                DispatcherTimer.RunOnce(Lift, TimeSpan.FromSeconds(3));
+            }
             _player.Play(_media);
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _guard.Tick += (_, _) => GuardTick();
@@ -296,8 +339,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 e.Handled = true;
             }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             // WPF: strict vetoes a user close while playing; a non-strict close is a dismiss.
-            w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
-            w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
+            w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying && _surfaces.Any(x => x.Window == w)) e.Cancel = true; };
+            w.Closed += (_, _) => { if (!_closing && _surfaces.Any(x => x.Window == w)) Scheduler.End(); };
             w.Show();
             w.WindowState = WindowState.FullScreen;
             w.Activate();
@@ -453,7 +496,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var framed = FirstFrameMs >= 0;
             var played = (framed ? _sinceFrame.Elapsed.TotalSeconds : Elapsed) + PlayedSkew;
             var why = MandatoryVideoScheduler.Guard(Elapsed, played, framed,
-                (_player?.VideoTrackCount ?? -1) != 0, (_player?.Length ?? 0) / 1000.0,
+                (_player?.VideoTrackCount ?? -1) != 0, GentleWindowRules.WallSeconds((_player?.Length ?? 0) / 1000.0, _playRate),
                 Stopwatch.GetElapsedTime(FrameTs).TotalSeconds, CoreSettings.Current.VideoMaxDurationSeconds, _capSpent);
             if (why == null) return;
             if (MandatoryVideoScheduler.GuardHeals(why, _healUsed))
@@ -529,7 +572,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!_attention || !Scheduler.IsPlaying || _surfaces.Count == 0) return;
             var s = CoreSettings.Current;
             var total = MandatoryVideoScheduler.AttentionTargetCount(s.AttentionDensity, s.RandomizeAttentionTargets, _random);
-            _spawnTimes = MandatoryVideoScheduler.AttentionSpawnTimes(total, (_player?.Length ?? 0) / 1000.0, _random);
+            _spawnTimes = MandatoryVideoScheduler.AttentionSpawnTimes(total, GentleWindowRules.WallSeconds((_player?.Length ?? 0) / 1000.0, _playRate), _random);
             _lastFrame = null;
             Log.Information("Attention: {Count} targets over {Duration}s", total, (_player?.Length ?? 0) / 1000);
             NextFrame();
@@ -812,9 +855,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 packs?.InstalledPackIds.Count ?? 0, packs?.GetActivePackIds().Count ?? 0);
         }
 
+        internal static Func<Window, bool> AcceptCurtain = w => X11Overlay.IsCompositing && X11Overlay.SetClickThrough(w, true);
+
+        internal void FadeDesktopBack(Window window)
+        {
+            // ponytail: the existing black video window is the unowned curtain after decoder teardown.
+            window.Content = null;
+            window.IsHitTestVisible = false;
+            if (!AcceptCurtain(window)) { window.Close(); return; }
+            _fadingWindows.Add(window);
+            GentleFade.Run(window, 1, 0, GentleVisuals.FadeSeconds,
+                () => _fadingWindows.Contains(window),
+                () => { _fadingWindows.Remove(window); window.Close(); },
+                value => X11Overlay.SetOpacity(window, value));
+        }
+
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
             _closing = true;
+            DropGentleFades();
             try
             {
                 _attention = _gracePaused = false;
@@ -833,7 +892,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _player = null;
                 try { _media?.Dispose(); } catch { }
                 _media = null;
-                foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; x.Window.Close(); }
+                foreach (var x in _surfaces)
+                {
+                    x.Video.Source = x.Fill.Source = null;
+                    if (GentleWindowRules.SoftExit(
+                        GentleVisuals.On, _naturalEnd))
+                        FadeDesktopBack(x.Window);
+                    else x.Window.Close();
+                }
                 _surfaces.Clear();
                 _sink?.Free();
                 _sink = null;

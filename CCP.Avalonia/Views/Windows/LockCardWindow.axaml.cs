@@ -1,4 +1,5 @@
 using System;
+using ConditioningControlPanel.Services.Safety;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -87,6 +88,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _completedRepeats;
         private bool _isCompleted;
         private DispatcherTimer? _closeTimer;
+        private int _fadeGeneration;
 
         // ── Anti-cheat: the phrase must actually be TYPED (#734) ───────────────
         // Blocking the clipboard keys alone was never enough, and undo was the bigger hole:
@@ -305,6 +307,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         private void OnShown()
         {
+            if (GentleVisuals.On)
+            {
+                int gen = ++_fadeGeneration;
+                Overlays.GentleFade.Run(this, 0, 1,
+                    GentleVisuals.RiseMs(
+                        GentleVisuals.FadeMs(0)) / 1000.0,
+                    () => gen == _fadeGeneration && IsVisible);
+            }
             _startTime = DateTime.Now;
             _totalErrors = 0;
             _totalCharsTyped = 0;
@@ -608,7 +618,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _closeTimer.Tick += (_, _) =>
             {
                 _closeTimer?.Stop();
-                CloseAllWindows();
+                DismissSolved();
             };
             _closeTimer.Start();
         }
@@ -1027,6 +1037,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// cancels an unsolved strict close, and an Esc that <see cref="EscClosesCard"/> allowed
         /// must not then be refused by that guard.
         /// </summary>
+        internal void DismissSolved()
+        {
+            if (!GentleVisuals.On) { CloseAllWindows(); return; }
+            var windows = Fanout();
+            foreach (var w in windows)
+            {
+                int gen = ++w._fadeGeneration;
+                Overlays.GentleFade.Run(w, w.Opacity, 0,
+                    GentleVisuals.FadeSeconds,
+                    () => gen == w._fadeGeneration && w.IsVisible,
+                    () => { w._isCompleted = true; w.Close(); });
+            }
+        }
+
         private void CloseAllWindows()
         {
             var windows = Fanout();
@@ -1120,6 +1144,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var window = new LockCardWindow { _isPrimary = isPrimary, _isTest = isTest };
             window.Configure(phrase, repeats, strictMode, voiceMode);
+            if (GentleVisuals.On) window.Opacity = 0;
             _allWindows.Add(window);
             return window;
         }

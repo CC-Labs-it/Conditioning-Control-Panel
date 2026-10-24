@@ -1,4 +1,5 @@
 using System;
+using ConditioningControlPanel.Services.Safety;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -34,6 +35,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     {
         internal static readonly BouncingTextEngine Engine = new();
         private static double _zAccum;
+        internal static Action<double, double, Color> Burst = (x, y, color) =>
+        {
+            foreach (var w in Windows) w.SpawnBurst(x, y, color);
+        };
 
         /// <summary>WPF StepLogo on a corner hit: App.Achievements.TrackCornerHit (corner_hit).</summary>
         internal static Action CornerHit = () => App.Achievements?.TrackCornerHit();
@@ -228,10 +233,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var l = logos[i];
                 var step = Engine.Step(l, dt, s);
                 if (step.CornerHit) { CornerHit(); Platform.BarkHead.Engine?.Raise("BouncingTextCorner"); }   // WPF BarkService.cs:731
-                if (step.CornerHit && s.BouncingTextFxCornerBurst)
+                if (step.CornerHit && s.BouncingTextFxCornerBurst && !GentleVisuals.On)
                 {
                     var c = step.ColorBeforeBounce;
-                    foreach (var w in Windows) w.SpawnBurst(l.PosX + l.TextWidth / 2, l.PosY + l.TextHeight / 2, Color.FromRgb(c.R, c.G, c.B));
+                    Burst(l.PosX + l.TextWidth / 2, l.PosY + l.TextHeight / 2, Color.FromRgb(c.R, c.G, c.B));
                 }
                 if (step.Bounced)
                 {

@@ -6,6 +6,7 @@
 // (ChaosRunHost header). The e-stim DEVICE output is untouched here.
 
 using System;
+using ConditioningControlPanel.Services.Safety;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
@@ -99,6 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private readonly List<(Polyline Glow, Polyline Core)> _lines = new();
         private long _start;
         private int _step;
+        private ChaosFxRamp? _gentle;
         private double _scale = 1;
         private double _alpha;
 
@@ -153,6 +155,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return new Point(x, y);
             }
             _tick.Stop();
+            _gentle = null;
+            if (!GentleVisuals.AllowFlicker)
+            {
+                var g = GentleWindowRules.RiseHoldFade(M.StrikeOpacity,
+                    GentleVisuals.RiseMs(0), M.HotMs,
+                    GentleVisuals.FadeMs(M.FadeMs));
+                _gentle = new ChaosFxRamp(0, g.Select(k => ((double)k.Ms, k.Value)).ToArray());
+            }
             Draw(boltsPx.Select(b => (Local(b.From), Local(b.To))).ToList());
             _start = Clock.GetTimestamp();
             _tick.Start();
@@ -168,7 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void Draw(IReadOnlyList<(Point A, Point B)> bolts)
         {
-            SetAlpha(M.StrikeOpacity);
+            SetAlpha(_gentle == null ? M.StrikeOpacity : 0);
             _canvas.Children.Clear();
             _segments.Clear();
             _lines.Clear();
@@ -216,8 +226,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             double ms = Clock.GetElapsedTime(_start).TotalMilliseconds;
             int step = M.FlickerStep(ms);
-            if (step > _step) { _step = step; Jitter(); }
-            var op = M.StrikeOpacityAt(ms);
+            if (_gentle == null && step > _step) { _step = step; Jitter(); }
+            double? op = _gentle == null ? M.StrikeOpacityAt(ms) : ms < _gentle.DurationMs ? _gentle.Sample(ms) : null;
             if (op is double o) { SetAlpha(o); return; }
             _tick.Stop();
             _canvas.Children.Clear();

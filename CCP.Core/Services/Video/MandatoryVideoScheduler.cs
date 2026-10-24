@@ -413,7 +413,14 @@ namespace ConditioningControlPanel.Services
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (Finish() && _running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
+            bool finished = Finish();
+            if (!finished)
+            {
+                // A natural end may have left a gentle desktop curtain fading in the head.
+                try { _host.CloseAll(); }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: idle close failed"); }
+            }
+            if (finished && _running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
         }
 
         private bool Finish()
