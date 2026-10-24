@@ -759,6 +759,8 @@ namespace ConditioningControlPanel
             _conditioningStartTime = DateTime.Now;
             _conditioningBaselineMinutes = App.Settings?.Current?.TotalConditioningMinutes ?? 0;
             _conditioningTimeSecondCounter = 0;
+            _conditioningPendingSeconds = 0;
+            _conditioningLastTickUtc = DateTime.UtcNow;
 
             // Update display every second for LIVE tracking
             _conditioningTimeTimer = new DispatcherTimer
@@ -783,11 +785,15 @@ namespace ConditioningControlPanel
                             (int)elapsed.TotalSeconds, App.Settings?.Current?.TotalConditioningMinutes ?? 0);
                     }
 
-                    // Save to local storage every minute (avoid excessive disk writes)
-                    if (_conditioningTimeSecondCounter >= 60)
+                    // Save to local storage every minute (avoid excessive disk writes). Counted by
+                    // the real time between ticks, not by ticks: a busy UI drops them (ConditioningClock).
+                    var nowUtc = DateTime.UtcNow;
+                    var due = Services.Progression.ConditioningClock.Tick(ref _conditioningPendingSeconds,
+                        (nowUtc - _conditioningLastTickUtc).TotalSeconds);
+                    _conditioningLastTickUtc = nowUtc;
+                    if (due > 0)
                     {
-                        var elapsed = DateTime.Now - _conditioningStartTime;
-                        App.SkillTree?.AddConditioningTime(1.0); // Add 1 minute
+                        App.SkillTree?.AddConditioningTime(due);
                         _conditioningTimeSecondCounter = 0;
                         App.Logger?.Debug("Conditioning time saved to storage: {Time}", App.SkillTree?.GetFormattedConditioningTime());
                     }
