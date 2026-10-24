@@ -6,7 +6,7 @@ export function keepSpiralLayout(track) {
   const gates = [];
   for (const [id, fraction, radiusM, depthM] of [
     ['outer-exit', .65, 20, 10], ['tower-spiral', .28, 19, 18],
-    ['tower-spiral', .78, 19, 18], ['crown-walk', .55, 24, 24], ['moat-return', .7, 21, 14],
+    ['tower-spiral', .78, 19, 18], ['gallows-courtyard', .35, 20, 14], ['moat-return', .7, 21, 14],
   ]) {
     const p = layout.landmarks.find(l => l.id === id);
     if (!p) continue;
