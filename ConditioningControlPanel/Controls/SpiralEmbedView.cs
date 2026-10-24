@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
@@ -55,21 +54,19 @@ namespace ConditioningControlPanel.Controls
     public sealed class SpiralEmbedView : Grid
     {
         /// <summary>Origin of the embed. Navigation is locked to it; nothing else may load.</summary>
-        public const string EmbedHost = "app.cclabs.app";
-
-        private const string EmbedPath = "/embed/spiral";
+        public const string EmbedHost = SpiralEmbedBridge.EmbedHost;
 
         /// <summary>Shared browser profile for both modes — one warm cache, one cookie jar (empty).</summary>
         private const string UserDataFolderName = "browser_data_spiral";
 
         private readonly string _mode;
-        private readonly List<string> _pending = new();
+        private readonly SpiralEmbedBridge _bridge = new();
         private WebView2? _web;
         private bool _initStarted;
         private bool _disposed;
 
         /// <summary>True once the canvas has posted 'spiral:ready'.</summary>
-        public bool IsReady { get; private set; }
+        public bool IsReady => _bridge.IsReady;
 
         /// <summary>
         /// Raised (UI thread) when this view has given up: no runtime, no core, a dead
@@ -111,7 +108,7 @@ namespace ConditioningControlPanel.Controls
         /// query string, so it is normalised here rather than trusted.
         /// </summary>
         internal static string BuildUrl(string mode)
-            => $"https://{EmbedHost}{EmbedPath}?mode={(mode == "map" ? "map" : "mini")}";
+            => SpiralEmbedBridge.BuildUrl(mode);
 
         // ============================== lifecycle ==============================
 
@@ -207,8 +204,8 @@ namespace ConditioningControlPanel.Controls
         /// </summary>
         private void OnNavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
         {
-            if (string.IsNullOrEmpty(e.Uri) ||
-                !e.Uri.StartsWith("https://" + EmbedHost + "/", StringComparison.OrdinalIgnoreCase))
+            if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var target) ||
+                !SpiralEmbedBridge.AllowsNavigation(target))
             {
                 e.Cancel = true;
             }
@@ -254,15 +251,8 @@ namespace ConditioningControlPanel.Controls
                 // the tree straight out is the one serialisation with nothing in the middle
                 // that could re-shape a value on the way to the wire.
                 var json = BuildState(block).ToString(Formatting.None);
-                if (IsReady && _web?.CoreWebView2 != null)
-                {
-                    _web.CoreWebView2.PostWebMessageAsJson(json);
-                }
-                else
-                {
-                    _pending.Clear();
-                    _pending.Add(json);
-                }
+                var message = _bridge.Post(json);
+                if (message != null) _web?.CoreWebView2?.PostWebMessageAsJson(message);
             }
             catch (Exception ex)
             {
@@ -301,60 +291,9 @@ namespace ConditioningControlPanel.Controls
         /// (lib/descent/stations.ts) and the web parser ignores `lit_station_ids` outright
         /// when `stations` is present.
         /// </summary>
-        internal static JObject BuildState(DescentBlock? block)
-        {
-            var state = new JObject
-            {
-                ["type"] = "spiral:state",
-                ["devotion_days"] = block?.DevotionDays ?? 0,
-                ["stage"] = block?.Stage?.N ?? 0,
-                ["relapse_multiplier"] = block?.Relapse?.Multiplier ?? 1.0,
-                ["vat_fill_pct"] = block?.Vat?.FillPct ?? 0.0,
-                ["reduced_motion"] = MotionFx.Level != Models.MotionLevel.Full,
-                ["perf_tier"] = PerfTier(),
-            };
-
-            // Re-parsed with date coercion OFF for the same reason DescentReader.ParseWire
-            // turns it off: the default rewrites every ISO-8601-shaped STRING into a
-            // DateTime, and re-serialising that emits an invented offset. The whole point
-            // of this field is that what arrives at the canvas is what the server sent,
-            // so the round trip has to be lossless or it is not a verbatim forward.
-            var raw = ParseVerbatim(block?.RawJson);
-            if (raw is not null) state["descent"] = raw;
-
-            return state;
-        }
-
-        /// <summary>Re-parse a stored block with date coercion off. Null on anything unusable.</summary>
-        private static JToken? ParseVerbatim(string? json)
-        {
-            if (string.IsNullOrWhiteSpace(json)) return null;
-            try
-            {
-                return JsonConvert.DeserializeObject<JToken>(
-                    json, new JsonSerializerSettings { DateParseHandling = DateParseHandling.None });
-            }
-            catch (Exception ex)
-            {
-                // The block already parsed once to exist at all, so this is unreachable in
-                // practice — and if it ever is reached, the field drops out and the canvas
-                // gets a clean v1 payload rather than a half-forwarded one.
-                App.Logger?.Debug("[Spiral] raw descent re-parse failed: {E}", ex.Message);
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Map the app's own tier onto §9's three-value scale. Quality is the tier the
-        /// app considers "indistinguishable from unoptimised", so it is 'high'; the two
-        /// escalations are the ones that mean the machine is already busy.
-        /// </summary>
-        private static string PerfTier() => PerformanceProfile.CurrentTier switch
-        {
-            Models.PerformanceTier.Performance => "low",
-            Models.PerformanceTier.Balanced => "mid",
-            _ => "high",
-        };
+        internal static JObject BuildState(DescentBlock? block) =>
+            SpiralEmbedBridge.BuildState(block, MotionFx.Level != Models.MotionLevel.Full,
+                PerformanceProfile.CurrentTier);
 
         private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
         {
@@ -363,15 +302,11 @@ namespace ConditioningControlPanel.Controls
             {
                 var json = e.WebMessageAsJson;
                 if (string.IsNullOrEmpty(json)) return;
-                var o = JObject.Parse(json);
-                if ((string?)o["type"] != "spiral:ready") return;
-
-                IsReady = true;
-                foreach (var queued in _pending)
-                {
-                    try { _web?.CoreWebView2?.PostWebMessageAsJson(queued); } catch { /* page gone */ }
-                }
-                _pending.Clear();
+                var wasReady = IsReady;
+                var queued = _bridge.Receive(json);
+                if (!IsReady) return;
+                if (queued != null) _web?.CoreWebView2?.PostWebMessageAsJson(queued);
+                if (wasReady) return;
                 Ready?.Invoke(this, EventArgs.Empty);
             }
             catch (Exception ex)
@@ -395,8 +330,7 @@ namespace ConditioningControlPanel.Controls
         {
             if (_disposed) return;
             _disposed = true;
-            IsReady = false;
-            _pending.Clear();
+            _bridge.Reset();
             try
             {
                 if (_web != null)
