@@ -30,8 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// CreateAnimatedSkillTreeBrush. Ownership, purchasability, multiplier and time come from Core
     /// <c>SkillTreeRules</c>, the same rules WPF SkillTreeService delegates to.
     ///
-    /// <para>Not here (see the parity rows): purchasing (SkillCard_Click / PurchaseSkillAsync is a
-    /// server call behind account auth) and purchase FX. PRO analytics live in EnhancementsTabView.Analytics.cs.</para>
+    /// <para>Purchasing (SkillCard_Click) and its bursts live in EnhancementsTabView.Purchase.cs; PRO analytics in
+    /// EnhancementsTabView.Analytics.cs.</para>
     /// </summary>
     public partial class EnhancementsTabView : UserControl
     {
@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (_window != null) _window.PropertyChanged -= OnWindowPropertyChanged;
             _window = null;
             StopFx(rest: false);
+            ParkSheen();
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -125,7 +126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// and SparkleWallet refresh only the visible tab).</summary>
         private void RepaintIfShown()
         {
-            if (IsEffectivelyVisible && VisualRoot != null) Repaint();
+            // Mid-purchase the bought node must stay attached until its burst fires; BuyAsync repaints after.
+            if (!_buying && IsEffectivelyVisible && VisualRoot != null) Repaint();
             else _dirty = true;
         }
 
@@ -134,7 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnVisibilityChanged()
         {
             if (IsEffectivelyVisible) Repaint();
-            else EvaluateFx();
+            else { EvaluateFx(); ParkSheen(); }
         }
 
         private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
@@ -448,6 +450,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var prestigeBox = Box(Rgb(52, 44, 28), new Thickness(15, 6, 15, 6), prestige);
             ToolTip.SetTip(prestigeBox, Loc.Get("tooltip_prestige"));
             main.Children.Add(prestigeBox);
+            _prestigeRow = prestigeBox;   // WPF _prestigeRowBorder, the prestige burst's anchor
 
             if (SkillTreeRules.HasSkill(settings, "ditzy_data"))
                 AddDitzyStats(main, mods?.GetStatsTitle());
@@ -675,6 +678,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             wrapper.PointerEntered += (_, _) => ApplyNodeHover(wrapper, true);
             wrapper.PointerExited += (_, _) => ApplyNodeHover(wrapper, false);
+            if (canPurchase) MakePurchasable(wrapper, skill.Id);
 
             var tip = new StackPanel { MaxWidth = 280 };
             tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedFlavorText), Foreground = AccentLight, FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
@@ -817,6 +821,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedFlavorText), Foreground = Rgb(200, 150, 255), FontStyle = FontStyle.Italic, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
             tip.Children.Add(new TextBlock { Text = CoreMods.MakeModAware(skill.LocalizedDescription), Foreground = Brushes.White, TextWrapping = TextWrapping.Wrap });
             ToolTip.SetTip(card, Tip(tip, Rgb(40, 25, 55), Rgb(153, 50, 204)));
+            if (canPurchase) MakePurchasable(card, skill.Id);
             return card;
         }
 

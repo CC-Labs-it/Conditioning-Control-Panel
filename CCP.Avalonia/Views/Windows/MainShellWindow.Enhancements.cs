@@ -10,13 +10,11 @@
 // PRO panels + season/sparkline/heatmap charts live on EnhancementsTabView.Analytics.cs;
 // aggregation is Core EnhancementAnalytics, also called by WPF.
 //
-// ponytail: still missing, each a whole feature:
-//   SkillCard_Click (+ CelebrateEnhancementPurchase, UpdateTrophyCaseColumns) - purchasing is
-//     ProfileSync.PurchaseSkillAsync, a server call with auth recovery and a sync retry, not ported;
-//     purchasable nodes draw their WPF state but do not take a click.
-//   OnLuckyProc / EnsureLuckyToast / PlaceLuckyToast / CloseLuckyToast - nothing raises a lucky
-//     proc on this head (RollLuckyFlash/RollLuckyBubble are SkillTreeService, head-side in WPF).
-//   The prestige rank-up burst (_prestigeRowBorder) rides on the purchase above.
+// SkillCard_Click + the purchase/prestige bursts: EnhancementsTabView.Purchase.cs over Core SkillPurchase;
+// UpdateTrophyCaseColumns: MainShellWindow.Leaderboard.cs. OnLuckyProc/EnsureLuckyToast/PlaceLuckyToast/
+// CloseLuckyToast: LuckyToast.cs, raised by FlashOverlay's roll.
+// ponytail: still missing - CelebratePrestige's full-window sheen (needs ChromeFx SweepSheen, a stub), the
+//   401 token recovery + retry before a purchase fails, and the lucky-bubble proc (no bubble roll on this head).
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

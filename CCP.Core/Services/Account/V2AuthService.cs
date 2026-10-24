@@ -809,6 +809,57 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Adds the X-Auth-Token header to a V2 API request if an auth token is available.
         /// </summary>
+        /// <summary>WPF ProfileSyncService.PurchaseSkillResponse.</summary>
+        public class PurchaseSkillResponse
+        {
+            [JsonProperty("success")] public bool Success { get; set; }
+            [JsonProperty("error")] public string? Error { get; set; }
+            [JsonProperty("skill_points")] public int? SkillPoints { get; set; }
+            [JsonProperty("unlocked_skills")] public System.Collections.Generic.List<string>? UnlockedSkills { get; set; }
+            [JsonProperty("lifetime_points_spent")] public long? LifetimePointsSpent { get; set; }
+        }
+
+        /// <summary>
+        /// The request half of WPF ProfileSyncService.PurchaseSkillAsync (ProfileSyncService.cs:3980): POST
+        /// /v2/user/purchase-skill with the local balance so the server can reconcile. A 2xx answers its parsed body
+        /// (which may still be a refusal); anything else answers null and WPF's error text. No 401 recovery and
+        /// retry: this head has no token-recovery path, so a 401 goes straight to the session-expired advice.
+        /// </summary>
+        public async Task<(PurchaseSkillResponse? result, string? error)> PurchaseSkillAsync(string unifiedId, string skillId, int skillPoints)
+        {
+            try
+            {
+                var payload = new JObject { ["unified_id"] = unifiedId, ["skill_id"] = skillId, ["skill_points"] = skillPoints };
+                var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/purchase-skill");
+                AddAuthHeader(request);
+                request.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
+                var response = await _http.SendAsync(request);
+                var json = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    if (await TryHandleMergedAsync(response, json))
+                        return (null, Localization.Loc.Get("account_merged_retry_hint"));
+                    if (response.StatusCode == HttpStatusCode.Unauthorized)
+                    {
+                        Log.Warning("Skill purchase failed: auth token invalid/missing");
+                        return (null, $"Your session has expired. Open {Localization.Loc.Get("nav_door_settings")} → Account and sign in again to purchase skills.");
+                    }
+                    string error;
+                    try { error = JsonConvert.DeserializeObject<PurchaseSkillResponse>(json)?.Error ?? $"Server error: {response.StatusCode}"; }
+                    catch { error = $"Server error: {response.StatusCode}"; }
+                    Log.Warning("Skill purchase failed: {Error}", error);
+                    return (null, error);
+                }
+                var result = JsonConvert.DeserializeObject<PurchaseSkillResponse>(json);
+                return result == null ? (null, "Invalid server response") : (result, null);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Skill purchase request failed");
+                return (null, "Connection failed. Please check your internet connection.");
+            }
+        }
+
         private void AddAuthHeader(HttpRequestMessage request)
         {
             var token = _settings()?.AuthToken;

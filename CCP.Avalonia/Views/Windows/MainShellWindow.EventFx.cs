@@ -9,7 +9,7 @@
 //   CelebrateAchievementUnlock      <- MainWindow.AchievementsTab.cs:782 (on-tile reveal + burst: AchievementsTabView.Fx.cs)
 //   CelebrateQuestComplete          <- MainWindow.Quests.cs:77 (on-tab burst: QuestsTabView.Fx.cs)
 //   CelebrateProgramDayComplete     <- MainWindow.ProgramsTab.cs:1020
-//   CelebrateEnhancementPurchase    <- MainWindow.Enhancements.cs:2059
+//   CelebrateEnhancementPurchase    <- MainWindow.Enhancements.cs:2059 (on-tab burst + prestige burst: EnhancementsTabView.Purchase.cs)
 //   CelebratePrestige               <- the prestige rank roll
 //
 // Not one of those six sites exists on this head. Restoring the six methods now would add ~200

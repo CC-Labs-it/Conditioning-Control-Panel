@@ -902,6 +902,7 @@ namespace ConditioningControlPanel.Avalonia
                     CoreEngine.Stop();
                     StopDesktopOverlays();
                     Views.Overlays.CornerGifOverlay.StopAll();   // WPF CornerGifService.OnMainWindowClosing / OnExit
+                    Views.Windows.LuckyToast.Close();   // WPF WindowChrome.cs:276 CloseLuckyToast: reused + hidden, so close for real
                     Views.Windows.LockCardWindow.ForceCloseAll();
                 };
                 // WPF App.xaml.cs:2602: restore at ApplicationIdle, once startup has settled (#709).
