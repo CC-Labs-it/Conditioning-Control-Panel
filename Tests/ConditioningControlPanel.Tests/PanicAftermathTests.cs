@@ -103,13 +103,12 @@ public class PanicAftermathTests
         Assert.Contains("Services.Safety.PanicAftermath.EndQuiet();",
             Body(Source("MainWindow", "MainWindow.Presets.cs"), "private void BtnPauseSession_Click("));
 
-        var root = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        // Every product root (SourceRoots): PanicAftermath itself lives in CCP.Core since the split.
         var found = new System.Collections.Generic.SortedDictionary<string, int>(StringComparer.Ordinal);
-        foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+        foreach (var file in SourceRoots.EnumerateProductSources("*.cs"))
         {
-            var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
-            if (rel.StartsWith("bin/", StringComparison.Ordinal) || rel.StartsWith("obj/", StringComparison.Ordinal)
-                || rel == "Services/Safety/PanicAftermath.cs") continue;
+            var rel = SourceRoots.Relative(file);
+            if (rel == "CCP.Core/Services/Safety/PanicAftermath.cs") continue;
             var text = File.ReadAllText(file);
             for (int at = text.IndexOf("PanicAftermath.EndQuiet()", StringComparison.Ordinal); at >= 0;
                  at = text.IndexOf("PanicAftermath.EndQuiet()", at + 1, StringComparison.Ordinal))
@@ -119,8 +118,8 @@ public class PanicAftermathTests
         }
         Assert.Equal(new System.Collections.Generic.SortedDictionary<string, int>(StringComparer.Ordinal)
         {
-            ["MainWindow/MainWindow.Presets.cs"] = 1,     // the user's Resume with the engine on
-            ["MainWindow/MainWindow.StartStop.cs"] = 1,   // StartEngineFromUser
+            ["ConditioningControlPanel/MainWindow/MainWindow.Presets.cs"] = 1,     // the user's Resume with the engine on
+            ["ConditioningControlPanel/MainWindow/MainWindow.StartStop.cs"] = 1,   // StartEngineFromUser
         }, found);
     }
 
@@ -297,14 +296,8 @@ public class PanicAftermathTests
 
     // ---- helpers ----------------------------------------------------------------------------------
 
-    private static string Source(params string[] parts)
-    {
-        var all = new string[parts.Length + 2];
-        all[0] = RepoRoot();
-        all[1] = "ConditioningControlPanel";
-        Array.Copy(parts, 0, all, 2, parts.Length);
-        return File.ReadAllText(Path.Combine(all));
-    }
+    // Every product root: PanicAftermath itself lives in CCP.Core since the split.
+    private static string Source(params string[] parts) => SourceRoots.ReadProductFile(parts);
 
     /// <summary>The text of one method: from its signature to the brace that closes it.</summary>
     private static string Body(string source, string signature)
@@ -319,14 +312,5 @@ public class PanicAftermathTests
             else if (source[i] == '}' && --depth == 0) return source.Substring(at, i - at + 1);
         }
         throw new Xunit.Sdk.XunitException("unclosed method: " + signature);
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
-            dir = dir.Parent;
-        Assert.True(dir != null, "could not locate the repo root from " + AppContext.BaseDirectory);
-        return dir!.FullName;
     }
 }

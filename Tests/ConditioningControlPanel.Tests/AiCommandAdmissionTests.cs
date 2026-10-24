@@ -130,8 +130,8 @@ public class AiCommandAdmissionTests
 
     // ---- wiring ----
 
-    private static string Src(params string[] parts)
-        => File.ReadAllText(Path.Combine(new[] { RepoRoot(), "ConditioningControlPanel" }.Concat(parts).ToArray()));
+    // The commands live in CCP.Core since the split; SourceRoots probes every product root.
+    private static string Src(params string[] parts) => SourceRoots.ReadProductFile(parts);
 
     [Fact]
     public void Nested_follow_up_commands_pass_the_same_gate_and_cap()
@@ -156,7 +156,8 @@ public class AiCommandAdmissionTests
 
     [Fact]
     public void An_ai_lock_card_follows_the_users_strict_switch()
-        => Assert.Contains("customStrict: false", Src("Services", "Commands", "MantraLockScreenCommand.cs"));
+        // The Core command shows the card through the head's surface; the WPF surface picks strict.
+        => Assert.Contains("ShowLockCard(phrase, repeats, customStrict: false)", Src("App.AiEffects.cs"));
 
     [Fact]
     public void A_named_media_path_uses_the_containment_and_switch_off_rules()
@@ -165,13 +166,5 @@ public class AiCommandAdmissionTests
         Assert.Contains("AiCommandAdmission.IsUnderRoot(assetsRoot, fullPath)", src);
         Assert.Contains("AiCommandAdmission.IsSwitchedOff(", src);
         Assert.DoesNotContain("fullPath.StartsWith(assetsRoot", src);
-    }
-
-    private static string RepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "MainWindow")))
-            dir = dir.Parent;
-        return dir?.FullName ?? throw new InvalidOperationException("repo root not found");
     }
 }

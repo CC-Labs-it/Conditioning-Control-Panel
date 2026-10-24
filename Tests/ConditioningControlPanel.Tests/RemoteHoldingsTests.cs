@@ -118,7 +118,7 @@ public class RemoteHoldingsTests
                      "private void ReleaseRemoteHoldings()" })
             Assert.DoesNotContain("PanicKeyEnabled = true", CodeOnly(Body(src, sig)));
         Assert.Contains("ReleaseRemoteSafetyState();", Body(Source("Remote/RemoteControlService.V2.cs"), "public void ReleaseHoldingsForExit()"));
-        var ld = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Haptics", "LockdownService.cs"));
+        var ld = SourceRoots.ReadProductFile("Services", "Haptics", "LockdownService.cs");   // CCP.Core since the split
         Assert.Contains("DisabledPanicKey = settings.LockdownDisablePanicKey;", Body(ld, "public void Activate(TimeSpan duration)"));
     }
 
@@ -226,7 +226,7 @@ public class RemoteHoldingsTests
     public void Lockdown_takes_the_correction_and_the_crash_heal_runs_after_its_recovery()
     {
         var root = Path.Combine(RepoRoot(), "ConditioningControlPanel");
-        var ld = File.ReadAllText(Path.Combine(root, "Services", "Haptics", "LockdownService.cs"));
+        var ld = SourceRoots.ReadProductFile("Services", "Haptics", "LockdownService.cs");   // CCP.Core since the split
         Assert.Contains("ForcedStrictLock = settings.LockdownForceStrictLock;", Body(ld, "public void Activate(TimeSpan duration)"));
         var correct = Body(ld, "public void CorrectRecordedStrictLock(bool wearersOwn)");
         Assert.Contains("if (!_isActive", correct);
