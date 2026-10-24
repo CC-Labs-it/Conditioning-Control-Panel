@@ -264,7 +264,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 };
                 _media = new Media(libVLC, _clipPath, FromType.FromPath);
                 // Muted tutorial loop, silent through :no-audio (WPF Services.LibVlcSilence).
-                _media.AddOption(":no-audio");
+                _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
                 _mediaPlayer.Play(_media);
             }
             catch (Exception ex)
