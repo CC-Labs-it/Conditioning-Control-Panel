@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Specialized;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using ConditioningControlPanel.Controls;
@@ -142,6 +143,371 @@ namespace ConditioningControlPanel
             var flat = body.Replace("\r", " ").Replace("\n", " ").Trim();
             while (flat.Contains("  ")) flat = flat.Replace("  ", " ");
             return flat.Length <= max ? flat : flat.Substring(0, max - 1).TrimEnd() + "…";
+        }
+
+        // ------------------------------------------------------------------ conversion rows (C9)
+
+        /// <summary>
+        /// Every conversion row this install owes right now, each through the presenter (so never
+        /// inside a session, a game or the first-launch window) and each stamped in
+        /// <c>AppSettings.InboxStamps</c> the moment it is handed over, so a focus storm posts it once.
+        /// Called on focus, after a server tier reading, and after the lapse pass.
+        /// </summary>
+        internal void MaybePostConversionRows()
+        {
+            try
+            {
+                var settings = App.Settings?.Current;
+                if (settings == null) return;
+                var dirty = NoteDailyGiftUse(settings);
+                dirty |= MaybePostLapseRow(settings);
+                dirty |= MaybePostRelockRow(settings);
+                dirty |= MaybePostMemberHello(settings);
+                if (dirty) App.Settings?.Save();
+                MaybeCheckPostCode(settings);
+            }
+            catch (Exception ex) { App.Logger?.Warning(ex, "[Inbox] conversion rows failed"); }
+        }
+
+        /// <summary>The lapse rows (proposals 4a, 4b): 7 / 3 / 1 days before the grace end once the
+        /// server has reported a lower tier, then one closed row. A dead Patreon grant gets the
+        /// Reconnect copy instead, never a lapse row. True when a stamp changed.</summary>
+        private bool MaybePostLapseRow(Models.AppSettings settings)
+        {
+            // Never from memory alone: the server must have answered this run (it may have just cleared the reading).
+            if (!Services.EntitlementTierSync.ServerAnsweredThisRun) return false;
+            var reading = Services.Startup.Conversion.ConversionRules.DecideLapse(settings.PatreonTier, settings.ServerTierSeen,
+                settings.PatreonPremiumValidUntil, settings.PatreonLabValidUntil, DateTime.UtcNow, liveCoversIt: false);
+            if (reading.Row == Services.Startup.Conversion.LapseRow.None || LiveCovers(reading.Tier)) return false;
+            var stamps = settings.InboxStamps;
+
+            if (App.Patreon?.GrantLooksDead == true || Services.TierGate.ReconnectIsTheAnswer())
+            {
+                var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
+                const string reconnectKey = Services.Startup.Conversion.ConversionRules.KeyLapseReconnect;
+                if (!Services.Startup.Conversion.ConversionRules.Owed(stamps, reconnectKey, today)) return false;
+                Services.Startup.Conversion.ConversionRules.Stamp(stamps, reconnectKey, today);
+                var line = Loc.Get("tiergate_denied_reconnect");
+                PresentOrInbox(new Services.Startup.InboxItem
+                {
+                    Key = "conv:" + reconnectKey,
+                    Glyph = "🔑",
+                    Title = line,
+                    Open = () => InboxNoticeCard.Present(this, line, "", Loc.Get("tiergate_reconnect_action"),
+                        StartPatreonReconnectFromGate),
+                });
+                return true;
+            }
+
+            if (!Services.Startup.Conversion.ConversionRules.Owed(stamps, reading.Key, reading.Stamp)) return false;
+            Services.Startup.Conversion.ConversionRules.Stamp(stamps, reading.Key, reading.Stamp);
+
+            var prime = reading.Tier >= 2;
+            var closed = reading.Row == Services.Startup.Conversion.LapseRow.Closed;
+            var untilLocal = reading.UntilUtc.ToLocalTime();
+            string title, body, primary, secondary;
+            if (closed)
+            {
+                title = untilLocal.Date == DateTime.Today
+                    ? Loc.Get(prime ? "conv_lapse_closed_prime_today" : "conv_lapse_closed_basic_today")
+                    : Loc.GetF(prime ? "conv_lapse_closed_prime" : "conv_lapse_closed_basic", untilLocal.ToString("ddd d MMM"));
+                body = Loc.Get("conv_lapse_closed_body");
+                primary = Loc.Get(prime ? "conv_reopen_prime" : "conv_reopen_basic");
+                secondary = Loc.Get("conv_leave_closed");
+            }
+            else
+            {
+                title = reading.DaysLeft <= 1
+                    ? Loc.Get(prime ? "conv_lapse_warn_prime_one" : "conv_lapse_warn_basic_one")
+                    : Loc.GetF(prime ? "conv_lapse_warn_prime" : "conv_lapse_warn_basic", reading.DaysLeft);
+                body = Loc.Get("conv_lapse_warn_body");
+                primary = Loc.Get(prime ? "conv_keep_prime" : "conv_keep_basic");
+                secondary = Loc.Get("conv_let_close");
+            }
+
+            var tier = reading.Tier;
+            var rowKey = reading.Key;
+            PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "conv:" + rowKey,
+                Glyph = "⏳",
+                Title = title,
+                Summary = body,
+                Open = () => InboxNoticeCard.Present(this, title, body, primary, () => OpenPlanFromInbox(tier, rowKey), secondary),
+            });
+            return true;
+        }
+
+        /// <summary>Remembers the Daily Gift seen in use (its switch on while it was the free one), so
+        /// the next day's launch can say the door shut. Called on focus and at the top of the lapse
+        /// pass, before that pass switches yesterday's gift off. Only the gifts with a switch are
+        /// seen this way (Takeover, Awareness, She's Listening, Haptics). True when a stamp changed.</summary>
+        internal bool NoteDailyGiftUse(Models.AppSettings settings)
+        {
+            var daily = App.DailyFree;
+            if (daily == null || App.Patreon?.HasPremiumAccess == true) return false;
+            var today = DateTime.Today;
+            var key = daily.TodayKey;
+            if (GiftSwitchOn(settings, key))
+                return Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps,
+                    Services.Startup.Conversion.ConversionRules.KeyGiftUsed, Services.Startup.Conversion.ConversionRules.GiftUse(today, key));
+
+            // Still on from yesterday's free day (the lapse pass is about to switch it off).
+            var yesterday = daily.SeededKeyFor(today.AddDays(-1));
+            if (!GiftSwitchOn(settings, yesterday) || daily.IsFreeToday(yesterday)) return false;
+            settings.InboxStamps.TryGetValue(Services.Startup.Conversion.ConversionRules.KeyGiftUsed, out var last);
+            if (last != null && last.StartsWith(Services.Startup.Conversion.ConversionRules.DayStamp(today), StringComparison.Ordinal)) return false;
+            return Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps,
+                Services.Startup.Conversion.ConversionRules.KeyGiftUsed, Services.Startup.Conversion.ConversionRules.GiftUse(today.AddDays(-1), yesterday));
+        }
+
+        private static bool GiftSwitchOn(Models.AppSettings s, string? key) => key switch
+        {
+            "awareness" => s.KeywordTriggersEnabled || s.AwarenessModeEnabled,
+            "takeover" => s.AutonomyModeEnabled || s.MantraChantEnabled,
+            "voice" => s.SpokenMantrasEnabled || s.SpeechWakeWordEnabled || s.SpeechPushToTalkEnabled,
+            "haptics" => s.Haptics?.Enabled == true,
+            _ => false,
+        };
+
+        /// <summary>"Yesterday's door is shut." on the next launch after a Daily Gift was in use.
+        /// True when a stamp changed.</summary>
+        private bool MaybePostRelockRow(Models.AppSettings settings)
+        {
+            var daily = App.DailyFree;
+            if (daily == null) return false;
+            settings.InboxStamps.TryGetValue(Services.Startup.Conversion.ConversionRules.KeyGiftUsed, out var used);
+            if (!Services.Startup.Conversion.ConversionRules.RelockOwed(used, DateTime.Today, App.Patreon?.HasPremiumAccess == true,
+                    daily.IsFreeToday, out var key)) return false;
+            const string rowKey = Services.Startup.Conversion.ConversionRules.KeyGiftRelock;
+            var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
+            if (!Services.Startup.Conversion.ConversionRules.Owed(settings.InboxStamps, rowKey, today)) return false;
+            Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps, rowKey, today);
+
+            var feature = Models.ExclusiveFeature.All.FirstOrDefault(f => f.DailyFreeKey == key);
+            var tier = feature?.Tier >= 2 ? 2 : 1;
+            var title = Loc.Get(tier >= 2 ? "conv_relock_prime" : "conv_relock_basic");
+            var name = feature == null ? "" : Loc.Get(feature.TitleLocKey);
+            PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "conv:" + rowKey,
+                Glyph = "🚪",
+                Title = title,
+                Summary = name,
+                Open = () => InboxNoticeCard.Present(this, title, name, Loc.Get(tier >= 2 ? "conv_get_prime" : "conv_get_basic"),
+                    () => OpenPlanFromInbox(tier, rowKey)),
+            });
+            return true;
+        }
+
+        /// <summary>Once ever, for a Patreon free member with no tier (proposal 6b / 6d): thanks, and
+        /// the second Daily Gift they now get. True when a stamp changed.</summary>
+        private bool MaybePostMemberHello(Models.AppSettings settings)
+        {
+            const string rowKey = Services.Startup.Conversion.ConversionRules.KeyFreeMemberHello;
+            if (App.Patreon?.IsFreeMember != true
+                || !Services.Startup.Conversion.ConversionRules.Owed(settings.InboxStamps, rowKey, "1")) return false;
+            Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps, rowKey, "1");
+
+            var title = Loc.Get("conv_member_hello_title");
+            var summary = Loc.Get("conv_member_hello_body");
+            PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "conv:" + rowKey,
+                Glyph = "🎁",
+                Title = title,
+                Summary = summary,
+                Open = () =>
+                {
+                    // Named at open time: the second gift moves with the day.
+                    var second = App.DailyFree?.MemberKey;
+                    var feature = second == null ? null : Models.ExclusiveFeature.All.FirstOrDefault(f => f.DailyFreeKey == second);
+                    var body = feature == null ? summary : summary + " " + Loc.GetF("conv_member_second", Loc.Get(feature.TitleLocKey));
+                    InboxNoticeCard.Present(this, title, body, null, null, Loc.Get("conv_ok"));
+                },
+            });
+            return true;
+        }
+
+        // ---- this week's post code (brief C6, proposal 6c)
+
+        private static readonly TimeSpan PostCodeCheckGap = TimeSpan.FromMinutes(30);
+        private DateTime _postCodeCheckedUtc = DateTime.MinValue;
+        private int _postCodeInFlight;
+
+        /// <summary>For a Patreon member, at most every 30 minutes: ask whether a post code is live and
+        /// unredeemed for a feature this account does not already hold; if so, one row a day whose
+        /// button opens the redeem box.</summary>
+        private void MaybeCheckPostCode(Models.AppSettings settings)
+        {
+            if (!settings.PatreonMember || settings.OfflineMode || string.IsNullOrEmpty(settings.AuthToken)) return;
+            const string rowKey = Services.Startup.Conversion.ConversionRules.KeyPostCodeLive;
+            if (!Services.Startup.Conversion.ConversionRules.Owed(settings.InboxStamps, rowKey,
+                    Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now))) return;
+            var now = DateTime.UtcNow;
+            if (now - _postCodeCheckedUtc < PostCodeCheckGap) return;
+            if (System.Threading.Interlocked.Exchange(ref _postCodeInFlight, 1) == 1) return;
+            _postCodeCheckedUtc = now;
+
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var live = await Services.Startup.Conversion.PostCodeApi.LiveAsync().ConfigureAwait(false);
+                    if (live is not { Live: true, Redeemed: false, Feature: string feature }) return;
+                    await Dispatcher.BeginInvoke(new Action(() => PostPostCodeRow(feature)),
+                        System.Windows.Threading.DispatcherPriority.Normal);
+                }
+                catch (Exception ex) { App.Logger?.Debug("[Inbox] post code check: {E}", ex.Message); }
+                finally { System.Threading.Interlocked.Exchange(ref _postCodeInFlight, 0); }
+            });
+        }
+
+        private void PostPostCodeRow(string feature)
+        {
+            var settings = App.Settings?.Current;
+            if (settings == null) return;
+            var info = Models.ExclusiveFeature.All.FirstOrDefault(f => f.DailyFreeKey == feature);
+            // A door this account already holds is no reason to post anything.
+            var held = (info?.Tier >= 2 ? App.Patreon?.HasLabAccess : App.Patreon?.HasPremiumAccess) == true;
+            if (held) return;
+            const string rowKey = Services.Startup.Conversion.ConversionRules.KeyPostCodeLive;
+            if (!Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps, rowKey,
+                    Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now))) return;
+            App.Settings?.Save();
+
+            var title = Loc.Get("conv_postcode_title");
+            var body = Loc.GetF("conv_postcode_body", info == null ? feature : Loc.Get(info.TitleLocKey));
+            PresentOrInbox(new Services.Startup.InboxItem
+            {
+                Key = "conv:" + rowKey,
+                Glyph = "🔖",
+                Title = title,
+                Summary = body,
+                Open = () => InboxNoticeCard.Present(this, title, body, Loc.Get("conv_postcode_enter"), () => PostCodeDialog.Present(this)),
+            });
+        }
+
+        // ---- companion cap: filed after the conversation surface is gone
+
+        private System.Windows.Threading.DispatcherTimer? _capWatch;
+
+        /// <summary>The conversation page hit the daily cap. Nothing is shown now; a watch files
+        /// the row once the Companion page is no longer the open tab.</summary>
+        private void OnCompanionCapHit()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(OnCompanionCapHit), System.Windows.Threading.DispatcherPriority.Normal);
+                return;
+            }
+            try
+            {
+                var settings = App.Settings?.Current;
+                if (settings == null || CapTierNow() >= 2) return;
+                var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
+                if (!Services.Startup.Conversion.ConversionRules.Owed(settings.InboxStamps,
+                        Services.Startup.Conversion.ConversionRules.KeyCompanionCap, today)) return;
+                if (_capWatch == null)
+                {
+                    _capWatch = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Normal)
+                    { Interval = TimeSpan.FromSeconds(10) };
+                    _capWatch.Tick += (_, _) => TryFileCapRow();
+                }
+                _capWatch.Start();
+            }
+            catch (Exception ex) { App.Logger?.Debug("[Inbox] cap watch: {E}", ex.Message); }
+        }
+
+        private void TryFileCapRow()
+        {
+            try
+            {
+                if (string.Equals(_activeTabKey, "companion", StringComparison.OrdinalIgnoreCase)
+                    && IsVisible && WindowState != WindowState.Minimized) return;
+                _capWatch?.Stop();
+                var settings = App.Settings?.Current;
+                var offer = Services.Startup.Conversion.ConversionRules.CapRowOffers(CapTierNow());
+                if (settings == null || offer is not int tier) return;
+                var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
+                const string rowKey = Services.Startup.Conversion.ConversionRules.KeyCompanionCap;
+                if (!Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps, rowKey, today)) return;
+                App.Settings?.Save();
+
+                var title = tier >= 2
+                    ? Loc.GetF("conv_cap_basic", Services.Startup.Conversion.ConversionRules.CompanionCapBasic, Services.Startup.Conversion.ConversionRules.CompanionCapPrime)
+                    : Loc.GetF("conv_cap_free", Services.Startup.Conversion.ConversionRules.CompanionCapFree,
+                        Services.Startup.Conversion.ConversionRules.CompanionCapBasic, Services.Startup.Conversion.ConversionRules.CompanionCapPrime);
+                var body = Loc.Get("conv_cap_body");
+                App.StartupLadder?.FileRow(new Services.Startup.InboxItem
+                {
+                    Key = "conv:" + rowKey,
+                    Glyph = "💬",
+                    Title = title,
+                    Summary = body,
+                    Open = () => InboxNoticeCard.Present(this, title, body, Loc.Get(tier >= 2 ? "conv_get_prime" : "conv_get_basic"),
+                        () => OpenPlanFromInbox(tier, rowKey)),
+                });
+            }
+            catch (Exception ex) { App.Logger?.Debug("[Inbox] cap row: {E}", ex.Message); }
+        }
+
+        private static int CapTierNow()
+            => App.Patreon?.HasLabAccess == true ? 2 : App.Patreon?.HasPremiumAccess == true ? 1 : 0;
+
+        /// <summary>
+        /// A free account unlocked an achievement: one quiet row (never on the toast) saying the
+        /// patron gallery holds more. Filed, never presented; once a day. Safe from any thread.
+        /// </summary>
+        internal void PostPatronGalleryRow(Models.Achievement achievement)
+        {
+            try
+            {
+                if (achievement == null || achievement.IsExclusive || App.Patreon?.HasPremiumAccess == true) return;
+                var settings = App.Settings?.Current;
+                var startup = App.StartupLadder;
+                if (settings == null || startup == null) return;
+                var more = Models.Achievement.All.Values.Count(a => a.IsExclusive && !a.IsHidden);
+                if (more <= 0) return;
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    const string rowKey = Services.Startup.Conversion.ConversionRules.KeyPatronGallery;
+                    var today = Services.Startup.Conversion.ConversionRules.DayStamp(DateTime.Now);
+                    if (!Services.Startup.Conversion.ConversionRules.Stamp(settings.InboxStamps, rowKey, today)) return;
+                    App.Settings?.Save();
+                    var title = Loc.GetF("conv_gallery_title", more);
+                    var body = Loc.Get("conv_gallery_body");
+                    startup.FileRow(new Services.Startup.InboxItem
+                    {
+                        Key = "conv:" + rowKey,
+                        Glyph = "🏅",
+                        Title = title,
+                        Summary = body,
+                        Open = () => InboxNoticeCard.Present(this, title, body, Loc.Get("conv_get_basic"), () => OpenPlanFromInbox(1, rowKey)),
+                    });
+                }), System.Windows.Threading.DispatcherPriority.Normal);
+            }
+            catch (Exception ex) { App.Logger?.Debug("[Inbox] gallery row: {E}", ex.Message); }
+        }
+
+        /// <summary>True when something live (a validated Patreon tier, the whitelist, SubscribeStar
+        /// for Basic) still holds <paramref name="tier"/>: no lapse row then, whatever the stamps say.</summary>
+        internal static bool LiveCovers(int tier)
+        {
+            var patreon = App.Patreon;
+            if (patreon == null) return false;
+            if (patreon.IsWhitelisted) return true;
+            if (patreon.CurrentTier >= (tier >= 2 ? Models.PatreonTier.Level2 : Models.PatreonTier.Level1)) return true;
+            return tier < 2 && App.SubscribeStar?.HasPremiumAccess == true;
+        }
+
+        /// <summary>A plan button on a conversion row: the Patreon checkout for the tier.</summary>
+        internal static void OpenPlanFromInbox(int tier, string rowKey)
+        {
+            var url = Services.Startup.Conversion.ConversionRules.PlanUrl(tier);
+            App.Logger?.Information("[Inbox] plan button on {Row} ({Plan})", rowKey, Services.Startup.Conversion.ConversionRules.PlanWord(tier));
+            // TODO(D1): FunnelBeacon.Post("cta_clicked", rowKey, "patreon") once Services/Funnel lands on main.
+            Helpers.BrowserLauncher.TryOpenUrl(url);
         }
 
         /// <summary>

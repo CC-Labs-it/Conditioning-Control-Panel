@@ -723,6 +723,9 @@ namespace ConditioningControlPanel
                 // nothing.
                 App.Descent?.RequestRefresh("profile loaded");
 
+                // A restored session with no display name gets asked (MainWindow.DisplayNameAsk.cs).
+                QueueDisplayNameAskIfNeeded();
+
                 // Re-arm autonomy after profile load ONLY if the user opted into resume-on-startup
                 // (same gate as App.OnStartup — Takeover otherwise always starts OFF).
                 var s = App.Settings?.Current;
@@ -1108,6 +1111,8 @@ namespace ConditioningControlPanel
                 // #890 rewrote both of these to be reachable from this thread. Called individually
                 // rather than via App.KillAllAudio, which also touches services never audited for
                 // off-thread calls.
+                try { App.StopAudioPlaylist(); }         catch (Exception ex) { LogPanicFallbackStep("audio playlist", ex); }
+                try { Services.GoonGame.GoonToyDirector.Close(); } catch (Exception ex) { LogPanicFallbackStep("goon toys", ex); }
                 try { App.MindWipe?.Stop(); }            catch (Exception ex) { LogPanicFallbackStep("mind wipe", ex); }
                 try { App.BrainDrain?.Stop(); }          catch (Exception ex) { LogPanicFallbackStep("brain drain", ex); }
                 try { App.Audio?.ForceUnduck(); }        catch (Exception ex) { LogPanicFallbackStep("unduck", ex); }
@@ -1486,7 +1491,7 @@ namespace ConditioningControlPanel
             Services.FirstShow.FirstShowService.Open(this);
         }
 
-        /// <summary>When Racing Thoughts last kept an Escape as its pause; see <see cref="TryRacePauseOnEscape"/>.</summary>
+        /// <summary>When a game last kept an Escape as its pause; see <see cref="TryRacePauseOnEscape"/>.</summary>
         private DateTime? _lastRaceEscapeClaimUtc;
 
         /// <summary>
@@ -1495,12 +1500,8 @@ namespace ConditioningControlPanel
         /// the game under it. Every condition is in <see cref="Services.Safety.PanicPolicy.GameClaimsEscapeAsPause"/>,
         /// including the one that matters most: a second Escape within 2 s is a full panic.
         ///
-        /// <para>Piece by Piece rides the same rule (owner, 2026-09-29): without it the first Escape of a
-        /// chess game closed the board, so its own pause card could never be reached. The board's pause
-        /// goes quiet at once (ui/pause-hush.js) and an Escape on the pause card leaves.</para>
-        ///
-        /// <para>Breakout rides it too (tester report, 2026-09-30: Escape closed the whole game window).
-        /// The first Escape pauses it; an Escape on its pause card leaves.</para>
+        /// <para>Piece by Piece, Breakout, Down the Rabbit Hole, Arcademy, Goon, the Back Room and
+        /// Intake share this rule: Escape only pauses a game. Leaving is a pause-card button.</para>
         /// </summary>
         private bool TryRacePauseOnEscape()
         {
@@ -1510,23 +1511,39 @@ namespace ConditioningControlPanel
                 bool raceInFront = Services.Chaos.CaucusHostService.IsInFront;
                 bool boardInFront = Services.PieceByPiece.PieceByPieceHostService.IsInFront;
                 bool breakoutInFront = Services.BackRoom.BackRoomHostService.IsBreakoutInFront;
+                // Down the Rabbit Hole rides it too (owner, 2026-10-12: Escape only pauses the game).
+                bool dtrhInFront = Services.Chaos.DtrhHostService.IsInFront;
+                bool arcademyInFront = Services.Arcademy.ArcademyHostService.IsInFront;
+                bool goonInFront = Services.GoonGame.GoonHostService.IsInFront;
+                bool roomInFront = Services.BackRoom.BackRoomHostService.IsRoomInFront;
+                bool intakeInFront = Services.Quiz.IntakeHostService.IsInFront;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
-                    gameInFront: raceInFront || boardInFront || breakoutInFront,
+                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront
+                        || arcademyInFront || goonInFront || roomInFront || intakeInFront,
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
                     lastClaimUtc: _lastRaceEscapeClaimUtc,
                     nowUtc: now);
                 if (!claim) { _lastRaceEscapeClaimUtc = null; return false; }
                 _lastRaceEscapeClaimUtc = now;
-                VideoDiag.Log("PANIC", $"Escape kept by {(raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece" : "Breakout")} as its pause (again within 2 s = full panic)");
+                var gameName = raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece"
+                    : breakoutInFront ? "Breakout" : dtrhInFront ? "Down the Rabbit Hole"
+                    : arcademyInFront ? "Arcademy" : goonInFront ? "Goon"
+                    : roomInFront ? "Back Room" : "Intake";
+                VideoDiag.Log("PANIC", $"Escape kept by {gameName} as its pause (again within 2 s = full panic)");
                 // Each game pauses on its own keydown, which never comes while its WebView2 is out of
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
                 // when the real key reached it as well (host-escape.js).
                 switch (Services.Safety.PanicPolicy.KeptEscapeGoesTo(claim,
                             raceInFront, raceReady: Services.Chaos.CaucusHostService.IsReady,
                             boardInFront, boardReady: Services.PieceByPiece.PieceByPieceHostService.IsReady,
-                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady))
+                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady,
+                            dtrhInFront, dtrhReady: Services.Chaos.DtrhHostService.IsReady,
+                            arcademyInFront, arcademyReady: Services.Arcademy.ArcademyHostService.IsReady,
+                            goonInFront, goonReady: Services.GoonGame.GoonHostService.IsReady,
+                            roomInFront, roomReady: Services.BackRoom.BackRoomHostService.IsRoomReady,
+                            intakeInFront, intakeReady: Services.Quiz.IntakeHostService.IsReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Race:
                         Services.Chaos.CaucusHostService.PostKeptEscape(); break;
@@ -1534,6 +1551,16 @@ namespace ConditioningControlPanel
                         Services.PieceByPiece.PieceByPieceHostService.PostKeptEscape(); break;
                     case Services.Safety.PanicPolicy.KeptEscapePage.Breakout:
                         Services.BackRoom.BackRoomHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Dtrh:
+                        Services.Chaos.DtrhHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Arcademy:
+                        Services.Arcademy.ArcademyHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Goon:
+                        Services.GoonGame.GoonHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Room:
+                        Services.BackRoom.BackRoomHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Intake:
+                        Services.Quiz.IntakeHostService.PostKeptEscape(); break;
                 }
                 return true;
             }
@@ -1601,6 +1628,12 @@ namespace ConditioningControlPanel
                 paletteClaimedPress: paletteClaimed,
                 overrideAll: Services.Safety.PanicPolicy.OverrideEnabled(App.Settings?.Current));
 
+            // Same five minutes as EMI for Trigger Mode and unprompted lines (PanicAftermath), armed
+            // before any rung can return into a game's own ladder. Not for an Escape that only
+            // closed the Ctrl+K palette: that press stops nothing, so it silences nothing either.
+            if (rung != Services.Safety.PanicPolicy.Rung.DismissSettingsPalette)
+                Services.Safety.PanicAftermath.ArmQuiet();
+
             if (rung == Services.Safety.PanicPolicy.Rung.DismissLockCard)
             {
                 VideoDiag.Log("PANIC", "dismissing the open lock card (it outranks every hand-off)");
@@ -1644,11 +1677,17 @@ namespace ConditioningControlPanel
             // fell into the "not running" branch below — where a second press EXITS the app.
             if (App.Chaos?.IsDescending == true) { VideoDiag.Log("PANIC", "handed off to the Rabbit Hole descent (chaos owns the key)"); return; }
 
-            // The web DtRH game (its own WebView2 window) owns Esc while it's up: the page
-            // runs a pause → exit-fullscreen → close ladder. Swallow the panic double-tap so
-            // those presses can't fall into the "not running" branch and exit the whole app.
-            // Reactivates on its own once the game window closes (IsActive flips false).
-            if (Services.Chaos.DtrhHostService.IsActive) { VideoDiag.Log("PANIC", "handed off to the DtRH web game window"); return; }
+            // The web DtRH game (its own WebView2 window). Its page only PAUSES on Escape now, so a
+            // press that reaches this rung is one the pause did not claim (a second press inside
+            // 2 s, or any press with a session running): close the game here. The page's old
+            // ladder ended in a close too, and the panic key must never do less than it did.
+            // Returning keeps the press out of the "not running" branch, which exits the app.
+            if (Services.Chaos.DtrhHostService.IsActive)
+            {
+                VideoDiag.Log("PANIC", "closing the DtRH web game window (unclaimed Escape)");
+                Services.Chaos.DtrhHostService.CloseActive();
+                return;
+            }
 
             // The Arcademy (its own WebView2 window) owns the panic key while it's up, same shape as
             // the DtRH hand-off above and for the same reason: without this rung, two Esc taps with
@@ -1810,9 +1849,24 @@ namespace ConditioningControlPanel
                 _lastPanicTime = now;
             }
             
+            // Pause session if one is running (instead of stopping it). ALWAYS, engine on or off: a
+            // session resumed with the engine stopped (Resume while a remote controller holds START)
+            // ticks its effects back on by itself, so the engine-off branch must pause it too.
+            bool sessionWasPaused = false;
+            if (_sessionEngine != null && _sessionEngine.IsRunning && !_sessionEngine.IsPaused)
+            {
+                _sessionEngine.PauseSession();
+                sessionWasPaused = true;
+            }
+            NoteLocalPanicPause();   // a remote resume cannot undo this pause (PanicAftermath)
+
+            // The scheduler must not start the engine again after a panic: the flag STOP sets.
+            if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
+                _manuallyStoppedDuringSchedule = true;
+
             if (_isRunning)
             {
-                // First press while running: stop engine, pause session if active
+                // First press while running: stop engine (the session was paused above)
                 App.Logger?.Information("Panic key pressed! Stopping engine...");
 
                 // IMMEDIATELY kill ALL audio before anything else
@@ -1823,14 +1877,6 @@ namespace ConditioningControlPanel
 
                 // Track panic press for Relapse achievement (must be before stopping session)
                 App.Achievements?.TrackPanicPressed();
-
-                // Pause session if one is running (instead of stopping it)
-                bool sessionWasPaused = false;
-                if (_sessionEngine != null && _sessionEngine.IsRunning && !_sessionEngine.IsPaused)
-                {
-                    _sessionEngine.PauseSession();
-                    sessionWasPaused = true;
-                }
 
                 // Remember if autonomy was running before we stop everything
                 bool autonomyWasRunning = App.Autonomy?.IsEnabled == true;
@@ -2008,6 +2054,8 @@ namespace ConditioningControlPanel
                 // #668: a standalone Audio Layers master means the bed is the user's, not a session's.
                 if (App.Settings?.Current?.AudioLayersEnabled != true) App.LayeredAudio?.Stop();
             });
+            // The player's own files stop on panic like every other sound (the list stays).
+            Step("audio playlist", App.StopAudioPlaylist);
             Step("audio unduck", () => App.Audio?.ForceUnduck());
             // Belt and braces LAST: KillAllAudio is a single try/catch, so anything it would have
             // skipped after an early throw has already been done individually above.
@@ -3583,6 +3631,9 @@ namespace ConditioningControlPanel
 
             // Title-bar microphone-active indicator (privacy parity with the camera pill)
             WireMicActivePill();
+
+            // Title-bar "Online N%" pill + the Assets tab's online media card (MainWindow.OnlineMeter.cs)
+            WireOnlineMeter();
 
             // Movable loading splash shown while the webcam engine starts up
             InstallWebcamLoadingSplash();

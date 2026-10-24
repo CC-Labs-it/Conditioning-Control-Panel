@@ -140,7 +140,7 @@ namespace ConditioningControlPanel.Controls.Billboard
             _stage.MouseLeave += (_, _) => { _pointerOver = false; OnHoverChanged(); };
             _stage.MouseLeftButtonDown += OnStagePressed;
             IsKeyboardFocusWithinChanged += (_, _) => UpdateRunning();
-            IsVisibleChanged += (_, _) => UpdateRunning();
+            IsVisibleChanged += (_, _) => { UpdateRunning(); if (IsVisible) ApplyDirty(); };
         }
 
         // ---- the walk ----------------------------------------------------------------------------
@@ -160,8 +160,33 @@ namespace ConditioningControlPanel.Controls.Billboard
             Show(_deck.Next(), animate: true, sound: true);
         }
 
-        /// <summary>A provider's state moved: rebuild at the next card change.</summary>
-        public void MarkDirty() => _deck.MarkDirty();
+        /// <summary>A provider's state moved. On screen the deck rebuilds now (the dots match it)
+        /// and a Live card that came in shows at the next change, or at once when the card on
+        /// screen has barely started (<see cref="DashboardBillboard.JumpToArrival"/>). Off screen
+        /// it waits for the board to come back.</summary>
+        public void MarkDirty()
+        {
+            _deck.MarkDirty();
+            ApplyDirty();
+        }
+
+        private void ApplyDirty()
+        {
+            if (!_begun || _folding || !IsVisible || _card == null || !_deck.IsDirty) return;
+            double progress = HoldProgress;
+            var ids = DeckIds();
+            bool arrived = _deck.Refresh();
+            // The card on screen would leave the deck: the next card change rebuilds.
+            if (_deck.IsDirty) return;
+            if (arrived && DashboardBillboard.JumpToArrival(progress, HoldMayRun)) { Advance(); return; }
+            if (ids == DeckIds()) return;
+            RebuildChips(tick: false);
+            _holdProgress = progress;
+            if (_fill != null) _fill.ScaleX = progress;
+            UpdateRunning();
+        }
+
+        private string DeckIds() => string.Join("\n", System.Linq.Enumerable.Select(_deck.Cards, c => c.Spec.Id));
 
         /// <summary>The motion level changed: re-read every gate now.</summary>
         public void RefreshMotion() => UpdateRunning();

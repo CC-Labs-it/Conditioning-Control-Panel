@@ -201,7 +201,7 @@ public class RemoteHapticPlayerTests
     public void Every_stop_path_stops_the_remote_haptic()
     {
         var src = ServiceSource();
-        Assert.Contains("StopRemoteHaptics();", Between(src, "private void StopAllRemoteEffects(bool force)", "private void SyncPanicKeyUi()"));
+        Assert.Contains("StopRemoteHaptics();", Between(src, "private void StopAllRemoteEffects(RemoteEndCause cause)", "private void SyncPanicKeyUi()"));
         Assert.Contains("StopRemoteHaptics();", Between(src, "private void StopRemoteTriggeredEffects()", "private void EnsureOverlayRunning()"));
         Assert.Contains("StopRemoteHaptics();", Between(src, "case \"haptic_stop\":", "break;"));
         // Both controller-gone branches of the poll: the explicit disconnect and the idle timeout.
