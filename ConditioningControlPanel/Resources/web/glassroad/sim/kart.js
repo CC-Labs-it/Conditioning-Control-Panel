@@ -303,7 +303,9 @@ export function step(st, a, track, feel, dt, ev) {
   // boost pads: once per entry, on the ground
   if (st[S.grounded] && !drop && !qb.forkId && track.boosts) {
     const L = track.lengthM;
-    const inside = (pad, s, x) => wrap(s - pad.s, L) <= pad.len && Math.abs(x - pad.x) <= pad.w / 2;
+    // State stores Float32 positions. Compare a fresh query at the same precision so an
+    // accepted edge cannot round outside in prevS/prevLat and retrigger next tick.
+    const inside = (pad, s, x) => wrap(Math.fround(s) - pad.s, L) <= pad.len && Math.abs(Math.fround(x) - pad.x) <= pad.w / 2;
     track.boosts.forEach((pad, i) => {
       if (inside(pad, qb.s, lat) && !(wasGround && inside(pad, prevS, prevLat))) {
         ev.emit('pad', { index: i });

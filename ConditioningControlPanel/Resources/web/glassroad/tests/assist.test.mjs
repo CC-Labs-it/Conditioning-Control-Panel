@@ -20,7 +20,8 @@ import { threshold } from './sim-racers-harness.mjs';
 function solo({ mode = 'light', hands = () => ({}), feelOver = {} } = {}) {
   const track = threshold(), feel = makeFeel(feelOver);
   const log = [];
-  const queue = { emit(name, payload = {}) { log.push({ name, payload, t: race.timeS }); } };
+  const queue = { emit(name, payload = {}) { log.push({ name, payload, t: race.timeS,
+    ...(name === 'wall' ? { s: racers.player.st[S.s], lateral: racers.player.st[S.lateral] } : {}) }); } };
   const race = createRace(track, feel, queue);
   const racers = createRacers(track, feel, queue, { count: 1, seed: 3 });
   const assist = createAssist(track, feel, { mode });
@@ -62,7 +63,7 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
     assert.ok(r.P.st[S.lap] >= 1, mode + ': a lap done hands off (lap ' + r.P.st[S.lap] + ', s ' + r.P.st[S.s].toFixed(0) + ' of ' + L.toFixed(0) + ')');
     assert.equal(r.events('drop').length, 0, mode + ': never off the road');
     const hard = r.events('wall').filter((e) => e.payload.dv > 6);
-    assert.equal(hard.length, 0, mode + ': never into a wall hard (' + hard.map((e) => e.payload.dv.toFixed(1)).join(', ') + ')');
+    assert.equal(hard.length, 0, mode + ': never into a wall hard (' + hard.map((e) => e.payload.dv.toFixed(1) + '@' + e.s.toFixed(1) + '/' + e.lateral.toFixed(1)).join(', ') + ')');
     // it keeps rolling: after the first seconds, never slower than a crawl for long
     const racing = r.trace.filter((x) => x.t > 12);
     const slow = Math.min(...racing.map((x) => x.v));

@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { validate } from '../track/schema.js';
 import { createScalar } from '../track/spline.js';
+import { densifyBoosts } from '../track/boostPlan.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const argOut = process.argv.indexOf('--out');
@@ -375,6 +376,7 @@ export function build(pieces = PIECES) {
     beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: Math.floor(minY - 25), edgeGraceM: 1.2, edgeGraceS: 0.8 },
   };
+  track.boosts = densifyBoosts(track).boosts;
   return { track, closure, lengthM: sAcc, meta, lipPiece, pieces };
 }
 

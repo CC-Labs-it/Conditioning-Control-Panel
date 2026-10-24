@@ -29,7 +29,7 @@ test('threshold length is 1.15 to 1.69 km (polish 6: the stacked course, +-25% o
 test('threshold carries the Phase A features', () => {
   assert.deepEqual(track.sections.map((s) => s.act), ['induction', 'deepening', 'release']);
   assert.deepEqual(track.sections.map((s) => s.palette), ['dawn', 'deep', 'afterglow']);
-  assert.ok(track.boosts.length >= 3 && track.boosts.length <= 4);
+  assert.ok(track.boosts.length >= 16, 'dense acceleration runs retain the original authored pads');
   assert.equal(track.jumps.length, 1);
   assert.ok(track.nodes[track.jumps[0].node].flags.includes('jump'));
   assert.ok(track.nodes.some((n) => n.flags.includes('open')));
