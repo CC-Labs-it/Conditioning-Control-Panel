@@ -351,7 +351,7 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.goldenS` 4.0: Golden: nothing sticks, bumps shove harder.
 - `items.echoS` 6.0: Echo copies last this long (or until all are used).
 - `items.glassMaxS` 20: a Glass bubble that soaks nothing pops by itself after this.
-- `items.flashCover` 0.4: share of the screen a Flash picture covers.
+- `items.flashCover` 0.7: requested area for the central view-blocking Flash card, fitted inside the view. Gentle uses a small corner card.
 - `items.spiralSteerAmp` 0.35: Spiral steering drift, stick share added at the peak.
 - `items.spiralSteerHz` 0.4: Spiral steering drift rate (one slow sway per 1 / Hz s).
 - `items.freezeSteerMul` 0.55: Freeze steering share (0.4 before polish 2; raised so Freeze on the calmed steer law bites about as hard at top speed as before).
@@ -368,17 +368,22 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.throwExtraMps` 22: a throw flies at the user's speed plus this, along the driveline.
 - `items.throwLifeS` 5: a throw that reaches nobody pops after this.
 - `items.throwRangeM` 150: a throw locks on the kart ahead only within this; past it, it flies straight.
+- `items.homeLateralMps` 7: maximum sideways homing speed; guidance ends once the shot passes its target.
+- `items.lobCommitFrac` 0.85: fraction of flight after which the lob stops retargeting.
+- `items.lobRetargetMps` 65: maximum movement of the predicted lob landing point per second.
+- `items.projectileRadiusM` 1.05: thrown projectile shell radius.
+- `items.lobRadiusM` 1.3: lobbed projectile shell radius.
 - `items.homeTcS` 0.25: a throw eases across to its target's lateral with this time constant.
-- `items.hitRadiusM` 1.6: a throw or lob hits within this (along and across).
+- `items.hitRadiusM` 2.15: circular throw contact radius; throws sweep the path between ticks.
 - `items.throwHeightM` 1.1: a throw flies this high above the road.
 - `items.throwArcM` 0.5: extra height of the first arc out of the hand.
-- `items.lobFlightS` 1.6: a lob reaches the leader in this, wherever they are.
+- `items.lobFlightS` 1.6: lob travel duration; its committed landing point allows a late dodge.
 - `items.lobHeightM` 14: lob arc peak height.
-- `items.dropBehindM` 3.5: a dropped trap lands this far behind the user.
+- `items.dropBehindM` 4.8: a dropped trap lands this far behind the user.
 - `items.trapLifeS` 45: a trap no one drives over pops after this.
 - `items.trapArmS` 0.6: a trap cannot hit its own layer for this long.
-- `items.trapRadiusM` 1.5: trap hit distance.
-- `items.meltRadiusM` 2.4: Melt puddle hit distance.
+- `items.trapRadiusM` 2.35: circular trap contact radius, matching its steady warning ring.
+- `items.meltRadiusM` 3.6: circular Melt puddle contact radius.
 - `items.maxTraps` 12: the oldest trap pops when one more is laid.
 - `items.mercyS` 2: after a screen effect ends, no screen effect lands on that kart for this.
 - `items.viewBudgetS` 3: at most this much blocked view per viewWindowS (a hit is trimmed to fit).

@@ -9,7 +9,7 @@
  * local per client. Remote karts carry their effect and shields in their records (net/remote.js). Three-free.
  */
 import { S, RESPAWN } from '../sim/state.js';
-import { wrap, damp, lerp } from '../core/math.js';
+import { wrap, damp, lerp, clamp } from '../core/math.js';
 import { grantBoost } from '../sim/grant.js';
 import { cancelDrift } from '../sim/drift.js';
 import { endBoost } from '../sim/boost.js';
@@ -70,8 +70,9 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     if (m.mode === 'drop') traps.push({ sid: m.sid, id: m.sid, kind: m.item, s: wrap(m.s - g('dropBehindM'), L), x: m.x, t: 0, layer: by });
     else if (m.mode === 'throw') {
       const v = (r ? Math.max(0, r.st[S.speedPct]) : 1) * feel.get('speed.topMps') + g('throwExtraMps');
-      flying.push({ sid: m.sid, kind: m.item, mode: 'throw', by, target, t: 0, s: wrap(m.s + THROW_LEAD_M, L), x: m.x, h: g('throwHeightM'), v });
-    } else if (m.mode === 'lob') flying.push({ sid: m.sid, kind: m.item, mode: 'lob', by, target, t: 0, fromS: m.s, fromX: m.x, s: m.s, x: m.x, h: g('throwHeightM') });
+      flying.push({ sid: m.sid, kind: m.item, mode: 'throw', by, target, t: 0, s: wrap(m.s + THROW_LEAD_M, L), x: m.x, h: g('throwHeightM'), v, homing: target >= 0 });
+    } else if (m.mode === 'lob') flying.push({ sid: m.sid, kind: m.item, mode: 'lob', by, target, t: 0, fromS: m.s, fromX: m.x, s: m.s, x: m.x, h: g('throwHeightM'),
+      aimD: tg ? sd(tg.st[S.s], m.s) : 0, aimX: tg ? tg.st[S.lateral] : m.x, homing: target >= 0 });
     else if (m.mode === 'wide') waves.push({ id: m.sid, kind: m.item, from: by, s: m.s, x: m.x, t: 0 });
   }
 
@@ -82,15 +83,17 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     const shot = flying.find((p) => p.sid === m.sid) || traps.find((p) => p.sid === m.sid);
     flying = flying.filter((p) => p !== shot); traps = traps.filter((p) => p !== shot);
     if (!v) return;
-    const p = shot ? point(shot.s, shot.x, shot.h || 0) : kartP(v);
-    if (shot) pop(m.item, shot.layer !== undefined ? (m.verdict === 'glass' || m.verdict === 'golden' ? m.verdict : 'trap') : m.verdict === 'mercy' ? 'hit' : m.verdict, shot.s, shot.x, shot.h || 0);
+    // Cosmetic pursuit can diverge from the room. Its verdict always bursts on
+    // the victim, with no locally predicted damage or collision decision.
+    const p = kartP(v);
+    if (shot) pop(m.item, shot.layer !== undefined ? (m.verdict === 'glass' || m.verdict === 'golden' ? m.verdict : 'trap') : m.verdict === 'mercy' ? 'hit' : m.verdict, v.st[S.s], v.st[S.lateral], 1);
     if (local(v)) {
       const x = rs(v.i);
       if (m.verdict === 'hit') land(v, x, m.item, m.durationS, byR ? byR.i : -1);
       else if (m.verdict === 'glass') { x.glass = 0; pop('glass', 'glass', v.st[S.s], v.st[S.lateral], 1); }
       else if (m.verdict === 'decoy') x.echo = Math.max(0, x.echo - 1);
     }
-    events.emit('item-hit', { victim: v.i, by: byR ? byR.i : -1, kind: m.item, verdict: m.verdict, durationS: m.verdict === 'hit' ? m.durationS : 0, p });
+    events.emit('item-hit', { victim: v.i, by: byR ? byR.i : -1, kind: m.item, how: shot ? (shot.layer !== undefined ? 'trap' : shot.mode) : null, verdict: m.verdict, durationS: m.verdict === 'hit' ? m.durationS : 0, p });
   }
   function onFizzle(m) {
     ver++;
@@ -187,20 +190,40 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   // ---- shown flights (the room rules the outcome; these only draw it) ---------------------------
   function flights(dt) {
     flying = flying.filter((pr) => {
+      const oldP = point(pr.s, pr.x, pr.h);
       pr.t += dt;
       const tg = pr.target >= 0 ? list[pr.target] : null;
       if (pr.mode === 'lob') {
         const k = Math.min(1, pr.t / g('lobFlightS'));
-        if (tg) { pr.s = wrap(pr.fromS + sd(tg.st[S.s], pr.fromS) * k, L); pr.x = lerp(pr.fromX, tg.st[S.lateral], k); }
+        pr.homing = !!(tg && free(tg) && k < g('lobCommitFrac'));
+        if (pr.homing) {
+          const f = track.frameAt(tg.st[S.s]), remaining = Math.max(0, g('lobFlightS') - pr.t);
+          const speed = tg.st[S.velX] * f.t[0] + tg.st[S.velY] * f.t[1] + tg.st[S.velZ] * f.t[2];
+          const wanted = pr.aimD + sd(tg.st[S.s], wrap(pr.fromS + pr.aimD, L)) + speed * remaining;
+          pr.aimD += clamp(wanted - pr.aimD, -g('lobRetargetMps') * dt, g('lobRetargetMps') * dt);
+          pr.aimX += clamp(tg.st[S.lateral] - pr.aimX, -g('homeLateralMps') * dt, g('homeLateralMps') * dt);
+        }
+        pr.s = wrap(pr.fromS + pr.aimD * k, L);
+        pr.x = lerp(pr.fromX, pr.aimX, k);
         pr.h = g('throwHeightM') + g('lobHeightM') * 4 * k * (1 - k);
+        velocity(pr, oldP, dt);
         return pr.t < g('lobFlightS') + ORPHAN_S;
       }
+      const gap = tg ? sd(tg.st[S.s], pr.s) : -1;
+      pr.homing = !!(tg && free(tg) && gap > 0 && gap <= g('throwRangeM'));
       pr.s = wrap(pr.s + pr.v * dt, L);
-      if (tg && free(tg)) pr.x = damp(pr.x, tg.st[S.lateral], g('homeTcS'), dt);
+      if (pr.homing) pr.x += clamp(damp(pr.x, tg.st[S.lateral], g('homeTcS'), dt) - pr.x, -g('homeLateralMps') * dt, g('homeLateralMps') * dt);
       pr.h = g('throwHeightM') + g('throwArcM') * Math.sin(Math.PI * Math.min(1, pr.t / ARC_S));
+      velocity(pr, oldP, dt);
       return pr.t < g('throwLifeS') + ORPHAN_S;
     });
     traps = traps.filter((tp) => (tp.t += dt) < g('trapLifeS') + ORPHAN_S);
+  }
+
+  function velocity(pr, oldP, dt) {
+    const p = point(pr.s, pr.x, pr.h);
+    pr.velocity ||= [0, 0, 0];
+    for (let k = 0; k < 3; k++) pr.velocity[k] = dt > 0 ? (p[k] - oldP[k]) / dt : 0;
   }
 
   function update(dt, racers, standings, race) {
@@ -231,12 +254,14 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     for (const b of pick) { b.v.alive = b.downT <= 0; b.v.k = b.v.alive ? Math.min(1, b.upT / GROW_S) : 0; }
     V.held = []; V.projectiles = []; V.traps = []; V.waves = []; V.shields = []; V.pops = [];
     for (const r of list) if (r.item && (r.item.id || r.item.rolling)) V.held.push({ racer: r.i, id: r.item.id, rolling: r.item.rolling, rollT: r.item.rollT });
-    for (const pr of flying) V.projectiles.push({ id: pr.sid, kind: pr.kind, mode: pr.mode, p: point(pr.s, pr.x, pr.h), t: pr.t, target: pr.target, s: pr.s, x: pr.x });
+    for (const pr of flying) V.projectiles.push({ id: pr.sid, kind: pr.kind, mode: pr.mode, p: point(pr.s, pr.x, pr.h), t: pr.t, target: pr.target, s: pr.s, x: pr.x,
+      by: pr.by, homing: pr.homing, radiusM: g(pr.mode === 'lob' ? 'lobRadiusM' : 'projectileRadiusM'),
+      progress: Math.min(1, pr.t / (pr.mode === 'lob' ? g('lobFlightS') : ARC_S)), v: pr.velocity ? pr.velocity.slice() : [0, 0, 0] });
     const armS = g('trapArmS');
     for (const tp of traps) {
       const f = track.frameAt(tp.s, fr), p = [0, 0, 0];
       for (let k = 0; k < 3; k++) p[k] = f.p[k] + f.b[k] * tp.x;
-      V.traps.push({ id: tp.sid, kind: tp.kind, p, n: f.n.slice(), t: tp.t, armed: tp.t >= armS, s: tp.s, x: tp.x });
+      V.traps.push({ id: tp.sid, kind: tp.kind, p, n: f.n.slice(), t: tp.t, armed: tp.t >= armS, s: tp.s, x: tp.x, radiusM: g(tp.kind === 'melt' ? 'meltRadiusM' : 'trapRadiusM') });
     }
     for (const w of waves) V.waves.push({ id: w.id, kind: w.kind, from: w.from, p: point(w.s, w.x, 0), t: w.t, rangeM: g('pinkRangeM') });
     for (const r of list) {
