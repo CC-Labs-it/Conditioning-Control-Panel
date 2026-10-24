@@ -211,10 +211,11 @@ public sealed class ProfileBubbleParityTests : IDisposable
             time.Advance(TimeSpan.FromSeconds(0.105));
             BeatLoop.StepAll();
             Assert.Equal(-3, tilt.Angle, 3);
-            time.Advance(TimeSpan.FromSeconds(0.5075));
+            time.Advance(TimeSpan.FromTicks(5_075_000)); // FromSeconds truncates 0.5075 to one tick short
             BeatLoop.StepAll();
-            Assert.Equal(-12.527207793864215, tilt.Angle, 6); // WPF's final SineEase EaseOut
-            time.Advance(TimeSpan.FromSeconds(0.0875));
+            // WPF's final SineEase EaseOut (linear would be -12.9).
+            Assert.Equal(-12.527207793864215, tilt.Angle, 6);
+            time.Advance(TimeSpan.FromTicks(875_000)); // lands on exactly 700 ms
             BeatLoop.StepAll();
             Assert.Equal(-12, tilt.Angle, 3);
             // The 700 ms one-shot stops its own frame clock.

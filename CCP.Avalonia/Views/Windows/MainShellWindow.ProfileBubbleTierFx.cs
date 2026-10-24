@@ -24,7 +24,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Image? ProfileTierBadgeBigImage => Named<Image>("ProfileTierBadgeBig");
         private static readonly (double At, double V)[] ProfileTierWobbleKeys =
         {
-            (0, -12), (0.105, -3), (0.245, -18.75), (0.385, -7.95), (0.525, -13.8), (0.7, -12),
+            // Linear keys only; the 0.525 -> 0.7 s settle to -12 is ProfileTierWobbleAngle's sine ease.
+            (0, -12), (0.105, -3), (0.245, -18.75), (0.385, -7.95), (0.525, -13.8),
         };
 
         private void EnsureProfileTierFx()
