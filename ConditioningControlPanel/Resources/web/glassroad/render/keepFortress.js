@@ -1,15 +1,15 @@
 /* Solid fortress construction around the authored course. One instanced draw per finish. */
 import { Group, Mesh, InstancedMesh, BoxGeometry, CylinderGeometry, MeshBasicNodeMaterial, Matrix4, Quaternion, Euler, Vector3, Color } from 'three/webgpu';
-import { materialColor, positionWorld, normalWorld, normalLocal, modelNormalMatrix, normalize, dot, clamp, vec3, texture, mix, float, fract, smoothstep, fwidth, uv, min, max, floor, hash, select } from 'three/tsl';
+import { materialColor, positionWorld, positionGeometry, normalWorld, normalLocal, modelNormalMatrix, cameraPosition, normalize, dot, clamp, vec2, vec3, texture, mix, float, fract, smoothstep, fwidth, uv, min, max, floor, hash, select, sin, abs, pow } from 'three/tsl';
 import { LOOK } from './look.js';
 import { prisonPlan } from './keepPrison.js';
 import { waterSpills } from './waterMath.js';
 
-export function keepStoneMaterial(hex, art, mortar = true, outline = true) {
+export function keepStoneMaterial(hex, art, mortar = true, outline = true, finish = 'stone') {
   const material = new MeshBasicNodeMaterial({ color: new Color(hex) });
   const N = normalize(normalWorld), light = clamp(dot(N, normalize(vec3(...LOOK.lightDir))).mul(0.58).add(0.64), 0.19, 1.14);
   const map = art?.tex('road-glass-roughness');
-  const grain = map ? texture(map, positionWorld.xz.div(7)).r.add(texture(map, positionWorld.xy.div(7)).r).mul(0.5) : float(0.5);
+  const grain = map ? texture(map, positionGeometry.xz.mul(vec2(3, 6))).r.add(texture(map, positionGeometry.xy.mul(vec2(3, 6))).r).mul(0.5) : float(0.5);
   let colour = materialColor.rgb.mul(light).mul(smoothstep(.2, .8, grain).mul(.25).add(.87));
   if (mortar) {
     const y = positionWorld.y.div(2.4), edge = fract(y), aa = fwidth(y).max(0.008);
@@ -25,7 +25,27 @@ export function keepStoneMaterial(hex, art, mortar = true, outline = true) {
     const vertical = smoothstep(.008, bx.add(.018), brick).mul(smoothstep(.008, bx.add(.018), float(1).sub(brick)));
     const joint = horizontal.mul(vertical);
     const variation = hash(floor(staggered).add(floor(y).mul(37))).mul(.16).add(.9);
-    colour = colour.mul(variation).mul(mix(float(.23), float(1), joint));
+    const footprint = max(aa, bx), detail = float(1).sub(smoothstep(.14, .42, footprint));
+    const bed = min(edge, float(1).sub(edge)), side = min(brick, float(1).sub(brick));
+    const bevel = smoothstep(.02, aa.add(.045), bed).mul(float(1).sub(smoothstep(.07, aa.add(.12), bed)))
+      .add(smoothstep(.015, bx.add(.03), side).mul(float(1).sub(smoothstep(.05, bx.add(.09), side))));
+    // Recessed joints and wide dressed lips give stone mass without extra geometry or dark shimmer.
+    colour = colour.mul(variation).mul(mix(float(1), mix(float(.23), float(1), joint), detail))
+      .add(materialColor.rgb.mul(bevel).mul(.20).mul(detail));
+    const beddingPhase = y.mul(8).add(sin(staggered.mul(2.1)).mul(.65));
+    const bedding = sin(beddingPhase).mul(.055).mul(float(1).sub(smoothstep(.4, 1.3, fwidth(beddingPhase))));
+    colour = colour.mul(bedding.add(1));
+  }
+  if (finish === 'iron' || finish === 'cap') {
+    const V = normalize(cameraPosition.sub(positionWorld)), H = normalize(V.add(normalize(vec3(...LOOK.lightDir))));
+    const specular = pow(max(dot(N, H), 0), finish === 'iron' ? 26 : 18);
+    // Plum forged iron and pale dressed crowns keep their accepted colours under a soft polish.
+    colour = colour.add(mix(materialColor.rgb, vec3(.65, .52, .57), .3).mul(specular).mul(finish === 'iron' ? .32 : .16));
+    if (finish === 'iron') {
+      const forgePhase = positionGeometry.y.mul(95).add(positionGeometry.x.mul(5));
+      const forge = sin(forgePhase).mul(.065).mul(float(1).sub(smoothstep(.3, 1.2, fwidth(forgePhase))));
+      colour = colour.mul(forge.add(1));
+    }
   }
   if (outline) {
     // A subpixel ink edge follows each primitive face. Derivatives keep it thin at every distance.
@@ -103,7 +123,7 @@ export function buildKeepFortress(track, layout, art) {
   const plan = prisonPlan(track, layout, { phone: art?.tier === 'phone' });
   for (const p of plan.boxes) worldBlock(p.material, p.p, p.size, p.yaw, p.tilt);
   const materials = { stone: keepStoneMaterial('#96789e', art), deck: keepStoneMaterial('#39213f', art),
-    cap: keepStoneMaterial('#d1a8bc', art), iron: keepStoneMaterial('#673955', art, false),
+    cap: keepStoneMaterial('#d1a8bc', art, true, true, 'cap'), iron: keepStoneMaterial('#673955', art, false, true, 'iron'),
     dark: keepStoneMaterial('#090610', art, false), roof: keepStoneMaterial('#3c1939', art), glow: new MeshBasicNodeMaterial({ color: '#ffd198' }) };
   const { stone, cap } = materials;
   owned.push(...Object.values(materials));

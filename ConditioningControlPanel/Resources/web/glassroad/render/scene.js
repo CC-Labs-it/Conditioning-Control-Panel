@@ -82,6 +82,7 @@ import { createBoudoirHazardView } from './boudoirHazards.js';
 import { buildBoudoirMirrorRoom } from './boudoirMirrorRoom.js';
 import { createBoudoirWaterPalette } from './boudoirWater.js';
 import { buildBoudoirForks } from './boudoirForks.js';
+import { padMediaSlots } from './padMedia.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -319,7 +320,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       existingSlots: worldScreenExistingSlots(track, layout, { tier: Q.name, samples }) });
     media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout,
       scrolllerShare: goon ? .6 : .5,
-      placeholderPalette: goon ? ['#bd006e', '#fff9ff'] : null, extraSlots: worldScreens.slots, extraSlotsDynamic: false }) : null;
+      placeholderPalette: goon ? ['#bd006e', '#fff9ff'] : null, extraSlots: [...worldScreens.slots, ...padMediaSlots(track)], extraSlotsDynamic: false }) : null;
   } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
   // polish 4: the drop shortcut's rail opening and landing pad (track routes); the ring swells on the player's clean landing
   let routes = null;

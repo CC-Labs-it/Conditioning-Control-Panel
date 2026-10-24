@@ -24,6 +24,17 @@ export const GOONWORKS_DISTRICT_PALETTES=Object.freeze({
 export const GOONWORKS_PAPER_MATERIALS=Object.freeze(['white','cream','ivory','ice','lilac','blush']);
 const rgb = hex => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
 
+// Analytic print texture has no uploads or per-frame work. Each frequency fades independently
+// before it becomes smaller than a pixel, including on scaled, moving instances.
+function filteredWave(phase) {
+  return sin(phase).mul(float(1).sub(smoothstep(.75,2.8,fwidth(phase))));
+}
+function surfaceGrain(p, paper) {
+  const fibre=filteredWave(dot(p,vec3(91.7,137.3,73.1)));
+  const tooth=filteredWave(dot(p,vec3(173.3,-59.7,119.9)));
+  return fibre.mul(paper?.012:.005).add(tooth.mul(paper?.008:.004)).add(1);
+}
+
 export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit = false, outline = false } = {}) {
   const material = new MeshBasicNodeMaterial({ side: outline ? BackSide : DoubleSide, toneMapped:false });
   material.name = 'goonworks-' + (outline || ink ? 'ink' : hex);
@@ -38,7 +49,12 @@ export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit
   const dots = float(1).sub(smoothstep(.12,.22,cell.length())).mul(float(1).sub(smoothstep(.25,.7,footprint)))
     .mul(float(1).sub(smoothstep(-.05,.3,light))).mul(.13);
   const shaded=paper?mix(rgb(GOONWORKS_PALETTE.warmgray),base,bands.mul(.75).add(.18)):base.mul(bands);
-  const lit = shaded.mul(float(1).sub(dots)).add(rgb('#f5eddf').mul(highlight));
+  // Paper keeps its dry fine tooth; painted toys get a broad, quiet enamel roll instead.
+  // The source position follows rotating wheels and gears without swimming across their faces.
+  const grain=surfaceGrain(positionGeometry,paper);
+  const paintRoll=sin(dot(positionGeometry,vec3(3.2,1.4,2.1))).mul(.5).add(.5);
+  const finish=paper?float(1):paintRoll.mul(.024).add(.984);
+  const lit = shaded.mul(grain).mul(finish).mul(float(1).sub(dots)).add(rgb('#f5eddf').mul(highlight));
   material.colorNode = mix(lit,rgb(GOONWORKS_PALETTE.ink),silhouette.mul(.87));
   return material;
 }
@@ -62,7 +78,10 @@ export function applyGoonworksRoad(road, art, track) {
   const N=normalize(normalWorld), top=smoothstep(.48,.72,N.y);
   const light=max(dot(N,normalize(vec3(-.38,.82,.42))),0).mul(.09).add(.87);
   const glaze=smoothstep(0,half,abs(p.x)).mul(.045).add(sin(p.y.mul(.018)).mul(.012)).add(.945);
-  const paper=texture(widths,vec2(distanceUV,.375)).rgb.mul(light).mul(glaze);
+  // A warm printed board under the glossy shoulder paint. Fine fibres disappear at distance.
+  const roadGrain=filteredWave(p.x.mul(43).add(p.y.mul(7))).mul(.009)
+    .add(filteredWave(p.y.mul(31).sub(p.x.mul(11))).mul(.006)).add(1);
+  const paper=texture(widths,vec2(distanceUV,.375)).rgb.mul(light).mul(glaze).mul(roadGrain);
   const dark=rgb(GOONWORKS_PALETTE.wine),pink=texture(widths,vec2(distanceUV,.625)).rgb,accent=texture(widths,vec2(distanceUV,.875)).rgb;
   let colour=mix(dark,paper,top);
   // Broad district enamel bands stay visible from the kart. The central paper lane and
@@ -70,8 +89,12 @@ export function applyGoonworksRoad(road, art, track) {
   const bandStart=2.8,bandEnd=half.mul(.18).add(bandStart);
   const districtBand=smoothstep(float(bandStart).sub(pixel),float(bandStart).add(pixel),edge)
     .mul(float(1).sub(smoothstep(bandEnd.sub(pixel),bandEnd.add(pixel),edge)));
-  const bandGlaze=mix(accent,paper,.14).mul(light);
+  const bandRoll=smoothstep(0,1,edge.sub(bandStart).div(half.mul(.18))).mul(.05).add(.965);
+  const bandGlaze=mix(accent,paper,.14).mul(light).mul(bandRoll);
   colour=mix(colour,bandGlaze,districtBand.mul(top));
+  // An inset ivory pinline makes the wide accent read as finished enamel, not a flat fill.
+  const bandLip=float(1).sub(smoothstep(.04,pixel.add(.10),abs(edge.sub(bandEnd.sub(.3)))));
+  colour=mix(colour,mix(accent,rgb(GOONWORKS_PALETTE.ivory),.58),bandLip.mul(top).mul(.5));
   // Two fine enamel ribbons bring scale to the wide floor without filling the racing line.
   const laneCenter=half.mul(.12).add(3.8).add(sin(p.y.mul(.026)).mul(.32)),laneDistance=abs(abs(p.x).sub(laneCenter));
   const lanePixel=max(fwidth(laneDistance),.025),laneSoft=float(1).sub(smoothstep(.64,lanePixel.add(.88),laneDistance));
@@ -84,6 +107,14 @@ export function applyGoonworksRoad(road, art, track) {
   const tile=float(1).sub(smoothstep(.91,tilePixel.add(1),lozenge));
   const tileRule=float(1).sub(smoothstep(.025,tilePixel.add(.055),abs(lozenge.sub(1))));
   colour=mix(colour,accent,tile.mul(.1).add(tileRule.mul(.48)).mul(district.g).mul(top).mul(printable));
+  // Large halls carry faint staggered print blocks outside the racing line. The low contrast
+  // leaves the coloured district bands, arrows and physical toy warnings in charge.
+  const printCell=vec2(p.x.div(12),p.y.div(24).add(fract(p.x.div(24)).mul(.12)));
+  const blockEdge=min(abs(fract(printCell.x).sub(.5)),abs(fract(printCell.y).sub(.5)));
+  const blockPixel=max(fwidth(printCell.x),fwidth(printCell.y));
+  const blockRule=float(1).sub(smoothstep(.006,max(blockPixel,.003).add(.012),blockEdge));
+  const outerPrint=smoothstep(half.mul(.3),half.mul(.5),abs(p.x));
+  colour=mix(colour,mix(paper,accent,.28),blockRule.mul(outerPrint).mul(district.g).mul(top).mul(printable).mul(.24));
   // One two-tone checker shoulder and a thin inner rule, leaving the racing line open.
   const checkerPhase=p.y.mul(Math.PI/3.5),checker=mix(smoothstep(-.1,.1,sin(checkerPhase)),float(.5),smoothstep(.6,2,fwidth(checkerPhase)));
   colour=mix(colour,mix(paper,pink,checker),gutter.mul(top));
@@ -127,6 +158,15 @@ export function createGoonworksTubeMaterial(outer=false){
   const panelTone=sin(p.y.mul(.033)).mul(.5).add(.5);
   colour=mix(colour,rgb(outer?GOONWORKS_PALETTE.magenta:GOONWORKS_PALETTE.lilac),panelTone.mul(outer?.23:.16));
   colour=mix(colour,rgb(outer?GOONWORKS_PALETTE.magenta:GOONWORKS_PALETTE.teal),rib);
+  // Glazed mouldings catch a narrow cream edge; a dry print seam splits the broad panels.
+  const ribLip=float(1).sub(smoothstep(.06,ribPixel.add(.16),abs(ribDistance.sub(ribWidth-.35))));
+  const panelSeam=abs(fract(p.y.div(19)).sub(.5)).mul(19);
+  const seamPixel=max(fwidth(panelSeam),.03);
+  const seam=float(1).sub(smoothstep(.035,seamPixel.add(.085),panelSeam));
+  const tubeGrain=filteredWave(p.y.mul(23).add(p.x.mul(67))).mul(outer?.005:.012).add(1);
+  colour=colour.mul(tubeGrain);
+  colour=mix(colour,rgb(outer?GOONWORKS_PALETTE.rose:GOONWORKS_PALETTE.warmgray),seam.mul(outer?.16:.1));
+  colour=mix(colour,rgb(GOONWORKS_PALETTE.cream),ribLip.mul(outer?.18:.42));
   colour=mix(colour,rgb(GOONWORKS_PALETTE.ivory),enamel);
   colour=mix(colour,rgb(GOONWORKS_PALETTE.ink),max(rim,ribInk));
   material.colorNode=colour;return material;
@@ -139,11 +179,18 @@ export function createGoonworksPlatformMaterial(w,len,index=0){
   const shoulder=float(1).sub(smoothstep(1.1,1.3,edge));
   const edgePixel=max(fwidth(edge),.04);
   const islandBand=smoothstep(1.45,edgePixel.add(1.6),edge).mul(float(1).sub(smoothstep(3.4,edgePixel.add(3.6),edge)));
-  const checker=smoothstep(-.1,.1,sin(p.x.mul(Math.PI/3)).mul(sin(p.y.mul(Math.PI/3))));
+  const checkerPhase=vec2(p.x.mul(Math.PI/3),p.y.mul(Math.PI/3));
+  const checker=mix(smoothstep(-.1,.1,sin(checkerPhase.x).mul(sin(checkerPhase.y))),float(.5),
+    smoothstep(.6,2,max(fwidth(checkerPhase.x),fwidth(checkerPhase.y))));
   const arrow=abs(p.y.add(float(len/2-5)).sub(abs(p.x).mul(.62)));
   const chevron=float(1).sub(smoothstep(.25,.4,arrow)).mul(float(1).sub(smoothstep(4.8,5.2,abs(p.x))));
   material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.rose),shoulder.mul(checker));
   material.colorNode=mix(material.colorNode,rgb(index%2?GOONWORKS_PALETTE.lime:GOONWORKS_PALETTE.mint),islandBand);
+  // Each island is a glazed game token with an inset cream bevel painted onto its top.
+  const bandLip=float(1).sub(smoothstep(.06,edgePixel.add(.14),abs(edge.sub(3.12))));
+  const glaze=smoothstep(1.3,3.4,edge).mul(.035).add(.975);
+  material.colorNode=material.colorNode.mul(glaze);
+  material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.cream),bandLip.mul(.55));
   material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.teal),chevron);
   material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.ink),ink);
   material.colorNode=mix(rgb(GOONWORKS_PALETTE.ink),material.colorNode,smoothstep(.4,.7,normalize(normalWorld).y));return material;

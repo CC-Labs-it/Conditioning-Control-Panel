@@ -40,10 +40,10 @@ export function selectScrolllerSlots(slots = [], { share = .5 } = {}) {
     [...cohorts].sort((a, b) => b.fraction - a.fraction || a.order - b.order)
       .slice(0, extra).forEach(cohort => cohort.count++);
     const chosen = cohorts.map(cohort => spread(cohort.slots, cohort.count));
-    return [...group('card'), ...[...chosen[0], ...chosen[1]].sort(spatial), ...chosen[2], ...chosen[3]];
+    return [...group('card'), ...[...chosen[0], ...chosen[1]].sort(spatial), ...chosen[2], ...chosen[3], ...group('boostPad')];
   }
   // Balance two odd cohorts so the complete group still selects ceil(count / 2).
   const desktopStart = phone.length % 2 && desktop.length % 2 ? 1 : 0;
   const boards = [...alternate(phone), ...alternate(desktop, desktopStart)].sort(spatial);
-  return [...group('card'), ...boards, ...alternate(group('halo')), ...alternate(group('tunnel'))];
+  return [...group('card'), ...boards, ...alternate(group('halo')), ...alternate(group('tunnel')), ...group('boostPad')];
 }

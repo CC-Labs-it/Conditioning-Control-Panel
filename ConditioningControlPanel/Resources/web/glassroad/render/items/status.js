@@ -19,6 +19,7 @@ import { S } from '../../sim/state.js';
 import { MOTE_TINT } from './look.js';
 import { STATUS_LOOK as L, SHAPE, statusStep, statusState, statusSprites, createBurstPool, createTrail } from './statusMath.js';
 import { lensDepth, lensScale, lensAlpha } from '../lens.js';
+import { createMalusSpirals } from './malusSpirals.js';
 
 const TINT = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k, s.split(',').map((x) => Number(x) / 255)]));
 const WHITE = [1, 1, 1];
@@ -98,6 +99,7 @@ const GOPT = [{ gentle: false }, { gentle: true }];
 /** @returns {{ update(view: object, dt: number, karts: object[], opts: object): void, clear(): void, dispose(): void }} */
 export function createItemStatus(root, feel, { photosafe = null, cap = 1100 } = {}) {
   const cloud = statusMaterial(cap);
+  const malusSpirals = createMalusSpirals(root, feel);
   root.add(cloud.sprite);
   const pool = createBurstPool(640);
   const states = [], seeds = [];
@@ -137,6 +139,7 @@ export function createItemStatus(root, feel, { photosafe = null, cap = 1100 } = 
     const soft = gentle(), rate = soft ? 0.5 : 1;
     timeS += dt * rate; frameId++;
     cloud.begin();
+    malusSpirals.update(karts, dt);
     const riseS = (feel.get('gentle.riseMs') || 300) / 1000;
 
     // status looks on every racer
@@ -204,7 +207,7 @@ export function createItemStatus(root, feel, { photosafe = null, cap = 1100 } = 
 
   return {
     update,
-    clear() { pool.clear(); rings.length = 0; trails.clear(); for (const s of states) if (s) { s.kind = null; s.outAge = -1; } },
-    dispose() { root.remove(cloud.sprite); cloud.material.dispose(); },
+    clear() { malusSpirals.clear(); pool.clear(); rings.length = 0; trails.clear(); for (const s of states) if (s) { s.kind = null; s.outAge = -1; } },
+    dispose() { malusSpirals.dispose(); root.remove(cloud.sprite); cloud.material.dispose(); },
   };
 }

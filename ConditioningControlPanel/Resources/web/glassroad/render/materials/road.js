@@ -32,6 +32,7 @@ import { mainframeFloor } from '../mainframeFloor.js';
 import { createBoudoirRoadSurface } from '../boudoirMaterials.js';
 import { createBoudoirWaterPalette } from '../boudoirWater.js';
 import { createAudioReactiveUniforms, reactiveRoadLight, reactiveTint } from '../audioReactive.js';
+import { thresholdGlassFinish } from '../thresholdFinish.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -195,6 +196,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   if (pal.flow) { if (lapM) pal.flowWrap = lapM; pal.motionSource = u.contrast; }
   const flow = pal.flow || u.phase;
   const p = uv(), uRaw = p.x;
+  const castGlass = track?.id === 'threshold' ? thresholdGlassFinish(p) : null;
   const a = p.y.add(flow);
   const toCam = cameraPosition.sub(positionWorld), dist = toCam.length(), V = normalize(toCam);
   const calm = smoothstep(S.nearCalmM[0], S.nearCalmM[1], dist);
@@ -365,6 +367,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   if (track?.id === 'mainframe') tileBody = surface.mul(tiles.relief)
     .add(vec3(0.36, 0.72, 0.56).mul(tiles.glaze).mul(u.sheen).mul(0.5));
   if (boudoir) tileBody = surface.mul(tiles.relief).add(boudoir.sheen.mul(tiles.glaze).mul(u.sheen));
+  if (castGlass) tileBody = tileBody.mul(castGlass.body);
   // WATER (wave 1): stream and pool vertices (attribute `surface` 3 / 4, `flow` m/s) swap the glass body
   // for the water surface (materials/water.js) BEFORE the tiles and bands, so both keep working on water;
   // the glass sheen and polish thin out over it. The clock u.water.t is the caller's (Gentle halves it).
@@ -373,14 +376,15 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const waterSky = boudoir ? x => mix(waterPal.col(2), waterPal.col(0), clamp(x, 0, 1)) : skyRamp;
   const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal: waterPal, u: u.water, skyRamp: waterSky, reactive: u.reactive });
   const wet = water.w.mul(u.water.coverage);
-  const dryBody = boudoir ? surface : surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol);
+  let dryBody = boudoir ? surface : surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol);
+  if (castGlass) dryBody = dryBody.mul(castGlass.body);
   const glassBody = mix(mix(dryBody, water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
   const reactiveLight = reactiveRoadLight({ p, trueEdge, distance: dist, u: u.reactive, tint: reactiveTint(pal, track?.id) });
   const musicBody = beatBands.apply(glassBody).add(reactiveLight.mul(float(1).sub(wet)));
   const dry = float(1).sub(wet.mul(0.75));
-  const finishSheen = boudoir ? boudoir.sheen.mul(u.sheen) : vec3(1, 0.96, 0.98).mul(sheen);
+  const finishSheen = boudoir ? boudoir.sheen.mul(u.sheen) : vec3(1, 0.96, 0.98).mul(sheen).mul(castGlass ? castGlass.glaze : 1);
   const litCol = musicBody.add(finishSheen.mul(dry)).add(polish.mul(dry).mul(boudoir ? .08 : track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));
   const lineCol = boudoir ? vec3(.92, .78, .57) : mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);

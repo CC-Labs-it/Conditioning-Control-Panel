@@ -435,7 +435,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   let shownTier = null;
   const hidden = (sl) => (sl.frame === 'billboard' && !sl.phone && tierOf(Q.name, M).phoneOnly);
   function placeSlot(sl) {
-    const off = hidden(sl), o = own.get(sl.index), stripH = sl.h * M.stripShare;
+    const off = hidden(sl), o = own.get(sl.index), stripH = Math.min(sl.h * M.stripShare, sl.w / 7);
     const im = screenMeshes[sl.p];
     const active = !!o?.ready;
     if (off || active) im.setMatrixAt(sl.k, ZERO); else im.setMatrixAt(sl.k, slotMatrix(sl, M4));

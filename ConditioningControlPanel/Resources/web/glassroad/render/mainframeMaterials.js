@@ -14,7 +14,8 @@ export function coolantCaustics(p, time) {
 export function plateDetails(p, size = vec2(4, 6)) {
   const cell = fract(p.div(size)).mul(size), edge = min(cell, size.sub(cell));
   const px = max(fwidth(p), vec2(0.003)), filter = max(px.x, px.y);
-  const seam = float(1).sub(smoothstep(0.035, filter.add(0.075), min(edge.x, edge.y)));
+  const visibility = float(1).sub(smoothstep(.18, .65, filter));
+  const seam = float(1).sub(smoothstep(0.035, filter.add(0.075), min(edge.x, edge.y))).mul(visibility);
   const rim = smoothstep(0.065, filter.add(0.1), min(edge.x, edge.y))
     .mul(float(1).sub(smoothstep(0.16, filter.add(0.24), min(edge.x, edge.y))));
   // Opposing plate edges catch different light, giving the seam a readable lip.
@@ -24,15 +25,25 @@ export function plateDetails(p, size = vec2(4, 6)) {
   const screw = float(1).sub(smoothstep(0.065, filter.add(0.10), socketDistance));
   const slot = float(1).sub(smoothstep(0.015, filter.add(0.025), abs(edge.x.sub(edge.y)))).mul(screw);
   const variation = sin(floor(p.x.div(size.x)).mul(2.7).add(floor(p.y.div(size.y)).mul(1.3))).mul(0.06).add(0.96);
-  return { seam, rim, side, socket, screw, slot, variation };
+  return { seam, rim: rim.mul(visibility), side, socket: socket.mul(visibility),
+    screw: screw.mul(visibility), slot: slot.mul(visibility), variation, cell, edge, filter, visibility };
 }
 
 export function machineSurface(p, base, wear = null, details = null) {
   const d = details || plateDetails(p);
   const brushed = wear ? texture(wear, p.div(vec2(2.2, 0.55))).r : float(0.5);
-  const finish = base.mul(brushed.mul(0.24).add(0.82)).mul(d.variation)
+  // Broad pressed recesses read from the chase camera; fine machining disappears before aliasing.
+  const hatch = max(abs(d.cell.x.sub(2)).sub(1.25), abs(d.cell.y.sub(3)).sub(2.1));
+  const inset = float(1).sub(smoothstep(-.04, d.filter.add(.04), hatch)).mul(d.visibility);
+  const lip = float(1).sub(smoothstep(.025, d.filter.add(.09), abs(hatch))).mul(d.visibility);
+  const brushPhase = p.y.mul(82).add(sin(p.x.mul(.8)).mul(.6));
+  const brushVisibility = float(1).sub(smoothstep(.3, 1.1, fwidth(brushPhase)));
+  const machining = sin(brushPhase).mul(.035).mul(brushVisibility).add(1);
+  const finish = base.mul(brushed.mul(0.24).add(0.82)).mul(d.variation).mul(machining)
+    .mul(float(1).sub(inset.mul(.10)))
     .mul(float(1).sub(d.seam.mul(0.8))).mul(float(1).sub(d.socket.mul(0.72)));
   return finish.add(base.mul(d.rim).mul(d.side.mul(0.78).sub(0.2)))
+    .add(base.mul(lip).mul(.16))
     .add(vec3(0.15, 0.19, 0.20).mul(d.screw)).mul(float(1).sub(d.slot.mul(0.65)));
 }
 
