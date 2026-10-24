@@ -2,12 +2,13 @@
  *
  * Where Scrolller media will show: trackside billboards on glass stalks, a halo of screens orbiting
  * over the start/finish, and a glass tunnel lined with screens (tracks/<id>.media.json, fitted by
- * render/mediaMath.js so nothing enters any road stretch). This pass shows ANIMATED PLACEHOLDERS only
- * (render/mediaPlaceholders.js): nothing is downloaded, nothing asks Scrolller.
+ * render/mediaMath.js so nothing enters any road stretch). All trap cards and half the world panels
+ * accept host-provided local clips; the others keep animated Loom/placeholders. The renderer never
+ * fetches remote media. Shared video textures keep upload cost independent of the face count.
  *
  * Draw cost: the placeholders are a few shared canvases (Q tier: 6 at 256 px, phone 4 at 128 px); every
  * slot showing one is an instance of that program's InstancedMesh, cropped and hue-turned per instance,
- * so the whole layer is about a dozen draws. Canvas uploads share one budget (at most 2 a frame, phone 1),
+ * so the whole layer is about a dozen draws. Canvas uploads share one budget (high 3, mid 2, phone 1),
  * nearest and most overdue first, and only for programs with a slot within drawM. Loom spirals are drawn
  * once and turn in the shader, so they move smoothly at any redraw rate.
  * Each frame: a soft glow border cycling through the spectrum, a dark back plate, and the credit strip
@@ -30,6 +31,8 @@ import {
   createUploadBudget, urlAllowed, creditText, colourOf, slotColour,
 } from './mediaMath.js';
 import { createPlaceholder, programFor, spinOf, warpOf, releaseLoom, PROGRAMS } from './mediaPlaceholders.js';
+import { selectScrolllerSlots } from './mediaSelection.js';
+import { MAX_MEDIA_CLIPS, mediaClipLimit } from './mediaVariety.js';
 
 // the shared colour system (render/spectrum.js); the local ring stays the fallback for a missing hue
 import * as SPECTRUM from './spectrum.js';
@@ -52,6 +55,99 @@ const TAU = Math.PI * 2;
 const M4 = new Matrix4(), VX = new Vector3(), VY = new Vector3(), VZ = new Vector3(), VP = new Vector3(), EYE = new Vector3();
 const SX = new Vector3(), SY = new Vector3();
 const ZERO = new Matrix4().makeScale(0, 0, 0);
+
+/** Shared videos get gesture retries and one recovery attempt for a stalled native loop. */
+export function createMediaPlayback({ target = globalThis.document, now = () => performance.now() / 1000 } = {}) {
+  const videos = new Map();
+  let nextId = 1;
+  function play(el, v) {
+    if (v.pending || el.error) return;
+    v.pending = true;
+    const failed = e => { v.playError = e?.name || 'PlaybackError'; };
+    try {
+      Promise.resolve(el.play()).then(() => { v.playError = null; }, failed).finally(() => { v.pending = false; });
+    } catch (e) { failed(e); v.pending = false; }
+  }
+  function resume() {
+    for (const [el, v] of videos) if ((el.paused || v.playError) && !v.pending && v.retries < 3) {
+      v.retries++; play(el, v);
+    }
+  }
+  function tick() {
+    const at = now();
+    for (const [el, v] of videos) {
+      const seconds = el.currentTime, duration = el.duration;
+      const eligible = el.loop && Number.isFinite(duration) && duration > 0 && Number.isFinite(seconds)
+        && !el.seeking && !el.error && !el.paused && !el.ended && !v.playError && !v.pending && el.readyState >= 2;
+      const delta = seconds - v.watchSeconds;
+      if (eligible && v.loopRecoveryPending && delta > 0 && delta <= (at - v.watchSampleAt) * 2 + .25
+        && seconds < duration - Math.min(.04, duration / 4)) {
+        v.recoveryProgress += delta;
+        if (v.recoveryProgress >= Math.min(.1, duration / 4)) v.loopRecoveryPending = false;
+      }
+      if (!eligible || Math.abs(delta) > .00001) v.watchChangedAt = at;
+      v.watchSeconds = seconds; v.watchSampleAt = at;
+      const atEnd = duration - seconds >= 0 && duration - seconds <= Math.min(.04, duration / 4);
+      if (!eligible || !atEnd || v.loopRecoveryPending || at - v.watchChangedAt < .35) continue;
+      // Never loop seek/play repeatedly when a decoder ignores the first recovery.
+      v.loopRecoveryPending = true; v.recoveryProgress = 0; v.loopRecoveries++;
+      v.lastAdvanceAt = null;
+      try { el.currentTime = 0; }
+      catch (e) { v.loopRecoveryError = e?.name || 'SeekError'; continue; }
+      v.watchSeconds = el.currentTime; v.watchChangedAt = at;
+      // The seek is not decoded motion. Only subsequent playback may restore advancing.
+      v.previous = el.currentTime; v.sampledAt = at;
+      play(el, v);
+    }
+  }
+  const gesture = e => { if (e.isTrusted) resume(); };
+  const listen = on => {
+    for (const type of ['pointerdown', 'keydown']) target?.[on ? 'addEventListener' : 'removeEventListener']?.(type, gesture, true);
+  };
+  return {
+    retain(el) {
+      const current = videos.get(el);
+      if (current) { current.refs++; return; }
+      if (!videos.size) listen(true);
+      const at = now(), seconds = el.currentTime || 0;
+      const v = { id: nextId++, refs: 1, pending: false, retries: 0, playError: null,
+        previous: seconds, sampledAt: at, lastAdvanceAt: null, advancedS: 0,
+        watchSeconds: seconds, watchSampleAt: at, watchChangedAt: at,
+        loopRecoveries: 0, loopRecoveryPending: false, loopRecoveryError: null, recoveryProgress: 0 };
+      videos.set(el, v); play(el, v);
+    },
+    release(el) {
+      const v = videos.get(el);
+      if (v && --v.refs === 0) videos.delete(el);
+      if (!videos.size) listen(false);
+    },
+    resume,
+    tick,
+    snapshot(elements = [...videos.keys()]) {
+      const at = now(), result = [];
+      for (const el of new Set(elements)) {
+        const v = videos.get(el);
+        if (!v) continue;
+        const seconds = el.currentTime || 0, duration = Number.isFinite(el.duration) ? el.duration : null;
+        let delta = seconds - v.previous;
+        if (delta < 0 && el.loop && duration) delta += duration;
+        // Ignore seeks. A loop crossing is real progress, even though currentTime decreases.
+        if (!el.seeking && delta > 0 && delta <= (at - v.sampledAt) * 2 + .25) {
+          v.advancedS += delta; v.lastAdvanceAt = at;
+        }
+        v.previous = seconds; v.sampledAt = at;
+        const error = el.error?.code || null;
+        result.push({ id: v.id, slots: v.refs, seconds, duration, readyState: el.readyState || 0,
+          paused: !!el.paused, ended: !!el.ended, error, playError: v.playError, pending: v.pending,
+          loopRecoveries: v.loopRecoveries, loopRecoveryPending: v.loopRecoveryPending, loopRecoveryError: v.loopRecoveryError,
+          advancedS: v.advancedS, advancing: v.lastAdvanceAt !== null && at - v.lastAdvanceAt <= 1.5
+            && !el.paused && !el.ended && !error && el.readyState >= 2 });
+      }
+      return result;
+    },
+    dispose() { videos.clear(); listen(false); },
+  };
+}
 
 /** A slot's matrix: picture axes, w x h scale, pushed along its face by `lift`. */
 function slotMatrix(sl, out, { w = sl.w, h = sl.h, lift = 0, down = 0 } = {}) {
@@ -84,12 +180,12 @@ export function createMediaSlots(scene, track, opts = {}) {
   const buildTier = opts.tier || Q.name, T = tierOf(buildTier, M);
   const group = new Group();
   group.name = 'media';
-  const empty = { object: group, slots: [], setSource: () => false, update() {}, dispose() { if (scene) scene.remove(group); }, stats: () => ({ slots: 0, draws: 0, uploads: 0 }) };
+  const empty = { object: group, slots: [], videoCapacity: 0, setSource: () => false, update() {}, dispose() { if (scene) scene.remove(group); }, stats: () => ({ slots: 0, draws: 0, uploads: 0 }) };
   if (!layout) { if (scene) scene.add(group); return empty; }
   const samples = opts.samples || roadSamples(track, M.checkStepM);
 
   // ---- slots: billboards, the halo, the tunnel ----
-  const slots = [];
+  const slots = (layout.slots || []).map(slot => ({ ...slot }));
   for (const b of layout.billboards || []) {
     const sl = placeBillboard(b, track, samples, M);
     if (sl) slots.push(sl); else console.warn('[glassroad/media] billboard ' + b.id + ' found no clear spot');
@@ -101,6 +197,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   if (haloSpec) for (const sl of haloSlots(haloSpec, haloFrame, haloN, orbit, M)) slots.push(sl);
   const tun = layout.tunnel ? tunnelLayout(layout.tunnel, track, M, T.tunnelStepMul) : null;
   if (tun) for (const sl of tun.slots) slots.push(sl);
+  for (const sl of opts.extraSlots || []) slots.push(sl);
 
   // ---- shared placeholder programs ----
   const P = Math.min(T.programs, PROGRAMS.length), cols = placeholderColours();
@@ -226,6 +323,19 @@ export function createMediaSlots(scene, track, opts = {}) {
 
   // ---- own sources (setSource) and credits ----
   const own = new Map();     // slot index -> { mesh, mat, tex, el, kind, src, credit }
+  const playback = createMediaPlayback();
+  const persistentSources = new Map(), selected = selectScrolllerSlots(slots);
+  const blankSource = opts.make ? opts.make(2, 2) : Object.assign(document.createElement('canvas'), { width: 2, height: 2 });
+  const blankContext = blankSource.getContext('2d'); blankContext.fillStyle = '#15121b'; blankContext.fillRect(0, 0, 2, 2);
+  const sharedVideos = new Map();
+  // Every owner exists before shader warmup, even on phone. Faces only change a texture binding.
+  const sharedPool = Array.from({ length: MAX_MEDIA_CLIPS }, () => {
+    const tex = new Texture(blankSource); tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4; tex.needsUpdate = true;
+    const owner = { tex, el: null, refs: new Set(), ready: false, uploaded: false, idleDisposed: false, uploads: 0 };
+    owner.src = budget.add({ every: 1 / T.videoFps, kind: 'shared-video', owner, on: false });
+    return owner;
+  });
+  const videoCapacity = () => Math.min(sharedPool.length, mediaClipLimit(Q.name));
   let creditTex = null;
   function creditTexture(text) {
     if (creditTex && creditTex.text === text) return creditTex.tex;
@@ -241,13 +351,70 @@ export function createMediaSlots(scene, track, opts = {}) {
     return tex;
   }
 
+  function makeOwnSource(sl, persistent = false) {
+    // Selected world faces and cards exist before warmAll, including their credit graphs.
+    const tex = new Texture(persistent ? blankSource : null);
+    tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4;
+    if (persistent) tex.needsUpdate = true;
+    const crop = { cx: uniform(0.5), cy: uniform(0.5), sx: uniform(1), sy: uniform(1) };
+    const sample = texture(tex), mat = ownMaterial(sample, crop, U, M), mesh = new Mesh(plane, mat);
+    mesh.name = persistent ? 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-source-' + sl.id : 'media-source-' + sl.id;
+    mesh.matrixAutoUpdate = false; mesh.frustumCulled = false; mesh.visible = false;
+    slotMatrix(sl, mesh.matrix, { lift: 0.01 });
+    group.add(mesh);
+    const o = { mesh, mat, tex, baseTex: tex, sample, crop, persistent, frame: sl.frame, shared: null,
+      el: null, kind: null, ready: false, credit: null, creditOn: false, src: -1, unlisten: null };
+    if (persistent) {
+      const cv = opts.make ? opts.make(256, 40) : Object.assign(document.createElement('canvas'), { width: 256, height: 40 });
+      const ct = new CanvasTexture(cv); ct.colorSpace = SRGBColorSpace;
+      o.creditCanvas = cv; o.creditTex = ct;
+      const cm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+      const sample = texture(ct); cm.colorNode = sample.rgb; cm.opacityNode = sample.a;
+      o.credit = new Mesh(plane, cm); o.credit.name = 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-credit-' + sl.id;
+      o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = false; o.credit.renderOrder = 4; o.credit.visible = false;
+      group.add(o.credit);
+    }
+    return o;
+  }
+  for (const [i, sl] of selected.entries()) {
+    const o = makeOwnSource(sl, true);
+    o.sample.value = sharedPool[i % sharedPool.length].tex;
+    persistentSources.set(sl.index, o);
+  }
+
+  function retainShared(o, index, el) {
+    let owner = sharedVideos.get(el);
+    if (!owner) {
+      if (sharedVideos.size >= videoCapacity()) return false;
+      owner = sharedPool.find(p => !p.el);
+      if (!owner) return false;
+      owner.el = el; owner.ready = false; owner.uploaded = false;
+      sharedVideos.set(el, owner);
+    }
+    owner.refs.add(index); o.shared = owner; o.tex = owner.tex; o.sample.value = owner.tex;
+    return true;
+  }
+  function releaseShared(o, index) {
+    const owner = o.shared;
+    if (!owner) return;
+    owner.refs.delete(index);
+    if (!owner.refs.size) {
+      sharedVideos.delete(owner.el); budget.list[owner.src].on = false;
+      if (!owner.idleDisposed) owner.tex.dispose();
+      owner.tex.image = blankSource; owner.idleDisposed = true;
+      owner.el = null; owner.ready = false; owner.uploaded = false;
+    }
+    o.shared = null; o.tex = o.baseTex; o.sample.value = o.baseTex;
+  }
+
   // ---- placement of every instance (halo slots move, tier changes hide or show) ----
   let shownTier = null;
   const hidden = (sl) => (sl.frame === 'billboard' && !sl.phone && tierOf(Q.name, M).phoneOnly);
   function placeSlot(sl) {
     const off = hidden(sl), o = own.get(sl.index), stripH = sl.h * M.stripShare;
     const im = screenMeshes[sl.p];
-    if (off || o) im.setMatrixAt(sl.k, ZERO); else im.setMatrixAt(sl.k, slotMatrix(sl, M4));
+    const active = !!o?.ready;
+    if (off || active) im.setMatrixAt(sl.k, ZERO); else im.setMatrixAt(sl.k, slotMatrix(sl, M4));
     if (off) { for (const x of [borders, backs, strips]) x.setMatrixAt(sl.index, ZERO); }
     else {
       borders.setMatrixAt(sl.index, slotMatrix(sl, M4, { w: sl.w + M.borderM * 2, h: sl.h + M.borderM * 2, lift: -0.06 }));
@@ -255,11 +422,11 @@ export function createMediaSlots(scene, track, opts = {}) {
       strips.setMatrixAt(sl.index, slotMatrix(sl, M4, { h: stripH, lift: 0.04, down: sl.h / 2 - stripH / 2 }));
     }
     if (o) {
-      o.mesh.visible = !off;
+      o.mesh.visible = !off && active;
       slotMatrix(sl, o.mesh.matrix, { lift: 0.01 });
       o.mesh.matrixWorldNeedsUpdate = true;
       if (o.credit) {
-        o.credit.visible = !off;
+        o.credit.visible = !off && active && o.creditOn;
         slotMatrix(sl, o.credit.matrix, { w: stripH * 6.4, h: stripH, lift: 0.06, down: sl.h / 2 - stripH / 2 });
         placeCreditLeft(sl, o.credit, stripH);
         o.credit.matrixWorldNeedsUpdate = true;
@@ -282,7 +449,8 @@ export function createMediaSlots(scene, track, opts = {}) {
    * setSource(slotId, { kind: 'image'|'video'|'canvas', url | el, credit }) shows a real source on one
    * slot (null puts the placeholder back). url must be local or same origin (mediaMath.urlAllowed):
    * the host hands a cached copy, never a remote Scrolller url. credit 'scrolller' writes "via Scrolller"
-   * on the slot's strip. Returns true when taken.
+   * on the slot's strip. An explicit el with borrowed:true stays owned by its provider, allowing
+   * many faces to share the current tier's limited video decoders. Returns true when taken.
    */
   function setSource(slotId, src) {
     const sl = slots.find((s) => s.id === slotId);
@@ -297,16 +465,23 @@ export function createMediaSlots(scene, track, opts = {}) {
       else if (src.kind === 'image') el = Object.assign(new Image(), { crossOrigin: 'anonymous', decoding: 'async', src: src.url });
     }
     if (!el || !['image', 'video', 'canvas'].includes(src.kind)) { placeSlot(sl); flush(); return false; }
-    const tex = src.kind === 'canvas' ? new CanvasTexture(el) : new Texture(el);
-    tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4;
-    const crop = { cx: uniform(0.5), cy: uniform(0.5), sx: uniform(1), sy: uniform(1) };
-    const mat = ownMaterial(texture(tex), crop, U, M);
-    const mesh = new Mesh(plane, mat);
-    mesh.matrixAutoUpdate = false; mesh.frustumCulled = false; mesh.visible = false;
-    group.add(mesh);
-    const o = { mesh, mat, tex, el, kind: src.kind, crop, ready: false, credit: null, src: -1 };
+    const o = persistentSources.get(sl.index) || makeOwnSource(sl);
+    o.el = el; o.kind = src.kind; o.borrowed = !!src.el && src.borrowed === true;
+    if (src.kind === 'video' && o.borrowed && !retainShared(o, sl.index, el)) {
+      o.el = null; o.kind = null; o.borrowed = false;
+      if (!o.persistent) { group.remove(o.mesh); o.mat.dispose(); o.baseTex.dispose(); }
+      placeSlot(sl); flush(); return false;
+    }
+    if (!o.shared) o.sample.value = o.baseTex;
+    const { tex, crop } = o;
     const text = creditText(src.credit);
-    if (text) {
+    o.creditOn = !!text;
+    if (o.persistent) {
+      const g = o.creditCanvas.getContext('2d'); g.clearRect(0, 0, 256, 40);
+      g.fillStyle = 'rgba(255,255,255,0.92)'; g.font = '600 24px system-ui, sans-serif';
+      g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(text, 10, 21);
+      o.creditTex.needsUpdate = true;
+    } else if (text) {
       const cm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
       const ct = texture(creditTexture(text));
       cm.colorNode = ct.rgb; cm.opacityNode = ct.a;
@@ -314,21 +489,35 @@ export function createMediaSlots(scene, track, opts = {}) {
       group.add(o.credit);
     }
     const ready = () => {
-      if (!own.has(sl.index) || own.get(sl.index) !== o) return;
+      if (own.get(sl.index) !== o || o.el !== el) return;
       const w = el.videoWidth || el.naturalWidth || el.width || 1, h = el.videoHeight || el.naturalHeight || el.height || 1;
       const c = fitCover(w / h, sl.w / sl.h);
       crop.cx.value = c.cx; crop.cy.value = c.cy; crop.sx.value = c.sx; crop.sy.value = c.sy;
-      o.ready = true; tex.needsUpdate = true;
+      if (o.shared) {
+        if (!o.shared.ready) {
+          o.shared.ready = true;
+          budget.list[o.shared.src].due = uploadClock;
+        }
+        // Keep the placeholder until this owner's first budgeted upload, including on phone.
+        o.ready = o.shared.uploaded;
+      } else {
+        // r186 keeps an uploaded regular texture's allocation size until disposal.
+        if (o.persistent) tex.dispose();
+        tex.image = el; tex.needsUpdate = true;
+        o.ready = true;
+      }
       placeSlot(sl); flush();
     };
     own.set(sl.index, o);
+    const event = src.kind === 'image' ? 'load' : 'loadeddata';
+    o.unlisten = () => el.removeEventListener?.(event, ready);
     if (src.kind === 'image') { if (el.complete && el.naturalWidth) ready(); else el.addEventListener('load', ready, { once: true }); }
     else if (src.kind === 'video') {
       el.addEventListener('loadeddata', ready, { once: true });
       if (el.readyState >= 2) ready();
-      try { const pr = el.play(); if (pr && pr.catch) pr.catch(() => {}); } catch { /* paused until a gesture */ }
+      playback.retain(el);
     } else ready();
-    if (src.kind !== 'image') o.src = budget.add({ every: 1 / (src.kind === 'video' ? T.videoFps : T.sourceFps), kind: 'own', slot: sl.index });
+    if (src.kind !== 'image' && !o.shared) o.src = budget.add({ every: 1 / (src.kind === 'video' ? T.videoFps : T.sourceFps), kind: 'own', slot: sl.index });
     placeSlot(sl); flush();
     return true;
   }
@@ -337,21 +526,36 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (!o) return;
     own.delete(i);
     if (o.src >= 0) budget.list[o.src].on = false;
-    group.remove(o.mesh); o.mat.dispose(); o.tex.dispose();
-    if (o.credit) { group.remove(o.credit); o.credit.material.dispose(); }
-    if (o.kind === 'video' && o.el && o.el.pause) { try { o.el.pause(); } catch { /* gone */ } }
+    o.unlisten?.(); o.unlisten = null;
+    if (o.kind === 'video' && o.el) playback.release(o.el);
+    releaseShared(o, i);
+    if (o.kind === 'video' && o.el && !o.borrowed) {
+      try { o.el.pause?.(); } catch { /* gone */ }
+      try { o.el.removeAttribute?.('src'); o.el.srcObject = null; o.el.load?.(); } catch { /* detached */ }
+    }
+    if (o.persistent) {
+      o.tex.dispose();
+      o.tex.image = blankSource; o.tex.needsUpdate = true;
+      o.mesh.visible = false; o.credit.visible = false;
+      o.el = null; o.kind = null; o.borrowed = false; o.ready = false; o.creditOn = false; o.src = -1;
+    } else {
+      group.remove(o.mesh); o.mat.dispose(); o.tex.dispose();
+      if (o.credit) { group.remove(o.credit); o.credit.material.dispose(); }
+    }
   }
 
   // ---- per frame ----
-  let clock = 0, uploads = 0;
+  let clock = 0, uploadClock = 0, uploads = 0, sharedVideoUploads = 0, sharedVideoUploadsTotal = 0;
   const picks = [];
   const haloSlotsOf = haloSpec ? slots.slice(haloStart, haloStart + haloN) : [];
   function update(dt, view = {}) {
+    playback.tick();
     const feel = opts.feel;
     const gentle = view.gentle ?? (feel ? !!feel.get('gentle.on') : false);
     const scroll = view.scrollMul ?? (gentle ? (feel ? feel.get('gentle.scrollMul') : 0.5) : 1);
     const contrast = view.contrastMul ?? (gentle ? (feel ? feel.get('gentle.contrastMul') : 0.5) : 1);
     clock += dt * scroll;
+    uploadClock += dt; // Gentle slows procedural motion, never video playback or its upload cadence.
     U.time.value = clock;
     U.contrast.value = contrast;
     U.border.value = M.borderGain * (gentle ? M.borderGentle : 1);
@@ -363,7 +567,8 @@ export function createMediaSlots(scene, track, opts = {}) {
       // in place (perf, polish 6): a fresh haloSlots() a frame was steady race garbage
       for (let k = 0; k < haloSlotsOf.length; k++) placeSlot(haloPoseInto(haloSpec, haloFrame, haloN, orbit, k, haloSlotsOf[k]));
     }
-    if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length) flush();
+    for (const sl of opts.extraSlots || []) placeSlot(sl);
+    if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length || opts.extraSlots?.length) flush();
 
     // the shared upload budget: nearest overdue programs and live own sources within drawM
     const cam = view.camera;
@@ -371,23 +576,50 @@ export function createMediaSlots(scene, track, opts = {}) {
     const Tl = tierOf(Q.name, M);
     for (const pg of progs) {
       let d = Infinity;
-      for (const sl of pg.slots) if (!own.has(sl.index) && !hidden(sl)) d = Math.min(d, Math.hypot(sl.C[0] - EYE.x, sl.C[1] - EYE.y, sl.C[2] - EYE.z));
+      for (const sl of pg.slots) if (!own.get(sl.index)?.ready && !hidden(sl)) d = Math.min(d, Math.hypot(sl.C[0] - EYE.x, sl.C[1] - EYE.y, sl.C[2] - EYE.z));
       const x = budget.list[pg.src];
       x.near = d; x.every = pg.ph.static || !(Tl.placeholderFps > 0) ? Infinity : 1 / Tl.placeholderFps;
     }
     for (const [i, o] of own) if (o.src >= 0) { const sl = slots[i]; budget.list[o.src].near = Math.hypot(sl.C[0] - EYE.x, sl.C[1] - EYE.y, sl.C[2] - EYE.z); }
-    budget.pick(clock, Tl.maxUploads, Tl.drawM, picks);
-    uploads = 0;
+    for (const owner of sharedVideos.values()) {
+      const entry = budget.list[owner.src]; entry.near = Infinity; entry.every = 1 / Tl.videoFps;
+      entry.on = owner.ready && dt > 0;
+      for (const i of owner.refs) {
+        const sl = slots[i];
+        if (!hidden(sl)) entry.near = Math.min(entry.near, Math.hypot(sl.C[0] - EYE.x, sl.C[1] - EYE.y, sl.C[2] - EYE.z));
+      }
+    }
+    budget.pick(uploadClock, Tl.maxUploads, Tl.drawM, picks);
+    uploads = 0; sharedVideoUploads = 0;
     for (const i of picks) {
       const x = budget.list[i];
       if (x.kind === 'program') { const pg = progs[x.p]; if (pg.ph.draw(clock)) { pg.tex.needsUpdate = true; uploads++; } }
+      else if (x.kind === 'shared-video') {
+        const owner = x.owner;
+        if (owner.ready) {
+          if (!owner.uploaded) {
+            // Retain the warmed sampler graph, but release r186's old-size GPU allocation.
+            if (!owner.idleDisposed) owner.tex.dispose();
+            owner.tex.image = owner.el; owner.idleDisposed = false; owner.uploaded = true;
+            for (const index of owner.refs) { const o = own.get(index); if (o) { o.ready = true; placeSlot(slots[index]); } }
+            flush();
+          }
+          owner.tex.needsUpdate = true; owner.uploads++; uploads++; sharedVideoUploads++; sharedVideoUploadsTotal++;
+        }
+      }
       else { const o = own.get(x.slot); if (o && o.ready) { o.tex.needsUpdate = true; uploads++; } }
-      budget.done(i, clock);
+      const due = x.due;
+      budget.done(i, uploadClock);
+      if (x.kind === 'shared-video') x.due = Math.max(uploadClock, due + x.every);
     }
   }
 
   function dispose() {
     for (const i of [...own.keys()]) drop(i);
+    playback.dispose();
+    for (const o of persistentSources.values()) { o.baseTex.dispose(); o.creditTex.dispose(); }
+    persistentSources.clear();
+    for (const owner of sharedPool) if (!owner.idleDisposed) owner.tex.dispose();
     for (const pg of progs) pg.tex.dispose();
     if (creditTex) creditTex.tex.dispose();
     group.traverse((o) => { if (o.material) o.material.dispose(); });
@@ -400,11 +632,29 @@ export function createMediaSlots(scene, track, opts = {}) {
   return {
     object: group,
     slots: pub,
+    get videoCapacity() { return videoCapacity(); },
     tunnel: tun ? { fromS: tun.fromS, toS: tun.toS } : null,
     setSource,
+    resumePlayback: playback.resume,
     update,
     dispose,
-    stats: () => ({ slots: slots.length, programs: progs.length, draws: group.children.filter((c) => c.visible).length, uploads, canvasPx: T.canvasPx }),
+    stats: () => {
+      const videos = [...own.values()].filter(o => o.kind === 'video'), cards = videos.filter(o => o.frame === 'card');
+      const world = videos.filter(o => ['billboard', 'halo', 'tunnel'].includes(o.frame));
+      const worldVideoCounts = Object.fromEntries(['billboard', 'halo', 'tunnel'].map(frame => [frame, {
+        selected: selected.filter(sl => sl.frame === frame).length, ready: world.filter(o => o.frame === frame && o.ready).length,
+      }]));
+      return { slots: slots.length, programs: progs.length, draws: group.children.filter(c => c.visible).length, uploads, canvasPx: T.canvasPx,
+        readyCardVideos: cards.filter(o => o.ready).length, cardVideoDecoders: new Set(cards.map(o => o.el)).size,
+        cardVideoSeconds: cards.map(o => o.el?.currentTime || 0), cardVideoPlayback: playback.snapshot(cards.map(o => o.el)),
+        selectedMediaFaces: selected.length, readyMediaVideos: videos.filter(o => o.ready).length,
+        selectedWorldVideos: selected.filter(sl => sl.frame !== 'card').length, readyWorldVideos: world.filter(o => o.ready).length,
+        worldVideoCounts, mediaVideoDecoders: new Set(videos.map(o => o.el)).size, mediaVideoPlayback: playback.snapshot(videos.map(o => o.el)),
+        videoCapacity: videoCapacity(), prewarmedVideoTextures: sharedPool.length,
+        sharedVideoTextures: sharedVideos.size, sharedVideoUploads, sharedVideoUploadsTotal,
+        maxMediaUploads: tierOf(Q.name, M).maxUploads, videoUploadFps: tierOf(Q.name, M).videoFps,
+      };
+    },
   };
 }
 

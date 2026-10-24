@@ -21,9 +21,11 @@ Shift or Space hop and drift (hold through a turn, let go for the boost), E item
 to drop it behind as a trap), Escape pause. A standard gamepad works too (left stick, RT, LT, A, X item,
 stick down + X drops, Start; the d-pad, A and B work the cards). Touch: tap the round item slot.
 
-The garage now offers The Keep beside Threshold. Open `?track=keep` for its 1.315 km fortress circuit:
-three laps, seven bots, six timed portcullises, two clear bypasses at every gate, and the accepted Keep art.
+The garage now offers The Keep beside Threshold. Open `?track=keep` for its 2.9 km fortress circuit:
+two laps, seven bots, a two-turn tower spiral, four swinging chains, six timed portcullises, a sluice and pool.
+Solid walls and roofed halls use the accepted Keep art; close panels alternate moving media and Loom spirals.
 The warning footprint brightens before a gate lowers. Pause freezes the gates; restarting resets their cycle.
+Local moving media needs the isolated selected-feed preview server and a real Race click. The plain dev server supplies placeholders.
 Keep currently supports solo racing only. Online admission still uses Threshold's server track card.
 
 ## Url flags
