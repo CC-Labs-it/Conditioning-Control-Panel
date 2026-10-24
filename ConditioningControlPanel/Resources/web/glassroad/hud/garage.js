@@ -1,6 +1,6 @@
 import {KARTS,OUTFITS,PRESETS,COLOR_KEYS} from './garageState.js';
 
-export function garageUi({change,select,customize,action,hover}) {
+export function garageUi({change,select,customize,action,hover,trackId='threshold',online=true,changeTrack}) {
   const root=document.createElement('section');root.id='race-garage';root.hidden=true;root.setAttribute('aria-label','Choose your racer');
   root.innerHTML=`<aside class="g-menu" aria-label="Main menu"><div class="g-title-card"><p>CC LABS</p><div class="g-logo" aria-label="Racing Thoughts"><span>racing</span><b>thoughts</b></div><div class="g-title-rule" aria-hidden="true"></div></div>
       <nav class="g-menu-options" aria-label="Race options"><button data-g="race" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V3m0 1c5-4 9 4 15 0v10c-6 4-10-4-15 0"/></svg><span><b>Race</b><small class="g-track"></small></span><i aria-hidden="true">↗</i></button><button data-g="online" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="3"/><path d="M2 20v-3a6 6 0 0 1 12 0v3m2-16a3 3 0 0 1 0 6m2 3c3 1 4 3 4 7"/></svg><span><b>Race online</b></span><i aria-hidden="true">›</i></button><button data-g="customize" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0c0 3-3 3-3 6l9 6v3H3v-3l9-6"/></svg><span><b>Customize EMI</b></span><i aria-hidden="true">›</i></button><button data-g="options" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16m8-16v16m8-16v16M1 9h6m2 6h6m2-8h6"/></svg><span><b>Options</b></span><i aria-hidden="true">›</i></button><button data-g="controls" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10c4 0 7 13 3 13l-5-4H9l-5 4C0 20 3 7 7 7Z"/><path d="M6 10v5m-2-2h4m8-2h.01m3 3h.01"/></svg><span><b>Controls</b></span><i aria-hidden="true">›</i></button></nav></aside>
@@ -10,6 +10,7 @@ export function garageUi({change,select,customize,action,hover}) {
     <div class="g-controls"><div class="g-label">Outfit <span class="g-outfit-name"></span></div><div class="g-outfits"></div>
       <div class="g-label">Colors <button data-g="original">Original</button></div><div class="g-colors"><label>Shell <input type="color" data-color="primary" aria-label="Shell color"></label><label>Accent <input type="color" data-color="secondary" aria-label="Accent color"></label></div><div class="g-palettes"></div>
       <div class="g-label">Pattern</div><div class="g-patterns"></div><p class="g-skin-name"></p></div></section><p class="g-announce" role="status" aria-live="polite"></p>`;
+  root.querySelector('[data-g=online]').hidden=!online;
   document.body.append(root);
   const $=s=>root.querySelector(s);
   const make=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;$(parent).append(b);return b;};

@@ -40,9 +40,11 @@ export function beneath(track, st, P, out) {
   const r = routeOf(track, st);
   if (!r) return null;
   const hint = (r.land.from + r.land.to) >> 1;
-  const q = track.query(P[0], P[1], P[2], hint, out);
+  // Probe at the authored landing height so an upper revolution cannot steal the query.
+  const q = track.query(P[0], r.pad.p[1], P[2], hint, out);
   if (q.seg < r.land.from || q.seg > r.land.to || !q.onRoad) return null;
-  if (q.height < -1.5) return null;                 // already under the landing road: it passed
+  q.height = (P[0] - q.p[0]) * q.normal[0] + (P[1] - q.p[1]) * q.normal[1] + (P[2] - q.p[2]) * q.normal[2];
+  if (q.height < -1.5) return null;
   const m = memOf(st);
   if (m.air !== r.idx) m.air = r.idx;
   return r;

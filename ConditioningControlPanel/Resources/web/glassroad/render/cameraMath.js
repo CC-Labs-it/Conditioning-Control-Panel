@@ -2,8 +2,8 @@
  *
  * The rig keeps a world yaw and a pitch, follows the kart heading with a time constant and a yaw-rate
  * cap (a wider cap once the gap is large), biases into a drift, freezes yaw while stalled, and follows
- * the kart position with a velocity-predicted horizontal ease and a plain vertical ease (hops do not
- * jerk the view). Horizon stays level: up is world +Y. Vertical fov goes through the lifted viewport law.
+ * the kart position with velocity prediction on the road and a plain vertical ease in the air (hops do
+ * not jerk the view). Horizon stays level: up is world +Y. Vertical fov goes through the lifted viewport law.
  * Polish 3, the kick layer: a short camera kick on bumps and walls (away from the hit) and landings
  * (a dip by tier), a slight fov punch when a boost starts. Each is one damped spring lobe (no oscillation
  * run, so it is a kick, never a shake); Gentle halves every amplitude and damps critically.
@@ -320,7 +320,9 @@ export function createCamRig(feel) {
     const rescue = kart[S.respawnPhase] !== RESPAWN.NONE && kart[S.respawnPhase] !== RESPAWN.GRACE;
     F[0] = damp(F[0] + (rescue ? px - lastPosition[0] : kart[S.velX] * dt), px, tcH, dt);
     F[2] = damp(F[2] + (rescue ? pz - lastPosition[2] : kart[S.velZ] * dt), pz, tcH, dt);
-    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * dt * rig.loop), py, tcV, dt);
+    // Grounded climbs need the same prediction as X/Z, or the vertical ease sinks the eye into the road.
+    const predictY = kart[S.grounded] > 0.5 && kart[S.airborne] < 0.5 ? 1 : rig.loop;
+    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * dt * predictY), py, tcV, dt);
     lastPosition[0] = px; lastPosition[1] = py; lastPosition[2] = pz;
     const gentle = !!feel.get('gentle.on');
     for (const [kind, mag, side] of kickEdges(rig.watch, kart, dt, KL, rig.useVel)) rig.kick.hit(kind, mag, side, gentle);

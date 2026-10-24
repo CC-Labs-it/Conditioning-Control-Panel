@@ -3,6 +3,8 @@
  * No three.js here, so tests/render-*.test.mjs read it under bare node. Colours are CSS hex or 0..1 rgb.
  */
 
+import { BUBBLE_RAM } from '../../core/bubble.js';
+
 /** Per quality tier (render/quality.js Q.name): pooled objects and how alive the icons are. */
 export const ITEM_TIERS = {
   high: { bubbles: 48, motes: 10, iconPx: 256, iconFps: 30, puddles: 12, copies: 3 },
@@ -47,7 +49,7 @@ export const ITEM_LOOK = {
   // pink wave: a flat ring opening along the road
   waveColour: '#ff5cbf', waveAlpha: 0.45, waveWidthM: 3,
   // shields
-  shieldR: 1.55, shieldUpM: 0.75, goldTint: '#ffcf6b',
+  shieldR: BUBBLE_RAM.radiusM, shieldUpM: 0.75, goldTint: '#ffcf6b',
   echoSideM: 1.7, echoBackM: 1.4, echoSwayM: 0.35, echoAlpha: 0.38, echoFlickerHz: 2.5, echoFlickerAmp: 0.15,
   goldMotes: 14,
   // ---- polish 2 ----

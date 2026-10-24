@@ -22,7 +22,7 @@ const NONE = Object.freeze({ kind: 'none', t: 0, durS: 0, k: 0, strength: 0, pre
 
 export function createPost(three, scene, camera) {
   const pipe = new RenderPipeline(three);
-  const u = { strength: uniform(LOOK.bloomStrength), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0) };
+  const u = { strength: uniform(LOOK.bloomStrength), white: uniform(0), flash: uniform(0), edge: uniform(0), side: uniform(0), submerged: uniform(0) };
   const scenePass = pass(scene, camera, { samples: Q.antialias ? 4 : 0 });
   const col = scenePass.getTextureNode('output');
   let screen = null;
@@ -43,6 +43,8 @@ export function createPost(three, scene, camera) {
     out = mix(out, rgb(LOOK.edgeTint), vig.mul(u.edge).mul(sideW).mul(0.6));
     out = out.mul(vig.mul(LOOK.vignetteDark).oneMinus());
     out = mix(out, vec3(1, 1, 1), u.white).add(rgb(LOOK.flashTint).mul(u.flash));
+    // A steady coolant tint eases with depth; no strobe, blur or loss of the driving corridor.
+    out = mix(out, out.mul(vec3(0.48, 0.82, 1.02)).add(vec3(0.006, 0.035, 0.055)), u.submerged.mul(0.8));
     pipe.outputNode = vec4(out, 1);
     pipe.needsUpdate = true;
     builtBloom = Q.bloom;
@@ -64,6 +66,7 @@ export function createPost(three, scene, camera) {
       u.flash.value = fx.flashLevel || 0;
       u.edge.value = fx.edgeGlow || 0;
       u.side.value = fx.edgeSide || 0;
+      u.submerged.value = fx.submerged || 0;
     },
     render() { pipe.render(); },
     dispose() { if (bloomNode) bloomNode.dispose(); if (screen) screen.dispose(); pipe.dispose(); },

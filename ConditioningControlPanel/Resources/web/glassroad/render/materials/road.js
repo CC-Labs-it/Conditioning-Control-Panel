@@ -27,6 +27,8 @@ import { createMusicTiles } from './musicTiles.js';
 import { ROAD_HALF_WIDTH_RANGE, encodeRoadHalfWidth } from '../musicTilesMath.js';
 import { createMusicBands } from './musicBands.js';
 import { createWaterSurface, waterAttributes } from './water.js';
+import { machineSurface, coolantCaustics } from '../mainframeMaterials.js';
+import { mainframeFloor } from '../mainframeFloor.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -322,35 +324,60 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const polish = refl.add(edgeCol.mul(0.6).add(0.4).mul(rim)).mul(u.sheen).mul(mu.calm.mul(M.calmSheen).add(1)).add(vec3(1, 0.97, 0.99).mul(glint));
   // u.bright carries the beat breath; the drop wave and the shatter add their own light (mu.flash is
   // photosafe gated by the caller, 0 when refused or under Gentle)
-  const surface = body.mul(S.baseGain).add(hot.mul(lineV.mul(S.lineGain))).add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)))
+  let surface = body.mul(S.baseGain).add(hot.mul(lineV.mul(S.lineGain))).add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)))
     .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze).mul(LOOK.roadGain);
+  // Mainframe departments own their opaque deck finishes. Shared navigation marks are restrained
+  // so the control tiles, grating, cable channels and black service deck retain their own identity.
+  if (track?.id === 'mainframe') {
+    const plates = mainframeFloor(track, p, machineSurface(p, vec3(0.085, 0.105, 0.12)), {
+      halfWidth: half, wear: art?.detail?.('detail-gold-wear'), roughness: art?.detail?.('detail-porcelain-roughness'),
+    });
+    const dash = smoothstep(.2,.35,fract(p.y.div(12))).mul(float(1).sub(smoothstep(.65,.8,fract(p.y.div(12)))));
+    surface = plates.add(body.mul(0.008)).add(pal.col(0).mul(edgeW.mul(0.035)))
+      .add(vec3(0.32, 0.38, 0.35).mul(centre.mul(dash).mul(S.centreGain * 0.45).mul(u.contrast)))
+      .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze);
+  }
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
+  if (track?.id === 'mainframe') m.transparent = false;
   // the edge line sits over everything; the gutter darkens what is inside it, so the line reads against any hue
   // A broad quiet shoulder gives the clear edge a darker neighbour. The music and glitter remain
   // above it; there are no extra stripes or time-driven luminance changes near the kart.
   const shoulder = smoothstep(0.28, 0.6, trueEdge).mul(float(1).sub(smoothstep(1.15, 1.85, trueEdge)));
   // Solid panes keep their joints and colour when the surrounding ribbon streams or flashes.
   // The steady centre and all separate word/pad markings remain above this restrained surface.
-  const tileBody = tiles.colour.mul(tiles.relief).mul(haze).mul(LOOK.roadGain)
+  let tileBody = tiles.colour.mul(tiles.relief).mul(haze).mul(LOOK.roadGain)
     .add(vec3(1, 0.96, 0.98).mul(tiles.glaze).mul(u.sheen))
     .add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)).mul(LOOK.roadGain));
+  if (track?.id === 'mainframe') tileBody = surface.mul(tiles.relief)
+    .add(vec3(0.36, 0.72, 0.56).mul(tiles.glaze).mul(u.sheen).mul(0.5));
   // WATER (wave 1): stream and pool vertices (attribute `surface` 3 / 4, `flow` m/s) swap the glass body
   // for the water surface (materials/water.js) BEFORE the tiles and bands, so both keep working on water;
   // the glass sheen and polish thin out over it. The clock u.water.t is the caller's (Gentle halves it).
   const wa = waterAttributes();
   const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal, u: u.water, skyRamp });
   const wet = water.w;
-  const glassBody = mix(mix(surface.add(deepCol), water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
+  const glassBody = mix(mix(surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol), water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
   const musicBody = beatBands.apply(glassBody);
   const dry = float(1).sub(wet.mul(0.75));
-  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen).mul(dry)).add(polish.mul(dry)).mul(float(1).sub(gutter.mul(E.gutterDark)));
+  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen).mul(dry)).add(polish.mul(dry).mul(track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));
   const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);
+  const submerged = track?.id === 'mainframe' && track.sections.find(s => s.id === 'submerged');
+  if (submerged) {
+    const emerge = track.sections.find(s => s.id === 'emerge');
+    const inside = smoothstep(submerged.fromS, submerged.fromS + 8, p.y)
+      .mul(float(1).sub(smoothstep((emerge?.toS ?? submerged.toS) - 8, emerge?.toS ?? submerged.toS, p.y)))
+      .mul(smoothstep(-0.3, 1.8, float(track.reservoir?.waterY ?? 4).sub(positionWorld.y)));
+    const tankFloor = m.colorNode.mul(vec3(0.36, 0.8, 1.25))
+      .add(vec3(0.025, 0.2, 0.3).mul(coolantCaustics(p, u.water.t)).mul(u.contrast));
+    m.colorNode = mix(m.colorNode, tankFloor, inside);
+  }
   const ribbonAlpha = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
     .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)).add(gutter.mul(E.gutterAlpha)), 0, 1);
   const bodyAlpha = mix(ribbonAlpha, water.alpha, wet);
   m.opacityNode = max(mix(bodyAlpha, max(tiles.opacity, schlick.mul(0.08).add(tiles.opacity)), tiles.mask), edgeLine);
+  if (track?.id === 'mainframe') m.opacityNode = float(1);
   return { material: m, uniforms: u };
 }

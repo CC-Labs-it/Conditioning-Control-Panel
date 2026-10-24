@@ -18,6 +18,7 @@
  */
 import { makeFrame, frameAtSegU } from './frames.js';
 import { holeAt, holeDistance, fieldAt, stoneIn, stoneDistance } from './courts.js';
+import { canalNormal } from './canal.js';
 
 const WINDOW = 4, FAR_M = 25, BELOW_UP = 0.5, BELOW_PASS_M = 1.5, BELOW_END_M = 0.5;
 
@@ -43,7 +44,7 @@ export function flowAt(nodes, seg, segT, out = [0, 0]) {
   return out;
 }
 
-export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], fields = []) {
+export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], fields = [], profile = null) {
   const { N, SUB, samplePos: S } = sp;
   // bounding sphere per segment over its samples
   const centre = new Float64Array(N * 3), radius = new Float64Array(N);
@@ -70,6 +71,7 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
   // polish 6: the running best lives in a typed scratch (best[0] d2, best[1] seg, best[2] u); doubles kept in the
   // closure context boxed a fresh heap number on every store (the top garbage source of a race)
   const best = new Float64Array(3);
+  const curved = {};
 
   const scanSeg = (i, px, py, pz) => {
     const dc = Math.hypot(px - centre[i * 3], py - centre[i * 3 + 1], pz - centre[i * 3 + 2]) - radius[i];
@@ -138,9 +140,18 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
     flowAt(nodes, seg, fr.segT, out.flow);
     out.railed = !gap && (fl.includes('rail') || fl.includes(lat >= 0 ? 'railR' : 'railL'));
     out.p[0] = fr.p[0] + fr.b[0] * lat; out.p[1] = fr.p[1] + fr.b[1] * lat; out.p[2] = fr.p[2] + fr.b[2] * lat;
+    if (profile && profile(out.s, lat, curved).blend) {
+      canalNormal(fr, curved, out.normal);
+      for (let k = 0; k < 3; k++) out.p[k] += fr.n[k] * curved.height;
+      out.height = (px - out.p[0]) * out.normal[0] + (py - out.p[1]) * out.normal[1] + (pz - out.p[2]) * out.normal[2];
+    }
     return out;
   }
 
+  // A shoulder wider than the centreline search radius needs a surface-distance check. Keep this
+  // bounded to broad decks near the kart's feet; airborne routes still use the usual centreline search.
+  const broad = [];
+  for (let i = 0; i < N; i++) if (Math.max(widthAt(i, 0), widthAt(i, 1)) > FAR_M * 2) broad.push(i);
   const courtProbe = makeQuery();
   function query(px, py, pz, hintSeg = -1, out = makeQuery()) {
     const hint = hintSeg >= 0 && hintSeg < N ? hintSeg | 0 : -1;
@@ -155,6 +166,14 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
       solve(i, 0.5, px, py, pz, courtProbe);
       const h = Math.abs(courtProbe.height), along = (px - fr.p[0]) * fr.t[0] + (py - fr.p[1]) * fr.t[1] + (pz - fr.p[2]) * fr.t[2];
       if (courtProbe.s < court.fromS || courtProbe.s >= court.toS || courtProbe.edgeDist < -1e-6 || h > 4 || Math.abs(along) > 1e-4) continue;
+      if (h < Math.abs(out.height) - 1e-7 || out.edgeDist < 0) copyQuery(out, courtProbe);
+    }
+    for (const i of broad) {
+      const o = i * 4;
+      if (px < box[o] || px > box[o + 2] || pz < box[o + 1] || pz > box[o + 3]) continue;
+      solve(i, 0.5, px, py, pz, courtProbe);
+      const h = Math.abs(courtProbe.height), along = (px - fr.p[0]) * fr.t[0] + (py - fr.p[1]) * fr.t[1] + (pz - fr.p[2]) * fr.t[2];
+      if (!courtProbe.onRoad || courtProbe.height < -BELOW_PASS_M || h > 4 || Math.abs(along) > 1e-4) continue;
       if (h < Math.abs(out.height) - 1e-7 || out.edgeDist < 0) copyQuery(out, courtProbe);
     }
     return out;

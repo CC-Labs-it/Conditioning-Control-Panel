@@ -7,6 +7,7 @@
  * Pitched cues sit on the root of audio/engine.js; impacts play now and are never quantised.
  */
 import { SOUND, CHORDS, noiseBuffer } from './engine.js';
+import { ladderSemis } from './mix.js';
 
 export function makeSynth(ctx, out, feel, engine) {
   let nbuf = null;
@@ -120,6 +121,19 @@ export const AUDIO_CUES = {
     } else syn.noise({ dur: 0.45, vol: 0.1, freq: 600, sweep: 2800 });
   },
   hop(syn) { syn.tone(syn.semis(7), { dur: 0.08, vol: 0.06, glide: syn.semis(12) }); },
+  stone(syn, { id, field = null } = {}) {
+    if (id == null) return;
+    const time = syn.ctx.currentTime, previous = syn.stoneRun;
+    const continuing = previous && previous.field === field && time >= previous.time && time - previous.time < 8;
+    if (continuing && previous.id === id) return;
+    const rung = continuing ? Math.min(19, previous.rung + 1) : 0;
+    syn.stoneRun = { id, field, rung, time };
+    // The same pentatonic climb as a Breakout chain, with a rounded mallet and a glass tail.
+    const hz = syn.semis(ladderSemis(rung));
+    syn.tone(hz, { type: 'triangle', dur: .32, vol: .12, attack: .007 });
+    syn.tone(hz * 2, { type: 'sine', dur: .46, vol: .035, attack: .009 });
+    syn.tone(hz * 3, { type: 'sine', dur: .13, vol: .012, attack: .004 });
+  },
   land(syn, { tier = 0 }) {
     if (tier < 2) return;
     const loud = tier >= 3 ? 1 : 0.55;
@@ -135,6 +149,7 @@ export const AUDIO_CUES = {
   'edge-enter'(syn) { syn.hold('edge', syn.semis(-5), { vol: 0.05 }); },
   'edge-exit'(syn) { syn.release('edge', j(syn, 'edgeGlowFadeS')); },
   drop(syn) {
+    syn.stoneRun = null;
     syn.release('edge', 0.1);
     syn.hold('rescue', syn.semis(0), { vol: 0.1, attack: 0.2 });
   },
@@ -148,6 +163,7 @@ export const AUDIO_CUES = {
     for (const s of chordOf(to)) syn.tone(syn.semis(s + 12), { dur: 0.8, vol: 0.05, attack: 0.08 });
   },
   lap(syn) {
+    syn.stoneRun = null;
     syn.tone(syn.semis(12), { dur: 0.15, vol: 0.1 });
     syn.tone(syn.semis(16), { dur: 0.25, vol: 0.08 });
   },

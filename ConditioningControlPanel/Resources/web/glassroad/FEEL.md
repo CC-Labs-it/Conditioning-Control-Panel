@@ -454,3 +454,11 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `contact.slipAmount` 0.1: slingshot boost size, share of top speed.
 - `contact.slipHoldS` 0.6: slingshot boost hold.
 - `contact.slipCooldownS` 2.5: no second slingshot for this.
+
+## glide (Keep drawbridge)
+
+- `glide.gravityMps2` 6: descending gravity while jump is held after the drawbridge launch.
+- `glide.fallMps` 7: maximum descent speed with the propeller deployed.
+- `glide.maxS` 2.6: maximum flight assistance after launch. Release closes the cap; landing, rescue and restart reset it. Lift also ends before the platform approach.
+
+Keep broad platforms refresh the existing lip lift once when an early hop crosses a forward edge. Other fields keep their original timing.

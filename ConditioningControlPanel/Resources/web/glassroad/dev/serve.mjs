@@ -3,7 +3,7 @@
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // the app serves Resources/web whole, so glassroad's ../../arcademy imports (the Loom) resolve to /arcademy/
@@ -14,6 +14,10 @@ const ARCADEMY = resolve(ROOT, '..', 'arcademy');
 const PRIVATE = resolve(process.env.GLASSROAD_AUDIO_DIR || 'C:/Projects/glassroad-audio');
 const MOUNTS = [['/arcademy/', ARCADEMY], ['/private-audio/', PRIVATE]];
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
+// A developer may attach a private local provider. Its settings and receipts stay outside this tree.
+const providerModule = process.env.GLASSROAD_PREVIEW_PROVIDER;
+const liveCards = providerModule
+  ? (await import(pathToFileURL(resolve(providerModule)).href)).createLiveCardMedia() : null;
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.css': 'text/css; charset=utf-8', '.wasm': 'application/wasm', '.glb': 'model/gltf-binary', '.ktx2': 'image/ktx2',
@@ -23,6 +27,30 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
   const head = { 'Cache-Control': 'no-store', 'Cross-Origin-Opener-Policy': 'same-origin' };
+  if (liveCards && new URL(req.url, 'http://local').pathname.startsWith('/__card-media/')) {
+    const path = new URL(req.url, 'http://local').pathname;
+    if (path === '/__card-media/start') {
+      if (req.method !== 'POST') { res.writeHead(405, head); res.end(); return; }
+      if (req.headers.origin !== `http://127.0.0.1:${PORT}` && req.headers.origin !== `http://localhost:${PORT}`) {
+        res.writeHead(403, head); res.end(); return;
+      }
+      try { await liveCards.start(); res.writeHead(204, head); res.end(); }
+      catch { res.writeHead(503, head); res.end(); }
+      return;
+    }
+    if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
+    try {
+      if (path === '/__card-media/manifest.json') {
+        const body = JSON.stringify(await liveCards.manifest());
+        res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
+        res.end(req.method === 'HEAD' ? undefined : body); return;
+      }
+      const row = await liveCards.read(path.slice('/__card-media/'.length));
+      if (!row || Date.now() >= row.expiresAt) { res.writeHead(404, head); res.end(); return; }
+      res.writeHead(200, { ...head, 'Content-Type': row.type, 'Content-Length': row.bytes.length });
+      res.end(req.method === 'HEAD' ? undefined : row.bytes); return;
+    } catch { res.writeHead(503, head); res.end(); return; }
+  }
   if (req.method === 'POST' && req.url === '/__diag') {   // the page's dev beacon, printed for the session log
     let body = ''; req.on('data', (c) => { if (body.length < 8000) body += c; });
     req.on('end', () => { console.log(new Date().toISOString().slice(11, 19), 'diag', body); res.writeHead(204, head); res.end(); });
@@ -46,3 +74,8 @@ const server = createServer(async (req, res) => {
   }
 });
 server.listen(PORT, '127.0.0.1', () => console.log('glassroad on http://127.0.0.1:' + PORT + '/'));
+server.on('close', () => liveCards?.dispose());
+if (liveCards) {
+  const stop = () => { liveCards.dispose(); server.close(); };
+  process.once('SIGINT', stop); process.once('SIGTERM', stop);
+}

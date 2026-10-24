@@ -174,6 +174,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     reset(sectionIdx = 0) {
       syn?.releaseAll(0.1);
       if (syn) syn.b1 = null;
+      if (syn) syn.stoneRun = null;
       popSt.rung = -1; popSt.t = -1e9;
       engine?.chord(sectionIdx);
       rivals?.silence();

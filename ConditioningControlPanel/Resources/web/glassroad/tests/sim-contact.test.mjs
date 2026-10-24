@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { S, RESPAWN, BOOST } from '../sim/state.js';
 import { createContact } from '../sim/contact.js';
 import { createFeelOverlay, identityMods } from '../sim/racers.js';
-import { makeFeel, fakeTrack, place, recorder, DT } from './sim-fake.mjs';
+import { makeFeel, fakeTrack, place, recorder, DT, run, acts } from './sim-fake.mjs';
 
 // a racer stand-in: what contact reads (st, feel, mods, fxv, events)
 function racer(i, track, feel, opts) {
@@ -12,6 +12,48 @@ function racer(i, track, feel, opts) {
 }
 const RACING = { phase: 'racing', timeS: 10 };
 const quat = (st) => [st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]];
+
+for (const kind of ['glass','golden']) for (const reverse of [false,true]) test(`bubble ram ${kind}, reversed=${reverse}: launches the victim and preserves the holder`,()=>{
+  const feel=makeFeel(), tr=fakeTrack({flags:()=>[]}), rec=recorder(), c=createContact(tr,feel,rec);
+  const a=racer(0,tr,feel,{s:100,lateral:5.2,speed:20}), b=racer(1,tr,feel,{s:100,lateral:6,speed:20});
+  a.fxv.shield=kind;
+  c.update(DT,reverse?[b,a]:[a,b],RACING);
+  assert.equal(a.st[S.airborne],0); assert.equal(a.st[S.engineV],20);
+  assert.equal(b.st[S.airborne],1); assert.equal(b.st[S.grounded],0); assert.ok(b.st[S.velY]>=6.49);
+  const f=tr.frameAt(100,{}), lateral=b.st[S.velX]*f.b[0]+b.st[S.velZ]*f.b[2];
+  assert.ok(lateral>=17.99);
+  assert.equal(rec.all('bubble-ram').length,1); assert.equal(rec.first('bubble-ram').payload.victim,1);
+  run(b.st,tr,feel,acts({throttle:1}),2,rec,st=>st[S.respawnPhase]>0);
+  assert.ok(b.st[S.respawnPhase]>0,'the actual flight can crash beyond an open edge');
+});
+
+test('bubble ram cooldown, paired shields, ghost protection and pause',()=>{
+  const feel=makeFeel(),tr=fakeTrack(),rec=recorder(),c=createContact(tr,feel,rec);
+  const a=racer(0,tr,feel,{lateral:0,speed:20}),b=racer(1,tr,feel,{lateral:1,speed:20});
+  a.fxv.shield='glass'; b.fxv.shield='golden';
+  const initialA=a.st.slice(), initialB=b.st.slice();
+  c.update(DT,[a,b],{phase:'paused',timeS:10}); assert.equal(rec.all('bubble-ram').length,0);
+  c.update(DT,[a,b],{phase:'racing',timeS:0}); assert.equal(rec.all('bubble-ram').length,0);
+  c.update(DT,[a,b],RACING); assert.equal(a.st[S.airborne],1); assert.equal(b.st[S.airborne],1);
+  a.st.set(initialA); b.st.set(initialB); c.update(DT,[a,b],RACING);
+  assert.equal(rec.all('bubble-ram').length,1,'one launch per contact cooldown');
+  c.reset(); b.st[S.respawnPhase]=RESPAWN.GRACE; c.update(DT,[a,b],RACING);
+  assert.equal(rec.all('bubble-ram').length,1,'rescue grace cannot be rammed');
+});
+
+test('bubble contact reaches its visible shell and still respects rails and assisted edge protection',()=>{
+  for(const mode of ['open','rail','gentle','assist']) {
+    const feel=makeFeel(mode==='gentle'?{'gentle.on':true}:{}), tr=fakeTrack({flags:()=>mode==='rail'?['rail']:[]});
+    const rec=recorder(),c=createContact(tr,feel,rec);
+    const a=racer(0,tr,feel,{lateral:4.8,speed:20}),b=racer(1,tr,feel,{lateral:6.6,speed:20});
+    a.fxv.shield='glass'; if(mode==='assist') b.feel.over['gentle.on']=true;
+    c.update(DT,[a,b],RACING);
+    assert.equal(rec.all('bubble-ram').length,1,'the shell hits before bare kart bodies touch');
+    run(b.st,tr,b.feel,acts({throttle:1}),2,rec,st=>st[S.respawnPhase]>0);
+    if(mode==='open') assert.ok(b.st[S.respawnPhase]>0);
+    else assert.equal(b.st[S.respawnPhase],0,mode+' still holds the edge');
+  }
+});
 
 test('bump: overlapping karts push apart across the road, no spin, a bump cue', () => {
   const feel = makeFeel(), tr = fakeTrack(), rec = recorder(), c = createContact(tr, feel, rec);
