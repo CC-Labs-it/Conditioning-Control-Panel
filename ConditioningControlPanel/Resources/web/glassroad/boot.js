@@ -34,6 +34,7 @@ import { createTouch } from './input/touch.js';
 import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN } from './sim/state.js';
 import { createImmersion } from './track/immersion.js';
+import { createWaterContact } from './audio/water-travel.js';
 import { createRace } from './sim/race.js';
 import { createRacers } from './sim/racers.js';
 import { createAi } from './sim/ai.js';
@@ -223,7 +224,9 @@ async function boot() {
   fx.state.screen = effects.screen;
   const audio = createAudio(feel, bus, { gentle });
   const immersion = createImmersion(track);
+  const waterContact = createWaterContact(track);
   if (BOT) Object.defineProperty(debug, 'underwaterAudio', { get: () => audio.underwater });
+  if (BOT) Object.defineProperty(debug, 'waterTravelAudio', { get: () => audio.waterTravel });
   for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
@@ -838,6 +841,7 @@ async function boot() {
       boosting: pst[S.boostKind] > 0, drifting: pst[S.driftDir] !== 0, driftTier: pst[S.driftStage],
       airborne: pst[S.airborne] > 0, onRoad: pst[S.grounded] > 0, edge: fs.edgeGlow > 0, paused: frozen, duck: fs.duck,
       submerged: inRace ? immersion(pst[S.s], cam.camera.position.y) : 0,
+      ...waterContact(pst, inRace, feel.get('speed.topMps')),
     }, inRace ? racers.nearby(feel.get('ai.audibleKarts'), 80) : []);
     // rumble follows fs.rumble (zero under Gentle): re-sent every juice.rumbleMs at its current level,
     // and at once when it steps up (drift tiers 2 and 3), so the ladder ramps and a landing fades
