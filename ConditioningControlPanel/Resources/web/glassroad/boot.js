@@ -29,6 +29,7 @@ import { clamp, v3, qrotate } from './core/math.js';
 import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
 import { createTouch } from './input/touch.js';
+import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN } from './sim/state.js';
 import { createRace } from './sim/race.js';
 import { createRacers } from './sim/racers.js';
@@ -354,7 +355,10 @@ async function boot() {
   applyOptions(opts);
   hud.on('option', ({ options }) => applyOptions(options || hud.options));
 
+  let glideHintLap = -1;
   function resetAll() {
+    glideHintLap = -1;
+    for (const r of racers.list) resetGlide(r.st);
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
     if (hazards) hazards.reset();
@@ -767,6 +771,14 @@ async function boot() {
     if (words) wordCount.set(words.pops, words.total, words.streak);
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
+    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
+    if (track.id === 'keep' && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
+      const bridge = keepLayout.drawbridge;
+      if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
+        glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
+      }
+    }
+    if (BOT) debug.gliding = !!kartViews[0]?.glide;
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road

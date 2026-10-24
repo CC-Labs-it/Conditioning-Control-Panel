@@ -119,19 +119,17 @@ test('Keep prison blocks clear the road and exposed sections preserve the inner 
     assert.ok(f.w >= 34);
   }
 });
-test('Keep has a real raised drawbridge gap and three complete lanes of 5m stepping stones', () => {
+test('Keep has a real drawbridge and nine broad landing platforms with four-and-a-half metre gaps', () => {
   const t = keep(), layout = getKeepLayout(t), bridge = layout.drawbridge;
   assert.equal(t.jumps.length, 1);
   assert.ok(t.frameAt(bridge.gapS0 + 1).flags.includes('jump'));
   assert.ok(t.frameAt(bridge.gapS1 + 1).p[1] < t.frameAt(bridge.gapS0).p[1] - 15);
-  assert.ok(t.frameAt(bridge.rampS0 + 25).t[1] > .25, 'physical upward takeoff slope');
-  const field = t.fields[0]; assert.equal(field.id, 'keep-stones');
-  assert.equal(field.stones.length, 15); assert.ok(field.toS - field.fromS > 40.9 && field.toS - field.fromS < 41.1);
-  for (const x of field.lanes) {
-    const stones = field.stones.filter((h) => h.x === x);
-    assert.ok(stones.every((h) => h.w === 5 && h.len === 5));
-    assert.ok(Math.abs(stones[0].s - field.fromS) < .01);
-    assert.ok(Math.abs(stones.at(-1).s + 5 - field.toS) < .01);
-    for (let i = 1; i < stones.length; i++) assert.ok(stones[i].s - stones[i-1].s - 5 <= 4.01);
-  }
+  assert.ok(t.frameAt(bridge.rampS0 + 25).t[1] > .25);
+  const field = t.fields[0], stones = field.stones;
+  assert.equal(field.id, 'keep-stones'); assert.equal(stones.length, 9);
+  assert.ok(Math.abs(field.toS - field.fromS - 270) < .01);
+  assert.ok(stones.every((h) => h.w === 28 && h.len === 26));
+  assert.ok(Math.abs(stones[0].s - field.fromS) < .01);
+  assert.ok(Math.abs(stones.at(-1).s + 26 - field.toS) < .01);
+  for (let i = 1; i < stones.length; i++) assert.ok(Math.abs(stones[i].s - stones[i-1].s - 30.5) < .01);
 });

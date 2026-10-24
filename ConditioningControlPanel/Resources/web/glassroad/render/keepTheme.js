@@ -17,7 +17,7 @@ export function keepArtPlan(want, tier) {
   aliases['hazard-keep-footprint'] = 'hazard-keep-footprint' + suffix;
   const ids = want.filter((id) => !/^(chess-|slot-cabinet|threshold-slot|stone-threshold|card-(drop|lens|orbit|petal)$|pocket-watch$|spiral-disc$)/.test(id))
     .map((id) => aliases[id] || id);
-  ids.push(...Object.values(aliases), 'stone-keep', 'hazard-keep-portcullis',
+  ids.push(...Object.values(aliases), 'stone-keep', 'glide-keep-beanie', 'hazard-keep-portcullis',
     ...['keep-colossus-padlock', 'keep-colossus-chainpile', 'keep-portcullis-arch'].map((id) => `${id}-lod${lod}`));
   return { ids: [...new Set(ids)], aliases };
 }

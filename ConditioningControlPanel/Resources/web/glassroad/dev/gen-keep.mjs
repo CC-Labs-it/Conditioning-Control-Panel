@@ -42,8 +42,8 @@ export function buildKeep() {
     const n = node(id, .5); nodes[n].flags.push('boost'); boosts.push({ node: n, x: 0, w: 4, len: 6 });
   }
   const fieldStart = node('stones'), fieldEnd = node('stones-exit');
-  const fields = [{ id: 'keep-stones', from: fieldStart, to: fieldEnd, lanes: [-7, 0, 7],
-    stones: [-7, 0, 7].flatMap((x, lane) => [0, 9, 18, 27, 36].map((ds, i) => ({ id: 'keep-' + lane + '-' + i, node: fieldStart, ds, x, w: 5, len: 5 }))) }];
+  const fields = [{ id: 'keep-stones', from: fieldStart, to: fieldEnd, lanes: [-8, 0, 8],
+    stones: Array.from({ length: 9 }, (_, i) => ({ id: 'keep-stones-' + i, node: fieldStart, ds: i * 30.5, x: 0, w: 28, len: 26 })) }];
   const track = {
     format: 'glassroad-track', version: 1, id: 'keep', name: { en: 'The Keep' }, author: 'ccl', created: '2026-10-24',
     loop: true, laps: 2, units: 'm', nodes,

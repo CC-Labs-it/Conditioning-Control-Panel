@@ -31,7 +31,7 @@ test('stones schema: Threshold carries a field; a bad field is refused', () => {
   assert.equal(bad((t) => { t.fields.push({ ...t.fields[0] }); }).ok, false, 'duplicate id');
   assert.equal(bad((t) => { t.fields[0].lanes = [7, 0, -7]; }).ok, false, 'lanes unsorted');
   assert.equal(bad((t) => { t.fields[0].stones[0].w = 2; }).ok, false, 'w under 3');
-  assert.equal(bad((t) => { t.fields[0].stones[0].len = 13; }).ok, false, 'len over 12');
+  assert.equal(bad((t) => { t.fields[0].stones[0].len = 33; }).ok, false, 'len over 32');
   assert.equal(bad((t) => { t.fields[0].stones[0].x = 12; }).ok, false, 'stone off the road');
   assert.equal(bad((t) => { t.fields[0].stones[0].node = t.fields[0].to; }).ok, false, 'stone outside its field');
   assert.equal(bad((t) => { t.fields[0].stones[1].id = t.fields[0].stones[0].id; }).ok, false, 'duplicate stone id');

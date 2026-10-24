@@ -29,10 +29,11 @@ function pieces() {
     corner('dogleg-in', 45, 75, 48), straight('west-descent', 120, 20), corner('dogleg-out', -45, 75, 14),
     straight('gallows-courtyard', 160, 14, 34), corner('courtyard-exit', -45, 75, 16),
     straight('outer-rampart', 140, 16, 34, { edge: 'L' }), corner('rampart-turn', 45, 75, 16),
+    corner('north-rampart-in', -45, 75, 16), straight('north-rampart-traverse', 263, 16, 32), corner('north-rampart-out', 45, 75, 16),
     straight('west-approach', 320, 16, 32), corner('west-tower', 90, 90, 14),
     straight('bridge-approach', 80, 14, 34), straight('drawbridge-ramp', 40, 24, 34, { kick: true }),
     straight('drawbridge-gap', 20, 8, 34, { jump: true, linear: true }), straight('drawbridge-landing', 60, 8, 34),
-    straight('stones-approach', 70, 2, 26), straight('stones', 41, 2, 26, { field: true }), straight('stones-exit', 20, 2, 26),
+    straight('stones-approach', 70, 2, 32), straight('stones', 270, 2, 32, { field: true }), straight('stones-exit', 20, 2, 32),
     straight('sluice', 40, 2, 30, { surface: 'stream', flow: [3, 0] }),
     straight('moat-pool', 55, 2, 30, { surface: 'pool' }), straight('moat-return', 0, 0),
     corner('south-tower', 90, 90, 0), straight('home', 80, 0),
@@ -74,7 +75,7 @@ export function getKeepLayout(track) {
     courts: [{ id: 'gallows', x: 520, z: 510, w: 170, d: 65, baseY: 14, wallM: 12 }],
     ruins: [{ id: 'collapsed-north-wing', x: 475, z: 590, w: 140, d: 55, baseY: 14, topY: 42 }],
   };
-  const stoneFields = [{ id: 'keep-stones', s0: find('stones').s0, s1: find('stones').s1, lanes: [-7, 0, 7], widthM: 26 }];
+  const stoneFields = [{ id: 'keep-stones', s0: find('stones').s0, s1: find('stones').s1, lanes: [-8, 0, 8], widthM: 32, platformWidthM: 28, platformLengthM: 26, gapM: 4.5 }];
   const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, minY: 0, maxY: 0 };
   for (let s = 0; s < track.lengthM; s += 10) {
     const f = track.frameAt(s), margin = f.w / 2;
