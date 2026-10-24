@@ -79,7 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static async Task<bool> OpenBrowserOrPromptAsync(Window owner, string url, string purpose)
         {
             if (!Allowed(url)) return false;
-            if (Open(url)) return true;
+            if (await OpenAsync(owner, url)) return true;
             if (OperatingSystem.IsWindows() &&
                 (BrowserFallback("explorer.exe", url) ||
                  BrowserFallback("cmd.exe", $"/c start \"\" \"{url}\"") ||

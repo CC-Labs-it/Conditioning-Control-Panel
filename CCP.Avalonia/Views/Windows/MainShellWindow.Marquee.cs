@@ -241,7 +241,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async void BannerWebLink_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             e.Handled = true;
-            try { await Platform.ExternalOpener.OpenBrowserOrPromptAsync(this, "https://app.cclabs.app", "open the CC Labs web app"); }
+            // The link's Tag carries the URL, as WPF reads it from the Hyperlink's e.Uri.
+            var url = "https://app.cclabs.app";
+            try { await Platform.ExternalOpener.OpenBrowserOrPromptAsync(this, url, "open the CC Labs web app"); }
             catch (Exception ex) { Log.Warning(ex, "Banner browser prompt failed"); }
             finally { RetireWebBannerBeat(); }
         }

@@ -68,7 +68,7 @@ public partial class MainShellWindow
         if (Named<Border>("BannerHalo") is { } halo)
         {
             halo.Opacity = .35;
-            halo.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = AmbientFxCanvas.Env.GlowColor });
+            SetHaloShadow(halo, 12);
         }
         if (Named<Border>("BannerSheen") is { } sheen) sheen.Opacity = 0;
         Named<Canvas>("BannerSparkleLayer")?.Children.Clear();
@@ -139,6 +139,16 @@ public partial class MainShellWindow
         }
     }
     private int _bannerSparkleSeed = Environment.TickCount;
+    private (double Blur, Color Color) _bannerHaloShadow;
+
+    // P07: a new BoxShadows only when the flare or glow hue actually changes, not every breath tick.
+    private void SetHaloShadow(Border halo, double blur)
+    {
+        var key = (blur, AmbientFxCanvas.Env.GlowColor);
+        if (key == _bannerHaloShadow && halo.BoxShadow.Count > 0) return;
+        _bannerHaloShadow = key;
+        halo.BoxShadow = new BoxShadows(new BoxShadow { Blur = blur, Color = key.Item2 });
+    }
 
     // Explicit time is also the test seam: assert actual transforms/opacity and sprite cleanup.
     internal void StepBannerFx(double now)
@@ -168,7 +178,7 @@ public partial class MainShellWindow
             halo.Opacity = BannerAmbient ? .25 + .35 * (.5 - .5 * Math.Cos(now * Math.PI / 3.2)) : .35;
             double flare = cues && age >= 0 && age < .4
                 ? age < .09 ? age / .09 : Math.Pow(1 - (age - .09) / .31, 2) : 0;
-            halo.BoxShadow = new BoxShadows(new BoxShadow { Blur = 12 + 10 * flare, Color = AmbientFxCanvas.Env.GlowColor });
+            SetHaloShadow(halo, 12 + 10 * flare);
         }
         double sweep = now - _bannerSheenAt;
         if (Named<Border>("BannerSheen") is { } sheen)
@@ -176,9 +186,12 @@ public partial class MainShellWindow
             double t = Math.Clamp(sweep / .75, 0, 1);
             sheen.Opacity = cues && sweep >= 0 && sweep < .75
                 ? .22 * (t < .2 ? t / .2 : t < .75 ? 1 : (1 - t) / .25) : 0;
-            var width = Named<Grid>("BannerSheenHost")?.Bounds.Width ?? 0;
-            sheen.RenderTransform = new TransformGroup { Children = { new SkewTransform(-20, 0),
-                new TranslateTransform(-110 + (width + 137.5) * (.5 - .5 * Math.Cos(t * Math.PI)), 0) } };
+            // The XAML's own slide (WPF BannerSheenSlide), moved only while the band is visible.
+            if (sheen.Opacity > 0 && sheen.RenderTransform is TransformGroup { Children: [_, TranslateTransform slide] })
+            {
+                var width = Named<Grid>("BannerSheenHost")?.Bounds.Width ?? 0;
+                sheen.RenderTransform = new TransformGroup { Children = { new SkewTransform(-20, 0), new TranslateTransform() } }; slide.X = -110 + (width + 137.5) * (.5 - .5 * Math.Cos(t * Math.PI));
+            }
         }
         bool support = _bannerCurrentIndex < _bannerBeats.Length && ReferenceEquals(_bannerBeats[_bannerCurrentIndex], BannerPrimary);
         if (BannerAmbient && support && now - _bannerSparkleAt >= 12) RunBannerSparkles(now);

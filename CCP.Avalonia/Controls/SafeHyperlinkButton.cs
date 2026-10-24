@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
             NavigateUri = null;
             try { base.OnClick(); }
             finally { NavigateUri = uri; }
-            if (uri is not null) _ = OpenAsync(uri);
+            
         }
 
         private async Task OpenAsync(Uri uri)
