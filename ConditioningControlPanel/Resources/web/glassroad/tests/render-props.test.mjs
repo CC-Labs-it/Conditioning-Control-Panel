@@ -42,13 +42,13 @@ test('props: the corridor windows match the brief and nothing sits in one', () =
   }
   assert.equal(corridorHit(f(0.91), L, W), 'tunnel');
   assert.equal(corridorHit(f(0.89) - 15, L, W), 'tunnel');
-  assert.equal(corridorHit(f(0.42), L, W), 'loop');
-  assert.equal(corridorHit(f(0.51), L, W), 'loop');
-  for (const b of [0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]) assert.equal(corridorHit(f(b) + 7, L, W), 'board');
+  assert.equal(corridorHit(f(0.79), L, W), 'loop');
+  assert.equal(corridorHit(f(0.819), L, W), 'loop');
+  for (const b of [0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]) assert.ok(['board','loop'].includes(corridorHit(f(b) + 7, L, W)));
   assert.equal(corridorHit(f(0.13), L, W), null);
   // windows wrap round the line
-  assert.equal(corridorHit(L - 1, L, { ...W, corridorGates: [0.005] }), 'gate');
-  assert.equal(corridorHit(3, L, { ...W, corridorGates: [0.999] }), 'gate');
+  assert.equal(corridorHit(L - 1, L, { ...W, corridorGates: [8/L] }), 'gate');
+  assert.equal(corridorHit(3, L, { ...W, corridorGates: [1-8/L] }), 'gate');
   const free = freeSpans(L, W);
   assert.ok(free.length > 5 && free.every(([a, b]) => b > a));
   for (const tier of ['high', 'mid', 'phone']) for (const seed of [1, 7, 4242]) {
@@ -72,10 +72,11 @@ test('props: the scatter hangs where the chase camera looks, never empty for lon
       const q = localOf(x.p, tr.frameAt(x.s));
       assert.ok(q.h > W.scatterAirM && Math.abs(q.l) <= tr.frameAt(x.s).w, x.k.id + ' over the road');
     }
-    // inside the free road, any 100 m holds a piece (the corridors carry the spirals and screens)
+    // The same prop budget spans the longer lap; world screens and lamps retain their per-metre cadence.
+    const windowM = Math.max(100, L / scatterCount('high', W) * 2.2);
     const ss = sc.map((x) => x.s).sort((a, b) => a - b);
     for (const [a, b] of freeSpans(L, W)) {
-      for (let s = a; s + 100 <= b; s += 20) assert.ok(ss.some((v) => v >= s && v < s + 100), 'empty stretch from s ' + s.toFixed(0));
+      for (let s = a; s + windowM <= b; s += 20) assert.ok(ss.some((v) => v >= s && v < s + windowM), 'empty stretch from s ' + s.toFixed(0));
     }
   }
 });
@@ -274,7 +275,7 @@ test('heroes: clear of every stretch, the corridors, the billboards, the drop sh
     assert.ok(sc.length >= Math.floor(scatterCount(tier, W) * 0.85), 'scatter still fills: ' + sc.length);
   }
   // the dare's take-off (the coil's outer turn) and landing (its inner turn) stay open (polish 6)
-  for (const s of [945, 975, 1005, 1145, 1170, 1190]) assert.ok(heroAvoidHit(s, L, W), 'avoid ' + s);
+  for (const s of [4410, 4450, 4510, 4600, 4680, 4720]) assert.ok(heroAvoidHit(s, L, W), 'avoid ' + s);
   assert.ok(heroAvoidHit(L - 5, L, W) && heroAvoidHit(5, L, W), 'the finish arch');
 });
 

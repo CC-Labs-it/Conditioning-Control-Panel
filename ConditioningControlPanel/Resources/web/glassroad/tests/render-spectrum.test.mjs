@@ -144,7 +144,7 @@ test('patterns: fitPeriod divides the lap exactly and stays near the base', () =
 
 test('patterns: zones cover the lap in order, each section runs its own list, lanes carry a large share', () => {
   const z = patternZones(tr.sections);
-  assert.equal(z.length, KEYS.reduce((a, k) => a + SECTION_PATTERNS[k].length, 0));
+  assert.equal(z.length, tr.sections.reduce((a, s) => a + SECTION_PATTERNS[sectionKey(s)].length, 0));
   assert.equal(z[0].fromS, 0); assert.ok(near(z[z.length - 1].toS, tr.lengthM, 1e-6));
   for (let i = 1; i < z.length; i++) assert.ok(near(z[i].fromS, z[i - 1].toS, 1e-6));
   for (const zone of z) assert.ok(zone.pattern >= 0 && zone.pattern < PATTERNS.length);

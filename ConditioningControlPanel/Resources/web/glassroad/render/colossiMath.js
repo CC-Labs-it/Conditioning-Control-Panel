@@ -59,7 +59,7 @@ export const WORLD_DEFAULTS = Object.freeze({
   heroFaceLeadM: 110, heroEyeM: 2.6, heroSwingRad: 0.35, heroTries: 120,
   // polish 6: the finish arch and the whole coil (the dare's take-off on its outer turn, the landing on its inner
   // one; a hero beside a turn that tight could never face the oncoming camera)
-  heroAvoidS: Object.freeze([Object.freeze([-28, 28]), Object.freeze([900, 1200])]),
+  heroAvoidS: Object.freeze([Object.freeze([-28, 28]), Object.freeze([4400, 4730])]),
   heroKinds: Object.freeze([
     { id: 'chess-king-lod0', h: [50, 55], spin: 0.06, pose: 'upright', look: 'chess' },
     { id: 'slot-cabinet-lod0', h: [34, 40], spin: 0, pose: 'face', look: 'slot' },
@@ -95,7 +95,7 @@ export const WORLD_DEFAULTS = Object.freeze({
   corridorGates: Object.freeze([0.09, 0.17, 0.315, 0.785, 0.965]), corridorGateHalfM: 20,
   corridorTunnel: Object.freeze([0.89, 0.93]), corridorTunnelPadM: 20,
   // the wheel and the hoop (vertical loops, polish 6): nothing stands in a loop window (padM either side)
-  corridorLoops: Object.freeze([Object.freeze([0.388, 0.451]), Object.freeze([0.481, 0.536])]), corridorLoopPadM: 12,
+  corridorLoops: Object.freeze([Object.freeze([0.781, 0.802]), Object.freeze([0.809, 0.829])]), corridorLoopPadM: 12,
   corridorBoards: Object.freeze([0.06, 0.2, 0.24, 0.35, 0.37, 0.575, 0.68, 0.76, 0.808, 0.99]), corridorBoardHalfM: 7.5,
   // soft shading (materials/colossus.js): wrap, floor, rim, sheen, aerial haze (polish 3: full colour inside
   // hazeNearM, no low haze) and the prop tint: a saturated hue over the paint's luminance, mixed in whole

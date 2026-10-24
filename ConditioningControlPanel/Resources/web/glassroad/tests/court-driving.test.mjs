@@ -108,7 +108,7 @@ test('court rescue anchors have supported rollouts and recover through the exit 
 for (const seed of [1, 20261023, 241023]) test('eight racers reach and leave the court from the real starting grid without a court fall, seed ' + seed, () => {
   const race = makeRace({ track, seed }), seen = new Set(), exited = new Set();
   const falls = race.racers.list.map(() => 0);
-  for (let i = 0; i < 110 / DT && exited.size < 8; i++) {
+  for (let i = 0; i < 300 / DT && exited.size < 8; i++) {
     const before = race.racers.list.map(r => r.st[S.s]);
     race.tick();
     for (const r of race.racers.list) {

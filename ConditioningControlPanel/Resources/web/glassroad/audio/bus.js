@@ -40,7 +40,7 @@ const LOCAL = new Set(['effect-start', 'effect-end', 'race-result']);
  *   cue(name: string, opts?: {volume?: number, pitch?: number}): void, reset(sectionIdx?: number): void,
  *   setPaused(on: boolean): void, setVolumes(v: {master?: number, music?: number, sfx?: number}): void,
  *   readonly music: object|null, dispose(): void}} */
-export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCtx = null, fetchFn = globalThis.fetch, laps = 3, sfxBase } = {}) {
+export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCtx = null, fetchFn = globalThis.fetch, musicFetchFn = fetchFn, laps = 3, sfxBase } = {}) {
   let ctx = null, engine = null, syn = null, rivals = null, music = null, paused = false, dead = false;
   let samples = null, samplesReady = Promise.resolve(0), plays = 0, lapCount = laps;
   const popSt = { rung: -1, t: -1e9 };
@@ -76,7 +76,7 @@ export function createAudio(feel, bus, { gentle, win = globalThis.window, makeCt
     rivals = createRivals(ctx, bed, feel);
     syn = makeSynth(ctx, sfx, feel, engine);
     syn.duck = duck;
-    try { music = createMusic(ctx, musicBus, feel); } catch (e) { music = null; }
+    try { music = createMusic(ctx, musicBus, feel, { fetchFn: musicFetchFn }); } catch (e) { music = null; }
     samples = createSamples(ctx, sfx, { fetchFn, ...(sfxBase ? { base: sfxBase } : {}) });
     samplesReady = samples.load().then((n) => { engine?.useSamples(samples); rivals?.useSamples(samples); return n; }).catch(() => 0);
     return ctx;

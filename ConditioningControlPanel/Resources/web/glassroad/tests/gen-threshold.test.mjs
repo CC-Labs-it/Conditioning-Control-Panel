@@ -14,7 +14,7 @@ test('gen: the course passes every generator check', () => {
   assert.deepEqual(errs, []);
   assert.deepEqual(info.levels, [0, 14, 28]);
   assert.ok(info.crossings.length >= 2, 'crossings ' + info.crossings.length);
-  assert.ok(info.lengthM >= 1350 * 0.75 && info.lengthM <= 1350 * 1.25, 'lap within +-25% of the old ring: ' + info.lengthM);
+  assert.ok(info.lengthM >= 5000 && info.lengthM <= 6500, 'six-section lap length: ' + info.lengthM);
 });
 
 test('gen: tracks/threshold.json is the generator output', () => {

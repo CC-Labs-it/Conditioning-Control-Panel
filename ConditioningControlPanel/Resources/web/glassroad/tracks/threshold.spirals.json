@@ -12,7 +12,7 @@
       }
     },
     {
-      "id": "dawn-coil", "f": 0.17, "radiusM": 18, "depthM": 24, "helixTurns": 0.12, "taper": 0.15, "upM": 3.5,
+      "id": "dawn-coil", "f": 0.17, "radiusM": 20, "depthM": 24, "helixTurns": 0.12, "taper": 0.15, "upM": 3.5,
       "seed": 204
     },
     {

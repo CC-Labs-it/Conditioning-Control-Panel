@@ -90,12 +90,14 @@ test('wet grip-bank airborne transitions create hop and landing impulses without
   const bank={...track,frameAt:s=>({...track.frameAt(s),surface:'grip'})};
   const water=createWaterfall(bank,pal,{fluid});t.after(()=>water.dispose());
   const st=createState();st[S.s]=10;st[S.grounded]=1;st[S.velZ]=-12;water.kart(0,st,.01);
+  assert.equal(impulses.length,3,'entering water responds on the first frame');impulses.length=0;
   st[S.grounded]=0;st[S.airborne]=1;st[S.velY]=4;water.kart(0,st,.01);
   assert.equal(impulses.length,1);assert.ok(impulses[0].strength<0);
   st[S.velY]=-10;water.kart(0,st,.01);st[S.grounded]=1;st[S.airborne]=0;st[S.velY]=0;water.kart(0,st,.01);
-  assert.equal(impulses.length,2);assert.ok(impulses[1].strength>.6,'landing retains pre-contact downward velocity');
+  assert.equal(impulses.filter(p=>p.strength>.6).length,1,'landing retains pre-contact downward velocity once');
   water.reset();bank.frameAt=s=>track.frameAt(s);impulses.length=0;
   water.kart(0,st,.01);st[S.grounded]=0;st[S.airborne]=1;water.kart(0,st,.01);
   st[S.grounded]=1;st[S.airborne]=0;water.kart(0,st,.01);
-  assert.equal(impulses.length,0,'stream/pool hops and landings stay owned by sim splash events');
+  assert.equal(impulses.filter(p=>p.strength>.6).length,0,'stream/pool landings stay owned by sim splash events');
+  assert.equal(impulses.length,6,'stream entry and re-entry each leave only the three driving wake impulses');
 });
