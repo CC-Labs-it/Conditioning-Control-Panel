@@ -66,6 +66,17 @@ public sealed class SessionRunnerTests : IDisposable
         },
     };
 
+    [Fact]
+    public void SettingPulseIsSettledBeforeSessionSnapshot()
+    {
+        var s = CoreSettings.Current;
+        s.PinkFilterOpacity = 45;
+        _runner.SettleSettingPulses = () => s.PinkFilterOpacity = 10;
+        _runner.Start(OneMinute());
+        _runner.Stop();
+        Assert.Equal(10, s.PinkFilterOpacity);
+    }
+
     private static JObject SettingsJson() =>
         JObject.Parse(JsonConvert.SerializeObject(CoreSettings.Current, Formatting.Indented));   // = settings.json
 

@@ -302,9 +302,25 @@ namespace ConditioningControlPanel.Services
             if (!done) CoreDispatch.Post(ReleaseOnLeave);
         }
 
+        /// <summary>Hand back a live controller's holdings before the final settings save.</summary>
+        public void ReleaseHoldingsForExit()
+        {
+            if (!IsActive) return;
+            _loop?.Cancel();
+            Interlocked.Increment(ref _leaveGeneration); // refuse commands already queued
+            ReleaseSafetySettings();
+        }
+
         private void ReleaseOnLeave()
         {
             RemoteCommands.RemoteHaptics.Stop();
+            ReleaseSafetySettings();
+            if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
+                try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+        }
+
+        private void ReleaseSafetySettings()
+        {
             var s = CoreSettings.Current;
             var changed = false;
             if (_remoteSetStrictLock) { _remoteSetStrictLock = false; if (s.StrictLockEnabled) { s.StrictLockEnabled = false; changed = true; } }
@@ -315,8 +331,6 @@ namespace ConditioningControlPanel.Services
                 try { LockdownService.PanicKeyUiSync?.Invoke(); } catch { }
                 Log.Information("[RemoteControl] Controller left: panic key back on, controller's strict lock released");
             }
-            if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
-                try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
         }
 
         private int _leaveGeneration;

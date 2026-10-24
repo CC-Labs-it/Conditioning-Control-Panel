@@ -717,7 +717,10 @@ namespace ConditioningControlPanel.Avalonia
                 // The plain engine (Start/Stop) is CoreEngine; the one SessionRunner seeds
                 // IsSessionRunningProvider, so the feature lock fires for a session, not a plain Start.
                 CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
-                Sessions = new SessionRunner(new SessionLogService());
+                Sessions = new SessionRunner(new SessionLogService())
+                {
+                    SettleSettingPulses = () => Views.Windows.MainShellWindow.Current?.SettleSettingPulses()
+                };
                 // WPF App.xaml.cs:2566: the media recap. FlashOverlay feeds images; the video scheduler feeds clips.
                 MediaHistory = new MediaHistoryService();
                 if (CoreEngine.Video is { } recapVideo)
@@ -1149,7 +1152,14 @@ namespace ConditioningControlPanel.Avalonia
         /// pink tint is saved as the user's own (WPF StopEngine cancels pulses before the save).</summary>
         internal static void SaveSettingsOnExit(Views.Windows.MainShellWindow? shell, Action save)
         {
+            try { Sessions?.Stop(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Exit session restore failed"); }
             try { shell?.CancelAutonomyPulses(); } catch (Exception ex) { Serilog.Log.Debug("Exit pulse cancel failed: {E}", ex.Message); }
+            try
+            {
+                var relay = Views.Tabs.RemoteControlTabView.Relay;
+                if (relay.IsValueCreated) relay.Value.ReleaseHoldingsForExit();
+            }
+            catch (Exception ex) { Serilog.Log.Debug(ex, "Exit remote holdings release failed"); }
             try { save(); }
             catch { /* SettingsService logs save failures; exit must continue */ }
         }

@@ -197,6 +197,35 @@ public sealed class RemoteRelayTests
     // main 71cfc4185 (ccp-bugs #1340): the controller leaving hands back the panic key and the strict
     // lock IT switched on; a strict lock the subject set stays.
     [Fact]
+    public async Task Exit_releases_controller_holdings_but_preserves_subject_lock()
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect);
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = (false, false, false);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, _ => { }, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"enable_strict_lock\"}]}");
+            await r.PollOnceAsync();
+            Assert.True(s.StrictLockEnabled);
+            r.ReleaseHoldingsForExit();
+            r.ReleaseHoldingsForExit(); // idempotent
+            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+
+            s.StrictLockEnabled = true;   // the subject's own
+            Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"2\",\"action\":\"enable_strict_lock\"}]}");
+            await r.PollOnceAsync();
+            r.ReleaseHoldingsForExit();
+            Assert.True(s.StrictLockEnabled);
+        }
+        finally { (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = saved; }
+    }
+
+    // main 7b22ece8c (ccp-bugs #1065): no toy -> refused, never a silent "ok".
+    [Fact]
     public async Task Controller_leave_releases_the_controllers_strict_lock_and_the_panic_key_only()
     {
         var s = CoreSettings.Current;

@@ -180,6 +180,29 @@ public sealed class TakeoverTests
         });
     }
 
+    [Fact]
+    public Task SessionSettleRetiresOnlySettingPulseAndItsDelayedRestore() => WithArmedShell((shell, timers) =>
+    {
+        var s = CoreSettings.Current;
+        s.PinkFilterEnabled = false;
+        s.PinkFilterOpacity = 10;
+        int bubbleStops = 0;
+        CoreBubbles.StartAction = () => { };
+        CoreBubbles.StopAction = () => bubbleStops++;
+        shell.PerformAutonomy(AutonomyActionType.StartBubbles);
+        shell.PerformAutonomy(AutonomyActionType.PinkFilterPulse);
+        shell.SettleSettingPulses();
+        Assert.False(s.PinkFilterEnabled);
+        Assert.Equal(10, s.PinkFilterOpacity);
+        Assert.False(PinkFilterOverlay.PulseHold);
+        Assert.Equal(0, bubbleStops);
+        s.PinkFilterOpacity = 50; // the session now owns it
+        timers[1]();
+        Assert.Equal(50, s.PinkFilterOpacity);
+        timers[0]();
+        Assert.Equal(1, bubbleStops);
+    });
+
     /// <summary>Headless shell with Takeover armed, a stepped pulse clock and the pink/bubble state
     /// saved; <paramref name="body"/> gets the shell and the queued 30 s timer callbacks.</summary>
     private static Task WithArmedShell(Action<MainShellWindow, System.Collections.Generic.List<Action>> body) =>
@@ -345,6 +368,36 @@ public sealed class TakeoverTests
         shell.PerformAutonomy(AutonomyActionType.PinkFilterPulse);
         shell.Close();   // the Closed handler hands the pulse back too
         Assert.Equal((false, 10), (s.PinkFilterEnabled, s.PinkFilterOpacity));
+    });
+
+    [Fact]
+    public Task ExitWithoutShellCloseRestoresSessionBeforeSaving() => WithArmedShell((shell, _) =>
+    {
+        var previous = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var runner = new SessionRunner(new SessionLogService());
+        global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
+        var s = CoreSettings.Current;
+        var original = s.FlashOpacity;
+        try
+        {
+            s.FlashOpacity = 17;
+            runner.Start(new global::ConditioningControlPanel.Models.Session
+            {
+                Id = "exit_restore_test", Name = "Exit restore", DurationMinutes = 1,
+                Settings = new() { FlashEnabled = true, FlashOpacity = 80 }
+            });
+            int saved = -1;
+            global::ConditioningControlPanel.Avalonia.App.SaveSettingsOnExit(shell, () => saved = s.FlashOpacity);
+            Assert.Equal(17, saved);
+            Assert.False(runner.IsRunning);
+        }
+        finally
+        {
+            runner.Stop();
+            s.FlashOpacity = original;
+            global::ConditioningControlPanel.Avalonia.App.Sessions = previous;
+            CoreSession.IsSessionRunningProvider = () => previous?.IsRunning == true;
+        }
     });
 
     /// <summary>WPF: a running session owns the overlays, so the pink pulse is skipped.</summary>

@@ -163,7 +163,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             EndPulseAfter30s(() => EndPinkPulse(cancelled: false));
         }
 
-        private void EndPinkPulse(bool cancelled)
+        /// <summary>WPF SettleSettingPulses: no bubble cancellation or overlay teardown.</summary>
+        internal void SettleSettingPulses() => EndPinkPulse(cancelled: true, refresh: false);
+
+        private void EndPinkPulse(bool cancelled, bool refresh = true)
         {
             if (!_pinkPulse) return;
             _pinkPulse = false;
@@ -173,7 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (cancelled || s.PinkFilterOpacity == _pinkAppliedOpacity)
                 s.PinkFilterOpacity = _pinkBaseOpacity;
             PinkFilterOverlay.PulseHold = false;
-            PinkFilterOverlay.Refresh(this);
+            if (refresh) PinkFilterOverlay.Refresh(this);
         }
 
         private static readonly string[] CommentPhrases =

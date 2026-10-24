@@ -63,6 +63,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
 
+        /// <summary>Hand back head-owned setting pulses before persisting or capturing settings.</summary>
+        public Action? SettleSettingPulses { get; set; }
+
         /// <summary>A session ended; the bool is completed. Raised after the runner is idle again.</summary>
         public event Action<Session, bool>? Stopped;
 
@@ -105,6 +108,10 @@ namespace ConditioningControlPanel.Services
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
             _startTime = DateTime.Now;
             _stopwatch.Restart();
+
+            // WPF 8fe2a80a0: pulses must hand back their values before either the save or snapshot.
+            try { SettleSettingPulses?.Invoke(); }
+            catch (Exception ex) { Log.Debug(ex, "[Session] Takeover pulse settle failed"); }
 
             // Ledger persisted before any override, so a crash mid-session keeps it (as WPF) without
             // leaking session values to disk. Immediate: a debounced save would serialise the overrides.
