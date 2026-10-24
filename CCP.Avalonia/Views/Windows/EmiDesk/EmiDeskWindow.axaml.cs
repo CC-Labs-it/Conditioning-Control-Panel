@@ -116,9 +116,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // crept across the desktop instead (QA 2026-08-29). One constant, one space.
         private const double DragThresholdDip = 6.0;   // widget.js DIALS.DRAG_PX
 
-        /// <summary>The face string she rests on. <c>EmiChains.RestFace</c> in the WPF head.</summary>
-        private const string RestFace = "0_0";
-
         // ---------------------------------------------------------------- seams (B2 / B3)
 
         #region seams
@@ -266,7 +263,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private double _resizeStartWidth;
 
         /// <summary>True while a chain is on screen.</summary>
-        // ponytail: the pat faces are the only chain this head plays; the full EmiChains.Player is wire-win-emi-desk-b.
+        // ponytail: the pat faces are the only chain this head plays; the full chain player (EmiChainPlayer, WPF head only;
+        // the chain data is in Core as EmiChains) is wire-win-emi-desk-b.
         public bool ChainLive => _patFeedback is not null;
 
         /// <summary>True while a summon or dismiss transition is running.</summary>
@@ -306,7 +304,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
             _bodyRoot.RenderTransform = new TransformGroup
             {
-                Children = { _crtScale, _squashScale, _wobbleRotate, _moveShift }
+                Children = { _crtScale, _squashScale, _landShift, _wobbleRotate, _moveShift }
             };
             _faceView.RenderTransform = _gazeShift;
 
@@ -360,7 +358,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
             ApplyBodyWidth(_bodyWidth);
             SetPose("idle");
-            DrawFace(RestFace);
+            DrawFace(EmiChains.RestFace);
 
             try { OnReadyCore(); }
             catch (Exception ex) { Log.Warning(ex, "[EmiDesk] ready seam threw"); }
@@ -806,7 +804,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             try
             {
-                var face = string.IsNullOrEmpty(text) ? RestFace : text;
+                var face = string.IsNullOrEmpty(text) ? EmiChains.RestFace : text;
                 if (_faceView.Text == face) return;
                 _faceView.Text = face;
                 FaceChanged?.Invoke(this, face);
@@ -815,7 +813,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary>The face on the glass right now. The dock chip's mini face mirrors it.</summary>
-        public string Face => _faceView.Text ?? RestFace;
+        public string Face => _faceView.Text ?? EmiChains.RestFace;
 
         /// <summary>Raised with the new face string on every frame that changes it (WPF binds
         /// EmiDock.MiniFace onto EmiFace.Face; Avalonia has no such property, so this is the feed).</summary>
@@ -888,16 +886,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         // ---------------------------------------------------------------- chains
 
         /// <summary>Play a canon chain by id. Unknown ids are ignored.</summary>
-        // ponytail: needs EmiChains + EmiChains.Player (Services/EmiDesk/EmiChains.cs) - the chain
-        // table, the frame clock and the Draw/Bubble/BodyFrame/Fx/Move hook set. Wired when the
-        // chain player moves to Core.
+        // ponytail: needs EmiChainPlayer (WPF head) - the frame clock and the
+        // Draw/Bubble/BodyFrame/Fx/Move hook set. The chain table (EmiChains) is in Core; wired
+        // when the chain player moves to Core.
         public void PlayChain(string chainId, Action? done = null, string? bodyFrameOverride = null)
         {
             done?.Invoke();
         }
 
         /// <summary>Say a line on the locked . / .. / ... cadence.</summary>
-        // ponytail: needs EmiChains.MakeSay / SayHoldMs / FrameForFace, none of them in Core.
+        // ponytail: EmiChains.MakeSay / SayHoldMs / FrameForFace are in Core now; still needs
+        // EmiChainPlayer (WPF head) to play the result.
         public void Say(string? line, string reactionFace = "^_^", Action? done = null)
         {
             done?.Invoke();
@@ -1208,6 +1207,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 {
                     _dragMoved = true;
                     CloseRing();   // WPF Ring.cs OnRingWatchMove: a drag past the threshold folds the fan
+                    OnPickedUp();
                 }
                 if (!_dragMoved) return;
 
@@ -1239,6 +1239,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     SavePlacement();
                     try { Moved?.Invoke(this, EventArgs.Empty); }
                     catch (Exception ex) { Log.Debug(ex, "[EmiDesk] Moved handler threw"); }
+                    OnPutDown();
                     return;
                 }
 
@@ -1966,6 +1967,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _wobbleLastX = x;
 
                 _wobbleVx = _wobbleVx * WobbleVelKeep + raw * (1.0 - WobbleVelKeep);
+                if (_dragMoved) NoteTossFrame(dt, _wobbleVx);   // WPF React.cs:286
 
                 // She TRAILS the hand: drag her right and her feet swing left, which about a
                 // head-high pivot is a positive (clockwise) angle in a y-down frame.
@@ -1994,7 +1996,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
                 if (want == _wobbleFace) return;
                 _wobbleFace = want;
-                DrawFace(want ?? RestFace);
+                DrawFace(want ?? EmiChains.RestFace);
             }
             catch (Exception ex)
             {
@@ -2018,7 +2020,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (_wobbleFace != null)
                 {
                     _wobbleFace = null;
-                    if (!ChainLive) DrawFace(RestFace);
+                    if (!ChainLive) DrawFace(EmiChains.RestFace);
                 }
 
                 double a = _wobbleAngle;
@@ -2290,7 +2292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 _transiting = false;
                 InputLocked = false;
                 SetPose("idle");
-                DrawFace(RestFace);
+                DrawFace(EmiChains.RestFace);
             }
             catch (Exception ex)
             {

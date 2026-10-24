@@ -19,7 +19,7 @@
 // the camera and monitor enumerations, and the two consent buttons (WebcamConsent itself IS in
 // Core, but "revoke" has to stop a running capture, which is App.Webcam again).
 //
-// Members dropped (69 - 10 since ported, see below; OpenDeviceSettings is already live elsewhere, see above):
+// Members dropped (of WPF's 69; entries marked PORTED have since been ported; OpenDeviceSettings is already live elsewhere, see above):
 //   private bool _webcamDebugSubscribed
 //   private int _webcamDebugBlinkCount
 //   private int _webcamDebugMouthOpenCount
@@ -42,9 +42,8 @@
 //   private bool _syncingBlinkRecalToggles
 //   internal void ChkBlinkRecalShortcut_Changed(…)
 //   private void SyncBlinkRecalToggles(…)
-//   private void UpdateLabTrackerUi(…)
-//   private void UpdateWebcamStatusChips(…)
-//   private static string WebcamStateText(…)
+//   (UpdateLabTrackerUi / UpdateWebcamStatusChips: PORTED, PlayTabView/BlinkTrainerTabView/DeeperTabView/
+//    DevicesSettingsSection via WebcamStatusPresentation; WebcamStateText: PORTED, Core WebcamStatus.TextKey)
 //   internal void OpenDeviceSettings(…)               ALREADY LIVE (MainShellWindow.Settings.cs:82)
 //   internal void RefreshDeviceSettingsLists(…)
 //   private string? _quickRecalTooltipBase

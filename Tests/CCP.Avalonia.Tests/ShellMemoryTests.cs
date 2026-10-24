@@ -49,6 +49,11 @@ public sealed class ShellMemoryTests(ITestOutputHelper output)
     [Fact]
     public Task AnAmbientLoopDoesNotKeepItsClosedWindow() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
+        // Own platform setup (P45): as the first test of a shard it otherwise has no IWindowingPlatform.
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
         // Ticking, and parked: a loop that starts on a hidden owner (a breath on a hidden tab).
         var windows = new[] { OpenLoopAndClose(parked: false), OpenLoopAndClose(parked: true) };
         await Task.Yield();
