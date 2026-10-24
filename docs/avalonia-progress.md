@@ -2945,3 +2945,6 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 
 ## avalonia-port/main-20261024-compat: +62
 - Compat for main sync #8: App.* in Core as Serilog/CoreSettings, LockdownExitRule/PanicAftermath/VoicePanicReach/TickStep into Core, main's WPF scan tests via SourceRoots and retargeted to where the stack split the code. rgate GATE-OK (run 40109201391).
+
+## avalonia-port/ledger-dedupe-2: +7
+- Parity ledger back to one row per id (1815 -> ~540 lines), meaning-preserving; pushq resolver fixed (P132).
