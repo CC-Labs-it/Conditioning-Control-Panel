@@ -114,6 +114,33 @@ public sealed class RemoteMediaCacheTempSweepTests : IDisposable
         }
         finally { RemoteMediaCache.SystemTempDirProvider = () => null; }
     }
+
+    [Fact]
+    public void A_copy_stamped_days_ahead_goes_at_once()
+    {
+        // The clock went back after the download (or was wrong when it was made): the copy's
+        // creation time sits three days in the future. It used to read as "-72 h old" and stay.
+        var ahead = Make("ccp_temp_remote_ahead.jpg", -72);
+        var young = Make("ccp_temp_remote_young3.jpg", 1);
+        Assert.Equal(1, RemoteMediaCache.SweepTempFilesOlderThan(TimeSpan.FromHours(23)));
+        Assert.False(File.Exists(ahead));
+        Assert.True(File.Exists(young));
+    }
+
+    [Theory]
+    [InlineData(25.0, 24.0, true)]
+    [InlineData(24.0, 24.0, true)]
+    [InlineData(23.5, 24.0, false)]
+    [InlineData(1.0, 23.0, false)]
+    [InlineData(0.0, 0.0, true)]      // the off switch: every copy
+    [InlineData(-0.5, 23.0, false)]   // half an hour ahead: clock jitter, kept
+    [InlineData(-2.0, 23.0, true)]    // more than an hour ahead: the clock went back
+    [InlineData(-72.0, 23.0, true)]
+    public void Temp_copy_due_matrix(double hoursOld, double ageHours, bool due)
+    {
+        var now = new DateTime(2026, 10, 22, 12, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(due, RemoteMediaCache.TempCopyDue(now.AddHours(-hoursOld), now, TimeSpan.FromHours(ageHours)));
+    }
 }
 
 /// <summary>

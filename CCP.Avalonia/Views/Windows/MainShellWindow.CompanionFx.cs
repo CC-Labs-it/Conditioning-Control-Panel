@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _companionDrawersRestored;
 
         /// <summary>WPF MainWindow.CompanionFx.cs:32, called from CompanionTabView on a real
-        /// visibility edge of the room.</summary>
+        /// visibility edge of the tab (the room itself stays collapsed).</summary>
         internal void OnCompanionTabVisibilityChanged(bool visible, CompanionRoomView room)
         {
             try
@@ -53,6 +53,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch (Exception ex) { Log.Debug("OnCompanionTabVisibilityChanged: {E}", ex.Message); }
         }
+
+        /// <summary>WPF MainWindow.Patreon.cs:1546 RevealCompanionWorkshopCell: under v2 the room is
+        /// collapsed, so each Workshop cell opens the Companion page that hosts it.</summary>
+        internal void RevealCompanionWorkshopCell(string? cellKey)
+        {
+            if (CompanionPageForWorkshopCell(cellKey) is { } page) { ShowTab(page); return; }
+            try { RoomView()?.RevealWorkshop(cellKey); }
+            catch (Exception ex) { Log.Debug("RevealCompanionWorkshopCell: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF MainWindow.Patreon.cs:1561: the page that hosts a Workshop cell (null = none;
+        /// the Awareness cell lives on the Awareness tab).</summary>
+        internal static string? CompanionPageForWorkshopCell(string? cellKey) => cellKey switch
+        {
+            null => "personality",
+            CompanionRoomAnchors.WorkshopRosterCell => "personality",
+            CompanionRoomAnchors.WorkshopBehaviorCell => "companionai",
+            CompanionRoomAnchors.WorkshopTriggersCell => "companionai",
+            CompanionRoomAnchors.WorkshopCommunityCell => "personality",
+            CompanionRoomAnchors.WorkshopLibraryCell => "companionlinks",
+            _ => null,
+        };
 
         /// <summary>WPF WindowChrome.cs:176: quitting while still on the tab is not a hide edge.</summary>
         private void PersistCompanionDrawerStatesOnExit()

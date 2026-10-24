@@ -10,7 +10,8 @@ using Avalonia.VisualTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
-using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -98,12 +99,14 @@ public sealed class CompanionPhraseEditorTests
         {
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            shell.ShowTab("companion"); // the user's path: Companion room -> Workshop -> Triggers cell
-            var room = shell.GetLogicalDescendants().OfType<CompanionRoomView>().Single();
-            var workshop = (WorkshopRuntimeVm)room.FindControl<WorkshopAccordion>("WorkshopZone")!.DataContext!;
-            workshop.IsExpanded = true;
+            shell.ShowTab("companion");
+            // WPF v2: Companion > AI adopts the Workshop Triggers cell (Pages/AiPage.xaml.cs:32).
+            shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("companionai")!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
-            var cell = workshop.Parts.Triggers;
+            // The active room is now the AI page; the legacy CompanionRoomView stays collapsed.
+            var room = shell.Named<AiPage>("CompanionAiTab")!;
+            var cell = (WorkshopTriggersCell)room.FindControl<ContentControl>("TriggersHost")!.Content!;
             Assert.True(room.IsVisualAncestorOf(cell));
             cell.FindControl<Button>("BtnManagePhrases")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
