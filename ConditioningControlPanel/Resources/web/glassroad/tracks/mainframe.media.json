@@ -5,7 +5,7 @@
     { "id": "mf-bb-13", "f": 0.13, "side": -1, "kind": "portrait", "heightM": 13, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 3, "phone": true },
     { "id": "mf-bb-22", "f": 0.22, "side": 1, "kind": "landscape", "heightM": 11, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 0, "phone": false },
     { "id": "mf-bb-31", "f": 0.31, "side": -1, "kind": "landscape", "heightM": 10, "offM": 9, "liftM": 3, "angleDeg": 30, "program": 3, "phone": true },
-    { "id": "mf-bb-41", "f": 0.41, "side": 1, "kind": "portrait", "heightM": 13, "offM": 9, "liftM": 2, "angleDeg": 30, "program": 0, "phone": false },
+    { "id": "mf-bb-41", "f": 0.41, "side": 1, "kind": "portrait", "heightM": 13, "offM": 4, "liftM": 2, "angleDeg": 30, "program": 0, "phone": false },
     { "id": "mf-bb-53", "f": 0.53, "side": -1, "kind": "landscape", "heightM": 11, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 3, "phone": true },
     { "id": "mf-bb-62", "f": 0.62, "side": 1, "kind": "portrait", "heightM": 13, "offM": 9, "liftM": 2, "angleDeg": 30, "program": 0, "phone": false },
     { "id": "mf-bb-73", "f": 0.73, "side": -1, "kind": "landscape", "heightM": 10, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 3, "phone": true },
