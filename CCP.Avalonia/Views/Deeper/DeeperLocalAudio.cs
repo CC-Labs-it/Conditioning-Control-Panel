@@ -25,6 +25,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// <summary>Null when libvlc did not load or the file will not parse. Tests swap it.</summary>
         internal static Func<string, Task<IDeeperLocalAudio?>> Open { get; set; } = OpenVlcAsync;
 
+        /// <summary>This head's <see cref="ConditioningControlPanel.Services.Deeper.AudioWaveformCache.Decoder"/>
+        /// (WPF: NAudio MediaFoundationReader). The race's LibVLC transcode gives mono 16 kHz, so a peak
+        /// is the loudest sample of the downmix rather than of the loudest channel. Throws on failure.</summary>
+        internal static ConditioningControlPanel.Services.Deeper.AudioWaveformResult DecodeWaveform(string path)
+        {
+            var pcm = Games.RaceTrackPlayer.Decode(path, null, CancellationToken.None);
+            int at = 0;
+            return ConditioningControlPanel.Services.Deeper.AudioWaveformCache.BucketPeaks(1, 16000, pcm.Length / 16000.0, buf =>
+            {
+                int n = Math.Min(buf.Length, pcm.Length - at);
+                Array.Copy(pcm, at, buf, 0, n);
+                at += n;
+                return n;
+            });
+        }
+
         private static async Task<IDeeperLocalAudio?> OpenVlcAsync(string path)
         {
             var vlc = LibVlcAudio.Shared;

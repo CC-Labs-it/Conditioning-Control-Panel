@@ -103,8 +103,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// <para><b>What is stubbed, and why.</b> Three families, each marked <c>ponytail:</c> at the
     /// call site:</para>
     /// <list type="bullet">
-    ///   <item><b>Services.</b> WebcamTracking and waveform decoding
-    ///         still live in the WPF head, so every handler that reached them is a stub.
+    ///   <item><b>Services.</b> WebcamTracking
+    ///         still lives in the WPF head, so every handler that reached it is a stub.
     ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. What
@@ -318,6 +318,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _miniTimelineCanvas.PointerCaptureLost += (_, _) => _miniScrubbing = false;
             _waveformCanvas.PointerPressed += WaveformCanvas_PointerPressed;
 
+            // WPF PreviewKeyDown/PreviewKeyUp: tunnel, so a focused button never eats Space.
+            AddHandler(KeyDownEvent, Window_PreviewKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            AddHandler(KeyUpEvent, Window_PreviewKeyUp, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            Deactivated += (_, _) => _keysDown.Clear(); // a key-up lost to another window is not a held key
             AddHandler(DragDrop.DragOverEvent, Window_DragOver);
             AddHandler(DragDrop.DropEvent, Window_Drop);
 
@@ -882,7 +886,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             if (e.Property != RangeBase.ValueProperty) return;
             var volume = (int)Math.Round(_sliderVolume.Value);
             if (_localAudio != null) _localAudio.Volume = volume;
-            if (CoreSettings.Current.DeeperPlayerVolume != volume)
+            // A hand-dragged slider ends a mute; a muted 0 is never persisted.
+            if (!_muteChanging) _volumeBeforeMute = null;
+            if (_volumeBeforeMute == null && CoreSettings.Current.DeeperPlayerVolume != volume)
             {
                 CoreSettings.Current.DeeperPlayerVolume = volume;
                 CoreSettings.Save();
@@ -1691,6 +1697,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _isClosing = true;
             AudioWindows.Remove(this);
             DisposeLocalAudio();
+            CancelEscHold();
             // Stop the tick timer so no UI work is queued onto a dying window — and because
             // --render-all opens and closes every view in one process, a timer left running would
             // accumulate one live 100ms tick per view.

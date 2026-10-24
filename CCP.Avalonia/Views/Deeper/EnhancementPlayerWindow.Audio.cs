@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
+using ConditioningControlPanel.Services.Deeper;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Deeper;
@@ -19,7 +20,8 @@ public partial class EnhancementPlayerWindow
     private bool _isClosing;
 
     // WPF LoadAudio: replace the previous clip, then play as soon as loading succeeds.
-    // ponytail: waveform decoding and EnhancementHostService.Bind arrive together in lane -b.
+    // ponytail: EnhancementHostService.Bind (rules firing on this clock) needs the engine in Core
+    // (deeper-core-c, not under this lane); named in the parity row as -b-next.
     private async void LoadAudio(string path)
     {
         try { await LoadAudioAsync(path); }
@@ -59,6 +61,9 @@ public partial class EnhancementPlayerWindow
         ShowMediaPaneFor(MediaTypes.Audio);
         _peaks = null;
         _waveformPath.Data = null;
+        // WPF awaited the decode before Play; a LibVLC transcode of a long file is not instant,
+        // so here the clip starts at once and the waveform draws when its peaks land.
+        _ = LoadWaveformAsync(path);
         _currentSec = _durationSec = 0;
         _txtPlayPauseGlyph.Kind = IconKind.Play;
         _txtCurrent.Text = _txtTotal.Text = "0:00";
@@ -96,6 +101,25 @@ public partial class EnhancementPlayerWindow
         _txtStatus.Text = Loc.Get("deeper_player_status_playing");
         _uiTimer?.Start();
         UiTimer_Tick(null, EventArgs.Empty);
+    }
+
+    // WPF LoadWaveformAsync: disk-cached peaks; a decode failure leaves the strip flat.
+    private async Task LoadWaveformAsync(string path)
+    {
+        try
+        {
+            var data = await AudioWaveformCache.LoadAsync(path);
+            if (_isClosing || _lastAudioPath != path) return;
+            _peaks = data.Peaks;
+            RenderWaveform();
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("EnhancementPlayer: waveform decode failed: {Error}", ex.Message);
+            if (_isClosing || _lastAudioPath != path) return;
+            _peaks = null;
+            _waveformPath.Data = null;
+        }
     }
 
     private void DisposeLocalAudio()
