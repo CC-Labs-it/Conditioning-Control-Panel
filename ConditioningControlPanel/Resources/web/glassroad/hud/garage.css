@@ -28,3 +28,4 @@
 
 .g-menu-row .g-track{position:static;margin:4px 0 0}
 @media(max-width:699px){.g-selector{bottom:calc(226px + env(safe-area-inset-bottom))}#race-garage .g-menu-row[data-g=controls]{grid-column:auto;justify-content:normal;min-height:47px;padding:9px}.g-menu-row[data-g=controls]>span{flex:1}.g-menu-row[data-g=controls] i{display:block}}
+#race-garage.g-calm .g-menu-row:hover,#race-garage.g-calm .g-menu-row:focus-visible{transform:none}#race-garage.g-calm .g-menu-row{transition:background .35s,border-color .35s}

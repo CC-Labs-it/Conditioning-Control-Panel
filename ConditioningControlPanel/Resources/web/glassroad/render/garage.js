@@ -67,7 +67,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps}
     if(custom){camera.position.set(0,phone?1.2:1.3,phone?-4.4:-2.9);camera.lookAt(phone?new T.Vector3(0,.53,0):new T.Vector3(0,.65,0));camera.setViewOffset(w,h,0,phone?h*.18:0,w,h);rider.position.set(phone?0:.72,phone?-.12:-.30,0);}
     else{camera.setViewOffset(w,h,layout.offsetX,layout.offsetY,w,h);camera.position.set(0,phone?1.65:1.9,phone?-5.6:-4.7);camera.lookAt(0,.5,0);rider.position.set(0,0,0);}}
   const ease=x=>x*x*(3-2*x);
-  function update(dt,motionReduced,gentle=false){reduced=motionReduced||gentle;time+=dt;emiLife.beforePose();
+  function update(dt,motionReduced,gentle=false){reduced=motionReduced||gentle;ui.root.classList.toggle('g-calm',reduced);time+=dt;emiLife.beforePose();
     lifeSignals.time=time;lifeSignals.menu=true;lifeSignals.selected=true;lifeSignals.custom=custom;lifeSignals.motionOff=motionReduced;lifeSignals.gentle=gentle;lifeSignals.near=true;lifeSignals.outfit=state.outfit;lifeSignals.transition=0;lifeSignals.land=0;
     lifeSignals.clip=moving?'hop_squash':null;
     if(moving){const m=moving;m.elapsed+=dt;const u=Math.min(1,m.elapsed/m.duration);yaw=T.MathUtils.lerp(m.yaw,0,ease(Math.min(1,u/.2)));

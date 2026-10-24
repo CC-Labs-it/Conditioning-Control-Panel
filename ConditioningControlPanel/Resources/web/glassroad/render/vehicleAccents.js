@@ -5,7 +5,7 @@ import {texture,uv,uniform} from 'three/tsl';
 
 const finishes = new Map(), loomFinishes = new WeakMap();
 const THEMES = {
-  pendulum:{color:'#e8b56a',x:.28,y:.25,radius:.055,petals:12,rate:.48},
+  pendulum:{color:'#e8b56a',x:.20,y:.56,radius:.055,petals:12,rate:.48},
   feedback:{color:'#79dfd8',y:.335,petals:9,rate:.65},
   reverie:{color:'#b7dbff',y:.28,petals:5,rate:.32},
   undertow:{color:'#67d6c6',y:.27,petals:3,rate:-.55},
