@@ -8,11 +8,10 @@ export function mainframeSpan(track, id) {
 
 export function scanZones(track) {
   if (track.id !== 'mainframe') return [];
-  const canal = mainframeSpan(track, 'coolant-canal'), submerged = mainframeSpan(track, 'submerged'), memory = mainframeSpan(track, 'memory-crossing');
-  // The memory section starts with its twelve-node raised bend; the straight follows it.
-  const memoryS = memory && track.nodeS?.[memory.from + 12];
-  if (!canal || !submerged || !Number.isFinite(memoryS)) return [];
-  const positions = [180, canal.fromS + 85, canal.fromS + 170, memoryS + 190, memoryS + 360, submerged.fromS + 130];
+  const canal = mainframeSpan(track, 'coolant-canal'), submerged = mainframeSpan(track, 'submerged');
+  const memory = mainframeSpan(track, 'memory-crossing'), bridge = mainframeSpan(track, 'skybridge');
+  if (!canal || !submerged || !memory || !bridge) return [];
+  const positions = [180, canal.fromS + 85, canal.fromS + 170, bridge.fromS + 160, memory.toS - 35, submerged.fromS + 130];
   return positions.map((s, i) => ({ id: 'scan-' + i, s, len: i === 1 || i === 2 ? 10 : 8,
     width: i === 1 || i === 2 ? 18 : 12, height: i === 1 || i === 2 ? 15 : 5.5,
     travel: i === 1 || i === 2 ? 4 : 3, offset: [0, 5, 11, 3, 9, 6][i] }));
