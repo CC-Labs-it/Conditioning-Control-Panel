@@ -69,7 +69,8 @@ const mediaMod = await import('./media.js').catch((e) => { console.warn('[glassr
 const SPIRAL_LAYOUTS = new Map();
 if (spiralsMod && globalThis.location) SPIRAL_LAYOUTS.set('threshold', await spiralsMod.fetchSpiralLayout('threshold'));
 if (spiralsMod && globalThis.location?.search?.includes('mainframe')) SPIRAL_LAYOUTS.set('mainframe', await spiralsMod.fetchSpiralLayout('mainframe'));
-if (mediaMod && globalThis.location?.search?.includes('mainframe')) await mediaMod.loadMediaLayout('mainframe');
+const MAINFRAME_MEDIA_LAYOUT = mediaMod && globalThis.location?.search?.includes('mainframe')
+  ? await mediaMod.loadMediaLayout('mainframe') : null;
 
 /** Track MeshData -> Mesh, or null when the data is empty. */
 export function meshFrom(d, material) {
@@ -180,7 +181,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   add(meshFrom(track.meshes.jumps, lip.material));
   // the hero colossi lean over the road; the scatter keeps clear of them (WORLD lane)
   const samples = sampleTrack(track, 4);
-  const mainframe = isMainframe ? buildMainframe(track, art, { samples }) : null;
+  const mainframe = isMainframe ? buildMainframe(track, art, { samples, mediaLayout: MAINFRAME_MEDIA_LAYOUT }) : null;
   if (mainframe) scene.add(mainframe.group);
   let colossi = null;
   try { colossi = art && !isMainframe ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }

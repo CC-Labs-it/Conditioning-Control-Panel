@@ -7,9 +7,10 @@ import { sampleTrack, bodyClear, WORLD_DEFAULTS } from './colossiMath.js';
 import { Q } from './quality.js';
 import { createMachineMaterial, coolantCaustics } from './mainframeMaterials.js';
 import { createPlaceholder, releaseLoom } from './mediaPlaceholders.js';
+import { mediaLook, placeBillboard } from './mediaMath.js';
 
 const point = (f, x, y, z = 0) => f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z);
-export function buildMainframe(track, art, { samples = sampleTrack(track, 4), makeCanvas = null } = {}) {
+export function buildMainframe(track, art, { samples = sampleTrack(track, 4), makeCanvas = null, mediaLayout = null } = {}) {
   const group = new Group(); group.name = 'mainframe';
   const geometry = new BoxGeometry(1, 1, 1), geometries = [geometry], materials = [], textures = [], rows = { shell: [], slot: [], green: [], cyan: [], floor: [], wall: [], tank: [], rib: [], amber: [] };
   const coolantTime = uniform(0), loomContrast = uniform(1), displays = [];
@@ -18,13 +19,22 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   })].filter(s => s > 0);
   const add = (kind, f, x, y, z, size) => rows[kind].push({ p: point(f, x, y, z), b: [...f.b], n: [...f.n], t: [...f.t], size });
   const length = track.lengthM, count = Q.name === 'phone' ? 34 : 60;
+  // Use the media renderer's fitted faces, including any clearance-driven outward adjustment.
+  // Long display bays expose the whole picture while it is still 30-60 m ahead of the driver.
+  const mediaLookNow = mediaLook();
+  const billboards = (mediaLayout?.billboards || []).map(b => placeBillboard(b, track, samples, mediaLookNow)).filter(Boolean);
+  const displayBay = (s, side) => billboards.find(b => {
+    const d = ((s - b.s + length * 1.5) % length) - length / 2;
+    return b.side === side && d >= -80 - b.w / 2 && d <= b.w / 2 + 16;
+  });
   const sectionAt = (s) => track.sections[track.sectionAt(s)]?.id || '';
   const isCanal = (s) => sectionAt(s).includes('canal');
   const isCore = (s) => sectionAt(s).includes('spiral') || sectionAt(s).includes('core');
   const hasGap = (s) => track.nodeFlags(track.frameAt(s).seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 8 > v.fromS);
   // A capsule check against the WHOLE road keeps every rack out of nearby switchbacks too.
   for (let i = 0; i < count; i++) {
-    const f = track.frameAt((i + 0.5) * length / count), side = i % 2 ? 1 : -1;
+    const s = (i + 0.5) * length / count, f = track.frameAt(s), side = i % 2 ? 1 : -1;
+    if (displayBay(s, side)) continue;
     const height = 27 + (i * 17 % 5) * 5, width = 6 + (i % 3), depth = 5;
     let off = f.w / 2 + 13 + (i % 3) * 8, fit = false;
     for (let n = 0; n < 10; n++, off += 8) {
@@ -59,6 +69,13 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       if (core && (f.p[0] - 480) * f.b[0] * side + (f.p[2] - 425) * f.b[2] * side < 0) continue;
       const off = side * (half + 8), height = under ? 19 : 28;
       if (!bodyClear({ B: point(f, off, -2), D: f.n, len: height, r: 4.3 }, samples, clearance).ok) continue;
+      if (displayBay(s + 4, side)) {
+        // Continuous lintel and sill frame the opening; solid adjacent wall segments form the jambs.
+        add('rib', f, off, height - 3, 0, [1.8, 2, 8.5]);
+        add('rib', f, off, -1, 0, [1.8, 1, 8.5]);
+        add('cyan', f, off - side, height - 4.1, 0, [0.12, 0.16, 8.5]);
+        continue;
+      }
       add(under ? 'tank' : 'wall', f, off, height / 2 - 2, 0, [1.5, height, 8.5]);
       add('slot', f, off - side * 0.95, 5, 0, [0.5, 9, 6.2]);
       add(under ? 'cyan' : id.includes('boot') ? 'green' : 'amber', f, off - side * 1.25, 9.6, 0, [0.22, 0.22, 6.7]);
@@ -79,6 +96,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     const f = track.frameAt(s + 2.5);
     if (track.nodeFlags(f.seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 5 > v.fromS)) continue;
     for (const side of [-1, 1]) {
+      if (displayBay(s + 2.5, side)) continue;
       for (let wire = 0; wire < 3; wire++) add('slot', f, side * (f.w / 2 + 0.85 + wire * 0.26), 0.45, 0, [0.2, 0.2, 5.15]);
       if (Math.round(s / 5) % 3 === 0) add('cyan', f, side * (f.w / 2 + 1.1), 0.46, 0, [0.85, 0.29, 0.16]);
     }
