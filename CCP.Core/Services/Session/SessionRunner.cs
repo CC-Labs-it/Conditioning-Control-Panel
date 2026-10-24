@@ -71,7 +71,20 @@ namespace ConditioningControlPanel.Services
         /// <summary>SessionEngine.ElapsedTime: frozen while paused.</summary>
         public TimeSpan Elapsed => !IsRunning ? TimeSpan.Zero
             : IsPaused ? _pausedElapsed
-            : SessionClock.Elapsed(_pausedElapsed, _startTime, DateTime.Now, _stopwatch.Elapsed);
+            : _seededElapsed ?? SessionClock.Elapsed(_pausedElapsed, _startTime, DateTime.Now, _stopwatch.Elapsed);
+
+        private TimeSpan? _seededElapsed;
+
+        /// <summary>Test seam: a session in flight at a fixed elapsed (no timer, no engine, no log);
+        /// a null session leaves the runner idle. Start() clears it.</summary>
+        internal void SeedForTest(Session? session, TimeSpan elapsed, bool paused = false)
+        {
+            CurrentSession = session;
+            IsRunning = session != null;
+            IsPaused = paused;
+            _pausedElapsed = elapsed;
+            _seededElapsed = elapsed;
+        }
 
         /// <summary>WPF StartSessionAsync (SessionEngine.cs:159-323), after the caller's engine start
         /// (MainWindow.Presets.cs:1619), which this does itself.</summary>
@@ -92,6 +105,7 @@ namespace ConditioningControlPanel.Services
             PauseCount = 0;
             PinkOpacity = null;
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
+            _seededElapsed = null;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
             _startTime = DateTime.Now;
             _stopwatch.Restart();

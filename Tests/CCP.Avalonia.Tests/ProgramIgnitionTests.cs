@@ -306,14 +306,18 @@ public sealed class ProgramIgnitionTests
         var old = AvApp.Sessions;
         var provider = CoreSession.IsSessionRunningProvider;
         var runner = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
-        void Set(string name, object value) => typeof(ConditioningControlPanel.Services.SessionRunner)
-            .GetField(name, flags)!.SetValue(runner, value);
         var session = new Session { Id = "program-fx-test", DurationMinutes = 60 };
-        Set("<CurrentSession>k__BackingField", session);
-        Set("<IsRunning>k__BackingField", true);
-        Set("_startTime", DateTime.Now);
-        Set("_pausedElapsed", TimeSpan.FromMinutes(15));
+        runner.SeedForTest(session, TimeSpan.FromMinutes(15));
+        // A writable copy: WPF ApplyProgramsReadOnly (:1437) never paints the strip for a read-only service.
+        var liveDir = Directory.CreateTempSubdirectory("ccp-programs-live-").FullName;
+        var livePath = System.IO.Path.Combine(liveDir, "programs.json");
+        File.WriteAllText(livePath, JsonSerializer.Serialize(svc.State));
+        var live = new ProgramService(livePath, readOnly: false);
+        live.ActiveProgram!.Chapters[0].AccentColor = "#00FF00";   // the run accent shifts; the strip must not
+        live.ActiveEnrollment!.AttemptNumber++;   // new run key: the run accent snaps to the chapter's, no crossfade
         typeof(ProgramService).GetField("_expectedSessionId", flags)!.SetValue(svc, session.Id);
+        typeof(ProgramService).GetField("_expectedSessionId", flags)!.SetValue(live, session.Id);
+        AvApp.Programs = live;
         AvApp.Sessions = runner;
         try
         {
@@ -332,12 +336,12 @@ public sealed class ProgramIgnitionTests
             var slide = (TranslateTransform)sheen.RenderTransform!;
             Step(.5);
             Assert.True(slide.X > -160);
-            Set("<IsPaused>k__BackingField", true);
+            runner.SeedForTest(session, TimeSpan.FromMinutes(15), paused: true);
             shell.OnSessionTick();
             Assert.Equal(Loc.GetF("programs_session_progress_paused",
                 Loc.GetF("programs_session_progress", "15:00", "1:00:00")), text.Text);
             Assert.Equal(0, sheen.Opacity);
-            Set("<IsPaused>k__BackingField", false);
+            runner.SeedForTest(session, TimeSpan.FromMinutes(15));
             shell.OnSessionTick();
             Assert.Equal(1, sheen.Opacity);
             CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
@@ -351,6 +355,13 @@ public sealed class ProgramIgnitionTests
             shell.WindowState = WindowState.Normal;
             Assert.Equal(1, sheen.Opacity);
             Assert.Same(tasks, tab.FindControl<ItemsControl>("TodayTaskList")!.ItemsSource);
+            shell.OnSessionTick();
+            Assert.Equal(Color.Parse(live.ActiveProgram.AccentColor), ((ISolidColorBrush)bar.Foreground!).Color);   // WPF :1466
+            AvApp.Programs = svc;
+            shell.OnSessionTick();
+            Assert.False(row.IsVisible);
+            Assert.Equal(0, sheen.Opacity);
+            AvApp.Programs = live;
             session.Id = "foreign-session";
             shell.OnSessionTick();
             Assert.False(row.IsVisible);
@@ -359,7 +370,10 @@ public sealed class ProgramIgnitionTests
         }
         finally
         {
-            Set("<IsRunning>k__BackingField", false);
+            runner.SeedForTest(null, TimeSpan.Zero);
+            AvApp.Programs = svc;
+            live.Dispose();
+            Directory.Delete(liveDir, true);
             AvApp.Sessions = old;
             CoreSession.IsSessionRunningProvider = provider;
         }

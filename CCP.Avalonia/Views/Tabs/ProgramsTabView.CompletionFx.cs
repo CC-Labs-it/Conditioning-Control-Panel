@@ -105,7 +105,8 @@ public partial class ProgramsTabView
         var row = Find<Grid>("TodaySessionProgressRow");
         var text = Find<TextBlock>("TxtTodaySessionProgress");
         var bar = Find<ProgressBar>("TodaySessionProgressBar");
-        if (enrollment == null || record == null || !IsVisible || VisualRoot == null)
+        // WPF :1437 ApplyProgramsReadOnly returns before the strip is painted.
+        if (enrollment == null || record == null || svc!.IsReadOnly || !IsVisible || VisualRoot == null)
         {
             row.IsVisible = text.IsVisible = false;
             bar.Value = 0;
@@ -128,7 +129,8 @@ public partial class ProgramsTabView
         var total = TimeSpan.FromMinutes(Math.Max(1, runner!.CurrentSession!.DurationMinutes));
         var elapsed = runner.Elapsed;
         if (elapsed > total) elapsed = total;
-        bar.Foreground = text.Foreground = _runAccent;
+        // WPF :1466: the program's own accent, not the chapter-shifted run accent.
+        bar.Foreground = text.Foreground = Windows.MainShellWindow.AccentBrush(svc.ActiveProgram?.AccentColor);
         bar.Value = Math.Clamp(elapsed.TotalSeconds / total.TotalSeconds * 100, 0, 100);
         var clock = Loc.GetF("programs_session_progress", ProgramClockText(elapsed), ProgramClockText(total));
         text.Text = runner.IsPaused ? Loc.GetF("programs_session_progress_paused", clock) : clock;
