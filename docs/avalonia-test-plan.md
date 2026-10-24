@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Friends drawer completion checks
+
+1. Open the rail friends drawer signed out, then signed in with presence hidden and no prior answer. Answer Yes: presence shares and the ask stays gone after reopening. Repeat in a fresh sandbox with No: stays hidden and never asks again. The header switch also dismisses the ask. WPF `Controls/Friends/FriendsDrawer.cs:322-377` + `FriendsDrawer.Presence.cs:76-81`. Rows: `ctrl-friends-drawer`.
+2. With Basic/Prime friends and a locked friend hosting a table, check tier art, lock day and Join remain visible together; free accounts have no plate. WPF `Controls/Friends/FriendsDrawer.cs:550-585`. Rows: `ctrl-friends-drawer`.
+3. Toggle the foot bell twice. Its tooltip and ink follow the stored corner-notices setting; Inbox remains available. WPF `Controls/Friends/FriendsDrawer.cs:872-897`. Rows: `ctrl-friends-drawer`.
+4. Right-click a request: Block needs no confirmation; Report offers reasons. With an old server, successful blocks appear under Blocked only for that account; successful Unblock forgets them. A server block list takes precedence and retires local entries without reblocking. WPF `Controls/Friends/FriendsDrawer.Blocked.cs:45-81,152-179,245-261`. Rows: `ctrl-friends-drawer`.
