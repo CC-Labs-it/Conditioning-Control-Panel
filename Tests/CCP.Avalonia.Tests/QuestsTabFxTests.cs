@@ -34,9 +34,7 @@ public sealed class QuestsTabFxTests
 
     private static void Setup()
     {
-        if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
     }
 
     [Fact]

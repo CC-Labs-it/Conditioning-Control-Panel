@@ -99,6 +99,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Serilog.Log.Debug("PaintSectionWash failed: {E}", ex.Message); }
         }
 
+        /// <summary>
+        /// The chrome half of WPF CmbMotionLevel_SelectionChanged (MainWindow.UiUpdates.cs:2529): the
+        /// window edge, the strip's sheen clock, the favourites handle glow and the fold arrow's breath
+        /// re-read the level now, not at the next section change or tab visit. The other loops it
+        /// names listen to the gate themselves.
+        /// A static event: subscribed while open, never rooting a closed shell (P41).
+        /// </summary>
+        private void InitializeMotionChrome()
+        {
+            Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome; AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome; };
+            Closed += (_, _) =>
+            {
+                AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
+                StopLockdownPulse();
+            };
+        }
+
+        internal void OnMotionChrome()
+        {
+            try
+            {
+                // Before the first navigation the frame wears Home's hue (the XAML default; WPF _edgeHue).
+                PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), CoreSettings.Current.MotionLevel, 0);
+                PageStrip?.UpdateSheenClock();
+                if (!AmbientFxCanvas.Env.AllowAmbientLoops) StopLockdownPulse();
+                if (Named<Tabs.SettingsTabView>("SettingsTab") is { } dash)
+                {
+                    dash.SyncFavoritesDrawerFx();   // WPF PaintFavoritesDrawer: the handle glow's breath
+                    dash.PaintFoldArrow(BrowserFolded);
+                }
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Motion chrome refresh failed: {E}", ex.Message); }
+        }
+
         /// <summary>WPF PaintSectionEdge (SectionEdge.cs :105) with no fog running (the full band):
         /// the 3 px line at 0xE6, each band's edge alpha balanced for brightness
         /// (SectionEdgeRules.GlowAlpha), the lift the hue toward white, hidden at Motion Off.</summary>

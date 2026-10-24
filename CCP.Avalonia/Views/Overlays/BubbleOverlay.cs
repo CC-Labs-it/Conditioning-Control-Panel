@@ -30,8 +30,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Hot path is allocation-free: one cached frame delegate, one Render pass over the
     /// field with struct transforms, a reused rect buffer for the input region.</para>
     ///
-    /// <para>ponytail: plain FloatUp bubbles only. Not here yet: trigger/effect bubbles
-    /// (ChaosBubbleVariants and payloads are head-side), Bubbles v2 motions (Rain/Spiral In) and
+    /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
+    /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
+    ///
+    /// <para>ponytail: FloatUp bubbles only. Not here yet: live chaos bubbles (fuses, defuse,
+    /// detonation), the dashboard's ambient trigger bubbles, Bubbles v2 motions (Rain/Spiral In) and
     /// Brain Drain/Magnet, Natasha's red bubble, the avatar egg, gaze pops, the lucky gold glow and
     /// sparkles, pop haptics, mod pop-sound overrides, Discord presence, and the achievement
     /// (no AchievementService on this head; quests are credited).</para>
@@ -55,18 +58,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
 
+        /// <summary>WPF BubbleService.OnBubblePopped (the leash bubble task counts these).</summary>
+        internal static event Action? Popped;
+
         // CCP_FRAME_STATS=1: one stdout line per 10 s - step+region cost per frame with N bubbles.
         private static readonly bool Stats = Environment.GetEnvironmentVariable("CCP_FRAME_STATS") == "1";
         private static readonly Stopwatch StatClock = new();
         private static double _statMax, _statSum;
         private static int _statN, _statBubbles;
 
-        public static bool IsRunning => _running;
+        /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
+        public static bool IsRunning => _running && !_chaosOpenedWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
 
         /// <summary><paramref name="frequency"/> per minute overrides the setting (WPF Start's).</summary>
-        public static void Start(Visual host, int? frequency = null)
+        public static void Start(Visual host, int? frequency = null) => Start(host, frequency, ambient: true);
+
+        /// <param name="ambient">False opens the windows for a Chaos run only: no ambient spawn timer.</param>
+        private static void Start(Visual host, int? frequency, bool ambient)
         {
+            if (_running && ambient && _chaosOpenedWindows)
+            {
+                _chaosOpenedWindows = false;   // the ambient game starts mid-run: it owns the windows now
+                StartSpawning(frequency);
+                return;
+            }
             if (_running) return;
             if (!X11Overlay.IsAvailable) { Log.Warning("Bubbles: this platform cannot show click-through overlays; skipped"); return; }
             var screens = ScreenList.Enumerate(host);
@@ -91,6 +107,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _running = true;
             _lastStep = null;
+            if (ambient) StartSpawning(frequency);
+        }
+
+        private static void StartSpawning(int? frequency)
+        {
+            var s = CoreSettings.Current;
             _spawnTimer = new DispatcherTimer { Interval = AmbientBubbleField.SpawnInterval(frequency ?? s.BubblesFrequency) };
             _spawnTimer.Tick += (_, _) => Spawn();
             _spawnTimer.Start();
@@ -102,7 +124,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public static void Stop()
         {
-            var wasRunning = _running;
+            // WPF Stop returns early when the ambient game is idle, so a chaos-only teardown keeps presence.
+            var wasRunning = IsRunning;
+            if (_chaosPopped != null && _running)
+            {
+                // The ambient game stops mid-run: its bubbles go, the run keeps the windows.
+                _spawnTimer?.Stop();
+                _spawnTimer = null;
+                Field.Bubbles.RemoveAll(b => b.Spec == null);
+                _chaosOpenedWindows = true;
+                foreach (var w in Windows) w.Sync();
+                if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF BubbleService.cs:853
+                return;
+            }
+            _chaosOpenedWindows = false;
             _running = false;
             _pending = false;
             _spawnTimer?.Stop();
@@ -142,9 +177,108 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Windows[0].RequestAnimationFrame(Windows[0].FrameCallback);
         }
 
+        // ---- Chaos field (WPF BubbleService.BeginChaosMode / SpawnChaosBubble / EndChaosMode) ----
+        private static Action<AmbientBubble>? _chaosPopped;
+        private static Func<AmbientBubble, bool>? _chaosCanChannel;
+
+        /// <summary>WPF Detonate/CompleteDefuse anchor the pop point at the bubble's centre.</summary>
+        private static void AnchorPop(AmbientBubble b) { ChaosLastPopX = b.CenterX; ChaosLastPopY = b.CenterY; }
+
+        /// <summary>WPF OnPlayerPress: a live chaos bubble starts a hold-to-defuse channel (if the
+        /// focus gate allows) at the press point (global DIPs); every other bubble pops.</summary>
+        internal static void Press(AmbientBubble b, double x, double y)
+        {
+            if (!b.IsLiveThreat) { Pop(b); return; }
+            Field.PressLive(b, _chaosCanChannel?.Invoke(b) ?? true, x, y);
+            RequestFrame();
+        }
+
+        /// <summary>WPF ChaosMouseHeld/CursorPx: the hold moved or let go.</summary>
+        internal static void PointerHold(bool held, double x, double y)
+        {
+            Field.Held = held;
+            Field.CursorX = x; Field.CursorY = y;
+        }
+        private static bool _chaosOpenedWindows;
+        /// <summary>WPF BubbleService.ChaosLastPopXDip/YDip: the last chaos pop's centre, global DIPs.</summary>
+        internal static double ChaosLastPopX, ChaosLastPopY;
+
+        /// <summary>Live (not popping) chaos bubbles: WPF ActiveBubbles during a run.</summary>
+        internal static int ChaosCount
+        {
+            get { var n = 0; foreach (var b in Field.Bubbles) if (b.Spec != null && !b.Popping) n++; return n; }
+        }
+
+        /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
+        /// if the ambient field is not already running.</summary>
+        internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
+            Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
+            Func<AmbientBubble, bool>? canChannel = null)
+        {
+            _chaosPopped = onPop;
+            _chaosCanChannel = canChannel;
+            Field.Held = false;
+            Field.ChaosDefused = onDefuse == null ? null : b => { AnchorPop(b); onDefuse(b); };
+            Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); };
+            if (_running) return;
+            Start(host, null, ambient: false);
+            _chaosOpenedWindows = _running;
+        }
+
+        /// <summary>WPF SetChaosFrozen + SetChaosInputLocked (manual pause): chaos bubbles hold
+        /// still and a click on one is swallowed, so a paused field cannot be farmed.</summary>
+        internal static void HoldChaos(bool held)
+        {
+            Field.HoldChaos = held;
+            RequestFrame();
+        }
+
+        /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
+        internal static void EndChaos()
+        {
+            Field.HoldChaos = false;
+            _chaosPopped = null;
+            _chaosCanChannel = null;
+            Field.ChaosDefused = Field.ChaosDetonated = null;
+            Field.Held = false;
+            Field.Bubbles.RemoveAll(b => b.Spec != null);
+            if (_chaosOpenedWindows) { Stop(); return; }
+            foreach (var w in Windows) w.Sync();
+        }
+
+        /// <summary>WPF SpawnChaosBubble, FloatUp only. Without an overlay window (headless, or a
+        /// platform that refuses click-through) the bubble lives on a 1920x1080 model screen.</summary>
+        internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec)
+        {
+            AmbientBubble b;
+            if (Targets.Count == 0)
+                b = AmbientBubble.SpawnChaos(Field.Random, 0, 0, 0, 1920, 1080, 1, spec);
+            else
+            {
+                var i = Field.Random.Next(Targets.Count);
+                var a = Targets[i].WorkingArea;
+                b = AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+            }
+            Field.Bubbles.Add(b);
+            RequestFrame();
+            return b;
+        }
+
+        /// <summary>WPF Bubble.Pop with a spec: anchor the pop point, start the burst, hand it to the run.</summary>
+        internal static void PopChaos(AmbientBubble b)
+        {
+            if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
+            b.Popping = true;
+            ChaosLastPopX = b.CenterX;
+            ChaosLastPopY = b.CenterY;
+            _chaosPopped?.Invoke(b);
+            RequestFrame();
+        }
+
         /// <summary>WPF AwardAmbientPop, head half: sound, XP, quest credit.</summary>
         internal static void Pop(AmbientBubble b)
         {
+            if (b.Spec != null) { PopChaos(b); return; }
             var s = CoreSettings.Current;
             var paid = Field.Pop(b, s);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
@@ -160,6 +294,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             CoreAudio.PlayOneShot(path, Math.Min(vol, 1f), "bubble-pop");
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
+            try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
         }
 
         internal static void OnFrame(TimeSpan now)
@@ -202,6 +337,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             GradientStops = { new GradientStop(Color.FromArgb(180, 200, 220, 255), 0), new GradientStop(Color.FromArgb(80, 255, 255, 255), 1) },
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
+        private static readonly IPen FuseYellow = new Pen(new SolidColorBrush(Color.FromRgb(255, 210, 40)), 4);
+        private static readonly IPen FuseRed = new Pen(new SolidColorBrush(Color.FromRgb(255, 45, 45)), 4);
+        private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
+
+        /// <summary>One fill + pen per variant tint, built once (the render pass stays allocation-free).</summary>
+        private static (IBrush, IPen) TintPaint(uint argb)
+        {
+            if (TintCache.TryGetValue(argb, out var p)) return p;
+            var c = Color.FromUInt32(argb);
+            return TintCache[argb] = (new SolidColorBrush(c, 0.45), new Pen(new SolidColorBrush(c), 3));
+        }
 
         internal readonly int Index;
         internal readonly PixelRect Bounds;
@@ -240,6 +386,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Content = new Layer(this);
             FrameCallback = now => { if (BubbleOverlay.IsFrameOwner(this)) BubbleOverlay.OnFrame(now); };
             PointerPressed += OnPressed;
+            PointerMoved += (_, e) => OnHold(e, true);
+            PointerReleased += (_, e) => OnHold(e, false);
+            // WPF polls the physical button (BubbleService.cs:545): a release the window never saw
+            // (alt-tab, compositor grab) still breaks the hold.
+            PointerCaptureLost += (_, _) =>
+            {
+                if (BubbleOverlay.Field.Held) BubbleOverlay.PointerHold(false, BubbleOverlay.Field.CursorX, BubbleOverlay.Field.CursorY);
+            };
         }
 
         /// <summary>Global bubble DIPs (screen px / scaling) to this window's DIPs.</summary>
@@ -251,8 +405,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var p = e.GetPosition(this);
             var b = BubbleOverlay.Field.HitTest(Index, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
             if (b == null) return;
-            BubbleOverlay.Pop(b);
+            BubbleOverlay.Press(b, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
             e.Handled = true;
+        }
+
+        /// <summary>The press is captured, so the hold's moves and release land here (WPF TickChannel reads them).</summary>
+        private void OnHold(PointerEventArgs e, bool held)
+        {
+            if (!BubbleOverlay.Field.Held) return;
+            var p = e.GetPosition(this);
+            BubbleOverlay.PointerHold(held, (Bounds.X + p.X * RenderScaling) / Scaling, (Bounds.Y + p.Y * RenderScaling) / Scaling);
         }
 
         /// <summary>After a step: input region = live clickable bubbles here; repaint if any were drawn.</summary>
@@ -295,14 +457,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
-                    double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale;
+                    double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
+                        if (b.Spec != null)   // chaos bubble: its variant tint under the sprite
+                        {
+                            var (fill, pen) = TintPaint(b.Spec.Tint);
+                            dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        }
                         if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
+                        if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45, red at the brink
+                        {
+                            double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
+                            double brinkMs = Math.Min(b.FuseTotalMs * 0.30, ConditioningControlPanel.Services.Chaos.ChaosTuning.RING_BRINK_MS);
+                            dc.DrawEllipse(null, b.FuseRemainingMs <= brinkMs ? FuseRed : FuseYellow, new Point(cx, cy), rr, rr);
+                        }
                     }
                 }
             }

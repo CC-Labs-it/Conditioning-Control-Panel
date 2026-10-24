@@ -67,6 +67,13 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 catch (Exception ex) { Log.Warning(ex, "[ModArt] mod override {Path} would not load", overridePath); }
             }
 
+            return TryLoadBuiltIn(resourceName, decodeWidth);
+        }
+
+        /// <summary>Compiled art only, for WPF surfaces that bind pack:// directly rather than use a mod resolver.</summary>
+        internal static Bitmap? TryLoadBuiltIn(string? resourceName, int? decodeWidth = null)
+        {
+            if (string.IsNullOrWhiteSpace(resourceName)) return null;
             try
             {
                 var uri = new Uri($"avares://CCP.Avalonia/Resources/{resourceName}");
@@ -80,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 return null;
             }
         }
+
         private static readonly System.Collections.Generic.Dictionary<string, Bitmap?> WardrobeCache = new();
 
         /// <summary>WPF WardrobeArt.GetImage: a registry item's PNG off disk at 384px (Core

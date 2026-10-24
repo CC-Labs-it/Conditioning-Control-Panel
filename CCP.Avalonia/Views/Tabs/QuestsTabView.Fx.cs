@@ -137,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void CelebrateQuestComplete(QuestType type, string? definitionId)
         {
             if (!IsEffectivelyVisible) return;
-            UpdateLayout(); // RefreshQuestUI just resized the fills
+            UpdateLayout(); // the daily fill may still be mid-tween, so the burst can anchor at its start width (as WPF's ActualWidth read does)
             Control? fill, track;
             if (type == QuestType.Weekly) { fill = WeeklyProgressFill; track = WeeklyProgressTrack; }
             else

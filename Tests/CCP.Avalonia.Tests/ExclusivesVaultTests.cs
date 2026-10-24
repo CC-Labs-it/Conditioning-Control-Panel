@@ -39,7 +39,7 @@ public sealed class ExclusivesVaultTests
 
                 // Unseeded: every premium door is veiled, Just Drop and the Arcademy (no door seeded) are
                 // absent, the free doors stay open. WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free under
-                // headers, Graded Intake shelved with Prime, open doors first, roster order within each half.
+                // headers, Graded Intake shelved with Basic (WPF 5ce1a6cd1), open doors first, roster order within each half.
                 var rows = Rows(view);
                 Assert.DoesNotContain(rows, r => r.Feature.Key is "justdrop" or "arcademy");
                 var items = view.FindControl<ItemsControl>("ExclusivesShelf")!.Items.Cast<object>().ToList();
@@ -51,11 +51,13 @@ public sealed class ExclusivesVaultTests
                 int At(string key) => items.FindIndex(i => i is ExclusiveCardRow r && r.Feature.Key == key);
                 int Head(string g) => items.FindIndex(i => i is ExclusiveGroupRow h && h.Group.ToString() == g);
                 Assert.InRange(At("fyp"), Head("Basic"), Head("Prime"));
-                Assert.InRange(At("gradedintake"), Head("Prime"), Head("Free"));   // untagged, sold as Prime
+                Assert.InRange(At("gradedintake"), Head("Basic"), Head("Prime"));   // untagged, any paid tier since 2a1fd1e88
                 Assert.InRange(At("dtrh"), Head("Prime"), Head("Free"));
                 Assert.True(At("backroom") > Head("Free"));
                 var basic = items.OfType<ExclusiveGroupRow>().First();
-                Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("premium_group_count", 0, rows.Count(r => r.Tier == 1)), basic.Count);
+                // WPF ArrangeVaultShelf counts the group's cards (Graded Intake, untagged, sits in Basic since 5ce1a6cd1).
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("premium_group_count", 0,
+                    expected.Single(g => g.Group == ConditioningControlPanel.Services.UI.PremiumGroup.Basic).Items.Count), basic.Count);
                 Assert.True(basic.HasSign);
                 Assert.False(items.OfType<ExclusiveGroupRow>().Last().HasSign);
 
@@ -119,16 +121,21 @@ public sealed class ExclusivesVaultTests
                 Assert.True(fyp.BadgeFreeToday);   // tiered: the badge re-stamps, no pill
                 Assert.False(view.FindControl<Border>("SpotVeil")!.IsVisible);
 
-                // Open doors lead their shelf: today's free Haptics jumps ahead of the locked Basic doors.
+                // Open doors lead their shelf: today's free Haptics jumps ahead of the locked Basic doors. Graded
+                // Intake sits in Basic since 5ce1a6cd1 and its unspent pass is an open door (WPF IsVaultDoorOpen), so
+                // it leads, then Haptics (roster order within the open half).
                 CoreEntitlement.IsFreeTodayProvider = key => key == "haptics";
                 view.RefreshVault();
                 var shelf = view.FindControl<ItemsControl>("ExclusivesShelf")!.Items.Cast<object>().ToList();
-                Assert.Equal("haptics", ((ExclusiveCardRow)shelf[1]).Feature.Key);
-                Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("premium_group_count", 1, Rows(view).Count(r => r.Tier == 1)),
+                Assert.Equal("gradedintake", ((ExclusiveCardRow)shelf[1]).Feature.Key);
+                Assert.Equal("haptics", ((ExclusiveCardRow)shelf[2]).Feature.Key);
+                var basicCards = shelf.Skip(1).TakeWhile(i => i is ExclusiveCardRow).Count();
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("premium_group_count", 2, basicCards),
                              ((ExclusiveGroupRow)shelf[0]).Count);
                 CoreEntitlement.IsFreeTodayProvider = key => key == "fyp";
 
-                // Premium owns the pool: no gift tag, no veil.
+                // Premium owns the pool: no gift tag, no veil. The week's pass spent: only the tier opens Intake.
+                CoreEntitlement.IntakePassAvailableProvider = null;
                 CoreEntitlement.HasPremiumProvider = () => true;
                 view.RefreshVault();
                 rows = Rows(view);
@@ -136,6 +143,7 @@ public sealed class ExclusivesVaultTests
                 // premium does not open those; the Lab bar does.
                 Assert.All(rows.Where(r => r.Feature.Key != "gradedintake" && r.Feature.Tier < 2), r => Assert.False(r.IsLocked));
                 Assert.All(rows.Where(r => r.Feature.Tier == 2), r => Assert.True(r.IsLocked));
+                Assert.False(rows.Single(r => r.Feature.Key == "gradedintake").IsLocked);   // any paid tier since 2a1fd1e88
                 Assert.False(rows.Single(r => r.Feature.Key == "fyp").FreeToday);
             }
             finally
@@ -203,7 +211,7 @@ public sealed class ExclusivesVaultTests
     private static void EnsureAvalonia()
     {
         if (Application.Current is not null) return;
-        AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+        global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
             .UseSkia()
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .SetupWithoutStarting();

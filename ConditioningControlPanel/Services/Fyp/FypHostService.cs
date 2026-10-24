@@ -70,6 +70,7 @@ internal static class FypHostService
     public static void Launch()
     {
         if (_host != null) { _host.FocusWeb(); return; }
+        _remoteSentIds.Clear();   // a new page holds nothing yet
         try
         {
             // EMI Desk: the ring learns from every open, not just its own cards.
@@ -314,6 +315,11 @@ internal static class FypHostService
 
     private static int _remoteFetchInFlight;   // 0/1 via Interlocked
 
+    /// <summary>Remote ids this page has been handed since it opened (UI thread only). The
+    /// "fresh" in online-status counts ids NEW to the page: a spent or away batch is cached
+    /// files the page may already hold, and counting those as fresh kept it asking ~1/s.</summary>
+    private static readonly HashSet<string> _remoteSentIds = new(StringComparer.Ordinal);
+
     /// <summary>Subs with a probe in the air; a second request for the same name is dropped
     /// rather than queued (the page commits on Enter AND on blur).</summary>
     private static readonly HashSet<string> _probesInFlight = new(StringComparer.OrdinalIgnoreCase);
@@ -340,8 +346,12 @@ internal static class FypHostService
             await win.Dispatcher.InvokeAsync(() =>
             {
                 if (_host == null) return;
+                // Fresh = ids this page has never been handed. A spent/away batch is cached
+                // files (ScrolllerReuse), often ones the page already holds: counting those
+                // as fresh reset the page's dry ladder and it asked again about once a second.
+                int newToPage = ScrolllerReuse.CountNewToPage(_remoteSentIds, batch.Entries.Select(e => e.Id));
                 // assets-append (when any), then online-status either way (FypRules.BatchFrames).
-                foreach (var frame in FypRules.BatchFrames(batch)) _host.Post(frame);
+                foreach (var frame in FypRules.BatchFrames(batch, newToPage)) _host.Post(frame);
             });
         }
         catch (Exception ex) { App.Logger?.Warning("FypHost: remote batch failed: {E}", ex.Message); }

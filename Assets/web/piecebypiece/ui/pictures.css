@@ -1,0 +1,72 @@
+/* Piece by Piece - the pictures card (ui/pictures.js): the shared niche picker
+   (backroom/shared/niches/picker.js) dressed in the front door's colours, with
+   a Back button top-left, a veil that fades in and out, and buttons that admit
+   they were touched. Loaded by ui/pictures.js after the page's sheets, so the
+   card rules here win over styles.css's older ones. The widget itself is shared
+   by every game and is never edited for chess: only its --np-* properties and
+   a few scoped rules under .pbp-np-card. Reduced motion (.still): no travel. */
+
+.pbp-np-modal {
+  opacity: 0; transition: opacity 200ms ease;
+  background: radial-gradient(ellipse at 50% 40%, rgba(26, 26, 62, 0.55) 0%, rgba(12, 10, 30, 0.86) 100%);
+}
+.pbp-np-modal.is-in { opacity: 1; }
+.pbp-np-modal.is-out { opacity: 0; transition-duration: 160ms; pointer-events: none; }
+.pbp-np-modal.still, .pbp-np-modal.still.is-out { transition-duration: 120ms; }
+
+.pbp-np-card .np {
+  --np-ink: #E9E2F5; --np-dim: #c4b6d6; --np-faint: #8f84a6; --np-card: #1d1838; --np-pill: rgba(245, 230, 200, 0.06);
+  --np-on: rgba(255, 105, 180, 0.3); --np-edge: rgba(245, 230, 200, 0.2); --np-pink: #FF69B4; --np-gold: #ffd27a;
+}
+.pbp-np-card {
+  gap: 12px; padding: 20px 22px 18px; border-radius: 18px;
+  background: rgba(20, 20, 46, 0.9); border: 1px solid rgba(245, 230, 200, 0.16);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4); backdrop-filter: blur(9px);
+}
+.pbp-np-card::-webkit-scrollbar { width: 6px; }
+.pbp-np-card::-webkit-scrollbar-thumb { background: rgba(255, 105, 180, 0.45); border-radius: 3px; }
+.pbp-np-card::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+@supports not selector(::-webkit-scrollbar) { .pbp-np-card { scrollbar-width: thin; scrollbar-color: rgba(255, 105, 180, 0.5) transparent; } }
+.pbp-np-modal.is-first .pbp-np-card { padding: 8px 0; background: transparent; border: 0; box-shadow: none; backdrop-filter: none; }
+
+/* the head: Back, then the title */
+.pbp-np-head { display: flex; align-items: center; gap: 12px; min-height: 36px; }
+.pbp-np-title { margin: 0; font: 600 24px/1 'PbpFredoka', 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.01em; color: var(--pbp-cream, #F5E6C8); }
+.pbp-np-sub { margin: 0; font-size: 12.5px; color: #c4b6d6; }
+
+/* everything you can press looks pressable, lifts on hover and squashes on press */
+.pbp-np-card .np-tab, .pbp-np-card .np-pill, .pbp-np-card .np-tile, .pbp-np-card .np-keep,
+.pbp-np-card .np-play, .pbp-np-card .np-add button, .pbp-np-done {
+  transition: transform 140ms cubic-bezier(.2, 1.5, .4, 1), background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+}
+.pbp-np-card .np-tab:hover, .pbp-np-card .np-pill:hover, .pbp-np-card .np-keep:hover, .pbp-np-card .np-add button:hover { transform: translateY(-1px); }
+.pbp-np-card .np-tab:active, .pbp-np-card .np-pill:active, .pbp-np-card .np-keep:active,
+.pbp-np-card .np-add button:active, .pbp-np-card .np-play:active, .pbp-np-done:active { transform: scale(0.95); }
+.pbp-np-card .np-tile:active { transform: translateY(-1px) scale(0.97); }
+
+.pbp-np-card .np-tab { padding: 7px 13px; font-size: 12.5px; }
+.pbp-np-card .np-tab[aria-pressed="true"] { box-shadow: 0 0 0 1px var(--tint, #FF69B4), 0 4px 14px color-mix(in srgb, var(--tint, #FF69B4) 28%, transparent); }
+.pbp-np-card .np-edit { border-color: rgba(245, 230, 200, 0.16); background: rgba(10, 8, 26, 0.45); }
+.pbp-np-card .np-pill { opacity: 0.6; }
+.pbp-np-card .np-pill.is-on { opacity: 1; border-color: var(--np-pink); box-shadow: 0 0 10px rgba(255, 105, 180, 0.22); }
+.pbp-np-card .np-pill button { padding: 6px 11px; font-size: 12.5px; }
+.pbp-np-card .np-pill.is-on button:first-child { color: #fff; }
+.pbp-np-card .np-add input { border-color: rgba(255, 105, 180, 0.45); }
+.pbp-np-card .np-add button { background: rgba(245, 230, 200, 0.1); border: 1px solid rgba(245, 230, 200, 0.22); }
+
+/* Done: the door's primary, one per card */
+.pbp-np-done {
+  justify-self: end; min-height: 42px; padding: 0 28px; border: 0; border-radius: 12px;
+  font: 600 15px/1 'PbpFredoka', 'Segoe UI', system-ui, sans-serif; letter-spacing: 0.04em;
+  background: var(--pbp-pink, #FF69B4); color: #1A1A3E; box-shadow: 0 3px 0 #9c2d6a, 0 0 18px rgba(255, 105, 180, 0.3);
+}
+.pbp-np-done:hover { background: #FF7DBE; }
+.pbp-np-done:focus-visible { outline: 2px solid #ffd27a; outline-offset: 3px; }
+
+/* reduced motion: no lift, no squash */
+.pbp-np-modal.still .pbp-np-card *, .pbp-np-modal.still .pbp-np-done { transition: none !important; transform: none !important; }
+
+@media (max-width: 520px) {
+  .pbp-np-card { padding: 16px 14px 14px; }
+  .pbp-np-done { justify-self: stretch; }
+}
