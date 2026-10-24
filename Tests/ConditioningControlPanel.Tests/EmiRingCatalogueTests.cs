@@ -49,7 +49,7 @@ public class EmiRingCatalogueTests
 
     private static IReadOnlyDictionary<string, string> Map(string field)
     {
-        var f = typeof(EmiTargets).GetField(field, BindingFlags.NonPublic | BindingFlags.Static);
+        var f = typeof(EmiDoors).GetField(field, BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(f);
         return (IReadOnlyDictionary<string, string>)f!.GetValue(null)!;
     }
