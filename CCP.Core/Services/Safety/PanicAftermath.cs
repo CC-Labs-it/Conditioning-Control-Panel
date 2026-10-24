@@ -46,7 +46,14 @@ namespace ConditioningControlPanel.Services.Safety
         {
             Interlocked.Exchange(ref _quietUntilMs, QuietUntil(nowMs));
             Interlocked.Exchange(ref _engineHeld, 1);
+            Interlocked.Increment(ref _panics);
         }
+
+        /// <summary>How many panics this process has seen. An AI follow-up remembers the count when it
+        /// is scheduled and never fires once a panic overtook it (AiCommandAdmission).</summary>
+        public static long PanicCount => Interlocked.Read(ref _panics);
+
+        private static long _panics;
 
         /// <summary>The user's own START: what they stopped may come back.</summary>
         public static void EndQuiet()
