@@ -69,6 +69,8 @@ import { buildBoudoirDressing } from './boudoirDressing.js';
 import { boudoirMediaLayout } from './boudoirMedia.js';
 import { boudoirSpiralLayout } from './boudoirSpirals.js';
 import { createBoudoirPerfumeView } from './boudoirPerfume.js';
+import { createBoudoirHazardView } from './boudoirHazards.js';
+import { buildBoudoirMirrorRoom } from './boudoirMirrorRoom.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -203,6 +205,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const boudoirDressing = boudoir ? buildBoudoirDressing(track, art, pal, samples) : null;
   if (boudoirDressing) scene.add(boudoirDressing.group);
   const perfumeView = boudoir ? createBoudoirPerfumeView(scene, track) : null;
+  const boudoirHazardView = boudoir ? createBoudoirHazardView(scene, track, art) : null;
+  const mirrorRoom = boudoir ? buildBoudoirMirrorRoom(track, art, pal) : null;
+  if (mirrorRoom) scene.add(mirrorRoom.group);
   const keepDressing = keep ? buildKeepDressing(track, art, pal, samples) : null;
   if (keepDressing) scene.add(keepDressing.group);
   const keepGates = keep ? createKeepGateView(scene, track, art, { gates: getKeepLayout(track).gates }) : null;
@@ -308,6 +313,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     on('bump', (p) => ['bump', p.a, p.dv || 0, p.p, p.b]);
     on('bubble-ram', (p) => ['ram', p.attacker, 0, p.p, p.victim]);
     for (const name of ['keep-gate-hit', 'keep-chain-hit']) on(name, () => ['bump', 0, 12]);
+    for (const name of ['boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit']) on(name, p => [name, 0, 12, p]);
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
     on('item-box', (p) => ['box', p.racer, 0, p.p]);
     on('item-hit', (p) => ['hit', p.victim, p.verdict, p.p, p.kind]);
@@ -322,6 +328,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const posOf = (i) => { const o = kartObjs[i]; return o ? [o.position.x, o.position.y, o.position.z] : null; };
   function juice(e, gentle) {
     const [kind, i, a, p, b] = e, k = karts.list[i], obj = kartObjs[i], few = gentle ? 0.6 : 1;
+    if (kind === 'boudoir-press-hit' || kind === 'boudoir-sweeper-hit' || kind === 'boudoir-mirror-hit') {
+      boudoirHazardView?.hit(p);
+      particles.burst(posOf(i), Math.round(24 * few), { colours: ['#f6cbdc', '#e6b563', '#ffffff'], speed: 5, up: 2, sparkle: .65, near: i === 0 });
+      if (k) kickWobble(k.pose, LOOK, gentle, .55);
+      return;
+    }
     if (kind === 'splash') { if (waterfall) waterfall.splash(p || {}, gentle); return; }
     if (kind === 'chute') { if (waterfall) waterfall.chute(p || {}, gentle); return; }
     if (kind === 'stone') {
@@ -501,6 +513,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (colossi) colossi.update(dt, scroll);
     if (mainframe) mainframe.update(dt, view, gentle);
     boudoirDressing?.update({ ...view, dt, gentle });
+    boudoirHazardView?.update(view.raceTimeS ?? 0, { gentle, paused: !!view.paused, active: view.mode === 'race', dt });
+    mirrorRoom?.update(dt, view, gentle);
     perfumeView?.update(view.scanTimeS ?? view.raceTimeS ?? 0, { ready: view.perfumeReady, gentle, paused: !!view.paused, active: view.mode === 'race', dt });
     rails.uniforms.flow.value = road.uniforms.phase.value;
     if (shadows && view.camera) { view.camera.layers.enable(CATCH_LAYER); view.camera.getWorldDirection(FWD); shadows.update(view.camera.position, FWD); }
@@ -542,7 +556,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (waterfall) waterfall.dispose();
     waterVolume.dispose();
     if (showcaseDressing) showcaseDressing.dispose();
-    boudoirDressing?.dispose(); perfumeView?.dispose();
+    boudoirDressing?.dispose(); perfumeView?.dispose(); boudoirHazardView?.dispose(); mirrorRoom?.dispose();
     if (keepDressing) keepDressing.dispose();
     if (keepGates) keepGates.dispose();
     if (keepChains) keepChains.dispose();
@@ -555,9 +569,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, perfumeView, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, perfumeView, boudoirHazardView, mirrorRoom, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { stones?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { stones?.reset(); boudoirHazardView?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

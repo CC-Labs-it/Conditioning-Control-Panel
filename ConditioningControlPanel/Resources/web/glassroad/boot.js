@@ -71,6 +71,7 @@ import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
 import { getBoudoirLayout } from './track/boudoir-layout.js';
 import { createBoudoirPerfume } from './sim/boudoirPerfume.js';
+import { createBoudoirHazards } from './sim/boudoirHazards.js';
 import { createKeepHazards } from './sim/keepHazards.js';
 
 const qs = new URLSearchParams(location.search);
@@ -196,7 +197,7 @@ async function boot() {
   debug.trackId = track.id;
   const keepLayout = getKeepLayout(track);
   const boudoirLayout = getBoudoirLayout(track);
-  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : null;
+  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : boudoirLayout ? createBoudoirHazards(track, boudoirLayout) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -206,7 +207,7 @@ async function boot() {
   const effects = createEffects(bus, feel, { gentle, photosafe });
   fx.state.screen = effects.screen;
   const audio = createAudio(feel, bus, { gentle });
-  for (const name of ['keep-gate-hit', 'keep-chain-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
+  for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
   bus.on('effect-start', ({ kind }) => { if (!debug.effects.includes(kind)) debug.effects.push(kind); debug.effectNow = kind; });
@@ -269,7 +270,7 @@ async function boot() {
   debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
   debug.trackId = track.id;
   if (boudoirLayout) Object.defineProperty(debug, 'perfume', { get: () => perfume.inspect(), enumerable: true });
-  if (hazards) Object.defineProperty(debug, 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
+  if (hazards) Object.defineProperty(debug, boudoirLayout ? 'boudoirHazards' : 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
   debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   debug.terrace = world.terrace ? { count: world.terrace.count, ...world.terrace.diagnostics } : null;
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
@@ -658,8 +659,41 @@ async function boot() {
   // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
   hud.setLoading('Preparing shaders', 0.55);
   await paintGap();
-  const warm = await renderer.compile(world.scene, cam.camera, undefined,
-    { onProgress: (k, n) => hud.setLoading('Preparing shaders ' + k + '/' + n, 0.55 + 0.4 * k / n) });
+  // Native mirrors skip capture from behind their planes. Warm from inside the hall
+  // so its reflection pipelines compile behind the loading card, before the first lap.
+  const warmPose = world.mirrorRoom ? cam.camera.clone() : null;
+  const warmView = (views) => ({ kart: views[0].st, karts: views, fx: fx.state, timeS: 0, beat: clock.beat,
+    raceTimeS: 0, sectionIdx: views[0].st[S.sectionIdx], items: items.view(), mode: 'menu', camera: cam.camera, paused: false,
+    scanTimeS: 0, scanReady: scan.ready, perfumeReady: perfume.ready });
+  let warm;
+  try {
+    if (warmPose) {
+      const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
+      peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
+    }
+    warm = await renderer.compile(world.scene, cam.camera, undefined,
+      { onProgress: (k, n) => hud.setLoading('Preparing shaders ' + k + '/' + n, 0.55 + 0.4 * k / n) });
+    if (warmPose) {
+      hud.setLoading('Preparing mirrors', .96);
+      await paintGap();
+      const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
+      // Temporary view copies put all racers in the capture without changing race state.
+      const warmKarts = kartViews.map((r, i) => {
+        const st = r.st.slice(), s = hall.s0 + 82 + i * 1.6, f = track.frameAt(s);
+        f.p.forEach((value, j) => { st[S.posX + j] = value + f.b[j] * ((i % 3) - 1) * 4; });
+        st[S.s] = s;
+        return { ...r, st };
+      });
+      world.update(warmView(warmKarts));
+      await world.mirrorRoom.warmCapture(renderer, world.scene, cam.camera);
+    }
+  } finally {
+    if (warmPose) {
+      cam.camera.position.copy(warmPose.position); cam.camera.quaternion.copy(warmPose.quaternion); cam.camera.up.copy(warmPose.up);
+      cam.camera.updateMatrixWorld(true);
+      world.update(warmView(kartViews));
+    }
+  }
   debug.warm = warm;
   // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
   hud.setLoading('Last touches', 0.97);
