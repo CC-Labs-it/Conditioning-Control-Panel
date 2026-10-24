@@ -71,6 +71,7 @@ import { boudoirSpiralLayout } from './boudoirSpirals.js';
 import { createBoudoirPerfumeView } from './boudoirPerfume.js';
 import { createBoudoirHazardView } from './boudoirHazards.js';
 import { buildBoudoirMirrorRoom } from './boudoirMirrorRoom.js';
+import { createBoudoirWaterPalette } from './boudoirWater.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -255,8 +256,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   for (const o of wakes.objects) add(o);
   // the chute's waterfall sheet, spray and splash ring (render/waterfall.js; in the scene before the warm)
   let waterfall = null;
-  try { waterfall = createWaterfall(track, pal, { particles, wakes }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
-  const waterVolume = buildWaterVolume(track, pal, art);
+  const waterPal = boudoir ? createBoudoirWaterPalette(pal) : pal;
+  try { waterfall = createWaterfall(track, waterPal, { particles, wakes }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
+  const waterVolume = buildWaterVolume(track, waterPal, art);
   add(waterVolume.object);
   // polish 4: glowing skid ribbons under a drift (one pooled draw call for every kart)
   const skids = createSkids(feel, count);
