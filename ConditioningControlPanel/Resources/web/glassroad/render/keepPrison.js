@@ -1,6 +1,7 @@
 /* Original prison architecture. Pure world-space pieces also provide physical media mounts. */
+import { keepDetails } from './keepDetails.js';
 export function prisonPlan(track, layout, { phone = false } = {}) {
-  const boxes = [], drums = [], mounts = [], buildings = [];
+  const boxes = [], drums = [], mounts = [], buildings = [], missingBricks = [];
   const box = (material, name, p, size, yaw = 0, tilt = 0) => boxes.push({ material, name, p, size, yaw, tilt });
   const ground = Math.min(-25, ...(layout.towers || []).map((t) => t.baseY));
   const road = [];
@@ -22,7 +23,18 @@ export function prisonPlan(track, layout, { phone = false } = {}) {
           local(a, 'stone', 'broken-upper-wall', ...p, [pitch * 0.8, 3, 3], angle, (j % 2 ? 1 : -1) * 0.12);
           continue;
         }
-        local(a, 'stone', 'cell-pier', ...at(u, y + 4.5), [pitch + .05, 10, 3.2], angle);
+        if ((j + floor * 5 + side * 3) % 9 === 2 && j > 0 && j < n - 1) {
+          // Four remaining pieces surround a genuinely absent brick, exposing the recessed core.
+          local(a, 'stone', 'chipped-masonry', ...at(u, y - .05), [pitch + .05, .9, 3.2], angle);
+          local(a, 'stone', 'chipped-masonry', ...at(u, y + 5.95), [pitch + .05, 7.1, 3.2], angle);
+          local(a, 'stone', 'chipped-masonry', ...at(u - pitch / 2 + .4, y + 1.4), [.8, 2, 3.2], angle);
+          local(a, 'stone', 'chipped-masonry', ...at(u + 1.6, y + 1.4), [pitch - 3.2, 2, 3.2], angle);
+          missingBricks.push(transform(a, ...at(u - pitch / 2 + 2, y + 1.4)));
+        } else local(a, 'stone', 'cell-pier', ...at(u, y + 4.5), [pitch + .05, 10, 3.2], angle);
+        if (j % 5 === 1 && floor % 2 === 0) for (let k = 0; k < 4; k++) {
+          const zig = k % 2 ? .32 : -.15;
+          local(a, 'dark', 'masonry-crack', ...at(u - pitch * .32 + zig, y + 5 + k * 1.1, 1.66), [.16, 1.4, .1], angle, zig);
+        }
         local(a, 'dark', 'cell-recess', ...at(u + .7, y + 4.6, 1.7), [3.1, 4.8, .2], angle);
         for (const k of [-1, 0, 1]) local(a, 'iron', 'cell-bars', ...at(u + .7 + k, y + 4.6, 1.88), [.23, 4.9, .22], angle);
         local(a, 'iron', 'cell-crossbar', ...at(u + .7, y + 3.3, 1.9), [3.2, .24, .22], angle);
@@ -142,6 +154,15 @@ export function prisonPlan(track, layout, { phone = false } = {}) {
     }
   }
   const groupIndex = new Map();
+  const details = keepDetails(track, layout, mounts); boxes.push(...details.boxes); mounts.push(...details.mounts);
+  const climb = details.interiors.find((a) => a.id === 'interior-spiral');
+  for (const m of mounts) if (m.id.startsWith('tower-tablet-') && climb && m.s > climb.s0 && m.s < climb.s1) {
+    const f = track.frameAt(m.s), tower = layout.towers[0], out = Math.sign(f.b[0] * (f.p[0] - tower.x) + f.b[2] * (f.p[2] - tower.z));
+    m.p = [f.p[0] - f.b[0] * out * (f.w / 2 + 1.6), f.p[1] + 7, f.p[2] - f.b[2] * out * (f.w / 2 + 1.6)];
+    const length = Math.hypot(f.b[0], f.b[2]);
+    m.t = [f.b[0] * out / length, 0, f.b[2] * out / length]; m.b = [m.t[2], 0, -m.t[0]]; m.n = [0, 1, 0]; m.standoff = .15;
+    box('stone', 'interior-media-tablet', m.p.map((v, i) => v - m.t[i] * .7), [15, 7, 1.1], Math.atan2(m.t[0], m.t[2]));
+  }
   for (const m of mounts) { const i = groupIndex.get(m.frame) || 0; m.phone = i % 4 < 2; groupIndex.set(m.frame, i + 1); }
-  return { boxes, drums, mounts, buildings };
+  return { boxes, drums, mounts, buildings, interiors: details.interiors, missingBricks };
 }

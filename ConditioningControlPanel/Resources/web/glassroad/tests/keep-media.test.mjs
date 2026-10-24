@@ -13,7 +13,7 @@ const layout=keepMediaLayout(track),M=mediaLook(),course=getKeepLayout(track),pr
 
 test('Keep architecture supplies a half-video half-Loom mix on every tier including the tower climb',()=>{
   assert.equal(keepMediaLayout({id:'threshold'}),null);
-  assert.equal(layout.slots.length,46);assert.equal(new Set(layout.slots.map(s=>s.id)).size,46);
+  assert.equal(layout.slots.length,62);assert.equal(new Set(layout.slots.map(s=>s.id)).size,62);
   for(const tier of ['high','mid','phone']){
     const visible=tierSlots(layout.slots,tier,M),chosen=selectScrolllerSlots(visible);
     for(const frame of ['billboard','halo','tunnel']){
@@ -36,7 +36,7 @@ test('Every Keep media face has real masonry backing and gatehouse screens face 
   };
   for(const slot of layout.slots){
     const points=[...rectPoints(slot,1),slot.C],mount=prison.mounts.find(m=>m.id===slot.mountId),f=track.frameAt(slot.s);
-    assert.ok(mount,'physical mount '+slot.id);assert.deepEqual(slot.C,mount.p.map((v,i)=>v+mount.t[i]*1.2));
+    assert.ok(mount,'physical mount '+slot.id);assert.deepEqual(slot.C,mount.p.map((v,i)=>v+mount.t[i]*(mount.standoff??1.2)));
     assert.ok(points.every(p=>p.every(Number.isFinite)));
     const nearby=prison.boxes.filter(box=>Math.hypot(...box.p.map((v,i)=>v-slot.C[i]))<Math.hypot(...box.size)/2+12);
     for(const p of points)assert.ok([.1,.35,.7,1.5,3,5,8].some(d=>nearby.some(box=>inside(p.map((v,i)=>v-slot.Z[i]*d),box))),'stone behind '+slot.id);

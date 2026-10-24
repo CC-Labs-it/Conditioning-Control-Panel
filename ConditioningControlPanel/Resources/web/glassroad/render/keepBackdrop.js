@@ -53,7 +53,7 @@ function overcast() {
   const cloud = sin(d.x.mul(13).add(d.z.mul(7))).mul(sin(d.z.mul(17).sub(d.x.mul(4)))).mul(.5).add(.5);
   const streak = sin(d.x.mul(9).add(d.z.mul(14)).add(elevation.mul(54))).mul(.5).add(.5);
   const high = smoothstep(-.06, .65, elevation);
-  let sky = mix(color('#796274'), color('#252c3e'), high);
+  let sky = mix(color('#90617b'), color('#171d32'), high);
   const band = float(1).sub(smoothstep(.025, .19, elevation.abs()));
   sky = mix(sky, color('#c17594'), band.mul(.38));
   sky = mix(sky, color('#34323f'), cloud.mul(streak).mul(smoothstep(.03, .25, elevation)).mul(.48));
@@ -103,7 +103,7 @@ export function createKeepBackdrop(scene, track) {
   const moat = new Mesh(moatGeometry, moatMaterial); moat.name = 'keep-still-black-moat'; moat.position.set(plan.center[0], plan.moatY - 1, plan.center[2]); group.add(moat);
   const skyGeometry = new SphereGeometry(plan.skyRadiusM, 48, 28), skyMaterial = overcast(); owned.push(skyGeometry, skyMaterial);
   const sky = new Mesh(skyGeometry, skyMaterial); sky.name = 'keep-overcast-sky'; sky.position.fromArray(plan.center); sky.renderOrder = -10; sky.frustumCulled = false; group.add(sky);
-  const oldFog = scene.fog, fog = new FogExp2('#665065', .00048); scene.fog = fog; scene.add(group);
+  const oldFog = scene.fog, fog = new FogExp2('#563450', .00034); scene.fog = fog; scene.add(group);
   const stats = { sky: 1, skyRadiusM: plan.skyRadiusM, starfield: false, rocks: plan.rocks.flat().length, cliffLayers: plan.rocks.length,
     towers: plan.towers.length, ruinedWalls: plan.walls.length, spires: plan.spires.length, island: 1, moat: 1, draws: group.children.length };
   return { group, plan, stats, dispose() { group.removeFromParent(); if (scene.fog === fog) scene.fog = oldFog;

@@ -16,7 +16,7 @@ export function keepMediaLayout(track) {
     id: 'keep-media-' + mount.id, mountId: mount.id, frame: mount.frame, s: mount.s,
     kind: 'landscape', w: mount.w, h: mount.h, phone: mount.phone,
     // Stand beyond the outermost bars, window sills and tower buttresses.
-    program: Math.floor(i / 2) % 2 ? 3 : 0, C: mount.p.map((v, axis) => v + mount.t[axis] * 1.2), ...axesFrom(mount.t, mount.n),
+    program: Math.floor(i / 2) % 2 ? 3 : 0, C: mount.p.map((v, axis) => v + mount.t[axis] * (mount.standoff ?? 1.2)), ...axesFrom(mount.t, mount.n),
   }));
   return { track: 'keep', slots };
 }

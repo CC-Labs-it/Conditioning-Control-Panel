@@ -1,6 +1,6 @@
 /* Accepted Keep assets, placed before shader warmup. All colour is supplied by the host. */
 import { Group, Matrix4, Vector3, Color } from 'three/webgpu';
-import { vec3, texture, uv, vec2, mix, step, attribute, float } from 'three/tsl';
+import { vec3, texture, uv, vec2, mix, step, attribute, float, smoothstep, normalWorld, positionWorld, cameraPosition, normalize, dot } from 'three/tsl';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createSoftMaterial } from './materials/colossus.js';
 import { buildKeepFortress, keepStoneMaterial } from './keepFortress.js';
@@ -8,10 +8,11 @@ import { buildKeepFortress, keepStoneMaterial } from './keepFortress.js';
 export function applyKeepRoad(road, art) {
   const map = art?.tex('road-bands-mask');
   const seam = map ? texture(map, vec2(uv().x.div(12), uv().y.div(16))).r : float(0);
-  const stone = keepStoneMaterial('#45424c', art, false), original = road.material.colorNode;
+  const stone = keepStoneMaterial('#664b69', art, false, false), original = road.material.colorNode;
   // An opaque slate floor with fixed magenta joints. Music is a subtle surface response.
-  const floor = stone.colorNode.add(original.mul(0.02))
-    .add(vec3(0.8, 0.035, 0.31).mul(seam).mul(road.uniforms.contrast).mul(0.07));
+  const cut = smoothstep(.12, .5, seam), bevel = smoothstep(.06, .22, seam).sub(smoothstep(.4, .7, seam));
+  const floor = mix(stone.colorNode, vec3(.006, .002, .009), cut.mul(.78)).add(original.mul(.02))
+    .add(vec3(.8, .035, .31).mul(bevel).mul(road.uniforms.contrast).mul(.17));
   road.material.colorNode = mix(floor, original, step(2.5, attribute('surface', 'float')));
   road.material.color.copy(stone.color); road.material.transparent = false; road.material.opacity = 1;
   stone.dispose();
@@ -27,10 +28,14 @@ export function buildKeepDressing(track, art, pal, samples) {
   const tint = (src) => {
     if (materials.has(src)) return materials.get(src);
     const paint = src.clone(), seam = src.name.includes('seam'), glass = src.name.includes('blackglass');
-    paint.color.set(seam ? '#ed3e9d' : glass ? '#151522' : '#626372');
+    paint.color.set(seam ? '#ff3b9e' : glass ? '#090610' : '#a486ad');
     const c = new Color('#df5baa');
-    const material = createSoftMaterial(paint, pal, { haze: 0.4, fill: 0.2,
+    const material = createSoftMaterial(paint, pal, { haze: 0.18, fill: 0.18,
       rim: vec3(c.r, c.g, c.b), rimGain: seam ? 0.15 : 0.35, rimPow: 2.8 }).material;
+    if (!seam) {
+      const edge = float(1).sub(dot(normalize(normalWorld), normalize(cameraPosition.sub(positionWorld))).abs());
+      material.colorNode = mix(material.colorNode, vec3(.002, .001, .004), smoothstep(.965, .996, edge));
+    }
     paint.dispose(); materials.set(src, material); return material;
   };
   function place(id, s, x, { scale = 1, wide = 1, turn = 0, y = 0 } = {}) {
