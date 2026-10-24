@@ -14,6 +14,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
 using Serilog;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -383,6 +384,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: false, fromGaze: false, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            if (GentleVisuals.On)
+            {
+                Exiting.Add(w);
+                w.Closed += (_, _) => Exiting.Remove(w);
+                w.BeginExit(FlashExit.Gentle(GentleVisuals.Fade(FlashExit.DurationOf(FlashExitStyle.Mix)), Rng.Next()));
+                return;
+            }
             if (FlashExit.Pick(s.FlashExitStyle, _lastExitStyle, Rng) is not { } style) { w.Close(); return; }
             _lastExitStyle = style;
             Exiting.Add(w);

@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Exit = exit;
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);
-            GrowForExit();
+            if (exit.Style != FlashExitStyle.Mix) GrowForExit();
             _exitScale = new ScaleTransform();
             _exitRotate = new RotateTransform();
             _exitShift = new TranslateTransform();
@@ -235,6 +235,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Closed += (_, _) => picture.Dispose();
         }
 
+        internal TimeSpan FadeLength { get; private set; }
+
         /// <summary>
         /// Fade in to <paramref name="alpha"/> over <paramref name="fade"/>, hold until
         /// <paramref name="lifetime"/> after spawn, fade out over <paramref name="fade"/>, close.
@@ -242,6 +244,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// </summary>
         public void Run(double alpha, TimeSpan fade, TimeSpan lifetime)
         {
+            FadeLength = fade = ConditioningControlPanel.Services.Safety.GentleVisuals.Fade(fade);
             _alpha = alpha;
             Fade(0, alpha, fade);
             DispatcherTimer.RunOnce(() => Fade(alpha, 0, fade, Close), lifetime);

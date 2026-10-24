@@ -113,6 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var w = new TintOverlayWindow();
                 w.PlaceOn(screens[i]);
                 w.SetTint(r, g, b, opacity);
+                GentleOverlayFade.Show(w);
                 w.Show();                       // Position -> Show -> click-through, the order
                                                 // BubbleCountWindow uses; there is no XID before Show
                 // A refusal is about the platform, not about this monitor, so drop the whole set
@@ -129,7 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var w in Windows)
             {
-                try { w.Close(); }
+                try { GentleOverlayFade.Close(w); }
                 catch (Exception ex) { Log.Debug("Pink filter: failed to close a tint window: {E}", ex.Message); }
             }
             Windows.Clear();

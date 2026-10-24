@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Gentle layers (sync7-port-gentle-layers)
+
+1. With Gentle visuals off, show and hide pink/spiral overlays, pop a clickable flash, and show a subliminal; confirm existing fades, exit style and background settings apply. Enable Gentle visuals at 1.5 s / 0.25 speed: pink/spiral fade both ways, spiral GIF slows, flash fades lengthen and every pop leaves as a plain fade, subliminals have no background and retain their hold between longer fades. Panic during a fade must close it immediately. WPF `a52c3c1d3` (`OverlayService`, `FlashService`, `SubliminalService`). Rows: `sync7-gentle-visuals`. Automated: `GentleLayersTests`. Missing compositor/brain-drain/pulse/video hosts are detailed in `docs/cloud/sync7-port-gentle-layers.md`.

@@ -12,6 +12,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services;   // SubliminalCard
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using Serilog;
+using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -145,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Grid Build(string text, Models.AppSettings s)
         {
             var grid = new Grid { IsHitTestVisible = false };
-            if (!s.SubBackgroundTransparent)
+            if (!s.SubBackgroundTransparent && !s.GentleVisuals)
                 grid.Children.Add(new Rectangle { Fill = new SolidColorBrush(Parse(s.SubBackgroundColor, Colors.Black)) });
 
             var family = new FontFamily(string.IsNullOrWhiteSpace(s.SubliminalFont) ? "Arial" : s.SubliminalFont + ", Arial");
@@ -173,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// close. Compositor-side alpha (<see cref="X11Overlay.SetOpacity"/>), so the card renders once.</summary>
         public void Run(double alpha, TimeSpan hold)
         {
-            var fade = TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs);
+            var fade = FadeLength;
             var closed = false;
             Closed += (_, _) => closed = true;   // a newer card may have closed this one already
             // The envelope starts at the card's first frame, not at Show(): mapping and the first
@@ -193,11 +194,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<TopLevel, Action<TimeSpan>> RequestFrame = (t, a) => t.RequestAnimationFrame(a);
 
         /// <summary>Show() to forced close: the whole envelope plus 100 ms of first-frame slack.</summary>
-        internal static TimeSpan MaxLifetime(TimeSpan hold) => hold + TimeSpan.FromMilliseconds(4 * SubliminalCard.DefaultFadeMs);
+        internal static TimeSpan FadeLength => GentleVisuals.Fade(TimeSpan.FromMilliseconds(SubliminalCard.DefaultFadeMs));
+
+        internal static TimeSpan MaxLifetime(TimeSpan hold) => hold + FadeLength * 2 + TimeSpan.FromMilliseconds(100);
 
         private void Ramp(double from, double to, TimeSpan start, TimeSpan span)
         {
-            const int steps = 3;   // ~one step per 60 Hz frame across 50 ms
+            var steps = Math.Max(3, (int)Math.Ceiling(span.TotalMilliseconds / 17));
             for (var i = 1; i <= steps; i++)
             {
                 var v = from + (to - from) * i / steps;

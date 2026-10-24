@@ -51,7 +51,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsShowing => Windows.Count > 0;
         internal static bool IsAnimating => _timer is { IsEnabled: true };
         internal static int FrameIndex => _index;
-        internal static TimeSpan FrameDelay => _delay;
+        internal static TimeSpan FrameDelay => TimeSpan.FromMilliseconds(
+            ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(_delay.TotalMilliseconds));
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
 
         /// <summary>WPF GetSpiralPath: the configured file if it exists, else the active mod's spiral,
@@ -121,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     CloseAll();
                     return;
                 }
+                GentleOverlayFade.Show(w);
                 w.Show();
                 Windows.Add(w);
             }
@@ -128,7 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             QuestMinutes.Follow(Windows.Count > 0);
             if (_frames.Count > 1 && Windows.Count > 0)
             {
-                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = _delay };
+                _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = FrameDelay };
                 _timer.Tick += (_, _) => Tick();
                 _timer.Start();
             }
@@ -151,7 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _timer = null;
             foreach (var w in Windows)
             {
-                try { w.Close(); }
+                try { GentleOverlayFade.Close(w); }
                 catch (Exception ex) { Log.Debug("Spiral: failed to close a window: {E}", ex.Message); }
             }
             Windows.Clear();
@@ -180,6 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var (frames, delay) = await Task.Run(() => Decode(path));
             if (frames.Count == 0) Log.Warning("Spiral: no frames decoded from {Path}; spiral not shown", path);
+            GentleOverlayFade.CloseAll(w => w is SpiralOverlayWindow); // release last-frame windows before disposing their cached art
             foreach (var old in _frames) old.Dispose();
             (_frames, _framesKey, _delay, _index) = (frames, path, delay, 0);
             Decoding = null;   // or the Refresh below, still inside this task, cannot start a newer path's decode

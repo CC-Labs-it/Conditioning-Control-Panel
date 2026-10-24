@@ -114,6 +114,7 @@ public sealed class PanicSurfacesTests
         "leash-task",
         "lock-cards",
         "mantra",
+        "gentle-fades",
         "pink-rush",
         "possession",
         "program-session",
