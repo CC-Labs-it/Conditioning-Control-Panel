@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         /// <summary>Cancels the pending post-line gap (WPF _speechDelayTimer.Stop). Never null.</summary>
         private Action _cancelSpeechDelay = static () => { };
+        private bool _speechDelayPending;   // WPF _speechDelayTimer.IsEnabled, for the latch watchdog
 
         /// <summary>Runs <c>fire</c> once after the delay and returns its cancel. A DispatcherTimer, as
         /// WPF; tests swap in a manual one (P08).</summary>
@@ -72,11 +73,16 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _cancelSpeechDelay();
             _cancelSpeechDelay = static () => { };
             if (remaining > 0)
-                _cancelSpeechDelay = SpeechDelayScheduler(TimeSpan.FromSeconds(remaining), () =>
+            {
+                _speechDelayPending = true;
+                var cancel = SpeechDelayScheduler(TimeSpan.FromSeconds(remaining), () =>
                 {
+                    _speechDelayPending = false;
                     _cancelSpeechDelay = static () => { };
                     ShowQueuedPreset(next);
                 });
+                _cancelSpeechDelay = () => { _speechDelayPending = false; cancel(); };
+            }
             else
                 ShowQueuedPreset(next);
         }

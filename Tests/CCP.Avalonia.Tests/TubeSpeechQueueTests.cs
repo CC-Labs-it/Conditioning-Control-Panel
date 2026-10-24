@@ -264,6 +264,40 @@ public sealed class TubeSpeechQueueTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF OnIdleTick -> ClearStaleSpeechLatch (Speech.cs:1614,3070): a bubble collapsed out from
+    /// under the latch is cleared by the idle beat, but a pending gap still holds it.</summary>
+    [Fact]
+    public Task IdleBeatClearsAWedgedLatchButNotAPendingGap() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var muted = s.AvatarMuted;
+        s.AvatarMuted = false;
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            var delays = CaptureDelays(tube);
+            tube.RestartIdleTimer();
+            var bubble = tube.FindControl<Border>("SpeechBubble")!;
+
+            tube.Giggle("a");
+            tube.Giggle("b");
+            tube.EndSpeechBubble();                   // "b" waits out its gap: latch up, legitimately
+            tube.IdleTick();
+            Assert.True(tube.IsSpeaking);
+            delays[0].Fire();
+            Assert.True(bubble.IsVisible);
+
+            bubble.IsVisible = false;                 // collapsed without its hide tick: wedged
+            Assert.True(tube.IsSpeaking);
+            tube.IdleTick();
+            Assert.False(tube.IsSpeaking);
+        }
+        finally { tube.Close(); s.AvatarMuted = muted; }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task PanicClearsTheQueueSoNothingSpeaksAfterIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
