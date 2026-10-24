@@ -51,7 +51,7 @@ namespace ConditioningControlPanel
             if (RemoteHudRules.LocalPanicAllowed(settings?.PanicKeyEnabled ?? true))
             {
                 App.Logger?.Information("[RemoteHud] Stop pressed - running the panic path");
-                HandlePanicKeyPress();
+                HandlePanicFromStopButton();
             }
             else if (Controls.Leash.LeashSurfaces.IsLeashed)
             {
