@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Miscellaneous evidence checks
+
+1. During an update download, check 0%, an intermediate value and completion: the bar stays inside its track and matches the percentage. WPF `Dialogs/UpdateProgressDialog.xaml.cs:18-28`. Rows: `dialogs-update-progress`.
+2. Pink Filter: enable, change opacity and monitor, reset a custom color, then change opacity through a preset. The card, swatch and tint follow; an unplugged monitor target survives reopening the card. WPF `Features/PinkFilterFeatureControl.xaml.cs:87-234`. Rows: `feat-pink-filter`.
+3. Default companion: navigate to Settings and hear its shipped bark with the speech bubble; trigger a muted easter egg and expect text only. WPF `Services/Companion/BarkService.cs:1606-1615,1922-1985`. Rows: `companion-ccp-default-voice`.
+4. Intiface: type a dot before the port, click Connect, and check the corrected address in the box. Enter an invalid scheme and expect the localized warning without a connection attempt. WPF `MainWindow/MainWindow.Haptics.cs:576-595`. Rows: `feat-intiface-url`.
