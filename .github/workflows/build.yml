@@ -46,6 +46,13 @@ jobs:
       - name: Build solution
         run: dotnet build ConditioningControlPanel.sln -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check shared Loom renderer exports
+        run: node --test ConditioningControlPanel/Resources/web/dtrh/tests/loom-renderer-exports.test.mjs
+
       # The suite includes WpfRenderHarness.cs and PlayDoorRenderTests.cs, which do real WPF
       # rendering. Those pass headless on windows-latest - measured, 4924 passed / 0 failed in
       # about 45 seconds - so this is a hard gate rather than advisory. An advisory job that is
