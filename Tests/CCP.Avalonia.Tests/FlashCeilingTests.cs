@@ -86,4 +86,55 @@ public sealed class FlashCeilingTests
             }
             return Task.CompletedTask;
         });
+
+    [Fact]
+    public Task A_full_screen_skips_one_burst_picture_and_a_later_one_still_spawns() =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var s = CoreSettings.Current;
+            var saved = (s.HydraLimit, s.FlashClickable, s.FlashStayUntilPopped);
+            var present = FlashOverlay.Present;
+            var runLater = FlashOverlay.RunLater;
+            var pay = CoreProgression.AddXPProvider;
+            var count = 0;
+            var done = false;
+            var ticks = new System.Collections.Generic.List<Action>();
+            var host = new Window();
+            try
+            {
+                FlashOverlay.Present = (_, _, _) => { count++; return true; };
+                FlashOverlay.RunLater = (a, _) => ticks.Add(a);
+                CoreProgression.AddXPProvider = (_, _) => { };
+                (s.HydraLimit, s.FlashClickable, s.FlashStayUntilPopped) = (1, false, false);
+                var screen = host.Screens.All[0];
+                var flashes = new System.Collections.Generic.List<(Bitmap, PixelRect, string, Screen)>();
+                for (var i = 0; i < 3; i++)
+                    flashes.Add((new WriteableBitmap(new PixelSize(2, 2), new Vector(96, 96), PixelFormat.Bgra8888,
+                        AlphaFormat.Premul), new PixelRect(100, 100, 2, 2), "burst.png", screen));
+                FlashOverlay.Schedule(flashes, 0, 0, FlashOverlay.Generation, 1, TimeSpan.Zero, TimeSpan.FromMinutes(10),
+                    clickable: false, ambient: false, hydraGeneration: 0, done: () => done = true);
+                Assert.Equal(3, ticks.Count);
+
+                ticks[0]();
+                ticks[1](); // screen full: this picture is skipped, the burst is not stopped
+                Assert.Equal(1, count);
+                s.HydraLimit = 2; // room frees up before the third picture
+                ticks[2]();
+                Assert.Equal(2, count);
+                Assert.True(done);
+            }
+            finally
+            {
+                host.Close();
+                FlashOverlay.CloseAll(final: false);
+                FlashOverlay.Present = present;
+                FlashOverlay.RunLater = runLater;
+                CoreProgression.AddXPProvider = pay;
+                (s.HydraLimit, s.FlashClickable, s.FlashStayUntilPopped) = saved;
+            }
+            return Task.CompletedTask;
+        });
 }
