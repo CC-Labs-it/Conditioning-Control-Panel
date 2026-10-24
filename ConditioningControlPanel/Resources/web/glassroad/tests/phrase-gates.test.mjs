@@ -6,6 +6,7 @@ import { loadTrack } from '../track/load.js';
 import { phraseGateLayout, phraseExclusions } from '../track/phraseGates.js';
 import { createPhraseGateContact } from '../sim/phraseGates.js';
 import { createState, S } from '../sim/state.js';
+import { phraseLook, gatePulse, gateMote, GATE_AMBIENT, GATE_CAPACITY } from '../render/phraseGateMotion.js';
 const hooks = registerHooks({ resolve(s, c, next) {
   const files = { 'three/tsl': 'three.tsl.min.js', 'three/webgpu': 'three.webgpu.min.js' };
   return files[s] ? { url: new URL('../vendor/three/build/' + files[s], import.meta.url).href, shortCircuit: true } : next(s, c);
@@ -80,4 +81,52 @@ test('prebuilt gate resources, overlay clock and cleanup follow race lifecycle',
   effect.update(at(2),3); assert.equal(effect.stats.active,false);
   effect.clear(); assert.equal(effect.stats.hits,0);
   effect.dispose(); assert.equal(scene.children.length,0);
+});
+
+test('text overshoots once, holds still, then separates echoes and leaves without a flash', () => {
+  assert.ok(phraseLook(.2).scale > 1 && phraseLook(.2).scale <= 1.07);
+  for (const age of [.3,.7,1.29]) {
+    const p = phraseLook(age); assert.equal(p.scale,1); assert.equal(p.alpha,1);
+    assert.equal(p.y,0); assert.equal(p.echo,0);
+  }
+  assert.ok(phraseLook(1.6).echo > .4 && phraseLook(1.6).split > 0 && phraseLook(1.6).y < 0);
+  for (let age=0;age<2.5;age+=.01) {
+    const p=phraseLook(age,true); assert.equal(p.scale,1); assert.equal(p.y,0); assert.equal(p.tilt,0);
+    assert.equal(p.echo,0); assert.equal(p.sparks,0); assert.ok(p.alpha>=0 && p.alpha<=1);
+  }
+});
+
+test('gate pulse has a 300ms rise and a bounded tail; pooled particles grow and die', () => {
+  assert.equal(gatePulse(0).alpha,0); assert.ok(gatePulse(.15).alpha<gatePulse(.3).alpha);
+  assert.ok(gatePulse(.3).alpha>0); assert.equal(gatePulse(1.3).alpha,0);
+  assert.equal(gatePulse(.6,true).travel,0);
+  for (let i=0;i<GATE_CAPACITY;i++) for(const age of [-1,0,.15,.7,1.4,3]) {
+    const p=gateMote(i,100,36,age); assert.ok(Object.values(p).every(Number.isFinite));
+    assert.ok(p.size>=0 && p.size<.2);
+    if(i>=GATE_AMBIENT && (age<=0 || age>=1.4)) assert.equal(p.size,0);
+    if(i>=GATE_AMBIENT) assert.equal(gateMote(i,100,36,.7,true).size,0);
+  }
+});
+
+test('gate particles and travelling pulse freeze on pause and clear without allocating new meshes', () => {
+  const scene=new Scene(), effect=createPhraseGates(scene,tracks[1],{doc:null}), gate=effect.gates[0];
+  const at=z=>{const st=createState(); st[S.s]=gate.s+z;for(let i=0;i<3;i++)st[S.posX+i]=gate.frame.p[i]+gate.frame.t[i]*z;return st;};
+  const root=scene.getObjectByName(gate.id), pool=root.children.find(v=>v.isInstancedMesh), children=root.children.length;
+  effect.update(at(-1),.1);effect.update(at(1),.1);effect.update(at(2),.35);
+  assert.equal(effect.stats.pulses,1); assert.ok(effect.stats.particles>=96);
+  const before=JSON.stringify(effect.stats), matrices=pool.instanceMatrix.array.slice();
+  effect.update(at(2),1,{paused:true});assert.equal(JSON.stringify(effect.stats),before);
+  assert.deepEqual(pool.instanceMatrix.array,matrices);assert.equal(root.children.length,children);
+  effect.clear();assert.equal(pool.count,0);assert.equal(effect.stats.pulses,0);effect.dispose();
+});
+
+test('Gentle reduces the cloud and a refused brightness budget softens the pulse', () => {
+  for(const gentle of [false,true]) {
+    const scene=new Scene(), effect=createPhraseGates(scene,tracks[1],{doc:null,feel:{get:()=>gentle},photosafe:{request:()=>false}});
+    const gate=effect.gates[0], at=z=>{const st=createState();st[S.s]=gate.s+z;for(let i=0;i<3;i++)st[S.posX+i]=gate.frame.p[i]+gate.frame.t[i]*z;return st;};
+    effect.update(at(-1),.1);effect.update(at(1),.1);effect.update(at(2),.6);
+    const root=scene.getObjectByName(gate.id),pool=root.children.find(v=>v.isInstancedMesh),pulse=root.children.at(-1);
+    assert.equal(pool.count,gentle?32:GATE_CAPACITY);assert.equal(Math.abs(pulse.position.z),0);assert.ok(pulse.material.opacity<=.2);
+    effect.dispose();
+  }
 });
