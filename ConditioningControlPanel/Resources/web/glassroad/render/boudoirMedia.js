@@ -1,6 +1,7 @@
 /* One construction plan owns both the furniture and its mounted moving pictures. */
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
 import { axesFrom, roadSamples, V3 } from './mediaMath.js';
+import { dressBoudoirProps } from './boudoirProps.js';
 
 const { add, sub, mul, dot, norm } = V3, TAU = Math.PI * 2;
 const plans = new WeakMap();
@@ -223,8 +224,11 @@ export function boudoirWorldPlan(track) {
       if (Math.floor(s / 12) % 4 === 0) particles.push({ p: at(f, side * (f.w / 2 + 7), 2), phase: s * .17 });
     }
   }
+  const props = dressBoudoirProps(track, layout, { put, clear, rows, particles, heroes });
+  const blockers = [...rows, ...props.motionEnvelopes];
+  // The dedicated mirror hall owns its reflections, facets and shutters, without legacy billboards.
   // Mounted mirrors share one half-media / half-Loom pool. Every face is checked after all solids.
-  const picks = layout.landmarks.filter(l => !/gap|ramp|landing|compacts$|chute/.test(l.id));
+  const picks = layout.landmarks.filter(l => !/gap|ramp|landing|compacts$|chute|drawer-hall/.test(l.id));
   for (const l of picks) for (const [j, u] of [0.3, 0.72].entries()) {
     const s = l.s0 + (l.s1 - l.s0) * u, f = track.frameAt(s), side = j ? 1 : -1;
     const inside = (layout.halls || []).some(h => s > h.s0 && s < h.s1);
@@ -232,10 +236,10 @@ export function boudoirWorldPlan(track) {
     for (let attempt = 0; attempt < (inside ? 1 : 30); attempt++) {
       const C = at(f, side * (f.w / 2 + (inside ? 3 : 10) + attempt % 10 * 5), (inside ? 8 : 11) + Math.floor(attempt / 10) * 10);
       const face = { p: C, size: [w + 2, h + 2, 1.5], axes: [axes.X, axes.Y, axes.Z] };
-      if (!clear(face) || rows.some(r => boudoirBoxesIntersect(face, r, .2))) continue;
+      if (!clear(face) || blockers.some(r => boudoirBoxesIntersect(face, r, .2))) continue;
       const facePoints = [C, ...[-1, 1].flatMap(x => [-1, 1].map(y => add(add(C, mul(axes.X, x * w * .4)), mul(axes.Y, y * h * .4))))];
       const eyes = [30, 45, 60].map(lead => at(track.frameAt(s - lead), 0, 3));
-      if (eyes.some(eye => facePoints.some(point => rows.some(row => boudoirSegmentBlocked(eye, point, row))))) continue;
+      if (eyes.some(eye => facePoints.some(point => blockers.some(row => boudoirSegmentBlocked(eye, point, row))))) continue;
       const mount = { id: 'boudoir-mirror-' + l.id + '-' + j, s, frame: inside ? 'tunnel' : 'billboard', kind: 'landscape', phone: true,
         w, h, C, ...axes, program: (mounts.length >> 1) % 2 ? 3 : 0 };
       mounts.push(mount);
@@ -255,7 +259,7 @@ export function boudoirWorldPlan(track) {
     const group = mounts.filter(m => m.frame === kind);
     if (group.length % 2) mounts.splice(mounts.indexOf(group.at(-1)), 1);
   }
-  const plan = { rows, mounts, heroes, interiors, particles, corridors, rejected, center, groundY, ceilingY, roomW, roomD };
+  const plan = { rows, mounts, heroes, interiors, particles, corridors, rejected, center, groundY, ceilingY, roomW, roomD, props };
   plans.set(track, plan); return plan;
 }
 

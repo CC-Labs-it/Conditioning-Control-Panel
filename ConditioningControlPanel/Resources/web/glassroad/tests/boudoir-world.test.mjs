@@ -100,7 +100,7 @@ hooks.deregister();
 
 test('Boudoir world batches its solids and sparkles, and pause freezes decorative motion', () => {
   const dressing = buildBoudoirDressing(track, null, createPalette('boudoir'), roadSamples(track));
-  assert.ok(dressing.stats.draws <= 32, JSON.stringify(dressing.stats));
+  assert.ok(dressing.stats.draws <= 48, JSON.stringify(dressing.stats));
   assert.ok(dressing.stats.sparkles >= 240);
   dressing.group.traverse(o => { if (o.isMesh) {
     o.geometry.computeBoundingSphere(); assert.ok(Number.isFinite(o.geometry.boundingSphere.radius));
@@ -116,4 +116,30 @@ test('Boudoir world batches its solids and sparkles, and pause freezes decorativ
   } });
   dressing.dispose(); dressing.dispose();
   assert.ok([...released.values()].every(n => n === 1), 'GPU instance buffers released exactly once');
+});
+
+test('Expanded Boudoir dressing has distinct nearby silhouettes and moving room-scale setpieces', () => {
+  assert.ok(plan.props.clusters.length >= 75, 'near-road dressing is distributed through the lap');
+  assert.ok(plan.props.animated.length > 1000);
+  for (const name of ['brush-individual-bristles', 'powder-compact-mirror', 'thread-winding', 'nail-polish-label',
+    'hair-comb-teeth', 'jewel-gift-cross-ribbon', 'hero-gown-skirt', 'hero-hatbox', 'chandelier-pearl-chain', 'draped-wide-satin-ribbon'])
+    assert.ok(plan.rows.some(row => row.name === name), name);
+  assert.ok(!media.slots.some(s => s.id.includes('drawer-hall')), 'mirror room owns its reflected view');
+  for (const envelope of plan.props.motionEnvelopes)
+    assert.ok(!plan.corridors.some(c => boudoirBoxesIntersect(envelope, c)), 'full moving envelope clears every driving level');
+});
+
+test('Every moving ornament stays inside its fitted clearance envelope at both swing extremes', () => {
+  const hits = new Set(), dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  for (const row of plan.props.animated) for (const phase of [-1, 0, 1]) for (const up of [-1, 1]) {
+    const m = row.motion, c = Math.cos(phase * m.amp), s = Math.sin(phase * m.amp), envelope = m.envelope;
+    for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) {
+      const signs = [x, y, z], local = row.p.map((v, i) => v - m.pivot[i] + row.axes.reduce((sum, axis, k) => sum + axis[i] * row.size[k] / 2 * signs[k], 0));
+      const turn = cross(m.axis, local), along = dot(m.axis, local);
+      const p = local.map((v, i) => v * c + turn[i] * s + m.axis[i] * along * (1 - c) + m.pivot[i] + (i === 1 ? up * m.rise : 0) - envelope.p[i]);
+      if (envelope.axes.some((axis, i) => Math.abs(dot(p, axis)) > envelope.size[i] / 2 + .01)) hits.add(row.name);
+    }
+  }
+  assert.deepEqual([...hits], []);
 });
