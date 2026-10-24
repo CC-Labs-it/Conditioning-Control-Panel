@@ -75,10 +75,15 @@ public class ProfileSyncFailureBackoffTests
         typeof(ProfileSyncService).GetField("_hasLoadedProfile", Priv)!.SetValue(sync, true);
         typeof(ProfileSyncService).GetField("_httpClient", Priv)!.SetValue(sync,
             new HttpClient(new ServerClockHandler { InnerHandler = proxy }) { Timeout = clientTimeout ?? TimeSpan.FromSeconds(30) });
+        // The 401 path is Core AuthRecovery now, with its own client: point it at the same fake and settings.
+        AuthRecovery.ResetForTest();
+        AuthRecovery.HandlerForTest = new ServerClockHandler { InnerHandler = proxy };
+        AuthRecovery.SettingsForTest = () => settings;
 
         return (sync, proxy, settings, () =>
         {
             sync.StopHeartbeat();
+            AuthRecovery.ResetForTest();
             settingsProp.SetValue(null, previousSettings);
             App.UnifiedUserId = previousUid;
             ServerClock.ResetForTests();

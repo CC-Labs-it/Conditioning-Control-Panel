@@ -213,21 +213,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// </summary>
     public partial class FirstRunWizard : Window
     {
-        /// <summary>The catalogue's shipped pass card, or null (the frame then shows its flat ground).</summary>
-        private static IImage? LoadPassCard(string artName)
-        {
-            try
-            {
-                using var s = AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + artName));
-                return new Bitmap(s);
-            }
-            catch (Exception ex)
-            {
-                Log.Debug("FirstRunWizard: pass card {Name} would not load: {E}", artName, ex.Message);
-                return null;
-            }
-        }
-
         private const int StepCount = 3;
 
         private readonly ObservableCollection<FirstRunModCard> _cards = new();
@@ -781,7 +766,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     PackId = entry.PackId,
                     Name = Loc.Get(entry.NameLocKey),
                     Description = Loc.Get(entry.DescriptionLocKey),
-                    Art = LoadPassCard(entry.ArtName),
+                    Art = Helpers.ModArt.TryLoadBuiltIn(entry.ArtName),
                     AccentBrush = accent,
                     Note = note,
                     InstalledText = installedBadge
