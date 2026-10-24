@@ -4,11 +4,10 @@
  *
  * Flash a rounded card over cover of the view (B1: the spiral icon on paper); Spiral turning arms
  * over the middle, alpha capped; Brain Drain edges blur and grey, centre sharp; Freeze frost on the
- * edges; Blackout an iris closing to a circle; Pink a wash with the contrast down; Melt the whole
+ * edges; Blackout an iris closing to a circle; Pink drifting layered fog; Melt the whole
  * view blurred, wobbling and running down like wet paint; Shatter a soft radial smear and a tilt.
- * NEVER BLIND: a floor of the clear image's highlights survives every effect (rails and the racing
- * line are the brightest things on screen), Blackout keeps a circle and a dim floor, and post.js
- * adds bloom from the clear scene after this node. Gentle halves the amounts and slows the motion.
+ * Blackout keeps a small circle and a dim surround. Fog and the tunnel attenuate clear-scene
+ * highlights and bloom so they can obscure the driving line. Gentle halves amounts and slows motion.
  * Look numbers in render/items/look.js; the uniform-gated branch costs one sample when idle.
  * Wave 2 masks (art/ART.md, each optional with the procedural look as its fallback): Freeze reads
  * fx-frost-edge, Melt runs down along fx-melt-flow, Shatter lays fx-crack lines over the glass (no
@@ -19,15 +18,14 @@
  * opens from the centre and twirls the middle; Freeze is a frost front that crystallises in from the edges
  * with facets glinting on the front; Shatter cracks into cells that grow out from the middle, then the
  * pieces slide apart and home again; Blackout's iris wears a soft rim; Pink washes in from the edges round
- * a heart; Brain Drain's grey creeps inward. Gentle halves every amount, so fronts stop halfway.
+ * a heart in the historical version; Brain Drain's grey creeps inward. Gentle halves every amount.
  * Polish 4, bolder and clear about when it ends: a frame meter (a band round the whole view edge in the
  * effect's colour, draining clockwise from the top as the effect runs out) and a badge low in the middle (the
  * effect's icon in a disc, its ring draining the same way), both over the never-blind floor. The hit itself
  * tints the view toward the kind's colour for a beat (fx/effects.js screen.hit): the hue moves, the
  * luminance of every pixel stays, strongest at the edges.
- * Polish 5 (V2): a clear lane, a soft tapered capsule from the next bend down to the kart and the bottom edge
- * (fxmath.laneMask, SCREEN_LOOK.lane), keeps the road readable: Flash, Spiral, Pink and Blackout take lane.clear
- * of their strength out inside it and keep it at the frame. Flash is no longer a card in the middle: light blooms
+ * The historical clear-lane mask remains for Spiral and the shader Flash fallback. Pink and
+ * Blackout now cross the driving line. Legacy Flash: light blooms
  * in from the frame and the picture shows on two soft panes at the sides (one small pane in the Gentle corner),
  * with feathered edges, an ink glow just inside and a faint halo of paper light; no hard edge, no drop shadow.
  */
@@ -38,20 +36,14 @@ import {
 } from 'three/tsl';
 import { currentArt } from './art.js';
 import { SCREEN_LOOK as L } from './items/look.js';
-import { screenAmounts, irisRadius, flashPanes, shatterTilt, frostThreshold, shatterPhase, spiralOpen, pinkHeart, meterLook, SCREEN_KINDS } from './items/fxmath.js';
+import { screenAmounts, flashPanes, shatterTilt, frostThreshold, shatterPhase, spiralOpen, meterLook, SCREEN_KINDS } from './items/fxmath.js';
 import { HIT_LOOK } from './items/look.js';
 import { ITEMS } from '../sim/itemTable.js';
 import { maskLook } from './atlas.js';
+import { ATMOSPHERE as A, tunnelRadius, createAtmosphereClock } from './screen-atmosphere.js';
 
 const rgb = (hex) => { const c = new Color(hex); return vec3(c.r, c.g, c.b); };
 const hash = (p, a, b) => fract(sin(dot(p, vec2(a, b))).mul(43758.5453));
-/** Signed distance to a heart of size 1 (fxmath.heartSd, the same formula). */
-function heartSd(p) {
-  const x = abs(p.x), y = p.y, m = max(x.add(y), 0).mul(0.5);
-  const a = length(vec2(x.sub(0.25), y.sub(0.75))).sub(Math.SQRT2 / 4);
-  const d1 = vec2(x, y.sub(1)), d2 = vec2(x.sub(m), y.sub(m));
-  return select(x.add(y).greaterThan(1), a, sqrt(min(dot(d1, d1), dot(d2, d2))).mul(sign(x.sub(y))));
-}
 const ICON = new URL('../art/fx/spiral.png', import.meta.url).href;
 
 /** The badge atlas: a 4 x 2 canvas of BADGE_PX cells, each screen kind's icon drawn in as it loads. */
@@ -83,13 +75,24 @@ export function createScreenFx(three, art = currentArt()) {
     flash: uniform(0), spiral: uniform(0), drain: uniform(0), freeze: uniform(0), black: uniform(0), pink: uniform(0),
     melt: uniform(0), shatter: uniform(0), dimOnly: uniform(0), tilt: uniform(0), iris: uniform(L.irisFrom),
     rx: uniform(0.5), ry: uniform(0.5), rw: uniform(0.2), rh: uniform(0.2),
-    frostThr: uniform(1), crack: uniform(0), slide: uniform(0), spiralR: uniform(0), heartR: uniform(L.pinkHeartR[0]),
+    frostThr: uniform(1), crack: uniform(0), slide: uniform(0), spiralR: uniform(0),
     meterK: uniform(0), remain: uniform(0), meterRgb: uniform(new Color(1, 1, 1)), badgeS: uniform(1),
-    hitK: uniform(0), hitRgb: uniform(new Color(1, 1, 1)), badgeCell: uniform(new Vector2(0, 0)), mirror: uniform(1),
+    hitK: uniform(0), hitRgb: uniform(new Color(1, 1, 1)), badgeCell: uniform(new Vector2(0, 0)), mirror: uniform(1), fogFill: uniform(0),
   };
   const K = L.lane;
   const amt = {};
   let clock = 0;
+  const atmosphere = createAtmosphereClock();
+
+  // The tunnel is the only clear opening. Bloom must respect the same opening.
+  function tunnelShut() {
+    const p = screenUV.sub(vec2(...L.irisAt)).mul(vec2(u.aspect, 1));
+    return smoothstep(u.iris.sub(A.tunnelSoft), u.iris.add(A.tunnelSoft), length(p)).mul(u.black);
+  }
+
+  function bloomGate() {
+    return mix(float(1), tunnelShut().mul(1 - A.tunnelFloor).oneMinus().mul(u.fogFill.mul(0.9).oneMinus()), u.any);
+  }
 
   function node(sceneTex) {
     return Fn(() => {
@@ -116,8 +119,8 @@ export function createScreenFx(three, art = currentArt()) {
         const drip = flowT
           ? texture(flowT, vec2(uv0.x.mul(X.meltFlowTile[0]), uv0.y.mul(X.meltFlowTile[1]).sub(u.t.mul(X.meltFlowUvps)))).r
           : mx_noise_float(vec2(uv0.x.mul(L.meltCols), u.t.mul(L.meltHz))).mul(0.5).add(0.5);
-        const run = u.melt.mul(smoothstep(0, 1.5, u.runT).mul(L.meltRunUv).add(drip.mul(drip).mul(L.meltDripUv)));
-        const wob = u.melt.mul(L.meltWobbleUv);
+        const run = u.melt.mul(smoothstep(0, 1.5, u.runT).mul(L.meltRunUv).add(drip.mul(drip).mul(L.meltDripUv))).mul(A.meltWarp);
+        const wob = u.melt.mul(L.meltWobbleUv * A.meltWarp);
         const suv = rc.div(toH).add(0.5).add(vec2(
           sin(uv0.y.mul(14).add(u.t.mul(2.3))).mul(wob),
           run.negate().add(sin(uv0.x.mul(9).sub(u.t.mul(1.7))).mul(wob)),
@@ -146,7 +149,7 @@ export function createScreenFx(three, art = currentArt()) {
         const col = sceneTex.sample(suv).rgb.toVar();
         // Melt: the colour channels run apart down the view (read from further up)
         If(u.melt.greaterThan(0), () => {
-          const ch = vec2(0, u.melt.mul(L.meltChromaUv));
+          const ch = vec2(0, u.melt.mul(L.meltChromaUv * A.meltChroma));
           col.assign(vec3(col.r, sceneTex.sample(suv.sub(ch)).g, sceneTex.sample(suv.sub(ch.mul(2))).b));
         });
         // blur: Brain Drain at the edges (creeping in with the amount), Freeze under the frost, Melt everywhere
@@ -164,7 +167,7 @@ export function createScreenFx(three, art = currentArt()) {
           for (let i = 0; i < L.blurTaps; i++) {
             const a = i * 2.399963, d = Math.sqrt((i + 0.5) / L.blurTaps);
             // Melt stretches the taps down the screen: paint runs, it does not just go soft
-            const o = vec2(Math.cos(a) * d, u.melt.mul(L.meltStreak).add(1).mul(Math.sin(a) * d));
+            const o = vec2(Math.cos(a) * d, u.melt.mul(L.meltStreak * A.meltStreak).add(1).mul(Math.sin(a) * d));
             sum.addAssign(sceneTex.sample(suv.add(o.mul(r).div(toH))).rgb);
           }
           col.assign(sum.div(L.blurTaps + 1));
@@ -197,16 +200,24 @@ export function createScreenFx(three, art = currentArt()) {
         const lum = luminance(col);
         col.assign(mix(col, vec3(lum), u.drain.mul(edge).mul(L.drainGrey)));
         col.assign(mix(vec3(lum), col, u.melt.mul(L.meltSat - 1).add(1)));
-        // Pink: the wash closes in from the edges round a heart, full outside it and softer within
-        const hp = vec2(c.x, c.y.negate().add(0.06)).div(u.heartR).add(vec2(0, 0.55));
-        const hsd = heartSd(hp), outHeart = smoothstep(L.pinkHeartSoft * -0.3, L.pinkHeartSoft, hsd);
-        // polish 5: the wash and its edge tint leave the lane (keep); the heart's rim line keeps half in it
-        const pk = u.pink.mul(keep);
-        const low = mix(vec3(0.5), col, pk.mul(L.pinkContrast).oneMinus()).mul(vec3(...L.pinkTint)).add(L.pinkLift);
-        col.assign(mix(col, low, pk.mul(outHeart.mul(0.75).add(0.25))));
-        col.assign(mix(col, rgb(L.pinkEdgeTint), pk.mul(outHeart).mul(L.pinkEdgeAlpha)));
-        // a soft glowing line traces the heart
-        col.addAssign(rgb(L.pinkEdgeTint).mul(smoothstep(0, L.pinkRimW, abs(hsd)).oneMinus().mul(u.pink).mul(keep.add(1).mul(0.5)).mul(L.pinkRimAlpha)));
+        // Pink is opaque drifting mist, with several cloud depths, shadowed bellies and bright
+        // crests. The front rolls in over seconds and eventually crosses the driving line.
+        const fogOcclusion = float(0).toVar();
+        If(u.fogFill.greaterThan(0.0005), () => {
+          const edgeDistance = min(min(uv0.x.mul(asp), uv0.x.oneMinus().mul(asp)), min(uv0.y, uv0.y.oneMinus()));
+          for (let layer = 0; layer < A.fogLayers; layer++) {
+            const q = layer / (A.fogLayers - 1), drift = u.t.mul(A.fogDrift * (0.7 + q));
+            const p = c.mul(2.5 + q * 3).add(vec2(drift.mul(layer % 2 ? -1 : 1), drift.mul(-0.55))).add(vec2(layer * 7.3, layer * 3.9));
+            const curl = mx_noise_float(p.mul(0.65)).mul(0.45);
+            const billow = mx_noise_float(p.add(vec2(curl, curl.mul(0.7)))).mul(0.5).add(0.5);
+            const front = smoothstep(u.fogFill.mul(0.8).sub(0.2), u.fogFill.mul(0.8).add(0.08), edgeDistance.add(billow.mul(0.13))).oneMinus();
+            const density = smoothstep(0.2, 0.72, billow).mul(front).mul(u.fogFill).mul(A.fogDepth);
+            const alpha = density.negate().exp().oneMinus();
+            const cloud = mix(rgb(A.fogFar), rgb(A.fogNear), billow.mul(0.65).add(q * 0.25));
+            col.assign(mix(col, cloud, alpha));
+            fogOcclusion.assign(fogOcclusion.oneMinus().mul(alpha.oneMinus()).oneMinus());
+          }
+        });
         // Freeze: frost crystallises in from the edges; facets glint along the advancing front
         const ice = frostT ? smoothstep(X.frostVeinBand[0], X.frostVeinBand[1], frostM) : abs(mx_noise_float(c.mul(L.frostNoise * 4))).oneMinus().pow(10);
         const facet = mx_worley_noise_float(c.mul(L.frostCells)), front = frost.mul(frost.oneMinus()).mul(4);
@@ -245,11 +256,11 @@ export function createScreenFx(three, art = currentArt()) {
         // fx-iris: white is the aperture (radius irisMaskR of the mask), scaled so it sits at u.iris
         const open = irisT ? texture(irisT, ic0.mul(X.irisMaskR).div(u.iris).add(0.5)).r.oneMinus()
           : smoothstep(u.iris.sub(L.irisSoft), u.iris.add(L.irisSoft), length(ic0));
-        // polish 5: the lane to the kart and the bend stays open through the iris
-        const shut = dz(open).mul(min(u.black.mul(3), 1)).mul(keep);
-        col.assign(mix(col, col.mul(L.keepImage), shut));
+        // A circular tunnel has no road-shaped exemption and no sharp highlights outside it.
+        const shut = tunnelShut();
+        col.assign(mix(col, col.mul(A.tunnelFloor), shut));
         // a soft rim of light rides the closing iris edge
-        col.addAssign(rgb(L.irisRimColour).mul(open.mul(open.oneMinus()).mul(4).pow(L.irisRimPow).mul(u.black).mul(keep).mul(L.irisRimAlpha)));
+        col.addAssign(rgb(L.irisRimColour).mul(open.mul(open.oneMinus()).mul(4).pow(L.irisRimPow).mul(u.black).mul(L.irisRimAlpha * 0.4)));
         // the hit: the view's hue swings toward the kind's colour, each pixel keeping its own luminance
         If(u.hitK.greaterThan(0.001), () => {
           const tl = luminance(col), hl = max(luminance(u.hitRgb), 0.05);
@@ -260,7 +271,8 @@ export function createScreenFx(three, art = currentArt()) {
         // never blind: the highlights (rails, racing line) come through sharp, read where Melt and
         // Shatter moved the view so even Melt has no still centre
         const clear = sceneTex.sample(suv).rgb;
-        const bright = clear.mul(smoothstep(L.keepBright[0], L.keepBright[1], luminance(clear)).mul(L.keepBrightGain));
+        const bright = clear.mul(smoothstep(L.keepBright[0], L.keepBright[1], luminance(clear)).mul(L.keepBrightGain))
+          .mul(shut.mul(1 - A.tunnelFloor).oneMinus()).mul(fogOcclusion.oneMinus());
         if (jit) col.addAssign(jit.mul(X.ditherOut));
         out.assign(max(col, bright));
         If(u.meterK.greaterThan(0.001), () => {
@@ -293,6 +305,7 @@ export function createScreenFx(three, art = currentArt()) {
 
   function update(screen, dt, aspect) {
     const a = screenAmounts(screen, amt), m = meterLook(screen);
+    u.fogFill.value = atmosphere.update(screen, a.pink, dt, a.timeMul);
     u.hitK.value = m.hitK; u.meterK.value = m.meterK; u.remain.value = m.remain; u.badgeS.value = m.badgeS;
     if (m.hitK > 0) u.hitRgb.value.set(m.hitHex);
     if (m.meterK > 0) {
@@ -308,18 +321,17 @@ export function createScreenFx(three, art = currentArt()) {
     u.runT.value = (screen.t || 0) * a.timeMul;
     u.aspect.value = aspect > 0 ? aspect : 16 / 9;
     u.blurMul.value = a.blurMul;
-    u.flash.value = a.flash; u.spiral.value = a.spiral; u.drain.value = a.brainDrain; u.freeze.value = a.freeze;
+    u.flash.value = screen.params?.mediaFlash ? 0 : a.flash; u.spiral.value = a.spiral; u.drain.value = a.brainDrain; u.freeze.value = a.freeze;
     u.black.value = a.blackout; u.pink.value = a.pink; u.melt.value = a.melt; u.shatter.value = a.shatter;
     u.blurOn.value = a.brainDrain + a.melt + a.freeze > 0.001 ? 1 : 0;
     u.dimOnly.value = a.dimOnly ? 1 : 0;
-    u.iris.value = irisRadius(a.blackout);
+    u.iris.value = tunnelRadius(a.blackout);
     u.tilt.value = a.gentle ? 0 : shatterTilt(screen.kind === 'shatter' ? screen.t || 0 : 9, a.shatter);
     // polish 2: the IN and OUT of each effect follow its amount (fronts, reveals, cracks then slides)
     const sp = shatterPhase(screen.kind === 'shatter' ? (screen.t || 0) * a.timeMul : 9, a.shatter);
     u.crack.value = sp.crack; u.slide.value = sp.slide;
     u.frostThr.value = frostThreshold(a.freeze);
     u.spiralR.value = spiralOpen(a.spiral);
-    u.heartR.value = pinkHeart(a.pink);
     const r = flashPanes(a.cover, u.aspect.value, { corner: a.corner, scale: a.cornerScale, seed: a.seed });
     u.mirror.value = r.mirror ? 1 : 0;
     const pop = 1 - L.flashPop * (1 - Math.min(1, a.flash));
@@ -327,5 +339,5 @@ export function createScreenFx(three, art = currentArt()) {
     u.rx.value = r.cx; u.ry.value = r.cy + L.flashPop * 0.8 * (1 - Math.min(1, a.flash)); u.rw.value = r.hw * pop; u.rh.value = r.hh * pop;
   }
 
-  return { node, update, dispose() { icon.dispose(); badgeTex.dispose(); } };
+  return { node, update, bloomGate, dispose() { icon.dispose(); badgeTex.dispose(); } };
 }

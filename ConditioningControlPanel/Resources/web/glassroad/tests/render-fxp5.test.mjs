@@ -48,10 +48,13 @@ test('flash panes: two soft panes at the sides, clear of the lane middle, inside
   assert.ok(laneMask(x, y) < 0.05, 'the corner card sits outside the lane');
 });
 
-test('screenfx: Flash, Spiral, Pink and Blackout take their lane share; no hard card edge, no drop shadow, OUT still a fade', () => {
+test('screenfx: legacy Flash and Spiral keep the lane; fog and tunnel cross it; OUT still a fade', () => {
   const s = src('screenfx.js');
   assert.ok(s.includes('const keep = '), 'one lane share');
-  for (const k of ['u.flash.mul(keep)', 'u.pink.mul(keep)', 'reveal.mul(u.spiral).mul(keep)', 'mul(min(u.black.mul(3), 1)).mul(keep)']) assert.ok(s.includes(k), k);
+  for (const k of ['u.flash.mul(keep)', 'reveal.mul(u.spiral).mul(keep)']) assert.ok(s.includes(k), k);
+  assert.ok(!s.includes('u.pink.mul(keep)'), 'fog rolls across the road');
+  assert.ok(s.includes('const shut = tunnelShut();'), 'blackout uses a circular opening');
+  assert.ok(!s.includes('mul(min(u.black.mul(3), 1)).mul(keep)'), 'no road-shaped gap in the tunnel');
   assert.ok(!s.includes('smoothstep(0, 0.004, d)'), 'no 4 thousandths edge on the card');
   assert.ok(!s.includes('L.flashShadow'), 'no drop shadow');
   assert.ok(s.includes('flashPanes('), 'panes, not the middle card');
