@@ -194,7 +194,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
-            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
+            _player.Playing += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                if (_player == live)
+                {
+                    LibVlcAudio.ApplyPreferredDevice(live);
+                    CoreEngineOffAudioLog.Note("video", path);
+                }
+            });
             _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
             _player.EndReached += (_, _) =>
             {

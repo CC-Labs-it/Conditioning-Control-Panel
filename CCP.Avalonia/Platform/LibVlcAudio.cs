@@ -123,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
             player.Playing += (_, _) =>
             {
+                CoreEngineOffAudioLog.Note("oneshot:" + tag, path);
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
                 ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { ApplyPreferredDevice(player); player.Volume = vol; } });
@@ -150,19 +151,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 var l = new LoopVoice(this, path, onEnded) { Volume = volume };
                 return l.Start() ? l : null;
             }
-            var voice = NewVoice(path, onEnded);
+            var voice = NewVoice(path, onEnded, loop: false);
             voice.Volume = volume;
             return voice.Play() ? voice : null;
         }
 
-        private Voice NewVoice(string path, Action onEnded)
+        private Voice NewVoice(string path, Action onEnded, bool loop)
         {
             var media = new Media(_vlc, path, FromType.FromPath);
             media.AddOption(NoVideo);
-            return new Voice(new MediaPlayer(media), media, onEnded);
+            return new Voice(new MediaPlayer(media), media, onEnded, path, loop);
         }
 
-        private sealed class Voice(MediaPlayer player, Media media, Action onEnded) : MindWipePlayer.IVoice
+        private sealed class Voice(MediaPlayer player, Media media, Action onEnded, string path, bool loop) : MindWipePlayer.IVoice
         {
             private int _vol, _done;
             /// <summary>Raised once with the clip length in ms (0 when unknown) when it starts playing.</summary>
@@ -180,7 +181,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 player.Playing += (_, _) =>
                 {
                     Apply();
-                    if (Interlocked.Exchange(ref started, 1) == 0) Fire(() => Started?.Invoke(Math.Max(0, player.Length)));
+                    if (Interlocked.Exchange(ref started, 1) == 0)
+                    {
+                        CoreEngineOffAudioLog.Note(loop ? "mindwipe-loop" : "mindwipe", path);
+                        Fire(() => Started?.Invoke(Math.Max(0, player.Length)));
+                    }
                 };
                 player.EndReached += (_, _) => Dispose();
                 player.EncounteredError += (_, _) => { Failed = true; Dispose(); };
@@ -222,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     if (_done) return false;
                     v = null!;
-                    v = audio.NewVoice(path, () => Retire(v));
+                    v = audio.NewVoice(path, () => Retire(v), loop: true);
                     v.Volume = _vol;
                     v.Started = Schedule;
                     _live.Add(v);
