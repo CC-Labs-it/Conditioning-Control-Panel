@@ -21,17 +21,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// <summary>
     /// Fullscreen 16-point gaze calibration (4×4 grid), PORTED from
     /// ConditioningControlPanel/Windows/WebcamCalibrationWindow.xaml.cs over Platform/WebcamTracker
-    /// (OnRawIris / OnHeadPose / OnBlink / StateChanged / SetCalibrationLive / ApplyCalibration). The
+    /// (OnRawIris / OnHeadPose / OnBlink / OnMouthOpen / StateChanged / SetCalibrationLive / ApplyCalibration). The
     /// fit is Core WebcamCalibrationFit, which the WPF window calls too; the result is saved to the
     /// same profile file in the same format (WebcamCalibrationData.Save).
     ///
     /// Same timing, retries, messages and gesture checks as WPF. Deviations: Escape, a tracker stop
     /// (panic, revoke) or the X before the save restores the previously live calibration (WPF leaves the
-    /// unsaved candidate live); the mouth prompts always time out (no MAR detector yet); the redo prompt
+    /// unsaved candidate live); the redo prompt
     /// is ConfirmAsync (Yes / Cancel); Close(bool) for DialogResult; Screens.ScreenFromWindow for the monitor.
-    /// Verify's live cursor is a pink dot in this window (WPF: GazeDebugCursorService's overlay, minus its trail).
-    /// ponytail: the bubble test (WPF RunBubbleTestAsync, gaze attractor, auto-fix) is not ported: it only places a bubble.
-    /// The ring pulse is a DispatcherTimer: Avalonia's Animation cannot target a Transform.
+    /// Verify's and the bubble test's live cursor is a pink dot in this window (WPF: GazeDebugCursorService's
+    /// overlay, with shared Core trail rules). The bubble test's rules are Core BubbleAccuracyTest, shared with WPF.
+    /// The ring pulse and the bubble pop are stepped on the window clock: Avalonia's Animation cannot target a Transform.
     /// </summary>
     public partial class WebcamCalibrationWindow : Window
     {
@@ -64,12 +64,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly Ellipse _testBubble;
         private readonly Ellipse _testBubbleRingBg;
         private readonly Ellipse _testBubbleRingFg;
+        private readonly ScaleTransform _testBubbleScale;
+        private readonly TextBlock _txtBubbleTestStatus;
         private readonly Border _errorPanel;
         private readonly TextBlock _txtErrorDetail;
         private readonly Border _verifyPanel;
         private readonly TextBlock _txtVerifyStatus;
         private readonly Button _btnVerifyAccuracy;
         private readonly Ellipse _verifyCursor;
+        private readonly GazeCursorTrailControl _verifyTrail;
+        private int _trailToken;
+        private Action? _gestureUnsubscribe;
+        private bool _trailRunning;
+        private Point? _trailPosition;
 
         private DispatcherTimer? _ringPulse;
         private int _verifyCountdownSecondsLeft, _verifyToken;
@@ -116,12 +123,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _testBubble = this.FindControl<Ellipse>("TestBubble")!;
             _testBubbleRingBg = this.FindControl<Ellipse>("TestBubbleRingBg")!;
             _testBubbleRingFg = this.FindControl<Ellipse>("TestBubbleRingFg")!;
+            _testBubbleScale = (ScaleTransform)_testBubble.RenderTransform!;
+            _txtBubbleTestStatus = this.FindControl<TextBlock>("TxtBubbleTestStatus")!;
             _errorPanel = this.FindControl<Border>("ErrorPanel")!;
             _txtErrorDetail = this.FindControl<TextBlock>("TxtErrorDetail")!;
             _verifyPanel = this.FindControl<Border>("VerifyPanel")!;
             _txtVerifyStatus = this.FindControl<TextBlock>("TxtVerifyStatus")!;
             _btnVerifyAccuracy = this.FindControl<Button>("BtnVerifyAccuracy")!;
             _verifyCursor = this.FindControl<Ellipse>("VerifyCursor")!;
+            _verifyTrail = this.FindControl<GazeCursorTrailControl>("VerifyTrail")!;
 
             // FindControl is constrained to Control, so the named ScaleTransform is reached through
             // its owner's RenderTransform (authored in this file, so Single() is deterministic).
@@ -184,10 +194,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             IsShowing = false;
             _cancelled = true;
+            _gestureUnsubscribe?.Invoke();
+            _gestureUnsubscribe = null;
             _collecting = false;
             _introDone.TrySetResult(false);
             StopRingPulse();
             StopVerifyCountdown();
+            // At once, not on the bubble loop's next tick: nothing may steer the cursor after a panic.
+            if (_bubbleTestRunning) { Tracker.OnGazeMove -= OnBubbleTestGaze; Tracker.ClearGazeAttractor(); }
             if (!_subscribed) return;
             Tracker.OnRawIris -= OnRawIris;
             Tracker.OnHeadPose -= OnHeadPose;
@@ -374,12 +388,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             await RunGestureCheckAsync(IconKind.Eye, "Blink a couple of times", 2, h => Tracker.OnBlink += h, h => Tracker.OnBlink -= h);
             if (_cancelled) return;
-            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide", 1, null, null);
+            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide", 1, h => Tracker.OnMouthOpen += h, h => Tracker.OnMouthOpen -= h);
             if (_cancelled) return;
             _txtValidationDetail.Text = "Good — close, and once more in a moment…";
             await Delay(1000);
             if (_cancelled) return;
-            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide again", 1, null, null);
+            await RunGestureCheckAsync(IconKind.EmojiSurprise, "Open your mouth wide again", 1, h => Tracker.OnMouthOpen += h, h => Tracker.OnMouthOpen -= h);
         }
 
         /// <summary>WPF RunGestureCheckAsync + WaitFor*Async: up to 5 s for <paramref name="needed"/>
@@ -397,14 +411,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             int count = 0;
             void Handler()
             {
+                if (_cancelled) return;
                 count++;
                 _txtValidationDetail.Text = $"Detected: {count} / {needed}";
                 if (count >= needed) tcs.TrySetResult(true);
             }
             add?.Invoke(Handler);
+            _gestureUnsubscribe = () => remove?.Invoke(Handler);
             bool got;
             try { got = await Task.WhenAny(tcs.Task, Delay(TimeoutMs)) == tcs.Task; }
-            finally { remove?.Invoke(Handler); }
+            finally { remove?.Invoke(Handler); _gestureUnsubscribe = null; }
             if (_cancelled) return;
 
             if (got)
@@ -474,9 +490,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnVerifyGaze(Point p)
         {
+            if (_cancelled || (!_verifyGazeSubscribed && !_bubbleTestRunning)) return;
+            _trailPosition = p;
+            _verifyTrail.History.Tick(0, (p.X, p.Y));
+            _verifyTrail.InvalidateVisual();
+            if (!_trailRunning) { _trailRunning = true; Tracker.OnFaceLost += HideCursor; RunTrail(++_trailToken); }
             Canvas.SetLeft(_verifyCursor, p.X - _verifyCursor.Width / 2);
             Canvas.SetTop(_verifyCursor, p.Y - _verifyCursor.Height / 2);
             _verifyCursor.IsVisible = true;
+        }
+
+        private async void RunTrail(int token)
+        {
+            long last = Time.GetTimestamp();
+            while (token == _trailToken)
+            {
+                await Delay(16);
+                if (token != _trailToken) return;
+                long now = Time.GetTimestamp();
+                bool changed = _verifyTrail.History.Tick(Time.GetElapsedTime(last, now).TotalSeconds,
+                    _trailPosition is { } p ? (p.X, p.Y) : null);
+                last = now;
+                if (changed) _verifyTrail.InvalidateVisual(); // an idle, empty trail costs no frame
+            }
+        }
+
+        private void HideCursor()
+        {
+            _trailPosition = null;
+            _verifyTrail.History.Clear();
+            _verifyTrail.InvalidateVisual();
+            _verifyCursor.IsVisible = false;
+        }
+
+        private void StopTrail()
+        {
+            _trailToken++;
+            _trailRunning = false;
+            Tracker.OnFaceLost -= HideCursor;
+            HideCursor();
         }
 
         private void UpdateVerifyCountdownUi() =>
@@ -486,19 +538,145 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _verifyToken++;
             if (_verifyGazeSubscribed) { Tracker.OnGazeMove -= OnVerifyGaze; _verifyGazeSubscribed = false; }
-            _verifyCursor.IsVisible = false;
+            StopTrail();
             _btnVerifyAccuracy.IsEnabled = true;
             _txtVerifyStatus.Text = "Click Verify to preview accuracy with a live gaze cursor, or close when ready.";
         }
 
-        private void BtnVerifyBubbleTest_Click()
+        // ─────────────────────────────────────────────────────────────────────
+        //  Bubble accuracy test (optional, launched from the verify panel)
+        // ─────────────────────────────────────────────────────────────────────
+        //  WPF RunBubbleTestAsync: four bubbles, one at a time; holding the live cursor near one for
+        //  ~0.7 s pops it. The dwell samples are ground truth, so the residuals feed a per-axis offset +
+        //  scale correction applied (and saved) as the calibration's GazeTrim. Rules: Core BubbleAccuracyTest.
+
+        private bool _bubbleTestRunning;
+        private Point? _bubbleGaze;
+        private long _bubbleGazeAt;
+
+        private async void BtnVerifyBubbleTest_Click()
         {
+            if (_bubbleTestRunning) return;
+            _bubbleTestRunning = true;
             StopVerifyCountdown();
             _verifyPanel.IsVisible = false;
             _shortcutHintBanner.IsVisible = false;
             _bubbleTestPanel.IsVisible = true;
-            MoveBubbleTo(new Point(Bounds.Width / 2, Bounds.Height / 2));
-            UpdateRing(_testBubbleRingFg, 0.0);
+            Tracker.OnGazeMove += OnBubbleTestGaze;
+
+            string summary;
+            try { summary = await RunBubbleTestAsync(); }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "WebcamCalibrationWindow: bubble test threw");
+                summary = "Bubble test hit an error — see logs/app.log.";
+            }
+            finally
+            {
+                Tracker.OnGazeMove -= OnBubbleTestGaze;
+                Tracker.ClearGazeAttractor();
+                StopTrail();
+                _bubbleTestPanel.IsVisible = false;
+                _bubbleTestRunning = false;
+            }
+
+            if (_cancelled) return;
+            _verifyPanel.IsVisible = true;
+            _shortcutHintBanner.IsVisible = true;
+            _txtVerifyStatus.Text = summary;
+        }
+
+        internal void OnBubbleTestGaze(Point p)
+        {
+            _bubbleGaze = p;
+            _bubbleGazeAt = Time.GetTimestamp();
+            OnVerifyGaze(p);   // WPF shows the gaze cursor for the test
+        }
+
+        private async Task<string> RunBubbleTestAsync()
+        {
+            var spots = BubbleAccuracyTest.ProbeSpots(Bounds.Width, Bounds.Height, _testBubbleRingBg.Height / 2.0);
+            int popped = 0;
+            var errors = new List<double>();
+            var samples = new List<((double X, double Y) Target, (double X, double Y) Measured)>();
+
+            for (int i = 0; i < spots.Length; i++)
+            {
+                if (_cancelled) return "";
+                var center = new Point(spots[i].X, spots[i].Y);
+                MoveBubbleTo(center);
+                UpdateRing(_testBubbleRingFg, 0);
+                _testBubble.Opacity = 1.0;
+                _testBubbleScale.ScaleX = _testBubbleScale.ScaleY = 1.0;
+                _txtBubbleTestStatus.Text = $"Bubble {i + 1} / {spots.Length} — pop it with your eyes.";
+                // The attractor is circular: it gets the smaller X radius; the dwell ellipse is ours.
+                Tracker.SetGazeAttractor(center.X, center.Y, BubbleAccuracyTest.PopRadiusX);
+
+                var dwell = new BubbleAccuracyTest.Dwell(center.X, center.Y);
+                long started = Time.GetTimestamp();
+                while (true)
+                {
+                    await Delay(BubbleAccuracyTest.TickMs);
+                    if (_cancelled) return "";
+                    double elapsed = Time.GetElapsedTime(started).TotalMilliseconds;
+                    if (elapsed > BubbleAccuracyTest.TimeoutMs) break;
+
+                    var gaze = _bubbleGaze;
+                    bool fresh = gaze.HasValue && Time.GetElapsedTime(_bubbleGazeAt).TotalMilliseconds < BubbleAccuracyTest.FreshGazeMs;
+                    // Residual math records the pre-lock point; the dwell decision uses the locked one.
+                    var raw = fresh ? Tracker.LastPreLockGaze ?? gaze!.Value : default;
+                    dwell.Tick((long)elapsed, fresh ? (gaze!.Value.X, gaze.Value.Y) : null, (raw.X, raw.Y));
+                    UpdateRing(_testBubbleRingFg, dwell.Progress);
+                    if (dwell.Popped) break;
+                }
+                Tracker.ClearGazeAttractor();
+
+                if (dwell.Popped)
+                {
+                    popped++;
+                    var med = dwell.PopSample;
+                    errors.Add(Math.Sqrt(Math.Pow(med.X - center.X, 2) + Math.Pow(med.Y - center.Y, 2)));
+                    samples.Add(((center.X, center.Y), med));
+                    WebcamQuickRecalWindow.Play("bubbles/Pop.mp3", 0.5f);   // CalibrationSoundService.BubblePop
+                    await PlayBubblePopAsync();
+                }
+                else
+                {
+                    if (dwell.NearMissSample() is { } near) samples.Add(((center.X, center.Y), near));
+                    _txtBubbleTestStatus.Text = "Moving on…";
+                    _testBubble.Opacity = 0.25;
+                    await Delay(500);
+                    if (_cancelled) return "";
+                }
+            }
+            HideBubble();
+
+            var fit = BubbleAccuracyTest.FitTrim(samples, Bounds.Width, Bounds.Height);
+            if (fit is { Apply: true })
+            {
+                Tracker.ApplyGazeTrim(fit.X0, fit.X1, fit.Y0, fit.Y1, Bounds.Width / 2.0, Bounds.Height / 2.0, persist: true);
+                Log.Information("WebcamCalibrationWindow: bubble-test recal x0={X0:F0} x1={X1:F3} y0={Y0:F0} y1={Y1:F3} from {N} bubbles (rms {B:F0}->{A:F0} DIPs)",
+                    fit.X0, fit.X1, fit.Y0, fit.Y1, samples.Count, fit.RmsBefore, fit.RmsAfter);
+            }
+            return BubbleAccuracyTest.Summary(popped, spots.Length, errors, fit);
+        }
+
+        /// <summary>WPF PlayBubblePopAnimationAsync: scale 1 -> 1.7 (QuadraticEase out) and fade to 0 over
+        /// 180 ms, hold to 320 ms, reset. Stepped on the window clock (no Animation on a Transform).</summary>
+        private async Task PlayBubblePopAsync()
+        {
+            const int PopMs = 180, StepMs = 16;
+            for (int t = StepMs; ; t += StepMs)
+            {
+                await Delay(StepMs);
+                double k = Math.Min(1.0, t / (double)PopMs);
+                _testBubbleScale.ScaleX = _testBubbleScale.ScaleY = 1.0 + 0.7 * (1 - (1 - k) * (1 - k));
+                _testBubble.Opacity = Math.Clamp(1.0 - k, 0.0, 1.0);
+                if (k >= 1.0) break;
+            }
+            await Delay(320 - PopMs);
+            _testBubbleScale.ScaleX = _testBubbleScale.ScaleY = 1.0;
+            _testBubble.Opacity = 1.0;
         }
 
         private void BtnVerifyRecalibrate_Click()

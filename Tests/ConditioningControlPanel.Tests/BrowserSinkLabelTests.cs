@@ -107,7 +107,7 @@ public class BrowserSinkLabelTests
         // Scoping decision pinned in code: BrowserVideoGate's #938 force-demotion is deliberately
         // untouched by this PR, so a user with a chosen output device still gets LibVLC (which can
         // target the device natively). Relaxing the gate is a separate, later change.
-        var cs = ReadProduct("ConditioningControlPanel", "Services", "Video", "Browser", "BrowserVideoGate.cs");
+        var cs = SourceRoots.ReadProductFile("Services", "Video", "Browser", "BrowserVideoGate.cs");
         Assert.Contains("AudioOutputDeviceId", cs);
         Assert.Contains("routing to LibVLC, which can target it (#938)", cs);
     }
