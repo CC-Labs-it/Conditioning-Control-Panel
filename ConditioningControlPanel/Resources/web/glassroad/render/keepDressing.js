@@ -1,21 +1,27 @@
 /* Accepted Keep assets, placed before shader warmup. All colour is supplied by the host. */
 import { Group, Matrix4, Vector3, Color } from 'three/webgpu';
-import { vec3, texture, uv, vec2 } from 'three/tsl';
+import { vec3, texture, uv, vec2, mix, step, attribute, float } from 'three/tsl';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createSoftMaterial } from './materials/colossus.js';
+import { buildKeepFortress, keepStoneMaterial } from './keepFortress.js';
 
 export function applyKeepRoad(road, art) {
   const map = art?.tex('road-bands-mask');
-  if (!map) return;
-  const seam = texture(map, vec2(uv().x.div(12), uv().y.div(16))).r;
-  // Preserve music response and edge markings under the black glass; the seams stay fixed to it.
-  road.material.colorNode = road.material.colorNode.mul(0.65)
-    .add(vec3(0.8, 0.035, 0.31).mul(seam).mul(road.uniforms.contrast).mul(0.55));
+  const seam = map ? texture(map, vec2(uv().x.div(12), uv().y.div(16))).r : float(0);
+  const stone = keepStoneMaterial('#45424c', art, false), original = road.material.colorNode;
+  // An opaque slate floor with fixed magenta joints. Music is a subtle surface response.
+  const floor = stone.colorNode.add(original.mul(0.08))
+    .add(vec3(0.8, 0.035, 0.31).mul(seam).mul(road.uniforms.contrast).mul(0.3));
+  road.material.colorNode = mix(floor, original, step(2.5, attribute('surface', 'float')));
+  road.material.color.copy(stone.color); road.material.transparent = false; road.material.opacity = 1;
+  stone.dispose();
 }
 
 export function buildKeepDressing(track, art, pal, samples) {
   const group = new Group(); group.name = 'keep-fortress';
   const materials = new Map(), placed = [], layout = getKeepLayout(track);
+  const fortress = buildKeepFortress(track, layout, art), artGroup = new Group();
+  group.add(fortress.group, artGroup);
   const lod = art?.tier === 'phone' ? 1 : 0;
   const M = new Matrix4(), X = new Vector3(), Y = new Vector3(), Z = new Vector3();
   const tint = (src) => {
@@ -34,13 +40,17 @@ export function buildKeepDressing(track, art, pal, samples) {
     M.makeBasis(X.fromArray(f.b), Y.fromArray(f.n), Z.fromArray(f.t).negate());
     holder.quaternion.setFromRotationMatrix(M);
     holder.position.fromArray(f.p).addScaledVector(X, x).addScaledVector(Y, y);
+    if (id.includes('colossus')) holder.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(-f.t[0], -f.t[2]));
     body.scale.set(scale * wide, scale, scale); body.rotation.y = turn;
     body.traverse((o) => { if (o.isMesh) { o.material = Array.isArray(o.material) ? o.material.map(tint) : tint(o.material); o.castShadow = true; } });
-    holder.name = id; holder.add(body); group.add(holder);
+    holder.name = id; holder.add(body); artGroup.add(holder);
     placed.push({ id, s, x, p: holder.position.toArray() });
+    return holder;
   }
-  // A 28 m opening keeps the columns outside both 6 m bypass lanes. Gate width remains 14 m.
-  for (const hall of layout?.halls || []) for (const s of hall.gates) place('keep-portcullis-arch', s, 0, { wide: 2 });
+  // The opening follows the whole road width, leaving every bypass lane clear.
+  for (const hall of layout?.halls || []) for (const s of hall.gates)
+    place('keep-portcullis-arch', s, 0, { wide: (track.frameAt(s).w + 2) / 14 });
+  for (const chain of layout?.chains || []) place('keep-portcullis-arch', chain.s, 0, { wide: (track.frameAt(chain.s).w + 2) / 14 });
   const heroes = [
     ['forecourt', 0.65, -1, 'padlock'], ['outer-exit', 0.35, 1, 'chainpile'],
     ['east-ascent', 0.55, -1, 'padlock'], ['high-gate', 0.7, 1, 'chainpile'],
@@ -57,10 +67,14 @@ export function buildKeepDressing(track, art, pal, samples) {
     let offset = f.w / 2 + radius + 9, fit = false;
     for (let attempt = 0; attempt < 30; attempt++, offset += 8) {
       const p = f.p.map((v, i) => v + f.b[i] * side * offset);
-      if (samples.every((a) => Math.hypot(p[0] - a.p[0], p[2] - a.p[2]) > radius + a.w / 2 + 5)) { fit = true; break; }
+      const towersClear = (layout.towers || []).every((t) => Math.hypot(p[0] - t.x, p[2] - t.z) > radius + t.radiusM + 3);
+      if (towersClear && samples.every((a) => Math.hypot(p[0] - a.p[0], p[2] - a.p[2]) > radius + a.w / 2 + 5)) { fit = true; break; }
     }
-    if (fit) place('keep-colossus-' + kind, s, side * offset, { turn: side * 0.22, y: -1 });
+    if (fit) {
+      const holder = place('keep-colossus-' + kind, s, side * offset, { turn: side * 0.22, y: -1 });
+      if (holder) fortress.addPlinth(holder.position.toArray(), radius * 0.84);
+    }
   }
-  return { group, placed, casters: [group],
-    dispose() { group.removeFromParent(); materials.forEach((m) => m.dispose()); } };
+  return { group, placed, fortress, casters: [artGroup],
+    dispose() { group.removeFromParent(); fortress.dispose(); materials.forEach((m) => m.dispose()); } };
 }

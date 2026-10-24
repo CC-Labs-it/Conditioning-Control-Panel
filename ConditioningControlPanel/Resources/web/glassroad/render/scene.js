@@ -57,6 +57,9 @@ import { waterTable, tableCode } from './waterMath.js';
 import { buildStones } from './stones.js';
 import { buildKeepDressing, applyKeepRoad } from './keepDressing.js';
 import { createKeepGateView } from './keepGates.js';
+import { createKeepChainView } from './keepChains.js';
+import { keepSpiralLayout } from './keepSpirals.js';
+import { keepMediaLayout } from './keepMedia.js';
 import { getKeepLayout } from '../track/keep-layout.js';
 
 const FWD = new Vector3();
@@ -153,6 +156,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     scene.add(sun);
   }
   const sky = createSkyMaterial(pal, art);
+  if (keep) sky.material.colorNode = sky.material.colorNode.mul(.22);
   const skyMesh = add(new Mesh(new SphereGeometry(LOOK.skyRadiusM, 48, 32), sky.material));
   skyMesh.renderOrder = -1; skyMesh.frustumCulled = false;
   const road = createRoadMaterial(pal, art, track);
@@ -180,6 +184,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const keepDressing = keep ? buildKeepDressing(track, art, pal, samples) : null;
   if (keepDressing) scene.add(keepDressing.group);
   const keepGates = keep ? createKeepGateView(scene, track, art, { gates: getKeepLayout(track).gates }) : null;
+  const keepChains = keep ? createKeepChainView(scene, track, { chains: getKeepLayout(track).chains }) : null;
   let colossi = null;
   try { colossi = art && !keep ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
   if (colossi) add(colossi.object);
@@ -241,9 +246,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // polish 3: the Loom spiral gates across the road and the media slots (placeholders only)
   let spirals = null, media = null;
   // onPass: the player crossed a gate; boot plays that gate's own Loom on screen
-  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: spiralLayout, photosafe, feel,
+  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: keep && spiralLayout !== null ? keepSpiralLayout(track) : spiralLayout, photosafe, feel,
     onPass: (g) => { if (bus) bus.emit('gate-pass', g); } }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
-  try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
+  try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout: keep ? keepMediaLayout(track) : undefined }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
   // polish 4: the drop shortcut's rail opening and landing pad (track routes); the ring swells on the player's clean landing
   let routes = null;
   try { routes = routesMod ? routesMod.createRoutes(scene, track, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] route marks failed: ' + (e && e.message)); }
@@ -277,6 +282,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     on('go', () => ['p4', 0, 'go', {}]);
     on('racer-event', ({ racer = -1, name, p = {} }) => (P4_EVENTS.has(name) ? ['p4', racer, name, p] : [name, racer, (p && p.tier) || 0]));
     on('bump', (p) => ['bump', p.a, p.dv || 0, p.p, p.b]);
+    for (const name of ['keep-gate-hit', 'keep-chain-hit']) on(name, () => ['bump', 0, 12]);
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
     on('item-box', (p) => ['box', p.racer, 0, p.p]);
     on('item-hit', (p) => ['hit', p.victim, p.verdict, p.p, p.kind]);
@@ -351,6 +357,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   let labelsOf = null, labels = [];
   function update(view) {
     if (keepGates) keepGates.update(view.raceTimeS ?? 0);
+    if (keepChains) keepChains.update(view.raceTimeS ?? 0);
     const { kart: k, fx } = view;
     solo[0].st = k;
     const racers = view.karts && view.karts.length ? view.karts : solo;
@@ -477,13 +484,14 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (showcaseDressing) showcaseDressing.dispose();
     if (keepDressing) keepDressing.dispose();
     if (keepGates) keepGates.dispose();
+    if (keepChains) keepChains.dispose();
     court.dispose();
     if (stones) stones.dispose();
     if (terrace) terrace.dispose();
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, keepDressing, keepGates,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, keepDressing, keepGates, keepChains,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
