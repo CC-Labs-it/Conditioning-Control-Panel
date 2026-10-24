@@ -1214,11 +1214,18 @@ namespace ConditioningControlPanel
         /// Mapped bark lines use their manifest emotion; our event + idle affirmation lines (unmapped) get a
         /// seductive mix (mostly alluring, plus entrancing/dreamy/teasing). The number of poses scales with
         /// the line's length. No-op when the portrait system is off.
+        /// <paramref name="silent"/> (ccp-bugs #1468, a held idle line): no talking, just the line's
+        /// expression, so the avatar never lip-syncs a line nobody hears.
         /// </summary>
-        private void PlayEmotionForLine(string? emotionLineId, string? audioPath, string? text, string? mood = null)
+        private void PlayEmotionForLine(string? emotionLineId, string? audioPath, string? text, string? mood = null, bool silent = false)
         {
             // Circe pose-1 animated emotes take over the spoken-line reaction (own WebP path).
-            if (_circeEmoteMode) { CircePlayEmote(emotionLineId, audioPath, text, mood); return; }
+            if (_circeEmoteMode)
+            {
+                if (silent) CirceSilentEmote(emotionLineId, mood);
+                else CircePlayEmote(emotionLineId, audioPath, text, mood);
+                return;
+            }
             if (!_portraitMode || _portraitSet == null) return;
             var emotion = _portraitSet.EmotionForLine(emotionLineId);
             if (string.IsNullOrEmpty(emotion))
@@ -1227,6 +1234,7 @@ namespace ConditioningControlPanel
                 emotion = !string.IsNullOrWhiteSpace(mood)
                     ? _portraitSet.EmotionForMood(mood)
                     : PickAffirmationEmotion();
+            if (silent) { SetEmotionSequence(emotion!, MinSpeakPoses, 0); return; } // a look, not a read
             double durationSec = audioPath != null ? AudioDurationSec(audioPath) : EstimateDurationSec(text);
             SetEmotionSequence(emotion!, PoseCountForDuration(durationSec), durationSec);
         }

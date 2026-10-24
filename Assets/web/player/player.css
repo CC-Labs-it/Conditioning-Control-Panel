@@ -70,7 +70,7 @@ body.has-bg #bg { display: block; }
 #attn {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: 13;   /* over the credit badge (12) and end card (11): a target is never under them */
   overflow: hidden;
   /* Only the targets take presses; everything else falls through to the
      window-level handler that reports a generic click. */
@@ -142,3 +142,62 @@ body.attn-paused .attn { pointer-events: none; }
   paint-order: stroke fill;
   -webkit-text-stroke: 7.5px #000;
 }
+
+/* ---- "via Scrolller" credit ----
+   Scrolller clips only (load field `credit`). Fades only: no motion, no flash,
+   so Gentle visuals needs nothing extra. Sized off the window so the small
+   floating form gets a small badge. Stand-in wordmark until Scrolller sends art. */
+
+[hidden] { display: none !important; }
+
+#credit {
+  position: fixed;
+  right: clamp(8px, 1.6vmin, 18px);
+  bottom: clamp(6px, 1.4vmin, 16px);
+  z-index: 12;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4em;
+  padding: 0.3em 0.7em;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: clamp(10px, 1.5vmin, 15px);
+  opacity: 0;
+  transition: opacity 0.6s linear;
+  pointer-events: none;
+}
+#credit.on { opacity: 0.75; }
+#credit.clickable { pointer-events: auto; cursor: pointer; }
+#credit.clickable:hover { opacity: 1; }
+
+.credit-via, .outro-via { opacity: 0.7; }
+.credit-mark, .outro-mark { font-weight: 800; letter-spacing: 0.01em; }
+.credit-sub { opacity: 0.8; }
+.credit-tick { display: none; margin-left: 0.3em; }
+.credit-link.queued .credit-tick { display: inline; }
+
+#outro {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  opacity: 0;
+  transition: opacity 0.5s linear;
+  pointer-events: none;
+}
+#outro.on { opacity: 1; }
+#outro.clickable .outro-card { pointer-events: auto; cursor: pointer; }
+
+.outro-card {
+  text-align: center;
+  padding: 1em 1.6em;
+  font-size: clamp(12px, 2.4vmin, 26px);
+  line-height: 1.25;
+}
+.outro-mark { font-size: 2.6em; line-height: 1.05; }
+.outro-sub { margin-top: 0.3em; }
+.outro-site { margin-top: 0.6em; opacity: 0.65; font-size: 0.85em; }
+#outro.clickable .outro-site { text-decoration: underline; text-underline-offset: 0.2em; }
