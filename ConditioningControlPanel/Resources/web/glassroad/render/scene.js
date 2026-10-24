@@ -218,6 +218,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   try { edges = createEdges(scene, track, pal, { pulse: rails.uniforms.pulse }); } catch (e) { console.warn('[glassroad/world] edges failed: ' + (e && e.message)); }
   const pad = createPadMaterial(isMainframe ? '#75f8a7' : LOOK.padColour, art && art.tex('boost-chevron-mask')), lip = createPadMaterial(LOOK.lipColour);
   const padMesh = add(meshFrom(track.meshes.pads, pad.material));
+  // Composite over the transparent road and water, before wakes, with depth occlusion intact.
+  if (padMesh) padMesh.renderOrder = .9;
   add(meshFrom(track.meshes.jumps, lip.material));
   // the hero colossi lean over the road; the scatter keeps clear of them (WORLD lane)
   const samples = sampleTrack(track, 4);
