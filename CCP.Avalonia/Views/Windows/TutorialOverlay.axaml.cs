@@ -25,8 +25,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// title, description and its Skip / Skip step / Previous / Next row.
     ///
     /// Adapted from WPF's TutorialOverlay: card, spotlight and automatic advance subscriptions.
-    /// Live cards use the host overlay layer, including a real spotlight input hole. Narration,
-    /// guide navigation, keyword demo and fade timing remain in wire-win-tutorial-overlay-c. The parameterless constructor renders a
+    /// Live cards use the host overlay layer, including a real spotlight input hole, the 300/200 ms
+    /// fades, the waiting-for-window card and the section-rail door. Narration, guide navigation and
+    /// the keyword demo remain in wire-win-tutorial-overlay-c-next. The parameterless constructor renders a
     /// sample and never subscribes to the live tour.
     /// </summary>
     public partial class TutorialOverlay : Window
@@ -181,13 +182,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else Dispatcher.UIThread.Post(() => UpdateStep(step));
         }
 
-        /// <summary>The tour ended, by any route. The overlay goes with it — WPF fades out over
-        /// 200ms and closes; the fade is dropped here for the reason in the header.</summary>
+        /// <summary>The tour ended, by any route. The overlay goes with it after WPF's 200 ms
+        /// fade (TutorialOverlay.xaml.cs:1303-1313).</summary>
         private void OnSeamFinished(object? sender, bool completed)
         {
             _ = completed;
-            if (Dispatcher.UIThread.CheckAccess()) Close();
-            else Dispatcher.UIThread.Post(Close);
+            if (Dispatcher.UIThread.CheckAccess()) FadeOutAndTeardown();
+            else Dispatcher.UIThread.Post(FadeOutAndTeardown);
         }
 
         protected override void OnClosed(EventArgs e)
@@ -271,6 +272,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _step = step;
             if (RetargetIfNeeded(step)) return;
             _advanceFiredThisStep = false;
+            if (IsWaitingForWindow(step)) { ShowWaitingCard(step); return; }
 
             _txtStepCounter.Text = StepCounterText();
             (_txtIcon.Kind, _txtIcon.Variant) = IconFor(step.Icon);
@@ -346,6 +348,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _spotlightDelayTimer = null;
 
             _spotlightCanvas.Children.Clear();
+
+            // Waiting for the step's window: never measure against the old window's tree (WPF
+            // TutorialOverlay.xaml.cs:466-484). Also catches a host resize redraw while waiting.
+            if (IsWaitingForWindow(step))
+            {
+                DrawFullOverlay(step.BlockBackgroundClicks);
+                CenterTextPanel();
+                return;
+            }
 
             // The sidebar keeps a door's entries collapsed until the door is open, so any step that
             // needs a tab must open that door FIRST — a collapsed entry has no measurable bounds.
@@ -487,19 +498,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// settles).</summary>
         private bool PrepareDoorForStep(TutorialStep step)
         {
-            // ponytail: needs MainShellWindow.ExpandDoorForTab, which does not exist on this head
-            // (MainShellWindow.TabNavigation.cs has ShowTab, which also NAVIGATES — and a step can
-            // spotlight a nav entry filed under a door other than the tab it requires, so ShowTab
-            // would jump the user off the page the card is talking about). The door key itself is
-            // deliberately not on CoreTutorial.Step either: TutorialService.DoorTabKeyFor is a pure
-            // function of the step, but with no way to act on the answer a field carrying it would
-            // just be seam surface nothing reads.
-            //
-            // Until that method exists, no door is opened, so a step whose target sits behind a
-            // collapsed door falls through to the full-overlay path below — the same degraded card
-            // WPF draws when an element cannot be found.
-            _ = step;
-            return false;
+            // WPF TutorialOverlay.xaml.cs:689-706 -> MainWindow.ExpandDoorForTab, which is only
+            // RefreshSectionRail (MainWindow.TabNavigation.cs:881): light the owning row, never navigate.
+            if (_targetWindow is not MainShellWindow shell) return false;
+            var head = HeadStepFor(step);
+            var tabKey = head == null ? null : ConditioningControlPanel.Avalonia.Tours.TutorialService.DoorTabKeyFor(head);
+            if (string.IsNullOrEmpty(tabKey)) return false;
+            try
+            {
+                shell.RefreshSectionRail(tabKey);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Serilog.Log.Debug("TutorialOverlay ExpandDoorForTab({Tab}) failed: {Err}", tabKey, ex.Message);
+                return false;
+            }
         }
 
         private void DrawFullOverlay(bool blockClicks = true)

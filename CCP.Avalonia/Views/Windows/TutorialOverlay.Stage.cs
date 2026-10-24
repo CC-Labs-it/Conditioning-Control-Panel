@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Primitives;
@@ -33,6 +34,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private OverlayLayer? _layer;
         private IDisposable? _layerBoundsSub;
         private bool _tornDown;
+        private bool _fadingOut;
+
+        /// <summary>WPF TutorialOverlay.xaml.cs:107 (fade in) and :1308 (fade out before Close).</summary>
+        internal static readonly TimeSpan FadeInDuration = TimeSpan.FromMilliseconds(300);
+        internal static readonly TimeSpan FadeOutDuration = TimeSpan.FromMilliseconds(200);
+
+        private static Transitions OpacityFade(TimeSpan d) =>
+            new() { new DoubleTransition { Property = OpacityProperty, Duration = d } };
 
         /// <summary>The tour's card left the screen (finished, skipped, panic, host closed). Hides
         /// Window.Closed: a live overlay is never a shown window, so the base event would never fire.</summary>
@@ -83,7 +92,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             CoreTutorial.Finished -= OnSeamFinished;
             Detach();
             // The host window closing must not strand a running tour (WPF OnClosed does the same).
-            if (CoreTutorial.IsActive) CoreTutorial.Skip();
+            // After a fade the tour already finished; a tour running now is a NEW one, never ours.
+            if (!_fadingOut && CoreTutorial.IsActive) CoreTutorial.Skip();
             base.Close(); // dispose the never-shown Window platform implementation too
             try { Closed?.Invoke(this, EventArgs.Empty); } catch { /* a subscriber's fault is not the tour's */ }
         }
@@ -96,13 +106,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var root = _stage ?? (Content as Control);
             if (root == null) return false;
-            if (_stage == null) Content = null;     // out of the never-shown window, once
+            bool first = _stage == null;
+            if (first)
+            {
+                Content = null;     // out of the never-shown window, once
+                root.Opacity = 0;
+                root.Transitions = OpacityFade(FadeInDuration);
+            }
 
             _stage = root;
             _layer = layer;
             root.Width = layer.Bounds.Width;
             root.Height = layer.Bounds.Height;
             layer.Children.Add(root);
+            if (first) root.Opacity = 1;     // WPF fades the card in over 300 ms on Loaded
             _layerBoundsSub = layer.GetObservable(BoundsProperty).Subscribe(new BoundsObserver(this));
 
             window.AddHandler(KeyDownEvent, OnStageKeyDown, RoutingStrategies.Tunnel);
@@ -133,6 +150,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public void OnCompleted() { }
             public void OnError(Exception error) { }
             public void OnNext(Rect value) => _o.OnLayerBounds(value);
+        }
+
+        /// <summary>WPF OnTutorialCompleted: drop every subscription, fade 200 ms, then close. The
+        /// dim keeps blocking the host during the fade, as WPF's window did.</summary>
+        private void FadeOutAndTeardown()
+        {
+            if (_tornDown || _fadingOut) return;
+            if (TutorialHead.EndingInstantly || _stage == null || !IsOnStage) { Teardown(); return; }
+            _fadingOut = true;
+            _closed = true;
+            try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
+            _spotlightDelayTimer = null;
+            UnsubscribeAdvanceTrigger();
+            CoreTutorial.StepChanged -= OnSeamStepChanged;
+            CoreTutorialEvents.Event -= OnTutorialEvent;
+            CoreTutorial.Finished -= OnSeamFinished;
+            _stage.Transitions = OpacityFade(FadeOutDuration);
+            _stage.Opacity = 0;
+            // A posted job, not DispatcherTimer: headless RunJobs never promotes due timers.
+            _ = System.Threading.Tasks.Task.Delay(FadeOutDuration)
+                .ContinueWith(_ => Dispatcher.UIThread.Post(Teardown), System.Threading.Tasks.TaskScheduler.Default);
         }
 
         private void OnLayerBounds(Rect b)
@@ -170,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // Escape typed into one of the host's text boxes stays with that box.
         private void OnStageKeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Key != Key.Escape || _tornDown || e.Source is TextBox) return;
+            if (e.Key != Key.Escape || _closed || e.Source is TextBox) return;
             SkipTutorial();
             e.Handled = true;
         }
@@ -211,6 +249,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (w == null || ReferenceEquals(w, _targetWindow)) return false;   // WindowLoaded:* brings us later
             RetargetToWindow(w);
             return true;
+        }
+
+        /// <summary>The step names a window that is not open yet (RetargetIfNeeded found none).</summary>
+        private bool IsWaitingForWindow(CoreTutorial.Step step) =>
+            _live && step.TargetWindowTypeName != null && _targetWindow != null
+            && _targetWindow.GetType().Name != step.TargetWindowTypeName;
+
+        /// <summary>WPF UpdateStep :466-486: a clean centred "next up" card with only Skip, no
+        /// spotlight, and the step kept subscribed so its OnEvent trigger still fires while waiting.
+        /// WindowLoaded:* retargets the card once the window opens.</summary>
+        private void ShowWaitingCard(CoreTutorial.Step step)
+        {
+            UnsubscribeAdvanceTrigger();
+            _txtStepCounter.Text = StepCounterText();
+            (_txtIcon.Kind, _txtIcon.Variant) = IconFor(step.Icon);
+            _txtTitle.Text = step.Title;
+            _txtDescription.Text = step.Description;
+            _btnSupport.IsVisible = false;
+            _btnSkip.IsVisible = !step.IsFollowUpCard;
+            _btnSkipStep.IsVisible = false;
+            _btnNext.IsVisible = false;
+            _btnPrevious.IsVisible = false;
+            _followUpPanel.IsVisible = false;
+            UpdateSpotlight(step);
+            _subscribedStep = HeadStepFor(step);
         }
 
         private void OnWindowLoadedEvent(string typeName)
