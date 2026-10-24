@@ -2,6 +2,7 @@
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
 import { axesFrom, roadSamples, V3 } from './mediaMath.js';
 import { dressBoudoirProps } from './boudoirProps.js';
+import { dressBoudoirDistricts } from './boudoirDistricts.js';
 
 const { add, sub, mul, dot, norm } = V3, TAU = Math.PI * 2;
 const plans = new WeakMap();
@@ -225,6 +226,7 @@ export function boudoirWorldPlan(track) {
     }
   }
   const props = dressBoudoirProps(track, layout, { put, clear, rows, particles, heroes });
+  const districts = dressBoudoirDistricts(track, layout, { put, clear, rows, heroes });
   const blockers = [...rows, ...props.motionEnvelopes];
   // The dedicated mirror hall owns its reflections, facets and shutters, without legacy billboards.
   // Mounted mirrors share one half-media / half-Loom pool. Every face is checked after all solids.
@@ -259,7 +261,7 @@ export function boudoirWorldPlan(track) {
     const group = mounts.filter(m => m.frame === kind);
     if (group.length % 2) mounts.splice(mounts.indexOf(group.at(-1)), 1);
   }
-  const plan = { rows, mounts, heroes, interiors, particles, corridors, rejected, center, groundY, ceilingY, roomW, roomD, props };
+  const plan = { rows, mounts, heroes, interiors, particles, corridors, rejected, center, groundY, ceilingY, roomW, roomD, props, districts };
   plans.set(track, plan); return plan;
 }
 

@@ -5,6 +5,7 @@ import { registerHooks } from 'node:module';
 import { loadTrack } from '../track/load.js';
 import { boudoirWorldPlan, boudoirMediaLayout, boudoirBoxesIntersect, boudoirSegmentBlocked } from '../render/boudoirMedia.js';
 import { boudoirSpiralLayout } from '../render/boudoirSpirals.js';
+import { BOUDOIR_FINISH, BOUDOIR_DISTRICTS, boudoirDistrictFor } from '../render/boudoirDistricts.js';
 import { selectScrolllerSlots } from '../render/mediaSelection.js';
 import { roadSamples, rectPoints, tierSlots, mediaLook } from '../render/mediaMath.js';
 import { S } from '../sim/state.js';
@@ -142,4 +143,40 @@ test('Every moving ornament stays inside its fitted clearance envelope at both s
     }
   }
   assert.deepEqual([...hits], []);
+});
+
+test('Each Boudoir district has room-scale architecture at driving height and its own surface finish', () => {
+  for (const district of ['vanity', 'gallery', 'wardrobe', 'spa']) {
+    const stations = plan.districts.stations.filter(s => s.district === district);
+    assert.ok(stations.length >= 3, district + ' needs repeated architecture, not one distant prop');
+    assert.ok(stations.every(s => s.structure === BOUDOIR_DISTRICTS[district].structure && s.size[1] >= 25));
+    assert.ok(new Set(stations.map(s => Math.floor(s.s / 80))).size >= 2, district + ' spans more than one driving view');
+  }
+  for (const finish of Object.values(BOUDOIR_FINISH))
+    assert.ok(plan.rows.filter(r => r.material === 'district' && r.finish[0] === finish).length > 30,
+      'a substantial surface family for finish ' + finish);
+  for (const name of ['district-rosewood-cornice', 'district-deco-crown', 'district-gathered-velvet-curtain',
+    'district-velvet-pelmet-braid', 'district-spa-tiled-pier', 'district-spa-tile-frieze'])
+    assert.ok(plan.rows.some(r => r.name === name), name);
+  assert.equal(boudoirDistrictFor('drawer-hall'), 'mirror');
+  assert.ok(!plan.districts.stations.some(s => s.landmark === 'drawer-hall'), 'reflected room remains clear');
+});
+
+test('Metre-based district coordinates share one instance buffer and respect WebGPU limits', () => {
+  const dressing = buildBoudoirDressing(track, null, createPalette('boudoir'), roadSamples(track));
+  const district = dressing.group.children.filter(o => o.isInstancedMesh && o.material.name === 'boudoir-district');
+  assert.equal(district.length, 1, 'all five room finishes share one draw');
+  const geometry = district[0].geometry, size = geometry.attributes.boudoirSize, finish = geometry.attributes.boudoirFinish;
+  assert.ok(size.data.isInstancedInterleavedBuffer);
+  assert.equal(size.data, finish.data, 'two independent buffers would exceed the WebGPU eight-buffer cap');
+  const distinctBuffers = new Set(Object.values(geometry.attributes).map(a => a.isInterleavedBufferAttribute ? a.data : a));
+  assert.ok(distinctBuffers.size + 4 <= 8, 'four matrix columns plus geometry and finish data');
+  const rows = plan.rows.filter(r => r.material === 'district');
+  assert.equal(size.count, rows.length);
+  rows.forEach((row, i) => {
+    assert.deepEqual([size.getX(i), size.getY(i), size.getZ(i)].map(v => Math.round(v * 100)), row.size.map(v => Math.round(v * 100)));
+    assert.equal(finish.getX(i), row.finish[0]);
+  });
+  let disposed = 0; geometry.addEventListener('dispose', () => disposed++);
+  dressing.dispose(); dressing.dispose(); assert.equal(disposed, 1, 'district-owned geometry releases once');
 });
