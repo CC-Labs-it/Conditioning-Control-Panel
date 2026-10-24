@@ -273,7 +273,11 @@ public sealed class BubbleCountGameTests
             var listener = BubbleCountWindow.PanicListenerLive;
             var routeAudio = BubbleCountWindow.RouteAudio;
             var audioRoutes = 0;
-            BubbleCountWindow.RouteAudio = player => { routeAudio(player); System.Threading.Interlocked.Increment(ref audioRoutes); };
+            var routed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            BubbleCountWindow.RouteAudio = player => { routeAudio(player); System.Threading.Interlocked.Increment(ref audioRoutes); routed.TrySetResult(); };
+            var installClickHook = BubbleCountWindow.InstallClickHook;
+            var hooked = new System.Collections.Generic.List<TopLevel>();
+            BubbleCountWindow.InstallClickHook = w => { installClickHook(w); hooked.Add(w); };
             host.Scheduler = b;
             CoreEngine.BubbleCount = b;
             try
@@ -290,6 +294,7 @@ public sealed class BubbleCountGameTests
                     {
                         s.BubbleCountStrictLock = strict;
                         var routesBefore = System.Threading.Volatile.Read(ref audioRoutes);
+                        routed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                         b.Trigger(forceTest: true);
                         Assert.True(b.IsBusy);
                         Assert.Empty(BubbleCountWindow.OpenWindows);        // the 800 ms lead-in
@@ -298,7 +303,8 @@ public sealed class BubbleCountGameTests
                         Assert.True(BubbleCountWindow.Sink!.FrameCount >= 3, "frames decoded");
                         Assert.Same(BubbleCountWindow.Sink.Bitmap, w.VideoImage.Source);
                         Assert.True(w.Topmost && w.IsVisible);
-                        for (var i = 0; i < 40 && System.Threading.Volatile.Read(ref audioRoutes) == routesBefore; i++) await Task.Delay(25);
+                        Assert.Contains(w, hooked);                         // MA_NOACTIVATE on every game window
+                        await routed.Task.WaitAsync(TimeSpan.FromSeconds(5));   // Playing routes the device once
                         Assert.Equal(routesBefore + 1, System.Threading.Volatile.Read(ref audioRoutes));
                         return w;
                     }
@@ -344,6 +350,7 @@ public sealed class BubbleCountGameTests
                 CoreEngine.BubbleCount = prevEngine;
                 BubbleCountWindow.PanicListenerLive = listener;
                 BubbleCountWindow.RouteAudio = routeAudio;
+                BubbleCountWindow.InstallClickHook = installClickHook;
                 CoreProgression.AddXPProvider = prevXp;
                 (s.PanicKeyEnabled, s.PanicKey, s.BubbleCountStrictLock, s.DualMonitorEnabled) = saved;
             }
