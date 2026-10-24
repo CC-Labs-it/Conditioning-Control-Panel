@@ -234,11 +234,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try
             {
                 TranscodeToWav(path, wav, progress, ct);
-                // The terminal progress callback can cancel too, after the native wait has finished.
+                // A synchronous IProgress could cancel from Report(1), after the native wait. Real callers pass
+                // Progress<double> (posted, so asynchronous); this guards the seam, and the test hits it directly.
                 ct.ThrowIfCancellationRequested();
-                var pcm = ReadMono16(File.ReadAllBytes(wav));
-                ct.ThrowIfCancellationRequested();
-                return pcm;
+                return ReadMono16(File.ReadAllBytes(wav));
             }
             finally { try { File.Delete(wav); } catch { } }
         }
