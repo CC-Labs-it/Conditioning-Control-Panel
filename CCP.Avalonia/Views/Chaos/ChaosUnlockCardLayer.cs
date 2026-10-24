@@ -19,8 +19,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// shopping continues underneath. What each card says comes from Core
     /// <see cref="ChaosUnlockCardRules"/>.
     /// One timeline per card, sampled on the window's 30 fps beat, replaces WPF's BeginAnimation set.
-    /// ponytail: real item art - this head's ChaosArt has no sprites yet, so the tinted glyph
-    /// tile WPF falls back to is always what shows.
     /// </summary>
     internal sealed class ChaosUnlockCardLayer
     {
@@ -94,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Apply(_current, t);
         }
 
-        private static void Apply(Card c, double t)
+        internal static void Apply(Card c, double t)
         {
             c.Root.Opacity = t < HoldMs ? Math.Min(1, t / InMs) : Math.Max(0, 1 - (t - HoldMs) / OutMs);
             c.Slide.Y = -14 + 14 * BackOut(Math.Min(1, t / SlideMs), 0.4);
@@ -118,7 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static BoxShadows Glow(Color c, double blur, double opacity) =>
             new(new BoxShadow { Blur = blur, Color = Color.FromArgb((byte)(opacity * 255), c.R, c.G, c.B) });
 
-        private sealed class Card
+        internal sealed class Card
         {
             public required Border Root;
             public required TranslateTransform Slide;
@@ -128,7 +126,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF ChaosUnlockCards.BuildCardVisual, control for control.</summary>
-        private static Card Build(ChaosUnlockCardInfo d, double width)
+        internal static Card Build(ChaosUnlockCardInfo d, double width)
         {
             var accent = Color.FromRgb((byte)(d.AccentRgb >> 16), (byte)(d.AccentRgb >> 8), (byte)d.AccentRgb);
             var accentBrush = new SolidColorBrush(accent);
@@ -144,7 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("76,*") };
             var iconScale = new ScaleTransform(0.4, 0.4);
-            row.Children.Add(new Border
+            var tile = new Border
             {
                 Width = 64, Height = 64, CornerRadius = new CornerRadius(10),
                 VerticalAlignment = VerticalAlignment.Top,
@@ -156,7 +154,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Text = d.Glyph, FontSize = 30, Foreground = accentBrush,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 },
-            });
+            };
+            var art = d.IconPath != null ? ChaosArt.TryLoad(d.IconPath)
+                : d.IconFolder != null ? ChaosArt.Resolve(d.IconFolder, d.IconId!) : null;
+            if (art != null)
+            {
+                tile.Background = null;
+                tile.Child = new Image { Source = art, Stretch = Stretch.Uniform };
+            }
+            row.Children.Add(tile);
 
             var text = new StackPanel();
             text.Children.Add(new TextBlock

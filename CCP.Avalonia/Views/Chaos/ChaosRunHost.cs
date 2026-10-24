@@ -83,6 +83,43 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF IsDescending: the clock is running (countdown over, recap not up).</summary>
         internal static bool IsDescending => _spawning;
         internal static bool IsManuallyPaused => _manualPaused;
+        private static bool _lessonCardPaused;
+        private static int _runGeneration;
+        static ChaosRunHost()
+        {
+            ChaosLessons.LessonCompleted += id =>
+            {
+                int generation = _runGeneration;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (generation == _runGeneration) OnLessonCompleted(id);
+                });
+            };
+        }
+
+        internal static void OnLessonCompleted(string id)
+        {
+            if (!_active) return;
+            var card = ChaosUnlockCardRules.ForLesson(id);
+            if (card == null) return;
+            _state?.PushEvent($"📖 lesson learned — {card.Title}");
+            if (_spawning && !_manualPaused && !_lessonCardPaused)
+            {
+                _lessonCardPaused = true;
+                _spawnTimer?.Stop();
+                BubbleOverlay.HoldChaos(true);
+            }
+            ChaosUnlockCardOverlay.Show(card, ResumeAfterLessonCard, autoDismiss: !_lessonCardPaused);
+        }
+
+        private static void ResumeAfterLessonCard()
+        {
+            if (!_lessonCardPaused || ChaosUnlockCardOverlay.IsShowing) return;
+            _lessonCardPaused = false;
+            BubbleOverlay.HoldChaos(_manualPaused);
+            if (_spawning && !_manualPaused) _spawnTimer?.Start();
+        }
+
         /// <summary>Tests: stop the real 4 Hz timer so only stepped <see cref="Tick"/> calls move the clock (P08).</summary>
         internal static void StopTimerForTests() => _runTimer?.Stop();
 
@@ -149,7 +186,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF SpawnTick (:1101), the treat half. Re-times its own timer like WPF.</summary>
         internal static void SpawnTick()
         {
-            if (!_spawning || _state == null || _manualPaused) return;
+            if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01
             var cfg = _state.Config;
             double intensity = _state.RunIntensity;
@@ -196,7 +233,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnBubblePopped(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
             if (spec.IsPrism)
             {
                 FireScaledPayload(spec.Payload);
@@ -224,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnDefused(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
             double fuseSecLeft = b.DefuseJudgeFuseSec;
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
@@ -250,7 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static void OnDetonated(AmbientBubble b)
         {
             var spec = b.Spec;
-            if (_state == null || spec == null || _manualPaused) return;
+            if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
             switch (b.BrokenReason)
             {
                 case "nofocus": _state.PushEvent("✋ no focus — it triggers in your grip"); break;
@@ -307,7 +344,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>One RunTick, the clock half of WPF ChaosModeService.cs:929-1099.</summary>
         internal static void Tick()
         {
-            if (!_spawning || _state == null || _manualPaused) return;
+            if (!_spawning || _state == null || _manualPaused || _lessonCardPaused) return;
             if (_overlay is not { IsVisible: true }) return;   // P01: nothing ticks while hidden
             double elapsed = ChaosRunEngine.Advance(_state);
             UpdateHeatTint();
@@ -364,7 +401,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF ToggleManualPause (:257), the clock half: paused holds the clock.</summary>
         public static void ToggleManualPause()
         {
-            if (!_spawning) return;
+            if (!_spawning || _lessonCardPaused) return;
             _manualPaused = !_manualPaused;
             BubbleOverlay.HoldChaos(_manualPaused);   // WPF :267-268 freeze + input lock
             _state?.PushEvent(_manualPaused ? "⏸ held. the hole waits." : "▶ sinking again");
@@ -380,6 +417,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
             ChaosSkiaFxOverlay.CloseActive();   // WPF ChaosModeService.ForceShutdown; before the idle return
@@ -431,6 +469,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void EndRun()
         {
             if (!_spawning || _state == null) return;
+            ChaosUnlockCardOverlay.CloseActive();
+            _lessonCardPaused = false;
             bool ranFullCourse = _state.ElapsedSec >= _state.RunDurationSec;
             if (ranFullCourse) AwardLoopTip();   // a quit forfeits it
             // WPF :3211: final-loop + end-of-descent lessons (a quit didn't run the full course).
@@ -547,7 +587,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
-            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused);
+            var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused);
             if (r == ChaosToyRules.UseResult.Denied) ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
         }
 
@@ -576,6 +616,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF CleanupAfterRun :3322 (also reached by ForceShutdown / panic).</summary>
         private static void CleanupAfterRun()
         {
+            _runGeneration++;
+            ChaosUnlockCardOverlay.CloseActive();
+            _lessonCardPaused = false;
             StopToys();
             Overlays.ChaosFlashOverlay.CloseActive();   // WPF ForceShutdown :3175
             ChaosDvdOverlay.CloseActive();   // WPF CleanupAfterRun (:3319), ForceShutdown (:3179)

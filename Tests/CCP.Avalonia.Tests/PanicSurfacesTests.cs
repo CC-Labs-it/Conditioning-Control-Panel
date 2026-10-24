@@ -91,6 +91,7 @@ public sealed class PanicSurfacesTests
         "blink-trainer",
         "camera",
         "chaos",
+        "chaos-unlock-card",
         "chaos-announcer",
         "chaos-cursor-glow",
         "chaos-dvd",

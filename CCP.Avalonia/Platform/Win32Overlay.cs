@@ -73,6 +73,13 @@ internal static class Win32Overlay
             && SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
+    internal static bool SetPassive(TopLevel window, IntPtr hwnd)
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        Passive.AddOrUpdate(window, Passive);
+        return Apply(hwnd, Track(window).Value, true, AllowsFocus(window));
+    }
+
     /// <summary>WPF ApplyWindowStyles(stealsFocus): activation and mouse pass-through are independent.</summary>
     internal static bool AllowFocus(TopLevel window, IntPtr hwnd)
     {

@@ -117,6 +117,12 @@ internal static class X11Overlay
         }
     }
 
+    // WPF clickable NOACTIVATE overlays need passive styles without forcing HWND_TOPMOST.
+    internal static void SetPassive(TopLevel window)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd)) Win32Overlay.SetPassive(window, hwnd);
+    }
+
     /// <summary>Makes <paramref name="window"/> transparent to the mouse while it keeps drawing,
     /// or gives it back its input. The X11 equivalent of adding and clearing
     /// <c>WS_EX_TRANSPARENT</c>, and reversible at runtime the same way.

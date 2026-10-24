@@ -218,6 +218,11 @@
          (AppFonts.Mono) is the app-wide monospace. Licenses ship
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
+    <!-- Unlock-card art shares WPF's convention; omit staging/source artwork. -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\boons\*.png"
+             Link="assets\Chaos\boons\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\upgrades\*.png"
+             Link="assets\Chaos\upgrades\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
     <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
