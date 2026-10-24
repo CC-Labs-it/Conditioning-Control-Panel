@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             CmbMicDevice.SelectionChanged += CmbMicDevice_SelectionChanged;
             BtnMicRefresh.Click += BtnMicRefresh_Click;
             BtnChatShortcutDevices.Click += BtnChatShortcut_Click;
+            BtnCameraShortcutDevices.Click += BtnCameraShortcut_Click;
             BtnPanicKey.Click += BtnPanicKey_Click;
             BtnPauseKey.Click += BtnPauseKey_Click;
             BtnWebcamRevokeConsent.Click += BtnWebcamRevokeConsent_Click;
@@ -64,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             BtnWebcamDebugTrackerTest.Click += BtnWebcamDebugTrackerTest_Click;
             CmbWebcamDevice.SelectionChanged += CmbWebcamDevice_SelectionChanged;
             BtnWebcamDeviceRefresh.Click += BtnWebcamDeviceRefresh_Click;
+            CmbWebcamMonitor.SelectionChanged += CmbWebcamMonitor_SelectionChanged;
 
             SyncFromSettings();
             PopulateMicDevices();
@@ -79,6 +81,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             // hook, so the mic list is re-enumerated here too.
             SyncFromSettings();
             PopulateMicDevices();
+            PopulateWebcamMonitors();
             PopulateWebcamDevices();   // WPF OnSectionShown -> RefreshDeviceSettingsLists
             _lockdown = LockdownService.Current;
             if (_lockdown != null) { _lockdown.LockdownActivated += OnLockdownChanged; _lockdown.LockdownDeactivated += OnLockdownChanged; }
@@ -101,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         }
 
         // A cloud restore or a factory reset swaps the instance; repaint from it, on the UI thread.
-        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() => { SyncFromSettings(); PopulateWebcamDevices(); });
+        private void OnCurrentReplaced() => Dispatcher.UIThread.Post(() => { SyncFromSettings(); PopulateWebcamDevices(); PopulateWebcamMonitors(); });
 
         // =====================================================================================
         //  seed
@@ -109,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         internal void SyncFromSettings()
         {
+            TxtCameraShortcutLabelDevices.Text = MainShellWindow.FormatCameraShortcut();
             _loading = true;
             try
             {
@@ -249,9 +253,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         ///
         /// Quick Recal and Tracker Test are live over the tracker's gaze feed.
         /// The camera picker is live over <see cref="Platform.V4l2Cameras"/>.
-        /// <para>ponytail: the monitor combo and the debug cursor stay DISABLED with a
-        /// stated reason: calibration follows its own window's screen and the cursor overlay is not ported. The status pill stays
-        /// at its <c>rf_webcam_stopped</c> literal for the same reason (no OnTrackingStateChanged).</para>
+        /// <para>ponytail: the debug cursor stays disabled because its overlay is not ported.</para>
         /// </summary>
         private void RefreshWebcamAvailability()
         {
@@ -264,7 +266,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             BtnWebcamDebugCalibrate.IsEnabled = has;
             CmbWebcamDevice.IsEnabled = has;
             BtnWebcamDeviceRefresh.IsEnabled = has;
-            foreach (var c in new Control[] { CmbWebcamMonitor, ChkWebcamDebugCursor })
+            CmbWebcamMonitor.IsEnabled = has;
+            foreach (var c in new Control[] { ChkWebcamDebugCursor })
             {
                 c.IsEnabled = false;   // IsEnabled only - never IsChecked, which would fire the handler
                 ToolTip.SetShowOnDisabled(c, true);
@@ -273,6 +276,39 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (!has)
                 AppendWebcamDebugLog("No webcam tracking engine on this build — camera controls are unavailable.");
             RefreshWebcamStartLabel();
+        }
+
+        private bool _webcamMonitorPopulating;
+        internal void PopulateWebcamMonitors()
+        {
+            _webcamMonitorPopulating = true;
+            try
+            {
+                CmbWebcamMonitor.Items.Clear();
+                CmbWebcamMonitor.Items.Add(new ComboBoxItem { Content = Loc.Get("webcam_monitor_primary"), Tag = "Primary" });
+                int n = 1;
+                foreach (var screen in Features.ScreenList.Enumerate(this))
+                    CmbWebcamMonitor.Items.Add(new ComboBoxItem
+                    {
+                        Content = Loc.GetF("webcam_monitor_item_fmt", n++, screen.DisplayName ?? "", screen.Bounds.Width, screen.Bounds.Height),
+                        Tag = screen.DisplayName
+                    });
+                CmbWebcamMonitor.SelectedIndex = 0;
+                foreach (var entry in CmbWebcamMonitor.Items)
+                    if (entry is ComboBoxItem item)
+                    if (string.Equals(item.Tag as string, CoreSettings.Current.WebcamCalibrationScreen, StringComparison.OrdinalIgnoreCase))
+                    { CmbWebcamMonitor.SelectedItem = item; break; }
+            }
+            finally { _webcamMonitorPopulating = false; }
+        }
+
+        private void CmbWebcamMonitor_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+        {
+            if (_webcamMonitorPopulating || CmbWebcamMonitor.SelectedItem is not ComboBoxItem { Tag: string name } item) return;
+            if (string.Equals(name, CoreSettings.Current.WebcamCalibrationScreen, StringComparison.OrdinalIgnoreCase)) return;
+            CoreSettings.Current.WebcamCalibrationScreen = name;
+            CoreSettings.Save();
+            AppendWebcamDebugLog($"Calibration monitor set to {item.Content}.");
         }
 
         private bool _webcamDevicePopulating;   // Items.Clear()/SelectedItem raise SelectionChanged
@@ -808,13 +844,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             }
         }
 
-        // ponytail: BtnCameraShortcutDevices stays inert, and NOT for the reason the old note gave.
-        // SerializeModifiers shipped with the tube, so the capture half would work - but the combo
-        // it stores drives MainWindow.ToggleWebcamFromHotkey (MainWindow.SessionIO.cs:1485), which
-        // toggles WebcamTrackingService. This head now has a tracker (Platform/WebcamTracker, and
-        // CoreWebcam.IsAvailable is seeded true), but no global hotkey listener calls it, so a rebind
-        // here would let the user configure a key that cannot fire - and the row's own label would then
-        // report a binding that does nothing. The label is left at its XAML literal for the same reason.
-        // Unblocks with a global-hotkey route to WebcamTracker (ToggleWebcamFromHotkey).
+        private async void BtnCameraShortcut_Click(object? sender, RoutedEventArgs e)
+        {
+            if (TopLevel.GetTopLevel(this) is not MainShellWindow owner) return;
+            await owner.RebindCameraShortcut();
+        }
     }
 }

@@ -693,11 +693,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// else consent dialog when stale, then start off the UI thread. A failed start says why
         /// (OpenCV missing, no camera) instead of silently staying off.</summary>
         internal async void BtnBlinkTrainerStartStopTracker_Click(object? sender, RoutedEventArgs e)
+            => await ToggleWebcamTrackingAsync();
+
+        internal async System.Threading.Tasks.Task ToggleWebcamTrackingAsync(bool announce = false)
         {
             try
             {
                 var tracker = Platform.WebcamTracker.Instance;
-                if (tracker.IsRunning) { await tracker.StopAsync(); RefreshTrackerButton(); return; }
+                if (tracker.IsRunning)
+                {
+                    await tracker.StopAsync(); RefreshTrackerButton();
+                    if (announce) App.Notifications.Show(Loc.Get("camera_shortcut_toast_stopped"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(2));
+                    return;
+                }
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current))
                 {
@@ -710,6 +718,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 bool started = await tracker.StartAsync();
                 BtnBlinkTrainerStartStopTracker.IsEnabled = true;
                 RefreshTrackerButton();
+                if (announce && started) App.Notifications.Show(Loc.Get("camera_shortcut_toast_started"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(2));
                 if (!started && tracker.LastError != null)
                     await Dialogs.MessageDialog.ShowAsync(owner, "Webcam tracking", tracker.LastError);
             }

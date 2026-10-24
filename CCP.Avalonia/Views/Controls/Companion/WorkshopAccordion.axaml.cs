@@ -38,13 +38,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
+            parts.Behavior.CameraShortcutRequested += async (_, _) =>
+            {
+                if (TopLevel.GetTopLevel(this) is Windows.MainShellWindow owner) await owner.RebindCameraShortcut();
+            };
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
-            //  · Behavior.CameraShortcutRequested — the combo drives MainWindow.SessionIO.cs:1485
-            //    ToggleWebcamFromHotkey / WebcamTrackingService, and no webcam engine exists on this
-            //    head, so a rebind would configure a key for a feature that cannot fire. Same
-            //    refusal as DevicesSettingsSection.axaml.cs's BtnCameraShortcutDevices.
             //  · Behavior.PauseBrowserChanged — WPF mutes and suspends the live WebView2
             //    (MainWindow.Patreon.cs); this drawer holds no WebHost to suspend, and a switch
             //    that flips with nothing behind it would report a paused browser that is playing.

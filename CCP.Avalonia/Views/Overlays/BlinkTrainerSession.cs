@@ -408,8 +408,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sink = null;
         }
 
-        /// <summary>WPF GazeContentScreenPolicy minus the explicit pick: DualMonitorEnabled ? every
-        /// screen : the primary. Each window must accept click-through and transparency or none show.</summary>
+        /// <summary>WPF GazeContentScreenPolicy: explicit display wins, Primary follows global placement.
+        /// Each window must accept click-through and transparency or none show.</summary>
+        internal static System.Collections.Generic.IEnumerable<int> ResolveTrackingScreens(
+            System.Collections.Generic.IReadOnlyList<string?> names, string? picked, bool dual, int primary)
+        {
+            if (names.Count == 0) return Array.Empty<int>();
+            if (!string.IsNullOrEmpty(picked) && !string.Equals(picked, "Primary", StringComparison.OrdinalIgnoreCase))
+            {
+                for (int i = 0; i < names.Count; i++)
+                    if (string.Equals(names[i], picked, StringComparison.OrdinalIgnoreCase)) return new[] { i };
+                // WPF App.GetWebcamCalibrationScreen falls back to Primary when a named display disappears.
+                return new[] { primary >= 0 ? primary : 0 };
+            }
+            return PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, MonitorTarget.FollowGlobal, dual, names.Count, primary);
+        }
         private static List<OverlayWindow> DefaultCreateOverlays(Visual host)
         {
             var made = new List<OverlayWindow>();
@@ -417,7 +430,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
-            foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, MonitorTarget.FollowGlobal, CoreSettings.Current.DualMonitorEnabled, screens.Count, primary))
+            foreach (var i in ResolveTrackingScreens(screens.Select(s => s.DisplayName).ToArray(), CoreSettings.Current.WebcamCalibrationScreen, CoreSettings.Current.DualMonitorEnabled, primary))
             {
                 var w = new OverlayWindow();
                 w.PlaceOn(screens[i]);
