@@ -634,7 +634,10 @@
                                         <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
                                                   IsThreeState="False" Click="FolderCheckBox_Click"
                                                   VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                        <fx:IconGlyph Kind="Folder" Size="12" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <fx:IconGlyph Kind="Folder" Size="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                      IsVisible="{Binding !IsPackRoot}"/>
+                                        <fx:IconGlyph Kind="Box" Size="12" Margin="0,0,4,0" VerticalAlignment="Center"
+                                                      IsVisible="{Binding IsPackRoot}"/>
                                         <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
                                         <TextBlock Text="{Binding FileCountDisplay}"
                                                    Foreground="{DynamicResource TextMutedBrush}"

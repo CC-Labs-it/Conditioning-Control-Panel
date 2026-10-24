@@ -47,6 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
+            RefreshWebcamStatus();
             CoreMods.ModChanged += OnModChanged;
             CoreSettings.Current.PropertyChanged += OnWebcamSettingsChanged;
             Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamColumn;
@@ -58,11 +60,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             CoreMods.ModChanged -= OnModChanged;
             CoreSettings.Current.PropertyChanged -= OnWebcamSettingsChanged;
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamColumn;
             base.OnDetachedFromVisualTree(e);
         }
+
+        internal void RefreshWebcamStatus() => Helpers.WebcamStatusPresentation.Paint(this,
+            "WebcamStatusChipDeeperDot", "TxtWebcamStatusChipDeeper", Platform.WebcamTracker.Instance.State);
 
         /// <summary>ModChanged can be raised off the UI thread, so the repaint is marshalled.</summary>
         private void OnModChanged(object? sender, ModPackage mod) =>

@@ -101,14 +101,18 @@ public sealed class BackRoomApi : IBackRoomRelay
     /// <param name="adoptSp">Receives settlement balances; decoration state and layout replies are excluded.</param>
     /// <param name="applyPrizes">Receives (account sent for, revision, grants) from a counter reply.
     /// Null = <see cref="DefaultApplyPrizes"/>.</param>
+    /// <param name="baseUrl">Null = <see cref="BaseUrl"/>. The Avalonia head passes its sandbox-checked proxy.</param>
     public BackRoomApi(HttpClient? http, Func<(string UnifiedId, string Token)?> identity, Action<int>? adoptSp,
-        Action<string, long, string[]>? applyPrizes = null)
+        Action<string, long, string[]>? applyPrizes = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;
         _identity = identity;
         _adoptSp = adoptSp;
         _applyPrizes = applyPrizes ?? ((account, revision, grants) => DefaultApplyPrizes?.Invoke(account, revision, grants));
+        _baseUrl = baseUrl ?? BaseUrl;
     }
+
+    private readonly string _baseUrl;
 
     /// <summary>The account's token door off AppSettings, or null when there is none to use.</summary>
     public static (string UnifiedId, string Token)? AppIdentity()
@@ -116,7 +120,7 @@ public sealed class BackRoomApi : IBackRoomRelay
         try
         {
             var s = CoreSettings.Current;
-            if (s.OfflineMode) return null;
+            if (s == null || s.OfflineMode) return null;
             if (string.IsNullOrWhiteSpace(s.UnifiedId) || string.IsNullOrWhiteSpace(s.AuthToken)) return null;
             return (s.UnifiedId, s.AuthToken);
         }
@@ -177,13 +181,13 @@ public sealed class BackRoomApi : IBackRoomRelay
         return BackRoomStationResult.Refuse("offline");
     }
 
-    private static HttpRequestMessage BuildRequest(string method, string path, (string UnifiedId, string Token) id,
+    private HttpRequestMessage BuildRequest(string method, string path, (string UnifiedId, string Token) id,
         string? idem, JObject? body)
     {
         HttpRequestMessage req;
         if (method == "GET")
         {
-            req = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
+            req = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
         }
         else
         {
@@ -192,7 +196,7 @@ public sealed class BackRoomApi : IBackRoomRelay
             var o = body != null ? (JObject)body.DeepClone() : new JObject();
             if (!string.IsNullOrEmpty(idem)) o["idem"] = idem;
             o["unified_id"] = id.UnifiedId;
-            req = new HttpRequestMessage(HttpMethod.Post, BaseUrl + path)
+            req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + path)
             {
                 Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
             };
