@@ -181,6 +181,85 @@ function layerRotationRad(layer, phase) {
   return layer.direction * phase * symmetrySpanRad(layer) * layer.speedMul;
 }
 
+// ---- band maths for other renderers (ADDITIVE exports, 2026-10-22) -------
+// glassroad's 3D spiral gates (glassroad/render/spiralMath.js) stand the Loom up
+// as particles and import these instead of mirroring the shader. They are new
+// names only: nothing above or below changes, the shader stays the source.
+
+/** The golden style's log(1 + 6) (shader constant). */
+export const LOOM_GOLDEN_K = 1.9459101;
+
+/** Smallest rotation that maps a layer onto itself (symmetrySpanRad). */
+export function loomSpanRad(layer) { return symmetrySpanRad(layer); }
+
+/** A layer's rotation at loop phase 0..1 (layerRotationRad, the u_rot uniform). */
+export function loomLayerRotationRad(layer, phase) { return layerRotationRad(layer, phase); }
+
+/** Hue rotation at loop phase 0..1 (render()'s hueRad). */
+export function loomHueRad(q, phase) { return q.hueCycles > 0 ? TWO_PI * q.hueCycles * phase : 0; }
+
+/** Pulse zoom at loop phase 0..1 (the fragment shader's zoom). */
+export function loomPulseZoom(q, phase) { return 1 + q.pulse.amp * Math.sin(TWO_PI * phase * q.pulse.cycles); }
+
+/** Wobble at field radius r and loop phase 0..1 (the fragment shader's wob). */
+export function loomWobble(q, r, phase) {
+  return q.wobble.amp > 0.001 ? q.wobble.amp * Math.sin(TWO_PI * (q.wobble.freq * clamp(r, 0, 1) + phase * q.wobble.cycles)) : 0;
+}
+
+/** rotateHue's luma-preserving matrix as three rows (rgb' = rows . rgb, before the clamp). */
+export function loomHueRows(rad) {
+  const c = Math.cos(rad), s = Math.sin(rad);
+  return [
+    [0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928],
+    [0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283],
+    [0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072],
+  ];
+}
+
+/** Field radius 0..1 -> band parameter t for a style (the shader's style mapping; tunnel and petal take golden's, as in the shader). */
+export function loomStyleT(r, style) {
+  const rc = clamp(r, 0, 1), s = LOOM_STYLES.indexOf(style);
+  if (s <= 0) return Math.pow(rc, 0.5714286);
+  if (s === 1) return rc;
+  if (s === 2) return 0.5 - Math.sin(Math.asin(1 - 2 * rc) / 3);
+  return Math.log(1 + rc * 6) / LOOM_GOLDEN_K;
+}
+
+/** Inverse of loomStyleT. */
+export function loomStyleR(t, style) {
+  const x = clamp(t, 0, 1), s = LOOM_STYLES.indexOf(style);
+  if (s <= 0) return Math.pow(x, 1.75);
+  if (s === 1) return x;
+  if (s === 2) return (1 - Math.sin(3 * Math.asin(0.5 - x))) / 2;
+  return (Math.exp(x * LOOM_GOLDEN_K) - 1) / 6;
+}
+
+/** The tunnel style's helix shear, snapped to whole colour cycles (the shader's `helix`). */
+export function loomHelix(layer) {
+  const count = Math.max(1, Math.min(layer.colors.length, 6));
+  return Math.floor((layer.turns - 0.5) / count + 0.5) * count;
+}
+
+/**
+ * The shader's band rule at field point (r, th) for a layer turned by rot with wobble wob, without the
+ * anti alias and glow: { cov: 0|1, idx } where idx is the thread (hard bands). Petal keeps its centre
+ * hole only (the shader's outer fade is a soft edge, not a band).
+ */
+export function loomBandAt(layer, r, th, rot = 0, wob = 0) {
+  const s = LOOM_STYLES.indexOf(layer.style), rc = clamp(r, 0, 1), t = loomStyleT(rc, layer.style);
+  const A = layer.arms, C = Math.max(1, Math.min(layer.colors.length, 6)), fr = (x) => x - Math.floor(x);
+  if (s <= 3) {
+    const pos = fr((th - rot - TWO_PI * layer.turns * t + wob) / TWO_PI) * A, k = Math.floor(pos);
+    return { cov: pos - k < layer.duty ? 1 : 0, idx: k % C };
+  }
+  if (s === 4) {
+    const pos = t * A - rot * A / TWO_PI + loomHelix(layer) * th / TWO_PI + wob * 0.5;
+    return { cov: fr(pos) < layer.duty ? 1 : 0, idx: ((Math.floor(pos) % C) + C) % C };
+  }
+  const a = th - rot - TWO_PI * layer.turns * t * 0.35 + wob, m = 0.5 + 0.5 * Math.cos(a * A);
+  return { cov: m >= 1 - layer.duty && rc > 0.03 ? 1 : 0, idx: Math.floor(fr(a / TWO_PI) * A + 0.5) % C };
+}
+
 // ---- color helpers -------------------------------------------------------
 
 function hexToRgb01(h) {
