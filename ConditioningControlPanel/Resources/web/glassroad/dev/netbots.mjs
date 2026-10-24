@@ -21,6 +21,16 @@ import { createRace } from '../sim/race.js';
 import { createRacers } from '../sim/racers.js';
 import { createAi } from '../sim/ai.js';
 import { createAssist } from '../sim/assist.js';
+import { S } from '../sim/state.js';
+import { createMainframeScan, scanClock } from '../sim/mainframeScan.js';
+import { createMainframeIndustry } from '../sim/mainframeIndustry.js';
+import { createBoudoirPerfume } from '../sim/boudoirPerfume.js';
+import { createKeepHazards } from '../sim/keepHazards.js';
+import { createBoudoirHazards } from '../sim/boudoirHazards.js';
+import { createGoonworksHazards } from '../sim/goonworksHazards.js';
+import { getKeepLayout } from '../track/keep-layout.js';
+import { getBoudoirLayout } from '../track/boudoir-layout.js';
+import { getGoonworksLayout } from '../track/goonworks-layout.js';
 import { createContact } from '../sim/contact.js';
 import { createStandings } from '../sim/standings.js';
 import { createRoomSession } from '../net/room.js';
@@ -43,7 +53,7 @@ export async function runNetBot({ lobbyBase, uid, auth = 'Bearer jwt-', mode = '
   const look = { outfit: LOOK_OUTFITS[n % LOOK_OUTFITS.length], vehicle: LOOK_VEHICLES[n % LOOK_VEHICLES.length] };
 
   let j;
-  if (mode === 'open') j = await lobby.open({ track: trackId, mode: 'open', seats: 4, laps: 3, botFill: true, laneKeeper: false, look, ...(open || {}) });
+  if (mode === 'open') j = await lobby.open({ track: trackId, mode: 'open', seats: 4, laps: track.laps, botFill: true, laneKeeper: false, look, ...(open || {}) });
   else if (mode === 'join') j = await lobby.join({ roomId, look });
   else j = await lobby.quickMatch({ track: trackId, look });
   say('seated', { roomId: j.roomId, seat: j.seat });
@@ -73,12 +83,22 @@ export async function runNetBot({ lobbyBase, uid, auth = 'Bearer jwt-', mode = '
     if (s.cfg && s.cfg.laps > 0) track.laps = s.cfg.laps;   // the sim reads track.laps; the room judges cfg.laps
     const racers = createRacers(track, feel, q, { net: s.layout(), seed: s.seed });
     const ai = createAi(track, feel, { seed: s.seed + s.seat });
+    const keep = getKeepLayout(track), boudoir = getBoudoirLayout(track), goonworks = getGoonworksLayout(track);
+    const hazards = goonworks ? createGoonworksHazards(track, goonworks) : keep ? createKeepHazards(track, keep) : boudoir ? createBoudoirHazards(track, boudoir) : null;
+    const scan = createMainframeScan(track, q), industry = createMainframeIndustry(track, q), perfume = createBoudoirPerfume(track, q);
+    const drive = ai.drive;
+    ai.drive = (r, ctx, dt, out) => {
+      drive(r, ctx, dt, out);
+      if (ctx.race.phase !== 'racing' && ctx.race.phase !== 'finished') return;
+      if (!track.forkAtSeg?.(r.st[S.seg])) hazards?.steer(r, out);
+      if (track.id === 'mainframe') industry.steer(r, out);
+    };
     const assist = createAssist(track, feel);
     const contact = createContact(track, feel, q);
     const standings = createStandings(track, feel, q);
     const items = s.mount(racers, race, q);
     const a = Object.assign(createActions(), { item: false, back: false }), idle = Object.assign(createActions(), { item: false, back: false });
-    sim = { race, racers, ai, assist, contact, standings, items, a, idle, acc: 0, last: Date.now(), started: false, paused: false };
+    sim = { race, racers, ai, assist, contact, standings, items, hazards, scan, industry, perfume, a, idle, acc: 0, last: Date.now(), started: false, paused: false };
   }
 
   function frame() {
@@ -95,7 +115,11 @@ export async function runNetBot({ lobbyBase, uid, auth = 'Bearer jwt-', mode = '
         m.ai.drive(P, { racers: m.racers.list, items: m.items, standings: m.standings, race: m.race }, DT, m.a);
         const hands = m.paused ? m.assist.apply(m.idle, P.st, DT, m.race.phase) : m.a;   // pause: the assist coasts
         m.race.update(DT, hands, P.st);
-        m.racers.step(DT, hands, m.race, { ai: m.ai, items: m.items, standings: m.standings });
+        m.racers.step(DT, hands, m.race, { ai: m.ai, items: m.items, standings: m.standings, hazards: m.hazards, timeS: s.raceTimeS() });
+        const sc = scanClock(null, m.racers.clockS);
+        m.scan.update(m.racers.list, sc.timeS, sc.bpm);
+        m.industry.update(m.racers.list, m.racers.clockS, DT);
+        m.perfume.update(m.racers.list, sc.timeS, DT);
         m.contact.update(DT, m.racers.list, m.race);
         m.standings.update(m.racers.list, m.race, DT);
         m.items.update(DT, m.racers.list, m.standings, m.race);

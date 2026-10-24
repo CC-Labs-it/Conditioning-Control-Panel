@@ -1,10 +1,10 @@
-/** Courses shipped in this build. Online admission remains on the server's Threshold card. */
+/** Courses shipped in this build. All shipped courses have matching online room cards. */
 export const COURSES = Object.freeze([
   Object.freeze({ id: 'threshold', name: 'Threshold', online: true }),
-  Object.freeze({ id: 'mainframe', name: 'Mainframe', online: false }),
-  Object.freeze({ id: 'keep', name: 'The Keep', online: false }),
-  Object.freeze({ id: 'boudoir', name: 'Boudoir', online: false }),
-  Object.freeze({ id: 'goonworks', name: 'GOONWORKS', online: false }),
+  Object.freeze({ id: 'mainframe', name: 'Mainframe', online: true }),
+  Object.freeze({ id: 'keep', name: 'The Keep', online: true }),
+  Object.freeze({ id: 'boudoir', name: 'Boudoir', online: true }),
+  Object.freeze({ id: 'goonworks', name: 'GOONWORKS', online: true }),
 ]);
 export function selectedCourse(search = '') {
   const id = new URLSearchParams(search).get('track');

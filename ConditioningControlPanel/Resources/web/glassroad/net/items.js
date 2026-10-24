@@ -8,6 +8,7 @@
  * media consent and Gentle, never the thrower's) and emits item-hit for all; `fizzle` pops it. Speed bubbles stay
  * local per client. Remote karts carry their effect and shields in their records (net/remote.js). Three-free.
  */
+import { racerFork, pathFrame, pathScale } from './trackPath.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { wrap, damp, lerp, clamp } from '../core/math.js';
 import { grantBoost } from '../sim/grant.js';
@@ -30,8 +31,8 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     return false;
   }
   const fr = track.frameAt(0);
-  function point(s, x, h, out = [0, 0, 0]) {
-    const f = track.frameAt(s, fr);
+  function point(s, x, h, out = [0, 0, 0], fork = 0) {
+    const f = pathFrame(track, fork, s, fr);
     for (let k = 0; k < 3; k++) out[k] = f.p[k] + f.b[k] * x + f.n[k] * h;
     return out;
   }
@@ -47,7 +48,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   const local = (r) => r && r.kind !== 'remote';
   const free = (r) => !r.finished && (r.st[S.respawnPhase] === RESPAWN.NONE || r.st[S.respawnPhase] === RESPAWN.GRACE);
   const low = (r) => r.st[S.grounded] || r.st[S.height] <= g('pickHeightM');
-  const near = (r, s, x, rad) => Math.abs(sd(r.st[S.s], s)) <= rad && Math.abs(r.st[S.lateral] - x) <= rad;
+  const near = (r, s, x, rad) => !racerFork(track,r.st) && Math.abs(sd(r.st[S.s], s)) <= rad && Math.abs(r.st[S.lateral] - x) <= rad;
   const pop = (kind, at, s, x, h = 0) => pops.push({ kind, at, s, x, h, t: 0 });
   const kartP = (r) => [r.st[S.posX], r.st[S.posY], r.st[S.posZ]];
   const seatArg = (r, m) => (r.i === 0 ? m : Object.assign(m, { seat: r.meta.seat }));
@@ -67,15 +68,16 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     ver++;
     const r = bySeat(m.seat), tg = m.target === null ? null : bySeat(m.target), by = r ? r.i : -1, target = tg ? tg.i : -1;
     if (r && !local(r)) events.emit('item-fire', { racer: by, id: m.item, mode: m.mode, target, p: kartP(r) });
-    if (m.mode === 'drop') traps.push({ sid: m.sid, id: m.sid, kind: m.item, s: wrap(m.s - g('dropBehindM'), L), x: m.x, t: 0, layer: by });
+    const fork = m.fork || 0;
+    if (m.mode === 'drop') traps.push({ fork, sid: m.sid, id: m.sid, kind: m.item, s: wrap(m.s - g('dropBehindM') * pathScale(track,fork,m.s), L), x: m.x, t: 0, layer: by });
     else if (m.mode === 'throw') {
       const v = (r ? Math.max(0, r.st[S.speedPct]) : 1) * feel.get('speed.topMps') + g('throwExtraMps');
-      flying.push({ sid: m.sid, kind: m.item, mode: 'throw', by, target, t: 0, s: wrap(m.s + THROW_LEAD_M, L), x: m.x, h: g('throwHeightM'), v, homing: target >= 0 });
+      flying.push({ fork, sid: m.sid, kind: m.item, mode: 'throw', by, target, t: 0, s: wrap(m.s + THROW_LEAD_M * pathScale(track,fork,m.s), L), x: m.x, h: g('throwHeightM'), v, homing: target >= 0 });
     } else if (m.mode === 'lob') {
-      const pr = { sid: m.sid, kind: m.item, mode: 'lob', by, target, t: 0, fromS: m.s, fromX: m.x, s: m.s, x: m.x, h: g('throwHeightM'),
+      const pr = { fork, targetFork: m.targetFork || 0, worldFrom: point(m.s,m.x,g('throwHeightM'),undefined,fork), sid: m.sid, kind: m.item, mode: 'lob', by, target, t: 0, fromS: m.s, fromX: m.x, s: m.s, x: m.x, h: g('throwHeightM'),
         aimD: tg ? sd(tg.st[S.s], m.s) : 0, aimX: tg ? tg.st[S.lateral] : m.x, homing: target >= 0 };
       updateLanding(pr); flying.push(pr);
-    } else if (m.mode === 'wide') waves.push({ id: m.sid, kind: m.item, from: by, s: m.s, x: m.x, t: 0 });
+    } else if (m.mode === 'wide') waves.push({ fork, id: m.sid, kind: m.item, from: by, s: m.s, x: m.x, t: 0 });
   }
 
   /** The room's verdict: the victim (if local) applies it, everyone sees it. */
@@ -192,14 +194,15 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   // ---- shown flights (the room rules the outcome; these only draw it) ---------------------------
   function flights(dt) {
     flying = flying.filter((pr) => {
-      const oldP = point(pr.s, pr.x, pr.h);
+      const oldP = projectilePoint(pr);
       pr.t += dt;
       const tg = pr.target >= 0 ? list[pr.target] : null;
       if (pr.mode === 'lob') {
         const k = Math.min(1, pr.t / g('lobFlightS'));
         pr.homing = !!(tg && free(tg) && k < g('lobCommitFrac'));
         if (pr.homing) {
-          const f = track.frameAt(tg.st[S.s]), remaining = Math.max(0, g('lobFlightS') - pr.t);
+          pr.targetFork = racerFork(track,tg.st);
+          const f = pathFrame(track,pr.targetFork,tg.st[S.s]), remaining = Math.max(0, g('lobFlightS') - pr.t);
           const speed = tg.st[S.velX] * f.t[0] + tg.st[S.velY] * f.t[1] + tg.st[S.velZ] * f.t[2];
           const wanted = pr.aimD + sd(tg.st[S.s], wrap(pr.fromS + pr.aimD, L)) + speed * remaining;
           pr.aimD += clamp(wanted - pr.aimD, -g('lobRetargetMps') * dt, g('lobRetargetMps') * dt);
@@ -213,8 +216,8 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
         return pr.t < g('lobFlightS') + ORPHAN_S;
       }
       const gap = tg ? sd(tg.st[S.s], pr.s) : -1;
-      pr.homing = !!(tg && free(tg) && gap > 0 && gap <= g('throwRangeM'));
-      pr.s = wrap(pr.s + pr.v * dt, L);
+      pr.homing = !!(tg && free(tg) && racerFork(track,tg.st) === (pathFrameFork(pr)) && gap > 0 && gap <= g('throwRangeM'));
+      pr.s = wrap(pr.s + pr.v * dt * pathScale(track,pr.fork,pr.s), L);
       if (pr.homing) pr.x += clamp(damp(pr.x, tg.st[S.lateral], g('homeTcS'), dt) - pr.x, -g('homeLateralMps') * dt, g('homeLateralMps') * dt);
       pr.h = g('throwHeightM') + g('throwArcM') * Math.sin(Math.PI * Math.min(1, pr.t / ARC_S));
       velocity(pr, oldP, dt);
@@ -223,17 +226,27 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     traps = traps.filter((tp) => (tp.t += dt) < g('trapLifeS') + ORPHAN_S);
   }
 
+  function pathFrameFork(pr) { const f=track.forks?.[(pr.fork||0)-1]; return f && pr.s>=f.fromS && pr.s<=f.toS ? pr.fork : 0; }
+  function projectilePoint(pr, out=[0,0,0]) {
+    if(pr.mode==='lob' && (pr.fork||pr.targetFork) && pr.landingP) {
+      const k=Math.min(1,pr.t/g('lobFlightS'));
+      for(let j=0;j<3;j++)out[j]=lerp(pr.worldFrom[j],pr.landingP[j],k);
+      out[1]+=g('lobHeightM')*4*k*(1-k)+g('throwHeightM')*k;
+      return out;
+    }
+    return point(pr.s,pr.x,pr.h,out,pr.fork);
+  }
   function updateLanding(pr) {
     if (!pr.homing && pr.landingP) return;
     const s = wrap(pr.fromS + pr.aimD, L);
     pr.landingP ||= [0, 0, 0]; pr.landingN ||= [0, 1, 0];
-    point(s, pr.aimX, 0, pr.landingP);
-    const n = (track.surfaceAt ? track.surfaceAt(s, pr.aimX) : track.frameAt(s)).n;
+    point(s, pr.aimX, 0, pr.landingP, pr.targetFork);
+    const n = (pr.targetFork ? pathFrame(track,pr.targetFork,s) : track.surfaceAt ? track.surfaceAt(s, pr.aimX) : track.frameAt(s)).n;
     for (let j = 0; j < 3; j++) pr.landingN[j] = n[j];
   }
 
   function velocity(pr, oldP, dt) {
-    const p = point(pr.s, pr.x, pr.h);
+    const p = projectilePoint(pr);
     pr.velocity ||= [0, 0, 0];
     for (let k = 0; k < 3; k++) pr.velocity[k] = dt > 0 ? (p[k] - oldP[k]) / dt : 0;
   }
@@ -269,7 +282,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     for (const r of list) if (r.item && (r.item.id || r.item.rolling)) V.held.push({ racer: r.i, id: r.item.id, rolling: r.item.rolling, rollT: r.item.rollT });
     for (const pr of flying) {
       const i = V.projectiles.length, o = projectileRows[i] || (projectileRows[i] = { p: [0, 0, 0], v: [0, 0, 0] });
-      o.id = pr.sid; o.kind = pr.kind; o.mode = pr.mode; point(pr.s, pr.x, pr.h, o.p); o.t = pr.t; o.target = pr.target; o.s = pr.s; o.x = pr.x;
+      o.id = pr.sid; o.kind = pr.kind; o.mode = pr.mode; projectilePoint(pr, o.p); o.t = pr.t; o.target = pr.target; o.s = pr.s; o.x = pr.x;
       o.by = pr.by; o.homing = pr.homing; o.radiusM = g(pr.mode === 'lob' ? 'lobRadiusM' : 'projectileRadiusM');
       o.progress = Math.min(1, pr.t / (pr.mode === 'lob' ? g('lobFlightS') : ARC_S));
       for (let j = 0; j < 3; j++) o.v[j] = pr.velocity ? pr.velocity[j] : 0;
@@ -281,11 +294,11 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     }
     const armS = g('trapArmS');
     for (const tp of traps) {
-      const f = track.frameAt(tp.s, fr), p = [0, 0, 0];
+      const f = pathFrame(track,tp.fork,tp.s,fr), p = [0, 0, 0];
       for (let k = 0; k < 3; k++) p[k] = f.p[k] + f.b[k] * tp.x;
       V.traps.push({ id: tp.sid, kind: tp.kind, p, n: f.n.slice(), t: tp.t, armed: tp.t >= armS, s: tp.s, x: tp.x, radiusM: g(tp.kind === 'melt' ? 'meltRadiusM' : 'trapRadiusM') });
     }
-    for (const w of waves) V.waves.push({ id: w.id, kind: w.kind, from: w.from, p: point(w.s, w.x, 0), t: w.t, rangeM: g('pinkRangeM') });
+    for (const w of waves) V.waves.push({ id: w.id, kind: w.kind, from: w.from, p: point(w.s, w.x, 0, undefined, w.fork), t: w.t, rangeM: g('pinkRangeM') });
     for (const r of list) {
       const x = local(r) ? R[r.i] : null, sh = r.fxv && r.fxv.shield, ec = r.fxv ? r.fxv.echo : 0;
       if (x) {

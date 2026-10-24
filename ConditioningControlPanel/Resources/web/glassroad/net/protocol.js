@@ -87,7 +87,7 @@ export function packKart(dv, o, k) {
     | (k.grounded ? 64 : 0) | (k.airborne ? 128 : 0));
   dv.setUint8(o + 7, clampI(k.lap, 0, 255));
   dv.setUint8(o + 8, clampI(k.checkpoint, 0, 255));
-  dv.setUint8(o + 9, clampI(k.respawn, 0, 7) | (k.stalled ? 8 : 0) | (k.assist ? 16 : 0));
+  dv.setUint8(o + 9, clampI(k.respawn, 0, 7) | (k.stalled ? 8 : 0) | (k.assist ? 16 : 0) | (clampI(k.fork, 0, 7) << 5));
   dv.setUint32(o + 10, clampI(k.s * 100, 0, U32), true);
   dv.setInt16(o + 14, clampI(k.x * 100, -32768, 32767), true);
   dv.setInt16(o + 16, clampI(k.h * 100, -32768, 32767), true);
@@ -118,6 +118,7 @@ export function unpackKart(dv, o, out = createKart()) {
   out.checkpoint = dv.getUint8(o + 8);
   const st = dv.getUint8(o + 9);
   out.respawn = st & 7; out.stalled = !!(st & 8); out.assist = !!(st & 16);
+  if (st >> 5) out.fork = st >> 5; else delete out.fork;
   out.s = dv.getUint32(o + 10, true) / 100;
   out.x = dv.getInt16(o + 14, true) / 100;
   out.h = dv.getInt16(o + 16, true) / 100;
@@ -263,7 +264,7 @@ export const R2C = Object.freeze({
   start: { countAt: 'num', startAt: 'num', goTick: 'u32', seed: 'u32' },
   keep: { seats: 'seats' },
   roll: { seat: 'seat', box: 'u16', item: 'item' },
-  fired: { sid: 'u32', seat: 'seat', id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', target: 'seatOrNull' },
+  fired: { sid: 'u32', seat: 'seat', id: 'u16', item: 'item', mode: 'mode', tick: 'u32', s: 'num', x: 'num', target: 'seatOrNull', fork: 'u8?', targetFork: 'u8?' },
   hit: { sid: 'u32', victim: 'seat', by: 'seat', item: 'item', verdict: 'verdict', durationS: 'num', tick: 'u32' },
   fizzle: { sid: 'u32', tick: 'u32' },
   standings: { tick: 'u32', rows: 'standRows' },

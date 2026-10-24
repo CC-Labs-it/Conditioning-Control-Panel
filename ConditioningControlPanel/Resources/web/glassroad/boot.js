@@ -543,6 +543,12 @@ async function boot() {
   /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
   async function connectRoom(join) {
     if (!course.online) throw new Error('This course is for solo races');
+    if (join.track && join.track !== track.id && COURSES.some(c => c.id === join.track)) {
+      sessionStorage.setItem('glassroad.pendingRoom', join.roomId);
+      const to = new URL(location.href); to.searchParams.set('track', join.track);
+      location.replace(to.href);
+      return new Promise(() => {});
+    }
     const s = createRoomSession({ track, feel, courseHash: onlineCourseHash, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
     const welcome = await s.connect(join, { lookNow: join.look });
     return {
@@ -576,7 +582,7 @@ async function boot() {
     revokeLink: () => lobbyApi.revokeLink(),
     claimLink: (token, look, plat) => lobbyApi.claimLink(token, look, plat),
     access: () => lobbyApi.access(),
-  } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id, platform,
+  } : null, connect: lobbyApi ? connectRoom : null, identity: () => (link && link.identity) || null, track: track.id, trackLaps: TRACK_LAPS, platform,
   garageLook:()=>garage?raceLook(garage.state):null,
   // a race link (?r=<token>, NET.md section 13): the address drops its r after the first claim answer
   linkClaimed: () => { const to = dropLinkParam(location.href); if (to) history.replaceState(history.state, '', to); } });
@@ -747,7 +753,10 @@ async function boot() {
   loading.finish();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
   const linkTok = course.online ? linkToken(location.search) : null;
-  if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }
+  const pendingRoom = sessionStorage.getItem('glassroad.pendingRoom');
+  sessionStorage.removeItem('glassroad.pendingRoom');
+  if (pendingRoom) { hud.setCard('lobby', { roomId: pendingRoom }); lobbyUi = hud.lobby || lobbyUi; }
+  else if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }
   if (BOT && !link) botT = performance.now() + 2500;   // attract: a short look at the menu, then race (never with a lobby)
 
   let fpsN = 0, fpsT = performance.now(), telT = 0;
@@ -815,9 +824,10 @@ async function boot() {
       const pa = BOT && !debug.assistOn && !coast ? a : assist.apply(a, P.st, clock.dt, race.phase);
       if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
+      sctx.timeS = online ? online.s.raceTimeS() : undefined;
       racers.step(clock.dt, pa, race, sctx);
       if (race.phase === 'racing' || race.phase === 'finished') {
-        const sc = scanClock(audio.music, racers.clockS);
+        const sc = scanClock(online ? null : audio.music, racers.clockS);
         scan.update(racers.list, sc.timeS, sc.bpm);
         industry.update(racers.list, racers.clockS, clock.dt);
         perfume.update(racers.list, sc.timeS, clock.dt);
@@ -872,7 +882,7 @@ async function boot() {
     reactiveOptions.gentle = hostGentle || !!feel.get('gentle.on') || !!opts.gentlePreview;
     reactiveOptions.muted = opts.volMaster === 0 || opts.volMusic === 0;
     const audioReactive = music ? music.readReactivity(frameDt, reactiveOptions) : null;
-    const sc = scanClock(inRace ? music : null, racers.clockS);
+    const sc = scanClock(inRace && !online ? music : null, racers.clockS);
     if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     const pv = P.view;
     const wordLive = words && song ? words.update(songS,

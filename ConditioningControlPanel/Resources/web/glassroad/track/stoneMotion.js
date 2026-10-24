@@ -22,8 +22,9 @@ export function rotatingSpan(h, fixed, along = false, margin = 0) {
   }
   return lo<=hi ? [lo,hi] : null;
 }
-export function updateStoneMotion(fields, dt, gentle = false, reset = false) {
+export function updateStoneMotion(fields, dt, gentle = false, reset = false, timeS = null) {
   for (const f of fields || []) for (const h of f.stones) if (h.spin) {
-    h.angle = reset ? 0 : ((h.angle || 0) + dt*h.spin*(gentle?0.5:1)) % (Math.PI*2);
+    // Online shares the slower stone speed so Gentle never changes collision timing.
+    h.angle = reset ? 0 : (Number.isFinite(timeS) ? Math.max(0,timeS)*h.spin*0.5 : (h.angle || 0) + dt*h.spin*(gentle?0.5:1)) % (Math.PI*2);
   }
 }

@@ -7,6 +7,7 @@
  * When a new record moves the target from where the kart was shown, the difference is blended out over
  * blendMs (150); a jump over SNAP_M (a rescue) snaps. Output is a full sim KartState. Pure, three-free.
  */
+import { pathFrame } from './trackPath.js';
 import { S, createState } from '../sim/state.js';
 import { wrap, qslerp, qnorm } from '../core/math.js';
 import { RATES, seqNewer, createKart } from './protocol.js';
@@ -80,19 +81,19 @@ export function createInterp(track, { delayMs = RATES.renderDelayMs, deadMs = RA
       e.seenSeq = top.seq;
       if (e.shown) {
         const es = ds(raw.s, e.shown.s), ex = e.shown.x - raw.x, eh = e.shown.h - raw.h;
-        const big = Math.abs(es) > SNAP_M || Math.abs(ex) > SNAP_X;
+        const big = Math.abs(es) > SNAP_M || Math.abs(ex) > SNAP_X || (e.shown.fork || 0) !== (k.fork || 0);
         e.err.s = big ? 0 : es; e.err.x = big ? 0 : ex; e.err.h = big ? 0 : eh; e.errAt = t;
       }
     }
     const f = Math.max(0, 1 - (t - e.errAt) / blendMs);
     const s = wrap(raw.s + e.err.s * f, L), x = raw.x + e.err.x * f, h = raw.h + e.err.h * f;
-    if (!peek) e.shown = { s, x, h };
+    if (!peek) e.shown = { s, x, h, fork: k.fork || 0 };
     writeState(out, k, s, x, h);
     return k;
   }
 
   function writeState(out, k, s, x, h) {
-    const F = track.frameAt(s, fr);
+    const F = pathFrame(track, k.fork, s, fr);
     for (let i = 0; i < 3; i++) out[S.posX + i] = F.p[i] + F.b[i] * x + F.n[i] * h;
     out[S.quatX] = qo[0]; out[S.quatY] = qo[1]; out[S.quatZ] = qo[2]; out[S.quatW] = qo[3];
     out[S.velX] = k.v[0]; out[S.velY] = k.v[1]; out[S.velZ] = k.v[2];

@@ -58,7 +58,7 @@ export function createMainframeScan(track, events) {
       const now = { s: st[S.s], x: st[S.lateral], h: st[S.height], t: timeS };
       const prev = previous.get(id) || now;
       previous.set(id, now);
-      if (racer.finished || st[S.respawnPhase] !== RESPAWN.NONE || !api.ready) continue;
+      if (racer.kind === 'remote' || racer.finished || st[S.respawnPhase] !== RESPAWN.NONE || !api.ready) continue;
       // Teleports and lap wraps never draw a collision line through the rest of the course.
       const ds = now.s - prev.s;
       for (const zone of zones) {
