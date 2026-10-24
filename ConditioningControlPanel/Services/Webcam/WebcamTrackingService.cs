@@ -250,53 +250,10 @@ namespace ConditioningControlPanel.Services
         private static readonly int[] LeftEyeBoxIndices  = { 33, 133, 159, 145, 158, 153 };  // 33 outer, 133 inner, 159 top, 145 bottom
         private static readonly int[] RightEyeBoxIndices = { 263, 362, 386, 374, 385, 380 }; // 263 outer, 362 inner, 386 top, 374 bottom
 
-        // Mouth-open detection — MAR (Mouth Aspect Ratio), same shape as EAR.
-        // Uses FaceMesh's inner-lip landmarks (already in the 468-point set, no
-        // new model needed). Three vertical chord pairs averaged to suppress
-        // single-landmark noise, divided by mouth corner-to-corner width.
-        //   Corners: 78 (left), 308 (right)
-        //   Vertical pairs (top, bottom): (81,178), (13,14), (311,402)
-        // Baseline pattern matches EAR: 90-frame rolling buffer, 90th-percentile
-        // baseline (rejects yawn / surprised-face spikes from polluting it).
-        // Hysteresis: enter "open" at >1.65×baseline, leave at <1.30×baseline.
-        // Min open window 80 ms (filters single-frame jitter). Cooldown 800 ms.
-        // In dim light the inner-lip landmark spread compresses and the resting
-        // baseline reads high, so a purely relative threshold can become
-        // unreachable — an open mouth never hits 1.8× its own (inflated) resting
-        // value. The ratio is therefore loosened AND backed by an absolute
-        // "clearly wide open" floor (MAR is normalized by mouth width, so it's
-        // roughly scale-invariant): mouth counts as open if EITHER the relative
-        // ratio OR the absolute floor is crossed. Floors sit well above normal
-        // speech (~0.15-0.30) so talking won't false-fire.
-        private const int MarBaselineFrames = 90;
-        private const int MarMinSamplesForBaseline = 15;
-        private const double MarOpenRatio = 1.65;
-        private const double MarCloseRatio = 1.30;
-        private const double MarAbsoluteOpen = 0.38;   // enter open if MAR exceeds this regardless of baseline
-        private const double MarAbsoluteClose = 0.28;  // stay open until MAR drops below this (absolute hysteresis)
-        // Speech guard on the RELATIVE open path. A purely relative threshold
-        // is a false-positive machine for users with a low resting MAR: 1.65×
-        // a 0.10 baseline is ~0.17, and ordinary talking sweeps 0.15-0.30 all
-        // day. Real deliberate opens sit ~0.5+. The relative path therefore
-        // ALSO requires this absolute floor (scaled by the sensitivity
-        // slider); the separate MarAbsoluteOpen path is unaffected. Kept
-        // below speech peaks' ceiling so shouting doesn't fire, above dim-
-        // light baseline inflation so the relative path still has a job.
-        private const double MarSpeechFloor = 0.32;
-        // Was 80 ms — shorter than one spoken syllable, so any speech frame
-        // run above threshold fired. A deliberate "open wide" gesture is held;
-        // requiring a sustained window filters talking without hurting it.
-        private const int MinMouthOpenMs = 250;
-        private const int MouthCooldownMs = 800;
-        // Median-of-N smoothing on raw MAR. FaceMesh inner-lip landmarks are
-        // noisy on webcams; a single-frame spike dipping below the close
-        // threshold mid-open resets the min-open timer and drops a real open.
-        // A short median rejects those spikes with negligible lag.
-        private const int MarSmoothFrames = 3;
+        // Shared Core detector thresholds; aliases below are diagnostic labels only.
+        private const double MarOpenRatio = MouthOpenDetector.OpenRatio;
+        private const double MarCloseRatio = MouthOpenDetector.CloseRatio;
         private const int MouthDiagLogIntervalMs = 3000;
-        private static readonly int[] MarVerticalPairs = { 81, 178, 13, 14, 311, 402 };
-        private const int MouthCornerLeftIdx = 78;
-        private const int MouthCornerRightIdx = 308;
 
         // Tongue-out detection — HSV color heuristic on pixels inside the inner-
         // lip polygon. Only runs when MAR says the mouth is currently open, so
@@ -608,18 +565,9 @@ namespace ConditioningControlPanel.Services
         // Heuristic state (capture-thread only)
         private readonly BlinkDetector _blink = new();
 
-        // Mouth state (mirrors blink state machine)
-        private DateTime _lastMouthOpenAt = DateTime.MinValue;
-        private readonly Queue<double> _marBuffer = new();
-        private readonly Queue<double> _marSmoothBuffer = new();  // last few raw MAR for median de-jitter
-        private double _marBaseline;
-        private bool _mouthOpen;
-        private DateTime? _mouthOpenedAt;
-        private double _maxMarThisOpening;
-        private double _windowMinMar = double.MaxValue;
-        private double _windowMaxMar = double.MinValue;
+        private readonly MouthOpenDetector _mouth = new();
+        private bool _mouthOpen => _mouth.IsOpen;
         private DateTime _lastMouthDiagAt = DateTime.MinValue;
-        private int _mouthOpenCount;
 
         // Tongue state (gated on _mouthOpen)
         private DateTime _lastTongueOutAt = DateTime.MinValue;
@@ -1610,16 +1558,8 @@ namespace ConditioningControlPanel.Services
             _lastLeftEyeRect = null;
             _lastRightEyeRect = null;
             _blink.Reset();
-            _marBuffer.Clear();
-            _marSmoothBuffer.Clear();
-            _marBaseline = 0;
-            _mouthOpen = false;
-            _mouthOpenedAt = null;
-            _maxMarThisOpening = 0;
-            _windowMinMar = double.MaxValue;
-            _windowMaxMar = double.MinValue;
+            _mouth.Reset();
             _lastMouthDiagAt = DateTime.MinValue;
-            _mouthOpenCount = 0;
             _tongueOut = false;
             _tongueOutSince = null;
             _maxTongueRatioThisFire = 0;
@@ -1896,9 +1836,7 @@ namespace ConditioningControlPanel.Services
             _lastLeftEyeRect = null;
             _lastRightEyeRect = null;
             _blink.CancelClosure();
-            _mouthOpen = false;
-            _mouthOpenedAt = null;
-            _marSmoothBuffer.Clear();   // drop stale MAR so the median doesn't blip on face re-acquire
+            _mouth.FaceMissing();
             _tongueOut = false;
             _tongueOutSince = null;
             // (GazeEngine.FaceMissing dropped the gaze-smoothing state above.)
@@ -2030,12 +1968,6 @@ namespace ConditioningControlPanel.Services
             return new CvRect(x, y, w, h);
         }
 
-        private static void EnqueueWithCap(Queue<double> q, double value, int cap)
-        {
-            q.Enqueue(value);
-            while (q.Count > cap) q.Dequeue();
-        }
-
         private void SetState(WebcamTrackingState state)
         {
             if (_state == state) return;
@@ -2105,122 +2037,24 @@ namespace ConditioningControlPanel.Services
             }
         }
 
-        private static double PercentileOf(Queue<double> q, double pct) => BlinkDetector.PercentileOf(q, pct);
-
         // ─────────────────────────────────────────────────────────────────────────
         //  MAR (Mouth Aspect Ratio) mouth-open detection.
-        //  Pattern matches EAR: rolling 90-frame buffer, 90th-percentile baseline
-        //  (rejects yawn / surprise spikes), hysteresis enter at 1.8× baseline,
-        //  leave at 1.4×, min open window 80 ms, cooldown 800 ms. Diag log
-        //  every ~3 s (counts only — privacy contract).
+        //  Shared Core mouth rules: median of 3, closed-frame 10th-percentile baseline,
+        //  sensitivity-scaled speech guard, 250 ms held opening, 800 ms cooldown.
+        //  Diagnostic logs contain counts and thresholds only.
         // ─────────────────────────────────────────────────────────────────────────
-        private static double ComputeMAR(float[][] landmarks)
-        {
-            // Three vertical chord pairs averaged, normalized by corner-to-corner
-            // width. Direct port of the standard MAR formula.
-            double v1 = Distance(landmarks[MarVerticalPairs[0]], landmarks[MarVerticalPairs[1]]);
-            double v2 = Distance(landmarks[MarVerticalPairs[2]], landmarks[MarVerticalPairs[3]]);
-            double v3 = Distance(landmarks[MarVerticalPairs[4]], landmarks[MarVerticalPairs[5]]);
-            double w  = Distance(landmarks[MouthCornerLeftIdx], landmarks[MouthCornerRightIdx]);
-            return w > 1e-6 ? (v1 + v2 + v3) / (3.0 * w) : 0.0;
-        }
+        private static double ComputeMAR(float[][] landmarks) => MouthOpenDetector.ComputeMar(landmarks);
 
         private void UpdateMouthState(double rawMar)
         {
-            // De-jitter the noisy raw MAR with a short median before any
-            // thresholding. Without this, single-frame landmark spikes flip the
-            // open/close hysteresis and reset the min-open timer, dropping real
-            // opens. PercentileOf(.,0.50) on the small buffer is the median.
-            EnqueueWithCap(_marSmoothBuffer, rawMar, MarSmoothFrames);
-            double mar = PercentileOf(_marSmoothBuffer, 0.50);
-
-            // Resting-closed baseline = 10th percentile of recent CLOSED frames.
-            // Closed-mouth values dominate the buffer; the 10th percentile
-            // approximates the resting closed MAR, and we compare current MAR to
-            // it (e.g. >1.8× resting = open). We deliberately STOP feeding the
-            // baseline while the mouth is open (except to seed it initially) so
-            // repeated or held opens can't drag the baseline — and thus the open
-            // threshold — upward, which previously made the 2nd/3rd open in a
-            // row harder to detect than the first.
-            if (!_mouthOpen || _marBuffer.Count < MarMinSamplesForBaseline)
-                EnqueueWithCap(_marBuffer, mar, MarBaselineFrames);
-            _marBaseline = PercentileOf(_marBuffer, 0.10);
-
-            if (mar < _windowMinMar) _windowMinMar = mar;
-            if (mar > _windowMaxMar) _windowMaxMar = mar;
-
             var now = DateTime.UtcNow;
+            if (_mouth.Update(rawMar, now, App.Settings?.Current?.WebcamSensitivity ?? .5))
+            {
+                Dispatch(() => OnMouthOpen?.Invoke());
+                App.Logger?.Debug("WebcamTrackingService: mouth-open #{N} FIRED (baseline MAR={Base:F3}, max MAR={Max:F3})",
+                    _mouth.Count, _mouth.Baseline, _mouth.OpeningMax);
+            }
             MaybeLogMouthDiag(now);
-
-            if (_marBuffer.Count < MarMinSamplesForBaseline) return;
-            if (_marBaseline <= 0) return;
-
-            // Open if EITHER the relative ratio (vs resting baseline) OR the
-            // absolute floor is crossed. The absolute path is the low-light
-            // rescue: when a dim frame inflates the baseline so the ratio can't
-            // be reached, a genuinely wide-open mouth still trips the floor.
-            //
-            // BUT an absolute floor is only meaningful when it sits ABOVE the
-            // resting baseline. For users whose resting (closed) mouth MAR is
-            // naturally high (>= MarAbsoluteClose), the fixed close floor sits
-            // *below* their shut mouth, so `mar > MarAbsoluteClose` stays true
-            // even when the mouth is closed — latching MouthOpen on forever and
-            // spamming phantom mouth/tongue gestures (#367/#371). Gate each
-            // absolute path on the floor genuinely exceeding the baseline; when
-            // it doesn't, fall back to the relative ratio alone.
-            // Per-user sensitivity (Webcam settings slider, 0..1, default 0.5) scales the ENTER-open
-            // thresholds: below 0.5 raises them so facial hair / naturally-parted lips stop producing
-            // phantom mouth-open fires (#432); above 0.5 lowers them for the under-detected. 0.5 is
-            // neutral. The close/hysteresis floors are left fixed (they stay below the scaled open).
-            double sensitivity = Math.Clamp(App.Settings?.Current?.WebcamSensitivity ?? 0.5, 0.0, 1.0);
-            double openScale = 1.0 + (0.5 - sensitivity) * 0.8;   // 1.4 @0.0 → 1.0 @0.5 → 0.6 @1.0
-            double openRatio = MarOpenRatio * openScale;
-            double absoluteOpen = MarAbsoluteOpen * openScale;
-
-            bool absoluteOpenUsable  = absoluteOpen  > _marBaseline;
-            bool absoluteCloseUsable = MarAbsoluteClose > _marBaseline;
-            // Relative path requires the speech floor too — see MarSpeechFloor.
-            double speechFloor = MarSpeechFloor * openScale;
-            bool nowOpen = _mouthOpen
-                ? (mar > MarCloseRatio * _marBaseline || (absoluteCloseUsable && mar > MarAbsoluteClose))
-                : ((mar > openRatio * _marBaseline && mar > speechFloor)
-                    || (absoluteOpenUsable && mar > absoluteOpen));
-
-            if (nowOpen && !_mouthOpen)
-            {
-                _mouthOpenedAt = now;
-                _maxMarThisOpening = mar;
-            }
-            else if (nowOpen)
-            {
-                if (mar > _maxMarThisOpening) _maxMarThisOpening = mar;
-                // Fire OnMouthOpen once per open window, after MinMouthOpenMs has
-                // elapsed and cooldown allows it. Edge-trigger so a long-held
-                // open mouth doesn't spam the event.
-                if (_mouthOpenedAt.HasValue && _lastMouthOpenAt < _mouthOpenedAt.Value)
-                {
-                    var openMs = (now - _mouthOpenedAt.Value).TotalMilliseconds;
-                    if (openMs >= MinMouthOpenMs
-                        && (now - _lastMouthOpenAt).TotalMilliseconds >= MouthCooldownMs)
-                    {
-                        _lastMouthOpenAt = now;
-                        _mouthOpenCount++;
-                        Dispatch(() => OnMouthOpen?.Invoke());
-                        // Debug, not Information — see blink fire log above for reasoning.
-                        App.Logger?.Debug(
-                            "WebcamTrackingService: mouth-open #{N} FIRED (open for {Ms:F0}ms, baseline MAR={Base:F3}, max MAR during open={Max:F3}, ratio={Ratio:F2}× baseline)",
-                            _mouthOpenCount, openMs, _marBaseline, _maxMarThisOpening,
-                            _maxMarThisOpening / _marBaseline);
-                    }
-                }
-            }
-            else if (!nowOpen && _mouthOpen)
-            {
-                _mouthOpenedAt = null;
-                _maxMarThisOpening = 0;
-            }
-
-            _mouthOpen = nowOpen;
         }
 
         private void MaybeLogMouthDiag(DateTime now)
@@ -2229,18 +2063,17 @@ namespace ConditioningControlPanel.Services
             if ((now - _lastMouthDiagAt).TotalMilliseconds < MouthDiagLogIntervalMs) return;
             _lastMouthDiagAt = now;
 
-            double openThreshold = _marBaseline * MarOpenRatio;
-            double closeThreshold = _marBaseline * MarCloseRatio;
-            double winMaxRatio = _marBaseline > 0 ? _windowMaxMar / _marBaseline : 0;
+            double openThreshold = _mouth.Baseline * MarOpenRatio;
+            double closeThreshold = _mouth.Baseline * MarCloseRatio;
+            double winMaxRatio = _mouth.Baseline > 0 ? _mouth.WindowMax / _mouth.Baseline : 0;
             // Debug, not Information — see blink-diag for reasoning.
             App.Logger?.Debug(
                 "WebcamTrackingService: mouth-diag baseline={Base:F3} openThr={OT:F3} closeThr={CT:F3} winMin={WMin:F3} winMax={WMax:F3}({WMaxR:P0}) state={State} mouthOpens={N} samples={S}",
-                _marBaseline, openThreshold, closeThreshold,
-                _windowMinMar, _windowMaxMar, winMaxRatio,
-                _mouthOpen ? "OPEN" : "closed", _mouthOpenCount, _marBuffer.Count);
+                _mouth.Baseline, openThreshold, closeThreshold,
+                _mouth.WindowMin, _mouth.WindowMax, winMaxRatio,
+                _mouthOpen ? "OPEN" : "closed", _mouth.Count, _mouth.ClosedSamples);
 
-            _windowMinMar = double.MaxValue;
-            _windowMaxMar = double.MinValue;
+            _mouth.ResetDiagnosticWindow();
         }
 
         // ─────────────────────────────────────────────────────────────────────────

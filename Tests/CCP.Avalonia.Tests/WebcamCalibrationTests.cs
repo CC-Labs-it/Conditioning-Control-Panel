@@ -56,6 +56,131 @@ public sealed class WebcamCalibrationTests
         }
     }
 
+    [Fact]
+    public void MouthPrompts_ConsumeEventsAndUnsubscribeOnPanic() => WithTracker(start: true, (tracker, _) =>
+    {
+        var win = OpenAndContinue();
+        var prompt = win.FindControl<TextBlock>("TxtValidationPrompt")!;
+        var detail = win.FindControl<TextBlock>("TxtValidationDetail")!;
+        var field = typeof(WebcamTracker).GetField("OnMouthOpen", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        Action? Mouths() => (Action?)field.GetValue(tracker);
+        Assert.True(Gaze(win, () => prompt.Text == "Open your mouth wide"));
+        Assert.NotNull(Mouths());
+        void PumpUntil(Func<bool> done)
+        {
+            // Await the asynchronous TCS continuation without spending the synthetic gesture timeout:
+            // run the dispatcher until a text change satisfies done() (a signal, not a sleep).
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            void Check(object? s, AvaloniaPropertyChangedEventArgs e) { if (done()) cts.Cancel(); }
+            prompt.PropertyChanged += Check; detail.PropertyChanged += Check;
+            try { if (!done()) Dispatcher.UIThread.MainLoop(cts.Token); }
+            finally { prompt.PropertyChanged -= Check; detail.PropertyChanged -= Check; }
+            Assert.True(done());
+        }
+        Mouths()!.Invoke();
+        PumpUntil(() => detail.Text == "Detected.");
+        Clock.Advance(700);
+        PumpUntil(() => detail.Text == "Good — close, and once more in a moment…");
+        Clock.Advance(1000);
+        PumpUntil(() => prompt.Text == "Open your mouth wide again");
+        Assert.NotNull(Mouths());
+        var queued = Mouths();
+        tracker.Stop(); Dispatcher.UIThread.RunJobs();
+        Assert.Null(Mouths());
+        var text = detail.Text;
+        queued!(); Assert.Equal(text, detail.Text);
+    });
+
+    [Fact]
+    public void Tracker_UsesCoreMarAndDropsStoppedRunEvents() => WithTracker(start: false, (_, _) =>
+    {
+        var tracker = new WebcamTracker();
+        var lm = Enumerable.Range(0, 468).Select(_ => new float[3]).ToArray();
+        lm[308][0] = 1;
+        int fires = 0, events = 0;
+        tracker.OnMouthOpen += () => events++;
+        var epoch = new DateTime(2026, 1, 1);
+        for (int i = 0; i < 60; i++)
+        {
+            float mar = i < 20 ? .1f : .6f;
+            lm[81][1] = lm[13][1] = lm[311][1] = mar;
+            if (tracker.ProcessMouthLandmarks(lm, epoch.AddMilliseconds(i * 30))) fires++;
+        }
+        Assert.Equal(1, fires);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, events); // never deliver an event from an idle/stopped capture run
+    });
+
+    private sealed class IdleSource : IFrameSource
+    {
+        public readonly ManualResetEventSlim Entered = new(), Release = new();
+        public bool Open() => true;
+        // A live capture run, parked in Read so no detected face can race the synthetic landmark input (P67).
+        public bool Read(Mat bgr) { Entered.Set(); Release.Wait(); return false; }
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void Tracker_LiveCaptureDeliversMouthEventAndStopDropsQueuedDelivery() => WithTracker(start: false, (_, _) =>
+    {
+        var source = new IdleSource();
+        WebcamTracker.SourceFactory = () => source;
+        var tracker = new WebcamTracker();
+        var lm = Enumerable.Range(0, 468).Select(_ => new float[3]).ToArray();
+        lm[308][0] = 1;
+        var epoch = new DateTime(2026, 1, 1);
+        int events = 0;
+        tracker.OnMouthOpen += () => events++;
+        void Feed(int offset)
+        {
+            int fired = 0;
+            for (int i = 0; i < 60; i++)
+            {
+                lm[81][1] = lm[13][1] = lm[311][1] = i < 20 ? .1f : .6f;
+                if (tracker.ProcessMouthLandmarks(lm, epoch.AddMilliseconds(offset + i * 30))) fired++;
+            }
+            Assert.Equal(1, fired);
+        }
+        try
+        {
+            Assert.True(tracker.Start(), tracker.LastError);
+            Assert.True(tracker.IsRunning);
+            Assert.True(source.Entered.Wait(TimeSpan.FromSeconds(5))); // the capture thread is really parked
+            Feed(0); Assert.Equal(0, events);
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(1, events);
+            Feed(3000); Assert.Equal(1, events); // queued, not yet delivered
+            source.Release.Set();
+            tracker.Stop();
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(1, events);
+        }
+        finally { source.Release.Set(); tracker.Stop(); }
+    });
+
+    [Fact]
+    public void CursorTrail_FadesAndClearsOnFaceLossAndPanic() => WithTracker(start: true, (tracker, _) =>
+    {
+        var win = OpenAndContinue();
+        Assert.True(Gaze(win, () => win.FindControl<Border>("VerifyPanel")!.IsVisible));
+        win.FindControl<Button>("BtnVerifyAccuracy")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var trail = win.FindControl<ConditioningControlPanel.Avalonia.Controls.GazeCursorTrailControl>("VerifyTrail")!;
+        var queued = GazeHandlers(tracker)!;
+        queued(new global::Avalonia.Point(400, 300));
+        queued(new global::Avalonia.Point(500, 350));
+        Assert.Equal(2, trail.History.Count);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
+        var dir = Environment.GetEnvironmentVariable("CCP_WEBCAM_PROOF_DIR");
+        if (dir != null) { Directory.CreateDirectory(dir); using var frame = win.CaptureRenderedFrame(); frame!.Save(Path.Combine(dir, "VerifyTrail.png")); }
+        for (int i = 0; i < 6; i++) { Clock.Advance(100); Dispatcher.UIThread.RunJobs(); }
+        Assert.Equal(1, trail.History.Count); // moving segment expired, stationary endpoint stays live
+        var lost = (Action?)typeof(WebcamTracker).GetField("OnFaceLost", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(tracker);
+        lost!(); Assert.Equal(0, trail.History.Count);
+        Assert.False(win.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("VerifyCursor")!.IsVisible);
+        queued(new global::Avalonia.Point(450, 330)); Assert.Equal(1, trail.History.Count);
+        tracker.Stop(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, trail.History.Count); Assert.Null(GazeHandlers(tracker));
+        queued(new global::Avalonia.Point(700, 700)); Assert.Equal(0, trail.History.Count);
+    });
+
     private sealed class BlankSource : IFrameSource
     {
         public bool Open() => true;
@@ -286,10 +411,11 @@ public sealed class WebcamCalibrationTests
         shell.Show();
         Dispatcher.UIThread.RunJobs();
         var seen = new List<(double P, string? Text)>();
-        WebcamLoadingSplash? shown = null;   // kept here: a slow runner can finish the fade before the test reads the shell's field
+        WebcamLoadingSplash? shownSplash = null;
         Action<double, string> spy = (p, _) =>
         {
-            shown = shell.WebcamLoadingSplashForTests ?? shown;
+            // Capture the real splash before its 200 ms wall-clock fade can finish during RunJobs.
+            shownSplash ??= shell.WebcamLoadingSplashForTests;
             seen.Add((p, shell.WebcamLoadingSplashForTests?.FindControl<TextBlock>("TxtStatus")!.Text));
         };
         tracker.OnStartupProgress += spy;   // after the shell's handler, so it sees the splash the shell made
@@ -300,7 +426,7 @@ public sealed class WebcamCalibrationTests
             Assert.Equal(new[] { 0.08, 0.25, 0.55, 0.92, 1.0 }, seen.Select(x => x.P));
             Assert.Equal("Opening camera…", seen[2].Text);
             Assert.Equal("Ready", seen[4].Text);
-            var splash = Assert.IsType<WebcamLoadingSplash>(shown);
+            var splash = Assert.IsType<WebcamLoadingSplash>(shownSplash);
             PumpUntilSplashGone(shell);
             Assert.Null(shell.WebcamLoadingSplashForTests);   // faded and closed
             Assert.False(splash.IsVisible);
