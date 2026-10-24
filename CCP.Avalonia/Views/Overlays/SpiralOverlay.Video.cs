@@ -57,7 +57,7 @@ internal static partial class SpiralOverlay
                 if (_sink!.Bitmap is { } bitmap) show(bitmap);
             });
             // Per-media no-audio avoids changing the shared player's/process's audio state.
-            _media.AddOption(":no-audio");
+            _media.AddOption(ConditioningControlPanel.Services.LibVlcSilence.NoAudioOption);
             _media.AddOption(":input-repeat=65535");
             try
             {
