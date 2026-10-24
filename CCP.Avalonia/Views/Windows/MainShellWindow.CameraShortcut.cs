@@ -19,8 +19,9 @@ public partial class MainShellWindow
     private readonly X11Chord _cameraChord = new();
     private readonly Win32CameraChord _windowsCameraChord = new();
     private void DisarmCameraChord() { _cameraChord.Disarm(); _windowsCameraChord.Disarm(); }
-    private bool ArmCameraChord(ChordMods mods, string key, Action callback) => OperatingSystem.IsWindows()
-        ? _windowsCameraChord.Arm(mods, key, callback) : _cameraChord.Arm(mods, key, callback);
+    // A CCP_USERDATA_DIR sandbox (tests, kc, render-all) never grabs a key on the real desktop.
+    private bool ArmCameraChord(ChordMods mods, string key, Action callback) => !SandboxNet.Active && (OperatingSystem.IsWindows()
+        ? _windowsCameraChord.Arm(mods, key, callback) : _cameraChord.Arm(mods, key, callback));
     private bool _cameraChordArmed;
     private bool _cameraToggleBusy;
     private bool _cameraShortcutClosed;
@@ -111,7 +112,9 @@ public partial class MainShellWindow
                 Show();
                 Activate();
             }
-            await BlinkTrainerTab.ToggleWebcamTrackingAsync(announce: true);
+            // Named<T>: x:Name fields are null on this window (CLAUDE.md trap 7).
+            if (Named<Tabs.BlinkTrainerTabView>("BlinkTrainerTab") is { } tab)
+                await tab.ToggleWebcamTrackingAsync(announce: true);
         }
         finally { _cameraToggleBusy = false; }
     }

@@ -349,12 +349,25 @@ public sealed class WebcamCalibrationTests
     [Fact]
     public void QuickRecal_OpensOnTheCalibratedMonitor() => WithTracker(start: false, (tracker, _) =>
     {
-        var screen = new global::Avalonia.Controls.Window().Screens.All[0];
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = screen.Bounds.X, Y = screen.Bounds.Y } };
-        var win = new WebcamQuickRecalWindow();
-        Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
-        Assert.Equal(screen.Bounds.Position, win.Position);
-        tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
-        Assert.Equal(WindowStartupLocation.CenterScreen, new WebcamQuickRecalWindow().WindowStartupLocation);   // unknown monitor: left alone
+        // WPF App.ApplyCalibrationScreenPlacement + GetWebcamCalibrationScreen (App.xaml.cs:1408): the picked
+        // tracking display wins over the old calibration record; a disconnected pick falls back to Primary.
+        var all = new global::Avalonia.Controls.Window().Screens.All;
+        var primary = all.FirstOrDefault(x => x.IsPrimary) ?? all[0];
+        var named = all[all.Count - 1];
+        var settings = CoreSettings.Current;
+        var old = settings.WebcamCalibrationScreen;
+        try
+        {
+            tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
+            settings.WebcamCalibrationScreen = named.DisplayName;
+            var win = new WebcamQuickRecalWindow();
+            Assert.Equal(WindowStartupLocation.Manual, win.WindowStartupLocation);
+            Assert.Equal(named.Bounds.Position, win.Position);
+            settings.WebcamCalibrationScreen = "disconnected-display";
+            var fallback = new WebcamQuickRecalWindow();
+            Assert.Equal(WindowStartupLocation.Manual, fallback.WindowStartupLocation);
+            Assert.Equal(primary.Bounds.Position, fallback.Position);
+        }
+        finally { settings.WebcamCalibrationScreen = old; }
     });
 }

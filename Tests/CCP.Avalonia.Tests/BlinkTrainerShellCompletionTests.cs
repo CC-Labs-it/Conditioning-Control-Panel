@@ -133,7 +133,8 @@ public sealed class BlinkTrainerShellCompletionTests
             var keyEvent = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.J, KeyModifiers = KeyModifiers.Control | KeyModifiers.Meta };
             shell.RaiseEvent(keyEvent);
             Assert.True(keyEvent.Handled);
-            for (int i = 0; i < 100 && !shell.OwnedWindows.OfType<WebcamConsentDialog>().Any(); i++)
+            var deadline = DateTime.UtcNow.AddSeconds(10); // P73: bound by time, not turns
+            while (DateTime.UtcNow < deadline && !shell.OwnedWindows.OfType<WebcamConsentDialog>().Any())
             { Dispatcher.UIThread.RunJobs(); await Task.Yield(); }
             Assert.True(shell.IsVisible);
             var dialog = Assert.Single(shell.OwnedWindows.OfType<WebcamConsentDialog>());
