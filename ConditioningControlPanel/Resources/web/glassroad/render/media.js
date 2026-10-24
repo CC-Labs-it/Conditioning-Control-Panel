@@ -33,6 +33,7 @@ import {
 import { createPlaceholder, programFor, spinOf, warpOf, releaseLoom, PROGRAMS } from './mediaPlaceholders.js';
 import { selectScrolllerSlots } from './mediaSelection.js';
 import { MAX_MEDIA_CLIPS, mediaClipLimit } from './mediaVariety.js';
+import { fitMainframeBillboard, moveMainframePanel } from './mainframeMediaMotion.js';
 
 // the shared colour system (render/spectrum.js); the local ring stays the fallback for a missing hue
 import * as SPECTRUM from './spectrum.js';
@@ -187,7 +188,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   // ---- slots: billboards, the halo, the tunnel ----
   const slots = (layout.slots || []).map(slot => ({ ...slot }));
   for (const b of layout.billboards || []) {
-    const sl = placeBillboard(b, track, samples, M);
+    const sl = track.id === 'mainframe' ? fitMainframeBillboard(b, track, samples, M) : placeBillboard(b, track, samples, M);
     if (sl) slots.push(sl); else console.warn('[glassroad/media] billboard ' + b.id + ' found no clear spot');
   }
   const haloSpec = layout.halo || null, haloFrame = haloSpec ? track.frameAt(((haloSpec.f || 0) % 1) * track.lengthM) : null;
@@ -560,7 +561,9 @@ export function createMediaSlots(scene, track, opts = {}) {
   let clock = 0, uploadClock = 0, uploads = 0, sharedVideoUploads = 0, sharedVideoUploadsTotal = 0;
   const picks = [];
   const haloSlotsOf = haloSpec ? slots.slice(haloStart, haloStart + haloN) : [];
+  const flyingSlots = slots.filter(sl => sl.flight);
   function update(dt, view = {}) {
+    if (view.paused) dt = 0;
     playback.tick();
     const feel = opts.feel;
     const gentle = view.gentle ?? (feel ? !!feel.get('gentle.on') : false);
@@ -580,7 +583,8 @@ export function createMediaSlots(scene, track, opts = {}) {
       for (let k = 0; k < haloSlotsOf.length; k++) placeSlot(haloPoseInto(haloSpec, haloFrame, haloN, orbit, k, haloSlotsOf[k]));
     }
     for (const sl of opts.extraSlots || []) placeSlot(sl);
-    if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length || opts.extraSlots?.length) flush();
+    for (const sl of flyingSlots) placeSlot(moveMainframePanel(sl, clock));
+    if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length || flyingSlots.length || opts.extraSlots?.length) flush();
 
     // the shared upload budget: nearest overdue programs and live own sources within drawM
     const cam = view.camera;

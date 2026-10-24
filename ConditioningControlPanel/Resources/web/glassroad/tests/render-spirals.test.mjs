@@ -127,11 +127,11 @@ test('spirals: slots take the player first, then the nearest, at most L.slots, o
   assert.ok(crossed(-0.5, 0.3, 4, 20) && !crossed(0.3, 0.6, 4, 20) && !crossed(-0.5, 0.3, 30, 20));
 });
 
-test('spirals: budgets per tier (phone a quarter of high), far gates thin, past drawM none', () => {
-  assert.equal(budgetFor('high'), 12000);
-  assert.equal(budgetFor('mid'), 6000);
-  assert.equal(budgetFor('phone'), 3000);
-  assert.equal(budgetFor('high', L.activeM + 1), Math.round(12000 * L.farShare));
+test('spirals: denser tier budgets, far gates thin, past drawM none', () => {
+  assert.equal(budgetFor('high'), 18000);
+  assert.equal(budgetFor('mid'), 9000);
+  assert.equal(budgetFor('phone'), 4200);
+  assert.equal(budgetFor('high', L.activeM + 1), Math.round(18000 * L.farShare));
   assert.equal(budgetFor('high', L.drawM + 1), 0);
   const q = gateParams(layout.gates[0], loom), P = buildParticles(q, thin, 12000, 9);
   const meanRc = (n) => { let s = 0; for (let i = 0; i < n; i++) s += P.a0[i * 4]; return s / n; };

@@ -299,6 +299,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     on('racer-event', ({ racer = -1, name, p = {} }) => (P4_EVENTS.has(name) ? ['p4', racer, name, p] : [name === 'water-hop' ? 'splash' : name, racer, (p && p.tier) || 0, p]));
     on('bump', (p) => ['bump', p.a, p.dv || 0, p.p, p.b]);
     on('bubble-ram', (p) => ['ram', p.attacker, 0, p.p, p.victim]);
+    on('scan-hit', (p) => ['machine', p.racer, p.effect === 'boost' ? 1 : 0]);
+    on('industry-hit', (p) => ['machine', p.racer, 0]);
+    on('industry-boost', (p) => ['machine', p.racer, 1]);
     for (const name of ['keep-gate-hit', 'keep-chain-hit']) on(name, () => ['bump', 0, 12]);
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
     on('item-box', (p) => ['box', p.racer, 0, p.p]);
@@ -330,6 +333,13 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       return;
     }
     if (kind === 'void') return;
+    if (kind === 'machine') {
+      if (!obj || !obj.visible) return;
+      particles.burst(posOf(i), Math.round(36 * few), { colours: a ? ['#5cff9d','#c0ffe0','#40dbc5'] : ['#ffd04e','#ef9b30','#fff1b8'],
+        speed: a ? 5 : 3, up: 1.8, sizeM: .16, lifeS: .8, sparkle: .7, near: i === 0 });
+      wakes.ring(posOf(i), obj.quaternion, a ? 3.2 : 2, { gentle, gain: .65 });
+      return;
+    }
     if (kind === 'ram') {
       particles.burst(p, Math.round(42*few), { colours: ['#adfff1','#5cd8ff','#ffffff'], speed: 9, up: 3, sparkle: 0.8, near: i===0 || b===0 });
       if(obj) wakes.ring(p,obj.quaternion,3.5,{gentle,gain:0.8});
@@ -498,8 +508,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (view.camera) {
       kartPos.length = 0;
       for (const o of kartObjs) if (o.visible) kartPos.push(o.position);
-      if (spirals) spirals.update(dt, { camera: view.camera, karts: kartPos, player: 0, gentle });
-      if (media) media.update(dt, { camera: view.camera, gentle, scrollMul: scroll, contrastMul: contrast });
+      if (spirals) spirals.update(dt, { camera: view.camera, karts: kartPos, player: 0, gentle, paused: !!view.paused });
+      if (media) media.update(dt, { camera: view.camera, gentle, scrollMul: scroll, contrastMul: contrast, paused: !!view.paused });
     }
     if (routes) routes.update(dt, { gentle, paused: !!view.paused, scroll });
     if (edges) edges.update(dt, { gentle, paused: !!view.paused });

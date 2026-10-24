@@ -31,12 +31,12 @@ export { LOOM_GOLDEN_K };
 /** Lane look table (render numbers live here, never in logic). Gentle halves turn, twinkle and contrast. */
 export const SPIRAL_LOOK = Object.freeze({
   radiusM: 20, upM: 3.5, holeFrac: 0.06, jitterM: 0.6,
-  perGate: Object.freeze({ high: 12000, mid: 6000, phone: 3000 }),
+  perGate: Object.freeze({ high: 18000, mid: 9000, phone: 4200 }),
   farShare: 0.3, activeM: 400, drawM: 900,
   // polish 4 (owner: "dense, with a glow and an aura, so we spot the arms at a glance"): cores sit on the
   // arm centre line (armFill of each band) sized to the band's real width across the arm, a soft glow
   // sprite layer under them (glowShare of the budget, glowSpan of the band width, never past glowMaxM)
-  sizeM: Object.freeze([0.16, 0.42]), coreSpan: 0.42, sizeRimGain: 0.2, armFill: 0.32,
+  sizeM: Object.freeze([0.2, 0.52]), coreSpan: 0.5, sizeRimGain: 0.2, armFill: 0.38,
   glitterShare: 0.03, glitterSize: 1.6, haloShare: 0, haloBand: 0.04,
   glowShare: 0.16, glowSpan: 1.35, glowMinM: 0.7, glowMaxM: 4.5, glowAlpha: 0.16, glowGain: 1.0, glowNearM: 14,
   alpha: 0.9, layer2Alpha: 0.8, haloAlpha: 0.35, gain: 1.25, glitterGain: 1.8, whiteMix: 0.3, coreWhite: 0.15,
@@ -52,7 +52,7 @@ export const SPIRAL_LOOK = Object.freeze({
   // the road window: particles over the road corridor (road half width + corridorSideM across, up to
   // corridorUpM above the surface, soft over corridorSoftM) fade to corridorAlpha, so the road and the next
   // turn stay readable through the gate from the kart's eye
-  corridorSideM: 1.5, corridorUpM: 7, corridorSoftM: 3, corridorAlpha: 0.1,
+  corridorSideM: 1.5, corridorUpM: 7, corridorSoftM: 3, corridorAlpha: 0.22,
   layer2Share: 0.35,
   slots: 4, partM: 8, partInnerM: 2.5, partRadiusM: 10, partLeadM: 22, partTrailM: 30, swirlShare: 0.7,
   burst: Object.freeze({

@@ -40,6 +40,7 @@ import { createItems } from './sim/items.js';
 import { loadTrack } from './track/load.js';
 import { selectTrack, allowsOnline, courseSongs } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
+import { createMainframeIndustry } from './sim/mainframeIndustry.js';
 import { createRenderer } from './render/renderer.js';
 import { buildWorld } from './render/world.js';
 import { loadArt } from './render/art.js';
@@ -274,7 +275,7 @@ async function boot() {
   const assist = createAssist(track, feel);       // the player's Steer assist (Options), never the bots'
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
-  let race, racers, ai, contact, standings, items, scan, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let race, racers, ai, contact, standings, items, scan, industry, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   function buildRun(s = null) {
     const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
@@ -288,6 +289,11 @@ async function boot() {
     }
     contact = createContact(track, feel, q);
     scan = createMainframeScan(track, q);
+    industry = createMainframeIndustry(track, q);
+    if (track.id === 'mainframe') {
+      const drive = ai.drive;
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing' || ctx.race.phase === 'finished') industry.steer(r, out); };
+    }
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
@@ -371,6 +377,7 @@ async function boot() {
     for (const r of racers.list) resetGlide(r.st);
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     scan.reset();
+    industry.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
     if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
@@ -735,9 +742,10 @@ async function boot() {
       if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
       racers.step(clock.dt, pa, race, sctx);
-      if (race.phase === 'racing') {
-        const sc = scanClock(audio.music, race.timeS);
+      if (race.phase === 'racing' || race.phase === 'finished') {
+        const sc = scanClock(audio.music, racers.clockS);
         scan.update(racers.list, sc.timeS, sc.bpm);
+        industry.update(racers.list, racers.clockS, clock.dt);
       }
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
@@ -780,7 +788,7 @@ async function boot() {
     const iv = items.view();
     // the song position the player hears (frozen while paused: the context is suspended)
     const music = audio.music, song = inRace && music ? music.song : null, songS = song ? music.songS : NaN;
-    const sc = scanClock(inRace ? music : null, race.timeS);
+    const sc = scanClock(inRace ? music : null, racers.clockS);
     if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     const pv = P.view;
     const wordLive = words && song ? words.update(songS,

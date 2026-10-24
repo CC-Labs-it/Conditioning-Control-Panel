@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { scanPose, scanClock, scanZones, createMainframeScan } from '../sim/mainframeScan.js';
 import { selectTrack, allowsOnline, courseSongs } from '../track/selection.js';
 import { songCharts } from '../host/bridge.js';
-import { createState, S, RESPAWN } from '../sim/state.js';
+import { createState, S, RESPAWN, BOOST } from '../sim/state.js';
 import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 
@@ -103,4 +103,17 @@ test('scan uses audible song position and downbeat, or the paused race clock wit
   assert.deepEqual(scanClock({ song: { bpm: 135, downbeatS: 0.4 }, songS: 3.4 }, 90), { timeS: 3, bpm: 135 });
   assert.deepEqual(scanClock(null, 5), { timeS: 5, bpm: 120 });
   assert.deepEqual(scanZones({ id: 'threshold' }), []);
+});
+
+test('laser yellow slows and green accelerates, with a forecast before each colour change', () => {
+  assert.equal(scanPose(zone,5).effect,'slow'); assert.equal(scanPose(zone,5).color,'yellow');
+  assert.equal(scanPose(zone,13).effect,'boost'); assert.equal(scanPose(zone,13).color,'green');
+  assert.equal(scanPose(zone,7.2).changingSoon,true); assert.equal(scanPose(zone,7.2).nextEffect,'boost');
+  assert.equal(scanPose(zone,15.2).changingSoon,true); assert.equal(scanPose(zone,15.2).nextEffect,'slow');
+  const {scan,r,events}=setup(); scan.update([r],13);
+  assert.equal(r.st[S.stalled],0); assert.equal(r.st[S.boostKind],BOOST.PAD);
+  assert.ok(Math.abs(r.st[S.boostAmount]-.18)<1e-6); assert.equal(events[0].effect,'boost');
+  scan.update([r],13); assert.equal(events.length,1,'pause cannot repeat a contact');
+  // Gentle is a rendering input, so it never changes laser collision or colour-clock semantics.
+  assert.deepEqual(scanPose(zone,13,120,false),scanPose(zone,13,120,true));
 });

@@ -5,7 +5,8 @@ import { registerHooks } from 'node:module';
 import { loadTrack } from '../track/load.js';
 import { scanPose } from '../sim/mainframeScan.js';
 import { bodyClear, sampleTrack, WORLD_DEFAULTS } from '../render/colossiMath.js';
-import { mediaLook, placeBillboard } from '../render/mediaMath.js';
+import { mediaLook } from '../render/mediaMath.js';
+import { fitMainframeBillboard, motionEnvelope } from '../render/mainframeMediaMotion.js';
 
 const hooks = registerHooks({ resolve(specifier, context, next) {
   const files = { 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
@@ -93,7 +94,8 @@ test('spill edges and the hex gallery void stay open below the driving surface',
 
 test('framed display bays keep billboard faces visible from the approaching road', () => {
   const samples = sampleTrack(track, 4), world = buildMainframe(track, null, { samples, mediaLayout });
-  const faces = mediaLayout.billboards.map(b => placeBillboard(b, track, samples, mediaLook())).filter(Boolean);
+  const faces = mediaLayout.billboards.map(b => fitMainframeBillboard(b, track, samples, mediaLook())).filter(Boolean)
+    .map(b => b.flight ? motionEnvelope(b, mediaLook()) : b);
   assert.equal(faces.length, mediaLayout.billboards.length);
   const opaque = []; world.group.updateMatrixWorld(true);
   world.group.traverse(o => { if (o.isMesh && !o.material.transparent) opaque.push(o); });
@@ -115,7 +117,7 @@ test('framed display bays keep billboard faces visible from the approaching road
     if (visible < 6) blocked.push(`${face.id}: only ${visible}/9 visible from ${lead} m`);
   }
   assert.deepEqual(blocked, []);
-  assert.ok(world.counts.wall > 250, 'the display bays retain substantial enclosed architecture');
+  assert.ok(world.counts.wall > 100 && world.counts.rib > 500, 'room openings retain enclosed aisles and framed structural bays');
   world.dispose();
 });
 
@@ -179,7 +181,7 @@ test('Mainframe scans follow the shared song clock, freeze on pause and warn aft
   world.update(0.1, { scanTimeS: 5.5, scanBpm: 120, paused: true });
   assert.equal(scan.panel.position.x, before);
   world.update(0.1, { scanTimeS: 5.5, scanBpm: 120, scanReady: false }, true);
-  assert.equal(scan.panelMat.color.getHexString(), 'ffc65c');
+  assert.equal(scan.panelMat.color.getHexString(), 'ffd04e');
   assert.ok(scan.panelMat.opacity < 0.52);
   world.dispose();
 });

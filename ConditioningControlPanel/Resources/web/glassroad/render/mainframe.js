@@ -9,6 +9,9 @@ import { createMachineMaterial, coolantCaustics } from './mainframeMaterials.js'
 import { createLoomDisplayFrames } from './loomVariety.js';
 import { buildFloatingProcessors } from './mainframeFloat.js';
 import { mediaLook, placeBillboard, rectPoints } from './mediaMath.js';
+import { fitMainframeBillboard, motionEnvelope } from './mainframeMediaMotion.js';
+import { buildMainframeRooms, mainframeRoomWindows } from './mainframeRooms.js';
+import { buildMainframeHazards } from './mainframeHazards.js';
 
 const point = (f, x, y, z = 0) => f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z);
 
@@ -43,10 +46,13 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   }).filter(s => s > 0);
   const add = (kind, f, x, y, z, size) => rows[kind].push({ p: point(f, x, y, z), b: [...f.b], n: [...f.n], t: [...f.t], size });
   const length = track.lengthM, count = Q.name === 'phone' ? 34 : 60;
+  const roomWindows = mainframeRoomWindows(track);
+  const roomBay = s => roomWindows.some(room => s >= room.fromS && s <= room.toS);
   // Use the media renderer's fitted faces, including any clearance-driven outward adjustment.
   // Long display bays expose the whole picture while it is still 30-60 m ahead of the driver.
   const mediaLookNow = mediaLook();
-  const billboards = (mediaLayout?.billboards || []).map(b => placeBillboard(b, track, samples, mediaLookNow)).filter(Boolean);
+  const billboards = (mediaLayout?.billboards || []).map(b => fitMainframeBillboard(b, track, samples, mediaLookNow)).filter(Boolean)
+    .map(b => motionEnvelope(b, mediaLookNow));
   const displayBay = (s, side) => billboards.find(b => {
     const d = ((s - b.s + length * 1.5) % length) - length / 2;
     return b.side === side && d >= -80 - b.w / 2 && d <= b.w / 2 + 16;
@@ -59,7 +65,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   // A capsule check against the WHOLE road keeps every rack out of nearby switchbacks too.
   for (let i = 0; i < count; i++) {
     const s = (i + 0.5) * length / count, f = track.frameAt(s), side = i % 2 ? 1 : -1;
-    if (displayBay(s, side)) continue;
+    if (displayBay(s, side) || roomBay(s)) continue;
     const height = 27 + (i * 17 % 5) * 5, width = 6 + (i % 3), depth = 5;
     let off = f.w / 2 + 13 + (i % 3) * 8, fit = false;
     for (let n = 0; n < 10; n++, off += 8) {
@@ -98,7 +104,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       const exit = id === 'emerge' ? Math.max(0, Math.min(1, (s - reservoir.emerge.fromS) / (reservoir.emerge.toS - reservoir.emerge.fromS))) : 0;
       const blend = exit * exit * (3 - 2 * exit), height = baseHeight + (28 - baseHeight) * blend;
       if (!bodyClear({ B: point(f, off, -2), D: f.n, len: height, r: 4.3 }, samples, clearance).ok) continue;
-      if (displayBay(s + 4, side)) {
+      if (displayBay(s + 4, side) || roomBay(s + 4)) {
         // Continuous lintel and sill frame the opening; solid adjacent wall segments form the jambs.
         add('rib', f, off, height - 3, 0, [1.8, 2, 8.5]);
         add('rib', f, off, -1, 0, [1.8, 1, 8.5]);
@@ -322,13 +328,19 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     barRows.forEach((r, i) => { matrix.makeScale(r.w, r.h, r.d).setPosition(r.x, r.y, r.z); bars.setMatrixAt(i, matrix); });
     bars.instanceMatrix.needsUpdate = true; bars.computeBoundingSphere();
     const lamps = new Mesh(geometry, stripeMat); lamps.scale.set(zone.width, 0.45, 0.35); lamps.position.set(0, height + 0.6, 0); holder.add(lamps);
-    return { zone, frame: f, panel, floor, floorTiles, panelMat, floorMat, bars, stripeMat };
+    const sparks = new InstancedMesh(keepGeo(new SphereGeometry(.15, 5, 4)), stripeMat, Q.name === 'phone' ? 24 : 80);
+    sparks.frustumCulled = false; sparks.name = 'laser-ion-sparks'; holder.add(sparks);
+    return { zone, frame: f, panel, floor, floorTiles, panelMat, floorMat, bars, stripeMat, sparks };
   });
   const floating = buildFloatingProcessors(track, art, samples, billboards); group.add(floating.group);
-  return { group, scans, core, tubes, displays, landmarks, reservoir, floating, counts: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.length])),
+  const rooms = buildMainframeRooms(track, art, { samples, mediaLayout }); group.add(rooms.group);
+  const industry = buildMainframeHazards(track, art); group.add(industry.group);
+  return { group, scans, core, tubes, displays, landmarks, reservoir, floating, rooms, industry, counts: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.length])),
     update(dt, view, gentle = false) {
       if (view.paused) return;
       floating.update(dt, gentle);
+      rooms.update(dt, { gentle, paused: view.paused });
+      industry.update(dt, { timeS: view.raceTimeS ?? 0, gentle, paused: view.paused });
       updateBubbles(dt * (gentle ? 0.5 : 1));
       coolantTime.value += dt * (gentle ? 0.5 : 1);
       loomContrast.value += ((gentle ? 0.5 : 1) - loomContrast.value) * Math.min(1, dt / 0.3);
@@ -351,17 +363,28 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
           scan.floorTiles.instanceMatrix.needsUpdate = true; scan.floorTiles.computeBoundingSphere();
         }
         const warning = pose.phase === 'warn', active = pose.phase === 'sweep' || pose.phase === 'hold';
-        scan.panelMat.color.set(warning ? '#ffc65c' : '#77ffad'); scan.stripeMat.color.copy(scan.panelMat.color);
+        scan.panelMat.color.set(pose.effect === 'boost' ? '#57ff9d' : '#ffd04e'); scan.stripeMat.color.copy(scan.panelMat.color);
+        const scanTime = view.scanTimeS ?? view.timeS ?? 0;
+        const flutter = pose.changingSoon && !gentle ? .72 + .28 * Math.sin(scanTime * Math.PI * 2) ** 2 : 1;
+        for (let j = 0; j < scan.sparks.count; j++) {
+          const phase = ((scanTime * (gentle ? .2 : .45) + j * .618) % 1 + 1) % 1;
+          const x = pose.x + (j / scan.sparks.count - .5) * scan.zone.width;
+          matrix.makeScale(.6 + phase, .6 + phase, .6 + phase).setPosition(x,
+            .25 + phase * (scan.zone.height ?? 5.5), Math.sin(j * 2.4 + scanTime * .4) * scan.zone.len / 2);
+          scan.sparks.setMatrixAt(j, matrix);
+        }
+        scan.sparks.instanceMatrix.needsUpdate = true;
         const intensity = gentle ? 0.75 : 1, target = active ? 0.52 * intensity : warning ? 0.12 * intensity : 0.015;
         // 300 ms minimum full rise, with the same collision timing and bypass on every setting.
         const step = Math.min(1, dt / (gentle ? 0.3 : 0.18));
         scan.panelMat.opacity += (target - scan.panelMat.opacity) * step;
-        scan.stripeMat.opacity += ((active ? 0.9 : warning ? 0.5 : 0.04) * intensity - scan.stripeMat.opacity) * step;
+        scan.stripeMat.opacity += ((active ? 0.9 : warning || pose.changingSoon ? 0.5 : 0.04) * intensity * flutter - scan.stripeMat.opacity) * step;
         scan.floorMat.color.copy(scan.panelMat.color);
         scan.floorMat.opacity += (Math.max(0.025, warning ? 0.4 : target * 0.65) - scan.floorMat.opacity) * step;
       }
     },
     dispose() {
+      rooms.dispose(); industry.dispose();
       floating.dispose();
       group.removeFromParent(); group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
       geometries.forEach((g) => g.dispose()); materials.forEach((m) => m.dispose());

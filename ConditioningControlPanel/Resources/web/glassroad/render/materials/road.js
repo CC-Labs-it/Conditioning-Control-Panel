@@ -28,6 +28,7 @@ import { ROAD_HALF_WIDTH_RANGE, encodeRoadHalfWidth } from '../musicTilesMath.js
 import { createMusicBands } from './musicBands.js';
 import { createWaterSurface, waterAttributes } from './water.js';
 import { machineSurface, coolantCaustics } from '../mainframeMaterials.js';
+import { mainframeFloor } from '../mainframeFloor.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -332,7 +333,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
     const joints = aaLineN(abs(fract(p.y.div(12)).sub(0.5)).mul(12), 0.065, fwidth(p.y), 12)
       .mul(smoothstep(5, 14, dist));
     const traces = max(lanes, joints.mul(0.45));
-    const plates = machineSurface(p, vec3(0.045, 0.067, 0.073), art?.detail?.('detail-gold-wear'));
+    const plates = mainframeFloor(track, p, machineSurface(p, vec3(0.045, 0.067, 0.073), art?.detail?.('detail-gold-wear')));
     surface = plates.add(body.mul(0.018))
       .add(pal.col(0).mul(traces.mul(0.42).add(lineV.mul(0.12)).add(edgeW.mul(0.08))))
       .add(vec3(0.28, 0.75, 0.48).mul(centre.mul(S.centreGain).mul(u.contrast)))

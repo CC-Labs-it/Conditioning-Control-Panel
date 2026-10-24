@@ -1,5 +1,6 @@
 // Mainframe scan walls: four visible phases on the song clock, with a permanent outside bypass.
-import { S, RESPAWN } from './state.js';
+import { S, BOOST, RESPAWN } from './state.js';
+import { applyBoost, boostHoldLeftS } from './boost.js';
 
 /** Named runtime span shared by the course's environment, canal support and timed obstacles. */
 export function mainframeSpan(track, id) {
@@ -18,11 +19,15 @@ export function scanZones(track) {
 }
 
 export function scanPose(zone, timeS, bpm = 120) {
-  const beat = ((Math.max(0, timeS) * bpm / 60 + zone.offset) % 16 + 16) % 16;
+  const absoluteBeat = Math.max(0, timeS) * bpm / 60 + zone.offset;
+  const beat = ((absoluteBeat % 16) + 16) % 16;
+  const effect = Math.floor(absoluteBeat / 16) % 2 ? 'boost' : 'slow';
   const phase = beat < 4 || beat >= 14 ? 'clear' : beat < 8 ? 'warn' : beat < 12 ? 'sweep' : 'hold';
   const u = Math.max(0, Math.min(1, (beat - 8) / 4));
   const travel = zone.travel || 3;
-  return { phase, x: -travel + 2 * travel * (u * u * (3 - 2 * u)),
+  return { phase, effect, color: effect === 'boost' ? 'green' : 'yellow',
+    nextEffect: effect === 'boost' ? 'slow' : 'boost', warning: phase === 'warn', changingSoon: beat >= 14,
+    x: -travel + 2 * travel * (u * u * (3 - 2 * u)),
     opacity: phase === 'clear' ? Math.max(0, 1 - (beat - 14) / 2) * (beat >= 14 ? 0.28 : 0)
       : phase === 'warn' ? Math.min(1, (beat - 4) / 1.5) * 0.18 : 0.28,
     active: phase === 'sweep' || phase === 'hold' };
@@ -61,7 +66,7 @@ export function createMainframeScan(track, events) {
         const near = now.s >= zone.s - 3 && now.s <= zone.s + zone.len + 3;
         if (!near) latched.delete(key);
         if (latched.has(key) || Math.abs(ds) > 15) continue;
-        let hit = false;
+        let hit = false, hitEffect = 'slow';
         // Swept probes cover the kart path and the moving wall, even on a low frame rate.
         for (let n = 0; n <= 4 && !hit; n++) {
           const a = n / 4, s = prev.s + ds * a, x = prev.x + (now.x - prev.x) * a;
@@ -71,12 +76,17 @@ export function createMainframeScan(track, events) {
           const wallHeight = support ? support.height + h * Math.hypot(1, support.slope, support.alongSlope) : h;
           hit = sampleT >= safeUntil && pose.active && s >= zone.s - 0.7 && s <= zone.s + zone.len + 0.7
             && wallHeight >= -0.5 && wallHeight <= zone.height && Math.abs(x - pose.x) <= zone.width / 2 + 0.65;
+          if (hit) hitEffect = pose.effect;
         }
         if (hit) {
           latched.add(key);
-          st[S.stalled] = Math.max(st[S.stalled], 0.5);
+          if (hitEffect === 'boost') {
+            if (!(racer.feel && st[S.boostAmount] >= .18 && boostHoldLeftS(st,racer.feel) > 0))
+              applyBoost(st, BOOST.PAD, 0, racer.feel, racer.events || { emit() {} }, { amount: 0.18, holdS: 0.7 });
+          } else st[S.stalled] = Math.max(st[S.stalled], 0.5);
           api.hits++;
-          events.emit('scan-hit', { racer: id, zone: zone.id, durationS: 0.5 });
+          events.emit('scan-hit', { racer: id, zone: zone.id, durationS: hitEffect === 'boost' ? 0.7 : 0.5,
+            effect: hitEffect, color: hitEffect === 'boost' ? 'green' : 'yellow' });
         }
       }
     }
