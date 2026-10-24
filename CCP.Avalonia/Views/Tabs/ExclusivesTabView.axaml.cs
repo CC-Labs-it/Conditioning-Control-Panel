@@ -47,9 +47,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             LoadBackdrop();
             RefreshVault();
 
-            // The tab is permanently mounted on WPF and MainWindow parks its canvas through
-            // RegisterTabFx. No tab host on this head: the view runs its own room and stops it on
-            // unload. The canvas self-gates on motion, tier and window focus regardless.
+            // The shell enrolls the room in RegisterTabFx on first arrival at "premium",
+            // matching WPF EnsureExclusivesBuilt. This view composes it and stops it on unload;
+            // the canvas also self-gates on motion, tier and window focus.
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             // PLAYBOOK P01: the shell hides tabs with IsVisible, so the motion clock follows it too.
@@ -128,6 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void RefreshVault()
         {
+            RetintVaultChrome();
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.
@@ -163,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // WPF VaultLivery.Apply at hero weight: tiered = livery + 4px living rim; untiered = resting/gold edge.
             TierFxBorder.SetRimThickness(card, 4);
             TierFxBorder.SetTier(card, spot.Tier);
-            card.BorderBrush = SpotEdge(spot.Tier, spot.FreeToday);
+            card.BorderBrush = spot.Tier > 0 ? ExclusiveCardRow.Livery(spot.Tier) : spot.FreeToday ? ExclusiveCardRow.EdgeFree : new SolidColorBrush(WithAlpha(VaultAccent(), 0x66));
             card.BorderThickness = new Thickness(spot.Tier > 0 ? 4 : spot.FreeToday ? 2 : 1);
             card.Cursor = spot.Cursor;
             ToolTip.SetTip(card, spot.UnavailableTip);
@@ -171,18 +172,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             open.IsEnabled = spot.IsAvailable;
             ToolTip.SetTip(open, spot.UnavailableTip);
             ToolTip.SetShowOnDisabled(open, true);
-            // WPF RetintVaultChrome re-tints the spotlight chrome on every mod switch.
-            if (Resources["SpotTitleGlow"] is DropShadowEffect titleGlow) titleGlow.Color = ExclusiveCardRow.Accent;
-            foreach (var name in new[] { "SpotBadge", "SpotVeilPill" })
-                if (this.FindControl<Border>(name)?.Background is LinearGradientBrush fill)
-                    foreach (var stop in fill.GradientStops)
-                    {
-                        var hue = stop.Offset == 0 ? ExclusiveCardRow.Accent : ExclusiveCardRow.Partner;
-                        stop.Color = Color.FromArgb(stop.Color.A, hue.R, hue.G, hue.B);
-                    }
             RefreshTierPlates();
             Dress(this.FindControl<Control>("SpotFreeToday")!);
             Dress(this.FindControl<Control>("SpotVeilLock")!);   // WPF :799 breathes only under a shown veil
+        }
+
+        // WPF RetintVaultChrome: only decor follows the mod; gold free-day and tier commerce do not.
+        internal static Color VaultAccent()
+        {
+            var rgb = App.Mods?.GetGlowColorRgb();
+            return rgb is { } c ? Color.FromRgb(c.R, c.G, c.B) : AmbientFxCanvas.Env.GlowColor;
+        }
+
+        internal static Color WithAlpha(Color c, byte alpha) => Color.FromArgb(alpha, c.R, c.G, c.B);
+
+        internal static Color VaultPartner()
+        {
+            var c = VaultAccent();
+            var rgb = Services.UI.VaultColor.ShiftHue(c.R, c.G, c.B, Services.UI.VaultColor.PartnerHueShift);
+            return Color.FromArgb(c.A, rgb.R, rgb.G, rgb.B);
+        }
+
+        private void RetintVaultChrome()
+        {
+            var accent = VaultAccent();
+            var partner = VaultPartner();
+            Resources["VaultAccentColor"] = accent;
+            Resources["VaultPartnerColor"] = partner;
+            Resources["VaultVeilAccentColor"] = WithAlpha(accent, 0xE6);
+            Resources["VaultVeilPartnerColor"] = WithAlpha(partner, 0xD9);
         }
 
         /// <summary>WPF RefreshExclusiveTierPlates: the plate matching the account's access lights and breathes.
@@ -202,10 +220,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ------------------------------------------------------------------
         // Motion (WPF Start/StopExclusivesMotion, ApplyVeilLockBreath, ApplyFreeTodayPulse, sheens)
         // ------------------------------------------------------------------
-
-        /// <summary>WPF VaultLivery at hero weight; untiered = SpotlightEdgeDefault (accent at 0x66).</summary>
-        internal static IBrush SpotEdge(int tier, bool freeToday) =>
-            tier > 0 ? ExclusiveCardRow.Livery(tier) : freeToday ? ExclusiveCardRow.EdgeFree : new SolidColorBrush(ExclusiveCardRow.AccentWithAlpha(0x66));
 
         private static readonly Color FreeTodayGold = Color.FromRgb(0xFF, 0xD2, 0x7A);
         private readonly ScaleTransform _kenBurns = new();
@@ -444,62 +458,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>
         /// Resting rim (VaultLivery.Apply). Untiered free-today is EdgeFree at 2px.
         /// A tiered card wears its livery at 3px (the template's TierFxBorder laps it).
-        /// Untiered rims derive their HSV partner from the active mod, as WPF's ExclusiveEdgeDefault does.
         /// </summary>
-        public IBrush EdgeBrush => Tier > 0 ? Livery(Tier) : FreeToday ? EdgeFree : new SolidColorBrush(PartnerWithAlpha(0x4D));
+        public IBrush EdgeBrush => Tier > 0 ? Livery(Tier) : FreeToday ? EdgeFree : new SolidColorBrush(ExclusivesTabView.WithAlpha(ExclusivesTabView.VaultPartner(), 0x4D));
         public Thickness EdgeThickness => new(Tier > 0 ? 3 : FreeToday ? 2 : 1);
-
-        /// <summary>WPF AccentGradient(0xFF, 0xFF): the NEW/BETA badge.</summary>
-        public IBrush BadgeFill => AccentGradient(0xFF, 0xFF);
-        /// <summary>WPF AccentGradient(0xE6, 0xD9): the locked veil's unlock pill.</summary>
-        public IBrush PillFill => AccentGradient(0xE6, 0xD9);
-        /// <summary>WPF AccentTitleShadow(): the card title's accent glow.</summary>
-        public IEffect TitleGlow => new DropShadowEffect { Color = Accent, BlurRadius = 10, OffsetX = 0, OffsetY = 0, Opacity = 0.7 };
-
-        private static LinearGradientBrush AccentGradient(byte alphaA, byte alphaB) => new()
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-            GradientStops = { new GradientStop(AccentWithAlpha(alphaA), 0), new GradientStop(PartnerWithAlpha(alphaB), 1) },
-        };
-
-        internal static Color Accent
-        {
-            get
-            {
-                // ponytail: no global FxTheme writer yet. Read the same Core mod palette WPF
-                // publishes; headless rendering falls back to the authored FxGlowColor resource.
-                if (App.Mods is { } mods)
-                {
-                    var (r, g, b) = mods.GetGlowColorRgb();
-                    return Color.FromRgb(r, g, b);
-                }
-                return AmbientFxCanvas.Env.GlowColor;
-            }
-        }
-
-        internal static Color Partner
-        {
-            get
-            {
-                var c = Accent;
-                uint partner = Services.UI.VaultHue.Partner(Services.UI.NavStripPaint.Argb(c.A, c.R, c.G, c.B));
-                return Color.FromArgb(Services.UI.NavStripPaint.A(partner), Services.UI.NavStripPaint.R(partner),
-                    Services.UI.NavStripPaint.G(partner), Services.UI.NavStripPaint.B(partner));
-            }
-        }
-
-        internal static Color AccentWithAlpha(byte alpha)
-        {
-            var c = Accent;
-            return Color.FromArgb(alpha, c.R, c.G, c.B);
-        }
-
-        private static Color PartnerWithAlpha(byte alpha)
-        {
-            var c = Partner;
-            return Color.FromArgb(alpha, c.R, c.G, c.B);
-        }
 
         /// <summary>VaultLivery.EdgeFree: gold means "open for one day only".</summary>
         internal static IBrush EdgeFree => Brush("#E6FFD27A");

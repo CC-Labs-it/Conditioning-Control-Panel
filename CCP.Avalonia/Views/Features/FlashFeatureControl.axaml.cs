@@ -58,6 +58,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CmbMotion.SelectionChanged += CmbMotion_Changed;
             SliderDriftSpeed.ValueChanged += SliderDriftSpeed_Changed;
 
+            // WPF OnLoaded: Configure, then RowChanged re-measures the box (OnGetRowChanged -> RefreshV2Box).
+            RowGetFlashesV2.RowChanged += (_, _) => OnGetRowChanged();
+            RowGetFlashesV2.Configure(ConditioningControlPanel.Services.Prizes.V2PurchaseRule.FlashesPrizeId, "v2_get_flash_blurb", "section_flash_v2");
+
             LoadFromSettings();
 
             // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt +
@@ -140,16 +144,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        // WPF rebuilds on PrizeGrants.GrantsChanged; ownership never changes at runtime on this head
-        // (PrizeOwnership), so the rebuild on load/rebind is all there is to do.
+        // WPF rebuilds on PrizeGrants.GrantsChanged. On this head ownership changes at runtime only
+        // when a Get it buy lands its grants (PrizeOwnership.ApplySnapshot), and that is exactly when
+        // the row turns Hidden: rebuild then, so the bought Drift & Bounce shows at once.
+        private void OnGetRowChanged()
+        {
+            if (!RowGetFlashesV2.IsRowHidden || RowMotion.IsVisible
+                || !Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)) { RefreshV2Box(); return; }
+            var wasLoading = _isLoading;
+            _isLoading = true;
+            try { BuildMotionPicker(); }
+            finally { _isLoading = wasLoading; }
+        }
+
+        /// <summary>WPF RefreshV2Box: the box holds the offer while nothing is owned and collapses once
+        /// no row is left (only the motion row and the Get it row exist here).</summary>
+        private void RefreshV2Box() =>
+            BoxFlashV2.IsVisible = RowMotion.IsVisible || !RowGetFlashesV2.IsRowHidden;
 
         /// <summary>Still always, Drift and Bounce with its v2 pill when owned, Mix once anything v2 is
-        /// owned; with nothing owned the box stays hidden. Pendulum is not offered: this head cannot
-        /// play it yet (it would play Still).</summary>
+        /// owned. Pendulum is not offered: this head cannot play it yet (it would play Still).</summary>
         private void BuildMotionPicker()
         {
             var drift = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce);
-            BoxFlashV2.IsVisible = RowMotion.IsVisible = drift;
+            RowMotion.IsVisible = drift;
+            RefreshV2Box();
             CmbMotion.Items.Clear();
             AddMotionChoice(FlashMotionStyle.Still, "option_flash_motion_still", v2: false);
             if (drift)
@@ -168,19 +187,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             var row = new StackPanel { Orientation = global::Avalonia.Layout.Orientation.Horizontal };
             row.Children.Add(new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get(key), VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center });
-            if (v2)
-                row.Children.Add(new Border
-                {
-                    Margin = new Thickness(8, 0, 0, 0), Padding = new Thickness(6, 2, 7, 3), CornerRadius = new CornerRadius(7),
-                    Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
-                    BorderBrush = V2Brush, BorderThickness = new Thickness(1), IsHitTestVisible = false,
-                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
-                    Child = new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get("badge_v2"), Foreground = V2Brush, FontSize = 9, FontWeight = FontWeight.Bold },
-                });
+            if (v2) row.Children.Add(NewV2Badge(new Thickness(8, 0, 0, 0)));
             CmbMotion.Items.Add(new ComboBoxItem { Content = row, Tag = style });
         }
 
         private static readonly IBrush V2Brush = new SolidColorBrush(Color.Parse("#FFE08A"));
+
+        /// <summary>WPF FeatureCard.NewV2Badge: the champagne v2 pill for other surfaces (this
+        /// picker, the Studio rack rows). <paramref name="compact"/> is the rack/rail size.</summary>
+        internal static Border NewV2Badge(Thickness margin, bool compact = false) => new()
+        {
+            Margin = margin,
+            Padding = compact ? new Thickness(3, 0, 4, 1) : new Thickness(6, 2, 7, 3),
+            CornerRadius = new CornerRadius(compact ? 5 : 7),
+            Background = new SolidColorBrush(Color.FromArgb(0xD9, 0x1A, 0x1A, 0x2E)),
+            BorderBrush = V2Brush, BorderThickness = new Thickness(1), IsHitTestVisible = false,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
+            Child = new TextBlock { Text = ConditioningControlPanel.Localization.Loc.Get("badge_v2"), Foreground = V2Brush, FontSize = compact ? 7 : 9, FontWeight = FontWeight.Bold },
+        };
 
         private void CmbMotion_Changed(object? sender, SelectionChangedEventArgs e)
         {

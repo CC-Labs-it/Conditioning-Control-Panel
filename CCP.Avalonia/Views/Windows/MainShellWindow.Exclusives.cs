@@ -1,16 +1,15 @@
-// PORTED-AS-A-STUB from ConditioningControlPanel/MainWindow/MainWindow.Exclusives.cs (1296 lines).
+// PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.Exclusives.cs (1296 lines).
 //
 // Restored in ExclusivesTabView (rows-exclusives): BuildComingSoonCard, ApplyVeilLockBreath, ApplyFreeTodayPulse,
 // RefreshExclusiveTierPlates, Start/StopExclusivesMotion, Restart/AttachExclusiveSheens, VaultLivery.Apply.
-// Restored in ExclusivesTabView/ExclusiveCardRow (mod accent): VaultAccent (Accent), VaultPartner/ShiftHue/
-// VaultPartnerHueShift (Core VaultHue), ExclusiveEdgeDefault, SpotlightEdgeDefault (SpotEdge), AccentGradient,
-// AccentTitleShadow (TitleGlow), RetintVaultChrome (RefreshVault on tab show / ModChanged).
+// wire-shell-exclusives adds mod-aware accent edges and badge/pill gradients in that same view;
+// the HSV hue rotation is shared with WPF through Core Services/UI/VaultColor.cs.
 // ponytail: stub except RefreshExclusivesTab (the roster/gate repaint now lives in ExclusivesTabView). Every member below reaches App.*, a service, a device, a
 // WebView2 or Win32 - none of which this head may touch (see the layer rules: "Do not
 // move services"). The file exists and each member is NAMED so nothing disappears
 // silently; the bodies come back when the services move to Core.
 //
-// Members dropped (38):
+// Members dropped (41; the accent retint - VaultPartner, ShiftHue, RetintVaultChrome, TintShadow/TintGradient - is in ExclusivesTabView + Core VaultColor):
 //   private sealed class ExclusiveCardUi
 //   private readonly List<ExclusiveCardUi> _exclusiveCards
 //   private readonly List<TextBlock> _exclusiveTeaserMarks
@@ -23,7 +22,12 @@
 //   private static readonly FontFamily FredokaFont
 //   private static readonly Color FreeTodayGold
 //   private static SolidColorBrush Freeze(…)
+//   private static Color VaultAccent(…)
 //   private const byte TeaserMarkAlpha
+//   private static SolidColorBrush ExclusiveEdgeDefault(…)
+//   private static SolidColorBrush SpotlightEdgeDefault(…)
+//   private LinearGradientBrush AccentGradient(…)
+//   private DropShadowEffect AccentTitleShadow(…)
 //   private static bool IsExclusiveFreeToday(…)
 //   internal void OpenExclusiveSpotlight(…)
 //   private void EnsureExclusivesBuilt(…)
@@ -33,8 +37,6 @@
 //   private static string TeaserEmoji(…)
 //   private static void OnExclusiveCardHover(…)
 //   internal void RefreshExclusivesTab(…)
-//   private static void TintShadow(…)
-//   private static void TintGradient(…)
 //   private void ApplyExclusiveCardState(…)
 //   private static void ApplyVeilLockBreath(…)
 //   private static Storyboard? ApplyFreeTodayPulse(…)

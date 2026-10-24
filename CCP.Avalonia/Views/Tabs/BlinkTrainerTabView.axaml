@@ -22,10 +22,10 @@
        x:FieldModifier="internal"    ->  dropped; x:Names kept (nothing on this head pokes them yet)
        SnapsToDevicePixels           ->  dropped (no equivalent, no visual effect here)
        Button.Resources Style-for-Border -> CornerRadius straight on the Button
-       feat:AdaptiveSideArt.CollapseBelow -> dropped; the attached behaviour is not ported
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        MediaElement                  ->  Image fed by a VlcFrameSink (muted, looped)
        Image / ImageBrush art        ->  named plate Borders painted by ModArt.BindFeaturePlates -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -154,9 +154,9 @@
         <!-- ═══ WIDE LAYOUT ═══
              Row 0 is the "look" band: the live stage on the left, the feature plate on the
              right (both 288 tall). Row 1 is the settings, spanning both columns and capped at
-             940. ponytail: the WPF root carries feat:AdaptiveSideArt.CollapseBelow="860" to
-             collapse the art column on a narrow host; that attached behaviour is not ported. -->
-        <Grid>
+             940. sideart:AdaptiveSideArt.CollapseBelow="860" collapses the art column on a narrow
+             host, as on WPF. -->
+        <Grid sideart:AdaptiveSideArt.CollapseBelow="860">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="3*" MaxWidth="780"/>
             <ColumnDefinition Width="2*"/>
@@ -210,10 +210,13 @@
                   <ColumnDefinition Width="*"/>
                   <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <Ellipse Grid.Column="0" x:Name="BlinkTrainerStatusDot"
-                         Width="10" Height="10"
-                         Fill="{DynamicResource PinkBrush}" Margin="0,0,9,0"
-                         VerticalAlignment="Center"/>
+                <Grid Grid.Column="0" Width="10" Height="10" Margin="0,0,9,0" VerticalAlignment="Center">
+                  <Border x:Name="BlinkTrainerStatusGlow" CornerRadius="99" IsVisible="False" IsHitTestVisible="False"/>
+                  <Ellipse x:Name="BlinkTrainerStatusDot"
+                           Width="10" Height="10"
+                           Fill="{DynamicResource PinkBrush}"
+                           VerticalAlignment="Center"/>
+                </Grid>
                 <TextBlock Grid.Column="1" x:Name="BlinkTrainerStatusText"
                            Text="{loc:Str blink_trainer_status_ready}"
                            Foreground="{DynamicResource TextMutedBrush}"

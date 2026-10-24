@@ -51,9 +51,10 @@
              d:DesignHeight="620" d:DesignWidth="1460">
 
     <UserControl.Resources>
-        <!-- Spotlight title glow; its Color is re-tinted to the mod accent by RefreshExclusivesTab. -->
-        <DropShadowEffect x:Key="SpotTitleGlow" Color="#FF69B4" BlurRadius="20"
-                          OffsetX="0" OffsetY="0" Opacity="0.5"/>
+        <Color x:Key="VaultAccentColor">#FF69B4</Color>
+        <Color x:Key="VaultPartnerColor">#B478FF</Color>
+        <Color x:Key="VaultVeilAccentColor">#E6FF69B4</Color>
+        <Color x:Key="VaultVeilPartnerColor">#D9B478FF</Color>
         <!-- Velvet Kit 2 · round 4 — the vault's hue identity. LOCAL literals only:
              a Theme dictionary may not resolve a StaticResource from another dictionary
              (deferred-BAML EndOfStreamException), and these three keys are wanted by
@@ -223,8 +224,8 @@
                                             <!-- Authored in the Bambi accent pair; re-tinted from
                                                  the active mod's accent by RefreshExclusivesTab. -->
                                             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                                <GradientStop Color="#FF69B4" Offset="0"/>
-                                                <GradientStop Color="#B478FF" Offset="1"/>
+                                                <GradientStop Color="{DynamicResource VaultAccentColor}" Offset="0"/>
+                                                <GradientStop Color="{DynamicResource VaultPartnerColor}" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
                                         <TextBlock x:Name="TxtSpotBadge"
@@ -255,8 +256,12 @@
                                 </StackPanel>
                                 <TextBlock x:Name="TxtSpotTitle"
                                            FontWeight="SemiBold"
-                                           FontSize="30" Foreground="White"
-                                           Effect="{StaticResource SpotTitleGlow}"/>
+                                           FontSize="30" Foreground="White">
+                                    <TextBlock.Effect>
+                                        <DropShadowEffect Color="{DynamicResource VaultAccentColor}" BlurRadius="20"
+                                                          OffsetX="0" OffsetY="0" Opacity="0.5"/>
+                                    </TextBlock.Effect>
+                                </TextBlock>
                                 <TextBlock x:Name="TxtSpotTagline"
                                            Foreground="{StaticResource TextSecondaryBrush}" FontSize="14" TextWrapping="Wrap"
                                            Margin="0,8,0,0" LineHeight="21"/>
@@ -286,13 +291,13 @@
                                     <fx:IconGlyph x:Name="SpotVeilLock"
                                                Kind="LockClosed" Variant="Filled" Size="44" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"/>
                                     </Panel>
-                                    <Border x:Name="SpotVeilPill" CornerRadius="12" Padding="14,5" Margin="0,10,0,0">
+                                    <Border CornerRadius="12" Padding="14,5" Margin="0,10,0,0">
                                         <Border.Background>
                                             <!-- Same accent pair as the shelf cards' unlock pill;
                                                  re-tinted by RefreshExclusivesTab on a mod switch. -->
                                             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
-                                                <GradientStop Color="#E6FF69B4" Offset="0"/>
-                                                <GradientStop Color="#D9B478FF" Offset="1"/>
+                                                <GradientStop Color="{DynamicResource VaultVeilAccentColor}" Offset="0"/>
+                                                <GradientStop Color="{DynamicResource VaultVeilPartnerColor}" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
                                         <fx:IconLabel TextElement.FontSize="11" TextElement.FontWeight="Bold" TextElement.Foreground="White"
@@ -356,7 +361,12 @@
                                             </Border.Background>
                                             <StackPanel>
                                                 <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
-                                                           FontSize="15" Foreground="White" Effect="{Binding TitleGlow}"/>
+                                                           FontSize="15" Foreground="White">
+                                                    <TextBlock.Effect>
+                                                        <DropShadowEffect Color="{DynamicResource VaultAccentColor}" BlurRadius="10"
+                                                                          OffsetX="0" OffsetY="0" Opacity="0.7"/>
+                                                    </TextBlock.Effect>
+                                                </TextBlock>
                                                 <TextBlock Text="{Binding Tagline}" Foreground="#9A93B8"
                                                            FontSize="11" TextWrapping="Wrap"
                                                            TextTrimming="CharacterEllipsis" MaxLines="2"
@@ -396,8 +406,13 @@
                                         <!-- optional NEW/BETA badge, top-left, in the brand gradient -->
                                         <Border IsVisible="{Binding HasBadge}"
                                                 HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                Margin="8,8,0,0" CornerRadius="10" Padding="8,2"
-                                                Background="{Binding BadgeFill}">
+                                                Margin="8,8,0,0" CornerRadius="10" Padding="8,2">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                                    <GradientStop Color="{DynamicResource VaultAccentColor}" Offset="0"/>
+                                                    <GradientStop Color="{DynamicResource VaultPartnerColor}" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
                                             <TextBlock Text="{Binding BadgeText}" Foreground="White"
                                                        FontSize="9" FontWeight="Bold"/>
                                         </Border>
@@ -418,8 +433,14 @@
                                                 <fx:IconGlyph Name="VeilLock" Kind="LockClosed" Variant="Filled" Size="34" HorizontalAlignment="Center" Foreground="{DynamicResource IconTier1Brush}"
                                                            Loaded="FxPart_Loaded" Unloaded="FxPart_Unloaded"/>
                                                 </Panel>
-                                                <Border Name="VeilPill" Margin="0,8,0,0" CornerRadius="10" Padding="10,4"
-                                                        HorizontalAlignment="Center" Background="{Binding PillFill}">
+                                                <Border Margin="0,8,0,0" CornerRadius="10" Padding="10,4"
+                                                        HorizontalAlignment="Center">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                                            <GradientStop Color="{DynamicResource VaultVeilAccentColor}" Offset="0"/>
+                                                            <GradientStop Color="{DynamicResource VaultVeilPartnerColor}" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
                                                     <fx:IconLabel Key="exclusives_chip_lab"
                                                                TextElement.Foreground="White" TextElement.FontSize="10" TextElement.FontWeight="Bold"/>
                                                 </Border>

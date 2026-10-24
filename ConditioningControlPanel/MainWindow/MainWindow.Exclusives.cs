@@ -129,7 +129,7 @@ namespace ConditioningControlPanel
         /// same accent, so a mod that only sets accentColor would otherwise flatten every gradient
         /// on the tab into one colour.
         /// </summary>
-        private const double VaultPartnerHueShift = -59.0;
+        private const double VaultPartnerHueShift = Services.UI.VaultColor.PartnerHueShift;
 
         internal static Color VaultPartner(Color accent) => ShiftHue(accent, VaultPartnerHueShift);
 
@@ -145,10 +145,8 @@ namespace ConditioningControlPanel
         /// </summary>
         internal static Color ShiftHue(Color c, double degrees)
         {
-            var shifted = Services.UI.VaultHue.ShiftHue(
-                Services.UI.NavStripPaint.Argb(c.A, c.R, c.G, c.B), degrees);
-            return Color.FromArgb(Services.UI.NavStripPaint.A(shifted), Services.UI.NavStripPaint.R(shifted),
-                Services.UI.NavStripPaint.G(shifted), Services.UI.NavStripPaint.B(shifted));
+            var rgb = Services.UI.VaultColor.ShiftHue(c.R, c.G, c.B, degrees);
+            return Color.FromArgb(c.A, rgb.R, rgb.G, rgb.B);
         }
 
         /// <summary>A live card's resting edge (the partner hue, 1px) - was a literal #4DB478FF.</summary>
