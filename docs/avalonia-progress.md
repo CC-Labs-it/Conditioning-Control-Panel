@@ -2979,3 +2979,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-ctrl-spiral-first-light-visual: +492
 - First-light fog/arm canvas ported onto the Spiral tab fog host, driven by the shared BeatLoop and Core timeline; row stays stub.
 - Review fixes: fog clock stepped in test, no PNG writes, 30 fps note; parity rows refreshed (render-all limit stated).
+
+## avalonia-port/wire-ctrl-attention-check-b: +194
+- Dormant attention ring glow rasterized from the visible arc at attach density (redrawn on scale change, skipped when progress is unchanged), shared pulse transform.
+- Review fixes done; rgate 39694832799 green except known P108 GoonClock core-linux failure.
