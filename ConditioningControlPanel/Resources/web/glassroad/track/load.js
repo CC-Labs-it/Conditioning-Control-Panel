@@ -92,7 +92,7 @@ export function loadTrack(json, { validate = true } = {}) {
 
   const track = {
     id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS,
-    sections, sectionAt, boosts, jumps, items, routes, courts, fields,
+    sections, sectionAt, boosts, jumps, items, routes, courts, fields, reservoir: json.reservoir, waterSpills: json.waterSpills,
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
     nodeFlags: (i) => nodes[((i % N) + N) % N].flags,
