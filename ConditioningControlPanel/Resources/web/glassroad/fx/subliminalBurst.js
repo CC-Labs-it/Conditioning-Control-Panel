@@ -4,7 +4,8 @@ export const SUBLIMINAL_PHRASES = Object.freeze(['LET GO', 'DRIFT DEEPER', 'FOLL
 const sat = v => Math.max(0, Math.min(1, v));
 const ease = v => { const q = sat(v); return q * q * (3 - 2 * q); };
 const rnd = n => { const x = Math.sin(n * 127.1 + 31.7) * 43758.5453; return x - Math.floor(x); };
-const STACK = [[.43,.18,-.09], [.57,.29,.08], [.45,.40,-.065], [.56,.51,.10], [.42,.62,-.08], [.55,.73,.065], [.48,.84,-.105]];
+const LANES = [[.45,.18,-.045], [.54,.40,.04], [.46,.62,-.035], [.53,.84,.045]];
+const ARRIVAL_LANES = [0, 2, 1, 3];
 
 export const subliminalPrimary = value => /^#[a-f\d]{6}$/i.test(value || '') ? value : /^#[a-f\d]{3}$/i.test(value || '') ? '#' + value.slice(1).split('').map(x => x + x).join('') : '#c9eceb';
 
@@ -19,27 +20,37 @@ export function subliminalParticle(index, age, seed = 0, smoke = false) {
     size: smoke ? .055 + q * .16 : .0025 + r * .003, alpha, life };
 }
 
-/** Layout in fractions of the view. Seeded variation stays fixed throughout a hit and its OUT. */
-export function subliminalCards(age, aspect = 16 / 9, seed = 0, gentle = false) {
-  const count = gentle ? 4 : 7, a = aspect > 0 ? aspect : 16 / 9;
-  return STACK.slice(0, count).map(([x, y, tilt], i) => {
-    const enter = ease((age - i * .045) / (gentle ? .65 : .34)), phase = seed * 1.7 + i * 2.3;
-    const motion = gentle ? 0 : Math.sin(age * 1.15 + phase);
+/** Each word owns its pop, readable hold and fade. Reused lanes are empty before the next arrival. */
+export function subliminalCards(age, aspect = 16 / 9, seed = 0, gentle = false, duration = 2.5) {
+  const rise = gentle ? .32 : .14, hold = gentle ? .38 : .36, fade = .48;
+  const life = rise + hold + fade, minGap = gentle ? .4 : .25;
+  const durationS = Number.isFinite(duration) ? Math.max(0, duration) : 2.5;
+  // Short mercy hits use fewer words rather than speeding up their onsets.
+  const count = Math.min(gentle ? 4 : 7, 1 + Math.floor(Math.max(0, durationS - life) / minGap + 1e-6));
+  const gap = count > 1 ? Math.max(minGap, (durationS - life) / (count - 1)) : minGap;
+  return Array.from({ length: count }, (_, i) => {
+    const localAge = age - i * gap;
+    if (localAge <= 0 || localAge >= life) return null;
+    const enter = ease(localAge / rise), exit = 1 - ease((localAge - rise - hold) / fade);
+    const lane = ARRIVAL_LANES[i % ARRIVAL_LANES.length], [x, y, tilt] = LANES[lane];
+    const phase = seed * 1.7 + i * 2.3, motion = gentle ? 0 : Math.sin(localAge * 1.15 + phase);
     return { text: SUBLIMINAL_PHRASES[(i + Math.abs(Math.trunc(seed))) % SUBLIMINAL_PHRASES.length],
-      x: x + (rnd(seed * 11 + i) - .5) * .025 + (1 - enter) * (i % 2 ? .055 : -.055) + motion * .008,
-      y: y + (rnd(seed * 7 + i) - .5) * .012 + (1 - enter) * .035 + motion * .005,
-      w: .95 * (gentle ? .78 : 1),
-      h: .19 * (gentle ? .75 : 1),
-      tilt: tilt + motion * .022, alpha: enter, scale: .84 + enter * .16, seed: seed * 13 + i };
-  });
+      x: x + (rnd(seed * 11 + lane) - .5) * .012 + (gentle ? 0 : (1 - enter) * (i % 2 ? .025 : -.025) + motion * .005),
+      y: y + (rnd(seed * 7 + lane) - .5) * .006 + motion * .002,
+      w: .95 * (gentle ? .78 : 1), h: .19 * (gentle ? .75 : 1),
+      tilt: gentle ? tilt * .6 : tilt + motion * .01,
+      alpha: enter * exit,
+      scale: gentle ? .96 + enter * .04 : .82 + enter * .18 + Math.sin(Math.PI * sat(localAge / rise)) * .06,
+      seed: seed * 13 + i, index: i, lane, localAge, onset: i * gap, life };
+  }).filter(card => card && card.alpha > 0);
 }
 
 export function createSubliminalBurst({ parent = globalThis.document?.body, doc = globalThis.document, primary = '#c9eceb' } = {}) {
   const canvas = doc?.createElement('canvas'), ctx = canvas?.getContext('2d');
   const resolvePrimary = () => { try { return subliminalPrimary(typeof primary === 'function' ? primary() : primary); } catch { return '#c9eceb'; } };
   let colour = resolvePrimary();
-  const stats = { active: false, cards: 0, particles: 0, smoke: 0, clock: 0, seed: 0, primary: colour };
-  let age = 0, seed = null, params = null, effectStrength = 1, drawAge = -Infinity, disposed = false;
+  const stats = { active: false, cards: 0, particles: 0, smoke: 0, clock: 0, seed: 0, visibleTexts: [], primary: colour };
+  let age = 0, duration = 2.5, seed = null, params = null, effectStrength = 1, drawAge = -Infinity, disposed = false;
   if (!canvas || !ctx || !parent) return { update() {}, dispose() {}, get stats() { return { ...stats }; } };
   // Three tiny offscreen sprites give the smoke soft scalloped wisps without per-frame gradients.
   const puffs = Array.from({ length: 3 }, () => {
@@ -67,7 +78,7 @@ export function createSubliminalBurst({ parent = globalThis.document?.body, doc 
   function clear() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     canvas.style.display = 'none'; age = 0; seed = null; params = null; drawAge = -Infinity;
-    Object.assign(stats, { active: false, cards: 0, particles: 0, smoke: 0, clock: 0, seed: 0 });
+    Object.assign(stats, { active: false, cards: 0, particles: 0, smoke: 0, clock: 0, seed: 0, visibleTexts: [] });
   }
   function update(screen, dt, aspect = 16 / 9) {
     if (disposed) return;
@@ -76,11 +87,12 @@ export function createSubliminalBurst({ parent = globalThis.document?.body, doc 
     if (!(amount > .001)) { if (stats.active) clear(); return; }
     if (current) {
       params = { ...screen.params };
+      duration = Number.isFinite(screen.durS) ? screen.durS : 2.5;
       effectStrength = screen.strength > 0 ? Math.min(1, screen.strength) : 1;
       if (params.seed !== seed) { age = 0; drawAge = -Infinity; seed = params.seed; }
     }
     const p = params || screen.params || {}, gentle = !!p.gentle;
-    age += Math.max(0, dt || 0) * (gentle ? .5 : 1);
+    age += Math.max(0, dt || 0);
     const a = Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
     const viewW = Math.max(1, parent.clientWidth || doc.defaultView?.innerWidth || 1280);
     const scale = Math.min(1, 1280 / viewW, 1280 / (viewW / a));
@@ -88,7 +100,7 @@ export function createSubliminalBurst({ parent = globalThis.document?.body, doc 
     const resized = canvas.width !== w || canvas.height !== h;
     if (resized) { canvas.width = w; canvas.height = h; }
     Object.assign(canvas.style, { display: 'block', opacity: String(amount * effectStrength * (gentle ? .5 : 1)) });
-    Object.assign(stats, { active: true, clock: age, seed: seed || 0, cards: gentle ? 4 : 7 });
+    Object.assign(stats, { active: true, clock: age, seed: seed || 0 });
     if (!resized && age - drawAge < 1 / 20) return;
     drawAge = age;
     const nextColour = current ? resolvePrimary() : colour;
@@ -96,13 +108,16 @@ export function createSubliminalBurst({ parent = globalThis.document?.body, doc 
     stats.primary = colour;
     stats.particles = 0; stats.smoke = 0;
     ctx.clearRect(0, 0, w, h);
-    for (const card of subliminalCards(age, a, seed || 0, gentle)) {
+    const cards = subliminalCards(age, a, seed || 0, gentle, duration);
+    stats.cards = cards.filter(card => card.alpha > .01).length;
+    stats.visibleTexts = cards.filter(card => card.alpha > .01).map(card => card.text);
+    for (const card of cards) {
       ctx.save();
       ctx.translate(card.x * w, card.y * h); ctx.rotate(card.tilt); ctx.scale(card.scale, card.scale);
       const cw = Math.min(card.w * w, (Math.min(card.x, 1 - card.x) * 2 - .055) * w), ch = card.h * h;
       const smokeCount = gentle ? 3 : 6;
       for (let j = 0; j < smokeCount; j++) {
-        const puff = subliminalParticle(j, age, card.seed, true);
+        const puff = subliminalParticle(j, card.localAge * (gentle ? .5 : 1), card.seed, true);
         if (puff.alpha <= .001) continue;
         ctx.globalAlpha = card.alpha * puff.alpha * (gentle ? .45 : .8);
         const radius = puff.size * h;
@@ -122,7 +137,7 @@ export function createSubliminalBurst({ parent = globalThis.document?.body, doc 
       ctx.fillStyle = colour; ctx.fillText(card.text, 0, 1);
       const sparks = gentle ? 6 : 14;
       for (let j = 0; j < sparks; j++) {
-        const spark = subliminalParticle(j, age, card.seed);
+        const spark = subliminalParticle(j, card.localAge * (gentle ? .5 : 1), card.seed);
         if (spark.alpha <= .001) continue;
         const sx = spark.x * cw, sy = spark.y * h, r = Math.max(1.5, spark.size * h);
         ctx.globalAlpha = card.alpha * spark.alpha;
