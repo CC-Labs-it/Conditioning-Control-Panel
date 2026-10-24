@@ -1,13 +1,13 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
-// media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
-// ccp.words; the settings frame sends none, which the page reads as "no whispers"), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// media-flavour / media-more / online-media), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -17,6 +17,7 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.Quiz;
 using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -156,13 +157,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>()));
+                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, PbpWhispers()));
             }
             if (!_pbpIdentityPosted)
             {
                 _pbpIdentityPosted = true;
                 Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                     CoreSettings.Current.UserDisplayName, CoreReleaseContent.AppVersion));
+            }
+        }
+
+        /// <summary>WPF SafeWhisperClips: own brain drain first, then the mod's permitted fallback.</summary>
+        private IReadOnlyList<string> PbpWhispers()
+        {
+            if (_server == null) return Array.Empty<string>();
+            try
+            {
+                static IEnumerable<string>? Names(string? folder) =>
+                    !string.IsNullOrEmpty(folder) && Directory.Exists(folder)
+                        ? Directory.GetFiles(folder).Select(f => Path.GetFileName(f)) : null;
+                bool shared = CoreSettings.Current.SubAudioAudible && ModAudioPolicy.UsesSharedSubAudio(CoreMods.ActiveModId);
+                // Unchecked own clips are not offered (the server 404s them), so all-unchecked falls back like an empty folder.
+                var assets = CorePaths.EffectiveAssets;
+                var off = IntakeRun.DisabledAssetSet(_server.DisabledAssets());
+                var own = Path.Combine(assets, PbpWhisperClips.BrainDrainFolder);
+                return PbpWhisperClips.Build(Names(own)?.Where(n => IntakeRun.IsAssetActive(off, assets, Path.Combine(own, n))),
+                    shared, Names(_server.SubAudioRoot()), Names(_server.WordsRoot())).Select(_server.WhisperUrl).ToArray();
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("PieceByPiece: whisper clips failed: {E}", ex.Message);
+                return Array.Empty<string>();
             }
         }
 
