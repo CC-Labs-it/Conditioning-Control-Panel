@@ -13,6 +13,7 @@ import { uniform, uv, float, vec3, floor, fract, hash, pow, smoothstep, attribut
 import { LOOK } from './look.js';
 import { WATER_LOOK, sheetRuns, isWaterSurface } from './waterMath.js';
 import { createWaterSpray } from './waterSpray.js';
+import { ambientWaterHeight } from './waterMotion.js';
 import { S } from '../sim/state.js';
 
 
@@ -97,7 +98,7 @@ export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK } = {
     tangent.fromArray(f.t).addScaledVector(normal,-tangent.dot(normal)).normalize();right.crossVectors(tangent,normal).normalize();
     const p = payload.p || (track.surfaceAt ? f.p : f.p.map((v, k) => v + f.b[k] * x));
     const value=fluid?.sample?.(s,x,sampled),height=value?.wet ? Math.max(-.8,Math.min(.8,value.height||0)):0;
-    return { p:p.map((v,k)=>v+n[k]*(.12+height)),n,b:right.toArray(),t:tangent.toArray() };
+    return { p:p.map((v,k)=>v+n[k]*(.12+height+(value?.wet?ambientWaterHeight(p,u.t.value):0))),n,b:right.toArray(),t:tangent.toArray() };
   }
   function splash({ s = 0, x = 0, down = 0, kind = 'land', ...payload } = {}, gentle = false) {
     if (!track || !track.frameAt) return;

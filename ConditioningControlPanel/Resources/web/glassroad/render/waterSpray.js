@@ -6,15 +6,16 @@ import { Q } from './quality.js';
 
 export function createWaterSpray({ capacity = Q.name === 'phone' ? 256 : 768, fanCapacity = 32 } = {}) {
   const object = new Group(); object.name = 'water-ballistic-spray';
-  const material = new MeshBasicNodeMaterial({ transparent: true, opacity: .66, depthWrite: false });
+  const material = new MeshBasicNodeMaterial({ transparent: true, opacity: .38, depthWrite: false });
   const shine=pow(max(dot(normalWorld,normalize(vec3(-.4,.8,.3))),0),10);
-  material.colorNode = vec3(.18,.56,.68).add(vec3(.48,.7,.8).mul(shine)); material.toneMapped = false;
+  material.colorNode = vec3(.08,.32,.36).add(vec3(.5,.72,.78).mul(shine)); material.toneMapped = false;
+  material.opacityNode=float(.38).mul(smoothstep(.8,3,positionView.z.negate()));
   const fanMaterial = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
   fanMaterial.colorNode = vec3(.24,.62,.76); fanMaterial.toneMapped = false;
   const edge=smoothstep(0,.18,uv().x).mul(smoothstep(.82,1,uv().x).oneMinus());
   const end=smoothstep(0,.15,uv().y).mul(smoothstep(.6,1,uv().y).oneMinus());
   fanMaterial.opacityNode=float(.12).mul(edge).mul(end).mul(smoothstep(1.5,4,positionView.z.negate()));
-  const dropletGeo = new SphereGeometry(1,6,4), fanGeo = new BufferGeometry();
+  const dropletGeo = new SphereGeometry(1,10,7), fanGeo = new BufferGeometry();
   // A bowed fan, narrow at its source and divided into strips as the liquid breaks apart.
   const pos=[],uvs=[];
   for(let k=0;k<5;k++) {
@@ -49,7 +50,7 @@ export function createWaterSpray({ capacity = Q.name === 'phone' ? 256 : 768, fa
       const index=cursor++%capacity, o=index*stride, vx=dirX+(rnd()-.5)*spread, vs=dirS+(rnd()-.5)*spread;
       const rise=lift*(.65+rnd()*.65)*gain;
       for(let k=0;k<3;k++) { data[o+k]=origin[k]+b[k]*(rnd()-.5)*.22; data[o+3+k]=b[k]*vx+t[k]*vs+n[k]*rise; }
-      data[o+6]=0;data[o+7]=life*(.7+rnd()*.5);data[o+8]=size*(.65+rnd()*.7);data[o+9]=1;
+      data[o+6]=0;data[o+7]=life*(.7+rnd()*.5);data[o+8]=size*.5*(.65+rnd()*.7);data[o+9]=1;
       emitted++;
     }
     if(fan&&amount) {
@@ -73,7 +74,7 @@ export function createWaterSpray({ capacity = Q.name === 'phone' ? 256 : 768, fa
       v.set(data[o+3],data[o+4]-9.8*age,data[o+5]);
       const speed=v.length(),fade=Math.min(1,(life-age)/.18),r=data[o+8]*fade;
       if(speed>.001)rotation.setFromUnitVectors(up,v.multiplyScalar(1/speed));else rotation.identity();
-      scale.set(r,r*Math.min(3,1+speed*.15),r);matrix.compose(p,rotation,scale);drops.setMatrixAt(i,matrix);
+      scale.set(r,r*Math.min(1.8,1+speed*.08),r);matrix.compose(p,rotation,scale);drops.setMatrixAt(i,matrix);
     }
     for(let i=0;i<fanCapacity;i++) {
       const o=i*stride;if(!fanData[o+9])continue;

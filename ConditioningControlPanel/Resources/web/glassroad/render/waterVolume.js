@@ -1,6 +1,7 @@
 // Shared shallow water bodies and gravity-fed spill curtains. All shaders exist before warm-up.
 import { Group, Mesh, BufferGeometry, Float32BufferAttribute, InterleavedBuffer, InterleavedBufferAttribute, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, ClampToEdgeWrapping, NoColorSpace, MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
-import { uniform, uv, vec2, vec3, float, sin, mix, smoothstep, texture, cubeTexture, positionWorld, cameraPosition, normalize, pow, attribute, positionLocal } from 'three/tsl';
+import { uniform, uv, vec2, vec3, float, sin, mix, smoothstep, texture, cubeTexture, positionWorld, cameraPosition, normalize, pow, attribute, positionLocal, dot } from 'three/tsl';
+import { ambientWaterNodes } from './waterMotion.js';
 import { WATER_VOLUME as L, waterSpills } from './waterMath.js';
 import { createWaterSurface } from './materials/water.js';
 import { createWaterField } from './waterField.js';
@@ -45,9 +46,10 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   heightTexture.minFilter = heightTexture.magFilter = LinearFilter; heightTexture.wrapS = heightTexture.wrapT = ClampToEdgeWrapping;
   heightTexture.generateMipmaps = false; heightTexture.flipY = false; heightTexture.needsUpdate = true;
   const heightSample = texture(heightTexture, attribute('aWaterUV', 'vec2')).level(0);
-  const fieldHeight = heightSample.r.mul(2).sub(1).clamp(-0.8, 0.8);
   const fieldNormal = normalize(attribute('aWaterN', 'vec3'));
   const u = { t: uniform(0), motion: uniform(1), reflectionReady: uniform(0) };
+  const wind=ambientWaterNodes(positionLocal,u.t);
+  const fieldHeight = heightSample.r.mul(2).sub(1).clamp(-0.8, 0.8).add(wind.height);
   const reflections = createWaterReflections({ scene, renderer, exclude: object, quality, track });
   const froth = createWaterFoam(track, field, spills, { quality });
   const tex = id => art?.detail?.(id) || art?.tex?.(id + (Q.name === 'phone' ? '-phone' : '')) || null;
@@ -122,7 +124,8 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   // stay below it; otherwise their bed triangles composite over the visible waves.
   const skin = new MeshBasicNodeMaterial({ transparent: true, depthWrite: true, side: DoubleSide });
   const fields = { ...(normal ? { slope: q => texture(normal, q.mul(0.25)).rg.mul(2).sub(1) } : {}), ...(foam ? { foam: q => texture(foam, q.mul(0.25)).r } : {}) };
-  const deformation = { slope: heightSample.gb.mul(2).sub(1), foam: heightSample.a, height: fieldHeight,
+  const windSlope=vec2(dot(wind.gradient,attribute('aWaterB','vec3').xz),dot(wind.gradient,attribute('aWaterT','vec3').xz));
+  const deformation = { slope: heightSample.gb.mul(2).sub(1).add(windSlope), foam: heightSample.a, height: fieldHeight,
     reflection: direction => cubeTexture(reflections.texture, direction).rgb, reflectionReady: u.reflectionReady,
     B: normalize(attribute('aWaterB','vec3')), T: normalize(attribute('aWaterT','vec3')) };
   const surface = createWaterSurface({ surface: attribute('surface', 'float'), flow: attribute('flow', 'vec2'), p: uv(), trueEdge: attribute('aWaterEdge', 'float'), V: normalize(cameraPosition.sub(positionWorld)), N0: fieldNormal, pal, u, fields, deformation });

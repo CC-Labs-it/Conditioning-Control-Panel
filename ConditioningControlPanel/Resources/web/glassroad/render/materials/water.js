@@ -86,16 +86,16 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
     // Actual nearby architecture and screens reflect through the displaced normal.
     // Transmission stays clear enough to reveal the recessed physical bed.
     const elevation = (deformation.height || float(0)).mul(0.45).add(0.5).clamp(0,1);
-    const transmitted = pal.col(2).mul(0.13).add(vec3(0.018,0.065,0.078)).mul(elevation.mul(0.18).add(0.82));
+    const transmitted = pal.col(2).mul(0.08).add(vec3(0.035,0.24,0.265)).mul(elevation.mul(0.28).add(0.72));
     const fallback = pal.col(0).mul(0.13).add(vec3(.015,.035,.045));
     const reflected = deformation.reflection ? mix(fallback,deformation.reflection(R),deformation.reflectionReady || float(1)) : fallback;
     const grazing = pow(float(1).sub(ndv),5).mul(.98).add(.02);
     const sharpSpec = pow(clamp(dot(N,H),0,1),90).mul(0.95);
-    colour = mix(transmitted,reflected,grazing.mul(.78).add(.16))
+    colour = mix(transmitted,reflected,grazing.mul(.67).add(.12))
       .add(vec3(0.72,0.9,1).mul(sharpSpec))
       .add(white.mul(foam).mul(0.075));
   }
-  const alpha = deformation ? float(.26).add(pow(float(1).sub(ndv),3).mul(.59)).add(foam.mul(.08)).clamp(.26,.93)
+  const alpha = deformation ? float(.52).add(pow(float(1).sub(ndv),3).mul(.34)).add(foam.mul(.06)).clamp(.52,.93)
     : clamp(float(L.alpha).add(foam.mul(0.1)).add(spec.mul(0.3)), 0, 1);
   return { w, colour, alpha, foam, N, pool };
 }

@@ -6,6 +6,7 @@ const hooks=registerHooks({resolve(s,c,next){const files={'three/webgpu':'three.
   return files[s]?{url:new URL('../vendor/three/build/'+files[s],import.meta.url).href,shortCircuit:true}:next(s,c);}});
 const {createWaterSpray}=await import('../render/waterSpray.js');
 const {createWaterfall}=await import('../render/waterfall.js');
+const {ambientWaterHeight}=await import('../render/waterMotion.js');
 const {vec3}=await import('three/tsl');hooks.deregister();
 const pal={col:()=>vec3(.2,.5,.7)};
 const track={lengthM:60,frameAt:s=>({p:[0,5,-s],n:[0,1,0],b:[1,0,0],t:[0,0,-1],w:12,surface:s<40?'stream':'glass'}),
@@ -78,9 +79,10 @@ test('spray contact follows the full reactive trough and crest height',t=>{
   const water=createWaterfall(track,pal,{fluid:{sample:(s,x,out)=>Object.assign(out,{wet:true,height})}});
   t.after(()=>water.dispose());
   water.splash({s:10,x:0,kind:'hop'});
-  assert.ok(Math.abs(water.spray.data[1]-(5-.75+.12))<.001);
+  const wind=ambientWaterHeight([0,5,-10],0);
+  assert.ok(Math.abs(water.spray.data[1]-(5-.75+.12+wind))<.001);
   water.reset();height=.75;water.splash({s:10,x:0,kind:'hop'});
-  assert.ok(Math.abs(water.spray.data[1]-(5+.75+.12))<.001);
+  assert.ok(Math.abs(water.spray.data[1]-(5+.75+.12+wind))<.001);
 });
 
 test('wet grip-bank airborne transitions create hop and landing impulses without duplicating stream events',t=>{

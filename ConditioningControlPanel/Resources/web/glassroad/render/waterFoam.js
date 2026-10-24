@@ -1,6 +1,7 @@
 // Small three-dimensional foam clusters, carried by the simulated crests and gravity-fed spills.
 import { InstancedMesh, IcosahedronGeometry, MeshBasicNodeMaterial, Object3D, Vector3 } from 'three/webgpu';
 import { vec3, dot, normalWorld, normalize, max } from 'three/tsl';
+import { ambientWaterHeight } from './waterMotion.js';
 
 const hash=n=>{const q=Math.sin(n*127.1+311.7)*43758.5453;return q-Math.floor(q);};
 export function createWaterFoam(track,field,spills,{quality='mid'}={}) {
@@ -40,7 +41,7 @@ export function createWaterFoam(track,field,spills,{quality='mid'}={}) {
         const seed=++sequence,s=spill.fromS+hash(seed)*(spill.toS-spill.fromS),f=track.frameAt(s);
         const x=spill.side*(f.w/2-.08),c=contact(s,x),h=field.sample(s,x,sample).height;
         spawn({s,x,seed,age:0,life:Math.min(3.2,Math.sqrt(spill.dropM/4.9)),fall:true,radius:.07+hash(seed+2)*.07,
-          p:c.p.map((v,k)=>v+c.n[k]*(.14+h)),v:[c.b[0]*spill.side*(.8+hash(seed)),.2,c.b[2]*spill.side*(.8+hash(seed))]});
+          p:c.p.map((v,k)=>v+c.n[k]*(.14+h+ambientWaterHeight(c.p,clock))),v:[c.b[0]*spill.side*(.8+hash(seed)),.2,c.b[2]*spill.side*(.8+hash(seed))]});
       }
     }
     for(const [key,time] of lastCell)if(clock-time>4)lastCell.delete(key);
@@ -60,7 +61,7 @@ export function createWaterFoam(track,field,spills,{quality='mid'}={}) {
         const state=field.sample(p.s,p.x,sample);
         if(!state.wet){particles.splice(i,1);continue;}
         const c=contact(p.s,p.x);n=c.n;b=c.b;t=c.t;
-        position=c.p.map((v,k)=>v+n[k]*(.1+state.height));stats.surface++;
+        position=c.p.map((v,k)=>v+n[k]*(.1+state.height+ambientWaterHeight(c.p,clock)));stats.surface++;
       }
       const fade=Math.min(1,p.age/.12,(p.life-p.age)/.5),r=p.radius*Math.max(0,fade);
       normal.set(...n);dummy.quaternion.setFromUnitVectors(up,normal.normalize());
