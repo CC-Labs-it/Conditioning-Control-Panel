@@ -15,7 +15,7 @@ const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 const R = makeRace({ seed: 1, track: TR });
 let railBreaches = 0;
 const done = () => !!R.standings.result && R.racers.list.every((r) => r.finished);
-for (let i = 0; i < 60 * 260 && !done(); i++) {
+for (let i = 0; i < 60 * 900 && !done(); i++) {
   R.tick();
   if (i % 6) continue;
   for (const r of R.racers.list) {
@@ -31,7 +31,7 @@ test('race: all 7 bots finish 3 laps of Threshold on their own, at most 2 falls 
     assert.equal(r.finished, true, r.meta.id + ' finished');
     assert.equal(r.lapTimes.length, TR.laps, r.meta.id + ' laps');
     assert.ok(r.falls <= 2, r.meta.id + ' falls ' + r.falls);
-    for (const t of r.lapTimes) assert.ok(t > 30 && t < 75, r.meta.id + ' lap time ' + t);
+    for (const t of r.lapTimes) assert.ok(t > TR.lengthM / 50 && t < TR.lengthM / 20, r.meta.id + ' lap time ' + t);
   }
 });
 

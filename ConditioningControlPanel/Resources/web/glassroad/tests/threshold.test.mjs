@@ -20,15 +20,16 @@ test('threshold is a closed loop', () => {
   assert.ok(track.nodes[0].flags.includes('start'));
 });
 
-test('threshold length is 1.15 to 1.69 km (polish 6: the stacked course, +-25% of the old ring)', () => {
+test('threshold extends the original stack into a 5 to 6.5 km lap', () => {
   let L = 0;
   for (let i = 0; i < N; i++) L += dist(P[i], P[(i + 1) % N]);
-  assert.ok(L >= 1150 && L <= 1690, 'length ' + L);
+  assert.ok(L >= 5000 && L <= 6500, 'length ' + L);
 });
 
 test('threshold carries the Phase A features', () => {
-  assert.deepEqual(track.sections.map((s) => s.act), ['induction', 'deepening', 'release']);
-  assert.deepEqual(track.sections.map((s) => s.palette), ['dawn', 'deep', 'afterglow']);
+  assert.deepEqual(track.sections.map((s) => s.id), ['induction', 'tidal-gallery', 'prism-observatory', 'cascade-return', 'deepening', 'release']);
+  assert.deepEqual(track.sections.map((s) => s.act), ['induction', 'induction', 'deepening', 'release', 'deepening', 'release']);
+  assert.deepEqual(track.sections.map((s) => s.palette), ['dawn', 'dawn', 'deep', 'afterglow', 'deep', 'afterglow']);
   assert.ok(track.boosts.length >= 16, 'dense acceleration runs retain the original authored pads');
   assert.equal(track.jumps.length, 1);
   assert.ok(track.nodes[track.jumps[0].node].flags.includes('jump'));

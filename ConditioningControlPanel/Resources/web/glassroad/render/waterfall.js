@@ -14,6 +14,7 @@ import { LOOK } from './look.js';
 import { WATER_LOOK, sheetRuns, isWaterSurface } from './waterMath.js';
 import { createWaterSpray } from './waterSpray.js';
 import { ambientWaterHeight } from './waterMotion.js';
+import { waterResponse } from './waterResponse.js';
 import { S } from '../sim/state.js';
 import { createAudioReactiveUniforms, reactiveWaterNodes } from './audioReactive.js';
 
@@ -118,7 +119,8 @@ export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK, reac
     if (paused || !(dt > 0)) return;
     if(!Number.isInteger(i)||i<0||i>=kartMemory.length)return;
     const memory=kartMemory[i];
-    const s = st[S.s], f = track.frameAt(s), speed = Math.hypot(st[S.velX], st[S.velY], st[S.velZ]);
+    if (track.forkAtSeg?.(st[S.seg])) { memory.spray=0; memory.wet=false; return; }
+    const s = st[S.s], f = track.surfaceAt ? track.surfaceAt(s,st[S.lateral]) : track.frameAt(s), speed = Math.hypot(st[S.velX], st[S.velY], st[S.velZ]);
     const wet=fluid?.sample?.(s,st[S.lateral],sampled);
     const grounded=!!st[S.grounded]&&!st[S.airborne],bankWet=wet?.wet===true&&!isWaterSurface(f.surface);
     const down=Math.max(0,-(st[S.velX]*f.n[0]+st[S.velY]*f.n[1]+st[S.velZ]*f.n[2]));
@@ -132,19 +134,23 @@ export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK, reac
     if (!visible || !st[S.grounded] || st[S.airborne] || st[S.respawnPhase] || (wet?.wet!==true&&!isWaterSurface(f.surface)) || wet?.wet===false || speed < 1.5) { memory.spray=0;memory.wet=false;return; }
     const along=st[S.velX]*f.t[0]+st[S.velY]*f.t[1]+st[S.velZ]*f.t[2];
     const lateral=st[S.velX]*f.b[0]+st[S.velY]*f.b[1]+st[S.velZ]*f.b[2];
-    const steering=Math.min(1,Math.abs(st[S.steerSlew])+Math.abs(lateral)/7),drifting=st[S.driftDir]!==0;
+    const drifting=st[S.driftDir]!==0;
+    const response=waterResponse({speed,lateral,steer:st[S.steerSlew],drifting,previousSpeed:memory.speed??speed,dt});
+    memory.speed=speed;
+    const steering=response.turn;
+    const entering=!memory.wet;
     memory.spray+=dt;memory.wet=true;
-    if(memory.spray<(drifting?.065:.095))return;
+    if(!entering && memory.spray<response.interval)return;
     const elapsed=Math.min(.14,memory.spray);memory.spray=0;
-    const strength=Math.min(.72,speed*.016+steering*.22)*elapsed/.1*(gentle?.7:1);
+    const strength=response.strength*elapsed/.1*(gentle?.7:1);
     fluid?.disturb?.({s,x:st[S.lateral],radius:2.2,strength,dirX:lateral*.15,dirS:along*.1,foam:.18+steering*.25});
     for (const side of [-1, 1]) {
       const x = Math.max(-f.w / 2 + 0.1, Math.min(f.w / 2 - 0.1, st[S.lateral] + side * LOOK.saucerR * 1.15));
       const sideWet=fluid?.sample?.(s,x,sampled);if(sideWet?.wet===false)continue;
       const pt=contact(s-.7,x),push=side*(1.6+speed*.055+steering*2.4)+lateral*.35;
       fluid?.disturb?.({s:s-1.8,x,radius:2+steering*.9,strength:-strength*.85,dirX:push,dirS:-along*.08,foam:.25+steering*.35});
-      sprayPool.emit({...pt,count:drifting?12:5+Math.round(steering*4),dirX:push,dirS:-along*.15,
-        lift:1.5+steering*2+(drifting?.9:0),spread:1.4+steering,size:drifting?.055:.038,life:.65+steering*.2,gentle});
+      sprayPool.emit({...pt,count:Math.round(response.count*response.pressure(side)),dirX:push,dirS:-along*.15,
+        lift:response.lift,spread:1.4+steering,size:response.size,life:.65+steering*.2,gentle});
     }
   }
   /** CONTRACT `chute { s }`: the lip nearest s sprays at once. */
@@ -154,7 +160,7 @@ export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK, reac
     const pt = best ? points[runs.indexOf(best) * 2] : null;
     if (pt) spray(pt, gentle, 2);
   }
-  function reset(){timer=0;u.t.value=0;sprayPool.reset();for(const row of kartMemory){row.spray=0;row.wet=false;row.seen=false;row.grounded=false;row.down=0;}}
+  function reset(){timer=0;u.t.value=0;sprayPool.reset();for(const row of kartMemory){row.spray=0;row.wet=false;row.seen=false;row.grounded=false;row.down=0;row.speed=undefined;}}
   return { object, runs, points, uniforms:u, update,splash,chute,kart,reset,spray:sprayPool,
     dispose(){reset();sprayPool.dispose();if(mesh){mesh.geometry.dispose();mat.dispose();}object.removeFromParent();} };
 }

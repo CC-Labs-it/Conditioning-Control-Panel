@@ -12,10 +12,10 @@ import { grantBoost } from '../sim/grant.js';
 const json = JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8'));
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
 
-test('threshold: 4 to 5 rows of 3 to 4 item boxes and a few bubble clusters', () => {
+test('threshold: nine rows of 3 to 4 item boxes across the extended lap and bubble clusters', () => {
   const rows = new Map();
   for (const it of json.items.filter((i) => i.kind === 'box')) rows.set(it.node, (rows.get(it.node) || 0) + 1);
-  assert.ok(rows.size >= 4 && rows.size <= 5, 'rows ' + rows.size);
+  assert.equal(rows.size, 9, 'rows ' + rows.size);
   for (const [node, n] of rows) assert.ok(n >= 3 && n <= 4, 'row at node ' + node + ' has ' + n);
   const bubbles = json.items.filter((i) => i.kind === 'bubble');
   assert.ok(bubbles.length >= 9, 'bubbles ' + bubbles.length);

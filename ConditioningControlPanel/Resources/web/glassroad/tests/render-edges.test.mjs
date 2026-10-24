@@ -41,7 +41,7 @@ test('edges: the hazard strip and lip lie on the road along open edges only, nev
   // the open corner both sides, and the drop shortcut's opening
   const lipS = v.filter((p) => p[3] < 0.01).map((p) => p[4]);
   assert.ok(lipS.some((s) => s >= R0.openS0 - 0.5 && s <= R0.openS1 + 0.5), 'the shortcut opening is an open edge');
-  assert.ok(lipS.some((s) => s > 940 && s < 1030), 'the open corner');
+  assert.ok(lipS.some((s) => s > track.jumps[0].landS && s < track.lengthM - 50), 'the open corner');
 });
 
 test('edges: a haze curtain falls away below every open lip', () => {

@@ -77,7 +77,9 @@ function waterTrack() {
 
 const WATER = waterTrack(), DRY = dryTrack();
 const RUNS = createAi(WATER, makeFeel(), { seed: 1 }).water();
-const BEND = RUNS.find((r) => r.kind === 'bend'), CHUTE = RUNS.find((r) => r.kind === 'chute'), POOL = RUNS.find((r) => r.kind === 'pool');
+const BEND = RUNS.find((r) => r.kind === 'bend');
+const technical = WATER.sections.find(s => s.id === 'deepening').fromS;
+const CHUTE = RUNS.find(r => r.kind === 'chute' && r.s0 > technical), POOL = RUNS.find(r => r.kind === 'pool' && r.s0 > CHUTE.s1 - 2);
 const COURT = WATER.courts[0];
 const inRun = (run, s) => s >= run.s0 && s < run.s1;
 
@@ -158,7 +160,7 @@ function gridRun(track, seed) {
   const race = makeRace({ track, seed });
   const list = race.racers.list, falls = list.map(() => 0), waterFalls = list.map(() => 0), court = new Set(), lap1 = list.map(() => null);
   const water = (s) => inRun(BEND, s) || inRun(CHUTE, s) || inRun(POOL, s);
-  for (let i = 0; i < 150 / DT; i++) {
+  for (let i = 0; i < 350 / DT; i++) {
     const before = list.map((r) => r.st[S.s]);
     race.tick();
     let done = true;
@@ -183,5 +185,5 @@ for (const seed of SEEDS) test('eight racers from the grid take the stream bend,
   const mean = have.length ? (have.reduce((a, b) => a + b, 0) / have.length).toFixed(2) : 'n/a';
   console.log('# water lap 1 delta vs glass, seed ' + seed + ': mean ' + mean + ' s, per racer ' + JSON.stringify(deltas) +
     ' (water ' + JSON.stringify(w.lap1.map((t) => (t === null ? null : +t.toFixed(1)))) + ')');
-  assert.ok(w.lap1.every((t) => t !== null), 'everybody finished lap 1 within 150 s: ' + JSON.stringify(w.lap1));
+  assert.ok(w.lap1.every((t) => t !== null), 'everybody finished lap 1 within 350 s: ' + JSON.stringify(w.lap1));
 });

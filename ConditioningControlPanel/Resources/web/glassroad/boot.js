@@ -54,6 +54,7 @@ import { createPhotosafe } from './fx/photosafe.js';
 import { createFx } from './fx/reactions.js';
 import { createEffects } from './fx/effects.js';
 import { createAudio } from './audio/bus.js';
+import { createSongCache } from './audio/songCache.js';
 import { goDownbeat } from './audio/music.js';
 import { createHud } from './hud/hud.js';
 import { createWordRun } from './sim/words.js';
@@ -194,6 +195,9 @@ async function boot() {
   CHARTS = songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs });
   // Mainframe has no recorded Drone song yet. A personally selected chart or audio file remains usable.
   CHARTS = courseSongs(TRACK_ID, location.search, CHARTS);
+  const songCache = createSongCache();
+  for (const url of CHARTS) void songCache.preload(url);
+  window.addEventListener('pagehide', () => songCache.clear(), { once: true });
   // the diegetic faces (render/fonts.js) load beside the feel: road markings and bubble text measure with them
   const [feel, trackJson] = await Promise.all([
     loadFeel(),
@@ -224,7 +228,7 @@ async function boot() {
   const fx = createFx(bus, feel, { gentle, photosafe });
   const effects = createEffects(bus, feel, { gentle, photosafe });
   fx.state.screen = effects.screen;
-  const audio = createAudio(feel, bus, { gentle });
+  const audio = createAudio(feel, bus, { gentle, musicFetchFn: songCache.fetch });
   const immersion = createImmersion(track);
   const waterContact = createWaterContact(track);
   if (BOT) Object.defineProperty(debug, 'underwaterAudio', { get: () => audio.underwater });
@@ -238,6 +242,16 @@ async function boot() {
   const wordCount = createWordCount(document.getElementById('hud'));
   const NO_WORDS = [];
   let words = null;
+  let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
+  let online = null, lobbyUi = null;
+  let songToken = 0, pickedSong = null;
+  let extraSongs = async () => [];
+  audio.setVolumes({ master: hud.options.volMaster, music: hud.options.volMusic, sfx: hud.options.volSfx });
+  for (const event of ['pointerdown', 'keydown']) window.addEventListener(event, menuSong, { passive: true });
+  window.addEventListener('pagehide', () => {
+    for (const event of ['pointerdown', 'keydown']) window.removeEventListener(event, menuSong);
+  }, { once: true });
+  if (navigator.userActivation?.hasBeenActive) void menuSong();
   hud.setReady(false, 'Starting the renderer');
   hud.setHostGentle(hostGentle);
   hud.setCard('start', { title: trackName });
@@ -372,12 +386,10 @@ async function boot() {
   const actions = createActionMap([createKeyboard({ target: window }), padSource, createTouch({ root: document.body }), tapSource], { items: true, feel });
   const hopLatch = createEdgeLatch('hopPressed'), itemLatch = createEdgeLatch('item');
 
-  let state = 'boot', paused = false, finishAt = 0, result = null, rumbleT = 0, rumbleSent = 0, botT = 0;
 
   // ---- options: Gentle preview (never below the host's switch), steering assist and sensitivity,
   //      volumes, and the display set (frame cap, render scale, quality, fps readout, shadows) ----
   // online: { s (net/room.js session), cfg, go (race.start() done) } or null; lobbyUi = the hud/lobby.js handle
-  let online = null, lobbyUi = null;
   let opts = hud.options, assistKey = '';
   const reactiveOptions = { paused: false, gentle: false, muted: false };
   /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and on while paused. */
@@ -442,17 +454,17 @@ async function boot() {
    * Start the race song: the first chart in CHARTS that loads. align(song) -> the song position to hear now, so
    * go lands on a bar downbeat (S3): the song is offset against go, go never moves.
    */
-  let songToken = 0;
   // a song the player dropped on the page (solo only): no chart, so the beat shake runs on its analysis
   // (audio/songShape.js analyzeBuffer) and there are no words. Online the room's chart wins.
-  let pickedSong = null;
   async function playSong(align = null) {
     const my = ++songToken;
+    debug.songLoading = true;
+    try {
     if (pickedSong && !online && audio.music) {
       if (await audio.music.playFile(pickedSong)) {
         if (my !== songToken) return;
         debug.chart = 'file:' + pickedSong.name;
-        armWords();
+        if (state === 'race') armWords();
         return;
       }
       if (my !== songToken) return;
@@ -462,12 +474,28 @@ async function boot() {
       if (await audio.music.playChart(url, { align })) {
         if (my !== songToken) return;
         debug.chart = url;
-        armWords();
+        if (state === 'race') armWords();
         return;
       }
     }
+    const fallbacks = await extraSongs();
+    for (const url of fallbacks) {
+      if (my !== songToken || !audio.music) return;
+      if (await audio.music.playChart(url, { align })) {
+        if (my !== songToken) return;
+        debug.chart = url; if (state === 'race') armWords(); return;
+      }
+    }
+    } finally { if (my === songToken) debug.songLoading = false; }
   }
-  function stopSong() { songToken++; if (audio.music) audio.music.stop(); words = null; wordCount.show(false); }
+  function stopSong() { songToken++; debug.songLoading = false; if (audio.music) audio.music.stop(); words = null; wordCount.show(false); }
+  // A trusted gesture unlocks the existing bus during loading or in the garage.
+  // Starting a race realigns this same recording to its countdown.
+  async function menuSong() {
+    if (!['boot', 'menu'].includes(state) || debug.songLoading || audio.music?.playing) return;
+    await audio.start();
+    if (['boot', 'menu'].includes(state) && audio.state === 'running' && !debug.songLoading && !audio.music?.playing) await playSong();
+  }
   function unpause() {
     if (!paused) return;
     paused = false; clock.pause(false); audio.setPaused(false); bus.emit('pause', { on: false });
@@ -505,10 +533,11 @@ async function boot() {
   function toMenu() {
     if (online && lobbyUi) lobbyUi.leave();       // quit mid-race online: leave the room (online-left tears down)
     if (online) endOnline();
-    stopSong(); unpause(); resetAll();
+    unpause(); resetAll();
     state = 'menu';
     hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps, online: course.online,
       courses: COURSES.map(c => ({ name: c.name, selected: c.id === track.id, url: courseUrl(location.href, c.id) })) });
+    if (audio.state === 'running') void menuSong();
   }
 
   // ---- online (wave B2): lobby transport, the room session behind the lobby UI, the run per room --------------
@@ -530,13 +559,21 @@ async function boot() {
   // race songs from our own storage (NET.md section 14): nothing named a chart and the lobby is there, so ask it once
   // for signed chart urls on the room origin (a local lobby names its room with &room=http://127.0.0.1:<port>). A
   // refusal (preview, dark, offline) leaves no song; a race that starts before the answer lands runs without one.
-  if (lobbyApi && wantLobbySongs({ search: location.search, charts: CHARTS })) {
+  if (lobbyApi && !qs.has('chart') && courseSongs(TRACK_ID, '', ['recording']).length) {
     const devLobby = LOCAL_URL.test(qs.get('lobby') || '') && /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
     const roomOrigin = !devLobby ? ROOM_ORIGIN : (LOCAL_URL.test(qs.get('room') || '') ? qs.get('room') : null);
-    lobbyApi.songs().then((r) => {
-      const list = lobbySongCharts(r && r.songs, { roomOrigin });
-      if (list.length && !CHARTS.length) CHARTS = list;
-    }).catch(() => { /* no lobby songs: none */ });
+    let fallback;
+    extraSongs = () => fallback ||= lobbyApi.songs().then(r => lobbySongCharts(r?.songs, { roomOrigin })).catch(() => []);
+    if (wantLobbySongs({ search: location.search, charts: CHARTS })) extraSongs().then(list => {
+      if (!list.length) return;
+      if (!CHARTS.length) CHARTS = list;
+      for (const url of list) void songCache.preload(url);
+      if (audio.state !== 'running' || debug.songLoading || audio.music?.playing) return;
+      if (state === 'boot' || state === 'menu') void menuSong();
+      else if (state === 'race') void playSong(song => online
+        ? goDownbeat(song, (online.s.startAt-online.s.countAt)/1000) - (online.s.startAt-online.s.serverNow())/1000
+        : goDownbeat(song, goS) - race.goInS);
+    });
   }
   const platform = init.caps.platform === 'desktop' || init.caps.platform === 'phone' ? init.caps.platform : 'web';
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
