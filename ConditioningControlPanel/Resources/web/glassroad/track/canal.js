@@ -4,7 +4,7 @@ const smooth = t => t * t * (3 - 2 * t);
 
 export function canalProfile(sections, s, x, out = {}) {
   out.height = out.slope = out.alongSlope = out.blend = 0;
-  const section = sections.find(v => v.id === 'coolant-canal' && s >= v.fromS && s <= v.toS);
+  const section = sections.find(v => ['coolant-canal', 'rabbit-hole'].includes(v.id) && s >= v.fromS && s <= v.toS);
   if (!section) return out;
   const a = Math.min(1, (s - section.fromS) / CANAL.blendM), b = Math.min(1, (section.toS - s) / CANAL.blendM);
   const blend = smooth(a) * smooth(b);

@@ -10,5 +10,5 @@ export function allowsOnline(trackId) { return trackId === 'threshold'; }
 // Mainframe stays silent until it has its own song or the player explicitly chooses one.
 export function courseSongs(trackId, search, charts) {
   const chart = new URLSearchParams(search).get('chart');
-  return trackId === 'mainframe' && !chart?.trim() ? [] : charts;
+  return ['mainframe', 'goonworks'].includes(trackId) && !chart?.trim() ? [] : charts;
 }

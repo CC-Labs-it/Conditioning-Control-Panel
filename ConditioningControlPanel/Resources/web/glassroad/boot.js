@@ -72,6 +72,8 @@ import { raceLook } from './hud/garageState.js';
 import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
 import { createKeepHazards } from './sim/keepHazards.js';
+import { getGoonworksLayout } from './track/goonworks-layout.js';
+import { createGoonworksHazards } from './sim/goonworksHazards.js';
 
 const qs = new URLSearchParams(location.search);
 const course = selectedCourse(location.search);
@@ -197,7 +199,8 @@ async function boot() {
   const track = loadTrack(trackJson);
   debug.trackId = track.id;
   const keepLayout = getKeepLayout(track);
-  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : null;
+  const goonworksLayout = getGoonworksLayout(track);
+  const hazards = goonworksLayout ? createGoonworksHazards(track, goonworksLayout) : keepLayout ? createKeepHazards(track, keepLayout) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -207,7 +210,7 @@ async function boot() {
   const effects = createEffects(bus, feel, { gentle, photosafe });
   fx.state.screen = effects.screen;
   const audio = createAudio(feel, bus, { gentle });
-  for (const name of ['keep-gate-hit', 'keep-chain-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
+  for (const name of ['keep-gate-hit', 'keep-chain-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
   bus.on('effect-start', ({ kind }) => { if (!debug.effects.includes(kind)) debug.effects.push(kind); debug.effectNow = kind; });
@@ -270,7 +273,7 @@ async function boot() {
   if (BOT) Object.defineProperty(debug, 'world', { value: world, enumerable: false });
   debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
   debug.trackId = track.id;
-  if (hazards) Object.defineProperty(debug, 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
+  if (hazards) Object.defineProperty(debug, goonworksLayout ? 'goonworksHazards' : 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
   debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   debug.terrace = world.terrace ? { count: world.terrace.count, ...world.terrace.diagnostics } : null;
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
@@ -288,7 +291,7 @@ async function boot() {
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
     if (hazards) {
       const drive = ai.drive;
-      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing') hazards.steer(r, out); };
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing' || ctx.race.phase === 'finished') hazards.steer(r, out); };
       hazards.reset();
     }
     contact = createContact(track, feel, q);
@@ -802,8 +805,8 @@ async function boot() {
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
-    if (track.id === 'keep' && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
-      const bridge = keepLayout.drawbridge;
+    if ((keepLayout || goonworksLayout) && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
+      const bridge = goonworksLayout?.launch || keepLayout.drawbridge;
       if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
         glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
       }

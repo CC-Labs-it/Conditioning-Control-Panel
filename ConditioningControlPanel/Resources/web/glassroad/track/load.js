@@ -40,7 +40,7 @@ export function loadTrack(json, { validate = true } = {}) {
     for (let i = sections.length - 1; i > 0; i--) if (sw >= sections[i].fromS) return i;
     return 0;
   };
-  const hasCanal = sections.some(s => s.id === 'coolant-canal');
+  const hasCanal = sections.some(s => ['coolant-canal', 'rabbit-hole'].includes(s.id));
   const profile = hasCanal ? (s, x, out) => canalProfile(sections, wrap(s, lengthM), x, out) : null;
   const surfaceProfile = {}, surfaceN = [0, 0, 0];
   const surfaceAt = (s, x = 0, out = makeFrame()) => {

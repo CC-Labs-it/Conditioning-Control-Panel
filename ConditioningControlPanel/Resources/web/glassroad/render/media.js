@@ -23,7 +23,7 @@ import {
 } from 'three/webgpu';
 import {
   texture, uv, vec2, vec3, float, uniform, instancedBufferAttribute, attribute, cos, sin, hue, mix, smoothstep,
-  max, abs, fract, pow,
+  max, abs, fract, pow, fwidth,
 } from 'three/tsl';
 import { Q } from './quality.js';
 import {
@@ -56,6 +56,15 @@ const TAU = Math.PI * 2;
 const M4 = new Matrix4(), VX = new Vector3(), VY = new Vector3(), VZ = new Vector3(), VP = new Vector3(), EYE = new Vector3();
 const SX = new Vector3(), SY = new Vector3();
 const ZERO = new Matrix4().makeScale(0, 0, 0);
+
+// Facing overlays keep depth testing while remaining distinct at long cross-level views.
+function mediaDepthLayer(material, layer = 1) {
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -layer;
+  material.polygonOffsetUnits = -layer * 2;
+  return material;
+}
+
 
 /** Shared videos get gesture retries and one recovery attempt for a stalled native loop. */
 export function createMediaPlayback({ target = globalThis.document, now = () => performance.now() / 1000 } = {}) {
@@ -177,7 +186,9 @@ function borderColour(sl, i) {
  * samples (road samples), feel (reads gentle.* when update's view does not say), make (canvas factory).
  */
 export function createMediaSlots(scene, track, opts = {}) {
-  const M = mediaLook(), layout = opts.layout || LAYOUTS.get(track.id);
+  const M = { ...mediaLook() }, layout = opts.layout || LAYOUTS.get(track.id);
+  const palette = opts.placeholderPalette || null;
+  if (palette) { M.screenHueRadps = 0; M.borderHueRadps = 0; }
   const buildTier = opts.tier || Q.name, T = tierOf(buildTier, M);
   const group = new Group();
   group.name = 'media';
@@ -223,9 +234,9 @@ export function createMediaSlots(scene, track, opts = {}) {
   slots.forEach((sl, i) => {
     sl.index = i;
     sl.p = programFor(sl.program ?? i, P);
-    sl.hue0 = ((i * 2.399) % TAU);                   // golden-angle spread: neighbours never share a hue
+    sl.hue0 = palette ? 0 : ((i * 2.399) % TAU);
     sl.spinDir = (i % 2 ? -1 : 1) * (sl.frame === 'tunnel' ? 0.7 : 1);
-    sl.base = borderColour(sl, i);
+    sl.base = palette ? new Color(palette[0]).toArray() : borderColour(sl, i);
     progs[sl.p].slots.push(sl);
   });
 
@@ -240,7 +251,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       sl.k = k;
     });
     const m = screenMaterial(texture(pg.tex), instancedBufferAttribute(new InstancedBufferAttribute(crop, 4), 'vec4'),
-      instancedBufferAttribute(new InstancedBufferAttribute(info, 4), 'vec4'), pg.spin, pg.warp, U, M);
+      instancedBufferAttribute(new InstancedBufferAttribute(info, 4), 'vec4'), pg.spin, pg.warp, U, M, palette);
     const im = new InstancedMesh(plane, m, n);
     im.frustumCulled = false; im.name = 'media-' + pg.ph.program;
     if (!pg.slots.length) im.count = 0;
@@ -258,7 +269,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   const backMat = new MeshBasicNodeMaterial({ side: BackSide });
   backMat.colorNode = vec3(...new Color(M.backColour).toArray());
   const backs = new InstancedMesh(plane, backMat, Math.max(1, N));
-  const stripMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: FrontSide });
+  const stripMat = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: FrontSide }), 2);
   stripMat.colorNode = vec3(...new Color(M.stripColour).toArray());
   stripMat.opacityNode = float(M.stripAlpha);
   const strips = new InstancedMesh(plane, stripMat, Math.max(1, N));
@@ -380,7 +391,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       const cv = opts.make ? opts.make(256, 40) : Object.assign(document.createElement('canvas'), { width: 256, height: 40 });
       const ct = new CanvasTexture(cv); ct.colorSpace = SRGBColorSpace;
       o.creditCanvas = cv; o.creditTex = ct;
-      const cm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+      const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }), 3);
       const sample = texture(ct); cm.colorNode = sample.rgb; cm.opacityNode = sample.a;
       o.credit = new Mesh(plane, cm); o.credit.name = 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-credit-' + sl.id;
       o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = false; o.credit.renderOrder = 4; o.credit.visible = false;
@@ -495,7 +506,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(text, 10, 21);
       o.creditTex.needsUpdate = true;
     } else if (text) {
-      const cm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+      const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }), 3);
       const ct = texture(creditTexture(text));
       cm.colorNode = ct.rgb; cm.opacityNode = ct.a;
       o.credit = new Mesh(plane, cm); o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = false; o.credit.renderOrder = 4;
@@ -687,8 +698,8 @@ export function createMediaSlots(scene, track, opts = {}) {
 }
 
 /** The placeholder screen: per-instance crop and hue, the program's turn or warp, a slow breathing zoom, Gentle contrast. */
-function screenMaterial(tex, crop, info, spin, warp, U, M) {
-  const m = new MeshBasicNodeMaterial({ side: FrontSide });
+function screenMaterial(tex, crop, info, spin, warp, U, M, palette = null) {
+  const m = mediaDepthLayer(new MeshBasicNodeMaterial({ side: FrontSide }));
   const ang = spin.mul(U.time).mul(info.y);
   const breathe = float(1).sub(sin(U.time.mul(TAU * M.breatheHz).add(info.z.mul(TAU))).mul(0.5).add(0.5).mul(M.breatheAmp));
   const off = uv().sub(0.5).mul(crop.zw).mul(breathe);
@@ -699,14 +710,18 @@ function screenMaterial(tex, crop, info, spin, warp, U, M) {
     const w = U.time.mul(0.35).add(info.z.mul(TAU));
     tuv = tuv.add(vec2(sin(tuv.y.mul(5.1).add(w)), cos(tuv.x.mul(4.3).sub(w.mul(0.8)))).mul(warp));
   }
-  const col = hue(tex.sample(tuv).rgb, info.x.add(U.time.mul(M.screenHueRadps)));
+  let col = hue(tex.sample(tuv).rgb, info.x.add(U.time.mul(M.screenHueRadps)));
+  if (palette) {
+    const low = vec3(...new Color(palette[0]).toArray()), high = vec3(...new Color(palette[1]).toArray());
+    col = mix(low, high, smoothstep(.12, .8, col.dot(vec3(.2126, .7152, .0722))));
+  }
   m.colorNode = mix(vec3(0.42, 0.36, 0.48), col, U.contrast).mul(M.screenGain);
   return m;
 }
 
 /** A real source on one slot: the cover crop from its aspect, same contrast and gain as the placeholders. */
 function ownMaterial(tex, crop, U, M) {
-  const m = new MeshBasicNodeMaterial({ side: FrontSide });
+  const m = mediaDepthLayer(new MeshBasicNodeMaterial({ side: FrontSide }));
   const tuv = vec2(crop.cx, crop.cy).add(uv().sub(0.5).mul(vec2(crop.sx, crop.sy)));
   m.colorNode = mix(vec3(0.42, 0.36, 0.48), tex.sample(tuv).rgb, U.contrast).mul(M.screenGain);
   return m;
@@ -719,7 +734,8 @@ function borderMaterial(size, col, U, M) {
   const p = uv().sub(0.5).mul(full);
   const d = max(abs(p.x).sub(size.x.mul(0.5)), abs(p.y).sub(size.y.mul(0.5)));
   const outside = smoothstep(B, 0, d).pow(2.2), rim = smoothstep(-0.35, 0, d).mul(smoothstep(0.25, 0, d));
-  const glow = max(outside.mul(0.85), rim);
+  const pixel = max(fwidth(d), float(.002));
+  const glow = max(outside.mul(0.85), rim).mul(smoothstep(pixel.negate(), pixel, d));
   m.colorNode = hue(col.xyz, col.w.add(U.time.mul(M.borderHueRadps))).mul(glow).mul(U.border);
   return m;
 }
