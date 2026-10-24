@@ -21,8 +21,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// MainWindow.Patreon.cs). The mapping and both probes are Core <see cref="Providers"/>, so the two
     /// heads cannot drift; the active transport follows the setting through Core AiServiceStrategy.
     ///
-    /// <para>ponytail: no Live actions feed (AiCommandService.LiveActionSink is unseeded on this head),
-    /// so ShowLiveActions stays false and the placeholder shows. The BYO API key box writes nothing:
+    /// <para>The live-actions collection is shared with the command sink, and remains observable.
+    /// The BYO API key box writes nothing:
     /// MainShellWindow.CompanionRoom.cs says why (no at-rest store reads it yet). Login has
     /// no account tab deep link here yet, so LoginCommand stays null.</para>
     /// </summary>
@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 s.AiChatEnabled = enabled;
                 if (enabled) s.CompanionPrompt.AiProvider = provider;
                 CoreSettings.Save();
+                if (Providers.ClearsLiveActions(value)) App.AiLiveActions.Clear();
                 Serilog.Log.Information("Companion room: provider set to {Mode}", value);
                 Sync();
                 if (value == Mode.LocalOllama && MaybeOfferLocalSetupAsync() is { IsCompleted: false } offer) LocalOffer = offer;
@@ -116,8 +117,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         }
 
         public string DailyLimitLabel { get => _dailyLimitLabel; private set => Set(ref _dailyLimitLabel, value); }
-        public bool ShowLiveActions => false;
-        public IReadOnlyList<string> LiveActions { get; } = Array.Empty<string>();
+        public bool ShowLiveActions => _provider is Mode.LocalOllama or Mode.Custom;
+        public IReadOnlyList<string> LiveActions => App.AiLiveActions;
         public string LiveActionsPlaceholder => Loc.Get("companion_engine_live_actions_placeholder");
 
         public ICommand? LoginCommand => null;
@@ -147,6 +148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                     ? Loc.GetF("companion_engine_daily_limit_fmt", limit)
                     : Loc.Get("companion_engine_daily_limit_none");
                 IsLoggedIn = !string.IsNullOrEmpty(CoreAccount.UnifiedUserId);
+                Raise(nameof(ShowLiveActions));
                 RefreshStatus();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "EngineRoomVm: sync failed"); }
