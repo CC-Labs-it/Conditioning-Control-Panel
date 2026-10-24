@@ -48,8 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
             // WPF ChaosModeService.ForceShutdown (:3176) closes the rain; it also runs outside a run (trigger bubble, Emi, BackRoom).
             new("gif-cascade", _ => Chaos.ChaosGifCascadeOverlay.CloseActive()),
-            // WPF ForceShutdown :3177 ChaosAnnouncerOverlay.CloseActive: queue dropped, window closed, run or not.
             new("chaos-unlock-card", _ => Chaos.ChaosUnlockCardOverlay.CloseActive()),
+            // WPF ForceShutdown :3177 ChaosAnnouncerOverlay.CloseActive: queue dropped, window closed, run or not.
             new("chaos-announcer", _ => Chaos.ChaosAnnouncerOverlay.CloseActive()),
             new("chaos-dvd", _ => Chaos.ChaosDvdOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosDvdOverlay.CloseActive (:3179)
             new("chaos-cursor-glow", _ => Chaos.ChaosCursorGlowOverlay.CloseActive()),   // WPF ForceShutdown :3183 closes the halo

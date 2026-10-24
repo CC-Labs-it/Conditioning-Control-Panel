@@ -28,7 +28,7 @@ internal sealed class ChaosUnlockCardOverlay : Window
     private ChaosUnlockCardLayer.Card? _card;
     private Action? _done;
     private bool _auto, _dismissing;
-    private double _start, _fadeStart, _fadeOpacity;
+    private double _start, _fadeStart, _fadeOpacity, _inFrom;
     private ScaleTransform? _scale;
 
     private ChaosUnlockCardOverlay()
@@ -85,6 +85,7 @@ internal sealed class ChaosUnlockCardOverlay : Window
         if (Queue.Count == 0) return;
         var (info, done, auto) = Queue.Dequeue();
         _done = done; _auto = auto; _dismissing = false;
+        _inFrom = Opacity; // WPF fades in from the current opacity: a direct swap stays at 1
         _card = ChaosUnlockCardLayer.Build(info, 420);
         _card.Root.Opacity = 1;
         _card.Slide.Y = 0;
@@ -160,7 +161,7 @@ internal sealed class ChaosUnlockCardOverlay : Window
         }
         ChaosUnlockCardLayer.Apply(_card, Math.Min(t, 800)); // shared one-shot icon and glow, no hub fade
         _card.Root.Opacity = 1; _card.Slide.Y = 0;
-        Opacity = Math.Clamp(t / InMs, 0, 1);
+        Opacity = _inFrom + (1 - _inFrom) * Math.Clamp(t / InMs, 0, 1);
         _scale!.ScaleX = _scale.ScaleY = 0.9 + 0.1 * ChaosUnlockCardLayer.BackOut(Math.Min(1, t / PopMs), 0.5);
         if (_auto && t >= AutoMs) Dismiss();
     }

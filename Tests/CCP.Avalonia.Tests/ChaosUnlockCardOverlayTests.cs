@@ -28,22 +28,33 @@ public sealed class ChaosUnlockCardOverlayTests
     public async Task Real_lesson_event_reaches_overlay_and_stale_events_after_teardown_are_ignored() => await AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();
+        var lessons = new System.Collections.Generic.HashSet<string>(ChaosMeta.State.LessonsComplete ?? new());
+        var progress = new System.Collections.Generic.Dictionary<string, long>(ChaosMeta.State.LessonProgress ?? new());
         try
         {
             ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
             ChaosRunHost.BeginRun(); ChaosRunHost.StopTimerForTests();
             ChaosMeta.State.LessonsComplete?.Remove("silk_touch");
+            ChaosMeta.State.LessonProgress?.Remove("silk_touch"); // a prior high-water mark would swallow the raise
             ChaosLessons.RaiseTo("silk_touch", ChaosLessons.T_SILK_TOUCH);
             await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { }, global::Avalonia.Threading.DispatcherPriority.Background);
             Assert.True(ChaosUnlockCardOverlay.IsShowing);
             Assert.True(BubbleOverlay.Field.HoldChaos);
             ChaosMeta.State.LessonsComplete?.Remove("popup_notification");
+            ChaosMeta.State.LessonProgress?.Remove("popup_notification"); // a prior high-water mark would swallow the raise
             ChaosLessons.Tick("popup_notification", ChaosLessons.T_POPUP_NOTIF);
             ChaosRunHost.ForceShutdown();
+            // A new run before the queued event drains: only the generation guard drops it.
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3 });
+            ChaosRunHost.BeginRun(); ChaosRunHost.StopTimerForTests();
             await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { }, global::Avalonia.Threading.DispatcherPriority.Background);
-            Assert.Null(ChaosUnlockCardOverlay.Active);
+            Assert.False(ChaosUnlockCardOverlay.IsShowing);
         }
-        finally { ChaosRunHost.ForceShutdown(); }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            ChaosMeta.State.LessonsComplete = lessons; ChaosMeta.State.LessonProgress = progress; ChaosMeta.Save();
+        }
     });
 
     [Fact]
@@ -91,6 +102,8 @@ public sealed class ChaosUnlockCardOverlayTests
             Assert.Equal(1, w.Opacity);
             ChaosUnlockCardOverlay.Show(Card, () => callbacks++);
             w.Dismiss();
+            w.Advance();
+            Assert.Equal(1, w.Opacity); // direct swap: no scrim blink
             Assert.Equal(1, callbacks);
             Assert.Same(w, ChaosUnlockCardOverlay.Active);
             now += ChaosUnlockCardOverlay.AutoMs; w.Advance();
