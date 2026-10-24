@@ -212,7 +212,7 @@ namespace ConditioningControlPanel.Services
                 // the clip to LibVLC, and WedgeWatchdogTick also no-ops while _browserActive.
                 StopWedgeWatchdog();
 
-                App.Bubbles?.PauseAndClear();
+                if (Video.VideoFlashRule.ClearsBubbles(floating: IsFloating)) App.Bubbles?.PauseAndClear();
                 if (Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating)) SetupAttention();
 
                 VideoDiag.Log("VIDEO", $"browser session on screen ({_windows.Count} window(s)) - {Path.GetFileName(path)}");

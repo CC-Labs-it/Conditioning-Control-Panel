@@ -19,7 +19,10 @@ namespace ConditioningControlPanel.Services.Commands
 
         public Task<bool> ExecuteAsync()
         {
-            var intensity = Math.Clamp(_data.Intensity, 0, MaxIntensity);
+            // Null for "off" (and for an "on" with no intensity): the saved opacity is the user's,
+            // so the head writes back the value it already has (WPF bafe52cfc).
+            var intensity = AiOverlayOpacity.ToWrite(_data.On, _data.Intensity, MaxIntensity)
+                ?? CoreSettings.Current.PinkFilterOpacity;
 
             try
             {
