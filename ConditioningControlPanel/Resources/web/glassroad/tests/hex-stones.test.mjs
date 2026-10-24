@@ -63,6 +63,46 @@ test('schema accepts giant hex platforms and broad galleries without enlarging l
   f.stones[0].w = 24; f.stones[0].len = 41; assert.equal(validate(json).ok, false);
 });
 
+test('Mainframe bots traverse every giant-platform lane at ordinary and boosted entry speed', () => {
+  const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8'))), f = track.fields[0];
+  assert.equal(f.lanes.length, 5);
+  assert.ok(f.stones.every((st) => st.shape === 'hex'));
+  for (const speed of [20, 34]) for (let i = 0; i < f.lanes.length; i++) {
+    const feel = makeFeel(), events = [], bus = { emit: (name) => events.push(name) };
+    const r = createRacers(track, feel, bus, { count: 8, seed: 1 }).list[i + 1], lane = f.lanes[i];
+    r.st.set(place(track, { s: f.fromS - 24, lateral: lane + 0.5, speed }));
+    const ai = createAi(track, feel, { seed: 1 }), actions = createActions(), race = { phase: 'racing', timeS: 10 };
+    let worst = 0;
+    for (let tick = 0; tick < 35 / DT; tick++) {
+      ai.drive(r, { race, racers: [r] }, DT, actions);
+      step(r.st, actions, track, feel, DT, bus); updateRespawn(r.st, track, feel, DT, bus); race.timeS += DT;
+      if (r.st[S.s] >= f.fromS && r.st[S.s] < f.toS) worst = Math.max(worst, Math.abs(r.st[S.lateral] - lane));
+      if (r.st[S.s] > f.toS + 10 && r.st[S.grounded]) break;
+      if (r.st[S.respawnPhase]) break;
+    }
+    const label = JSON.stringify({ lane, speed, s: r.st[S.s], lateral: r.st[S.lateral], worst });
+    assert.ok(r.st[S.s] > f.toS + 10, 'completed field: ' + label);
+    assert.equal(r.st[S.respawnPhase], 0, 'no rescue: ' + label);
+    assert.ok(!events.includes('drop') && !events.includes('fall'), 'no fall: ' + label);
+    assert.ok(worst < 1.5, 'held lane: ' + label);
+  }
+});
+
+test('Mainframe gallery approach keeps its outer shoulder above the lower reactor helix', () => {
+  const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8'))), field = track.fields[0];
+  for (let s = field.fromS - 70; s < field.fromS; s += 2) {
+    const f = track.frameAt(s);
+    for (let x = 26; x < f.w / 2 - 0.5; x += 2) {
+      const p = f.p.map((v, k) => v + f.b[k] * x + f.n[k] * 0.2);
+      for (const hint of [f.seg, -1]) {
+        const q = track.query(...p, hint);
+        assert.ok(Math.abs(q.s - s) < 1e-3, `gallery s=${s}, x=${x} selected s=${q.s}`);
+        assert.ok(q.onRoad && Math.abs(q.height - 0.2) < 1e-3);
+      }
+    }
+  }
+});
+
 const hooks = registerHooks({ resolve(specifier, context, next) {
   const files = { 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
   return files[specifier] ? { url: new URL('../vendor/three/build/' + files[specifier], import.meta.url).href, shortCircuit: true } : next(specifier, context);
