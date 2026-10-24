@@ -76,10 +76,30 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (OperatingSystem.IsWindows() && bundled != null) Core.Initialize(bundled);
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
-            _vlc = new LibVLC(options.Append("--quiet").ToArray());
+            _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
             Shared ??= _vlc;
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
+
+        /// <summary>This instance's LibVLC (the Windows session test plays through the real output).</summary>
+        internal LibVLC Vlc => _vlc;
+
+        /// <summary>
+        /// Windows: LibVLC's default output (mmdevice) sets Player.Volume and Mute on the PROCESS's one
+        /// WASAPI session, which every player shares and Windows remembers (measured with silent WAVs:
+        /// players at 100 and 30 shared ONE session, it went to 0.027 and both read 30). Through DirectSound
+        /// each player's Volume/Mute is its own buffer's: measured 100 / 30 / 0 / 5 / mute on two players with
+        /// the session at 1.000 throughout, each player reading its own value. 0 is DirectSound's floor
+        /// (silence) and LibVLC's cubic scale is kept, so the linear gain mapping (<see cref="VlcVolume"/>)
+        /// still lands WPF's sample-gain levels. ",any" falls back to the default output if DirectSound
+        /// cannot open. A caller's own --aout (tests: dummy) wins. Linux: pulse is per stream already.
+        /// </summary>
+        internal static string[] WithOutput(string[] options, bool windows) =>
+            windows && !options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal))
+                ? options.Prepend("--aout=directsound,any").ToArray() : options;
+
+        /// <summary>WPF's linear sample gain (0-1) as LibVLC's cubic 0-100 volume: 0.5 lands at about -6 dB.</summary>
+        internal static int VlcVolume(float gain) => (int)Math.Round(Math.Cbrt(Math.Clamp(gain, 0f, 1f)) * 100);
 
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
         internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _vlc = null!; _pactl = pactl; _journal = duckJournal; }
@@ -141,7 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             media.AddOption(NoVideo);
             var player = new MediaPlayer(media);
             // WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
-            var vol = (int)Math.Round(Math.Cbrt(Math.Clamp(volume, 0f, 1f)) * 100);
+            var vol = VlcVolume(volume);
             var done = 0;
             void Finish()
             {

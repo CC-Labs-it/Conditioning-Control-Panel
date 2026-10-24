@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _rescan?.Dispose();
                 _rescan = new Timer(_ => Rescan(), null, RescanMs, RescanMs);
             }
-            try { LayeredAudio.Instance?.ApplyDuckGain(amount); } catch { }   // never ApplyDuck here: Volume is the whole session
+            try { LayeredAudio.Instance?.ApplyDuck(amount); } catch { }   // per player: LibVLC plays through DirectSound here (LibVlcAudio)
             Enqueue(() => DuckSweep(rescan: false));
         }
 
@@ -105,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _ducked = false;
                 DisposeDuckTimers();
             }
-            try { LayeredAudio.Instance?.ReleaseDuckGain(); } catch { }
+            try { LayeredAudio.Instance?.ReleaseDuck(); } catch { }
             Enqueue(Restore);
         }
 
@@ -296,7 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _generation++;
                 DisposeDuckTimers();
             }
-            try { LayeredAudio.Instance?.ReleaseDuckGain(); } catch { }
+            try { LayeredAudio.Instance?.ReleaseDuck(); } catch { }
             Enqueue(Restore);
         }
 

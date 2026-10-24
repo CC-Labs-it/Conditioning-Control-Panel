@@ -157,46 +157,6 @@ public sealed class WindowsDuckerTests : IDisposable
     }
 
     [Fact]
-    public void OurOwnLayersDuckByAPerPlayerGainNeverThroughVolume()
-    {
-        // Volume on a LibVLC player is the whole process's WASAPI session on Windows (measured), so
-        // the Windows ducker must never reach LayeredAudio.ApplyDuck.
-        var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "WindowsDucker.cs"));
-        Assert.DoesNotContain("ApplyDuck(", src);
-        Assert.DoesNotContain("ReleaseDuck(", src);
-        Assert.Contains("ApplyDuckGain(", src);
-
-        var players = new List<FakeLayer>();
-        var layers = new LayeredAudio(_ => { var f = new FakeLayer(); players.Add(f); return f; });
-        var s = ConditioningControlPanel.CoreSettings.Current;
-        var saved = (s.AudioLayers, s.AudioLayersEnabled);
-        var file = Path.GetTempFileName();
-        try
-        {
-            s.AudioLayers = new() { new ConditioningControlPanel.Models.AudioLayerTrack { Path = file, Volume = 100 } };
-            s.AudioLayersEnabled = true;
-            layers.Start();
-            var volume = players[0].Volume;
-            layers.ApplyDuckGain(0.8f);
-            Assert.Equal(-13.98f, players[0].Db, 2);
-            Assert.Equal(volume, players[0].Volume);   // the session volume is never touched
-            layers.ApplyDuckGain(1f);
-            Assert.Equal(-20f, players[0].Db, 2);      // LibVLC's preamp floor
-            layers.ReleaseDuckGain();
-            Assert.Equal(0f, players[0].Db);
-        }
-        finally { (s.AudioLayers, s.AudioLayersEnabled) = saved; layers.Dispose(); File.Delete(file); }
-    }
-
-    private sealed class FakeLayer : LayeredAudio.ILayerPlayer
-    {
-        public int Volume { get; set; } = -1;
-        public float Db = float.NaN;
-        float LayeredAudio.ILayerPlayer.DuckDb { set => Db = value; }
-        public void Dispose() { }
-    }
-
-    [Fact]
     public void WindowsDuckingIsSeededOnlyFromAppStartUp()
     {
         var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "LibVlcAudio.cs"));
