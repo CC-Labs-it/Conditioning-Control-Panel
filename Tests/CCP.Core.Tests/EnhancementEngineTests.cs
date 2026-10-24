@@ -102,6 +102,39 @@ public class EnhancementEngineTests
     }
 
     [Fact]
+    public void HostRebindAndUnload_DisposeEachAdapterAfterUnsubscribing()
+    {
+        var adapters = new List<FakeWebcam>();
+        EnhancementHostService.WebcamProvider = () =>
+        {
+            var webcam = new FakeWebcam();
+            adapters.Add(webcam);
+            return webcam;
+        };
+        try
+        {
+            using var host = new EnhancementHostService();
+            Assert.True(host.LoadFromMemory(Enh(Rule(new BlinkDetectedTrigger(), Subliminal())), "memory"));
+            Assert.True(host.Bind(new FakeSource()));
+            Assert.True(adapters[0].HasBlinkListener);
+            Assert.True(host.Bind(new FakeSource()));
+            Assert.Equal(1, adapters[0].DisposeCalls);
+            Assert.False(adapters[0].HadListenersAtDispose);
+            Assert.True(adapters[1].HasBlinkListener);
+
+            host.Unload();
+            host.UnbindEngine();
+            Assert.Equal(1, adapters[1].DisposeCalls);
+            Assert.False(adapters[1].HadListenersAtDispose);
+            Assert.False(host.IsRunning);
+        }
+        finally
+        {
+            EnhancementHostService.WebcamProvider = null;
+        }
+    }
+
+    [Fact]
     public void GazeTarget_MapsTheNormalizedRectOntoTheVideoRect_HitFiresMissDoesNot()
     {
         // Video drawn at (100,100) 200x100; target = right half -> screen x 200..300, y 100..200.
@@ -177,13 +210,22 @@ public class EnhancementEngineTests
         public void StopOneShotSubliminals() => Cleanups.Add("stop-subliminals");
     }
 
-    private sealed class FakeWebcam : IEnhancementWebcam
+    private sealed class FakeWebcam : IEnhancementWebcam, IDisposable
     {
         public event Action? OnBlink;
         public event Action? OnMouthOpen;
         public event Action<double, double>? OnGazeMove;
         public event Action? OnFaceLost;
         public event Action? OnFaceFound;
+
+        public int DisposeCalls { get; private set; }
+        public bool HadListenersAtDispose { get; private set; }
+        public void Dispose()
+        {
+            DisposeCalls++;
+            HadListenersAtDispose = OnBlink != null || OnMouthOpen != null || OnGazeMove != null
+                || OnFaceLost != null || OnFaceFound != null;
+        }
 
         public bool HasBlinkListener => OnBlink != null;
         public void Blink() => OnBlink?.Invoke();

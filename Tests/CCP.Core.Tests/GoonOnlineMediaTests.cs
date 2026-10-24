@@ -204,4 +204,11 @@ public class GoonOnlineMediaTests
         using var m = GoonOnlineMedia.ForNoise("cats", _ => { });
         Assert.NotNull(m);
     }
+
+    [Fact]
+    public void The_peer_pool_takes_only_clean_niche_names()
+    {
+        var subs = GoonOnlineMediaRules.CleanSubs(new[] { "Good_one", "https://evil.example/x", "a", "good_ONE", "../etc" });
+        Assert.Equal(new[] { "Good_one" }, subs);
+    }
 }
