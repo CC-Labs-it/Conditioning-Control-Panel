@@ -45,6 +45,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("gaze-minigame", _ => Lab.GazeMinigame.GazeMinigameWindow.CloseAllForPanic(), Lab.GazeMinigame.GazeMinigameWindow.IsAnyRunning),   // ends before the camera stop below
             new("mantra", _ => MantraWindow.StopForPanic()),                // WPF KillAllAudio -> Mantra?.Dispose()
             new("chaos", _ => Chaos.ChaosRunHost.ForceShutdown(), () => Chaos.ChaosRunHost.IsDescending),
+            new("chaos-flash", _ => Overlays.ChaosFlashOverlay.CloseActive()),   // WPF ForceShutdown :3175; a run-less glitch wash too
+            // WPF ChaosModeService.ForceShutdown (:3176) closes the rain; it also runs outside a run (trigger bubble, Emi, BackRoom).
+            new("gif-cascade", _ => Chaos.ChaosGifCascadeOverlay.CloseActive()),
+            // WPF ForceShutdown :3177 ChaosAnnouncerOverlay.CloseActive: queue dropped, window closed, run or not.
+            new("chaos-announcer", _ => Chaos.ChaosAnnouncerOverlay.CloseActive()),
+            new("chaos-dvd", _ => Chaos.ChaosDvdOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosDvdOverlay.CloseActive (:3179)
+            new("chaos-cursor-glow", _ => Chaos.ChaosCursorGlowOverlay.CloseActive()),   // WPF ForceShutdown :3183 closes the halo
+            new("chaos-vibe-trail", _ => Chaos.ChaosVibeTrailOverlay.CloseActive()),   // WPF ForceShutdown :3184; also when no run owns it
+            new("chaos-estim", _ => Chaos.ChaosEStimOverlay.CloseActive()),   // lightning + cursor halo (WPF ChaosModeService.cs:3185)
+            new("chaos-field-fx", _ => Overlays.ChaosFieldFxOverlay.CloseActive()),   // WPF ChaosModeService teardown CloseActive
+            new("chaos-skia-fx", _ => Chaos.ChaosSkiaFxOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosSkiaFxOverlay.CloseActive; also outside a run
             new("chaos-intro", _ => Chaos.ChaosIntroWindow.CloseForPanic()),   // the modal first-run card (WPF left it up)
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("keyword-triggers", _ => Platform.KeywordTriggerHead.StopAudio()),   // the clip only; the switch stays armed
