@@ -30,6 +30,18 @@ namespace ConditioningControlPanel
             catch { try { onFinished?.Invoke(); } catch { } }
         }
 
+        /// <summary>PlaySound uses the caller's level beneath the live master dial, unlike
+        /// PlayOneShot whose callers already supply a final gain.</summary>
+        public static volatile Action<string, float, string, Action<TimeSpan>?, Action?>? PlaySoundProvider;
+
+        public static void PlaySound(string path, float volume, string tag = "sound",
+                                    Action<TimeSpan>? onStarted = null, Action? onFinished = null)
+        {
+            if (PlaySoundProvider is not { } play) { try { onFinished?.Invoke(); } catch { } return; }
+            try { play(path, volume, tag, onStarted, onFinished); }
+            catch { try { onFinished?.Invoke(); } catch { } }
+        }
+
         /// <summary>Optional: a player that also hands back the clip's stop (WPF's one-shot handle.Stop).</summary>
         public static volatile Func<string, float, string, Action<TimeSpan>?, Action?, Action?>? PlayStoppableProvider;
 
