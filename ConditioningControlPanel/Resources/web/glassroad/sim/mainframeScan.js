@@ -1,17 +1,30 @@
 // Mainframe scan walls: four visible phases on the song clock, with a permanent outside bypass.
 import { S, RESPAWN } from './state.js';
 
+/** Named runtime span shared by the course's environment, canal support and timed obstacles. */
+export function mainframeSpan(track, id) {
+  return track.id === 'mainframe' ? track.sections?.find(section => section.id === id) || null : null;
+}
+
 export function scanZones(track) {
   if (track.id !== 'mainframe') return [];
-  return [210, 835].map((s, i) => ({ id: 'scan-' + i, s, len: 8, width: 10, offset: i * 8 }));
+  const canal = mainframeSpan(track, 'coolant-canal'), submerged = mainframeSpan(track, 'submerged'), memory = mainframeSpan(track, 'memory-crossing');
+  // The memory section starts with its twelve-node raised bend; the straight follows it.
+  const memoryS = memory && track.nodeS?.[memory.from + 12];
+  if (!canal || !submerged || !Number.isFinite(memoryS)) return [];
+  const positions = [180, canal.fromS + 85, canal.fromS + 170, memoryS + 190, memoryS + 360, submerged.fromS + 130];
+  return positions.map((s, i) => ({ id: 'scan-' + i, s, len: i === 1 || i === 2 ? 10 : 8,
+    width: i === 1 || i === 2 ? 18 : 12, height: i === 1 || i === 2 ? 15 : 5.5,
+    travel: i === 1 || i === 2 ? 4 : 3, offset: [0, 5, 11, 3, 9, 6][i] }));
 }
 
 export function scanPose(zone, timeS, bpm = 120) {
   const beat = ((Math.max(0, timeS) * bpm / 60 + zone.offset) % 16 + 16) % 16;
-  const phase = beat < 4 || beat >= 13 ? 'clear' : beat < 8 ? 'warn' : beat < 12 ? 'sweep' : 'hold';
+  const phase = beat < 4 || beat >= 14 ? 'clear' : beat < 8 ? 'warn' : beat < 12 ? 'sweep' : 'hold';
   const u = Math.max(0, Math.min(1, (beat - 8) / 4));
-  return { phase, x: -3 + 6 * (u * u * (3 - 2 * u)),
-    opacity: phase === 'clear' ? Math.max(0, 1 - (beat - 13) / 2) * (beat >= 13 ? 0.28 : 0)
+  const travel = zone.travel || 3;
+  return { phase, x: -travel + 2 * travel * (u * u * (3 - 2 * u)),
+    opacity: phase === 'clear' ? Math.max(0, 1 - (beat - 14) / 2) * (beat >= 14 ? 0.28 : 0)
       : phase === 'warn' ? Math.min(1, (beat - 4) / 1.5) * 0.18 : 0.28,
     active: phase === 'sweep' || phase === 'hold' };
 }
@@ -25,7 +38,7 @@ export function scanClock(music, raceTimeS) {
 }
 
 export function createMainframeScan(track, events) {
-  const zones = scanZones(track), previous = new Map(), latched = new Set();
+  const zones = scanZones(track), previous = new Map(), latched = new Set(), profile = {};
   let lastT = null, safeUntil = -Infinity;
   const api = { ready: true, hits: 0, update, reset };
   function reset() { previous.clear(); latched.clear(); lastT = null; safeUntil = -Infinity; api.ready = true; api.hits = 0; }
@@ -53,15 +66,18 @@ export function createMainframeScan(track, events) {
         // Swept probes cover the kart path and the moving wall, even on a low frame rate.
         for (let n = 0; n <= 4 && !hit; n++) {
           const a = n / 4, s = prev.s + ds * a, x = prev.x + (now.x - prev.x) * a;
-          const h = prev.h + (now.h - prev.h) * a, pose = scanPose(zone, prev.t + (timeS - prev.t) * a, bpm);
-          hit = pose.active && s >= zone.s - 0.7 && s <= zone.s + zone.len + 0.7
-            && h >= -0.5 && h <= 4 && Math.abs(x - pose.x) <= zone.width / 2 + 0.65;
+          const h = prev.h + (now.h - prev.h) * a, sampleT = prev.t + (timeS - prev.t) * a, pose = scanPose(zone, sampleT, bpm);
+          // Walls rise from the centreline, while kart height is measured above the curved support normal.
+          const support = track.canalProfile ? track.canalProfile(s, x, profile) : null;
+          const wallHeight = support ? support.height + h * Math.hypot(1, support.slope, support.alongSlope) : h;
+          hit = sampleT >= safeUntil && pose.active && s >= zone.s - 0.7 && s <= zone.s + zone.len + 0.7
+            && wallHeight >= -0.5 && wallHeight <= zone.height && Math.abs(x - pose.x) <= zone.width / 2 + 0.65;
         }
         if (hit) {
           latched.add(key);
-          st[S.stalled] = Math.max(st[S.stalled], 0.4);
+          st[S.stalled] = Math.max(st[S.stalled], 0.5);
           api.hits++;
-          events.emit('scan-hit', { racer: id, zone: zone.id, durationS: 0.4 });
+          events.emit('scan-hit', { racer: id, zone: zone.id, durationS: 0.5 });
         }
       }
     }

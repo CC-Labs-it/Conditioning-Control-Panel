@@ -19,7 +19,7 @@ test('Mainframe constructs server batches and scan volumes before the first upda
   const world = buildMainframe(track, null);
   assert.ok(world.counts.shell > 10);
   assert.ok(world.counts.green > world.counts.shell);
-  assert.equal(world.scans.length, 2);
+  assert.equal(world.scans.length, 6);
   for (const scan of world.scans) {
     assert.equal(scan.panel.scale.x, scan.zone.width);
     assert.equal(scan.panel.scale.z, scan.zone.len, 'visible depth covers the entire collision region');

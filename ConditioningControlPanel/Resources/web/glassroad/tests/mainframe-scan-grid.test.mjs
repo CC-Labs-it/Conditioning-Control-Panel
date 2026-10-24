@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
-import { createMainframeScan, scanClock } from '../sim/mainframeScan.js';
+import { createMainframeScan, scanClock, scanZones } from '../sim/mainframeScan.js';
 import { S } from '../sim/state.js';
 import { makeRace } from './sim-racers-harness.mjs';
 
@@ -22,11 +22,11 @@ for (const seed of [1, 241023, 20261024]) test('Mainframe full grid finishes wit
     const clock = scanClock(music, run.race.timeS);
     scan.update(run.racers.list, clock.timeS, clock.bpm);
   };
-  run.run(240, () => run.racers.list.every(racer => racer.finished));
+  run.run(480, () => run.racers.list.every(racer => racer.finished));
   assert.ok(hits.length > 0, 'real driving must encounter an active scan');
   assert.ok(hits.some(hit => hit.racer > 0), 'bots receive the same contact rule');
   assert.equal(scan.hits, hits.length);
-  assert.deepEqual(new Set(hits.map(hit => hit.zone)), new Set(['scan-0', 'scan-1']));
+  assert.deepEqual(new Set(hits.map(hit => hit.zone)), new Set(scanZones(track).map(zone => zone.id)));
   assert.ok(run.racers.list.every(racer => racer.finished && racer.st[S.lap] === 3),
     JSON.stringify(run.racers.list.map(r => ({ i: r.i, s: r.st[S.s], lap: r.st[S.lap], falls: r.falls }))));
   assert.ok(run.racers.list.every(racer => racer.falls === 0), 'scan stalls never strand a racer or require a rescue');
