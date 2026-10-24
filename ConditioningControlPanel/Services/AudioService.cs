@@ -813,14 +813,20 @@ namespace ConditioningControlPanel.Services
                     return 0;
                 }
 
-                // Apply volume curve (gentler, minimum 5%)
-                var volume = volumePercent / 100.0f;
-                var curvedVolume = Math.Max(0.05f, (float)Math.Pow(volume, 1.5));
-                _soundFile.Volume = curvedVolume;
+                // The caller's level sits UNDER the master dial (#1432). Both callers (the
+                // companion's Audio effect, a Deeper play-audio action) pass their own level and
+                // nothing else, so this was the one place the master could be applied - and it
+                // was not: with the master at 0% the clip still played, floored at 5%.
+                _soundVolumePercent = volumePercent;
+                Audio.MasterVolumeWatch.Shared.Changed -= OnMasterVolumeChangedForSound;
+                Audio.MasterVolumeWatch.Shared.Changed += OnMasterVolumeChangedForSound;
+                Audio.MasterVolumeWatch.Shared.EnsureHooked();
+                _soundFile.Volume = SoundGain(volumePercent, App.Settings?.Current?.MasterVolume ?? 100);
 
                 _soundPlayer.Init(_soundFile);
                 _soundPlayer.Play();
                 NoteOutputSuccess();
+                Audio.EngineOffAudioLog.Note("sound", path);
 
                 var duration = _soundFile.TotalTime.TotalSeconds;
                 App.Logger?.Debug("Playing sound: {Path}, duration: {Duration}s", Path.GetFileName(path), duration);
@@ -836,6 +842,29 @@ namespace ConditioningControlPanel.Services
                 NoteOutputFailure("playsound", ex.Message);
                 return 0;
             }
+        }
+
+        /// <summary>The level <see cref="PlaySound"/> was last asked for, before the master dial.</summary>
+        private int _soundVolumePercent = 100;
+
+        /// <summary>
+        /// Gain for <see cref="PlaySound"/>: the caller's level times the master dial, on the
+        /// gentle 1.5 curve. The 5% floor keeps a quiet setting audible, but only while both
+        /// dials are above zero: zero on either one is silence (ccp-bugs #1432).
+        /// </summary>
+        public static float SoundGain(int volumePercent, int masterVolume)
+        {
+            var level = Math.Clamp(volumePercent, 0, 100) / 100f * (Math.Clamp(masterVolume, 0, 100) / 100f);
+            if (level <= 0f) return 0f;
+            return Math.Max(0.05f, (float)Math.Pow(level, 1.5));
+        }
+
+        /// <summary>A long clip started by <see cref="PlaySound"/> follows the master dial live.</summary>
+        private void OnMasterVolumeChangedForSound(int masterVolume)
+        {
+            var file = _soundFile;
+            if (file == null) return;
+            try { file.Volume = SoundGain(_soundVolumePercent, masterVolume); } catch { }
         }
 
         /// <summary>
