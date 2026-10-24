@@ -18,8 +18,25 @@ test('Boudoir regenerates a closed substantial two-lap course with a level eight
   const track = course(), end = walkBoudoir(BOUDOIR_PIECES);
   assert.equal(track.laps, 2); assert.ok(track.lengthM > 6000 && track.lengthM < 8000);
   assert.ok(Math.hypot(end.x, end.z) < 1e-7);
-  assert.ok(json.nodes.every(n => n.w >= 32));
+  assert.ok(json.nodes.every(n => n.w >= 28));
   for (let i = 0; i < 8; i++) assert.ok(Math.abs(track.spawnPose(i).p[1]) < .001);
+});
+test('Vanity and galleries vary the physical drive with smooth crests, a broad S-bend and tapered decks', () => {
+  const track = course(), layout = getBoudoirLayout(track);
+  for (const id of ['vanity-grid', 'shelf-gallery', 'upper-gallery']) {
+    const span = layout.landmarks.find(p => p.id === id), frames = [];
+    for (let s = span.s0; s < span.s1; s += 2) frames.push(track.frameAt(s));
+    const start = frames[0], height = Math.max(...frames.map(f => f.p[1])) - start.p[1];
+    assert.ok(height > (id === 'vanity-grid' ? 1.8 : 3.7), id + ' crest');
+    assert.ok(Math.min(...frames.map(f => f.w)) <= start.w - 3.5, id + ' tapered width');
+    assert.ok(frames.every(f => Math.abs(f.t[1]) < .16), id + ' gentle slope');
+    if (id === 'shelf-gallery') {
+      const end = track.frameAt(span.s1), dx = end.p[0] - start.p[0], dz = end.p[2] - start.p[2];
+      const offset = frames.map(f => ((f.p[0] - start.p[0]) * dz - (f.p[2] - start.p[2]) * dx) / Math.hypot(dx, dz));
+      assert.ok(Math.max(...offset) > 7 && Math.min(...offset) < -7, 'two distinct S-bend turns');
+    }
+  }
+  for (let s = 0; s < 60; s += 3) assert.ok(Math.abs(track.frameAt(s).p[1]) < .001, 'grid remains flat');
 });
 test('Perfume courts have long visible flat approaches and an always-open eight-metre bypass', () => {
   const track = course(), layout = getBoudoirLayout(track);

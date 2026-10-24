@@ -19,11 +19,16 @@ export function buildBoudoir() {
         const h = start.heading + p.turn * RAD * u, radius = p.r * Math.sign(p.turn);
         x = start.x + radius * (Math.sin(h) - Math.sin(start.heading)); z = start.z + radius * (Math.cos(start.heading) - Math.cos(h));
       }
+      // Gentle crests, a gallery S-bend and tapered widths vary the driving rhythm.
+      // The envelope is flat at both ends, retaining the authored crossing and join positions.
+      const profile = p.profile || {}, v = Math.max(0, (u - (profile.begin || 0)) / (1 - (profile.begin || 0)));
+      const envelope = Math.sin(Math.PI * v) ** 2, weave = (profile.weave || 0) * envelope * Math.sin(2 * Math.PI * v);
+      x -= Math.sin(start.heading) * weave; z += Math.cos(start.heading) * weave;
       const flags = p.jump ? ['jump', 'open'] : p.field ? ['open'] : p.edge && d >= 25 && d < length - 25 ? ['rail' + (p.edge === 'L' ? 'R' : 'L')] : ['rail'];
       if (!nodes.length) flags.unshift('start');
-      nodes.push({ p: [round(x), round(y0 + (p.y - y0) * (p.kick ? u * u : p.linear ? u : smooth(u))), round(z)],
-        roll: p.turn ? round(Math.sign(p.turn) * 10 * Math.min(1, d / 30, (length - d) / 30)) : 0,
-        w: p.stepWidth ? 32 + 7 * Math.min(2, Math.floor(u * 810 / 360)) : p.w, flags, speed: 1,
+      nodes.push({ p: [round(x), round(y0 + (p.y - y0) * (p.kick ? u * u : p.linear ? u : smooth(u)) + (profile.crest || 0) * envelope), round(z)],
+        roll: p.turn ? round(Math.sign(p.turn) * 10 * Math.min(1, d / 30, (length - d) / 30)) : round((profile.bank || 0) * envelope * Math.sin(2 * Math.PI * v)),
+        w: p.stepWidth ? 32 + 7 * Math.min(2, Math.floor(u * 810 / 360)) : round(p.w - (profile.pinch || 0) * envelope), flags, speed: 1,
         surface: p.surface || 'glass', ...(p.flow ? { flow: p.flow } : {}) });
     }
     y0 = p.y;

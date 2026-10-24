@@ -18,13 +18,13 @@ export function walkBoudoir(pieces) {
 }
 function pieces() {
   const p = [
-    line('vanity-grid', 180, 0, 40), bend('powder-sweep', -60, 110, 4, { w: 40 }),
+    line('vanity-grid', 180, 0, 40, { profile: { begin: .4, crest: 2, pinch: 4 } }), bend('powder-sweep', -60, 110, 4, { w: 40 }),
     line('perfume-court', 160, 4, 44), bend('powder-return', 120, 110, 10, { w: 40 }),
     bend('ribbon-weave', -60, 110, 10), line('drawer-hall', 200, 10, 34),
     bend('shelf-approach', 90, 100, 14), bend('shelf-climb', 720, 82, 98, { linear: true, w: 32 }),
-    line('shelf-gallery', 180, 98, 36, { edge: 'L' }),
+    line('shelf-gallery', 180, 98, 36, { edge: 'L', profile: { crest: 6, weave: 13, pinch: 8, bank: 5 } }),
     bend('shelf-weave-in', -45, 100, 104), bend('shelf-weave-cross', 90, 100, 108), bend('shelf-weave-out', -45, 100, 102),
-    line('upper-gallery', 130, 102),
+    line('upper-gallery', 130, 102, 36, { profile: { crest: 4, pinch: 8, bank: -7 } }),
     bend('upper-weave-in', 45, 95, 106), bend('upper-weave-cross', -90, 95, 106), bend('upper-weave-out', 45, 95, 102),
     line('upper-runout', 370 - 190 * Math.SQRT2, 102), bend('upper-turn', -90, 100, 102),
     line('wardrobe-bridge', 200, 102, 38), bend('wardrobe-in', 90, 110, 102),
