@@ -27,6 +27,14 @@ function starGeometry(){
   for(let i=0;i<10;i++){const j=(i+1)%10,a=points[i],b=points[j];tri([0,0,.5],[...a,.5],[...b,.5]);tri([0,0,-.5],[...b,-.5],[...a,-.5]);tri([...a,.5],[...a,-.5],[...b,-.5]);tri([...a,.5],[...b,-.5],[...b,.5]);}
   const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(positions,3));g.computeVertexNormals();g.computeBoundingSphere();return g;
 }
+function spiralGeometry(){
+  const P=[],N=[],U=[],I=[],steps=240;
+  for(let i=0;i<=steps;i++){const t=i/steps,a=t*Math.PI*6.2,r=.04+t*.4;
+    for(const side of[-1,1]){const width=.019,radius=r+side*width;P.push(Math.cos(a)*radius,Math.sin(a)*radius,0);N.push(0,0,1);U.push(t,(side+1)/2);}
+    if(i){const j=(i-1)*2;I.push(j,j+1,j+3,j,j+3,j+2);}
+  }
+  const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(P,3));g.setAttribute('normal',new Float32BufferAttribute(N,3));g.setAttribute('uv',new Float32BufferAttribute(U,2));g.setIndex(I);g.computeBoundingSphere();return g;
+}
 
 /** Extend only actual side and underside triangles. Existing gaps remain cut through every layer. */
 export function goonworksRibbonShell(track){
@@ -50,7 +58,7 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   if(!plan)return{group,update(){},hit(){},reset(){},dispose(){},stats:{},casters:[]};
   const geometries={box:new BoxGeometry(1,1,1),sphere:new SphereGeometry(.5,20,12),
     cylinder:new CylinderGeometry(.5,.5,1,20),cone:new CylinderGeometry(.48,.2,1,20),
-    torus:new TorusGeometry(.48,.02,6,40),arch:new TorusGeometry(.48,.025,8,40,Math.PI),star:starGeometry(),island:islandGeometry(),openIsland:islandGeometry(false,false),hexIsland:islandGeometry(true),spark:new OctahedronGeometry(.5)};
+    torus:new TorusGeometry(.48,.02,6,40),arch:new TorusGeometry(.48,.025,8,40,Math.PI),star:starGeometry(),spiral:spiralGeometry(),island:islandGeometry(),openIsland:islandGeometry(false,false),hexIsland:islandGeometry(true),spark:new OctahedronGeometry(.5)};
   const materials={};for(const[name,hex]of Object.entries(C))materials[name]=createGoonworksMaterial(hex,{ink:name==='ink',paper:name==='white'||name==='cream',unlit:name==='distant'});
   const ink=createGoonworksMaterial(C.ink,{outline:true}),owned=[ink],extraGeometry=[];
   function upload(data){const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(data.positions,3));g.setAttribute('normal',new BufferAttribute(data.normals,3));g.setAttribute('uv',new BufferAttribute(data.uvs,2));g.setIndex(new BufferAttribute(data.indices,1));g.computeBoundingSphere();extraGeometry.push(g);return g;}

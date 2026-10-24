@@ -90,7 +90,7 @@ export function goonworksWorldPlan(track){
           for(const z of[-.2,0,.2])local('pinball-lamp','hot',f,x-side*6,12,z*step,[1.8,2,2],{shape:'sphere'});
         }
       }
-      if(i%2===0){screen(id+'-screen-'+i,s,-1,20,Math.min(20,step*.76),12,3);screen(id+'-screen-'+i+'b',s,1,20,Math.min(20,step*.76),12,3);}
+      if(i%2===0){screen(id+'-screen-'+i,s,-1,22,Math.min(20,step*.76),10,-7);screen(id+'-screen-'+i+'b',s,1,22,Math.min(20,step*.76),10,-7);}
       if(id==='aperture-mill'&&i%2===0)local(id+'-vault-rib','white',f,0,height-4,0,[roomHalf*2+20,20,3],{shape:'arch'});
       if(id==='pop-quiz'&&i%3===1){
         for(const x of[-roomHalf*.65,0,roomHalf*.65])local('quiz-icing-canopy','fuchsia',f,x,height+8,0,[roomHalf,14,step+6],{shape:'sphere'});
@@ -116,8 +116,9 @@ export function goonworksWorldPlan(track){
         local('grotto-inner-rock','fuchsia',f,side*(half+11),3,5,[14,17,16],{shape:'sphere'});
         if(i%3!==1)local('grotto-arched-roof','wine',f,side*(half*.6),48,0,[half+28,20,27],{shape:'sphere'});
         if(i%2===0)drip('grotto-stalactite',f,side*(half-1),40,0,1.7);
-        screen('grotto-'+i+'-'+side,s,side,14,17,13,3);
-        if(i%2===0)screen('grotto-high-'+i+'-'+side,s,side,33,13,10,14);
+        // The inside of the entry curve needs wider spacing so consecutive cabinets do not mask each other.
+        if(side<0||i%2===0||s>=layout.byId['grotto-gallery'].s0)screen('grotto-'+i+'-'+side,s,side,24,17,12,-7);
+        if(i%2===0)screen('grotto-high-'+i+'-'+side,s-8,side,34,12,8,-10);
       }
       local('grotto-floating-rock-keel','wine',f,0,-18,0,[f.w+45,28,29],{shape:'island'});
       particles.push({p:point(f,0,7),spread:half,phase:i});
@@ -161,15 +162,79 @@ export function goonworksWorldPlan(track){
     for(let s=r.s0+30,i=0;s<r.s1;s+=62,i++){const f=track.frameAt(s);particles.push({p:point(f,0,-5),spread:f.w*.7,phase:i*1.2});
       if(id==='leapfrog'){const side=i%2?1:-1,x=side*(f.w/2+20);local('orchard-floating-cloud','fuchsia',f,x,-9,0,[28,17,28],{shape:'island'});local('orchard-tube-trunk','white',f,x,11,0,[3.5,28,3.5],{shape:'cylinder'});local('orchard-star-crown','white',f,x,28,0,[15,15,4],{shape:'star',motion:{spin:.1,axis:2,phase:i}});}}
   }
+  // Three authored silhouettes are recognizable from several elevations around the open atrium.
+  const landmarks=[];
+  function landmarkSite(id,s,side,start,size,centerY){
+    const f=track.frameAt(s);
+    for(let distance=start;distance<=start+160;distance+=16){const x=side*distance,volume={p:point(f,x,centerY),size,axes:axes(f)};
+      if(clear(volume)){landmarks.push({id,s,...volume});features.push(id);return{f,x};}}
+    return null;
+  }
+  const braid=layout.byId['ribbon-braid'];
+  const badge=landmarkSite('spiral-cameo',braid.s0+(braid.s1-braid.s0)*.51,1,54,[62,94,52],22);
+  if(badge){const{f,x}=badge;
+    local('spiral-cameo-island','fuchsia',f,x,-14,0,[52,20,44],{shape:'island'});
+    local('spiral-cameo-icing','white',f,x,-2,0,[54,3,46],{shape:'island'});
+    for(const dx of[-13,13]){local('spiral-cameo-pillar','fuchsia',f,x+dx,11,0,[5,26,5],{shape:'cylinder'});drip('spiral-cameo-icing-drip',f,x+dx,-2,-21,.75);}
+    local('spiral-cameo-disc','white',f,x,36,0,[56,5,56],{shape:'cylinder',basis:[f.b,f.t,f.n]});
+    local('spiral-cameo-rim','ink',f,x,36,-2.2,[60,60,3],{shape:'torus',outline:false});
+    local('spiral-cameo-painted-face','fuchsia',f,x,36,-2.8,[54,54,1],{shape:'spiral',outline:false,motion:{spin:.025,axis:2,phase:0}});
+    local('spiral-cameo-painted-back','fuchsia',f,x,36,2.8,[54,54,1],{shape:'spiral',basis:[mul(f.b,-1),f.n,f.t],outline:false,motion:{spin:.025,axis:2,phase:0}});
+    particles.push({p:point(f,x,-6),spread:24,phase:2.1});
+  }
+  const descent=layout.byId['fold-descent'];
+  const pipes=landmarkSite('rabbit-pipe-organ',descent.s0+205,-1,100,[94,114,66],28);
+  if(pipes){const{f,x}=pipes;
+    local('rabbit-pipe-organ-island','wine',f,x,-17,0,[90,22,60],{shape:'island'});
+    local('rabbit-pipe-organ-icing','white',f,x,-4,0,[92,3.5,62],{shape:'island'});
+    for(const [dx,y,w,h,z]of[[-14,25,60,58,0],[18,12,44,44,-14]]){
+      local('rabbit-pipe-organ-arch','fuchsia',f,x+dx,y,z,[w,h,7],{shape:'arch'});
+      for(const side of[-1,1]){
+        const legX=x+dx+side*w*.48;
+        local('rabbit-pipe-organ-leg','fuchsia',f,legX,(y-3)/2,z,[3.8,y+3,3.8],{shape:'cylinder'});
+        local('rabbit-pipe-organ-white-cuff','white',f,legX,4,z,[6,4,6],{shape:'cylinder'});
+      }
+    }
+    for(const dx of[-27,9,29])drip('rabbit-pipe-organ-icing-drip',f,x+dx,-4,-30,1+(dx%3)*.12);
+    particles.push({p:point(f,x,4),spread:38,phase:4.2});
+  }
+  const overlook=layout.byId['fold-overlook'];
+  const factory=landmarkSite('icing-observatory',overlook.s0+(overlook.s1-overlook.s0)*.45,-1,88,[100,128,78],38);
+  if(factory){const{f,x}=factory;
+    local('icing-observatory-island','fuchsia',f,x,-14,0,[94,26,72],{shape:'island'});
+    local('icing-observatory-icing','white',f,x,1,0,[96,3,74],{shape:'island'});
+    for(const[dx,z,height,width]of[[-23,0,46,24],[9,10,73,30],[33,-17,31,18]]){
+      local('icing-observatory-tower','fuchsia',f,x+dx,height/2+3,z,[width,height,width],{shape:'cylinder'});
+      local('icing-observatory-tower-roof','white',f,x+dx,height+4,z,[width+5,12,width+5],{shape:'sphere'});
+      local('icing-observatory-window','ink',f,x+dx,height*.7,z-width*.51,[width*.4,width*.5,1.2],{shape:'sphere'});
+      local('icing-observatory-window-glint','white',f,x+dx-2,height*.7+2,z-width*.54,[width*.1,width*.19,1.4],{shape:'sphere',outline:false});
+      for(const side of[-1,1])drip('icing-observatory-roof-drip',f,x+dx+side*width*.35,height+1,z-width*.4,.9+side*.18);
+    }
+    for(const dx of[-34,-9,18,36])drip('icing-observatory-platform-drip',f,x+dx,0,-35,1.1+(dx%3)*.12);
+    local('icing-observatory-loop-pipe','white',f,x-24,53,4,[29,25,6],{shape:'arch'});
+    particles.push({p:point(f,x,15),spread:34,phase:5.7});
+  }
   const minP=[Infinity,Infinity,Infinity],maxP=[-Infinity,-Infinity,-Infinity];for(const f of samples)for(let k=0;k<3;k++){minP[k]=Math.min(minP[k],f.p[k]);maxP[k]=Math.max(maxP[k],f.p[k]);}
   const center=minP.map((v,k)=>(v+maxP[k])/2),radius=Math.hypot(maxP[0]-minP[0],maxP[2]-minP[2])/2;
   // Chunky suspended silhouettes replace the old spiral sky, with visible pale air below every island.
-  for(let i=0;i<24;i++){const a=i/24*TAU,r=radius+360+(i%3)*140,p=[center[0]+Math.cos(a)*r,minP[1]-35+(i%4)*45,center[2]+Math.sin(a)*r];
-    put('horizon-island','distant',p,[90+(i%3)*28,46,70+(i%4)*15],{shape:'island',check:false,outline:false});
-    put('horizon-factory','distant',add(p,[0,52,0]),[50,72,36],{check:false,outline:false});
-    for(const dx of[-17,10])put('horizon-chimney','distant',add(p,[dx,103,-6]),[8,45+(i%3)*14,8],{shape:'cylinder',check:false,outline:false});
-    for(let j=0;j<3;j++)put('white-cartoon-cloud','cream',[p[0]+j*22,p[1]+180+(i%3)*35,p[2]],[55,16+j*4,22],{shape:'sphere',check:false,outline:false});
+  for(let i=0;i<20;i++){const a=i/20*TAU+Math.sin(i*2.3)*.035,r=radius+360+(i%3)*140,p=[center[0]+Math.cos(a)*r,minP[1]-35+(i%4)*45,center[2]+Math.sin(a)*r];
+    const horizon=(id,offset,size,shape='box')=>put('horizon-'+id,'distant',add(p,offset),size,{shape,check:false,outline:false});
+    horizon('island',[0,0,0],[82+(i%3)*28,40+(i%4)*9,65+(i%4)*15],i%3===0?'hexIsland':'island');
+    if(i%4===0){
+      horizon('twin-tower',[-20,58,0],[31,78,32],'cylinder');horizon('twin-tower',[20,45,8],[40,52,36]);
+      horizon('icing-dome',[-20,102,0],[40,14,40],'sphere');horizon('chimney',[22,94,8],[9,50,9],'cylinder');
+    }else if(i%4===1){
+      horizon('loop-pipe',[0,58,0],[82,88,12],'arch');for(const dx of[-39,39])horizon('loop-leg',[dx,40,0],[7,42,7],'cylinder');
+      horizon('small-tower',[15,35,-18],[22,32,22],'cylinder');
+    }else if(i%4===2){
+      horizon('dome-house',[0,50,0],[60,52,48],'cylinder');horizon('dome-roof',[0,80,0],[72,22,58],'sphere');
+      horizon('thin-mast',[-20,108,0],[5,52,5],'cylinder');horizon('mast-pearl',[-20,136,0],[17,17,17],'sphere');
+    }else{
+      horizon('stepped-factory',[-19,48,2],[38,60,44]);horizon('stepped-factory',[20,68,-8],[33,100,34]);
+      horizon('wide-funnel',[20,126,-8],[38,19,38],'cone');horizon('side-chimney',[-35,85,3],[7,30,7],'cylinder');
+    }
+    for(let j=0;j<2;j++)put('white-cartoon-cloud','cream',[p[0]+j*22,p[1]+180+(i%3)*35,p[2]],[55,16+j*4,22],{shape:'sphere',check:false,outline:false});
   }
-  const plan={layout,rows,mounts,particles,platforms,rooms,features,rejected,corridor,center,radius,skyRadius:Math.max(2400,radius+1100)};
+  const plan={layout,rows,mounts,particles,platforms,rooms,features,landmarks,rejected,corridor,center,radius,skyRadius:Math.max(2400,radius+1100)};
   CACHE.set(track,plan);return plan;
 }

@@ -40,9 +40,24 @@ export function buildGoonworks() {
   const base = loadTrack(track), nearest = s => base.nodeS.slice(0, nodes.length).reduce((best, v, i) => Math.abs(v-s)<Math.abs(base.nodeS[best]-s)?i:best,0);
   for (const id of ['start-terrace','grotto-gallery','mill-hall','quiz-ballroom','ribbon-braid','leapfrog-exit','pinball-table','fold-overlook','finish-crossing'])
     for (const x of [-6,-2,2,6]) track.items.push({ node: node(id, .5), x, kind: 'box' });
-  for (const id of ['rabbit-exit','ribbon-braid','fold-runout','finish-crossing','home-straight']) {
-    const n = node(id, .6); nodes[n].flags.push('boost'); track.boosts.push({ node: n, x: 0, w: 5, len: 8 });
-  }
+  // Side-lane chains reward holding a line while leaving the centre free to coast.
+  // The last pad clears each timed toy or shortcut lip by at least 120 m: boost holds a speed floor even under braking.
+  const padRun = (id, offsetM, count, x, spacingM = 30) => {
+    const s0 = base.nodeS[spans[id].from];
+    for (let i = 0; i < count; i++) {
+      const n = nearest(s0 + offsetM + i * spacingM);
+      nodes[n].flags.push('boost'); track.boosts.push({ node: n, x, w: 6, len: 8 });
+    }
+  };
+  padRun('rabbit-exit', 5, 3, -6);
+  padRun('mill-approach', 0, 2, 6, 20);
+  padRun('quiz-approach', 0, 2, -6, 20);
+  padRun('ribbon-braid', 140, 3, -6);
+  padRun('ribbon-braid', 650, 3, -6);
+  padRun('pinball-approach', 10, 3, -6);
+  padRun('fold-overlook', 10, 2, 6);
+  padRun('fold-runout', 40, 2, -6);
+  padRun('home-straight', 40, 4, 6);
   const from = node('leapfrog-field'), to = node('leapfrog-exit'), s0 = base.nodeS[from], s1 = base.nodeS[to], stones = [];
   const count = 10, pitch = (s1 - s0 + 2) / count;
   for (let i = 0; i < count; i++) {

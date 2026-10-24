@@ -1,6 +1,7 @@
 /* Opaque enamel and triangle-based ink. All nodes are shared by WebGPU and WebGL2. */
 import { MeshBasicNodeMaterial, Color, DoubleSide, BackSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, RepeatWrapping } from 'three/webgpu';
 import { vec2, vec3, float, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, max, min, abs, pow, mix, smoothstep, fract, fwidth, texture, sin } from 'three/tsl';
+import {getGoonworksLayout} from '../track/goonworks-layout.js';
 
 export const GOONWORKS_PALETTE = Object.freeze({ fuchsia: '#bd006e', hot: '#e80087', wine: '#69003e',
   white: '#fff9ff', cream: '#fff0fa', ink: '#1a061c', shade: '#3c1037', sky: '#f7d9e9', distant: '#cb8aaf' });
@@ -28,10 +29,12 @@ export function createGoonworksMaterial(hex, { ink = false, paper = false, unlit
 export function applyGoonworksRoad(road, art, track) {
   if (track?.id !== 'goonworks') return null;
   const size = Math.max(2,Math.ceil(track.lengthM)), bytes = new Uint8Array(size*4);
-  for(let i=0;i<size;i++){bytes[i*4]=Math.round(Math.min(1,track.frameAt((i+.5)*track.lengthM/size).w/120)*255);bytes[i*4+3]=255;}
+  const layout=getGoonworksLayout(track),halls=['mill-hall','quiz-ballroom','pinball-table'].map(id=>layout.byId[id]);
+  for(let i=0;i<size;i++){const s=(i+.5)*track.lengthM/size;bytes[i*4]=Math.round(Math.min(1,track.frameAt(s).w/120)*255);
+    bytes[i*4+1]=halls.some(r=>s>=r.s0&&s<=r.s1)?255:0;bytes[i*4+3]=255;}
   const widths = new DataTexture(bytes,size,1,RGBAFormat,UnsignedByteType);
   widths.minFilter=widths.magFilter=LinearFilter;widths.wrapS=RepeatWrapping;widths.generateMipmaps=false;widths.needsUpdate=true;
-  const p=uv(), half=texture(widths,vec2(p.y.div(track.lengthM),.5)).r.mul(60), edge=half.sub(abs(p.x));
+  const p=uv(),district=texture(widths,vec2(p.y.div(track.lengthM),.5)),half=district.r.mul(60), edge=half.sub(abs(p.x));
   const pixel=max(fwidth(edge),.015), ink=float(1).sub(smoothstep(.19,pixel.add(.38),edge));
   const gutter=float(1).sub(smoothstep(1.65,1.9,edge)).mul(float(1).sub(ink));
   const N=normalize(normalWorld), top=smoothstep(.48,.72,N.y);
@@ -39,6 +42,18 @@ export function applyGoonworksRoad(road, art, track) {
   const paper=rgb(GOONWORKS_PALETTE.white).mul(light);
   const dark=rgb(GOONWORKS_PALETTE.wine), pink=rgb(GOONWORKS_PALETTE.fuchsia);
   let colour=mix(dark,paper,top);
+  // Two fine enamel ribbons bring scale to the wide floor without filling the racing line.
+  const laneCenter=half.mul(.12).add(3.8).add(sin(p.y.mul(.026)).mul(.32)),laneDistance=abs(abs(p.x).sub(laneCenter));
+  const lanePixel=max(fwidth(laneDistance),.025),laneSoft=float(1).sub(smoothstep(.64,lanePixel.add(.88),laneDistance));
+  const laneLine=float(1).sub(smoothstep(.12,lanePixel.add(.22),laneDistance));
+  const printable=float(1).sub(smoothstep(.6,1.5,max(fwidth(p.x),fwidth(p.y))));
+  colour=mix(colour,pink,laneSoft.mul(.14).add(laneLine.mul(.6)).mul(top).mul(printable));
+  // Sparse outlined lozenges on the outer floor recall a toy game board in each large hall.
+  const bay=abs(fract(p.y.div(34)).sub(.5)).mul(34),tileX=abs(abs(p.x).sub(half.mul(.64)));
+  const lozenge=tileX.div(3.2).add(bay.div(6.4)),tilePixel=max(fwidth(lozenge),.025);
+  const tile=float(1).sub(smoothstep(.91,tilePixel.add(1),lozenge));
+  const tileRule=float(1).sub(smoothstep(.025,tilePixel.add(.055),abs(lozenge.sub(1))));
+  colour=mix(colour,pink,tile.mul(.08).add(tileRule.mul(.52)).mul(district.g).mul(top).mul(printable));
   // One two-tone checker shoulder and a thin inner rule, leaving the racing line open.
   const checker=smoothstep(.43,.57,sin(p.y.mul(Math.PI/3.5)));
   colour=mix(colour,mix(paper,pink,checker),gutter.mul(top));

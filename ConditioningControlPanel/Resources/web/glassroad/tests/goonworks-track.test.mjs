@@ -3,22 +3,31 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildGoonworks } from '../dev/gen-goonworks.mjs';
 import { GOONWORKS_PIECES, getGoonworksLayout, walkGoonworks } from '../track/goonworks-layout.js';
+import { goonworksSetpieces } from '../track/goonworks-setpieces.js';
 import { validate } from '../track/schema.js';
 import { loadTrack } from '../track/load.js';
 import { stoneIn } from '../track/courts.js';
 import { makeRace } from './sim-racers-harness.mjs';
 import { createItems } from '../sim/items.js';
 import { createActions } from '../core/actions.js';
-import { qfromBasis } from '../core/math.js';
+import { qfromBasis, qrotate } from '../core/math.js';
 import { S, createState, setPos, setQuat, setVel } from '../sim/state.js';
 import { step } from '../sim/kart.js';
 import { updateRespawn } from '../sim/respawn.js';
 import { createProgress } from '../sim/progress.js';
 import { registeredSkip } from '../sim/routes.js';
 import { glideActive } from '../sim/glide.js';
+import { calmMul } from '../sim/steer.js';
+import { createGoonworksHazards } from '../sim/goonworksHazards.js';
 import { makeFeel, place, acts, recorder, DT } from './sim-fake.mjs';
 const json = JSON.parse(readFileSync(new URL('../tracks/goonworks.json', import.meta.url), 'utf8'));
 const track = loadTrack(json), layout = getGoonworksLayout(track);
+const padRuns = track.boosts.reduce((runs, pad, index) => {
+  const last = runs.at(-1), previous = last?.at(-1);
+  if (previous && pad.s - previous.s < 40 && pad.x === previous.x) last.push({ ...pad, index });
+  else runs.push([{ ...pad, index }]);
+  return runs;
+}, []);
 
 test('GOONWORKS is reproducible, closed, substantial and compact with a level eight-kart grid', () => {
   assert.deepEqual(buildGoonworks(), json);
@@ -42,6 +51,76 @@ test('mechanics halls expose straight broad stations and no jump or stone gaps',
       assert.ok(f.t.reduce((a,v,k)=>a+v*reference.t[k],0)>.999,id+' straight');
       assert.ok(track.query(...f.p,f.seg).onRoad,id+' supported');
     }
+  }
+});
+
+test('boost chains offer supported side lines and a clear coast line with recovery space before toys and jumps', () => {
+  assert.ok(track.boosts.length >= 20 && track.boosts.length <= 28);
+  assert.ok(padRuns.length >= 8 && padRuns.every(run => run.length >= 2 && run.length <= 4));
+  assert.ok(padRuns.some(run => run[0].x < 0) && padRuns.some(run => run[0].x > 0));
+  const toys = goonworksSetpieces(track, layout);
+  const approaches = [...toys.map(row => row.s - row.depth / 2), layout.field.s0, layout.launch.rampS0,
+    ...track.routes.map(route => route.openS0)];
+  const noPads = [layout.field, layout.byId['pinball-table'], layout.byId['pinball-ramp'], layout.byId['pinball-gap'],
+    layout.byId['pinball-landing'], layout.byId['fold-descent'],
+    ...['grotto-gallery', 'mill-hall', 'quiz-ballroom'].map(id => layout.byId[id])];
+  for (const pad of track.boosts) {
+    assert.ok(Math.abs(pad.x) - pad.w / 2 >= 2.5, 'central coast line');
+    assert.ok(!noPads.some(range => pad.s < range.s1 && pad.s + pad.len > range.s0), 'no pad on a precision surface');
+    for (const s of approaches) assert.ok((s - pad.s - pad.len + track.lengthM) % track.lengthM >= 120,
+      'boost must expire before timed toys, the field, launch and shortcut lips');
+    for (const ds of [0, pad.len / 2, pad.len]) for (const x of [pad.x - pad.w / 2, pad.x, pad.x + pad.w / 2]) {
+      const f = track.surfaceAt(pad.s + ds, x), q = track.query(...f.p, f.seg);
+      assert.ok(q.onRoad && Math.abs(q.height) < .025, 'pad follows its physical driving surface');
+      assert.ok(q.edgeDist >= 6, 'room to recover outside the pad lane');
+    }
+  }
+});
+
+function drivePadRun(run, lateral) {
+  const start = run[0].s - 12, st = place(track, { s: start, lateral, speed: 30 });
+  const f = track.surfaceAt(start, lateral), feel = makeFeel(), events = recorder();
+  setPos(st, f.p); setQuat(st, qfromBasis([0, 0, 0, 1], f.b, f.n, f.t.map(v => -v)));
+  setVel(st, f.t.map(v => v * 30));
+  const end = run.at(-1).s + run.at(-1).len + 15;
+  for (let i = 0; i < 12 / DT && st[S.s] < end; i++) {
+    const ahead = track.surfaceAt(st[S.s] + 12, lateral);
+    const d = ahead.p.map((v, k) => v - st[S.posX + k]);
+    const q = [st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]];
+    const right = qrotate([0, 0, 0], q, [1, 0, 0]), forward = qrotate([0, 0, 0], q, [0, 0, -1]);
+    const dot = a => a.reduce((v, n, k) => v + n * d[k], 0);
+    const steer = Math.max(-1, Math.min(1, Math.atan2(dot(right), Math.max(.1, dot(forward))) *
+      feel.get('ai.steerGain') / Math.max(.2, calmMul(st[S.engineV], feel))));
+    step(st, acts({ throttle: 1, steer }), track, feel, DT, events);
+    updateRespawn(st, track, feel, DT, events);
+  }
+  assert.ok(st[S.s] >= end, 'chain drive reaches its exit');
+  assert.equal(events.all('drop').length, 0); assert.equal(events.all('wall').length, 0);
+  return events.all('pad').map(event => event.payload.index);
+}
+
+test('every side-lane chain pays consecutive physical boosts while the centre remains a usable bypass', () => {
+  for (const run of padRuns) {
+    assert.deepEqual(drivePadRun(run, run[0].x), run.map(pad => pad.index), 'all pads pay on the chosen line');
+    assert.deepEqual(drivePadRun(run, 0), [], 'centre can pass the full chain without a forced boost');
+  }
+});
+
+test('boost recovery leaves physical braking distance before the earliest timed obstacle', () => {
+  const pad = track.boosts.at(-1), st = place(track, { s: pad.s - .1, lateral: pad.x, speed: 39 });
+  const feel = makeFeel(), events = recorder();
+  for (let i = 0; i < 6 / DT; i++) {
+    step(st, acts({ brake: 1 }), track, feel, DT, events);
+    if (events.all('pad').length && st[S.engineV] <= 21) break;
+  }
+  assert.equal(events.all('pad').length, 1);
+  assert.ok(st[S.engineV] <= 21, 'full braking can recover from the complete pad envelope');
+  const recoverM = st[S.s] - pad.s - pad.len;
+  assert.ok(recoverM > 90, 'the test includes the boost floor that persists under braking');
+  const hazards = goonworksSetpieces(track, layout);
+  for (const boost of track.boosts) for (const row of hazards) {
+    const clear = (row.s - row.depth / 2 - boost.s - boost.len + track.lengthM) % track.lengthM;
+    assert.ok(clear > recoverM + 25, 'at least 25 m of reaction space remains after braking to toy speed');
   }
 });
 
@@ -130,11 +209,15 @@ test('all nonadjacent road crossings clear the full banked driving width', () =>
   assert.deepEqual(clashes.slice(0,20),[]);assert.ok(crossings>50);
 });
 
-test('all eight racers finish the two-lap course with items and no rescues', () => {
-  const r=makeRace({track,seed:20261024,items:createItems});
+test('all eight racers finish the boosted two-lap course with active toys, items and no rescues', () => {
+  const r=makeRace({track,seed:20261024,items:createItems}), hazards=createGoonworksHazards(track,layout);
+  const drive=r.ai.drive.bind(r.ai), racersStep=r.racers.step.bind(r.racers);
+  r.ai.drive=(racer,ctx,dt,actions)=>{drive(racer,ctx,dt,actions);if(ctx.race.phase==='racing'||ctx.race.phase==='finished')hazards.steer(racer,actions);};
+  r.racers.step=(dt,actions,race,ctx)=>racersStep(dt,actions,race,{...ctx,hazards});
   r.run(820,()=>r.racers.list.every(v=>v.finished));
   assert.ok(r.racers.list.every(v=>v.finished),'finish times '+r.racers.list.map(v=>v.finishS));
   assert.deepEqual(r.racers.list.map(v=>v.falls),Array(8).fill(0));
+  assert.ok(r.events('pad').length+r.botEvents('pad').length>=20,'physical pads pay during the full race');
 });
 
 function driveCut(route, speed, yaw) {

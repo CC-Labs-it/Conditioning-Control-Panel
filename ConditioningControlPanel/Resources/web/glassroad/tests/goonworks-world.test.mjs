@@ -5,16 +5,18 @@ import {loadTrack} from '../track/load.js';
 import {goonworksWorldPlan,goonworksBoxesIntersect} from '../render/goonworksWorld.js';
 import {goonworksMediaLayout,goonworksSpiralLayout} from '../render/goonworksMedia.js';
 import {goonworksTubeShell,goonworksPlatformGeometry} from '../render/goonworksGeometry.js';
+import {goonworksScreenVisibility} from '../render/goonworksVisibility.js';
 import {selectScrolllerSlots} from '../render/mediaSelection.js';
 const track=loadTrack(JSON.parse(readFileSync(new URL('../tracks/goonworks.json',import.meta.url),'utf8')));
 const plan=goonworksWorldPlan(track);
 test('GOONWORKS architecture has distinct physical rooms, windowed tube and suspended local islands',()=>{
   assert.equal(goonworksWorldPlan({id:'keep'}),null);
   assert.equal(plan.rooms.length,3);assert.ok(plan.features.includes('windowed-rabbit-tube'));assert.ok(plan.features.includes('watching-grotto'));
-  for(const name of['rabbit-ceiling-conduit','grotto-scalloped-rock','pinball-bumper-cap','aperture-mill-roof-beam','pop-quiz-island-keel','horizon-island'])
+  for(const name of['rabbit-ceiling-conduit','grotto-scalloped-rock','pinball-bumper-cap','aperture-mill-roof-beam','pop-quiz-island-keel','horizon-island','spiral-cameo-painted-face','rabbit-pipe-organ-arch','icing-observatory-tower'])
     assert.ok(plan.rows.some(r=>r.id===name),name);
   assert.ok(plan.rows.length>700);assert.ok(plan.rows.every(r=>r.p.every(Number.isFinite)&&r.size.every(v=>v>0)));
   assert.ok(!plan.rows.some(r=>/foundation|ground-plane/.test(r.id)));
+  assert.equal(plan.landmarks.length,3);assert.ok(plan.landmarks.every(site=>!plan.corridor.some(c=>goonworksBoxesIntersect(site,c))));
 });
 test('GOONWORKS authored instance bases are orthonormal right-handed rotations, never reflections',()=>{
   const dot=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
@@ -50,6 +52,13 @@ test('GOONWORKS CRT cabinets give the shared media system a balanced clip and Lo
   const media=goonworksMediaLayout(track);assert.ok(media.slots.length>=30);assert.equal(new Set(media.slots.map(s=>s.id)).size,media.slots.length);
   for(const s of media.slots){assert.ok(s.C.every(Number.isFinite));assert.ok(plan.rows.some(r=>r.id===s.backId));assert.ok([0,3].includes(s.program));}
   assert.equal(selectScrolllerSlots(media.slots).length,Math.ceil(media.slots.length/2));assert.deepEqual(goonworksSpiralLayout(track).gates,[]);
+});
+test('GOONWORKS screens show meaningful clear picture area from driver height at multiple approaches',()=>{
+  const report=goonworksScreenVisibility(track,plan);assert.equal(report.length,plan.mounts.length);
+  const hidden=report.filter(r=>r.visible<.5||r.approaches.filter(a=>a.visible>=.5).length<2);
+  assert.deepEqual(hidden,[],'Each screen needs at least half of its face probes clear at two approach distances');
+  assert.ok(report.reduce((sum,r)=>sum+r.visible,0)/report.length>.8,'Most face area should stay readable while approaching');
+  assert.ok(report.every(r=>!r.blockers.some(([id])=>id===r.id+'-cabinet')),'Pictures must sit in front of their own backing');
 });
 const hooks=(await import('node:module')).registerHooks({resolve(specifier,context,next){const files={'three/webgpu':'three.webgpu.min.js','three/tsl':'three.tsl.min.js'};return files[specifier]?{url:new URL('../vendor/three/build/'+files[specifier],import.meta.url).href,shortCircuit:true}:next(specifier,context);}});
 const{buildGoonworks,goonworksRibbonShell}=await import('../render/goonworks.js');hooks.deregister();

@@ -49,6 +49,10 @@ export function createGoonworksHazardView(scene, track, layout) {
     s.closePath();
     return own(new ExtrudeGeometry(s, { depth, bevelEnabled: false, steps: 1 }).translate(0, 0, -depth / 2));
   }
+  const riseMark = new Shape();
+  riseMark.moveTo(-1, -.08); riseMark.lineTo(0, .17); riseMark.lineTo(1, -.08);
+  riseMark.lineTo(1, .07); riseMark.lineTo(0, .32); riseMark.lineTo(-1, .07); riseMark.closePath();
+  const riseGeometry = own(new ExtrudeGeometry(riseMark, { depth: .035, bevelEnabled: false, steps: 1 }));
   for (const row of rows) {
     const root = new Group(); root.name = row.id; root.position.fromArray(row.p);
     basis.makeBasis(axes[0].fromArray(row.b), axes[1].fromArray(row.n), axes[2].fromArray(row.t).negate());
@@ -101,8 +105,11 @@ export function createGoonworksHazardView(scene, track, layout) {
       const block = new Group(); block.position.x = row.x; root.add(block); entry.block = block;
       mesh(block, box, outline, [0, .5, 0], [row.w, 1, row.depth]);
       mesh(block, box, (Number(row.id.at(-1)) % 2) ? white : pink, [0, .5, .015], [row.w - .25, .96, row.depth - .25]);
+      // Two bold upward marks identify a rising obstacle even without its warning colour.
+      for (const y of [.3, .58]) mesh(block, riseGeometry, ink, [0, y, row.depth / 2 + .025], [1.45, .65, 1]);
       for (const side of [-1, 1]) mesh(block, box, candy, [side * (row.w / 2 - .35), .5, 0], [.22, .92, row.depth - .45]);
       entry.crown = cube(root, white, [row.x, .16, 0], [row.w + .05, .18, row.depth + .05], .08);
+      for (const side of [-1, 1]) mesh(entry.crown, box, lampMaterial, [0, .115, side * (row.depth / 2 - .45)], [row.w - .65, .035, .55]);
     } else {
       cube(root, white, [row.x, .12, 0], [row.w + 1, .2, row.depth + 1]);
       const flipper = new Group(); flipper.position.set(row.x, .28, row.depth / 2); root.add(flipper); entry.flipper = flipper;
