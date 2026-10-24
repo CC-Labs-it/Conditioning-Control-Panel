@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## 9. Sync 7 flash attribution
+
+1. With a Scrolller remote-temp picture presented through the flash host, check that “via Scrolller” sits at the picture's bottom-right, moves and fades with the picture, and takes no clicks. A local or pack picture has no mark. Pop the picture or use Stop/panic: no credit remains. WPF `Services/Flash/FlashService.cs` / `Services/Compositor/FlashLayer.cs` (`e878ce391`). Rows: `e878ce391`. The remote flash picker is not wired on this base; automated `ScrolllerFlashCreditTests` supplies the labelled picture directly.

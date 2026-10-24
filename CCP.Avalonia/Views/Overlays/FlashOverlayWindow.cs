@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Fyp.Online;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -32,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
         private readonly Panel _card, _root;
         private readonly Border _glow, _whiten;
+        internal Border? CreditMark { get; private set; }
         private Canvas? _sparks;
         private Panel? _slices;
         private double _alpha = 1;
@@ -58,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (Exit != null) return;
             Exit = exit;
+            if (CreditMark != null) CreditMark.IsVisible = false; // WPF FlashLayer: no credit on exit fragments
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);
             GrowForExit();
@@ -209,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Height = 300;
         }
 
-        public FlashOverlayWindow(Bitmap picture)
+        public FlashOverlayWindow(Bitmap picture, string? path = null)
         {
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
@@ -230,6 +233,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,
                 VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
             };
+            if (ScrolllerCredit.IsScrolllerMedia(path))
+            {
+                CreditMark = new Border
+                {
+                    Opacity = 0.75, CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 2),
+                    Background = new SolidColorBrush(Color.FromArgb(0x99, 0x10, 0x10, 0x14)),
+                    Child = new TextBlock { Text = ScrolllerCredit.Mark, FontSize = 11, Foreground = Brushes.White, MaxLines = 1, IsHitTestVisible = false },
+                    IsHitTestVisible = false,
+                    HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Right,
+                    VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom,
+                    Margin = new Thickness(0, 0, 6, 4),
+                };
+                _card.Children.Add(CreditMark); // same picture geometry, transform and native window fade
+            }
             _root = new Panel { Children = { _card } };
             Content = _root;
             Closed += (_, _) => picture.Dispose();

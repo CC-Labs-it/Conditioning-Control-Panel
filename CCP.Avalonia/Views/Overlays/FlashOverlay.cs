@@ -142,7 +142,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
-            var w = new FlashOverlayWindow(bmp)
+            var w = new FlashOverlayWindow(bmp, path)
             {
                 HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
