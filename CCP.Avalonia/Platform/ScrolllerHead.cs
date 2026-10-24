@@ -63,6 +63,8 @@ internal static class ScrolllerHead
         Step(() => ScrolllerDiskCache.SweepTempCopies(TempDirs(), ScrolllerDiskCache.TempPrefix,
             ScrolllerDiskCache.MaxAge - ScrolllerDiskCache.SweepPeriod));
         Step(() => LegacyWebViewCaches.SweepAll());
+        // The live gated cores (Windows): Chromium's disk cache of each profile under the day limit (WPF ScrolllerCopySweeper).
+        if (OperatingSystem.IsWindows()) Step(() => _ = ScrolllerWebGate.ClearDueChromiumCachesAsync());
     }
 
     /// <summary>The off switch: every copy goes now (WPF ScrolllerCopySweeper.PurgeAll). Idempotent, never throws.</summary>
@@ -72,6 +74,7 @@ internal static class ScrolllerHead
         Step(() => DtrhRemoteMedia.SweepLocalCopies(DtrhRemoteMedia.AssetsTempCopier.Release, all: true));
         Step(() => ScrolllerDiskCache.SweepTempCopies(TempDirs(), ScrolllerDiskCache.TempPrefix, TimeSpan.Zero));
         Step(() => LegacyWebViewCaches.SweepAll());
+        if (OperatingSystem.IsWindows()) Step(() => _ = ScrolllerWebGate.ClearChromiumCachesAsync(reason));   // the live cores too
     }
 
     private static string? SafePath(Func<string> path)

@@ -246,6 +246,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
+                    // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
+                    // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
+                    Platform.ScrolllerWebHostGate.Attach(_web, OnScrolllerGate);
                     _webSlot.Children.Add(_web);
                 }
                 catch (Exception ex)
@@ -282,6 +285,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var target = e.Request;
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
+            // No Scrolller gate on this engine (yet, or at all): nothing but this head's own pages loads.
+            if (!ScrolllerGateAllows(_scrolllerGate, target))
+            {
+                e.Cancel = true;
+                Log.Warning("WebHost: navigation held, no Scrolller gate on this web view ({Host})", target?.Host);
+                return;
+            }
             // The Scrolller licence switch is off: no web view of this app opens a Scrolller page (WPF ScrolllerWebGate Block).
             if (ConditioningControlPanel.Services.Fyp.Online.ScrolllerPolicyService.Blocks(target?.AbsoluteUri)) { e.Cancel = true; return; }
             var gate = AllowNavigation;
@@ -308,6 +318,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
             if (_web is null) return;
+            if (_scrolllerGate is null) return;   // held: the gate's report loads Source
             try { _web.Navigate(url); }
             catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
         }
@@ -328,6 +339,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private bool _explicitNavigate;
 
+        /// <summary>The Scrolller gate on this engine: null = not reported yet (every navigation held), true = gated,
+        /// false = it could not be had (only this head's own pages load).</summary>
+        private bool? _scrolllerGate;
+
+        /// <summary>The gate's one report (UI thread): the held Source loads now.</summary>
+        internal void OnScrolllerGate(bool gated)
+        {
+            _scrolllerGate = gated;
+            ApplySource();
+        }
+
+        /// <summary>The navigation rule while the gate is missing, pure: a gated engine loads anything; an ungated one only
+        /// this head's own loopback pages (they get Scrolller through the relay only) and about: pages.</summary>
+        internal static bool ScrolllerGateAllows(bool? gate, Uri? target)
+            => gate == true || (target is { IsAbsoluteUri: true } t
+                && (t.Scheme == "about" || (t.Scheme == Uri.UriSchemeHttp && t.Host == "127.0.0.1")));
+
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
@@ -343,6 +371,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // A sandbox never loads a real site (see OnNavigationStarted); the panel may still name it.
             if (_web is not null)
             {
+                if (_scrolllerGate is null) return;   // held until the Scrolller gate reports (OnScrolllerGate)
                 if (!_explicitNavigate) _web.Source = ConditioningControlPanel.Services.SandboxNet.Allows(src) ? src! : null!;
                 return;
             }
