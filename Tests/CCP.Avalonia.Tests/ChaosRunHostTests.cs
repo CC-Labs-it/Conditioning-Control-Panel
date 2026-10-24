@@ -103,6 +103,11 @@ public sealed class ChaosRunHostTests
             int pockets = meta.ToyPockets;
             bool hadActive = meta.ActiveLifetimeBoons.Contains("vibe_popping");
             bool hadLevel = meta.LifetimeBoonLevels.TryGetValue("vibe_popping", out int level);
+            // The click fires Vibe for real: it awards first_play (+Sparks) and starts the sweep timer.
+            bool hadPlay = meta.FirstTimesAwarded.Contains(ChaosFirstTimes.Play);
+            int sparks = meta.Sparks;
+            var oldPointer = ChaosRunHost.ReadToyPointer;
+            ChaosRunHost.ReadToyPointer = () => null;
             var s = CoreSettings.Current;
             (bool pe, string pk, string k1) = (s.PanicKeyEnabled, s.PanicKey, s.ChaosAccessoryKey1);
             s.PanicKeyEnabled = true;
@@ -154,6 +159,9 @@ public sealed class ChaosRunHostTests
             finally
             {
                 ChaosRunHost.ForceShutdown(); shell.Close();
+                ChaosRunHost.ReadToyPointer = oldPointer;
+                meta.Sparks = sparks;
+                if (!hadPlay) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
                 meta.ToyPockets = pockets;
                 if (!hadActive) meta.ActiveLifetimeBoons.Remove("vibe_popping");
                 if (hadLevel) meta.LifetimeBoonLevels["vibe_popping"] = level; else meta.LifetimeBoonLevels.Remove("vibe_popping");

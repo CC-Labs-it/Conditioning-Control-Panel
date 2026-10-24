@@ -52,6 +52,10 @@ Views/Chaos/ChaosRunHost.cs :: 💥 {name} triggered! :: run event-feed sentence
 Views/Chaos/ChaosRunHost.cs :: ⏱ last breath! x :: run event-feed sentence, WPF ChaosModeService.cs:2040 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🐌 slow burn! x3 :: run event-feed sentence, WPF ChaosModeService.cs:2048 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ✔ snapped {spec :: run event-feed sentence, WPF ChaosModeService.cs:2049 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.Toys.cs :: 🔸 it buzzes. hold and sweep :: run event-feed sentence, WPF ChaosModeService.cs:2708 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.Toys.cs :: ✋ snapped. all of it. :: run event-feed sentence, WPF ChaosModeService.cs:2748 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.Toys.cs :: ✋ snapped — every live one let go :: run event-feed sentence, WPF ChaosModeService.cs:2748 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.Toys.cs :: 🔸 afterglow — it lingers :: run event-feed sentence, WPF ChaosModeService.cs:2938 verbatim (content (c).3)
 
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
 Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations

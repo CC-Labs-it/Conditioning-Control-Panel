@@ -105,6 +105,9 @@ public sealed class ChaosToyEffectsTests
         {
             Setup();
             var oldPointer = ChaosRunHost.ReadToyPointer;
+            var meta = ChaosMeta.State;
+            bool hadPlay = meta.FirstTimesAwarded.Contains(ChaosFirstTimes.Play);
+            int sparks = meta.Sparks;
             try
             {
                 var toy = Equip("vibe_popping", 1, maxed);
@@ -146,7 +149,12 @@ public sealed class ChaosToyEffectsTests
                 ChaosRunHost.ForceShutdown();
                 Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec != null);
             }
-            finally { ChaosRunHost.ReadToyPointer = oldPointer; ChaosRunHost.ForceShutdown(); }
+            finally
+            {
+                ChaosRunHost.ReadToyPointer = oldPointer; ChaosRunHost.ForceShutdown();
+                meta.Sparks = sparks;
+                if (!hadPlay) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+            }
             return Task.CompletedTask;
         });
     }
@@ -160,6 +168,9 @@ public sealed class ChaosToyEffectsTests
         {
             Setup();
             var oldPointer = ChaosRunHost.ReadToyPointer;
+            var meta = ChaosMeta.State;
+            bool hadPlay = meta.FirstTimesAwarded.Contains(ChaosFirstTimes.Play);
+            int sparks = meta.Sparks;
             try
             {
                 Equip("vibe_popping", 1);
@@ -175,7 +186,12 @@ public sealed class ChaosToyEffectsTests
                 ChaosRunHost.SweepToyPointer();
                 Assert.True(live.Popping); // outside the sprite, inside the trained reach
             }
-            finally { ChaosRunHost.ReadToyPointer = oldPointer; ChaosRunHost.ForceShutdown(); }
+            finally
+            {
+                ChaosRunHost.ReadToyPointer = oldPointer; ChaosRunHost.ForceShutdown();
+                meta.Sparks = sparks;
+                if (!hadPlay) meta.FirstTimesAwarded.Remove(ChaosFirstTimes.Play);
+            }
             return Task.CompletedTask;
         });
     }
