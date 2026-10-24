@@ -32,9 +32,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///    dropped rather than emulated.
     ///  - <c>ArtUri</c> was a <c>pack://</c> URI bound straight to <c>Image.Source</c>, never
     ///    routed through <c>ModResourceResolver</c>. The same six PNGs are linked into this head
-    ///    under <c>avares://CCP.Avalonia/Resources/</c>, and <see cref="Art"/> loads them through
-    ///    <c>Helpers.ModArt.TryLoad</c> - so a mod MAY now override a pass card, which the WPF
-    ///    pack:// path did not allow. Null still draws the accent-framed tile alone, as WPF does
+    ///    under <c>avares://CCP.Avalonia/Resources/</c>, and <see cref="Art"/> loads only that
+    ///    compiled copy through <c>Helpers.ModArt.TryLoadBuiltIn</c>, bypassing mod overrides as
+    ///    WPF does. Null still draws the accent-framed tile alone, as WPF does
     ///    before the bitmap resolves.
     /// </summary>
     public sealed class ModPickerCard : INotifyPropertyChanged
@@ -47,8 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         public string Description { get; init; } = "";
 
         /// <summary>
-        /// The pass-card art, mod override first (a tier WPF's bare pack:// URI did not have).
-        /// Null when neither the override nor the shipped copy loads, and the accent-framed tile
+        /// The catalogue's shipped art, as with WPF's bare pack:// URI.
+        /// Null when the shipped copy does not load, and the accent-framed tile
         /// is then the whole card - not a failure.
         /// </summary>
         public IImage? Art { get; init; }
@@ -184,7 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     /// ConditioningControlPanel/Dialogs/ModPackCatalog.cs (only the fields this screen reads): the
     /// catalogue lives in the WPF head next to the dialogs, not in CCP.Core, and neither may be
     /// touched by this port. WPF's <c>ArtUri</c> becomes <see cref="ArtName"/>: the same file,
-    /// named the way <c>Helpers.ModArt</c> wants it rather than as a <c>pack://</c> URI.
+    /// named relative to Resources rather than as a <c>pack://</c> URI.
     /// </summary>
     public sealed class ModPickerCatalogEntry
     {
@@ -199,7 +199,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
         /// <summary>
         /// The card's art, as a forward-slash path under <c>Resources/</c> - the shape
-        /// <c>Helpers.ModArt.TryLoad</c> takes, so an active mod may override it.
+        /// <c>Helpers.ModArt.TryLoadBuiltIn</c> takes; active mods cannot override catalogue cards.
         /// </summary>
         public string ArtName { get; init; } = "";
 
@@ -465,7 +465,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     PackId = entry.PackId,
                     Name = Loc.Get(entry.NameLocKey),
                     Description = Loc.Get(entry.DescriptionLocKey),
-                    Art = Helpers.ModArt.TryLoad(entry.ArtName),
+                    Art = Helpers.ModArt.TryLoadBuiltIn(entry.ArtName),
                     AccentBrush = accent,
                     PremiumNote = entry.PremiumProgramNote ? Loc.Get("modpicker_note_premium_programs") : "",
                     VoiceNote = entry.NoVoiceNote ? Loc.Get("modpicker_note_no_voice") : ""

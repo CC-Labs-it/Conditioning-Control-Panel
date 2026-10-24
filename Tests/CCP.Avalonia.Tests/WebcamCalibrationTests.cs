@@ -55,6 +55,131 @@ public sealed class WebcamCalibrationTests
         }
     }
 
+    [Fact]
+    public void MouthPrompts_ConsumeEventsAndUnsubscribeOnPanic() => WithTracker(start: true, (tracker, _) =>
+    {
+        var win = OpenAndContinue();
+        var prompt = win.FindControl<TextBlock>("TxtValidationPrompt")!;
+        var detail = win.FindControl<TextBlock>("TxtValidationDetail")!;
+        var field = typeof(WebcamTracker).GetField("OnMouthOpen", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        Action? Mouths() => (Action?)field.GetValue(tracker);
+        Assert.True(Gaze(win, () => prompt.Text == "Open your mouth wide"));
+        Assert.NotNull(Mouths());
+        void PumpUntil(Func<bool> done)
+        {
+            // Await the asynchronous TCS continuation without spending the synthetic gesture timeout:
+            // run the dispatcher until a text change satisfies done() (a signal, not a sleep).
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            void Check(object? s, AvaloniaPropertyChangedEventArgs e) { if (done()) cts.Cancel(); }
+            prompt.PropertyChanged += Check; detail.PropertyChanged += Check;
+            try { if (!done()) Dispatcher.UIThread.MainLoop(cts.Token); }
+            finally { prompt.PropertyChanged -= Check; detail.PropertyChanged -= Check; }
+            Assert.True(done());
+        }
+        Mouths()!.Invoke();
+        PumpUntil(() => detail.Text == "Detected.");
+        Clock.Advance(700);
+        PumpUntil(() => detail.Text == "Good — close, and once more in a moment…");
+        Clock.Advance(1000);
+        PumpUntil(() => prompt.Text == "Open your mouth wide again");
+        Assert.NotNull(Mouths());
+        var queued = Mouths();
+        tracker.Stop(); Dispatcher.UIThread.RunJobs();
+        Assert.Null(Mouths());
+        var text = detail.Text;
+        queued!(); Assert.Equal(text, detail.Text);
+    });
+
+    [Fact]
+    public void Tracker_UsesCoreMarAndDropsStoppedRunEvents() => WithTracker(start: false, (_, _) =>
+    {
+        var tracker = new WebcamTracker();
+        var lm = Enumerable.Range(0, 468).Select(_ => new float[3]).ToArray();
+        lm[308][0] = 1;
+        int fires = 0, events = 0;
+        tracker.OnMouthOpen += () => events++;
+        var epoch = new DateTime(2026, 1, 1);
+        for (int i = 0; i < 60; i++)
+        {
+            float mar = i < 20 ? .1f : .6f;
+            lm[81][1] = lm[13][1] = lm[311][1] = mar;
+            if (tracker.ProcessMouthLandmarks(lm, epoch.AddMilliseconds(i * 30))) fires++;
+        }
+        Assert.Equal(1, fires);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, events); // never deliver an event from an idle/stopped capture run
+    });
+
+    private sealed class IdleSource : IFrameSource
+    {
+        public readonly ManualResetEventSlim Entered = new(), Release = new();
+        public bool Open() => true;
+        // A live capture run, parked in Read so no detected face can race the synthetic landmark input (P67).
+        public bool Read(Mat bgr) { Entered.Set(); Release.Wait(); return false; }
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void Tracker_LiveCaptureDeliversMouthEventAndStopDropsQueuedDelivery() => WithTracker(start: false, (_, _) =>
+    {
+        var source = new IdleSource();
+        WebcamTracker.SourceFactory = () => source;
+        var tracker = new WebcamTracker();
+        var lm = Enumerable.Range(0, 468).Select(_ => new float[3]).ToArray();
+        lm[308][0] = 1;
+        var epoch = new DateTime(2026, 1, 1);
+        int events = 0;
+        tracker.OnMouthOpen += () => events++;
+        void Feed(int offset)
+        {
+            int fired = 0;
+            for (int i = 0; i < 60; i++)
+            {
+                lm[81][1] = lm[13][1] = lm[311][1] = i < 20 ? .1f : .6f;
+                if (tracker.ProcessMouthLandmarks(lm, epoch.AddMilliseconds(offset + i * 30))) fired++;
+            }
+            Assert.Equal(1, fired);
+        }
+        try
+        {
+            Assert.True(tracker.Start(), tracker.LastError);
+            Assert.True(tracker.IsRunning);
+            Assert.True(source.Entered.Wait(TimeSpan.FromSeconds(5))); // the capture thread is really parked
+            Feed(0); Assert.Equal(0, events);
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(1, events);
+            Feed(3000); Assert.Equal(1, events); // queued, not yet delivered
+            source.Release.Set();
+            tracker.Stop();
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(1, events);
+        }
+        finally { source.Release.Set(); tracker.Stop(); }
+    });
+
+    [Fact]
+    public void CursorTrail_FadesAndClearsOnFaceLossAndPanic() => WithTracker(start: true, (tracker, _) =>
+    {
+        var win = OpenAndContinue();
+        Assert.True(Gaze(win, () => win.FindControl<Border>("VerifyPanel")!.IsVisible));
+        win.FindControl<Button>("BtnVerifyAccuracy")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var trail = win.FindControl<ConditioningControlPanel.Avalonia.Controls.GazeCursorTrailControl>("VerifyTrail")!;
+        var queued = GazeHandlers(tracker)!;
+        queued(new global::Avalonia.Point(400, 300));
+        queued(new global::Avalonia.Point(500, 350));
+        Assert.Equal(2, trail.History.Count);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs();
+        var dir = Environment.GetEnvironmentVariable("CCP_WEBCAM_PROOF_DIR");
+        if (dir != null) { Directory.CreateDirectory(dir); using var frame = win.CaptureRenderedFrame(); frame!.Save(Path.Combine(dir, "VerifyTrail.png")); }
+        for (int i = 0; i < 6; i++) { Clock.Advance(100); Dispatcher.UIThread.RunJobs(); }
+        Assert.Equal(1, trail.History.Count); // moving segment expired, stationary endpoint stays live
+        var lost = (Action?)typeof(WebcamTracker).GetField("OnFaceLost", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(tracker);
+        lost!(); Assert.Equal(0, trail.History.Count);
+        Assert.False(win.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("VerifyCursor")!.IsVisible);
+        queued(new global::Avalonia.Point(450, 330)); Assert.Equal(1, trail.History.Count);
+        tracker.Stop(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, trail.History.Count); Assert.Null(GazeHandlers(tracker));
+        queued(new global::Avalonia.Point(700, 700)); Assert.Equal(0, trail.History.Count);
+    });
+
     private sealed class BlankSource : IFrameSource
     {
         public bool Open() => true;
@@ -329,22 +454,6 @@ public sealed class WebcamCalibrationTests
         Assert.Equal((tx + 20, ty), cleared.Apply(tx + 20, ty));
     });
 
-    [Fact]
-    public void BubbleTest_WithoutFreshGazeTimesOutAndReturnsToVerify() => WithTracker(start: true, (tracker, _) =>
-    {
-        var win = OpenAndContinue();
-        var verify = win.FindControl<Border>("VerifyPanel")!;
-        Assert.True(Gaze(win, () => verify.IsVisible));
-        win.FindControl<Button>("BtnVerifyBubbleTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        for (int i = 0; i < 1400 && !verify.IsVisible; i++)
-        { Clock.Advance(33); Dispatcher.UIThread.RunJobs(); }
-        Assert.True(verify.IsVisible);
-        Assert.Equal("Couldn't pop any bubbles — tracking may be off for this setup. Consider recalibrating.",
-            win.FindControl<TextBlock>("TxtVerifyStatus")!.Text);
-        Assert.False(win.FindControl<Grid>("BubbleTestPanel")!.IsVisible);
-        win.Close();
-    });
-
     private sealed class ClosedSource : IFrameSource
     {
         public bool Open() => false;
@@ -359,7 +468,13 @@ public sealed class WebcamCalibrationTests
         shell.Show();
         Dispatcher.UIThread.RunJobs();
         var seen = new List<(double P, string? Text)>();
-        Action<double, string> spy = (p, _) => seen.Add((p, shell.WebcamLoadingSplashForTests?.FindControl<TextBlock>("TxtStatus")!.Text));
+        WebcamLoadingSplash? shownSplash = null;
+        Action<double, string> spy = (p, _) =>
+        {
+            // Capture the real splash before its 200 ms wall-clock fade can finish during RunJobs.
+            shownSplash ??= shell.WebcamLoadingSplashForTests;
+            seen.Add((p, shell.WebcamLoadingSplashForTests?.FindControl<TextBlock>("TxtStatus")!.Text));
+        };
         tracker.OnStartupProgress += spy;   // after the shell's handler, so it sees the splash the shell made
         try
         {
@@ -368,7 +483,7 @@ public sealed class WebcamCalibrationTests
             Assert.Equal(new[] { 0.08, 0.25, 0.55, 0.92, 1.0 }, seen.Select(x => x.P));
             Assert.Equal("Opening camera…", seen[2].Text);
             Assert.Equal("Ready", seen[4].Text);
-            var splash = shell.WebcamLoadingSplashForTests!;
+            var splash = Assert.IsType<WebcamLoadingSplash>(shownSplash);
             PumpUntilSplashGone(shell);
             Assert.Null(shell.WebcamLoadingSplashForTests);   // faded and closed
             Assert.False(splash.IsVisible);
@@ -429,5 +544,89 @@ public sealed class WebcamCalibrationTests
         Assert.Equal(screen.Bounds.Position, win.Position);
         tracker.Calibration = new WebcamCalibrationData { MonitorBounds = new MonitorBoundsRecord { X = -99999, Y = 7 } };
         Assert.Equal(WindowStartupLocation.CenterScreen, new WebcamQuickRecalWindow().WindowStartupLocation);   // unknown monitor: left alone
+    });
+
+    private static Action<global::Avalonia.Point>? GazeHandlers(WebcamTracker tracker) =>
+        (Action<global::Avalonia.Point>?)typeof(WebcamTracker).GetField("OnGazeMove", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(tracker);
+
+    /// <summary>The tracker's current gaze attractor (Core GazeLock's private target), null when cleared.</summary>
+    private static object? Attractor(WebcamTracker tracker)
+    {
+        var lk = typeof(WebcamTracker).GetField("_gazeLock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(tracker)!;
+        return typeof(GazeLock).GetField("_target", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(lk);
+    }
+
+    private static global::Avalonia.Point BubbleCenter(WebcamCalibrationWindow win)
+    {
+        var b = win.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("TestBubble")!;
+        return new global::Avalonia.Point(Canvas.GetLeft(b) + b.Width / 2, Canvas.GetTop(b) + b.Height / 2);
+    }
+
+    [Fact]
+    public void BubbleTest_PopsFourBubbles_AndSavesTheTrimFromTheAim() => WithTracker(start: true, (tracker, _) =>
+    {
+        var win = OpenAndContinue();
+        var verify = win.FindControl<Border>("VerifyPanel")!;
+        Assert.True(Gaze(win, () => verify.IsVisible));
+        win.FindControl<Button>("BtnVerifyBubbleTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(win.FindControl<Grid>("BubbleTestPanel")!.IsVisible);
+        Assert.Equal("Bubble 1 / 4 — pop it with your eyes.", win.FindControl<TextBlock>("TxtBubbleTestStatus")!.Text);
+        Assert.NotNull(Attractor(tracker));
+
+        // Look 40 right of and 30 above each bubble: inside the dwell ellipse, so all four pop, and that
+        // steady aim error is what the recal fit takes out.
+        var seen = new List<global::Avalonia.Point>();
+        for (int t = 0; t < 60000 && !verify.IsVisible; t += 11)
+        {
+            var c = BubbleCenter(win);
+            if (seen.Count == 0 || seen[^1] != c) seen.Add(c);
+            GazeHandlers(tracker)?.Invoke(new global::Avalonia.Point(c.X + 40, c.Y - 30));
+            Clock.Advance(11);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        var spots = BubbleAccuracyTest.ProbeSpots(win.Bounds.Width, win.Bounds.Height, 114);
+        Assert.Equal(spots.Select(p => new global::Avalonia.Point(p.X, p.Y)), seen);
+        Assert.Equal("Popped 4 / 4 · average accuracy 50 px · recalibrated from your aim (50→0 px). Run it again to verify!",
+            win.FindControl<TextBlock>("TxtVerifyStatus")!.Text);
+        var trim = tracker.Calibration!.GazeTrim!;
+        Assert.Equal((-40.0, 30.0), (Math.Round(trim.X0, 6), Math.Round(trim.Y0, 6)));
+        Assert.Equal(-40, WebcamCalibrationData.Load()!.GazeTrim!.X0, 6);   // saved to the profile file, as WPF
+        Assert.Null(Attractor(tracker));
+        Assert.Null(GazeHandlers(tracker));
+        Assert.False(win.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("VerifyCursor")!.IsVisible);
+        win.FindControl<Button>("BtnVerifyDone")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    });
+
+    [Fact]
+    public void BubbleTest_NoGaze_TimesOutEveryBubble_AndAppliesNothing() => WithTracker(start: true, (tracker, _) =>
+    {
+        var win = OpenAndContinue();
+        var verify = win.FindControl<Border>("VerifyPanel")!;
+        Assert.True(Gaze(win, () => verify.IsVisible));
+        var saved = tracker.Calibration;
+        win.FindControl<Button>("BtnVerifyBubbleTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(Gaze(win, () => win.FindControl<TextBlock>("TxtBubbleTestStatus")!.Text == "Moving on…", 10200));
+        Assert.True(Gaze(win, () => verify.IsVisible, 4 * 10600));
+        Assert.Equal("Couldn't pop any bubbles — tracking may be off for this setup. Consider recalibrating.",
+            win.FindControl<TextBlock>("TxtVerifyStatus")!.Text);
+        Assert.Same(saved, tracker.Calibration);
+        Assert.Null(WebcamCalibrationData.Load()!.GazeTrim);
+        win.FindControl<Button>("BtnVerifyDone")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    });
+
+    [Fact]
+    public void BubbleTest_PanicClosesTheWindow_AndClearsTheAttractor() => WithTracker(start: true, (tracker, _) =>
+    {
+        var win = OpenAndContinue();
+        var verify = win.FindControl<Border>("VerifyPanel")!;
+        Assert.True(Gaze(win, () => verify.IsVisible));
+        win.FindControl<Button>("BtnVerifyBubbleTest")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.NotNull(Attractor(tracker));
+        PanicSurfaces.StopAll("test");   // the real panic pass; its last entry stops the camera
+        // The camera entry is fire-and-forget (StopAsync on the pool), so wait for its real completion, bounded.
+        Assert.True(SpinWait.SpinUntil(() => Gaze(win, () => !win.IsVisible, 10), 5000));
+        Assert.Null(Attractor(tracker));
+        Assert.Null(GazeHandlers(tracker));
     });
 }

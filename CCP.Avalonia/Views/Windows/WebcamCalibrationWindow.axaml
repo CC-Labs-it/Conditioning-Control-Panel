@@ -286,10 +286,10 @@
             <StackPanel>
                 <TextBlock Text="Calibration verified" Foreground="#FF69B4" FontSize="22"
                            FontWeight="Bold" HorizontalAlignment="Center"/>
-                <TextBlock Text="Calibration complete — you're all set."
+                <TextBlock Text="Calibration complete. Blink and mouth tracking warmed up — you're all set."
                            Foreground="{DynamicResource TextSecondaryBrush}" FontSize="13" Margin="0,8,0,0"
                            TextWrapping="Wrap" HorizontalAlignment="Center"/>
-                <TextBlock x:Name="TxtVerifyStatus" Text="Preview accuracy with a live gaze cursor, or pop a few bubbles with your eyes to test precision."
+                <TextBlock x:Name="TxtVerifyStatus" Text="Preview accuracy with a live gaze cursor, or pop a few bubbles with your eyes to test (and auto fine-tune) precision."
                            Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,16,0,20"
                            TextWrapping="Wrap" HorizontalAlignment="Center" MaxWidth="440"/>
 
@@ -322,9 +322,12 @@
 
         <!-- Verify's live gaze cursor: WPF shows GazeDebugCursorService's idle pink dot (its overlay
              window); here it is drawn in this full-screen window, which covers the calibrated monitor. -->
-        <Canvas IsHitTestVisible="False">
+        <Grid IsHitTestVisible="False">
+            <fx:GazeCursorTrailControl x:Name="VerifyTrail"/>
+            <Canvas>
             <Ellipse x:Name="VerifyCursor" Width="26" Height="26" IsVisible="False"
                      Fill="#FF69B4" Stroke="#D2FFFFFF" StrokeThickness="1.6" Opacity="0.9"/>
-        </Canvas>
+            </Canvas>
+        </Grid>
     </Grid>
 </Window>
