@@ -10,11 +10,17 @@ using Xunit;
 
 namespace CCP.Core.Tests;
 
+/// <summary>CoreDispatch.Post/InvokeProvider are process-global and swapped by tests in three other
+/// collections (SessionStatics, CoreSecretsStatics, default), so a test that counts hops runs alone.</summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class CoreDispatchStatics { public const string Name = "CoreDispatchStatics"; }
+
 /// <summary>
 /// The Goon Game clock and sudden-death round rules after the Core move (goongame-core-c): the
 /// NTP-style sync converges, scheduling refuses an unsynced clock, and every UI hop the clock and
 /// the rounds make goes through the <see cref="CoreDispatch"/> seam instead of a WPF dispatcher.
 /// </summary>
+[Collection(CoreDispatchStatics.Name)]
 public sealed class GoonClockAndRoundsTests : IDisposable
 {
     private readonly Action<Action>? _savedPost = CoreDispatch.PostProvider;
