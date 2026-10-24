@@ -3,7 +3,7 @@
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), whisper clips (needs asset-server routes for ccp.subaudio /
 // ccp.words; the settings frame sends none, which the page reads as "no whispers"), PvP stakes (Core StakeBridge.ForApp
-// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// is not routed here yet: stakes-host), friend / Lobby Join intents (.Friends.cs), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -55,6 +55,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private static readonly Random PbpRng = new();
 
+        private string? _pbpSpectateInit;
+        private JObject? _pbpSpectateIntent;
+
+        /// <summary>WPF HostSpectate: fresh board uses settings; an existing board uses a friend intent.</summary>
+        internal static GameWindow? HostSpectate(string matchId)
+        {
+            if (!PbpWatchRules.IsMatchId(matchId)) return null;
+            GameWindow? live;
+            lock (Open) live = Open.FirstOrDefault(w => w.Spec.Id == PbpId);
+            if (live != null)
+            {
+                live._pbpSpectateIntent = new JObject
+                    { ["type"] = "pbp:friend", ["mode"] = "spectate", ["matchId"] = matchId };
+                if (live._pbpIdentityPosted) live.PostPbpSpectateIntent();
+                live.Activate();
+                return live;
+            }
+            var window = new GameWindow(Games[PbpId]) { _pbpSpectateInit = matchId };
+            window.Load(Server());
+            window.Show();
+            return window;
+        }
+
+        private void PostPbpSpectateIntent()
+        {
+            var intent = _pbpSpectateIntent;
+            _pbpSpectateIntent = null;
+            if (intent != null) Post(intent);
+        }
+
         private bool _pbpOpen;
         private bool _pbpSettingsPosted;   // pbp:settings goes out exactly once per boot
         private bool _pbpIdentityPosted;   // and so does pbp:identity
@@ -90,6 +120,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_pbpOpen) return;
             _pbpOpen = false;
+            _pbpSpectateInit = null;
+            _pbpSpectateIntent = null;
             try { _pbpWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _pbpWatch = null;
             try { FriendsHead.Service?.LeaveActivity(PresenceActivity.Chess); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -117,6 +149,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "boot-error":
                         PbpBootFailedThisSession = true;
                         return false;
+                    case PbpWatchRules.SettingFrame:
+                        if (PbpWatchRules.TryRead(o, out var key, out var value)
+                            && key == PbpWatchRules.LetPeopleWatchKey
+                            && PbpWatchRules.Apply(CoreSettings.Current, key, value))
+                        {
+                            CoreSettings.Save();
+                            Log.Information("PieceByPiece: {Key} = {Value}", key, value);
+                        }
+                        return true;
                     case "pbp:exit":
                         Close();
                         return true;
@@ -148,13 +189,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>()));
+                var spectate = _pbpSpectateInit;
+                _pbpSpectateInit = null;
+                // ponytail: add only this commit's fields; other watch/media settings belong to sibling lanes.
+                var settings = PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>());
+                settings["letPeopleWatch"] = PbpWatchRules.LetPeopleWatch(s);
+                settings["spectateMatchId"] = spectate != null ? new JValue(spectate) : JValue.CreateNull();
+                Post(settings);
             }
             if (!_pbpIdentityPosted)
             {
                 _pbpIdentityPosted = true;
                 Post(PbpHostRules.IdentityFrame(CoreAccount.UnifiedUserId, PbpAuthToken(),
                     CoreSettings.Current.UserDisplayName, CoreReleaseContent.AppVersion));
+                PostPbpSpectateIntent();
             }
         }
 

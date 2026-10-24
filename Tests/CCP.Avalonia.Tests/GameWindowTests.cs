@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
@@ -314,6 +315,83 @@ public sealed class GameWindowTests
     // ---- Racing Thoughts (WPF Services/Chaos/CaucusHostService.cs) ----
 
     /// <summary>Signed in, owning <paramref name="owned"/> (null = nothing); XP and Sparks go to lists.</summary>
+    [Fact]
+    public void PbpWatch_FreshExistingAndBootingBoardsReceiveOneSpectateIntent() => Run((shell, _) =>
+    {
+        CoreSettings.Current.PbpLetPeopleWatch = true;
+        const string first = "m_0123456789abcdef", second = "m_fedcba9876543210";
+        Assert.Null(GameWindow.HostSpectate("not-a-match"));
+        var page = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.AvailableSubjectsTabView>("AvailableSubjectsTab")!;
+        page.ReadGates = () => ConditioningControlPanel.Services.Lobby.LobbyGates.From(true, false, false);
+        var row = new ConditioningControlPanel.Services.Lobby.LobbyRow
+        {
+            Game = ConditioningControlPanel.Services.Lobby.LobbyGame.Chess,
+            State = ConditioningControlPanel.Services.Lobby.LobbyRowState.Playing,
+            Key = first, CanWatch = true, Watchers = 3,
+        };
+        page.WatchRow(row);
+        var w = GameWindow.Launch(GameWindow.PbpId)!;
+        var sent = new List<JObject>();
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(first, (string?)sent[0]["spectateMatchId"]);
+        Assert.True((bool)sent[0]["letPeopleWatch"]!);
+        w.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(2, sent.Count);
+        Assert.Same(w, GameWindow.HostSpectate(second));
+        Assert.Equal("pbp:friend", (string?)sent.Last()["type"]);
+        Assert.Equal("spectate", (string?)sent.Last()["mode"]);
+        Assert.Equal(second, (string?)sent.Last()["matchId"]);
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
+        Assert.False(GameWindow.IsAnyOpen());
+
+        // A board already booting queues the intent until identity, with no settings target.
+        var booting = GameWindow.Launch(GameWindow.PbpId)!;
+        sent.Clear();
+        booting.Posted += json => sent.Add(JObject.Parse(json));
+        Assert.Same(booting, GameWindow.HostSpectate(first));
+        Assert.Empty(sent);
+        booting.HandleMessage("{\"type\":\"ready\"}");
+        Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:friend" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(JTokenType.Null, sent[0]["spectateMatchId"]!.Type);
+        Assert.Equal(first, (string?)sent[2]["matchId"]);
+    });
+
+    [Fact]
+    public void PbpWatch_PageSettingPersistsOnlyBooleanLetPeopleWatchAndNextBootReadsIt() => Run((_, _) =>
+    {
+        var original = CoreSettings.Current.PbpLetPeopleWatch;
+        CoreSettings.Current.PbpLetPeopleWatch = true;
+        CoreSettings.SaveImmediate();
+        try
+        {
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            foreach (var frame in new[] {
+                "{\"type\":\"pbp:setting\",\"key\":\"unknown\",\"value\":false}",
+                "{\"type\":\"pbp:setting\",\"key\":\"letPeopleWatch\",\"value\":\"false\"}" })
+                w.HandleMessage(frame);
+            Assert.True(CoreSettings.Current.PbpLetPeopleWatch);
+            w.HandleMessage("{\"type\":\"pbp:setting\",\"key\":\"letPeopleWatch\",\"value\":false}");
+            Assert.False(CoreSettings.Current.PbpLetPeopleWatch);
+            Assert.True(SpinWait.SpinUntil(() =>
+                !(bool)JObject.Parse(File.ReadAllText(Path.Combine(CorePaths.UserData, "settings.json")))["pbpLetPeopleWatch"]!,
+                TimeSpan.FromSeconds(10)), "The page setting must schedule a save without an explicit flush.");
+            w.Close();
+            var next = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            next.Posted += json => sent.Add(JObject.Parse(json));
+            next.HandleMessage("{\"type\":\"ready\"}");
+            Assert.False((bool)sent[0]["letPeopleWatch"]!);
+            Assert.Equal(JTokenType.Null, sent[0]["spectateMatchId"]!.Type);
+        }
+        finally
+        {
+            CoreSettings.Current.PbpLetPeopleWatch = original;
+            CoreSettings.SaveImmediate();
+        }
+    });
+
     private static void RunRace(string? owned, Action<LauncherWindow, List<double>, List<double>> body) => Run((_, launcher) =>
     {
         var (oldOwns, oldBank, oldXp, oldAssets, oldClock) = (RacingAccess.IsGrantedProvider, GameWindow.RaceBankSparks, CoreProgression.AddXPProvider, CorePaths.EffectiveAssetsProvider, GameWindow.RaceUtcNow);

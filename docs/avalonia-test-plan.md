@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## 9. Main sync 7: chess Lobby Watch
+
+1. With a watchable public chess row supplied to the Lobby, press Watch signed out: expect sign-in. Sign in and repeat: expect a spectator board. Repeat with a board open and while it boots: the existing board receives the new target after identity, with no duplicate settings. A non-watchable row has no Watch action. Live polling is blocked by the missing Avalonia Lobby service on this base; use the headless fixture until that host lands. WPF `MainWindow/MainWindow.Lobby.cs:244` + `Services/PieceByPiece/PieceByPieceHostService.Friends.cs:72`. Rows: `sync7-pbp-host`.
+2. In the chess page, turn “Let people watch my games” off, close and reopen: expect it to stay off. Invalid setting frames must not change it. Panic closes a spectator board through the existing games surface. WPF `Services/PieceByPiece/PieceByPieceHostService.cs:363` + `Services/PieceByPiece/PieceByPieceHostService.Friends.cs:98`. Rows: `sync7-pbp-host`.
