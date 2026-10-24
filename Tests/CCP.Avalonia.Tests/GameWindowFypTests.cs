@@ -79,6 +79,7 @@ public sealed class GameWindowFypTests
         shell.ShowTab("fyp");
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(GameWindow.FeedOwnsTheScreen());
         Assert.Equal(1, denied);
         CoreEntitlement.HasPremiumProvider = () => true;
         var score = EmiSuggester.ScoreOf("fyp");
@@ -89,11 +90,14 @@ public sealed class GameWindowFypTests
         var w = GameWindow.Launch(GameWindow.FypId);   // focuses the live one
         Assert.NotNull(w);
         Assert.Equal(GameWindow.FypId, w!.Spec.Id);
+        Assert.True(GameWindow.FeedOwnsTheScreen());
+        Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler.FeedOwnsTheScreen!());
         Assert.EndsWith("/fyp/index.html", w.PageUrl!.AbsolutePath);
         Assert.Equal(tab, shell.CurrentTab);                 // a window, not a tab
         PanicSurfaces.All.Single(x => x.Id == "games").Stop(shell);
         Dispatcher.UIThread.RunJobs();
         Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(GameWindow.FeedOwnsTheScreen());
         Assert.True(EmiSuggester.ScoreOf("fyp") > score);   // WPF Launch NoteOpen("fyp")
         // The EMI door opens the feed itself (WPF EmiTargets.cs:215), not the panel.
         shell.Hide();

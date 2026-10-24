@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -110,6 +111,39 @@ public sealed class InlineLoopVideoTests
                 host.Close();
                 Dispatcher.UIThread.RunJobs();
             }
+        });
+    }
+
+    [Fact]
+    public async Task HelpWindowClipLoopsAndReplacementAndPanicReleaseItsPlayer()
+    {
+        await WithClip(async clip =>
+        {
+            var baseline = InlineLoopVideo.LivePlayers;
+            HelpVideoWindow? Current() => (HelpVideoWindow?)typeof(HelpVideoWindow)
+                .GetField("_current", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null);
+            var content = new HelpContent { SectionId = "VideoTest", Title = "Tutorial", WhatItDoes = "Fallback", ClipFile = clip };
+            try
+            {
+                HelpVideoWindow.Show(content, null);
+                var first = Current()!;
+                var video = first.GetVisualDescendants().OfType<InlineLoopVideo>().Single();
+                Assert.True(first.FindControl<Border>("VideoContainer")!.IsVisible);
+                Assert.Equal(global::Avalonia.Media.Stretch.Uniform, video.Stretch);
+                Assert.True(await OnFrames(video, () => video.FrameCount > 30, 5000), "clip did not keep looping");
+                Assert.Equal(baseline + 1, InlineLoopVideo.LivePlayers);
+                HelpVideoWindow.Show(content, null);
+                var second = Current()!;
+                Assert.NotSame(first, second);
+                Assert.False(video.HasPlayer);
+                var replacement = second.GetVisualDescendants().OfType<InlineLoopVideo>().Single();
+                Assert.True(await OnFrames(replacement, () => replacement.FrameCount > 0, 5000));
+                PanicSurfaces.All.Single(x => x.Id == "help-video").Stop(null);
+                Assert.Null(Current());
+                Assert.False(replacement.HasPlayer);
+                Assert.Equal(baseline, InlineLoopVideo.LivePlayers);
+            }
+            finally { Current()?.Close(); }
         });
     }
 

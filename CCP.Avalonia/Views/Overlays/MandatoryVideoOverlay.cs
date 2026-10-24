@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -35,8 +36,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// on a 1 s UI timer: a dead (8 s) or lost (5 s without frames) output replays the clip once, as
     /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.md). Ambient bubbles
     /// are paused by the Core scheduler.
-    /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
-    /// (a Stop that hangs in native code still hangs the UI thread), the gaze
+    /// Native Stop/disposal runs off-thread; a hung release retains the decoder's buffers.
+    /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and shared LibVLC retirement,
+    /// the gaze
     /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
     /// </summary>
     internal sealed class MandatoryVideoOverlay : IMandatoryVideoHost
@@ -46,7 +48,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public MandatoryVideoScheduler Scheduler   // tests swap in a fixed library
         {
             get => _scheduler;
-            internal set { if (_scheduler != null) _scheduler.NoVideos -= ShowNoVideos; _scheduler = value; value.NoVideos += ShowNoVideos; }
+            internal set
+            {
+                if (_scheduler != null) { _scheduler.NoVideos -= ShowNoVideos; _scheduler.FeedDeferred -= ShowFeedDeferred; }
+                _scheduler = value;
+                value.NoVideos += ShowNoVideos;
+                value.FeedDeferred += ShowFeedDeferred;
+            }
         }
 
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
@@ -62,7 +70,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
         private bool _closing, _didDuck, _attention, _gracePaused, _graceConsumed;
-        private long _watchedMs;
+        private sealed class WatchCredit { public long Milliseconds; }
+        private WatchCredit _credit = new();
         /// <summary>Stopwatch timestamp of the last frame shown (tests age it to fake a lost output).</summary>
         internal long FrameTs;
         private bool _healUsed, _strict;
@@ -82,6 +91,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
             DurationOf = LengthOf,
+            CascadeActive = () => Views.Chaos.ChaosGifCascadeOverlay.IsRaining,
+            FeedOwnsTheScreen = Views.Games.GameWindow.FeedOwnsTheScreen,
             // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
             PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
         };
@@ -127,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _sinceFrame.Reset();
             PlayedSkew = 0;
             FirstFrameMs = -1;
-            _watchedMs = 0;
+            var credit = _credit = new WatchCredit();
             FillMs = FillCount = 0;
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
 
@@ -152,7 +163,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _player.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
             var blur = s.VideoBlurredBackgroundEnabled;
-            _sink = new VlcFrameSink(_player, () => _media, bmp =>
+            // Capture this media: a retired decoder may still call Format while the next clip starts.
+            var media = new Media(vlc, path, FromType.FromPath);
+            _media = media;
+            _sink = new VlcFrameSink(_player, () => media, bmp =>
             {
                 foreach (var x in _surfaces) x.Video.Source = bmp;
                 if (!blur) return;
@@ -195,20 +209,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var live = _player;
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) LibVlcAudio.ApplyPreferredDevice(live); });
-            _player.TimeChanged += (_, e) => Interlocked.Exchange(ref _watchedMs, e.Time);
+            _player.TimeChanged += (_, e) => Interlocked.Exchange(ref credit.Milliseconds, e.Time);
             _player.EndReached += (_, _) =>
             {
-                var len = _player?.Length ?? 0;
-                if (len > 0) Interlocked.Exchange(ref _watchedMs, len);
+                var len = live.Length;
                 Dispatcher.UIThread.Post(() =>   // never tear down on LibVLC's own thread
                 {
+                    if (!ReferenceEquals(_player, live)) return;
+                    if (len > 0) Interlocked.Exchange(ref credit.Milliseconds, len);
                     // WPF OnEnded: a clip that really played to its end earns Circe's "video" note.
                     if (Scheduler.IsPlaying && FirstFrameMs >= 0) App.ChasterNote("video");
                     Scheduler.Ended();
                 });
             };
-            _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(Scheduler.End);
-            _media = new Media(vlc, path, FromType.FromPath);
+            _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(_player, live)) Scheduler.End();
+            });
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
             _guard = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -812,6 +829,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 packs?.InstalledPackIds.Count ?? 0, packs?.GetActivePackIds().Count ?? 0);
         }
 
+        private static void ShowFeedDeferred() => App.Notifications.Show(Loc.Get("video_toast_feed_has_the_screen"),
+            Helpers.NotificationType.Info, TimeSpan.FromSeconds(6));
+
+        // Small native seam: tests hold Stop to prove teardown never blocks the dispatcher.
+        // ponytail: a native call that never returns retains its player/media/sink; fresh-instance
+        // retirement and its session budget remain separate work. Never free a live decoder buffer.
+        internal static Task ReleaseNativeAsync(Action stop, Action dispose, Action free)
+            => Task.Run(() =>
+            {
+                try { stop(); } catch (Exception ex) { Log.Debug(ex, "VideoService: native Stop failed"); }
+                try { dispose(); }
+                catch (Exception ex)
+                {
+                    Log.Warning(ex, "VideoService: native disposal failed; retaining decoder buffers");
+                    // Keep native callbacks and their managed roots alive as well as the buffer.
+                    lock (QuarantinedReleases) QuarantinedReleases.Add((stop, dispose, free));
+                    return;
+                }
+                Dispatcher.UIThread.Post(free);
+            });
+
+        private static readonly List<(Action Stop, Action Dispose, Action Free)> QuarantinedReleases = new();
+        internal Task NativeRelease { get; private set; } = Task.CompletedTask;
+
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
             _closing = true;
@@ -824,19 +865,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _spawnTimes.Clear();
                 _targets.Clear();
                 ReleaseToyBatches();
-                // Stop joins the decoder thread, so after it no callback touches the frame buffer.
-                if (_player != null)
-                {
-                    try { _player.Stop(); } catch { }
-                    try { _player.Dispose(); } catch { }
-                }
-                _player = null;
-                try { _media?.Dispose(); } catch { }
+                var player = _player;
+                var media = _media;
+                var sink = _sink;
+                _player = null;   // invalidate every queued event before a new clip can start
                 _media = null;
+                _sink = null;
+                sink?.Detach();
                 foreach (var x in _surfaces) { x.Video.Source = x.Fill.Source = null; x.Window.Close(); }
                 _surfaces.Clear();
-                _sink?.Free();
-                _sink = null;
+                NativeRelease = Task.WhenAll(NativeRelease, ReleaseNativeAsync(
+                    () => player?.Stop(),
+                    () => { player?.Dispose(); media?.Dispose(); },
+                    () => sink?.Free()));
                 _fill?.Dispose();
                 _fill = null;
                 if (_didDuck) { _didDuck = false; CoreAudio.Unduck(); }
@@ -844,7 +885,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (FillCount > 0) Log.Information("VideoService: blur fill {Avg:F3} ms/frame over {N} frames", FillMs / FillCount, FillCount);
             }
             finally { _closing = false; }
-            return Interlocked.Exchange(ref _watchedMs, 0) / 1000.0;
+            return Interlocked.Exchange(ref _credit.Milliseconds, 0) / 1000.0;
         });
     }
 }

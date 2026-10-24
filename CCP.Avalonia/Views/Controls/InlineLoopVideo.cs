@@ -48,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal int FrameCount => _sink?.FrameCount ?? 0;
         /// <summary>UI thread, per blitted frame: lets tests wait on frames, not on a clock.</summary>
         internal event Action? FrameShown;
+        internal event Action? StartFailed;
         /// <summary>Players created and not yet disposed, process-wide: the leak check.</summary>
         internal static int LivePlayers;
 
@@ -105,6 +106,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 Log.Error(ex, "InlineLoopVideo: failed to start {Path}", _path);
                 Teardown();
+                StartFailed?.Invoke();
             }
         }
 

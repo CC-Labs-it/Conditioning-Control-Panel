@@ -441,7 +441,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 Serilog.Log.Warning("User requested force reset of stuck video state");
                 video.ForceCleanup();
             }
-            video.Trigger();
+            video.Trigger(userInitiated: true);
         }
     }
 }

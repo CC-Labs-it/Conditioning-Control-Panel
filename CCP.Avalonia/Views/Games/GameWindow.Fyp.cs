@@ -29,6 +29,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     {
         internal const string FypId = "fyp";
 
+        // WPF FeedOwnsTheScreen: this head cannot ghost a feed, so a visible feed owns it.
+        internal static bool FeedOwnsTheScreen()
+        {
+            lock (Open) return Open.Any(w => w.Spec.Id == FypId && w.IsVisible);
+        }
+
         private FypMetaStore? _fypMeta;
         private bool _fypHooked;
         private bool _fypFileMenuHooked;

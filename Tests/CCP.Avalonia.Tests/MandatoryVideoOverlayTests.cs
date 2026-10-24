@@ -117,9 +117,13 @@ public sealed class MandatoryVideoOverlayTests
                     w.Close();
                     w.KeyPress(Key.F12, RawInputModifiers.None, PhysicalKey.F12, "");
                     Assert.True(v.IsPlaying && w.IsVisible, "strict window survives close + panic key");
+                    var retiredSink = o.Sink!;
                     v.Stop();                                           // engine stop / panic
                     Assert.Empty(o.Windows);
                     Assert.False(w.IsVisible);
+                    await o.NativeRelease.WaitAsync(TimeSpan.FromSeconds(5));
+                    global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                    Assert.True(retiredSink.Freed, "native Stop/disposal completed before freeing the decoder buffer");
 
                     // Strict with NO live listener (#875): the panic key must escape, not trap.
                     MandatoryVideoOverlay.PanicListenerLive = () => false;
@@ -190,7 +194,7 @@ public sealed class MandatoryVideoOverlayTests
                     w.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, "");
                     Assert.False(v.IsPlaying);
                     Assert.Empty(o.Windows);
-                    Assert.True(o.Sink == null, "frame buffer freed");
+                    Assert.True(o.Sink == null, "retired sink detached from the visible clip");
                     Assert.True(credited >= 1, $"credited {credited}s");
                     Assert.True((ducks, unducks) == (3, 3), $"every close releases its duck ({ducks}/{unducks})");
 

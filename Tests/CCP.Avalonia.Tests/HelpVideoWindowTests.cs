@@ -87,6 +87,22 @@ public sealed class HelpVideoWindowTests
         finally { win.Close(); }
     });
 
+    [Fact]
+    public Task MissingClipKeepsFallbackAndTutorialLinkAndPanicClosesIt() => Run(() =>
+    {
+        HelpVideoWindow.Show(new HelpContent
+        {
+            SectionId = "MissingClipTest", Title = "Tutorial", WhatItDoes = "Fallback",
+            ClipFile = "missing-test-clip.mp4", FullTutorialUrl = "https://example.invalid/tutorial"
+        }, null);
+        var win = Current()!;
+        Assert.False(win.FindControl<Border>("VideoContainer")!.IsVisible);
+        Assert.Equal("Fallback", win.FindControl<TextBlock>("TxtCaption")!.Text);
+        Assert.True(win.FindControl<Button>("BtnFullTutorial")!.IsVisible);
+        PanicSurfaces.All.Single(x => x.Id == "help-video").Stop(null);
+        Assert.Null(Current());
+    });
+
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 

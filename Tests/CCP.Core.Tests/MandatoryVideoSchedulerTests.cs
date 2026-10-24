@@ -37,6 +37,148 @@ public sealed class MandatoryVideoSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void Cascade_defers_and_coalesces_without_picking_then_replays_the_first_request() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var raining = true; var picks = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => { picks++; return Clips; })
+            { CascadeActive = () => raining };
+        v.Start();
+        Assert.True(v.Trigger(true));
+        Assert.True(v.Trigger(false, "/v/ignored.mp4"));
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        Assert.Equal(0, picks);
+        raining = false;
+        clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.True(Assert.Single(host.Shown).Strict);
+        Assert.Equal(1, picks);
+        v.Stop();
+    });
+
+    [Fact]
+    public void Cascade_expiry_and_stop_cancel_the_pending_replay() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var raining = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeActive = () => raining };
+        v.Start();
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(90));
+        raining = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Shown);
+        raining = true;
+        v.Trigger();
+        v.Stop();
+        raining = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Shown);
+    });
+
+    [Fact]
+    public void Cascade_replay_rechecks_enabled() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var raining = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeActive = () => raining };
+        v.Start();
+        v.Trigger();
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        raining = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void Cascade_earned_replay_preserves_path_and_strictness_without_the_scheduler() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var raining = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeActive = () => raining };
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        Assert.True(v.Trigger(true, "/v/earned.mp4", userEarned: true));
+        raining = false;
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.True(v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(("/v/earned.mp4", true), Assert.Single(host.Shown));
+        v.ForceCleanup();
+    });
+
+    [Fact]
+    public void Cascade_panic_cancels_pending_request_even_without_a_visible_video() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var raining = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeActive = () => raining };
+        v.Trigger(userEarned: true);
+        v.ForceCleanup();
+        raining = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Shown);
+    });
+
+    [Fact]
+    public void Feed_defers_scheduled_and_test_requests_but_only_test_announces() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true; var announced = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => feed };
+        v.FeedDeferred += () => announced++;
+        v.Start();
+        clock.Advance(TimeSpan.FromSeconds(73));
+        Assert.Empty(host.Shown);
+        Assert.Equal(0, announced);
+        v.Trigger(true, userInitiated: true);
+        Assert.Equal(1, announced);
+        feed = false;
+        clock.Advance(TimeSpan.FromMilliseconds(500));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void Feed_earned_request_plays_immediately_and_panic_cancels_held_requests() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var announced = 0;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => true };
+        v.FeedDeferred += () => announced++;
+        v.Start();
+        v.Trigger(userInitiated: true);
+        Assert.Equal(1, announced);
+        Assert.False(v.IsPlaying);
+        v.Trigger(true, "/v/earned.mp4", userEarned: true, userInitiated: true);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(("/v/earned.mp4", true), Assert.Single(host.Shown));
+        Assert.Equal(1, announced);
+        v.ForceCleanup();
+        v.FeedOwnsTheScreen = () => false;
+        clock.Advance(TimeSpan.FromSeconds(4));
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
+    public void Feed_expires_after_ninety_seconds_and_disabled_scheduler_cancels_replay() => With(60, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var feed = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { FeedOwnsTheScreen = () => feed };
+        v.Start();
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(90));
+        feed = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Shown);
+        feed = true;
+        v.Trigger();
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        feed = false;
+        clock.Advance(TimeSpan.FromSeconds(3));
+        Assert.Empty(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();

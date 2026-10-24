@@ -109,6 +109,7 @@ public sealed class PanicSurfacesTests
         "gaze-minigame",
         "gif-cascade",
         "haptics",
+        "help-video",
         "intake",
         "knock-cards",
         "leash-task",

@@ -41,9 +41,8 @@ namespace ConditioningControlPanel.Services
     /// (<c>FinalizeWatchCredit</c> :7424) and the strict-key rules. Drawing is the head's
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
-    /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
-    /// interaction queue are WPF-head services; add each here when it reaches Core.
+    /// ponytail: remote clips, browser-media defers and the interaction queue still need
+    /// their head services. DND, content packs, duration filtering and cascade/feed deferral are live.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
     /// silently dies until the engine restarts; here a video added mid-session still plays
@@ -63,7 +62,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _preroll;
+        private ITimer? _scheduler, _preroll, _cascadeDefer, _feedDefer;
         private volatile bool _running, _playing;
         private int _retryGeneration, _noVideosShown;
 
@@ -100,6 +99,13 @@ namespace ConditioningControlPanel.Services
             _time = time ?? TimeProvider.System;
             _library = library ?? LocalLibrary;
         }
+
+        /// <summary>Head's live GIF-cascade state (WPF ChaosGifCascadeOverlay.IsRaining).</summary>
+        public Func<bool>? CascadeActive { get; set; }
+        /// <summary>Head's visible For You feed (ghosted feeds do not own the screen).</summary>
+        public Func<bool>? FeedOwnsTheScreen { get; set; }
+        /// <summary>WPF #1239: an explicit Test press deserves a toast when the feed defers it.</summary>
+        public event Action? FeedDeferred;
 
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
@@ -314,11 +320,24 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
-        /// pre-roll. False when nothing was started (no clip, or one is already playing).
-        /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).</summary>
-        public bool Trigger(bool? strictOverride = null, string? path = null)
+        /// pre-roll. True means accepted (possibly deferred); false means empty or already playing.
+        /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).
+        /// Earned bubble requests bypass the feed and need no running scheduler; an explicit
+        /// button press announces a feed defer. Both still wait for cascades.</summary>
+        public bool Trigger(bool? strictOverride = null, string? path = null, bool userEarned = false, bool userInitiated = false)
         {
             if (_playing) return false;
+            if (CascadeActive?.Invoke() == true)
+            {
+                if (_cascadeDefer == null) DeferPastObstruction(false, strictOverride, path, userEarned);
+                return true;   // accepted, but not yet playing and no library item consumed
+            }
+            if (!userEarned && FeedOwnsTheScreen?.Invoke() == true)
+            {
+                if (userInitiated) FeedDeferred?.Invoke();
+                if (_feedDefer == null) DeferPastObstruction(true, strictOverride, path, userEarned);
+                return true;
+            }
             path ??= PickNext();
             if (path == null)
             {
@@ -355,6 +374,36 @@ namespace ConditioningControlPanel.Services
             created.Change(PreRoll, Timeout.InfiniteTimeSpan);
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
+        }
+
+        // WPF DeferTriggerPastCascade / DeferTriggerPastFeed (#871/#1073): one request per
+        // obstruction, 500 ms polls and a fixed 90 s ceiling. Earned clips bypass only the feed.
+        private void DeferPastObstruction(bool feed, bool? strict, string? path, bool userEarned)
+        {
+            var deadline = _time.GetUtcNow() + TimeSpan.FromSeconds(90);
+            void Clear()
+            {
+                if (feed) Dispose(ref _feedDefer); else Dispose(ref _cascadeDefer);
+            }
+            void Poll(ITimer? mine)
+            {
+                if (!ReferenceEquals(mine, feed ? _feedDefer : _cascadeDefer)) return;
+                var blocked = (feed ? FeedOwnsTheScreen : CascadeActive)?.Invoke() == true;
+                if (blocked)
+                {
+                    if (_time.GetUtcNow() >= deadline) { Clear(); return; }
+                    mine!.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
+                    return;
+                }
+                Clear();
+                if (userEarned || (_running && CoreSettings.Current.MandatoryVideosEnabled))
+                    Trigger(strict, path, userEarned);
+            }
+            ITimer? created = null;
+            created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() => Poll(mine)); },
+                null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            if (feed) _feedDefer = created; else _cascadeDefer = created;
+            created.Change(TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
         }
 
         /// <summary>WPF Cleanup: the natural end or an Esc dismiss. The flash resumes and, while the
@@ -410,6 +459,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            Dispose(ref _cascadeDefer);
+            Dispose(ref _feedDefer);
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.

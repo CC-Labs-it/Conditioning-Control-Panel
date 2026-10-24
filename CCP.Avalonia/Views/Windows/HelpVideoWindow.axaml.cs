@@ -19,17 +19,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// <see cref="HelpContent"/> topic, with a caption below and an optional
     /// "watch full tutorial" link.
     ///
-    /// PORTED from ConditioningControlPanel/Windows/HelpVideoWindow.xaml.cs. Deviations:
-    ///  - LibVLCSharp.WPF's VideoView, the MediaPlayer and the whole load/loop/mute/dispose block
-    ///    are gone: they are the WPF head's, hung off
-    ///    ConditioningControlPanel/Services/Video/VideoService.cs (SharedLibVLC), and there is no
-    ///    Avalonia video surface on this head. Everything up to the player - resolving the clip
-    ///    path and proving the file exists - is restored, so StartClip takes the fail-soft branch
-    ///    the original already had: hidden video surface, caption and link still shown.
-    ///  - The drawn help loop (TryShowLoop) is ported as-is and wins over the clip, as in WPF.
-    ///  - App.Logger becomes Serilog's static Log, as everywhere else on this head.
-    ///  - DragMove() -> BeginMoveDrag(e); PreviewKeyDown -> KeyDown (tunnelling has no twin, and
-    ///    nothing in this window consumes Escape first).
+    /// WPF's load/loop/mute/close behavior uses the shared InlineLoopVideo surface.
+    /// Drawn help loops still win over clips; captions and links survive missing media or LibVLC.
     ///
     /// Fail-soft as the original: never throws to the caller.
     /// </summary>
@@ -147,7 +138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        private static void CloseCurrent()
+        internal static void CloseCurrent()
         {
             var existing = _current;
             _current = null;
@@ -218,14 +209,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
 
-            // ponytail: playback itself needs LibVLCSharp.WPF's VideoView plus
-            // ConditioningControlPanel/Services/Video/VideoService.cs (SharedLibVLC) - both WPF
-            // head-side, and this head has no video surface to parent a player into. So a clip
-            // that IS on disk still takes the WPF "LibVLC not available" branch, which is this
-            // same fail-soft: surface hidden (VideoContainer is IsVisible="False" in the markup),
-            // caption and link shown.
-            Log.Debug("HelpVideoWindow: no video surface on this head; hiding video for {Path}", _clipPath);
-            ShowWhatItDoesFallback();
+            if (Platform.LibVlcAudio.Shared == null) { ShowWhatItDoesFallback(); return; }
+            var container = this.FindControl<Border>("VideoContainer")!;
+            var clip = new Controls.InlineLoopVideo(_clipPath) { Stretch = Stretch.Uniform };
+            clip.StartFailed += () => { container.IsVisible = false; ShowWhatItDoesFallback(); };
+            container.Child = clip;
+            container.IsVisible = true;
         }
 
         private void BtnFullTutorial_Click()
@@ -258,11 +247,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         protected override void OnClosed(EventArgs e)
         {
-            // Drop the single-instance reference if it points at us (whether we were closed by the
-            // user or superseded by a newer help video). The WPF player teardown that followed
-            // (VideoView detach, MediaPlayer stop/dispose, Media dispose) has nothing to tear down
-            // here - StartClip never builds one.
             if (ReferenceEquals(_current, this)) _current = null;
+            // Detach drives InlineLoopVideo's player/buffer teardown, including a panic close.
+            this.FindControl<Border>("VideoContainer")!.Child = null;
             base.OnClosed(e);
         }
     }

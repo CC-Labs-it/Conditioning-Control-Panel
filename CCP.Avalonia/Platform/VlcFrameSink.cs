@@ -26,6 +26,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private IntPtr _buffer;
         private int _width, _height, _blitQueued, _frames;
         private bool _freed;
+        private volatile bool _detached;
         private readonly Action _blit;
 
         /// <param name="bitmapChanged">UI thread: a new bitmap (first frame or a size change) to show.</param>
@@ -79,6 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private void Display(IntPtr opaque, IntPtr picture)
         {
+            if (_detached) return;
             // One pending blit at a time: a slow UI thread drops frames rather than queueing them.
             if (Interlocked.Exchange(ref _blitQueued, 1) == 0)
                 Dispatcher.UIThread.Post(_blit, DispatcherPriority.Render);
@@ -89,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             Volatile.Write(ref _blitQueued, 0);
             lock (_lock)
             {
-                if (_buffer == IntPtr.Zero) return;
+                if (_detached || _buffer == IntPtr.Zero) return;
                 if (Bitmap == null || Bitmap.PixelSize.Width != _width || Bitmap.PixelSize.Height != _height)
                 {
                     Bitmap?.Dispose();
@@ -108,6 +110,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         private static ref byte At(IntPtr p) => ref Unsafe.AddByteOffset(ref Unsafe.NullRef<byte>(), p);
+
+        /// <summary>UI teardown can hide the picture immediately while native Stop is still joining
+        /// the decoder off-thread. Keep its buffer alive, but ignore queued and subsequent blits.</summary>
+        public void Detach() { lock (_lock) _detached = true; }
 
         /// <summary>Free the buffer and bitmap. Call after <c>MediaPlayer.Stop</c>, which joins the
         /// decoder thread, so no callback touches the buffer afterwards.</summary>
