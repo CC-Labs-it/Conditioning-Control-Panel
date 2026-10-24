@@ -66,6 +66,103 @@ public sealed class SessionRunnerTests : IDisposable
         },
     };
 
+    private sealed class SessionSink : Serilog.Core.ILogEventSink
+    {
+        public readonly System.Collections.Generic.List<Serilog.Events.LogEvent> Events = new();
+        public void Emit(Serilog.Events.LogEvent e) => Events.Add(e);
+    }
+
+    [Fact]
+    public void FailingProgress_IsReportedOncePerSession_WithCountsAtStop_AndClockContinues()
+    {
+        var sink = new SessionSink();
+        var previous = Serilog.Log.Logger;
+        using var logger = new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger();
+        Serilog.Log.Logger = logger;
+        void Fail() => throw new InvalidOperationException("test progress failure");
+        _runner.Ticked += Fail;
+        try
+        {
+            _runner.Start(OneMinute());
+            for (var i = 1; i <= 3; i++) _runner.Tick(TimeSpan.FromSeconds(i));
+            var failure = Assert.Single(sink.Events.Where(e => e.Properties.ContainsKey("SessionStep")));
+            Assert.IsType<InvalidOperationException>(failure.Exception);
+            Assert.Contains("test progress failure", failure.Exception!.ToString());
+            _runner.Tick(TimeSpan.FromMinutes(1));
+            Assert.False(_runner.IsRunning);
+            Assert.NotNull(_ready);
+            Assert.Contains(sink.Events, e => e.Exception == null && e.RenderMessage().Contains("tick:progress x3"));
+
+            _runner.Start(OneMinute());
+            _runner.Tick(TimeSpan.FromSeconds(1));
+            Assert.Equal(2, sink.Events.Count(e => e.Properties.ContainsKey("SessionStep")));
+        }
+        finally
+        {
+            _runner.Ticked -= Fail;
+            _runner.Stop();
+            Serilog.Log.Logger = previous;
+        }
+    }
+
+    [Fact]
+    public void ThrowingRestoreObserver_DoesNotSkipStopNotificationOrSessionLog()
+    {
+        var settings = CoreSettings.Current;
+        var snapshot = SessionSettingsSnapshot.Capture(settings);
+        settings.FlashFrequency = 13;
+        _runner.Start(OneMinute());
+        var stopped = false;
+        _runner.Stopped += (_, _) => stopped = true;
+        void Fail(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(settings.FlashFrequency))
+                throw new InvalidOperationException("test restore observer failure");
+        }
+        settings.PropertyChanged += Fail;
+        try { _runner.Stop(); }
+        finally
+        {
+            settings.PropertyChanged -= Fail;
+            snapshot.RestoreTo(settings);
+        }
+        Assert.True(stopped);
+        Assert.NotNull(_ready);
+        Assert.Null(_runner.CurrentSession);
+        Assert.False(CoreEngine.IsRunning);
+    }
+
+    [Fact]
+    public void RestartForResume_DoesNotCountANewRun_AndPendingFeaturesStayOff()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 10;
+        session.Settings.FlashStartMinute = 5;
+        session.Settings.SubliminalStartMinute = 5;
+        session.Settings.LockCardStartMinute = 5;
+        session.Settings.BouncingTextStartMinute = 5;
+        _runner.Start(session);
+        var count = CoreSettings.Current.TotalSessions;
+        _runner.Pause();
+        CoreEngine.Stop();
+        CoreEngine.Start(resumingSession: true);
+        Assert.True(CoreFlash.IsRunning); // the global start temporarily overrides the schedule
+        _runner.Resume();
+        _runner.ReassertScheduleAfterEngineStart();
+        Assert.Equal(count, CoreSettings.Current.TotalSessions);
+        Assert.False(CoreFlash.IsRunning || CoreSubliminal.IsRunning || LockCardScheduler.Instance.IsRunning);
+        _runner.Tick(TimeSpan.FromMinutes(5));
+        Assert.True(CoreFlash.IsRunning && CoreSubliminal.IsRunning && LockCardScheduler.Instance.IsRunning);
+        _runner.Pause();
+        CoreEngine.Stop();
+        CoreEngine.Start(resumingSession: true);
+        Assert.Null(LockCardScheduler.Instance.LastWindowMinutes);
+        _runner.Resume();
+        _runner.ReassertScheduleAfterEngineStart();
+        Assert.InRange(LockCardScheduler.Instance.LastWindowMinutes!.Value, 9.0, 10.0);
+
+    }
+
     private static JObject SettingsJson() =>
         JObject.Parse(JsonConvert.SerializeObject(CoreSettings.Current, Formatting.Indented));   // = settings.json
 

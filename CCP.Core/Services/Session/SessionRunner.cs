@@ -1,5 +1,7 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
@@ -37,6 +39,21 @@ namespace ConditioningControlPanel.Services
         private TimeSpan _lastElapsed;
         private TimeSpan _pausedElapsed;
         private readonly Random _random = new();
+        private readonly SortedDictionary<string, int> _stepFailures = new(StringComparer.Ordinal);
+
+        // WPF 293a89197: first failure in full, repeats counted, one summary at stop.
+        private void Step(string name, Action action)
+        {
+            try { action(); }
+            catch (Exception ex)
+            {
+                _stepFailures.TryGetValue(name, out var count);
+                _stepFailures[name] = count + 1;
+                if (count != 0) return;
+                try { Log.ForContext("SessionStep", name).Error(ex, "SESSION {Step} failed", name); }
+                catch { /* Diagnostics must never interrupt the clock or teardown. */ }
+            }
+        }
 
         public SessionLogService SessionLog { get; }
         public Session? CurrentSession { get; private set; }
@@ -95,6 +112,7 @@ namespace ConditioningControlPanel.Services
             CoreMindWipe.Stop();
 
             var s = CoreSettings.Current;
+            _stepFailures.Clear();
             CurrentSession = session;
             IsRunning = true;
             CurrentPhaseIndex = 0;
@@ -243,6 +261,24 @@ namespace ConditioningControlPanel.Services
             Log.Information("Session resumed");
         }
 
+        /// <summary>WPF 293a89197: a user engine restart must not override the parked timeline.</summary>
+        public void ReassertScheduleAfterEngineStart()
+        {
+            if (!IsRunning || IsPaused || CurrentSession == null) return;
+            if (_deferred.IsPending("flash")) Step("resume", CoreFlash.Stop);
+            if (_deferred.IsPending("subliminal")) Step("resume", CoreSubliminal.Stop);
+            if (_deferred.IsPending("bouncing text")) Step("resume", CoreBouncingText.Stop);
+            if (_deferred.IsPending("lock cards")) Step("resume", LockCardScheduler.Instance.Stop);
+            else if (CurrentSession.Settings.LockCardEnabled)
+                Step("resume", () =>
+                {
+                    LockCardScheduler.Instance.Stop();
+                    LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
+                });
+            // ponytail: no session Mind Wipe host yet; never let the global one leak into a session.
+            Step("resume", CoreMindWipe.Stop);
+        }
+
         private void StartAt(string name, int minute, Action start, Action stop)
         {
             if (minute == 0) { start(); return; }
@@ -260,14 +296,17 @@ namespace ConditioningControlPanel.Services
             var minutes = elapsed.TotalMinutes;
             if (minutes >= session.DurationMinutes) { Stop(true, elapsed); return; }
 
-            var phase = SessionTimeline.PhaseIndexAt(session.Phases, minutes);
-            if (phase != CurrentPhaseIndex)
+            Step("tick:phase", () =>
             {
-                CurrentPhaseIndex = phase;
-                Log.Information("Phase changed: {Phase}", session.Phases[phase].Name);
-            }
-            UpdateRamps(session, minutes);
-            _deferred.FireDue(minutes);
+                var phase = SessionTimeline.PhaseIndexAt(session.Phases, minutes);
+                if (phase != CurrentPhaseIndex)
+                {
+                    CurrentPhaseIndex = phase;
+                    Log.Information("Phase changed: {Phase}", session.Phases[phase].Name);
+                }
+            });
+            Step("tick:ramp", () => UpdateRamps(session, minutes));
+            Step("tick:delayed-features", () => _deferred.FireDue(minutes));
 
             // Pink delayed start at its randomised minute (SessionEngine.cs:849); the head shows it.
             var s = CoreSettings.Current;
@@ -276,8 +315,8 @@ namespace ConditioningControlPanel.Services
                 s.PinkFilterEnabled = true;
                 Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
             }
-            TickCornerGif(session.Settings, minutes);
-            Ticked?.Invoke();
+            Step("tick:corner-gif", () => TickCornerGif(session.Settings, minutes));
+            Step("tick:progress", () => Ticked?.Invoke());
         }
 
         /// <summary>SessionEngine.UpdateRampingValues (SessionEngine.cs:699), flash trio + pink.</summary>
@@ -405,23 +444,23 @@ namespace ConditioningControlPanel.Services
             var session = CurrentSession;
             if (!IsRunning || session == null) return;
             IsRunning = IsPaused = false;
-            _custody?.Release();
+            Step("stop", () => _custody?.Release());
             _stopwatch.Stop();
             _timer?.Dispose();
             _timer = null;
             _deferred.Clear();
-            CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:372
-            CloseCornerGif(handBack: true);   // SessionEngine.cs:356
+            Step("stop", () => CoreEngine.PopQuiz?.Stop());   // SessionEngine.cs:372
+            Step("stop", () => CloseCornerGif(handBack: true));   // SessionEngine.cs:356
 
             var s = CoreSettings.Current;
-            s.ClearSessionFlashRamp();   // SessionEngine.cs:390, ahead of the restore
+            Step("stop", s.ClearSessionFlashRamp);   // SessionEngine.cs:390, ahead of the restore
             PinkOpacity = null;
-            _snapshot?.RestoreTo(s);
+            Step("stop", () => _snapshot?.RestoreTo(s));
             _snapshot = null;
-            _custody?.Restore(s);
+            Step("stop", () => _custody?.Restore(s));
             _custody = null;
-            CoreEngine.Stop();   // MainWindow.Presets.cs:1951
-            CoreSettings.Save();   // WPF leaves the restore to the next save; persist it now
+            Step("stop", CoreEngine.Stop);   // MainWindow.Presets.cs:1951
+            Step("stop", () => CoreSettings.Save());   // WPF leaves the restore to the next save; persist it now
 
             // XP actually banked: 0 while no head has a progression service (decision log).
             int xp = 0;
@@ -439,6 +478,9 @@ namespace ConditioningControlPanel.Services
 
             try { SessionLog.EndSession(completed, elapsed, xp); }
             catch (Exception ex) { Log.Error(ex, "SessionLog.EndSession failed"); }
+            if (_stepFailures.Count > 0)
+                Log.Warning("Session steps failed this session (first of each in crash.log): {Counts}",
+                    string.Join(", ", _stepFailures.Select(p => p.Key + " x" + p.Value)));
             CurrentSession = null;
             // WPF SessionEngine.SessionStopped + SessionCompleted, as one call (ProgramEngineBridge).
             try { Stopped?.Invoke(session, completed); }

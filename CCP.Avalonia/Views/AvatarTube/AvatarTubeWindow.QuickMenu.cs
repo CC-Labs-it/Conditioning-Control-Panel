@@ -100,7 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }
             else
             {
-                shell.StartEngine();
+                shell.StartEngineFromUser();
                 Giggle("Engine started! *giggles*");
             }
             UpdateQuickMenuState();

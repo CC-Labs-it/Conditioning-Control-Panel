@@ -108,6 +108,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             if (runner.IsPaused)
             {
+                if (!CoreEngine.IsRunning && !RemoteControllerConnected)
+                {
+                    StartEngineFromUser();
+                    return;
+                }
                 StartEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;

@@ -168,6 +168,43 @@ public sealed class RemoteControlShellTests
         }
     });
 
+    [Fact]
+    public Task ResumeWhileControllerOwnsStoppedEngineOnlyResumesSession() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldRelay = RemoteControlTabView.Relay;
+        var oldRunner = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var fake = new FakeRelay { Poll = "{\"controller_connected\":true}" };
+        using var relay = new RemoteRelay(() => "test", () => "test", "1", (_, _) => null, _ => { }, fake) { AutoPoll = false };
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        var runner = new SessionRunner(new SessionLogService());
+        global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
+        var shell = new MainShellWindow();
+        try
+        {
+            await relay.StartAsync("light");
+            await relay.PollOnceAsync();
+            runner.Start(new Session { Id = "remote_resume", DurationMinutes = 10 });
+            MainShellWindow.StopEngine();
+            var count = CoreSettings.Current.TotalSessions;
+            shell.Named<Button>("BtnPauseSession")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(runner.IsPaused);
+            Assert.False(CoreEngine.IsRunning);
+            Assert.Equal(count, CoreSettings.Current.TotalSessions);
+        }
+        finally
+        {
+            runner.Stop();
+            shell.Close();
+            RemoteControlTabView.Relay = oldRelay;
+            global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
+            CoreSession.IsSessionRunningProvider = oldRunner == null ? null : () => oldRunner.IsRunning;
+        }
+    });
+
     /// <summary>The opacity the fade is heading to (the transition animates the visible value).</summary>
     private static double Target(Visual v) => v.GetBaseValue(Visual.OpacityProperty).Value;
 

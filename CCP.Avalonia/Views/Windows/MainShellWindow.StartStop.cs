@@ -29,6 +29,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async void BtnStart_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (RemoteControllerConnected) return;   // WPF StartStop.cs:43: a controller drives
+            if (!CoreEngine.IsRunning && App.Sessions is { IsRunning: true, IsPaused: true })
+            {
+                StartEngineFromUser();
+                return;
+            }
             if ((CoreEngine.IsRunning || App.Sessions?.IsRunning == true) && RefuseStopUnderLockdown()) return;
             // WPF MainWindow.StartStop.cs:58: a running session asks first; declining keeps everything on.
             if (App.Sessions?.IsRunning == true)
@@ -39,7 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             if (CoreEngine.IsRunning) { Serilog.Log.Information("Start button: stopping the engine"); StopEngine(); }
-            else StartEngine();
+            else StartEngineFromUser();
         }
 
         private void MenuJumpRightIn_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RandomizeAndStart();
@@ -65,22 +70,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void MenuStartNormal_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
-            if (!CoreEngine.IsRunning) StartEngine();
+            if (!CoreEngine.IsRunning) StartEngineFromUser();
         }
 
         /// <summary>WPF StartEngine, through the portal wrapper so the panic key is bound first.</summary>
-        internal void StartEngine()
+        internal void StartEngineFromUser()
+        {
+            if (RemoteControllerConnected) return;
+            StartEngine(resumeParkedSession: true);
+        }
+
+        internal void StartEngine(bool resumeParkedSession = false)
         {
             var gen = ++_engineGen;
             StartEffect(() =>
             {
                 if (gen != _engineGen || CoreEngine.IsRunning) return;
-                CoreEngine.Start();
+                var runner = App.Sessions;
+                var resuming = resumeParkedSession && runner is { IsRunning: true, IsPaused: true };
+                CoreEngine.Start(resumingSession: resuming);
+                if (resuming)
+                {
+                    runner!.Resume();
+                    runner.ReassertScheduleAfterEngineStart();
+                    SetPauseButton(false);
+                }
                 PinkRushHost.Start();              // WPF StartEngine :309 App.SkillTree?.Start()
                 PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Start()
                 SpiralOverlay.Refresh(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
+                if (resuming) OnSessionTick();
             });
         }
 

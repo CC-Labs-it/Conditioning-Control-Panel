@@ -68,6 +68,30 @@ public sealed class TubeQuickMenuTests
     });
 
     [Fact]
+    public Task CompanionStartResumesParkedSessionWithoutCountingAnotherRun() => WithShell((shell, tube) =>
+    {
+        var old = global::ConditioningControlPanel.Avalonia.App.Sessions;
+        var runner = new SessionRunner(new SessionLogService());
+        global::ConditioningControlPanel.Avalonia.App.Sessions = runner;
+        try
+        {
+            runner.Start(new ConditioningControlPanel.Models.Session { Id = "tube_resume", DurationMinutes = 10 });
+            MainShellWindow.StopEngine();
+            var count = CoreSettings.Current.TotalSessions;
+            Click(tube, "MenuItemEngine");
+            Assert.True(CoreEngine.IsRunning);
+            Assert.False(runner.IsPaused);
+            Assert.Equal(count, CoreSettings.Current.TotalSessions);
+        }
+        finally
+        {
+            runner.Stop();
+            global::ConditioningControlPanel.Avalonia.App.Sessions = old;
+            CoreSession.IsSessionRunningProvider = old == null ? null : () => old.IsRunning;
+        }
+    });
+
+    [Fact]
     public Task EngineItemStartsAndPanicStopsWhatItStarted() => WithShell((shell, tube) =>
     {
         CoreSettings.Current.FlashEnabled = true;

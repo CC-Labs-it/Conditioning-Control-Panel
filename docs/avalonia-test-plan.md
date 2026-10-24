@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Session clock review (sync 7)
+
+1. WPF `293a89197`: start a session with delayed flash/subliminal/lock-card starts, panic, then Resume. The engine and clock resume without adding a run; delayed features stay off until due. Rows: `229`.
+2. WPF `293a89197`: repeat with the companion menu Start and the shell Start/Start normally. Only explicit user starts resume the parked session. Rows: `229`.
+3. WPF `293a89197`: while a remote controller owns the stopped engine, Resume only resumes the session; the engine stays stopped. Rows: `229`.
+4. WPF `293a89197`: inject a failing session progress callback in the test harness. Repeated ticks produce one full exception in crash.log, a count summary at stop, and a fresh first report next session. Rows: `229`.

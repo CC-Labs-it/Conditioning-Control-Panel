@@ -61,10 +61,19 @@ public sealed class SessionRunWireTests
                 Assert.Equal("\u25B6", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.Get("tooltip_resume_session"), ToolTip.GetTip(pause));
 
+                var runsBeforeResume = CoreSettings.Current.TotalSessions;
                 pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));   // Resume
                 Assert.False(runner.IsPaused);
+                Assert.True(CoreEngine.IsRunning);
+                Assert.Equal(runsBeforeResume, CoreSettings.Current.TotalSessions);
                 Assert.Equal("\u23F8", shell.Named<TextBlock>("TxtPauseIcon")!.Text);
                 Assert.Equal(Loc.GetF("tooltip_pause_session_100_xp_penalty_per_pause_npause", 1), ToolTip.GetTip(pause));
+
+                MainShellWindow.StopEverything();
+                shell.Named<Button>("BtnStart")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Assert.True(CoreEngine.IsRunning);
+                Assert.False(runner.IsPaused);
+                Assert.Equal(runsBeforeResume, CoreSettings.Current.TotalSessions);
 
                 runner.Stop(completed: false);   // the stop-session confirm's OK
                 Assert.False(runner.IsRunning || CoreEngine.IsRunning || pause.IsVisible);
