@@ -30,7 +30,7 @@ public sealed class CompanionCardsRowTests
     public Task RoomCardsReadLiveStateAndHistoryOpensTheTranscript() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
