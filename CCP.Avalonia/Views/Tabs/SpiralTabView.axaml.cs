@@ -214,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _awaitingFirstBlock;
         private double _revealLastAt;
         private BeatLoop? _revealFrames;
+        private ITimer? _blockWait;
 
         /// <summary>The fuse subscriptions are held only while the tab is on screen (P01).</summary>
         private DescentCountdownService? _wiredFuse;
@@ -489,8 +490,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         ///
         /// <para>ponytail: DescentService (the block and its BlockChanged) is WPF-head only, so on
         /// this head the block is never in hand: the reveal always holds at the bloom and the
-        /// timeout hands back. The timeout is measured on the reveal's own BeatLoop clock, so a
-        /// minimised window (parked loop) fires it on restore rather than on the dot.</para>
+        /// timeout hands back. A one-shot deadline runs independently of the parked frame clock,
+        /// matching WPF's DispatcherTimer while minimised.</para>
         /// </summary>
         internal void BeginFirstLight()
         {
@@ -526,6 +527,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _revealFrames = new BeatLoop(visual, RevealFrame);
                 _revealFrames.Start();
 
+                // WPF's block-wait DispatcherTimer is independent of the compositor.
+                // Keep the existing testable clock; marshal its one-shot callback to the UI.
+                var reveal = _revealFrames;
+                _blockWait = BeatLoop.Time.CreateTimer(_ => Dispatcher.UIThread.Post(() =>
+                {
+                    // A queued deadline from a reveal we left must not finish a later reveal.
+                    if (_revealFrames != reveal
+                        || !_firstLight || !_awaitingFirstBlock) return;
+                    Log.Information("[Spiral] first light: no descent block within {Seconds}s - handing the room back quietly.",
+                        (int)FirstLightBlockTimeout.TotalSeconds);
+                    FinishFirstLight();
+                }), null, FirstLightBlockTimeout, Timeout.InfiniteTimeSpan);
+
                 Log.Information("[Spiral] first light opened in the room ({Motion}, block {State}).",
                     _firstLightReduced ? "reduced motion" : "full motion",
                     _awaitingFirstBlock ? "still in flight" : "already in hand");
@@ -546,14 +560,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var dt = Math.Max(0, now - _revealLastAt);
                 _revealLastAt = now;
-
-                if (_awaitingFirstBlock && now >= FirstLightBlockTimeout.TotalSeconds)
-                {
-                    Log.Information("[Spiral] first light: no descent block within {Seconds}s - handing the room back quietly.",
-                        (int)FirstLightBlockTimeout.TotalSeconds);
-                    FinishFirstLight();
-                    return;
-                }
 
                 // THE HOLD at the hand-off fade. Clamped rather than WPF's "stop adding once past":
                 // WPF steps every 20 ms, but a parked loop (minimised) resumes with one large dt
@@ -589,6 +595,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             _revealFrames?.Stop();
             _revealFrames = null;
+            _blockWait?.Dispose();
+            _blockWait = null;
         }
 
         private SpiralFirstLightVisual EnsureVisual()

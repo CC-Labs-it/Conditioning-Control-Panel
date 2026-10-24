@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using System.Threading;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -84,8 +86,10 @@ public sealed class SpiralRoomShellTests
     /// <summary>FIRST LIGHT through the shell's door (WPF MainWindow.BeginSpiralFirstLight -> SpiralTabView.BeginFirstLight): the reveal owns the room,
     /// holds at the hand-off fade with no block, hands back to the waiting room at the 12 s timeout,
     /// and leaving the tab mid-reveal ends it.</summary>
-    [Fact]
-    public Task FirstLightHoldsForTheBlockThenTimesOutToTheWaitingRoom() => AvaloniaTestDispatcher.RunAsync(() =>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task FirstLightHoldsForTheBlockThenTimesOutToTheWaitingRoom(bool minimized) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -98,7 +102,7 @@ public sealed class SpiralRoomShellTests
         s.DescentCeremonyAtUtc = null;
         s.DescentMigrationCompleted = false;
         s.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
-        var time = new SteppedTime();
+        var time = new DeadlineClock();
         global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
         var oldFuse = global::ConditioningControlPanel.Avalonia.App.DescentCountdown;
         global::ConditioningControlPanel.Avalonia.App.DescentCountdown = null;   // fuse dark: the room is the waiting room
@@ -133,12 +137,26 @@ public sealed class SpiralRoomShellTests
             Assert.True(fog.IsVisible);
             Assert.False(waiting.IsVisible);
 
+            if (minimized) shell.WindowState = WindowState.Minimized;
+            // No animation frame: the deadline must run even while the compositor is parked.
             time.Advance(TimeSpan.FromSeconds(0.5));   // 12 s: no block came
-            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Dispatcher.UIThread.RunJobs();
             Assert.False(fog.IsVisible);
             Assert.True(waiting.IsVisible);
             Assert.True(help.IsVisible);
             Assert.DoesNotContain(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+
+            Assert.Equal(0, time.ActiveTimers);
+            shell.WindowState = WindowState.Normal;
+
+            // A deadline queued before navigation cannot end the next reveal.
+            shell.BeginSpiralFirstLight();
+            time.Advance(TimeSpan.FromSeconds(12));
+            shell.ShowTab("appsettings");
+            shell.BeginSpiralFirstLight();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(fog.IsVisible);
+            Assert.False(waiting.IsVisible);
 
             // Leaving the tab mid-reveal ends it; coming back is the ordinary room.
             shell.BeginSpiralFirstLight();
@@ -147,6 +165,9 @@ public sealed class SpiralRoomShellTests
             shell.ShowTab("appsettings");
             Dispatcher.UIThread.RunJobs();
             Assert.DoesNotContain(global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Running, l => l.Owner == visual);
+            time.Advance(TimeSpan.FromSeconds(12));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, time.ActiveTimers);
             shell.ShowTab(SpiralRoom.TabKey);
             Dispatcher.UIThread.RunJobs();
             Assert.False(fog.IsVisible);
@@ -163,4 +184,43 @@ public sealed class SpiralRoomShellTests
         }
         return Task.CompletedTask;
     });
+    // One-shot timer clock: deadlines advance without delivering a compositor frame.
+    private sealed class DeadlineClock : TimeProvider
+    {
+        private long _now;
+        private readonly List<Deadline> _timers = new();
+        public int ActiveTimers => _timers.FindAll(t => t.Due != null).Count;
+        public override long GetTimestamp() => _now;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new Deadline(this, () => callback(state));
+            _timers.Add(timer);
+            timer.Change(dueTime, period);
+            return timer;
+        }
+        public void Advance(TimeSpan by)
+        {
+            _now += by.Ticks;
+            foreach (var timer in _timers.ToArray())
+                if (timer.Due is { } due && due <= _now)
+                {
+                    timer.Due = null;
+                    timer.Fire();
+                }
+        }
+        private sealed class Deadline(DeadlineClock clock, Action fire) : ITimer
+        {
+            public long? Due;
+            public void Fire() => fire();
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                Due = dueTime == Timeout.InfiniteTimeSpan ? null : clock._now + dueTime.Ticks;
+                return true;
+            }
+            public void Dispose() => Due = null;
+            public ValueTask DisposeAsync() { Dispose(); return default; }
+        }
+    }
+
 }
