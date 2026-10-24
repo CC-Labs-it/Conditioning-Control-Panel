@@ -163,16 +163,6 @@ jobs:
       # Drop the flag if the solution ever builds clean without it.
       - name: Build solution (hard gate)
         run: dotnet build ConditioningControlPanel.sln -c Release -p:ValidateExecutableReferencesMatchSelfContained=false
-      - name: Render verified WPF parity rows (offscreen, sandbox profile)
-        run: dotnet test Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release --no-build -p:ValidateExecutableReferencesMatchSelfContained=false --filter FullyQualifiedName~VerifiedRowRenderTests
-        env:
-          WPF_RENDER_OUT: ${{ runner.temp }}/wpf-render
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: wpf-render
-          path: ${{ runner.temp }}/wpf-render/
-          if-no-files-found: error
       # HARD GATE. This started advisory - the suite is 254 files including WpfRenderHarness.cs
       # and PlayDoorRenderTests.cs, which do real WPF rendering, and nobody had confirmed it
       # green on a headless runner. The first CI run settled it: 4924 passed, 0 failed, in 45s,
@@ -242,6 +232,17 @@ jobs:
           if ($ok -ne 0) { throw "--win-panic-check F24 exited $ok" }
           $neg = Check 'F23'
           if ($neg -eq 0) { throw '--win-panic-check F23 passed: the check cannot fail' }
+      # Last step of the job, so a render failure cannot skip (and hide) the suites above.
+      - name: Render verified WPF parity rows (offscreen, sandbox profile)
+        run: dotnet test Tests/ConditioningControlPanel.Tests/ConditioningControlPanel.Tests.csproj -c Release --no-build -p:ValidateExecutableReferencesMatchSelfContained=false --filter FullyQualifiedName~VerifiedRowRenderTests
+        env:
+          WPF_RENDER_OUT: ${{ runner.temp }}/wpf-render
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wpf-render
+          path: ${{ runner.temp }}/wpf-render/
+          if-no-files-found: error
 
   # CCP.Avalonia.Tests, one shard per job so the shards run in parallel instead of one after another.
   # Sharded: one testhost for the whole suite outgrew the 16 GB runner; the shard definitions live in
