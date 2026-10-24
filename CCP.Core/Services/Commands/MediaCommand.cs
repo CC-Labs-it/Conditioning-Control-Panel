@@ -386,7 +386,7 @@ namespace ConditioningControlPanel.Services.Commands
                 if (!AiCommandAdmission.IsUnderRoot(assetsRoot, fullPath)) return null;
                 if (!File.Exists(fullPath)) return null;
                 // A file the user switched off never plays because the AI named it.
-                var settings = App.Settings?.Current;
+                var settings = CoreSettings.Current;
                 if (AiCommandAdmission.IsSwitchedOff(Path.GetRelativePath(assetsRoot, fullPath),
                         settings?.DisabledAssetPaths, settings?.DisabledAssetFolders?.ToArray()))
                     return null;

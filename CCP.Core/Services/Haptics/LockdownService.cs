@@ -90,7 +90,7 @@ public class LockdownService : IDisposable
         get
         {
             if (!_isActive || _duration <= TimeSpan.Zero) return 0;
-            return LockdownExitRule.ElapsedFraction(_activatedAt, _duration, UtcNow());
+            return CompatLockdownExitRule.ElapsedFraction(_activatedAt, _duration, UtcNow());
         }
     }
 
@@ -147,7 +147,7 @@ public class LockdownService : IDisposable
         if (!_isActive || _preStrictLock == wearersOwn) return;
         _preStrictLock = wearersOwn;
         WriteRecoveryFile(_preStrictLock, _prePanicKeyEnabled);
-        App.Logger?.Information("Lockdown: recorded strict lock corrected to the wearer's own ({Value})", wearersOwn);
+        Log.Information("Lockdown: recorded strict lock corrected to the wearer's own ({Value})", wearersOwn);
     }
 
     /// <summary>
@@ -165,7 +165,7 @@ public class LockdownService : IDisposable
         {
             if (!_isActive) return TimeSpan.Zero;
             // UTC, never local time: a local clock jumps an hour at the daylight-saving change.
-            return LockdownExitRule.Remaining(_activatedAt, _duration, UtcNow());
+            return CompatLockdownExitRule.Remaining(_activatedAt, _duration, UtcNow());
         }
     }
 
@@ -284,7 +284,7 @@ public class LockdownService : IDisposable
             // the settings on disk may carry its panic-off. Fail open rather than leave them stuck.
             if (state == null)
             {
-                var (strict, panic) = LockdownExitRule.UnreadableRecovery;
+                var (strict, panic) = CompatLockdownExitRule.UnreadableRecovery;
                 state = new RecoveryState { StrictLockEnabled = strict, PanicKeyEnabled = panic };
             }
             {
@@ -391,7 +391,7 @@ public class LockdownService : IDisposable
     {
         if (!_isActive) return false;
 
-        if (LockdownExitRule.PhraseMatches(phrase))
+        if (CompatLockdownExitRule.PhraseMatches(phrase))
         {
             Log.Information("Lockdown deactivated via secret exit phrase");
             Deactivate();

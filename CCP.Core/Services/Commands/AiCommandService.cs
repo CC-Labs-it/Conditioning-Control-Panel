@@ -122,7 +122,7 @@ namespace ConditioningControlPanel.Services.Commands
             return AiCommandAdmission.Decide(commandData,
                 masterOn: ConditioningControlPanel.Services.Companion.AiEffectControlGate.IsOn(settings, CoreAccount.HasLabAccess),
                 effectAllowed: settings != null && IsEffectAllowed(commandData.Command, settings),
-                panicQuiet: Safety.PanicAftermath.TriggersSilenced(),
+                panicQuiet: Safety.CompatPanicAftermath.TriggersSilenced(),
                 textBlocked: TextBlocked);
         }
 

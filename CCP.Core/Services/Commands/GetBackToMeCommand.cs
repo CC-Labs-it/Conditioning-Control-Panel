@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Services.Commands
 
             var delay = Math.Clamp(_data.Delay, 1, MaxDelaySec);
             // A panic while this waits cancels it: nothing AI-driven comes back after a panic.
-            var panicsAtSchedule = Safety.PanicAftermath.PanicCount;
+            var panicsAtSchedule = Safety.CompatPanicAftermath.PanicCount;
 
             try
             {
@@ -55,7 +55,7 @@ namespace ConditioningControlPanel.Services.Commands
 
                 // Consent can have changed during the delay: re-gate before asking the AI anything.
                 _cancellationToken.ThrowIfCancellationRequested();
-                if (!AiCommandAdmission.FollowUpStands(panicsAtSchedule, Safety.PanicAftermath.PanicCount))
+                if (!AiCommandAdmission.FollowUpStands(panicsAtSchedule, Safety.CompatPanicAftermath.PanicCount))
                 {
                     Log.Information("GetBackToMeCommand: a panic came first, follow-up dropped");
                     return false;
