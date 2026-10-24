@@ -38,8 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// <para>ponytail: still NOT here: the freeze pickup, darters, the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Chaperone/Bound/Tease) - SpawnTick spawns only treat variants until they land; every
-    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips, combo
-    /// milestones, lessons/first-times, pulses, SFX, announcer and the achievement credit; slow-mo,
+    /// motion but FloatUp, treat rot, chain reaction, the Body Buzz shockwave, cam-girl tips,
+    /// lessons/first-times, SFX, announcer and the achievement credit; slow-mo,
     /// freeze hold and the perf backoff on the cadence; the payload firer is a logging no-op; the
     /// pop text is the <see cref="PopText"/> hook (chaos-pop-text lane). Also missing: the boon draft
     /// on a wave boundary (BeginWaveTransition rolls straight on, as WPF does with drafts off); every
@@ -47,8 +47,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// the fuse ring is a two-phase ring (no flash phase, no danger breathing); the SNAP and NO FOCUS
     /// bubble labels (WPF BubbleService.cs:4500,4574) are not drawn. The hold and the Snap Chain window
     /// run on wall time (<c>BubbleOverlay.Field.Clock</c>), as WPF does (:4531, ChaosModeService :2000).
-    /// The FX window's Pulse/FreezeBurst/edge-hold callers (pops, detonations, the freeze power-up)
-    /// are not wired yet; only the heat tint is driven from here.</para>
+    /// The FX window receives pop, defuse, combo and detonation pulses plus heat tint.
+    /// ponytail: freeze burst/edge hold and mandatory-video re-raise await their run features.</para>
     ///
     /// <para><see cref="Tick"/> is the stepped clock: the DispatcherTimer only calls it, tests call
     /// it directly. It does nothing while the overlay is hidden (P01).</para>
@@ -70,6 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Action<double, double, string, Color>? PopText;
         private static ChaosFxWindow? _fx;
         private static double _lastHeatTint = -1;
+        private static int _lastComboBigFired;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired;
         private static readonly List<ChaosToyButtonWindow> _toyButtons = new();
         internal static IReadOnlyList<ChaosToyButtonWindow> ToyButtons => _toyButtons;
@@ -130,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _state.StartShields = _state.Shields;
             StartToys();
             _waveDetonatedAt = _state.Detonated;
+            _lastComboBigFired = 0;
             _invulnUntilUtc = DateTime.MinValue;
             ChaosRunLessons.OnRunStarted();   // WPF :399
             // ponytail: NotifyChaosRunStarted bark -> chaos-payout-fallin-c.
@@ -203,6 +205,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 double prismPts = ChaosFieldMath.ApplyPrismPop(_state, spec);
                 ShowPopScore(prismPts);
                 _state.PushEvent($"🔮 prism! 10x · {spec.Payload.DisplayName} fires");
+                Pulse(Color.FromRgb(0xC8, 0xA8, 0xFF), 0.40);
+                CheckComboMilestone();
                 return;
             }
             spec.Payload.Fire();   // benign pop = a treat
@@ -212,7 +216,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 34,
                     $"+{(int)ChaosFieldMath.TreatFocusGain(spec.PayMult)} FOCUS", Color.FromRgb(0x7A, 0xE0, 0xFF));
             ShowPopScore(pts);
+            Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+            CheckComboMilestone();
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
@@ -237,12 +243,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
                     $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(0xFF, 0xD7, 0x00));
                 _state.PushEvent($"{ChaosGlyphs.Gold} playing with fire +{gold} gold");
+                Pulse(Color.FromRgb(255, 140, 60), 0.30);
             }
             if (lastBreath > 1) _state.PushEvent($"⏱ last breath! x{lastBreath:0}");
+            Pulse(lastBreath > 1 ? Color.FromRgb(255, 215, 0) : Color.FromRgb(90, 255, 150),
+                lastBreath > 1 ? 0.40 : 0.16);
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
-            // ponytail: defuse lessons, first-times, regen, aftermath, ripple, pulses, combo
-            // milestones and the defuse barks are not here yet (chaos-payout-fallin-c).
+            CheckComboMilestone();
+            // ponytail: defuse lessons, first-times, regen, aftermath, ripple
+            // and the defuse barks are not here yet (chaos-payout-fallin-c).
         }
 
         /// <summary>WPF OnDetonated (:2055) + OnChannelBroken's feed line: the payload fires, the loop
@@ -264,19 +274,57 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             string name = spec.Payload.DisplayName;
             switch (ChaosFieldMath.ApplyDetonation(_state, BubbleOverlay.Field.Clock() < _invulnUntilUtc))
             {
-                case ChaosFieldMath.Detonation.SnapChainHeld: _state.PushEvent($"⛓ snap chain holds ({name})"); break;
-                case ChaosFieldMath.Detonation.ShieldAbsorbed: _state.PushEvent($"♥ resistance crumbles ({name})"); break;
+                case ChaosFieldMath.Detonation.SnapChainHeld:
+                    _state.PushEvent($"⛓ snap chain holds ({name})");
+                    Pulse(Color.FromRgb(0x7A, 0xE0, 0xFF), 0.22);
+                    break;
+                case ChaosFieldMath.Detonation.ShieldAbsorbed:
+                    _state.PushEvent($"♥ resistance crumbles ({name})");
+                    Pulse(Color.FromRgb(80, 160, 255), 0.28);
+                    break;
                 case ChaosFieldMath.Detonation.CollarHeld:
                     _state.PushEvent($"📿 the collar holds ({_state.CollarSaves} left)");
+                    Pulse(Color.FromRgb(255, 215, 0), 0.32);
                     if (_state.UnleashedEnabled)
                     {
                         BubbleOverlay.Field.DefuseAllLive();
                         _state.PushEvent("📿 unleashed — the field lets go");
+                        Pulse(Color.FromRgb(255, 215, 0), 0.50);
                     }
                     break;
-                default: _state.PushEvent($"💥 {name} triggered!"); break;
+                default:
+                    _lastComboBigFired = 0;
+                    _state.PushEvent($"💥 {name} triggered!");
+                    Pulse(Color.FromRgb(255, 50, 50), 0.4 + spec.Strength / 100.0 * 0.35);
+                    break;
             }
-            // ponytail: SFX, pulses, shake, HUD flashes, narrative and the detonation barks -> chaos-payout-fallin-c.
+            // ponytail: SFX, shake, HUD flashes, narrative and the detonation barks -> chaos-payout-fallin-c.
+        }
+
+        private static void Pulse(Color color, double strength)
+        {
+            if (_state?.Config?.ColorFlashesEnabled == true) _fx?.Pulse(color, strength);
+        }
+
+        // WPF CheckComboMilestone: preserve call order, including the micro/×10 pulse that
+        // replaces a big-threshold pulse on the same layer in the same callback.
+        private static void CheckComboMilestone()
+        {
+            int combo = _state?.Combo ?? 0;
+            if (combo <= 0) return;
+            foreach (int t in new[] { 25, 50, 100 })
+            {
+                if (combo < t || _lastComboBigFired >= t) continue;
+                _lastComboBigFired = t;
+                _state!.PushEvent($"🔥🔥 STREAK x{combo}!");
+                Pulse(Color.FromRgb(255, 230, 120), 0.55);
+            }
+            if (combo % 10 == 0)
+            {
+                _state!.PushEvent($"🔥 streak x{combo}!");
+                Pulse(Color.FromRgb(255, 200, 60), 0.4);
+            }
+            else Pulse(Color.FromRgb(255, 170, 80), 0.04 + 0.08 * ((combo % 10) / 10.0));
         }
 
         /// <summary>WPF ShowPopScore (:1685), Blank Eyes.</summary>

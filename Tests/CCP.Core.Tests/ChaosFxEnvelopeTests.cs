@@ -7,6 +7,17 @@ namespace CCP.Core.Tests;
 public class ChaosFxEnvelopeTests
 {
     [Fact]
+    public void Gentle_pulse_rises_over_300ms_then_keeps_its_260ms_fade()
+    {
+        var ramp = ChaosFxEnvelope.Pulse(0, 0.5,
+            ConditioningControlPanel.Services.Safety.GentleVisuals.RiseMs(40, true));
+        Assert.Equal(0.235, ramp.Sample(150), 6);
+        Assert.Equal(0.47, ramp.Sample(300), 6);
+        Assert.Equal(0.235, ramp.Sample(430), 6);
+        Assert.Equal(0, ramp.Sample(560));
+    }
+
+    [Fact]
     public void Pulse_snaps_to_its_peak_in_40ms_and_is_gone_at_300ms()
     {
         var r = ChaosFxEnvelope.Pulse(0, 0.5);   // peak 0.22 + 0.25
