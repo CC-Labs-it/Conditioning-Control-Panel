@@ -211,6 +211,7 @@ public sealed class PanicSurfacesTests
         ["MiniPlayerWindow"] = "only --video-check (a CLI diagnostic) opens it",
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
+        ["ScrolllerAwayHost"] = "no media, no visible window: OS lock / sleep hooks that only set ScrolllerPolicy.Away (WPF ScrolllerAwayWatcher)",
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
         ["InlineLoopVideo"] = "WPF parity: the help card's muted, no-audio clip poster; it lives only while that card is open, and closing the card detaches and frees it",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
