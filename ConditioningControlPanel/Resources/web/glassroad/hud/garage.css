@@ -62,3 +62,22 @@
 /* Keep the carousel behind menu cards and fade each overlay without a scene cut. */
 #race-garage{animation:g-soft-arrive .4s ease both}.g-menu{animation:none}
 #card:not([data-kind=menu]){animation:g-soft-arrive .35s ease both}
+
+/* Course choice sits beside Race in the same compact menu. */
+#race-garage .g-course-choice{border-color:#317f84;background:#174b58;margin:1px 0 5px;min-height:58px}.g-course-choice svg{color:#ffce62}.g-course-choice small{font-size:10px;color:#afe8db;margin:0 0 2px}.g-course-choice b{font-size:16px!important}
+.g-track-picker{width:min(730px,calc(100vw - 32px));max-height:calc(100dvh - 40px);box-sizing:border-box;overflow:auto;border:3px solid #10101b;border-radius:20px;background:#143c49;color:#fff4df;padding:24px;box-shadow:0 8px #10101b;pointer-events:auto;animation:g-card-arrive .35s ease both}
+.g-track-picker::backdrop{background:#091925bd;animation:g-soft-arrive .3s ease both}.g-track-picker header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.g-track-picker header small{font:700 10px 'Segoe UI',sans-serif;letter-spacing:.18em;color:#8ee8d1}.g-track-picker h2{font:italic 34px Georgia,serif;margin:5px 0 0;text-shadow:2px 2px #10101b}
+#race-garage .g-track-back{background:#ffce62;color:#271b2c;border:2px solid #10101b;box-shadow:0 3px #10101b;border-radius:9px;min-width:68px}
+.g-track-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+#race-garage .g-track-tile{position:relative;display:flex;align-items:flex-start;flex-direction:column;background:#102d39;border:3px solid #0b1420;border-radius:13px;padding:14px 17px;text-align:left;box-shadow:0 4px #091522;transition:transform .2s,background .2s,border-color .2s;overflow:hidden}
+#race-garage .g-track-tile:hover,#race-garage .g-track-tile:focus-visible{transform:translateY(-3px);border-color:var(--course-color);background:#194b57;outline:none}
+#race-garage .g-track-tile[aria-pressed=true]{border-color:var(--course-color);box-shadow:0 4px #091522,inset 0 -3px var(--course-color)}
+.g-track-tile svg{width:100%;height:102px;overflow:visible;margin:8px 0 10px}.g-track-tile path{fill:none;stroke:var(--course-color);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.g-track-tile .g-route-shadow{stroke:#080e19;stroke-width:5}.g-track-tile circle{fill:#fff4df;stroke:#080e19;stroke-width:1.5}
+.g-track-tile strong{font-size:20px;font-weight:600}.g-track-tile .g-course-details{font-size:11px;color:#b1ded8;margin-top:4px;min-height:16px}.g-course-mode{font-size:10px;color:var(--course-color)}.g-course-selected{position:absolute;right:13px;top:12px;font-size:10px;color:var(--course-color);opacity:0}.g-track-tile[aria-pressed=true] .g-course-selected{opacity:1}.g-track-status{font-size:12px;min-height:17px;margin:15px 0 0;color:#abe7da}
+.g-course-leaving::after{content:'';position:fixed;inset:0;background:#132f39;z-index:30;animation:g-soft-arrive .35s ease both;pointer-events:auto}.g-course-leaving .g-track-picker{pointer-events:none}
+#race-garage.g-calm .g-track-picker{animation:g-soft-arrive .4s ease both}#race-garage.g-calm .g-track-tile:hover,#race-garage.g-calm .g-track-tile:focus-visible{transform:none}
+@media(max-width:699px){#race-garage .g-menu-row[data-g=race]{grid-row:auto;min-height:57px}#race-garage .g-course-choice{min-height:57px;margin:0;padding:8px}.g-course-choice small{font-size:9px}.g-course-choice b{font-size:13px!important}.g-track-picker{padding:17px;width:calc(100vw - 24px)}.g-track-grid{gap:9px}#race-garage .g-track-tile{padding:10px}.g-track-tile svg{height:75px}.g-track-tile strong{font-size:16px}.g-track-tile .g-course-details{font-size:10px}.g-course-selected{font-size:8px;right:9px}.g-track-picker h2{font-size:29px}}
+@media(max-height:580px) and (min-width:700px){.g-track-picker{padding:16px}.g-track-tile svg{height:60px}.g-track-picker header{margin-bottom:12px}.g-track-tile strong{font-size:17px}}
+@media(prefers-reduced-motion:reduce){.g-track-picker{animation:g-soft-arrive .4s ease both}#race-garage .g-track-tile:hover,#race-garage .g-track-tile:focus-visible{transform:none}}
+
+.g-course-leaving .g-track-picker{animation:g-course-out .35s ease both}@keyframes g-course-out{to{opacity:0}}

@@ -265,7 +265,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     g.computeBoundingSphere();
   }
   let waterfall = null;
-  try { waterfall = createWaterfall(track, pal, { particles, wakes, fluid: waterVolume.field }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
+  try { waterfall = createWaterfall(track, waterPal, { particles, wakes, fluid: waterVolume.field }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
   // polish 4: glowing skid ribbons under a drift (one pooled draw call for every kart)
   const skids = createSkids(feel, count);
   add(skids.object);
