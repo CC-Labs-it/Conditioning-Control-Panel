@@ -22,6 +22,7 @@ import { createBridge, songCharts, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN 
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia } from './host/cardMedia.js';
 import { createFlashMedia } from './fx/flashMedia.js';
+import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
 import { createClock } from './core/clock.js';
@@ -260,8 +261,9 @@ async function boot() {
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
   const flashMedia = createFlashMedia({ source: seed => cardMedia?.sourceForFlash(seed) || null });
+  const subliminalBurst = createSubliminalBurst({ parent: document.body });
   effects.screen.params.mediaFlash = true;
-  window.addEventListener('pagehide', () => flashMedia.dispose(), { once: true });
+  window.addEventListener('pagehide', () => { flashMedia.dispose(); subliminalBurst.dispose(); }, { once: true });
   if (cardMedia) {
     await cardMedia.ready;
     window.addEventListener('pagehide', () => cardMedia.dispose(), { once: true });
@@ -828,6 +830,7 @@ async function boot() {
     fx.update(fxDt, P.st, race);                                  // 4. fx
     effects.update(fxDt);                                         //    the local screen effect
     flashMedia.update(effects.screen, fxDt, renderer.aspect);
+    subliminalBurst.update(effects.screen, fxDt, renderer.aspect);
     if (HT) hLap('fx');
     const fs = fx.state;
     const pst = P.st;
