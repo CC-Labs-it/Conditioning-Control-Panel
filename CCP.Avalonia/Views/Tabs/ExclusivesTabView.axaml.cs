@@ -85,8 +85,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// WPF ExclusivesTabView.PlansMode (:108): Settings &gt; Account &amp; Plans hosts this view inline with
         /// its own header, the tier plates and a link to the Premium page; the spotlight and shelf stay on the
         /// Premium page. The inner scroller is disabled so the Settings page owns the wheel.
-        /// ponytail: WPF also shows the invites card here (and not on Premium); this head keeps it on the Premium
-        /// page, where the invite ticket and RefreshInvites read it (wire-views-tab-app-settings-b-next).
         /// </summary>
         public bool PlansMode
         {
@@ -97,7 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 this.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible = !value;
                 this.FindControl<Border>("SpotlightCard")!.IsVisible = !value;
                 this.FindControl<Button>("BtnSeePremium")!.IsVisible = value;
-                this.FindControl<Control>("InvitesHost")!.IsVisible = !value;
+                this.FindControl<Control>("InvitesHost")!.IsVisible = value;
                 BindLoc("TxtVaultTitle", value ? "plans_header_title" : "premium_page_title");
                 BindLoc("TxtVaultSub", value ? "plans_header_sub" : "premium_page_sub");
                 this.FindControl<ScrollViewer>("ContentScroll")!.VerticalScrollBarVisibility =
@@ -181,7 +179,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void RefreshVault()
         {
             // WPF RefreshVaultCore: Account & Plans carries no shelf and no spotlight, only the plates.
-            if (_plansMode) { RefreshTierPlates(); return; }
+            if (_plansMode)
+            {
+                RefreshTierPlates();
+                _ = this.FindControl<Controls.Invites.InvitePanel>("InvitesCard")!.RefreshAsync();
+                return;
+            }
             // WPF ArrangeVaultShelf (polish 12): Basic, Prime, Free, each under its header, open doors first,
             // roster order within each half (Core PremiumShelfOrder). The two reserved seats are dropped. Just
             // Drop until the server opens its door and the Arcademy behind its build flag are hidden, not veiled.

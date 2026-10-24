@@ -490,9 +490,10 @@
                         </ItemsControl.DataTemplates>
                     </ItemsControl>
 
-                    <!-- Invites (WPF Controls/Invites/InvitePanel, InvitesHost). Hidden until the
-                         server answers /v2/invites/mine; read on every show of the tab. -->
-                    <inv:InvitePanel x:Name="InvitesHost" Margin="0,18,0,0"/>
+                    <!-- Placement follows PlansMode; the card independently hides until a server answer. -->
+                    <Border x:Name="InvitesHost" IsVisible="False" Margin="0,18,0,0">
+                        <inv:InvitePanel x:Name="InvitesCard"/>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

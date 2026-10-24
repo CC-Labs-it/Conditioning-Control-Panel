@@ -41,6 +41,8 @@ public sealed class AccountPlansVaultTests
                 var plans = page.FindControl<AccountSettingsSection>("SectionAccount")!.FindControl<ExclusivesTabView>("PlansView")!;
 
                 Assert.True(plans.PlansMode);
+                Assert.True(plans.FindControl<Border>("InvitesHost")!.IsVisible);
+                Assert.False(shell.Named<ExclusivesTabView>("ExclusivesTab")!.FindControl<Control>("InvitesHost")!.IsVisible);
                 Assert.False(plans.FindControl<ItemsControl>("ExclusivesShelf")!.IsVisible);
                 Assert.False(plans.FindControl<Border>("SpotlightCard")!.IsVisible);
                 Assert.Equal(Loc.Get("plans_header_title"), plans.FindControl<TextBlock>("TxtVaultTitle")!.Text);

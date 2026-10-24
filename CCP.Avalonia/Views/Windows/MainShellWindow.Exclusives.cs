@@ -88,7 +88,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF _invitePanel.RefreshAsync(): throttled inside, so a repaint storm costs one read.</summary>
-        internal void RefreshInvites() => _ = Named<Tabs.ExclusivesTabView>("ExclusivesTab")
-            ?.FindControl<Controls.Invites.InvitePanel>("InvitesHost")?.RefreshAsync();
+        internal void RefreshInvites() => _ = InvitesCard?.RefreshAsync();
     }
 }
