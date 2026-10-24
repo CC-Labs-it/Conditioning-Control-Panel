@@ -228,6 +228,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// cancel throws OperationCanceledException. Throws when the file will not decode.</summary>
         internal static float[] Decode(string path, IProgress<double>? progress, CancellationToken ct)
         {
+            // Before the transcode: a short track can finish inside the first 100 ms wait, so the loop's check never runs.
+            ct.ThrowIfCancellationRequested();
             var wav = Path.Combine(Path.GetTempPath(), "ccp-race-" + Guid.NewGuid().ToString("N") + ".wav");
             try
             {
@@ -245,6 +247,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct)
         {
+            // A short file transcodes inside the first 100 ms wait, so an already-cancelled pick must stop here.
+            ct.ThrowIfCancellationRequested();
             var vlc = LibVlcAudio.Shared ?? throw new InvalidOperationException(GameWindow.RaceNoAudioMessage);
             using var done = new ManualResetEventSlim(false);
             bool failed = false;

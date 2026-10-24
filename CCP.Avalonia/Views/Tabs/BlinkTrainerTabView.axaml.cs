@@ -79,6 +79,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 BlinkTrainerSession.StateChanged += OnSessionStateChanged;
                 Platform.WebcamTracker.Instance.StateChanged += OnSessionStateChanged;
+                RefreshWebcamStatus();
             };
             DetachedFromVisualTree += (_, _) =>
             {
@@ -98,6 +99,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             SyncTick();
         }
 
+        internal void RefreshWebcamStatus() => Helpers.WebcamStatusPresentation.Paint(this,
+            "WebcamStatusChipBlinkTrainerDot", "TxtWebcamStatusChipBlinkTrainer", Platform.WebcamTracker.Instance.State);
+
         /// <summary>WPF BlinkTrainerTick runs while a session runs; here only while the page shows too.</summary>
         private void SyncTick()
         {
@@ -114,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try
             {
                 SyncTick();
+                RefreshWebcamStatus();
                 RefreshTrackerButton();
                 RefreshStatusRow();
                 ApplyStageMode();
@@ -256,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _stageSink = new Platform.VlcFrameSink(_stagePlayer, () => _stageMedia,
                 bmp => BlinkTrainerStageVideo.Source = bmp, () => BlinkTrainerStageVideo.InvalidateVisual());
             _stageMedia = new VlcMedia(vlc, path, LibVLCSharp.Shared.FromType.FromPath);
-            _stageMedia.AddOption(":no-audio");
+            _stageMedia.AddOption(LibVlcSilence.NoAudioOption);
             _stageMedia.AddOption(":input-repeat=65535");
             _stagePlayer.Play(_stageMedia);
         }
@@ -402,6 +407,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshBlinkTrainerWebcamColumn's consent card and calibration line.</summary>
         private void RefreshWebcamColumn()
         {
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
             bool consented = WebcamConsent.IsCurrent(CoreSettings.Current);
             BlinkTrainerConsentCard.Background = new SolidColorBrush(consented ? Color.FromArgb(0x1A, 0x4A, 0xDE, 0x80) : Color.FromArgb(0x1A, 0xFF, 0xD0, 0x80));
             BlinkTrainerConsentCard.BorderBrush = consented ? Green : Amber;
@@ -719,6 +725,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF RefreshBlinkTrainerTrackerButton: the literal label WPF authors untranslated.</summary>
         private void RefreshTrackerButton()
         {
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.Named<DeeperTabView>("DeeperTab")?.RefreshWebcamColumn();
             if (BtnBlinkTrainerStartStopTracker.Content is TextBlock tb)
                 tb.Text = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracker" : "Start tracker";
         }

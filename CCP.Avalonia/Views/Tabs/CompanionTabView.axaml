@@ -32,8 +32,9 @@
            3. tell MainWindow when it becomes visible, which is what
               drives the tab-transition choreography.
 
-         Jobs 1 and 3 are stubbed on this head — see the code-behind for
-         what they wait on.
+         The room owns live zone viewmodels; visibility and roster card
+         actions reach the shell. The aggregate runtime/compat seam and
+         WPF v2 page mount remain in wire-views-tab-companion-b.
 
          The tab's own header is gone on purpose: Z0 draws it, from the
          hero's viewmodel, so there is one title and not two.

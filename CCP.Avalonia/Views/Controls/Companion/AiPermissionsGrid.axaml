@@ -78,11 +78,11 @@
                     <fx:IconGlyph Kind="BrainCircuit" Size="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <TextBlock Text="{loc:Str lab_ai_effects_memory_title}" Theme="{StaticResource CmpSectionTitleStyle}"/>
-                <Border Theme="{StaticResource CmpTrainTagStyle}" Margin="9,0,0,0">
+                <Border x:Name="PreviewBetaTag" Theme="{StaticResource CmpTrainTagStyle}" Margin="9,0,0,0">
                     <TextBlock Text="{loc:Str label_beta_2}" Theme="{StaticResource CmpTrainTagTextStyle}"/>
                 </Border>
                 <!-- The T2 plate: on a Free/T1 door it has to be said out loud, entitled or not. -->
-                <Border Theme="{StaticResource CmpTierPlateStyle}">
+                <Border x:Name="HeaderTierTag" Theme="{StaticResource CmpTierPlateStyle}">
                     <TextBlock Text="{loc:Str hm3_rail_lock_t2}" FontSize="10" FontWeight="Bold"
                                Foreground="{StaticResource CmpTextBrush}"/>
                 </Border>
@@ -115,7 +115,7 @@
 
             <!-- ========== the two halves ==========
                  Effects (Tier 2, gated) beside memory (Tier 1, not gated). -->
-            <Grid ColumnDefinitions="3*,16,2*">
+            <Grid x:Name="PermissionColumns" ColumnDefinitions="3*,16,2*">
 
                 <!-- ===== left: effect control + permissions ===== -->
                 <Grid Grid.Column="0">
@@ -195,7 +195,7 @@
                 </Grid>
 
                 <!-- ===== right: chat memory (Tier 1, NOT gated) ===== -->
-                <Border Grid.Column="2" Theme="{StaticResource CmpInsetPanelStyle}"
+                <Border x:Name="MemoryPane" Grid.Column="2" Theme="{StaticResource CmpInsetPanelStyle}"
                         BorderBrush="{StaticResource CmpVioletBrush}" VerticalAlignment="Top">
                     <StackPanel>
                         <Grid>
