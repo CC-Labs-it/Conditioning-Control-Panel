@@ -61,6 +61,8 @@ import { createKeepChainView } from './keepChains.js';
 import { keepSpiralLayout } from './keepSpirals.js';
 import { keepMediaLayout } from './keepMedia.js';
 import { getKeepLayout } from '../track/keep-layout.js';
+import { createKeepDrawbridge } from './keepDrawbridge.js';
+import { createKeepBackdrop } from './keepBackdrop.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -156,9 +158,10 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     scene.add(sun);
   }
   const sky = createSkyMaterial(pal, art);
-  if (keep) sky.material.colorNode = sky.material.colorNode.mul(.22);
   const skyMesh = add(new Mesh(new SphereGeometry(LOOK.skyRadiusM, 48, 32), sky.material));
-  skyMesh.renderOrder = -1; skyMesh.frustumCulled = false;
+  skyMesh.renderOrder = -1; skyMesh.frustumCulled = false; skyMesh.visible = !keep;
+  const keepBackdrop = keep ? createKeepBackdrop(scene, track) : null;
+  const keepDrawbridge = keep ? createKeepDrawbridge(scene, track, art) : null;
   const road = createRoadMaterial(pal, art, track);
   if (keep) applyKeepRoad(road, art);
   const roadMesh = add(meshFrom(track.meshes.road, road.material));
@@ -485,13 +488,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (keepDressing) keepDressing.dispose();
     if (keepGates) keepGates.dispose();
     if (keepChains) keepChains.dispose();
+    if (keepBackdrop) keepBackdrop.dispose();
+    if (keepDrawbridge) keepDrawbridge.dispose();
     court.dispose();
     if (stones) stones.dispose();
     if (terrace) terrace.dispose();
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, keepDressing, keepGates, keepChains,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
