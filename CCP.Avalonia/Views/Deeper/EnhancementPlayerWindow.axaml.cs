@@ -321,6 +321,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             AddHandler(DragDrop.DragOverEvent, Window_DragOver);
             AddHandler(DragDrop.DropEvent, Window_Drop);
 
+            InitializeInteractions();
             RefreshEventList();
             UpdateFilterCounts();
             UpdateStatusPill();
@@ -806,6 +807,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnStop_Click()
         {
+            CancelEscHold();
             DisposeLocalAudio();
             if (_isVideoMode && _videoNavigated)
                 _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.pause(); l.currentTime=0;"));
@@ -881,8 +883,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (e.Property != RangeBase.ValueProperty) return;
             var volume = (int)Math.Round(_sliderVolume.Value);
+            if (!_muteChanging) _volumeBeforeMute = null;
+            if (_isVideoMode && _videoNavigated)
+                _ = _videoBrowser.InvokeScriptAsync(DeeperPreview.Invoke("l.volume=" + (volume / 100.0).ToString("0.##", CultureInfo.InvariantCulture) + ";"));
             if (_localAudio != null) _localAudio.Volume = volume;
-            if (CoreSettings.Current.DeeperPlayerVolume != volume)
+            if (_volumeBeforeMute == null && CoreSettings.Current.DeeperPlayerVolume != volume)
             {
                 CoreSettings.Current.DeeperPlayerVolume = volume;
                 CoreSettings.Save();
@@ -1595,6 +1600,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void MiniTimelineCanvas_PointerMoved(object? sender, PointerEventArgs e)
         {
+            UpdateMiniHoverLabel(e.GetPosition(_miniTimelineCanvas).X);
             if (!_miniScrubbing) return;
             try { SeekToMiniPosition(e.GetPosition(_miniTimelineCanvas).X); } catch { }
         }
@@ -1688,6 +1694,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void Window_Closing()
         {
+            CancelEscHold();
+            _heldKeys.Clear();
             _isClosing = true;
             AudioWindows.Remove(this);
             DisposeLocalAudio();

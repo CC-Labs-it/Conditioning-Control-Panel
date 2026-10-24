@@ -20,7 +20,7 @@ using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
-public sealed class DeeperPlayerAudioTests
+public sealed partial class DeeperPlayerAudioTests
 {
     private sealed class Audio : IDeeperLocalAudio
     {
