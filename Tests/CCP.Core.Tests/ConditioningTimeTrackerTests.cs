@@ -24,6 +24,43 @@ public sealed class ConditioningTimeTrackerTests
     }
 
     [Fact]
+    public void DelayedTicksCreditRealMinutesAndRestartDiscardsPendingTime()
+    {
+        var s = new AppSettings();
+        var clock = new SteppedClock();
+        var tracker = new ConditioningTimeTracker(clock);
+        tracker.Start(s);
+        for (var i = 0; i < 47; i++)
+        {
+            clock.Now = clock.Now.AddSeconds(1.3);
+            tracker.Tick(s);
+        }
+        Assert.Equal(1, s.TotalConditioningMinutes);
+        tracker.Stop(s);
+        var baseline = s.TotalConditioningMinutes;
+        tracker.Start(s);
+        Seconds(tracker, s, clock, 59);
+        Assert.Equal(baseline, s.TotalConditioningMinutes);
+    }
+
+    [Fact]
+    public void LongTickGapsAreCappedAndBackwardsTicksDoNotCredit()
+    {
+        var s = new AppSettings();
+        var clock = new SteppedClock();
+        var tracker = new ConditioningTimeTracker(clock);
+        tracker.Start(s);
+        clock.Now = clock.Now.AddHours(8);
+        tracker.Tick(s);
+        clock.Now = clock.Now.AddSeconds(-5);
+        tracker.Tick(s);
+        Seconds(tracker, s, clock, 44);
+        Assert.Equal(0, s.TotalConditioningMinutes);
+        Seconds(tracker, s, clock, 1);
+        Assert.Equal(1, s.TotalConditioningMinutes);
+    }
+
+    [Fact]
     public void AccruesAMinutePerSixtyTicksAndTheRemainderOnStop()
     {
         var s = new AppSettings { TotalConditioningMinutes = 10 };

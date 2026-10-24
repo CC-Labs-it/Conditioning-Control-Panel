@@ -70,6 +70,24 @@ public sealed class SessionRunnerTests : IDisposable
         JObject.Parse(JsonConvert.SerializeObject(CoreSettings.Current, Formatting.Indented));   // = settings.json
 
     [Fact]
+    public void JournalPrecedesOverridesAndCleanStopClearsIt()
+    {
+        var s = CoreSettings.Current;
+        s.SubliminalDuration = 3;
+        var originalPool = new System.Collections.Generic.Dictionary<string, bool>(s.SubliminalPool);
+        var path = Path.Combine(CorePaths.UserData, CoreSessionSettingsJournal.FileName);
+        _runner.Start(OneMinute());
+        Assert.True(File.Exists(path));
+        var recovered = new AppSettings { SubliminalDuration = 9 };
+        Assert.True(CoreSessionSettingsJournal.Apply(File.ReadAllText(path), recovered, s.ActiveModId) > 0);
+        Assert.Equal(3, recovered.SubliminalDuration);
+        Assert.Equal(originalPool.OrderBy(p => p.Key), recovered.SubliminalPool.OrderBy(p => p.Key));
+        _runner.Stop();
+        Assert.Equal(3, s.SubliminalDuration);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
     public void OneMinuteSession_CompletesByTick_SavesLog_RestoresSettings_ReleasesPools()
     {
         var s = CoreSettings.Current;

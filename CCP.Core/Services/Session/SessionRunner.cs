@@ -112,6 +112,13 @@ namespace ConditioningControlPanel.Services
             CoreSettings.SaveImmediate();
 
             _snapshot = SessionSettingsSnapshot.Capture(s);
+            // Before pool custody or any session override, as WPF SaveCurrentSettings.
+            try
+            {
+                CoreSessionSettingsJournal.Write(CorePaths.UserData, CoreSessionSettingsJournal.Build(
+                    s, s.ActiveModId, s.SubliminalPool, s.BouncingTextPool, s.LockCardPhrases));
+            }
+            catch (Exception ex) { Log.Warning(ex, "[Session] Settings journal not written"); }
             _custody = PhrasePoolCustody.Begin(s, session.Settings, CoreMods.ActiveModId, session);
             Apply(session.Settings, s);
 
@@ -422,6 +429,7 @@ namespace ConditioningControlPanel.Services
             _custody = null;
             CoreEngine.Stop();   // MainWindow.Presets.cs:1951
             CoreSettings.Save();   // WPF leaves the restore to the next save; persist it now
+            CoreSessionSettingsJournal.Clear(CorePaths.UserData);
 
             // XP actually banked: 0 while no head has a progression service (decision log).
             int xp = 0;
