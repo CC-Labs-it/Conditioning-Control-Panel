@@ -88,6 +88,7 @@ internal sealed partial class GameWindow
         Dispatcher.UIThread.Post(() =>
         {
             if (_closing) return;
+            // Item.Url is WPF's ccp.assets host URL; this head serves files through WebAssetServer instead.
             string Url(GoonOnlineMedia.Item i) => _server!.AssetUrl(Path.GetRelativePath(CorePaths.EffectiveAssets, i.Path));
             Post(new { type = "pbp:online-media", state = snap.State, subs = snap.Subs, share = _pbpSharePct,
                 images = snap.Images.Select(Url).ToArray(), clips = snap.Videos.Select(Url).ToArray(), have = snap.Have, want = snap.Want });
