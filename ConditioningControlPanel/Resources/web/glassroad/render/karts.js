@@ -40,6 +40,7 @@ import { LOOK } from './look.js';
 import { KART_VIEW } from './viewMath.js';
 import { Q } from './quality.js';
 import { buildKart } from './dressing.js';
+import { createGlideCap } from './glideCap.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
   createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor,
@@ -258,6 +259,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     const skin = art3d ? createEmiSkin(model,{cloneMaterials:false}) : null;
     const dress = art3d ? dressKart(art, model, want, { tint: look ? look.cup : null, tintMix: LOOK.vehicleTintMix }) : null;
     const accessory = art3d && look && !(dress && dress.outfit) ? attachAccessory(art, model, look.accessory) : null;
+    const glideCap = art3d ? createGlideCap(art, model) : null;
     const head = art3d ? headRig(model) : null;
     const rig = art3d ? makeRig(kartGltf, model) : null;
     const bones = {};
@@ -274,7 +276,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     root.add(aura.mesh);
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
-      dress, skin, rig, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
+      dress, skin, rig, glideCap, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
       tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura,
     });
@@ -337,10 +339,12 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
    * One kart per frame. st = interpolated state, fxv = RacerFx or null, distM = distance to the camera,
    * opts: { squash (the player's fx.squash; the reaction layer now owns squash), gentle, topMps, name }.
    */
-  function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '' } = {}) {
+  function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', glide = false } = {}) {
     const { root, body, pose: p, react: r } = k;
     k.life?.beforePose();
     root.visible = true;
+    if (k.glideCap) k.glideCap.update(glide && st[S.airborne] > 0 && st[S.respawnPhase] === RESPAWN.NONE, dt, gentle);
+    if (k.accessory) k.accessory.visible = !(k.dress && k.dress.outfit) && !(k.glideCap && k.glideCap.cap.visible);
     root.position.set(st[S.posX], st[S.posY], st[S.posZ]);
     root.quaternion.set(st[S.quatX], st[S.quatY], st[S.quatZ], st[S.quatW]);
     const rig = k.rig, spinOwned = rig && k.dir.cur === 'spin_out';
@@ -468,6 +472,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
   function resetReactions() {
     for (const k of list) {
       k.react = Object.assign(createReact(k.i), { rig: !!k.rig }); k.pend.length = 0; k.dir = createDirector();
+      if (k.glideCap) k.glideCap.reset();
       if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.cur = null; }
     }
   }
@@ -483,6 +488,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       k.aura.material.dispose();
       if (k.accessory) k.accessory.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
       if (k.life) k.life.dispose();
+      if (k.glideCap) k.glideCap.dispose();
       if (k.dress) k.dress.dispose();
       if (k.skin) k.skin.dispose();
       if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.mixer.uncacheRoot(k.model); }

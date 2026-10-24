@@ -10,6 +10,7 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { Q } from './quality.js';
 import { attachVertexShade } from './vertexShade.js';
 import { MATERIAL_DETAIL_IDS, materialDetailId } from './materialDetailMath.js';
+import { keepArtPlan } from './keepTheme.js';
 
 const BASE = new URL('../art/', import.meta.url);
 const TRANSCODER = new URL('../vendor/three/addons/libs/basis/', import.meta.url).href;
@@ -50,10 +51,17 @@ export const currentArt = () => current;
 /** Load the art set. Resolves { tex(id), model(id), row(id), failed[], loaded, wanted } and never rejects.
  * wanted counts the ids asked for minus LATER ids not shipped yet; loaded counts what arrived.
  * onProgress(done, total) runs as each id settles (arrived or failed), for the warming card. */
-export async function loadArt(renderer, { want = WANT, onProgress = null } = {}) {
+export async function loadArt(renderer, { want = WANT, trackId = 'threshold', onProgress = null } = {}) {
+  // Evict the previous theme before loading its replacements, including a quality-tier change.
+  if (current) { current.dispose(); current = null; }
   const rows = new Map(), tex = new Map(), models = new Map(), failed = [];
   const materialTier = Q.name;
-  const requested = [...new Set([...want, ...MATERIAL_DETAIL_IDS.map((id) => materialDetailId(id, materialTier))])];
+  if (trackId === 'mainframe') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
+    .concat('spout-mainframe', 'stone-mainframe');
+  const plan = trackId === 'keep' ? keepArtPlan(want, materialTier) : { ids: want, aliases: {} };
+  const resolve = (id) => plan.aliases[id] || id;
+  const waterIds = ['water-normal', 'water-foam-mask', 'waterfall-sheet', 'waterfall-phase-mask'].map(id => id + (materialTier === 'phone' ? '-phone' : ''));
+  const requested = [...new Set([...plan.ids, ...waterIds, ...MATERIAL_DETAIL_IDS.map((id) => materialDetailId(id, materialTier))])];
   const vertexShading = { applied: [], skipped: [] };
   let manifest = [];
   try {
@@ -113,13 +121,14 @@ export async function loadArt(renderer, { want = WANT, onProgress = null } = {})
   ktx2.dispose();
   const wanted = requested.filter((id) => rows.has(id) || !LATER.has(id)).length;
   return current = {
+    theme: trackId, tier: materialTier, requested,
     loaded: tex.size + models.size,
     wanted,
     vertexShading,
     detail: (id) => tex.get(materialDetailId(id, materialTier)) || null,
-    tex: (id) => tex.get(id) || null,
+    tex: (id) => tex.get(resolve(id)) || null,
     model: (id) => models.get(id) || null,
-    row: (id) => rows.get(id) || null,
+    row: (id) => rows.get(resolve(id)) || null,
     failed,
     dispose() { for (const t of tex.values()) t.dispose(); },
   };

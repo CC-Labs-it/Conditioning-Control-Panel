@@ -10,6 +10,7 @@ import { createQuery, flowAt } from './query.js';
 import { buildDriveline, buildChecklines } from './driveline.js';
 import { buildMeshes } from './mesh.js';
 import { buildCourts, buildFields } from './courts.js';
+import { canalProfile, canalNormal } from './canal.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
 export function loadTrack(json, { validate = true } = {}) {
@@ -38,6 +39,24 @@ export function loadTrack(json, { validate = true } = {}) {
     const sw = wrap(s, lengthM);
     for (let i = sections.length - 1; i > 0; i--) if (sw >= sections[i].fromS) return i;
     return 0;
+  };
+  const hasCanal = sections.some(s => s.id === 'coolant-canal');
+  const profile = hasCanal ? (s, x, out) => canalProfile(sections, wrap(s, lengthM), x, out) : null;
+  const surfaceProfile = {}, surfaceN = [0, 0, 0];
+  const surfaceAt = (s, x = 0, out = makeFrame()) => {
+    frameAt(s, out);
+    const h = profile ? profile(s, x, surfaceProfile).height : 0;
+    for (let k = 0; k < 3; k++) out.p[k] += out.b[k] * x + out.n[k] * h;
+    if (profile && surfaceProfile.blend) {
+      canalNormal(out, surfaceProfile, surfaceN);
+      for (let k = 0; k < 3; k++) out.t[k] += out.n[k] * surfaceProfile.alongSlope;
+      const tLength = Math.hypot(...out.t);
+      for (let k = 0; k < 3; k++) { out.t[k] /= tLength; out.n[k] = surfaceN[k]; }
+      out.b[0] = out.t[1] * out.n[2] - out.t[2] * out.n[1];
+      out.b[1] = out.t[2] * out.n[0] - out.t[0] * out.n[2];
+      out.b[2] = out.t[0] * out.n[1] - out.t[1] * out.n[0];
+    }
+    return out;
   };
 
   const boosts = json.boosts.map((b) => ({ node: b.node, x: b.x, w: b.w, len: b.len, s: nodeS[b.node] }));
@@ -73,15 +92,15 @@ export function loadTrack(json, { validate = true } = {}) {
 
   const track = {
     id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS,
-    sections, sectionAt, boosts, jumps, items, routes, courts, fields,
+    sections, sectionAt, boosts, jumps, items, routes, courts, fields, reservoir: json.reservoir, waterSpills: json.waterSpills,
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
     nodeFlags: (i) => nodes[((i % N) + N) % N].flags,
     nodeSurface: (i) => nodes[((i % N) + N) % N].surface,
     /** Water flow at (seg, segT) into out, see track/query.js flowAt. */
     flowAt: (seg, segT, out) => flowAt(nodes, ((seg % N) + N) % N, segT, out),
-    frameAt,
-    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields),
+    frameAt, surfaceAt, canalProfile: profile,
+    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields, profile),
     checklines: null,
   };
   track.checklines = buildChecklines(track, json.checkpoints);

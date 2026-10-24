@@ -1,8 +1,10 @@
+import {COURSES} from '../track/catalog.js';
 import {KARTS,OUTFITS,PRESETS,COLOR_KEYS} from './garageState.js';
 
-export function garageUi({change,select,customize,action,hover}) {
+export function garageUi({change,select,customize,action,hover,trackId='threshold',online=true,changeTrack}) {
   const root=document.createElement('section');root.id='race-garage';root.hidden=true;root.setAttribute('aria-label','Choose your racer');
   root.innerHTML=`<aside class="g-menu" aria-label="Main menu"><div class="g-title-card"><p>CC LABS</p><div class="g-logo" aria-label="Racing Thoughts"><span>racing</span><b>thoughts</b></div><div class="g-title-rule" aria-hidden="true"></div></div>
+      <div class="g-courses" aria-label="Track"></div>
       <nav class="g-menu-options" aria-label="Race options"><button data-g="race" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V3m0 1c5-4 9 4 15 0v10c-6 4-10-4-15 0"/></svg><span><b>Race</b><small class="g-track"></small></span><i aria-hidden="true">↗</i></button><button data-g="online" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="7" r="3"/><path d="M2 20v-3a6 6 0 0 1 12 0v3m2-16a3 3 0 0 1 0 6m2 3c3 1 4 3 4 7"/></svg><span><b>Race online</b></span><i aria-hidden="true">›</i></button><button data-g="customize" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0c0 3-3 3-3 6l9 6v3H3v-3l9-6"/></svg><span><b>Customize EMI</b></span><i aria-hidden="true">›</i></button><button data-g="options" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v16m8-16v16m8-16v16M1 9h6m2 6h6m2-8h6"/></svg><span><b>Options</b></span><i aria-hidden="true">›</i></button><button data-g="controls" class="g-menu-row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10c4 0 7 13 3 13l-5-4H9l-5 4C0 20 3 7 7 7Z"/><path d="M6 10v5m-2-2h4m8-2h.01m3 3h.01"/></svg><span><b>Controls</b></span><i aria-hidden="true">›</i></button></nav></aside>
     <div class="g-selector"><h1></h1><div class="g-positions" aria-label="Kart selection"></div><p>Drag to turn · tap a kart to choose</p></div>
     <button class="g-nav previous" aria-label="Previous kart" data-g="previous"></button><button class="g-nav next" aria-label="Next kart" data-g="next"></button>
@@ -13,6 +15,8 @@ export function garageUi({change,select,customize,action,hover}) {
   document.body.append(root);
   const $=s=>root.querySelector(s);
   const make=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;$(parent).append(b);return b;};
+  for(const c of COURSES){const b=make('.g-courses',c.name,()=>changeTrack?.(c.id));b.dataset.course=c.id;b.setAttribute('aria-pressed',String(c.id===trackId));b.disabled=c.id===trackId;}
+  $('[data-g=online]').hidden=!online;
   for(const [id,label]of OUTFITS)make('.g-outfits',label,()=>change({outfit:id})).dataset.outfit=id;
   for(const p of PRESETS){const b=make('.g-palettes','',()=>change({...p,skin:p.name,original:false}));b.setAttribute('aria-label',p.name+' colors');b.dataset.palette=p.name;b.style.background=`linear-gradient(135deg,${p.primary} 50%,${p.secondary} 50%)`;}
   ['Plain','Stripes','Dots','Checks'].forEach((label,pattern)=>{const b=make('.g-patterns','',()=>change({pattern,original:false}));b.dataset.pattern=pattern;b.setAttribute('aria-label',label);});
@@ -38,6 +42,7 @@ export function garageUi({change,select,customize,action,hover}) {
       for(const el of root.querySelectorAll('[data-pattern]'))el.setAttribute('aria-pressed',String(Number(el.dataset.pattern)===s.pattern));
       for(const el of root.querySelectorAll('[data-kart]')){el.disabled=locked.has(el.dataset.kart);el.classList.toggle('locked',el.disabled);el.setAttribute('aria-pressed',String(el.dataset.kart===s.kart));el.setAttribute('aria-label',KARTS.find(k=>k[0]===el.dataset.kart)[1]+(el.disabled?', locked':''));}
       for(const el of root.querySelectorAll('[data-g=race],[data-g=online]'))el.disabled=busy;
+      for(const el of root.querySelectorAll('[data-course]'))el.disabled=busy||el.dataset.course===trackId;
       $('.g-announce').textContent=custom?'Customize EMI':KARTS.find(k=>k[0]===s.kart)[1]+' selected';
     },
     track(name,laps){$('.g-track').textContent=name+' · '+laps+' laps';},

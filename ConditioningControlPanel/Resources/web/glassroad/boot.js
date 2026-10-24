@@ -20,6 +20,7 @@
  */
 import { createBridge, songCharts, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
+import { createCardMedia } from './host/cardMedia.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
 import { createClock } from './core/clock.js';
@@ -28,6 +29,7 @@ import { clamp, v3, qrotate } from './core/math.js';
 import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
 import { createTouch } from './input/touch.js';
+import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN } from './sim/state.js';
 import { createRace } from './sim/race.js';
 import { createRacers } from './sim/racers.js';
@@ -36,6 +38,9 @@ import { createContact } from './sim/contact.js';
 import { createStandings } from './sim/standings.js';
 import { createItems } from './sim/items.js';
 import { loadTrack } from './track/load.js';
+import { selectTrack, allowsOnline, courseSongs } from './track/selection.js';
+import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
+import { createMainframeIndustry } from './sim/mainframeIndustry.js';
 import { createRenderer } from './render/renderer.js';
 import { buildWorld } from './render/world.js';
 import { loadArt } from './render/art.js';
@@ -64,8 +69,13 @@ import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading } from './hud/loading.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
+import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
+import { getKeepLayout } from './track/keep-layout.js';
+import { createKeepHazards } from './sim/keepHazards.js';
 
 const qs = new URLSearchParams(location.search);
+const course = selectedCourse(location.search);
+const TRACK_ID = course.id;
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
 // ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
 const DEV = devAllowed(location.search);
@@ -167,10 +177,12 @@ async function boot() {
   const hostEscape = createHostEscape();          // before the key listeners: its capture hears Escape first
   const init = await bridge.init;
   CHARTS = songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs });
+  // Mainframe has no recorded Drone song yet. A personally selected chart or audio file remains usable.
+  CHARTS = courseSongs(TRACK_ID, location.search, CHARTS);
   // the diegetic faces (render/fonts.js) load beside the feel: road markings and bubble text measure with them
   const [feel, trackJson] = await Promise.all([
     loadFeel(),
-    fetch(new URL('./tracks/threshold.json', import.meta.url), { cache: 'no-store' }).then((r) => {
+    fetch(new URL('./tracks/' + course.id + '.json', import.meta.url), { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error('track ' + r.status);
       return r.json();
     }),
@@ -183,6 +195,9 @@ async function boot() {
   if (qs.get('feel') === '1') openFeelSheet(feel, document.body);
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
+  debug.trackId = track.id;
+  const keepLayout = getKeepLayout(track);
+  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -192,6 +207,7 @@ async function boot() {
   const effects = createEffects(bus, feel, { gentle, photosafe });
   fx.state.screen = effects.screen;
   const audio = createAudio(feel, bus, { gentle });
+  for (const name of ['keep-gate-hit', 'keep-chain-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
   bus.on('effect-start', ({ kind }) => { if (!debug.effects.includes(kind)) debug.effects.push(kind); debug.effectNow = kind; });
@@ -213,7 +229,7 @@ async function boot() {
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
   showLoading('Bringing the racers in', 0.08);
   const art = qs.get('art') === '0' ? null
-    : await loadArt(renderer, { onProgress: (d, n) => showLoading('Bringing the racers in', 0.08 + 0.4 * d / n) });
+    : await loadArt(renderer, { trackId: track.id, onProgress: (d, n) => showLoading('Bringing the racers in', 0.08 + 0.4 * d / n) });
   showLoading('Setting the course', 0.5);
   await paintGap();
   if (art && art.failed.length) debug.artFailed = art.failed;
@@ -225,7 +241,15 @@ async function boot() {
   // and the Shadows option turns it on or off in applyOptions
   const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0',
     spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
-  const garage=await createGarage({art,renderer,canvas,track:trackName,laps,
+  // A visual review may keep the Loom faces without requesting or displaying private media.
+  const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
+  if (cardMedia) {
+    await cardMedia.ready;
+    window.addEventListener('pagehide', () => cardMedia.dispose(), { once: true });
+  }
+  Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
+  const garage=await createGarage({art,renderer,canvas,track:trackName,laps,trackId:track.id,online:course.online,
+    changeTrack:id=>{const url=courseUrl(location.href,id);if(url)location.assign(url);},
     action:name=>hud.menuAction(name),sound:name=>{audio.start();audio.cue(name);}});
   if(garage){hud.setGarageNav(garage.nav);debug.garage=garage;}
   // passing through a spiral gate plays that gate's own Loom over the view (photosafe, Gentle halves it)
@@ -245,6 +269,8 @@ async function boot() {
   // dev (?bot=1): the shot harness pokes at the world; not enumerable, so the status JSON stays small
   if (BOT) Object.defineProperty(debug, 'world', { value: world, enumerable: false });
   debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
+  debug.trackId = track.id;
+  if (hazards) Object.defineProperty(debug, 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
   debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   debug.terrace = world.terrace ? { count: world.terrace.count, ...world.terrace.diagnostics } : null;
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
@@ -253,18 +279,29 @@ async function boot() {
   const assist = createAssist(track, feel);       // the player's Steer assist (Options), never the bots'
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
-  let race, racers, ai, contact, standings, items, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let race, racers, ai, contact, standings, items, scan, industry, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   function buildRun(s = null) {
     const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
     race = createRace(track, feel, q);
     racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: COUNT, seed: sd });
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
+    if (hazards) {
+      const drive = ai.drive;
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing') hazards.steer(r, out); };
+      hazards.reset();
+    }
     contact = createContact(track, feel, q);
+    scan = createMainframeScan(track, q);
+    industry = createMainframeIndustry(track, q);
+    if (track.id === 'mainframe') {
+      const drive = ai.drive;
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing' || ctx.race.phase === 'finished') industry.steer(r, out); };
+    }
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
-    sctx = { ai, items, standings };
+    sctx = { ai, items, standings, hazards };
     aiCtx = { racers: racers.list, items, standings, race };
     kartViews = racers.list.map((r) => ({ st: r.view, meta: r.meta, fxv: r.fxv }));
     mapXz = new Float32Array(racers.list.length * 2);
@@ -338,9 +375,15 @@ async function boot() {
   applyOptions(opts);
   hud.on('option', ({ options }) => applyOptions(options || hud.options));
 
+  let glideHintLap = -1;
   function resetAll() {
+    glideHintLap = -1;
+    for (const r of racers.list) resetGlide(r.st);
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
+    scan.reset();
+    industry.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
+    if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
     const sec = P.st[S.sectionIdx];
@@ -434,12 +477,14 @@ async function boot() {
     if (online) endOnline();
     stopSong(); unpause(); resetAll();
     state = 'menu';
-    hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps });
+    hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps, online: course.online,
+      courses: COURSES.map(c => ({ name: c.name, selected: c.id === track.id, url: courseUrl(location.href, c.id) })) });
   }
 
   // ---- online (wave B2): lobby transport, the room session behind the lobby UI, the run per room --------------
   /** The lobby transport and identity: dev local lobby, desktop host relay, or a direct fetch on the web. */
   function lobbyLink() {
+    if (!course.online) return null;
     const dev = qs.get('lobby');
     if (dev && LOCAL_URL.test(dev) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
       const uid = qs.get('uid') || 'u_devpage1', name = qs.get('name') || uid;
@@ -467,6 +512,7 @@ async function boot() {
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
   /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
   async function connectRoom(join) {
+    if (!course.online) throw new Error('This course is for solo races');
     const s = createRoomSession({ track, feel, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
     const welcome = await s.connect(join, { lookNow: join.look });
     return {
@@ -631,7 +677,7 @@ async function boot() {
   toMenu();
   loading.finish();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
-  const linkTok = linkToken(location.search);
+  const linkTok = course.online ? linkToken(location.search) : null;
   if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }
   if (BOT && !link) botT = performance.now() + 2500;   // attract: a short look at the menu, then race (never with a lobby)
 
@@ -701,6 +747,11 @@ async function boot() {
       if (devHook && !online) devHook.apply(pa, clock.dt);         //    ?dev=1 only: a scripted drive holds the hands
       race.update(clock.dt, pa, P.st);
       racers.step(clock.dt, pa, race, sctx);
+      if (race.phase === 'racing' || race.phase === 'finished') {
+        const sc = scanClock(audio.music, racers.clockS);
+        scan.update(racers.list, sc.timeS, sc.bpm);
+        industry.update(racers.list, racers.clockS, clock.dt);
+      }
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
       items.update(clock.dt, racers.list, standings, race);       //    pickups, use, flights, hits, mods
@@ -742,14 +793,25 @@ async function boot() {
     const iv = items.view();
     // the song position the player hears (frozen while paused: the context is suspended)
     const music = audio.music, song = inRace && music ? music.song : null, songS = song ? music.songS : NaN;
+    const sc = scanClock(inRace ? music : null, racers.clockS);
+    if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     const pv = P.view;
     const wordLive = words && song ? words.update(songS,
       { s: pv[S.s], lat: pv[S.lateral], speedMps: Math.max(0, pv[S.speedPct]) * feel.get('speed.topMps') }) : NO_WORDS;
     if (words) wordCount.set(words.pops, words.total, words.streak);
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
+    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
+    if (track.id === 'keep' && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
+      const bridge = keepLayout.drawbridge;
+      if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
+        glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
+      }
+    }
+    if (BOT) debug.gliding = !!kartViews[0]?.glide;
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
-      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive });
+      raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive,
+      scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
       debug.song = { t: Math.round(songS * 100) / 100, section: m.sectionId, calm: +m.calm.toFixed(2), helix: +m.helix.toFixed(2),

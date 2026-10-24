@@ -36,6 +36,7 @@ import {
   budgetFor, burstCount, depthAlpha, burstEnvelope, makeRng, toHex, hexRgb,
 } from './spiralMath.js';
 import { GATE_LENS } from './atlas.js';
+import { createSpiralCloud } from './spiralCloud.js';
 
 const TAU = Math.PI * 2, GOLD_K = LOOM_GOLDEN_K;
 const LOOM = await loadLoom();
@@ -231,6 +232,8 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       const params = gateParams(g, LOOM, paletteFor(sec && sec.palette, spectrumMod, L));
       const gate = buildGate(g, frames[i], params, (i + 1) * 7919, L);
       gates.push(gate); group.add(gate.sprite);
+      gate.cloud = createSpiralCloud(track, frames[i].s, (i + 1) * 1717);
+      group.add(gate.cloud.object);
       if (gate.aura) group.add(gate.aura.mesh);
     } catch (e) { console.warn('[glassroad/spirals] gate ' + g.id + ' failed: ' + (e && e.message)); }
   });
@@ -254,8 +257,8 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
    * @param {number} dt seconds
    * @param {{ camera: Camera, karts?: Array<Vector3|number[]|Object3D>, player?: number, gentle?: boolean }} view
    */
-  function update(dt, { camera = null, karts = [], player = 0, gentle = false } = {}) {
-    if (!camera) return;
+  function update(dt, { camera = null, karts = [], player = 0, gentle = false, paused = false } = {}) {
+    if (!camera || paused) return;
     camera.updateMatrixWorld();
     pv.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(pv);
@@ -278,6 +281,8 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
       gate.sprite.visible = n > 0 && frustum.intersectsSphere(gate.sphere);
       gate.sprite.count = Math.min(gate.n, n);
       if (gate.aura) gate.aura.mesh.visible = gate.sprite.visible;
+      gate.cloud.object.visible = dist < L.activeM;
+      if (gate.cloud.object.visible) gate.cloud.update(dt, { gentle });
       if (!gate.sprite.visible || dist > L.activeM) continue;
       // the Loom phase: one seamless loop per loopMs2, slowed by Gentle
       gate.phaseT = (gate.phaseT + dt * turn) % (gate.loop * 1000);
@@ -317,7 +322,7 @@ export function createSpiralGates(scene, track, { layout = null, photosafe = nul
   }
 
   function dispose() {
-    for (const g of gates) { g.material.dispose(); if (g.aura) { g.aura.material.dispose(); g.aura.geo.dispose(); } }
+    for (const g of gates) { g.material.dispose(); g.cloud.dispose(); if (g.aura) { g.aura.material.dispose(); g.aura.geo.dispose(); } }
     burst.material.dispose();
     if (group.parent) group.parent.remove(group);
   }

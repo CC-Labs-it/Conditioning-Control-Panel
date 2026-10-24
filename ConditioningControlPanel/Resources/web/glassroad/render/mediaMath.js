@@ -16,7 +16,7 @@ export const MEDIA_DEFAULTS = Object.freeze({
   // WebGPU, measured), the redraw rates of real canvas and video sources, the shared upload cap per
   // frame, how far a slot still asks for redraws, tunnel spacing multiplier, halo count share
   tiers: Object.freeze({
-    high: Object.freeze({ canvasPx: 256, loomPx: 512, programs: 6, placeholderFps: 0, sourceFps: 10, videoFps: 24, maxUploads: 2, drawM: 900, tunnelStepMul: 1, haloShare: 1, phoneOnly: false }),
+    high: Object.freeze({ canvasPx: 256, loomPx: 512, programs: 6, placeholderFps: 0, sourceFps: 10, videoFps: 24, maxUploads: 3, drawM: 900, tunnelStepMul: 1, haloShare: 1, phoneOnly: false }),
     mid: Object.freeze({ canvasPx: 192, loomPx: 384, programs: 6, placeholderFps: 0, sourceFps: 8, videoFps: 20, maxUploads: 2, drawM: 700, tunnelStepMul: 1, haloShare: 1, phoneOnly: false }),
     phone: Object.freeze({ canvasPx: 128, loomPx: 256, programs: 4, placeholderFps: 0, sourceFps: 6, videoFps: 15, maxUploads: 1, drawM: 450, tunnelStepMul: 2, haloShare: 0.67, phoneOnly: true }),
   }),

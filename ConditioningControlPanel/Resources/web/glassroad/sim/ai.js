@@ -27,6 +27,7 @@ import { ITEMS } from './itemTable.js';
 import { bendSpeed, yawParams, calmOf } from './steer.js';
 import { createCourtPaths } from './court-paths.js';
 import { makeQuery } from '../track/query.js';
+import { stoneLaneSpan } from '../track/courts.js';
 
 const YP = {};                       // steering law numbers, read once per bot per tick
 
@@ -212,12 +213,13 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       const clearM = feelOr('stones.clearGapM', 4) + 0.5, v = feelOr('stones.minClearMps', 14);
       const entryM = Math.sqrt(2 * gap(feel, 'kart.snapM') / feelOr('hop.gravityMps2', 28)) * v;
       const safe = f.lanes.filter((lx) => {
-        const rows = (f.stones || []).filter((st) => st && Math.abs(st.x - lx) < 0.5 && Number.isFinite(st.s)).sort((a, b) => a.s - b.s);
+        const rows = (f.stones || []).filter((st) => st && !st.spin && Number.isFinite(st.s))
+          .map((st) => stoneLaneSpan(st, lx, st.shape === 'hex' ? 0.7 : 0)).filter(Boolean).sort((a, b) => a[0] - b[0]);
         if (!rows.length) return false;
-        if (rows[0].s - f.fromS > entryM) return false;
-        for (let i = 1; i < rows.length; i++) if (rows[i].s - (rows[i - 1].s + rows[i - 1].len) > clearM) return false;
-        const last = rows[rows.length - 1];
-        return f.toS - (last.s + last.len) <= clearM;
+        if (rows[0][0] - f.fromS > entryM) return false;
+        let end = rows[0][1];
+        for (let i = 1; i < rows.length; i++) { if (rows[i][0] - end > clearM) return false; end = Math.max(end, rows[i][1]); }
+        return f.toS - end <= clearM;
       }).map((x) => clamp(x, -hw + 1, hw - 1));
       return { field: f, fromS: f.fromS, toS: f.toS, lanes, centre, safe: safe.length ? safe : lanes };
     });

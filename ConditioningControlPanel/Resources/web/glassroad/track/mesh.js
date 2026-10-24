@@ -14,6 +14,7 @@
 import { makeFrame } from './frames.js';
 import { supportIntervals } from './courts.js';
 import { surfaceId } from './schema.js';
+import { bendCanalMesh } from './canal.js';
 
 // RAIL_H: 1.2 m since the EDGES lane (was 0.9: a railed edge read too like an open one); render/look.js railHeightM matches
 const COLS = 4, THICK_M = 0.25, RAIL_H = 1.2, RAIL_T = 0.08, DECAL_M = 0.02, LIP_M = 3, STRIP_STEP_M = 1;
@@ -72,6 +73,7 @@ function runs(Q, keep) {
 
 export function buildMeshes(track, dl) {
   const Q = dl.quads, L = track.lengthM;
+  const columns = track.canalProfile ? 18 : COLS;
   const courtHoles = (track.courts || []).flatMap((c) => c.holes);
   const row = (q) => q % Q;              // row index of the start of quad q (wrapped)
   const rowS = (q) => dl.s[row(q)] + Math.floor(q / Q) * L;
@@ -99,8 +101,8 @@ export function buildMeshes(track, dl) {
       const c = at(dl.c, r), n = at(dl.n, r), b = at(dl.b, r), h = dl.w[r] / 2, nn = neg(n);
       const sf = rowWater(r), fa = fw[0], fl = fw[1];
       const tr = [], br = [];
-      for (let i = 0; i <= COLS; i++) {
-        const x = -h + (2 * h * i) / COLS;
+      for (let i = 0; i <= columns; i++) {
+        const x = -h + (2 * h * i) / columns;
         tr.push(road.v(off(c, b, x, n, 0), n, x, v, sf, fa, fl));
         br.push(road.v(off(c, b, x, n, -THICK_M), nn, x, v, sf, fa, fl));
       }
@@ -113,7 +115,7 @@ export function buildMeshes(track, dl) {
       const s0 = rawS - offsetS, s1 = rowS(q0 + k + 1) - offsetS;
       const holes = courtHoles.filter((h) => h.s < s1 && h.s + h.len > s0);
       if (holes.length) courtStrip(road, track, s0, s1, holes, offsetS);
-      else for (let i = 0; i < COLS; i++) {
+      else for (let i = 0; i < columns; i++) {
         road.quad(top[k][i], top[k][i + 1], top[k + 1][i], top[k + 1][i + 1]);
         road.quad(bot[k][i], bot[k][i + 1], bot[k + 1][i], bot[k + 1][i + 1]);
       }
@@ -171,7 +173,8 @@ export function buildMeshes(track, dl) {
       track.frameAt(s0 + v, f);
       ids.push([-1, 1].map((sd) => {
         const x = x0 + (sd * w) / 2;
-        return m.v(off(f.p, f.b, x, f.n, DECAL_M), f.n, uCentre ? x - x0 : x, v);
+        const surface = track.surfaceAt ? track.surfaceAt(s0 + v, x) : null;
+        return m.v(surface ? off(surface.p, surface.b, 0, surface.n, DECAL_M) : off(f.p, f.b, x, f.n, DECAL_M), surface ? surface.n : f.n, uCentre ? x - x0 : x, v);
       }));
     }
     for (let k = 0; k < rowsN; k++) m.quad(ids[k][0], ids[k][1], ids[k + 1][0], ids[k + 1][1]);
@@ -185,7 +188,7 @@ export function buildMeshes(track, dl) {
   }
   const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
   const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField);
-  return { road: road.done(), rails: rails.done(), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
+  return { road: bendCanalMesh(road.done(), track), rails: bendCanalMesh(rails.done(), track), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
 }
 
 /** Split only affected road quads, at the exact collision bounds, on both visible faces. */

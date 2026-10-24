@@ -170,3 +170,20 @@ test('pool: thrust capped at poolThrustMul of top, an engine above the cap is dr
   assert.ok(hot[S.engineV] >= cap - 1e-6);
   assert.equal(rec.all('surface').length, 0, 'no surface change on a one-surface road');
 });
+
+test('stream hops and landings emit one spray cue each with the actual world contact', () => {
+  const feel = makeFeel(), tr = waterTrack({ stream: () => true, flow: [0, 0] }), rec = recorder();
+  const st = place(tr, { speed: 20 });
+  step(st, acts({ hopPressed: true }), tr, feel, DT, rec);
+  run(st, tr, feel, acts(), 2, rec, () => !!rec.first('splash'));
+  assert.equal(rec.all('water-hop').length, 1);
+  assert.equal(rec.all('splash').length, 1);
+  for (const name of ['water-hop', 'splash']) {
+    const p = rec.first(name).payload;
+    assert.equal(p.p.length, 3); assert.equal(p.normal.length, 3);
+    assert.ok(p.p.every(Number.isFinite));
+    const q = tr.query(...p.p, st[S.seg]);
+    near(q.height, 0, 0.001, 'event uses the actual contact plane');
+  }
+  assert.ok(rec.first('splash').payload.down > 0);
+});

@@ -2,12 +2,12 @@
  * mixes in by the `surface` attribute (3 stream, 4 pool; anything else is glass). No draw of its own: the
  * road is still one batch, this is a branch inside its shader.
  *
- * Procedural for now: two ripple fields scrolled with the `flow` attribute (direction and speed from the
+ * Two ripple fields scroll with the `flow` attribute (direction and speed from the
  * current; a still pool breathes at WATER_LOOK.baseScrollMps) make the normal; foam gathers toward the
  * rails and on a pool's edges; the body takes the section palette (pal.col, never a fixed colour), a faint
  * underglow from below, a soft specular from LOOK.sheenDir and a sky reflection on the fresnel.
- * Astra's masks later replace the fields: pass `fields = { slope(q) -> vec2, foam(q) -> float }` built on
- * textures sampled at the same scrolled coordinates and nothing else changes.
+ * The raised water volume supplies Astra's existing masks through `fields = { slope(q), foam(q) }`.
+ * Missing art uses the same procedural field coordinates and keeps the contact geometry intact.
  * Gentle: the scroll clock runs at half speed (the caller's uniform); nothing pulses.
  */
 import { float, vec2, vec3, sin, cos, mix, smoothstep, clamp, max, abs, dot, pow, normalize, length, select, reflect, attribute } from 'three/tsl';
@@ -40,7 +40,7 @@ function proceduralSlope(q) {
  * (seconds, Gentle slowed by the caller); skyRamp: pal.ramp wrapper for the reflection.
  * Returns { w, colour, alpha, foam, N }.
  */
-export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, skyRamp = null, fields = null, L = WATER_LOOK }) {
+export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, skyRamp = null, fields = null, deformation = null, L = WATER_LOOK }) {
   const w = waterWeight(surface);
   const pool = smoothstep(3.5, 4, surface);
   // scroll from the flow attribute (render/waterMath.js rippleScroll in numbers): along = v, lateral = u
@@ -53,15 +53,23 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
   };
   const qA = layer(0), qB = layer(1);
   const slopeOf = fields && fields.slope ? fields.slope : proceduralSlope;
-  const slope = slopeOf(qA).add(slopeOf(qB).mul(0.6)).mul(L.bump);
+  const smallSlope = slopeOf(qA).add(slopeOf(qB).mul(0.6)).mul(L.bump);
+  // Heightfield slopes are measured in lateral/along metres. They follow the same transported
+  // tangent frame as the displaced vertices, including banked turns and the curved canal walls.
+  const slope = deformation ? deformation.slope.add(smallSlope.mul(0.24)) : smallSlope;
   // the road normal tilted by the slope (u along the road's right, v along its tangent: both lie in the plane)
-  const N = normalize(N0.add(vec3(slope.x, 0, slope.y)));
+  const N = deformation ? normalize(N0.sub(deformation.B.mul(slope.x)).sub(deformation.T.mul(slope.y)))
+    : normalize(N0.add(vec3(slope.x, 0, slope.y)));
   // foam: toward the rails, more on a pool, a little toward the side a lateral current runs into
   const rail = float(1).sub(smoothstep(L.foamRailM[0], L.foamRailM[1], max(trueEdge, 0)));
   const sideFoam = clamp(flow.y.mul(p.x).sign().max(0).mul(abs(flow.y)).mul(L.foamLatMul), 0, 1);
   const crest = smoothstep(0.2, 0.9, slope.y.mul(2).add(0.5));
   const foamBase = fields && fields.foam ? fields.foam(qA) : crest;
-  const foam = clamp(rail.mul(pool.mul(L.poolFoamMul - 1).add(1)).add(sideFoam.mul(rail)), 0, 1).mul(foamBase.mul(0.6).add(0.4));
+  const bankFoam = clamp(rail.mul(pool.mul(L.poolFoamMul - 1).add(1)).add(sideFoam.mul(rail)), 0, 1).mul(foamBase.mul(0.6).add(0.4));
+  // The simulation supplies the trail footprint; the existing mask breaks its edge into small flecks.
+  // Thresholding keeps dilute residual foam from bleaching whole atlas cells into white patches.
+  const foam = deformation ? smoothstep(0.055, 0.24, deformation.foam)
+    .mul(foamBase.mul(0.65).add(0.35)).add(bankFoam.mul(0.12)).clamp(0,1) : bankFoam;
   // the body: the palette's deep colour under the surface, the bright one on the fresnel, an underglow from below
   const ndv = clamp(abs(dot(N, V)), 0, 1);
   const fres = pow(float(1).sub(ndv), 3);
@@ -73,7 +81,24 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
   const H = normalize(normalize(vec3(...LOOK.sheenDir)).add(V));
   const spec = pow(clamp(dot(N, H), 0, 1), L.specPow).mul(L.specGain);
   const white = vec3(1, 0.98, 0.99);
-  const colour = body.add(glow).add(sky.mul(fres)).add(white.mul(spec)).add(white.mul(foam.mul(L.foamGain)));
+  let colour = body.add(glow).add(sky.mul(fres)).add(white.mul(spec)).add(white.mul(foam.mul(L.foamGain)));
+  if (deformation) {
+    // A dark transmitted body gives the real wave slopes somewhere to reflect bright light.
+    // Two broad environment strips bend and split over the transported heightfield normal.
+    const slowCurrent = sin(qA.x.mul(0.28).add(sin(qB.y.mul(0.2))).add(qA.y.mul(0.12))).mul(0.5).add(0.5);
+    const elevation = (deformation.height || float(0)).mul(0.45).add(0.5).clamp(0,1);
+    const transmitted = pal.col(2).mul(0.23).add(vec3(0.008,0.025,0.035))
+      .mul(slowCurrent.mul(0.22).add(elevation.mul(0.25)).add(0.62));
+    const reflected = pal.col(0).mul(0.22).add(vec3(0.025,0.065,0.085));
+    const stripA = pow(float(1).sub(abs(R.y.sub(0.18)).mul(6.5)).max(0),3);
+    const stripB = pow(float(1).sub(abs(R.y.add(R.x.mul(0.18)).sub(0.58)).mul(10)).max(0),4);
+    const grazing = pow(float(1).sub(ndv),1.6);
+    const reflectedLight = stripA.mul(0.58).add(stripB.mul(0.34)).mul(grazing.mul(0.72).add(0.28));
+    const sharpSpec = pow(clamp(dot(N,H),0,1),90).mul(0.95);
+    colour = mix(transmitted,reflected,grazing.mul(0.74))
+      .add(vec3(0.72,0.9,1).mul(reflectedLight.add(sharpSpec)))
+      .add(white.mul(foam).mul(0.55));
+  }
   const alpha = clamp(float(L.alpha).add(foam.mul(0.1)).add(spec.mul(0.3)), 0, 1);
   return { w, colour, alpha, foam, N, pool };
 }

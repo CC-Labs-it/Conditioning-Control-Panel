@@ -87,7 +87,7 @@ export function step(state, actions, track, feel, dt, events) /* -> void; one fi
 // stones.kickUpMps along the road normal and takes off as 'lip' (the deck hands over to a void on the staggered
 // lanes; the road's own edges and court holes never kick). Over a lip void the kart stays "on its own road" while within kart.snapM of the deck (no fall probe, no hole
 // latch, no edge glow); below that band the hole-fall latch runs as today (drop cause 'hole', or the fall onto the road
-// beneath through sim/falls.js when the track offers one). Emits stone { id, s, x } when the kart lands on or first
+// beneath through sim/falls.js when the track offers one). Emits stone { id, field, s, x, p } when the kart lands on or first
 // drives onto a stone it was not on before (a hop that lands on the same stone is silent) and void { s, x } once per
 // flight when it first drops below that band over a void (before the drop or the fall).
 export function applyBoost(state, kind /* BOOST.* */, tier /* 1..3, 0 for PAD */, feel, events) /* emits boost-start */
@@ -278,7 +278,7 @@ Escape only pauses; the page never sends `exit` on Escape.
 | `surface` | `{ kind, from }` (ground surface kind changed: glass, grip, haze, stream, pool) | kart | fx (fov lift entering stream) |
 | `splash` | `{ s, x, speed, down }` (landing onto a pool, down = vertical m/s, positive down) | kart | fx (fov dip, white ring), audio |
 | `chute` | `{ s }` (first drive onto a stream node steeper than water.chuteGradeDeg) | kart | fx (fov lean, lip spray) |
-| `stone` | `{ id, s, x }` (wave 2 STONES: the kart lands on, or first drives onto, a stone it was not on before; a hop landing on the same stone is silent) | kart | fx (soft tick, 2 cm bob; the tick only on Gentle) |
+| `stone` | `{ id, field, s, x, p:[worldX,worldY,worldZ] }` (distinct grounded platform contact; same-platform hops are silent; player emits bare, bots use racer-event wrapper) | kart | platform highlight, landing sparkles and local ascending note; existing soft bob |
 | `void` | `{ s, x }` (once per flight: the kart first drops below the deck over a field's void, before the drop or the fall) | kart | fx (fov dip, short darkening) |
 
 ## 9. Frame loop (boot.js, every requestAnimationFrame)

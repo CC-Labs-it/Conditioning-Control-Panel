@@ -1,5 +1,7 @@
 /* Court apertures in track coordinates. s is the start of an opening, not its centre. */
 
+import { rotatingSpan, stonePolygon, STONE_HEX } from './stoneMotion.js';
+
 export function courtAt(courts, s) {
   return (courts || []).find((c) => s >= c.fromS && s < c.toS) || null;
 }
@@ -50,12 +52,41 @@ export function fieldAt(fields, s) {
   return null;
 }
 
-/** The stone under (s, x) in field f, or null. A positive margin shrinks every stone on all four sides. */
+/** Shared normalized (lateral, along) outline, with flat entry/exit faces. */
+export { STONE_HEX };
+
+/** Lateral half-width at s; margin is perpendicular clearance from every edge. */
+export function stoneHalfWidth(h, s, margin = 0) {
+  const along = Math.abs(s - h.s - h.len / 2);
+  if (along > h.len / 2 - margin) return -Infinity;
+  const k = h.shape === 'hex' ? h.w / (2 * h.len) : 0;
+  return h.w / 2 - k * along - margin * Math.hypot(1, k);
+}
+
+/** Supported along-road interval on a held lane, including angled hex shoulders. */
+export function stoneLaneSpan(h, x, margin = 0) {
+  if (h.spin) {
+    const span = rotatingSpan(h, x-h.x, true, margin);
+    return span && span.map(v => v+h.s+h.len/2);
+  }
+  const k = h.shape === 'hex' ? h.w / (2 * h.len) : 0;
+  const spare = h.w / 2 - Math.abs(x - h.x) - margin * Math.hypot(1, k);
+  if (spare < 0) return null;
+  const half = Math.min(h.len / 2 - margin, k ? spare / k : Infinity);
+  return half < 0 ? null : [h.s + h.len / 2 - half, h.s + h.len / 2 + half];
+}
+
+/** The stone under (s, x) in field f, or null. Positive margin shrinks its actual polygon. */
 export function stoneIn(f, s, x, margin = 0) {
   const st = f.stones;
   for (let i = 0; i < st.length; i++) {
     const h = st[i];
-    if (s >= h.s + margin && s <= h.s + h.len - margin && Math.abs(x - h.x) <= h.w / 2 - margin) return h;
+    if (h.spin) {
+      const span = rotatingSpan(h, s-h.s-h.len/2, false, margin);
+      if (span && x-h.x >= span[0] && x-h.x <= span[1]) return h;
+      continue;
+    }
+    if (Math.abs(x - h.x) <= stoneHalfWidth(h, s, margin)) return h;
   }
   return null;
 }
@@ -69,12 +100,24 @@ export function stoneAt(fields, s, x, margin = 0) {
 /** Distance from (s, x) to the nearest stone edge of field f (0 on a stone). */
 export function stoneDistance(f, s, x) {
   let best = Infinity;
-  for (let i = 0; i < f.stones.length; i++) best = Math.min(best, Math.max(0, holeDistance(f.stones[i], s, x)));
+  for (const h of f.stones) {
+    if (h.shape !== 'hex') { best = Math.min(best, Math.max(0, holeDistance(h, s, x))); continue; }
+    const span = h.spin ? rotatingSpan(h, s-h.s-h.len/2) : null;
+    if (h.spin ? span && x-h.x >= span[0] && x-h.x <= span[1] : Math.abs(x - h.x) <= stoneHalfWidth(h, s)) return 0;
+    const px = x - h.x, pz = s - h.s - h.len / 2;
+    const poly = stonePolygon(h);
+    for (let i = 0; i < 6; i++) {
+      const a = poly[i], b = poly[(i + 1) % 6];
+      const ax = a[0], az = a[1], dx = b[0]-a[0], dz = b[1]-a[1];
+      const u = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz)));
+      best = Math.min(best, Math.hypot(px - ax - u * dx, pz - az - u * dz));
+    }
+  }
   return best;
 }
 
 /**
- * Supported lateral intervals at s inside a field: the stones' [x - w/2, x + w/2] shrunk by margin, clipped to the
+ * Supported lateral intervals at s inside a field: each stone's actual cross-section shrunk by margin, clipped to the
  * road, sorted and merged. Outside every field it returns null: the road as usual (see supportIntervals).
  */
 export function fieldSupport(fields, s, halfWidth, margin = 0) {
@@ -82,8 +125,13 @@ export function fieldSupport(fields, s, halfWidth, margin = 0) {
   if (!f) return null;
   const lo = -halfWidth + margin, hi = halfWidth - margin, cuts = [];
   for (const h of f.stones) {
-    if (s < h.s + margin || s > h.s + h.len - margin) continue;
-    const a = Math.max(lo, h.x - h.w / 2 + margin), b = Math.min(hi, h.x + h.w / 2 - margin);
+    if (h.spin) {
+      const span = rotatingSpan(h, s-h.s-h.len/2, false, margin);
+      if (span) { const a=Math.max(lo,h.x+span[0]), b=Math.min(hi,h.x+span[1]); if(b>a) cuts.push([a,b]); }
+      continue;
+    }
+    const hw = stoneHalfWidth(h, s, margin);
+    const a = Math.max(lo, h.x - hw), b = Math.min(hi, h.x + hw);
     if (b > a) cuts.push([a, b]);
   }
   cuts.sort((a, b) => a[0] - b[0]);
@@ -105,9 +153,11 @@ export function buildFields(rows, nodeS, frameAt) {
     Object.defineProperty(out, 'void', { value: { id: c.id + ':void', field: out, lip: true }, enumerable: false });
     for (const h of out.stones) {
       if (h.s < out.fromS - 1e-6 || h.s + h.len > out.toS + 1e-6) throw new Error('field ' + c.id + ' stone ' + h.id + ' extends outside its field');
+      const radius = h.spin ? Math.max(h.w/2,Math.hypot(h.w/4,h.len/2)) : 0;
+      if (h.spin && (h.s+h.len/2-radius < out.fromS || h.s+h.len/2+radius > out.toS)) throw new Error('rotating stone leaves its field');
       for (let k = 0, n = Math.max(1, Math.ceil(h.len)); k <= n; k++) {
         const f = frameAt(h.s + h.len * k / n);
-        if (Math.abs(h.x) + h.w / 2 > f.w / 2 || f.flags.includes('jump') || f.flags.includes('magnet'))
+        if (Math.abs(h.x) + (h.spin ? radius : h.w / 2) > f.w / 2 || f.flags.includes('jump') || f.flags.includes('magnet'))
           throw new Error('field ' + c.id + ' stone ' + h.id + ' needs an interior road footprint');
       }
     }

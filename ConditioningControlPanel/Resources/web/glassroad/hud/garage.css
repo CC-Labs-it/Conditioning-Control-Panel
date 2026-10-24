@@ -62,3 +62,6 @@
 /* Keep the carousel behind menu cards and fade each overlay without a scene cut. */
 #race-garage{animation:g-soft-arrive .4s ease both}.g-menu{animation:none}
 #card:not([data-kind=menu]){animation:g-soft-arrive .35s ease both}
+/* Course choices belong to the same menu as Race and the carousel controls. */
+.g-menu{max-height:calc(100dvh - 40px);overflow:auto}.g-courses{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;margin:0 11px 12px}#race-garage .g-courses button{min-width:0;min-height:30px;padding:5px 6px;border:2px solid #10101b;border-radius:7px;background:#245867;font-size:11px}#race-garage .g-courses button[aria-pressed=true]{opacity:1;background:#ffce62;color:#281b26;box-shadow:inset 0 -2px #d29c35}
+@media(max-width:699px){.g-courses{margin:9px 9px 0}.g-selector{bottom:calc(302px + env(safe-area-inset-bottom))}}

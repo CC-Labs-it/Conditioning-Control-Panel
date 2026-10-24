@@ -21,10 +21,27 @@ Shift or Space hop and drift (hold through a turn, let go for the boost), E item
 to drop it behind as a trap), Escape pause. A standard gamepad works too (left stick, RT, LT, A, X item,
 stick down + X drops, Start; the d-pad, A and B work the cards). Touch: tap the round item slot.
 
+The garage offers The Keep beside Threshold. Open `?track=keep` for its 4.3 km ruined prison circuit:
+two laps, seven bots, a 1.5-turn tower climb, barred cell galleries, courtyards and exposed ramparts.
+Four swinging chains and six timed portcullises guard the halls. A half-raised drawbridge launches over a
+real 20 m gap to a wide lower landing, followed by a short three-lane crossing of 5 x 5 m stones.
+Both crossings work on ordinary throttle. Selected broken guardrails allow real falls and rescue.
+The slate and magenta castle stands against overcast skies, layered cliffs and distant ruined towers.
+46 mounted panels alternate moving media and Loom spirals (28 on phone quality).
+The warning footprint brightens before a gate lowers. Pause freezes the traps; restart resets their cycle.
+Local moving media needs the configured preview source and a real Race click. The plain dev server supplies placeholders.
+Keep currently supports solo racing only. Online admission still uses Threshold's server track card.
+
+Validation (2026-10-24): 961 game tests pass, including three complete eight-racer simulations, crossing
+trajectories from four approach speeds, and constructed geometry clearance over roads and voids.
+Chrome completed both laps with no falls or runtime errors. Firefox verified art loading, pause, restart
+and all 23 selected media faces. Mounted screens are checked against bars and roof ribs, then viewed in-game.
+
 ## Url flags
 
 | Flag | What it does |
 |---|---|
+| `?track=threshold` / `?track=keep` | choose the course (also available in the garage) |
 | `?feel=1` | live feel sheet: every `feel.json` number, edits apply next tick, kept in this browser, Copy JSON to paste back |
 | `?renderer=webgl2` | force the WebGL2 backend (`webgpu` forces WebGPU; default picks WebGPU and falls back) |
 | `?quality=high\|mid\|phone` | pin the starting quality tier (the governor only steps down from it, then back up) |
