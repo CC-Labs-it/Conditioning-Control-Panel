@@ -36,7 +36,7 @@ All commands used SDK 10.0.100 and Release configuration; tests used `DiffEngine
 | `dotnet test Tests/CCP.Core.Tests -c Release --no-build` | 0 | 3981 passed, 5 skipped, 0 failed |
 | Focused Core rule/availability tests | 0 | 28 passed |
 | Temporarily restore the old two-character minimum; run `NeedsDisplayNameRuleTests` | 1 (expected) | 2 failed, 21 passed; production minimum restored to 3, focused suite passed again |
-| `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter 'FullyQualifiedName~RequiredDisplayNameTests|FullyQualifiedName~LoginDeviceCodeTests|FullyQualifiedName~PanicSurfacesTests'` | 1 | Final combined run: 10 font-creation failures, 5 passed; no assertion failures |
+| `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter 'FullyQualifiedName~RequiredDisplayNameTests\|FullyQualifiedName~LoginDeviceCodeTests\|FullyQualifiedName~PanicSurfacesTests'` | 1 | Final combined run: 10 font-creation failures, 5 passed; no assertion failures |
 | `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter 'FullyQualifiedName~RequiredDisplayNameTests\|FullyQualifiedName~PanicSurfacesTests'` | 0 | 12 passed, 0 failed |
 | `git diff --cached --check` | 0 | No whitespace errors |
 
