@@ -104,6 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // The rail's setup pass. Here, not in OnAttachedToVisualTree: a Window IS the visual
             // root, so that override never fires on it and the rail never opened.
             InitializeNavRail();
+            InitializeChromeFx(); // WPF chrome message cue lifecycle
             InitFavoritesRail(); // MainShellWindow.FavoritesRail.cs (WPF MainWindow.xaml.cs:3501)
             ApplyEnableDeeper(); // MainShellWindow.DeeperTab.cs (WPF LoadSettings: rail door follows EnableDeeper)
             InitializeTabHistoryInput(); // MainShellWindow.TabHistory.cs (WPF MainWindow ctor)
@@ -148,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             App.CatalogueLookup.SetOpener(OpenCatalogueEnhancement);
             Closed += (_, _) =>
             {
+                StopLockdownPulse();
                 App.CatalogueLookup.ClearOpener(OpenCatalogueEnhancement);
                 if (Platform.X11PanicKey.PushToTalk == OnPushToTalkKey)
                     Platform.X11PanicKey.PushToTalk = null;

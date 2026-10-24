@@ -43,6 +43,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         private const double TeaseBorderThickness = 2;
         private const double ContentClipRadius = 11;
 
+        // WPF gesture flags; ponytail: visual dashboard depth remains the card's separate parity lane.
+        public static readonly StyledProperty<bool> DashboardDepthProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(DashboardDepth));
+        public bool DashboardDepth { get => GetValue(DashboardDepthProperty); set => SetValue(DashboardDepthProperty, value); }
+        public static readonly StyledProperty<bool> DimWhenInactiveProperty =
+            AvaloniaProperty.Register<FeatureCard, bool>(nameof(DimWhenInactive));
+        public bool DimWhenInactive { get => GetValue(DimWhenInactiveProperty); set => SetValue(DimWhenInactiveProperty, value); }
+
         public static readonly StyledProperty<string> TitleProperty =
             AvaloniaProperty.Register<FeatureCard, string>(nameof(Title), "Feature");
         public static readonly StyledProperty<IImageBrushSource?> IconProperty =
@@ -83,7 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public int TeaseTier { get => GetValue(TeaseTierProperty); set => SetValue(TeaseTierProperty, value); }
 
         public event EventHandler<RoutedEventArgs> Click { add => AddHandler(ClickEvent, value); remove => RemoveHandler(ClickEvent, value); }
-        /// <summary>Raised on right-click so the dashboard can quick-toggle the feature without opening its popup.</summary>
+        /// <summary>Raised by the toggle gesture (right-click by default; inverted on dashboard toggle tiles).</summary>
         public event EventHandler<RoutedEventArgs> ToggleRequested { add => AddHandler(ToggleRequestedEvent, value); remove => RemoveHandler(ToggleRequestedEvent, value); }
 
         private readonly Border _rootBorder, _imgIconHost, _glyphHost, _rimLight, _activeBorder, _lockedOverlay, _tierBadgeHost;
@@ -353,17 +361,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // the "?" without also opening the feature popup.
             if (e.Source is Visual src && (src == _btnHelp || _btnHelp.IsVisualAncestorOf(src))) return;
 
-            if (e.InitialPressMouseButton == MouseButton.Left)
-            {
-                RaiseEvent(new RoutedEventArgs(ClickEvent, this));
-            }
-            else if (e.InitialPressMouseButton == MouseButton.Right)
-            {
-                // Right-click is a quick on/off shortcut. A locked feature can't be toggled on.
-                if (IsLocked) return;
-                e.Handled = true;
-                RaiseEvent(new RoutedEventArgs(ToggleRequestedEvent, this));
-            }
+            if (e.InitialPressMouseButton is not (MouseButton.Left or MouseButton.Right)) return;
+            bool right = e.InitialPressMouseButton == MouseButton.Right;
+            bool toggle = DashboardClickRule.ShouldToggle(right, CoreSettings.Current.DashboardInvertClicks,
+                DashboardDepth, DimWhenInactive);
+            if (toggle && IsLocked) return;
+            if (right || toggle) e.Handled = true;
+            RaiseEvent(new RoutedEventArgs(toggle ? ToggleRequestedEvent : ClickEvent, this));
         }
     }
 }
