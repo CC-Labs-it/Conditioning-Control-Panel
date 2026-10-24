@@ -4,7 +4,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { validate } from '../track/schema.js';
 import { loadTrack } from '../track/load.js';
 import { KEEP_PIECES, keepPieceLength, keepSegmentCount, walkKeep, getKeepLayout } from '../track/keep-layout.js';
-const smooth = (u) => u * u * (3 - 2 * u), round = (x) => +x.toFixed(3), RAD = Math.PI / 180;
+const smooth = (u) => u * u * (3 - 2 * u), round = (x) => +x.toFixed(3) || 0, RAD = Math.PI / 180;
 export function buildKeep() {
   const plan = walkKeep(KEEP_PIECES), nodes = [], starts = [];
   if (Math.hypot(plan.x, plan.z) > 1e-7) throw Error('Keep does not close');
@@ -21,8 +21,8 @@ export function buildKeep() {
         z = st.z + sign * p.r * (Math.cos(st.heading) - Math.cos(h));
       }
       const bank = p.turn ? Math.sign(p.turn) * 12 * Math.min(1, d / 25, (len - d) / 25) : 0;
-      nodes.push({ p: [round(x), round(y0 + (p.y - y0) * smooth(u)), round(z)],
-        roll: round(bank), w: p.w, flags: nodes.length ? ['rail'] : ['start', 'rail'], speed: 1, surface: 'glass' });
+      nodes.push({ p: [round(x), round(y0 + (p.y - y0) * (p.linear ? u : smooth(u))), round(z)],
+        roll: round(bank), w: p.widenTo ? round(p.w + (p.widenTo - p.w) * smooth(Math.max(0, Math.min(1, (d - 10) / 35)))) : p.w, flags: nodes.length ? ['rail'] : ['start', 'rail'], speed: 1, surface: p.surface || 'glass', ...(p.flow ? { flow: p.flow } : {}) });
     }
     y0 = p.y;
   });
@@ -32,22 +32,22 @@ export function buildKeep() {
   };
   const section = (id, from, to, act, bandSpeed) => ({ id, from, to, act, palette: 'deep', sky: 'spiral-deep', bandSpeed });
   const items = [], boosts = [];
-  for (const [id, u] of [['forecourt', .55], ['crown-walk', .45], ['west-approach', .45], ['home', .35]])
+  for (const [id, u] of [['forecourt', .55], ['tower-bridge', .45], ['crown-walk', .45], ['west-approach', .45], ['moat-bridge', .45], ['home', .35]])
     for (const x of [-6, -2, 2, 6]) items.push({ node: node(id, u), x, kind: 'box' });
-  for (const [id, x] of [['east-ascent', 3], ['north-tower', 3], ['west-tower', 3]])
+  for (const [id, x] of [['east-ascent', 3], ['tower-spiral', -3], ['north-tower', 3], ['west-tower', 3]])
     for (let k = 0; k < 5; k++) items.push({ node: node(id, .35), x, kind: 'bubble', ds: k * 3 });
   for (const id of ['outer-exit', 'crown-walk', 'home']) {
     const n = node(id, .5); nodes[n].flags.push('boost'); boosts.push({ node: n, x: 0, w: 4, len: 6 });
   }
   const track = {
     format: 'glassroad-track', version: 1, id: 'keep', name: { en: 'The Keep' }, author: 'ccl', created: '2026-10-24',
-    loop: true, laps: 3, units: 'm', nodes,
+    loop: true, laps: 2, units: 'm', nodes,
     sections: [
-      section('outer-bailey', 0, node('high-gate'), 'induction', .55),
-      section('crown-ramparts', node('high-gate'), node('dogleg-in'), 'deepening', .75),
+      section('outer-bailey', 0, node('tower-spiral'), 'induction', .55),
+      section('crown-ramparts', node('tower-spiral'), node('dogleg-in'), 'deepening', .75),
       section('moat-descent', node('dogleg-in'), nodes.length, 'release', .6),
     ],
-    checkpoints: [0, node('east-ascent'), node('north-tower'), node('west-descent'), node('west-tower')],
+    checkpoints: [0, node('east-ascent'), node('tower-spiral', .45), node('tower-bridge'), node('north-tower'), node('west-descent'), node('moat-bridge'), node('south-tower')],
     spawn: { node: 0, grid: [[-4, -5], [4, -9], [-4, -13], [4, -17], [-4, -21], [4, -25], [-4, -29], [4, -33]] },
     items, boosts, jumps: [], routes: [], courts: [], fields: [], hazards: [], media: [],
     ai: { lines: [], pace: [1, 1.05, 1.1] }, beat: { bpm: null, offsetMs: 0, map: [] },
@@ -60,7 +60,7 @@ export function buildKeep() {
 export function formatKeep(track) {
   const lines = ['{'];
   for (const [key, value] of Object.entries(track)) {
-    if (key === 'nodes') lines.push('  "nodes": [', ...value.map((n, i) => '    ' + JSON.stringify(n) + (i + 1 < value.length ? ',' : '')), '  ],');
+    if (key === 'nodes') lines.push('  "nodes": [', ...Array.from({ length: Math.ceil(value.length / 2) }, (_, i) => '    ' + value.slice(i * 2, i * 2 + 2).map(JSON.stringify).join(',') + (i * 2 + 2 < value.length ? ',' : '')), '  ],');
     else lines.push('  ' + JSON.stringify(key) + ': ' + JSON.stringify(value) + ',');
   }
   lines[lines.length - 1] = lines.at(-1).slice(0, -1);
@@ -72,4 +72,3 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (!process.argv.includes('--check')) writeFileSync(out, formatKeep(json));
   console.log(JSON.stringify({ nodes: track.nodeCount, lengthM: track.lengthM, ...layout }, null, 2));
 }
-
