@@ -2,8 +2,6 @@ using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using Avalonia;
-using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -12,15 +10,14 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+// Shared dispatcher/settings snapshots must remain exclusive across async lifecycle turns.
+[Collection(RunsAloneCollection.Name)]
 public sealed class ShellMemoryTests(ITestOutputHelper output)
 {
     [Fact]
     public Task ClosedShellsReleaseMemory() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         CoreSettings.Current.Welcomed = true;
         CoreSettings.Current.HasAcceptedAgeVerification = true;
         CoreSettings.Current.AvatarEnabled = false;
@@ -28,17 +25,8 @@ public sealed class ShellMemoryTests(ITestOutputHelper output)
         for (var i = 0; i < windows.Length; i++)
         {
             windows[i] = OpenAndClose();
-            await Task.Yield();
-            // Finalizers/compositor disposal can queue another dispatcher callback.
-            // Drain those as well; no real-time sleeps or RSS thresholds.
-            for (var pass = 0; pass < 3; pass++)
-            {
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-            }
-            GC.Collect();
+            await LifecycleTestPump.UntilAsync(() => !windows[i].IsAlive,
+                "A closed shell is still rooted.", collect: true);
             using var process = Process.GetCurrentProcess();
             output.WriteLine($"iteration {i}: rss={process.WorkingSet64 / 1048576} MiB managed={GC.GetTotalMemory(false) / 1048576} MiB alive={Array.FindAll(windows, w => w?.IsAlive == true).Length}");
         }
@@ -49,22 +37,11 @@ public sealed class ShellMemoryTests(ITestOutputHelper output)
     [Fact]
     public Task AnAmbientLoopDoesNotKeepItsClosedWindow() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        // Own platform setup (P45): as the first test of a shard it otherwise has no IWindowingPlatform.
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         // Ticking, and parked: a loop that starts on a hidden owner (a breath on a hidden tab).
         var windows = new[] { OpenLoopAndClose(parked: false), OpenLoopAndClose(parked: true) };
-        await Task.Yield();
-        for (var pass = 0; pass < 3; pass++)
-        {
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-            Dispatcher.UIThread.RunJobs();
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-        }
-        GC.Collect();
+        await LifecycleTestPump.UntilAsync(() => Array.TrueForAll(windows, w => !w.IsAlive),
+            "A closed ambient-loop window is still rooted.", collect: true);
         Assert.False(windows[0].IsAlive, "A closed window with a BeatLoop is still rooted (frame clock / BeatLoop.Live).");
         Assert.False(windows[1].IsAlive, "A closed window with a parked BeatLoop is still rooted (BeatLoop.Live).");
     });

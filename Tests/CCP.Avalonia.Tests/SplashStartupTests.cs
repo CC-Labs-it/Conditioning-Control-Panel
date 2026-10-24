@@ -15,15 +15,11 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF App.xaml.cs:1949-3867 + Windows/SplashScreen.xaml.cs: the splash comes up first, each
 /// startup step paints its status before the next runs, then the shell shows and the splash fades.</summary>
+// Shared dispatcher/settings snapshots must remain exclusive across async lifecycle turns.
+[Collection(RunsAloneCollection.Name)]
 public sealed class SplashStartupTests
 {
-    private static void Setup()
-    {
-        if (Application.Current is null)
-            AppBuilder.Configure<App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
-    }
+    private static void Setup() => AmbientBeatLoopsTests.Setup();
 
     private static double Bar(SplashScreen s) =>
         ((ScaleTransform)s.FindControl<Border>("ProgressFill")!.RenderTransform!).ScaleX;
@@ -43,8 +39,14 @@ public sealed class SplashStartupTests
             {
                 ran.Add("settings");
                 await step(0.2, "Loading settings...");
+                Assert.Equal("Loading settings...", Status(splash));
+                Assert.False(shell.IsVisible);
                 ran.Add("audio");
-                await step(0.6, "Initializing audio...");
+                var audioFrame = step(0.6, "Initializing audio...");
+                Assert.Equal(0.6, Bar(splash), 3); // before the live creep timer can advance it
+                await audioFrame;
+                Assert.Equal("Initializing audio...", Status(splash));
+                Assert.False(shell.IsVisible);
                 ran.Add("shell built");
             }, () => shell);
 
@@ -54,22 +56,14 @@ public sealed class SplashStartupTests
             Assert.Equal(0.2, Bar(splash), 3);   // jumped to WPF's value, not left creeping
             Assert.False(shell.IsVisible);
 
-            for (int i = 0; i < 10 && !start.IsCompleted; i++)
-            {
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
-                Dispatcher.UIThread.RunJobs();
-            }
+            await LifecycleTestPump.UntilAsync(() => start.IsCompleted, "Startup did not complete.");
             await start;
             Assert.Equal(new[] { "settings", "audio", "shell built" }, ran);
             Assert.True(shell.IsVisible);
             Assert.Equal("Ready!", Status(splash));
             Assert.False(splash.Topmost);   // dropped first so the shell is not hidden under the fade
 
-            for (int i = 0; i < 120 && splash.IsVisible; i++)
-            {
-                AvaloniaHeadlessPlatform.ForceRenderTimerTick(16);
-                Dispatcher.UIThread.RunJobs();
-            }
+            await LifecycleTestPump.UntilAsync(() => !splash.IsVisible, "The splash fade did not close its window.");
             Assert.False(splash.IsVisible);
         }
         finally { splash.CloseImmediate(); shell.Close(); Dispatcher.UIThread.RunJobs(); }

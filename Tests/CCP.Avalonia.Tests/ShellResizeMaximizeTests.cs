@@ -14,6 +14,8 @@ namespace CCP.Avalonia.Tests;
 /// <summary>User bug: "can't scale it by dragging the sides; no resize arrow; full screen looks very
 /// bad". WPF: WindowChrome ResizeBorderThickness=5 (MainWindow.xaml:33) and a Viewbox over the
 /// 1585x901 DesignCanvas (MainWindow.xaml:282).</summary>
+// Shared dispatcher/settings snapshots must remain exclusive across async lifecycle turns.
+[Collection(RunsAloneCollection.Name)]
 public sealed class ShellResizeMaximizeTests
 {
     [Theory]
@@ -44,10 +46,7 @@ public sealed class ShellResizeMaximizeTests
 
     private static MainShellWindow Open()
     {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
-                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
-                .SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
         var w = new MainShellWindow();
         w.Show();
         w.MinWidth = w.MinHeight = 0;
@@ -67,45 +66,54 @@ public sealed class ShellResizeMaximizeTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var w = Open();
-            var box = w.Named<Viewbox>("ShellViewbox")!;
+            try
+            {
+                var box = w.Named<Viewbox>("ShellViewbox")!;
 
-            // 16:9-ish: WPF's Fill, canvas covers the window.
-            w.Width = 1600; w.Height = 910;
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(Stretch.Fill, box.Stretch);
-            var (tl, br) = CanvasRect(w);
-            Assert.Equal(0, tl.X, 0); Assert.Equal(0, tl.Y, 0);
-            Assert.Equal(1600, br.X, 0); Assert.Equal(910, br.Y, 0);
+                // 16:9-ish: WPF's Fill, canvas covers the window.
+                w.Width = 1600; w.Height = 910;
+                w.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
+                Assert.Equal(Stretch.Fill, box.Stretch);
+                var (tl, br) = CanvasRect(w);
+                Assert.Equal(0, tl.X, 0); Assert.Equal(0, tl.Y, 0);
+                Assert.Equal(1600, br.X, 0); Assert.Equal(910, br.Y, 0);
 
-            // Portrait: Uniform, true aspect, full width, top-aligned, band below.
-            w.Width = 1113; w.Height = 1979;
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(Stretch.Uniform, box.Stretch);
-            (tl, br) = CanvasRect(w);
-            Assert.Equal((br.X - tl.X) / 1585, (br.Y - tl.Y) / 901, 3);
-            Assert.Equal(0, tl.X, 0); Assert.Equal(1113, br.X, 0);
-            Assert.Equal(0, tl.Y, 0);
-            Assert.True(br.Y < 1000, "no band under a Uniform portrait canvas");
+                // Portrait: Uniform, true aspect, full width, top-aligned, band below.
+                w.Width = 1113; w.Height = 1979;
+                w.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
+                Assert.Equal(Stretch.Uniform, box.Stretch);
+                (tl, br) = CanvasRect(w);
+                Assert.Equal((br.X - tl.X) / 1585, (br.Y - tl.Y) / 901, 3);
+                Assert.Equal(0, tl.X, 0); Assert.Equal(1113, br.X, 0);
+                Assert.Equal(0, tl.Y, 0);
+                Assert.True(br.Y < 1000, "no band under a Uniform portrait canvas");
 
-            // The edge bands sit on the WINDOW edge, not the canvas edge: the bottom edge is in the band.
-            w.MouseDown(new Point(500, 1977), MouseButton.Left);
-            w.MouseUp(new Point(500, 1977), MouseButton.Left);
-            Assert.Equal(WindowEdge.South, w.LastResizeEdge);
-            w.MouseDown(new Point(500, br.Y - 1), MouseButton.Left);   // the canvas's bottom is NOT an edge
-            w.MouseUp(new Point(500, br.Y - 1), MouseButton.Left);
-            w.MouseDown(new Point(1111, 1500), MouseButton.Left);
-            w.MouseUp(new Point(1111, 1500), MouseButton.Left);
-            Assert.Equal(WindowEdge.East, w.LastResizeEdge);
+                // The edge bands sit on the WINDOW edge, not the canvas edge: the bottom edge is in the band.
+                w.MouseDown(new Point(500, 1977), MouseButton.Left);
+                w.MouseUp(new Point(500, 1977), MouseButton.Left);
+                Assert.Equal(WindowEdge.South, w.LastResizeEdge);
+                w.MouseDown(new Point(500, br.Y - 1), MouseButton.Left);   // the canvas's bottom is NOT an edge
+                w.MouseUp(new Point(500, br.Y - 1), MouseButton.Left);
+                w.MouseDown(new Point(1111, 1500), MouseButton.Left);
+                w.MouseUp(new Point(1111, 1500), MouseButton.Left);
+                Assert.Equal(WindowEdge.East, w.LastResizeEdge);
 
-            // Maximized: no resize edges at all.
-            w.WindowState = WindowState.Maximized;
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(WindowState.Maximized, w.WindowState);
-            var edge = w.Bounds.Size;
-            w.MouseDown(new Point(2, edge.Height / 2), MouseButton.Left);
-            w.MouseUp(new Point(2, edge.Height / 2), MouseButton.Left);
-            Assert.Equal(WindowEdge.East, w.LastResizeEdge);   // unchanged: the West press did not resize
-            w.Close();
+                // Maximized: no resize edges at all.
+                w.WindowState = WindowState.Maximized;
+                w.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
+                Assert.Equal(WindowState.Maximized, w.WindowState);
+                var edge = w.Bounds.Size;
+                w.MouseDown(new Point(2, edge.Height / 2), MouseButton.Left);
+                w.MouseUp(new Point(2, edge.Height / 2), MouseButton.Left);
+                Assert.Equal(WindowEdge.East, w.LastResizeEdge);   // unchanged: the West press did not resize
+            }
+            finally { w.Close(); Dispatcher.UIThread.RunJobs(); }
             return Task.CompletedTask;
         });
     }
@@ -116,13 +124,16 @@ public sealed class ShellResizeMaximizeTests
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
             var w = Open();                  // design floors captured on open: 1131 x 620
-            w.RelaxSizeFloorsTo(1113, 560);
-            Assert.Equal(1113, w.MinWidth);
-            Assert.Equal(560, w.MinHeight);
-            w.RelaxSizeFloorsTo(3000, 3000);  // a bigger screen: back to the design floors, never above
-            Assert.Equal(1131, w.MinWidth);
-            Assert.Equal(620, w.MinHeight);
-            w.Close();
+            try
+            {
+                w.RelaxSizeFloorsTo(1113, 560);
+                Assert.Equal(1113, w.MinWidth);
+                Assert.Equal(560, w.MinHeight);
+                w.RelaxSizeFloorsTo(3000, 3000);  // a bigger screen: back to the design floors, never above
+                Assert.Equal(1131, w.MinWidth);
+                Assert.Equal(620, w.MinHeight);
+            }
+            finally { w.Close(); Dispatcher.UIThread.RunJobs(); }
             return Task.CompletedTask;
         });
     }
