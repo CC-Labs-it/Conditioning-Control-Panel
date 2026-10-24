@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 
@@ -15,7 +16,7 @@ public partial class EnhancementPlayerWindow
     private readonly HashSet<Key> _heldKeys = new();
     private int? _volumeBeforeMute;
     private bool _muteChanging;
-    private DispatcherTimer? _escHoldTimer;
+    private BeatLoop? _escHoldTimer;   // WPF: 50 ms DispatcherTimer; here the shared beat (elapsed-time logic unchanged)
     private DateTime _escHoldStart, _lastEscSignal;
     private bool _escConsumed;
 
@@ -112,8 +113,7 @@ public partial class EnhancementPlayerWindow
         _escConsumed = false;
         if (IsUnderStrictLock() || !IsSessionActive()) return;
         _escHoldStart = DateTime.UtcNow;
-        _escHoldTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-        _escHoldTimer.Tick += EscHoldTimer_Tick;
+        _escHoldTimer = new BeatLoop(this, t => { if (t > 0) EscHoldTimer_Tick(null, EventArgs.Empty); });
         _escHoldTimer.Start();
         ShowHoldEscHint(0);
     }
@@ -143,9 +143,9 @@ public partial class EnhancementPlayerWindow
     {
         if (_escHoldTimer != null)
         {
-            _escHoldTimer.Stop();
-            _escHoldTimer.Tick -= EscHoldTimer_Tick;
+            var loop = _escHoldTimer;
             _escHoldTimer = null;
+            loop.Stop();
         }
         this.FindControl<StackPanel>("HoldEscHint")!.IsVisible = false;
     }

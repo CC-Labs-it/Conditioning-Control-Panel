@@ -356,12 +356,23 @@
                 </Grid>
             </Border>
 
-            <!-- "Now: [region]" overlay — top-right of the media pane, above both panes. -->
+            <!-- "Now: [region]" overlay, top-right of the media pane; hold-Esc hint beside it, as in WPF's info strip (EnhancementPlayerWindow.xaml:451). -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,8,10,0" ZIndex="20" IsHitTestVisible="False">
+            <StackPanel x:Name="HoldEscHint" Orientation="Horizontal"
+                        Margin="0,0,8,0" VerticalAlignment="Center" IsVisible="False">
+                <TextBlock Text="{loc:Str deeper_player_hold_esc_hint}"
+                           Foreground="{DynamicResource DeeperAccentSoftBrush}"
+                           FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <ProgressBar x:Name="HoldEscProgress" Width="70" Height="6" MinHeight="6" Minimum="0" Maximum="1"
+                             Foreground="{DynamicResource DeeperAccentBrush}"
+                             Background="{DynamicResource DeeperAccentTransparent20Brush}"
+                             BorderThickness="0" VerticalAlignment="Center"/>
+            </StackPanel>
             <Border x:Name="NowRegionPanel"
-                    HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,8,10,0" Padding="8,3" CornerRadius="6"
+                    Padding="8,3" CornerRadius="6"
                     Background="{DynamicResource DeeperPlayerOverlayBgBrush}"
-                    IsVisible="False" IsHitTestVisible="False" ZIndex="20">
+                    IsVisible="False" IsHitTestVisible="False">
                 <StackPanel Orientation="Horizontal">
                     <Rectangle x:Name="NowRegionSwatch" Width="8" Height="8"
                                RadiusX="2" RadiusY="2" Margin="0,0,6,0"
@@ -372,6 +383,7 @@
                                VerticalAlignment="Center"/>
                 </StackPanel>
             </Border>
+            </StackPanel>
         </Grid>
 
         <!-- =====================================================================
@@ -403,8 +415,8 @@
                     <Canvas x:Name="MiniTimelineCanvas" ClipToBounds="True" Background="Transparent"/>
                     <Border x:Name="MiniHoverLabel" IsVisible="False" IsHitTestVisible="False"
                             HorizontalAlignment="Left" VerticalAlignment="Top" Padding="4,1"
-                            Background="{DynamicResource DeeperLaneHeaderBrush}" CornerRadius="3">
-                        <TextBlock x:Name="TxtMiniHoverTime" FontSize="10" Foreground="White"/>
+                            Background="{DynamicResource DeeperPlayerOverlayBgBrush}" CornerRadius="3">
+                        <TextBlock x:Name="TxtMiniHoverTime" Text="0:00" FontSize="9" FontFamily="monospace" Foreground="White"/>
                     </Border>
                 </Grid>
             </Border>
@@ -414,12 +426,6 @@
              Row 4: TRANSPORT — primary cluster (left) + secondary cluster (right)
              ===================================================================== -->
         <DockPanel Grid.Row="4" LastChildFill="False" Margin="0,0,0,10">
-            <StackPanel x:Name="HoldEscHint" DockPanel.Dock="Right" Orientation="Horizontal"
-                        IsVisible="False" VerticalAlignment="Center" Margin="6,0">
-                <TextBlock Text="{loc:Str deeper_player_hold_esc_hint}" FontSize="10"
-                           Foreground="{DynamicResource DeeperAccentSoftBrush}" Margin="0,0,6,0"/>
-                <ProgressBar x:Name="HoldEscProgress" Width="70" Height="6" Minimum="0" Maximum="1"/>
-            </StackPanel>
             <Button x:Name="BtnPlayPause" DockPanel.Dock="Left"
                     ToolTip.Tip="{loc:Str deeper_player_tip_play_pause}"
                     AutomationProperties.Name="{loc:Str deeper_player_tip_play_pause}"
