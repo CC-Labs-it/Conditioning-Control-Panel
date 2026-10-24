@@ -4,6 +4,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadTrack } from '../track/load.js';
 import { validate } from '../track/schema.js';
+import { densifyBoosts } from '../track/boostPlan.js';
 
 const round = v => Math.round(v * 1000) / 1000 || 0;
 const smooth = u => u * u * (3 - 2 * u);
@@ -135,6 +136,7 @@ export function buildMainframe() {
   const scanS = [180, loaded.nodeS[spans.canal.from] + 85, loaded.nodeS[spans.canal.from] + 170,
     at('skybridge', 160), loaded.nodeS[spans['memory-exit'].to] - 35, loaded.nodeS[spans.submerged.from] + 130];
   const scanHalls = scanS.map((s, i) => ({ id: 'scan-' + i, s, node: nearest(s), from: nearest(s - 20), to: nearest(s + 20) }));
+  track.boosts = densifyBoosts(track).boosts;
   const errors = validate(track).errors;
   if (errors.length) throw new Error(errors.join('; '));
   return { track, spans, scanHalls, lengthM: loaded.lengthM };

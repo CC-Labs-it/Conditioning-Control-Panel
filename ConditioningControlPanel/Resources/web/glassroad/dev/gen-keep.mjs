@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { validate } from '../track/schema.js';
 import { loadTrack } from '../track/load.js';
+import { densifyBoosts } from '../track/boostPlan.js';
 import { KEEP_PIECES, keepPieceLength, keepSegmentCount, walkKeep, getKeepLayout } from '../track/keep-layout.js';
 const smooth = (u) => u * u * (3 - 2 * u), round = (x) => +x.toFixed(3) || 0, RAD = Math.PI / 180;
 export function buildKeep() {
@@ -64,6 +65,7 @@ export function buildKeep() {
     ai: { lines: [], pace: [1, 1.05, 1.1] }, beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: -30, edgeGraceM: 1.2, edgeGraceS: .8 },
   };
+  track.boosts = densifyBoosts(track).boosts;
   const result = validate(track);
   if (!result.ok || result.warnings.length) throw Error(JSON.stringify(result));
   return track;
