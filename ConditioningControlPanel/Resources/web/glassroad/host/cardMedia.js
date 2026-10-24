@@ -13,7 +13,7 @@ export function validCardSource(src, origin, now = Date.now()) {
 export function createCardMedia(media, { bridge, origin = globalThis.location?.origin || '',
   makeVideo = url => Object.assign(document.createElement('video'), { muted: true, loop: true, playsInline: true, src: url }),
 } = {}) {
-  const slots = selectScrolllerSlots(media?.slots || []), entries = new Map();
+  const slots = selectScrolllerSlots(media?.slots || [], { share: media?.scrolllerShare }), entries = new Map();
   const shown = slots.map(() => null);
   let order = [], disposed = false, authority = 0, refreshTimer = 0, retryTimer = 0, expiryTimer = 0;
   let manifestController = null;

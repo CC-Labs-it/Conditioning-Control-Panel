@@ -138,8 +138,9 @@ export function goonworksWorldPlan(track){
     for(let s=r.s0+18,i=0;s<r.s1-10;s+=37,i++){
       const f=track.frameAt(s),side=i%2?1:-1,x=side*(f.w/2+20);
       if(id==='aperture-mill'){
-        local('toy-gear-hub','white',f,x,15,0,[18,4,18],{shape:'cylinder',basis:[f.b,f.t,f.n],motion:{spin:.16,axis:1,phase:i}});
-        for(let j=0;j<12;j++){const a=j/12*TAU;local('toy-gear-tooth','fuchsia',f,x+Math.cos(a)*10,15+Math.sin(a)*10,0,[4,4,4],{shape:'box'});}
+        // One closed mesh partitions the ivory center and gold crown. Separate coplanar box
+        // teeth used to overlap the cylinder caps and flicker from both approach directions.
+        local('toy-gear-solid','gear',f,x,15,0,[24,24,4],{shape:'gear',motion:{spin:.16,axis:2,phase:i}});
       }else if(id==='pinball-launch'){
         local('pinball-bumper-stem','white',f,x,6,0,[9,12,9],{shape:'cylinder'});
         local('pinball-bumper-cap','hot',f,x,13,0,[25,13,25],{shape:'sphere'});
@@ -234,6 +235,35 @@ export function goonworksWorldPlan(track){
       horizon('wide-funnel',[20,126,-8],[38,19,38],'cone');horizon('side-chimney',[-35,85,3],[7,30,7],'cylinder');
     }
     for(let j=0;j<2;j++)put('white-cartoon-cloud','cream',[p[0]+j*22,p[1]+180+(i%3)*35,p[2]],[55,16+j*4,22],{shape:'sphere',check:false,outline:false});
+  }
+  // Colour is assigned after placement so district art changes cannot move a support or a screen.
+  const whiteFamily=id=>id.startsWith('grotto')||id.startsWith('rabbit')?'ice':id.startsWith('pop-quiz')||id.startsWith('quiz-')?'lilac':id.startsWith('aperture-mill')||id.startsWith('mill-')||id.startsWith('pinball')?'ivory':id.startsWith('icing-observatory')?'blush':'white';
+  const counts=new Map();
+  for(const row of rows){const repeat=counts.get(row.id)||0;counts.set(row.id,repeat+1);
+    if(row.material==='white')row.material=whiteFamily(row.id);
+    if(row.id.startsWith('horizon-'))row.material=repeat%3===1?'distantCool':repeat%3===2?'distantWarm':'distant';
+    if(row.material==='fuchsia'){
+      if(row.id.includes('roof-beam')||row.id.startsWith('grotto-inner')||row.id.startsWith('pop-quiz-upright'))row.material='magenta';
+      else if(row.id.includes('balcony-band')||row.id==='orchard-floating-cloud')row.material='rose';
+    }
+    if(row.material==='wine'&&(row.id.includes('island-keel')||row.id==='grotto-arched-roof'))row.material='plum';
+    if(row.id==='grotto-scalloped-rock')row.material=repeat%3===0?'magenta':repeat%3===1?'wine':'plum';
+    if(row.id.endsWith('-white-bezel')&&row.size[0]<row.size[1])row.material=row.id.startsWith('grotto')?'periwinkle':row.id.startsWith('rabbit')?'teal':row.id.startsWith('pop-quiz')?'apricot':'gold';
+    if(row.id==='quiz-icing-canopy')row.material=repeat%2?'pink':'blush';
+    if(row.id==='mill-grand-clock-ring'||row.id==='pinball-balcony-star')row.material='gold';
+    if(row.id==='rabbit-ceiling-conduit')row.material='teal';
+    if(row.id.startsWith('grotto-')&&row.id.endsWith('-white-bezel'))row.material=row.id.startsWith('grotto-high-')?'periwinkle':'teal';
+    if(row.id.startsWith('grotto-stalactite'))row.material=repeat%3===0?'periwinkle':'teal';
+    if(row.id==='pinball-bumper-stem')row.material='periwinkle';
+    if(row.id==='pinball-bumper-cap')row.material=repeat%3===0?'hot':repeat%3===1?'rose':'magenta';
+    if(row.id==='pinball-lamp')row.material=repeat%2?'apricot':'gold';
+    if(row.id==='orchard-star-crown')row.material=repeat%2?'periwinkle':'gold';
+    if(row.id==='spiral-cameo-disc')row.material='ivory';
+    if(row.id==='spiral-cameo-pillar'||row.id==='rabbit-pipe-organ-arch')row.material='teal';
+    if(row.id==='rabbit-pipe-organ-white-cuff')row.material='gold';
+    if(row.id==='icing-observatory-tower')row.material=repeat%2?'magenta':'rose';
+    if(row.id==='icing-observatory-tower-roof')row.material=repeat===1?'apricot':'ivory';
+    if(row.id==='white-cartoon-cloud')row.material=repeat%3===0?'ice':repeat%3===1?'cream':'lilac';
   }
   const plan={layout,rows,mounts,particles,platforms,rooms,features,landmarks,rejected,corridor,center,radius,skyRadius:Math.max(2400,radius+1100)};
   CACHE.set(track,plan);return plan;

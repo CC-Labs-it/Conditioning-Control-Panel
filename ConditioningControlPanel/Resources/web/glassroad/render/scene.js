@@ -295,6 +295,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: spiralLayout === null ? null : goon ? goonworksSpiralLayout(track) : boudoir ? boudoirSpiralLayout(track) : keep ? keepSpiralLayout(track) : spiralLayout, photosafe, feel,
     onPass: (g) => { if (bus) bus.emit('gate-pass', g); } }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
   try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout: goon ? goonworksMediaLayout(track) : boudoir ? boudoirMediaLayout(track) : keep ? keepMediaLayout(track) : undefined,
+    scrolllerShare: goon ? .6 : .5,
     placeholderPalette: goon ? ['#bd006e', '#fff9ff'] : null }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
   // polish 4: the drop shortcut's rail opening and landing pad (track routes); the ring swells on the player's clean landing
   let routes = null;

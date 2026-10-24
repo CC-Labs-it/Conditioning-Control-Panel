@@ -61,8 +61,26 @@ test('GOONWORKS screens show meaningful clear picture area from driver height at
   assert.ok(report.every(r=>!r.blockers.some(([id])=>id===r.id+'-cabinet')),'Pictures must sit in front of their own backing');
 });
 const hooks=(await import('node:module')).registerHooks({resolve(specifier,context,next){const files={'three/webgpu':'three.webgpu.min.js','three/tsl':'three.tsl.min.js'};return files[specifier]?{url:new URL('../vendor/three/build/'+files[specifier],import.meta.url).href,shortCircuit:true}:next(specifier,context);}});
-const{buildGoonworks,goonworksRibbonShell,applyGoonworksRoad}=await import('../render/goonworks.js');
+const{buildGoonworks,goonworksRibbonShell,goonworksGearGeometry,applyGoonworksRoad}=await import('../render/goonworks.js');
 const{FrontSide,DoubleSide,MeshBasicNodeMaterial}=await import('three/webgpu');hooks.deregister();
+test('GOONWORKS decorative gears tile each colored cap once and form one closed solid',()=>{
+  assert.ok(plan.rows.some(r=>r.id==='toy-gear-solid'));
+  assert.ok(!plan.rows.some(r=>r.id==='toy-gear-hub'||r.id==='toy-gear-tooth'));
+  const geometry=goonworksGearGeometry(),p=geometry.attributes.position.array,edges=new Map(),caps=[];
+  const key=v=>v.map(n=>n.toFixed(6)).join(',');
+  for(let i=0;i<p.length;i+=9){const vertices=[Array.from(p.slice(i,i+3)),Array.from(p.slice(i+3,i+6)),Array.from(p.slice(i+6,i+9))];
+    for(let j=0;j<3;j++){const a=key(vertices[j]),b=key(vertices[(j+1)%3]),edge=[a,b].sort().join('|');edges.set(edge,(edges.get(edge)||0)+1);}
+    if(vertices.every(v=>v[2]===.5))caps.push(vertices);
+  }
+  assert.ok([...edges.values()].every(n=>n===2),'Every surface edge belongs to exactly two triangles');
+  const cross=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+  for(let x=-.49;x<.5;x+=.023)for(let y=-.487;y<.5;y+=.021){const probe=[x,y];
+    const coverage=caps.filter(([a,b,c])=>cross(a,b,probe)>1e-8&&cross(b,c,probe)>1e-8&&cross(c,a,probe)>1e-8).length;
+    assert.ok(coverage<=1,'No opaque face can overlap another face in the same plane');
+    if(Math.hypot(x,y)<.39)assert.ok(caps.some(([a,b,c])=>cross(a,b,probe)>=-1e-8&&cross(b,c,probe)>=-1e-8&&cross(c,a,probe)>=-1e-8),'The central disc remains solid');
+  }
+  geometry.dispose();
+});
 test('GOONWORKS opaque road and tube skins cull hidden faces and keep outward triangle winding',()=>{
   const road={material:new MeshBasicNodeMaterial({side:DoubleSide})},owner=applyGoonworksRoad(road,null,track);
   assert.equal(road.material.side,FrontSide);assert.equal(road.material.depthWrite,true);owner.dispose();road.material.dispose();
@@ -77,6 +95,7 @@ test('GOONWORKS opaque road and tube skins cull hidden faces and keep outward tr
 });
 test('GOONWORKS renderer prebuilds finite batches and has pause-safe platform feedback and disposal',()=>{
   const world=buildGoonworks(track);assert.ok(world.stats.parts>700);assert.equal(world.platforms.length,plan.platforms.length);
+  assert.equal(world.group.getObjectByName('goonworks-gear-gear-moving').material.side,FrontSide);
   for(const name of['goonworks-thick-ribbon','goonworks-rabbit-inner-shell','goonworks-rabbit-outer-shell'])assert.equal(world.group.getObjectByName(name).material.side,FrontSide,name);
   world.group.traverse(o=>{if(o.isInstancedMesh)assert.ok(o.instanceMatrix.array.every(Number.isFinite),o.name);});
   const p=world.platforms[0],start=p.holder.position.clone();world.hit(p.row.id);world.update(.1,{paused:true});assert.deepEqual(p.holder.position.toArray(),start.toArray());

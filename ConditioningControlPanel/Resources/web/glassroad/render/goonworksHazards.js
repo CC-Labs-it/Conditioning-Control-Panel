@@ -1,8 +1,9 @@
 // Chunky comic-book toys. Every moving transform comes from the collision pose authority.
-import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, Shape, ExtrudeGeometry,
-  MeshBasicNodeMaterial, Matrix4, Vector3, BackSide } from 'three/webgpu';
+import { Group, Mesh, BoxGeometry, CylinderGeometry, SphereGeometry, Shape, Path, ShapeGeometry, ShapeUtils, ExtrudeGeometry,
+  MeshBasicNodeMaterial, Matrix4, Vector2, Vector3, BackSide } from 'three/webgpu';
 import { vec3, normalWorld, normalize, dot, clamp, floor } from 'three/tsl';
 import { goonworksSetpieces, goonworksPose } from '../track/goonworks-setpieces.js';
+import { GOONWORKS_PALETTE, GOONWORKS_DISTRICT_PALETTES } from './goonworksMaterials.js';
 
 export function createGoonworksHazardView(scene, track, layout) {
   const group = new Group(); group.name = 'goonworks-toys'; scene.add(group);
@@ -17,9 +18,19 @@ export function createGoonworksHazardView(scene, track, layout) {
     if (!flat) m.colorNode = vec3(m.color.r, m.color.g, m.color.b).mul(shade);
     materials.push(m); return m;
   }
-  const ink = material('#1A061C', true), white = material('#FFF9FF'), pink = material('#BD006E');
-  const outline = material('#1A061C', true); outline.side = BackSide;
-  const candy = material('#FF5CB7');
+  const ink = material(GOONWORKS_PALETTE.ink, true);
+  const outline = material(GOONWORKS_PALETTE.ink, true); outline.side = BackSide;
+  const paintCache = new Map();
+  function paint(key) {
+    if (!paintCache.has(key)) paintCache.set(key, material(GOONWORKS_PALETTE[key]));
+    return paintCache.get(key);
+  }
+  const paints = Object.fromEntries([
+    ['wheel', 'aperture-mill'], ['shutter', 'screen-grotto'], ['block', 'pop-quiz'], ['flipper', 'pinball-launch'],
+  ].map(([kind, district]) => {
+    const theme = GOONWORKS_DISTRICT_PALETTES[district];
+    return [kind, { white: paint(theme.road), pink: paint(theme.pink), candy: paint(theme.accent) }];
+  }));
   const basis = new Matrix4(), axes = [new Vector3(), new Vector3(), new Vector3()];
   function mesh(parent, geo, mat, p = [0, 0, 0], size = [1, 1, 1]) {
     const m = new Mesh(geo, mat); m.position.set(...p); m.scale.set(...size); m.castShadow = true; parent.add(m); return m;
@@ -29,16 +40,16 @@ export function createGoonworksHazardView(scene, track, layout) {
     mesh(root, box, outline, [0, 0, 0], size.map(v => v + edge * 2)); mesh(root, box, mat, [0, 0, .015], size);
     return root;
   }
-  function discSector(radius, gap, depth, inner = 0) {
+  function sectorShape(radius, gap, inner = 0) {
     const s = new Shape(), a = gap / 2, b = Math.PI * 2 - gap / 2;
     s.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
     s.lineTo(Math.cos(a) * radius, Math.sin(a) * radius); s.absarc(0, 0, radius, a, b, false);
     if (inner > 0) { s.lineTo(Math.cos(b) * inner, Math.sin(b) * inner); s.absarc(0, 0, inner, b, a, true); }
     else s.lineTo(0, 0);
     s.closePath();
-    return own(new ExtrudeGeometry(s, { depth, bevelEnabled: false, curveSegments: 64, steps: 1 }).translate(0, 0, -depth / 2));
+    return s;
   }
-  function curvedArrow(radius, start, end, width, depth) {
+  function curvedArrow(radius, start, end, width) {
     const s = new Shape(), steps = 16, angle = end - .13;
     s.moveTo(Math.cos(start) * (radius - width), Math.sin(start) * (radius - width));
     for (let i = 1; i <= steps; i++) { const a = start + (angle - start) * i / steps; s.lineTo(Math.cos(a) * (radius - width), Math.sin(a) * (radius - width)); }
@@ -47,13 +58,61 @@ export function createGoonworksHazardView(scene, track, layout) {
     s.lineTo(Math.cos(angle) * (radius + width * 2.8), Math.sin(angle) * (radius + width * 2.8));
     for (let i = steps; i >= 0; i--) { const a = start + (angle - start) * i / steps; s.lineTo(Math.cos(a) * (radius + width), Math.sin(a) * (radius + width)); }
     s.closePath();
-    return own(new ExtrudeGeometry(s, { depth, bevelEnabled: false, steps: 1 }).translate(0, 0, -depth / 2));
+    return s;
+  }
+  function insetShape(shape, thickness) {
+    const points = shape.getPoints(); if (points[0].equals(points.at(-1))) points.pop();
+    const winding = ShapeUtils.isClockWise(points) ? -1 : 1;
+    return new Shape(points.map((p, i) => {
+      const incoming = p.clone().sub(points[(i + points.length - 1) % points.length]).normalize();
+      const outgoing = points[(i + 1) % points.length].clone().sub(p).normalize();
+      const a = new Vector2(-incoming.y, incoming.x).multiplyScalar(winding);
+      const b = new Vector2(-outgoing.y, outgoing.x).multiplyScalar(winding);
+      return p.clone().addScaledVector(a.clone().add(b), thickness / (1 + a.dot(b)));
+    }));
+  }
+  function wheelSurface(rotor, row, { white, pink }) {
+    const body = sectorShape(row.radius, row.gap);
+    // The small inner boundary is hidden by the hub. Keeping it inside the body makes a proper
+    // enclosed hole, rather than two face contours touching at the sector's centre vertex.
+    const face = sectorShape(row.radius - .2, row.gap + .025, .5);
+    const band = sectorShape(row.radius - .75, row.gap + .08, row.radius - 2.15);
+    const hole = shape => new Path(shape.getPoints(64));
+    const dark = body.clone(); dark.holes.push(hole(face));
+    const light = face.clone(); light.holes.push(hole(band));
+    const inkShapes = [dark], pinkShapes = [band];
+    for (let i = 0; i < 3; i++) {
+      const a = row.gap / 2 + .28 + i * 1.15, b = a + .81;
+      const arrow = curvedArrow(row.radius * .64, a, b, .16);
+      const inset = insetShape(arrow, .055);
+      light.holes.push(hole(arrow)); arrow.holes.push(hole(inset));
+      inkShapes.push(arrow); pinkShapes.push(inset);
+    }
+    // One surface at each depth: the ink, enamel and arrow triangles tile the face without
+    // overlapping. Millimetre-separated closed discs z-fight at the rear wheel and at overlooks.
+    for (const [name, shapes, mat] of [['ink', inkShapes, ink], ['white', [light], white], ['pink', pinkShapes, pink]]) {
+      const front = own(new ShapeGeometry(shapes, 64)), back = own(front.clone());
+      const index = back.index.array, normals = back.getAttribute('normal');
+      for (let i = 0; i < index.length; i += 3) [index[i + 1], index[i + 2]] = [index[i + 2], index[i + 1]];
+      for (let i = 0; i < normals.count; i++) normals.setZ(i, -1);
+      for (const [side, geometry] of [[1, front], [-1, back]]) {
+        const cap = mesh(rotor, geometry, mat, [0, 0, side * row.depth / 2]);
+        cap.name = `wheel-face-${name}-${side}`;
+      }
+    }
+    // Retain the complete physical thickness and radial cut walls, but never submit its hidden
+    // filled caps beneath the tiled faces. Ordinary depth testing and front-face culling stay on.
+    const walls = own(new ExtrudeGeometry(body, { depth: row.depth, bevelEnabled: false, curveSegments: 64, steps: 1 }).translate(0, 0, -row.depth / 2));
+    const sides = walls.groups.find(g => g.materialIndex === 1);
+    walls.setDrawRange(sides.start, sides.count); walls.clearGroups();
+    mesh(rotor, walls, ink).name = 'wheel-cut-walls';
   }
   const riseMark = new Shape();
   riseMark.moveTo(-1, -.08); riseMark.lineTo(0, .17); riseMark.lineTo(1, -.08);
   riseMark.lineTo(1, .07); riseMark.lineTo(0, .32); riseMark.lineTo(-1, .07); riseMark.closePath();
   const riseGeometry = own(new ExtrudeGeometry(riseMark, { depth: .035, bevelEnabled: false, steps: 1 }));
   for (const row of rows) {
+    const { white, pink, candy } = paints[row.kind];
     const root = new Group(); root.name = row.id; root.position.fromArray(row.p);
     basis.makeBasis(axes[0].fromArray(row.b), axes[1].fromArray(row.n), axes[2].fromArray(row.t).negate());
     root.quaternion.setFromRotationMatrix(basis); group.add(root);
@@ -65,25 +124,17 @@ export function createGoonworksHazardView(scene, track, layout) {
     }
     if (row.kind === 'wheel') {
       const rotor = new Group(); rotor.position.set(row.x, row.centerY, 0); root.add(rotor); entry.rotor = rotor;
-      mesh(rotor, discSector(row.radius, row.gap, row.depth), ink);
-      mesh(rotor, discSector(row.radius - .2, row.gap + .025, row.depth + .025), white);
-      mesh(rotor, discSector(row.radius - .75, row.gap + .08, row.depth + .055, row.radius - 2.15), pink);
-      // Broad curved arrows make the wheel's direction and open sector readable while approaching.
-      for (let i = 0; i < 3; i++) {
-        const a = row.gap / 2 + .28 + i * 1.15, b = a + .81;
-        mesh(rotor, curvedArrow(row.radius * .64, a, b, .16, row.depth + .12), ink);
-        mesh(rotor, curvedArrow(row.radius * .64, a + .025, b - .025, .105, row.depth + .15), pink);
-      }
+      rotor.name = 'wheel-rotor'; wheelSurface(rotor, row, paints.wheel);
       for (let i = 0; i < 9; i++) {
         const a = row.gap / 2 + .16 + i * (Math.PI * 2 - row.gap - .32) / 8;
         for (const side of [-1, 1]) {
-          const bolt = mesh(rotor, cylinder, ink, [Math.cos(a) * (row.radius - 1.43), Math.sin(a) * (row.radius - 1.43), side * (row.depth / 2 + .08)], [.25, .18, .25]);
-          bolt.rotation.x = Math.PI / 2;
+          const bolt = mesh(rotor, cylinder, candy, [Math.cos(a) * (row.radius - 1.43), Math.sin(a) * (row.radius - 1.43), side * (row.depth / 2 + .08)], [.25, .18, .25]);
+          bolt.name = 'wheel-bolt'; bolt.rotation.x = Math.PI / 2;
         }
       }
       // The hub stays above traffic and does not bridge the road-level missing sector.
       const hub = mesh(root, cylinder, ink, [row.x, row.centerY, 0], [1.65, row.depth + .45, 1.65]); hub.rotation.x = Math.PI / 2;
-      const cap = mesh(root, cylinder, candy, [row.x, row.centerY, row.depth / 2 + .35], [1.35, .25, 1.35]); cap.rotation.x = Math.PI / 2;
+      const cap = mesh(root, cylinder, candy, [row.x, row.centerY, row.depth / 2 + .35], [1.35, .25, 1.35]); cap.name = 'wheel-hub-cap'; cap.rotation.x = Math.PI / 2;
       cube(root, pink, [row.x, row.centerY + row.radius + 2.2, 0], [row.roadWidth + 4, 1.3, 3]);
       for (const side of [-1, 1]) {
         cube(root, white, [side * (row.roadWidth / 2 + 3), 16, 0], [1.8, 31, 3]);
