@@ -2975,3 +2975,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-play: +94
 - Play wall free games (Breakout Demo, Piece by Piece) launch and focus their hosts; panic closes them.
 - Hand cursor on both buttons, asserted in PlayWallTests.
+
+## avalonia-port/wire-ctrl-spiral-first-light-visual: +492
+- First-light fog/arm canvas ported onto the Spiral tab fog host, driven by the shared BeatLoop and Core timeline; row stays stub.
+- Review fixes: fog clock stepped in test, no PNG writes, 30 fps note; parity rows refreshed (render-all limit stated).
