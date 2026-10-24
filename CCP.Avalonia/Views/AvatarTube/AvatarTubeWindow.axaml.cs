@@ -963,7 +963,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 if (useAlternative && ModOverridesAttachedTubeOnly()) useAlternative = false;
                 var name = useAlternative ? "tube2.png" : "tube.png";
                 var art = ModArt.TryLoad(name);
-                if (art != null) _imgTubeFrame.Source = art;
+                if (art != null) _imgTubeFrame.Source = Helpers.TubeArtAlpha.Scrub(art);
                 Log.Information("Tube style changed to: {Style}", name);
                 // No midnight glass on this head (see above), so the motes are always the pink tint.
                 ApplyTubeMotes(useAlternative, midnight: false);

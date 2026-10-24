@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## 9. Main sync 7 tube art
+
+1. Load a mod whose tube art has alpha 1–8 padding and visible alpha 9+ edges. Detach the companion and click beside its painted frame: the invisible haze must not drag the tube or swallow clicks. Reattach and verify the visible glass remains unchanged. WPF `AvatarTube/AvatarTubeWindow.Windowing.cs`, `AvatarTube/TubeArtAlpha.cs`. Rows: `877085a51`.
