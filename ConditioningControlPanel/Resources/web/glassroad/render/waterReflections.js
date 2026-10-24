@@ -52,7 +52,9 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
             try {
               // Cube captures have their own no-shadow/MRT pipeline. Warm its hidden,
               // distant and zero-count variants too, before the loading cover lifts.
-              scene.traverse?.(object=>{
+              // All six cube views share perspective/layers/target format and no-shadow shaders.
+              // One unculled compile covers every hidden variant; orientation is camera data.
+              if(face===0) scene.traverse?.(object=>{
                 if(excluded.has(object))return;
                 saved.push([object,object.visible,object.frustumCulled,object.count]);
                 object.visible=true;object.frustumCulled=false;
@@ -63,7 +65,7 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
               // this no-shadow capture; compiling ShadowNodeMaterial without shadows
               // asks its shadow-mask lighting model for a float that does not exist.
               scene.updateMatrixWorld?.(true);
-              await three.compileAsync(scene,faceCamera);
+              if(face===0) await three.compileAsync(scene,faceCamera);
             } finally {
               for(const [object,visible,culled,count] of saved){object.visible=visible;object.frustumCulled=culled;if(object.count!==count)object.count=count;}
               for(const material of materials)material.visible=false;

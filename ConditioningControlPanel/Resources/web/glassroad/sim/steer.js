@@ -5,7 +5,8 @@
  * easing to steer.cruiseYawMul at steer.cruiseMps, steer.topYawMul at steer.topCalmMps and
  * steer.boostYawMul at steer.boostCalmMps (boosted) and above. steer.userMul is the player's steering
  * sensitivity (Options, 0.6 to 1.4); bots hold it at 1 (sim/racers.js).
- * Drift yaw keeps the uncalmed base law (sim/drift.js), so a drift is the strong turn. Polish 4 takes about
+ * Drift yaw shares the speed calm (sim/drift.js), with extra inward range and gentler countersteer.
+ * Polish 4 takes about
  * another third off at cruise and top (feel numbers only; FEEL.md "steer" has the before / after deg/s).
  * The bots solve corner speeds many times a tick, so the law reads feel once into a plain record
  * (yawParams) and the math runs on that.
@@ -14,6 +15,16 @@
 const DEG = Math.PI / 180;
 const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const ease = (s, a, b, ma, mb) => ma + (mb - ma) * smooth((s - a) / Math.max(1e-6, b - a));
+
+/** Calm turn onset, prompt release and reversal. Old feel files inherit the corrected release. */
+export function slewSteer(current, target, feel, dt) {
+  let release = .055;
+  try { release = feel.get('steer.releaseS'); } catch { /* Older saved feel files. */ }
+  const lettingGo = current * target < 0 || Math.abs(target) < Math.abs(current);
+  const tc = lettingGo ? release : feel.get('steer.slewCentreS')
+    + (feel.get('steer.slewFullS') - feel.get('steer.slewCentreS')) * Math.abs(current);
+  return current + (target - current) * (1 - Math.exp(-dt / Math.max(.001, tc)));
+}
 
 /** Every steering-law number, read once. @returns {object} out */
 export function yawParams(feel, out = {}) {

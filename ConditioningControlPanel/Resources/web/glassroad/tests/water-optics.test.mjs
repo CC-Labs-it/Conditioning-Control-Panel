@@ -32,7 +32,7 @@ test('local reflection capture warms every face and restores render state before
   const reflection=createWaterReflections({renderer:r.api,scene:{},exclude});t.after(()=>reflection.dispose());
   const progress=[];
   assert.equal(await reflection.warm({playerPos:[2,3,4],onProgress:(n,total)=>progress.push([n,total])}),true);
-  assert.deepEqual(r.state.renders.map(x=>x.face),[0,1,2,3,4,5]);assert.equal(r.state.compiles,6);
+  assert.deepEqual(r.state.renders.map(x=>x.face),[0,1,2,3,4,5]);assert.equal(r.state.compiles,1,'one unculled compile covers all cube orientations');
   assert.deepEqual(progress,[[1,6],[2,6],[3,6],[4,6],[5,6],[6,6]]);
   assert.equal(reflection.stats.size,64);assert.equal(reflection.stats.ready,true);
   assert.equal(r.state.target,old.target);assert.equal(r.state.face,old.face);assert.equal(r.state.mip,old.mip);assert.equal(r.state.mrt,old.mrt);
@@ -72,11 +72,11 @@ test('reflection warm stages hidden and distant variants, then restores them eve
     };
     const reflection=createWaterReflections({scene,renderer:r.api,exclude});t.after(()=>reflection.dispose());
     t.mock.method(console,'warn',()=>{});
-    assert.equal(await reflection.warm(),!fail);assert.equal(compiles,fail?1:6);
+    assert.equal(await reflection.warm(),!fail);assert.equal(compiles,1);
     assert.equal(hidden.visible,false);assert.equal(hidden.frustumCulled,true);assert.equal(hidden.count,0);
     assert.equal(hidden.material.visible,false);assert.equal(exclude.visible,true);assert.equal(waterChild.visible,false);
     if(!fail)reflection.update(.2,{playerPos:[1,2,3]});
-    assert.equal(compiles,fail?1:6,'normal captures never restage or recompile hidden variants');
+    assert.equal(compiles,1,'normal captures never restage or recompile hidden variants');
   }
 });
 function track(){return {lengthM:60,nodeS:[0,60],sections:[],

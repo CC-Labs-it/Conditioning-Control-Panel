@@ -65,7 +65,7 @@ test('stones courts: fieldAt, stoneAt margins, fieldSupport outside null and ins
   assert.throws(() => buildFields([{ id: 'x', from: 1, to: 2, lanes: [9], stones: [{ id: 'a', node: 1, ds: 0, x: 9, w: 5, len: 5 }] }], [0, 100, 140, 200], () => ({ w: 21, flags: [] })), /footprint/);
 });
 
-test('stones load: Threshold field with fromS/toS, staggered lanes, stones inside, the deck eased to 21 m', () => {
+test('stones load: Threshold field with fromS/toS, staggered lanes, stones inside, the wider deck narrows to 21 m', () => {
   assert.equal(tr.fields.length, 1);
   assert.equal(field.id, 'bridge-stones');
   assert.equal(field.fromS, tr.nodeS[field.from]); assert.equal(field.toS, tr.nodeS[field.to]);
@@ -89,7 +89,7 @@ test('stones load: Threshold field with fromS/toS, staggered lanes, stones insid
     for (const s of [h.s, h.s + h.len / 2, h.s + h.len]) assert.ok(tr.frameAt(s).w / 2 >= Math.abs(h.x) + h.w / 2 + 0.5, 'spare room at s ' + s);
   }
   assert.ok(Math.abs(tr.frameAt(field.fromS).w - 21) < 0.05 && Math.abs(tr.frameAt(field.toS - 1).w - 21) < 0.1, 'the field is 21 m wide');
-  assert.ok(Math.abs(tr.frameAt(field.fromS - 30).w - 17.5) < 0.05 && Math.abs(tr.frameAt(field.toS + 30).w - 17.5) < 0.05, 'and 17.5 m well before and after');
+  assert.ok(Math.abs(tr.frameAt(field.fromS - 30).w - 24.5) < 0.05 && Math.abs(tr.frameAt(field.toS + 30).w - 24.5) < 0.05, 'the ordinary road remains 24.5 m well before and after');
   for (let s = field.fromS; s < field.toS - 4.5; s += 0.5) assert.ok(fieldSupport(tr.fields, s, 10.5).length >= 1, 'never a wall at s ' + s);
   for (const it of tr.items) assert.ok(it.s < field.fromS || it.s >= field.toS, 'no item inside');
   for (const b of tr.boosts) assert.ok(b.s + b.len <= field.fromS || b.s >= field.toS, 'no pad inside');

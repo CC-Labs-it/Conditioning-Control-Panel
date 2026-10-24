@@ -66,9 +66,14 @@ for (const id of ['threshold', 'keep', 'mainframe']) {
 test('Threshold exact 66m rollout endpoint rejects the former shoulder overlap', () => {
   const json = JSON.parse(readFileSync(new URL('../tracks/threshold.json', import.meta.url), 'utf8'));
   const track = loadTrack(json), s = track.nodeS[2], endWidth = track.frameAt(s + 66).w;
-  assert.ok(endWidth < 18 && endWidth >= 17, 'the real taper reproduces the missed final 4m');
-  assert.equal(safeBoostStation(track, s, { x: 5, w: 4, len: 6 }), false);
-  assert.equal(safeBoostStation(track, s, { x: 4.5, w: 4, len: 6 }), true);
+  const safeX = endWidth / 2 - 4.25, unsafeX = safeX + .5;
+  assert.ok(endWidth < track.frameAt(s + 61).w, 'the real taper continues through the former missed final 5m');
+  for (let d = -8; d < 66; d += 5)
+    assert.ok(track.frameAt(s + d).w / 2 - unsafeX - 2 >= 2, 'the old sample points have a full 2m shoulder');
+  assert.equal(endWidth / 2 - safeX - 2, 2.25, 'accepted endpoint retains the exact shoulder margin');
+  assert.equal(endWidth / 2 - unsafeX - 2, 1.75, 'half a metre outward fails only the final endpoint');
+  assert.equal(safeBoostStation(track, s, { x: unsafeX, w: 4, len: 6 }), false);
+  assert.equal(safeBoostStation(track, s, { x: safeX, w: 4, len: 6 }), true);
 });
 
 for (const seed of [1, 241023, 20261024]) test('dense Threshold: eight racers finish with no falls, seed ' + seed, () => {

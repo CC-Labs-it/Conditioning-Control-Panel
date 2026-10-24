@@ -32,8 +32,13 @@ export function defaultInit({ search = '', coarse = false } = {}) {
 export const SONG_URL = /^\/[A-Za-z0-9/_.-]+\.json$/;
 const DEV_SONGS = Object.freeze(['/private-audio/pink-road/chart.json', '/private-audio/pink-road/chart.v0.json']);
 
+/** The preview server mounts private recordings on every loopback port it serves. */
+export function isLocalSongHost({ hostname = '', protocol = '' } = {}) {
+  return (protocol === 'http:' || protocol === 'https:') && /^(127\.0\.0\.1|localhost)$/.test(hostname);
+}
+
 /**
- * The race song charts to try, in order: `?chart=0` none, `?chart=<url>` that one, the dev host (8790) its
+ * The race song charts to try, in order: `?chart=0` none, `?chart=<url>` that one, the loopback dev host its
  * private list, else the host's `caps.songs` (each checked against SONG_URL, at most 8), else none.
  */
 export function songCharts({ search = '', devHost = false, songs = null } = {}) {

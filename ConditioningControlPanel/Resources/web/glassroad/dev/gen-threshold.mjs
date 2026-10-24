@@ -29,7 +29,7 @@ const DEG = Math.PI / 180;
 // y = target height at the piece end; ease: smooth | lin | kick (grade grows to the end)
 export const PIECES = [
   // induction: ground level, the climb onto deck 1, the bridge over the start straight
-  { id: 'start', len: 90, y: 0, w: 20, sec: 0, pad: { at: 0.45, x: 0 } },
+  { id: 'start', len: 90, y: 0, w: 28, sec: 0, pad: { at: 0.45, x: 0 } },
   // water wave 1: the first sweep from u 0.15 and all of L2 are a STREAM; the current runs +5 m/s along and
   // -2.5 m/s to the left (the outside of the right turn), eased in over the first two stream nodes and out
   // over the last two (STREAM_RAMP). The hairpin after it stays glass.
@@ -42,21 +42,21 @@ export const PIECES = [
   // The dare, the court and the start are untouched and the loop closes exactly
   { id: 'bridge', len: 162, y: 14, sec: 0, pad: { at: 0.35, x: -3 } },
   // A long excursion leaves the compact induction stack before returning above it.
-  { id: 'prism-approach', len: 160, y: 48, w: 26, sec: 3 },
-  { id: 'tidal-in', turn: 90, r: 90, roll: 16, y: 28, w: 26, sec: 3 },
-  { id: 'tidal-gallery', len: 450, y: 28, w: 30, sec: 3, surface: 'stream', flow: [4, 0] },
-  { id: 'tidal-out', turn: 90, r: 90, roll: 18, y: 38, w: 26, sec: 3 },
-  { id: 'prism-run', len: 300, y: 48, w: 26, sec: 4 },
-  { id: 'observatory-spiral', turn: -360, r: 110, roll: 22, y: 84, ease: 'lin', w: 26, sec: 4 },
-  { id: 'lens-gallery', len: 400, y: 84, w: 30, sec: 4 },
-  { id: 'lens-out', turn: 90, r: 90, roll: 16, y: 84, w: 26, sec: 5 },
-  { id: 'cascade-descent', len: 350, y: -16, w: 26, surface: 'stream', flow: [5, 0], sec: 5 },
-  { id: 'cascade-return', turn: 90, r: 90, roll: 18, y: -16, w: 26, sec: 5 },
-  { id: 'crescent', len: 500, y: -16, w: 26, surface: 'pool', sec: 5 },
+  { id: 'prism-approach', len: 160, y: 48, w: 34, sec: 3 },
+  { id: 'tidal-in', turn: 90, r: 90, roll: 16, y: 28, w: 34, sec: 3 },
+  { id: 'tidal-gallery', len: 450, y: 28, w: 38, sec: 3, surface: 'stream', flow: [4, 0] },
+  { id: 'tidal-out', turn: 90, r: 90, roll: 18, y: 38, w: 34, sec: 3 },
+  { id: 'prism-run', len: 300, y: 48, w: 34, sec: 4 },
+  { id: 'observatory-spiral', turn: -360, r: 110, roll: 22, y: 84, ease: 'lin', w: 34, sec: 4 },
+  { id: 'lens-gallery', len: 400, y: 84, w: 38, sec: 4 },
+  { id: 'lens-out', turn: 90, r: 90, roll: 16, y: 84, w: 34, sec: 5 },
+  { id: 'cascade-descent', len: 350, y: -16, w: 34, surface: 'stream', flow: [5, 0], sec: 5 },
+  { id: 'cascade-return', turn: 90, r: 90, roll: 18, y: -16, w: 34, sec: 5 },
+  { id: 'crescent', len: 500, y: -16, w: 34, surface: 'pool', sec: 5 },
   { id: 'rejoin', len: 100, y: 14, w: 20, sec: 5 },
   // deepening: up round the column onto the top deck, the wheel and its hoop, the dare, down the keyhole
   { id: 'column', turn: -360, r: 28, roll: 18, y: 28, ease: 'lin', w: 16.25, speed: 0.92, sec: 1 },
-  { id: 'deck', len: 40, y: 28, sec: 1, pad: { at: 0.55, x: 0 } },
+  { id: 'deck', len: 40, y: 28, w: 17.5, sec: 1, pad: { at: 0.55, x: 0 } },
   // The nested loops and dare retain their technical widths: expanding them closes real air gaps.
   { id: 'wheel', loop: true, r: 16, off: -20, y: 28, w: 14, sec: 1 },
   { id: 'link', len: 50, y: 28, w: 14, sec: 1 },
@@ -84,7 +84,7 @@ export const PIECES = [
   { id: 'landing', len: 24, y: -1, sec: 2 },
   { id: 'sweepE', turn: -90, r: 24, roll: 24, y: 0, speed: 0.9, sec: 2 },
   { id: 'sweepF', turn: -90, r: 24, roll: 24, y: 0, speed: 0.85, sec: 2 },
-  { id: 'home', len: 60, y: 0, w: 20, sec: 2 },
+  { id: 'home', len: 60, y: 0, w: 28, sec: 2 },
 ];
 const SECTIONS = [
   { id: 'induction', act: 'induction', palette: 'dawn', sky: 'spiral-slow', bandSpeed: 0.6 },
@@ -94,8 +94,8 @@ const SECTIONS = [
   { id: 'prism-observatory', act: 'deepening', palette: 'deep', sky: 'spiral-deep', bandSpeed: 0.85 },
   { id: 'cascade-return', act: 'release', palette: 'afterglow', sky: 'spiral-wide', bandSpeed: 0.7 },
 ];
-// Main racing road gains 25% room. The loader's monotone width spline eases each join without overshoot.
-const W = 17.5, TOP = 30, G = 28;
+// Ordinary lanes have room to correct a slide; nested loops and open shortcuts keep their real gaps.
+const W = 24.5, TOP = 30, G = 28;
 /** Loop clearance: the exit lane's edge keeps this much plan room from the entry lane's edge. */
 const LOOP_SIDE_GAP_M = 4;
 /** Lanes marked alongside keep at least this much plan gap between edges and this much height between them. */

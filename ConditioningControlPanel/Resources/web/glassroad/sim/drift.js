@@ -4,7 +4,7 @@
  * by hop). Polish 4, the power slide: with the throttle held (drift.brakeThrottleMin), a brake press
  * (drift.brakeMin, fresh within drift.brakeEntryS) while steering past drift.steerMin on the ground
  * starts one too (held by the brake). Either way it curves INTO that side; the stick then only sets
- * tightness (tightMin..tightMax of yawMul x the uncalmed base yaw). While a power slide holds the
+ * tightness (tightMin..tightMax of yawMul x the calmed grip yaw). While a power slide holds the
  * throttle, the brake does not brake: the engine loses only drift.brakeDragMps2 (the engine's brake is
  * given back here, after kart.js ran it). Charge is held time times the soft-drift modifier (into the
  * drift x softInMul, counter-steering x softOutMul), on the ground only. Release pays: letting go of
@@ -86,7 +86,7 @@ function release(st, feel, events) {
 export function driftYaw(st, steer, feel, gripYaw) {
   const dir = st[S.driftDir];
   const tight = lerp(feel.get('drift.tightMin'), feel.get('drift.tightMax'), (clamp(steer * dir, -1, 1) + 1) / 2);
-  return dir * feel.get('drift.yawMul') * gripYaw * tight;   // gripYaw here = the uncalmed base law (sim/steer.js)
+  return dir * feel.get('drift.yawMul') * gripYaw * tight;
 }
 
 /** One tick: the trick clock, a power slide start, then a running drift's release, cancels, charge and tiers. */

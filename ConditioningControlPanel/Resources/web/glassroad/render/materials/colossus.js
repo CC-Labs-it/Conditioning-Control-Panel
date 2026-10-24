@@ -49,11 +49,12 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   const W = worldLook();
   const u = { haze: uniform(haze) };
   const c = new Color().copy((src && src.color) || new Color(1, 1, 1));
-  let base = vec3(c.r, c.g, c.b);
+  // Colours are data, so differently painted props can share a compiled shader.
+  let base = uniform(c);
   if (src && src.vertexColors) base = base.mul(vertexColor().rgb);
   if (src && src.map) base = base.mul(texture(src.map, uv()).rgb);
-  const metal = float(Math.min(1, (src && src.metalness) || 0));
   const finish = surfaceFinish(src || {});
+  const metal = uniform(finish.metalness), specExponent = uniform(finish.exponent), specGain = uniform(finish.gain);
   // Only validated source primitives carry this attribute. Dynamic faces remain neutral.
   const vertexShade = src?.userData?.ccpVertexShade ? attribute(VERTEX_SHADE_ATTRIBUTE, 'vec2') : null;
   const ao = vertexShade ? vertexShade.x : float(1);
@@ -90,8 +91,8 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   // Existing mipmapped art keeps the glaze smooth at a distance, without a new texture owner.
   const glazeUV = positionGeometry.xy.add(positionGeometry.zz.mul(.37)).div(.24);
   const glaze = glazeMap ? texture(glazeMap, glazeUV).r.sub(.5) : float(0);
-  const specPower = float(finish.exponent).mul(wear.mul(-0.22).add(1)).mul(glaze.mul(.22).add(1));
-  const spec = pow(max(dot(Nf, H), 0), specPower).mul(W.specGain * finish.gain)
+  const specPower = specExponent.mul(wear.mul(-0.22).add(1)).mul(glaze.mul(.22).add(1));
+  const spec = pow(max(dot(Nf, H), 0), specPower).mul(specGain.mul(W.specGain))
     .mul(wear.mul(-0.15).add(1)).mul(glaze.mul(-.12).add(1));
   const edge = max(float(1).sub(abs(dot(Nf, V))), 0);   // never negative under pow (NaN guard)
   let col = lit.add(base.mul(pal.col(1)).mul(sky));

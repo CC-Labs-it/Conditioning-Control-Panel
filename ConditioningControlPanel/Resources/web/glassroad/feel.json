@@ -10,6 +10,7 @@
   "steer": {
     "slewCentreS": 0.09,
     "slewFullS": 0.18,
+    "releaseS": 0.055,
     "yawRateDegps": 137.5,
     "yawSpeedRefMps": 25,
     "calmFromMps": 8,
@@ -38,13 +39,13 @@
     "airPull": 1, "airMaxMps": 5, "airAccel": 6 },
   "stones": { "kickUpMps": 3.5, "clearGapM": 4, "minClearMps": 14, "leadM": 25, "flightCapM": 7.5, "shoveMul": 0.3 },
   "glide": { "gravityMps2": 6, "fallMps": 7, "maxS": 2.6 },
-  "hop": { "upMps": 4.8, "gravityHopMps2": 26, "gravityMps2": 28, "gravityEaseS": 0.25 },
+  "hop": { "upMps": 6.8, "gravityHopMps2": 26, "gravityMps2": 28, "gravityEaseS": 0.25 },
   "drift": {
     "minSpeedMps": 8,
-    "tightMin": 0.5,
+    "tightMin": 0.35,
     "tightMax": 1.0,
-    "yawMul": 1.45,
-    "cancelSlipDeg": 6,
+    "yawMul": 1.75,
+    "cancelSlipDeg": 2.5,
     "cancelSlipS": 0.2,
     "tierS": [0.5, 1.2, 2.1],
     "softInMul": 1.25,
@@ -86,7 +87,7 @@
     "botChance": 0.35
   },
   "air": {
-    "lightS": 0.35,
+    "lightS": 0.55,
     "mediumS": 0.6,
     "heavyS": 1.0,
     "squash": [0.04, 0.08, 0.12],
@@ -235,6 +236,7 @@
     "popShowS": 0.6
   },
   "ai": {
+    "stones": { "approachM": 80, "holdLeadM": 35 },
     "routeChance": 0.2,
     "routeLowMul": 0,
     "routeLeadM": 70,

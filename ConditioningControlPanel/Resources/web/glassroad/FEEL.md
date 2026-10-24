@@ -20,16 +20,18 @@ default so the code has no hidden number.
 ## steer
 Polish 2 (owner: "the steering is too strong"): grip yaw = `steer * rate / (1 + v / yawSpeedRefMps) * calm(v) * userMul`
 (`sim/steer.js`). Full-lock grip yaw, before / after: 8 m/s 104 / 104 deg/s, 20 m/s 76 / 51 (-33%), 30 m/s (top)
-62.5 / 40 (-36%), 39 m/s (boosted top) 54 / 27 (-50%). Drift yaw keeps the uncalmed base law, so a drift is the strong
-turn. -50% already at 30 m/s cost 5.8% lap time on Threshold (the 280 m banked sweeper at 1.2 deg/m); -36% costs 2.8%.
+62.5 / 40 (-36%), 39 m/s (boosted top) 54 / 27 (-50%). The historical uncalmed drift is replaced below.
+-50% already at 30 m/s cost 5.8% lap time on Threshold (the 280 m banked sweeper at 1.2 deg/m); -36% costs 2.8%.
 Polish 4 (owner: "it takes way too little to steer completely"): about another third off at cruise and top, so a held
 key carves a wide arc and the tight bends ask for a hold, a lift or a drift. Full-lock grip yaw before / after: 20 m/s
 51.2 / 35.1 deg/s (-31%), 30 m/s 40.0 / 28.1 (-30%), 39 m/s 26.9 / 18.8 (-30%); 8 m/s unchanged (104). Full lock at
 top is now a 61 m arc. Threshold at top speed (30 m/s): the 55 to 58 m bends need 30 to 31 deg/s (a small lift or a
-drift), the 38 to 49 m bends and the helix (r about 36 m on the road plane, 47 deg/s) need a drift (45 to 91 deg/s at
+drift), the 38 to 49 m bends and the helix (r about 36 m on the road plane, 47 deg/s) need a drift (up to 49 deg/s at
 30 m/s) or grip at 22 to 26 m/s.
-- `steer.slewCentreS` 0.09: stick slew time near centre (0.06 before polish 2: a tap is a small correction now).
-- `steer.slewFullS` 0.18: stick slew time at full lock (0.14 before).
+- `steer.slewCentreS` 0.09: calm onset near centre.
+- `steer.slewFullS` 0.18: calm onset toward full lock; unchanged so tight-track line tracking stays responsive.
+- `steer.releaseS` 0.055: prompt release and opposite-side correction, including older feel files missing this key.
+  Grip yaw and bot bend planning stay unchanged; full-lock reversal crosses zero within 50 ms.
 - `steer.yawRateDegps` 137.5: yaw rate at full lock and zero speed (2.4 rad/s), before the calm.
 - `steer.yawSpeedRefMps` 25: speed that halves the base yaw rate.
 - `steer.calmFromMps` 8: below this the base law is untouched (nimble when slow).
@@ -40,7 +42,7 @@ drift), the 38 to 49 m bends and the helix (r about 36 m on the road plane, 47 d
 - `steer.boostCalmMps` 39: boosted-top point of the calm (speed.topMps x speed.maxPct) ...
 - `steer.boostYawMul` 0.35: ... grip yaw multiplier there and above (0.5 before polish 4).
 - `steer.userMul` 1: steering sensitivity, the player's Options `steerSens` (0.6 to 1.4 in 0.1 steps). The integrator
-  wires it with `feel.set('steer.userMul', opts.steerSens)`. Scales grip yaw only (not drift yaw); bots hold it at 1
+  wires it with `feel.set('steer.userMul', opts.steerSens)`. Scales grip and drift yaw; bots hold it at 1
   (`sim/racers.js` overlay), and the bots' corner planning reads the same calmed law.
 - `steer.slipCostGripPerDegS` 0.009: engineV fraction lost per degree of slip per second in a grip turn.
 - `steer.slipCostDriftPerDegS` 0.0035: the same while drifting.
@@ -123,8 +125,8 @@ A stone field (`track.fields`) replaces the road deck with lanes of 5 x 5 m ston
 - `stones.leadM` 25: the slipstream kick holds from this far before a field to its end (as the court lead does), so no boost fires at the entry at the wrong lateral.
 
 ## hop
-Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every drift); now 0.40 m, 0.33 s, lands soft.
-- `hop.upMps` 4.8: hop up speed (5.5 before).
+Owner manual-handling pass: a visible jump, about 0.8 m apex and 0.48 s air (previously 0.40 m / 0.33 s).
+- `hop.upMps` 6.8: hop up speed (4.8 before).
 - `hop.gravityHopMps2` 26: gravity right after a hop (18 before: the hang at the apex).
 - `hop.gravityMps2` 28: rest gravity (every other airborne moment; unchanged so jump arcs stay the same).
 - `hop.gravityEaseS` 0.25: time to ease from hop gravity to rest gravity (0.3 before).
@@ -132,15 +134,16 @@ Polish 2: the hop was floaty (0.69 m apex, 0.45 s air, a landing thud on every d
 ## drift
 Polish 4: a hop OR a brake press while steering at speed (throttle held: the power slide) starts the slide; the first
 tier comes at 0.5 s (0.4 s steering into it), and every drift that charged 0.4 s pays at least the mini-turbo on
-release. Drift yaw at 30 m/s: 45 to 91 deg/s (60 to 100 before), so the slide is the strong turn and still holdable.
+release. Drift now shares speed calm: at 30 m/s, 17 to 49 deg/s replaces 45 to 91. Full inward lock still holds
+the 36 m Threshold helix; countersteer opens the arc substantially. Charging remains grounded time only.
 Events: `drift-start { dir, via: 'hop' | 'brake' }`, `drift-tier { tier, dir }`, `drift-release { tier }`,
 `drift-boost { tier, dir }` (every paid release, tier 0 = mini-turbo), `drift-cancel { reason }`; a bot's arrive as
 `racer-event { racer, name, p }`. Skid flag: `skidOf(st)` in `sim/drift.js` (drifting and grounded).
 - `drift.minSpeedMps` 8: a hop or a brake starts a drift only above this speed; dropping under it cancels.
-- `drift.tightMin` 0.5: drift yaw share with the stick away from the turn (0.6 before polish 4).
+- `drift.tightMin` 0.35: drift yaw share with the stick away from the turn (0.5 before).
 - `drift.tightMax` 1.0: drift yaw share with the stick into the turn.
-- `drift.yawMul` 1.45: max drift yaw as a multiple of the uncalmed base yaw (1.6 before polish 4).
-- `drift.cancelSlipDeg` 6: slip under this angle ...
+- `drift.yawMul` 1.75: max drift yaw as a multiple of the speed-calmed grip yaw (previously 1.45 times uncalmed yaw).
+- `drift.cancelSlipDeg` 2.5: slip under this angle (lowered with the gentler slide) ...
 - `drift.cancelSlipS` 0.2: ... for this long ends the drift: one that charged `drift.miniMinS` pays like a release
   (the slide straightened out by itself), a shorter one cancels (also release, low speed, wall).
 - `drift.tierS` [0.5, 1.2, 2.1]: charge seconds for tiers 1, 2, 3 ([0.6, 1.4, 2.4] before polish 4).
@@ -191,7 +194,7 @@ take-off, on a pad up to padLateS after entering it, or on the ground up to earl
 - `trick.botChance` 0.35: chance a bot tricks at a lip (read by sim/ai.js once it presses hop after a lip take-off).
 
 ## air (landing tiers by airtime)
-- `air.lightS` 0.35: under this, nothing (0.25 before; a plain hop, 0.33 s, now lands soft).
+- `air.lightS` 0.55: under this, nothing; the higher plain hop still lands softly.
 - `air.mediumS` 0.6: light tier up to here (squash, dust).
 - `air.heavyS` 1.0: medium tier up to here (squash, bounce, cue); above is heavy (squash, bounce, shake, loud cue).
 - `air.squash` [0.04, 0.08, 0.12]: squash per tier light, medium, heavy.
@@ -399,6 +402,8 @@ Weights are `[front, middle, back]` relative draw weights per place bucket; 0 = 
 - `items.popShowS` 0.6: a pop stays in the item view this long for its burst.
 
 ## ai (B1 bots, sim/ai.js and sim/racers.js)
+- `ai.stones` { approachM: 80, holdLeadM: 35 }: settle onto the picked lane earlier before stone fields,
+  keeping the same physical steering, hop and drift rules as the player with the faster steering release.
 - `ai.playerSlot` 5: grid slot of the local player (0 = front); bots fill the rest.
 - `ai.difficulty` 1: index into difficultyMul (0 easy, 1 normal, 2 hard).
 - `ai.difficultyMul` [0.92, 1.0, 1.06]: bot top speed share per difficulty.

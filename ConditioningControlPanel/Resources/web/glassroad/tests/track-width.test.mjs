@@ -45,7 +45,9 @@ test('width: every change eases monotonically between node widths without a sudd
       const w = track.frameAt(s0 + (s1 - s0) * j / 100).w;
       assert.ok(w >= Math.min(a, b) - 1e-7 && w <= Math.max(a, b) + 1e-7);
       assert.ok((w - last) * (b - a) >= -1e-7);
-      assert.ok(Math.abs(w - last) / 2 < 0.8 * (s1 - s0) / 100, 'edge taper stays below 0.8 lateral metres per forward metre');
+      // Widening the ordinary road changes metres per metre where it meets unchanged technical
+      // widths. Preserve the shape limit: a monotone cubic's slope cannot exceed 3x its mean.
+      assert.ok(Math.abs(w - last) <= Math.abs(b - a) * 3 / 100 + 1e-7, 'no 1% station step exceeds 3% of the complete width transition');
       last = w;
     }
   }
@@ -54,17 +56,20 @@ test('width: every change eases monotonically between node widths without a sudd
 
 test('width: steering out then counter-steering uses the extra room instead of hitting the old rail', () => {
   const narrow = structuredClone(json);
-  for (const node of narrow.nodes) if (node.w === 20) node.w = 16;
+  // The home straight grew from 20m to 28m. Rebuild its actual former boundary for comparison.
+  assert.equal(track.frameAt(15).w, 28);
+  for (const node of narrow.nodes) if (node.w === 28) node.w = 20;
   const oldTrack = loadTrack(narrow), feel = makeFeel();
+  const formerEdge = oldTrack.frameAt(15).w / 2, newEdge = track.frameAt(15).w / 2;
   for (const side of [-1, 1]) {
     for (const t of [track, oldTrack]) {
-      const st = place(t, { s: 15, lateral: 7 * side, speed: 24 }), rec = recorder();
+      const st = place(t, { s: 15, lateral: (formerEdge - .75) * side, speed: 24 }), rec = recorder();
       run(st, t, feel, acts({ throttle: 1, steer: 0.5 * side }), 0.4, rec);
       run(st, t, feel, acts({ throttle: 1, steer: -0.5 * side }), 0.4, rec);
       run(st, t, feel, acts({ throttle: 1 }), 0.4, rec);
       if (t === track) {
-        assert.ok(Math.abs(st[S.lateral]) > 8.1, 'travels beyond the former road edge');
-        assert.ok(Math.abs(st[S.lateral]) < 9, 'stays comfortably inside the new rail');
+        assert.ok(Math.abs(st[S.lateral]) > formerEdge + .1, 'travels beyond the former road edge');
+        assert.ok(Math.abs(st[S.lateral]) < newEdge - 2, 'keeps at least 2m of room inside the new rail');
         assert.ok(st[S.grounded] && st[S.engineV] > 29);
         assert.ok(!rec.names().some((n) => ['wall', 'drop', 'edge-enter'].includes(n)), rec.names().join(','));
       } else assert.ok(rec.first('wall'), 'the same maneuver hits the old boundary');

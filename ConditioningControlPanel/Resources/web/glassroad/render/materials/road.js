@@ -338,7 +338,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // Mainframe departments own their opaque deck finishes. Shared navigation marks are restrained
   // so the control tiles, grating, cable channels and black service deck retain their own identity.
   if (track?.id === 'mainframe') {
-    const plates = mainframeFloor(track, p, machineSurface(p, vec3(0.085, 0.105, 0.12)), {
+    const plates = mainframeFloor(track, p, machineSurface(p, vec3(0.085, 0.105, 0.12), null, null, { flush: true }), {
       halfWidth: half, wear: art?.detail?.('detail-gold-wear'), roughness: art?.detail?.('detail-porcelain-roughness'),
     });
     const dash = smoothstep(.2,.35,fract(p.y.div(12))).mul(float(1).sub(smoothstep(.65,.8,fract(p.y.div(12)))));

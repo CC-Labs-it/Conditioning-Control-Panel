@@ -18,7 +18,7 @@
  * ?lobby=http://127.0.0.1:8811&uid=<id>&name=<n> talks to a local race-local.mjs lobby with the fake identity
  * (&tier=N also goes to the lobby as x-dev-tier). ?r=<token>: a friend's race link, claimed on the lobby card.
  */
-import { createBridge, songCharts, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
+import { createBridge, songCharts, isLocalSongHost, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia } from './host/cardMedia.js';
 import { createFlashMedia } from './fx/flashMedia.js';
@@ -75,7 +75,7 @@ import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createLoading } from './hud/loading.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
-import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
+import { COURSES, selectedCourse, courseUrl, courseRaceIntent } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
 import { getBoudoirLayout } from './track/boudoir-layout.js';
 import { createBoudoirPerfume } from './sim/boudoirPerfume.js';
@@ -87,6 +87,12 @@ import { createGoonworksHazards } from './sim/goonworksHazards.js';
 const qs = new URLSearchParams(location.search);
 const course = selectedCourse(location.search);
 const TRACK_ID = course.id;
+const START_ON_READY = courseRaceIntent(location.search) === TRACK_ID;
+// A chooser click survives the page load once. Refreshing the course opens its garage normally.
+if (qs.has('start')) {
+  const url = new URL(location.href); url.searchParams.delete('start');
+  history.replaceState(history.state, '', url);
+}
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
 // ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
 const DEV = devAllowed(location.search);
@@ -95,9 +101,9 @@ const HT = qs.get('hitch') === '1' ? (window.__hitch = { sim: 0, fx: 0, audio: 0
 let hT = 0;
 const hLap = (k) => { const t = performance.now(); HT[k] = t - hT; hT = t; };
 // the race song (handoff-1022/MUSIC-ROAD-BRIEF.md): ?chart=<url> plays that chart, ?chart=0 none; the dev
-// server (port 8790) tries the private song folder it mounts at /private-audio/; a host names its own charts in
+// loopback server tries the private song folder it mounts at /private-audio/; a host names its own charts in
 // init.caps.songs (host/bridge.js songCharts). Set once the init lands, before any race can start.
-const DEV_HOST = location.port === '8790' && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
+const DEV_HOST = isLocalSongHost(location);
 let CHARTS = [];
 const COUNT = 8;                                   // offline grid (and the kart slots the world builds); online = the room's seats
 const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
@@ -289,7 +295,7 @@ async function boot() {
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   const garage=await createGarage({art,renderer,canvas,track:trackName,laps,trackId:track.id,online:course.online,
-    changeTrack:id=>{const url=courseUrl(location.href,id);if(url)location.assign(url);},
+    changeTrack:id=>{const url=courseUrl(location.href,id,{race:true});if(url)location.assign(url);},
     action:name=>hud.menuAction(name),sound:name=>{audio.start();audio.cue(name);}});
   if(garage){hud.setGarageNav(garage.nav);debug.garage=garage;}
   // passing through a spiral gate plays that gate's own Loom over the view (photosafe, Gentle halves it)
@@ -536,7 +542,7 @@ async function boot() {
     unpause(); resetAll();
     state = 'menu';
     hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps, online: course.online,
-      courses: COURSES.map(c => ({ name: c.name, selected: c.id === track.id, url: courseUrl(location.href, c.id) })) });
+      courses: COURSES.map(c => ({ name: c.name, selected: c.id === track.id, url: courseUrl(location.href, c.id, {race:true}) })) });
     if (audio.state === 'running') void menuSong();
   }
 
@@ -794,6 +800,7 @@ async function boot() {
   sessionStorage.removeItem('glassroad.pendingRoom');
   if (pendingRoom) { hud.setCard('lobby', { roomId: pendingRoom }); lobbyUi = hud.lobby || lobbyUi; }
   else if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }
+  else if (START_ON_READY) startRace();
   if (BOT && !link) botT = performance.now() + 2500;   // attract: a short look at the menu, then race (never with a lobby)
 
   let fpsN = 0, fpsT = performance.now(), telT = 0;

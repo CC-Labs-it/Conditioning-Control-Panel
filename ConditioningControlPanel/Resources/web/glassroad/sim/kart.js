@@ -37,7 +37,7 @@ import { applyBoost, boostFloor, endBoost } from './boost.js';
 import { updateDrift, cancelDrift, driftYaw, maybeStartDrift } from './drift.js';
 import { hop, gravityMps2 } from './hop.js';
 import { takeoff, land } from './air.js';
-import { baseYaw, gripYaw } from './steer.js';
+import { gripYaw, slewSteer } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
@@ -112,14 +112,13 @@ export function step(st, a, track, feel, dt, ev) {
   }
 
   // steering: slew toward the stick (quicker near centre), then the yaw law
-  const slewTc = lerp(feel.get('steer.slewCentreS'), feel.get('steer.slewFullS'), Math.abs(st[S.steerSlew]));
-  const steer = (st[S.steerSlew] = damp(st[S.steerSlew], stalled ? 0 : clamp(a.steer, -1, 1), slewTc, dt));
+  const steer = (st[S.steerSlew] = slewSteer(st[S.steerSlew], stalled ? 0 : clamp(a.steer, -1, 1), feel, dt));
   qrotate(U, Q, UP); qrotate(F, Q, FWD);
   if (wasGround) v3norm(U, v3lerp(U, U, qa.normal, 1 - Math.exp(-dt / gap(feel, 'kart.alignTcS'))));
   v3norm(F, v3reject(F, F, U));
   const fwd0 = v3dot(V, F);
-  // grip: the calmed law (sim/steer.js); a drift keeps the uncalmed base, so it stays the strong turn
-  let yaw = st[S.driftDir] ? driftYaw(st, steer, feel, baseYaw(fwd0, feel)) : steer * gripYaw(fwd0, feel) * (fwd0 < 0 ? -1 : 1);
+  // Both steering modes share speed calm; a drift adds a bounded stronger turn.
+  let yaw = st[S.driftDir] ? driftYaw(st, steer, feel, gripYaw(fwd0, feel)) : steer * gripYaw(fwd0, feel) * (fwd0 < 0 ? -1 : 1);
   if (stalled) yaw = 0;
   yaw *= W.steerMul;                               // a chute steers less (wave 1 WATER)
   st[S.yawRate] = yaw;

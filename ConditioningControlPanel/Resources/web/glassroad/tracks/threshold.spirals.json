@@ -12,11 +12,11 @@
       }
     },
     {
-      "id": "dawn-coil", "f": 0.17, "radiusM": 20, "depthM": 24, "helixTurns": 0.12, "taper": 0.15, "upM": 3.5,
+      "id": "dawn-coil", "f": 0.17, "radiusM": 24, "depthM": 24, "helixTurns": 0.12, "taper": 0.15, "upM": 3.5,
       "seed": 204
     },
     {
-      "id": "deep-well", "f": 0.315, "radiusM": 20, "depthM": 20, "helixTurns": 0.2, "taper": 0.35, "upM": 3.5,
+      "id": "deep-well", "f": 0.315, "radiusM": 22, "depthM": 20, "helixTurns": 0.2, "taper": 0.35, "upM": 3.5,
       "loom": {
         "schema": 2, "speed": 2,
         "layer": { "arms": 4, "turns": 3.5, "duty": 0.42, "style": "tunnel", "direction": 1, "colors": ["#00e5ff", "#9dff2f", "#ffd21f"], "bandMode": "gradient", "speedMul": 1 },

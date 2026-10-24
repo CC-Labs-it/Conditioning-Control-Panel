@@ -130,11 +130,11 @@ test('the kick never fires on the deck; a hop on the same stone is no new stone 
   assert.ok(st[S.s] < f.fromS, 'still on the deck');
   assert.equal(rec.all('airborne').length, 0); assert.equal(rec.all('stone').length, 0);
   const rec2 = recorder();
-  // slow, so the hop (about 0.33 s in the air) comes down on the same 5 m stone
+  // Slow, so the higher hop (about 0.48 s in the air) comes down on the same 5 m stone.
   const k = place(tr, { s: first.s + 0.5, lateral: 0, speed: 4 });
   run(k, tr, feel, acts(), 2 * DT, rec2);
   assert.deepEqual(rec2.all('stone').map((e) => e.payload.id), [first.id]);
-  run(k, tr, feel, acts({ hopPressed: true }), 0.4, rec2, () => !!rec2.first('land'));
+  run(k, tr, feel, acts({ hopPressed: true }), 0.6, rec2, () => !!rec2.first('land'));
   assert.ok(rec2.first('hop') && rec2.first('land'), 'hopped and landed');
   assert.equal(rec2.all('stone').length, 1, 'same stone, no new event');
 });

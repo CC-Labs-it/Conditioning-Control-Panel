@@ -16,7 +16,7 @@ export function mainframeFloor(track, p, circuit, { halfWidth = float(14), wear 
     const d = abs(fract(v.div(period)).sub(.5)).mul(period);
     return float(1).sub(smoothstep(width, float(width).add(px), d));
   };
-  const plates = plateDetails(p), plate = base => machineSurface(p, base, null, plates);
+  const plates = plateDetails(p), plate = base => machineSurface(p, base, null, plates, { flush: true });
   const edge = halfWidth.sub(abs(p.x));
   const verge = smoothstep(0.8, 1.2, edge).mul(float(1).sub(smoothstep(2.6, 3.1, edge)));
   const stripe = smoothstep(.42, .58, fract(p.x.add(p.y).div(3.2)));
@@ -37,7 +37,7 @@ export function mainframeFloor(track, p, circuit, { halfWidth = float(14), wear 
   const finishes = {
     control: plate(vec3(.24,.255,.225)).add(vec3(.06,.085,.075).mul(line(p.x,12,.23,pixel.x))),
     engine: warning(mix(plate(vec3(.10,.105,.10)).add(vec3(.09,.075,.047).mul(tread)),vec3(.006,.012,.015),grate)),
-    containment: mix(plate(vec3(.30,.35,.34)),vec3(.018,.16,.13),verge).add(vec3(.12,.15,.14).mul(plates.rim)),
+    containment: mix(plate(vec3(.30,.35,.34)),vec3(.018,.16,.13),verge).add(vec3(.02,.025,.023).mul(plates.rim)),
     tar: warning(plate(vec3(.018,.022,.026)).add(vec3(.075,.09,.10).mul(tread.mul(.5))).mul(float(1).sub(serviceBand.mul(.32)))),
     cables: mix(plate(vec3(.105,.12,.135)),darkChannel,serviceBand).add(vec3(.08,.10,.12).mul(line(abs(p.x).sub(halfWidth.mul(.5)),2,.055,pixel.x).mul(serviceBand))),
     accelerator: mix(plate(vec3(.025,.04,.07)),vec3(.085,.32,.29),launchArrow).add(vec3(.025,.045,.06).mul(line(p.x,5,.12,pixel.x))),

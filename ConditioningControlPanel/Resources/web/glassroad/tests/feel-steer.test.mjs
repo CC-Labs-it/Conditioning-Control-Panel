@@ -40,12 +40,12 @@ test('polish 4: full-lock grip yaw is about a third under polish 3 at 20, 30 and
   assert.ok(30 / gripYaw(30, f) > 55);
 });
 
-test('polish 4: every bend radius of Threshold (36 to 70 m) is makeable at top speed with a drift', () => {
+test('every Threshold bend remains makeable at top speed with the calmed drift', () => {
   const f = makeFeel(), top = f.get('speed.topMps');
-  const drift = f.get('drift.yawMul') * baseYaw(top, f);
+  const drift = f.get('drift.yawMul') * gripYaw(top, f);
   for (const r of [36, 48, 56, 70]) {
     const need = top / r;
-    assert.ok(drift * f.get('drift.tightMax') >= need * 1.5, 'drift has room at r ' + r);
+    assert.ok(drift * f.get('drift.tightMax') >= need, 'drift holds r ' + r);
     // a held grip key alone makes the wide ones at near top, the tight ones only after a lift
     const v = bendSpeed(180 / Math.PI / r, f, 1);
     assert.ok(v > 20, 'grip turn at r ' + r + ' holds ' + v.toFixed(1) + ' m/s');
@@ -78,17 +78,17 @@ test('bendSpeed: the crossing of k v and share x the calmed grip yaw; the Phase 
   assert.ok(bendSpeed(1.2, f, 0.8) < bendSpeed(1.2, flat, 0.8), 'the calm slows a grip turn');
 });
 
-test('kart: grip yaw follows the calmed law at speed; a drift keeps the uncalmed base law', () => {
+test('kart: grip and drift both follow speed calm, drift remains the stronger turn', () => {
   const f = makeFeel(), tr = fakeTrack({ w: 400 });
   const st = place(tr, { speed: 30 });
   run(st, tr, f, acts({ throttle: 1, steer: 1 }), 0.6, recorder());
   const v = st[S.speedPct] * f.get('speed.topMps');
-  near(st[S.yawRate], gripYaw(v, f), 0.03 * gripYaw(v, f), 'grip');
+  near(st[S.yawRate], st[S.steerSlew] * gripYaw(v, f), 0.03 * gripYaw(v, f), 'grip');
   const d = place(tr, { speed: 30 });
   run(d, tr, f, acts({ throttle: 1, hop: true, hopPressed: true, steer: 1 }), 0.6, recorder());
   assert.equal(d[S.driftDir], 1);
   const dv = d[S.speedPct] * f.get('speed.topMps');
-  assert.ok(d[S.yawRate] >= f.get('drift.yawMul') * f.get('drift.tightMin') * baseYaw(dv, f) - 1e-6, 'drift is the strong turn');
+  assert.ok(d[S.yawRate] >= f.get('drift.yawMul') * f.get('drift.tightMin') * gripYaw(dv, f) - 1e-6, 'drift uses grip calm');
   assert.ok(d[S.yawRate] > 1.5 * gripYaw(dv, f));
 });
 
@@ -172,13 +172,13 @@ test('camera: the heading follows on yawFollowTcS, softer than the position foll
   assert.ok(f.get('camera.yawFollowTcS') > f.get('camera.followHTcS'));
 });
 
-test('hop: snappy, about 0.4 m and a third of a second, lands soft (no thud on every drift)', () => {
+test('hop: visible .8 m jump with half a second of air, plain drift hops still land soft', () => {
   const f = makeFeel(), tr = fakeTrack({ w: 400 }), rec = recorder();
   const st = place(tr, { speed: 25 }), y0 = st[S.posY];
   let apex = 0;
   run(st, tr, f, acts({ throttle: 1, hopPressed: true }), 0.8, rec, (s) => { apex = Math.max(apex, s[S.posY] - y0); return false; });
   const land = rec.first('land');
-  assert.ok(apex > 0.3 && apex < 0.5, 'apex ' + apex);
-  assert.ok(land.payload.airTime > 0.25 && land.payload.airTime < f.get('air.lightS'), 'air ' + land.payload.airTime);
+  assert.ok(apex > 0.75 && apex < 0.9, 'apex ' + apex);
+  assert.ok(land.payload.airTime > 0.45 && land.payload.airTime < f.get('air.lightS'), 'air ' + land.payload.airTime);
   assert.equal(land.payload.tier, 0);
 });

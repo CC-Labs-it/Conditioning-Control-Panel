@@ -31,7 +31,8 @@ test('court holes remove support, preserve outer rail distance, and copy cleanly
   assert.equal(out.hole, q.hole); assert.equal(out.holeDist, q.holeDist);
   for (const x of [h.x - h.w / 2 - 0.1, h.x + h.w / 2 + 0.1]) assert.ok(track.query(...point(track, s, x)).onRoad);
   for (const ss of [h.s - 0.1, h.s + h.len + 0.1]) assert.ok(track.query(...point(track, ss, h.x)).onRoad);
-  assert.equal(track.query.below(...point(track, s, h.x, 0.5)), null, 'no hidden support under this opening');
+  const below = track.query.below(...point(track, s, h.x, 0.5));
+  assert.ok(!below || p[1] - below.p[1] >= 10, 'the opening has no hidden floor; a visible lower deck stays at least 10 m below');
 });
 
 test('court intervals reserve kart clearance and ordinary tracks stay unchanged', () => {

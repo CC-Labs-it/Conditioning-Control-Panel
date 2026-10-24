@@ -29,7 +29,7 @@ export function plateDetails(p, size = vec2(4, 6)) {
     screw: screw.mul(visibility), slot: slot.mul(visibility), variation, cell, edge, filter, visibility };
 }
 
-export function machineSurface(p, base, wear = null, details = null) {
+export function machineSurface(p, base, wear = null, details = null, { flush = false } = {}) {
   const d = details || plateDetails(p);
   const brushed = wear ? texture(wear, p.div(vec2(2.2, 0.55))).r : float(0.5);
   // Broad pressed recesses read from the chase camera; fine machining disappears before aliasing.
@@ -40,11 +40,13 @@ export function machineSurface(p, base, wear = null, details = null) {
   const brushVisibility = float(1).sub(smoothstep(.3, 1.1, fwidth(brushPhase)));
   const machining = sin(brushPhase).mul(.035).mul(brushVisibility).add(1);
   const finish = base.mul(brushed.mul(0.24).add(0.82)).mul(d.variation).mul(machining)
-    .mul(float(1).sub(inset.mul(.10)))
-    .mul(float(1).sub(d.seam.mul(0.8))).mul(float(1).sub(d.socket.mul(0.72)));
-  return finish.add(base.mul(d.rim).mul(d.side.mul(0.78).sub(0.2)))
-    .add(base.mul(lip).mul(.16))
-    .add(vec3(0.15, 0.19, 0.20).mul(d.screw)).mul(float(1).sub(d.slot.mul(0.65)));
+    .mul(float(1).sub(inset.mul(flush ? 0 : .10)))
+    .mul(float(1).sub(d.seam.mul(flush ? .22 : .8))).mul(float(1).sub(d.socket.mul(flush ? .15 : .72)));
+  // Floor joints are flush paint and sealed fasteners. Only machinery has raised pressed lips.
+  return finish.add(base.mul(d.rim).mul(d.side.mul(flush ? .08 : .78).sub(flush ? .025 : .2)))
+    .add(base.mul(lip).mul(flush ? 0 : .16))
+    .add(vec3(0.15, 0.19, 0.20).mul(d.screw).mul(flush ? .22 : 1))
+    .mul(float(1).sub(d.slot.mul(flush ? .16 : .65)));
 }
 
 export function createMachineMaterial(hex, art, { glow = false, vent = false, coolant = null } = {}) {

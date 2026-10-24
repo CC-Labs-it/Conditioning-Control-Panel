@@ -12,7 +12,7 @@ const fwd = (st) => qrotate([0, 0, 0], [st[S.quatX], st[S.quatY], st[S.quatZ], s
 
 test('landing tiers by airtime', () => {
   const feel = makeFeel(), g = feel.get('hop.gravityMps2');
-  for (const [t, tier] of [[0.2, 0], [0.4, 1], [0.8, 2], [1.2, 3]]) {
+  for (const [t, tier] of [[0.2, 0], [0.59, 1], [0.8, 2], [1.2, 3]]) {
     assert.equal(landTier(t, feel), tier);
     const tr = fakeTrack({ w: 40 }), rec = recorder();
     const st = place(tr, { speed: 10, height: 0.5 * g * t * t, airborne: true });

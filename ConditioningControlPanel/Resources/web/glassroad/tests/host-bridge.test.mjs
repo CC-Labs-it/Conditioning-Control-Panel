@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBridge, defaultInit, mergeInit, songCharts } from '../host/bridge.js';
+import { createBridge, defaultInit, mergeInit, songCharts, isLocalSongHost } from '../host/bridge.js';
 import { createHostEscape } from '../host/hostEscape.js';
 import { formatTime } from '../hud/hud.js';
 import { applyKept, rangeFor } from '../hud/feelSheet.js';
@@ -85,4 +85,19 @@ test('caps.songs: default empty, host list validated, query and dev host win', (
   assert.deepEqual(songCharts({ search: '?chart=0', songs: ['/a.json'] }), []);
   assert.deepEqual(songCharts({ search: '?chart=/x.json', songs: ['/a.json'] }), ['/x.json']);
   assert.equal(songCharts({ devHost: true, songs: ['/a.json'] })[0], '/private-audio/pink-road/chart.json');
+});
+
+test('private preview songs are available on alternate loopback ports without leaking into remote hosts',()=>{
+  for(const origin of ['http://127.0.0.1:8790','http://127.0.0.1:18952','http://localhost:18952']){
+    const devHost=isLocalSongHost(new URL(origin));
+    assert.equal(devHost,true,origin);
+    assert.equal(songCharts({devHost})[0],'/private-audio/pink-road/chart.json');
+    assert.deepEqual(songCharts({devHost,search:'?chart=0'}),[]);
+    assert.deepEqual(songCharts({devHost,search:'?chart=/chosen/chart.json'}),['/chosen/chart.json']);
+  }
+  for(const origin of ['https://app.cclabs.app','https://localhost.evil.test:18952','http://192.168.1.2:18952','file:///C:/game/index.html']){
+    const devHost=isLocalSongHost(new URL(origin));
+    assert.equal(devHost,false,origin);
+    assert.deepEqual(songCharts({devHost}),[]);
+  }
 });

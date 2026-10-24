@@ -51,6 +51,18 @@ test('query: segT and surface data match frameAt', () => {
   assert.ok(Math.abs(q.normal[0] - f.n[0]) < 1e-3 && Math.abs(q.normal[1] - f.n[1]) < 1e-3);
 });
 
+test('query: wide start shoulder stays on its floor beneath the raised bridge', () => {
+  const s = 62.62450764796011, lateral = 13.813753416675029, height = .21920925714970074;
+  const { f, P } = place(s, lateral, height);
+  for (const hint of [-1, f.seg, 31]) {
+    const q = tr.query(...P, hint);
+    assert.ok(sDiff(q.s, s) < 1e-3);
+    assert.ok(Math.abs(q.height - height) < 1e-3);
+    assert.equal(q.onRoad, true);
+    assert.ok(Math.abs(q.p[1]) < 1e-3, 'the 11 m overhead bridge cannot own this floor contact');
+  }
+});
+
 test('query: past the edge, open sides and rails', () => {
   const railS = tr.nodeS[20] + 4, openS = tr.nodeS[OPEN] + 4;
   for (const side of [-1, 1]) {
