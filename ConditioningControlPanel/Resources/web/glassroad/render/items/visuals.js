@@ -28,12 +28,13 @@ import { Q } from '../quality.js';
 import { ITEM_LOOK as L, ITEM_TIERS, MOTE_TINT } from './look.js';
 import {
   tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool, cardEdgeGlow, shellFit, nearCapR, impactSeen,
-  breathe, trailPush, trailLook, trapWarn, lobMark, impactPhase, confettiAt, boxGlint, launchPop, launchFlare, impactFountain,
+  breathe, trailLook, trapWarn, lobMark, impactPhase, confettiAt, boxGlint, launchPop, launchFlare, impactFountain,
   iconFps, iconLive,
 } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
 import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, cardEdge, blobShadow, confettiCloud } from './materials.js';
 import { createItemStatus } from './status.js';
+import { advanceRibbon, flightSpark } from './flight.js';
 
 const UP = new Vector3(0, 1, 0), V = new Vector3(), W = new Vector3(), N = new Vector3(), QT = new Quaternion(), QS = new Quaternion();
 const OFF = [0, 0, 0];
@@ -82,7 +83,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   const icons = createLivingIcons({ px: start.iconPx, fps: () => iconFps(tierOf(Q.name).iconFps, backendOf()) });
   // motes: bubble rings, pop sprays, throw ribbons, lob dots, box glints and impact glows share one draw
   const bubbles = bubbleCloud(top.bubbles + 24, icons.texture);
-  const motes = moteCloud(top.bubbles * top.motes + 24 * Math.ceil(L.popMotes * L.impactMotesMul) + 8 * (2 * L.trailPts + L.lobDots + 1) + 12 * L.fountain.high + 24);
+  const motes = moteCloud(top.bubbles * top.motes + 24 * Math.ceil(L.popMotes * L.impactMotesMul) + 8 * (2 * L.trailPts + L.lobDots + 17) + 12 * L.fountain.high + top.puddles * 10 + 24);
   root.add(bubbles.sprite, motes.sprite);
   const confetti = confettiCloud(L.confetti.high * 6 + L.hitConfetti.high * 4);
   root.add(confetti.mesh);
@@ -138,7 +139,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     return { mesh, u: g.uniforms };
   }, (e) => { e.mesh.visible = false; });
   // polish 2: flat rings (shockwaves, trap warnings, lob landing marks) and soft landing shadows
-  const marks = createPool(16, () => {
+  const marks = createPool(48, () => {
     const g = ringGlow(L.markColour), mesh = new Mesh(plane, g.material);
     mesh.frustumCulled = false; mesh.renderOrder = 1; root.add(mesh);
     return { mesh, u: g.uniforms };
@@ -172,7 +173,9 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     return { obj, set(a) { for (const m of meshes) m.userData.echoA = a; } };
   }, (e) => { e.obj.visible = false; });
   // one of each pooled look exists from boot so the warm links it (pass 4: the first echo copy froze Firefox ~55 s in)
-  for (const p of [puddles, waves, marks, shadows]) p.prime(1);
+  // Full pools are built behind the loading cover. Firefox must not link a second
+  // puddle or ring material for the first time when several traps are laid together.
+  for (const p of [puddles, waves, marks, shadows]) p.prime(p.cap);
   copies.prime(copies.cap);
   boxes[0] = buildBox(0); boxes[0].visible = false;
 
@@ -193,14 +196,14 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     return iconLive(R, d, d > 1e-6 ? (dx * camFx + dy * camFy + dz * camFz) / d : 1, cam.fov || 0);
   }
   /** R shrunk so a bubble at (x, y, z) stays under nearMaxFrac of the view's height (no camera: unchanged). */
-  function capR(x, y, z, R) {
+  function capR(x, y, z, R, nearFrac = L.nearMaxFrac) {
     if (!cam || !cam.position) return R;
     const p = cam.position;
-    return nearCapR(R, Math.hypot(x - p.x, y - p.y, z - p.z), cam.fov, L.nearMaxFrac);
+    return nearCapR(R, Math.hypot(x - p.x, y - p.y, z - p.z), cam.fov, nearFrac);
   }
   /** free: skip the near cap (shields wrap a kart and must stay round it). */
-  function bubble(x, y, z, id, R, alpha = 1, mode = MODE.icon, seed = 0, moteN = -1, free = false) {
-    if (!free) R = capR(x, y, z, R);
+  function bubble(x, y, z, id, R, alpha = 1, mode = MODE.icon, seed = 0, moteN = -1, free = false, nearFrac = L.nearMaxFrac) {
+    if (!free) R = capR(x, y, z, R, nearFrac);
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     const cell = mode >= MODE.shell ? -1 : cellOf(id);
     if (cell >= 0) icons.use(id, iconSeen(x, y, z, R));
@@ -211,9 +214,9 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     if (n > 0) addMotes(x, y, z, R, id, n, seed, alpha);
   }
   /** A 3D effect bubble (held, thrown, trap, box turn): the GLB shell round a bare living icon; the sprite bubble without it. */
-  function bubble3d(x, y, z, id, R, alpha = 1, seed = 0, moteN = -1) {
-    if (!shells) { bubble(x, y, z, id, R, alpha, MODE.icon, seed, moteN); return; }
-    R = capR(x, y, z, R);
+  function bubble3d(x, y, z, id, R, alpha = 1, seed = 0, moteN = -1, nearFrac = L.nearMaxFrac) {
+    if (!shells) { bubble(x, y, z, id, R, alpha, MODE.icon, seed, moteN, false, nearFrac); return; }
+    R = capR(x, y, z, R, nearFrac);
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     if (!shells.push(x, y, z, R, alpha, seed)) return;
     icons.use(id, iconSeen(x, y, z, R));
@@ -238,7 +241,11 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     if (edge) edge.uniforms.glow.value = cardEdgeGlow(timeS, soft);
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
     const endAll = () => { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); if (shells) shells.end(); };
-    if (!view) { endAll(); return; }
+    if (!view) {
+      trails.clear(); launches.clear(); glows.clear();
+      for (const box of boxes) box.visible = false;
+      endAll(); return;
+    }
     const tier = tierOf(Q.name), moteK = tier.motes / top.motes;
     const showS = feel.get('items.popShowS') || 0.6;
     const mid = cardModel ? L.boxCardM / 2 : 0;   // the bubble rises out of the card's middle
@@ -308,11 +315,13 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     const lobS = feel.get('items.lobFlightS') || 1.6;
     for (const pr of view.projectiles || []) {
       const x = comp(pr.p, 0), y = comp(pr.p, 1), z = comp(pr.p, 2), lob = pr.mode === 'lob', id = pr.id | 0, age = pr.t || 0;
-      bubble3d(x, y, z, pr.kind, (lob ? L.lobR : L.throwR) * launchPop(age, soft), 1, id * 3);
+      const radius = pr.radiusM || (lob ? L.lobR : L.throwR);
+      bubble3d(x, y, z, pr.kind, radius * launchPop(age, soft), 1, id * 3, -1, L.hazardMaxFrac);
       seen.add(id);
       // where it left: a glow swells and goes (capped like an impact glow), a ring opens on the road
       let ln = launches.get(id);
-      if (!ln) launches.set(id, ln = { x, y, z });
+      if (!ln || age < ln.age) launches.set(id, ln = { x, y, z, age });
+      ln.age = age;
       const fl = launchFlare(age, soft), lc = TINTS[pr.kind] || TINTS.box;
       if (fl.glowA > 0.003) {
         const p = cam && cam.position, d = p ? Math.hypot(ln.x - p.x, ln.y - p.y, ln.z - p.z) : 99;
@@ -321,7 +330,16 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       }
       if (fl.ringA > 0.004) { OFF[0] = ln.x; OFF[1] = ln.y - (feel.get('items.throwHeightM') || 1); OFF[2] = ln.z; mark(OFF, null, fl.ring, MOTE_HEX[pr.kind] || L.markColour, fl.ringA, 0.08); }
       const n = lob ? L.lobDots : L.trailPts, h = trailOf(id, n), c = TINTS[pr.kind] || TINTS.box;
-      trailPush(h, x, y, z, n, lob ? L.lobDotStepM : L.trailStepM);
+      if (age < (h.age || 0)) h.n = 0;
+      h.age = age;
+      advanceRibbon(h, x, y, z, lob ? L.lobDotStepM : L.trailStepM);
+      // Paired spiralling sparks make a seeking projectile's turn visible in space.
+      // Straight throws retain a solid white nose and a broader coloured tail.
+      const ns = pr.homing ? (soft ? 4 : Math.round(8 * moteK)) : 0;
+      for (let i = 0; i < ns; i++) {
+        const a = flightSpark(i, ns, timeS, id, pr.v, radius, OFF);
+        motes.push(x + OFF[0], y + OFF[1], z + OFF[2], 0.3, c[0], c[1], c[2], a * (soft ? 0.55 : 1));
+      }
       const shown = Math.max(2, Math.round(h.n * (lob ? 1 : moteK)));
       for (let i = h.n - shown; i < h.n - 1; i++) {
         const j = i * 3, tl = trailLook(i - (h.n - shown), shown, timeS, id, soft);
@@ -334,7 +352,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       }
       const tk = lob ? karts[pr.target] : null;
       if (tk && tk.st) {
-        const m = lobMark((pr.t || 0) / lobS, timeS, soft), e = shadows.take();
+        const m = lobMark(pr.progress ?? (pr.t || 0) / lobS, timeS, soft), e = shadows.take();
         kartPos(tk); W.set(0, 1, 0).applyQuaternion(kartQuat(tk));
         if (e) { lay(e.mesh, V, W, 0, 0.05); e.mesh.scale.setScalar(m.r); e.u.opacity.value = m.alpha; e.mesh.visible = true; }
         mark(V, W, m.ring, L.markColour, m.ringAlpha, 0.07);
@@ -353,21 +371,32 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
         d2 = Math.min(d2, dx * dx + dy * dy + dz * dz);
       }
       const warn = tr.armed ? trapWarn(Math.sqrt(d2)) : 0;
-      const ringR = tr.kind === 'melt' ? (feel.get('items.meltRadiusM') || 2.4) * L.meltPuddleMul * 1.08 : L.trapWarnRingM;
-      mark(tr.p, tr.n, ringR * (1 + (soft ? 0 : 0.06 * Math.sin(timeS * 6.283 * L.markPulseHz))), L.trapWarnColour, warn * L.trapWarnAlpha * (soft ? 0.6 : 1));
+      const ringR = tr.radiusM || (tr.kind === 'melt' ? (feel.get('items.meltRadiusM') || 3.6) : L.trapWarnRingM);
+      // The steady footprint is the real contact radius; the warning brightens it
+      // rather than changing its size, so the driver can judge the escape line.
+      mark(tr.p, tr.n, ringR, MOTE_HEX[tr.kind] || L.trapWarnColour, (tr.armed ? 0.38 : 0.2) + warn * 0.45 * (soft ? 0.5 : 1));
       const alpha = tr.armed ? 1 : L.trapUnarmedAlpha;
       if (tr.kind === 'melt') {
         const e = puddles.take();
         if (!e) continue;
-        const R = (feel.get('items.meltRadiusM') || 2.4) * L.meltPuddleMul;
-        lay(e.mesh, tr.p, tr.n, 0, L.meltLiftM); e.mesh.scale.setScalar(R);
+        // materials.js scales UV radius by span to leave room for decorative
+        // drips. Compensate the mesh so the solid body reaches the contact ring.
+        const span = 1 + L.meltWobble * 0.5 + L.meltDripAmp;
+        const R = ringR * L.meltPuddleMul;
+        lay(e.mesh, tr.p, tr.n, 0, L.meltLiftM); e.mesh.scale.setScalar(R * span);
         e.mesh.visible = true; e.u.time.value = timeS; e.u.alpha.value = alpha * Math.min(1, (tr.t || 0) * 3 + 0.2); e.u.seed.value = (tr.id | 0) * 1.7;
+        const n = Math.round((soft ? 4 : 8) * moteK);
+        for (let i = 0; i < n; i++) {
+          const a = timeS * 0.45 + i * 6.283 / n + (tr.id | 0), r = R * (0.62 + 0.18 * Math.sin(a * 2));
+          W.set(Math.cos(a) * r, 0.2 + (i % 3) * 0.2, Math.sin(a) * r).applyQuaternion(e.mesh.quaternion).add(e.mesh.position);
+          motes.push(W.x, W.y, W.z, 0.25 + 0.1 * Math.sin(a), 1, 0.28, 0.65, alpha * (soft ? 0.3 : 0.55));
+        }
         continue;
       }
       normal(tr.n);
       const lift = L.trapHoverM + Math.sin(timeS * 1.2 + (tr.id | 0)) * 0.08 * (1 + warn);
       const pulse = 1 + L.trapPulse * (soft ? 0.4 : 1 + warn) * Math.sin(timeS * 6.283 * L.trapPulseHz * (1 + warn) + (tr.id | 0));
-      bubble3d(comp(tr.p, 0) + N.x * lift, comp(tr.p, 1) + N.y * lift, comp(tr.p, 2) + N.z * lift, tr.kind, L.trapR * pulse, alpha, (tr.id | 0) * 5);
+      bubble3d(comp(tr.p, 0) + N.x * lift, comp(tr.p, 1) + N.y * lift, comp(tr.p, 2) + N.z * lift, tr.kind, L.trapR * pulse, alpha, (tr.id | 0) * 5, -1, L.hazardMaxFrac);
     }
 
     // Pink wave: a ring opening along the road

@@ -146,10 +146,11 @@ export function meltPuddle(mask, melt = null) {
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const lp = uv().mul(2).sub(1), span = 1 + L.meltWobble * 0.5 + L.meltDripAmp;
   const r = length(lp).mul(span), a = atan(lp.y, lp.x), t = u.time.mul(L.meltHz).add(u.seed);
-  // same edge as fxmath.meltEdge: a wobble plus arms that reach out and pull back like drips
+  // Decorative drips extend beyond a solid contact-radius body. The mesh scale
+  // compensates span in visuals.js so the visible trap never understates contact.
   const wob = sin(a.mul(3).add(t.mul(2.1))).add(sin(a.mul(5).sub(t.mul(1.3)))).mul(0.25 * L.meltWobble);
   const arm = pow(max(sin(a.mul(L.meltArms).add(t)), 0), 3).mul(sin(t.mul(0.7).add(a.mul(2))).mul(0.4).add(0.6)).mul(L.meltDripAmp);
-  const edge = wob.add(arm).add(1);
+  const edge = max(1.07, wob.add(arm).add(1));
   const inside = smoothstep(edge.sub(0.07), edge, r).oneMinus();
   const turn = u.time.mul(L.meltTurnRadps).add(sin(r.mul(6).sub(u.time.mul(1.2))).mul(0.25));
   const q = lp.mul(0.5).div(edge), qr = vec2(q.x.mul(cos(turn)).sub(q.y.mul(sin(turn))), q.x.mul(sin(turn)).add(q.y.mul(cos(turn)))).add(0.5);
@@ -158,7 +159,10 @@ export function meltPuddle(mask, melt = null) {
   const spiral = smoothstep(L.meltBands[0], L.meltBands[1], spiral0);
   const gloss = smoothstep(edge.sub(0.3), edge.sub(0.08), r).mul(inside).mul(0.45)
     .add(smoothstep(0, 0.25, length(lp.sub(vec2(sin(u.time.mul(0.4)).mul(0.3), 0.25)))).oneMinus().mul(0.35));
-  m.colorNode = mix(col3(L.meltDark), col3(L.meltPink), spiral).add(col3(L.meltGloss).mul(gloss));
+  const lip = smoothstep(edge.sub(0.13), edge.sub(0.08), r).mul(smoothstep(edge.sub(0.08), edge.sub(0.035), r).oneMinus());
+  const outline = smoothstep(edge.sub(0.04), edge, r);
+  const bodyColour = mix(col3(L.meltDark), col3(L.meltPink), spiral).add(col3(L.meltGloss).mul(gloss.add(lip.mul(0.55))));
+  m.colorNode = mix(bodyColour, col3('#26082f'), outline);
   // the melt mask is strength: its arms and drips read solid, the gaps between keep meltFloor
   const body = melt ? spiral0.mul(1 - L.meltFloor).add(L.meltFloor) : float(1);
   m.opacityNode = inside.mul(body).mul(u.alpha).mul(0.92);
