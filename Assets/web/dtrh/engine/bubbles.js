@@ -18,6 +18,8 @@ import { S, activeWords, getCustomSpiral, getVeilWords } from './settings.js';
 import { pickSpiralUrl } from './loomSpirals.js';
 import { getLevel } from './audioLevels.js';
 import { makeSfxPlayer } from './audioBus.js';
+import { pickExit, runExit } from './flashExit.js';
+import { motionLevel } from '../shared/motion.js';
 
 const BASE = '/dtrh/assets/bubbles/';
 
@@ -254,6 +256,7 @@ export function createBubbles({ hud, canvas, media, onPop, onMiss, onEffect, onC
   // Trigger flash clips at RANDOM positions, CLICKABLE: popping one spawns two
   // more (the hydra) for FLASH_MAX_GEN generations.
   const flashLive = new Set();
+  let lastFlashExit = null;   // the last leave style a pop drew (never twice in a row)
   // The flash bubbles pull from the player's own media pool (hostMedia). No pool =>
   // callers fall back to the built-in CSS flash. No bundled flash clips ship.
   const hasFlashMedia = () => !!(media && media.hasUserMedia && media.hasUserMedia());
@@ -263,7 +266,11 @@ export function createBubbles({ hud, canvas, media, onPop, onMiss, onEffect, onC
     // Flash bubbles draw from the PLAYER's own media pool (no bundled clips ship).
     // Resolve a URL async, then build the clickable clip; an empty pool spawns
     // nothing and fireEffect falls back to the built-in CSS flash.
-    const picked = (media && media.hasUserMedia && media.hasUserMedia() && media.draw) ? media.draw() : null;
+    // A moving picture first when there is one (the app's own flashes are gif clips too).
+    const has = media && media.hasUserMedia && media.hasUserMedia();
+    const picked = (has && media.drawLoop && media.drawLoop())
+      || (has && media.drawKind && Math.random() < 0.6 && media.drawKind('video'))
+      || (has && media.draw ? media.draw() : null);
     if (!picked || !picked.acquire) return;
     picked.acquire().then((a) => { if (a && a.url) buildFlashClip(gen, picked.kind, a.url); }).catch(() => {});
   }
@@ -273,11 +280,12 @@ export function createBubbles({ hud, canvas, media, onPop, onMiss, onEffect, onC
   // ripple-fling teardown (releasePlayer no-ops on the <img>).
   function buildFlashClip(gen, kind, url) {
     if (flashLive.size >= FLASH_LIVE_CAP) return;   // re-check: the acquire resolved async
-    const isVideo = kind === 'video';
+    const isLoop = kind === 'loop';              // a moving picture: loops for the whole hold
+    const isVideo = kind === 'video' || isLoop;
     const v = document.createElement(isVideo ? 'video' : 'img');
     v.className = 'rh-fx-flashclip';
     v.src = url;
-    if (isVideo) { v.muted = true; v.autoplay = true; v.loop = false; v.playsInline = true; }
+    if (isVideo) { v.muted = true; v.autoplay = true; v.loop = isLoop; v.playsInline = true; }
     const sizeVw = (gen >= 2 ? 19 : gen === 1 ? 26 : 34) * 0.7 * S.gifSize; // 30% smaller base (bubbles + tube-zone flashes)
     v.style.setProperty('--w', `${sizeVw.toFixed(1)}vw`);
     v.style.setProperty('--gifop', String(S.gifOpacity));
@@ -289,8 +297,15 @@ export function createBubbles({ hud, canvas, media, onPop, onMiss, onEffect, onC
     let timer = 0, done = false;
     const finish = () => { if (done) return; done = true; window.clearTimeout(timer); releasePlayer(v); v.remove(); flashLive.delete(v); };
     v._flashFinish = finish;   // the ripple's fling reuses this exact teardown
-    if (isVideo) v.addEventListener('ended', finish, { once: true });   // <img> has no 'ended'
-    timer = window.setTimeout(finish, FLASH_MAX_MS);
+    // How it leaves (flashExit.js): a pop draws a style, running out of time is the soft fade.
+    const leave = (style) => {
+      if (done || v._leaving || v._flung) return;
+      v._leaving = true;
+      if (isVideo) { try { v.pause(); } catch (e) { /* ignore */ } }   // hold the frame it leaves on
+      runExit(v, style, { level: motionLevel(), done: finish });
+    };
+    if (isVideo && !isLoop) v.addEventListener('ended', () => leave('fade'), { once: true });   // <img> has no 'ended'
+    timer = window.setTimeout(() => leave('fade'), FLASH_MAX_MS);
     v.addEventListener('pointerdown', (e) => {
       // Right-click belongs to the ripple. chaosRun's onPointerDownGlobal is a
       // window CAPTURE-phase listener, so on a right-click it already fired the
@@ -299,9 +314,10 @@ export function createBubbles({ hud, canvas, media, onPop, onMiss, onEffect, onC
       // clip away mid-flight. Only a left-click pops the clip by hand (the hydra).
       if (e.button != null && e.button !== 0) return;
       e.preventDefault(); e.stopPropagation();
-      if (frozen) return;
+      if (frozen || v._leaving) return;
       const x = e.clientX, y = e.clientY;
-      finish();
+      lastFlashExit = pickExit(lastFlashExit);
+      leave(lastFlashExit);
       playSfx(BASE + 'sfx/' + pick(POP_SFX), 0.25);
       // phones split one generation less: a full hydra burst cold-starts a pile
       // of video decoders at once, which is what skips frames on a pop.
@@ -480,7 +496,7 @@ export function createBubbles({ hud, canvas, media, onPop, onMiss, onEffect, onC
     const reach = Math.max(0, radiusPx || 0) * FLASH_FLING_MULT;
     let n = 0;
     for (const v of flashLive) {
-      if (v._flung) continue;
+      if (v._flung || v._leaving) continue;
       const rect = v.getBoundingClientRect();
       if (!rect.width || !rect.height) continue;
       const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;

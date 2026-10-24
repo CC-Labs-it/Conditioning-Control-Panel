@@ -1,5 +1,8 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
+using System.Linq;
+using Avalonia.VisualTree;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -25,10 +28,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// run view - wash, sigil breath, turning border, rail glow, counter shimmer, edge glow, boss flare,
     /// rail comet, particles - plus the day / chapter / graduation moments. Ambient loops run only while
     /// the tab is visible and attached, Motion allows them and the shell is not minimised (WPF
-    /// ProgramsFx.cs:818; focus loss only parks the particle canvas, which watches IsActive itself) (P01); all of them hang off one
-    /// CancellationTokenSource, stopped on hide and on detach (P65). Display only: nothing is written.
-    /// ponytail: FireBurstAt sparks (task tick, seal, graduation), the rail-node ignite, today's pip
-    /// pulse and the banner spring have no Avalonia twin yet. The live session sheen rides BeatLoop.
+    /// ProgramsFx.cs:818; focus loss only parks the particle canvas, which watches IsActive itself) (P01); the rig and generated rail nodes own cancellation groups, stopped on hide and on detach (P65). Display only: nothing is written.
+    /// ponytail: FireBurstAt sparks (task tick, seal, graduation) and the banner spring have no Avalonia twin yet. The live session sheen rides BeatLoop.
     /// </summary>
     public partial class ProgramsTabView
     {
@@ -60,6 +61,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private string? _runKeySeen, _dayCompletePopped, _chapterSealed, _chapterBaselineRun, _graduationCelebrated;
         private bool _dayJustCompleted;
         private Window? _fxWindow;
+        private CancellationTokenSource? _railPipCts;
+        private readonly HashSet<ProgramDayPip> _ignitedPips = new();
 
         /// <summary>Tests read these: the heat tier last computed, and whether ambient clocks run.</summary>
         internal ProgramHeatTier IgnitionTier => _tier;
@@ -208,7 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     panel.BorderThickness = new Thickness(2);
                 }
                 RefreshLiveSessionProgress();
-                if (!rearm) return;
+                if (!rearm) { ApplyRailPipFx(); return; }
 
                 // Clocks only exist when ambient motion is allowed; otherwise every surface below is static.
                 var token = ambient ? (_ignitionCts = new CancellationTokenSource()).Token : CancellationToken.None;
@@ -275,6 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 ApplyRailComet(ambient, token);
                 ApplyParticles(accent);
+                ApplyRailPipFx();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Program ignition pass failed"); }
         }
@@ -371,6 +375,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void StopIgnitionLoops()
         {
             StopSessionSheen();
+            StopRailPipFx();
             _fxSignature = null;
             _cometAttempts = 0;
             _particles?.Stop();
@@ -384,6 +389,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             edge.Fill = null;
             Find<Rectangle>("RailComet").Opacity = 0;
             Find<Grid>("RailCometHost").IsVisible = false;
+        }
+
+        // WPF ProgramsTabView.xaml:626-698: the rail's generated containers own their
+        // clocks. They are rebuilt on credits, so these clocks follow those containers rather
+        // than the signature-cached hero rig. Every frame rides the shared 30 fps beat.
+        private void ApplyRailPipFx()
+        {
+            StopRailPipFx();
+            if (!IsVisible || VisualRoot == null || Shell is { WindowState: WindowState.Minimized }) return;
+            _railPipCts = new CancellationTokenSource();
+            var token = _railPipCts.Token;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (token.IsCancellationRequested || !IsVisible || VisualRoot == null) return;
+                var strip = Find<ItemsControl>("ProgramDayStrip");
+                foreach (var glow in strip.GetVisualDescendants().OfType<Ellipse>().Where(e => e.Name == "PipGlow"))
+                {
+                    if (glow.DataContext is not ProgramDayPip pip) continue;
+                    pip.Breathe = pip.IsCurrent && AmbientOn && _tier >= ProgramHeatTier.Warm;
+                    if (!pip.Breathe) continue;
+                    var scale = (ScaleTransform)glow.RenderTransform!;
+                    var loop = new BeatLoop(glow, t =>
+                    {
+                        var phase = BeatLoop.Breath(t, 1.2);
+                        glow.Opacity = .35 + .60 * phase;
+                        scale.ScaleX = scale.ScaleY = .9 + .22 * phase;
+                    });
+                    loop.Start();
+                    token.Register(() => { loop.Stop(); glow.Opacity = .65; scale.ScaleX = scale.ScaleY = 1; });
+                }
+                foreach (var flare in strip.GetVisualDescendants().OfType<Ellipse>().Where(e => e.Name == "PipIgnite"))
+                {
+                    if (flare.DataContext is not ProgramDayPip { Ignite: true } pip || !_ignitedPips.Add(pip)) continue;
+                    // The moment survives Reduced, while Off consumes the carrier without replaying later.
+                    if (!Env.AllowTransitions) continue;
+                    var scale = (ScaleTransform)flare.RenderTransform!;
+                    var keys = new[] { (0d, 0d), (.18, .95), (.9, 0d) };
+                    var easing = new CubicEaseOut();
+                    BeatLoop? loop = null;
+                    loop = new BeatLoop(flare, t =>
+                    {
+                        var p = Math.Clamp(t / .9, 0, 1);
+                        flare.Opacity = BeatLoop.Keys(t, keys);
+                        scale.ScaleX = scale.ScaleY = .6 + .75 * easing.Ease(p);
+                        if (p >= 1) loop!.Stop();
+                    });
+                    loop.Start();
+                    token.Register(() => { loop.Stop(); flare.Opacity = 0; });
+                }
+            }, DispatcherPriority.Loaded);
+        }
+
+        private void StopRailPipFx()
+        {
+            _railPipCts?.Cancel();
+            _railPipCts?.Dispose();
+            _railPipCts = null;
         }
 
         // ---- the discrete moments (WPF :899-1192) ----

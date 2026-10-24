@@ -22,11 +22,7 @@ namespace ConditioningControlPanel.Localization
         /// <param name="english">The key's English text, or null when en.json lacks it.</param>
         /// <param name="makeModAware">The active mod's replacements, or null with no mod.</param>
         public static string Resolve(string localized, string? english, Func<string, string>? makeModAware)
-        {
-            if (string.IsNullOrEmpty(english) || makeModAware == null) return localized;
-            var modded = makeModAware(english);
-            return !string.IsNullOrEmpty(modded) && modded != english ? modded : localized;
-        }
+            => ModAwareLabelRules.Resolve(localized, english, makeModAware);
 
         /// <summary>Converter for a <c>[key]</c> binding on <see cref="LocalizationManager.Instance"/>.</summary>
         public sealed class Converter : IValueConverter

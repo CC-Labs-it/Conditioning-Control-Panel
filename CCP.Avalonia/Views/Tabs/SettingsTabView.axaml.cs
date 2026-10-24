@@ -95,10 +95,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     FogPuffs = MosaicFogPuffs,
                 });
 
-                // ponytail: needs MainWindow.RegisterTabFx("settings", MosaicFx) - the
-                // park/resume hook and the motion kill-switch's reach. It is MainWindow's; wired when the ambient registry and the tab
-                // navigation move to Core. Until then the canvas parks itself on detach
-                // (AmbientFxCanvas.Evaluate), which is why running it here is safe.
+                // The shell registers this canvas as "settings" (MainShellWindow DashboardFx.cs) for park/resume.
             }
             catch (Exception)
             {
