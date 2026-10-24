@@ -63,6 +63,9 @@ public sealed class HelpButtonsTests
             // A hidden tab is never measured, so its templated content does not exist until the
             // user opens it: walk every door the way a user does.
             var buttons = new HashSet<Button>();
+            // HelpBtnCompanions / HelpBtnCompanionSettings sit in the Workshop drawer, which v2 leaves in
+            // the collapsed room (as WPF does): show the room so their attachment is still checked.
+            CollapsedRoom.Show(w);
             foreach (var tab in Tabs)
             {
                 w.ShowTab(tab);

@@ -239,6 +239,7 @@ public sealed class PanicSurfacesTests
     /// <summary>Types that start something but need no entry of their own, and why.</summary>
     private static readonly Dictionary<string, string> Allowed = new()
     {
+        ["CompanionPageHost"] = "not a host of anything that runs: it re-parents the collapsed room's zones into the Companion pages",
         ["LockCardWindow"] = "phrase mic + cards: the 'lock-cards' surface (StopLockCards) closes every card",
         ["DevicesSettingsSection"] = "camera preview/calibration: the 'camera' surface stops WebcamTracker",
         ["SettingsTabView"] = "the Home browser card's webcam pill: the 'camera' surface stops WebcamTracker",
