@@ -3,6 +3,7 @@ export const COURSES = Object.freeze([
   Object.freeze({ id: 'threshold', name: 'Threshold', online: true }),
   Object.freeze({ id: 'mainframe', name: 'Mainframe', online: false }),
   Object.freeze({ id: 'keep', name: 'The Keep', online: false }),
+  Object.freeze({ id: 'boudoir', name: 'Boudoir', online: false }),
 ]);
 export function selectedCourse(search = '') {
   const id = new URLSearchParams(search).get('track');

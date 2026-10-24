@@ -58,6 +58,8 @@ export async function loadArt(renderer, { want = WANT, trackId = 'threshold', on
   const materialTier = Q.name;
   if (trackId === 'mainframe') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
     .concat('spout-mainframe', 'stone-mainframe');
+  if (trackId === 'boudoir') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
+    .concat('spout-boudoir', 'stone-boudoir', 'glide-boudoir-beanie');
   const plan = trackId === 'keep' ? keepArtPlan(want, materialTier) : { ids: want, aliases: {} };
   const resolve = (id) => plan.aliases[id] || id;
   const waterIds = ['water-normal', 'water-foam-mask', 'waterfall-sheet', 'waterfall-phase-mask'].map(id => id + (materialTier === 'phone' ? '-phone' : ''));

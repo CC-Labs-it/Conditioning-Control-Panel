@@ -69,6 +69,8 @@ import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
+import { getBoudoirLayout } from './track/boudoir-layout.js';
+import { createBoudoirPerfume } from './sim/boudoirPerfume.js';
 import { createKeepHazards } from './sim/keepHazards.js';
 
 const qs = new URLSearchParams(location.search);
@@ -193,6 +195,7 @@ async function boot() {
   const track = loadTrack(trackJson);
   debug.trackId = track.id;
   const keepLayout = getKeepLayout(track);
+  const boudoirLayout = getBoudoirLayout(track);
   const hazards = keepLayout ? createKeepHazards(track, keepLayout) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
@@ -265,6 +268,7 @@ async function boot() {
   if (BOT) Object.defineProperty(debug, 'world', { value: world, enumerable: false });
   debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
   debug.trackId = track.id;
+  if (boudoirLayout) Object.defineProperty(debug, 'perfume', { get: () => perfume.inspect(), enumerable: true });
   if (hazards) Object.defineProperty(debug, 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
   debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   debug.terrace = world.terrace ? { count: world.terrace.count, ...world.terrace.diagnostics } : null;
@@ -274,7 +278,7 @@ async function boot() {
   const assist = createAssist(track, feel);       // the player's Steer assist (Options), never the bots'
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
-  let race, racers, ai, contact, standings, items, scan, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let race, racers, ai, contact, standings, items, scan, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   function buildRun(s = null) {
     const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
@@ -288,6 +292,7 @@ async function boot() {
     }
     contact = createContact(track, feel, q);
     scan = createMainframeScan(track, q);
+    perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
@@ -370,7 +375,7 @@ async function boot() {
     glideHintLap = -1;
     for (const r of racers.list) resetGlide(r.st);
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
-    scan.reset();
+    scan.reset(); perfume.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
     if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
@@ -738,6 +743,7 @@ async function boot() {
       if (race.phase === 'racing') {
         const sc = scanClock(audio.music, race.timeS);
         scan.update(racers.list, sc.timeS, sc.bpm);
+        perfume.update(racers.list, sc.timeS, clock.dt);
       }
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
@@ -789,8 +795,8 @@ async function boot() {
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
-    if (track.id === 'keep' && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
-      const bridge = keepLayout.drawbridge;
+    if ((keepLayout || boudoirLayout) && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
+      const bridge = boudoirLayout?.mirrorJump || keepLayout.drawbridge;
       if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
         glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
       }
@@ -798,7 +804,7 @@ async function boot() {
     if (BOT) debug.gliding = !!kartViews[0]?.glide;
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive,
-      scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready });
+      scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
       debug.song = { t: Math.round(songS * 100) / 100, section: m.sectionId, calm: +m.calm.toFixed(2), helix: +m.helix.toFixed(2),

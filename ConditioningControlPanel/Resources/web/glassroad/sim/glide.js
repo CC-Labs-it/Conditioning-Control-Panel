@@ -1,12 +1,13 @@
-/* Keep drawbridge flight. Held hop opens the rotor; finite lift cannot carry into the stone field. */
+/* Authored launch flight. Held hop opens the rotor; finite lift cannot carry into the stone field. */
 import { S, RESPAWN } from './state.js';
 import { getKeepLayout } from '../track/keep-layout.js';
+import { getBoudoirLayout } from '../track/boudoir-layout.js';
 const flights = new WeakMap(), bridges = new WeakMap();
 export const glideActive = (st) => !!flights.get(st)?.active && st[S.airborne] > 0 && st[S.respawnPhase] === RESPAWN.NONE;
 export function resetGlide(st) { flights.delete(st); }
 function bridgeFor(track) {
-  if (track.id !== 'keep') return null;
-  if (!bridges.has(track)) bridges.set(track, getKeepLayout(track).drawbridge);
+  if (!['keep', 'boudoir'].includes(track.id)) return null;
+  if (!bridges.has(track)) bridges.set(track, track.id === 'boudoir' ? getBoudoirLayout(track).mirrorJump : getKeepLayout(track).drawbridge);
   return bridges.get(track);
 }
 /** Only the raised drawbridge can arm a flight, including a manual hop near its lip. */

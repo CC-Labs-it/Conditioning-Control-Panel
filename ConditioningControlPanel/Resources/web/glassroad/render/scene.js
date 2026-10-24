@@ -65,6 +65,10 @@ import { keepMediaLayout } from './keepMedia.js';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createKeepDrawbridge } from './keepDrawbridge.js';
 import { createKeepBackdrop } from './keepBackdrop.js';
+import { buildBoudoirDressing } from './boudoirDressing.js';
+import { boudoirMediaLayout } from './boudoirMedia.js';
+import { boudoirSpiralLayout } from './boudoirSpirals.js';
+import { createBoudoirPerfumeView } from './boudoirPerfume.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -153,6 +157,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // Fog stays in the warmed shader; its density eases as the kart dives into the coolant reservoir.
   const submerged = track.sections.find(s => s.id === 'submerged');
   if (isMainframe) scene.fog = new FogExp2('#063e49', 0);
+  const boudoir = track.id === 'boudoir';
   const keep = track.id === 'keep', pal = createPalette(track.id);
   const owned = [], offs = [];
   const add = (m) => { if (m) { scene.add(m); owned.push(m); } return m; };
@@ -175,7 +180,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (keep) applyKeepRoad(road, art);
   const roadMesh = add(meshFrom(track.meshes.road, road.material));
   // Built before warmup: shared static construction gives the glass road depth.
-  const showcaseDressing = keep ? null : buildShowcaseDressing(track, pal, art);
+  const showcaseDressing = (keep || boudoir) ? null : buildShowcaseDressing(track, pal, art);
   if (showcaseDressing) scene.add(showcaseDressing.group);
   const court = isMainframe ? null : buildCourt(track, pal);
   if (court) scene.add(court.group);
@@ -195,19 +200,22 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const samples = sampleTrack(track, 4);
   const mainframe = isMainframe ? buildMainframe(track, art, { samples, mediaLayout: MAINFRAME_MEDIA_LAYOUT }) : null;
   if (mainframe) scene.add(mainframe.group);
+  const boudoirDressing = boudoir ? buildBoudoirDressing(track, art, pal, samples) : null;
+  if (boudoirDressing) scene.add(boudoirDressing.group);
+  const perfumeView = boudoir ? createBoudoirPerfumeView(scene, track) : null;
   const keepDressing = keep ? buildKeepDressing(track, art, pal, samples) : null;
   if (keepDressing) scene.add(keepDressing.group);
   const keepGates = keep ? createKeepGateView(scene, track, art, { gates: getKeepLayout(track).gates }) : null;
   const keepChains = keep ? createKeepChainView(scene, track, { chains: getKeepLayout(track).chains }) : null;
   let colossi = null;
-  try { colossi = art && !keep && !isMainframe ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
+  try { colossi = art && !keep && !isMainframe && !boudoir ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
   if (colossi) add(colossi.object);
-  const scatter = (keep || isMainframe) ? null : buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
-  if (!keep && !isMainframe) add(scatter ? scatter.object : props(track));
-  if (!keep && !isMainframe) add(createNearDressing(track, { phone: Q.name === 'phone' }).object);
+  const scatter = (keep || isMainframe || boudoir) ? null : buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
+  if (!keep && !isMainframe && !boudoir) add(scatter ? scatter.object : props(track));
+  if (!keep && !isMainframe && !boudoir) add(createNearDressing(track, { phone: Q.name === 'phone' }).object);
   let terrace = null, terraceScreen = null;
   try {
-    if (!keep && !isMainframe && art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
+    if (!keep && !isMainframe && !boudoir && art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
       terraceScreen = reelTexture();
       terrace = buildTerrace(art, track, pal, { phone: Q.name === 'phone', samples, screenMap: terraceScreen,
         avoid: [...(colossi ? colossi.placed : []), ...(scatter && scatter.heroes ? scatter.heroes.bodies : []), ...(scatter ? scatter.placed : [])] });
@@ -255,16 +263,16 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (renderer) {
     try {
       shadows = buildShadows(renderer, scene, sun, Q, { enabled: shadowsOn, track, samples, receivers: [roadMesh, padMesh].filter(Boolean),
-        casters: keepDressing ? keepDressing.casters : colossi ? colossi.casters : [], scatterCasters: scatter ? [scatter.object] : [], karts: kartObjs, colossi: colossi ? colossi.placed : [] });
+        casters: boudoirDressing ? (boudoirDressing.casters || []) : keepDressing ? keepDressing.casters : colossi ? colossi.casters : [], scatterCasters: scatter ? [scatter.object] : [], karts: kartObjs, colossi: colossi ? colossi.placed : [] });
     } catch (e) { console.warn('[glassroad/world] shadows failed: ' + (e && e.message)); }
     if (shadows && renderer.onTier) offs.push(renderer.onTier(() => shadows.retier()));
   }
   // polish 3: the Loom spiral gates across the road and the media slots (placeholders only)
   let spirals = null, media = null;
   // onPass: the player crossed a gate; boot plays that gate's own Loom on screen
-  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: keep && spiralLayout !== null ? keepSpiralLayout(track) : spiralLayout, photosafe, feel,
+  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: boudoir && spiralLayout !== null ? boudoirSpiralLayout(track) : keep && spiralLayout !== null ? keepSpiralLayout(track) : spiralLayout, photosafe, feel,
     onPass: (g) => { if (bus) bus.emit('gate-pass', g); } }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
-  try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout: keep ? keepMediaLayout(track) : undefined }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
+  try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout: boudoir ? boudoirMediaLayout(track) : keep ? keepMediaLayout(track) : undefined }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
   // polish 4: the drop shortcut's rail opening and landing pad (track routes); the ring swells on the player's clean landing
   let routes = null;
   try { routes = routesMod ? routesMod.createRoutes(scene, track, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] route marks failed: ' + (e && e.message)); }
@@ -492,6 +500,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (scatter) scatter.update(dt, scroll);
     if (colossi) colossi.update(dt, scroll);
     if (mainframe) mainframe.update(dt, view, gentle);
+    boudoirDressing?.update({ ...view, dt, gentle });
+    perfumeView?.update(view.scanTimeS ?? view.raceTimeS ?? 0, { ready: view.perfumeReady, gentle, paused: !!view.paused, active: view.mode === 'race', dt });
     rails.uniforms.flow.value = road.uniforms.phase.value;
     if (shadows && view.camera) { view.camera.layers.enable(CATCH_LAYER); view.camera.getWorldDirection(FWD); shadows.update(view.camera.position, FWD); }
 
@@ -532,6 +542,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (waterfall) waterfall.dispose();
     waterVolume.dispose();
     if (showcaseDressing) showcaseDressing.dispose();
+    boudoirDressing?.dispose(); perfumeView?.dispose();
     if (keepDressing) keepDressing.dispose();
     if (keepGates) keepGates.dispose();
     if (keepChains) keepChains.dispose();
@@ -544,7 +555,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, perfumeView, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
