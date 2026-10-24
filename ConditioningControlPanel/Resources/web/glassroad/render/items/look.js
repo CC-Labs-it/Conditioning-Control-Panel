@@ -25,8 +25,8 @@ export const ITEM_LOOK = {
   // the player's own rides low in the cup's back right; hidden in the world while the HUD slot shows it
   playerHeldScale: 0.7, playerHeldAt: [0.8, 1.05, 0.35], playerHeldInWorld: false,
   // a bubble near the camera shrinks so it spans at most this share of the view's height (shields exempt)
-  nearMaxFrac: 0.08,
-  throwR: 0.6, lobR: 0.9, trapR: 0.5, trapHoverM: 0.45, trapUnarmedAlpha: 0.45, pickupR: 0.7, pickupHoverM: 1.3,
+  nearMaxFrac: 0.08, hazardMaxFrac: 0.17,
+  throwR: 1.05, lobR: 1.3, trapR: 1.05, trapHoverM: 1.0, trapUnarmedAlpha: 0.55, pickupR: 0.9, pickupHoverM: 1.3,
   shellRim: 0.9, shellAlpha: 0.12, shellWhite: 0.55, iconFill: 0.727, shellFill: 0.96, // the art/fx bubble spans 186 of 256 px
   rollSwapS: 0.14, rollSwapGentleS: 0.3,
   // motes: a slow ring round each bubble, a little outward and up, then over again
@@ -44,8 +44,8 @@ export const ITEM_LOOK = {
   // pops: a ring that opens and a spray of motes
   popRingM: [0.6, 3.6], popMotes: 22, popMoteSizeM: 0.24, popSpeedMps: 4.8, popGravityMps2: 3,
   // melt puddle (trap): the spiral mask, wobbling and dripping
-  meltPuddleMul: 1.25, meltArms: 7, meltDripAmp: 0.32, meltWobble: 0.12, meltTurnRadps: 0.35, meltHz: 0.45,
-  meltDark: '#3a0c46', meltPink: '#ff7cc8', meltBands: [0.3, 0.7], meltGloss: '#ffe6f6', meltLiftM: 0.04,
+  meltPuddleMul: 1, meltArms: 7, meltDripAmp: 0.16, meltWobble: 0.08, meltTurnRadps: 0.35, meltHz: 0.45,
+  meltDark: '#500d60', meltPink: '#ff54b6', meltBands: [0.3, 0.7], meltGloss: '#ffe6f6', meltLiftM: 0.065,
   // pink wave: a flat ring opening along the road
   waveColour: '#ff5cbf', waveAlpha: 0.45, waveWidthM: 3,
   // shields
@@ -57,12 +57,12 @@ export const ITEM_LOOK = {
   // low on the far side; the living icon breathes (scale share, Hz; Gentle keeps a third)
   shineDriftRad: 0.5, shineHz: 0.11, causticGain: 0.55, causticSharp: 10, breathAmp: 0.05, breathHz: 0.35,
   // throws: a sparkling ribbon of motes along the last trailPts positions (one every trailStepM)
-  trailPts: 22, trailStepM: 0.45, trailSizeM: 0.36, trailAlpha: 0.9, trailTwinkleHz: 0.9,
+  trailPts: 28, trailStepM: 0.6, trailSizeM: 0.72, trailAlpha: 0.95, trailTwinkleHz: 0.9,
   // lobs: a dotted arc (a dot every lobDotStepM) and a soft shadow plus a pulsing ring at the target
-  lobDots: 18, lobDotStepM: 1.6, lobDotSizeM: 0.3, lobShadowR: [0.9, 2.2], lobShadowAlpha: 0.5, markColour: '#ff8fd0',
-  markPulseHz: 1.2, markRingM: 2.4, markAlpha: 0.55,
+  lobDots: 22, lobDotStepM: 1.2, lobDotSizeM: 0.48, lobShadowR: [1.8, 3.4], lobShadowAlpha: 0.6, markColour: '#ff8fd0',
+  markPulseHz: 1.2, markRingM: 3.2, markAlpha: 0.7,
   // traps: a slow pulse (scale share, Hz) and a warning ring that wakes from warnM[0] to full at warnM[1]
-  trapPulse: 0.07, trapPulseHz: 0.8, trapWarnM: [18, 5], trapWarnRingM: 2.2, trapWarnAlpha: 0.6, trapWarnColour: '#ffb3d9',
+  trapPulse: 0.09, trapPulseHz: 0.8, trapWarnM: [26, 7], trapWarnRingM: 2.35, trapWarnAlpha: 0.85, trapWarnColour: '#ffb3d9',
   // impacts (an effect lands, a shield soaks it): a shockwave ring on the road and a soft glow that never
   // spans more than impactGlowFrac of the view's height; the glow asks photosafe and skips when refused
   impactRingM: [0.8, 11], impactRingS: 0.6, impactRingAlpha: 0.95, impactGlowM: 1.6, impactGlowFrac: 0.18, impactGlowAlpha: 0.55,
@@ -77,12 +77,12 @@ export const ITEM_LOOK = {
   // ---- polish 4: items as events ----
   // a throw leaves charged: the bubble starts launchPop bigger and settles by launchS, a glow swells and a ring
   // opens on the road where it left (the glow capped to impactGlowFrac of the view like an impact)
-  launchS: 0.4, launchPop: 0.7, launchGlowM: 2.4, launchGlowAlpha: 0.45, launchRingM: [0.6, 5],
+  launchS: 0.46, launchPop: 0.8, launchGlowM: 3.2, launchGlowAlpha: 0.45, launchRingM: [0.9, 6],
   // the trail you can follow: a soft halo under every other ribbon point
   trailHaloMul: 2.8, trailHaloAlpha: 0.22,
   // impacts: a wider pop ring, more motes, a second shockwave a beat later, confetti in the kind's colour and
   // a fountain of glitter (counts per tier)
-  impactPopRingM: [1, 6.5], impactMotesMul: 1.8, impactRing2S: 0.12, impactRing2Mul: 0.6,
+  impactPopRingM: [1.4, 7.5], impactMotesMul: 1.8, impactRing2S: 0.12, impactRing2Mul: 0.6,
   hitConfetti: { high: 24, mid: 16, phone: 10 }, fountain: { high: 18, mid: 12, phone: 8 },
   fountainSpeedMps: [3.5, 7.5], fountainGravityMps2: 6, fountainS: 0.9, fountainSizeM: 0.32,
 };

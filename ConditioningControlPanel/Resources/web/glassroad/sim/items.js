@@ -8,7 +8,7 @@
  * Three-free. Bot events (boost, drift cancel) go out as racer-event like every other bot event.
  */
 import { S, RESPAWN } from './state.js';
-import { wrap, damp, lerp } from '../core/math.js';
+import { wrap, damp, lerp, clamp } from '../core/math.js';
 import { grantBoost } from './grant.js';
 import { cancelDrift } from './drift.js';
 import { endBoost } from './boost.js';
@@ -87,7 +87,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       }
     } else land(v, x, kind, d, by, 0);
     if (verdict !== 'hit') d = 0;
-    events.emit('item-hit', { victim: v.i, by, kind, verdict, durationS: d, p: p || kartP(v) });
+    events.emit('item-hit', { victim: v.i, by, kind, how, verdict, durationS: d, p: p || kartP(v) });
     return verdict;
   }
 
@@ -138,18 +138,21 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       events.emit('item-refused', { racer: r.i, id, reason: 'edge' });
       return;
     }
-    let target = -1;
+    let target = -1, fired = null;
     if (mode === 'drop') {
       if (traps.length >= g('maxTraps')) { const o = traps.shift(); pop(o.kind, 'fizzle', o.s, o.x); }
       traps.push({ id: nextId++, kind: id, s: dropS, x, t: 0, layer: r.i });
     } else if (mode === 'throw') {
       target = aheadOf(r, standings, g('throwRangeM'));
-      projectiles.push({ id: nextId++, kind: id, mode, by: r.i, target, t: 0, s: wrap(s + THROW_LEAD_M, L), x, h: g('throwHeightM'),
-        v: Math.max(0, st[S.speedPct]) * feel.get('speed.topMps') + g('throwExtraMps') });
+      fired = { id: nextId++, kind: id, mode, by: r.i, target, t: 0, s: wrap(s + THROW_LEAD_M, L), x, h: g('throwHeightM'),
+        v: Math.max(0, st[S.speedPct]) * feel.get('speed.topMps') + g('throwExtraMps'), homing: target >= 0 };
+      projectiles.push(fired);
     } else if (mode === 'lob') {
       target = lobTarget(r.i, standings);
       if (target < 0) return;   // alone on the road: keep it
-      projectiles.push({ id: nextId++, kind: id, mode, by: r.i, target, t: 0, fromS: s, fromX: x, s, x, h: g('throwHeightM') });
+      fired = { id: nextId++, kind: id, mode, by: r.i, target, t: 0, fromS: s, fromX: x, s, x, h: g('throwHeightM'),
+        aimD: sd(racer(target).st[S.s], s), aimX: racer(target).st[S.lateral], homing: true };
+      projectiles.push(fired);
     } else if (mode === 'wide') {
       const me = standings.progressOf(r.i);
       waves.push({ id: nextId++, kind: id, from: r.i, s, x, t: 0 });
@@ -159,7 +162,8 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       }
     } else self(r, id, standings);
     r.item.id = null; r.item.rolling = false; r.item.rollT = 0; r.item.heldT = 0;
-    events.emit('item-fire', { racer: r.i, id, mode, target, p: kartP(r) });
+    events.emit('item-fire', { racer: r.i, id, mode, target, p: kartP(r),
+      projectileId: fired ? fired.id : null, launchP: fired ? point(fired.s, fired.x, fired.h) : kartP(r), direction: track.frameAt(s).t.slice() });
   }
 
   function self(r, id, standings) {
@@ -210,31 +214,47 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   function flights(dt) {
     projectiles = projectiles.filter((pr) => {
       pr.t += dt;
+      const oldP = point(pr.s, pr.x, pr.h), oldS = pr.s, oldX = pr.x;
       const tg = pr.target >= 0 ? racer(pr.target) : null;
       if (pr.mode === 'lob') {
         const k = Math.min(1, pr.t / g('lobFlightS'));
-        if (!tg) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h); return false; }
-        pr.s = wrap(pr.fromS + sd(tg.st[S.s], pr.fromS) * k, L);
-        pr.x = lerp(pr.fromX, tg.st[S.lateral], k);
+        if (!tg || !free(tg)) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h); return false; }
+        // Commit the landing point before the terminal dive. Unwrapped distance prevents a
+        // moving target across the half-lap boundary from flipping the whole trajectory.
+        pr.homing = k < g('lobCommitFrac');
+        if (pr.homing) {
+          const f = track.frameAt(tg.st[S.s]), remaining = Math.max(0, g('lobFlightS') - pr.t);
+          const speed = tg.st[S.velX] * f.t[0] + tg.st[S.velY] * f.t[1] + tg.st[S.velZ] * f.t[2];
+          const wanted = pr.aimD + sd(tg.st[S.s], wrap(pr.fromS + pr.aimD, L)) + speed * remaining;
+          pr.aimD += clamp(wanted - pr.aimD, -g('lobRetargetMps') * dt, g('lobRetargetMps') * dt);
+          pr.aimX += clamp(tg.st[S.lateral] - pr.aimX, -g('homeLateralMps') * dt, g('homeLateralMps') * dt);
+        }
+        pr.s = wrap(pr.fromS + pr.aimD * k, L);
+        pr.x = lerp(pr.fromX, pr.aimX, k);
         pr.h = g('throwHeightM') + g('lobHeightM') * 4 * k * (1 - k);
+        velocity(pr, oldP, dt);
         if (k < 1) return true;
-        if (!free(tg)) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h); return false; }
+        if (Math.hypot(sd(tg.st[S.s], pr.s), tg.st[S.lateral] - pr.x) > g('hitRadiusM') || !sameLevel(tg, pr.s, pr.x)) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h); return false; }
         const verdict = hit(tg, pr.by, pr.kind, 'lob', point(pr.s, pr.x, pr.h));
         pop(pr.kind, verdict === 'mercy' ? 'hit' : verdict, pr.s, pr.x, pr.h);
         return false;
       }
       if (pr.t >= g('throwLifeS')) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h); return false; }
-      pr.s = wrap(pr.s + pr.v * dt, L);
+      let stepM = pr.v * dt;
       const shatter = pr.kind === 'shatter';
-      if (tg && free(tg)) {
-        pr.x = damp(pr.x, tg.st[S.lateral], g('homeTcS'), dt);
-        if (shatter && nearOpenEdge(tg.st[S.s], g('shatterEdgeSafeM')) && sd(tg.st[S.s], pr.s) < SHATTER_WAIT_M) {
-          pr.s = wrap(tg.st[S.s] - SHATTER_WAIT_M, L);
+      const gap = tg ? sd(tg.st[S.s], pr.s) : -1;
+      pr.homing = !!(tg && free(tg) && gap > 0 && gap <= g('throwRangeM'));
+      if (pr.homing) {
+        pr.x += clamp(damp(pr.x, tg.st[S.lateral], g('homeTcS'), dt) - pr.x, -g('homeLateralMps') * dt, g('homeLateralMps') * dt);
+        if (shatter && nearOpenEdge(tg.st[S.s], g('shatterEdgeSafeM'))) {
+          stepM = Math.min(stepM, Math.max(0, gap - SHATTER_WAIT_M));
         }
       }
+      pr.s = wrap(pr.s + stepM, L);
       pr.h = g('throwHeightM') + g('throwArcM') * Math.sin(Math.PI * Math.min(1, pr.t / ARC_S));
+      velocity(pr, oldP, dt);
       for (const o of list) {
-        if (o.i === pr.by || !free(o) || !low(o) || !near(o, pr.s, pr.x, g('hitRadiusM'))) continue;
+        if (o.i === pr.by || !free(o) || !low(o) || !sweptNear(o, oldS, oldX, pr.x, stepM, g('hitRadiusM')) || !sameLevel(o, pr.s, pr.x)) continue;
         if (shatter && nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'))) continue;
         const verdict = hit(o, pr.by, pr.kind, 'throw', point(pr.s, pr.x, pr.h));
         pop(pr.kind, verdict === 'mercy' ? 'hit' : verdict, pr.s, pr.x, pr.h);
@@ -244,13 +264,31 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     });
   }
 
+  function velocity(pr, oldP, dt) {
+    const p = point(pr.s, pr.x, pr.h);
+    pr.velocity ||= [0, 0, 0];
+    for (let k = 0; k < 3; k++) pr.velocity[k] = dt > 0 ? (p[k] - oldP[k]) / dt : 0;
+  }
+  function sameLevel(r, s, x) {
+    const p = point(s, x, 0), f = track.frameAt(s);
+    const h = (r.st[S.posX] - p[0]) * f.n[0] + (r.st[S.posY] - p[1]) * f.n[1] + (r.st[S.posZ] - p[2]) * f.n[2];
+    return Math.abs(h) <= g('pickHeightM');
+  }
+  function sweptNear(r, fromS, fromX, toX, stepM, radius) {
+    const d = sd(r.st[S.s], fromS), dx = r.st[S.lateral] - fromX, sweepX = toX - fromX;
+    const len2 = stepM * stepM + sweepX * sweepX;
+    const k = len2 > 0 ? clamp((d * stepM + dx * sweepX) / len2, 0, 1) : 1;
+    return Math.hypot(d - stepM * k, dx - sweepX * k) <= radius;
+  }
+
   function trapsTick(dt) {
     traps = traps.filter((tp) => {
       tp.t += dt;
       if (tp.t >= g('trapLifeS')) { pop(tp.kind, 'fizzle', tp.s, tp.x); return false; }
       const rad = tp.kind === 'melt' ? g('meltRadiusM') : g('trapRadiusM');
       for (const o of list) {
-        if ((o.i === tp.layer && tp.t < g('trapArmS')) || !free(o) || !low(o) || !near(o, tp.s, tp.x, rad)) continue;
+        if ((o.i === tp.layer && tp.t < g('trapArmS')) || !free(o) || !low(o)
+          || Math.hypot(sd(o.st[S.s], tp.s), o.st[S.lateral] - tp.x) > rad || !sameLevel(o, tp.s, tp.x)) continue;
         if (tp.kind === 'shatter' && nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'))) continue;
         const verdict = hit(o, tp.layer, tp.kind, 'trap', point(tp.s, tp.x, 0));
         pop(tp.kind, verdict === 'glass' || verdict === 'golden' ? verdict : 'trap', tp.s, tp.x);
@@ -330,12 +368,16 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     for (const pr of projectiles) {
       const o = row('projectiles');
       o.id = pr.id; o.kind = pr.kind; o.mode = pr.mode; point(pr.s, pr.x, pr.h, o.p); o.t = pr.t; o.target = pr.target; o.s = pr.s; o.x = pr.x;
+      o.by = pr.by; o.homing = pr.homing; o.radiusM = g(pr.mode === 'lob' ? 'lobRadiusM' : 'projectileRadiusM');
+      o.progress = Math.min(1, pr.t / (pr.mode === 'lob' ? g('lobFlightS') : ARC_S));
+      o.v ||= [0, 0, 0]; for (let k = 0; k < 3; k++) o.v[k] = pr.velocity ? pr.velocity[k] : 0;
     }
     const armS = g('trapArmS');
     for (const tp of traps) {
       const o = row('traps'), f = track.frameAt(tp.s, fr);
       for (let k = 0; k < 3; k++) { o.p[k] = f.p[k] + f.b[k] * tp.x; o.n[k] = f.n[k]; }
       o.id = tp.id; o.kind = tp.kind; o.t = tp.t; o.armed = tp.t >= armS; o.s = tp.s; o.x = tp.x;
+      o.radiusM = g(tp.kind === 'melt' ? 'meltRadiusM' : 'trapRadiusM');
     }
     for (const w of waves) {
       const o = row('waves');

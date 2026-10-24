@@ -36,7 +36,7 @@ export function createPost(three, scene, camera) {
     if (Q.bloom) {
       bloomNode = bloom(col, u.strength, LOOK.bloomRadius, LOOK.bloomThreshold);
       bloomNode.setResolutionScale(Q.bloomScale);
-      out = out.add(bloomNode.rgb);
+      out = out.add(bloomNode.rgb.mul(screen ? screen.bloomGate() : 1));
     }
     const vig = smoothstep(LOOK.vignetteIn, LOOK.vignetteOut, screenUV.sub(0.5).length().mul(Math.SQRT2));
     const sideW = clamp(screenUV.x.sub(0.5).mul(u.side).mul(2).add(1), 0, 1);

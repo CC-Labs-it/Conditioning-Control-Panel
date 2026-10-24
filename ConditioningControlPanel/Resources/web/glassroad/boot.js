@@ -21,6 +21,7 @@
 import { createBridge, songCharts, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { createCardMedia } from './host/cardMedia.js';
+import { createFlashMedia } from './fx/flashMedia.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
 import { createClock } from './core/clock.js';
@@ -242,6 +243,9 @@ async function boot() {
     spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
+  const flashMedia = createFlashMedia({ source: seed => cardMedia?.sourceForFlash(seed) || null });
+  effects.screen.params.mediaFlash = true;
+  window.addEventListener('pagehide', () => flashMedia.dispose(), { once: true });
   if (cardMedia) {
     await cardMedia.ready;
     window.addEventListener('pagehide', () => cardMedia.dispose(), { once: true });
@@ -768,6 +772,7 @@ async function boot() {
     const fxDt = frozen ? 0 : frameDt;                            //    the pause card freezes every effect too
     fx.update(fxDt, P.st, race);                                  // 4. fx
     effects.update(fxDt);                                         //    the local screen effect
+    flashMedia.update(effects.screen, fxDt, renderer.aspect);
     if (HT) hLap('fx');
     const fs = fx.state;
     const pst = P.st;
@@ -849,7 +854,7 @@ async function boot() {
     hud.update({ lap: pst[S.lap], laps, timeS: race.timeS, speedPct: pst[S.speedPct], countdown: null,
       sectionIdx: pst[S.sectionIdx], paused, place, count: racers.list.length, item: holding ? hudItem : null,
       map: mapXz, finished: P.finished, bestLapS: P.bestLapS, kartAt: goPoint });
-    gateScreen.update(frameDt, paused);
+    gateScreen.update(frameDt, paused, effects.screen);
     slotFx.update(paused ? 0 : frameDt, holding && !P.finished ? hudItem : null, !!feel.get('gentle.on'));
 
     if (!online && state === 'race' && finishAt && now >= finishAt && result) {   // results after the finish swell (online: the room's)

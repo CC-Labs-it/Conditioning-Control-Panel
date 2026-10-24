@@ -156,7 +156,13 @@ export function createCardMedia(media, { bridge, origin = globalThis.location?.o
     if (!response.ok) throw Error('Card media unavailable');
   }) : null;
   const ready = local ? refresh() : Promise.resolve();
-  return { apply, ready, dispose() {
+  return { apply, ready,
+    sourceForFlash(seed = 0) {
+      const available = order.map(key => entries.get(key)).filter(e => e?.el && live(e)
+        && e.el.readyState >= 2 && e.el.videoWidth > 0 && !e.el.error);
+      return available.length ? available[Math.abs(Math.trunc(seed)) % available.length].el : null;
+    },
+    dispose() {
     if (disposed) return;
     disposed = true; authority++; manifestController?.abort();
     clearTimeout(refreshTimer); clearTimeout(retryTimer); clearTimeout(expiryTimer);

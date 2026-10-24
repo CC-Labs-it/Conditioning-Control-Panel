@@ -22,6 +22,8 @@
 import { createFieldRenderer, normalizeParams2, drawFallbackFrame } from '../../arcademy/engine/loom/loomField.js';
 import { Q } from './quality.js';
 import { SPIRAL_LOOK, loopS, screenTimes, screenEnvelope, screenRateMul, screenMaskCss } from './spiralMath.js';
+import { screenAmounts } from './items/fxmath.js';
+import { createAtmosphereClock } from './screen-atmosphere.js';
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
 
@@ -41,6 +43,7 @@ export function createGateScreen(host, { feel = null, photosafe = null, gentle =
 
   let canvas = null, field = null, ctx2d = null, broken = !doc || !host;
   let q = null, strength = 0, age = -1, phase = 0, loop = 1, lastDraw = -1e9, clockMs = 0, shown = false, level = 0;
+  const atmosphere = createAtmosphereClock(), amounts = {};
 
   function mount() {
     if (canvas || broken) return !broken;
@@ -108,17 +111,20 @@ export function createGateScreen(host, { feel = null, photosafe = null, gentle =
     return true;
   }
 
-  /** Advance and draw. dt seconds; paused: nothing moves, the frame on the glass stays as it is. */
-  function update(dt, paused = false) {
-    if (age < 0 || !canvas || broken) return;
+  /** Advance and draw. Screen atmosphere also obscures this DOM layer above the scene. */
+  function update(dt, paused = false, screen = null) {
     if (paused || !(dt > 0)) return;
-    if (doc.hidden) return;
+    if (doc && doc.hidden) return;
+    const a = screenAmounts(screen, amounts), fog = atmosphere.update(screen, a.pink, dt, a.timeMul);
+    const visibleShare = 1 - Math.max(a.blackout, fog * 0.95);
+    // Advance ingress even when no gate is active, so a later gate cannot pierce settled fog.
+    if (age < 0 || !canvas || broken) return;
     const g = isGentle();
     age += dt;
     const env = screenEnvelope(age, { gentle: g, riseMs: get('gentle.riseMs', 300), fadeMs: get('gentle.fadeMs', 600) }, look);
     if (env <= 0 && age > times().rise) { stop(); return; }
     phase = (phase + dt * screenRateMul(q, { gentle: g }, look) / loop) % 1;
-    level = clamp01(env * strength * S.peak * (g ? S.gentleAlphaMul : 1));
+    level = clamp01(env * strength * S.peak * (g ? S.gentleAlphaMul : 1) * visibleShare);
     if (!shown) { canvas.style.display = 'block'; shown = true; }
     canvas.style.opacity = level.toFixed(3);
     clockMs += dt * 1000;
