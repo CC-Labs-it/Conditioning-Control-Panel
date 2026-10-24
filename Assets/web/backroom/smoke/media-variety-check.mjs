@@ -109,14 +109,15 @@ const walls = await ev(`(async()=>{
   let batch=0,now=0,freed=0;
   const screens=await createScreens({meshes,ads:[],media:async()=>({gifs:Array.from({length:8},(_,i)=>({url:'/backroom/stations/slot/fallback/gif'+i%4+'.webp?batch='+batch+'&i='+i,src:'pool'}))})});
   await screens.deal(()=>now);screens.update(0,null,false);
-  const unique=new Set(meshes.map(m=>m.material.uniforms.a.value)).size;
+  const shown=()=>new Set(meshes.flatMap(m=>{const u=m.material.uniforms;return [u.a.value,u.ax.value,u.ay.value].slice(0,u.panelsA.value);})).size;
+  const unique=shown();
   for(const m of meshes)m.material.uniforms.a.value.addEventListener('dispose',()=>freed++);
   batch++;now=80;screens.update(now,null,true);
   const held=freed===0;
   screens.update(now,null,false);
   for(let i=0;i<100&&freed<8;i++) await new Promise(r=>setTimeout(r,30));
   screens.update(now,null,false);
-  const second=new Set(meshes.map(m=>m.material.uniforms.a.value)).size;
+  const second=shown();
   const squarePanels=meshes[0].material.uniforms.panelsA.value;
   const image=meshes[0].material.uniforms.a.value.image;image.height=image.width*2;
   screens.update(now,null,false);const portraitPanels=meshes[0].material.uniforms.panelsA.value;

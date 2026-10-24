@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using ConditioningControlPanel.Localization;
+using VideoShow = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation;
 
 namespace ConditioningControlPanel.Features
 {
@@ -61,6 +62,8 @@ namespace ConditioningControlPanel.Features
                 TxtVideoMinDur.Text = FormatDuration(s.VideoMinDurationSeconds);
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
+                ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
+                ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
                 ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
@@ -71,6 +74,25 @@ namespace ConditioningControlPanel.Features
                 TxtTargetSize.Text = s.AttentionSize.ToString();
                 ChkVideoGazeClick.IsChecked = s.VideoGazeClickEnabled;
                 PopulateMonitors();
+                // Full screen first (the default). Rebuilt on every load so the names follow the language.
+                CmbAppearance.Items.Clear();
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_fullscreen"), Tag = false });
+                CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
+                CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
+                TxtAppearanceNote.Visibility = s.MandatoryVideoFloating ? Visibility.Visible : Visibility.Collapsed;
+                // Size, drift speed and the most at once: floating only.
+                PanelFloatingOptions.Visibility = s.MandatoryVideoFloating ? Visibility.Visible : Visibility.Collapsed;
+                SliderFloatingSize.Value = VideoShow.ClampSizePercent(s.MandatoryVideoFloatingSizePercent);
+                TxtFloatingSize.Text = SliderFloatingSize.Value.ToString("0") + "%";
+                SliderFloatingSpeed.Value = VideoShow.ClampSpeedPercent(s.MandatoryVideoFloatingSpeedPercent);
+                TxtFloatingSpeed.Text = SliderFloatingSpeed.Value.ToString("0") + "%";
+                CmbFloatingCount.Items.Clear();
+                for (var n = 1; n <= VideoShow.MaxWindows; n++)
+                    CmbFloatingCount.Items.Add(new ComboBoxItem { Content = n.ToString(), Tag = n });
+                CmbFloatingCount.SelectedIndex = VideoShow.ClampCount(s.MandatoryVideoFloatingCount) - 1;
+                ChkFloatingTogether.IsChecked = s.MandatoryVideoFloatingTogether;
+                ChkFloatingKeepSound.IsChecked = s.MandatoryVideoFloatingKeepSound;
+                ChkReplayFailedCheck.IsChecked = s.MandatoryVideoReplayAfterFailedCheck;
                 // The fold opens on its own when a row inside is off its default, so a setting
                 // someone changed is never hidden from them. It never closes itself.
                 if (s.VideoTargetMonitor != App.MonitorTargetFollowGlobal
@@ -140,6 +162,81 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
+        /// <summary>Read at the next video's start; a video already playing stays as it is.</summary>
+        private void CmbAppearance_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading || CmbAppearance.SelectedItem is not ComboBoxItem { Tag: bool floating }) return;
+            var s = App.Settings?.Current;
+            if (s == null || s.MandatoryVideoFloating == floating) return;
+            s.MandatoryVideoFloating = floating;
+            App.Settings?.Save();
+        }
+
+        /// <summary>Applies to the next window that opens; the ones up keep their size.</summary>
+        private void SliderFloatingSize_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtFloatingSize == null) return;
+            var v = VideoShow.ClampSizePercent((int)Math.Round(e.NewValue));
+            TxtFloatingSize.Text = v + "%";
+            var s = App.Settings?.Current;
+            if (_isLoading || s == null || s.MandatoryVideoFloatingSizePercent == v) return;
+            s.MandatoryVideoFloatingSizePercent = v;
+            App.Settings?.Save();
+        }
+
+        /// <summary>Live: every open floating window takes the new speed as the slider moves.</summary>
+        private void SliderFloatingSpeed_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtFloatingSpeed == null) return;
+            var v = VideoShow.ClampSpeedPercent((int)Math.Round(e.NewValue));
+            TxtFloatingSpeed.Text = v + "%";
+            var s = App.Settings?.Current;
+            if (_isLoading || s == null || s.MandatoryVideoFloatingSpeedPercent == v) return;
+            s.MandatoryVideoFloatingSpeedPercent = v;
+            App.Settings?.Save();
+            App.Video?.RefreshFloatingMotionSpeed();
+        }
+
+        /// <summary>The most on screen at once. Read at every trigger, and by the Test button.</summary>
+        private void CmbFloatingCount_Changed(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isLoading || CmbFloatingCount.SelectedItem is not ComboBoxItem { Tag: int count }) return;
+            var s = App.Settings?.Current;
+            if (s == null || s.MandatoryVideoFloatingCount == count) return;
+            s.MandatoryVideoFloatingCount = count;
+            App.Settings?.Save();
+        }
+
+        /// <summary>Read at the next trigger; the windows up stay as they are.</summary>
+        private void ChkFloatingTogether_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoFloatingTogether = ChkFloatingTogether.IsChecked == true;
+            App.Settings?.Save();
+        }
+
+        /// <summary>Read when the next window is shown.</summary>
+        private void ChkFloatingKeepSound_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoFloatingKeepSound = ChkFloatingKeepSound.IsChecked == true;
+            App.Settings?.Save();
+        }
+
+        /// <summary>Read at the next attention verdict.</summary>
+        private void ChkReplayFailedCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoReplayAfterFailedCheck = ChkReplayFailedCheck.IsChecked == true;
+            App.Settings?.Save();
+        }
+
         private static string FormatDuration(int seconds)
         {
             if (seconds <= 0) return "off";
@@ -156,12 +253,18 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.StrictLockEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoMinDurationSeconds) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoMaxDurationSeconds) ||
+                e.PropertyName == nameof(Models.AppSettings.VideoCutRandomStart) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionChecksEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionDensity) ||
                 e.PropertyName == nameof(Models.AppSettings.RandomizeAttentionTargets) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionLifespan) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoGazeClickEnabled) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloating) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingCount) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingTogether) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFloatingKeepSound) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoTargetMonitor))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));
@@ -210,6 +313,15 @@ namespace ConditioningControlPanel.Features
                 SliderVideoMinDur.Value = v;
                 TxtVideoMinDur.Text = FormatDuration(v);
             }
+            App.Settings?.Save();
+        }
+
+        private void ChkVideoCutRandomStart_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.VideoCutRandomStart = ChkVideoCutRandomStart.IsChecked ?? true;
             App.Settings?.Save();
         }
 
@@ -371,6 +483,10 @@ namespace ConditioningControlPanel.Features
             {
                 if (App.Video?.IsPlaying == true)
                 {
+                    // Floating: Test always adds ONE window (at the limit the oldest makes room)
+                    // and never asks. Full screen keeps the dialog below.
+                    if (App.Video.TryAddFloatingTestVideo()) return;
+
                     var result = MessageBox.Show(
                         "A video appears to be playing.\n\nIf you don't see a video, it may be stuck. Click Yes to force reset and try again.",
                         "Video Playing",
