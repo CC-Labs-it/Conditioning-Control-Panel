@@ -21,18 +21,32 @@ namespace CCP.Avalonia.Tests;
 public sealed class BannerFinishTests
 {
     [Fact]
-    public Task SupportBeatCarriesAnActionableLinkAndPanicParksItsFx() => InShell(w =>
+    public Task SupportBeatCarriesAnActionableLinkAndPanicParksItsFx() => InShell(async w =>
     {
         var link = w.Named<global::ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>("BannerSupportLink")!;
         Assert.Equal("https://linktr.ee/CodeBambi", link.NavigateUri!.AbsoluteUri);
-        Assert.True(link.Focus());
-        // Sandbox refuses the external site; this keyboard click must never launch a real browser.
-        w.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
+        // The sandbox refuses external sites, so aim the same link at loopback and stub the shell: the
+        // keyboard click must reach ExternalOpener with the link's own target, never a real browser.
+        link.NavigateUri = new Uri("http://localhost:12345/support");
+        var shell = ExternalOpener.Shell;
+        var opened = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            ExternalOpener.Shell = target => { opened.TrySetResult(target); return true; };
+            // Like WPF, the beat trims with an ellipsis, and a trimmed-off inline link is not in the tree. The
+            // header's free width depends on what earlier tests left in it, so lift the trim: this test is
+            // about the link acting, not about how much of the line fits.
+            w.Named<TextBlock>("TxtBannerPrimary")!.TextTrimming = TextTrimming.None;
+            w.UpdateLayout();
+            Assert.True(link.Focus());
+            w.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
+            Assert.Equal("http://localhost:12345/support", await opened.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+        }
+        finally { ExternalOpener.Shell = shell; }
         var stop = System.Linq.Enumerable.Single(PanicSurfaces.All, s => s.Id == "banner-fx");
         stop.Stop(w);
         Assert.False(Get<FrameClock>(w, "_bannerFxClock").IsEnabled);
         Assert.Empty(w.Named<Canvas>("BannerSparkleLayer")!.Children);
-        return Task.CompletedTask;
     });
 
     [Fact]
@@ -84,8 +98,22 @@ public sealed class BannerFinishTests
         var at = Get<double>(w, "_bannerSheenAt");
         w.SweepBannerSheen();
         Assert.Equal(at, Get<double>(w, "_bannerSheenAt"));
+        var sheen = w.Named<Border>("BannerSheen")!;
+        var transform = sheen.RenderTransform;
+        w.StepBannerFx(at + .2);
+        var slide = Assert.IsType<TranslateTransform>(Assert.IsType<TransformGroup>(transform).Children[1]);
+        var x = slide.X;
         w.StepBannerFx(at + .375);
-        Assert.InRange(w.Named<Border>("BannerSheen")!.Opacity, .219, .221);
+        Assert.InRange(sheen.Opacity, .219, .221);
+        // P07: the XAML slide is moved in place, never a new transform per tick.
+        Assert.Same(transform, sheen.RenderTransform);
+        Assert.True(slide.X > x);
+        // WPF HeaderBannerGlowHost: the halo is a sibling behind the pill, sized to it, so it rings the outside.
+        var host = w.Named<Border>("HeaderBannerHost")!;
+        var halo = w.Named<Border>("BannerHalo")!;
+        w.UpdateLayout();
+        Assert.Same(host.Parent, halo.Parent);
+        Assert.Equal(host.Bounds, halo.Bounds);
         Set(w, "_bannerSheenAt", -10d);
         w.SetBannerAnnouncement("new line");
         Assert.True(Get<double>(w, "_bannerSheenAt") >= 0);
@@ -129,7 +157,10 @@ public sealed class BannerFinishTests
         var shell = ExternalOpener.Shell;
         var prompt = ExternalOpener.BrowserPrompt;
         var fallback = ExternalOpener.BrowserFallback;
+        var seen = CoreSettings.Current.SeenFeatureIntros;
+        bool hadKey = seen.Remove(MainShellWindow.WebBannerSeenKey);
         int prompts = 0;
+        var prompted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
             ExternalOpener.BrowserFallback = (_, _) => false;
@@ -138,16 +169,30 @@ public sealed class BannerFinishTests
                 Assert.Equal("http://localhost:12345/", url);
                 Assert.Equal("open the CC Labs web app", purpose);
                 prompts++;
+                prompted.TrySetResult();
                 return Task.CompletedTask;
             };
             ExternalOpener.Shell = _ => false;
-            Assert.False(await ExternalOpener.OpenBrowserOrPromptAsync(w, "http://localhost:12345/", "open the CC Labs web app"));
+            // The user path: the One Account beat's own link (its Tag is WPF's e.Uri), aimed at loopback.
+            var link = w.Named<Button>("BannerWebLink")!;
+            Assert.Equal("https://app.cclabs.app", link.Tag);
+            link.Tag = "http://localhost:12345/";
+            Assert.True(link.Focus());
+            w.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
+            await prompted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, prompts);
+            Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
             ExternalOpener.Shell = _ => true;
             Assert.True(await ExternalOpener.OpenBrowserOrPromptAsync(w, "http://localhost:12345/", "open the CC Labs web app"));
             Assert.Equal(1, prompts);
         }
-        finally { ExternalOpener.Shell = shell; ExternalOpener.BrowserPrompt = prompt; ExternalOpener.BrowserFallback = fallback; }
+        finally
+        {
+            ExternalOpener.Shell = shell; ExternalOpener.BrowserPrompt = prompt; ExternalOpener.BrowserFallback = fallback;
+            if (!hadKey) seen.Remove(MainShellWindow.WebBannerSeenKey);
+            else if (!seen.Contains(MainShellWindow.WebBannerSeenKey)) seen.Add(MainShellWindow.WebBannerSeenKey);
+        }
     });
 
     private static Task InShell(Func<MainShellWindow, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
