@@ -50,8 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //    that flips with nothing behind it would report a paused browser that is playing.
             //  · Roster.PersonalityAssignRequested — personality prompt assignment remains absent.
             //    CompanionTabView wires CompanionCardClicked to the shell's shared-Core switch.
-            //  · Community.Browse/Import/Export/RefreshPromptsRequested — the community-prompt
-            //    service, still in the WPF head.
+            // Community owns its shared-service actions and native picker presentation.
         }
 
         /// <summary>

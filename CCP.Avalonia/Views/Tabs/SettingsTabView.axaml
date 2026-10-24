@@ -484,9 +484,33 @@
                        TextWrapping="Wrap" Margin="0,0,0,6"/>
           </StackPanel>
         </ScrollViewer>
-        <!-- ponytail: WPF docks the "Click tips" ClickChoice popup in row 1 here
-             (SettingsTabView.xaml:349, InvertDashboardClicks); not ported in this layer -
-             see the shell-favorites-rail row. -->
+        <Border Grid.Row="1" Margin="8,0,8,0" Padding="0,5,0,7"
+                BorderBrush="{DynamicResource GlassBorderBrush}" BorderThickness="0,1,0,0">
+          <Grid>
+            <Button x:Name="ClickChoiceAnchor" FontSize="11" FontWeight="SemiBold" Padding="2,8" Cursor="Hand"
+                    Background="Transparent" Foreground="{DynamicResource TextLightBrush}" BorderThickness="0"
+                    Click="OpenClickChoice" PointerEntered="HoverClickChoice" PointerExited="ScheduleClickChoiceClose">
+              <TextBlock Text="{loc:Str dash_click_choice}" TextWrapping="Wrap" TextAlignment="Center"/>
+            </Button>
+            <Popup x:Name="ClickChoicePopup" PlacementTarget="{Binding #ClickChoiceAnchor}" Placement="Left"
+                   HorizontalOffset="-6" IsLightDismissEnabled="False" Closed="ClickChoiceClosed">
+              <Border x:Name="ClickChoiceBody" Width="290" Padding="18" CornerRadius="12" Background="#FF1B1B30"
+                      BorderBrush="{DynamicResource SecondaryBrush}" BorderThickness="1"
+                      PointerEntered="KeepClickChoiceOpen" PointerExited="ScheduleClickChoiceClose">
+                <StackPanel>
+                  <TextBlock Text="{loc:Str dash_click_choice}" FontSize="17" FontWeight="Bold"
+                             Foreground="{DynamicResource PinkBrush}" Margin="0,0,0,10"/>
+                  <TextBlock x:Name="ClickChoiceDescription" FontSize="13" LineHeight="20" Foreground="White"
+                             TextWrapping="Wrap" Margin="0,0,0,14"/>
+                  <CheckBox x:Name="InvertDashboardClicks" Content="{loc:Str dash_click_invert}"
+                            Foreground="White" FontSize="13" Cursor="Hand"/>
+                  <TextBlock Text="{loc:Str dash_click_pages_pin}" FontSize="12" LineHeight="18"
+                             Foreground="#CCCCDF" TextWrapping="Wrap" Margin="0,14,0,0"/>
+                </StackPanel>
+              </Border>
+            </Popup>
+          </Grid>
+        </Border>
       </Grid>
     </Border>
       </Grid>
@@ -543,15 +567,15 @@
            (RefreshMysteryTile) and the tease tile (ApplyTeaseCard). -->
 
       <!-- Row 1: flash, the video pair, subliminals, bouncing text -->
-      <features:FeatureCard Grid.Row="0" Grid.Column="0" x:Name="CardFlash" Icon="/Resources/features/flash.png"
+      <features:FeatureCard Grid.Row="0" Grid.Column="0" DashboardDepth="True" DimWhenInactive="True" x:Name="CardFlash" Icon="/Resources/features/flash.png"
                             Title="Flash Images"
                             HelpSectionId="FlashImages"/>
       <features:SplitFeatureCard Grid.Row="0" Grid.Column="1" x:Name="ComboVideoBubble" IconB="/Resources/features/Bubble_count.png" IconA="/Resources/features/mandatory_videos.png"
                                  TitleA="Mandatory Video" TitleB="Bubble Count" DashboardDepth="True" HelpSectionIdA="Video" HelpSectionIdB="BubbleCount"/>
-      <features:FeatureCard Grid.Row="0" Grid.Column="2" x:Name="CardSubliminal" Icon="/Resources/features/subliminal.png"
+      <features:FeatureCard Grid.Row="0" Grid.Column="2" DashboardDepth="True" DimWhenInactive="True" x:Name="CardSubliminal" Icon="/Resources/features/subliminal.png"
                             Title="Subliminals"
                             HelpSectionId="Subliminals"/>
-      <features:FeatureCard Grid.Row="0" Grid.Column="3" x:Name="CardBouncingText" Icon="/Resources/features/bouncing_text.png"
+      <features:FeatureCard Grid.Row="0" Grid.Column="3" DashboardDepth="True" DimWhenInactive="True" x:Name="CardBouncingText" Icon="/Resources/features/bouncing_text.png"
                             Title="Bouncing Text"
                             HelpSectionId="BouncingText"/>
 
@@ -896,10 +920,10 @@
                             BlurRadius="14" OffsetX="0" OffsetY="0" Opacity="0.95"/>
         </TextBlock.Effect>
       </TextBlock>
-      <features:FeatureCard Grid.Row="3" Grid.Column="2" x:Name="CardBubblePop" Icon="/Resources/features/Bubble_pop.png"
+      <features:FeatureCard Grid.Row="3" Grid.Column="2" DashboardDepth="True" DimWhenInactive="True" x:Name="CardBubblePop" Icon="/Resources/features/Bubble_pop.png"
                             Title="Bubble Pop"
                             HelpSectionId="BubblePop"/>
-      <features:FeatureCard Grid.Row="3" Grid.Column="3" x:Name="CardLockCard" Icon="/Resources/features/Phrase_Lock.png"
+      <features:FeatureCard Grid.Row="3" Grid.Column="3" DashboardDepth="True" DimWhenInactive="True" x:Name="CardLockCard" Icon="/Resources/features/Phrase_Lock.png"
                             Title="Lock Card"
                             HelpSectionId="LockCard"/>
 

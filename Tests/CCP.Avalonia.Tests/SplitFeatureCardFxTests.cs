@@ -30,7 +30,7 @@ public sealed class SplitFeatureCardFxTests
     public Task MotionAndTierGateTheBreathSweepAndHalves() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var (motion, perf, wipe, drain) = (s.MotionLevel, s.PerformanceMode, s.MindWipeEnabled, s.BrainDrainEnabled);

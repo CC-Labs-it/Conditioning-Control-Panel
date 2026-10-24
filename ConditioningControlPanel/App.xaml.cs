@@ -254,6 +254,18 @@ namespace ConditioningControlPanel
             // Chaos bubble payloads are Core data; what firing one does is this head's.
             Services.Chaos.EffectPayload.Firer = Services.Chaos.EffectPayloadFiring.Fire;
 
+            // Goon Game seams (CCP.Core/Services/GoonGame): the Scrolller downloader and the
+            // Discord link both live in this head.
+            Services.GoonGame.GoonOnlineMedia.Materialize = (url, ct) => Services.Fyp.Online.RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true);
+            Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = Services.Fyp.Online.RemoteMediaCache.ReleaseTempFile;
+            Services.GoonGame.GoonAvatarCache.OwnDiscordProvider = () =>
+                Discord is { IsAuthenticated: true } d ? (true, d.Avatar, d.GetAvatarUrl(128)) : (false, null, null);
+            // Own-media transfer (CCP.Core/Services/Media/Transfer): the library walk, the webp
+            // header check and the WinRT video engine are this head's.
+            Services.Transfer.AssetCompressionPlanner.ActivePool = Services.Chaos.DtrhAssetManifest.EnumerateActive;
+            Services.Transfer.AssetCompressionPlanner.IsAnimatedWebp = Services.AnimatedWebp.IsAnimated;
+            Services.Transfer.WinRtVideoTranscoder.Install();
+
             // Mod seam. Localization moved to CCP.Core and VocabTokens needs the active mod's
             // overrides, but App derives from System.Windows.Application and cannot exist there.
             // These run lazily on every read, so the mod system coming up after localization is
@@ -651,7 +663,7 @@ namespace ConditioningControlPanel
             // The Deeper engine and its host moved to Core; the effects and the tracker stay here.
             Services.Deeper.EnhancementHostService.DispatcherFactory = () => new Services.Deeper.RealActionDispatcher();
             Services.Deeper.EnhancementHostService.WebcamProvider = () =>
-                Webcam == null ? null : (_deeperWebcam ??= new Services.Deeper.EnhancementWebcamAdapter(Webcam));
+                Webcam == null ? null : new Services.Deeper.WebcamEnhancementEvents(Webcam);
 
             // Speech capability, for the views that ask whether voice input is worth offering.
             // SpeechService itself stays here - it owns a capture device. Reading ModelStatus
@@ -1267,7 +1279,6 @@ namespace ConditioningControlPanel
         public static BugReportService BugReport { get; private set; } = null!;
         public static WallpaperService? Wallpaper { get; private set; }
         public static WebcamTrackingService Webcam { get; private set; } = null!;
-        private static Services.Deeper.EnhancementWebcamAdapter? _deeperWebcam;
         public static NotificationService Notifications { get; private set; } = null!;
         public static AttentionCheckService AttentionCheck { get; private set; } = null!;
         public static FocusGameService FocusGame { get; private set; } = null!;
@@ -2667,7 +2678,12 @@ namespace ConditioningControlPanel
             // Initialize companion leveling system (v5.3) - migrate existing users if needed
             CompanionService.MigrateFromLegacy(Settings.Current);
             Companion = new CompanionService();
-            CommunityPrompts = new CommunityPromptService();
+            CommunityPrompts = new CommunityPromptService(validatorProvider: () => PromptValidator);
+            CommunityPrompts.ValidationAdvisory += (_, count) => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { MessageBox.Show(Loc.GetF("community_prompt_warning_body", count), Loc.Get("community_prompt_warning_title"), MessageBoxButton.OK, MessageBoxImage.Warning); }
+                catch (Exception ex) { Logger?.Debug("Community prompt advisory failed: {Error}", ex.Message); }
+            }));
 
             // Initialize personality preset system (v5.5) - migrate from legacy SlutModeEnabled
             Personality = new PersonalityService();

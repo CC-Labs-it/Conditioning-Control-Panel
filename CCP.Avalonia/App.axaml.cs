@@ -224,12 +224,9 @@ namespace ConditioningControlPanel.Avalonia
                 || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
                 || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:696
+            // WPF App.xaml.cs:715 routes this through CompanionLinkLauncher.Open (remote guard, embedded browser, https fallback).
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.OpenLink = url =>
-            {
-                if (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
-                    _ = Platform.AppUpdater.OpenUrl(Views.AvatarTube.AvatarTubeWindow.Live, url!);
-                else Serilog.Log.Warning("Companion watch chip refused a non-https link");
-            };
+                _ = Views.Controls.Companion.CompanionLinkLauncher.OpenAsync(url);
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Start();
         }
 
@@ -647,6 +644,14 @@ namespace ConditioningControlPanel.Avalonia
                 }
                 catch (Exception ex) { Serilog.Log.Warning(ex, "[Friends] service could not be built"); }
                 Platform.LeashHead.StartDemoIfAsked();   // Debug + sandbox only (WPF CCP_LEASH_DEMO)
+                // WPF App.xaml.cs V2Purchase: pure constructor, the counter is read when a Get it row shows.
+                // The cache is per account (WPF MainWindow.Login.cs:128/316 Invalidate on sign-in/out).
+                if (Platform.V2PurchaseHead.Create(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
+                        Environment.GetEnvironmentVariable(Platform.V2PurchaseHead.EnvVar)) is { } v2Purchase)
+                {
+                    Platform.V2PurchaseHead.Service = v2Purchase;
+                    CoreAccount.UnifiedIdentityChanged += (_, _) => v2Purchase.Invalidate();
+                }
                 // WPF App.xaml.cs:3010-3013: the task runner the gate's action starts.
                 try { Platform.LeashTaskHost.Start(Platform.LeashHead.Service as ConditioningControlPanel.Services.Leash.LeashService); }
                 catch (Exception exRunner) { Serilog.Log.Warning(exRunner, "[Leash] task runner could not be built"); }
