@@ -136,13 +136,13 @@ export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK, reac
     memory.spray+=dt;memory.wet=true;
     if(memory.spray<(drifting?.065:.095))return;
     const elapsed=Math.min(.14,memory.spray);memory.spray=0;
-    const strength=Math.min(.65,speed*.012+steering*.18)*elapsed/.1*(gentle?.7:1);
-    fluid?.disturb?.({s,x:st[S.lateral],radius:1.7,strength,dirX:lateral*.15,dirS:along*.1,foam:.18+steering*.25});
+    const strength=Math.min(.72,speed*.016+steering*.22)*elapsed/.1*(gentle?.7:1);
+    fluid?.disturb?.({s,x:st[S.lateral],radius:2.2,strength,dirX:lateral*.15,dirS:along*.1,foam:.18+steering*.25});
     for (const side of [-1, 1]) {
       const x = Math.max(-f.w / 2 + 0.1, Math.min(f.w / 2 - 0.1, st[S.lateral] + side * LOOK.saucerR * 1.15));
       const sideWet=fluid?.sample?.(s,x,sampled);if(sideWet?.wet===false)continue;
       const pt=contact(s-.7,x),push=side*(1.6+speed*.055+steering*2.4)+lateral*.35;
-      fluid?.disturb?.({s:s-1.4,x,radius:1.6+steering*.9,strength:-strength*.8,dirX:push,dirS:-along*.08,foam:.25+steering*.35});
+      fluid?.disturb?.({s:s-1.8,x,radius:2+steering*.9,strength:-strength*.85,dirX:push,dirS:-along*.08,foam:.25+steering*.35});
       sprayPool.emit({...pt,count:drifting?12:5+Math.round(steering*4),dirX:push,dirS:-along*.15,
         lift:1.5+steering*2+(drifting?.9:0),spread:1.4+steering,size:drifting?.055:.038,life:.65+steering*.2,gentle});
     }

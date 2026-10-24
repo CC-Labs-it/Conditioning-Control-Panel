@@ -58,7 +58,11 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
   const smallSlope = slopeOf(qA).add(slopeOf(qB).mul(0.6)).mul(L.bump);
   // Heightfield slopes are measured in lateral/along metres. They follow the same transported
   // tangent frame as the displaced vertices, including banked turns and the curved canal walls.
-  const wakeSlope = deformation ? deformation.slope.add(smallSlope.mul(0.12)) : smallSlope;
+  // Short capillary ripples break up reflections between the larger displaced swells.
+  const rippleA=proceduralSlope(p.mul(vec2(.39,.31)).add(vec2(u.t.mul(.24),u.t.mul(-.19))));
+  const rippleB=proceduralSlope(p.mul(vec2(-.61,.47)).add(vec2(u.t.mul(-.16),u.t.mul(.27))));
+  const fineRipples=rippleA.mul(.075).add(rippleB.mul(.045));
+  const wakeSlope = deformation ? deformation.slope.add(smallSlope.mul(0.55)).add(fineRipples) : smallSlope;
   const slope = response ? wakeSlope.add(response.slope) : wakeSlope;
   // the road normal tilted by the slope (u along the road's right, v along its tangent: both lie in the plane)
   const N = deformation ? normalize(N0.sub(deformation.B.mul(slope.x)).sub(deformation.T.mul(slope.y)))
@@ -88,15 +92,17 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
   if (deformation) {
     // Actual nearby architecture and screens reflect through the displaced normal.
     // Transmission stays clear enough to reveal the recessed physical bed.
-    const elevation = (deformation.height || float(0)).mul(0.45).add(0.5).clamp(0,1);
-    const transmitted = pal.col(2).mul(0.08).add(vec3(0.035,0.24,0.265)).mul(elevation.mul(0.28).add(0.72));
+    const elevation = (deformation.height || float(0)).mul(1.6).add(0.5).clamp(0,1);
+    const transmitted = pal.col(2).mul(0.08).add(vec3(0.035,0.24,0.265)).mul(elevation.mul(0.48).add(0.52));
     const fallback = pal.col(0).mul(0.13).add(vec3(.015,.035,.045));
     const reflected = deformation.reflection ? mix(fallback,deformation.reflection(R),deformation.reflectionReady || float(1)) : fallback;
     const grazing = pow(float(1).sub(ndv),5).mul(.98).add(.02);
-    const sharpSpec = pow(clamp(dot(N,H),0,1),90).mul(0.95);
+    const sharpSpec = pow(clamp(dot(N,H),0,1),64).mul(0.95);
+    const crestLight=smoothstep(.56,.92,elevation).mul(.065);
     colour = mix(transmitted,reflected,grazing.mul(.67).add(.12))
       .add(vec3(0.72,0.9,1).mul(sharpSpec))
-      .add(white.mul(foam).mul(0.075));
+      .add(vec3(.35,.7,.76).mul(crestLight))
+      .add(white.mul(foam).mul(0.12));
   }
   if (response) {
     // Soft refracted bands and crest light use the same phase as the optical slope. Neither
