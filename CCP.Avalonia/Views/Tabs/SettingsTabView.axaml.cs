@@ -164,7 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // the wiring is a rename away once those partials reach Core.
         //
         // ponytail: needs MainWindow (DashboardFx, Browser, Login,
-        // TeaseCard, TabNavigation) and PremiumFeature - both WPF-head. TierGate is NOT
+        // TabNavigation) and PremiumFeature - both WPF-head. TierGate is NOT
         // among them any more: CCP.Core/Services/TierGate.cs, over the CoreEntitlement seam.
         //
         // LinkPhoneDialog and LayeredAudioWindow are the only two handlers in the WPF file that
@@ -201,7 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CardMystery.Click += CardMystery_Click;
             MysteryRevealFace.PointerReleased += MysteryRevealFace_Click;
             CardVault.Click += CardVault_Click;
-            CardJustDrop.Click += CardJustDrop_Click;
+            CardDeeperEditor.Click += CardDeeperEditor_Click;
             LogoBrandFrame.PointerPressed += ImgLogo_MouseLeftButtonDown;
             IntakePassFace.PointerPressed += IntakePassFace_MouseLeftButtonDown;
 
@@ -297,7 +297,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ => null,
         };
         private void CardVault_Click(object? sender, RoutedEventArgs e) => Shell?.BtnPatreonExclusives_Click(sender, e);
-        private void CardJustDrop_Click(object? sender, RoutedEventArgs e) { }        // mw.CardJustDrop_Click(...)
+        /// <summary>WPF CardDeeperEditor_Click (MainWindow.Presets.cs:1121): opens the Deeper page, never the editor.</summary>
+        private void CardDeeperEditor_Click(object? sender, RoutedEventArgs e) => Shell?.ShowTab("deeper");
         /// <summary>
         /// WPF ImgLogo_MouseLeftButtonDown (MainWindow.UiUpdates.cs:1212): the Neon Obsession /
         /// Needy Doll achievement track, the bark (rolling 60s click count behind the

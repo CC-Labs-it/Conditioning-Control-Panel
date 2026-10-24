@@ -202,6 +202,21 @@ public sealed class HomeMarqueeTests
         return Task.CompletedTask;
     });
 
+    /// <summary>WPF CardDeeperEditor_Click (Presets.cs:1121; SettingsTabView.xaml:601-636): the tile that replaced the
+    /// retired tease tile is a door to the Deeper page - localized title, no dimming, and a click navigates.</summary>
+    [Fact]
+    public Task DeeperEditorTileOpensTheDeeperPage() => WithShell((w, dash) =>
+    {
+        var card = dash.FindControl<ConditioningControlPanel.Avalonia.Views.Features.FeatureCard>("CardDeeperEditor")!;
+        Assert.Equal(Loc.Get("dash_deeper_editor_title"), card.Title);
+        Assert.False(card.DimWhenInactive);
+        Assert.Null(dash.FindControl<Control>("CardJustDrop"));
+        card.RaiseEvent(new RoutedEventArgs(ConditioningControlPanel.Avalonia.Views.Features.FeatureCard.ClickEvent, card));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("deeper", w.CurrentTab);
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF IntakePassFace_MouseLeftButtonDown (UiUpdates.cs:1911): the face launches through the intake page's
     /// gates (no login here: its "Login Required" note); its "(?)" belongs to the help popover.</summary>
     [Fact]

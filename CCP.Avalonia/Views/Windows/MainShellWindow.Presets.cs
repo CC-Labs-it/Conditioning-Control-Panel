@@ -64,7 +64,7 @@
 //   internal void CardLockCard_Click(…)
 //   internal void CardMystery_Click(…)
 //   internal void CardVault_Click(…)
-//   internal void CardJustDrop_Click(…)
+//   internal void CardDeeperEditor_Click(…)
 //   internal void RefreshMosaicTierBadges(…)
 //   internal void RefreshMysteryTile(…)
 //   private static string? MysteryFeatureName(…)
