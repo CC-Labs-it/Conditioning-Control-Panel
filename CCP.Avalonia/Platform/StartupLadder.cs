@@ -13,13 +13,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// <summary>
     /// This head's half of WPF's <c>App.StartupLadder</c> (Services/Startup/StartupPresenter.cs): the
     /// passive route and the Inbox. A passive surface opens now unless something already owns the
-    /// user (session, tour, the ten-minute first-launch window), in which case it becomes an Inbox
+    /// user (session, game, tour, the ten-minute first-launch window), in which case it becomes an Inbox
     /// row - the same Core rule WPF reads (<see cref="StartupQueueCore.Route"/>).
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so
-    /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
+    /// ponytail: no modal ladder or launcher hold on this head, so
+    /// LadderBusy / LauncherHolding stay false and Route never answers Defer; port the
     /// pump when the startup modals move onto a shared ladder.
     /// </summary>
     internal static class StartupLadder
@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
+            GameHostUp = Views.Windows.PanicSurfaces.AnyOwnsTheScreen(),
             FirstLaunchUntilUtc = _firstLaunchUntilUtc,
             NowUtc = nowUtc,
         };

@@ -33,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
+            new("inbox-notice", _ => Dialogs.InboxNoticeCard.CloseActive()),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),

@@ -673,3 +673,13 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Conversion lapse notices (sync #7)
+
+1. On a signed-in test account with a server-confirmed lower tier and no live provider covering it,
+   check the Inbox at 7, 3 and 1 days before grace ends and on the day it closes. Repeated focus
+   must not repeat the same row for that grace end. Open the row: Keep/Reopen opens the matching
+   Patreon checkout; Leave closes the card. During a session or first-launch quiet window it stays
+   in the Inbox. A dead grant offers Reconnect instead. Panic closes an open notice card.
+   WPF `MainWindow/MainWindow.Inbox.cs:165`, `Dialogs/InboxNoticeCard.cs:49`.
+   Rows: `sync7-conversion`.

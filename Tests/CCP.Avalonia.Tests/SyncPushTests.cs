@@ -105,6 +105,29 @@ public sealed partial class AccountSeedTests
         }
     }
 
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(2, null)]
+    [InlineData(null, 0)]
+    public void ProfileReadingRemembersLowerClearsAgreementAndPreservesNoSignal(int? server, int? expected)
+        => WithFreshInstall(async () =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.PatreonTier, s.ServerTierSeen);
+        try
+        {
+            s.PatreonTier = 2;
+            s.ServerTierSeen = 0;
+            var profile = JObject.Parse(L40Profile("u1"));
+            if (server.HasValue) profile["user"]!["effective_tier"] = server.Value;
+            SignIn("u1", profile.ToString());
+            Assert.True(await AccountSeed.LoadProfileAsync());
+            Assert.Equal(expected, s.ServerTierSeen);
+            Assert.Equal(2, s.PatreonTier);
+        }
+        finally { (s.PatreonTier, s.ServerTierSeen) = old; }
+    });
+
     [Fact]
     public void NoPush_BeforeASuccessfulLoad_NorAfterLogout_UntilTheNextLoad() => WithFreshInstall(async () =>
     {

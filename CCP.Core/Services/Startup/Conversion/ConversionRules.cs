@@ -1,0 +1,100 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+
+namespace ConditioningControlPanel.Services.Conversion
+{
+    /// <summary>Which lapse row an install owes right now.</summary>
+    public enum LapseRow { None, Warn7, Warn3, Warn1, Closed }
+
+    /// <summary>A lapse reading: the row, the tier that is closing (1 Basic, 2 Prime), its end, and
+    /// whole days left (0 once closed).</summary>
+    public readonly record struct LapseReading(LapseRow Row, int Tier, DateTime UntilUtc, int DaysLeft)
+    {
+        public static readonly LapseReading Nothing = new(LapseRow.None, 0, default, 0);
+
+        /// <summary>The Inbox row key (also the <c>InboxStamps</c> key).</summary>
+        public string Key => Row switch
+        {
+            LapseRow.Warn7 => ConversionRules.KeyLapseWarn7,
+            LapseRow.Warn3 => ConversionRules.KeyLapseWarn3,
+            LapseRow.Warn1 => ConversionRules.KeyLapseWarn1,
+            LapseRow.Closed => ConversionRules.KeyLapseClosed,
+            _ => "",
+        };
+
+        /// <summary>The stamp value: one post per grace end, so a later lapse warns again.</summary>
+        public string Stamp => UntilUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// The pure half of the conversion Inbox rows (brief contract C9). Every row goes through the
+    /// presenter (the head startup ladder), so none of
+    /// them can land inside a session, a game or a conversation; this class only decides WHETHER a
+    /// row is owed and keeps each one to once a day (or once per lapse) through
+    /// <see cref="Models.AppSettings.InboxStamps"/>.
+    /// </summary>
+    public static class ConversionRules
+    {
+        public const string KeyLapseWarn7 = "lapse_warn_7";
+        public const string KeyLapseWarn3 = "lapse_warn_3";
+        public const string KeyLapseWarn1 = "lapse_warn_1";
+        public const string KeyLapseClosed = "lapse_closed";
+        public const string KeyLapseReconnect = "lapse_reconnect";
+
+        /// <summary>How long after the close the closed row may still be posted (proposal 4d).</summary>
+        public static readonly TimeSpan ClosedRowWindow = TimeSpan.FromDays(30);
+
+        /// <summary>The Patreon checkout that preselects the tier. Never the bare profile url.</summary>
+        public static string PlanUrl(int tier) => Services.Vault.PlanCatalog.Fallback.For(tier).PatreonUrl;
+
+        /// <summary>The funnel's plan word for a tier.</summary>
+        public static string PlanWord(int tier) => tier >= 2 ? "prime" : "basic";
+
+        /// <summary>
+        /// Whether a lapse row is owed. Only when the server has REPORTED a lower tier
+        /// (<paramref name="serverTierSeen"/>, stored by EntitlementTierSync) and nothing live still
+        /// covers the tier: a guess from a stale grace stamp alone never warns anyone.
+        /// Stored 2 with the server below 2 closes Prime (the Lab stamp); stored 1 with the server
+        /// at 0 closes Basic (the premium stamp).
+        /// </summary>
+        public static LapseReading DecideLapse(int storedTier, int? serverTierSeen, DateTime? premiumUntilUtc,
+            DateTime? labUntilUtc, DateTime nowUtc, bool liveCoversIt)
+        {
+            if (serverTierSeen is not int server || liveCoversIt) return LapseReading.Nothing;
+            var local = Math.Clamp(storedTier, 0, 2);
+            if (server >= local) return LapseReading.Nothing;
+
+            var tier = local >= 2 ? 2 : 1;
+            var until = tier >= 2 ? (labUntilUtc ?? premiumUntilUtc) : premiumUntilUtc;
+            if (until is not DateTime end) return LapseReading.Nothing;
+
+            var remaining = end - nowUtc;
+            if (remaining <= TimeSpan.Zero)
+                return -remaining <= ClosedRowWindow ? new LapseReading(LapseRow.Closed, tier, end, 0) : LapseReading.Nothing;
+
+            var days = (int)Math.Ceiling(remaining.TotalDays);
+            var row = days <= 1 ? LapseRow.Warn1 : days <= 3 ? LapseRow.Warn3 : days <= 7 ? LapseRow.Warn7 : LapseRow.None;
+            return row == LapseRow.None ? LapseReading.Nothing : new LapseReading(row, tier, end, days);
+        }
+
+        // ------------------------------------------------------------------ stamps
+
+        /// <summary>A local date as a stamp value.</summary>
+        public static string DayStamp(DateTime local) => local.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        /// <summary>True when <paramref name="key"/> has not been posted for <paramref name="value"/>.</summary>
+        public static bool Owed(IReadOnlyDictionary<string, string>? stamps, string key, string value)
+            => !string.IsNullOrEmpty(key)
+               && (stamps == null || !stamps.TryGetValue(key, out var last) || !string.Equals(last, value, StringComparison.Ordinal));
+
+        /// <summary>Records <paramref name="value"/> for <paramref name="key"/>. True when it changed.</summary>
+        public static bool Stamp(IDictionary<string, string>? stamps, string key, string value)
+        {
+            if (stamps == null || string.IsNullOrEmpty(key)) return false;
+            if (stamps.TryGetValue(key, out var last) && string.Equals(last, value, StringComparison.Ordinal)) return false;
+            stamps[key] = value;
+            return true;
+        }
+    }
+}

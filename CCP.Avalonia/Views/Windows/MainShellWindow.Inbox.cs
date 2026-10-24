@@ -25,7 +25,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             inbox.CollectionChanged += OnInboxCollectionChanged;
             Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;
             RefreshInboxBadge();
+            Activated += OnConversionFocus;
+            AccountSeed.ProfileLoaded += OnConversionReading;
+            Closed += (_, _) =>
+            {
+                Activated -= OnConversionFocus;
+                AccountSeed.ProfileLoaded -= OnConversionReading;
+            };
         }
+
+        private void OnConversionFocus(object? sender, EventArgs e) => MaybePostConversionRows();
+        private void OnConversionReading() => Dispatcher.UIThread.Post(MaybePostConversionRows);
 
         private void OnInboxCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
