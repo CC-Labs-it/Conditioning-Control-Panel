@@ -2999,3 +2999,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-chaster: +863
 - Chaster tab: menu boards, inline price editing and the two-limit drawer, on Core `TabPriceEdit`/`LimitChange`/`TabLimits`; the menu is visible only while linked, as in WPF.
 - Row `views-tab-chaster` stays stub; page Fx, art and trailer remain in wire-views-tab-chaster-b.
+
+## avalonia-port/wire-shell-notifications-toasts: +340
+- Avalonia NotificationService gains WPF's ShowSticky/Dismiss(key) (pre-host replay, dedup, persisted × dismissal via Core NotificationDismissals, secondary action row); catalogue/deeper acceptance notices are sticky; Pink Rush reuses passive corner placement.
+- Tests are deterministic (no wall-clock waits); row stays stub, remaining lifecycle callers named under wire-shell-notifications-toasts-b.
