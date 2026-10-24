@@ -2949,3 +2949,8 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 - Merge webcam calibration lane `be09ff13f0ea97c92e72c6dfcad763e387ad1aec` into pinned workshop lane `5252d4f0598e96f01d98bc635dd997e29a3ab726`.
 - Retain companion roster identity refresh, phrase-preset select/save/delete and tab-return refresh, conversation resume/park, and prompt-editor entry points.
 - Keep all 37 panic surfaces in parent order, their ordering contracts, and both parents’ tests. Consolidate parity IDs with the more advanced status and distinct evidence; retain both progress histories without claiming live verification.
+## avalonia-port/main-20261024: +5620
+- Main sync #8: WPF main f81ea01fb merged (Oct 22 night bug hunt, 32 commits); delta ledger docs/avalonia-main-sync-20261024.md (2 ported-by-merge, 30 needs-port in 15 sync8-* lanes, 0 n/a). Red by design; gated in -compat.
+
+## avalonia-port/main-20261024-compat: +62
+- Compat for main sync #8: App.* in Core as Serilog/CoreSettings, LockdownExitRule/PanicAftermath/VoicePanicReach/TickStep into Core, main's WPF scan tests via SourceRoots and retargeted to where the stack split the code. rgate GATE-OK (run 40109201391).
