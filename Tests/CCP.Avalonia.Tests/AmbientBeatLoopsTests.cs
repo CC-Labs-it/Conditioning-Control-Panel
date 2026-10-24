@@ -192,12 +192,19 @@ public sealed class AmbientBeatLoopsTests
     private static T F<T>(object o, string name) =>
         (T)o.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(o)!;
 
-    private static void Setup()
+    internal static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+        {
+            var options = global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options();
+            // Lifecycle/curve tests use the bundled face for Windows-only font names on Linux.
+            var mappings = new Dictionary<string, FontFamily>(options.FontFamilyMappings!);
+            mappings["Segoe UI"] = mappings["Segoe UI Black"] = new FontFamily(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter);
+            options.FontFamilyMappings = mappings;
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().With(options)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        }
     }
 
     private static void Step(SteppedTime time, double seconds)
@@ -284,6 +291,83 @@ public sealed class AmbientBeatLoopsTests
     });
 
     [Fact]
+    public Task LockdownPulseFollowsTabNavigation() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var old = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        CoreSettings.Current.PerformanceMode = false;
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.Activate();
+            Dispatcher.UIThread.RunJobs();
+            var plate = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageBorder")!;
+            var resting = plate.BorderBrush;
+            var glow = shell.Named<Control>("LockdownTab")!.FindControl<Border>("LockdownImageGlow")!;
+            var restingShadow = glow.BoxShadow;
+            var restingOpacity = glow.Opacity;
+            Assert.Null(plate.Effect);
+            shell.ShowTab("LOCKDOWN");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(shell.LockdownPulsing);
+            Step(time, 0.75);
+            var midpoint = ((ISolidColorBrush)plate.BorderBrush!).Color;
+            Assert.NotEqual(((ISolidColorBrush)resting!).Color, midpoint);
+            shell.ShowTab("not-a-tab");
+            Assert.True(shell.LockdownPulsing); // invalid navigation keeps the current tab
+            shell.ShowTab("lockdown");
+            Assert.True(shell.LockdownPulsing);
+            // WPF stops and restarts on every switch, so re-selecting Lockdown begins again at #FF1493.
+            Assert.Equal(Color.FromRgb(0xFF, 0x14, 0x93), ((ISolidColorBrush)plate.BorderBrush!).Color);
+            shell.ShowTab("settings");
+            Assert.False(shell.LockdownPulsing);
+            Assert.Same(resting, plate.BorderBrush);
+            Assert.Equal(restingShadow, glow.BoxShadow);
+            Assert.Equal(restingOpacity, glow.Opacity);
+            var quests = shell.Named<QuestsTabView>("QuestsTab")!;
+            var enhancements = shell.Named<EnhancementsTabView>("EnhancementsTab")!;
+            shell.ShowTab("quests");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(quests.AmbientRunning);
+            shell.ShowTab("enhancements");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(quests.AmbientRunning);
+            Assert.True(enhancements.FxRunning);
+            shell.ShowTab("settings");
+            Assert.False(enhancements.FxRunning);
+            CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+            shell.ShowTab("lockdown");
+            Assert.False(shell.LockdownPulsing);
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            CoreSettings.Current.PerformanceMode = true;
+            shell.ShowTab("settings");
+            shell.ShowTab("lockdown");
+            Assert.False(shell.LockdownPulsing);
+            CoreSettings.Current.PerformanceMode = false;
+            shell.ShowTab("settings");
+            shell.ShowTab("lockdown");
+            Assert.True(shell.LockdownPulsing);
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.LockdownPulsing);
+        }
+        finally
+        {
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            BeatLoop.Time = TimeProvider.System;
+            CoreSettings.ServiceProvider = old;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task ShellLoopsBreatheOnTheBeat() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
@@ -327,6 +411,7 @@ public sealed class AmbientBeatLoopsTests
             Assert.Null(pulseGlow.Effect);
             Assert.Equal(22, pulseGlow.BoxShadow[0].Blur, 3);
             Assert.Equal(1, pulseGlow.Opacity);
+            Assert.Equal(255, pulseGlow.BoxShadow[0].Color.A);
             Step(time, 1.5);
             Assert.Equal(Color.FromRgb(0xFF, 0x14, 0x93), ((ISolidColorBrush)plate.BorderBrush!).Color);
             shell.StopLockdownPulse();
