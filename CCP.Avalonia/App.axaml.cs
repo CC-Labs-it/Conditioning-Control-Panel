@@ -460,6 +460,8 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:3088: a run killed mid-lockdown gets its real panic key and Strict
                 // Lock back from lockdown_recovery.json before anything reads them.
                 LockdownService.RecoverIfNeeded();
+                if (ConditioningControlPanel.Services.RemoteControl.RemoteHoldings.HealOnLaunch(CorePaths.UserData, CoreSettings.Current) > 0)
+                    CoreSettings.Save();
                 LockdownService.Current = new LockdownService();
                 // WPF App.xaml.cs:3295: quest credit for each completed lockdown of 20+ minutes.
                 // LastActiveDuration is set in Deactivate before the event fires.
@@ -1193,6 +1195,11 @@ namespace ConditioningControlPanel.Avalonia
             // Flush while the dispatcher is still usable. In particular, a serialize retry from a
             // background save must not see the shutdown-safe drop provider below.
             var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
+            if (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated)
+            {
+                Views.Tabs.RemoteControlTabView.Relay.Value.ReleaseHoldingsForExit();
+                Views.Tabs.RemoteControlTabView.Relay.Value.Dispose();
+            }
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 
             // WPF AchievementService.Dispose saves synchronously; only when dirty here, so an idle exit

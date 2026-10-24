@@ -115,9 +115,9 @@ public sealed class RemoteRelayTests
             Assert.False(s.StrictLockEnabled);
             (s.StrictLockEnabled, s.PanicKeyEnabled) = (true, false);
             Assert.Null(RemoteCommands.Execute("enable_panic", null));
-            Assert.Null(RemoteCommands.Execute("disable_strict_lock", null));
+            Assert.Equal("the Lockdown holds the strict lock", RemoteCommands.Execute("disable_strict_lock", null));
             Assert.True(s.PanicKeyEnabled);
-            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.StrictLockEnabled);
             Assert.True(ld.IsActive);             // the timer was not ended
             Assert.Equal(0, ld.RestartCount);     // nor restarted
             s.PanicKeyEnabled = false;            // whatever the controller left behind...
@@ -218,6 +218,73 @@ public sealed class RemoteRelayTests
             s.StrictLockEnabled = true;   // the subject's own
             Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"2\",\"action\":\"enable_strict_lock\"}]}");
             await r.PollOnceAsync();
+            Poll(f, "{\"controller_connected\":false}");
+            await r.PollOnceAsync();
+            Assert.True(s.StrictLockEnabled);
+        }
+        finally { (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = saved; }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Remote_end_preserves_lockdown_and_corrects_its_record(bool stopEffects, bool sessionEnd)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect,
+            s.LockdownForceStrictLock, s.LockdownDisablePanicKey);
+        var previous = LockdownService.Current;
+        using var ld = LockdownService.Current = new LockdownService();
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect,
+                s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = (false, true, stopEffects, true, true);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid", "test",
+                RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, Cmd("1", "enable_strict_lock"));
+            await r.PollOnceAsync();
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Assert.True(ld.RecordedStrictLock);
+            if (sessionEnd) await r.StopAsync();
+            else { Poll(f, "{\"controller_connected\":false}"); await r.PollOnceAsync(); }
+            Assert.True(ld.IsActive);
+            Assert.True(s.StrictLockEnabled);
+            Assert.False(s.PanicKeyEnabled);
+            Assert.False(ld.RecordedStrictLock);
+            ld.Deactivate();
+            Assert.False(s.StrictLockEnabled);
+            Assert.True(s.PanicKeyEnabled);
+        }
+        finally
+        {
+            ld.Deactivate();
+            LockdownService.Current = previous;
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect,
+                s.LockdownForceStrictLock, s.LockdownDisablePanicKey) = saved;
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Disconnect_returns_the_wearers_strict_lock(bool controllerWrites)
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect);
+        try
+        {
+            (s.StrictLockEnabled, s.PanicKeyEnabled, s.StopEffectsOnRemoteDisconnect) = (true, true, true);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid", "test",
+                RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, controllerWrites ? Cmd("1", "disable_strict_lock") : "{\"controller_connected\":true}");
+            await r.PollOnceAsync();
+            Assert.Equal(!controllerWrites, s.StrictLockEnabled);
             Poll(f, "{\"controller_connected\":false}");
             await r.PollOnceAsync();
             Assert.True(s.StrictLockEnabled);

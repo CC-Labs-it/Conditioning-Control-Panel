@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Serilog;
+using ConditioningControlPanel.Services.RemoteControl;
 
 namespace ConditioningControlPanel.Services
 {
@@ -55,7 +56,8 @@ namespace ConditioningControlPanel.Services
         private DateTime _lastStatusPush = DateTime.MinValue, _statusBackoffUntil = DateTime.MinValue;
         private string _lastStatus = "ok";
         private string? _lastReason;
-        private bool _remoteSetStrictLock, _pollBackedOff;
+        private bool _pollBackedOff;
+        private RemoteHoldings? _holdings;
         private DateTime _lastControllerCommand = DateTime.MinValue;
         public const double HotPollSeconds = 1.0, HotWindowSeconds = 60.0, ConnectedHeartbeatSeconds = 5.0;   // WPF Screen.cs (d39969827)
 
@@ -131,6 +133,7 @@ namespace ConditioningControlPanel.Services
                 if (string.IsNullOrEmpty(code)) return null;
                 (SessionCode, ConnectPin, Tier, IsActive) = (code, pin, tier, true);
                 (_consecutiveFailures, PollInterval, _lastStatusPush, _statusBackoffUntil) = (0, PollIntervalSeconds, DateTime.MinValue, DateTime.MinValue);
+                CoreDispatch.Invoke(() => { TakeWearerSnapshot(); return 0; }, TimeSpan.FromSeconds(10));
                 if (AutoPoll) StartLoop();
                 Log.Information("[RemoteControl] Session started: {Code}, tier: {Tier}", code, tier);
                 return code;
@@ -185,12 +188,18 @@ namespace ConditioningControlPanel.Services
             _loop?.Cancel();
             _loop = null;
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
-            (_remoteSetStrictLock, _pollBackedOff, _lastControllerCommand) = (false, false, DateTime.MinValue);
+            (_pollBackedOff, _lastControllerCommand) = (false, DateTime.MinValue);
+            Interlocked.Increment(ref _leaveGeneration);
             (_lastOptInTags, _lastOptInStatus) = (null, null);
             Interlocked.Increment(ref _sessionGeneration);   // an opt-in still in flight must not list the next session
             // StopAsync and the poll loop land here off the UI thread, and the stops close windows: run
             // them on the UI like ControllerLeft, posted if a stalled UI cancels the Invoke.
-            void StopEffects() { try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); } }
+            void StopEffects()
+            {
+                try { _stopEffects(false); }
+                catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+                ReleaseHoldingsForExit();
+            }
             var (done, _) = CoreDispatch.Invoke(() => { StopEffects(); return 0; }, TimeSpan.FromSeconds(10));
             if (!done) CoreDispatch.Post(StopEffects);
             if (ControllerConnected) { ControllerConnected = false; ControllerConnectedChanged?.Invoke(this, EventArgs.Empty); }
@@ -289,8 +298,8 @@ namespace ConditioningControlPanel.Services
 
         // WPF HandleControllerDisconnectCleanup: default leaves effects running; the opt-in stops them.
         // A remote haptic never outlives its controller, and what could trap the subject is handed back
-        // (WPF 71cfc4185 ReleaseRemoteSafetyState, ccp-bugs #1340): panic key on, the controller's own
-        // strict lock off; a strict lock the subject set stays.
+        // WPF remote end: restore the wearer's strict lock; a running Lockdown retains its safety
+        // switches and gets its recorded value corrected for its own eventual end.
         // Runs through the same UI dispatch as commands (and so PanicKeyUiSync, which Avalonia leaves unset,
         // is on the UI thread), after bumping the leave generation that refuses anything still in flight.
         private void ControllerLeft()
@@ -305,18 +314,54 @@ namespace ConditioningControlPanel.Services
         private void ReleaseOnLeave()
         {
             RemoteCommands.RemoteHaptics.Stop();
-            var s = CoreSettings.Current;
-            var changed = false;
-            if (_remoteSetStrictLock) { _remoteSetStrictLock = false; if (s.StrictLockEnabled) { s.StrictLockEnabled = false; changed = true; } }
-            if (!s.PanicKeyEnabled) { s.PanicKeyEnabled = true; changed = true; }
-            if (changed)
-            {
-                CoreSettings.Save();
-                try { LockdownService.PanicKeyUiSync?.Invoke(); } catch { }
-                Log.Information("[RemoteControl] Controller left: panic key back on, controller's strict lock released");
-            }
+            ReleaseRemoteSafetyState();
             if (CoreSettings.Current.StopEffectsOnRemoteDisconnect)
                 try { _stopEffects(false); } catch (Exception ex) { Log.Warning(ex, "[RemoteControl] stop effects failed"); }
+        }
+
+        private void TakeWearerSnapshot()
+        {
+            _holdings = RemoteHoldings.Take(f => f == RemoteHeld.StrictLock
+                ? StrictBefore() : RemoteHoldings.Read(CoreSettings.Current, f), DateTime.UtcNow.Ticks);
+            RemoteHoldings.Save(CorePaths.UserData, _holdings);
+        }
+
+        private static int StrictBefore() => RemoteHoldings.StrictBefore(CoreSettings.Current.StrictLockEnabled,
+            LockdownService.Current?.IsActive == true, LockdownService.Current?.RecordedStrictLock == true);
+
+        private void NoteStrictWrite(bool on)
+        {
+            if (_holdings == null) return;
+            _holdings.NoteWrite(RemoteHeld.StrictLock, StrictBefore(), on ? 1 : 0);
+            RemoteHoldings.Save(CorePaths.UserData, _holdings);
+        }
+
+        private void ReleaseRemoteSafetyState()
+        {
+            var s = CoreSettings.Current;
+            var ld = LockdownService.Current;
+            var back = _holdings?.HandBackStrict(s.StrictLockEnabled, ld?.IsActive == true,
+                ld?.ForcedStrictLock == true, ld?.RecordedStrictLock == true) ?? default;
+            if (_holdings != null) RemoteHoldings.Save(CorePaths.UserData, _holdings);
+            if (back.LockdownRecorded is bool recorded) ld?.CorrectRecordedStrictLock(recorded);
+            var changed = false;
+            if (back.Live is bool live) { s.StrictLockEnabled = live; changed = true; }
+            if (RemoteHoldings.TurnsPanicBackOn(s.PanicKeyEnabled, false,
+                ld?.IsActive == true, ld?.DisabledPanicKey == true))
+            { s.PanicKeyEnabled = true; changed = true; }
+            if (!changed) return;
+            CoreSettings.Save();
+            try { LockdownService.PanicKeyUiSync?.Invoke(); } catch { }
+        }
+
+        /// <summary>Called on the UI thread before shutdown, after any local session restoration.</summary>
+        public void ReleaseHoldingsForExit()
+        {
+            if (_holdings == null) return;
+            if (_holdings.HandBackAllButStrict(CoreSettings.Current) > 0) CoreSettings.Save();
+            ReleaseRemoteSafetyState();
+            _holdings = null;
+            RemoteHoldings.Clear(CorePaths.UserData);
         }
 
         private int _leaveGeneration;
@@ -334,12 +379,14 @@ namespace ConditioningControlPanel.Services
                 {
                     if (gen.Leave != Volatile.Read(ref _leaveGeneration)) return "the controller left";
                     if (gen.Panic != RemoteCommands.PanicGeneration) return "stopped by panic";
-                    var strictBefore = CoreSettings.Current.StrictLockEnabled;
+                    if (action == "disable_strict_lock" && RemoteHoldings.RefusesStrictOff(
+                        LockdownService.Current?.IsActive == true, LockdownService.Current?.ForcedStrictLock == true))
+                        return "the Lockdown holds the strict lock";
+                    if (action is "enable_strict_lock" or "disable_strict_lock")
+                        NoteStrictWrite(action == "enable_strict_lock");
                     try
                     {
                         var refusal = _execute(action, parameters);
-                        // Set here, in the dispatched call, so even a late-landing switch-on is the controller's.
-                        if (refusal == null && action == "enable_strict_lock" && !strictBefore) _remoteSetStrictLock = true;
                         return refusal;
                     }
                     catch (Exception ex) { Log.Error(ex, "[RemoteControl] Error executing command: {Action}", action); return "error"; }
