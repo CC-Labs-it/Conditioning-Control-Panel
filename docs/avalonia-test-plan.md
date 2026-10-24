@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## 9. Mandatory video replay switch (main sync 7)
+
+1. WPF `Features/VideoFeatureControl.xaml` / `Services/Video/VideoService.cs` (`5c828b70f`). Rows: `sync7-mandatory-video`. In Mandatory Video, turn on attention checks and turn off **Replay after a failed check**. Miss a target in an ordinary video: the failure still counts, the video ends without a retry card. Turn replay on: a miss shows the failure card for 2 seconds and starts a fresh clip. Turn replay off again and repeat with Strict Lock or a Lockdown active: replay still occurs (mercy keeps its existing threshold). Reopen the panel and verify the switch retains its value. Floating windows remain blocked by the absent floating host; see the cloud unit report.
