@@ -3,10 +3,12 @@ import { MeshBasicNodeMaterial, Color } from 'three/webgpu';
 import { vec2, vec3, float, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, abs, max, min, mix, fract, smoothstep, fwidth, pow, texture, sin, floor } from 'three/tsl';
 
 export function coolantCaustics(p, time) {
-  const a = p.x.mul(0.63).add(sin(p.y.mul(0.42).add(time.mul(0.2))));
-  const b = p.y.mul(0.71).add(sin(p.x.mul(0.37).sub(time.mul(0.16))));
-  const wave = abs(sin(a).mul(sin(b)));
-  return float(1).sub(smoothstep(0.035, max(fwidth(wave), 0.025).add(0.16), wave));
+  // Interfering warped wave fronts form moving cells, rather than a scrolling square grid.
+  const a = p.x.mul(.82).add(time.mul(.23)).add(sin(p.y.mul(.67).add(time.mul(.41))).mul(.9));
+  const b = p.y.mul(1.07).sub(time.mul(.17)).add(sin(p.x.mul(.59).sub(time.mul(.32))).mul(.8));
+  const wave = abs(sin(a).add(sin(b)).add(sin(a.mul(.67).sub(b.mul(.53)).add(time.mul(.19))).mul(.36)));
+  const cell = float(1).sub(smoothstep(.045, max(fwidth(wave), .025).add(.19), wave));
+  return cell.mul(sin(a.mul(.4).add(b.mul(.3))).mul(.18).add(.82));
 }
 
 export function plateDetails(p, size = vec2(4, 6)) {

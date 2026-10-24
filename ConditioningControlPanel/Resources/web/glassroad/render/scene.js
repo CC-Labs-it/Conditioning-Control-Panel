@@ -23,6 +23,7 @@ import { clamp, lerp, smoothstep, qrotate, v3cross, v3norm } from '../core/math.
 import { LOOK, SKIES, FALLBACK_SKY } from './look.js';
 import { waterBedPositions } from './waterBed.js';
 import { createImmersion } from '../track/immersion.js';
+import { createUnderwaterFx } from './underwaterFx.js';
 import { Q } from './quality.js';
 import { createPalette } from './materials/palette.js';
 import { createRoadMaterial } from './materials/road.js';
@@ -246,6 +247,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // All fluid meshes and spray materials exist before shader warmup.
   const waterVolume = buildWaterVolume(track, pal, art, { quality: Q.name, scene, renderer });
   add(waterVolume.object);
+  const underwaterFx=createUnderwaterFx(track,{quality:Q.name});add(underwaterFx.object);
   road.uniforms.water.coverage.value = 0;
   if (roadMesh && waterVolume.field) {
     const g = roadMesh.geometry, a = g.attributes;
@@ -447,6 +449,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       if (waterfall) waterfall.kart(i, r.st, dt, { gentle, visible: near, paused: !!view.paused });
       skids.kart(i, kk.root, r.st, near);
     }
+    underwaterFx.update(dt,{karts:karts.list,playerS:k[S.s],playerPos:kart.position,paused:!!view.paused,gentle});
     skids.update(dt, !!view.paused);
     for (const e of pending) juice(e, gentle);
     pending.length = 0;
@@ -547,6 +550,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (wordRush) wordRush.dispose();
     if (waterfall) waterfall.dispose();
     waterVolume.dispose();
+    underwaterFx.dispose();
     if (showcaseDressing) showcaseDressing.dispose();
     if (keepDressing) keepDressing.dispose();
     if (keepGates) keepGates.dispose();
@@ -560,9 +564,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, waterVolume, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { if (scene.fog) scene.fog.density = 0; waterVolume.reset(); waterfall?.reset(); stones?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

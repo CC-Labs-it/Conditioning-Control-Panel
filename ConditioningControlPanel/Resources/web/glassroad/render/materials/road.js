@@ -371,7 +371,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
       .mul(float(1).sub(smoothstep((emerge?.toS ?? submerged.toS) - 8, emerge?.toS ?? submerged.toS, p.y)))
       .mul(smoothstep(-0.3, 1.8, float(track.reservoir?.waterY ?? 4).sub(positionWorld.y)));
     const tankFloor = m.colorNode.mul(vec3(0.36, 0.8, 1.25))
-      .add(vec3(0.025, 0.2, 0.3).mul(coolantCaustics(p, u.water.t)).mul(u.contrast));
+      .add(vec3(0.09, 0.34, 0.43).mul(coolantCaustics(positionWorld.xz, u.water.t)).mul(u.contrast));
     m.colorNode = mix(m.colorNode, tankFloor, inside);
   }
   const ribbonAlpha = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))

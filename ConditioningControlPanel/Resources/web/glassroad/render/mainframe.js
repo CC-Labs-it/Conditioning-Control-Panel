@@ -6,6 +6,7 @@ import { scanZones, scanPose } from '../sim/mainframeScan.js';
 import { sampleTrack, bodyClear, WORLD_DEFAULTS } from './colossiMath.js';
 import { Q } from './quality.js';
 import { createMachineMaterial, coolantCaustics } from './mainframeMaterials.js';
+import { createSubmergedBubbleMaterial } from './underwaterFx.js';
 import { createLoomDisplayFrames } from './loomVariety.js';
 import { buildFloatingProcessors } from './mainframeFloat.js';
 import { mediaLook, placeBillboard, rectPoints } from './mediaMath.js';
@@ -240,7 +241,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     const wall = new Mesh(geometry, dark); wall.position.set(px, (low + high) / 2, pz); wall.scale.set(sx, high - low, sz); group.add(wall);
   }
   const tubes = track.sections.filter((s) => /canal|submerged|emerge/.test(s.id));
-  const bubbleRows = [], bubbleGeo = keepGeo(new SphereGeometry(0.16, 6, 4));
+  const bubbleRows = [], bubbleGeo = keepGeo(new SphereGeometry(0.10, 10, 7));
   for (const section of tubes) {
     for (let s = section.fromS + 5; s < section.toS; s += 18) {
       const f = track.frameAt(s), canal = section.id.includes('canal'), radius = canal ? 20.8 : f.w / 2 + 5, holder = new Group(); orient(holder, f, point(f, 0, canal ? 20 : 0)); holder.userData.trackS = s; group.add(holder);
@@ -274,7 +275,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     mat.opacityNode = smoothstep(0, 0.035, uv().y).mul(float(1).sub(smoothstep(0.965, 1, uv().y))).mul(0.38);
     const surface = new Mesh(g, mat); surface.name = 'mainframe-reservoir-surface'; group.add(surface);
   }
-  const bubbleMat = keepMat(createMachineMaterial('#88deef', art, { glow: true }));
+  const bubbleMat = keepMat(createSubmergedBubbleMaterial());
   const bubbles = new InstancedMesh(bubbleGeo, bubbleMat, Math.max(1, bubbleRows.length)); bubbles.count = bubbleRows.length; bubbles.name = 'mainframe-coolant-bubbles'; group.add(bubbles);
   let bubbleTime = 0;
   function updateBubbles(dt) {

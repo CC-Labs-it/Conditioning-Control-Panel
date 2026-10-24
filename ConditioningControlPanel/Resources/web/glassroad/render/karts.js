@@ -32,7 +32,7 @@ import {
   Euler, Color, SphereGeometry, AdditiveBlending, AnimationMixer, LoopOnce, LoopRepeat, PropertyBinding,
 } from 'three/webgpu';
 import {
-  texture, uv, uniform, vec2, float, pow, abs, sin, atan, smoothstep, min, normalView, positionViewDirection, positionLocal,
+  texture, uv, uniform, vec2, vec3, float, pow, abs, sin, atan, smoothstep, min, max, normalView, normalWorld, positionWorld, positionViewDirection, positionLocal,
 } from 'three/tsl';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S, RESPAWN } from '../sim/state.js';
@@ -42,6 +42,7 @@ import { Q } from './quality.js';
 import { buildKart } from './dressing.js';
 import { createGlideCap } from './glideCap.js';
 import { createSwimPropeller } from './swimPropeller.js';
+import { coolantCaustics } from './mainframeMaterials.js';
 import { createKartMaterial, createKartSurface } from './materials/kart.js';
 import {
   createPose, stepPose, tagAlpha, rivalLook, rivalNumbers, createReact, reactNumbers, observeKart, reactTo, stepReact, reactionsFor,
@@ -270,6 +271,9 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     body.add(model); root.add(body); root.visible = false;
     const propeller = createSwimPropeller(body, art?.model?.(dress?.vehicle || 'emi-teacup-kart')?.scene);
     root.userData.swimPropeller = propeller.motion;
+    const caustics={time:uniform(0),amount:uniform(0)};
+    for(const material of mats) material.colorNode=material.colorNode.add(
+      coolantCaustics(positionWorld.xz,caustics.time).mul(vec3(.08,.28,.36)).mul(max(normalWorld.y,.18)).mul(caustics.amount));
     const mark = markTex ? markSprite(markTex) : null;
     if (mark) root.add(mark.sprite);
     const stars = markTex ? starRing(markTex, RR.stunStars, markCell('spark')) : null;
@@ -278,7 +282,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     root.add(aura.mesh);
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
-      dress, skin, rig, glideCap, propeller, dir: createDirector(),
+      dress, skin, rig, glideCap, propeller, caustics, underwater:0, dir: createDirector(),
       tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura,
     });
@@ -342,6 +346,8 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
    * opts: { squash (the player's fx.squash; the reaction layer now owns squash), gentle, topMps, name }.
    */
   function pose(k, st, fxv, dt, distM, { squash = null, gentle = false, topMps = 30, name = '', glide = false, underwater = 0, paused = false } = {}) {
+    k.underwater=underwater;
+    if(!paused){k.caustics.time.value+=dt*(gentle?.5:1);k.caustics.amount.value+=(underwater*(gentle?.5:1)-k.caustics.amount.value)*Math.min(1,dt/.35);}
     const { root, body, pose: p, react: r } = k;
     root.visible = true;
     k.propeller.update(st[S.respawnPhase] === RESPAWN.NONE ? underwater : 0, dt, {gentle,paused});
@@ -470,6 +476,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       k.react = Object.assign(createReact(k.i), { rig: !!k.rig }); k.pend.length = 0; k.dir = createDirector();
       if (k.glideCap) k.glideCap.reset();
       k.propeller.reset();
+      k.underwater=0;k.caustics.amount.value=k.caustics.time.value=0;
       if (k.rig) { k.rig.mixer.stopAllAction(); k.rig.cur = null; }
     }
   }
