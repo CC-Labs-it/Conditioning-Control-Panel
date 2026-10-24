@@ -37,6 +37,7 @@
   "route": { "catchPct": 0.25, "catchHoldS": 2.5, "cleanLenM": 24, "cleanLatM": 3.5, "cleanDeg": 25, "cleanAmount": 0.15, "cleanHoldS": 0.6, "kickUpMps": 2.5,
     "airPull": 1, "airMaxMps": 5, "airAccel": 6 },
   "stones": { "kickUpMps": 3.5, "clearGapM": 4, "minClearMps": 14, "leadM": 25, "flightCapM": 7.5, "shoveMul": 0.3 },
+  "glide": { "gravityMps2": 6, "fallMps": 7, "maxS": 2.6 },
   "hop": { "upMps": 4.8, "gravityHopMps2": 26, "gravityMps2": 28, "gravityEaseS": 0.25 },
   "drift": {
     "minSpeedMps": 8,

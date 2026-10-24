@@ -33,7 +33,7 @@ test('water volume has shallow raised surface, visible depth and curtains fallin
   const top = positions('water-surface-raised'), side = positions('water-visible-depth'), fall = positions('water-spills-into-void');
   for (let i = 0; i < top.count; i++) assert.ok(Math.abs(top.getY(i) - 5.1) < 0.00001);
   assert.ok(WATER_VOLUME.liftM + WATER_VOLUME.waveM <= 0.15);
-  assert.ok(Math.abs(Math.min(...Array.from({ length: side.count }, (_, i) => side.getY(i))) - 2.7) < 0.00001);
+  assert.ok(Math.abs(Math.min(...Array.from({ length: side.count }, (_, i) => side.getY(i))) - (5.1 - WATER_VOLUME.depthM)) < 0.00001);
   assert.ok(Math.min(...Array.from({ length: fall.count }, (_, i) => fall.getY(i))) < -8.8);
   water.update(1); assert.equal(water.uniforms.t.value, 1);
   water.update(1, { paused: true }); assert.equal(water.uniforms.t.value, 1);
@@ -72,4 +72,17 @@ test('pooled water spray follows curved contacts and is silent in the air, durin
   assert.equal(bursts.length, before);
   water.splash({ s: 10, x: 3, p: [100, 30, 20], normal: [0, 1, 0], down: 7 });
   assert.deepEqual(bursts.at(-1)[0], [100, 30.22, 20], 'real simulation contact wins over reconstructed frame');
+});
+
+test('spill curtain is folded in depth with separated layers rather than one flat sheet', t => {
+  const tr = track(); tr.waterSpills = [{ fromS: 10, toS: 30, side: -1, dropM: 14 }];
+  const water = buildWaterVolume(tr, pal); t.after(() => water.dispose());
+  const fall = water.object.getObjectByName('water-spills-into-void');
+  const p = fall.geometry.attributes.position;
+  const xs = Array.from({ length: p.count }, (_, i) => p.getX(i));
+  const ys = new Set(Array.from({ length: p.count }, (_, i) => p.getY(i).toFixed(2)));
+  assert.ok(Math.max(...xs) - Math.min(...xs) > 2, 'fall bows outward with real parallax');
+  assert.ok(ys.size >= 12, 'subdivided fall has depth steps for a moving silhouette');
+  assert.ok(fall.material.positionNode, 'cascade motion displaces geometry, not only its texture');
+  assert.ok(p.count < 5000, 'a spill remains a small shared mesh');
 });

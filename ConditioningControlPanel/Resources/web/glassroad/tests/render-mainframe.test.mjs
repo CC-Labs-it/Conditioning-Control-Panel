@@ -188,6 +188,6 @@ test('Mainframe palette is opt-in and accepts all three existing section ids', (
   const themed = createPalette('mainframe'), standard = createPalette();
   for (const key of ['dawn', 'deep', 'afterglow']) themed.set(key, key, 1);
   assert.equal(themed.theme, 'mainframe');
-  assert.equal(standard.theme, '');
+  assert.equal(standard.theme, 'threshold');
   assert.ok(themed.rampRoad(themed.hue));
 });

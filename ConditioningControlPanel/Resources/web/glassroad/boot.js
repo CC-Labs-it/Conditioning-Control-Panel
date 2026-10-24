@@ -29,6 +29,7 @@ import { clamp, v3, qrotate } from './core/math.js';
 import { createKeyboard } from './input/keyboard.js';
 import { createGamepad } from './input/gamepad.js';
 import { createTouch } from './input/touch.js';
+import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN } from './sim/state.js';
 import { createRace } from './sim/race.js';
 import { createRacers } from './sim/racers.js';
@@ -66,9 +67,13 @@ import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
+import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
+import { getKeepLayout } from './track/keep-layout.js';
+import { createKeepHazards } from './sim/keepHazards.js';
 
 const qs = new URLSearchParams(location.search);
-const TRACK_ID = selectTrack(location.search);
+const course = selectedCourse(location.search);
+const TRACK_ID = course.id;
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
 // ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
 const DEV = devAllowed(location.search);
@@ -174,7 +179,7 @@ async function boot() {
   // the diegetic faces (render/fonts.js) load beside the feel: road markings and bubble text measure with them
   const [feel, trackJson] = await Promise.all([
     loadFeel(),
-    fetch(new URL('./tracks/' + TRACK_ID + '.json', import.meta.url), { cache: 'no-store' }).then((r) => {
+    fetch(new URL('./tracks/' + course.id + '.json', import.meta.url), { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error('track ' + r.status);
       return r.json();
     }),
@@ -187,6 +192,8 @@ async function boot() {
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
   debug.trackId = track.id;
+  const keepLayout = getKeepLayout(track);
+  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -196,6 +203,7 @@ async function boot() {
   const effects = createEffects(bus, feel, { gentle, photosafe });
   fx.state.screen = effects.screen;
   const audio = createAudio(feel, bus, { gentle });
+  for (const name of ['keep-gate-hit', 'keep-chain-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
   bus.on('effect-start', ({ kind }) => { if (!debug.effects.includes(kind)) debug.effects.push(kind); debug.effectNow = kind; });
@@ -235,7 +243,8 @@ async function boot() {
     window.addEventListener('pagehide', () => cardMedia.dispose(), { once: true });
   }
   Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
-  const garage=await createGarage({art,renderer,canvas,track:trackName,laps,
+  const garage=await createGarage({art,renderer,canvas,track:trackName,laps,trackId:track.id,online:course.online,
+    changeTrack:id=>{const url=courseUrl(location.href,id);if(url)location.assign(url);},
     action:name=>hud.menuAction(name),sound:name=>{audio.start();audio.cue(name);}});
   if(garage){hud.setGarageNav(garage.nav);debug.garage=garage;}
   // passing through a spiral gate plays that gate's own Loom over the view (photosafe, Gentle halves it)
@@ -255,6 +264,8 @@ async function boot() {
   // dev (?bot=1): the shot harness pokes at the world; not enumerable, so the status JSON stays small
   if (BOT) Object.defineProperty(debug, 'world', { value: world, enumerable: false });
   debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
+  debug.trackId = track.id;
+  if (hazards) Object.defineProperty(debug, 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
   debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   debug.terrace = world.terrace ? { count: world.terrace.count, ...world.terrace.diagnostics } : null;
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
@@ -270,12 +281,17 @@ async function boot() {
     race = createRace(track, feel, q);
     racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: COUNT, seed: sd });
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
+    if (hazards) {
+      const drive = ai.drive;
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing') hazards.steer(r, out); };
+      hazards.reset();
+    }
     contact = createContact(track, feel, q);
     scan = createMainframeScan(track, q);
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
-    sctx = { ai, items, standings };
+    sctx = { ai, items, standings, hazards };
     aiCtx = { racers: racers.list, items, standings, race };
     kartViews = racers.list.map((r) => ({ st: r.view, meta: r.meta, fxv: r.fxv }));
     mapXz = new Float32Array(racers.list.length * 2);
@@ -349,10 +365,14 @@ async function boot() {
   applyOptions(opts);
   hud.on('option', ({ options }) => applyOptions(options || hud.options));
 
+  let glideHintLap = -1;
   function resetAll() {
+    glideHintLap = -1;
+    for (const r of racers.list) resetGlide(r.st);
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     scan.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
+    if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
     const sec = P.st[S.sectionIdx];
@@ -446,14 +466,14 @@ async function boot() {
     if (online) endOnline();
     stopSong(); unpause(); resetAll();
     state = 'menu';
-    hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps });
+    hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps, online: course.online,
+      courses: COURSES.map(c => ({ name: c.name, selected: c.id === track.id, url: courseUrl(location.href, c.id) })) });
   }
 
   // ---- online (wave B2): lobby transport, the room session behind the lobby UI, the run per room --------------
   /** The lobby transport and identity: dev local lobby, desktop host relay, or a direct fetch on the web. */
   function lobbyLink() {
-    // New course geometry needs its own private room card before online admission.
-    if (!allowsOnline(track.id)) return null;
+    if (!course.online) return null;
     const dev = qs.get('lobby');
     if (dev && LOCAL_URL.test(dev) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
       const uid = qs.get('uid') || 'u_devpage1', name = qs.get('name') || uid;
@@ -481,6 +501,7 @@ async function boot() {
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
   /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
   async function connectRoom(join) {
+    if (!course.online) throw new Error('This course is for solo races');
     const s = createRoomSession({ track, feel, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
     const welcome = await s.connect(join, { lookNow: join.look });
     return {
@@ -644,7 +665,7 @@ async function boot() {
   bridge.ready();
   toMenu();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
-  const linkTok = linkToken(location.search);
+  const linkTok = course.online ? linkToken(location.search) : null;
   if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }
   if (BOT && !link) botT = performance.now() + 2500;   // attract: a short look at the menu, then race (never with a lobby)
 
@@ -767,8 +788,16 @@ async function boot() {
     if (words) wordCount.set(words.pops, words.total, words.streak);
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
+    for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
+    if (track.id === 'keep' && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
+      const bridge = keepLayout.drawbridge;
+      if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
+        glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
+      }
+    }
+    if (BOT) debug.gliding = !!kartViews[0]?.glide;
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
-      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive,
+      raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;

@@ -8,7 +8,7 @@ import {garageUi} from '../hud/garage.js';
 import {KARTS,LOCKED,STORAGE,loadGarage,stepKart,routeTo,raceLook} from '../hud/garageState.js';
 
 /** One menu scene on the game's existing renderer, driven by the existing frame loop. */
-export async function createGarage({art,renderer,canvas,action,sound,track,laps}) {
+export async function createGarage({art,renderer,canvas,action,sound,track,laps,trackId='threshold',online=true,changeTrack}) {
   const base=art?.model('emi-teacup-kart');
   if(!base||KARTS.some(([id])=>!art.model('emi-vehicle-'+id)))return null;
   let storage;try{storage=localStorage;}catch{}
@@ -38,7 +38,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps}
   let selected=KARTS.findIndex(k=>k[0]===state.kart),orbit=-selected*Math.PI/4,yaw=0,custom=false,visible=false,moving=null,queued=null,time=0,reduced=true,dress=null;
   const arrows=garageArrows(scene),ray=new T.Raycaster(),pointer=new T.Vector2(),particles=[];
   const particleGeo=new T.OctahedronGeometry(.014),particleMaterial=new T.MeshBasicNodeMaterial({color:0xffd4ae});
-  const ui=garageUi({change,select,customize,action:name=>{if(!moving){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
+  const ui=garageUi({change,select,customize,trackId,online,changeTrack,action:name=>{if(!moving){sound('menu-ok');action(name);}},hover:(dir,on)=>arrows.hover(dir,on)});ui.track(track,laps);
   function save(){try{storage?.setItem(STORAGE,JSON.stringify(state));}catch{}}
   function paint(){skin.set(state);ui.paint(state,{custom,busy:!!moving,locked:LOCKED});save();}
   function change(values,colors=false){const previous=state.outfit;Object.assign(state,values);if(colors){state.antenna=state.secondary;state.shoes=state.secondary;state.hands='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.24).getHexString();state.face='#'+new T.Color(state.primary).lerp(new T.Color('#ffffff'),.65).getHexString();}

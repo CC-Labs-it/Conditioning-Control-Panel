@@ -185,7 +185,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   const samples = opts.samples || roadSamples(track, M.checkStepM);
 
   // ---- slots: billboards, the halo, the tunnel ----
-  const slots = [];
+  const slots = (layout.slots || []).map(slot => ({ ...slot }));
   for (const b of layout.billboards || []) {
     const sl = placeBillboard(b, track, samples, M);
     if (sl) slots.push(sl); else console.warn('[glassroad/media] billboard ' + b.id + ' found no clear spot');

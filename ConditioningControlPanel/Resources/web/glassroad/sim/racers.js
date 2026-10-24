@@ -105,7 +105,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
   }
 
   function step(dt, a, race, ctx = {}) {
-    const { ai = null, items = null, standings = null } = ctx;
+    const { ai = null, items = null, standings = null, hazards = null } = ctx;
     const live = race.phase === 'racing' || race.phase === 'finished';
     if (live) updateStoneMotion(track.fields, dt, !!feel.get('gentle.on'));
     if (race.phase === 'racing') racers.clockS = race.timeS;
@@ -144,7 +144,11 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
       o['speed.topMps'] = feel.get('speed.topMps') * m.capMul * pace;
       if (r.assist) o['gentle.on'] = true; else delete o['gentle.on'];
 
-      if (live) kartStep(r.st, act, track, r.feel, dt, r.events);
+      if (live) {
+        kartStep(r.st, act, track, r.feel, dt, r.events);
+        // Resolve course obstacles before crediting checkpoint or finish crossings.
+        if (hazards) hazards.apply(r, r.prev, racers.clockS, r.events);
+      }
       updateRespawn(r.st, track, r.feel, dt, r.events);
       r.progress.update(r.st, r.raceView);
     }

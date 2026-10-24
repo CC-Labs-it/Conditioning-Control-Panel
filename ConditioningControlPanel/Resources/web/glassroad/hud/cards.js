@@ -99,9 +99,10 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       note.textContent = (data.track || 'Threshold') + ', ' + (data.laps || 3) + ' laps';
       extra.innerHTML = '<div class="c-doors">' +
         btn('race', '<b>Race</b><em>You and 7 bots</em>', 'c-door hot') +
-        btn('online', '<b>Race online</b><em>Tables and friends</em>', 'c-door') +
+        (data.online === false ? '' : btn('online', '<b>Race online</b><em>Tables and friends</em>', 'c-door')) +
         '</div><div class="c-links">' + btn('options', 'Options', 'c-link') + btn('controls', 'Controls', 'c-link') +
-        btn('howto', 'How to play', 'c-link') + btn('back', 'Back', 'c-link') + '</div>';
+        btn('howto', 'How to play', 'c-link') + btn('back', 'Back', 'c-link') + '</div>' +
+        (data.courses ? '<nav class="c-links" aria-label="Track">' + data.courses.map(c => '<a class="c-btn c-link" href="' + esc(c.url) + '"' + (c.selected ? ' aria-current="page"' : '') + '>' + esc(c.name) + '</a>').join('') + '</nav>' : '');
     } else if (k === 'pause') {
       title.textContent = 'Paused';
       note.textContent = pauseLine(data) || 'The race waits';
@@ -197,7 +198,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
     emit('option', { key, value: opts[key], options: { ...opts } });
   }
 
-  const focusables = () => [...card.querySelectorAll('button, input')].filter((e) => !e.hidden && !e.disabled && e.offsetParent !== null);
+  const focusables = () => [...card.querySelectorAll('button, input, a[href]')].filter((e) => !e.hidden && !e.disabled && e.offsetParent !== null);
   function focusFirst() {
     if (kind === 'start' && go.disabled) return;
     const list = focusables();
@@ -227,6 +228,7 @@ export function createCards(card, { doc = globalThis.document, emit, devices = n
       return;
     }
     if (a === 'online') {
+      if (data.online === false) return;
       if (kind !== 'lobby') stack.lobby = { kind, data };
       show('lobby', { view: 'home' });
       emit('online', { lobby });

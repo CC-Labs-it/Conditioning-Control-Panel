@@ -1,11 +1,12 @@
+import {COURSES} from '../track/catalog.js';
 import {KARTS,OUTFITS,PRESETS,COLOR_KEYS} from './garageState.js';
 
-export function garageUi({change,select,customize,action,hover}) {
+export function garageUi({change,select,customize,action,hover,trackId='threshold',online=true,changeTrack}) {
   const root=document.createElement('section');root.id='race-garage';root.hidden=true;root.setAttribute('aria-label','Choose your racer');
   root.innerHTML=`<header class="g-header"><span><b>rt.</b> racing thoughts</span><button data-g="options">Options</button></header>
     <div class="g-selector"><h1></h1><div class="g-positions" aria-label="Kart selection"></div></div>
     <button class="g-nav previous" aria-label="Previous kart" data-g="previous"></button><button class="g-nav next" aria-label="Next kart" data-g="next"></button>
-    <footer class="g-footer"><button data-g="customize">Customize EMI</button><span class="g-track"></span><div><button class="g-race" data-g="race">Race <span>↗</span></button><button data-g="online">Race online</button></div><button data-g="controls">Controls</button></footer>
+    <footer class="g-footer"><button data-g="customize">Customize EMI</button><div class="g-course"><span class="g-track"></span><div class="g-courses" aria-label="Track"></div></div><div><button class="g-race" data-g="race">Race <span>↗</span></button><button data-g="online">Race online</button></div><button data-g="controls">Controls</button></footer>
     <section class="g-custom" hidden aria-label="Customize EMI"><div class="g-custom-top"><div><small>MAKE IT YOURS</small><h2>EMI</h2><p>Drag EMI to turn</p></div><button data-g="done">Done ✓</button></div>
     <div class="g-controls"><div class="g-label">Outfit <span class="g-outfit-name"></span></div><div class="g-outfits"></div>
       <div class="g-label">Colors <button data-g="original">Original</button></div><div class="g-colors"><label>Shell <input type="color" data-color="primary" aria-label="Shell color"></label><label>Accent <input type="color" data-color="secondary" aria-label="Accent color"></label></div><div class="g-palettes"></div>
@@ -13,6 +14,8 @@ export function garageUi({change,select,customize,action,hover}) {
   document.body.append(root);
   const $=s=>root.querySelector(s);
   const make=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;$(parent).append(b);return b;};
+  for(const c of COURSES){const b=make('.g-courses',c.name,()=>changeTrack?.(c.id));b.setAttribute('aria-pressed',String(c.id===trackId));b.disabled=c.id===trackId;}
+  $('[data-g=online]').hidden=!online;
   for(const [id,label]of OUTFITS)make('.g-outfits',label,()=>change({outfit:id})).dataset.outfit=id;
   for(const p of PRESETS){const b=make('.g-palettes','',()=>change({...p,skin:p.name,original:false}));b.setAttribute('aria-label',p.name+' colors');b.dataset.palette=p.name;b.style.background=`linear-gradient(135deg,${p.primary} 50%,${p.secondary} 50%)`;}
   ['Plain','Stripes','Dots','Checks'].forEach((label,pattern)=>{const b=make('.g-patterns','',()=>change({pattern,original:false}));b.dataset.pattern=pattern;b.setAttribute('aria-label',label);});

@@ -41,7 +41,8 @@ import { baseYaw, gripYaw } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
-import { lipLeave } from './stones.js';
+import { lipLeave, broadPlatformEdgeKick } from './stones.js';
+import { armGlide, glideGravity, resetGlide } from './glide.js';
 
 export { applyBoost };
 
@@ -78,14 +79,14 @@ export function spawn(st, track, feel, slot = 0) {
   st[S.seg] = pose.seg; st[S.latchSeg] = pose.seg; st[S.s] = pose.s; st[S.lateral] = pose.lateral;
   st[S.grounded] = 1; st[S.hopT] = 1e3;          // the last hop was long ago
   st[S.sectionIdx] = track.sectionAt(pose.s);
-  resetRoute(st); resetFall(st); resetWater(st); resetStones(st);
+  resetRoute(st); resetFall(st); resetWater(st); resetStones(st); resetGlide(st);
   return st;
 }
 
 /** One fixed tick. Respawn owns the kart during PULL, HOVER and RELEASE. */
 export function step(st, a, track, feel, dt, ev) {
   const ph = st[S.respawnPhase];
-  if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) { HOLE_FALL.delete(st); return; }
+  if (ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE) { HOLE_FALL.delete(st); resetGlide(st); return; }
   const grace = ph === RESPAWN.GRACE;
   const top = feel.get('speed.topMps');
   getPos(P, st); getVel(V, st); getQuat(Q, st);
@@ -177,11 +178,12 @@ export function step(st, a, track, feel, dt, ev) {
     // just before a drop shortcut's kicker lip the hop sees that lip too (the trick's early window)
     hop(st, feel, ev, V, qa.normal, speed, hopTrack(track, qa, V, speed, feel.get('trick.earlyS')));
     if (st[S.airborne] && (qa.surface === 'stream' || qa.surface === 'pool')) ev.emit('water-hop', { s: qa.s, x: qa.lateral, speed: Math.abs(speed), down: 0, kind: 'hop', p: [...P], normal: [...qa.normal] });
+    armGlide(st, track, qa);
     maybeStartDrift(st, a, feel, speed, ev);
   }
   const air = st[S.airborne] > 0;
   if (air) {
-    const g = gravityMps2(st, feel);
+    const g = glideGravity(st, a, qa, V, gravityMps2(st, feel), feel, dt);
     if (has(qa.flags, 'magnet')) v3addScaled(V, V, qa.normal, -g * dt); else V[1] -= g * dt;
   }
 
@@ -189,6 +191,8 @@ export function step(st, a, track, feel, dt, ev) {
   v3addScaled(P, P, V, dt);
   let qb = track.query(P[0], P[1], P[2], qa.seg, QB);
   const snap = gap(feel, 'kart.snapM');
+  // A low hop reaching the edge of a broad Keep platform receives its normal lip kick once.
+  if (air) v3addScaled(V, V, qb.normal, broadPlatformEdgeKick(track, qa, qb, v3dot(V, qb.normal), feel.get('stones.kickUpMps')));
   // wave 2 STONES: over a field's void the kart is still on its own road while within the snap band of the deck
   // (a lip kick across a gap lands on the next stone); below that band it has fallen through: `void` once per flight
   const sm = stoneMem(st);
@@ -218,7 +222,7 @@ export function step(st, a, track, feel, dt, ev) {
   if (ground) {
     v3addScaled(P, P, n, -qb.height); v3reject(V, V, n);
     const arrive = Math.hypot(V[0], V[1], V[2]);   // ground speed at touch-down (the splash payload)
-    if (air) land(st, a, feel, ev, V, n, speed, dt);
+    if (air) { land(st, a, feel, ev, V, n, speed, dt); resetGlide(st); }
     // wave 1 WATER: a pool catches the kart: no bounce back up, the water takes its share of speed once, splash
     if (air && surfaceKind(qb.surface) === 'pool') {
       if (st[S.airborne]) { st[S.airborne] = 0; st[S.grounded] = 1; v3reject(V, V, n); }
@@ -241,6 +245,7 @@ export function step(st, a, track, feel, dt, ev) {
     if (lip) v3addScaled(V, V, n, Math.min(feel.get('stones.kickUpMps'), feel.get('stones.flightCapM') * feel.get('hop.gravityMps2') / (2 * Math.max(1, speed))));
     else if (kick) v3addScaled(V, V, n, gap(feel, 'route.kickUpMps'));
     takeoff(st, ev, !kick && !lip && road && (qb.edgeDist < 0 || qb.hole) ? 'edge' : 'lip');
+    if (!road) armGlide(st, track, qb);
   } else st[S.airTime] += dt;
   // wave 2 STONES: a stone the kart was not on before (a landing or the deck handing over to the first stone)
   if (ground) {
@@ -289,7 +294,7 @@ export function step(st, a, track, feel, dt, ev) {
   const drop = !grace && (fell || st[S.edgeT] >= (holeFall ? Math.min(HOLE_GRACE_S, feel.get('drop.edgeGraceS')) : feel.get('drop.edgeGraceS')));
   if (drop) {
     if (wasEdge || past) ev.emit('edge-exit', { to: 'drop' });
-    cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st); resetFall(st); resetWater(st); resetStones(st);
+    cancelDrift(st, 'drop', ev); endBoost(st, feel, ev); resetRoute(st); resetFall(st); resetWater(st); resetStones(st); resetGlide(st);
     st[S.respawnPhase] = RESPAWN.PULL; st[S.respawnT] = 0; st[S.edgeT] = 0;
     HOLE_FALL.delete(st);
     ev.emit('drop', { seg: qb.seg, cause: fell ? 'fallY' : holeFall ? 'hole' : 'edge' });
