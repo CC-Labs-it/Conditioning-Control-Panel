@@ -77,27 +77,13 @@ public static class KeywordMatchRules
             !isMuted(t.Keyword) && (t.MatchType == KeywordMatchType.Regex
                 ? Match(text, t.Keyword) : ContainsWholeWord(text, t.Keyword))).ToList();
 
-    public static bool MatchesAppList(IEnumerable<string>? list, string processName) =>
-        !string.IsNullOrWhiteSpace(processName) && list != null && list.Any(raw =>
-        {
-            var entry = raw?.Trim() ?? "";
-            if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) entry = entry[..^4];
-            return entry.Length > 0 && string.Equals(entry, processName, StringComparison.OrdinalIgnoreCase);
-        });
-
     /// <summary>WPF KeywordTriggerService :677-681: the default Everywhere scope never resolves the foreground app.</summary>
     public static bool NeedsForeground(AppSettings settings) =>
         settings.KeywordTriggerAppScope != AwarenessAppScope.Everywhere || settings.KeywordTriggerIgnoreOwnFocus;
 
     public static bool AppAllowed(AppSettings settings, string? process, bool isOwn) =>
-        !NeedsForeground(settings) ||
-        (process == null ? settings.KeywordTriggerAppScope != AwarenessAppScope.OnlyListed :
-         !(isOwn && settings.KeywordTriggerIgnoreOwnFocus) && (settings.KeywordTriggerAppScope switch
-         {
-             AwarenessAppScope.OnlyListed => MatchesAppList(settings.KeywordTriggerApps, process),
-             AwarenessAppScope.ExceptListed => !MatchesAppList(settings.KeywordTriggerApps, process),
-             _ => true,
-         }));
+        !NeedsForeground(settings) || Awareness.AwarenessAppScopeRules.SuppressionReason(settings.KeywordTriggerAppScope,
+            settings.KeywordTriggerApps, process ?? "", process != null, isOwn, settings.KeywordTriggerIgnoreOwnFocus) == null;
 
     public static float AudioVolume(int volume, int master) =>
         Math.Max(0.05f, (float)Math.Pow(volume / 100f * (master / 100f), 1.5));

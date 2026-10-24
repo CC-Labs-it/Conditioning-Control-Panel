@@ -592,31 +592,14 @@ namespace ConditioningControlPanel.Services
         /// have to mean the same thing or the list silently fails to match.
         /// </summary>
         public static bool MatchesAppList(IEnumerable<string>? list, string processName)
-        {
-            return KeywordMatchRules.MatchesAppList(list, processName);
-        }
+            => Awareness.AwarenessAppScopeRules.MatchesAppList(list, processName);
 
         /// <summary>
         /// Splits the comma / semicolon / newline separated text the Awareness tab collects into a
         /// clean list of process names, de-duplicated and with any ".exe" dropped.
         /// </summary>
         public static List<string> ParseAppList(string? text)
-        {
-            var result = new List<string>();
-            if (string.IsNullOrWhiteSpace(text)) return result;
-
-            foreach (var part in text.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var entry = part.Trim();
-                if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                    entry = entry.Substring(0, entry.Length - 4);
-                if (entry.Length == 0) continue;
-                if (result.Any(e => string.Equals(e, entry, StringComparison.OrdinalIgnoreCase))) continue;
-                result.Add(entry);
-            }
-
-            return result;
-        }
+            => Awareness.AwarenessAppScopeRules.ParseAppList(text);
 
         private DateTime _lastSampleAt = DateTime.MinValue;
 
@@ -680,21 +663,11 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
 
-            if (!TryResolveForegroundApp(out var process, out var isOwn))
-            {
-                // An allow list promises triggers fire ONLY somewhere named. A window that will not
-                // name itself is not somewhere named, so it fails closed. A block list makes the
-                // opposite promise - only the listed apps are off limits - so it fails open.
-                var allowUnknown = scope != AwarenessAppScope.OnlyListed;
-                if (!allowUnknown) LogSuppressed(source, "foreground window could not be identified");
-                return allowUnknown;
-            }
-
-            if (KeywordMatchRules.AppAllowed(settings, process, isOwn)) return true;
-            LogSuppressed(source, isOwn && ignoreOwnFocus ? "Control Panel itself has focus"
-                : scope == AwarenessAppScope.ExceptListed ? $"'{process}' is on the block list"
-                : $"'{process}' is not on the allow list");
-            return false;
+            var known = TryResolveForegroundApp(out var process, out var isOwn);
+            var reason = Awareness.AwarenessAppScopeRules.SuppressionReason(scope, settings.KeywordTriggerApps,
+                process, known, isOwn, ignoreOwnFocus);
+            if (reason != null) LogSuppressed(source, reason);
+            return reason == null;
         }
 
         #endregion
