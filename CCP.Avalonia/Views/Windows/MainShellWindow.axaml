@@ -935,27 +935,56 @@
                          nothing else. The third beat (the Platinum Puppets thanks hyperlink) was
                          retired with the row - see MainWindow.Marquee.cs, where the rotation is
                          now a two-beat crossfade. -->
-                    <Border Grid.Column="3" x:Name="HeaderBannerHost"
+                    <!-- WPF HeaderBannerGlowHost (MainWindow.xaml:1060): the halo is a SIBLING behind the
+                         pill, sized to it, so the glow rings the pill's outside edge. -->
+                    <Border Grid.Column="3" x:Name="BannerHalo"
                             Background="{DynamicResource SurfaceBgBrush}"
+                            CornerRadius="16" Height="31" Margin="12,0,12,0"
+                            Width="{Binding #HeaderBannerHost.Bounds.Width}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Opacity="0.35" IsHitTestVisible="False"
+                            BoxShadow="0 0 12 0 #FF69B4"/>
+                    <Border Grid.Column="3" x:Name="HeaderBannerHost"
+                            Background="{DynamicResource DepthWellFloorBrush}"
                             BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
-                            CornerRadius="13" Padding="12,0" Height="31" MaxWidth="744"
+                            CornerRadius="16" Padding="12,0" Height="31" MaxWidth="744"
                             Margin="12,0,12,0"
                             HorizontalAlignment="Center" VerticalAlignment="Center">
                         <Grid>
-                            <!-- Sibling shadow: no Effect under the moving banner layers. -->
-                            <Border x:Name="BannerHalo" CornerRadius="13" Opacity="0.35" IsHitTestVisible="False"
-                                    BoxShadow="0 0 12 0 #FF69B4"/>
-                            <Border x:Name="BannerFlashRing" CornerRadius="13" Opacity="0" IsHitTestVisible="False"
-                                    BorderThickness="1" BorderBrush="{DynamicResource PinkBrush}"/>
-                            <Canvas x:Name="BannerSparkleLayer" IsHitTestVisible="False" ClipToBounds="True" ZIndex="2"/>
+                            <!-- WPF MainWindow.xaml:1086-1109: the sunken drum paint. Margin -12 undoes the
+                                 host padding so each layer spans the pill like WPF's Padding 0. -->
+                            <Border x:Name="BannerDrumShade" CornerRadius="15" Margin="-12,0" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0.00" Color="#A6000000"/>
+                                        <GradientStop Offset="0.34" Color="#00000000"/>
+                                        <GradientStop Offset="0.70" Color="#00000000"/>
+                                        <GradientStop Offset="1.00" Color="#40000000"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <Border x:Name="BannerDrumLip" CornerRadius="15" Margin="-12,0" IsHitTestVisible="False">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="10,0">
+                                        <GradientStop Offset="0" Color="#59000000"/>
+                                        <GradientStop Offset="1" Color="#00000000"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                            <Border x:Name="BannerDrumFoot" CornerRadius="15" Margin="-12,0" BorderThickness="0,0,0,1"
+                                    BorderBrush="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
+                            <Border x:Name="BannerFlashRing" CornerRadius="15" Margin="-12,0" Opacity="0" IsHitTestVisible="False"
+                                    BorderThickness="1.5" BorderBrush="{DynamicResource PinkButtonHoveredBrush}"/>
+                            <!-- Not clipped, like WPF: a star may peek past the pill's edge. -->
+                            <Canvas x:Name="BannerSparkleLayer" IsHitTestVisible="False" ZIndex="2"/>
 
-                            <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="1">
                                 <Run Text="{loc:Str label_if_you_love_the_project_please}"/>
-                                <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold"/>
+                                <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold" FontStyle="Normal" Foreground="White"/>
                                 <Run Text=" "/>
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <fx:SafeHyperlinkButton x:Name="BannerSupportLink" Padding="0" Margin="0" BorderThickness="0"
@@ -966,7 +995,7 @@
                                 </InlineUIContainer>
                                 
                             </TextBlock>
-                            <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -982,7 +1011,7 @@
                             <!-- Stretch, not Center: a Center TextBlock sizes itself from the inline
                                  button's first measure (4 DIP short), clipping "app" to "ap".
                                  TextAlignment centres the line just the same. -->
-                            <TextBlock x:Name="TxtBannerWeb" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerWeb" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -993,7 +1022,7 @@
                                      SafeHyperlinkButton (ExternalOpener); Click retires the beat. -->
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <fx:SafeHyperlinkButton x:Name="BannerWebLink" Padding="0" Margin="0" BorderThickness="0"
-                                                            Click="BannerWebLink_Click">
+                                                            Tag="https://app.cclabs.app" Click="BannerWebLink_Click">
                                         <TextBlock Text="{loc:Str label_banner_web_link}" FontWeight="Bold" FontSize="14"
                                                    FontStyle="Italic" Foreground="{DynamicResource PinkBrush}"
                                                    TextDecorations="Underline"/>
@@ -1001,7 +1030,7 @@
                                 </InlineUIContainer>
                             </TextBlock>
                             <!-- WPF's optional authored pool beat: no line means no rotation slot. -->
-                            <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkBrush}"
+                            <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkButtonHoveredBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -1030,6 +1059,16 @@
                                     </Border.RenderTransform>
                                 </Border>
                             </Grid>
+                            <!-- WPF BannerGlass (MainWindow.xaml:1205): the gloss strip over everything. -->
+                            <Border x:Name="BannerGlass" CornerRadius="12,12,5,5" Height="11" Margin="-5,2,-5,0"
+                                    VerticalAlignment="Top" IsHitTestVisible="False" ZIndex="3">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                                        <GradientStop Offset="0.0" Color="#24FFFFFF"/>
+                                        <GradientStop Offset="1.0" Color="#00FFFFFF"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
                         </Grid>
                     </Border>
                 </Grid>
