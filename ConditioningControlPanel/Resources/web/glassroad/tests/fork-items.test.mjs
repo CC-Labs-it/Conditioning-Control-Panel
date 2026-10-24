@@ -110,3 +110,71 @@ test('a throw keeps physical speed when its lead or later flight crosses a fork 
     assert.ok(Math.abs(delta.reduce((sum, v, k) => sum + v * f.b[k], 0)) < 1e-5);
   }
 });
+
+test('enlarged Melt discs isolate mapped paths and reject corners outside their visible circle', () => {
+  for (const fork of track.forks) {
+    const local = fork.lengthM * .5, centre = local - makeFeel().get('items.dropBehindM');
+    const list = [racer(state(fork, local)), racer(state(null, fork.mainS(centre)), 1)], t = setup(list);
+    t.fire(0, 'melt'); t.tick(.8);
+    const trap = t.items.view().traps[0], frame = fork.frameAt(centre);
+    assert.equal(trap.radiusM, 3.6);
+    assert.equal(t.hits().length, 0, 'the main racer sharing lap progress stays outside the branch disc');
+    // Place the victim using physical tangent-plane offsets, independent of the lap map.
+    list[1].st = state(fork, centre);
+    for (let j = 0; j < 3; j++) list[1].st[S.posX + j] += frame.t[j] * 3 + frame.b[j] * 3;
+    t.tick();
+    assert.equal(t.hits().length, 0, 'a square corner outside the 3.6 m disc cannot hit');
+    list[1].st = state(fork, centre, 3.3); t.tick();
+    assert.equal(t.hits().length, 1, 'the enlarged visible shoulder remains active');
+    assert.equal(t.hits()[0].victim, 1);
+    assert.ok(distance(t.hits()[0].p, frame.p) < .002);
+  }
+});
+
+test('bounded homing selects the physical branch target and stops guiding after a path change', () => {
+  for (const fork of track.forks) {
+    const local = fork.lengthM * .35;
+    const list = [racer(state(fork, local)), racer(state(null, fork.mainS(local + 5), -10), 1),
+      racer(state(fork, local + 60, 6), 2)], t = setup(list);
+    t.fire(0, 'freeze');
+    assert.equal(t.rec.first('item-fire').payload.target, 2, 'a nearer lap-map position on the main road cannot steal targeting');
+    const before = structuredClone(t.items.view().projectiles[0]);
+    assert.equal(before.homing, true);
+    assert.ok(before.x > 0 && before.x <= t.feel.get('items.homeLateralMps') * DT + 1e-6);
+    list[2].st = state(null, fork.mainS(local + 60), -8);
+    t.tick(.15);
+    const after = t.items.view().projectiles[0];
+    assert.ok(after); assert.equal(after.homing, false); assert.equal(after.x, before.x);
+    assert.ok(Math.abs(fork.localS(after.s) - fork.localS(before.s) - t.feel.get('items.throwExtraMps') * .15) < 1e-6);
+    const frame = fork.frameAt(fork.localS(after.s)), residual = after.p.map((v, j) => v - frame.p[j]);
+    assert.ok(Math.abs(residual.reduce((sum, v, j) => sum + v * frame.b[j], 0) - after.x) < 1e-5);
+    assert.equal(t.hits().length, 0);
+  }
+});
+
+test('cross-path lob commits its world endpoint and a late fork exit cannot teleport the impact', () => {
+  for (const fork of track.forks) {
+    const local = fork.lengthM * .5, s = fork.mainS(local);
+    const list = [racer(state(null, s - 80)), racer(state(fork, local), 1)], t = setup(list);
+    const endpoint = Array.from(list[1].st.slice(S.posX, S.posX + 3));
+    const flight = t.feel.get('items.lobFlightS'), commitTime = flight * t.feel.get('items.lobCommitFrac') + .01;
+    t.fire(0, 'blackout'); const start = t.rec.first('item-fire').payload.launchP; t.tick(commitTime - DT);
+    const committed = t.items.view().projectiles[0];
+    assert.equal(committed.homing, false);
+    list[1].st = state(null, s); t.tick(DT);
+    const after = t.items.view().projectiles[0], k = after.progress;
+    const expected = start.map((v, j) => v + (endpoint[j] - v) * k + (j === 1 ? t.feel.get('items.lobHeightM') * 4 * k * (1 - k) : 0));
+    assert.ok(distance(after.p, expected) < 1e-5, 'the visible descent retains its committed physical endpoint');
+    assert.ok(after.v.every(Number.isFinite));
+    t.tick(flight - commitTime);
+    assert.equal(t.items.view().projectiles.length, 0);
+    assert.equal(t.hits().length, 0, 'leaving the branch during the committed descent dodges the hit');
+    const impact = t.items.view().pops.find(p => p.at === 'fizzle');
+    assert.ok(impact && distance(impact.p, endpoint) < .002, 'fizzle stays at the committed branch position');
+
+    const controlList = [racer(state(null, s - 80)), racer(state(fork, local), 1)], control = setup(controlList);
+    control.fire(0, 'blackout'); control.tick(flight);
+    assert.equal(control.hits()[0].victim, 1, 'a target remaining on its branch is hit');
+    assert.ok(distance(control.hits()[0].p, endpoint) < .002);
+  }
+});
