@@ -50,12 +50,32 @@ export function fieldAt(fields, s) {
   return null;
 }
 
-/** The stone under (s, x) in field f, or null. A positive margin shrinks every stone on all four sides. */
+/** Shared normalized (lateral, along) outline, with flat entry/exit faces. */
+export const STONE_HEX = Object.freeze([[-0.5, 0], [-0.25, -0.5], [0.25, -0.5], [0.5, 0], [0.25, 0.5], [-0.25, 0.5]].map(Object.freeze));
+
+/** Lateral half-width at s; margin is perpendicular clearance from every edge. */
+export function stoneHalfWidth(h, s, margin = 0) {
+  const along = Math.abs(s - h.s - h.len / 2);
+  if (along > h.len / 2 - margin) return -Infinity;
+  const k = h.shape === 'hex' ? h.w / (2 * h.len) : 0;
+  return h.w / 2 - k * along - margin * Math.hypot(1, k);
+}
+
+/** Supported along-road interval on a held lane, including angled hex shoulders. */
+export function stoneLaneSpan(h, x, margin = 0) {
+  const k = h.shape === 'hex' ? h.w / (2 * h.len) : 0;
+  const spare = h.w / 2 - Math.abs(x - h.x) - margin * Math.hypot(1, k);
+  if (spare < 0) return null;
+  const half = Math.min(h.len / 2 - margin, k ? spare / k : Infinity);
+  return half < 0 ? null : [h.s + h.len / 2 - half, h.s + h.len / 2 + half];
+}
+
+/** The stone under (s, x) in field f, or null. Positive margin shrinks its actual polygon. */
 export function stoneIn(f, s, x, margin = 0) {
   const st = f.stones;
   for (let i = 0; i < st.length; i++) {
     const h = st[i];
-    if (s >= h.s + margin && s <= h.s + h.len - margin && Math.abs(x - h.x) <= h.w / 2 - margin) return h;
+    if (Math.abs(x - h.x) <= stoneHalfWidth(h, s, margin)) return h;
   }
   return null;
 }
@@ -69,12 +89,22 @@ export function stoneAt(fields, s, x, margin = 0) {
 /** Distance from (s, x) to the nearest stone edge of field f (0 on a stone). */
 export function stoneDistance(f, s, x) {
   let best = Infinity;
-  for (let i = 0; i < f.stones.length; i++) best = Math.min(best, Math.max(0, holeDistance(f.stones[i], s, x)));
+  for (const h of f.stones) {
+    if (h.shape !== 'hex') { best = Math.min(best, Math.max(0, holeDistance(h, s, x))); continue; }
+    if (Math.abs(x - h.x) <= stoneHalfWidth(h, s)) return 0;
+    const px = x - h.x, pz = s - h.s - h.len / 2;
+    for (let i = 0; i < 6; i++) {
+      const a = STONE_HEX[i], b = STONE_HEX[(i + 1) % 6];
+      const ax = a[0] * h.w, az = a[1] * h.len, dx = (b[0] - a[0]) * h.w, dz = (b[1] - a[1]) * h.len;
+      const u = Math.max(0, Math.min(1, ((px - ax) * dx + (pz - az) * dz) / (dx * dx + dz * dz)));
+      best = Math.min(best, Math.hypot(px - ax - u * dx, pz - az - u * dz));
+    }
+  }
   return best;
 }
 
 /**
- * Supported lateral intervals at s inside a field: the stones' [x - w/2, x + w/2] shrunk by margin, clipped to the
+ * Supported lateral intervals at s inside a field: each stone's actual cross-section shrunk by margin, clipped to the
  * road, sorted and merged. Outside every field it returns null: the road as usual (see supportIntervals).
  */
 export function fieldSupport(fields, s, halfWidth, margin = 0) {
@@ -82,8 +112,8 @@ export function fieldSupport(fields, s, halfWidth, margin = 0) {
   if (!f) return null;
   const lo = -halfWidth + margin, hi = halfWidth - margin, cuts = [];
   for (const h of f.stones) {
-    if (s < h.s + margin || s > h.s + h.len - margin) continue;
-    const a = Math.max(lo, h.x - h.w / 2 + margin), b = Math.min(hi, h.x + h.w / 2 - margin);
+    const hw = stoneHalfWidth(h, s, margin);
+    const a = Math.max(lo, h.x - hw), b = Math.min(hi, h.x + hw);
     if (b > a) cuts.push([a, b]);
   }
   cuts.sort((a, b) => a[0] - b[0]);

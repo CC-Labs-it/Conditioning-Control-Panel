@@ -42,7 +42,7 @@ export function validate(t) {
     if (!n || typeof n !== 'object') { err(at + ' not an object'); return; }
     if (!Array.isArray(n.p) || n.p.length !== 3 || !n.p.every(isNum)) err(at + '.p must be 3 numbers');
     if (!isNum(n.roll) || Math.abs(n.roll) > 60) err(at + '.roll must be a number in -60..60 degrees');
-    if (!isNum(n.w) || n.w < 4 || n.w > 40) err(at + '.w must be 4..40 m');
+    if (!isNum(n.w) || n.w < 4 || n.w > 120) err(at + '.w must be 4..120 m');
     if (!isNum(n.speed) || n.speed < 0.3 || n.speed > 1.5) err(at + '.speed must be 0.3..1.5');
     if (!SURFACES.includes(n.surface)) err(at + '.surface must be one of ' + SURFACES.join('|'));
     if (n.flow !== undefined) {
@@ -203,8 +203,9 @@ export function validate(t) {
         for (const h of c.stones) {
           if (!h || !isStr(h.id) || stones.has(h.id)) { err(at + ' stones need unique ids'); continue; }
           stones.add(h.id);
-          if (!inRange(h.node) || h.node < c.from || h.node >= c.to || !isNum(h.x) || !isNum(h.w) || h.w < 3 || h.w > 8 || !isNum(h.len) || h.len < 3 || h.len > 12 ||
-              (h.ds !== undefined && (!isNum(h.ds) || h.ds < 0))) { err(at + ' stone ' + h.id + ' needs an in-field node, x, w in 3..8, len in 3..12 and ds >= 0'); continue; }
+          const hex = h.shape === 'hex', maxW = hex ? 32 : 8, maxLen = hex ? 40 : 12;
+          if ((h.shape !== undefined && !hex) || !inRange(h.node) || h.node < c.from || h.node >= c.to || !isNum(h.x) || !isNum(h.w) || h.w < 3 || h.w > maxW || !isNum(h.len) || h.len < 3 || h.len > maxLen ||
+              (h.ds !== undefined && (!isNum(h.ds) || h.ds < 0))) { err(at + ' stone ' + h.id + ' needs an in-field node, x, valid shape, w in 3..' + maxW + ', len in 3..' + maxLen + ' and ds >= 0'); continue; }
           if (Math.abs(h.x) + h.w / 2 > nodes[h.node].w / 2) err(at + ' stone ' + h.id + ' leaves the road footprint');
         }
       });

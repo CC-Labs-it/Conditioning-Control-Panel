@@ -148,6 +148,10 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
     return out;
   }
 
+  // A shoulder wider than the centreline search radius needs a surface-distance check. Keep this
+  // bounded to broad decks near the kart's feet; airborne routes still use the usual centreline search.
+  const broad = [];
+  for (let i = 0; i < N; i++) if (Math.max(widthAt(i, 0), widthAt(i, 1)) > FAR_M * 2) broad.push(i);
   const courtProbe = makeQuery();
   function query(px, py, pz, hintSeg = -1, out = makeQuery()) {
     const hint = hintSeg >= 0 && hintSeg < N ? hintSeg | 0 : -1;
@@ -162,6 +166,14 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
       solve(i, 0.5, px, py, pz, courtProbe);
       const h = Math.abs(courtProbe.height), along = (px - fr.p[0]) * fr.t[0] + (py - fr.p[1]) * fr.t[1] + (pz - fr.p[2]) * fr.t[2];
       if (courtProbe.s < court.fromS || courtProbe.s >= court.toS || courtProbe.edgeDist < -1e-6 || h > 4 || Math.abs(along) > 1e-4) continue;
+      if (h < Math.abs(out.height) - 1e-7 || out.edgeDist < 0) copyQuery(out, courtProbe);
+    }
+    for (const i of broad) {
+      const o = i * 4;
+      if (px < box[o] || px > box[o + 2] || pz < box[o + 1] || pz > box[o + 3]) continue;
+      solve(i, 0.5, px, py, pz, courtProbe);
+      const h = Math.abs(courtProbe.height), along = (px - fr.p[0]) * fr.t[0] + (py - fr.p[1]) * fr.t[1] + (pz - fr.p[2]) * fr.t[2];
+      if (!courtProbe.onRoad || courtProbe.height < -BELOW_PASS_M || h > 4 || Math.abs(along) > 1e-4) continue;
       if (h < Math.abs(out.height) - 1e-7 || out.edgeDist < 0) copyQuery(out, courtProbe);
     }
     return out;
