@@ -18,8 +18,7 @@ public static class ChaosFlashWash
     public const int FadeInMs = 500;
     public const int FadeOutMs = 700;
     public const int MinLifeMs = 600;
-    /// <summary>WPF :222/:231 - animations decode capped at 1280 px (WPF stills go up to 2560, :254;
-    /// this head decodes both at this cap - a faint wash needs no native size).</summary>
+    /// <summary>WPF :222/:231 - animations decode capped at 1280 px (stills go up to 2560, :254).</summary>
     public const int MaxDecodeDim = 1280;
     /// <summary>WPF :222/:231 - at most 40 animation frames resident (#476 OOM).</summary>
     public const int MaxFrames = 40;
