@@ -70,8 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshExclusivesTab()
         {
             Named<Tabs.ExclusivesTabView>("ExclusivesTab")?.RefreshVault();
-            AppSettingsPage?.SectionAccount.PlansView.RefreshVault();   // WPF repaints every built view, the Plans copy too
-            RefreshInvites();
+            AppSettingsPage?.SectionAccount.PlansView.RefreshVault();   // WPF repaints every built view, the Plans copy too (and its throttled invites read)
         }
 
         /// <summary>WPF OpenExclusiveFeature (main 2e9080399): each card opens the door the launcher or the Play
@@ -86,8 +85,5 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 default: ShowTab(key); break;
             }
         }
-
-        /// <summary>WPF _invitePanel.RefreshAsync(): throttled inside, so a repaint storm costs one read.</summary>
-        internal void RefreshInvites() => _ = InvitesCard?.RefreshAsync();
     }
 }

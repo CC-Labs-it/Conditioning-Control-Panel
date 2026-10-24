@@ -124,6 +124,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (LockdownActive) return;
             OpenAppSettingsSection("account");
+            var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            InvitesCardOpened = done.Task;
             DispatcherTimer.RunOnce(async () =>
             {
                 try
@@ -133,7 +135,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     card.BringIntoView();
                 }
                 catch (Exception ex) { Log.Debug("[Invites] open invites card failed: {E}", ex.GetType().Name); }
-            }, TimeSpan.FromMilliseconds(300));
+                finally { done.TrySetResult(); }
+            }, InvitesCardSettle);
         }
+
+        /// <summary>WPF's 300 ms settle before the forced read (tests shorten it).</summary>
+        internal TimeSpan InvitesCardSettle { get; set; } = TimeSpan.FromMilliseconds(300);
+
+        /// <summary>Completes when the last OpenInvitesCard has read and scrolled (tests await it).</summary>
+        internal Task InvitesCardOpened { get; private set; } = Task.CompletedTask;
     }
 }

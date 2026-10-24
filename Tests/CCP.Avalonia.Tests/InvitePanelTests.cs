@@ -163,6 +163,7 @@ public sealed class InvitePanelTests
             ld.Activate(TimeSpan.FromMinutes(30));
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
             Assert.False(vault.IsVisible);
+            Assert.Equal("achievements", shell.CurrentTab);
             ld.Deactivate();
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal("appsettings", shell.CurrentTab);
@@ -190,15 +191,17 @@ public sealed class InvitePanelTests
             string reply = Mine;
             var wire = new Wire(reply, "{}");
             card.Api = () => new InviteApi(new HttpClient(wire), () => ("u_me", "tok"), "http://127.0.0.1:9");
-            shell.RefreshInvites(); // the shell reads the Plans card and its answer repaints the ticket
+            shell.RefreshExclusivesTab(); // the shell reads the Plans card and its answer repaints the ticket
             Assert.Contains("mine", wire.Ops);
             Assert.True(ticket.IsVisible);
             Assert.True(shell.InviteWobbleRunning);
             wire.Ops.Clear();
-            shell.RefreshInvites();
+            shell.RefreshExclusivesTab();
             Assert.Empty(wire.Ops); // normal shell refresh obeys the card's 30-second throttle
+            Assert.Equal(TimeSpan.FromMilliseconds(300), shell.InvitesCardSettle); // WPF's settle
+            shell.InvitesCardSettle = TimeSpan.Zero;
             shell.BtnInviteTicket_Click(ticket, new RoutedEventArgs(Button.ClickEvent));
-            await Task.Delay(450); // WPF's 300 ms settle then a forced read, even inside the throttle
+            await shell.InvitesCardOpened.WaitAsync(TimeSpan.FromSeconds(10)); // then a forced read, even inside the throttle
             Assert.Contains("mine", wire.Ops);
             Assert.Equal("appsettings", shell.CurrentTab);
             Assert.Equal("account", shell.AppSettingsPage.CheckedSectionKey);
