@@ -2958,3 +2958,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-play: +94
 - Play wall free games (Breakout Demo, Piece by Piece) launch and focus their hosts; panic closes them.
 - Hand cursor on both buttons, asserted in PlayWallTests.
+
+## avalonia-port/wire-ctrl-attention-check-b: +194
+- Dormant attention ring glow rasterized from the visible arc at attach density (redrawn on scale change, skipped when progress is unchanged), shared pulse transform.
+- Review fixes done; rgate 39694832799 green except known P108 GoonClock core-linux failure.
