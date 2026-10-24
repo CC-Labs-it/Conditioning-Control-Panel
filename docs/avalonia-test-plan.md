@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## 9. Sync 7 companion editor and silent phrases
+
+1. WPF `Dialogs/CompanionPromptEditorDialog.xaml.cs` (24756ace8): store a custom personality and reactions, then select a preset. Open the full prompt editor: all six boxes show the running persona. Save with custom off, reopen with custom on, and confirm stored custom text survived. Fork from a preset, change only reactions, save, and confirm the remaining sections follow the persona on the wire. Rows: `sync7-companion`
+2. WPF `Dialogs/TextEditorDialog.xaml.cs`, `Features/SubliminalFeatureControl.xaml.cs` (ec388b526): manage subliminal messages on a mod with recorded and unrecorded phrases. Confirm mute marks (including disabled lines), the hint, marks on newly added lines, and hint removal after deleting the last silent line. The whispers hint considers only enabled phrases, disappears when whispers are off, and refreshes on mod switches. Attention/lock-card/bouncing-text lists remain unmarked. Rows: `sync7-companion`

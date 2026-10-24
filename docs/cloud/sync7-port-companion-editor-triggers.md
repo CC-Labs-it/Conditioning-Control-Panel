@@ -1,0 +1,28 @@
+# Companion editor and silent phrase indicators
+
+- Adapt WPF `24756ace81838bbf5fac7ef8ce594494bef29951`: the full prompt editor opens on the running persona when custom is off; an off-to-off save preserves stored custom fields. Forking stores only edited fields.
+- Adapt WPF `ec388b526ad3a7c04a8a84f1aeedda279706f63f`: mark unrecorded lines in the existing text-pool editor with the Fluent SpeakerMute icon, retain disabled-line marks, and refresh the hint after adds/removals. Wire the subliminal pool editor and whispers hint to the playback resolver; refresh on mod changes and whisper toggles.
+- Read-only source `parity/trunk` fetched; the two credited WPF hashes above are the reference imports. Existing Core/head files win; no sibling commits imported, no new surfaces, and no PanicSurfaces entry needed.
+
+## Commit disposition
+
+- `24756ace8` — ported (editor): `CCP.Avalonia/Views/Dialogs/CompanionPromptEditorDialog.axaml.cs:222` and `:239`; regression test `CompanionEditorTriggerPortTests.DisabledCustomOpensOnPersonaAndOnlyForkSavesEdits` (off-to-off and fork cases), plus existing `CompanionEditorsTests` for custom-on saves. Already covered (Core): `CCP.Core/Services/Companion/ActivePersonaPromptText.cs:77` (EditorField), `:94` (WireFields), `CCP.Core/Services/BambiSprite.cs:684`, `:701`, `:805` (wire fields in prefix fingerprint and prompt assembly). **blocked-by-host (studio portion):** no Avalonia PersonalityStudio/create-personality dialog exists; the awareness field and length-cap change require that host. The Studio tab is the effects rack, not the WPF personality editor.
+- `ec388b526` — ported (existing subliminal/text-editor hosts): `CCP.Avalonia/Views/Dialogs/TextEditorDialog.axaml.cs:95`, corresponding `.axaml` mute mark and hint, `CCP.Avalonia/Views/Features/SubliminalFeatureControl.axaml.cs:299`, `:328`, and `CCP.Avalonia/Views/Overlays/SubliminalWhisperShow.cs:109`. Tests: `SilentMarksTrackAddAndKeepUnspokenListsUnmarked`, `WhisperHintUsesOnlyEnabledLinesAndFollowsToggle`. Already covered: `CCP.Core/Services/SpokenClipRule.cs:18`, `CCP.Core/Services/SubliminalWhisper.cs:57`, `CCP.Avalonia/Views/Controls/Companion/KeywordTriggersPanel.TriggerList.cs:79` (recorded-clip order), and localization strings in the shared WPF catalogues. **blocked-by-host (legacy trigger-phrase dialog portion):** Avalonia MainShellWindow.Patreon has no editable CustomTriggers TextEditorDialog host; the separate KeywordTriggersPanel edits keyword/action rules. No replacement host invented.
+
+## Verification limits
+
+- SDK: .NET 10.0.402 (the channel installer completed after a transient latest-version lookup failure; fixed 10.0.100 was also installed). All builds use Release.
+- `dotnet build CCP.Core/CCP.Core.csproj` and `dotnet build CCP.Avalonia/CCP.Avalonia.csproj`: exit 0, zero errors.
+- Workflow test projects built successfully (exit 0, zero errors): CatalogueStartup, Consent, GeneralSettings, Language, Migration, Report, Scheduler, Snapshot, CCP.Avalonia.Tests, CCP.Core.Content.Tests, CCP.Core.Settings.Tests, CCP.Core.Tests, and ConditioningControlPanel.Tests. WPF used `-p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false`; compiled only, never run on Linux.
+- `dotnet test Tests/CCP.Core.Tests -c Release`, `DiffEngine_Disabled=true`: exit 1; 3,952 passed, 5 skipped, 1 failed. Untouched `DtrhRemoteMediaTests.Take_ColdCacheFetches_LoopsDryBacksOff_CopiesBecomeAssetUrls` expected Loops but got Clips; rerun alone with `--no-build --filter FullyQualifiedName~DtrhRemoteMediaTests.Take_ColdCacheFetches_LoopsDryBacksOff_CopiesBecomeAssetUrls` passed (exit 0, 1/1). Final full-suite rerun `dotnet test Tests/CCP.Core.Tests -c Release --no-build`: exit 0, 3,953 passed, 5 skipped, 0 failed (36 s). No Core production code changed. Five existing Vosk tests skip without their unavailable model; no tests weakened.
+- `dotnet test Tests/CCP.Avalonia.Tests -c Release --filter 'FullyQualifiedName~CompanionEditorTriggerPortTests|FullyQualifiedName~CompanionEditorsTests'`, `DiffEngine_Disabled=true`: initial run exit 0, 9 passed. Fonts worked here.
+- Negative control: temporarily restored stale-personality loading/unconditional saving, removed the silent mark, and forced the whisper hint off. `dotnet test Tests/CCP.Avalonia.Tests -c Release -m:1 --filter FullyQualifiedName~CompanionEditorTriggerPortTests`: exit 1, all 4 new cases failed on behavior assertions. All production files restored in a finally block, then the focused suites rerun: exit 0, 9 passed, 0 failed (including the loaded-panel mod-change test).
+- `bash .github/scripts/core-guards.sh`: exit 0, “All Core guards passed.” The initial restricted attempt lacked writable temporary storage; rerun with writable storage passed.
+- `test-plan-coverage.sh` is absent on this base. Tester steps were added without promoting or modifying any ledger rows.
+- Initial overlapping builds hit a file lock and MSB4166; final builds passed. Consent compiled with `-m:1 -p:BuildProjectReferences=false` after its dependencies had built successfully. Windows behavior, actual audio output, and manual desktop interaction were not run. No real profile or desktop used by tests.
+
+## Assumptions
+
+- Missing personality-studio and legacy CustomTriggers editor hosts remain out of scope, per the unit's blocked-by-host rule.
+- Existing editor windows/settings panels are extended in place; they add no independently running panic surface.
+- Stored custom text is preserved exactly for an off-to-off save, matching WPF even if the disabled boxes were programmatically changed.

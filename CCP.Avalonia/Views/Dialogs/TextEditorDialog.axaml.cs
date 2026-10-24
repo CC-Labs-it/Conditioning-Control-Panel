@@ -13,6 +13,7 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 {
@@ -41,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private readonly TextBox _txtNewItem;
         private readonly ItemsControl _itemList;
         private bool _hasChanges = false;
+        private Func<string, bool>? _hasVoice;
         private bool? _dialogResult;
 
         /// <summary>
@@ -89,6 +91,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _itemList.AddHandler(InputElement.PointerPressedEvent, ItemList_PointerPressed);
         }
 
+        /// <summary>Use the player's lookup so the mark agrees with what can play.</summary>
+        public void MarkSilentLines(Func<string, bool> hasVoice)
+        {
+            _hasVoice = hasVoice;
+            foreach (var item in _items)
+                item.IsSilent = SpokenClipRule.IsSilent(item.Text, hasVoice);
+            RefreshSilentHint();
+        }
+
+        private void RefreshSilentHint()
+            => this.FindControl<TextBlock>("TxtSilentHint")!.IsVisible = _hasVoice != null
+                && SpokenClipRule.AnySilent(_items.Select(x => x.Text), _hasVoice);
+
         private async void AddNewItem()
         {
             var text = (_txtNewItem.Text ?? "").Trim().ToUpperInvariant();
@@ -104,9 +119,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 return;
             }
 
-            var added = new TextItem { Text = text, IsEnabled = true };
+            var added = new TextItem { Text = text, IsEnabled = true,
+                IsSilent = _hasVoice != null && SpokenClipRule.IsSilent(text, _hasVoice) };
             added.PropertyChanged += TextItem_Changed;
             _items.Add(added);
+            RefreshSilentHint();
             _txtNewItem.Clear();
             _txtNewItem.Focus();
             _hasChanges = true;
@@ -154,6 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 if (confirm == true)
                 {
                     _items.Remove(item);
+                    RefreshSilentHint();
                     _hasChanges = true;
                 }
                 return;
@@ -196,6 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 foreach (var item in selected)
                 {
                     _items.Remove(item);
+                    RefreshSilentHint();
                 }
                 _hasChanges = true;
             }
@@ -340,6 +359,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         private string _text = "";
         private bool _isEnabled = true;
         private bool _isSelected = false;
+        private bool _isSilent;
+
+        public bool IsSilent
+        {
+            get => _isSilent;
+            set { _isSilent = value; OnPropertyChanged(nameof(IsSilent)); }
+        }
 
         public string Text
         {

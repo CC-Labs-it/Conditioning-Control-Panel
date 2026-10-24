@@ -21,6 +21,7 @@
      The buttons also gained x:Names, because the handlers are wired in the constructor. -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
         xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
         x:Class="ConditioningControlPanel.Avalonia.Views.Dialogs.TextEditorDialog"
         x:DataType="vm:TextEditorViewModel"
@@ -43,6 +44,7 @@
 
     <Grid Margin="15">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -80,8 +82,12 @@
             </Button>
         </Grid>
 
+        <TextBlock x:Name="TxtSilentHint" Grid.Row="2" Text="{loc:Str hint_silent_lines}"
+                   IsVisible="False" Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
+                   TextWrapping="Wrap" Margin="2,0,0,8"/>
+
         <!-- Item List -->
-        <Border Grid.Row="2" Background="{StaticResource PanelBgBrush}" CornerRadius="8">
+        <Border Grid.Row="3" Background="{StaticResource PanelBgBrush}" CornerRadius="8">
             <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="5">
                 <ItemsControl x:Name="ItemList">
                     <ItemsControl.ItemTemplate>
@@ -94,6 +100,7 @@
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <CheckBox Grid.Column="0" Theme="{StaticResource ItemCheckBox}"
                                               IsChecked="{Binding IsEnabled, Mode=TwoWay}"
@@ -101,7 +108,11 @@
                                     <TextBlock Grid.Column="1" Text="{Binding Text}"
                                                Foreground="White" FontSize="13"
                                                VerticalAlignment="Center"/>
-                                    <fx:IconGlyph x:Name="BtnRemove" Grid.Column="2" Kind="Dismiss" Foreground="{DynamicResource TextMutedBrush}"
+                                    <fx:IconGlyph Kind="SpeakerMute" Grid.Column="2" Size="12" Opacity="0.7"
+                                                  IsVisible="{Binding IsSilent}" Margin="8,0,10,0"
+                                                  Foreground="{DynamicResource TextMutedBrush}"
+                                                  ToolTip.Tip="{loc:Str tooltip_silent_line}"/>
+                                    <fx:IconGlyph x:Name="BtnRemove" Grid.Column="3" Kind="Dismiss" Foreground="{DynamicResource TextMutedBrush}"
                                                Size="14" VerticalAlignment="Center"
                                                Cursor="Hand"
                                                ToolTip.Tip="{Binding $parent[Window].((vm:TextEditorViewModel)DataContext).LocTooltipRemoveItem}">
@@ -124,7 +135,7 @@
         </Border>
 
         <!-- Footer Buttons -->
-        <Grid Grid.Row="3" Margin="0,15,0,0">
+        <Grid Grid.Row="4" Margin="0,15,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>

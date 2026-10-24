@@ -104,13 +104,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             });
         }
 
+        /// <summary>The shared lookup for playback and editor marks.</summary>
+        internal static string? FindLinkedAudio(string text) => SubliminalWhisper.FindLinkedAudio(text,
+            SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath), SubAudioDir, App.Mods?.ActiveModId);
+
+        internal static bool HasRecordedVoice(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            try { return FindLinkedAudio(text) != null; }
+            catch { return false; }
+        }
+
         /// <summary>Duck, play the phrase's linked clip, then draw the card. False (nothing played) when
         /// there is no clip or whispers are muted: the caller then draws the card straight away.</summary>
         internal static bool Whisper(string text)
         {
             var s = CoreSettings.Current;
-            var path = SubliminalWhisper.FindLinkedAudio(text, SubliminalWhisper.ModAudioDir(App.Mods?.ActiveMod?.InstalledPath),
-                SubAudioDir, App.Mods?.ActiveModId);
+            var path = FindLinkedAudio(text);
             if (path == null || !s.SubAudioAudible) return false;
 
             var entry = Volatile.Read(ref _gen);   // a Stop after this drops this whisper and its card
