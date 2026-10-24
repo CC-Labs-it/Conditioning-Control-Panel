@@ -20,6 +20,7 @@
 import { mixGet } from './mix.js';
 import { normalizeChart } from './chart.js';
 import { analyzeBuffer, setLiveMusic, liveMusic } from './songShape.js';
+import { createMusicReactivity } from './reactivity.js';
 
 /** The one-time analysis of an AudioBuffer-like ({ numberOfChannels, sampleRate, getChannelData(i) }), or null. */
 export function analyzeAudioBuffer(buf) {
@@ -100,6 +101,8 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   const gain = ctx.createGain();
   gain.gain.value = 0;
   gain.connect(out);
+  const reactive = createMusicReactivity(ctx, gain);
+  const reactiveOptions = { playing: false, muted: false, paused: false, gentle: false, songS: 0 };
   let src = null, startT = 0, durS = 0, chart = null, song = null, bpm = 96, volume = 1, token = 0;
   let cached = null;   // { url, buffer, chart, song }: the last chart's decode, reused by a restart
   let analysis = null, analyzed = null;   // a picked file's beat analysis, and the buffer it belongs to
@@ -118,6 +121,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   function stopSrc(fadeS) {
     if (!src) return;
     const s = src; src = null;
+    reactive.clear();
     const t = ctx.currentTime;
     try {
       gain.gain.cancelScheduledValues(t);
@@ -131,6 +135,10 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     const s = ctx.createBufferSource();
     s.buffer = buffer; s.loop = true;
     s.connect(gain);
+    s.onended = () => {
+      try { s.disconnect(); } catch (e) { /* gone */ }
+      if (src === s) { src = null; reactive.clear(); }
+    };
     const t = ctx.currentTime;
     durS = buffer && buffer.duration > 0 ? buffer.duration : 0;
     chart = c; bpm = b; song = c ? (cached && cached.chart === c ? cached.song : normalizeChart(c)) : null;
@@ -194,9 +202,20 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     stop() { token++; stopSrc(g('musicFadeOutS')); chart = null; song = null; },
     setVolume(v) {
       volume = Math.max(0, Math.min(1, Number(v) || 0));
+      if (volume === 0) reactive.clear(songTime());
       if (src) { try { gain.gain.setTargetAtTime(volume, ctx.currentTime, 0.05); } catch (e) { gain.gain.value = volume; } }
     },
     get playing() { return !!src; },
+    /** Persistent 0..1 music-only envelope. readReactivity updates it once per render. */
+    get reactivity() { return reactive.frame; },
+    readReactivity(dt, opts = null) {
+      reactiveOptions.playing = !!src;
+      reactiveOptions.muted = volume === 0 || !!opts?.muted;
+      reactiveOptions.paused = !!opts?.paused;
+      reactiveOptions.gentle = !!opts?.gentle;
+      reactiveOptions.songS = songTime();
+      return reactive.read(dt, reactiveOptions);
+    },
     get chart() { return chart; },
     /** The normalised chart (audio/chart.js) of the playing track, or null (a picked file has none). */
     get song() { return src ? song : null; },
@@ -211,7 +230,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     get sectionIdx() { return chart ? sectionAt(chart, songTime()) : 0; },
     /** A picked file's beat analysis (songShape.analyzeBuffer), null for a chart or nothing playing. */
     get analysis() { return src && !song ? analysis : null; },
-    dispose() { token++; stopSrc(0.05); try { gain.disconnect(); } catch (e) { /* gone */ } if (liveMusic() === api) setLiveMusic(null); },
+    dispose() { token++; stopSrc(0.05); reactive.dispose(); try { gain.disconnect(); } catch (e) { /* gone */ } if (liveMusic() === api) setLiveMusic(null); },
   };
   setLiveMusic(api);
   return api;

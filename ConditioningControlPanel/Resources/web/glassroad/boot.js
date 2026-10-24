@@ -357,6 +357,7 @@ async function boot() {
   // online: { s (net/room.js session), cfg, go (race.start() done) } or null; lobbyUi = the hud/lobby.js handle
   let online = null, lobbyUi = null;
   let opts = hud.options, assistKey = '';
+  const reactiveOptions = { paused: false, gentle: false, muted: false };
   /** The Steer assist mode: the Options pick; online it is off on a no lane keeper table and on while paused. */
   function syncAssist() {
     let m = opts.steerAssist;
@@ -833,7 +834,12 @@ async function boot() {
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
     // the song position the player hears (frozen while paused: the context is suspended)
-    const music = audio.music, song = inRace && music ? music.song : null, songS = song ? music.songS : NaN;
+    const music = audio.music, song = inRace && music ? music.song : null;
+    const songS = inRace && music?.playing ? music.songS : NaN;
+    reactiveOptions.paused = paused;
+    reactiveOptions.gentle = hostGentle || !!feel.get('gentle.on') || !!opts.gentlePreview;
+    reactiveOptions.muted = opts.volMaster === 0 || opts.volMusic === 0;
+    const audioReactive = music ? music.readReactivity(frameDt, reactiveOptions) : null;
     const sc = scanClock(inRace ? music : null, racers.clockS);
     if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     const pv = P.view;
@@ -851,7 +857,7 @@ async function boot() {
     }
     if (BOT) debug.gliding = !!kartViews[0]?.glide;
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
-      raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive,
+      raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;

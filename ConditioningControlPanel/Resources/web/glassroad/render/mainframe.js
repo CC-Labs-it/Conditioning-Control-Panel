@@ -12,6 +12,7 @@ import { mediaLook, placeBillboard, rectPoints } from './mediaMath.js';
 import { fitMainframeBillboard, motionEnvelope } from './mainframeMediaMotion.js';
 import { buildMainframeRooms, mainframeRoomWindows } from './mainframeRooms.js';
 import { buildMainframeHazards } from './mainframeHazards.js';
+import { createAudioReactiveUniforms, reactiveWaterNodes } from './audioReactive.js';
 
 const point = (f, x, y, z = 0) => f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z);
 
@@ -32,7 +33,7 @@ export function reactorRoom(track) {
   return { center: [x, (low + high) / 2, z], radius: Math.max(1, radius), height: high - low + 60 };
 }
 
-export function buildMainframe(track, art, { samples = sampleTrack(track, 4), makeCanvas = null, mediaLayout = null } = {}) {
+export function buildMainframe(track, art, { samples = sampleTrack(track, 4), makeCanvas = null, mediaLayout = null, reactive = createAudioReactiveUniforms() } = {}) {
   const group = new Group(); group.name = 'mainframe';
   const geometry = new BoxGeometry(1, 1, 1), geometries = [geometry], materials = [], textures = [], rows = { shell: [], slot: [], green: [], cyan: [], floor: [], wall: [], tank: [], rib: [], amber: [] };
   let loomFrames = null;
@@ -270,7 +271,9 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     const g = keepGeo(new BufferGeometry()); g.setAttribute('position', new Float32BufferAttribute(positions, 3));
     g.setAttribute('uv', new Float32BufferAttribute(uvs, 2)); g.setIndex(indices); g.computeVertexNormals();
     const mat = keepMat(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide }));
-    mat.colorNode = vec3(0.025, 0.25, 0.39).add(vec3(0.07, 0.26, 0.34).mul(coolantCaustics(positionWorld.xz, coolantTime)));
+    const response = reactiveWaterNodes(positionWorld.xz, reactive);
+    mat.colorNode = vec3(0.025, 0.25, 0.39).add(vec3(0.07, 0.26, 0.34).mul(coolantCaustics(positionWorld.xz, coolantTime)))
+      .add(vec3(0.14, 0.66, 0.64).mul(response.light)).add(vec3(0.7, 0.9, 1).mul(response.crest));
     mat.opacityNode = smoothstep(0, 0.035, uv().y).mul(float(1).sub(smoothstep(0.965, 1, uv().y))).mul(0.38);
     const surface = new Mesh(g, mat); surface.name = 'mainframe-reservoir-surface'; group.add(surface);
   }
