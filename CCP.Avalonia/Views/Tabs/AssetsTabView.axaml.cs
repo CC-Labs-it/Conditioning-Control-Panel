@@ -39,7 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
     /// ponytail: the disabled WPF pack strip (including its card actions and wheel-to-pan)
-    /// stays hidden; see docs/cloud/fin-views-tab-assets.md for the pinned P122 proof.
+    /// stays hidden: WPF PacksSectionEnabled=false (MainWindow.xaml.cs:208) and AssetsTabView.xaml:118,472,718
+    /// are collapsed with no visibility setters (P122; facts in the views-tab-assets ledger row).
     /// </summary>
     public partial class AssetsTabView : UserControl
     {
