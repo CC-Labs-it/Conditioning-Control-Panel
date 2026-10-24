@@ -18,8 +18,8 @@
  * a sprite (one shared atlas canvas), eased in and out by the reaction layer's markK.
  * Polish 4, items as events: an item hit spins, stomps or flips the kart (kartPose.js itemHit), bursts in the
  * kind's colour, sets stars orbiting EMI's head for the stun and glows the rim in the kind's hue (hue drifts,
- * lightness held; Gentle holds it still and halves it). A throw winds up and lunges. Self items (Surge, Glass,
- * Echo, Golden) wrap the kart in an aura (fresnel shell with climbing bands, additive) plus rising motes.
+ * lightness held; Gentle holds it still and halves it). A throw winds up and lunges. Surge and Echo wrap
+ * the kart in an aura plus rising motes; Glass and Golden share one shell in items/visuals.js.
  * ART5, the R4 rig: one AnimationMixer per kart clone plays Astra's 26 clips, picked by kartPose.js
  * directorStep from the same edges and bus kinds the reactions hear (art/models/emi-kart-event-bindings.json).
  * The clips own every joint, so the procedural head, arm and antenna writes and the hop, land, bump, boost,
@@ -53,6 +53,7 @@ import { createEmiSkin } from './emiSkin.js';
 import { skinFromWire } from '../hud/garageState.js';
 import { lookForTier } from './wardrobeMath.js';
 import { HIT_LOOK, AURA_LOOK, ITEM_TIERS } from './items/look.js';
+import { auraStyle } from './items/shieldMath.js';
 import { createFaceCanvas, faceCell, FACE_LOOK, MARK_LOOK, markCell, createMarkAtlas } from './faces.js';
 
 const QX = new Quaternion(), QH = new Quaternion(), QI = new Quaternion(), EU = new Euler(), V = new Vector3(), AX = new Vector3();
@@ -75,17 +76,18 @@ function starRing(tex, n, cell) {
 
 /** A self item aura: a fresnel shell with bands climbing round it, additive; k fades it, t runs the bands. */
 function auraMesh(geo) {
-  const A = AURA_LOOK, u = { colour: uniform(new Color(1, 1, 1)), k: uniform(0), t: uniform(0) };
+  const A = AURA_LOOK, u = { colour: uniform(new Color(1, 1, 1)), k: uniform(0), t: uniform(0),
+    bandHz: uniform(A.bandClimbHz), bandPower: uniform(3), bandColour: uniform(.55), bandAlpha: uniform(.6) };
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
   const fres = pow(float(1).sub(abs(normalView.dot(positionViewDirection))), A.fresPow);
   const p = positionLocal;
-  const band = sin(p.y.mul(A.bands * Math.PI).sub(u.t.mul(A.bandClimbHz * 2 * Math.PI)).add(atan(p.x, p.z).mul(A.bandTwist))).mul(0.5).add(0.5).pow(3);
+  const band = sin(p.y.mul(A.bands * Math.PI).sub(u.t.mul(u.bandHz).mul(2 * Math.PI)).add(atan(p.x, p.z).mul(A.bandTwist))).mul(0.5).add(0.5).pow(u.bandPower);
   const ends = smoothstep(-1, -0.55, p.y).mul(smoothstep(1, 0.5, p.y));
-  m.colorNode = u.colour.mul(fres.mul(0.8).add(band.mul(0.55)));
-  m.opacityNode = min(fres.add(band.mul(0.6)), 1).mul(ends).mul(u.k);
+  m.colorNode = u.colour.mul(fres.mul(0.8).add(band.mul(u.bandColour)));
+  m.opacityNode = min(fres.add(band.mul(u.bandAlpha)), 1).mul(ends).mul(u.k);
   const mesh = new Mesh(geo, m);
   mesh.scale.set(A.size[0], A.size[1], A.size[2]); mesh.position.y = A.upM; mesh.renderOrder = 2; mesh.visible = false;
-  return { mesh, u, material: m, emitAcc: 0 };
+  return { mesh, u, material: m, emitAcc: 0, style: {} };
 }
 
 /** art/palettes.json `karts` (seven colourways); null keeps the LOOK.kartTints fallback. */
@@ -437,12 +439,14 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
 
   /** A self item's aura: the shell fades with auraK; motes rise off it (fewer on lower tiers and under Gentle). */
   function showAura(k, o, near, gentle, dt) {
-    const a = k.aura, A = AURA_LOOK, on = !!o.aura && o.auraK > 0.01;
+    const a = k.aura, A = AURA_LOOK, style = auraStyle(o.aura, k.i === 0, gentle, a.style), on = style.visible && o.auraK > 0.01;
     a.mesh.visible = on;
     if (!on) { a.emitAcc = 0; return; }
     const slow = gentle ? A.gentle : 1;
     a.u.colour.value.set(A.colours[o.aura] || '#ffffff');
-    a.u.k.value = o.auraK * (k.i === 0 ? A.playerAlpha : A.alpha) * slow;
+    a.u.k.value = o.auraK * style.alpha * slow;
+    a.u.bandHz.value = style.bandHz; a.u.bandPower.value = style.bandPower;
+    a.u.bandColour.value = style.bandColour; a.u.bandAlpha.value = style.bandAlpha;
     a.u.t.value = k.react.t * slow;
     if (!particles || !near) return;
     const tier = ITEM_TIERS[Q.name] || ITEM_TIERS.high, share = tier.motes / ITEM_TIERS.high.motes;

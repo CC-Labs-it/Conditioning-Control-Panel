@@ -36,6 +36,7 @@ export function createContact(track, feel, events) {
   // water wave 1: the kick also waits through a court approach (a slipstream kick at the aperture entry
   // pushed a bot onto a hole line faster than it could reach a supported band; the player gets the same hold)
   function courtAt(st) {
+    if (track.forkAtSeg?.(st[S.seg])) return false;
     const cs = track.courts || [];
     for (const c of cs) {
       if (!c.holes || !c.holes.length) continue;
@@ -53,6 +54,7 @@ export function createContact(track, feel, events) {
 
   /** Inside a stone field (or stones.leadM before it): a shove there keeps only stones.shoveMul of its sideways part. */
   function onStones(st) {
+    if (track.forkAtSeg?.(st[S.seg])) return false;
     const fs = track.fields;
     if (!fs || !fs.length) return false;
     const lead = feel.get('stones.leadM');
@@ -79,7 +81,7 @@ export function createContact(track, feel, events) {
     if (!q.railed && !r.feel.get('gentle.on')) return;
     const rad = gap(r.feel, 'kart.radiusM');
     if (q.edgeDist >= rad) return;
-    const b = track.frameAt(q.s, FR).b, side = q.lateral >= 0 ? 1 : -1, pen = rad - q.edgeDist;
+    const b = (track.pathFrameAt ? track.pathFrameAt(q.s, q.seg, FR) : track.frameAt(q.s, FR)).b, side = q.lateral >= 0 ? 1 : -1, pen = rad - q.edgeDist;
     move(r, -b[0] * side * pen, -b[1] * side * pen, -b[2] * side * pen);
     const out = (st[S.velX] * b[0] + st[S.velY] * b[1] + st[S.velZ] * b[2]) * side;
     if (out > 0) push(r, -b[0] * side * out, -b[1] * side * out, -b[2] * side * out);
@@ -107,7 +109,7 @@ export function createContact(track, feel, events) {
         const a = ra.st, b = rb.st;
         const dx = b[S.posX] - a[S.posX], dy = b[S.posY] - a[S.posY], dz = b[S.posZ] - a[S.posZ];
         if (dx * dx + dy * dy + dz * dz >= R2 * R2) continue;
-        const f = track.frameAt(a[S.s], FR), nrm = f.n;
+        const f = track.pathFrameAt ? track.pathFrameAt(a[S.s], a[S.seg], FR) : track.frameAt(a[S.s], FR), nrm = f.n;
         const dn = dx * nrm[0] + dy * nrm[1] + dz * nrm[2];
         if (Math.abs(dn) > maxH) continue;
         U[0] = dx - nrm[0] * dn; U[1] = dy - nrm[1] * dn; U[2] = dz - nrm[2] * dn;
@@ -178,7 +180,9 @@ export function createContact(track, feel, events) {
       if (w.cool <= 0 && fast(r)) {
         for (const o of racers) {
           if (o === r || !fast(o)) continue;
-          const ds = wrap(o.st[S.s] - r.st[S.s], L);
+          const ownFork = track.forkAtSeg?.(r.st[S.seg]), otherFork = track.forkAtSeg?.(o.st[S.seg]);
+          if (ownFork !== otherFork) continue;
+          const ds = ownFork ? ownFork.localS(o.st[S.s]) - ownFork.localS(r.st[S.s]) : wrap(o.st[S.s] - r.st[S.s], L);
           if (ds >= minM && ds <= maxM && Math.abs(o.st[S.lateral] - r.st[S.lateral]) < wid) { wake = true; break; }
         }
       }

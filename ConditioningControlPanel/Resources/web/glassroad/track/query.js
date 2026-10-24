@@ -116,6 +116,7 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
     const h = wx * fr.n[0] + wy * fr.n[1] + wz * fr.n[2];
     const gap = sp.gap[seg], half = fr.w / 2, fl = fr.flags;
     out.seg = seg;
+    if (out.forkId !== undefined) { out.forkId = null; out.forkS = 0; out.pathScale = 1; out.beyond = false; }
     out.segT = fr.segT;
     const sa = sp.sFromU(seg, u);
     out.s = sa >= sp.lengthM ? sa - sp.lengthM : sa;
@@ -215,6 +216,7 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
 /** Copy query result a into o (arrays copied in place). */
 export function copyQuery(o, a) {
   o.seg = a.seg; o.segT = a.segT; o.s = a.s; o.lateral = a.lateral; o.height = a.height;
+  if (a.forkId !== undefined || o.forkId !== undefined) { o.forkId = a.forkId || null; o.forkS = a.forkS || 0; o.pathScale = a.pathScale || 1; o.beyond = !!a.beyond; }
   o.normal[0] = a.normal[0]; o.normal[1] = a.normal[1]; o.normal[2] = a.normal[2];
   o.onRoad = a.onRoad; o.edgeDist = a.edgeDist; o.surface = a.surface; o.flags = a.flags; o.railed = a.railed;
   o.hole = a.hole; o.holeDist = a.holeDist; o.stone = a.stone || null;

@@ -29,8 +29,13 @@ export function fallBeneath(track, st, P, out, ev, wasEdge) {
   const below = track.query && track.query.below;
   if (typeof below !== 'function' || !below(P[0], P[1], P[2], out)) return false;
   // the kart's own stretch (a jump's ramp or landing, a crest) is the normal probe's business, not a fall
-  const n = track.nodeCount, d = (((out.seg - (st[S.seg] | 0)) % n) + n) % n;
-  if (d <= NEAR_SEGS || d >= n - NEAR_SEGS) return false;
+  const fromFork = track.forkAtSeg?.(st[S.seg]), toFork = track.forkAtSeg?.(out.seg);
+  if (fromFork || toFork) {
+    if (fromFork === toFork && Math.abs(out.seg - st[S.seg]) <= NEAR_SEGS) return false;
+  } else {
+    const n = track.nodeCount, d = (((out.seg - (st[S.seg] | 0)) % n) + n) % n;
+    if (d <= NEAR_SEGS || d >= n - NEAR_SEGS) return false;
+  }
   const m = memOf(st);
   if (!m.on) {
     m.on = true; m.fromS = st[S.s];

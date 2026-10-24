@@ -102,7 +102,7 @@ export function step(st, a, track, feel, dt, ev) {
   // old current is still easing out; the grade comes from its tangent (positive = a descent).
   const wm = waterMem(st);
   const wet = wasGround && (qa.surface === 'stream' || Math.abs(wm.cur[0]) > PUSH_EPS || Math.abs(wm.cur[1]) > PUSH_EPS);
-  if (wet) track.frameAt(qa.s, FW);
+  if (wet) (track.pathFrameAt ? track.pathFrameAt(qa.s, qa.seg, FW) : track.frameAt(qa.s, FW));
   waterAt(wasGround ? qa : null, wet && qa.surface === 'stream' ? gradeDeg(FW.t) : 0, feel, W);
   if (wasGround) {
     if (wm.kind === null) wm.kind = W.kind;
@@ -127,7 +127,7 @@ export function step(st, a, track, feel, dt, ev) {
   const loop = wasGround && has(qa.flags, 'magnet');
   if (loop) {
     // aim at the kart's own line a little way up the road: the wheel's sideways shift never walks it into a rail
-    const la = Math.max(4, Math.abs(fwd0) * gap(feel, 'loop.guideAheadS')), f = track.frameAt(qa.s + la, FL);
+    const la = Math.max(4, Math.abs(fwd0) * gap(feel, 'loop.guideAheadS')), f = track.pathFrameAt ? track.pathFrameAt(qa.s + la, qa.seg, FL) : track.frameAt(qa.s + la, FL);
     const ax = f.p[0] + f.b[0] * qa.lateral - P[0], ay = f.p[1] + f.b[1] * qa.lateral - P[1], az = f.p[2] + f.b[2] * qa.lateral - P[2];
     const al = Math.hypot(ax, ay, az) || 1;
     if ((F[0] * ax + F[1] * ay + F[2] * az) / al > 0.3) {
@@ -265,7 +265,7 @@ export function step(st, a, track, feel, dt, ev) {
   const overRail = air && (qb.height > gap(feel, 'wall.topM') || ed < 0);
   const soft = feel.get('gentle.on') && edgeKind !== 'kicker';
   if (road && !overRail && (qb.railed || kerb || soft) && ed < radius && qb.height > -radius) {
-    const b = track.frameAt(qb.s, FR).b, side = lat >= 0 ? 1 : -1, pen = radius - ed;
+    const b = (track.pathFrameAt ? track.pathFrameAt(qb.s, qb.seg, FR) : track.frameAt(qb.s, FR)).b, side = lat >= 0 ? 1 : -1, pen = radius - ed;
     v3addScaled(P, P, b, -side * pen); lat -= side * pen; ed = radius;
     const into = v3dot(V, b) * side;
     if (into > 0) {
@@ -301,7 +301,7 @@ export function step(st, a, track, feel, dt, ev) {
   } else if (wasEdge && !past && !under && !fall) ev.emit('edge-exit', { to: 'road' });
 
   // boost pads: once per entry, on the ground
-  if (st[S.grounded] && !drop && track.boosts) {
+  if (st[S.grounded] && !drop && !qb.forkId && track.boosts) {
     const L = track.lengthM;
     const inside = (pad, s, x) => wrap(s - pad.s, L) <= pad.len && Math.abs(x - pad.x) <= pad.w / 2;
     track.boosts.forEach((pad, i) => {

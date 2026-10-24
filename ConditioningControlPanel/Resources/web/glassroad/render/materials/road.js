@@ -19,7 +19,7 @@
  */
 import { MeshBasicNodeMaterial, DoubleSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping } from 'three/webgpu';
 import { uniform, uv, sin, fract, mix, smoothstep, float, vec2, vec3, texture, normalWorld, positionWorld, cameraPosition,
-  normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select, fwidth } from 'three/tsl';
+  normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select, fwidth, attribute } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
 import { ROAD_AA } from '../roadAaMath.js';
@@ -29,6 +29,8 @@ import { createMusicBands } from './musicBands.js';
 import { createWaterSurface, waterAttributes } from './water.js';
 import { machineSurface, coolantCaustics } from '../mainframeMaterials.js';
 import { mainframeFloor } from '../mainframeFloor.js';
+import { createBoudoirRoadSurface } from '../boudoirMaterials.js';
+import { createBoudoirWaterPalette } from '../boudoirWater.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -243,13 +245,17 @@ export function createRoadMaterial(pal, art = null, track = null) {
 
   // edges and centre: a steady bright edge lane and a calm centre line frame the racing line; the music
   // breathes the edge lanes with the bass and moves the edge lines with the melody
-  const half = track ? texture(widthTexture(track), vec2(p.y.div(lapM), 0.5)).r.mul(ROAD_HALF_WIDTH_RANGE) : float(P.halfWidthM);
+  const mainHalf = track ? texture(widthTexture(track), vec2(p.y.div(lapM), 0.5)).r.mul(ROAD_HALF_WIDTH_RANGE) : float(P.halfWidthM);
+  const forkHalf = attribute('forkWidth', 'float');
+  const half = select(forkHalf.greaterThan(0), forkHalf, mainHalf);
+  // A shared fork apron has no exposed border where another deck supports its edge.
+  const edgeVisible = clamp(attribute('roadEdge', 'float'), 0, 1);
   const toEdge = half.sub(au).sub(melody);
   const laneM = float(S.edgeLaneM).mul(mu.bassW.add(1));
   // the true edge never moves (no vibration, no melody): the lane's outer stretch stays lane colour there
   const trueEdge = half.sub(abs(uRaw));
   const tiles = createMusicTiles({ track, p, trueEdge, music: mu, view: V, distance: dist });
-  const edgeW = max(float(1).sub(smoothstep(laneM.mul(0.6), laneM, toEdge)), float(1).sub(smoothstep(E.laneHoldM[0], E.laneHoldM[1], trueEdge)));
+  const edgeW = max(float(1).sub(smoothstep(laneM.mul(0.6), laneM, toEdge)), float(1).sub(smoothstep(E.laneHoldM[0], E.laneHoldM[1], trueEdge))).mul(edgeVisible);
   // the edge line: a crisp bright line ON the true edge with a dark gutter inside it, the same in every palette
   // and music mode; its width grows to at least a pixel and its light shrinks to match, so far off it never
   // shimmers (fwidth keeps the energy per pixel even)
@@ -258,8 +264,8 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const px = fwidth(trueEdge).mul(E.aaPx), cap = E.lineM * E.aaCapMul;
   const lineW = max(float(E.lineM), min(px, cap));
   const crestFade = clamp(float(cap).div(max(px, 1e-4)), 0, 1).pow(2);
-  const edgeLine = float(1).sub(smoothstep(lineW.mul(0.55), lineW, trueEdge)).mul(float(E.lineM).div(lineW).min(1).mul(0.6).add(0.4)).mul(crestFade);
-  const gutter = smoothstep(lineW, lineW.add(E.gutterSoftM), trueEdge).mul(float(1).sub(smoothstep(lineW.add(E.gutterSoftM), lineW.add(E.gutterM), trueEdge))).mul(crestFade);
+  const edgeLine = float(1).sub(smoothstep(lineW.mul(0.55), lineW, trueEdge)).mul(float(E.lineM).div(lineW).min(1).mul(0.6).add(0.4)).mul(crestFade).mul(edgeVisible);
+  const gutter = smoothstep(lineW, lineW.add(E.gutterSoftM), trueEdge).mul(float(1).sub(smoothstep(lineW.add(E.gutterSoftM), lineW.add(E.gutterM), trueEdge))).mul(crestFade).mul(edgeVisible);
   // the centre line widens to a pixel and dims to match (same light per pixel), so far off it never crawls
   const cW = max(float(S.centreLineW), fwidth(au).mul(AA.lineMul * 1.5));
   const centre = float(1).sub(smoothstep(cW.mul(0.5), cW, au)).mul(float(S.centreLineW).div(cW));
@@ -320,7 +326,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const range = smoothstep(P.glintNearM[0], P.glintNearM[1], dist).mul(float(1).sub(smoothstep(P.glintFarM[0], P.glintFarM[1], dist)));
   const glint = spot.mul(lit).mul(catchA).mul(range).mul(P.glintGain).mul(u.sheen);
 
-  const rim = float(1).sub(smoothstep(0, P.rimInM, trueEdge)).mul(P.rimGain);
+  const rim = float(1).sub(smoothstep(0, P.rimInM, trueEdge)).mul(P.rimGain).mul(edgeVisible);
   const polish = refl.add(edgeCol.mul(0.6).add(0.4).mul(rim)).mul(u.sheen).mul(mu.calm.mul(M.calmSheen).add(1)).add(vec3(1, 0.97, 0.99).mul(glint));
   // u.bright carries the beat breath; the drop wave and the shatter add their own light (mu.flash is
   // photosafe gated by the caller, 0 when refused or under Gentle)
@@ -337,12 +343,19 @@ export function createRoadMaterial(pal, art = null, track = null) {
       .add(vec3(0.32, 0.38, 0.35).mul(centre.mul(dash).mul(S.centreGain * 0.45).mul(u.contrast)))
       .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze);
   }
+  const boudoir = track?.id === 'boudoir' ? createBoudoirRoadSurface({ track, p, trueEdge: mix(float(8), trueEdge, edgeVisible), distance: dist, view: V, normal: normalWorld }) : null;
+  if (boudoir) {
+    // The finish stays attached to the deck. Music contributes light above the material,
+    // while each district keeps its wood, cloth, stone or porcelain identity.
+    surface = boudoir.colour.mul(u.bright.mul(.4).add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(.25))))
+      .add(vec3(1, .88, .7).mul(music).mul(.16).mul(u.contrast));
+  }
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
   if (track?.id === 'mainframe') m.transparent = false;
   // the edge line sits over everything; the gutter darkens what is inside it, so the line reads against any hue
   // A broad quiet shoulder gives the clear edge a darker neighbour. The music and glitter remain
   // above it; there are no extra stripes or time-driven luminance changes near the kart.
-  const shoulder = smoothstep(0.28, 0.6, trueEdge).mul(float(1).sub(smoothstep(1.15, 1.85, trueEdge)));
+  const shoulder = smoothstep(0.28, 0.6, trueEdge).mul(float(1).sub(smoothstep(1.15, 1.85, trueEdge))).mul(edgeVisible);
   // Solid panes keep their joints and colour when the surrounding ribbon streams or flashes.
   // The steady centre and all separate word/pad markings remain above this restrained surface.
   let tileBody = tiles.colour.mul(tiles.relief).mul(haze).mul(LOOK.roadGain)
@@ -350,19 +363,24 @@ export function createRoadMaterial(pal, art = null, track = null) {
     .add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)).mul(LOOK.roadGain));
   if (track?.id === 'mainframe') tileBody = surface.mul(tiles.relief)
     .add(vec3(0.36, 0.72, 0.56).mul(tiles.glaze).mul(u.sheen).mul(0.5));
+  if (boudoir) tileBody = surface.mul(tiles.relief).add(boudoir.sheen.mul(tiles.glaze).mul(u.sheen));
   // WATER (wave 1): stream and pool vertices (attribute `surface` 3 / 4, `flow` m/s) swap the glass body
   // for the water surface (materials/water.js) BEFORE the tiles and bands, so both keep working on water;
   // the glass sheen and polish thin out over it. The clock u.water.t is the caller's (Gentle halves it).
   const wa = waterAttributes();
-  const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal, u: u.water, skyRamp });
+  const waterPal = boudoir ? createBoudoirWaterPalette(pal) : pal;
+  const waterSky = boudoir ? x => mix(waterPal.col(2), waterPal.col(0), clamp(x, 0, 1)) : skyRamp;
+  const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal: waterPal, u: u.water, skyRamp: waterSky });
   const wet = water.w.mul(u.water.coverage);
-  const glassBody = mix(mix(surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol), water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
+  const dryBody = boudoir ? surface : surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol);
+  const glassBody = mix(mix(dryBody, water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
   const musicBody = beatBands.apply(glassBody);
   const dry = float(1).sub(wet.mul(0.75));
-  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen).mul(dry)).add(polish.mul(dry).mul(track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));
-  const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
+  const finishSheen = boudoir ? boudoir.sheen.mul(u.sheen) : vec3(1, 0.96, 0.98).mul(sheen);
+  const litCol = musicBody.add(finishSheen.mul(dry)).add(polish.mul(dry).mul(boudoir ? .08 : track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));
+  const lineCol = boudoir ? vec3(.92, .78, .57) : mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);
   const submerged = track?.id === 'mainframe' && track.sections.find(s => s.id === 'submerged');
   if (submerged) {
@@ -376,7 +394,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   }
   const ribbonAlpha = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
     .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)).add(gutter.mul(E.gutterAlpha)), 0, 1);
-  const bodyAlpha = mix(ribbonAlpha, water.alpha, wet);
+  const bodyAlpha = mix(boudoir ? float(1) : ribbonAlpha, water.alpha, wet);
   m.opacityNode = max(mix(bodyAlpha, max(tiles.opacity, schlick.mul(0.08).add(tiles.opacity)), tiles.mask), edgeLine);
   if (track?.id === 'mainframe') m.opacityNode = float(1);
   return { material: m, uniforms: u };

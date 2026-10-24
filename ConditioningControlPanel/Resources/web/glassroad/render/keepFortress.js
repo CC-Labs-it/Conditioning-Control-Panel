@@ -1,6 +1,6 @@
 /* Solid fortress construction around the authored course. One instanced draw per finish. */
 import { Group, Mesh, InstancedMesh, BoxGeometry, CylinderGeometry, MeshBasicNodeMaterial, Matrix4, Quaternion, Euler, Vector3, Color } from 'three/webgpu';
-import { materialColor, positionWorld, normalWorld, normalize, dot, clamp, vec3, texture, mix, float, fract, smoothstep, fwidth, uv, min, max, floor, hash, select } from 'three/tsl';
+import { materialColor, positionWorld, normalWorld, normalLocal, modelNormalMatrix, normalize, dot, clamp, vec3, texture, mix, float, fract, smoothstep, fwidth, uv, min, max, floor, hash, select } from 'three/tsl';
 import { LOOK } from './look.js';
 import { prisonPlan } from './keepPrison.js';
 import { waterSpills } from './waterMath.js';
@@ -14,7 +14,13 @@ export function keepStoneMaterial(hex, art, mortar = true, outline = true) {
   if (mortar) {
     const y = positionWorld.y.div(2.4), edge = fract(y), aa = fwidth(y).max(0.008);
     const horizontal = smoothstep(.015, aa.add(.025), edge).mul(smoothstep(.015, aa.add(.025), float(1).sub(edge)));
-    const across = select(N.x.abs().greaterThan(N.z.abs()), positionWorld.z, positionWorld.x).div(4.8);
+    // Decide the projection in world space at the vertex, once for the whole face. A fragment
+    // normal's camera-space round trip can flip this comparison on 45-degree walls, producing
+    // crawling black mortar speckles even with a perfectly filtered texture.
+    const worldNormal = modelNormalMatrix.mul(normalLocal);
+    const brickAxis = select(worldNormal.x.abs().greaterThan(worldNormal.z.abs()), float(1), float(0))
+      .toVarying('keepBrickAxis').setInterpolation('flat');
+    const across = mix(positionWorld.x, positionWorld.z, brickAxis).div(4.8);
     const staggered = across.add(fract(floor(y).mul(.5))), brick = fract(staggered), bx = fwidth(staggered).max(.006);
     const vertical = smoothstep(.008, bx.add(.018), brick).mul(smoothstep(.008, bx.add(.018), float(1).sub(brick)));
     const joint = horizontal.mul(vertical);
@@ -36,6 +42,10 @@ export function buildKeepFortress(track, layout, art) {
   const group = new Group(); group.name = 'keep-solid-fortress';
   const owned = [], batches = { deck: [], stone: [], dark: [], cap: [], iron: [], roof: [], glow: [] };
   const box = new BoxGeometry(1, 1, 1), cylinder = new CylinderGeometry(1, 1, 1, 8);
+  // The prison drums have eight masonry faces. Give each face one normal and projection,
+  // including its two triangles, instead of interpolating round-tower normals across corners.
+  const facetedCylinder = cylinder.toNonIndexed();
+  cylinder.copy(facetedCylinder); cylinder.computeVertexNormals(); facetedCylinder.dispose();
   owned.push(box, cylinder);
   const M = new Matrix4(), B = new Matrix4(), Q = new Quaternion(), P = new Vector3(), S = new Vector3();
   const X = new Vector3(), Y = new Vector3(), Z = new Vector3();

@@ -11,6 +11,7 @@ import { buildDriveline, buildChecklines } from './driveline.js';
 import { buildMeshes } from './mesh.js';
 import { buildCourts, buildFields } from './courts.js';
 import { canalProfile, canalNormal } from './canal.js';
+import { installForks } from './forks.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
 export function loadTrack(json, { validate = true } = {}) {
@@ -104,6 +105,7 @@ export function loadTrack(json, { validate = true } = {}) {
     checklines: null,
   };
   track.checklines = buildChecklines(track, json.checkpoints);
+  installForks(track, json.forks);
   let dl = null, meshes = null;
   Object.defineProperty(track, 'driveline', { enumerable: true, get: () => (dl ||= buildDriveline(track, sp)) });
   Object.defineProperty(track, 'meshes', { enumerable: true, get: () => (meshes ||= buildMeshes(track, track.driveline)) });

@@ -124,7 +124,7 @@ const PINK = '#ff5fa8', GOLD = '#ffd36b';
 /** @param {HTMLCanvasElement} canvas */
 export function createMinimap(canvas, { doc = globalThis.document } = {}) {
   const ctx = canvas.getContext && canvas.getContext('2d');
-  let loop = null, ys = null, fit = null, layer = null, bands = null, w = 0, h = 0, dpr = 1, at = -1;
+  let loop = null, ys = null, forks = [], forkLayer = null, fit = null, layer = null, bands = null, w = 0, h = 0, dpr = 1, at = -1;
   const p = [0, 0];
 
   function size() {
@@ -136,9 +136,9 @@ export function createMinimap(canvas, { doc = globalThis.document } = {}) {
     bake();
   }
   function bake() {
-    layer = null; bands = null;
+    layer = null; bands = null; forkLayer = null;
     if (!loop || !ctx) return;
-    fit = fitMap(loop, w, h, 7);
+    fit = fitMap(forks.length ? [...loop, ...forks.flatMap(f => Array.from(f.xz))] : loop, w, h, 7);
     const pts = mapPoints(fit, loop), n = pts.length / 2;
     const sheet = () => {
       const c = doc.createElement('canvas');
@@ -151,6 +151,17 @@ export function createMinimap(canvas, { doc = globalThis.document } = {}) {
       path(); g.strokeStyle = SHADOW; g.lineWidth = 6; g.stroke();
       path(); g.strokeStyle = INK; g.lineWidth = 2.5; g.stroke();
     };
+    if (forks.length) {
+      const [c, g] = sheet();
+      for (const fork of forks) {
+        const fp = mapPoints(fit, fork.xz);
+        g.beginPath(); g.moveTo(fp[0], fp[1]);
+        for (let i = 2; i < fp.length; i += 2) g.lineTo(fp[i], fp[i + 1]);
+        g.strokeStyle = SHADOW; g.lineWidth = 5; g.stroke();
+        g.strokeStyle = '#91efd4'; g.lineWidth = 1.7; g.stroke();
+      }
+      forkLayer = c;
+    }
     const levels = ys ? new Set(Array.from(ys, (v) => bandOf(v))) : null;
     if (!levels || levels.size < 2) {
       const [c, g] = sheet();
@@ -178,9 +189,10 @@ export function createMinimap(canvas, { doc = globalThis.document } = {}) {
   }
   return {
     /** xz: the centreline as x, z pairs; y (optional): its height per point, which turns on the deck layers. */
-    setTrack({ xz, y } = {}) {
+    setTrack({ xz, y, forks: paths = [] } = {}) {
       if (xz && xz.length >= 6 && y && y.length * 2 >= xz.length) { const t = thinLoopY(xz, y); loop = t.xz; ys = t.y; }
       else { loop = xz && xz.length >= 6 ? thinLoop(xz) : null; ys = null; }
+      forks = paths.filter(f => f.xz?.length >= 4);
       at = -1; w = 0; size();
     },
     /** @param {Float32Array} map x, z per racer (racer 0 = you) @param {number} leader racer index in 1st */
@@ -204,6 +216,7 @@ export function createMinimap(canvas, { doc = globalThis.document } = {}) {
         const own = bands.find((b) => b.band === mine);
         if (own) ctx.drawImage(own.sheet, 0, 0);
       }
+      if (forkLayer) ctx.drawImage(forkLayer, 0, 0);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (!map) return;
       for (let i = map.length - 2; i >= 0; i -= 2) {   // you last, on top

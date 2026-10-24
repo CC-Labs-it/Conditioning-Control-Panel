@@ -44,16 +44,18 @@ const pitchOf = (t) => Math.asin(Math.max(-1, Math.min(1, t[1])));
  * A lip within distM ahead of s: a jump lip, a pad under `lateral`, or a crest (the road pitches down by
  * trick.crestDeg or more between here and just past distM). @returns {{at: string, d: number}|null}
  */
-export function lipAhead(track, s, lateral, distM, feel) {
+export function lipAhead(track, s, lateral, distM, feel, seg = -1) {
   if (!track || !(distM > 0)) return null;
   const L = track.lengthM;
-  for (const j of track.jumps || []) { const d = wrap(j.s - s, L); if (d <= distM) return { at: 'lip', d }; }
-  for (const p of track.boosts || []) {
+  const fork = track.forkAtSeg?.(seg);
+  for (const j of fork ? [] : track.jumps || []) { const d = wrap(j.s - s, L); if (d <= distM) return { at: 'lip', d }; }
+  for (const p of fork ? [] : track.boosts || []) {
     const d = wrap(p.s - s, L);
     if (d <= distM && Math.abs(lateral - p.x) <= p.w / 2) return { at: 'pad', d };
   }
   if (typeof track.frameAt === 'function') {
-    const fa = track.frameAt(s, FA), fb = track.frameAt(s + distM + 2, FB);
+    const fa = fork ? fork.frameAt(fork.localS(s), FA) : track.frameAt(s, FA);
+    const fb = fork ? fork.frameAt(fork.localS(s) + distM + 2, FB) : track.frameAt(s + distM + 2, FB);
     const loop = (fa.flags && fa.flags.indexOf('magnet') >= 0) || (fb.flags && fb.flags.indexOf('magnet') >= 0);   // a loop's far side is no crest
     const a = pitchOf(fa.t), b = pitchOf(fb.t);
     if (!loop && (a - b) * 180 / Math.PI >= feel.get('trick.crestDeg')) return { at: 'crest', d: distM };
@@ -88,7 +90,7 @@ export function trickOnHop(st, feel, events, speed, track) {
   }
   if (!track) return;
   const v = Math.max(1, Math.abs(speed));
-  const hit = lipAhead(track, st[S.s], st[S.lateral], v * feel.get('trick.earlyS'), feel);
+  const hit = lipAhead(track, st[S.s], st[S.lateral], v * feel.get('trick.earlyS'), feel, st[S.seg]);
   if (hit) arm(st, r, gradeOf(hit.d / v, feel), hit.at, events);
 }
 

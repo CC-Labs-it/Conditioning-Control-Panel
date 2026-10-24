@@ -72,6 +72,9 @@ import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
+import { getBoudoirLayout } from './track/boudoir-layout.js';
+import { createBoudoirPerfume } from './sim/boudoirPerfume.js';
+import { createBoudoirHazards } from './sim/boudoirHazards.js';
 import { createKeepHazards } from './sim/keepHazards.js';
 
 const qs = new URLSearchParams(location.search);
@@ -169,7 +172,12 @@ function centreline(track, stepM = 4) {
   const n = Math.max(8, Math.floor(track.lengthM / stepM)), xz = new Float32Array(n * 2), y = new Float32Array(n);
   const f = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
   for (let i = 0; i < n; i++) { track.frameAt(i * track.lengthM / n, f); xz[i * 2] = f.p[0]; xz[i * 2 + 1] = f.p[2]; y[i] = f.p[1]; }
-  return { xz, y };
+  const forks = (track.forks || []).map(fork => {
+    const frames = fork.samples(4), xz = new Float32Array(frames.length * 2), y = new Float32Array(frames.length);
+    frames.forEach((f, i) => { xz[i * 2] = f.p[0]; xz[i * 2 + 1] = f.p[2]; y[i] = f.p[1]; });
+    return { xz, y };
+  });
+  return { xz, y, forks };
 }
 
 async function boot() {
@@ -196,7 +204,8 @@ async function boot() {
   const track = loadTrack(trackJson);
   debug.trackId = track.id;
   const keepLayout = getKeepLayout(track);
-  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : null;
+  const boudoirLayout = getBoudoirLayout(track);
+  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : boudoirLayout ? createBoudoirHazards(track, boudoirLayout) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -208,7 +217,7 @@ async function boot() {
   const audio = createAudio(feel, bus, { gentle });
   const immersion = createImmersion(track);
   if (BOT) Object.defineProperty(debug, 'underwaterAudio', { get: () => audio.underwater });
-  for (const name of ['keep-gate-hit', 'keep-chain-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
+  for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
   bus.on('effect-start', ({ kind }) => { if (!debug.effects.includes(kind)) debug.effects.push(kind); debug.effectNow = kind; });
@@ -273,7 +282,8 @@ async function boot() {
   if (BOT) Object.defineProperty(debug, 'world', { value: world, enumerable: false });
   debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
   debug.trackId = track.id;
-  if (hazards) Object.defineProperty(debug, 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
+  if (boudoirLayout) Object.defineProperty(debug, 'perfume', { get: () => perfume.inspect(), enumerable: true });
+  if (hazards) Object.defineProperty(debug, boudoirLayout ? 'boudoirHazards' : 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
   debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   debug.terrace = world.terrace ? { count: world.terrace.count, ...world.terrace.diagnostics } : null;
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
@@ -282,7 +292,7 @@ async function boot() {
   const assist = createAssist(track, feel);       // the player's Steer assist (Options), never the bots'
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
-  let race, racers, ai, contact, standings, items, scan, industry, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
+  let race, racers, ai, contact, standings, items, scan, industry, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
   let runAssist = false;                          // the Options assist switch (applyOptions), carried into every rebuilt run
   function buildRun(s = null) {
     const q = s ? s.tap(queue) : queue, sd = s ? s.seed : seed;
@@ -291,7 +301,7 @@ async function boot() {
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
     if (hazards) {
       const drive = ai.drive;
-      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing') hazards.steer(r, out); };
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing' && !track.forkAtSeg?.(r.st[S.seg])) hazards.steer(r, out); };
       hazards.reset();
     }
     contact = createContact(track, feel, q);
@@ -301,6 +311,7 @@ async function boot() {
       const drive = ai.drive;
       ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing' || ctx.race.phase === 'finished') industry.steer(r, out); };
     }
+    perfume = createBoudoirPerfume(track, q);
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
@@ -385,6 +396,7 @@ async function boot() {
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     scan.reset();
     industry.reset();
+    perfume.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
     if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
@@ -667,8 +679,41 @@ async function boot() {
   // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
   hud.setLoading('Preparing shaders', 0.55);
   await paintGap();
-  const warm = await renderer.compile(world.scene, cam.camera, undefined,
-    { onProgress: (k, n) => hud.setLoading('Preparing shaders ' + k + '/' + n, 0.55 + 0.4 * k / n) });
+  // Native mirrors skip capture from behind their planes. Warm from inside the hall
+  // so its reflection pipelines compile behind the loading card, before the first lap.
+  const warmPose = world.mirrorRoom ? cam.camera.clone() : null;
+  const warmView = (views) => ({ kart: views[0].st, karts: views, fx: fx.state, timeS: 0, beat: clock.beat,
+    raceTimeS: 0, sectionIdx: views[0].st[S.sectionIdx], items: items.view(), mode: 'menu', camera: cam.camera, paused: false,
+    scanTimeS: 0, scanReady: scan.ready, perfumeReady: perfume.ready });
+  let warm;
+  try {
+    if (warmPose) {
+      const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
+      peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
+    }
+    warm = await renderer.compile(world.scene, cam.camera, undefined,
+      { onProgress: (k, n) => hud.setLoading('Preparing shaders ' + k + '/' + n, 0.55 + 0.4 * k / n) });
+    if (warmPose) {
+      hud.setLoading('Preparing mirrors', .96);
+      await paintGap();
+      const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
+      // Temporary view copies put all racers in the capture without changing race state.
+      const warmKarts = kartViews.map((r, i) => {
+        const st = r.st.slice(), s = hall.s0 + 82 + i * 1.6, f = track.frameAt(s);
+        f.p.forEach((value, j) => { st[S.posX + j] = value + f.b[j] * ((i % 3) - 1) * 4; });
+        st[S.s] = s;
+        return { ...r, st };
+      });
+      world.update(warmView(warmKarts));
+      await world.mirrorRoom.warmCapture(renderer, world.scene, cam.camera);
+    }
+  } finally {
+    if (warmPose) {
+      cam.camera.position.copy(warmPose.position); cam.camera.quaternion.copy(warmPose.quaternion); cam.camera.up.copy(warmPose.up);
+      cam.camera.updateMatrixWorld(true);
+      world.update(warmView(kartViews));
+    }
+  }
   debug.warm = warm;
   if (world.waterVolume.warmReflections) {
     hud.setLoading('Preparing water reflections', 0.96);
@@ -759,6 +804,7 @@ async function boot() {
         const sc = scanClock(audio.music, racers.clockS);
         scan.update(racers.list, sc.timeS, sc.bpm);
         industry.update(racers.list, racers.clockS, clock.dt);
+        perfume.update(racers.list, sc.timeS, clock.dt);
       }
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result
@@ -812,8 +858,8 @@ async function boot() {
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
-    if (track.id === 'keep' && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
-      const bridge = keepLayout.drawbridge;
+    if ((keepLayout || boudoirLayout) && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
+      const bridge = boudoirLayout?.mirrorJump || keepLayout.drawbridge;
       if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
         glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
       }
@@ -821,7 +867,7 @@ async function boot() {
     if (BOT) debug.gliding = !!kartViews[0]?.glide;
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
       raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive,
-      scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready });
+      scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
       debug.song = { t: Math.round(songS * 100) / 100, section: m.sectionId, calm: +m.calm.toFixed(2), helix: +m.helix.toFixed(2),

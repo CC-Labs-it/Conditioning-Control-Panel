@@ -62,7 +62,15 @@ test('Keep is solid architecture with instanced decks, walls, halls and a tower,
   assert.ok(fortress.plan.drums.length >= 9, 'jail tower and separate guard turrets');
   assert.ok(fortress.plan.boxes.some((p) => p.name === 'cell-bars'));
   assert.ok(fortress.plan.boxes.some((p) => p.name === 'collapsed-wall'));
-  assert.ok(fortress.group.getObjectByName('keep-tower-volume'));
+  const tower = fortress.group.getObjectByName('keep-tower-volume');
+  assert.ok(tower);
+  // A flat mortar-axis varying must receive the same normal from both tower-face triangles.
+  const normals = tower.geometry.getAttribute('normal');
+  assert.equal(tower.geometry.index, null);
+  assert.deepEqual(Object.keys(tower.geometry.attributes).sort(), ['normal', 'position', 'uv']);
+  for (let i = 0; i < 8 * 6; i += 6) for (let j = 1; j < 6; j++) for (let axis = 0; axis < 3; axis++)
+    assert.ok(Math.abs(normals.array[(i + j) * 3 + axis] - normals.array[i * 3 + axis]) < 1e-6,
+      `tower face ${i / 6} has one stable mortar projection`);
   assert.equal(fortress.plan.mounts.length, 70);
   assert.equal(fortress.plan.interiors.length, 2);
   for (const name of ['barrel-vault', 'winding-stair-ledge', 'iron-lock-body', 'forged-chain-link', 'hanging-cage-bars', 'climbing-vine-leaf', 'masonry-crack', 'chipped-masonry'])

@@ -25,6 +25,7 @@ export function resetRoute(st) { const m = MEM.get(st); if (m) { m.air = -1; m.h
 
 /** The route whose open edge the kart took off from (latchSeg), or null. */
 export function routeOf(track, st) {
+  if (track.forkAtSeg?.(st[S.latchSeg])) return null;
   const rs = track.routes;
   if (!rs || !rs.length) return null;
   const n = track.nodeCount, latch = ((st[S.latchSeg] | 0) % n + n) % n;

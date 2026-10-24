@@ -23,7 +23,7 @@ import {
 } from 'three/webgpu';
 import {
   texture, uv, vec2, vec3, float, uniform, instancedBufferAttribute, attribute, cos, sin, hue, mix, smoothstep,
-  max, abs, fract, pow,
+  max, abs, fract, pow, fwidth,
 } from 'three/tsl';
 import { Q } from './quality.js';
 import {
@@ -56,6 +56,15 @@ const TAU = Math.PI * 2;
 const M4 = new Matrix4(), VX = new Vector3(), VY = new Vector3(), VZ = new Vector3(), VP = new Vector3(), EYE = new Vector3();
 const SX = new Vector3(), SY = new Vector3();
 const ZERO = new Matrix4().makeScale(0, 0, 0);
+
+// At 900 m a depth pixel spans more than the screen's physical layer gaps.
+// Bias only these facing overlays; normal depth testing still hides them behind scenery.
+function mediaDepthLayer(material, layer = 1) {
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -layer;
+  material.polygonOffsetUnits = -layer * 2;
+  return material;
+}
 
 /** Shared videos get gesture retries and one recovery attempt for a stalled native loop. */
 export function createMediaPlayback({ target = globalThis.document, now = () => performance.now() / 1000 } = {}) {
@@ -258,7 +267,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   const backMat = new MeshBasicNodeMaterial({ side: BackSide });
   backMat.colorNode = vec3(...new Color(M.backColour).toArray());
   const backs = new InstancedMesh(plane, backMat, Math.max(1, N));
-  const stripMat = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: FrontSide });
+  const stripMat = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: FrontSide }), 2);
   stripMat.colorNode = vec3(...new Color(M.stripColour).toArray());
   stripMat.opacityNode = float(M.stripAlpha);
   const strips = new InstancedMesh(plane, stripMat, Math.max(1, N));
@@ -380,7 +389,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       const cv = opts.make ? opts.make(256, 40) : Object.assign(document.createElement('canvas'), { width: 256, height: 40 });
       const ct = new CanvasTexture(cv); ct.colorSpace = SRGBColorSpace;
       o.creditCanvas = cv; o.creditTex = ct;
-      const cm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+      const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }), 3);
       const sample = texture(ct); cm.colorNode = sample.rgb; cm.opacityNode = sample.a;
       o.credit = new Mesh(plane, cm); o.credit.name = 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-credit-' + sl.id;
       o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = false; o.credit.renderOrder = 4; o.credit.visible = false;
@@ -495,7 +504,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillText(text, 10, 21);
       o.creditTex.needsUpdate = true;
     } else if (text) {
-      const cm = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+      const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }), 3);
       const ct = texture(creditTexture(text));
       cm.colorNode = ct.rgb; cm.opacityNode = ct.a;
       o.credit = new Mesh(plane, cm); o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = false; o.credit.renderOrder = 4;
@@ -688,7 +697,7 @@ export function createMediaSlots(scene, track, opts = {}) {
 
 /** The placeholder screen: per-instance crop and hue, the program's turn or warp, a slow breathing zoom, Gentle contrast. */
 function screenMaterial(tex, crop, info, spin, warp, U, M) {
-  const m = new MeshBasicNodeMaterial({ side: FrontSide });
+  const m = mediaDepthLayer(new MeshBasicNodeMaterial({ side: FrontSide }));
   const ang = spin.mul(U.time).mul(info.y);
   const breathe = float(1).sub(sin(U.time.mul(TAU * M.breatheHz).add(info.z.mul(TAU))).mul(0.5).add(0.5).mul(M.breatheAmp));
   const off = uv().sub(0.5).mul(crop.zw).mul(breathe);
@@ -706,7 +715,7 @@ function screenMaterial(tex, crop, info, spin, warp, U, M) {
 
 /** A real source on one slot: the cover crop from its aspect, same contrast and gain as the placeholders. */
 function ownMaterial(tex, crop, U, M) {
-  const m = new MeshBasicNodeMaterial({ side: FrontSide });
+  const m = mediaDepthLayer(new MeshBasicNodeMaterial({ side: FrontSide }));
   const tuv = vec2(crop.cx, crop.cy).add(uv().sub(0.5).mul(vec2(crop.sx, crop.sy)));
   m.colorNode = mix(vec3(0.42, 0.36, 0.48), tex.sample(tuv).rgb, U.contrast).mul(M.screenGain);
   return m;
@@ -719,7 +728,10 @@ function borderMaterial(size, col, U, M) {
   const p = uv().sub(0.5).mul(full);
   const d = max(abs(p.x).sub(size.x.mul(0.5)), abs(p.y).sub(size.y.mul(0.5)));
   const outside = smoothstep(B, 0, d).pow(2.2), rim = smoothstep(-0.35, 0, d).mul(smoothstep(0.25, 0, d));
-  const glow = max(outside.mul(0.85), rim);
+  // The border used to fill the whole picture and rely on a 6 cm depth gap to hide it.
+  // Cut out that interior in the shader and filter the edge over its pixel footprint.
+  const pixel = max(fwidth(d), float(.002));
+  const glow = max(outside.mul(0.85), rim).mul(smoothstep(pixel.negate(), pixel, d));
   m.colorNode = hue(col.xyz, col.w.add(U.time.mul(M.borderHueRadps))).mul(glow).mul(U.border);
   return m;
 }

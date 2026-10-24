@@ -32,9 +32,10 @@ import {
   iconFps, iconLive,
 } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
-import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, cardEdge, blobShadow, confettiCloud } from './materials.js';
+import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shieldCloud, cardEdge, blobShadow, confettiCloud } from './materials.js';
 import { createItemStatus } from './status.js';
 import { advanceRibbon, flightSpark } from './flight.js';
+import { selectShieldShells, shieldLook } from './shieldMath.js';
 
 const UP = new Vector3(0, 1, 0), V = new Vector3(), W = new Vector3(), N = new Vector3(), QT = new Quaternion(), QS = new Quaternion();
 const OFF = [0, 0, 0];
@@ -99,6 +100,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   const shellGeo = shellGeometry(art && art.model ? art.model(L.shellModel) : null, fit);
   const shells = shellGeo ? shellCloud(shellGeo, top.bubbles) : null;
   if (shells) root.add(shells.mesh);
+  const shields = shieldCloud(), shieldRows = [], shieldState = {}, underlayState = {}; root.add(shields.mesh);
   const cardModel = art && art.model ? art.model(L.boxCard) : null;
   const edge = cardModel ? cardEdge(L.cardEdgeColour) : null;
 
@@ -201,9 +203,9 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     const p = cam.position;
     return nearCapR(R, Math.hypot(x - p.x, y - p.y, z - p.z), cam.fov, nearFrac);
   }
-  /** free: skip the near cap (shields wrap a kart and must stay round it). */
-  function bubble(x, y, z, id, R, alpha = 1, mode = MODE.icon, seed = 0, moteN = -1, free = false, nearFrac = L.nearMaxFrac) {
-    if (!free) R = capR(x, y, z, R, nearFrac);
+  /** Item sprites obey the near cap; the real shield mesh has no camera-facing sprite. */
+  function bubble(x, y, z, id, R, alpha = 1, mode = MODE.icon, seed = 0, moteN = -1, nearFrac = L.nearMaxFrac) {
+    R = capR(x, y, z, R, nearFrac);
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     const cell = mode >= MODE.shell ? -1 : cellOf(id);
     if (cell >= 0) icons.use(id, iconSeen(x, y, z, R));
@@ -215,7 +217,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   }
   /** A 3D effect bubble (held, thrown, trap, box turn): the GLB shell round a bare living icon; the sprite bubble without it. */
   function bubble3d(x, y, z, id, R, alpha = 1, seed = 0, moteN = -1, nearFrac = L.nearMaxFrac) {
-    if (!shells) { bubble(x, y, z, id, R, alpha, MODE.icon, seed, moteN, false, nearFrac); return; }
+    if (!shells) { bubble(x, y, z, id, R, alpha, MODE.icon, seed, moteN, nearFrac); return; }
     R = capR(x, y, z, R, nearFrac);
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
     if (!shells.push(x, y, z, R, alpha, seed)) return;
@@ -240,7 +242,8 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
     if (edge) edge.uniforms.glow.value = cardEdgeGlow(timeS, soft);
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
-    const endAll = () => { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); if (shells) shells.end(); };
+    shields.begin();
+    const endAll = () => { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); shields.end(); if (shells) shells.end(); };
     if (!view) {
       trails.clear(); launches.clear(); glows.clear();
       for (const box of boxes) box.visible = false;
@@ -409,18 +412,24 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       e.mesh.visible = true; e.u.opacity.value = L.waveAlpha * (1 - q);
     }
 
-    // shields: glass shell, golden shell plus a slow gold shimmer, Echo copies beside the kart
+    // One real shell stays around the kart, even when Glass and Golden timers overlap.
+    for (const sh of selectShieldShells(view.shields, shieldRows)) {
+      const k = karts[sh.racer]; if (!k) continue;
+      kartPos(k); kartQuat(k); W.set(0, 1, 0).applyQuaternion(QT);
+      const glass = sh.kind === 'golden' ? view.shields.find(row => row.racer === sh.racer && row.kind === 'glass') : null;
+      const underlay = glass ? shieldLook(glass, feel.get('items.glassMaxS'), sh.racer === 0, soft, underlayState) : null;
+      const state = shieldLook(sh, feel.get(sh.kind === 'golden' ? 'items.goldenS' : 'items.glassMaxS'), sh.racer === 0, soft, shieldState, underlay);
+      const cx = V.x + W.x * L.shieldUpM, cy = V.y + W.y * L.shieldUpM, cz = V.z + W.z * L.shieldUpM;
+      shields.push(cx, cy, cz, QT, state.radius, state.alpha, state.gold, state.warning);
+      if (sh.kind === 'golden') addMotes(cx, cy, cz, state.radius * .8, 'golden', Math.round(L.goldMotes * moteK), sh.racer * 11, state.alpha);
+    }
+    // Echo copies retain their independent timing and presentation.
     for (const sh of view.shields || []) {
+      if (sh.kind === 'glass' || sh.kind === 'golden') continue;
       const k = karts[sh.racer];
       if (!k) continue;
-      kartPos(k); kartQuat(k); W.set(0, 1, 0).applyQuaternion(QT);
-      const cx = V.x + W.x * L.shieldUpM, cy = V.y + W.y * L.shieldUpM, cz = V.z + W.z * L.shieldUpM;
+      kartQuat(k);
       const fade = Math.min(1, (sh.k === undefined ? 1 : sh.k) * 4);
-      if (sh.kind === 'glass' || sh.kind === 'golden') {
-        bubble(cx, cy, cz, sh.kind, L.shieldR, fade, sh.kind === 'golden' ? MODE.goldShell : MODE.shell, sh.racer, 0, true);
-        if (sh.kind === 'golden') addMotes(cx, cy, cz, L.shieldR * 0.8, 'golden', Math.round(L.goldMotes * tierOf(Q.name).motes / top.motes), sh.racer * 11, fade);
-        continue;
-      }
       const n = Math.min(sh.copies === undefined ? 3 : sh.copies, tierOf(Q.name).copies);
       for (let j = 0; j < n; j++) {
         const e = copies.take();
@@ -496,7 +505,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     update,
     dispose() {
       scene.remove(root);
-      status.dispose(); icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose();
+      status.dispose(); icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose(); shields.dispose();
       if (shells) shells.dispose();
       if (edge) edge.material.dispose();
       puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());

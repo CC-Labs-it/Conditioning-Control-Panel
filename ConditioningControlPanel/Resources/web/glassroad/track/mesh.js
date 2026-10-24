@@ -138,6 +138,7 @@ export function buildMeshes(track, dl) {
   const rails = builder();
   const railed = (q, side) => {
     if (dl.gap[q]) return false;
+    if (track.mainRailOpen?.((dl.s[q] + dl.s[q + 1]) / 2, side)) return false;
     const fl = track.nodeFlags(dl.seg[q]);
     if (fl.includes('rail') || fl.includes(side > 0 ? 'railR' : 'railL')) return true;
     // a drop shortcut's open side keeps its rail everywhere but the opening (polish 4)
@@ -249,7 +250,7 @@ function buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField =
   const E = EDGE_MESH, Q = dl.quads, L = track.lengthM;
   const strip = builder(), haze = builder(), caps = builder();
   for (const side of [-1, 1]) {
-    for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q] && !railed(q, side) && !inField(q))) {
+    for (const [q0, nq, closed] of runs(Q, (q) => !dl.gap[q] && !railed(q, side) && !inField(q) && !track.mainRailOpen?.((dl.s[q] + dl.s[q + 1]) / 2, side))) {
       const sr = [], hr = [];
       for (let k = 0; k <= nq; k++) {
         const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);

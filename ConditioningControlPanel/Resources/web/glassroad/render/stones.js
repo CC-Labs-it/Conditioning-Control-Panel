@@ -3,8 +3,8 @@
  * the static physics surface. Landing motion only changes render transforms, respects pause and
  * Gentle, and returns every platform to its starting pose on restart.
  */
-import { Group, InstancedMesh, BoxGeometry, BufferGeometry, Float32BufferAttribute, LineSegments, LineBasicMaterial, MeshBasicNodeMaterial, Matrix4, Vector3, Quaternion, Color } from 'three/webgpu';
-import { vec2, vec3, positionGeometry, normalize, normalWorld, dot, clamp, mix } from 'three/tsl';
+import { Group, Mesh, InstancedMesh, BoxGeometry, BufferGeometry, Float32BufferAttribute, LineSegments, LineBasicMaterial, MeshBasicNodeMaterial, Matrix4, Vector3, Quaternion, Color } from 'three/webgpu';
+import { vec2, vec3, attribute, positionGeometry, normalize, normalWorld, dot, clamp, mix } from 'three/tsl';
 import { LOOK } from './look.js';
 import { STONE_HEX } from '../track/courts.js';
 import { createStoneHover } from './stoneHover.js';
@@ -20,7 +20,7 @@ export function stoneLayout(track, deckM = STONE_KIT.deckM) {
   const tileM = STONE_KIT.slab[2];
   for (const field of track?.fields || []) {
     for (const st of field.stones || []) {
-      const broad = track.id === 'keep' && st.w > 8;
+      const broad = (track.id === 'keep' || track.id === 'boudoir') && st.w > 8;
       const hex = st.shape === 'hex', tiles = (hex || broad) ? 1 : Math.max(1, Math.round(st.len / tileM)), len = st.len / tiles;
       for (let k = 0; k < tiles; k++) {
         const s = st.s + len * (k + 0.5), f = track.frameAt(s);
@@ -88,13 +88,37 @@ function keepEdgeGeometry() {
   geometry.computeBoundingSphere(); return geometry;
 }
 
+// The compact is round, while the authored landing surface is rectangular. Its gilded tray
+// covers every supported corner; only the underside bevel narrows. The inset sits 4cm below
+// the mirror, avoiding coplanar faces while keeping the driving surface visually continuous.
+function compactTrayGeometry() {
+  const points = [], colours = [], gold = new Color('#cda15f'), blush = new Color('#b87796'), shadow = new Color('#765044');
+  const ring = (half, height) => [[-half, height, -half], [-half, height, half], [half, height, half], [half, height, -half]];
+  const quad = (a, b, c, d, colour) => {
+    for (const p of [a, b, c, a, c, d]) { points.push(...p); colours.push(colour.r, colour.g, colour.b); }
+  };
+  const top = ring(2.5, STONE_KIT.deckM), inset = ring(2.36, STONE_KIT.deckM - .04), shoulder = ring(2.5, .34), base = ring(2.42, .04);
+  quad(...inset, blush);
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    quad(top[i], top[j], inset[j], inset[i], gold);
+    quad(top[i], shoulder[i], shoulder[j], top[j], gold);
+    quad(shoulder[i], base[i], base[j], shoulder[j], shadow);
+  }
+  quad(base[3], base[2], base[1], base[0], shadow);
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(points, 3));
+  geometry.setAttribute('color', new Float32BufferAttribute(colours, 3));
+  geometry.computeVertexNormals(); geometry.computeBoundingBox(); geometry.computeBoundingSphere(); return geometry;
+}
+
 export function buildStones(track, art, pal) {
   const group = new Group(); group.name = 'stepping-stones';
   const rows = stoneLayout(track), hexes = rows.filter((r) => r.shape === 'hex'), tiled = rows.filter((r) => r.shape !== 'hex'), owned = [], geometries = [], moving = [];
   const basis = new Matrix4(), rotation = new Quaternion();
   const hexMeshes = [], spin = new Quaternion(), up = new Vector3(0,1,0), hexAges = hexes.map(()=>Infinity), lightColor = new Color();
   const x = new Vector3(), y = new Vector3(), z = new Vector3();
-  const model = tiled.length && art && typeof art.model === 'function' ? art.model(track.id === 'mainframe' ? 'stone-mainframe' : track.id === 'keep' ? 'stone-keep' : STONE_KIT.modelId) : null;
+  const model = tiled.length && art && typeof art.model === 'function' ? art.model(track.id === 'mainframe' ? 'stone-mainframe' : track.id === 'keep' ? 'stone-keep' : track.id === 'boudoir' ? 'stone-boudoir' : STONE_KIT.modelId) : null;
   let mode = 'none';
   if (tiled.length && model && model.scene) {
     mode = 'model';
@@ -117,6 +141,13 @@ export function buildStones(track, art, pal) {
     }
     const lip = lipSrc ? lipSrc.clone() : null;
     if (lip) { lip.name = 'stone-lip'; if (lip.color) lip.color.set(track.id === 'mainframe' ? '#76dfae' : STONE_KIT.brass); owned.push(lip); }
+    let compactTray = null, compactPaint = null;
+    if (track.id === 'boudoir') {
+      compactTray = compactTrayGeometry(); geometries.push(compactTray);
+      compactPaint = new MeshBasicNodeMaterial(); compactPaint.name = 'boudoir-compact-tray';
+      const shade = clamp(dot(normalize(normalWorld), normalize(vec3(...LOOK.lightDir))).mul(.38).add(.62), .24, 1);
+      compactPaint.colorNode = attribute('color', 'vec3').mul(shade); owned.push(compactPaint);
+    }
     for (const [index, r] of tiled.entries()) {
       const holder = new Group(), body = model.scene.clone(true);
       holder.name = 'stone:' + r.id;
@@ -133,6 +164,10 @@ export function buildStones(track, art, pal) {
         else if (lip && o.material && o.material.name === 'lip') o.material = lip;
       });
       holder.add(body);
+      if (compactTray && r.broad) {
+        const tray = new Mesh(compactTray, compactPaint); tray.name = 'boudoir-compact-tray'; tray.castShadow = true;
+        holder.add(tray);
+      }
       if (outlineGeometry) {
         const outline = new LineSegments(outlineGeometry, outlineMaterial); outline.name = 'keep-platform-outline';
         holder.add(outline);
