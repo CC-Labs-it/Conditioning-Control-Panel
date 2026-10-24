@@ -1,6 +1,8 @@
 /* Rigid child mechanisms cut from shared skinned vehicle geometry. No bones or clips are added. */
 import { BufferGeometry, BufferAttribute, Matrix4, Matrix3, Vector3, Group, Mesh } from 'three/webgpu';
 import { motionState, stepMechanism, partitionLifeTriangles } from './vehicleLifeMath.js';
+import {createFeedbackMeter} from './feedbackMeter.js';
+import {createVehicleAccents} from './vehicleAccents.js';
 
 const cutCache = new WeakMap(), EMPTY = Object.freeze({});
 const component = (a, i, k) => k === 0 ? a.getX(i) : k === 1 ? a.getY(i) : k === 2 ? a.getZ(i) : a.getW(i);
@@ -72,7 +74,7 @@ function movingGeometry(mesh, vertices, inverse, pivot) {
  * meshes: the vehicle's rebound SkinnedMeshes. definition: {groups:[id,pivot,axis,mode,...]}.
  * update consumes normalized race signals; disposal restores each original geometry exactly.
  */
-export function createVehicleLife(meshes, definition, { seed = 0 } = {}) {
+export function createVehicleLife(meshes, definition, { seed = 0, art = null } = {}) {
   const metrics = { groups: 0, draws: 0, movingTriangles: 0, rejected: false };
   const noop = { update() {}, dispose() {}, metrics };
   const definitions = Array.isArray(definition) ? definition : definition?.groups;
@@ -136,6 +138,12 @@ export function createVehicleLife(meshes, definition, { seed = 0 } = {}) {
   }
   metrics.groups = controls.size; metrics.draws = draws;
   const controlList = [...controls.values()];
+  const vehicleId=definition.vehicleId||meshes[0]?.name?.replace(/^emi[-_]vehicle[-_]/,'').replaceAll('_','-');
+  const meter=vehicleId==='feedback'?createFeedbackMeter(meshes):null;
+  const accents=createVehicleAccents(meshes,vehicleId,{art});
+  metrics.accentDraws=accents?.metrics.draws||0;metrics.accentTriangles=accents?.metrics.triangles||0;
+  metrics.accentMount=accents?.metrics.mount||null;
+  metrics.draws+=metrics.accentDraws;metrics.meterBars=meter?Array.from(meter.census).filter(n=>n>0).length:0;
   let disposed = false;
   const result = { metrics, update(dt, signals = EMPTY) {
     if (disposed) return;
@@ -156,9 +164,11 @@ export function createVehicleLife(meshes, definition, { seed = 0 } = {}) {
       }
       node.matrixWorldNeedsUpdate = true;
     }
+    meter?.update(dt,signals);accents?.update(dt,signals);
   }, dispose() {
     if (disposed) return;
     disposed = true;
+    meter?.dispose();accents?.dispose();
     for (const c of controls.values()) c.node.removeFromParent();
     for (const cut of cuts) { if (cut.mesh.geometry === cut.cache.geometry) cut.mesh.geometry = cut.source; cut.cache.release(); }
     for (const geometry of owned) geometry.dispose();

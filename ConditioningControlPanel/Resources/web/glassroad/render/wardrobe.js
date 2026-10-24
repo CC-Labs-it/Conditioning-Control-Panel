@@ -119,8 +119,9 @@ export function dressKart(art, model, look, { tint = null, tintMix = 0.6 } = {})
       kart.geometry = cut;
       for (const m of meshes) { m.castShadow = kart.castShadow; parent.add(m); added.push(m); res.tris += triCount(m.geometry); }
       res.vehicle = look.vehicle; res.draws += meshes.length;
-      vehicleLife = createVehicleLife(meshes, VEHICLE_MECHANISMS?.vehicles?.[look.vehicle.replace('emi-vehicle-', '')]);
-      res.life = vehicleLife; res.draws += vehicleLife.metrics.draws || 0;
+      const vehicleId=look.vehicle.replace('emi-vehicle-', '');
+      vehicleLife = createVehicleLife(meshes, {...VEHICLE_MECHANISMS?.vehicles?.[vehicleId],vehicleId},{art});
+      res.life = vehicleLife; res.draws += vehicleLife.metrics.draws || 0; res.tris += vehicleLife.metrics.accentTriangles || 0;
     }
   }
   if (look.outfit) {

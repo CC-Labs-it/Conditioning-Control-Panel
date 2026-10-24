@@ -61,6 +61,7 @@ import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
+import { createLoading } from './hud/loading.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 
@@ -82,6 +83,7 @@ const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
 const canvas = document.getElementById('view');
 const cardEl = document.getElementById('card');
 const note = document.getElementById('card-note');
+const loading=createLoading();
 /** Read-only status for the boot check (dev/boot-check.mjs) and the console. */
 const debug = { phase: 'boot', drops: 0, rescues: 0, laps: 0, fps: 0, events: {}, effects: [], place: 0 };
 window.__glassroad = debug;
@@ -89,7 +91,7 @@ window.__glassroad = debug;
 function fail(e) {
   console.error('[glassroad] boot failed', e);
   if (note) note.textContent = 'Could not start: ' + (e && e.message ? e.message : e);
-  debug.phase = 'failed';
+  debug.phase = 'failed';loading.fail();
 }
 
 /** ?botFall=1: once, steer the player to the outside of the first open stretch (a rescue to look at). */
@@ -202,15 +204,16 @@ async function boot() {
   hud.setCard('start', { title: trackName });
   // the warming card names each stage and its bar fills with the real progress (pass 3)
   const paintGap = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-  hud.setLoading('Starting the renderer', 0.04);
+  const showLoading=(stage,p)=>{hud.setLoading(stage,p);loading.set(stage,p);};
+  showLoading('Opening the garage', 0.04);
 
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
   const renderer = await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options });
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
-  hud.setLoading('Loading art', 0.08);
+  showLoading('Bringing the racers in', 0.08);
   const art = qs.get('art') === '0' ? null
-    : await loadArt(renderer, { onProgress: (d, n) => hud.setLoading('Loading art ' + d + '/' + n, 0.08 + 0.4 * d / n) });
-  hud.setLoading('Building the road', 0.5);
+    : await loadArt(renderer, { onProgress: (d, n) => showLoading('Bringing the racers in', 0.08 + 0.4 * d / n) });
+  showLoading('Setting the course', 0.5);
   await paintGap();
   if (art && art.failed.length) debug.artFailed = art.failed;
   debug.art = art ? { loaded: art.loaded, wanted: art.wanted, failed: art.failed.slice(0, 4) } : null;
@@ -612,19 +615,20 @@ async function boot() {
   });
 
   // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
-  hud.setLoading('Preparing shaders', 0.55);
+  showLoading('Getting the lights ready', 0.55);
   await paintGap();
   const warm = await renderer.compile(world.scene, cam.camera, undefined,
-    { onProgress: (k, n) => hud.setLoading('Preparing shaders ' + k + '/' + n, 0.55 + 0.4 * k / n) });
+    { onProgress: (k, n) => showLoading('Getting the lights ready', 0.55 + 0.4 * k / n) });
   debug.warm = warm;
   // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
-  hud.setLoading('Last touches', 0.97);
+  showLoading('One last look', 0.97);
   await paintGap();
   gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
-  hud.setLoading('Ready', 1);
+  showLoading('Ready to roll', 1);
   hud.setReady(true);
   bridge.ready();
   toMenu();
+  loading.finish();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
   const linkTok = linkToken(location.search);
   if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }

@@ -1,0 +1,10 @@
+/* Opaque from the first paint. No canvas, HUD or forced warm-up frame can show through. */
+body[data-boot=loading] #view,body[data-boot=loading] #hud,body[data-boot=loading] #card,body[data-boot=loading] #race-garage{visibility:hidden!important}
+#race-loading{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;background:#282220;color:#f6e7da;font-family:'Segoe UI',sans-serif;transition:opacity .45s ease;isolation:isolate}
+#race-loading::before{content:'';position:absolute;inset:24px;border:1px solid #554139;pointer-events:none}
+.boot-card{width:min(350px,76vw);text-align:center}.boot-eyebrow{font-size:10px;font-weight:700;letter-spacing:.32em;color:#b8a297;margin:0 0 22px}
+.boot-title{font:italic 64px/.76 Georgia,serif;letter-spacing:-3px;margin:0 0 47px;position:relative}.boot-title span{display:block}.boot-title b{display:block;font-size:.82em;font-weight:400;color:#f1a5ba;margin:12px 0 0 29px}.boot-title::after{content:'';display:block;width:78px;height:5px;margin:23px auto 0;background:repeating-conic-gradient(#f1a5ba 0 25%,transparent 0 50%) 0 0/10px 10px;transform:skewX(-20deg)}
+.boot-stage{font-size:13px;color:#d2bdb0;min-height:20px;margin:0 0 16px}.boot-progress{height:3px;background:#514039;border-radius:2px;overflow:hidden}.boot-fill{height:100%;background:#f0a3b9;transform:scaleX(0);transform-origin:left;transition:transform .35s ease}.boot-percent{display:block;margin-top:10px;font-size:10px;letter-spacing:.14em;color:#ab9286;font-variant-numeric:tabular-nums}
+.boot-ride{height:44px;position:relative;margin-bottom:18px;border-bottom:1px dashed #715548}.boot-ride svg{position:absolute;width:51px;height:37px;left:var(--boot-left,0%);bottom:0;transition:left .35s ease;fill:none;stroke:#edacbd;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#race-loading.boot-leaving{opacity:0;pointer-events:none}.boot-failed .boot-ride svg{stroke:#cbbcb3}
+@media(prefers-reduced-motion:reduce){#race-loading{transition:none}.boot-fill,.boot-ride svg{transition:none}}
