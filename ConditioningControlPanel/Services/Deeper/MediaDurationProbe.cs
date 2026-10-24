@@ -6,9 +6,9 @@ using NAudio.Wave;
 namespace ConditioningControlPanel.Services.Deeper
 {
     /// <summary>
-    /// The decoding half of <see cref="MediaDurationCache"/>: MediaFoundation (NAudio) and the
-    /// head's shared LibVLC instance, neither of which Core can reach. The cache, key and format
-    /// rules live in Core.
+    /// The decoding half of <see cref="MediaDurationCache"/> and <see cref="AudioWaveformCache"/>:
+    /// MediaFoundation (NAudio) and the head's shared LibVLC instance, neither of which Core can
+    /// reach. The cache, key, bucket and format rules live in Core.
     /// </summary>
     public static class MediaDurationProbe
     {
@@ -26,6 +26,16 @@ namespace ConditioningControlPanel.Services.Deeper
             var viaMf = await Task.Run(() => ProbeMediaFoundation(mediaPath)).ConfigureAwait(false);
             if (viaMf is > 0) return viaMf;
             return await ProbeLibVlcAsync(mediaPath).ConfigureAwait(false);
+        }
+
+        /// <summary>The <see cref="AudioWaveformCache.Decoder"/> for this head. Throws on decode failure.</summary>
+        public static AudioWaveformResult DecodeWaveform(string audioPath)
+        {
+            using var reader = new MediaFoundationReader(audioPath);
+            // Built on first read, as before the move: BucketPeaks returns early on an unknown duration.
+            NAudio.Wave.ISampleProvider? sp = null;
+            return AudioWaveformCache.BucketPeaks(reader.WaveFormat.Channels, reader.WaveFormat.SampleRate,
+                reader.TotalTime.TotalSeconds, buf => (sp ??= reader.ToSampleProvider()).Read(buf, 0, buf.Length));
         }
 
         private static double? ProbeMediaFoundation(string path)

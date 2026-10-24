@@ -127,19 +127,9 @@ namespace ConditioningControlPanel.Views.Deeper
         // button to advance into the editor; the tutorial follows them in.
         private void BtnTryHypnoTubeTutorial_Click(object sender, RoutedEventArgs e)
         {
-            string url = "https://hypnotube.com/video/bambis-naughty-tiktok-collection-117314.html";
-            try
-            {
-                foreach (var kvp in AvatarTubeWindow.KnownVideoLinks)
-                {
-                    if (kvp.Key.IndexOf("tiktok", System.StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        url = kvp.Value;
-                        break;
-                    }
-                }
-            }
-            catch { /* fall back to default */ }
+            string url;
+            try { url = HypnotubeDefaultLinks.SelectTikTokTutorialVideo(AvatarTubeWindow.KnownVideoLinks); }
+            catch { url = HypnotubeDefaultLinks.SelectTikTokTutorialVideo(null); }
 
             RbVideo.IsChecked = true;
             TxtSource.Text = url;

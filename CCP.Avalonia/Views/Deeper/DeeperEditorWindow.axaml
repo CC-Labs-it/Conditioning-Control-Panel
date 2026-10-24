@@ -96,31 +96,9 @@
     </Window.Resources>
 
     <Window.Styles>
-        <!-- The implicit rounded button / toggle. WPF used
-             <Style TargetType="Button" BasedOn="{StaticResource DeeperRoundButton}"/>; an ADDITIVE
-             Style rather than a ControlTheme so the Fluent template survives and each control's
-             own inline Background/Foreground/BorderBrush still wins over these setters.
-             ponytail: local copy of Resources/Theme/Controls.xaml:DeeperRoundButton +
-             DeeperRoundIconToggleButton, hoist when a second Avalonia view needs them. -->
-        <Style Selector="Button">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="HorizontalContentAlignment" Value="Center"/>
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-        </Style>
-        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Opacity" Value="0.85"/>
-        </Style>
-        <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Opacity" Value="0.70"/>
-        </Style>
-        <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Opacity" Value="0.40"/>
-        </Style>
-        <Style Selector="ToggleButton">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="CornerRadius" Value="8"/>
-        </Style>
+        <!-- Shared WPF rounded themes. Setting Theme preserves each control's local theme/template. -->
+        <Style Selector="Button"><Setter Property="Theme" Value="{StaticResource DeeperRoundButton}"/></Style>
+        <Style Selector="ToggleButton"><Setter Property="Theme" Value="{StaticResource DeeperRoundIconToggleButton}"/></Style>
         <!-- WPF's implicit Separator style tinted the light system gray. -->
         <Style Selector="Separator">
             <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent40Brush}"/>

@@ -71,6 +71,14 @@ internal static class AccountSeed
             ? NewV2().ChangeDisplayNameAsync(id, name) : null;
         CoreAccount.DeleteAccountProvider = () => CoreSettings.Current.UnifiedId is { Length: > 0 } id
             ? NewV2().DeleteAccountAsync(id) : null;
+        // WPF ProfileSyncService.HandleUnauthorizedAsync (StartHeartbeat on success) / TryProviderRevalidateAsync.
+        AuthRecovery.Recovered = () => { if (Sync is { Loaded: true } sync) sync.StartHeartbeat(); };
+        AuthRecovery.ProviderRevalidate = async () =>
+        {
+            if (patreon.IsAuthenticated) { await patreon.ValidateSubscriptionAsync(forceRefresh: true); return true; }
+            if (discord.IsAuthenticated) { await discord.ValidateAndRefreshUserAsync(forceRefresh: true); return true; }
+            return false;   // invite-code / email sessions have no provider to mint from
+        };
         // WPF App.xaml.cs:2937: the weekly intake pass re-evaluates (and refunds a pre-premium spend)
         // on either provider's TierChanged. Here, because this is where the providers now exist.
         App.IntakePass.AttachEntitlementSources(

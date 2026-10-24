@@ -61,6 +61,8 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             // A real ShowcaseProvider fetches its manifest and clips; a late Changed would put a card in
             // another test's deck (P02/P56). Every shell gets a silent one; the snapshot restores it.
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.MakeShowcase = () => SilentShowcase.Instance;
+            // P52: no shell arms the real 2 s pending-registration check; PendingRegistrationTests arm it themselves.
+            ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PendingRegistrationDelay = null;
         });
     public override void After(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
