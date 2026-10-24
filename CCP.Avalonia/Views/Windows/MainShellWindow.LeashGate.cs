@@ -76,7 +76,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _leashGate.StartRequested += StartLeashTask;
                 _leashGate.PardonRequested += p => _ = PardonLeashAsync(p);
                 _leashGate.PanicRequested += PanicFromLeashGate;
-                _leashGate.CutRequested += () => _ = CutLeashAsync();
+                _leashGate.CutRequested += () => _ = CutLeashAsync(this);
                 _leashGate.LaterRequested += () => { _leashUnplayablePid = null; HideLeashGate(); };
 
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -267,9 +267,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF CutRequested -> LeashSurfaces.Cut: the gate goes, the cut is said, and the Core
         /// cut runs (its LeashCutSafety steps first, whatever the network does).</summary>
-        internal async System.Threading.Tasks.Task CutLeashAsync()
+        /// <summary>The one cut path: gate, hold-to-cut, punish window and the self card.</summary>
+        internal static async System.Threading.Tasks.Task CutLeashAsync(MainShellWindow? shell = null)
         {
-            LeashTaskHost.EndTask("cut", this);   // WPF LeashSurfaces.CutDone -> EndLeashTask
+            LeashTaskHost.EndTask("cut", shell);   // WPF LeashSurfaces.CutDone -> EndLeashTask
             App.Notifications.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success);
             try { if (LeashHead.Service is { } s) await s.CutAsync(); }
             catch (Exception ex) { Serilog.Log.Debug("[Leash] cut failed (service retries): {E}", ex.Message); }

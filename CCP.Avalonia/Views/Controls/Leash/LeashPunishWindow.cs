@@ -32,7 +32,7 @@ internal sealed class LeashPunishWindow : Window
     /// <summary>Test seam: false builds the window without a web view (headless tests).</summary>
     internal static bool CreateWeb { get; set; } = true;
     /// <summary>The head's Cut leash: the panel's cut (LeashCutSafety first, whatever the network does).</summary>
-    internal static Action CutLeash { get; set; } = () => _ = Windows.MainShellWindow.Current?.CutLeashAsync();
+    internal static Action CutLeash { get; set; } = () => _ = Windows.MainShellWindow.CutLeashAsync();
     private readonly bool _locked;
     private readonly string _holder;
     private readonly TextBlock _title;

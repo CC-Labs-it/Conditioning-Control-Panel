@@ -5,8 +5,6 @@
 // window restore and the double-press exit ladder stay in the routes. Guarded by PanicSurfacesTests.
 
 using System;
-using System.Linq;
-using Avalonia.LogicalTree;
 using System.Collections.Generic;
 using ConditioningControlPanel.Services;
 
@@ -31,11 +29,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
             new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
-            new("leash-cards", sh =>
-            {
-                if (sh != null)
-                    foreach (var section in sh.GetLogicalDescendants().OfType<Controls.Leash.LeashDrawerSection>()) section.FoldForPanic();
-            }),
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => Games.GameWindow.CloseAllForPanic(), Games.GameWindow.IsAnyOpen),

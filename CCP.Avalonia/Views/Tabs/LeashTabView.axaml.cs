@@ -22,5 +22,4 @@ public partial class LeashTabView : UserControl
     }
     internal bool ShowingEmpty => EmptyPanel.IsVisible;
     internal void OnShown() => Section.Refresh();
-    internal void FoldForPanic() => Section.FoldForPanic();
 }

@@ -90,12 +90,10 @@ public sealed class LeashSelfCard : Border
         _body.Children.Clear();
         _body.Children.Add(LeashCardUi.Text(_me.Holder.Name + " " + Loc.Get("leash_self_holds"), "leash-self-title", F.Gold));
         _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_self_day", _me.Day)));
-        _body.Children.Add(LeashCardUi.Action(Loc.Get("leash_cut"), "leash-cut", async () =>
-        {
-            LeashTaskHost.EndTask("cut");
-            App.Notifications.Show(Loc.Get("leash_cut_done"), Helpers.NotificationType.Success);
-            if (_service() is { } s) await s.CutAsync();
-        }, IconKind.Cut));
+        var cut = LeashCardUi.Action(Loc.Get("leash_cut"), "leash-cut",
+            () => MainShellWindow.CutLeashAsync(TopLevel.GetTopLevel(this) as MainShellWindow), IconKind.Cut);
+        ToolTip.SetTip(cut, Loc.Get("leash_cut_tip"));
+        _body.Children.Add(cut);
         var gates = _me.Pending.Count(p => p.Kind != PunishKind.Chaster);
         if (gates > 0) _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_self_pending", gates)));
         if (_me.Assignment is { } a)
@@ -219,7 +217,9 @@ public sealed class LeashHolderCard : Border
         foreach (var day in h.Week.TakeLast(7)) week.Children.Add(LeashCardUi.Text(R.DayLetter(day.Day), "leash-week:" + day.Mark,
             day.Mark switch { WeekMark.Did => F.Mint, WeekMark.Punished => F.Red, WeekMark.Today => F.Gold, _ => F.Dim }));
         _body.Children.Add(week);
-        if (_readOnly) return;
+        if (dnd && h.DndUntil is { } quietUntil)
+            _body.Children.Add(LeashCardUi.Text(Loc.GetF("leash_holder_dnd", h.Who.Name, R.DndUntilText(quietUntil)), "leash-holder-dnd", F.Lilac));
+        if (_readOnly) { _body.Children.Add(LeashCardUi.Text(Loc.Get("leash_preview_buttons"), ink: F.Dim)); return; }
         var buttons = new WrapPanel();
         foreach (var id in new[] { "assign", "reward", "punish", "tug" })
         {
@@ -227,8 +227,8 @@ public sealed class LeashHolderCard : Border
             {
                 if (id == "tug")
                 {
-                    if (!TugThrottle.TryTug(h.Who.Id, DateTime.UtcNow)) { Word(new(LeashSendStatus.TooFast), "leash_done_tug"); return; }
-                    await Send(s => s.TugAsync(h.Who.Id), "leash_done_tug", close: false);
+                    if (!TugThrottle.TryTug(h.Who.Id, DateTime.UtcNow)) { Word(new(LeashSendStatus.TooFast), ""); return; }
+                    await Send(s => s.TugAsync(h.Who.Id), Honest("leash_done_tug"), close: false);
                 }
                 else { _sheet = _sheet == id ? null : id; Render(); }
             });
@@ -249,9 +249,9 @@ public sealed class LeashHolderCard : Border
                     foreach (var kind in R.VisiblePunishments(h.Intensity, r?.ChasterLinked == true))
                     {
                         panel.Children.Add(LeashCardUi.Text(Loc.Get(R.Key(kind))));
-                        if (kind == PunishKind.Video) panel.Children.Add(VideoPicker(w => Send(s => s.PunishAsync(h.Who.Id, kind, _videoCap, w), "leash_done_punish"), true));
+                        if (kind == PunishKind.Video) panel.Children.Add(VideoPicker(w => Send(s => s.PunishAsync(h.Who.Id, kind, _videoCap, w), Punished), true));
                         else panel.Children.Add(LeashCardUi.Choices(R.Sizes(kind).Select(size =>
-                            (R.SizeText(kind, size), $"leash-punish:{kind.ToString().ToLowerInvariant()}:{size}", (Func<Task>)(() => Send(s => s.PunishAsync(h.Who.Id, kind, size), "leash_done_punish"))))));
+                            (R.SizeText(kind, size), $"leash-punish:{kind.ToString().ToLowerInvariant()}:{size}", (Func<Task>)(() => Send(s => s.PunishAsync(h.Who.Id, kind, size), Punished))))));
                     }
                 }
             }
@@ -262,9 +262,9 @@ public sealed class LeashHolderCard : Border
                 foreach (var kind in R.AssignOrder)
                 {
                     panel.Children.Add(LeashCardUi.Text(Loc.Get(R.Key(kind))));
-                    if (kind == AssignKind.Video) panel.Children.Add(VideoPicker(w => Send(s => s.AssignAsync(h.Who.Id, kind, 1, w), "leash_done_assign"), false));
+                    if (kind == AssignKind.Video) panel.Children.Add(VideoPicker(w => Send(s => s.AssignAsync(h.Who.Id, kind, 1, w), Honest("leash_done_assign")), false));
                     else panel.Children.Add(LeashCardUi.Choices(R.Sizes(kind).Select(size =>
-                        (size.ToString(), $"leash-assign:{kind.ToString().ToLowerInvariant()}:{size}", (Func<Task>)(() => Send(s => s.AssignAsync(h.Who.Id, kind, size), "leash_done_assign"))))));
+                        (size.ToString(), $"leash-assign:{kind.ToString().ToLowerInvariant()}:{size}", (Func<Task>)(() => Send(s => s.AssignAsync(h.Who.Id, kind, size), Honest("leash_done_assign")))))));
                 }
             }
             else
@@ -279,10 +279,12 @@ public sealed class LeashHolderCard : Border
             }
             _body.Children.Add(panel);
         }
-        _body.Children.Add(LeashCardUi.Action(Loc.GetF("leash_menu_release", h.Who.Name), "leash-release", async () =>
+        // WPF LeashHolderCard.cs:310: letting go asks first; it ends the leash for both and sets a 24 h cooldown.
+        _body.Children.Add(LeashCardUi.Action(Loc.GetF("leash_menu_release", h.Who.Name), "leash-release", () =>
         {
-            var ok = _service() is { } s && await s.ReleaseAsync(h.Who.Id);
-            App.Notifications.Show(Loc.GetF(ok ? "leash_release_done" : "leash_release_failed", h.Who.Name), Helpers.NotificationType.Info);
+            LeashCutConfirmWindow.Confirm(Loc.GetF("leash_release_confirm_title", h.Who.Name), Loc.GetF("leash_release_confirm_body", h.Who.Name),
+                Loc.Get("leash_release_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-release-confirm", () => _ = Release(h.Who));
+            return Task.CompletedTask;
         }, IconKind.Link));
         if (LeashSentList.For(_service(), h.Who.Id) is { } receipts) _body.Children.Add(receipts);
         if (_result != null) _body.Children.Add(LeashCardUi.Text(_result, "leash-holder-result", F.Gold));
@@ -304,8 +306,10 @@ public sealed class LeashHolderCard : Border
         var box = new TextBox { Tag = "leash-ht-box", PlaceholderText = Loc.Get("leash_video_ht_hint") };
         var go = LeashCardUi.Action(Loc.Get("leash_send"), "leash-video-send", () => send(new("ht", FriendsDrawerRules.NormaliseHtId(box.Text), null)));
         go.IsEnabled = false;
-        box.TextChanged += (_, _) =>
+        // Text property, not TextChanged (raised a frame later): same as FriendsDrawer.Pickers.
+        box.PropertyChanged += (_, e) =>
         {
+            if (e.Property != TextBox.TextProperty) return;
             var id = FriendsDrawerRules.NormaliseHtId(box.Text);
             if (id != box.Text) { box.Text = id; box.CaretIndex = id.Length; }
             go.IsEnabled = id.Length > 0;
@@ -314,20 +318,31 @@ public sealed class LeashHolderCard : Border
         panel.Children.Add(go);
         return panel;
     }
+    private async Task Release(LeashPerson who)
+    {
+        var ok = false;
+        try { ok = _service() is { } s && await s.ReleaseAsync(who.Id); }
+        catch (Exception ex) { Serilog.Log.Debug("[Leash] release failed: {E}", ex.Message); }
+        App.Notifications.Show(Loc.GetF(ok ? "leash_release_done" : "leash_release_failed", who.Name),
+            ok ? Helpers.NotificationType.Info : Helpers.NotificationType.Warning);
+    }
     private Task Reward(RewardKind kind, string? token = null, int? size = null) =>
-        Send(s => s.RewardAsync(_held.Who.Id, kind, token, size), "leash_done_reward");
-    private async Task Send(Func<ILeashService, Task<LeashSendResult>> call, string oldKey, bool close = true)
+        Send(s => s.RewardAsync(_held.Who.Id, kind, token, size), Honest("leash_done_reward"));
+    // WPF LeashHolderCard.cs:722/744: a punishment always names its friend; other sends say "Sent." once receipts exist.
+    private string Punished(LeashSendResult r) => Loc.GetF(r.Status == LeashSendStatus.Queued ? "leash_done_punish_queued" : "leash_done_punish", _held.Who.Name);
+    private Func<LeashSendResult, string> Honest(string oldKey) => _ =>
+        _service()?.ReceiptsSupported == true ? Loc.Get("leash_res_sent") : Loc.GetF(oldKey, _held.Who.Name);
+    private async Task Send(Func<ILeashService, Task<LeashSendResult>> call, Func<LeashSendResult, string> good, bool close = true)
     {
         LeashSendResult result;
         try { result = _service() is { } s ? await call(s) : new(LeashSendStatus.Off); }
         catch { result = new(LeashSendStatus.Failed); }
         if (close && R.IsGood(result.Status)) _sheet = null;
-        Word(result, oldKey);
+        Word(result, R.IsGood(result.Status) ? good(result) : "");
     }
-    private void Word(LeashSendResult result, string oldKey)
+    private void Word(LeashSendResult result, string goodText)
     {
-        _result = R.IsGood(result.Status)
-            ? _service()?.ReceiptsSupported == true ? Loc.Get("leash_res_sent") : Loc.GetF(oldKey, _held.Who.Name)
+        _result = R.IsGood(result.Status) ? goodText
             : result.Status == LeashSendStatus.Dnd && result.DndUntil is { } until
                 ? Loc.GetF("leash_res_dnd_until", _held.Who.Name, R.DndUntilText(until)) : Loc.Get(R.ResultKey(result.Status));
         _resultTimer.Stop();
@@ -364,7 +379,7 @@ public sealed class LeashDrawerSection : StackPanel
         }
         Render();
     }
-    internal void Deactivate() { FoldForPanic(); Unsubscribe(); }
+    internal void Deactivate() { Fold(); Unsubscribe(); }
     private void Unsubscribe()
     {
         if (_service != null) { _service.SnapshotChanged -= OnSnapshot; _service.ReceiptsChanged -= Render; }
@@ -406,5 +421,5 @@ public sealed class LeashDrawerSection : StackPanel
         if (TopLevel.GetTopLevel(this) != null && IsEffectivelyVisible)
             _service?.NoteShown(_service.Snapshot.Me?.Assignment?.Aid);
     }
-    internal void FoldForPanic() { foreach (var card in _holders.Values) card.Fold(); }
+    internal void Fold() { foreach (var card in _holders.Values) card.Fold(); }
 }
