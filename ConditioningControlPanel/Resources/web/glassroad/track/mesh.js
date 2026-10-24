@@ -86,8 +86,11 @@ export function buildMeshes(track, dl) {
   const curvedPadList = [...curvedPads];
   const padRoadFaces = [];
   const padOverlaps = (p, s0, s1) => {
-    const shift = Math.round(((p.s + p.len / 2) - (s0 + s1) / 2) / L) * L;
-    return s0 + shift < p.s + p.len && s1 + shift > p.s;
+    // Wrapped runs carry unwrapped Float32 UVs. Use that same representation here:
+    // rounding can move a row across the pad edge, requiring the preceding face.
+    const uv0 = Math.fround(s0), uv1 = Math.fround(s1);
+    const shift = Math.round(((p.s + p.len / 2) - (uv0 + uv1) / 2) / L) * L;
+    return uv0 + shift < p.s + p.len && uv1 + shift > p.s;
   };
   const courtHoles = (track.courts || []).flatMap((c) => c.holes);
   const row = (q) => q % Q;              // row index of the start of quad q (wrapped)
@@ -129,7 +132,7 @@ export function buildMeshes(track, dl) {
       const rawS = rowS(q0 + k), offsetS = Math.floor(rawS / L) * L;
       const s0 = rawS - offsetS, s1 = rowS(q0 + k + 1) - offsetS;
       const holes = courtHoles.filter((h) => h.s < s1 && h.s + h.len > s0);
-      const underCurvedPad = curvedPadList.some(p => padOverlaps(p, s0, s1));
+      const underCurvedPad = curvedPadList.some(p => padOverlaps(p, rawS, rowS(q0 + k + 1)));
       if (holes.length) courtStrip(road, track, s0, s1, holes, offsetS);
       else for (let i = 0; i < columns; i++) {
         const a = top[k][i], b = top[k][i + 1], c = top[k + 1][i], d = top[k + 1][i + 1];

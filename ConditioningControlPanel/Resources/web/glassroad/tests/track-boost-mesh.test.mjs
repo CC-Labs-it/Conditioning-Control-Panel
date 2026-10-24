@@ -57,7 +57,7 @@ function checkCurvedPad(json, row) {
   }
   assert.ok(samples > 20);
   assert.ok(Math.abs(area - pad.w * pad.len) < .002, 'complete pad footprint without doubled or missing triangles');
-  return { triangles: pads.indices.length / 3, maxPhysicalGap };
+  return { triangles: pads.indices.length / 3, maxPhysicalGap, area };
 }
 
 test('Boudoir wet boost triangle interiors follow physical and rendered canal support', () => {
@@ -94,4 +94,18 @@ test('Dry pads keep their original two-edge strips, metre UVs and vertex count',
     const support = track.surfaceAt(pad.s + s, pad.x + u);
     assert.ok(Math.abs(dot(sub(v.p, support.p), support.n) - .02) < .0001);
   }
+});
+
+test('Wrapped Float32 road UVs retain the preceding face when a pad edge rounds forward', () => {
+  const json = read('mainframe'), row = { node: 104, x: 0, w: 7, len: 6 };
+  const track = loadTrack({ ...json, boosts: [row] }), pad = track.boosts[0];
+  const uv = track.meshes.road.uvs;
+  let roundedAcrossEdge = false;
+  for (let i = 1; i < uv.length; i += 2) {
+    const raw = uv[i], shift = Math.round((pad.s - raw) / track.lengthM) * track.lengthM;
+    if (raw > track.lengthM && raw + shift > pad.s && raw + shift - pad.s < .001) roundedAcrossEdge = true;
+  }
+  assert.ok(roundedAcrossEdge, 'fixture must exercise the wrapped Float32 edge crossing');
+  const result = checkCurvedPad(json, row);
+  assert.ok(Math.abs(result.area - row.w * row.len) < 1e-5, 'the submillimetre edge strip has complete coverage');
 });
