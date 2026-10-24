@@ -9,13 +9,14 @@
 - .NET 10.0.100 installed explicitly after channel discovery returned HTTP 403.
 - Release builds: CCP.Core, CCP.Avalonia and all 12 Linux test projects referenced by build.yml succeeded with zero errors.
 - Core suite: 3953 passed, 5 existing Vosk-dependent skips, 0 failed (3958 total). No tests changed or skipped to obtain this result.
+- A final redundant parallel rebuild hit MSB4166 (worker exited prematurely); retrying `dotnet build Tests/CCP.Avalonia.Tests -c Release -m:1` succeeded with 314 warnings, zero errors (exit 0).
 - Core guards passed. test-plan-coverage.sh is absent from this base; no ledger rows changed.
 - Baseline Avalonia run (ChasterBookedPopTests and QuestsTabLiveTests): 1 passed, 5 failed creating fonts before behaviour assertions.
 - Final complete-class Avalonia run (ChasterBookedPopTests, QuestsTabLiveTests, ModChoiceTests): 1 passed, 17 failed creating fonts before behaviour assertions. Missing typefaces include Segoe UI Black and Inter. Tests compile with zero errors.
 - The required 20 UI repetitions and UI mutation proof remain blocked by those font failures. No claim of a passing UI reliability gate. The existing assembly-wide DisableTestParallelization remains intact, so the complete-class invocation uses the repository's existing scheduling policy.
 - MakeHerYoursCommunityTests.CommunityLinkFromTheShellBrowsesCancelsInstallsAndReadoutUsesInstalledName, WorkshopCommunityCellTests.CommunityCellIsReachableThroughTheCompanionWorkshopDrawer, and ModChoiceTests.CompanionChipPicksAreRememberedAndRestoredByTheHeaderModSwitch are absent from both the required base and inspected trunk. Their root causes and fixes remain outstanding; do not infer fixes from other tests in the same area.
 - Supporting Core coalescing stress: BookedFlashPlanTests passed 20/20 invocations (18 tests each; 360 passes). These are supporting tests, not the requested UI repetitions.
-- Supporting negative control: temporarily setting BookedFlashPlan.CoalesceMs to zero produced 5 failures and 13 passes (exit 1). The original source was restored immediately; no product change is committed.
+- Supporting negative control: temporarily setting BookedFlashPlan.CoalesceMs to zero produced 5 failures and 13 passes (exit 1). The original source was restored immediately; all 18 tests then passed (exit 0). No product change is committed.
 - WPF test project cross-compiled successfully with EnableWindowsTargeting=true and ValidateExecutableReferencesMatchSelfContained=false: 557 warnings, zero errors. Windows behaviour was compiled but cannot run on this Linux host.
 
 ## Assumptions
