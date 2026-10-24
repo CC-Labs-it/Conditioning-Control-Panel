@@ -1,5 +1,5 @@
 /* Opaque enamel and triangle-based ink. All nodes are shared by WebGPU and WebGL2. */
-import { MeshBasicNodeMaterial, Color, DoubleSide, BackSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, RepeatWrapping } from 'three/webgpu';
+import { MeshBasicNodeMaterial, Color, DoubleSide, BackSide, FrontSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, RepeatWrapping } from 'three/webgpu';
 import { vec2, vec3, float, uv, positionGeometry, positionWorld, normalWorld, cameraPosition, normalize, dot, max, min, abs, pow, mix, smoothstep, fract, fwidth, texture, sin } from 'three/tsl';
 import {getGoonworksLayout} from '../track/goonworks-layout.js';
 
@@ -70,6 +70,9 @@ export function applyGoonworksRoad(road, art, track) {
   if(road.uniforms?.music){const mu=road.uniforms.music; const pulse=sin(p.y.mul(.13).sub(mu.t.mul(1.8))).mul(.5).add(.5).mul(mu.bassW).mul(.06);colour=colour.add(pink.mul(pulse).mul(gutter));}
   road.material.colorNode=colour;road.material.opacityNode=float(1);road.material.opacity=1;
   road.material.transparent=false;road.material.depthWrite=true;road.material.toneMapped=false;
+  // The opaque slab already has correctly wound top, bottom and side faces. Rendering its hidden
+  // back faces makes the 25 cm slab fight itself at overview distances with a 0.1 m camera near plane.
+  road.material.side=FrontSide;
   let disposed=false;const owner={dispose(){if(!disposed){disposed=true;widths.dispose();}}};
   road.goonworksFinish=owner;return owner;
 }
@@ -77,6 +80,8 @@ export function applyGoonworksRoad(road, art, track) {
 /** Oval cutouts are shared by inner and outer skins, with ink and enamel around each opening. */
 export function createGoonworksTubeMaterial(outer=false){
   const material=createGoonworksMaterial(outer?GOONWORKS_PALETTE.fuchsia:GOONWORKS_PALETTE.white,{paper:!outer}),p=uv();
+  // Inner normals face the tunnel; outer normals face the sky. Cull the opposite skin at each view.
+  material.side=FrontSide;
   const along=abs(fract(p.y.div(76)).sub(.5)).mul(76),angular=min(abs(sin(p.x.sub(.04))),abs(sin(p.x.add(.04))));
   const oval=along.div(24).pow(2).add(angular.div(.6).pow(2));
   const opening=float(1).sub(smoothstep(.96,1,oval));
