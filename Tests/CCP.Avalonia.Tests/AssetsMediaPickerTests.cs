@@ -67,6 +67,46 @@ public sealed class AssetsMediaPickerTests
         v.FindControl<WrapPanel>("RemoteSourceChips")!.Children.OfType<ToggleButton>().Single(c => (string?)c.Tag == key);
 
     [Fact]
+    public Task OfficialNoteNiceHidesNoteButKeepsCredit() => AvaloniaTestDispatcher.RunAsync(() => WithView((view, s) =>
+    {
+        var oldOfficial = ScrolllerPolicy.Official;
+        var oldEnabled = ScrolllerPolicy.Enabled;
+        var oldCap = ScrolllerPolicy.MaxClipShortSide;
+        try
+        {
+            ScrolllerPolicy.Apply(true, null);
+            ScrolllerPolicy.Official = true;
+            s.MediaSource = "online";
+            s.RemoteMediaConsented = true;
+            s.ScrolllerOfficialNoteSeen = false;
+            s.MotionLevel = MotionLevel.Off;
+            view.RefreshRemoteMediaPicker();
+            view.Measure(new Size(1100, 650));
+            view.Arrange(new Rect(0, 0, 1100, 650));
+            var browser = view.FindControl<Border>("AssetBrowserSection")!;
+            Assert.True(browser.Bounds.Height >= 260);
+            Assert.True(browser.Bounds.Bottom <= 650);
+            var note = view.FindControl<Border>("OnlineOfficialNote")!;
+            var credit = view.FindControl<TextBlock>("TxtOnlineOfficialCredit")!;
+            Assert.True(note.IsVisible);
+            Assert.True(credit.IsVisible);
+            view.FindControl<Button>("BtnOnlineOfficialNice")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(s.ScrolllerOfficialNoteSeen);
+            Assert.False(note.IsVisible);
+            Assert.True(credit.IsVisible);
+            s.MediaSource = "local";
+            view.RefreshOnlineOfficialNote();
+            Assert.False(credit.IsVisible);
+        }
+        finally
+        {
+            ScrolllerPolicy.Official = oldOfficial;
+            ScrolllerPolicy.Apply(oldEnabled, oldCap);
+        }
+        return Task.CompletedTask;
+    }));
+
+    [Fact]
     public Task SourceSwitchWritesOnlyAfterTheAwaitedConsentSaysYes() => AvaloniaTestDispatcher.RunAsync(() => WithView(async (view, s) =>
     {
         var details = view.FindControl<StackPanel>("RemoteMediaDetails")!;

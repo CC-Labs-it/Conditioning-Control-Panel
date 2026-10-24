@@ -151,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var s = Settings;
             if (s == null || !_pickerWired) return;
+            RefreshOnlineOfficialNote();
             _pickerSyncing = true;
             try
             {

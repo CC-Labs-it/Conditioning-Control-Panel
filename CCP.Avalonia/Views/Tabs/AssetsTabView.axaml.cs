@@ -86,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Inform = (title, msg) => MessageDialog.ShowAsync((TopLevel.GetTopLevel(this) as Window)!, title, msg);
             IsVisibleChanged(this);
             BtnPickAssetsFolder.Click += BtnPickAssetsFolder_Click;
+            InitializeOnlineOfficialNote();
             InitializeRemoteMediaPicker();   // AssetsTabView.MediaPicker.cs; re-syncs on every show
         }
 

@@ -673,3 +673,6 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Sync 7 official online-media note
+1. With online media consent, an online or mixed source, and the server licence marked official, open Assets. Expect one compact band with stamp, wrapped title/body/plan and Nice; the asset browser must fit at a 650 px page height. Nice hides the band across restart while the stamped credit remains. Local-only, no consent or a disabled/unofficial licence hides both. Compare all ten languages and motion Off/Reduced/Full, including GentleVisuals. WPF `Views/Tabs/AssetsTabView.xaml:273` and `MainWindow/MainWindow.OnlineMeter.cs:332`. Rows: `views-tab-assets`.

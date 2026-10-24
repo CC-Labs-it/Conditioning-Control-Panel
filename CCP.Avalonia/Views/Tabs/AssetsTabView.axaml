@@ -245,6 +245,25 @@
                 </ControlTheme>
             </Border.Resources>
             <StackPanel>
+                <!-- WPF e4f316961: one wide band, preserving the browser's room. -->
+                <Border x:Name="OnlineOfficialNote" IsVisible="False" Margin="0,0,0,8"
+                        Background="#181830" BorderBrush="#3A3A5C" BorderThickness="1" CornerRadius="12" Padding="14,9">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Border VerticalAlignment="Center" BorderBrush="{DynamicResource PinkBrush}"
+                                BorderThickness="2" CornerRadius="4" Padding="7,2" Margin="0,0,14,0"
+                                RenderTransform="rotate(-3)">
+                            <TextBlock Text="{loc:Str online_official_stamp}" FontSize="10" FontWeight="ExtraBold"
+                                       Foreground="{DynamicResource PinkBrush}"/>
+                        </Border>
+                        <TextBlock x:Name="TxtOnlineOfficialText" Grid.Column="1" VerticalAlignment="Center"
+                                   FontSize="12.5" Foreground="#CCCCE0" TextWrapping="Wrap"/>
+                        <Button x:Name="BtnOnlineOfficialNice" Grid.Column="2" Content="{loc:Str online_official_nice}"
+                                Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"
+                                Padding="16,6" FontSize="13" Margin="16,0,0,0"/>
+                    </Grid>
+                </Border>
+                <TextBlock x:Name="TxtOnlineOfficialCredit" IsVisible="False" FontSize="11"
+                           Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/>
                 <!-- Row 1, SOURCE: header (the hint rides it as a tooltip), the segmented bar and,
                      in Both only, the share slider. -->
                 <DockPanel LastChildFill="False">
@@ -525,7 +544,7 @@
                       Cursor="SizeNorthSouth" IsVisible="False"/>
 
         <!-- BOTTOM: Interactive File Browser -->
-        <Border x:Name="AssetBrowserSection" Grid.Row="4" Theme="{StaticResource SectionPanel}" Padding="12">
+        <Border x:Name="AssetBrowserSection" MinHeight="260" Grid.Row="4" Theme="{StaticResource SectionPanel}" Padding="12">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
