@@ -157,6 +157,35 @@ public sealed class BubbleOverlayTests
         });
     }
 
+    [Fact]
+    public async Task Dense_chaos_field_region_stays_bounded_and_cheap()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            // 120 large bubbles at 150 %: r = 112 px, so ~225 pixel rows per bubble before coalescing.
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 2560, 1440), 1.5);
+            BubbleOverlay.Field.Bubbles.Clear();
+            for (var i = 0; i < 120; i++)
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Screen = 0, X = (i % 12) * 140 + 0.37 * i, Y = (i / 12) * 90 + 0.21 * i, Size = 150, Clickable = true });
+            try
+            {
+                w.Sync();
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                for (var k = 0; k < 20; k++) w.Sync();
+                var ms = sw.Elapsed.TotalMilliseconds / 20;
+                var report = $"120 bubbles @150%: {w.InputRectCount} rects, {ms:F3} ms/sync";
+                // Identical adjacent rows coalesce, so the region stays well under one rect per row.
+                Assert.True(w.InputRectCount is >= 120 and <= 120 * 160, report);
+                Assert.True(ms < 30, report + " (budget 30 ms = one step)");
+            }
+            finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     /// <summary>Windows input region: the window takes clicks only while the cursor is inside a
     /// live bubble rect (Win32Overlay.SetInputRects toggles WS_EX_TRANSPARENT on this answer).</summary>
     [Fact]
