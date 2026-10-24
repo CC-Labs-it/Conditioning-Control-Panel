@@ -27,51 +27,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// around the control the current step is about, plus the card that carries the step's icon,
     /// title, description and its Skip / Skip step / Previous / Next row.
     ///
-    /// PORTED from ConditioningControlPanel/Windows/TutorialOverlay.xaml.cs. Everything that only
-    /// touches the view is real here — the spotlight geometry, the glow ring, the panel placer
-    /// with its clamp-and-flip, the settle timer, the visual-tree element lookup. What is stubbed,
-    /// and why:
-    ///
-    /// <list type="bullet">
-    ///   <item><b>Live against the tutorial seam.</b> The card, the counter, the Next/Finish label,
-    ///     Previous, Skip and the follow-up buttons all read <c>CoreTutorial</c>, and the two
-    ///     verbs plus Escape call into it. On a head that seeds the seam (the WPF one does, from
-    ///     <c>App.SeedTutorialSeam</c>) the overlay walks a real tour; unseeded — which is this
-    ///     head today, because TutorialService and its step lists are still in the WPF head — the
-    ///     seam answers "no tour" and nothing is drawn but the sample card. Use the
-    ///     <see cref="TutorialOverlay(Window)"/> constructor for the live overlay; the
-    ///     parameterless one is the render proof's.</item>
-    ///
-    ///   <item><b>The auto-advance subscriptions are still stubs</b> (OnButtonClick, OnTextEquals,
-    ///     OnSelectionEquals, OnSliderAtLeast, OnEvent), and so is the WindowLoaded:* retarget.
-    ///     Those are not seam calls: each hooks a real control in a real window and the OnEvent one
-    ///     needs <c>TutorialEventBus</c>, which stayed in the WPF head. A step whose
-    ///     <c>Advance</c> is anything but Manual therefore shows no Next button and nothing
-    ///     advances it — it is honest about waiting and wrong about what it waits for, so it stops
-    ///     the tour rather than skipping a card. <c>AllowManualSkip</c> steps still have their
-    ///     "Skip step" button, which is the WPF escape hatch for exactly this.</item>
-    ///
-    ///   <item><b><c>TutorialStep.PrepareTargetWindowAction</c> did not cross.</b> It is an
-    ///     <c>Action&lt;System.Windows.Window&gt;</c> on Windows (DeeperTutorialPrep,
-    ///     CompanionTutorialPrep, AppSettingsTutorialPrep in Services/TutorialService.cs), so it
-    ///     cannot be seam data. Without it a step pointing INSIDE a default-collapsed drawer
-    ///     resolves its element but measures 0×0, and the settle timer runs out and draws the plain
-    ///     dim — the degraded path WPF already takes when an element cannot be found, not a
-    ///     crash.</item>
-    ///
-    ///   <item><b>Click-through input.</b> The spotlight excludes its target rectangle from the
-    ///     native input region. Transparent waiting steps retain input only on their card.
-    ///     X11 uses XFixes; Windows uses SetWindowRgn, as WPF does.</item>
-    ///
-    ///   <item><b>The 300ms fade in and 200ms fade out.</b> Dropped rather than re-expressed as a
-    ///     transition: the headless render captures two dispatcher passes after Show(), which is
-    ///     inside the fade, so a faithful fade-in would have drawn a nearly blank PNG and hidden
-    ///     the very thing the render proves. The overlay simply appears.</item>
-    /// </list>
-    ///
-    /// The parameterless constructor is the render constructor (see RenderProof): it seeds one
-    /// sample step and a sample target rect so the PNG shows the dim sheet, the glow ring and a
-    /// fully populated card rather than an empty window.
+    /// Adapted from WPF's TutorialOverlay: card, spotlight and automatic advance subscriptions.
+    /// Click-through input: the spotlight excludes its target rectangle from the native input
+    /// region, and transparent waiting steps retain input only on their card (X11 uses XFixes;
+    /// Windows uses SetWindowRgn, as WPF does).
+    /// ponytail: the in-window stage, cross-window retarget and narration remain in follow-up
+    /// wire-win-tutorial-overlay-b. The parameterless constructor renders a sample and never
+    /// subscribes to the live tour.
     /// </summary>
     public partial class TutorialOverlay : Window
     {
@@ -161,9 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// as WPF does (MainWindow.StartTutorial calls Start then constructs) — the first card is
         /// read on Loaded, and StepChanged carries every card after it.
         ///
-        /// <para>Nothing on this head calls this yet: starting a tour is
-        /// <c>MainShellWindow.StartTutorial</c>, which is a different layer's file, and there is no
-        /// step source here to start. It is the entry point that layer needs.</para>
+        /// TutorialHead starts shell tours through this constructor.
         /// </summary>
         public TutorialOverlay(Window targetWindow) : this(targetWindow, live: true)
         {
@@ -209,6 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 CoreTutorial.StepChanged += OnSeamStepChanged;
                 CoreTutorial.Finished += OnSeamFinished;
+                CoreTutorialEvents.Event += OnTutorialEvent;
             }
 
             Loaded += (_, _) =>
@@ -241,6 +202,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            _closed = true;
+            UnsubscribeAdvanceTrigger();
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;
 
@@ -248,6 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 CoreTutorial.StepChanged -= OnSeamStepChanged;
                 CoreTutorial.Finished -= OnSeamFinished;
+                CoreTutorialEvents.Event -= OnTutorialEvent;
 
                 // The window going away while the tour is still running is exactly what WPF's
                 // OnAppExit / OnMainWindowClosed handlers cover, and they Skip() for a reason: a
@@ -314,19 +278,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _step = step;
 
-            // WPF retargeted here when step.TargetWindowTypeName named a different window, and
-            // drew a clean centered "next up" card while that window was still opening.
-            // ponytail: CurrentStepIndex is NOT the blocker - CoreTutorial.CurrentStepIndex is in
-            // Core and StepCounterText below already reads it. What is missing is the STEP LIST
-            // (CoreTutorial exposes CurrentStep only, so "the next step's TargetWindowTypeName"
-            // cannot be looked ahead) and the WindowLoaded:* bus event that says the other window
-            // has opened - ConditioningControlPanel/Services/TutorialEventBus.cs, which has no Core
-            // seam to emit into. Both live with
-            // ConditioningControlPanel/Services/TutorialService.cs.
-
-            // A new card: the once-per-step advance latch reopens. WPF does this inside
-            // SubscribeAdvanceTrigger, which is the only thing UpdateStep calls after this point
-            // that is still a stub here, so the reset moves up rather than getting lost with it.
+            // ponytail: cross-window retarget and WindowLoaded fallback are still in
+            // wire-win-tutorial-overlay-b. This slice binds to the current host only.
             _advanceFiredThisStep = false;
 
             _txtStepCounter.Text = StepCounterText();
@@ -376,14 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 try { Focus(); } catch { /* window already closing */ }
             }, DispatcherPriority.Background);
 
-            // ponytail: SubscribeAdvanceTrigger is head work, not a seam call — it hooks the target control
-            // for OnButtonClick (Click + PreviewMouseLeftButtonUp + the parent window's Closing),
-            // OnTextEquals (TextBox.TextChanged, with the numeric/substring match),
-            // OnSelectionEquals (Selector.SelectionChanged, by Content or Tag) and
-            // OnSliderAtLeast (advance on pointer release, not on every ValueChanged), and
-            // OnEvent came off the static TutorialEventBus, which stayed in the WPF head. Every
-            // one of them needs a real control in a real window, which is why none of it crossed
-            // with the seam. The consequence is written into the class header.
+            if (_live) SubscribeAdvanceTrigger(step);
         }
 
         /// <summary>The follow-up label comes from step data, which may contain an underscore, so
@@ -800,8 +746,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (parent is Control fe)
             {
-                var found = fe.FindControl<Control>(name);
-                if (found != null) return found;
+                if (fe.Name == name) return fe;
+                try
+                {
+                    var found = fe.FindControl<Control>(name);
+                    if (found != null) return found;
+                }
+                catch (InvalidOperationException) { /* dynamic controls may have no name scope; walk the visual tree */ }
             }
 
             try
@@ -861,9 +812,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_advanceFiredThisStep) return;
             _advanceFiredThisStep = true;
+            UnsubscribeAdvanceTrigger();
+            var step = _step;
             Dispatcher.UIThread.Post(() =>
             {
-                if (CoreTutorial.IsActive) CoreTutorial.Next();
+                if (!_closed && CoreTutorial.IsActive && ReferenceEquals(CoreTutorial.CurrentStep, step)) CoreTutorial.Next();
             });
         }
 
