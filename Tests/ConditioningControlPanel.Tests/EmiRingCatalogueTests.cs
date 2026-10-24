@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using ConditioningControlPanel.Services.EmiDesk;
 using Xunit;
@@ -44,6 +45,13 @@ public class EmiRingCatalogueTests
         foreach (var p in doc.RootElement.EnumerateObject())
             if (p.Value.ValueKind == JsonValueKind.String) d[p.Name] = p.Value.GetString() ?? string.Empty;
         return d;
+    }
+
+    private static IReadOnlyDictionary<string, string> Map(string field)
+    {
+        var f = typeof(EmiDoors).GetField(field, BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(f);
+        return (IReadOnlyDictionary<string, string>)f!.GetValue(null)!;
     }
 
     private static IEnumerable<string> NewKeys() =>
@@ -188,7 +196,33 @@ public class EmiRingCatalogueTests
         }
     }
 
-    // The tab / rack map invariants moved with the maps: Tests/CCP.Core.Tests/EmiDoorsTests.cs.
+    [Fact]
+    public void Tab_and_rack_maps_only_point_at_real_targets()
+    {
+        var ids = EmiTargets.All.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var kv in Map("_tabTargets"))
+            Assert.True(ids.Contains(kv.Value), $"tab \"{kv.Key}\" scores unknown target \"{kv.Value}\"");
+        foreach (var kv in Map("_rackTargets"))
+            Assert.True(ids.Contains(kv.Value), $"rack \"{kv.Key}\" scores unknown target \"{kv.Value}\"");
+    }
+
+    [Fact]
+    public void No_door_is_counted_twice()
+    {
+        // A target is reachable by a tab OR a rack module OR a host launcher, never two of them,
+        // or one sitting scores two opens and outranks an honest habit.
+        var tabs = Map("_tabTargets").Values.ToList();
+        var racks = Map("_rackTargets").Values.ToList();
+        Assert.Empty(tabs.Intersect(racks, StringComparer.Ordinal));
+        Assert.Equal(tabs.Count, tabs.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(racks.Count, racks.Distinct(StringComparer.Ordinal).Count());
+
+        // The three ShowTab keys intercepted above the counter, plus the quiz landing page, are
+        // counted at their launchers instead, so they must NOT also sit in the tab map.
+        foreach (var intercepted in new[] { "fyp", "justdrop", "patreon", "gradedintake" })
+            Assert.False(Map("_tabTargets").ContainsKey(intercepted),
+                $"\"{intercepted}\" is counted at its launcher, not at the bottom of ShowTab");
+    }
 
     [Fact]
     public void Every_host_launcher_scores_its_own_door()

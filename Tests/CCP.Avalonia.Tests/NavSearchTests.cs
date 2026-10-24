@@ -83,6 +83,58 @@ public sealed class NavSearchTests
     });
 
     [Fact]
+    public Task GamesRowReturnsToTheGamesZoneAfterTheWallWasScrolled() => Shell(shell =>
+    {
+        shell.ShowTab("play");
+        Dispatcher.UIThread.RunJobs();
+        var play = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!;
+        var scroll = play.FindControl<ScrollViewer>("WallScroll")!;
+        scroll.Offset = new Vector(0, 400);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(scroll.Offset.Y > 0, "the wall must be scrolled before the palette landing");
+
+        SettingsPaletteWindow.Toggle(shell);
+        var palette = OpenPalette();
+        palette.FindControl<TextBox>("TxtQuery")!.Text = "games";
+        Dispatcher.UIThread.RunJobs();
+        var list = palette.FindControl<ListBox>("ListResults")!;
+        list.SelectedItem = list.Items.Cast<PaletteRow>().Single(r => r.Entry.Id == "tab.play");
+        Enter(palette);
+
+        Assert.False(SettingsPaletteWindow.IsOpen);
+        Assert.Equal("play", shell.CurrentTab);
+        Assert.Equal(0, scroll.Offset.Y);
+    });
+
+    [Fact]
+    public Task PanicClosesThePaletteWithoutConsumingAnEscapePress() => Shell(shell =>
+    {
+        SettingsPaletteWindow.Toggle(shell);
+        OpenPalette();
+        // Arm the Esc grace window as if an earlier Escape had closed the palette. A future
+        // timestamp keeps it armed however slow the run is. Panic must close through
+        // CloseIfOpen and leave that grace alone; TryConsumeEscape would clear it.
+        var grace = typeof(SettingsPaletteWindow).GetField("_escapeClosedAtUtc", BindingFlags.NonPublic | BindingFlags.Static)!;
+        grace.SetValue(null, DateTime.UtcNow.AddMinutes(1));
+        PanicSurfaces.StopAll("palette test", shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(SettingsPaletteWindow.IsOpen);
+        Assert.True(SettingsPaletteWindow.TryConsumeEscape());
+        Assert.False(SettingsPaletteWindow.TryConsumeEscape());
+    });
+
+    [Fact]
+    public Task GameRowUsesTheLaunchersLeashGate() => Run(() => LeashGateCardTests.Run(punished: true, (shell, _, _) =>
+    {
+        Assert.False(shell.LeashGate!.IsUp);
+        SettingsPaletteWindow.Navigate(shell, SettingsPaletteIndex.All.Single(e => e.GameId == "intake"));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.IsVisible);
+        Assert.True(shell.LeashGate.IsUp);
+        Assert.NotEqual("gradedintake", shell.CurrentTab);
+    }));
+
+    [Fact]
     public Task RowsOpenThroughTheirOwnVerb() => Shell(shell =>
     {
         // A Studio module lands on the Studio, a Library launcher opens its window.

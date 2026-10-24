@@ -33,6 +33,7 @@ public sealed class GameWindowTests
         {
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -308,6 +309,127 @@ public sealed class GameWindowTests
             CoreSecrets.RetrieveProvider = oldSecret;
             Environment.SetEnvironmentVariable(FriendsHead.EnvVar, oldLoopback);
             Directory.Delete(lib, true);
+        }
+    });
+
+    // These tests exercise the real board and settings bridge, without the unrelated main shell FX.
+    private static void RunBoard(Action body) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        var (oldSettings, oldServer) = (CoreSettings.ServiceProvider, GameWindow.Server);
+        var root = Directory.CreateTempSubdirectory("pbp-settings-").FullName;
+        using var server = new WebAssetServer(root);
+        CoreSettings.ServiceProvider = () => service;
+        GameWindow.Server = () => server;
+        try { body(); }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            (CoreSettings.ServiceProvider, GameWindow.Server) = (oldSettings, oldServer);
+            Directory.Delete(root, true);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_SettingsWhisperOwnClips_AndPostOnlyOnce() => RunBoard(() =>
+    {
+        var lib = Directory.CreateTempSubdirectory("pbp-whispers-").FullName;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(lib, "braindrain"));
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "a one.wav"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "ignored.txt"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "braindrain", "off.wav"), new byte[] { 1 });
+            CoreSettings.Current.DisabledAssetPaths.Add("braindrain/off.wav");   // unchecked: never offered
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            using var server = new WebAssetServer(lib) { AssetsRoot = () => lib };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var settings = sent.Single(o => (string?)o["type"] == "pbp:settings");
+            var url = (string)settings["whispers"]!.Single()!;
+            Assert.Equal(w.PageUrl!.Authority, new Uri(url).Authority);
+            Assert.EndsWith("/ccp.assets/braindrain/a%20one.wav", url);
+            using var http = new System.Net.Http.HttpClient();   // the offered clip is actually served
+            using var got = http.GetAsync(url + "?ccp_t=" + server.Token).GetAwaiter().GetResult();
+            Assert.Equal(System.Net.HttpStatusCode.OK, got.StatusCode);
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Single(sent.Where(o => (string?)o["type"] == "pbp:settings"));
+        }
+        finally
+        {
+            CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(lib, true);
+        }
+    });
+
+    [Fact]
+    public void PieceByPiece_SettingsWhispers_AllOwnClipsUnchecked_FallBackToWords() => RunBoard(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("pbp-off-").FullName;
+        var oldAssets = CorePaths.EffectiveAssetsProvider;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "braindrain"));
+            File.WriteAllBytes(Path.Combine(dir, "braindrain", "off.wav"), new byte[] { 1 });
+            var words = Directory.CreateDirectory(Path.Combine(dir, "words")).FullName;
+            File.WriteAllBytes(Path.Combine(words, "drop.mp3"), new byte[] { 1 });
+            CoreSettings.Current.DisabledAssetPaths.Add("braindrain/off.wav");
+            CorePaths.EffectiveAssetsProvider = () => dir;
+            using var server = new WebAssetServer(dir) { SubAudioRoot = () => null, WordsRoot = () => words };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.EndsWith("/ccp.words/drop.mp3", (string?)sent.Single(o => (string?)o["type"] == "pbp:settings")["whispers"]!.Single());
+        }
+        finally
+        {
+            CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Theory]
+    [InlineData(false, ConditioningControlPanel.Models.BuiltInMods.BambiSleepId, "ccp.words/drop.mp3")]
+    [InlineData(true, ConditioningControlPanel.Models.BuiltInMods.BambiSleepId, "ccp.subaudio/BAMBI%20FREEZE.mp3")]
+    [InlineData(true, ConditioningControlPanel.Models.BuiltInMods.CCPDefaultId, "ccp.words/drop.mp3")]
+    public void PieceByPiece_SettingsWhisperFallback_RespectsSharedAudioPermission(bool audible, string modId, string expected)
+        => RunBoard(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("pbp-fallback-").FullName;
+        var (oldAssets, oldServer, oldMod) = (CorePaths.EffectiveAssetsProvider, GameWindow.Server, CoreMods.ActiveModIdProvider);
+        try
+        {
+            var sub = Directory.CreateDirectory(Path.Combine(dir, "sub")).FullName;
+            var words = Directory.CreateDirectory(Path.Combine(dir, "words")).FullName;
+            File.WriteAllBytes(Path.Combine(sub, "BAMBI FREEZE.mp3"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(words, "drop.mp3"), new byte[] { 1 });
+            CorePaths.EffectiveAssetsProvider = () => dir;
+            CoreMods.ActiveModIdProvider = () => modId;
+            CoreSettings.Current.SubAudioEnabled = true;
+            CoreSettings.Current.SubAudioMuted = !audible;
+            using var server = new WebAssetServer(dir) { SubAudioRoot = () => sub, WordsRoot = () => words };
+            GameWindow.Server = () => server;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.EndsWith("/" + expected, (string?)sent.Single(o => (string?)o["type"] == "pbp:settings")["whispers"]!.Single());
+        }
+        finally
+        {
+            (CorePaths.EffectiveAssetsProvider, GameWindow.Server, CoreMods.ActiveModIdProvider) = (oldAssets, oldServer, oldMod);
+            Directory.Delete(dir, true);
         }
     });
 
