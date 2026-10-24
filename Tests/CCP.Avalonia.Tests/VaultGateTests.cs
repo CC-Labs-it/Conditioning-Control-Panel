@@ -60,7 +60,7 @@ public sealed class VaultGateTests
             Click(card!, Loc.Get("vaultgate_compare"));
             Assert.Contains(Loc.Get("vaultgate_compare_title"), Texts(card!));
             Assert.Contains(Loc.Get("vaultgate_prime_7"), Texts(card!));
-            Click(card!, Loc.Get("vaultgate_billing_yearly"));
+            Click(card!, Loc.GetF("vaultgate_billing_yearly", PlanCatalog.YearlyOffPercent(PlanCatalog.Current.Basic)));
             Assert.Contains(Loc.Get("vaultgate_yearly_note"), Texts(card!));
             Click(card!, Loc.Get("vaultgate_back"));
             Assert.Contains(Loc.Get("vaultgate_signin"), Texts(card!));
@@ -275,6 +275,73 @@ public sealed class VaultGateTests
         finally { VaultGateDialog.Launch = previous; VaultGateDialog.Open?.Close(); }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task PlanPricesHintsAndCheckoutUseTheSameFreshList() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var previous = VaultGateDialog.Launch;
+        var opened = new System.Collections.Generic.List<string>();
+        var plans = PlanCatalog.Fallback with
+        {
+            Basic = PlanCatalog.Fallback.Basic with { MonthlyCents = 900, MonthlyEurCents = 800, YearlyCents = 8640,
+                PatreonUrl = "https://www.patreon.com/checkout/CodeBambi?rid=123" },
+            FromServer = true,
+        };
+        PlanCatalog.Reset();
+        PlanCatalog.FetchOverride = _ => Task.FromResult<string?>(PlanCatalog.ToWire(plans).ToString());
+        VaultGateDialog.Launch = url => { opened.Add(url); return true; };
+        try
+        {
+            var card = VaultGateDialog.ShowOffer(null, "remotecontrol", 1, () => { });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("$9", string.Join(" ", Texts(card)));
+            Assert.Contains(Loc.GetF("vaultgate_price_eur", VaultOffer.Money(800, PriceCurrency.Eur)), Texts(card));
+            Assert.Contains(Loc.GetF("vaultgate_yearly_hint", VaultOffer.Money(8640, PriceCurrency.Usd), 20), Texts(card));
+            Click(card, Loc.Get("vaultgate_open_vault"));
+            Assert.Equal(new[] { plans.Basic.PatreonUrl }, opened);
+            card = VaultGateDialog.ShowEnding(null, DateTime.UtcNow.AddHours(1), () => { });
+            Click(card, Loc.Get("vaultgate_ending_keep"));
+            Assert.Equal(plans.Basic.PatreonUrl, opened[1]);
+        }
+        finally { VaultGateDialog.Launch = previous; VaultGateDialog.Open?.Close(); PlanCatalog.Reset(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public async Task CardCountsShowAndTheRailActuallyOpened()
+    {
+        var events = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        var previous = VaultGateDialog.Launch;
+        var oldBase = ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.BaseUrlOverride;
+        ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.BaseUrlOverride = "https://proxy.test";
+        ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.SendOverride = (_, body) => { events.Enqueue(body); return Task.CompletedTask; };
+        VaultGateDialog.Launch = _ => true;
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                EnsureAvalonia();
+                var card = VaultGateDialog.ShowOffer(null, "remotecontrol", 2, () => { });
+                Click(card, Loc.Get("vaultgate_open_lab"));
+                card = VaultGateDialog.ShowEnding(null, DateTime.UtcNow.AddHours(1), () => { });
+                Click(card, Loc.Get("vaultgate_or_card"));
+                return Task.CompletedTask;
+            });
+            for (var i = 0; i < 100 && events.Count < 4; i++) await Task.Delay(20);
+            Assert.Contains("gate_shown|panel|remotecontrol|prime", events);
+            Assert.Contains("cta_clicked|panel|remotecontrol|patreon", events);
+            Assert.Contains("gate_shown|panel|invite_ending|basic", events);
+            Assert.Contains("cta_clicked|panel|invite_ending|web", events);
+            Assert.Equal(4, events.Count);
+        }
+        finally
+        {
+            VaultGateDialog.Launch = previous;
+            ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.BaseUrlOverride = oldBase;
+            ConditioningControlPanel.Services.Funnel.PanelFunnelBeacon.SendOverride = null;
+        }
+    }
 
     private static ConditioningControlPanel.Avalonia.Helpers.NotificationService Toasts(out StackPanel host)
     {

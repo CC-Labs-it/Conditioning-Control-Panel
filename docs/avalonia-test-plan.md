@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Sync 7 plan card and funnel
+
+1. Open a Basic and a Prime padlock, then Compare and switch Monthly/Yearly. Check the USD headline, euro secondary line on the offer, and the yearly discount against the plan list. Select each plan and verify its Patreon checkout has the matching reward selected; the card/PayPal link uses the matching web plan with `from=panel`. Repeat on an invite-ending card. WPF `Dialogs/VaultGateDialog.cs`. Rows: `5265111bc`.
+2. With an isolated profile and a test proxy, open a feature gate and an invite-ending card, then click Patreon and web respectively. Verify one `gate_shown` and one `cta_clicked` per action, surface `panel`, feature/tier and actual rail only. In Offline Mode verify no funnel or plan-list request. WPF `Services/Funnel/FunnelBeacon.cs`. Rows: `219fdf936`, `4fcd2fe65`.
