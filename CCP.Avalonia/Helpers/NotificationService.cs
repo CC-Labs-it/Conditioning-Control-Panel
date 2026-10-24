@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Serilog;
+using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel.Avalonia.Helpers
 {
@@ -19,27 +20,33 @@ namespace ConditioningControlPanel.Avalonia.Helpers
     /// NotificationService.cs: same colours, sizes, 5 s default, action button and × dismiss,
     /// newest stacked below in MainShellWindow's NotificationHost. Toasts fired before the host
     /// attaches are replayed on attach, as WPF does.
-    /// ponytail: WPF's ShowSticky/Dismiss(key) are not ported - nothing on this head calls them yet.
+    /// Sticky notifications persist until dismissed, recording their key in Core settings.
     /// </summary>
     public sealed class NotificationService
     {
         private Panel? _host;
-        private readonly List<(string message, NotificationType type, TimeSpan? duration, string? actionLabel, Action? action)> _pending = new();
+        private readonly List<(string message, NotificationType type, TimeSpan? duration, string? actionLabel, Action? action, string? stickyKey)> _pending = new();
+
+        private readonly Dictionary<string, Border> _stickyByKey = new();
 
         public void AttachHost(Panel host)
         {
             _host = host;
             var queue = _pending.ToArray();
             _pending.Clear();
-            foreach (var (msg, type, dur, label, action) in queue) Show(msg, type, dur, label, action);
+            foreach (var (msg, type, dur, label, action, key) in queue)
+            {
+                if (key != null) ShowSticky(key, msg, type, label, action);
+                else Show(msg, type, dur, label, action);
+            }
         }
 
         public void Show(string message, NotificationType type = NotificationType.Info, TimeSpan? duration = null,
             string? actionLabel = null, Action? action = null)
         {
-            if (_host == null) { _pending.Add((message, type, duration, actionLabel, action)); return; }
+            if (_host == null) { _pending.Add((message, type, duration, actionLabel, action, null)); return; }
 
-            var border = BuildToast(message, type, actionLabel, action);
+            var border = BuildToast(message, type, actionLabel, action, null);
             _host.Children.Add(border);
             border.Opacity = 1; // fades in through the Opacity transition (WPF AnimateIn, 180 ms)
 
@@ -49,7 +56,28 @@ namespace ConditioningControlPanel.Avalonia.Helpers
             timer.Start();
         }
 
-        private Border BuildToast(string message, NotificationType type, string? actionLabel, Action? action)
+        /// <summary>WPF ShowSticky: no expiry, session deduplication and persistent manual dismissal.</summary>
+        public void ShowSticky(string key, string message, NotificationType type = NotificationType.Info,
+            string? actionLabel = null, Action? action = null)
+        {
+            if (string.IsNullOrWhiteSpace(key) || CoreSettings.Current.DismissedNotificationKeys.Contains(key)) return;
+            if (_host == null) { _pending.Add((message, type, null, actionLabel, action, key)); return; }
+            if (_stickyByKey.ContainsKey(key)) return;
+            var border = BuildToast(message, type, actionLabel, action, key);
+            _stickyByKey[key] = border;
+            _host.Children.Add(border);
+            border.Opacity = 1;
+        }
+
+        /// <summary>Programmatic dismissal leaves the key eligible to appear again.</summary>
+        public void Dismiss(string key)
+        {
+            if (_stickyByKey.Remove(key, out var border)) FadeOutAndRemove(border);
+            _pending.RemoveAll(p => p.stickyKey == key);
+        }
+
+        private Border BuildToast(string message, NotificationType type, string? actionLabel, Action? action,
+            string? stickyKey)
         {
             var accent = new SolidColorBrush(Color.Parse(type switch
             {
@@ -108,6 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 {
                     try { action(); }
                     catch (Exception ex) { Log.Warning(ex, "NotificationService: action button handler failed"); }
+                    if (stickyKey != null) _stickyByKey.Remove(stickyKey);
                     FadeOutAndRemove(border);
                 };
                 buttons.Children.Add(actionBtn);
@@ -128,7 +157,16 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 VerticalAlignment = VerticalAlignment.Top,
             };
             global::Avalonia.Automation.AutomationProperties.SetName(dismissBtn, ConditioningControlPanel.Localization.Loc.Get("btn_close"));   // icon-only: name it
-            dismissBtn.Click += (_, _) => FadeOutAndRemove(border);
+            dismissBtn.Click += (_, _) =>
+            {
+                if (stickyKey != null)
+                {
+                    var keys = CoreSettings.Current.DismissedNotificationKeys;
+                    if (!keys.Contains(stickyKey)) { keys.Add(stickyKey); CoreSettings.Save(); }
+                    _stickyByKey.Remove(stickyKey);
+                }
+                FadeOutAndRemove(border);
+            };
             buttons.Children.Add(dismissBtn);
 
             border.Child = grid;
@@ -145,7 +183,10 @@ namespace ConditioningControlPanel.Avalonia.Helpers
                 new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(220), Easing = new QuadraticEaseIn() },
             };
             border.Opacity = 0;
-            DispatcherTimer.RunOnce(() => _host?.Children.Remove(border), TimeSpan.FromMilliseconds(220));
+            ScheduleRemoval(() => _host?.Children.Remove(border), TimeSpan.FromMilliseconds(220));
         }
+
+        /// <summary>Test seam: runs the post-fade removal (a real one-shot timer in the app).</summary>
+        internal Action<Action, TimeSpan> ScheduleRemoval = (remove, delay) => DispatcherTimer.RunOnce(remove, delay);
     }
 }

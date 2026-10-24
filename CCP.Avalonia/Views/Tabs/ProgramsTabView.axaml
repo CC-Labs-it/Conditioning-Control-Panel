@@ -42,14 +42,8 @@
      WPF (Content = Loc.Get("btn_program_pause"/"..._resume")), and a Button Content string carrying
      a snake_case loc key is exactly trap 1, so the caption is a named TextBlock inside the button.
 
-     DROPPED, and the only real losses:
-       DataTemplate.Triggers + Storyboard  - the today-node breathing halo, the day-complete node
-         ignite and the task-card completion pop. WPF DataTriggers with BeginStoryboard have no
-         Avalonia equivalent worth hand-rolling from a template, and every one of them is
-         decoration on top of a state the static markup already shows (the halo Ellipse, the
-         ignite Ellipse and the done chip all still draw, they just do not animate).
-         ponytail: no node breathe / ignite / card pop, restore with Avalonia animations when the
-         program services move to Core and the run view is live.
+     The today-node halo and day-complete ignite run through the shared beat in Ignition.cs,
+     replacing the WPF DataTemplate storyboards. Task-card completion pop remains a follow-up.
 
      The browse panel is the only visible state in this layer. It reads Core's BuiltInPrograms.All()
      catalogue, lets the user select a definition for read-only details, and keeps all execution
@@ -628,10 +622,8 @@
                                                         <Ellipse Width="{Binding NodeSize}" Height="{Binding NodeSize}"
                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                  Fill="{DynamicResource ElevatedSurfaceBrush}"/>
-                                                        <!-- Today's halo. On WPF a DataTrigger breathed it
-                                                             from 0.35 to 0.95; here it rests at its static
-                                                             mid value, so today's node still reads as
-                                                             today. -->
+                                                        <!-- Today's halo breathes on the shared beat in
+                                                             ProgramsTabView.Ignition; static .65 under reduced motion. -->
                                                         <Ellipse x:Name="PipGlow" Width="52" Height="52" Opacity="0.65"
                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                  IsHitTestVisible="False"
@@ -642,10 +634,8 @@
                                                                 <ScaleTransform ScaleX="1" ScaleY="1"/>
                                                             </Ellipse.RenderTransform>
                                                         </Ellipse>
-                                                        <!-- The day-complete IGNITE flare. Kept as its own
-                                                             element (never folded into the halo above) so
-                                                             the two can be re-animated apart when the
-                                                             storyboards come back. Rests invisible. -->
+                                                        <!-- Separate day-complete flare so a one-shot never
+                                                             replaces the halo's ambient clock. -->
                                                         <Ellipse x:Name="PipIgnite" Width="52" Height="52" Opacity="0"
                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                  IsHitTestVisible="False"
