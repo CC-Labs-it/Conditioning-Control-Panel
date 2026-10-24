@@ -19,7 +19,7 @@
  */
 import { MeshBasicNodeMaterial, DoubleSide, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, NearestFilter, RepeatWrapping, ClampToEdgeWrapping } from 'three/webgpu';
 import { uniform, uv, sin, fract, mix, smoothstep, float, vec2, vec3, texture, normalWorld, positionWorld, cameraPosition,
-  normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select, fwidth } from 'three/tsl';
+  normalize, dot, pow, abs, clamp, max, min, reflect, floor, hash, length, atan, step, exp, select, fwidth, attribute } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { SPECTRUM_LOOK, patternZones, patternBytes, fitPeriod } from '../spectrum.js';
 import { ROAD_AA } from '../roadAaMath.js';
@@ -244,13 +244,17 @@ export function createRoadMaterial(pal, art = null, track = null) {
 
   // edges and centre: a steady bright edge lane and a calm centre line frame the racing line; the music
   // breathes the edge lanes with the bass and moves the edge lines with the melody
-  const half = track ? texture(widthTexture(track), vec2(p.y.div(lapM), 0.5)).r.mul(ROAD_HALF_WIDTH_RANGE) : float(P.halfWidthM);
+  const mainHalf = track ? texture(widthTexture(track), vec2(p.y.div(lapM), 0.5)).r.mul(ROAD_HALF_WIDTH_RANGE) : float(P.halfWidthM);
+  const forkHalf = attribute('forkWidth', 'float');
+  const half = select(forkHalf.greaterThan(0), forkHalf, mainHalf);
+  // A shared fork apron has no exposed border where another deck supports its edge.
+  const edgeVisible = clamp(attribute('roadEdge', 'float'), 0, 1);
   const toEdge = half.sub(au).sub(melody);
   const laneM = float(S.edgeLaneM).mul(mu.bassW.add(1));
   // the true edge never moves (no vibration, no melody): the lane's outer stretch stays lane colour there
   const trueEdge = half.sub(abs(uRaw));
   const tiles = createMusicTiles({ track, p, trueEdge, music: mu, view: V, distance: dist });
-  const edgeW = max(float(1).sub(smoothstep(laneM.mul(0.6), laneM, toEdge)), float(1).sub(smoothstep(E.laneHoldM[0], E.laneHoldM[1], trueEdge)));
+  const edgeW = max(float(1).sub(smoothstep(laneM.mul(0.6), laneM, toEdge)), float(1).sub(smoothstep(E.laneHoldM[0], E.laneHoldM[1], trueEdge))).mul(edgeVisible);
   // the edge line: a crisp bright line ON the true edge with a dark gutter inside it, the same in every palette
   // and music mode; its width grows to at least a pixel and its light shrinks to match, so far off it never
   // shimmers (fwidth keeps the energy per pixel even)
@@ -259,8 +263,8 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const px = fwidth(trueEdge).mul(E.aaPx), cap = E.lineM * E.aaCapMul;
   const lineW = max(float(E.lineM), min(px, cap));
   const crestFade = clamp(float(cap).div(max(px, 1e-4)), 0, 1).pow(2);
-  const edgeLine = float(1).sub(smoothstep(lineW.mul(0.55), lineW, trueEdge)).mul(float(E.lineM).div(lineW).min(1).mul(0.6).add(0.4)).mul(crestFade);
-  const gutter = smoothstep(lineW, lineW.add(E.gutterSoftM), trueEdge).mul(float(1).sub(smoothstep(lineW.add(E.gutterSoftM), lineW.add(E.gutterM), trueEdge))).mul(crestFade);
+  const edgeLine = float(1).sub(smoothstep(lineW.mul(0.55), lineW, trueEdge)).mul(float(E.lineM).div(lineW).min(1).mul(0.6).add(0.4)).mul(crestFade).mul(edgeVisible);
+  const gutter = smoothstep(lineW, lineW.add(E.gutterSoftM), trueEdge).mul(float(1).sub(smoothstep(lineW.add(E.gutterSoftM), lineW.add(E.gutterM), trueEdge))).mul(crestFade).mul(edgeVisible);
   // the centre line widens to a pixel and dims to match (same light per pixel), so far off it never crawls
   const cW = max(float(S.centreLineW), fwidth(au).mul(AA.lineMul * 1.5));
   const centre = float(1).sub(smoothstep(cW.mul(0.5), cW, au)).mul(float(S.centreLineW).div(cW));
@@ -321,7 +325,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const range = smoothstep(P.glintNearM[0], P.glintNearM[1], dist).mul(float(1).sub(smoothstep(P.glintFarM[0], P.glintFarM[1], dist)));
   const glint = spot.mul(lit).mul(catchA).mul(range).mul(P.glintGain).mul(u.sheen);
 
-  const rim = float(1).sub(smoothstep(0, P.rimInM, trueEdge)).mul(P.rimGain);
+  const rim = float(1).sub(smoothstep(0, P.rimInM, trueEdge)).mul(P.rimGain).mul(edgeVisible);
   const polish = refl.add(edgeCol.mul(0.6).add(0.4).mul(rim)).mul(u.sheen).mul(mu.calm.mul(M.calmSheen).add(1)).add(vec3(1, 0.97, 0.99).mul(glint));
   // u.bright carries the beat breath; the drop wave and the shatter add their own light (mu.flash is
   // photosafe gated by the caller, 0 when refused or under Gentle)
@@ -340,7 +344,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
       .add(vec3(0.28, 0.75, 0.48).mul(centre.mul(S.centreGain).mul(u.contrast)))
       .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze);
   }
-  const boudoir = track?.id === 'boudoir' ? createBoudoirRoadSurface({ track, p, trueEdge, distance: dist, view: V, normal: normalWorld }) : null;
+  const boudoir = track?.id === 'boudoir' ? createBoudoirRoadSurface({ track, p, trueEdge: mix(float(8), trueEdge, edgeVisible), distance: dist, view: V, normal: normalWorld }) : null;
   if (boudoir) {
     // The finish stays attached to the deck. Music contributes light above the material,
     // while each district keeps its wood, cloth, stone or porcelain identity.
@@ -352,7 +356,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // the edge line sits over everything; the gutter darkens what is inside it, so the line reads against any hue
   // A broad quiet shoulder gives the clear edge a darker neighbour. The music and glitter remain
   // above it; there are no extra stripes or time-driven luminance changes near the kart.
-  const shoulder = smoothstep(0.28, 0.6, trueEdge).mul(float(1).sub(smoothstep(1.15, 1.85, trueEdge)));
+  const shoulder = smoothstep(0.28, 0.6, trueEdge).mul(float(1).sub(smoothstep(1.15, 1.85, trueEdge))).mul(edgeVisible);
   // Solid panes keep their joints and colour when the surrounding ribbon streams or flashes.
   // The steady centre and all separate word/pad markings remain above this restrained surface.
   let tileBody = tiles.colour.mul(tiles.relief).mul(haze).mul(LOOK.roadGain)

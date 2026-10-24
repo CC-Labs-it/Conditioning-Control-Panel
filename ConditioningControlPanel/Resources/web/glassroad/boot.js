@@ -169,7 +169,12 @@ function centreline(track, stepM = 4) {
   const n = Math.max(8, Math.floor(track.lengthM / stepM)), xz = new Float32Array(n * 2), y = new Float32Array(n);
   const f = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
   for (let i = 0; i < n; i++) { track.frameAt(i * track.lengthM / n, f); xz[i * 2] = f.p[0]; xz[i * 2 + 1] = f.p[2]; y[i] = f.p[1]; }
-  return { xz, y };
+  const forks = (track.forks || []).map(fork => {
+    const frames = fork.samples(4), xz = new Float32Array(frames.length * 2), y = new Float32Array(frames.length);
+    frames.forEach((f, i) => { xz[i * 2] = f.p[0]; xz[i * 2 + 1] = f.p[2]; y[i] = f.p[1]; });
+    return { xz, y };
+  });
+  return { xz, y, forks };
 }
 
 async function boot() {
@@ -288,7 +293,7 @@ async function boot() {
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
     if (hazards) {
       const drive = ai.drive;
-      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing') hazards.steer(r, out); };
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing' && !track.forkAtSeg?.(r.st[S.seg])) hazards.steer(r, out); };
       hazards.reset();
     }
     contact = createContact(track, feel, q);

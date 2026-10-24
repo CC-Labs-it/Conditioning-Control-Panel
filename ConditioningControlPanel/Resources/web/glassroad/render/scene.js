@@ -72,6 +72,7 @@ import { createBoudoirPerfumeView } from './boudoirPerfume.js';
 import { createBoudoirHazardView } from './boudoirHazards.js';
 import { buildBoudoirMirrorRoom } from './boudoirMirrorRoom.js';
 import { createBoudoirWaterPalette } from './boudoirWater.js';
+import { buildBoudoirForks } from './boudoirForks.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -100,6 +101,8 @@ export function meshFrom(d, material) {
   const n = d.positions.length / 3;
   g.setAttribute('surface', new BufferAttribute(d.surface && d.surface.length === n ? d.surface : new Float32Array(n), 1));
   g.setAttribute('flow', new BufferAttribute(d.flow && d.flow.length === n * 2 ? d.flow : new Float32Array(n * 2), 2));
+  g.setAttribute('forkWidth', new BufferAttribute(d.forkWidth && d.forkWidth.length === n ? d.forkWidth : new Float32Array(n), 1));
+  g.setAttribute('roadEdge', new BufferAttribute(d.roadEdge && d.roadEdge.length === n ? d.roadEdge : new Float32Array(n).fill(1), 1));
   g.setIndex(new BufferAttribute(d.indices, 1));
   g.computeBoundingSphere();
   return new Mesh(g, material);
@@ -193,6 +196,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   try { stones = buildStones(track, art, pal); scene.add(stones.group); } catch (e) { console.warn('[glassroad/world] stones failed: ' + (e && e.message)); }
   const rails = createRailMaterial(pal, art);
   add(meshFrom(track.meshes.rails, rails.material));
+  const boudoirForks = boudoir ? buildBoudoirForks(track, { roadMaterial: road.material, railMaterial: rails.material, phone: Q.name === 'phone' }) : null;
+  if (boudoirForks) scene.add(boudoirForks.group);
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
   let edges = null;
   try { edges = createEdges(scene, track, pal, { pulse: rails.uniforms.pulse }); } catch (e) { console.warn('[glassroad/world] edges failed: ' + (e && e.message)); }
@@ -269,7 +274,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   let shadows = null;
   if (renderer) {
     try {
-      shadows = buildShadows(renderer, scene, sun, Q, { enabled: shadowsOn, track, samples, receivers: [roadMesh, padMesh].filter(Boolean),
+      shadows = buildShadows(renderer, scene, sun, Q, { enabled: shadowsOn, track, samples, receivers: [roadMesh, padMesh, boudoirForks?.group.getObjectByName('fork-road')].filter(Boolean),
         casters: boudoirDressing ? (boudoirDressing.casters || []) : keepDressing ? keepDressing.casters : colossi ? colossi.casters : [], scatterCasters: scatter ? [scatter.object] : [], karts: kartObjs, colossi: colossi ? colossi.placed : [] });
     } catch (e) { console.warn('[glassroad/world] shadows failed: ' + (e && e.message)); }
     if (shadows && renderer.onTier) offs.push(renderer.onTier(() => shadows.retier()));
@@ -558,7 +563,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (waterfall) waterfall.dispose();
     waterVolume.dispose();
     if (showcaseDressing) showcaseDressing.dispose();
-    boudoirDressing?.dispose(); perfumeView?.dispose(); boudoirHazardView?.dispose(); mirrorRoom?.dispose();
+    boudoirDressing?.dispose(); boudoirForks?.dispose(); perfumeView?.dispose(); boudoirHazardView?.dispose(); mirrorRoom?.dispose();
     if (keepDressing) keepDressing.dispose();
     if (keepGates) keepGates.dispose();
     if (keepChains) keepChains.dispose();
@@ -571,7 +576,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, perfumeView, boudoirHazardView, mirrorRoom, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
