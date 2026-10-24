@@ -58,7 +58,8 @@ export async function loadArt(renderer, { want = WANT, trackId = 'threshold', on
   const materialTier = Q.name;
   const plan = trackId === 'keep' ? keepArtPlan(want, materialTier) : { ids: want, aliases: {} };
   const resolve = (id) => plan.aliases[id] || id;
-  const requested = [...new Set([...plan.ids, ...MATERIAL_DETAIL_IDS.map((id) => materialDetailId(id, materialTier))])];
+  const waterIds = ['water-normal', 'water-foam-mask', 'waterfall-sheet', 'waterfall-phase-mask'].map(id => id + (materialTier === 'phone' ? '-phone' : ''));
+  const requested = [...new Set([...plan.ids, ...waterIds, ...MATERIAL_DETAIL_IDS.map((id) => materialDetailId(id, materialTier))])];
   const vertexShading = { applied: [], skipped: [] };
   let manifest = [];
   try {

@@ -1,6 +1,6 @@
 /* Original Keep landscape. No textures, downloads or animated sky bands. */
-import { Group, Mesh, InstancedMesh, BufferGeometry, Float32BufferAttribute, BoxGeometry, CylinderGeometry, SphereGeometry, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, Color, BackSide, FogExp2 } from 'three/webgpu';
-import { materialColor, normalWorld, positionGeometry, normalize, dot, clamp, vec3, color, mix, smoothstep, sin, float } from 'three/tsl';
+import { Group, Mesh, InstancedMesh, BufferGeometry, Float32BufferAttribute, BoxGeometry, PlaneGeometry, CylinderGeometry, SphereGeometry, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, Color, BackSide, FogExp2 } from 'three/webgpu';
+import { materialColor, normalWorld, positionGeometry, normalize, dot, clamp, vec3, color, mix, smoothstep, sin, cos, pow, uniform, positionWorld, positionLocal, cameraPosition, float } from 'three/tsl';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { LOOK } from './look.js';
 
@@ -46,6 +46,20 @@ function stone(hex) {
   const material = new MeshBasicNodeMaterial({ color: new Color(hex) });
   const light = clamp(dot(normalize(normalWorld), normalize(vec3(...LOOK.lightDir))).mul(.28).add(.72), .4, 1);
   material.colorNode = materialColor.rgb.mul(light); return material;
+}
+// The distant moat shares the race clock, so ripples freeze with the pause card.
+function moatSurface(clock, motion) {
+  const material = new MeshBasicNodeMaterial();
+  const p = positionWorld, phase = p.x.mul(.085).add(p.z.mul(.06)).sub(clock.mul(.65));
+  const cross = p.x.mul(.04).sub(p.z.mul(.12)).add(clock.mul(.38));
+  const n = normalize(vec3(cos(phase).mul(.22), 1, cos(cross).mul(.19)));
+  const view = normalize(cameraPosition.sub(p)), fresnel = pow(float(1).sub(clamp(dot(n, view).abs(), 0, 1)), 3);
+  const shine = pow(clamp(dot(n, normalize(vec3(.35, .9, -.25).add(view))), 0, 1), 48);
+  const crests = smoothstep(.86, 1, sin(phase)).mul(smoothstep(.25, .9, cos(cross)));
+  material.colorNode = mix(color('#151322'), color('#65435f'), fresnel.mul(.75))
+    .add(color('#c6a5bf').mul(shine).mul(.65)).add(color('#8f7f9e').mul(crests).mul(.24));
+  material.positionNode = positionLocal.add(vec3(0, 0, sin(positionLocal.x.mul(.035).add(positionLocal.y.mul(.025)).sub(clock.mul(.4))).mul(.65).mul(motion)));
+  return material;
 }
 function overcast() {
   const material = new MeshBasicNodeMaterial({ side: BackSide, depthWrite: false, fog: false });
@@ -99,13 +113,16 @@ export function createKeepBackdrop(scene, track) {
   batch('keep-distant-spires', spike, '#302a36', plan.spires);
   const island = islandGeometry(plan.courseRadius * .85, plan.groundY, plan.moatY - 45), islandMaterial = stone('#3b3540'); owned.push(island, islandMaterial);
   const ground = new Mesh(island, islandMaterial); ground.name = 'keep-rocky-island'; ground.position.set(plan.center[0], 0, plan.center[2]); group.add(ground);
-  const moatGeometry = new CylinderGeometry(3100, 3100, 2, 80), moatMaterial = stone('#25202d'); owned.push(moatGeometry, moatMaterial);
-  const moat = new Mesh(moatGeometry, moatMaterial); moat.name = 'keep-still-black-moat'; moat.position.set(plan.center[0], plan.moatY - 1, plan.center[2]); group.add(moat);
+  const clock = uniform(0), motion = uniform(1);
+  const moatGeometry = new PlaneGeometry(6200, 6200, 80, 80), moatMaterial = moatSurface(clock, motion); owned.push(moatGeometry, moatMaterial);
+  const moat = new Mesh(moatGeometry, moatMaterial); moat.name = 'keep-still-black-moat'; moat.rotation.x = -Math.PI / 2; moat.position.set(plan.center[0], plan.moatY, plan.center[2]); group.add(moat);
   const skyGeometry = new SphereGeometry(plan.skyRadiusM, 48, 28), skyMaterial = overcast(); owned.push(skyGeometry, skyMaterial);
   const sky = new Mesh(skyGeometry, skyMaterial); sky.name = 'keep-overcast-sky'; sky.position.fromArray(plan.center); sky.renderOrder = -10; sky.frustumCulled = false; group.add(sky);
   const oldFog = scene.fog, fog = new FogExp2('#563450', .00034); scene.fog = fog; scene.add(group);
   const stats = { sky: 1, skyRadiusM: plan.skyRadiusM, starfield: false, rocks: plan.rocks.flat().length, cliffLayers: plan.rocks.length,
     towers: plan.towers.length, ruinedWalls: plan.walls.length, spires: plan.spires.length, island: 1, moat: 1, draws: group.children.length };
-  return { group, plan, stats, dispose() { group.removeFromParent(); if (scene.fog === fog) scene.fog = oldFog;
+  return { group, plan, stats, update(dt, { paused = false, gentle = false, scroll = 1 } = {}) {
+    if (paused) return; clock.value += Math.max(0, dt) * scroll; motion.value = gentle ? .35 : 1;
+  }, dispose() { group.removeFromParent(); if (scene.fog === fog) scene.fog = oldFog;
     group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); for (const item of owned) item.dispose(); } };
 }

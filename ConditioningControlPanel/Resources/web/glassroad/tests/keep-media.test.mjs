@@ -87,7 +87,9 @@ test('Keep backdrop stays within a small draw budget and restores the scene on t
   assert.equal(stats.sky,1);assert.equal(stats.starfield,false);assert.equal(stats.island,1);assert.equal(stats.moat,1);
   const sky=backdrop.group.getObjectByName('keep-overcast-sky');
   assert.equal(sky.material.fog,false);assert.equal(sky.material.side,BackSide);assert.equal(sky.material.depthWrite,false);
-  assert.equal(backdrop.group.getObjectByName('keep-still-black-moat').position.y,backdrop.plan.moatY-1);
+  const moat = backdrop.group.getObjectByName('keep-still-black-moat');
+  assert.equal(moat.position.y, backdrop.plan.moatY);
+  assert.ok(moat.material.positionNode && moat.geometry.attributes.position.count > 6000, 'subdivided moat has real moving swells');
   assert.equal(scene.fog.isFogExp2,true);assert.ok(scene.fog.density<=.0007);
   backdrop.group.traverse(o=>{if(o.isMesh){o.geometry.computeBoundingSphere();assert.ok(Number.isFinite(o.geometry.boundingSphere.radius));}});
   backdrop.dispose();assert.equal(scene.children.length,0);assert.equal(scene.fog,priorFog);
