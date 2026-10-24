@@ -45,12 +45,17 @@ export function buildStones(track, art, pal) {
   const rows = stoneLayout(track), owned = [], geometries = [];
   const basis = new Matrix4(), rotation = new Quaternion();
   const x = new Vector3(), y = new Vector3(), z = new Vector3();
-  const model = rows.length && art && typeof art.model === 'function' ? art.model(STONE_KIT.modelId) : null;
+  const model = rows.length && art && typeof art.model === 'function' ? art.model(track.id === 'keep' ? 'stone-keep' : STONE_KIT.modelId) : null;
   let mode = 'none';
   if (rows.length && model && model.scene) {
     mode = 'model';
     // the lip tint is one shared material: every clone swaps its lip meshes to it (shared geometry, one program)
-    const slots = slotMaterials(model.scene), lipSrc = slots.get('lip');
+    const slots = slotMaterials(model.scene), lipSrc = slots.get('lip'), keepPaint = new Map();
+    if (track.id === 'keep') for (const [name, source] of slots) {
+      const tint = source.clone();
+      tint.color?.set(({ surface: '#827388', lip: '#ed3e9d', underside: '#2a2433', detail: '#b68ba5' })[name] || '#827388');
+      keepPaint.set(name, tint); owned.push(tint);
+    }
     const lip = lipSrc ? lipSrc.clone() : null;
     if (lip) { lip.name = 'stone-lip'; if (lip.color) lip.color.set(STONE_KIT.brass); owned.push(lip); }
     for (const r of rows) {
@@ -63,7 +68,8 @@ export function buildStones(track, art, pal) {
       body.traverse((o) => {
         if (!o.isMesh) return;
         o.castShadow = true;
-        if (lip && o.material && o.material.name === 'lip') o.material = lip;
+        if (keepPaint.has(o.material?.name)) o.material = keepPaint.get(o.material.name);
+        else if (lip && o.material && o.material.name === 'lip') o.material = lip;
       });
       holder.add(body); group.add(holder);
     }
