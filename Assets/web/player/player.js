@@ -193,6 +193,51 @@
       + ' (' + claimed + '/' + MEDIA_KEY_ACTIONS.length + ' actions)');
   }
 
+  // ---------- "via Scrolller" credit ----------
+  // load field `credit` {sub, site, clickable, outroMs}; absent for every other clip.
+  // A corner badge while the clip plays, an end card for outroMs before `ended` is
+  // reported. Both only fade (Gentle visuals safe). A press on either, when
+  // clickable, posts creditClick INSTEAD of the generic click; the host opens the
+  // link (the page never navigates) and may answer creditQueued.
+
+  const creditEl = document.getElementById('credit');
+  const outroEl = document.getElementById('outro');
+  let outroTimer = 0;
+
+  function fillCredit(root, c) {
+    root.querySelectorAll('[data-credit="sub"]').forEach((n) => { n.textContent = String(c.sub || ''); });
+    root.querySelectorAll('[data-credit="site"]').forEach((n) => { n.textContent = String(c.site || ''); });
+    root.classList.toggle('clickable', !!c.clickable);
+    root.classList.remove('queued');
+  }
+
+  function showCredit(c) {
+    if (!c || !creditEl) return;
+    fillCredit(creditEl, c);
+    creditEl.hidden = false;
+    requestAnimationFrame(() => creditEl.classList.add('on'));
+  }
+
+  function showOutro(c) {
+    if (!c || !outroEl) return false;
+    fillCredit(outroEl, c);
+    if (creditEl && creditEl.classList.contains('queued')) outroEl.classList.add('queued');
+    if (creditEl) creditEl.classList.remove('on');
+    outroEl.hidden = false;
+    requestAnimationFrame(() => outroEl.classList.add('on'));
+    return true;
+  }
+
+  function clearCredit() {
+    clearTimeout(outroTimer);
+    outroTimer = 0;
+    [creditEl, outroEl].forEach((n) => {
+      if (!n) return;
+      n.classList.remove('on', 'clickable', 'queued');
+      n.hidden = true;
+    });
+  }
+
   // ---------- teardown ----------
 
   /** Free both decoders NOW. Safe to call at any time, including with no session. */
@@ -200,6 +245,7 @@
     cur = null; // first, so the pause/error churn below reaches no handler
     setMediaKeyGuard(false); // the lock belongs to the clip, not to the page
     clearAttention(); // targets belong to the clip that is going away
+    clearCredit(); // so does the credit, end card included
     stopTicker();
     lastTimeMs = -1;
     lastTimePostAt = 0;
@@ -346,12 +392,14 @@
       pauseStamps: [],
       startApplied: false,
       lastDurationMs: -1,
+      credit: d.credit && typeof d.credit === 'object' ? d.credit : null,
     };
 
     document.body.classList.toggle('has-bg', cur.blur);
     setMediaKeyGuard(cur.strict);
     applyVolume();
     applySink(d.sinkLabel);
+    applyGentle(d);
 
     fg.src = url;
     if (cur.blur) startBackdrop();
@@ -406,7 +454,10 @@
     // clip is playing" — that made IsPrimaryMediaPlaying report true one message-hop after
     // the host paused, which broke Deeper's speak-holds. hostPaused covers a host-requested
     // hold; fg.paused also covers a pause the page itself is sitting in. (#874)
-    post({ type: 'time', ms: ms, paused: !!(cur.hostPaused || fg.paused) });
+    // The played ranges exclude seeks and pauses; a random start is not watch time.
+    let played = 0;
+    for (let i = 0; i < fg.played.length; i++) played += fg.played.end(i) - fg.played.start(i);
+    post({ type: 'time', ms: ms, playedMs: Math.round(played * 1000), paused: !!(cur.hostPaused || fg.paused) });
   }
 
   // ---------- ticker: 10 Hz time + stall watchdogs ----------
@@ -479,7 +530,42 @@
     if (cur.playingSent) return;
     cur.playingSent = true;
     post({ type: 'playing' });
+    announceFirstFrame(cur);
+    showCredit(cur.credit);
   });
+
+  // `firstFrame`: the picture is really being painted, so a host that keeps its
+  // window hidden while a clip loads (floating videos) can show it now, never empty.
+  // One frame callback was not proof (owner, 2026-10-19: the window opened empty and
+  // the picture came a second later): it takes FIRST_FRAME_COUNT presented frames,
+  // the media time moving between them, on a visible page. No frame callback, or a
+  // page that never gets there: nothing is posted and the host falls back on played
+  // time (FloatingFirstFrame).
+  const FIRST_FRAME_COUNT = 3;
+  function announceFirstFrame(session) {
+    if (typeof fg.requestVideoFrameCallback !== 'function') return;
+    let frames = 0, firstMedia = -1;
+    const onFrame = (_now, meta) => {
+      if (cur !== session) return;
+      const t = meta && Number.isFinite(meta.mediaTime) ? meta.mediaTime : (fg.currentTime || 0);
+      frames++;
+      if (firstMedia < 0) firstMedia = t;
+      const visibility = document.visibilityState || 'visible';
+      if (frames >= FIRST_FRAME_COUNT && t > firstMedia && visibility === 'visible') {
+        post({ type: 'firstFrame', via: 'frames', frames: frames, mediaMs: Math.round(t * 1000), visibility: visibility });
+        return;
+      }
+      try { fg.requestVideoFrameCallback(onFrame); } catch (e) { /* the host's fallback decides */ }
+    };
+    try { fg.requestVideoFrameCallback(onFrame); } catch (e) { /* the host's fallback decides */ }
+  }
+
+  // `outro`: the host shows the end card over the clip while it ends (its last
+  // seconds, or the end of a cut), instead of after it over a frozen frame.
+  function startOutroEarly() {
+    if (!cur || cur.ended || cur.errored || cur.outroAt || !cur.credit) return;
+    if (showOutro(cur.credit)) cur.outroAt = performance.now();
+  }
 
   fg.addEventListener('timeupdate', () => {
     if (!cur || cur.errored || cur.ended || cur.hostPaused) return;
@@ -501,6 +587,25 @@
     // for as long as the user takes) — so stop the 10 Hz ticker rather than let it
     // spin for the whole of it.
     stopTicker();
+    // A credited clip holds its end card first. A `stop` or a new `load` in the
+    // meantime runs teardown, which drops the card and this timer with it.
+    const c = cur.credit;
+    const outroMs = c && Number.isFinite(c.outroMs) ? Math.min(Math.max(c.outroMs, 0), 5000) : 0;
+    const early = cur.outroAt || 0;
+    if (outroMs > 0 && (early || showOutro(c))) {
+      // The picture is over: the host stops judging the clip (length cap, new targets)
+      // and opens a link pressed during it. `ended` follows after the card, which a
+      // host `outro` may already have started over the clip's last seconds.
+      post({ type: 'mediaEnded' });
+      const left = early ? Math.max(0, outroMs - (performance.now() - early)) : outroMs;
+      if (left <= 0) { post({ type: 'ended' }); return; }
+      const session = cur;
+      outroTimer = setTimeout(() => {
+        outroTimer = 0;
+        if (cur === session) post({ type: 'ended' });
+      }, left);
+      return;
+    }
     post({ type: 'ended' });
   });
 
@@ -775,7 +880,10 @@
     let sec = Math.max(0, n / 1000);
     const d = fg.duration;
     if (Number.isFinite(d) && d > 0) sec = Math.min(sec, Math.max(0, d - 0.05));
-    try { fg.currentTime = sec; } catch (e) { log('seek rejected: ' + e); return; }
+    try { fg.currentTime = sec; } catch (e) {
+      cur.startAtMs = sec * 1000; cur.startApplied = false; // canplay retries early metadata seeks
+      log('seek deferred: ' + e); return;
+    }
     cur.ended = false; // seeking back out of the end re-arms normal reporting
     if (ticker == null) startTicker(); // ...including the ticker the end stopped
     cur.lastProgressAt = performance.now();
@@ -785,6 +893,30 @@
       playEl(fg, 'fg');
     }
     postTime(true);
+  }
+
+  // Gentle visuals (load fields `rate` and `fadeMs`; absent or 1/0 = normal playback). The host
+  // window can never fade (WebView2 under a layered window paints black), so the stage fades in
+  // from black on the first frame instead. Runs before fg.src is set: the load algorithm copies
+  // defaultPlaybackRate into playbackRate.
+  function applyGentle(d) {
+    const rate = Number.isFinite(d.rate) && d.rate > 0 && d.rate < 1 ? d.rate : 1;
+    fg.defaultPlaybackRate = rate;
+    fg.playbackRate = rate;
+    const stage = document.getElementById('stage');
+    const fadeMs = Number.isFinite(d.fadeMs) && d.fadeMs > 0 ? d.fadeMs : 0;
+    stage.style.transition = '';
+    stage.style.opacity = fadeMs > 0 ? '0' : '';
+    if (fadeMs <= 0) return;
+    let done = false;
+    const reveal = () => {
+      if (done) return;
+      done = true;
+      stage.style.transition = 'opacity ' + fadeMs + 'ms linear';
+      stage.style.opacity = '1';
+    };
+    fg.addEventListener('playing', reveal, { once: true });
+    setTimeout(reveal, 3000); // backstop: never leave the stage dark
   }
 
   function onHostMessage(data) {
@@ -820,6 +952,14 @@
       case 'attentionHide':
         attentionHide(data);
         break;
+      case 'outro':
+        startOutroEarly();
+        break;
+      case 'creditQueued':
+        // The link opens once the video is over: the badge (and the end card) wear a tick.
+        if (creditEl) creditEl.classList.add('queued');
+        if (outroEl) outroEl.classList.add('queued');
+        break;
       default:
         break;
     }
@@ -841,6 +981,13 @@
       e.preventDefault();
       e.stopPropagation();
       attentionHit(attn.get(node.dataset.id));
+      return;
+    }
+    const credit = e.target && e.target.closest ? e.target.closest('.credit-link.clickable') : null;
+    if (credit) {
+      e.preventDefault();
+      e.stopPropagation();
+      post({ type: 'creditClick' });
       return;
     }
     post({ type: 'click' });

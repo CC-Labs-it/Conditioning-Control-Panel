@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using ConditioningControlPanel.Localization;
 using Serilog;
@@ -58,25 +59,6 @@ internal static class EmiNames
     };
 
     /// <summary>
-    /// Tab keys that ARE a ring target under a different name. The ring already owns this map
-    /// privately for its usage scoring; this is the display-name half of the same idea, kept here
-    /// so <see cref="Feature"/> can answer for a tab key without the ring having to expose it.
-    /// </summary>
-    private static readonly Dictionary<string, string> _tabTargets = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["presets"] = "sessions",
-        ["remotecontrol"] = "remote",
-        ["bambitakeover"] = "takeover",
-        ["exclusives"] = "vault",
-        ["premium"] = "vault",
-        ["discord"] = "profile",
-        ["appsettings"] = "settings",
-        ["flash"] = "flashes",
-        ["video"] = "videos",
-        ["subliminal"] = "subliminals",
-    };
-
-    /// <summary>
     /// A tab key, rack key, ring target id or feature key as a lowercase display name, or null when
     /// nothing in the app knows a human name for it. Never throws and never returns the raw key.
     /// </summary>
@@ -92,7 +74,12 @@ internal static class EmiNames
             if (name != null) return name;
 
             // 2. a tab or rack key that IS a ring target under another id.
-            if (_tabTargets.TryGetValue(k, out var mapped))
+            //    EmiDoors' scoring maps, plus "exclusives", which redirects to the vault page
+            //    before the usage counter so it is not in TabTargets.
+            var mapped = k.Equals("exclusives", StringComparison.OrdinalIgnoreCase) ? "vault"
+                : EmiDoors.TabTargets.TryGetValue(k, out var tab) ? tab
+                : EmiDoors.RackTargets.TryGetValue(k, out var rack) ? rack : null;
+            if (mapped != null)
             {
                 name = FromTarget(mapped);
                 if (name != null) return name;
@@ -110,16 +97,30 @@ internal static class EmiNames
         }
     }
 
-    /// <summary>The head half: WPF <c>EmiTargets.Find(id)?.Label</c>. Null = not in the catalogue.</summary>
+    /// <summary>The head half: WPF <c>EmiTargets.Find(id)?.Label</c>. Null result = not in the
+    /// catalogue. Unset = read <see cref="EmiDoors"/> (the Avalonia head).</summary>
     public static Func<string, string?>? TargetLabelProbe { get; set; }
 
     /// <summary>A ring target id as a lowercase display name, or null when it is not in the catalogue.</summary>
+    /// <remarks>Reads <see cref="EmiDoors"/>, not a head's EmiTargets: the name is the card's label
+    /// (<see cref="EmiTarget.Label"/>, so the same fallback) and a door this head hides still has
+    /// one. Both heads therefore name every door the same.</remarks>
     private static string? FromTarget(string id)
     {
         try
         {
-            var label = TargetLabelProbe?.Invoke(id);
-            if (label == null) return null;
+            string? label;
+            if (TargetLabelProbe is { } probe)
+            {
+                label = probe(id);
+                if (label == null) return null;
+            }
+            else
+            {
+                if (!EmiDoors.All.Any(d => string.Equals(d.Id, id, StringComparison.Ordinal))) return null;
+                try { label = Loc.Get("emi_desk_target_" + id); }
+                catch { label = id; }
+            }
             return Clean(label);
         }
         catch (Exception ex)

@@ -56,9 +56,10 @@ namespace ConditioningControlPanel.Services
 
         public static bool CanStart(AppSettings s) => s.AutonomyModeEnabled && s.AutonomyConsentGiven && HasEntitlement;
 
-        /// <summary>A pulse that started the overlay service stops it, once no sibling holds it (#1180).</summary>
-        public static bool ShouldStopOverlayAfterPulse(bool overlayWasRunningBeforePulse, bool otherPulseActive)
-            => !overlayWasRunningBeforePulse && !otherPulseActive;
+        /// <summary>A pulse that started the overlay service stops it, once no sibling holds it (#1180),
+        /// and never while the engine runs: START inside the 30 s borrowed the service (WPF 8fe2a80a0).</summary>
+        public static bool ShouldStopOverlayAfterPulse(bool overlayWasRunningBeforePulse, bool otherPulseActive, bool engineRunning = false)
+            => !overlayWasRunningBeforePulse && !otherPulseActive && !engineRunning;
 
         /// <summary>An announced action still fires only if Takeover is on and not restarted since (#1153).</summary>
         public static bool ShouldRunDelayedAction(bool enabled, int generationAtSchedule, int generationNow)
@@ -109,7 +110,8 @@ namespace ConditioningControlPanel.Services
             // BrainDrainPulse, SpiralPulse and BubbleCount are deliberately never candidates (WPF).
             if (s.AutonomyCanTriggerBubbles) c.Add((AutonomyActionType.StartBubbles, 15));
             if (s.AutonomyCanComment) c.Add((AutonomyActionType.Comment, 20));
-            if (s.AutonomyCanTriggerMindWipe) c.Add((AutonomyActionType.MindWipe, 15));
+            // Takeover may Mind Wipe only while Mind Wipe itself is on (WPF AutonomyService.MayMindWipe, #1458).
+            if (s.AutonomyCanTriggerMindWipe && s.MindWipeEnabled) c.Add((AutonomyActionType.MindWipe, 15));
             if (s.AutonomyCanTriggerLockCard) c.Add((AutonomyActionType.LockCard, 10));
             if (s.AutonomyCanTriggerPinkFilter) c.Add((AutonomyActionType.PinkFilterPulse, 20));
             if (s.AutonomyCanTriggerBouncingText) c.Add((AutonomyActionType.BouncingText, 15));
