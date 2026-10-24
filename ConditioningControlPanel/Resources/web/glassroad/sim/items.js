@@ -73,6 +73,23 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     return out;
   }
 
+  // Presentation follows the same aim as flight. Preserve the committed normal
+  // as well as position so a late target dodge cannot drag the landing marker.
+  function updateLanding(pr, target) {
+    if (!pr.homing && pr.landingP) return;
+    pr.landingP ||= [0, 0, 0]; pr.landingN ||= [0, 1, 0];
+    let n;
+    if (pr.aimP) {
+      for (let j = 0; j < 3; j++) pr.landingP[j] = pr.aimP[j];
+      n = track.query(...pr.aimP, target.st[S.seg]).normal || pathFrame(target.st[S.s], target.st[S.seg]).n;
+    } else {
+      const s = wrap(pr.fromS + pr.aimD, L);
+      point(s, pr.aimX, 0, pr.landingP);
+      n = (track.surfaceAt ? track.surfaceAt(s, pr.aimX) : track.frameAt(s)).n;
+    }
+    for (let j = 0; j < 3; j++) pr.landingN[j] = n[j];
+  }
+
   const pick = (track.items || []).map((it, i) => {
     const f = track.frameAt(it.s);
     return { kind: it.kind, s: it.s, x: it.x, downT: 0, upT: 1e9,
@@ -194,6 +211,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
         fired.aimP = kartP(racer(target));
         fired.worldP = fired.fromP.slice();
       }
+      updateLanding(fired, racer(target));
       projectiles.push(fired);
     } else if (mode === 'wide') {
       const me = standings.progressOf(r.i);
@@ -279,6 +297,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
           pr.aimD += clamp(wanted - pr.aimD, -g('lobRetargetMps') * dt, g('lobRetargetMps') * dt);
           pr.aimX += clamp(tg.st[S.lateral] - pr.aimX, -g('homeLateralMps') * dt, g('homeLateralMps') * dt);
         }
+        updateLanding(pr, tg);
         pr.s = wrap(pr.fromS + pr.aimD * k, L);
         pr.x = lerp(pr.fromX, pr.aimX, k);
         pr.h = g('throwHeightM') + g('lobHeightM') * 4 * k * (1 - k);
@@ -433,6 +452,10 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       o.by = pr.by; o.homing = pr.homing; o.radiusM = g(pr.mode === 'lob' ? 'lobRadiusM' : 'projectileRadiusM');
       o.progress = Math.min(1, pr.t / (pr.mode === 'lob' ? g('lobFlightS') : ARC_S));
       o.v ||= [0, 0, 0]; for (let k = 0; k < 3; k++) o.v[k] = pr.velocity ? pr.velocity[k] : 0;
+      if (pr.mode === 'lob') {
+        o.landingP ||= [0, 0, 0]; o.landingN ||= [0, 1, 0];
+        for (let j = 0; j < 3; j++) { o.landingP[j] = pr.landingP[j]; o.landingN[j] = pr.landingN[j]; }
+      } else { o.landingP = null; o.landingN = null; }
     }
     const armS = g('trapArmS');
     for (const tp of traps) {

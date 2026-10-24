@@ -343,7 +343,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
         const a = flightSpark(i, ns, timeS, id, pr.v, radius, OFF);
         motes.push(x + OFF[0], y + OFF[1], z + OFF[2], 0.3, c[0], c[1], c[2], a * (soft ? 0.55 : 1));
       }
-      const shown = Math.max(2, Math.round(h.n * (lob ? 1 : moteK)));
+      const shown = Math.min(h.n, Math.max(2, Math.round(h.n * (lob ? 1 : moteK))));
       for (let i = h.n - shown; i < h.n - 1; i++) {
         const j = i * 3, tl = trailLook(i - (h.n - shown), shown, timeS, id, soft);
         if (lob) motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], L.lobDotSizeM, c[0], c[1], c[2], 0.35 + 0.5 * tl.size);
@@ -353,12 +353,10 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
           else motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], L.trailSizeM * L.trailHaloMul * tl.size, c[0], c[1], c[2], L.trailHaloAlpha * tl.alpha);
         }
       }
-      const tk = lob ? karts[pr.target] : null;
-      if (tk && tk.st) {
+      if (lob && pr.landingP) {
         const m = lobMark(pr.progress ?? (pr.t || 0) / lobS, timeS, soft), e = shadows.take();
-        kartPos(tk); W.set(0, 1, 0).applyQuaternion(kartQuat(tk));
-        if (e) { lay(e.mesh, V, W, 0, 0.05); e.mesh.scale.setScalar(m.r); e.u.opacity.value = m.alpha; e.mesh.visible = true; }
-        mark(V, W, m.ring, L.markColour, m.ringAlpha, 0.07);
+        if (e) { lay(e.mesh, pr.landingP, pr.landingN, 0, 0.05); e.mesh.scale.setScalar(m.r); e.u.opacity.value = m.alpha; e.mesh.visible = true; }
+        mark(pr.landingP, pr.landingN, m.ring, L.markColour, m.ringAlpha, 0.07);
       }
     }
     for (const id of trails.keys()) if (!seen.has(id)) trails.delete(id);

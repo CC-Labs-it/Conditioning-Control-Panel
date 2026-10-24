@@ -71,9 +71,11 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     else if (m.mode === 'throw') {
       const v = (r ? Math.max(0, r.st[S.speedPct]) : 1) * feel.get('speed.topMps') + g('throwExtraMps');
       flying.push({ sid: m.sid, kind: m.item, mode: 'throw', by, target, t: 0, s: wrap(m.s + THROW_LEAD_M, L), x: m.x, h: g('throwHeightM'), v, homing: target >= 0 });
-    } else if (m.mode === 'lob') flying.push({ sid: m.sid, kind: m.item, mode: 'lob', by, target, t: 0, fromS: m.s, fromX: m.x, s: m.s, x: m.x, h: g('throwHeightM'),
-      aimD: tg ? sd(tg.st[S.s], m.s) : 0, aimX: tg ? tg.st[S.lateral] : m.x, homing: target >= 0 });
-    else if (m.mode === 'wide') waves.push({ id: m.sid, kind: m.item, from: by, s: m.s, x: m.x, t: 0 });
+    } else if (m.mode === 'lob') {
+      const pr = { sid: m.sid, kind: m.item, mode: 'lob', by, target, t: 0, fromS: m.s, fromX: m.x, s: m.s, x: m.x, h: g('throwHeightM'),
+        aimD: tg ? sd(tg.st[S.s], m.s) : 0, aimX: tg ? tg.st[S.lateral] : m.x, homing: target >= 0 };
+      updateLanding(pr); flying.push(pr);
+    } else if (m.mode === 'wide') waves.push({ id: m.sid, kind: m.item, from: by, s: m.s, x: m.x, t: 0 });
   }
 
   /** The room's verdict: the victim (if local) applies it, everyone sees it. */
@@ -203,6 +205,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
           pr.aimD += clamp(wanted - pr.aimD, -g('lobRetargetMps') * dt, g('lobRetargetMps') * dt);
           pr.aimX += clamp(tg.st[S.lateral] - pr.aimX, -g('homeLateralMps') * dt, g('homeLateralMps') * dt);
         }
+        updateLanding(pr);
         pr.s = wrap(pr.fromS + pr.aimD * k, L);
         pr.x = lerp(pr.fromX, pr.aimX, k);
         pr.h = g('throwHeightM') + g('lobHeightM') * 4 * k * (1 - k);
@@ -218,6 +221,15 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
       return pr.t < g('throwLifeS') + ORPHAN_S;
     });
     traps = traps.filter((tp) => (tp.t += dt) < g('trapLifeS') + ORPHAN_S);
+  }
+
+  function updateLanding(pr) {
+    if (!pr.homing && pr.landingP) return;
+    const s = wrap(pr.fromS + pr.aimD, L);
+    pr.landingP ||= [0, 0, 0]; pr.landingN ||= [0, 1, 0];
+    point(s, pr.aimX, 0, pr.landingP);
+    const n = (track.surfaceAt ? track.surfaceAt(s, pr.aimX) : track.frameAt(s)).n;
+    for (let j = 0; j < 3; j++) pr.landingN[j] = n[j];
   }
 
   function velocity(pr, oldP, dt) {
@@ -247,6 +259,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
   // ---- view (the sim/items.js shape; rows pooled per tick) ---------------------------------------
   const V = { boxes: [], bubbles: [], held: [], projectiles: [], traps: [], waves: [], shields: [], pops: [] };
   for (const b of pick) (b.kind === 'box' ? V.boxes : V.bubbles).push(b.v);
+  const projectileRows = [];
   let builtVer = -1;
   function view() {
     if (builtVer === ver) return V;
@@ -254,9 +267,18 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
     for (const b of pick) { b.v.alive = b.downT <= 0; b.v.k = b.v.alive ? Math.min(1, b.upT / GROW_S) : 0; }
     V.held = []; V.projectiles = []; V.traps = []; V.waves = []; V.shields = []; V.pops = [];
     for (const r of list) if (r.item && (r.item.id || r.item.rolling)) V.held.push({ racer: r.i, id: r.item.id, rolling: r.item.rolling, rollT: r.item.rollT });
-    for (const pr of flying) V.projectiles.push({ id: pr.sid, kind: pr.kind, mode: pr.mode, p: point(pr.s, pr.x, pr.h), t: pr.t, target: pr.target, s: pr.s, x: pr.x,
-      by: pr.by, homing: pr.homing, radiusM: g(pr.mode === 'lob' ? 'lobRadiusM' : 'projectileRadiusM'),
-      progress: Math.min(1, pr.t / (pr.mode === 'lob' ? g('lobFlightS') : ARC_S)), v: pr.velocity ? pr.velocity.slice() : [0, 0, 0] });
+    for (const pr of flying) {
+      const i = V.projectiles.length, o = projectileRows[i] || (projectileRows[i] = { p: [0, 0, 0], v: [0, 0, 0] });
+      o.id = pr.sid; o.kind = pr.kind; o.mode = pr.mode; point(pr.s, pr.x, pr.h, o.p); o.t = pr.t; o.target = pr.target; o.s = pr.s; o.x = pr.x;
+      o.by = pr.by; o.homing = pr.homing; o.radiusM = g(pr.mode === 'lob' ? 'lobRadiusM' : 'projectileRadiusM');
+      o.progress = Math.min(1, pr.t / (pr.mode === 'lob' ? g('lobFlightS') : ARC_S));
+      for (let j = 0; j < 3; j++) o.v[j] = pr.velocity ? pr.velocity[j] : 0;
+      if (pr.mode === 'lob') {
+        o.landingP ||= [0, 0, 0]; o.landingN ||= [0, 1, 0];
+        for (let j = 0; j < 3; j++) { o.landingP[j] = pr.landingP[j]; o.landingN[j] = pr.landingN[j]; }
+      } else { o.landingP = null; o.landingN = null; }
+      V.projectiles.push(o);
+    }
     const armS = g('trapArmS');
     for (const tp of traps) {
       const f = track.frameAt(tp.s, fr), p = [0, 0, 0];
