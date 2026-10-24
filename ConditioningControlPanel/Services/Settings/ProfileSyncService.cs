@@ -172,17 +172,10 @@ namespace ConditioningControlPanel.Services
         private bool _disposed;
         private bool _syncEnabled = true;
         private bool _pendingQuestResetClear;
-        // Per-strategy recovery cooldowns. restore-session is a single cheap proxy call, so it may
-        // retry often; a provider re-validate walks the Patreon/Discord API and is rate-limited
-        // upstream, so it gets a longer leash. One shared 5-minute cooldown used to cover both,
-        // which meant a diverged token kept 401ing for five minutes before the only strategy that
-        // can actually fix it was even tried.
-        private static readonly TimeSpan RestoreSessionCooldown = TimeSpan.FromSeconds(30);
-        private static readonly TimeSpan ProviderRevalidateCooldown = TimeSpan.FromMinutes(2);
-        private DateTime _lastRestoreSessionAttempt = DateTime.MinValue;
-        private DateTime _lastProviderRevalidateAttempt = DateTime.MinValue;
-        private readonly SemaphoreSlim _authRecoveryGate = new(1, 1);
         private bool _hasLoadedProfile; // true after first successful LoadProfileAsync/SyncProfileAsync round-trip
+
+        /// <summary>The server's profile has landed this session (the display-name ask waits for it).</summary>
+        public bool HasLoadedProfile => _hasLoadedProfile;
         private readonly SemaphoreSlim _syncGate = new(1, 1);
 
         /// <summary>
@@ -1107,6 +1100,9 @@ namespace ConditioningControlPanel.Services
                 ApplyServerCurveEpoch(user.CurveEpoch, "read-before-write");
                 // Tier is still not adopted wholesale here; only a RISE of the folded tier is offered.
                 EntitlementTierSync.Offer(EntitlementTierRule.ParseTier(user.EffectiveTierRaw), "read-before-write");
+                // A fresh server Patreon confirmation keeps the grace alive for a Discord sign-in.
+                EntitlementTierSync.OfferPatreon(new PatreonActiveReading(user.PatreonIsActive,
+                    Invites.InviteRules.ParseUtc(user.PatreonConfirmedAtRaw), user.PatreonTier), "read-before-write");
 
                 var preLevel = settings.PlayerLevel;
                 var preLevelXp = settings.PlayerXP;
@@ -4127,6 +4123,26 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// GET /v2/auth/check-name (no auth). Asked before <see cref="ChangeDisplayNameAsync"/>
+        /// because the change route spends its 60 s cooldown even on a taken name. Null when the
+        /// server could not answer; the change route still has the last word.
+        /// </summary>
+        public async Task<bool?> IsDisplayNameAvailableAsync(string name)
+        {
+            try
+            {
+                var json = await _httpClient.GetStringAsync(
+                    $"{ProxyBaseUrl}/v2/auth/check-name?name={Uri.EscapeDataString(name)}");
+                return (bool?)JObject.Parse(json)["available"];
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("Display name check failed: {Error}", ex.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Change the user's display name via server-side validation.
         /// Name must be unique (case-insensitive). Case-only changes are allowed.
         /// </summary>
@@ -4326,200 +4342,12 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// Handles a 401 Unauthorized response. Attempts token recovery (see
-        /// <see cref="TryRecoverAuthTokenAsync"/>) under per-strategy cooldowns. The token is
-        /// preserved on failure.
-        ///
-        /// Returns TRUE only when the session was actually recovered and it is safe to carry on
-        /// with the request that 401'd. It used to return true for any 401 - including "recovery
-        /// failed" and "still inside the cooldown, so recovery was never even attempted" - while
-        /// every caller reads the result as "recovered, proceed": the skill purchase retried the
-        /// POST with the same dead token, and the heartbeat's stop-on-failure branch keyed off the
-        /// same true. Failure and success have to be distinguishable (#879).
-        ///
-        /// Note the asymmetry: a non-401 response also returns false, because "there was nothing
-        /// to recover from" is likewise not "a session was recovered". Callers that need to know
-        /// whether the response WAS a 401 must check <c>response.StatusCode</c> themselves.
+        /// Handles a 401: Core <see cref="AuthRecovery"/> (restore-session, then a provider re-validate, each on
+        /// its cooldown; the token is kept on failure). TRUE only when the session was actually recovered (#879);
+        /// a non-401 is false too. App.xaml.cs seeds the heartbeat restart and the provider re-validate.
         /// </summary>
-        private async Task<bool> HandleUnauthorizedAsync(HttpResponseMessage response)
-        {
-            if (response.StatusCode != HttpStatusCode.Unauthorized)
-                return false;
-
-            // One recovery at a time: a burst of concurrent 401s must not fire a burst of
-            // re-validates. Waiters re-enter TryRecoverAuthTokenAsync and fall straight out on the
-            // per-strategy cooldowns the winner just claimed, so they cost nothing.
-            await _authRecoveryGate.WaitAsync();
-            try
-            {
-                App.Logger?.Information("[Auth] 401 received — attempting token recovery");
-                if (await TryRecoverAuthTokenAsync())
-                {
-                    App.Logger?.Information("[Auth] Token recovered successfully");
-                    StartHeartbeat();
-                    return true;
-                }
-            }
-            finally
-            {
-                _authRecoveryGate.Release();
-            }
-
-            // Don't clear the auth token — it may still be valid for other endpoints or after
-            // a transient server issue. The per-strategy cooldowns prevent recovery spam.
-            App.Logger?.Warning("[Auth] 401 — recovery failed or on cooldown, token kept for retry");
-            return false;
-        }
-
-        /// <summary>
-        /// Attempts to recover the auth token, cheapest strategy first.
-        ///
-        /// 1. /v2/auth/restore-session — confirms the stored token is still the server's. It can
-        ///    only ever clear a TRANSIENT 401, because the endpoint authenticates with the very
-        ///    token we are trying to replace: if the client and server copies have diverged it
-        ///    answers 401 forever, which is why recovery alone never healed a divergence.
-        /// 2. Provider re-validate — /patreon/validate and /discord/validate both re-issue the
-        ///    auth token when the one we present doesn't match (BUG-7DCJHDP3JZ), and the provider
-        ///    OAuth token (not the CCP one) authenticates the call. This is the ONLY client path
-        ///    that can mint a fresh token, so a divergence has to fall through to it.
-        ///
-        /// Returns true if the token was successfully recovered.
-        /// Must NOT call HandleUnauthorizedAsync on any response here (would recurse).
-        /// </summary>
-        private async Task<bool> TryRecoverAuthTokenAsync()
-        {
-            if (string.IsNullOrEmpty(App.Settings?.Current?.UnifiedId))
-                return false;
-
-            if (TryClaimCooldown(ref _lastRestoreSessionAttempt, RestoreSessionCooldown)
-                && await TryRestoreSessionAsync())
-                return true;
-
-            if (TryClaimCooldown(ref _lastProviderRevalidateAttempt, ProviderRevalidateCooldown)
-                && await TryProviderRevalidateAsync())
-                return true;
-
-            return false;
-        }
-
-        /// <summary>
-        /// Marks a recovery strategy as attempted now, or returns false if it is still cooling down.
-        /// </summary>
-        private static bool TryClaimCooldown(ref DateTime lastAttempt, TimeSpan cooldown)
-        {
-            if (DateTime.Now - lastAttempt <= cooldown)
-                return false;
-            lastAttempt = DateTime.Now;
-            return true;
-        }
-
-        /// <summary>
-        /// Recovery strategy 1: ask the server to confirm the stored token.
-        /// </summary>
-        private async Task<bool> TryRestoreSessionAsync()
-        {
-            try
-            {
-                var unifiedId = App.Settings?.Current?.UnifiedId;
-                var storedToken = App.Settings?.Current?.AuthToken;
-                if (string.IsNullOrEmpty(unifiedId) || string.IsNullOrEmpty(storedToken))
-                    return false;
-
-                var body = JsonConvert.SerializeObject(new
-                {
-                    unified_id = unifiedId,
-                    client_version = UpdateService.AppVersion
-                });
-                var request = new HttpRequestMessage(HttpMethod.Post, $"{ProxyBaseUrl}/v2/auth/restore-session");
-                request.Headers.Add("X-Auth-Token", storedToken);
-                request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-
-                var response = await _httpClient.SendAsync(request);
-
-                // Contract D: the id we are trying to restore is a merge tombstone. The swap runs
-                // detached (this method executes under _authRecoveryGate), and there is no token
-                // to recover for a tombstone.
-                if (await MergedAccountRecovery.TryHandleAsync(response)) return false;
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    App.Logger?.Warning("[Auth] restore-session failed: {Status}", response.StatusCode);
-                    return false;
-                }
-
-                // restore-session succeeded — the token is still valid on the server.
-                // The original 401 was transient. Server does NOT return a new auth_token
-                // (rotation during restore-session causes race conditions), so we keep
-                // the existing token. If the response does include a new token, adopt it.
-                var json = await response.Content.ReadAsStringAsync();
-                var obj = Newtonsoft.Json.Linq.JObject.Parse(json);
-                var newToken = obj["auth_token"]?.ToString();
-                if (!string.IsNullOrEmpty(newToken) && App.Settings?.Current != null)
-                {
-                    App.Settings.Current.AuthToken = newToken;
-                    App.Settings.Save(suppressCloudBackup: true);
-                    App.Logger?.Information("[Auth] Auth token refreshed from restore-session");
-                }
-                else
-                {
-                    App.Logger?.Information("[Auth] restore-session confirmed token is still valid (transient 401)");
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning("[Auth] restore-session recovery failed: {Error}", ex.Message);
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Recovery strategy 2: force the signed-in provider to re-validate, which makes the server
-        /// re-issue the auth token when the stored one no longer matches its hash. Reuses the
-        /// services' own validate entry points — both already persist a re-issued token — so a
-        /// change in <see cref="AppSettings.AuthToken"/> across the call is the success signal.
-        /// </summary>
-        private static async Task<bool> TryProviderRevalidateAsync()
-        {
-            var before = App.Settings?.Current?.AuthToken;
-            try
-            {
-                var patreon = App.Patreon;
-                var discord = App.Discord;
-                if (patreon?.IsAuthenticated == true)
-                {
-                    App.Logger?.Information("[Auth] Re-validating Patreon to have the server re-issue the auth token");
-                    await patreon.ValidateSubscriptionAsync(forceRefresh: true);
-                }
-                else if (discord?.IsAuthenticated == true)
-                {
-                    App.Logger?.Information("[Auth] Re-validating Discord to have the server re-issue the auth token");
-                    await discord.ValidateAndRefreshUserAsync(forceRefresh: true);
-                }
-                else
-                {
-                    // Invite-code / email-only sessions have no provider to mint from; nothing left
-                    // to try short of the user signing in again.
-                    App.Logger?.Warning("[Auth] No provider session available to re-issue the auth token");
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning("[Auth] Provider re-validate failed: {Error}", ex.Message);
-                return false;
-            }
-
-            var after = App.Settings?.Current?.AuthToken;
-            if (!string.IsNullOrEmpty(after) && after != before)
-            {
-                App.Logger?.Information("[Auth] Provider re-validate issued a fresh auth token");
-                return true;
-            }
-
-            App.Logger?.Warning("[Auth] Provider re-validate returned no new auth token — token still diverged");
-            return false;
-        }
+        private static Task<bool> HandleUnauthorizedAsync(HttpResponseMessage response) =>
+            AuthRecovery.HandleUnauthorizedAsync(response);
 
         /// <summary>
         /// Signs an HTTP request with HMAC-SHA256 for anti-cheat verification.
@@ -4577,6 +4405,17 @@ namespace ConditioningControlPanel.Services
             // Documented local only: a restore on another PC must not switch presence sharing on.
             nameof(AppSettings.FriendsPresenceShared),
             nameof(AppSettings.ModPersonalityPreset),
+            // Conversion rows (C9): machine-local stamps and the last server tier reading.
+            // A restore must not bring back a stale reading or re-open a once-ever row.
+            nameof(AppSettings.ServerTierSeen),
+            nameof(AppSettings.InboxStamps),
+            nameof(AppSettings.LastKnownEffectiveTier),
+            // Free member fields mirror the server profile; the next profile read refills them.
+            nameof(AppSettings.PatreonMember),
+            nameof(AppSettings.PostGrants),
+            nameof(AppSettings.ServerPaidUntil),
+            // The one-time "online media is official" note: this PC saw it, not the account.
+            nameof(AppSettings.ScrolllerOfficialNoteSeen),
         };
 
         /// <summary>
@@ -4595,7 +4434,17 @@ namespace ConditioningControlPanel.Services
         /// <summary>True when a backup must not carry this property.</summary>
         internal static bool IsExcludedFromBackup(string name) =>
             ExcludedBackupProperties.Contains(name)
-            || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase));
+            || (name != null && name.StartsWith("Chaster", StringComparison.OrdinalIgnoreCase))
+            // The audio player's playlist is file paths on this machine: never uploaded.
+            || (name != null && name.StartsWith("AudioPlaylist", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>The audio player's settings (playlist paths, volume, loop, shuffle), found by name.</summary>
+        internal static readonly System.Reflection.PropertyInfo[] AudioPlaylistLocalProperties =
+            typeof(AppSettings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(p => p.Name.StartsWith("AudioPlaylist", StringComparison.Ordinal)
+                            && p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0
+                            && !Attribute.IsDefined(p, typeof(JsonIgnoreAttribute)))
+                .ToArray();
 
         /// <summary>
         /// The other half of <see cref="ExcludedBackupProperties"/>. A backup never carries these,
@@ -4614,7 +4463,15 @@ namespace ConditioningControlPanel.Services
             restored.DiscordWebhookUrl = current.DiscordWebhookUrl;
             restored.LastSeenUtc = current.LastSeenUtc;
             restored.FriendsPresenceShared = current.FriendsPresenceShared;
+            // Conversion state lives on this PC only (it is left out of the backup): a restore must
+            // not wipe it, or the once-ever rows post again and a post-code grant goes missing.
+            restored.InboxStamps = current.InboxStamps;
+            restored.ServerTierSeen = current.ServerTierSeen;
+            restored.PatreonMember = current.PatreonMember;
+            restored.PostGrants = current.PostGrants;
+            restored.ServerPaidUntil = current.ServerPaidUntil;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
+            restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)
@@ -4623,7 +4480,7 @@ namespace ConditioningControlPanel.Services
                 restored.ActiveAssetPaths = new HashSet<string>(current.ActiveAssetPaths);
             if (restored.AssetPresets.Count == 0 && current.AssetPresets.Count > 0)
                 restored.AssetPresets = new List<AssetPreset>(current.AssetPresets);
-            foreach (var p in ChasterLocalProperties)
+            foreach (var p in ChasterLocalProperties.Concat(AudioPlaylistLocalProperties))
             {
                 var v = p.GetValue(current);
                 if (v is List<string> list) v = new List<string>(list);

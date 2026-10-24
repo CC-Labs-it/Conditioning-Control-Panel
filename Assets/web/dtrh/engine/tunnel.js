@@ -96,6 +96,11 @@ const TUBE_FRAG = `
   // 0 near the top of the fall, ramping to 1 the deeper you go: speeds up the
   // intermittent line-glow flicker so the rays flash slow up top, frantic deep.
   uniform float uGlowRate;
+  // feel pass (worldFeel.js via fx.js): uFeelGlow = a small multiplier on the
+  // line glow (the slow breath + warmth; 1 = classic). uFeelRing = a one-shot
+  // band of light at view distance x, amplitude y, soft radius z (y 0 = off).
+  uniform float uFeelGlow;
+  uniform vec3 uFeelRing;
   // chamber pattern knobs (fx.js eases these; ALL 0 = the classic look).
   // Each of the Four Chambers wears its own subset:
   //   uBreath      I   - slow ring width+brightness swell (an invitation, not a demand)
@@ -135,6 +140,12 @@ const TUBE_FRAG = `
   uniform float uScan, uGlitch, uKaleido, uChase, uChain, uCaustic, uArch, uMirrorY;
   uniform float uStreaks, uRingFade, uSpiralFade, uSurge, uSlip, uBeatScroll;
   uniform float uDots, uChecker, uDesat, uFiligree, uPanel;
+  // thread layers (owner, 2026-10-12): extra dress ON the rings and spiral arms, eased by
+  // fx.js like the knobs above (all 0 = the classic threads). Halo, sparkle and a light
+  // weave are the base everywhere; beads, braid, wisps, static and sheen belong to biomes.
+  // uThTime is its own clock: it runs at the page motion level and stands still at off.
+  uniform float uThHalo, uThWeave, uThSheen, uThSparkle, uThBeads, uThBraid, uThWisps, uThStatic;
+  uniform float uThTime;
   // branch mouths carved into the wall (world space)
   uniform int uHoleCount;
   uniform vec3 uHolePos[MAX_HOLES];
@@ -174,6 +185,45 @@ const TUBE_FRAG = `
   float pulse(float p, float k) { return pow(0.5 + 0.5 * sin(p), k); }
   // cheap per-cell hash for pane tints / tear offsets.
   float hash1(float n) { return fract(sin(n * 127.1) * 43758.5453); }
+  // soap-film colour for the sheen layer
+  vec3 thFilm(float x) { return 0.5 + 0.5 * cos(6.2831 * (x + vec3(0.0, 0.33, 0.67))); }
+  // The additive thread layers for one family. c: across (an integer = on the thread).
+  // s: distance down the thread in thread spacings; every s frequency used on the rings is
+  // a whole number of turns, so nothing shows at the vUv wrap. vis fades the fine detail.
+  vec3 threadLayers(float c, float s, float w, vec3 tint, float glow, float seed, float vis) {
+    float d = 0.5 - abs(fract(c) - 0.5);
+    float t = uThTime;
+    float gl = min(glow, 2.0);
+    vec3 o = vec3(0.0);
+    if (uThHalo > 0.001) o += tint * exp(-d * d / 0.02) * 0.2 * uThHalo * (0.5 + 0.5 * gl);
+    if (uThWisps > 0.001) {
+      float wv = lineMask(c + 0.27 + 0.07 * sin(s * 6.2831 + t * 0.5 + seed), w * 0.22) * 0.45
+               + lineMask(c - 0.31 + 0.09 * sin(s * 12.5662 - t * 0.4 + seed), w * 0.18) * 0.32;
+      o += tint * wv * uThWisps * vis;
+    }
+    if (uThSparkle > 0.001) {
+      float h = hash1(mod(floor(s * 2.0), 512.0) + seed * 31.0);
+      float u = (fract(s * 2.0) - 0.5 - (h - 0.5) * 0.6) * 0.5;
+      float tw = pow(0.5 + 0.5 * sin(t * (0.7 + h) + h * 40.0), 14.0);
+      float dotM = exp(-(u * u + d * d) * 2600.0);
+      float crossM = exp(-abs(u) * 42.0) * exp(-d * d * 5000.0) + exp(-d * 42.0) * exp(-u * u * 5000.0);
+      o += (vec3(0.6) + tint * 0.6) * (dotM * 1.6 + crossM * 0.7) * tw * uThSparkle * vis;
+    }
+    if (uThBeads > 0.001) {
+      float ub = (fract(s * 4.0 - t * 0.12) - 0.5) * 0.25;
+      float bead = 1.0 - smoothstep(0.034, 0.05, length(vec2(ub, d)));
+      float hi = exp(-((ub + 0.014) * (ub + 0.014) + (d - 0.014) * (d - 0.014)) * 4200.0);
+      o += ((tint * 0.7 + 0.1) * bead + vec3(0.85) * hi * bead) * uThBeads * vis;
+    }
+    if (uThStatic > 0.001) {
+      // two grains cross-faded three times a second: it drifts, it never snaps (no flicker)
+      float cell = mod(floor(s * 150.0), 1024.0) * 13.0 + floor(d * 150.0) * 7.0 + seed;
+      float tf = t * 3.0;
+      float g = mix(hash1(cell + mod(floor(tf), 256.0) * 3.0), hash1(cell + mod(floor(tf) + 1.0, 256.0) * 3.0), smoothstep(0.0, 1.0, fract(tf)));
+      o += tint * exp(-d * d / 0.008) * (g - 0.35) * 0.4 * uThStatic * vis;
+    }
+    return o;
+  }
 
   void main() {
     float len = vUv.x;
@@ -234,6 +284,9 @@ const TUBE_FRAG = `
     // keeps its screen-space AA. Undertow drops to 2 & 5 = one big kelp swell.
     float wave = uLineWave * (0.35 * sin(around * 6.2831 * uWaveF1 + uTime * 0.6)
                             + 0.2  * sin(around * 6.2831 * uWaveF2 - uTime * 0.9));
+    // thread weave: the same sway at a lighter hand, everywhere, on the thread clock
+    wave += uThWeave * (0.2 * sin(around * 6.2831 * uWaveF1 + uThTime * 0.6)
+                      + 0.1 * sin(around * 6.2831 * uWaveF2 - uThTime * 0.9));
     // compass-loss (II): BOUNDED spiral phase offsets (never scale scroll - it
     // grows unbounded). When d(drift)/dt beats the scroll rate the spiral
     // visibly stalls and runs backwards; shear makes depths disagree about
@@ -245,7 +298,13 @@ const TUBE_FRAG = `
     // perpendicular rings + a helical spiral (around + length), both scrolling
     // (uSpiralDir lets a biome run the swirl against the fall)
     float ringCoord = len * uRings - scroll + wave;
-    float spiralCoord = around * uArms + len * uSpiralTurns - scroll * uSpiralDir + drift + shear;
+    // lw rides the wall (one unit = one spiral pitch; a whole number at the loop seam)
+    float lw = len * uSpiralTurns - scroll * uSpiralDir;
+    float spirS = lw * 3.0;          // distance down an arm, in arm spacings
+    float thRingS = around * 4.0;      // distance round a ring, in ring spacings
+    float thWeave = uThWeave * (0.3 * sin(lw * 6.2831 + uThTime * 0.5)
+                              + 0.13 * sin(lw * 12.5662 - uThTime * 0.7 + around * 6.2831));
+    float spiralCoord = around * uArms + lw + drift + shear + thWeave;
     // ring: single line, or the Court's crisp twin (offset > AA width so the
     // pair never fuses); narrower twins = the authoritative look
     float ringS = lineMask(ringCoord, 0.06 * max(brW, 0.5));
@@ -274,6 +333,15 @@ const TUBE_FRAG = `
     float dash = 1.0 - smoothstep(uDashDuty - dw, uDashDuty + dw, segD);
     ring *= mix(1.0, dash, uRingDash);
     float spiral = lineMask(spiralCoord, 0.05);
+    // braid (Chain Court): each arm becomes two strands twisting round each other, the
+    // one in front brighter. The rings keep their chain links.
+    if (uThBraid > 0.001) {
+      float bph = spirS * 12.5662 + uThTime * 0.6;
+      float boff = 0.1 * sin(bph);
+      float bfr = 0.65 + 0.35 * cos(bph);
+      float braid = max(lineMask(spiralCoord - boff, 0.025) * bfr, lineMask(spiralCoord + boff, 0.025) * (1.3 - bfr));
+      spiral = mix(spiral, braid, uThBraid);
+    }
     // kaleidoscope (Hall of Mirrors): re-run the spiral on a FOLDED
     // circumference (integer fold count -> wrap-safe triangle wave) so the arms
     // reflect into chevrons meeting at mirror seams. Masks are mixed, never
@@ -317,8 +385,8 @@ const TUBE_FRAG = `
     float spiralGlow = 0.45 + 2.0 * pulse(spiralCoord * 0.4 - uTime * 2.1 * gr, 3.0) + 0.9 * globalFlash;
 
     // breath (I): brightness follows the width swell, slightly lagged
-    ringGlow   *= brG;
-    spiralGlow *= brG;
+    ringGlow   *= brG * uFeelGlow;
+    spiralGlow *= brG * uFeelGlow;
     // heartbeat throb (III): hb/thr computed up top (the beat also drives the
     // communion beat-scroll); applied to the glows here.
     ringGlow   *= 1.0 + thr * 1.6;
@@ -353,9 +421,15 @@ const TUBE_FRAG = `
         * pulse(len * 6.2831 * 10.0 - uTime * 11.0, 2.0);
     }
 
+    // sheen: soap-film colour drifts down each thread (the masks keep their shape)
+    vec3 lineT = uLineColor, spirT = uSpiralColor;
+    if (uThSheen > 0.001) {
+      lineT = mix(lineT, mix(lineT, thFilm(around + uThTime * 0.04 + 0.3), 0.5), uThSheen);
+      spirT = mix(spirT, mix(spirT, thFilm(lw + uThTime * 0.04), 0.5), uThSheen);
+    }
     vec3 col = base
-      + uLineColor   * ring   * ringGlow
-      + uSpiralColor * spiral * spiralGlow
+      + lineT * ring   * ringGlow
+      + spirT * spiral * spiralGlow
       + uLineColor   * streak * uRush * 1.4
       + uLineColor   * streak2 * (1.2 + uRush * 0.6)
       + uLineColor   * uRush * 0.05
@@ -364,6 +438,15 @@ const TUBE_FRAG = `
       // faint whole-wall swell on the heartbeat + the Court's whole-tube tick
       + uLineColor   * (thr * 0.05 + strobe * 0.1);
 
+    // thread layers: fine detail fades right at the lens and far down the tube. A folded
+    // spiral (kaleido, waterline) keeps its arms bare: the layers would trace the unfolded one.
+    if (uThHalo + uThSparkle + uThBeads + uThWisps + uThStatic > 0.001) {
+      float thVis = smoothstep(4.0, 8.0, vFogDepth) * (1.0 - smoothstep(22.0, 64.0, vFogDepth));
+      col += threadLayers(ringCoord, thRingS, 0.06, lineT, ringGlow, 3.0 + mod(floor(ringCoord + 0.5), 64.0), thVis)
+           * (1.0 - uRingFade) * mix(1.0, dash, uRingDash);
+      col += threadLayers(spiralCoord, spirS, 0.05, spirT, spiralGlow, 11.0 + mod(floor(spiralCoord + 0.5), uArms), thVis)
+           * (1.0 - uSpiralFade) * (1.0 - uKaleido) * (1.0 - uMirrorY);
+    }
     // caustics (Undertow; a calm low dose on Mirror Lake): two interfering
     // sine fields sharpened into shifting water-light webs, a third slow field
     // breathing them in and out. Integer around/len frequencies - wrap-safe.
@@ -436,6 +519,15 @@ const TUBE_FRAG = `
       col *= 1.0 - uPanel * 0.10 * interior;
     }
 
+    // feel ring: a soft band of the tube's own two colors (never white) running
+    // away from the camera. It lifts the line work and barely touches the wall,
+    // and the distance fog below fades it out with depth.
+    if (uFeelRing.y > 0.001) {
+      float fr = (vFogDepth - uFeelRing.x) / uFeelRing.z;
+      col += mix(uLineColor, uSpiralColor, 0.5) * uFeelRing.y * exp(-fr * fr)
+           * (0.10 + 0.6 * ring + 0.4 * spiral);
+    }
+
     // lightning strike: a brief whole-tube glare that favours the line work
     col += uFlash * (0.18 + ring * 1.4 + spiral * 0.9) * vec3(0.95, 0.8, 1.05);
 
@@ -495,6 +587,8 @@ export function createTunnel(layout) {
       uFlash: { value: 0 }, // lightning glare, driven by fx.js
       uRush: { value: 0 },  // speed heat, driven by scene.js (0 calm - 1 flying)
       uGlowRate: { value: 0 }, // ray-flicker rate ramp, driven by fx.js (0 shallow - 1 deep)
+      uFeelGlow: { value: 1 },                      // feel pass: breath + warmth glow (fx.js)
+      uFeelRing: { value: new THREE.Vector3(0, 0, 1) }, // feel pass: light ring dist / amp / width
       // chamber pattern knobs, eased by fx.js from the region styles (0 = classic)
       uBreath: { value: 0 },
       uRingDash: { value: 0 },
@@ -519,6 +613,10 @@ export function createTunnel(layout) {
       uSurge: { value: 0 }, uSlip: { value: 0 }, uBeatScroll: { value: 0 },
       uDots: { value: 0 }, uChecker: { value: 0 }, uDesat: { value: 0 },
       uFiligree: { value: 0 }, uPanel: { value: 0 },
+      // thread layers (fx.js eases these; worldFeel.js holds the base and what warmth adds)
+      uThHalo: { value: 0 }, uThWeave: { value: 0 }, uThSheen: { value: 0 }, uThSparkle: { value: 0 },
+      uThBeads: { value: 0 }, uThBraid: { value: 0 }, uThWisps: { value: 0 }, uThStatic: { value: 0 },
+      uThTime: { value: 0 },
       // branch-hole carving (junctions.js sets these; 0 count => idle/no overhead)
       uHoleCount: { value: 0 },
       uHolePos: { value: Array.from({ length: MAX_HOLES }, () => new THREE.Vector3()) },
