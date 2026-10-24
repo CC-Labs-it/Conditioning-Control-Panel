@@ -161,7 +161,7 @@ test('routes: the bots leave the dare alone, finish, and seldom fall', () => {
   let landed = 0, drops = 0, finished = 0, bots = 0;
   for (const seed of [1, 4]) {
     const R = makeRace({ seed });
-    R.run(260, () => R.racers.list.every((r) => r.finished));
+    R.run(900, () => R.racers.list.every((r) => r.finished));
     landed += R.botEvents('route-land').length;
     drops += R.botEvents('drop').length;
     finished += R.racers.list.filter((r) => r.finished).length;

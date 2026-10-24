@@ -2,6 +2,7 @@
  * UPLOAD frame at 20 Hz (15 Hz on phones). Sim events become pulse bits that are ORed until the next record of
  * that seat; a trick holds its pose for POSE_MS. Pure: the caller passes ms and ticks.
  */
+import { racerFork } from './trackPath.js';
 import { createKart, kartFromState, PULSE, RATES } from './protocol.js';
 
 const POSE_MS = 700;
@@ -21,7 +22,7 @@ export function pulseOf(name, p = {}) {
   }
 }
 
-export function createUplink({ phone = false } = {}) {
+export function createUplink({ phone = false, track = null } = {}) {
   const per = new Map();   // seat -> { seq, pulses, pose, poseUntil, pops, k }
   const gapMs = 1000 / (phone ? RATES.upHzPhone : RATES.upHz);
   let lastAt = -Infinity;
@@ -61,6 +62,7 @@ export function createUplink({ phone = false } = {}) {
           item: it.id || null, rolling: !!it.rolling, effect: fxv.effect || null, shield: fxv.shield || (fxv.echo > 0 ? 'echo' : null),
           echo: fxv.echo || 0, pose: e.pose, pulses: e.pulses, pops: e.pops,
         });
+        e.k.fork = track ? racerFork(track, r.st) : 0;
         e.seq = (e.seq + 1) & 0xffff; e.pulses = 0;
         out.push(e.k);
       }

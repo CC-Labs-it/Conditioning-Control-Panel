@@ -1,7 +1,8 @@
 // dev/gen-threshold.mjs - builds tracks/threshold.json (Threshold, Track JSON v1).
 // Run: node dev/gen-threshold.mjs [--check] [--out <path>]   (--check prints the report and writes nothing)
 //
-// Polish 6: a stacked course on three decks (about y 0, +14, +28). The start straight runs under the
+// Six sections: the original stacked course opens into tidal galleries, a high observatory spiral,
+// a flowing descent and a lower basin. The start straight runs under the
 // induction bridge, the road spirals up round a tall column onto the top deck, drives a classic wheel
 // (a vertical 360 loop), drops back down a coil whose open edge is the drop shortcut, takes the jump and a
 // chain of two hoops at ground level and comes home.
@@ -40,6 +41,19 @@ export const PIECES = [
   // and sweepF r 42 -> 24); sweepD (the court entry) keeps r 40: at r 22 a boosted bot slid into the left hole.
   // The dare, the court and the start are untouched and the loop closes exactly
   { id: 'bridge', len: 162, y: 14, sec: 0, pad: { at: 0.35, x: -3 } },
+  // A long excursion leaves the compact induction stack before returning above it.
+  { id: 'prism-approach', len: 160, y: 48, w: 26, sec: 3 },
+  { id: 'tidal-in', turn: 90, r: 90, roll: 16, y: 28, w: 26, sec: 3 },
+  { id: 'tidal-gallery', len: 450, y: 28, w: 30, sec: 3, surface: 'stream', flow: [4, 0] },
+  { id: 'tidal-out', turn: 90, r: 90, roll: 18, y: 38, w: 26, sec: 3 },
+  { id: 'prism-run', len: 300, y: 48, w: 26, sec: 4 },
+  { id: 'observatory-spiral', turn: -360, r: 110, roll: 22, y: 84, ease: 'lin', w: 26, sec: 4 },
+  { id: 'lens-gallery', len: 400, y: 84, w: 30, sec: 4 },
+  { id: 'lens-out', turn: 90, r: 90, roll: 16, y: 84, w: 26, sec: 5 },
+  { id: 'cascade-descent', len: 350, y: -16, w: 26, surface: 'stream', flow: [5, 0], sec: 5 },
+  { id: 'cascade-return', turn: 90, r: 90, roll: 18, y: -16, w: 26, sec: 5 },
+  { id: 'crescent', len: 500, y: -16, w: 26, surface: 'pool', sec: 5 },
+  { id: 'rejoin', len: 100, y: 14, w: 20, sec: 5 },
   // deepening: up round the column onto the top deck, the wheel and its hoop, the dare, down the keyhole
   { id: 'column', turn: -360, r: 28, roll: 18, y: 28, ease: 'lin', w: 16.25, speed: 0.92, sec: 1 },
   { id: 'deck', len: 40, y: 28, sec: 1, pad: { at: 0.55, x: 0 } },
@@ -76,6 +90,9 @@ const SECTIONS = [
   { id: 'induction', act: 'induction', palette: 'dawn', sky: 'spiral-slow', bandSpeed: 0.6 },
   { id: 'deepening', act: 'deepening', palette: 'deep', sky: 'spiral-deep', bandSpeed: 1.0 },
   { id: 'release', act: 'release', palette: 'afterglow', sky: 'spiral-wide', bandSpeed: 0.8 },
+  { id: 'tidal-gallery', act: 'induction', palette: 'dawn', sky: 'spiral-wide', bandSpeed: 0.65 },
+  { id: 'prism-observatory', act: 'deepening', palette: 'deep', sky: 'spiral-deep', bandSpeed: 0.85 },
+  { id: 'cascade-return', act: 'release', palette: 'afterglow', sky: 'spiral-wide', bandSpeed: 0.7 },
 ];
 // Main racing road gains 25% room. The loader's monotone width spline eases each join without overshoot.
 const W = 17.5, TOP = 30, G = 28;
@@ -83,8 +100,8 @@ const W = 17.5, TOP = 30, G = 28;
 const LOOP_SIDE_GAP_M = 4;
 /** Lanes marked alongside keep at least this much plan gap between edges and this much height between them. */
 const ALONGSIDE_GAP_M = 1.5, ALONGSIDE_DY_M = 2.5;
-/** Length window (metres): about the old 1350 m ring, +-25% at most (tests/gen-threshold.test.mjs holds the same window). */
-const LENGTH_M = [1150, 1687];
+/** Six-section lap length, in metres (tests/gen-threshold.test.mjs holds the same window). */
+const LENGTH_M = [5000, 6500];
 /** Water: a stream run's flow ramps over its first and last STREAM_RAMP nodes (1/3, 2/3, 1 ... 1, 2/3, 1/3). */
 const STREAM_RAMP = 3;
 /** Water checks: the chute may not exceed this grade, the pool must be at least this long. */
@@ -96,6 +113,10 @@ const BOX_ROWS = [
   { piece: 'start', at: 0.8, xs: [-5, -1.7, 1.7, 5] },
   { piece: 'L2', at: 0.6, xs: [-3.5, 0, 3.5] },
   { piece: 'bridge', at: 0.2, xs: [-4.5, -1.5, 1.5, 4.5] },   // water wave 1: 0.12 sat where every kart still hugs the hairpin's outer rail
+  { piece: 'tidal-gallery', at: .45, xs: [-8, -3, 3, 8] },
+  { piece: 'prism-run', at: .7, xs: [-7, 0, 7] },
+  { piece: 'lens-gallery', at: .5, xs: [-8, -3, 3, 8] },
+  { piece: 'crescent', at: .5, xs: [-7, 0, 7] },
   { piece: 'L4a', at: 0.2, xs: [-3.5, 0, 3.5] },
   { piece: 'home', at: 0.6, xs: [-4.5, -1.5, 1.5, 4.5] },
 ];

@@ -155,7 +155,7 @@ test('gen: Threshold water invariants (stream bend, chute, pool, closure, the da
   assert.ok(built.closure.closeErr < 0.01 && Math.abs(built.closure.headErr % 360) < 0.01);
   const l4b = built.pieces.find((p) => p.id === 'L4b');
   assert.ok(l4b.auto && l4b.len >= 30, 'L4b ' + l4b.len);
-  assert.ok(info.lengthM <= 1687 && info.lengthM >= 1150, 'length ' + info.lengthM);
+  assert.ok(info.lengthM <= 6500 && info.lengthM >= 5000, 'length ' + info.lengthM);
   // the dare still runs c1 -> c3 and the court sits on L4d; no item sits on the chute
   const dare = built.track.routes.find((r) => r.id === 'dare');
   assert.ok(dare && ids[dare.from] === 'c1' && ids[dare.land.from] === 'c3');

@@ -35,6 +35,10 @@ export function showcaseLayout(track, options = {}) {
       if (!right) continue;
       const up = norm(cross(right, forward));
       const p = pa.map((v, j) => (v + pb[j]) * 0.5);
+      // A long course uses longer chords under the same geometry budget. Keep their centre below banked joins.
+      const top = dot(sub(p, f.p), f.n) + Math.abs(dot(up, f.n)) * K.fasciaH / 2;
+      const lower = Math.max(0, top + .08);
+      for (let j = 0; j < 3; j++) p[j] -= f.n[j] * lower;
       rows.fascia.push({ s, p, b: right, n: up, t: forward, size: [K.fasciaW, K.fasciaH, distance + 0.045] });
       rows.trim.push({ s, p: p.map((v, j) => v + up[j] * (K.fasciaDown - K.trimDown)),
         b: right, n: up, t: forward, size: [K.trimW, K.trimH, distance + 0.045] });

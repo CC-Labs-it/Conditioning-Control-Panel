@@ -17,7 +17,7 @@ test('track: length and node arc lengths', () => {
   assert.equal(tr.nodeS[N], tr.lengthM);
   for (let i = 0; i < N; i++) assert.ok(tr.nodeS[i + 1] > tr.nodeS[i] + 5, 'node ' + i);
   // polish 6: the stacked course, within +-25% of the 1350 m ring it replaced (water wave 1: + the chute and pool)
-  assert.ok(tr.lengthM > 1150 && tr.lengthM < 1700, 'length ' + tr.lengthM);
+  assert.ok(tr.lengthM > 5000 && tr.lengthM < 6500, 'length ' + tr.lengthM);
   for (let i = 0; i < N; i++) assert.ok(dist(tr.frameAt(tr.nodeS[i]).p, json.nodes[i].p) < 1e-6, 'passes node ' + i);
 });
 
@@ -69,7 +69,7 @@ test('track: roll honoured, right edge low on positive roll, flat when roll is 0
 test('track: derived lists', () => {
   assert.deepEqual(tr.checklines.map((c) => c.node), json.checkpoints);
   tr.checklines.forEach((c, i) => { assert.equal(c.idx, i); assert.equal(c.s, tr.nodeS[c.node]); assert.ok(c.w > 0); });
-  assert.equal(tr.sections.length, 3);
+  assert.equal(tr.sections.length, 6);
   assert.equal(tr.sectionAt(0), 0);
   for (const [k, sec] of json.sections.entries()) assert.equal(tr.sectionAt(tr.nodeS[Math.floor((sec.from + sec.to) / 2)]), k);
   assert.equal(tr.sectionAt(tr.lengthM + 1), 0);

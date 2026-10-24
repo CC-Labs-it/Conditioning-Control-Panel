@@ -69,12 +69,13 @@ test('wantLobbySongs: only when nothing named a chart (?chart and host songs win
   assert.deepEqual(wantLobbySongs(), true);
 });
 
-test('boot asks the lobby once, guarded, and keeps a chart that landed first', () => {
+test('boot memoizes the song fallback and starts recordings that arrive after racing begins', () => {
   const src = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
   const at = src.indexOf('lobbyApi.songs()');
   assert.ok(at > 0 && src.indexOf('lobbyApi.songs()', at + 1) < 0, 'one call');
-  const guard = src.lastIndexOf('wantLobbySongs(', at);
-  assert.ok(guard > 0 && at - guard < 600, 'behind wantLobbySongs');
+  assert.ok(src.includes("!qs.has('chart')"), 'explicit chart choices never fetch a fallback');
+  assert.ok(src.includes('fallback ||='), 'one memoized request also serves a failed host chart');
   assert.match(src.slice(at, at + 300), /lobbySongCharts\(/);
-  assert.match(src.slice(at, at + 300), /!CHARTS\.length/);
+  assert.ok(src.includes('if (!CHARTS.length) CHARTS = list;'));
+  assert.ok(src.includes("else if (state === 'race') void playSong"), 'a late song no longer leaves a silent race');
 });

@@ -214,7 +214,7 @@ function gridRun(seed) {
   const race = makeRace({ track: TRACK, seed }), list = race.racers.list, kick = kicker(TRACK);
   const fieldBad = list.map(() => []), worstLane = list.map(() => 0), minSpeed = list.map(() => Infinity), entered = new Set();
   let logged = 0;
-  for (let i = 0; i < 170 / DT; i++) {
+  for (let i = 0; i < 500 / DT; i++) {
     const before = list.map((r) => r.st[S.s]);
     for (const r of list) kick.before(r.st);
     race.tick();
@@ -246,7 +246,7 @@ for (const seed of SEEDS) test('eight racers from the grid cross the stones twic
   const g = gridRun(seed);
   const label = JSON.stringify({ laps: g.laps, worstLane: g.worstLane.map((v) => +v.toFixed(2)), minSpeed: g.minSpeed.map((v) => +v.toFixed(1)), bad: g.fieldBad });
   assert.equal(g.entered.size, 8, 'everybody reached the field: ' + label);
-  assert.ok(g.laps.every((n) => n >= 2), 'two laps each within 170 s: ' + label);
+  assert.ok(g.laps.every((n) => n >= 2), 'two laps each within 500 s: ' + label);
   assert.deepEqual(g.fieldBad, g.fieldBad.map(() => []), 'no void drop, no fall inside the field: ' + label);
   for (let i = 0; i < 8; i++) {
     assert.ok(g.worstLane[i] <= 1.5, 'racer ' + i + ' within 1.5 m of a lane centre: ' + label);

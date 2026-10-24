@@ -23,7 +23,8 @@ const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf('--' + k); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : d; };
 const PAGE = Number(arg('page-port', 8800)), CDP = Number(arg('cdp-port', 8808));
 const LOBBY_PORT = Number(arg('lobby-port', 8811)), ROOM_PORT = Number(arg('room-port', 8810));
-const LAPS = Number(arg('laps', 3));
+const TRACK = arg('track', 'threshold');
+const LAPS = Number(arg('laps', ['keep','boudoir','goonworks'].includes(TRACK) ? 2 : 3));
 const OWNER = [8790, 8792, 8794, 8796];
 if ([PAGE, CDP, LOBBY_PORT, ROOM_PORT].some((p) => OWNER.includes(p))) { console.error('net-e2e: owner ports are off limits'); process.exit(2); }
 const LOG = arg('log', null), SHOTS = arg('shots', null);
@@ -58,7 +59,7 @@ if (!lobby) {
   const server = arg('server', null);
   if (!server) { console.error('net-e2e: --server <CCP-Server checkout> or --lobby <url>'); process.exit(2); }
   const env = { ...process.env, ...(arg('node-path', null) ? { NODE_PATH: arg('node-path') } : {}) };
-  const rl = child(process.execPath, [join(server, 'proxy/scripts/race-local.mjs'), '--port', String(LOBBY_PORT), '--room-port', String(ROOM_PORT)], { env, cwd: join(server, 'proxy') });
+  const rl = child(process.execPath, [join(server, 'proxy/scripts/race-local.mjs'), '--port', String(LOBBY_PORT), '--room-port', String(ROOM_PORT), '--access', 'prime'], { env, cwd: join(server, 'proxy') });
   rl.stdout.on('data', (d) => {
     for (const l of String(d).split('\n')) {
       if (!l.trim()) continue;
@@ -110,7 +111,7 @@ const shot = async (name) => {
 };
 const D = () => ev('JSON.stringify((({ phase, lap, place, s, online, onlineResult, events, fps, backend }) => ({ phase, lap, place, s: Math.round(s || 0), online, onlineResult, fps, backend, hits: events["item-hit"] || 0, fires: events["item-fire"] || 0, bumps: events.bump || 0 }))(window.__glassroad || {}))').then((x) => JSON.parse(x || '{}'));
 
-const pageUrl = `http://127.0.0.1:${PAGE}/?bot=1&chart=0&quality=phone&lobby=${encodeURIComponent(lobby)}&uid=e2e-page&name=Page`;
+const pageUrl = `http://127.0.0.1:${PAGE}/?track=${encodeURIComponent(TRACK)}&bot=1&chart=0&quality=phone&lobby=${encodeURIComponent(lobby)}&uid=e2e-page&name=Page`;
 await cdp('Page.navigate', { url: pageUrl }, sid);
 check('page boots to the menu', await waitFor(async () => (await ev('window.__glassroad && window.__glassroad.phase')) === 'menu', 90000, 500));
 
@@ -119,7 +120,7 @@ const bots = [];
 let seatedA;
 const roomIdP = new Promise((r) => { seatedA = r; });
 const keeps = [];   // keep hand-offs: node players from their log, the page from its session
-const common = { lobbyBase: lobby, quiet: false, out: (l) => {
+const common = { track: TRACK, lobbyBase: lobby, quiet: false, out: (l) => {
   const o = JSON.parse(l);
   if (o.ev === 'keep' && o.seats.length) keeps.push({ who: o.bot, seats: o.seats });
   if (o.ev !== 'log' && o.ev !== 'seats') say('bot', o);
@@ -198,7 +199,7 @@ const res = await waitFor(async () => {
   const x = await D();
   if (!midShot && x.lap >= 2) { midShot = true; await shot('5-lap3'); }
   return x.onlineResult ? x : null;
-}, 400000, 1000);
+}, Number(arg('race-wait-ms', 3000000)), 1000);
 check('page gets the room results', !!res, res && res.onlineResult);
 await shot('6-results');
 const e2e = JSON.parse(await ev('JSON.stringify(Object.assign({}, window.__e2e, { last: undefined }))') || '{}');
@@ -232,7 +233,7 @@ const claims = roomLog.filter((l) => l.room === roomId && l.ev === 'claim');
 if (claims.length) say('refused-claims', { claims });
 check('signed result landed in the local ledger', !!result && result.rows.length === 5, result && result.rows.map((r) => [r.place, r.name, r.timeMs, r.flags.join('|')]));
 check('no anti-cheat flags on a clean race', result && result.rows.every((r) => !r.flags.length), result && result.rows.map((r) => r.flags));
-const board = await (await fetch(lobby + '/v2/race/board/threshold', { headers: { authorization: 'Bearer jwt-e2e-page' } })).json();
+const board = await (await fetch(lobby + '/v2/race/board/' + TRACK, { headers: { authorization: 'Bearer jwt-e2e-page' } })).json();
 say('board', board);
 check('leaderboard has the finishers', board && Array.isArray(board.rows) && board.rows.length >= 4, board && board.rows && board.rows.length);
 check('no page errors', errors.length === 0, errors.slice(0, 6));

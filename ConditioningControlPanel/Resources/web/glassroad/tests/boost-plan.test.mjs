@@ -73,7 +73,7 @@ test('Threshold exact 66m rollout endpoint rejects the former shoulder overlap',
 
 for (const seed of [1, 241023, 20261024]) test('dense Threshold: eight racers finish with no falls, seed ' + seed, () => {
   const r = makeRace({ seed });
-  r.run(420, () => r.racers.list.every((kart) => kart.finished));
+  r.run(900, () => r.racers.list.every((kart) => kart.finished));
   assert.ok(r.racers.list.every((kart) => kart.finished));
   assert.deepEqual(r.racers.list.map((kart) => kart.falls), Array(8).fill(0));
 });
@@ -95,7 +95,7 @@ for (const id of ['threshold', 'mainframe']) for (const seed of [1, 241023, 2026
   }
   const fallCounts = new Int32Array(8), before = new Float64Array(8), L = r.track.lengthM;
   const added = r.track.boosts.slice(id === 'mainframe' ? 8 : 4);
-  for (let tick = 0; tick < (id === 'mainframe' ? 1200 : 420) * 60 && !r.racers.list.every((kart) => kart.finished); tick++) {
+  for (let tick = 0; tick < (id === 'mainframe' ? 1200 : 900) * 60 && !r.racers.list.every((kart) => kart.finished); tick++) {
     for (const kart of r.racers.list) before[kart.i] = kart.st[S.s];
     r.tick();
     for (const kart of r.racers.list) {
