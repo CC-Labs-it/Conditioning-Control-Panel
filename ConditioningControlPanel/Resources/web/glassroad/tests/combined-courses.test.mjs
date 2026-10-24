@@ -11,8 +11,8 @@ import { placeKart } from '../dev/hook.js';
 import { waterRuns, waterSpills } from '../render/waterMath.js';
 import { makeFeel, recorder, DT } from './sim-fake.mjs';
 
-test('the garage catalog and course loader agree on all three bundled tracks', () => {
-  assert.deepEqual(COURSES.map(c => c.id).sort(), ['keep', 'mainframe', 'threshold']);
+test('the garage catalog and course loader agree on all four bundled tracks', () => {
+  assert.deepEqual(COURSES.map(c => c.id).sort(), ['boudoir', 'keep', 'mainframe', 'threshold']);
   for (const c of COURSES) {
     const url = new URL(courseUrl('http://localhost:18910/?chart=0&r=invite', c.id));
     assert.equal(selectedCourse(url.search).id, c.id);
