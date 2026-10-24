@@ -65,3 +65,13 @@ export function fieldRescueNode(track, index, aheadNodes = 0) {
 export function lipLeave(prevQ, q) {
   return !!(prevQ && prevQ.onRoad && q && q.hole && q.hole.lip === true && !q.stone);
 }
+
+/** A broad landing deck renews an early hop once at its actual lip, never over the rest of the void. */
+export function broadPlatformEdgeKick(track, prevQ, q, normalSpeed, kickUpMps) {
+  if (track?.id !== 'keep' || !prevQ?.stone || prevQ.stone.w < 24 || prevQ.stone.len < 24 ||
+      !lipLeave(prevQ, q) || prevQ.height < -.3 || q.height < -.3 || q.height > 1.5) return 0;
+  const stone = prevQ.stone, end = stone.s + stone.len;
+  if (!Number.isFinite(end) || !Number.isFinite(prevQ.s) || !Number.isFinite(q.s) || !Number.isFinite(q.lateral) ||
+      prevQ.s > end || q.s < end || q.s <= prevQ.s || Math.abs(q.lateral - stone.x) > stone.w / 2) return 0;
+  return Math.max(0, Math.max(0, kickUpMps) - normalSpeed);
+}

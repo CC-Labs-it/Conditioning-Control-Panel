@@ -71,3 +71,13 @@ test('a non-object fails cleanly', () => {
   assert.equal(validate(null).ok, false);
   assert.equal(validate([]).ok, false);
 });
+
+test('broad platforms remain bounded and contained by the road', () => {
+  const t = tiny(); t.nodes.forEach(n => { n.w = 34; });
+  t.fields = [{id: 'broad', from: 0, to: 4, lanes: [0], stones: [{id: 'deck', node: 1, x: 0, w: 28, len: 26}]}];
+  assert.equal(validate(t).ok, true);
+  const deck = t.fields[0].stones[0];
+  deck.w = 33; assert.equal(validate(t).ok, false);
+  deck.w = 28; deck.len = 33; assert.equal(validate(t).ok, false);
+  deck.len = 26; deck.x = 4; assert.ok(validate(t).errors.some(e => e.includes('leaves the road footprint')));
+});
