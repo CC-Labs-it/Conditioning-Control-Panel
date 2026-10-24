@@ -622,9 +622,9 @@
             </Border.Effect>
             <Grid>
               <!-- LAYER 0: the per-niche card art (Resources/intake/pass_card_*.png). Painted
-                   as a background brush rather than an Image child because ClipToBounds ignores
-                   CornerRadius - a background brush is the only fill that follows the rounded
-                   corners. Collapsed until IntakeNiche.PassCardImage() returns a bitmap.
+                   as a background brush on an inner 11px Border so it follows the rounded corners
+                   inside the 1px stroke (the outer Border's ClipToBounds does honour its
+                   CornerRadius - ShellSyncSevenTests proves it on LogoFaceLogo). Collapsed until IntakeNiche.PassCardImage() returns a bitmap.
                    ponytail: the PNGs ship here; what is missing is the writer - WPF's
                    MainWindow.UiUpdates.cs:1559 via IntakeNiche.PassCardImage(), neither ported. -->
               <Border x:Name="IntakePassArt" CornerRadius="11" IsVisible="False">

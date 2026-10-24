@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -23,7 +24,9 @@ public sealed class ShellSyncSevenTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
     }
 
     [Fact]
@@ -133,6 +136,21 @@ public sealed class ShellSyncSevenTests
             Assert.Equal(width - 48, logo.Bounds.Width, 2);
             Assert.Equal(logo.Bounds.Size, pass.Bounds.Size);
         }
+
+        // The rounded clip is real: paint the logo's content solid and its corner stays empty.
+        pass.IsVisible = false;
+        var content = Assert.IsAssignableFrom<Panel>(logo.Child);
+        content.Background = Brushes.White;
+        logo.Height = 100;   // content stretches to the logo, so its corner IS the logo's corner
+        host.Measure(new Size(300, 220));
+        host.Arrange(new Rect(0, 0, 300, 220));
+        using var bitmap = new RenderTargetBitmap(new PixelSize(300, 220));
+        bitmap.Render(host);
+        var pixels = Pixels(bitmap);
+        byte Alpha(double x, double y) => pixels[4 * ((int)y * 300 + (int)x) + 3];
+        var at = logo.TranslatePoint(default, host)!.Value;   // Bounds is parent-relative, not host-relative
+        Assert.True(Alpha(at.X + logo.Bounds.Width / 2, at.Y + 50) > 200, "logo content did not paint");
+        Assert.True(Alpha(at.X + 1, at.Y + 1) < 40, "logo corner is square: ClipToBounds ignored CornerRadius");
     });
 
     [Fact]

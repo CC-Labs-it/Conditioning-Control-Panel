@@ -27,7 +27,9 @@ public sealed class HoverBubbleBarTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.RenderProof.EnsureSetUp();
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
     }
 
     [Fact]
