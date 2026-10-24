@@ -766,7 +766,7 @@ async function boot() {
     renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
     const inGarage=!!garage&&state==='menu'&&hud.card==='menu';
     garage?.setVisible(inGarage);
-    if(inGarage)garage.render(frameDt,hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview||matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if(inGarage)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
     else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
     if (HT) hLap('render');
 
