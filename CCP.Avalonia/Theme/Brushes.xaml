@@ -1,90 +1,89 @@
 <!-- PORTED FROM ConditioningControlPanel/Resources/Theme/Brushes.xaml - DO NOT diverge.
      Same keys, same hex values, so a Windows/Linux fidelity comparison is meaningful.
-     WPF and Avalonia share this dictionary syntax almost exactly; only the xmlns and
-     DynamicResource->StaticResource for intra-dictionary refs differ.
+     DynamicResource color references preserve WPF runtime color propagation.
      When the WPF head is retired this becomes the single source of truth. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- Brushes (derived from Colors — use DynamicResource so runtime color changes propagate) -->
-    <SolidColorBrush x:Key="PinkBrush"   Color="{StaticResource PinkColor}"/>
-    <SolidColorBrush x:Key="DarkPinkBrush" Color="{StaticResource DarkPink}"/>
-    <SolidColorBrush x:Key="PanelBgBrush" Color="{StaticResource PanelBg}"/>
-    <SolidColorBrush x:Key="PanelBgTransparentBrush" Color="{StaticResource PanelBgTransparent}"/>
-    <SolidColorBrush x:Key="DarkerBgBrush" Color="{StaticResource DarkerBg}"/>
-    <SolidColorBrush x:Key="SurfaceBgBrush" Color="{StaticResource SurfaceBg}"/>
-    <SolidColorBrush x:Key="TextLightBrush" Color="{StaticResource TextLight}"/>
-    <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}"/>
-    <SolidColorBrush x:Key="PanelAccentBrush" Color="{StaticResource PanelAccent}"/>
-    <SolidColorBrush x:Key="PanelAccentHoverBrush" Color="{StaticResource PanelAccentHover}"/>
-    <SolidColorBrush x:Key="PreviewBgBrush" Color="{StaticResource PreviewBg}"/>
+    <SolidColorBrush x:Key="PinkBrush"   Color="{DynamicResource PinkColor}"/>
+    <SolidColorBrush x:Key="DarkPinkBrush" Color="{DynamicResource DarkPink}"/>
+    <SolidColorBrush x:Key="PanelBgBrush" Color="{DynamicResource PanelBg}"/>
+    <SolidColorBrush x:Key="PanelBgTransparentBrush" Color="{DynamicResource PanelBgTransparent}"/>
+    <SolidColorBrush x:Key="DarkerBgBrush" Color="{DynamicResource DarkerBg}"/>
+    <SolidColorBrush x:Key="SurfaceBgBrush" Color="{DynamicResource SurfaceBg}"/>
+    <SolidColorBrush x:Key="TextLightBrush" Color="{DynamicResource TextLight}"/>
+    <SolidColorBrush x:Key="TextMutedBrush" Color="{DynamicResource TextMuted}"/>
+    <SolidColorBrush x:Key="PanelAccentBrush" Color="{DynamicResource PanelAccent}"/>
+    <SolidColorBrush x:Key="PanelAccentHoverBrush" Color="{DynamicResource PanelAccentHover}"/>
+    <SolidColorBrush x:Key="PreviewBgBrush" Color="{DynamicResource PreviewBg}"/>
 
-    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource Danger}"/>
+    <SolidColorBrush x:Key="DangerBrush" Color="{DynamicResource Danger}"/>
 
     <!-- Ambient FX brushes. DESIGN-TIME SEEDS ONLY, exactly like their Color keys in Colors.xaml:
          Services/FxTheme.ApplyForActiveMod overwrites all four (Color + Brush) at startup and on
          every mod switch. They exist here so a chrome FX layer still has a brush to draw with if
          that call ever fails, and so the XAML designer isn't left with null backgrounds. -->
-    <SolidColorBrush x:Key="FxMistBrush" Color="{StaticResource FxMistColor}"/>
-    <SolidColorBrush x:Key="FxParticleBrush" Color="{StaticResource FxParticleColor}"/>
-    <SolidColorBrush x:Key="FxGlowBrush" Color="{StaticResource FxGlowColor}"/>
-    <SolidColorBrush x:Key="FxFlashTintBrush" Color="{StaticResource FxFlashTintColor}"/>
+    <SolidColorBrush x:Key="FxMistBrush" Color="{DynamicResource FxMistColor}"/>
+    <SolidColorBrush x:Key="FxParticleBrush" Color="{DynamicResource FxParticleColor}"/>
+    <SolidColorBrush x:Key="FxGlowBrush" Color="{DynamicResource FxGlowColor}"/>
+    <SolidColorBrush x:Key="FxFlashTintBrush" Color="{DynamicResource FxFlashTintColor}"/>
 
     <!-- Semantic success green (see Colors.xaml). Static across mods. -->
-    <SolidColorBrush x:Key="SuccessGreenBrush" Color="{StaticResource SuccessGreen}"/>
-    <SolidColorBrush x:Key="SuccessGreenDeepBrush" Color="{StaticResource SuccessGreenDeep}"/>
-    <SolidColorBrush x:Key="SuccessGreenSoftBrush" Color="{StaticResource SuccessGreenSoft}"/>
+    <SolidColorBrush x:Key="SuccessGreenBrush" Color="{DynamicResource SuccessGreen}"/>
+    <SolidColorBrush x:Key="SuccessGreenDeepBrush" Color="{DynamicResource SuccessGreenDeep}"/>
+    <SolidColorBrush x:Key="SuccessGreenSoftBrush" Color="{DynamicResource SuccessGreenSoft}"/>
 
-    <SolidColorBrush x:Key="TransparentPinkBrush" Color="{StaticResource TransparentPink}"/>
-    <SolidColorBrush x:Key="PinkButtonHoveredBrush" Color="{StaticResource PinkButtonHovered}"/>
+    <SolidColorBrush x:Key="TransparentPinkBrush" Color="{DynamicResource TransparentPink}"/>
+    <SolidColorBrush x:Key="PinkButtonHoveredBrush" Color="{DynamicResource PinkButtonHovered}"/>
 
     <!-- Accent pressed (darkened accent for press states) -->
-    <SolidColorBrush x:Key="AccentPressedBrush" Color="{StaticResource AccentPressed}"/>
+    <SolidColorBrush x:Key="AccentPressedBrush" Color="{DynamicResource AccentPressed}"/>
 
     <!-- 20% alpha transparent accent -->
-    <SolidColorBrush x:Key="TransparentPink20Brush" Color="{StaticResource TransparentPink20}"/>
+    <SolidColorBrush x:Key="TransparentPink20Brush" Color="{DynamicResource TransparentPink20}"/>
 
     <!-- Patreon brushes (secondary color — auto-computed for custom mods) -->
-    <SolidColorBrush x:Key="PatreonPurpleBrush" Color="{StaticResource PatreonPurple}"/>
-    <SolidColorBrush x:Key="PatreonLightPurpleBrush" Color="{StaticResource PatreonLightPurple}"/>
-    <SolidColorBrush x:Key="PatreonDarkPurpleBrush" Color="{StaticResource PatreonDarkPurple}"/>
+    <SolidColorBrush x:Key="PatreonPurpleBrush" Color="{DynamicResource PatreonPurple}"/>
+    <SolidColorBrush x:Key="PatreonLightPurpleBrush" Color="{DynamicResource PatreonLightPurple}"/>
+    <SolidColorBrush x:Key="PatreonDarkPurpleBrush" Color="{DynamicResource PatreonDarkPurple}"/>
 
     <!-- Secondary brush (alias for PatreonPurpleBrush, used in UI elements) -->
-    <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource PatreonPurple}"/>
+    <SolidColorBrush x:Key="SecondaryBrush" Color="{DynamicResource PatreonPurple}"/>
 
     <!-- Semi-transparent white -->
-    <SolidColorBrush x:Key="TransparentWhiteBrush" Color="{StaticResource TransparentWhite}"/>
+    <SolidColorBrush x:Key="TransparentWhiteBrush" Color="{DynamicResource TransparentWhite}"/>
 
     <!-- Added: brush for Controls.xaml hover color -->
-    <SolidColorBrush x:Key="DangerHoverBrush" Color="{StaticResource DangerHover}"/>
+    <SolidColorBrush x:Key="DangerHoverBrush" Color="{DynamicResource DangerHover}"/>
 
     <!-- Accent-tinted dark backgrounds (for headers, panels that need subtle accent tint) -->
-    <SolidColorBrush x:Key="AccentTintedBgBrush" Color="{StaticResource AccentTintedBg}"/>
-    <SolidColorBrush x:Key="AccentTintedBgHoverBrush" Color="{StaticResource AccentTintedBgHover}"/>
-    <SolidColorBrush x:Key="AccentMidGradientBrush" Color="{StaticResource AccentMidGradient}"/>
+    <SolidColorBrush x:Key="AccentTintedBgBrush" Color="{DynamicResource AccentTintedBg}"/>
+    <SolidColorBrush x:Key="AccentTintedBgHoverBrush" Color="{DynamicResource AccentTintedBgHover}"/>
+    <SolidColorBrush x:Key="AccentMidGradientBrush" Color="{DynamicResource AccentMidGradient}"/>
 
     <!-- 40% and 50% alpha accent brushes (for hover/selected overlays) -->
-    <SolidColorBrush x:Key="TransparentPink40Brush" Color="{StaticResource TransparentPink40}"/>
-    <SolidColorBrush x:Key="TransparentPink50Brush" Color="{StaticResource TransparentPink50}"/>
+    <SolidColorBrush x:Key="TransparentPink40Brush" Color="{DynamicResource TransparentPink40}"/>
+    <SolidColorBrush x:Key="TransparentPink50Brush" Color="{DynamicResource TransparentPink50}"/>
 
     <!-- New: de-saturated accent for headers/labels -->
-    <SolidColorBrush x:Key="PinkSoftBrush" Color="{StaticResource PinkSoft}"/>
+    <SolidColorBrush x:Key="PinkSoftBrush" Color="{DynamicResource PinkSoft}"/>
     <!-- New: vibrant accent for CTAs and interactive elements -->
-    <SolidColorBrush x:Key="PinkVibrantBrush" Color="{StaticResource PinkVibrant}"/>
+    <SolidColorBrush x:Key="PinkVibrantBrush" Color="{DynamicResource PinkVibrant}"/>
     <!-- New: glass-style card borders -->
-    <SolidColorBrush x:Key="GlassBorderBrush" Color="{StaticResource GlassBorder}"/>
-    <SolidColorBrush x:Key="GlassBorderHoverBrush" Color="{StaticResource GlassBorderHover}"/>
+    <SolidColorBrush x:Key="GlassBorderBrush" Color="{DynamicResource GlassBorder}"/>
+    <SolidColorBrush x:Key="GlassBorderHoverBrush" Color="{DynamicResource GlassBorderHover}"/>
     <!-- New: elevated card surface -->
-    <SolidColorBrush x:Key="ElevatedSurfaceBrush" Color="{StaticResource ElevatedSurface}"/>
+    <SolidColorBrush x:Key="ElevatedSurfaceBrush" Color="{DynamicResource ElevatedSurface}"/>
     <!-- New: quaternary text -->
-    <SolidColorBrush x:Key="TextDimBrush" Color="{StaticResource TextDim}"/>
+    <SolidColorBrush x:Key="TextDimBrush" Color="{DynamicResource TextDim}"/>
     <!-- Velvet Kit: secondary text tier (see Colors.xaml). -->
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="{DynamicResource TextSecondary}"/>
     <!-- Readability pass (polish 8, Brushes.xaml baff475e4): the section colours (Colors.xaml SectionInk). -->
-    <SolidColorBrush x:Key="SectionInkBrush" Color="{StaticResource SectionInk}"/>
-    <SolidColorBrush x:Key="SectionTintBrush" Color="{StaticResource SectionTint}"/>
-    <SolidColorBrush x:Key="SectionRuleBrush" Color="{StaticResource SectionRule}"/>
-    <SolidColorBrush x:Key="SectionOutlineBrush" Color="{StaticResource SectionOutline}"/>
+    <SolidColorBrush x:Key="SectionInkBrush" Color="{DynamicResource SectionInk}"/>
+    <SolidColorBrush x:Key="SectionTintBrush" Color="{DynamicResource SectionTint}"/>
+    <SolidColorBrush x:Key="SectionRuleBrush" Color="{DynamicResource SectionRule}"/>
+    <SolidColorBrush x:Key="SectionOutlineBrush" Color="{DynamicResource SectionOutline}"/>
 
     <!-- ============================================================
          Velvet Kit: section-hue brushes. Per section:
@@ -96,22 +95,22 @@
                                     hue-coded cards)
          Static tokens (not mod-mutable) so StaticResource is safe here.
          ============================================================ -->
-    <SolidColorBrush x:Key="SectionHueGeneralBrush" Color="{StaticResource SectionHueGeneral}"/>
-    <SolidColorBrush x:Key="SectionHueGeneralBorderBrush" Color="{StaticResource SectionHueGeneralBorder}"/>
+    <SolidColorBrush x:Key="SectionHueGeneralBrush" Color="{DynamicResource SectionHueGeneral}"/>
+    <SolidColorBrush x:Key="SectionHueGeneralBorderBrush" Color="{DynamicResource SectionHueGeneralBorder}"/>
     <LinearGradientBrush x:Key="SectionHueGeneralWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHueGeneralWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHueGeneralWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="SectionHueStartupBrush" Color="{StaticResource SectionHueStartup}"/>
-    <SolidColorBrush x:Key="SectionHueStartupBorderBrush" Color="{StaticResource SectionHueStartupBorder}"/>
+    <SolidColorBrush x:Key="SectionHueStartupBrush" Color="{DynamicResource SectionHueStartup}"/>
+    <SolidColorBrush x:Key="SectionHueStartupBorderBrush" Color="{DynamicResource SectionHueStartupBorder}"/>
     <LinearGradientBrush x:Key="SectionHueStartupWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHueStartupWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHueStartupWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="SectionHueAudioBrush" Color="{StaticResource SectionHueAudio}"/>
-    <SolidColorBrush x:Key="SectionHueAudioBorderBrush" Color="{StaticResource SectionHueAudioBorder}"/>
+    <SolidColorBrush x:Key="SectionHueAudioBrush" Color="{DynamicResource SectionHueAudio}"/>
+    <SolidColorBrush x:Key="SectionHueAudioBorderBrush" Color="{DynamicResource SectionHueAudioBorder}"/>
     <LinearGradientBrush x:Key="SectionHueAudioWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHueAudioWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHueAudioWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
     <!-- Studio triad carries LITERAL colors (same values as the SectionHueStudio* keys in
@@ -125,40 +124,40 @@
         <GradientStop Color="#14FF7E6B" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="SectionHueDevicesBrush" Color="{StaticResource SectionHueDevices}"/>
-    <SolidColorBrush x:Key="SectionHueDevicesBorderBrush" Color="{StaticResource SectionHueDevicesBorder}"/>
+    <SolidColorBrush x:Key="SectionHueDevicesBrush" Color="{DynamicResource SectionHueDevices}"/>
+    <SolidColorBrush x:Key="SectionHueDevicesBorderBrush" Color="{DynamicResource SectionHueDevicesBorder}"/>
     <LinearGradientBrush x:Key="SectionHueDevicesWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHueDevicesWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHueDevicesWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="SectionHuePerformanceBrush" Color="{StaticResource SectionHuePerformance}"/>
-    <SolidColorBrush x:Key="SectionHuePerformanceBorderBrush" Color="{StaticResource SectionHuePerformanceBorder}"/>
+    <SolidColorBrush x:Key="SectionHuePerformanceBrush" Color="{DynamicResource SectionHuePerformance}"/>
+    <SolidColorBrush x:Key="SectionHuePerformanceBorderBrush" Color="{DynamicResource SectionHuePerformanceBorder}"/>
     <LinearGradientBrush x:Key="SectionHuePerformanceWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHuePerformanceWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHuePerformanceWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="SectionHueNotificationsBrush" Color="{StaticResource SectionHueNotifications}"/>
-    <SolidColorBrush x:Key="SectionHueNotificationsBorderBrush" Color="{StaticResource SectionHueNotificationsBorder}"/>
+    <SolidColorBrush x:Key="SectionHueNotificationsBrush" Color="{DynamicResource SectionHueNotifications}"/>
+    <SolidColorBrush x:Key="SectionHueNotificationsBorderBrush" Color="{DynamicResource SectionHueNotificationsBorder}"/>
     <LinearGradientBrush x:Key="SectionHueNotificationsWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHueNotificationsWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHueNotificationsWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="SectionHueAccountBrush" Color="{StaticResource SectionHueAccount}"/>
-    <SolidColorBrush x:Key="SectionHueAccountBorderBrush" Color="{StaticResource SectionHueAccountBorder}"/>
+    <SolidColorBrush x:Key="SectionHueAccountBrush" Color="{DynamicResource SectionHueAccount}"/>
+    <SolidColorBrush x:Key="SectionHueAccountBorderBrush" Color="{DynamicResource SectionHueAccountBorder}"/>
     <LinearGradientBrush x:Key="SectionHueAccountWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHueAccountWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHueAccountWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="SectionHueDataBrush" Color="{StaticResource SectionHueData}"/>
-    <SolidColorBrush x:Key="SectionHueDataBorderBrush" Color="{StaticResource SectionHueDataBorder}"/>
+    <SolidColorBrush x:Key="SectionHueDataBrush" Color="{DynamicResource SectionHueData}"/>
+    <SolidColorBrush x:Key="SectionHueDataBorderBrush" Color="{DynamicResource SectionHueDataBorder}"/>
     <LinearGradientBrush x:Key="SectionHueDataWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHueDataWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHueDataWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
-    <SolidColorBrush x:Key="SectionHueUpdatesBrush" Color="{StaticResource SectionHueUpdates}"/>
-    <SolidColorBrush x:Key="SectionHueUpdatesBorderBrush" Color="{StaticResource SectionHueUpdatesBorder}"/>
+    <SolidColorBrush x:Key="SectionHueUpdatesBrush" Color="{DynamicResource SectionHueUpdates}"/>
+    <SolidColorBrush x:Key="SectionHueUpdatesBorderBrush" Color="{DynamicResource SectionHueUpdatesBorder}"/>
     <LinearGradientBrush x:Key="SectionHueUpdatesWashBrush" StartPoint="0,0" EndPoint="0.9,0.7">
-        <GradientStop Color="{StaticResource SectionHueUpdatesWash}" Offset="0"/>
+        <GradientStop Color="{DynamicResource SectionHueUpdatesWash}" Offset="0"/>
         <GradientStop Color="#00000000" Offset="0.55"/>
     </LinearGradientBrush>
 
@@ -175,44 +174,44 @@
     </LinearGradientBrush>
 
     <!-- Deeper tab accent brushes -->
-    <SolidColorBrush x:Key="DeeperAccentBrush" Color="{StaticResource DeeperAccent}"/>
-    <SolidColorBrush x:Key="DeeperAccentSoftBrush" Color="{StaticResource DeeperAccentSoft}"/>
-    <SolidColorBrush x:Key="DeeperAccentTransparent20Brush" Color="{StaticResource DeeperAccentTransparent20}"/>
-    <SolidColorBrush x:Key="DeeperAccentTransparent40Brush" Color="{StaticResource DeeperAccentTransparent40}"/>
+    <SolidColorBrush x:Key="DeeperAccentBrush" Color="{DynamicResource DeeperAccent}"/>
+    <SolidColorBrush x:Key="DeeperAccentSoftBrush" Color="{DynamicResource DeeperAccentSoft}"/>
+    <SolidColorBrush x:Key="DeeperAccentTransparent20Brush" Color="{DynamicResource DeeperAccentTransparent20}"/>
+    <SolidColorBrush x:Key="DeeperAccentTransparent40Brush" Color="{DynamicResource DeeperAccentTransparent40}"/>
 
     <!-- Mission 2 (Hub redesign) — semantic aliases for the row badges /
          tag chips. Aliasing existing brushes (rather than minting new hex)
          lets future theming reskin each surface independently of its
          underlying palette entry. -->
-    <SolidColorBrush x:Key="DeeperHubVideoBadgeBgBrush"   Color="{StaticResource DeeperAccentTransparent40}"/>
-    <SolidColorBrush x:Key="DeeperHubAudioBadgeBgBrush"   Color="{StaticResource TransparentPink40}"/>
-    <SolidColorBrush x:Key="DeeperHubHapticsChipBgBrush"  Color="{StaticResource DeeperAccentTransparent20}"/>
-    <SolidColorBrush x:Key="DeeperHubWebcamChipBgBrush"   Color="{StaticResource DeeperHubWebcamChipBg}"/>
+    <SolidColorBrush x:Key="DeeperHubVideoBadgeBgBrush"   Color="{DynamicResource DeeperAccentTransparent40}"/>
+    <SolidColorBrush x:Key="DeeperHubAudioBadgeBgBrush"   Color="{DynamicResource TransparentPink40}"/>
+    <SolidColorBrush x:Key="DeeperHubHapticsChipBgBrush"  Color="{DynamicResource DeeperAccentTransparent20}"/>
+    <SolidColorBrush x:Key="DeeperHubWebcamChipBgBrush"   Color="{DynamicResource DeeperHubWebcamChipBg}"/>
 
     <!-- Deeper editor chrome brushes — see Colors.xaml for the role of each. -->
-    <SolidColorBrush x:Key="DeeperLaneCanvasBrush" Color="{StaticResource DeeperLaneCanvas}"/>
-    <SolidColorBrush x:Key="DeeperLaneBgBrush" Color="{StaticResource DeeperLaneBg}"/>
-    <SolidColorBrush x:Key="DeeperLaneHeaderBrush" Color="{StaticResource DeeperLaneHeader}"/>
-    <SolidColorBrush x:Key="DeeperLaneHeaderHoverBrush" Color="{StaticResource DeeperLaneHeaderHover}"/>
-    <SolidColorBrush x:Key="DeeperLaneSeparatorBrush" Color="{StaticResource DeeperLaneSeparator}"/>
-    <SolidColorBrush x:Key="DeeperDrawerStripBrush" Color="{StaticResource DeeperDrawerStrip}"/>
-    <SolidColorBrush x:Key="DeeperDrawerStripHoverBrush" Color="{StaticResource DeeperDrawerStripHover}"/>
-    <SolidColorBrush x:Key="DeeperSelectionStripBrush" Color="{StaticResource DeeperSelectionStrip}"/>
+    <SolidColorBrush x:Key="DeeperLaneCanvasBrush" Color="{DynamicResource DeeperLaneCanvas}"/>
+    <SolidColorBrush x:Key="DeeperLaneBgBrush" Color="{DynamicResource DeeperLaneBg}"/>
+    <SolidColorBrush x:Key="DeeperLaneHeaderBrush" Color="{DynamicResource DeeperLaneHeader}"/>
+    <SolidColorBrush x:Key="DeeperLaneHeaderHoverBrush" Color="{DynamicResource DeeperLaneHeaderHover}"/>
+    <SolidColorBrush x:Key="DeeperLaneSeparatorBrush" Color="{DynamicResource DeeperLaneSeparator}"/>
+    <SolidColorBrush x:Key="DeeperDrawerStripBrush" Color="{DynamicResource DeeperDrawerStrip}"/>
+    <SolidColorBrush x:Key="DeeperDrawerStripHoverBrush" Color="{DynamicResource DeeperDrawerStripHover}"/>
+    <SolidColorBrush x:Key="DeeperSelectionStripBrush" Color="{DynamicResource DeeperSelectionStrip}"/>
 
     <!-- Mission 3 (Player redesign + theming cleanup) — see Colors.xaml. -->
-    <SolidColorBrush x:Key="DeeperPreviewSurfaceBgBrush" Color="{StaticResource DeeperPreviewSurfaceBg}"/>
-    <SolidColorBrush x:Key="DeeperWaveformBgBrush" Color="{StaticResource DeeperWaveformBg}"/>
-    <SolidColorBrush x:Key="DeeperMenuItemHoverBgBrush" Color="{StaticResource DeeperMenuItemHoverBg}"/>
-    <SolidColorBrush x:Key="DeeperPlayerOverlayBgBrush" Color="{StaticResource DeeperPlayerOverlayBg}"/>
-    <SolidColorBrush x:Key="DeeperGazePickerBackdropBrush" Color="{StaticResource DeeperGazePickerBackdrop}"/>
-    <SolidColorBrush x:Key="DeeperGazePickerToolbarBgBrush" Color="{StaticResource DeeperGazePickerToolbarBg}"/>
-    <SolidColorBrush x:Key="DeeperGazePickerHandleFillBrush" Color="{StaticResource DeeperGazePickerHandleFill}"/>
-    <SolidColorBrush x:Key="DeeperGazePickerCancelBorderBrush" Color="{StaticResource DeeperGazePickerCancelBorder}"/>
+    <SolidColorBrush x:Key="DeeperPreviewSurfaceBgBrush" Color="{DynamicResource DeeperPreviewSurfaceBg}"/>
+    <SolidColorBrush x:Key="DeeperWaveformBgBrush" Color="{DynamicResource DeeperWaveformBg}"/>
+    <SolidColorBrush x:Key="DeeperMenuItemHoverBgBrush" Color="{DynamicResource DeeperMenuItemHoverBg}"/>
+    <SolidColorBrush x:Key="DeeperPlayerOverlayBgBrush" Color="{DynamicResource DeeperPlayerOverlayBg}"/>
+    <SolidColorBrush x:Key="DeeperGazePickerBackdropBrush" Color="{DynamicResource DeeperGazePickerBackdrop}"/>
+    <SolidColorBrush x:Key="DeeperGazePickerToolbarBgBrush" Color="{DynamicResource DeeperGazePickerToolbarBg}"/>
+    <SolidColorBrush x:Key="DeeperGazePickerHandleFillBrush" Color="{DynamicResource DeeperGazePickerHandleFill}"/>
+    <SolidColorBrush x:Key="DeeperGazePickerCancelBorderBrush" Color="{DynamicResource DeeperGazePickerCancelBorder}"/>
 
     <!-- SP5 layer 3: NeonPurple brushes for the Available Subjects tab. -->
-    <SolidColorBrush x:Key="NeonPurpleBrush" Color="{StaticResource NeonPurple}"/>
-    <SolidColorBrush x:Key="NeonPurpleSoftBrush" Color="{StaticResource NeonPurpleSoft}"/>
-    <SolidColorBrush x:Key="NeonPurpleTransparent20Brush" Color="{StaticResource NeonPurpleTransparent20}"/>
+    <SolidColorBrush x:Key="NeonPurpleBrush" Color="{DynamicResource NeonPurple}"/>
+    <SolidColorBrush x:Key="NeonPurpleSoftBrush" Color="{DynamicResource NeonPurpleSoft}"/>
+    <SolidColorBrush x:Key="NeonPurpleTransparent20Brush" Color="{DynamicResource NeonPurpleTransparent20}"/>
 
     <!-- ============================ Session Rack ============================
          Difficulty + provenance colour code for the compact session list. See the
@@ -221,21 +220,21 @@
          these keys through SetResourceReference, i.e. as DynamicResource, so an
          override still lands without a rebuild.
          ====================================================================== -->
-    <SolidColorBrush x:Key="SessionDiffEasyBrush" Color="{StaticResource SessionDiffEasy}"/>
-    <SolidColorBrush x:Key="SessionDiffEasyWashBrush" Color="{StaticResource SessionDiffEasyWash}"/>
-    <SolidColorBrush x:Key="SessionDiffMediumBrush" Color="{StaticResource SessionDiffMedium}"/>
-    <SolidColorBrush x:Key="SessionDiffMediumWashBrush" Color="{StaticResource SessionDiffMediumWash}"/>
-    <SolidColorBrush x:Key="SessionDiffHardBrush" Color="{StaticResource SessionDiffHard}"/>
-    <SolidColorBrush x:Key="SessionDiffHardWashBrush" Color="{StaticResource SessionDiffHardWash}"/>
-    <SolidColorBrush x:Key="SessionDiffExtremeBrush" Color="{StaticResource SessionDiffExtreme}"/>
-    <SolidColorBrush x:Key="SessionDiffExtremeWashBrush" Color="{StaticResource SessionDiffExtremeWash}"/>
+    <SolidColorBrush x:Key="SessionDiffEasyBrush" Color="{DynamicResource SessionDiffEasy}"/>
+    <SolidColorBrush x:Key="SessionDiffEasyWashBrush" Color="{DynamicResource SessionDiffEasyWash}"/>
+    <SolidColorBrush x:Key="SessionDiffMediumBrush" Color="{DynamicResource SessionDiffMedium}"/>
+    <SolidColorBrush x:Key="SessionDiffMediumWashBrush" Color="{DynamicResource SessionDiffMediumWash}"/>
+    <SolidColorBrush x:Key="SessionDiffHardBrush" Color="{DynamicResource SessionDiffHard}"/>
+    <SolidColorBrush x:Key="SessionDiffHardWashBrush" Color="{DynamicResource SessionDiffHardWash}"/>
+    <SolidColorBrush x:Key="SessionDiffExtremeBrush" Color="{DynamicResource SessionDiffExtreme}"/>
+    <SolidColorBrush x:Key="SessionDiffExtremeWashBrush" Color="{DynamicResource SessionDiffExtremeWash}"/>
 
-    <SolidColorBrush x:Key="SessionSrcBuiltInBrush" Color="{StaticResource SessionSrcBuiltIn}"/>
-    <SolidColorBrush x:Key="SessionSrcBuiltInWashBrush" Color="{StaticResource SessionSrcBuiltInWash}"/>
-    <SolidColorBrush x:Key="SessionSrcCustomBrush" Color="{StaticResource SessionSrcCustom}"/>
-    <SolidColorBrush x:Key="SessionSrcCustomWashBrush" Color="{StaticResource SessionSrcCustomWash}"/>
-    <SolidColorBrush x:Key="SessionSrcImportedBrush" Color="{StaticResource SessionSrcImported}"/>
-    <SolidColorBrush x:Key="SessionSrcImportedWashBrush" Color="{StaticResource SessionSrcImportedWash}"/>
+    <SolidColorBrush x:Key="SessionSrcBuiltInBrush" Color="{DynamicResource SessionSrcBuiltIn}"/>
+    <SolidColorBrush x:Key="SessionSrcBuiltInWashBrush" Color="{DynamicResource SessionSrcBuiltInWash}"/>
+    <SolidColorBrush x:Key="SessionSrcCustomBrush" Color="{DynamicResource SessionSrcCustom}"/>
+    <SolidColorBrush x:Key="SessionSrcCustomWashBrush" Color="{DynamicResource SessionSrcCustomWash}"/>
+    <SolidColorBrush x:Key="SessionSrcImportedBrush" Color="{DynamicResource SessionSrcImported}"/>
+    <SolidColorBrush x:Key="SessionSrcImportedWashBrush" Color="{DynamicResource SessionSrcImportedWash}"/>
 
     <!-- v6 CCP brand gradient (135°, pink → violet). Static, NOT mod-overridable.
          Applied at the four brand anchors (logo, START button, XP bar, primary nav active)
@@ -250,7 +249,7 @@
            CCP Default → BrandGradient (above)
            any other mod → SolidColorBrush of the active mod's accent color
          XAML anchors read {StaticResource AccentGradientBrush}; everything else stays on PinkBrush. -->
-    <SolidColorBrush x:Key="AccentGradientBrush" Color="{StaticResource PinkColor}"/>
+    <SolidColorBrush x:Key="AccentGradientBrush" Color="{DynamicResource PinkColor}"/>
 
     <!-- ==================================================================
          TIER LIVERY - the persistent "this is paid content" trim, worn by a

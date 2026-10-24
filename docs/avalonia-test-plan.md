@@ -673,3 +673,12 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Theme linked evidence
+
+1. Open the awareness deny-list picker; check its dark background, inset rows and readable muted detail. WPF `Resources/Theme/Colors.xaml:9-19`. Rows: `theme-colors`. Automated: `ThemeEvidenceTests.PickerUsesWpfColorTokens`.
+2. With the picker open, replace the DarkerBg color token; its background must update immediately. WPF `Resources/Theme/Brushes.xaml:9`. Rows: `theme-brushes`. Automated: `ThemeEvidenceTests.OpenPickerBrushFollowsRuntimeColorChange`.
+3. Show picker rows with and without details/recommended marks; absent marks and details collapse. WPF `Resources/Theme/Converters.xaml:6` and `Dialogs/AwarenessAppPickerDialog.xaml:84-94`. Rows: `theme-converters`. Automated: `ThemeEvidenceTests.PickerBoolBindingsCollapseAndRevealRowDetails`.
+4. In Companion Workshop Community, hover Browse, then disable it: content remains visible, hover fill changes, disabled opacity is 0.45. WPF `Views/Controls/Companion/Runtime/WorkshopCellTheme.xaml:43-65`. Rows: `views-companion-workshop-cell-theme`. Automated: `ThemeEvidenceTests.WorkshopActionKeepsContentHoverAndDisabledChrome`.
+5. Open the Companion room: rounded shell clips the backdrop; decorative washes must not intercept clicks. WPF `Views/Controls/Companion/Themes/CompanionTheme.xaml:382-395`. Rows: `views-companion-theme`. Automated: `ThemeEvidenceTests.CompanionRoomUsesClippedShellAndNonInteractiveWash`.
+6. Open a season recap and switch active mod accent: rank recolors; gold, ink and foil cyan remain fixed. WPF `Resources/Theme/SeasonRecapCard.xaml:20-22` and `:44-49`. Rows: `theme-season-recap-card`. Automated: `ThemeEvidenceTests.RecapModSwitchRecolorsVisibleRankButKeepsGoldInkAndFoil`.
