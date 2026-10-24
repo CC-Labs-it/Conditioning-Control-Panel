@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Required account display name (sync7)
+
+1. WPF `Dialogs/DisplayNameDialog.xaml.cs` and `MainWindow/MainWindow.DisplayNameAsk.cs`: sign in to an account with no display name. Confirm the required prompt hides Cancel; two characters and invalid symbols cannot submit. A taken name stays open with an inline error; a valid available name saves. Close or Escape dismisses. Panic dismisses an in-flight prompt safely. Rows: `sync7-account`
+2. WPF `MainWindow/MainWindow.Login.cs`, `MainWindow/MainWindow.Marquee.cs`, `MainWindow/MainWindow.Browser.cs`: a signed-in blank-name account shows “No name yet” in settings and own profile and the signed-in no-name banner. Blank provider names are skipped. Rows: `sync7-account`
+
+Restored-session priority-40 prompting remains blocked by the missing modal startup ladder; see the cloud unit report.

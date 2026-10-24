@@ -90,6 +90,7 @@ public sealed class PanicSurfacesTests
         "attention-test",
         "blink-trainer",
         "camera",
+        "display-name",
         "chaos",
         "chaos-announcer",
         "chaos-cursor-glow",

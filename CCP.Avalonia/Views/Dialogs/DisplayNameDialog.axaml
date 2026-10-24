@@ -55,7 +55,7 @@
 
             <!-- Prompt -->
             <TextBlock x:Name="TxtPrompt" Grid.Row="2" Text="{loc:Str label_enter_the_name_you_d_like_to_be_called}"
-                       Foreground="White" FontSize="13" Margin="0,0,0,8"/>
+                       Foreground="White" FontSize="13" Margin="0,0,0,8" TextWrapping="Wrap"/>
 
             <!-- Input -->
             <TextBox x:Name="TxtDisplayName" Grid.Row="3"
@@ -69,6 +69,12 @@
                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,5,0,0"
                        HorizontalAlignment="Right" VerticalAlignment="Top"/>
 
+            <TextBlock x:Name="TxtStatus" Grid.Row="4" IsVisible="False" Foreground="{StaticResource WarningBrush}"
+                       FontSize="11" Margin="0,5,60,0" TextWrapping="Wrap"/>
+            <Button x:Name="BtnClose" Grid.Row="0" IsVisible="False" HorizontalAlignment="Right"
+                    VerticalAlignment="Top" Padding="4" ToolTip.Tip="{loc:Str name_ask_close_tip}">
+                <TextBlock Text="&#xD7;"/>
+            </Button>
             <!-- Buttons -->
             <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
                 <Button x:Name="BtnCancel" Width="90" Padding="10,10" Margin="0,0,10,0"

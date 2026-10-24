@@ -34,8 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var s = CoreSettings.Current;
                 // Not WPF's `s.UnifiedId ||`: a stored id with nothing to prove it is not restored (AccountSeed.RestoreSession).
                 var isLoggedIn = CoreAccount.IsLoggedIn;
-                var displayName = s.UserDisplayName ?? AccountSeed.Patreon?.DisplayName ?? AccountSeed.Discord?.DisplayName
-                                  ?? AccountSeed.SubscribeStar?.DisplayName ?? "User";
+                var displayName = Services.Account.NeedsDisplayNameRule.FirstName(s.UserDisplayName,
+                    AccountSeed.Patreon?.DisplayName, AccountSeed.Discord?.DisplayName, AccountSeed.SubscribeStar?.DisplayName)
+                    ?? (isLoggedIn ? Loc.Get("account_name_not_set") : "User");
 
                 var settings = SettingsPage;
                 SetVisible(settings?.FindControl<Button>("BtnUnifiedLogin"), !isLoggedIn);
@@ -71,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (await dialog.ShowDialogSafe<bool>(owner ?? this) && dialog.Result is not null)
             {
                 UpdateQuickLoginUI(accountChanged: true);
+                await AskDisplayNameAfterSignIn(owner ?? this, dialog.Result.DisplayName, dialog.Result.ServerNeedsDisplayName);
                 if (SecretStore.NotRemembered && !_notRememberedShown)
                 {
                     _notRememberedShown = true;
