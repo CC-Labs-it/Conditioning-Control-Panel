@@ -693,7 +693,7 @@ the seam alone every question was silent, which is the one line she most wants r
 cuts the burst. One to three dots route to `Tick()` rather than a burst, so the `.` `..` `...`
 cadence ticks and only the words sing.
 
-**The mood trap.** `EmiChains.Player.Step()` fires `hooks.Bubble` **before** `hooks.Draw`, and
+**The mood trap.** `EmiChainPlayer.Step()` fires `hooks.Bubble` **before** `hooks.Draw`, and
 `MakeSay` carries no `BodyFrame` at all, so the voice cannot be read off the pose when the bubble
 asks for it. `_voxMood` is set in `Say` (from the reaction face) and in `PlayChain` (from the chain's
 own pose, and only when it has one, so `Say`'s value survives). If you ever make the say chain carry

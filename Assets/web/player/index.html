@@ -24,6 +24,20 @@
        each target takes its own and reports attentionClick INSTEAD of the
        generic click. C# still owns the text, the styling and the schedule. -->
   <div id="attn"></div>
+  <!-- "via Scrolller" credit (load field `credit`, Scrolller clips only): a corner
+       badge while the clip plays and an end card after it. Brand text, never
+       translated. Pressable only when the load says clickable. -->
+  <div id="credit" class="credit-link" hidden>
+    <span class="credit-via">via</span><span class="credit-mark">Scrolller</span><span class="credit-sub" data-credit="sub"></span><span class="credit-tick">&#10003;</span>
+  </div>
+  <div id="outro" class="credit-link" hidden>
+    <div class="outro-card">
+      <div class="outro-via">via</div>
+      <div class="outro-mark">Scrolller</div>
+      <div class="outro-sub" data-credit="sub"></div>
+      <div class="outro-site"><span data-credit="site"></span><span class="credit-tick">&#10003;</span></div>
+    </div>
+  </div>
   <script src="player.js"></script>
 </body>
 </html>
