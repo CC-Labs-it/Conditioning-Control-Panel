@@ -318,6 +318,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     worldScreens = worldScreenLayout(track, { tier: Q.name, samples, solids,
       existingSlots: worldScreenExistingSlots(track, layout, { tier: Q.name, samples }) });
     media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout,
+      scrolllerShare: goon ? .6 : .5,
       placeholderPalette: goon ? ['#bd006e', '#fff9ff'] : null, extraSlots: worldScreens.slots, extraSlotsDynamic: false }) : null;
   } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
   // polish 4: the drop shortcut's rail opening and landing pad (track routes); the ring swells on the player's clean landing

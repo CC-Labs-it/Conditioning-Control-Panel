@@ -138,8 +138,9 @@ export function goonworksWorldPlan(track){
     for(let s=r.s0+18,i=0;s<r.s1-10;s+=37,i++){
       const f=track.frameAt(s),side=i%2?1:-1,x=side*(f.w/2+20);
       if(id==='aperture-mill'){
-        local('toy-gear-hub','white',f,x,15,0,[18,4,18],{shape:'cylinder',basis:[f.b,f.t,f.n],motion:{spin:.16,axis:1,phase:i}});
-        for(let j=0;j<12;j++){const a=j/12*TAU;local('toy-gear-tooth','fuchsia',f,x+Math.cos(a)*10,15+Math.sin(a)*10,0,[4,4,4],{shape:'box'});}
+        // One closed mesh partitions the ivory center and gold crown. Separate coplanar box
+        // teeth used to overlap the cylinder caps and flicker from both approach directions.
+        local('toy-gear-solid','gear',f,x,15,0,[24,24,4],{shape:'gear',motion:{spin:.16,axis:2,phase:i}});
       }else if(id==='pinball-launch'){
         local('pinball-bumper-stem','white',f,x,6,0,[9,12,9],{shape:'cylinder'});
         local('pinball-bumper-cap','hot',f,x,13,0,[25,13,25],{shape:'sphere'});
@@ -234,6 +235,63 @@ export function goonworksWorldPlan(track){
       horizon('wide-funnel',[20,126,-8],[38,19,38],'cone');horizon('side-chimney',[-35,85,3],[7,30,7],'cylinder');
     }
     for(let j=0;j<2;j++)put('white-cartoon-cloud','cream',[p[0]+j*22,p[1]+180+(i%3)*35,p[2]],[55,16+j*4,22],{shape:'sphere',check:false,outline:false});
+  }
+  // Colour is assigned after placement so district art changes cannot move a support or a screen.
+  const whiteFamily=id=>id.startsWith('grotto')||id.startsWith('rabbit')?'ice':id.startsWith('pop-quiz')||id.startsWith('quiz-')?'lilac':id.startsWith('aperture-mill')||id.startsWith('mill-')||id.startsWith('pinball')?'ivory':id.startsWith('icing-observatory')?'blush':'white';
+  const hallColours={
+    'aperture-mill':{structure:'gold',secondary:'gold'},
+    'pop-quiz':{structure:'violet',secondary:'periwinkle'},
+    'pinball-launch':{structure:'tangerine',secondary:'gold'}
+  };
+  const counts=new Map();
+  for(const row of rows){const id=row.id,repeat=counts.get(id)||0;counts.set(id,repeat+1);
+    if(row.material==='white')row.material=whiteFamily(id);
+    if(id.startsWith('horizon-'))row.material=repeat%3===1?'distantCool':repeat%3===2?'distantWarm':'distant';
+    if(row.material==='fuchsia'&&id.includes('balcony-band'))row.material='rose';
+    if(row.material==='wine'&&id.includes('island-keel'))row.material='plum';
+
+    // Full upper beams and columns carry each hall's identity. Low walls, island bodies,
+    // pale eaves and balcony lips retain the common fuchsia and porcelain construction.
+    for(const [hall,colours]of Object.entries(hallColours))if(id.startsWith(hall+'-')){
+      if(id===hall+'-roof-beam'||id===hall+'-upright'||id.endsWith('-cabinet')||id===hall+'-entrance-crown'||id===hall+'-exit-crown')row.material=colours.structure;
+      if(id===hall+'-inset-wall')row.material=colours.secondary;
+      if(id.endsWith('-white-bezel')&&row.size[0]<row.size[1])row.material=colours.secondary;
+    }
+    if(id==='mill-grand-clock-ring')row.material='gold';
+    if(id==='quiz-icing-canopy')row.material=repeat%3===1?'violet':'periwinkle';
+    if(id==='quiz-domino-pier')row.material='lilac';
+    if(id==='pinball-launch-balcony-band'||id==='pinball-striped-ceiling-beam'||id==='pinball-balcony-star')row.material='gold';
+    if(id==='pinball-bumper-stem')row.material='gold';
+    if(id==='pinball-bumper-cap')row.material=repeat%3===1?'hot':'tangerine';
+    if(id==='pinball-lamp')row.material=repeat%2?'apricot':'gold';
+
+    // Broad cobalt scallops alternate with pink walls, so blue reads from the racing line
+    // while the fuchsia base rocks and suspended roof still tie the cavern to the factory.
+    if(id==='grotto-scalloped-rock')row.material=repeat%4<2?'cobalt':repeat%4===2?'fuchsia':'magenta';
+    if(id==='grotto-inner-rock'||id==='grotto-arched-roof')row.material='fuchsia';
+    if(id.startsWith('grotto-')&&id.endsWith('-cabinet'))row.material='cobalt';
+    if(id.startsWith('grotto-')&&id.endsWith('-white-bezel'))row.material=id.startsWith('grotto-high-')?'periwinkle':'ice';
+    if(id.startsWith('grotto-stalactite'))row.material=repeat%3===0?'periwinkle':'ice';
+    if(id==='grotto-mouth-crown'||id==='grotto-mouth-pier')row.material='cobalt';
+
+    // The rabbit tube skin is shaded separately. Its complete cabinets and long conduits
+    // use the same mint family, rather than relying on a narrow strip around each screen.
+    if(id==='rabbit-ceiling-conduit')row.material='mint';
+    if(id.startsWith('rabbit-screen-')&&id.endsWith('-cabinet'))row.material='teal';
+    if(id.startsWith('rabbit-screen-')&&id.endsWith('-white-bezel'))row.material='mint';
+
+    // Outdoor districts use their existing large landmarks and broad orchard bodies.
+    if(id==='spiral-cameo-disc'||id==='spiral-cameo-pillar')row.material='coral';
+    if(id==='orchard-floating-cloud')row.material=repeat%3===1?'fuchsia':'mint';
+    if(id==='orchard-tube-trunk')row.material='mint';
+    if(id==='orchard-star-crown')row.material=repeat%3===1?'ivory':'lime';
+    if(id==='rabbit-pipe-organ-arch')row.material='indigo';
+    if(id==='rabbit-pipe-organ-leg')row.material='periwinkle';
+    if(id==='rabbit-pipe-organ-white-cuff')row.material='lilac';
+    if(id==='icing-observatory-tower')row.material=repeat===1?'magenta':'indigo';
+    if(id==='icing-observatory-tower-roof')row.material=repeat===1?'periwinkle':'lilac';
+    if(id==='icing-observatory-loop-pipe')row.material='periwinkle';
+    if(id==='white-cartoon-cloud')row.material=repeat%3===0?'ice':repeat%3===1?'cream':'lilac';
   }
   const plan={layout,rows,mounts,particles,platforms,rooms,features,landmarks,rejected,corridor,center,radius,skyRadius:Math.max(2400,radius+1100)};
   CACHE.set(track,plan);return plan;

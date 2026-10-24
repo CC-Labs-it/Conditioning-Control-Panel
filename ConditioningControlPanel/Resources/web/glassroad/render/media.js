@@ -2,7 +2,7 @@
  *
  * Where Scrolller media will show: trackside billboards on glass stalks, a halo of screens orbiting
  * over the start/finish, and a glass tunnel lined with screens (tracks/<id>.media.json, fitted by
- * render/mediaMath.js so nothing enters any road stretch). All trap cards and half the world panels
+ * render/mediaMath.js so nothing enters any road stretch). All trap cards and a chosen share of world panels
  * accept host-provided local clips; the others keep animated Loom/placeholders. The renderer never
  * fetches remote media. Shared video textures keep upload cost independent of the face count.
  *
@@ -183,7 +183,8 @@ function borderColour(sl, i) {
 /**
  * createMediaSlots(scene, track, opts) -> { object, slots, setSource, update, dispose, stats }.
  * opts: tier (Q tier name at build, default Q.name), layout (default the fetched tracks/<id>.media.json),
- * samples (road samples), feel (reads gentle.* when update's view does not say), make (canvas factory).
+ * samples (road samples), feel (reads gentle.* when update's view does not say), make (canvas factory),
+ * scrolllerShare (world media fraction, default .5; trap cards always accept media).
  */
 export function createMediaSlots(scene, track, opts = {}) {
   const M = { ...mediaLook() }, layout = opts.layout || LAYOUTS.get(track.id);
@@ -337,7 +338,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   // ---- own sources (setSource) and credits ----
   const own = new Map();     // slot index -> { mesh, mat, tex, el, kind, src, credit }
   const playback = createMediaPlayback();
-  const persistentSources = new Map(), selected = selectScrolllerSlots(slots);
+  const persistentSources = new Map(), selected = selectScrolllerSlots(slots, { share: opts.scrolllerShare });
   const blankSource = opts.make ? opts.make(2, 2) : Object.assign(document.createElement('canvas'), { width: 2, height: 2 });
   const blankContext = blankSource.getContext('2d'); blankContext.fillStyle = '#15121b'; blankContext.fillRect(0, 0, 2, 2);
   const sharedVideos = new Map();
@@ -670,6 +671,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   return {
     object: group,
     slots: pub,
+    scrolllerShare: opts.scrolllerShare,
     get videoCapacity() { return videoCapacity(); },
     tunnel: tun ? { fromS: tun.fromS, toS: tun.toS } : null,
     setSource,

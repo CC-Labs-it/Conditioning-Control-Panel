@@ -2,9 +2,9 @@
 import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry,
   OctahedronGeometry, BufferGeometry, Float32BufferAttribute, BufferAttribute, MeshBasicNodeMaterial,
   Matrix4, Quaternion, Vector3, BackSide, FrontSide } from 'three/webgpu';
-import { vec3, float, uv, positionWorld, normalWorld, normalize, abs, mix, smoothstep, min } from 'three/tsl';
+import { vec3, float, uv, attribute, positionWorld, normalWorld, normalize, abs, mix, smoothstep, min } from 'three/tsl';
 import { goonworksWorldPlan } from './goonworksWorld.js';
-import { createGoonworksMaterial, createGoonworksTubeMaterial, createGoonworksPlatformMaterial, GOONWORKS_PALETTE as C } from './goonworksMaterials.js';
+import { createGoonworksMaterial, createGoonworksTubeMaterial, createGoonworksPlatformMaterial, GOONWORKS_PAPER_MATERIALS, GOONWORKS_PALETTE as C } from './goonworksMaterials.js';
 import {goonworksTubeShell,goonworksPlatformGeometry} from './goonworksGeometry.js';
 import { Q } from './quality.js';
 export { applyGoonworksRoad, applyGoonworksRails } from './goonworksMaterials.js';
@@ -36,6 +36,23 @@ function spiralGeometry(){
   const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(P,3));g.setAttribute('normal',new Float32BufferAttribute(N,3));g.setAttribute('uv',new Float32BufferAttribute(U,2));g.setIndex(I);g.computeBoundingSphere();return g;
 }
 
+/** A tiled front, tiled back and perimeter walls, with no overlapping colored caps. */
+export function goonworksGearGeometry(){
+  const P=[],A=[],count=96,hub=.355;
+  const tri=(a,b,c,tone)=>{P.push(...a,...b,...c);A.push(tone,tone,tone);};
+  const point=(i,r,z)=>{const a=i/count*Math.PI*2;return[Math.cos(a)*r,Math.sin(a)*r,z];};
+  const radius=i=>[.405,.405,.5,.5,.5,.5,.405,.405][i%8];
+  for(let i=0;i<count;i++){const j=(i+1)%count;
+    for(const side of[-1,1]){const z=side*.5,a=point(i,hub,z),b=point(j,hub,z),c=point(i,radius(i),z),d=point(j,radius(j),z);
+      if(side>0){tri([0,0,z],a,b,0);tri(a,c,d,1);tri(a,d,b,1);}
+      else{tri([0,0,z],b,a,0);tri(a,d,c,1);tri(a,b,d,1);}
+    }
+    const a=point(i,radius(i),.5),b=point(j,radius(j),.5),c=point(i,radius(i),-.5),d=point(j,radius(j),-.5);
+    tri(a,c,d,1);tri(a,d,b,1);
+  }
+  const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(P,3));g.setAttribute('goonworksAccent',new Float32BufferAttribute(A,1));g.computeVertexNormals();g.computeBoundingSphere();return g;
+}
+
 /** Extend only actual side and underside triangles. Existing gaps remain cut through every layer. */
 export function goonworksRibbonShell(track){
   const source=track.meshes.road,P=new Float32Array(source.positions),N=source.normals,U=source.uvs,I=[],types=new Int8Array(P.length/3);
@@ -58,8 +75,10 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   if(!plan)return{group,update(){},hit(){},reset(){},dispose(){},stats:{},casters:[]};
   const geometries={box:new BoxGeometry(1,1,1),sphere:new SphereGeometry(.5,20,12),
     cylinder:new CylinderGeometry(.5,.5,1,20),cone:new CylinderGeometry(.48,.2,1,20),
-    torus:new TorusGeometry(.48,.02,6,40),arch:new TorusGeometry(.48,.025,8,40,Math.PI),star:starGeometry(),spiral:spiralGeometry(),island:islandGeometry(),openIsland:islandGeometry(false,false),hexIsland:islandGeometry(true),spark:new OctahedronGeometry(.5)};
-  const materials={};for(const[name,hex]of Object.entries(C))materials[name]=createGoonworksMaterial(hex,{ink:name==='ink',paper:name==='white'||name==='cream',unlit:name==='distant'});
+    torus:new TorusGeometry(.48,.02,6,40),arch:new TorusGeometry(.48,.025,8,40,Math.PI),star:starGeometry(),gear:goonworksGearGeometry(),spiral:spiralGeometry(),island:islandGeometry(),openIsland:islandGeometry(false,false),hexIsland:islandGeometry(true),spark:new OctahedronGeometry(.5)};
+  const materials={};for(const[name,hex]of Object.entries(C))materials[name]=createGoonworksMaterial(hex,{ink:name==='ink',paper:GOONWORKS_PAPER_MATERIALS.includes(name),unlit:name.startsWith('distant')});
+  materials.gear=createGoonworksMaterial(C.ivory,{paper:true});materials.gear.side=FrontSide;
+  materials.gear.colorNode=mix(materials.gear.colorNode,materials.gold.colorNode,attribute('goonworksAccent','float'));
   const ink=createGoonworksMaterial(C.ink,{outline:true}),owned=[ink],extraGeometry=[];
   function upload(data){const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(data.positions,3));g.setAttribute('normal',new BufferAttribute(data.normals,3));g.setAttribute('uv',new BufferAttribute(data.uvs,2));g.setIndex(new BufferAttribute(data.indices,1));g.computeBoundingSphere();extraGeometry.push(g);return g;}
   const M=new Matrix4(),B=new Matrix4(),P=new Vector3(),S=new Vector3(),rotation=new Quaternion(),X=new Vector3(),Y=new Vector3(),Z=new Vector3();
@@ -95,14 +114,14 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   const platformGroups=[];
   for(const row of plan.platforms){const holder=new Group();holder.name='goonworks-platform-'+row.id;
     B.makeBasis(X.fromArray(row.b),Y.fromArray(row.n),Z.fromArray(row.t).negate());holder.quaternion.setFromRotationMatrix(B);holder.position.fromArray(row.p);
-    const capMaterial=createGoonworksPlatformMaterial(row.w,row.len);owned.push(capMaterial);
+    const capMaterial=createGoonworksPlatformMaterial(row.w,row.len,platformGroups.length);owned.push(capMaterial);
     const top=new Mesh(upload(goonworksPlatformGeometry(row.w,row.len)),capMaterial);top.name='single-surface-platform-cap';holder.add(top);
-    const skirt=new Mesh(geometries.openIsland,materials.fuchsia);skirt.scale.set(row.w-.3,4.8,row.len-.3);skirt.position.y=-3.1;holder.add(skirt);
+    const skirt=new Mesh(geometries.openIsland,materials[platformGroups.length%3===0?'magenta':platformGroups.length%3===1?'fuchsia':'rose']);skirt.scale.set(row.w-.3,4.8,row.len-.3);skirt.position.y=-3.1;holder.add(skirt);
     group.add(holder);platformGroups.push({row,holder,rest:holder.position.clone(),age:Infinity});
   }
   // The sky carries static pale ink silhouettes, not a rainbow spiral or a distant ground plane.
   const skyG=new SphereGeometry(plan.skyRadius,32,18),skyM=new MeshBasicNodeMaterial({side:BackSide,depthWrite:false,fog:false,toneMapped:false});
-  skyM.colorNode=mix(vec3(.83,.53,.69),vec3(.98,.87,.94),smoothstep(plan.center[1]-250,plan.center[1]+350,positionWorld.y));
+  skyM.colorNode=mix(vec3(.62,.51,.69),vec3(.86,.8,.78),smoothstep(plan.center[1]-250,plan.center[1]+350,positionWorld.y));
   const sky=new Mesh(skyG,skyM);sky.position.fromArray(plan.center);sky.name='goonworks-blush-atmosphere';sky.renderOrder=-2;sky.frustumCulled=false;group.add(sky);extraGeometry.push(skyG);owned.push(skyM);
   const sparkleCount=Math.min(Q.name==='phone'?450:1900,plan.particles.length*11),sparkle=new InstancedMesh(geometries.spark,materials.white,sparkleCount);
   sparkle.name='goonworks-ink-sparkles';group.add(sparkle);

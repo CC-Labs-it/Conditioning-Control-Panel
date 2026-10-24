@@ -132,6 +132,59 @@ test('visible disc geometry has the same road-level opening and closes on the sa
   } finally { hooks.deregister(); }
 });
 
+test('wheel face colours tile one opaque surface without hidden caps at either viewing side or distance', async () => {
+  const hooks = registerHooks({ resolve(specifier, context, next) {
+    if (specifier === 'three/webgpu' || specifier === 'three/tsl') return { url: new URL('../vendor/three/build/' + (specifier.endsWith('tsl') ? 'three.tsl.min.js' : 'three.webgpu.min.js'), import.meta.url).href, shortCircuit: true };
+    return next(specifier, context);
+  } });
+  try {
+    const { Scene, Raycaster, Vector3, FrontSide } = await import('three/webgpu');
+    const { createGoonworksHazardView } = await import('../render/goonworksHazards.js');
+    const scene = new Scene(), view = createGoonworksHazardView(scene, track, layout);
+    for (const row of rows.filter(r => r.kind === 'wheel')) {
+      const rotor = view.group.getObjectByName(row.id).getObjectByName('wheel-rotor');
+      const surface = rotor.children.filter(m => m.name.startsWith('wheel-face-') || m.name === 'wheel-cut-walls');
+      for (const m of surface) {
+        assert.equal(m.material.side, FrontSide); assert.equal(m.material.depthTest, true);
+        assert.equal(m.material.depthWrite, true); assert.equal(m.material.transparent, false);
+      }
+      // Test actual submitted triangles. A filled ink cap beneath white would violate both the
+      // area equality and ray uniqueness, even when its millimetre offset happens to render cleanly.
+      const area = [0, 0];
+      for (const m of surface) {
+        const g = m.geometry, p = g.getAttribute('position'), ids = g.index;
+        const begin = g.drawRange.start, end = Math.min(ids?.count ?? p.count, begin + g.drawRange.count);
+        for (let i = begin; i < end; i += 3) {
+          const abc = [0, 1, 2].map(k => new Vector3().fromBufferAttribute(p, ids ? ids.getX(i + k) : i + k));
+          const cross = abc[1].clone().sub(abc[0]).cross(abc[2].clone().sub(abc[0]));
+          if (Math.abs(cross.z) < 1e-6) continue;
+          assert.ok(m.name.startsWith('wheel-face-'), 'cut walls must not submit another filled cap');
+          assert.ok(abc.every(v => Math.abs(v.z) < 1e-6), 'all face colours share the same plane');
+          assert.ok(cross.z * Math.sign(m.position.z) > 0, 'front and back have outward winding');
+          area[m.position.z > 0 ? 0 : 1] += Math.abs(cross.z) / 2;
+        }
+      }
+      const expected = row.radius ** 2 * (Math.PI * 2 - row.gap) / 2;
+      for (const value of area) assert.ok(Math.abs(value - expected) / expected < .001, `cap colors cover ${value}, expected ${expected}`);
+      for (const time of [0, 2.35, 5.1]) {
+        view.update(time); scene.updateMatrixWorld(true);
+        for (const side of [-1, 1]) for (const distance of [7, 140, 1400]) {
+          const direction = new Vector3(0, 0, -side).transformDirection(rotor.matrixWorld);
+          for (let i = 0; i < 49; i++) for (const radius of [.31, 6.13, 9.91, 13.69, 15.39]) {
+            const angle = (i + .371) * Math.PI * 2 / 49;
+            const origin = new Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, side * distance).applyMatrix4(rotor.matrixWorld);
+            const hits = new Raycaster(origin, direction, 0, distance + row.depth).intersectObjects(surface, false);
+            const solid = angle > row.gap / 2 && angle < Math.PI * 2 - row.gap / 2;
+            assert.equal(hits.length, solid ? 1 : 0, `${row.id} at ${time}s, side ${side}, ${distance}m, radius ${radius}, angle ${angle}`);
+            if (solid) assert.ok(Math.abs(hits[0].distance - (distance - row.depth / 2)) < .0001);
+          }
+        }
+      }
+    }
+    view.dispose(); assert.equal(scene.children.length, 0);
+  } finally { hooks.deregister(); }
+});
+
 test('all eight racers finish two laps with active toys, items and safe bypass steering', () => {
   const race = makeRace({ track, seed: 20261024, items: createItems }), toys = createGoonworksHazards(track, layout);
   const drive = race.ai.drive.bind(race.ai), step = race.racers.step.bind(race.racers);

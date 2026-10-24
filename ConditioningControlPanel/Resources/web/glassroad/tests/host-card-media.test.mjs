@@ -42,13 +42,13 @@ const response = () => new Response(new Uint8Array([1, 2, 3]), { headers: { 'con
 const source = (id, expiresAt = Date.now() + 60000) => ({ kind: 'video', url: '/__card-media/' + id, credit: 'scrolller', expiresAt });
 const manifest = (...sources) => ({ enabled: true, sources });
 function mediaFixture(t, options = {}) {
-  const { slots = Array.from({ length: 8 }, (_, i) => ({ id: 'card-' + i, frame: 'card' })),
+  const { slots = Array.from({ length: 8 }, (_, i) => ({ id: 'card-' + i, frame: 'card' })), scrolllerShare,
     videoCapacity = MAX_MEDIA_CLIPS, gpuCapacity = Infinity, ...adapterOptions } = options;
   const active = new Map(), videos = [], revoked = [], assignments = [];
   t.mock.method(URL, 'createObjectURL', () => 'blob:fixture-' + videos.length);
   t.mock.method(URL, 'revokeObjectURL', url => revoked.push(url));
   const rejected = [];
-  const media = { slots, get videoCapacity() { return typeof videoCapacity === 'function' ? videoCapacity() : videoCapacity; },
+  const media = { slots, scrolllerShare, get videoCapacity() { return typeof videoCapacity === 'function' ? videoCapacity() : videoCapacity; },
     setSource(id, src) {
       assignments.push([id, src]);
       if (!src) { active.delete(id); return true; }
@@ -68,6 +68,20 @@ function localLocation(t) {
   Object.defineProperty(globalThis, 'location', { configurable: true, value: { hostname: 'localhost', origin: 'http://localhost:8855' } });
   t.after(() => { if (old) Object.defineProperty(globalThis, 'location', old); else delete globalThis.location; });
 }
+
+test('the renderer share allocates 47 of 78 world faces while two clip owners stay bounded and source-off clears them', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => { calls++; return response(); });
+  const slots = Array.from({ length: 78 }, (_, i) => ({ id: 'board-' + i, frame: 'billboard', s: i * 10 }));
+  const { adapter, active, videos, revoked } = mediaFixture(t, { slots, scrolllerShare: .6, videoCapacity: 2 });
+  await adapter.apply(manifest(source('one'), source('two'), source('unused')));
+  assert.equal(active.size, 47); assert.equal(slots.length - active.size, 31);
+  assert.equal(videos.length, 2); assert.equal(calls, 2);
+  await adapter.apply({ enabled: false, sources: [] });
+  assert.equal(active.size, 0, 'every eligible face returns to its procedural fallback');
+  assert.equal(revoked.length, 2);
+  assert.ok(videos.every(v => v.pauses === 1 && v.unloads === 1));
+});
 
 test('world media rejects image, still, canvas and poster manifests without acquiring a decoder', async t => {
   const slots = [
