@@ -2939,3 +2939,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-win-webcam-calibration-b: +493
 - Calibration mouth prompts fire from real capture (Core MouthOpenDetector, WPF order) and verify/bubble cursors draw the shared Core GazeCursorTrail comet.
 - Review fixes: frame-run-tagged mouth events, cached trail paints, all 10 new tests fail-proven remotely.
+
+## avalonia-port/wire-win-settings-palette: +62
+- Palette Games row scrolls to the Games zone; panic closes the palette without eating Escape grace (both fail-proven).
+- Review fix after reboot: headless test setup restored, minimal panic-list diff, parity evidence path. rgate green; panic test now proves Escape grace survives panic.
