@@ -24,7 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Core <see cref="AmbientBubbleField"/> moves and scores, this draws. WPF's default render is
     /// the shared host (one click-through surface, pops from a hook); here that is one override-
     /// redirect window per targeted screen whose X11 input region is exactly the live bubbles'
-    /// hit squares, so the desktop stays clickable everywhere else. Reached through
+    /// hit discs, so the desktop stays clickable everywhere else. Reached through
     /// <see cref="CoreBubbles"/>, which App seeds.
     ///
     /// <para>Hot path is allocation-free: one cached frame delegate, one Render pass over the
@@ -329,7 +329,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
     /// <summary>One screen of the field: draws its bubbles (WPF Bubble visuals: bubble.png, or the
     /// gradient ellipse fallback, scaled and rotated about the centre at the pop fade) and takes
-    /// presses only inside their hit squares.</summary>
+    /// presses only inside their hit discs.</summary>
     internal sealed class BubbleOverlayWindow : Window
     {
         private static readonly IBrush FallbackFill = new RadialGradientBrush
@@ -352,7 +352,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal readonly int Index;
         internal readonly PixelRect Bounds;
         internal readonly double Scaling;
-        internal readonly PixelRect[] Rects = new PixelRect[64];
+        internal PixelRect[] Rects = new PixelRect[64];
+        internal int InputRectCount { get; private set; }
         private int _lastCount = -1;
         /// <summary>Cached (no per-frame closure); a closed window's late frame is ignored.</summary>
         internal readonly Action<TimeSpan> FrameCallback;
@@ -422,16 +423,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             var n = 0;
             var bubbles = BubbleOverlay.Field.Bubbles;
-            for (var i = 0; i < bubbles.Count && n < Rects.Length; i++)
+            for (var i = 0; i < bubbles.Count; i++)
             {
                 var b = bubbles[i];
-                if (b.Screen != Index || !b.Clickable || b.Popping) continue;
-                Rects[n++] = new PixelRect((int)(b.X * Scaling) - Bounds.X, (int)(b.Y * Scaling) - Bounds.Y,
-                    (int)(b.Size * Scaling), (int)(b.Size * Scaling));
+                if (b.Screen != Index || !b.Clickable || b.Popping || b.Size <= 0) continue;
+                // WPF's shared-host hook tests a disc, not the sprite's bounding square.
+                // Both native backends already accept unions of rectangles: rasterise each
+                // physical pixel row, clipped to this screen. Keep the buffer across frames.
+                var cx = b.CenterX * Scaling - Bounds.X;
+                var cy = b.CenterY * Scaling - Bounds.Y;
+                var r = b.Size * Scaling / 2;
+                var first = Math.Max(0, (int)Math.Ceiling(cy - r));
+                var last = Math.Min(Bounds.Height - 1, (int)Math.Floor(cy + r));
+                for (var y = first; y <= last; y++)
+                {
+                    var dy = y - cy;
+                    var half = Math.Sqrt(Math.Max(0, r * r - dy * dy));
+                    var left = Math.Max(0, (int)Math.Ceiling(cx - half));
+                    var right = Math.Min(Bounds.Width - 1, (int)Math.Floor(cx + half));
+                    // Round trips through mixed-DPI global DIPs can differ by an ULP at the
+                    // radius. Use the same predicate as the press handler at the endpoints.
+                    bool Hit(int x) => b.Contains((Bounds.X + x) / Scaling, (Bounds.Y + y) / Scaling);
+                    if (left > 0 && Hit(left - 1)) left--;
+                    if (right < Bounds.Width - 1 && Hit(right + 1)) right++;
+                    while (left <= right && !Hit(left)) left++;
+                    while (right >= left && !Hit(right)) right--;
+                    if (left > right) continue;
+                    var rect = new PixelRect(left, y, right - left + 1, 1);
+                    // Coalesce identical adjacent rows (especially useful for small bubbles).
+                    if (n > 0 && Rects[n - 1] is var prev && prev.X == rect.X && prev.Width == rect.Width && prev.Bottom == y)
+                        Rects[n - 1] = new PixelRect(prev.X, prev.Y, prev.Width, prev.Height + 1);
+                    else
+                    {
+                        if (n == Rects.Length) Array.Resize(ref Rects, Rects.Length * 2);
+                        Rects[n++] = rect;
+                    }
+                }
             }
+            InputRectCount = n;
             var drawn = HasBubbles();
             if (!drawn && _lastCount == 0) return;   // stayed empty: region already empty, nothing to repaint
-            X11Overlay.SetInputRects(this, Rects, n);
+            X11Overlay.SetInputRects(this, Rects, InputRectCount);
             (Content as Control)?.InvalidateVisual();
             _lastCount = drawn ? 1 : 0;
         }
