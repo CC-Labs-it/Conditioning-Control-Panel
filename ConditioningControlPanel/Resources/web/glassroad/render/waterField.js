@@ -1,4 +1,5 @@
 // Bounded shallow surface waves in track coordinates. No renderer or wall clock dependencies.
+import { isWaterSurface } from '../track/waterSurface.js';
 const clamp = (x,a,b) => Math.max(a,Math.min(b,x));
 const finite = (x, fallback=0) => Number.isFinite(x)?x:fallback;
 const FIXED = 1/60, MAX_HEIGHT = .8, MAX_VELOCITY = 3.5;
@@ -9,7 +10,7 @@ function wetRuns(track) {
   for(let i=0;i<points.length-1;i++) {
     const a=points[i],b=points[i+1]; if(!(b>a))continue;
     const s=(a+b)/2,f=track.frameAt(s),section=track.sections?.find(r=>s>=r.fromS&&s<r.toS)?.id||'';
-    const wet=f.surface==='stream'||f.surface==='pool'||section==='coolant-canal';
+    const wet=isWaterSurface(f.surface,section);
     if(!wet||/submerged|emerge/.test(section)||f.n?.[1]<.45||f.flags?.includes('jump'))continue;
     const previous=runs.at(-1);
     if(previous&&Math.abs(previous.toS-a)<.001)previous.toS=b;
