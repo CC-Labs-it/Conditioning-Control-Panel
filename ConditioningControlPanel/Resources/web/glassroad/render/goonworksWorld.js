@@ -238,32 +238,60 @@ export function goonworksWorldPlan(track){
   }
   // Colour is assigned after placement so district art changes cannot move a support or a screen.
   const whiteFamily=id=>id.startsWith('grotto')||id.startsWith('rabbit')?'ice':id.startsWith('pop-quiz')||id.startsWith('quiz-')?'lilac':id.startsWith('aperture-mill')||id.startsWith('mill-')||id.startsWith('pinball')?'ivory':id.startsWith('icing-observatory')?'blush':'white';
+  const hallColours={
+    'aperture-mill':{structure:'gold',secondary:'gold'},
+    'pop-quiz':{structure:'violet',secondary:'periwinkle'},
+    'pinball-launch':{structure:'tangerine',secondary:'gold'}
+  };
   const counts=new Map();
-  for(const row of rows){const repeat=counts.get(row.id)||0;counts.set(row.id,repeat+1);
-    if(row.material==='white')row.material=whiteFamily(row.id);
-    if(row.id.startsWith('horizon-'))row.material=repeat%3===1?'distantCool':repeat%3===2?'distantWarm':'distant';
-    if(row.material==='fuchsia'){
-      if(row.id.includes('roof-beam')||row.id.startsWith('grotto-inner')||row.id.startsWith('pop-quiz-upright'))row.material='magenta';
-      else if(row.id.includes('balcony-band')||row.id==='orchard-floating-cloud')row.material='rose';
+  for(const row of rows){const id=row.id,repeat=counts.get(id)||0;counts.set(id,repeat+1);
+    if(row.material==='white')row.material=whiteFamily(id);
+    if(id.startsWith('horizon-'))row.material=repeat%3===1?'distantCool':repeat%3===2?'distantWarm':'distant';
+    if(row.material==='fuchsia'&&id.includes('balcony-band'))row.material='rose';
+    if(row.material==='wine'&&id.includes('island-keel'))row.material='plum';
+
+    // Full upper beams and columns carry each hall's identity. Low walls, island bodies,
+    // pale eaves and balcony lips retain the common fuchsia and porcelain construction.
+    for(const [hall,colours]of Object.entries(hallColours))if(id.startsWith(hall+'-')){
+      if(id===hall+'-roof-beam'||id===hall+'-upright'||id.endsWith('-cabinet')||id===hall+'-entrance-crown'||id===hall+'-exit-crown')row.material=colours.structure;
+      if(id===hall+'-inset-wall')row.material=colours.secondary;
+      if(id.endsWith('-white-bezel')&&row.size[0]<row.size[1])row.material=colours.secondary;
     }
-    if(row.material==='wine'&&(row.id.includes('island-keel')||row.id==='grotto-arched-roof'))row.material='plum';
-    if(row.id==='grotto-scalloped-rock')row.material=repeat%3===0?'magenta':repeat%3===1?'wine':'plum';
-    if(row.id.endsWith('-white-bezel')&&row.size[0]<row.size[1])row.material=row.id.startsWith('grotto')?'periwinkle':row.id.startsWith('rabbit')?'teal':row.id.startsWith('pop-quiz')?'apricot':'gold';
-    if(row.id==='quiz-icing-canopy')row.material=repeat%2?'pink':'blush';
-    if(row.id==='mill-grand-clock-ring'||row.id==='pinball-balcony-star')row.material='gold';
-    if(row.id==='rabbit-ceiling-conduit')row.material='teal';
-    if(row.id.startsWith('grotto-')&&row.id.endsWith('-white-bezel'))row.material=row.id.startsWith('grotto-high-')?'periwinkle':'teal';
-    if(row.id.startsWith('grotto-stalactite'))row.material=repeat%3===0?'periwinkle':'teal';
-    if(row.id==='pinball-bumper-stem')row.material='periwinkle';
-    if(row.id==='pinball-bumper-cap')row.material=repeat%3===0?'hot':repeat%3===1?'rose':'magenta';
-    if(row.id==='pinball-lamp')row.material=repeat%2?'apricot':'gold';
-    if(row.id==='orchard-star-crown')row.material=repeat%2?'periwinkle':'gold';
-    if(row.id==='spiral-cameo-disc')row.material='ivory';
-    if(row.id==='spiral-cameo-pillar'||row.id==='rabbit-pipe-organ-arch')row.material='teal';
-    if(row.id==='rabbit-pipe-organ-white-cuff')row.material='gold';
-    if(row.id==='icing-observatory-tower')row.material=repeat%2?'magenta':'rose';
-    if(row.id==='icing-observatory-tower-roof')row.material=repeat===1?'apricot':'ivory';
-    if(row.id==='white-cartoon-cloud')row.material=repeat%3===0?'ice':repeat%3===1?'cream':'lilac';
+    if(id==='mill-grand-clock-ring')row.material='gold';
+    if(id==='quiz-icing-canopy')row.material=repeat%3===1?'violet':'periwinkle';
+    if(id==='quiz-domino-pier')row.material='lilac';
+    if(id==='pinball-launch-balcony-band'||id==='pinball-striped-ceiling-beam'||id==='pinball-balcony-star')row.material='gold';
+    if(id==='pinball-bumper-stem')row.material='gold';
+    if(id==='pinball-bumper-cap')row.material=repeat%3===1?'hot':'tangerine';
+    if(id==='pinball-lamp')row.material=repeat%2?'apricot':'gold';
+
+    // Broad cobalt scallops alternate with pink walls, so blue reads from the racing line
+    // while the fuchsia base rocks and suspended roof still tie the cavern to the factory.
+    if(id==='grotto-scalloped-rock')row.material=repeat%4<2?'cobalt':repeat%4===2?'fuchsia':'magenta';
+    if(id==='grotto-inner-rock'||id==='grotto-arched-roof')row.material='fuchsia';
+    if(id.startsWith('grotto-')&&id.endsWith('-cabinet'))row.material='cobalt';
+    if(id.startsWith('grotto-')&&id.endsWith('-white-bezel'))row.material=id.startsWith('grotto-high-')?'periwinkle':'ice';
+    if(id.startsWith('grotto-stalactite'))row.material=repeat%3===0?'periwinkle':'ice';
+    if(id==='grotto-mouth-crown'||id==='grotto-mouth-pier')row.material='cobalt';
+
+    // The rabbit tube skin is shaded separately. Its complete cabinets and long conduits
+    // use the same mint family, rather than relying on a narrow strip around each screen.
+    if(id==='rabbit-ceiling-conduit')row.material='mint';
+    if(id.startsWith('rabbit-screen-')&&id.endsWith('-cabinet'))row.material='teal';
+    if(id.startsWith('rabbit-screen-')&&id.endsWith('-white-bezel'))row.material='mint';
+
+    // Outdoor districts use their existing large landmarks and broad orchard bodies.
+    if(id==='spiral-cameo-disc'||id==='spiral-cameo-pillar')row.material='coral';
+    if(id==='orchard-floating-cloud')row.material=repeat%3===1?'fuchsia':'mint';
+    if(id==='orchard-tube-trunk')row.material='mint';
+    if(id==='orchard-star-crown')row.material=repeat%3===1?'ivory':'lime';
+    if(id==='rabbit-pipe-organ-arch')row.material='indigo';
+    if(id==='rabbit-pipe-organ-leg')row.material='periwinkle';
+    if(id==='rabbit-pipe-organ-white-cuff')row.material='lilac';
+    if(id==='icing-observatory-tower')row.material=repeat===1?'magenta':'indigo';
+    if(id==='icing-observatory-tower-roof')row.material=repeat===1?'periwinkle':'lilac';
+    if(id==='icing-observatory-loop-pipe')row.material='periwinkle';
+    if(id==='white-cartoon-cloud')row.material=repeat%3===0?'ice':repeat%3===1?'cream':'lilac';
   }
   const plan={layout,rows,mounts,particles,platforms,rooms,features,landmarks,rejected,corridor,center,radius,skyRadius:Math.max(2400,radius+1100)};
   CACHE.set(track,plan);return plan;

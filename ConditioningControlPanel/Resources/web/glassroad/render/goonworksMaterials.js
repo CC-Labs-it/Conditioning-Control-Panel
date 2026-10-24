@@ -6,18 +6,19 @@ import {getGoonworksLayout} from '../track/goonworks-layout.js';
 export const GOONWORKS_PALETTE = Object.freeze({ fuchsia: '#b60870', hot: '#dc4296', wine: '#661448',
   magenta:'#993e91',rose:'#ca6897',plum:'#513751',pink:'#e78eb8',
   white:'#ede7e6',cream:'#efe4d1',ivory:'#ede4cf',ice:'#dce8eb',lilac:'#e2dcef',blush:'#ebd4df',warmgray:'#b9aaa9',
-  teal:'#79b5ae',periwinkle:'#9b9ed0',apricot:'#dfad89',gold:'#cdb16c',
+  teal:'#36BDAE',periwinkle:'#A19CE5',apricot:'#F2B580',gold:'#E2B748',
+  cobalt:'#356BD0',violet:'#7652BA',coral:'#F28182',mint:'#73C9AE',lime:'#B4CD63',tangerine:'#ED994F',indigo:'#4C5799',
   ink: '#1a101e', shade: '#473347', sky: '#dfcadc', distant: '#b785a8',distantCool:'#9c8ead',distantWarm:'#bd9a9a' });
 export const GOONWORKS_DISTRICT_PALETTES=Object.freeze({
   start:Object.freeze({road:'white',pink:'fuchsia',accent:'gold'}),
   'rabbit-hole':Object.freeze({road:'ice',pink:'magenta',accent:'teal'}),
-  'screen-grotto':Object.freeze({road:'ice',pink:'magenta',accent:'periwinkle'}),
+  'screen-grotto':Object.freeze({road:'ice',pink:'magenta',accent:'cobalt'}),
   'aperture-mill':Object.freeze({road:'ivory',pink:'fuchsia',accent:'gold'}),
-  'pop-quiz':Object.freeze({road:'lilac',pink:'rose',accent:'periwinkle'}),
-  'ribbon-helix':Object.freeze({road:'blush',pink:'fuchsia',accent:'apricot'}),
-  leapfrog:Object.freeze({road:'ice',pink:'rose',accent:'teal'}),
-  'pinball-launch':Object.freeze({road:'ivory',pink:'hot',accent:'gold'}),
-  'grand-fold':Object.freeze({road:'lilac',pink:'magenta',accent:'periwinkle'}),
+  'pop-quiz':Object.freeze({road:'lilac',pink:'rose',accent:'violet'}),
+  'ribbon-helix':Object.freeze({road:'blush',pink:'fuchsia',accent:'coral'}),
+  leapfrog:Object.freeze({road:'ice',pink:'rose',accent:'mint'}),
+  'pinball-launch':Object.freeze({road:'ivory',pink:'hot',accent:'tangerine'}),
+  'grand-fold':Object.freeze({road:'lilac',pink:'magenta',accent:'indigo'}),
   finish:Object.freeze({road:'white',pink:'fuchsia',accent:'apricot'})
 });
 export const GOONWORKS_PAPER_MATERIALS=Object.freeze(['white','cream','ivory','ice','lilac','blush']);
@@ -64,6 +65,13 @@ export function applyGoonworksRoad(road, art, track) {
   const paper=texture(widths,vec2(distanceUV,.375)).rgb.mul(light).mul(glaze);
   const dark=rgb(GOONWORKS_PALETTE.wine),pink=texture(widths,vec2(distanceUV,.625)).rgb,accent=texture(widths,vec2(distanceUV,.875)).rgb;
   let colour=mix(dark,paper,top);
+  // Broad district enamel bands stay visible from the kart. The central paper lane and
+  // fuchsia outer checker remain the common visual language throughout the course.
+  const bandStart=2.8,bandEnd=half.mul(.18).add(bandStart);
+  const districtBand=smoothstep(float(bandStart).sub(pixel),float(bandStart).add(pixel),edge)
+    .mul(float(1).sub(smoothstep(bandEnd.sub(pixel),bandEnd.add(pixel),edge)));
+  const bandGlaze=mix(accent,paper,.14).mul(light);
+  colour=mix(colour,bandGlaze,districtBand.mul(top));
   // Two fine enamel ribbons bring scale to the wide floor without filling the racing line.
   const laneCenter=half.mul(.12).add(3.8).add(sin(p.y.mul(.026)).mul(.32)),laneDistance=abs(abs(p.x).sub(laneCenter));
   const lanePixel=max(fwidth(laneDistance),.025),laneSoft=float(1).sub(smoothstep(.64,lanePixel.add(.88),laneDistance));
@@ -111,7 +119,10 @@ export function createGoonworksTubeMaterial(outer=false){
   const rim=float(1).sub(smoothstep(1.03,1.14,oval));
   const enamel=smoothstep(1.13,1.2,oval).mul(float(1).sub(smoothstep(1.32,1.4,oval)));
   const ribDistance=min(fract(p.y.div(38)),float(1).sub(fract(p.y.div(38)))).mul(38);
-  const rib=float(1).sub(smoothstep(1.35,1.55,ribDistance)),ribInk=float(1).sub(smoothstep(.06,.16,abs(ribDistance.sub(1.65))));
+  const ribWidth=outer?1.35:4.8;
+  const ribPixel=max(fwidth(ribDistance),.06);
+  const rib=float(1).sub(smoothstep(ribWidth,ribPixel.add(ribWidth+.16),ribDistance));
+  const ribInk=float(1).sub(smoothstep(.08,ribPixel.add(.16),abs(ribDistance.sub(ribWidth+.3))));
   let colour=material.colorNode;
   const panelTone=sin(p.y.mul(.033)).mul(.5).add(.5);
   colour=mix(colour,rgb(outer?GOONWORKS_PALETTE.magenta:GOONWORKS_PALETTE.lilac),panelTone.mul(outer?.23:.16));
@@ -122,15 +133,18 @@ export function createGoonworksTubeMaterial(outer=false){
 }
 
 export function createGoonworksPlatformMaterial(w,len,index=0){
-  const tones=['ice','lilac','ivory','blush'],material=createGoonworksMaterial(GOONWORKS_PALETTE[tones[index%tones.length]],{paper:true}),p=uv();
+  const material=createGoonworksMaterial(GOONWORKS_PALETTE.ice,{paper:true}),p=uv();
   const edge=min(float(w/2).sub(abs(p.x)),float(len/2).sub(abs(p.y)));
   const ink=float(1).sub(smoothstep(.17,.27,edge));
   const shoulder=float(1).sub(smoothstep(1.1,1.3,edge));
+  const edgePixel=max(fwidth(edge),.04);
+  const islandBand=smoothstep(1.45,edgePixel.add(1.6),edge).mul(float(1).sub(smoothstep(3.4,edgePixel.add(3.6),edge)));
   const checker=smoothstep(-.1,.1,sin(p.x.mul(Math.PI/3)).mul(sin(p.y.mul(Math.PI/3))));
   const arrow=abs(p.y.add(float(len/2-5)).sub(abs(p.x).mul(.62)));
   const chevron=float(1).sub(smoothstep(.25,.4,arrow)).mul(float(1).sub(smoothstep(4.8,5.2,abs(p.x))));
   material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.rose),shoulder.mul(checker));
-  material.colorNode=mix(material.colorNode,rgb(index%2?GOONWORKS_PALETTE.periwinkle:GOONWORKS_PALETTE.teal),chevron);
+  material.colorNode=mix(material.colorNode,rgb(index%2?GOONWORKS_PALETTE.lime:GOONWORKS_PALETTE.mint),islandBand);
+  material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.teal),chevron);
   material.colorNode=mix(material.colorNode,rgb(GOONWORKS_PALETTE.ink),ink);
   material.colorNode=mix(rgb(GOONWORKS_PALETTE.ink),material.colorNode,smoothstep(.4,.7,normalize(normalWorld).y));return material;
 }
