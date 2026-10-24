@@ -72,6 +72,7 @@ namespace ConditioningControlPanel.Services
         private const int WM_DPICHANGED = 0x02E0;
         private DateTime _fireStartedAt;
         private double _dwellMs;
+        private DateTime _lastDwellTickUtc; // dwell counts real time between ticks (TickStep)
         private System.Windows.Point? _lastGazePoint;
         private DateTime _lastGazeAt;
         private bool _gazeSubscribed;
@@ -301,6 +302,7 @@ namespace ConditioningControlPanel.Services
 
                 _fireStartedAt = DateTime.UtcNow;
                 _dwellMs = 0;
+                _lastDwellTickUtc = _fireStartedAt;
                 _lastGazePoint = null;
                 _lastGazeAt = default; // stale until this check's first live sample
 
@@ -406,9 +408,13 @@ namespace ConditioningControlPanel.Services
                 var gazeFresh = _lastGazePoint.HasValue
                     && (now - _lastGazeAt).TotalMilliseconds <= GazeStaleMs;
 
+                // The real time since the last tick, not TickMs: this timer lands every ~47 ms or
+                // later, so counting ticks made the 1 s stare take ~1.4 s against the wall-clock grace.
+                var stepMs = Timing.TickStep.Ms(ref _lastDwellTickUtc, now, Timing.TickStep.DwellMaxStepMs);
+
                 if (gazeFresh && _activeBounds.Contains(_lastGazePoint!.Value))
                 {
-                    _dwellMs += TickMs;
+                    _dwellMs += stepMs;
                     _control?.SetProgress(_dwellMs / DwellTargetMs);
 
                     if (_dwellMs >= DwellTargetMs)
@@ -421,7 +427,7 @@ namespace ConditioningControlPanel.Services
                 {
                     // Gaze left bounds — drain dwell quickly so a brief
                     // glance doesn't bank progress that completes later.
-                    _dwellMs = Math.Max(0, _dwellMs - TickMs * 2);
+                    _dwellMs = Math.Max(0, _dwellMs - stepMs * 2);
                     _control?.SetProgress(_dwellMs / DwellTargetMs);
                 }
 
