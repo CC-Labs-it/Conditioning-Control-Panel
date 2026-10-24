@@ -2943,3 +2943,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-win-settings-palette: +62
 - Palette Games row scrolls to the Games zone; panic closes the palette without eating Escape grace (both fail-proven).
 - Review fix after reboot: headless test setup restored, minimal panic-list diff, parity evidence path. rgate green; panic test now proves Escape grace survives panic.
+
+## avalonia-port/wire-feat-pbp-host: +215
+- Piece by Piece whisper clips: Core `PbpWhisperClips` shared with WPF, authenticated sub-audio/words routes, settings frame sends whisper URLs (row stays stub).
+- Review fixes: tests moved not copied, unchecked brain-drain clips no longer offered (fallback works), settings test GETs the offered clip, parity row cites in-tree evidence.
