@@ -38,6 +38,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class BubbleOverlay
     {
+        // WPF OverlayService:3053-3079 (#1041): the attention layer is re-raised while a topmost browser is fullscreen.
+        internal static void RaiseForBrowserFullscreen()
+        {
+            foreach (var w in Windows) X11Overlay.Raise(w);
+        }
+
         internal static readonly AmbientBubbleField Field = new();
         private static readonly List<BubbleOverlayWindow> Windows = new();
         private static readonly List<Screen> Targets = new();

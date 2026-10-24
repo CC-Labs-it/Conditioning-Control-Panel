@@ -87,6 +87,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private Window? _browserFsEscapeTarget;
         private DispatcherTimer? _browserOverlayTimer;
         internal bool BrowserOverlayReasserting => _browserOverlayTimer?.IsEnabled == true;
+        internal TimeSpan? BrowserOverlayInterval => _browserOverlayTimer?.Interval;
+        /// <summary>Tests step the refresh timer's tick here instead of waiting on a real clock (P08).</summary>
+        internal void TickBrowserOverlayTimerForTests() { if (BrowserOverlayReasserting) ReassertBrowserOverlayOrder(); }
 
         // WPF BrowserService:563 / OverlayService:121 (#1041): force a pass after raising the
         // browser, then every 500 ms while it is fullscreen. No native desktop access in tests.
@@ -95,6 +98,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.RaiseForBrowserFullscreen();
             SpiralOverlay.RaiseForBrowserFullscreen();
             CornerGifOverlay.RaiseForBrowserFullscreen();
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.RaiseForBrowserFullscreen();
+            SubliminalOverlay.RaiseForBrowserFullscreen();
+            BubbleOverlay.RaiseForBrowserFullscreen();
         };
 
         private void ReassertBrowserOverlayOrder()

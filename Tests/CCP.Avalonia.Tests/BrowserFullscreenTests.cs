@@ -128,7 +128,7 @@ public sealed class BrowserFullscreenTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public Task FullscreenRefreshesOverlayOrderAndStopsRefreshingOnExitOrClose(bool popout) => WithShell(async (shell, page, host) =>
+    public Task FullscreenRefreshesOverlayOrderAndStopsRefreshingOnExitOrClose(bool popout) => WithShell((shell, page, host) =>
     {
         var passes = 0;
         shell.ReassertBrowserOverlays = () => passes++;
@@ -137,14 +137,15 @@ public sealed class BrowserFullscreenTests
         host.OnWebMessage(MainShellWindow.BrowserFullscreenOnMessage);
         Dispatcher.UIThread.RunJobs();
         Assert.True(shell.BrowserOverlayReasserting);
+        Assert.Equal(TimeSpan.FromMilliseconds(500), shell.BrowserOverlayInterval); // WPF OverlayService:121
         Assert.True(passes > 0);
         var initial = passes;
-        await Task.Delay(650);
-        Assert.True(passes > initial); // a real dispatcher timer pass, beyond the immediate notification
+        shell.TickBrowserOverlayTimerForTests();
+        Assert.Equal(initial + 1, passes); // one timer tick, one pass
         shell.BrowserPopoutWindow!.Close();
         Assert.False(shell.BrowserOverlayReasserting);
         var after = passes;
-        await Task.Delay(650);
+        shell.TickBrowserOverlayTimerForTests();
         Assert.Equal(after, passes);
     });
 

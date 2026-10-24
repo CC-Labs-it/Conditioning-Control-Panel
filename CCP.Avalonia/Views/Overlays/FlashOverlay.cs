@@ -37,6 +37,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal static class FlashOverlay
     {
+        // WPF OverlayService:3053-3079 (#1041): the attention layer is re-raised while a topmost browser is fullscreen.
+        internal static void RaiseForBrowserFullscreen()
+        {
+            foreach (var w in Active) X11Overlay.Raise(w.Window);
+        }
+
         // FlashService.ResolveFlashCap on the default (compositor) path.
         private const int MaxConcurrent = 30;
         private const int StaggerMs = 300;
