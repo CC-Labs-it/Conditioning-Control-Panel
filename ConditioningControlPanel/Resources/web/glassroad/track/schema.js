@@ -204,6 +204,7 @@ export function validate(t) {
           if (!h || !isStr(h.id) || stones.has(h.id)) { err(at + ' stones need unique ids'); continue; }
           stones.add(h.id);
           const hex = h.shape === 'hex', maxW = hex ? 32 : 8, maxLen = hex ? 40 : 12;
+          if (h.spin !== undefined && (!hex || !isNum(h.spin) || Math.abs(h.spin) > 0.12)) err(at + ' stone spin requires a hex and at most 0.12 rad/s');
           if ((h.shape !== undefined && !hex) || !inRange(h.node) || h.node < c.from || h.node >= c.to || !isNum(h.x) || !isNum(h.w) || h.w < 3 || h.w > maxW || !isNum(h.len) || h.len < 3 || h.len > maxLen ||
               (h.ds !== undefined && (!isNum(h.ds) || h.ds < 0))) { err(at + ' stone ' + h.id + ' needs an in-field node, x, valid shape, w in 3..' + maxW + ', len in 3..' + maxLen + ' and ds >= 0'); continue; }
           if (Math.abs(h.x) + h.w / 2 > nodes[h.node].w / 2) err(at + ' stone ' + h.id + ' leaves the road footprint');

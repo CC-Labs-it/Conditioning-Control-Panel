@@ -27,7 +27,7 @@ export function buildWaterVolume(track, pal, art = null) {
   const tex = id => art?.detail?.(id) || art?.tex?.(id + (Q.name === 'phone' ? '-phone' : '')) || null;
   const normal = tex('water-normal'), foam = tex('water-foam-mask'), sheet = tex('waterfall-sheet'), phase = tex('waterfall-phase-mask');
   for (const run of runs) {
-    const rows = Math.max(1, Math.ceil((run.toS - run.fromS) / L.stepM)), columns = 8;
+    const rows = Math.max(1, Math.ceil((run.toS - run.fromS) / L.stepM)), columns = 16;
     let previous = null;
     for (let row = 0; row <= rows; row++) {
       const s = run.fromS + (run.toS - run.fromS) * row / rows, f = track.frameAt(s), half = waterHalfWidth(track, s, f), ids = [];
@@ -54,15 +54,23 @@ export function buildWaterVolume(track, pal, art = null) {
     }
   }
   for (const spill of spills) {
-    const rows = Math.max(2, Math.ceil((spill.toS - spill.fromS) / 1.5));
-    for (let row = 0; row < rows; row++) {
-      const base = fall.p.length / 3;
-      for (const t of [row / rows, (row + 1) / rows]) {
-        const e = edgePoint(track, spill.fromS + (spill.toS - spill.fromS) * t, spill.side);
-        vertex(fall, e.p, t, 0, 0);
-        vertex(fall, [e.p[0] + e.f.b[0] * spill.side * 0.65, e.p[1] - spill.dropM, e.p[2] + e.f.b[2] * spill.side * 0.65], t, spill.dropM, 1);
+    const rows = Math.max(2, Math.ceil((spill.toS - spill.fromS) / 1.5)), drops = 12;
+    for (let layer = 0; layer < 2; layer++) {
+      let previous = null;
+      for (let row = 0; row <= rows; row++) {
+        const t = row / rows, e = edgePoint(track, spill.fromS + (spill.toS - spill.fromS) * t, spill.side), ids = [];
+        for (let d = 0; d <= drops; d++) {
+          const depth = d / drops;
+          const bow = Math.sin(depth * Math.PI * 0.6) * 2.6 + layer * 0.65 * depth;
+          const fold = Math.sin(t * 43 + depth * 8 + layer * 2) * 0.42 * depth;
+          const bridge = Math.min(1, depth * 12) * 1.4;
+          const outward = (bridge + bow + fold) * spill.side;
+          ids.push(vertex(fall, [e.p[0] + e.f.b[0] * outward, e.p[1] - spill.dropM * depth,
+            e.p[2] + e.f.b[2] * outward], t, depth * spill.dropM, depth));
+          if (previous && d) quad(fall, previous[d - 1], previous[d], ids[d - 1], ids[d]);
+        }
+        previous = ids;
       }
-      quad(fall, base, base + 1, base + 2, base + 3);
     }
   }
   function add(g, mat, name, order) { if (!g.index.length) { mat.dispose(); return; } const mesh = new Mesh(geometry(g), mat); mesh.name = name; mesh.renderOrder = order; object.add(mesh); }
@@ -72,12 +80,14 @@ export function buildWaterVolume(track, pal, art = null) {
   // Broad moving crests cross the whole current; the existing foam mask breaks their edges.
   const travel = uv().y.sub(u.t.mul(attribute('flow', 'vec2').x.abs().add(1.4)));
   const foamSample = foam ? texture(foam, vec2(uv().x.mul(0.24), travel.mul(0.18))).r : float(0.65);
-  const crestPhase = travel.mul(1.7).add(sin(uv().x.mul(0.72)).mul(1.1));
+  const crestPhase = travel.mul(0.65).add(sin(uv().x.mul(0.43)).mul(1.8));
   const crest = smoothstep(0.65, 0.96, sin(crestPhase)).mul(foamSample.mul(0.75).add(0.25));
-  skin.colorNode = surface.colour.mul(0.68).add(vec3(0.9, 0.98, 1).mul(crest).mul(0.58).mul(u.motion));
-  skin.opacityNode = surface.alpha.mul(0.9);
+  const bank = float(1).sub(smoothstep(0.3, 4.5, attribute('aWaterEdge', 'float')));
+  skin.colorNode = surface.colour.mul(0.42).add(vec3(0.025, 0.055, 0.09)).add(vec3(0.85, 0.96, 1).mul(crest).mul(bank.mul(0.5).add(0.12)).mul(u.motion));
+  skin.opacityNode = float(0.97);
   const wave = sin(uv().y.mul(0.9).sub(u.t.mul(1.3))).mul(sin(uv().x.mul(1.1).add(u.t.mul(0.5)))).mul(L.waveM).mul(u.motion);
-  skin.positionNode = positionLocal.add(vec3(0, wave, 0));
+  const roller = sin(crestPhase).mul(0.5).add(0.5).pow(3).mul(bank).mul(0.85).mul(u.motion);
+  skin.positionNode = positionLocal.add(vec3(0, wave.add(roller), 0));
   // Transparent water follows the road (0), then wakes (1) and spray (2) composite above it.
   add(top, skin, 'water-surface-raised', 0.5);
   const body = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
@@ -89,8 +99,9 @@ export function buildWaterVolume(track, pal, art = null) {
   const p = uv(), moving = vec2(p.x, p.y.div(12).sub(u.t.mul(0.65))), streak = sheet ? texture(sheet, moving).r : pow(sin(p.x.mul(100).add(p.y.mul(0.3)).sub(u.t.mul(3))).mul(0.5).add(0.5), 2);
   const foamPhase = phase ? texture(phase, moving).r : float(0.5);
   const edge = smoothstep(0, 0.06, p.x).mul(float(1).sub(smoothstep(0.94, 1, p.x))), fade = float(1).sub(smoothstep(0.7, 1, attribute('aWaterEdge', 'float')));
-  curtain.colorNode = pal.col(1).mul(0.45).add(vec3(0.8, 0.95, 1).mul(streak.mul(0.65).add(foamPhase.mul(0.2))));
-  curtain.opacityNode = streak.mul(0.6).add(0.22).mul(edge).mul(fade); add(fall, curtain, 'water-spills-into-void', 0.75);
+  curtain.colorNode = pal.col(1).mul(0.18).add(vec3(0.45, 0.7, 0.85).mul(streak.mul(0.95).add(foamPhase.mul(0.35))));
+  curtain.positionNode = positionLocal.add(vec3(sin(p.y.mul(0.8).sub(u.t.mul(2.1))).mul(0.18), 0, sin(p.y.mul(0.6).add(u.t.mul(1.7))).mul(0.18)).mul(attribute('aWaterEdge', 'float')).mul(u.motion));
+  curtain.opacityNode = streak.mul(0.5).add(0.3).mul(edge).mul(fade); add(fall, curtain, 'water-spills-into-void', 0.75);
   return { object, uniforms: u, runs, spills, stats: { runs: runs.length, spills: spills.length, vertices: (top.p.length + wall.p.length + fall.p.length) / 3 },
     update(dt, { gentle = false, paused = false, scroll = gentle ? 0.5 : 1 } = {}) { if (paused) return; u.t.value += Math.max(0, dt) * scroll; u.motion.value = gentle ? 0.5 : 1; },
     dispose() { for (const child of object.children) { child.geometry.dispose(); child.material.dispose(); } object.clear(); },

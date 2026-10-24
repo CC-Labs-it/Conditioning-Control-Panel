@@ -213,7 +213,7 @@ export function createAi(track, feel, { seed = 1 } = {}) {
       const clearM = feelOr('stones.clearGapM', 4) + 0.5, v = feelOr('stones.minClearMps', 14);
       const entryM = Math.sqrt(2 * gap(feel, 'kart.snapM') / feelOr('hop.gravityMps2', 28)) * v;
       const safe = f.lanes.filter((lx) => {
-        const rows = (f.stones || []).filter((st) => st && Number.isFinite(st.s))
+        const rows = (f.stones || []).filter((st) => st && !st.spin && Number.isFinite(st.s))
           .map((st) => stoneLaneSpan(st, lx, st.shape === 'hex' ? 0.7 : 0)).filter(Boolean).sort((a, b) => a[0] - b[0]);
         if (!rows.length) return false;
         if (rows[0][0] - f.fromS > entryM) return false;

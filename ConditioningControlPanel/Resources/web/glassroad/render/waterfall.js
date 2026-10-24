@@ -73,7 +73,7 @@ export function createWaterfall(track, pal, { particles = null, wakes = null, L 
   function spray(pt, gentle, mul = 1) {
     if (!particles) return;
     particles.burst(pt.p, Math.round(L.sprayCount * few(gentle) * mul), { family: 'melt', colours: SPRAY_COLOURS, speed: L.spraySpeedMps * (pt.lip ? 1 : 0.7),
-      sizeM: 0.16, lifeS: 0.55, sparkle: 0.25, up: pt.lip ? 2.2 : 1.4, g: 0.9 });
+      sizeM: 0.36, lifeS: 0.85, sparkle: 0.25, up: pt.lip ? 2.2 : 1.4, g: 0.9 });
   }
   /** Advance the streak clock (scroll = the Gentle share) and the spray timer; playerPos gates the spray. */
   function update(dt, { playerPos = null, gentle = false, paused = false, scroll = 1 } = {}) {
@@ -95,13 +95,13 @@ export function createWaterfall(track, pal, { particles = null, wakes = null, L 
     const n = payload.normal || f.n;
     const p = payload.p || (track.surfaceAt ? f.p : f.p.map((v, k) => v + f.b[k] * x));
     rotation.setFromUnitVectors(up, normal.fromArray(n).normalize());
-    return { p: p.map((v, k) => v + n[k] * 0.13), q: rotation };
+    return { p: p.map((v, k) => v + n[k] * 0.22), q: rotation };
   }
   function splash({ s = 0, x = 0, down = 0, kind = 'land', ...payload } = {}, gentle = false) {
     if (!track || !track.frameAt) return;
     const pt = contact(s, x, payload), hop = kind === 'hop';
     if (wakes) wakes.ring(pt.p, pt.q, splashRingM(down, L) * (hop ? 0.65 : 1), { gentle, colour: '#ffffff', gain: LOOK.ringGain * 0.9 });
-    if (particles) particles.burst(pt.p, Math.round(L.splashCount * few(gentle) * (hop ? 0.65 : 1.5)), { family: 'melt', colours: SPRAY_COLOURS, speed: hop ? 2 : 3.8, sizeM: 0.2, lifeS: 0.7, sparkle: 0, up: hop ? 1.8 : 3.3, g: 0.9 });
+    if (particles) particles.burst(pt.p, Math.round(L.splashCount * few(gentle) * (hop ? 0.65 : 1.5)), { family: 'melt', colours: SPRAY_COLOURS, speed: hop ? 2 : 3.8, sizeM: 0.85, lifeS: 1.1, sparkle: 0, up: hop ? 2.4 : 4.8, g: 0.9 });
   }
   /** Pooled spray follows actual wet contacts, including lateral drift on curved banks. */
   function kart(i, st, dt, { gentle = false, visible = true, paused = false } = {}) {
@@ -116,12 +116,12 @@ export function createWaterfall(track, pal, { particles = null, wakes = null, L 
     memory.spray = 0;
     for (const side of [-1, 1]) {
       const x = Math.max(-f.w / 2 + 0.1, Math.min(f.w / 2 - 0.1, st[S.lateral] + side * LOOK.saucerR * 1.15));
-      const pt = contact(s - Math.min(1.1, speed * 0.04), x);
-      particles?.burst(pt.p, Math.round((drifting ? 6 : 3) * few(gentle)), { family: 'melt', colours: SPRAY_COLOURS, speed: drifting ? 3.2 : 1.8, sizeM: drifting ? 0.25 : 0.19, lifeS: drifting ? 0.8 : 0.65, sparkle: 0, up: drifting ? 2.2 : 1.4, g: 0.9 });
+      const pt = contact(s + 1.2, x);
+      particles?.burst(pt.p, Math.round((drifting ? 12 : 7) * few(gentle)), { family: 'melt', colours: SPRAY_COLOURS, speed: drifting ? 4.8 : 3.5, sizeM: drifting ? 0.85 : 0.6, lifeS: drifting ? 0.85 : 0.7, sparkle: 0, up: drifting ? 4.2 : 2.8, g: 0.9 });
     }
     if (memory.ring >= (drifting ? 0.24 : 0.45)) {
       memory.ring = 0; const pt = contact(s, st[S.lateral]);
-      wakes?.ring(pt.p, pt.q, drifting ? 2.1 : 1.5, { gentle, colour: '#ffffff', lifeS: 0.6, gain: LOOK.ringGain * 0.24 });
+      wakes?.ring(pt.p, pt.q, drifting ? 2.1 : 1.5, { gentle, colour: '#ffffff', lifeS: 0.6, gain: LOOK.ringGain * 0.55 });
     }
   }
   /** CONTRACT `chute { s }`: the lip nearest s sprays at once. */

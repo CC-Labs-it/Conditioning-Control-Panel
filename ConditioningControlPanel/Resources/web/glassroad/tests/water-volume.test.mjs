@@ -33,7 +33,7 @@ test('water volume has shallow raised surface, visible depth and curtains fallin
   const top = positions('water-surface-raised'), side = positions('water-visible-depth'), fall = positions('water-spills-into-void');
   for (let i = 0; i < top.count; i++) assert.ok(Math.abs(top.getY(i) - 5.1) < 0.00001);
   assert.ok(WATER_VOLUME.liftM + WATER_VOLUME.waveM <= 0.15);
-  assert.ok(Math.abs(Math.min(...Array.from({ length: side.count }, (_, i) => side.getY(i))) - 3.7) < 0.00001);
+  assert.ok(Math.abs(Math.min(...Array.from({ length: side.count }, (_, i) => side.getY(i))) - 2.7) < 0.00001);
   assert.ok(Math.min(...Array.from({ length: fall.count }, (_, i) => fall.getY(i))) < -8.8);
   water.update(1); assert.equal(water.uniforms.t.value, 1);
   water.update(1, { paused: true }); assert.equal(water.uniforms.t.value, 1);
@@ -71,5 +71,5 @@ test('pooled water spray follows curved contacts and is silent in the air, durin
   st[S.respawnPhase] = 1; water.kart(0, st, 0.25);
   assert.equal(bursts.length, before);
   water.splash({ s: 10, x: 3, p: [100, 30, 20], normal: [0, 1, 0], down: 7 });
-  assert.deepEqual(bursts.at(-1)[0], [100, 30.13, 20], 'real simulation contact wins over reconstructed frame');
+  assert.deepEqual(bursts.at(-1)[0], [100, 30.22, 20], 'real simulation contact wins over reconstructed frame');
 });

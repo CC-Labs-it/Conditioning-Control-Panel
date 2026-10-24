@@ -14,7 +14,7 @@ const track = loadTrack(json);
 test('Mainframe is reproducible, closed, spacious and has three distinct acts', () => {
   assert.deepEqual(json, built.track);
   assert.deepEqual(validate(json), { ok: true, errors: [], warnings: [] });
-  assert.ok(track.lengthM >= 4800 && track.lengthM <= 4900);
+  assert.ok(track.lengthM >= 7500 && track.lengthM <= 7650);
   assert.equal(new Set(track.sections.map(section => section.act)).size, 3);
   assert.ok(json.nodes.every(n => n.w >= 24));
   assert.ok(Math.max(...json.nodes.map(n => n.p[1])) >= 86);
@@ -53,18 +53,32 @@ test('Mainframe memory tiles start supported in every lane and meet the exit dec
   const field = track.fields[0];
   assert.ok(field.toS - field.fromS >= 350);
   assert.equal(field.lanes.length, 5);
-  assert.ok(field.stones.every(stone => stone.shape === 'hex' && stone.w >= 20));
+  assert.ok(field.stones.every(stone => stone.shape === 'hex' && stone.w >= 16));
   assert.ok(track.frameAt(field.fromS).w >= 100);
   for (const x of field.lanes) {
     assert.ok(stoneIn(field, field.fromS + 0.1, x));
     const lane = field.stones.filter(stone => stone.x === x).sort((a, b) => a.s - b.s);
     assert.ok(Math.abs(field.toS - (lane.at(-1).s + lane.at(-1).len)) <= 0.01);
-    for (let i = 1; i < lane.length; i++) assert.ok(lane[i].s - lane[i - 1].s - lane[i - 1].len <= 2.01);
+    for (let i = 1; i < lane.length; i++) {
+      const gap = lane[i].s - lane[i - 1].s - lane[i - 1].len;
+      assert.ok(gap >= 3.99 && gap <= 4.01, 'visible but forgiving four-metre gaps');
+    }
   }
+});
+test('Mainframe islands expose void between lanes instead of overlapping into a floor', () => {
+  const field = track.fields[0];
+  const first = field.stones.filter(stone => stone.s === field.fromS);
+  assert.equal(first.length, 5);
+  for (let i = 1; i < first.length; i++) {
+    const x = (first[i].x + first[i - 1].x) / 2;
+    assert.equal(stoneIn(field, field.fromS + first[i].len / 2, x), null);
+    assert.ok(first[i].x - first[i - 1].x - (first[i].w + first[i - 1].w) / 2 >= 2);
+  }
+  assert.equal(field.stones.filter(stone => stone.id.startsWith('memory-link')).length, 26);
 });
 for (const seed of [1, 241023, 20261024]) test('Mainframe full starting grid finishes all three laps, seed ' + seed, () => {
   const run = makeRace({ track, seed });
-  run.run(720, () => run.racers.list.every(racer => racer.finished));
+  run.run(1200, () => run.racers.list.every(racer => racer.finished));
   assert.ok(run.racers.list.every(racer => racer.finished && racer.st[S.lap] === 3), JSON.stringify(run.racers.list.map(r => ({ i: r.i, s: r.st[S.s], lap: r.st[S.lap], falls: r.falls }))));
   assert.ok(run.racers.list.every(r => r.falls === 0), 'no rescues needed by the starting grid');
 });

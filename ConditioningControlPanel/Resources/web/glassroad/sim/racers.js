@@ -16,6 +16,7 @@ import { createProgress } from './progress.js';
 import { createActions } from '../core/actions.js';
 import { clamp } from '../core/math.js';
 import { gap } from './gaps.js';
+import { updateStoneMotion } from '../track/stoneMotion.js';
 
 const DEG = Math.PI / 180;
 const has = Object.prototype.hasOwnProperty;
@@ -86,6 +87,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
   }
 
   function place() {
+    updateStoneMotion(track.fields, 0, false, true);
     racers.clockS = 0;
     for (const r of list) {
       spawn(r.st, track, feel, r.meta.slot);
@@ -105,6 +107,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
   function step(dt, a, race, ctx = {}) {
     const { ai = null, items = null, standings = null } = ctx;
     const live = race.phase === 'racing' || race.phase === 'finished';
+    if (live) updateStoneMotion(track.fields, dt, !!feel.get('gentle.on'));
     if (race.phase === 'racing') racers.clockS = race.timeS;
     else if (race.phase === 'finished') racers.clockS += dt;
     const aiCtx = { racers: list, items, standings, race };

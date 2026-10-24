@@ -1,17 +1,21 @@
 {
   "track": "mainframe",
   "billboards": [
-    { "id": "mf-bb-05", "f": 0.05, "side": 1, "kind": "landscape", "heightM": 10, "offM": 7, "liftM": 2, "angleDeg": 30, "program": 0, "phone": true },
-    { "id": "mf-bb-13", "f": 0.13, "side": -1, "kind": "portrait", "heightM": 13, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 3, "phone": true },
-    { "id": "mf-bb-22", "f": 0.22, "side": 1, "kind": "landscape", "heightM": 11, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 0, "phone": false },
-    { "id": "mf-bb-31", "f": 0.31, "side": -1, "kind": "landscape", "heightM": 10, "offM": 9, "liftM": 3, "angleDeg": 30, "program": 3, "phone": true },
-    { "id": "mf-bb-41", "f": 0.41, "side": 1, "kind": "portrait", "heightM": 13, "offM": 9, "liftM": 2, "angleDeg": 30, "program": 0, "phone": false },
-    { "id": "mf-bb-53", "f": 0.53, "side": -1, "kind": "landscape", "heightM": 11, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 3, "phone": true },
-    { "id": "mf-bb-62", "f": 0.68, "side": 1, "kind": "portrait", "heightM": 13, "offM": 9, "liftM": 2, "angleDeg": 30, "program": 0, "phone": false },
-    { "id": "mf-bb-73", "f": 0.80, "side": -1, "kind": "landscape", "heightM": 10, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 3, "phone": true },
-    { "id": "mf-bb-84", "f": 0.84, "side": 1, "kind": "landscape", "heightM": 11, "offM": 9, "liftM": 2, "angleDeg": 30, "program": 0, "phone": false },
-    { "id": "mf-bb-96", "f": 0.96, "side": -1, "kind": "portrait", "heightM": 13, "offM": 8, "liftM": 2, "angleDeg": 30, "program": 3, "phone": true }
+    {"id":"mf-bb-05","f":0.0319829,"side":1,"kind":"landscape","heightM":10,"offM":7,"liftM":2,"angleDeg":30,"program":0,"phone":true},
+    {"id":"mf-bb-13","f":0.0831555,"side":-1,"kind":"portrait","heightM":13,"offM":8,"liftM":2,"angleDeg":30,"program":3,"phone":true},
+    {"id":"mf-bb-22","f":0.1407247,"side":1,"kind":"landscape","heightM":11,"offM":8,"liftM":2,"angleDeg":30,"program":0,"phone":false},
+    {"id":"mf-bb-31","f":0.1982939,"side":-1,"kind":"landscape","heightM":10,"offM":9,"liftM":3,"angleDeg":30,"program":3,"phone":true},
+    {"id":"mf-bb-41","f":0.2622597,"side":1,"kind":"portrait","heightM":13,"offM":9,"liftM":2,"angleDeg":30,"program":0,"phone":false},
+    {"id":"mf-bb-53","f":0.3390187,"side":-1,"kind":"landscape","heightM":11,"offM":8,"liftM":2,"angleDeg":30,"program":3,"phone":true},
+    {"id":"mf-bb-62","f":0.7953095,"side":1,"kind":"portrait","heightM":13,"offM":9,"liftM":2,"angleDeg":30,"program":0,"phone":false},
+    {"id":"mf-bb-73","f":0.8720684,"side":-1,"kind":"landscape","heightM":10,"offM":8,"liftM":2,"angleDeg":30,"program":3,"phone":true},
+    {"id":"mf-bb-84","f":0.8976547,"side":1,"kind":"landscape","heightM":11,"offM":9,"liftM":2,"angleDeg":30,"program":0,"phone":false},
+    {"id":"mf-bb-96","f":0.9744137,"side":-1,"kind":"portrait","heightM":13,"offM":8,"liftM":2,"angleDeg":30,"program":3,"phone":true},
+    {"id":"mf-bus-0","f":0.419107,"side":-1,"kind":"landscape","heightM":10,"offM":7,"liftM":2,"angleDeg":30,"program":0,"phone":true},
+    {"id":"mf-bus-1","f":0.4521596,"side":1,"kind":"portrait","heightM":13,"offM":8,"liftM":2,"angleDeg":30,"program":3,"phone":true},
+    {"id":"mf-bus-2","f":0.6372542,"side":-1,"kind":"landscape","heightM":11,"offM":8,"liftM":2,"angleDeg":30,"program":0,"phone":false},
+    {"id":"mf-bus-3","f":0.6597911,"side":1,"kind":"landscape","heightM":10,"offM":9,"liftM":3,"angleDeg":30,"program":3,"phone":true}
   ],
-  "halo": { "f": 0, "count": 10, "kind": "landscape", "heightM": 7, "radiusM": 23, "upM": 24, "tiltDeg": 40, "orbitRadps": 0.05 },
-  "tunnel": { "from": 0.91, "to": 0.935, "stepM": 12, "padM": 3.5, "heightM": 12, "wallDeg": 30, "facingDeg": 28, "wallKind": "landscape", "wallHeightM": 4, "ceilKind": "landscape", "ceilHeightM": 5 }
+  "halo": {"f":0,"count":10,"kind":"landscape","heightM":7,"radiusM":23,"upM":24,"tiltDeg":40,"orbitRadps":0.05},
+  "tunnel": {"from":0.9424308,"to":0.9584222,"stepM":12,"padM":3.5,"heightM":12,"wallDeg":30,"facingDeg":28,"wallKind":"landscape","wallHeightM":4,"ceilKind":"landscape","ceilHeightM":5}
 }

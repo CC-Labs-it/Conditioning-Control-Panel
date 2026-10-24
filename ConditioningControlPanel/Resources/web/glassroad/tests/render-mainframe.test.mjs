@@ -19,6 +19,18 @@ hooks.deregister();
 const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8')));
 const mediaLayout = JSON.parse(readFileSync(new URL('../tracks/mainframe.media.json', import.meta.url), 'utf8'));
 
+test('floating processor motion stays inside clear bounds and freezes on pause', () => {
+  const samples = sampleTrack(track, 4), world = buildMainframe(track, null, { samples, mediaLayout });
+  assert.ok(world.floating.sites.length >= 10);
+  for (const site of world.floating.sites) assert.ok(bodyClear(site.capsule, samples).ok);
+  const body = world.floating.group.getObjectByName('floating-processor-body');
+  const original = [...body.instanceMatrix.array]; world.update(1, {});
+  assert.notDeepEqual([...body.instanceMatrix.array], original);
+  const moved = [...body.instanceMatrix.array]; world.update(2, { paused: true });
+  assert.deepEqual([...body.instanceMatrix.array], moved);
+  world.dispose();
+});
+
 test('reactor placement follows a translated course and preserves the inner racing clearance', () => {
   const json = JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8'));
   const delta = [800, 37, -250]; json.nodes.forEach(n => { n.p = n.p.map((v, k) => v + delta[k]); });
@@ -74,7 +86,8 @@ test('spill edges and the hex gallery void stay open below the driving surface',
   for (const section of track.sections.filter(s => /spillway|coolant-chute/.test(s.id))) {
     for (let s = section.fromS + 12; s < section.toS - 12; s += 24) for (const side of [-1, 1]) check(s, side * (track.frameAt(s).w / 2 + 0.4), 5);
   }
-  for (const field of track.fields) for (let s = field.fromS + 12; s < field.toS - 12; s += 24) check(s, 0, 3.2);
+  for (const field of track.fields) for (let s = field.fromS + 12; s < field.toS - 12; s += 24)
+    for (const x of [-40, 0, 40]) check(s, x, 160);
   world.dispose();
 });
 
@@ -150,9 +163,11 @@ test('three real Loom displays are built once, clear every road and respect paus
     { ...WORLD_DEFAULTS, sideM: 1, underM: 1 }).ok);
   const disc = world.displays[0].disc, initialDraws = draws;
   world.update(1, { paused: true }); assert.equal(disc.rotation.z, 0);
-  world.update(1, {}, true); assert.equal(disc.rotation.z, 0.045);
-  world.update(1, {}, false); assert.equal(disc.rotation.z, 0.135);
-  assert.equal(draws, initialDraws, 'rotation does not redraw or upload another canvas frame');
+  assert.equal(draws, initialDraws, 'pause freezes canvas evolution as well as mesh rotation');
+  world.update(1, {}, true); assert.equal(disc.rotation.z, 0.18);
+  world.update(1, {}, false); assert.equal(disc.rotation.z, 0.63);
+  assert.ok(draws > initialDraws, 'Loom arms evolve as well as turning');
+  assert.equal(new Set(world.displays.map(d => d.tex)).size, 3);
   world.dispose();
 });
 

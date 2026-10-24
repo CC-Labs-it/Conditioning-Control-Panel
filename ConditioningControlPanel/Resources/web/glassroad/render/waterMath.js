@@ -23,12 +23,12 @@ export const WATER_LOOK = Object.freeze({
   chuteGradeDeg: 25,            // a stream node steeper than this is a chute (SIM's water.chuteGradeDeg twin)
   sheetLiftM: 0.12, sheetOverM: 0.35, sheetRunM: 2.5,   // shallow water stays close to the physical contact plane
   streakM: 2.6, streakW: 0.45, sheetSpeedMps: 9, sheetAlpha: 0.4,
-  sprayEveryS: 0.24, sprayNearM: 70, sprayCount: 3, spraySpeedMps: 2.4,
+  sprayEveryS: 0.24, sprayNearM: 70, sprayCount: 7, spraySpeedMps: 3.8,
   wakeWidthMul: 1.8, wakeWhite: 0.65,
-  splashRingM: [2.2, 5.5], splashDownMps: [2, 12], splashCount: 14,
+  splashRingM: [3.2, 7.5], splashDownMps: [2, 12], splashCount: 26,
 });
 
-export const WATER_VOLUME = Object.freeze({ liftM: 0.1, waveM: 0.025, depthM: 1.4, stepM: 2, spillDropM: 16 });
+export const WATER_VOLUME = Object.freeze({ liftM: 0.1, waveM: 0.045, depthM: 2.4, stepM: 2, spillDropM: 16 });
 
 /** Wet stretches with physical support. The reservoir renderer owns submerged waterlines. */
 export function waterRuns(track) {

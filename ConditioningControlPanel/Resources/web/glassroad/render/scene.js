@@ -283,6 +283,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     on('go', () => ['p4', 0, 'go', {}]);
     on('racer-event', ({ racer = -1, name, p = {} }) => (P4_EVENTS.has(name) ? ['p4', racer, name, p] : [name === 'water-hop' ? 'splash' : name, racer, (p && p.tier) || 0, p]));
     on('bump', (p) => ['bump', p.a, p.dv || 0, p.p, p.b]);
+    on('bubble-ram', (p) => ['ram', p.attacker, 0, p.p, p.victim]);
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
     on('item-box', (p) => ['box', p.racer, 0, p.p]);
     on('item-hit', (p) => ['hit', p.victim, p.verdict, p.p, p.kind]);
@@ -301,6 +302,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (kind === 'chute') { if (waterfall) waterfall.chute(p || {}, gentle); return; }
     if (kind === 'stone') { if (obj && obj.visible) wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[0], { gentle, gain: LOOK.ringGain * 0.4 }); return; }
     if (kind === 'void') return;
+    if (kind === 'ram') {
+      particles.burst(p, Math.round(42*few), { colours: ['#adfff1','#5cd8ff','#ffffff'], speed: 9, up: 3, sparkle: 0.8, near: i===0 || b===0 });
+      if(obj) wakes.ring(p,obj.quaternion,3.5,{gentle,gain:0.8});
+      return;
+    }
     if (kind === 'p4') {
       if (k && obj && obj.visible) {
         particles.event(obj, k.mem, a, p, { mul: i ? LOOK.botSparkMul : 1 });
@@ -454,6 +460,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (scatter) scatter.update(dt, scroll);
     if (colossi) colossi.update(dt, scroll);
     if (mainframe) mainframe.update(dt, view, gentle);
+    if (stones) stones.update(dt, { paused: !!view.paused, gentle });
     rails.uniforms.flow.value = road.uniforms.phase.value;
     if (shadows && view.camera) { view.camera.layers.enable(CATCH_LAYER); view.camera.getWorldDirection(FWD); shadows.update(view.camera.position, FWD); }
 

@@ -11,6 +11,7 @@ import { Group, InstancedMesh, BoxGeometry, BufferGeometry, Float32BufferAttribu
 import { vec3, normalize, normalWorld, dot, clamp, mix } from 'three/tsl';
 import { LOOK } from './look.js';
 import { STONE_HEX } from '../track/courts.js';
+import { createStoneHover } from './stoneHover.js';
 
 export const STONE_KIT = Object.freeze({ modelId: 'stone-threshold', deckM: 0.55, slab: Object.freeze([5, 0.8, 5]),
   rim: '#f3e2ce', brass: '#cda15f' });
@@ -26,7 +27,7 @@ export function stoneLayout(track, deckM = STONE_KIT.deckM) {
       for (let k = 0; k < tiles; k++) {
         const s = st.s + len * (k + 0.5), f = track.frameAt(s);
         rows.push({ id: tiles > 1 ? st.id + ':' + k : st.id, stone: st.id, tile: k, tiles, field: field.id, s, x: st.x, w: st.w, len,
-          shape: st.shape, scaleT: len / tileM,
+          shape: st.shape, source: st, scaleT: len / tileM,
           p: f.p.map((v, i) => v + f.b[i] * st.x - f.n[i] * (hex ? 0 : deckM)), b: [...f.b], n: [...f.n], t: [...f.t], w2: f.w });
       }
     }
@@ -80,6 +81,7 @@ export function buildStones(track, art, pal) {
   const group = new Group(); group.name = 'stepping-stones';
   const rows = stoneLayout(track), hexes = rows.filter((r) => r.shape === 'hex'), tiled = rows.filter((r) => r.shape !== 'hex'), owned = [], geometries = [];
   const basis = new Matrix4(), rotation = new Quaternion();
+  const hexMeshes = [], spin = new Quaternion(), up = new Vector3(0,1,0);
   const x = new Vector3(), y = new Vector3(), z = new Vector3();
   const model = tiled.length && art && typeof art.model === 'function' ? art.model(track.id === 'mainframe' ? 'stone-mainframe' : STONE_KIT.modelId) : null;
   let mode = 'none';
@@ -140,13 +142,30 @@ export function buildStones(track, art, pal) {
         matrix.compose(position.fromArray(r.p), rotation, scale.set(r.w, 1, r.len)); mesh.setMatrixAt(i, matrix);
       });
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); mesh.castShadow = true; group.add(mesh);
+      hexMeshes.push(mesh); mesh.boundingSphere.radius += 12;
     }
   }
+  const hover = track.id === 'mainframe' && hexes.length ? createStoneHover(hexes) : null;
+  if (hover) group.add(hover.object);
+  const matrix = new Matrix4(), position = new Vector3(), scale = new Vector3();
   let disposed = false;
   return { group, rows, mode, count: rows.length,
+    update(dt, { paused = false, gentle = false } = {}) {
+      if (paused || disposed) return;
+      hexes.forEach((r,i) => {
+        if (!r.source.spin) return;
+        basis.makeBasis(x.fromArray(r.b), y.fromArray(r.n), z.fromArray(r.t).negate());
+        rotation.setFromRotationMatrix(basis).multiply(spin.setFromAxisAngle(up,r.source.angle || 0));
+        matrix.compose(position.fromArray(r.p),rotation,scale.set(r.w,1,r.len));
+        for (const mesh of hexMeshes) mesh.setMatrixAt(i,matrix);
+      });
+      for (const mesh of hexMeshes) if (hexes.some(r=>r.source.spin)) mesh.instanceMatrix.needsUpdate = true;
+      hover?.update(dt, gentle);
+    },
     dispose() {
       if (disposed) return; disposed = true;
       group.removeFromParent(); group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
       geometries.forEach((g) => g.dispose()); owned.forEach((m) => m.dispose());
+      hover?.dispose();
     } };
 }

@@ -1,12 +1,13 @@
 /* Mainframe: original server-rack colossi and fixed cable conduits, built before shader warmup.
- * Static instanced architecture, one shared Loom texture. Scan timing comes from the shared sim law. */
-import { Group, Mesh, InstancedMesh, BufferGeometry, Float32BufferAttribute, BoxGeometry, CylinderGeometry, TorusGeometry, SphereGeometry, CircleGeometry, CanvasTexture, SRGBColorSpace, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, DoubleSide } from 'three/webgpu';
+ * Static instanced architecture and three animated Loom displays. Scan timing comes from the shared sim law. */
+import { Group, Mesh, InstancedMesh, BufferGeometry, Float32BufferAttribute, BoxGeometry, CylinderGeometry, TorusGeometry, SphereGeometry, CircleGeometry, Shape, Path, ShapeGeometry, CanvasTexture, SRGBColorSpace, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, DoubleSide } from 'three/webgpu';
 import { vec3, uniform, mix, texture, positionWorld, float, uv, smoothstep } from 'three/tsl';
 import { scanZones, scanPose } from '../sim/mainframeScan.js';
 import { sampleTrack, bodyClear, WORLD_DEFAULTS } from './colossiMath.js';
 import { Q } from './quality.js';
 import { createMachineMaterial, coolantCaustics } from './mainframeMaterials.js';
-import { createPlaceholder, releaseLoom } from './mediaPlaceholders.js';
+import { createLoomDisplayFrames } from './loomVariety.js';
+import { buildFloatingProcessors } from './mainframeFloat.js';
 import { mediaLook, placeBillboard, rectPoints } from './mediaMath.js';
 
 const point = (f, x, y, z = 0) => f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z);
@@ -31,6 +32,7 @@ export function reactorRoom(track) {
 export function buildMainframe(track, art, { samples = sampleTrack(track, 4), makeCanvas = null, mediaLayout = null } = {}) {
   const group = new Group(); group.name = 'mainframe';
   const geometry = new BoxGeometry(1, 1, 1), geometries = [geometry], materials = [], textures = [], rows = { shell: [], slot: [], green: [], cyan: [], floor: [], wall: [], tank: [], rib: [], amber: [] };
+  let loomFrames = null;
   const coolantTime = uniform(0), loomContrast = uniform(1), displays = [], landmarks = [];
   const room = reactorRoom(track);
   const reservoir = { waterY: track.reservoir?.waterY ?? 4,
@@ -51,8 +53,8 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   });
   const sectionAt = (s) => track.sections[track.sectionAt(s)]?.id || '';
   const isCanal = (s) => sectionAt(s).includes('canal');
-  const isCore = (s) => sectionAt(s).includes('spiral') || sectionAt(s).includes('core');
-  const hasSpills = (s) => /spillway|coolant-chute/.test(sectionAt(s));
+  const isCore = (s) => /spiral|core|bus-descent/.test(sectionAt(s));
+  const hasSpills = (s) => /spillway|coolant-chute|bus-descent/.test(sectionAt(s));
   const hasGap = (s) => track.nodeFlags(track.frameAt(s).seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 8 > v.fromS);
   // A capsule check against the WHOLE road keeps every rack out of nearby switchbacks too.
   for (let i = 0; i < count; i++) {
@@ -175,13 +177,10 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     }
   });
   for (const mesh of [towerBody, towerBands]) { mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); group.add(mesh); }
-  // One static frame from the real Loom, shared by three monumental rotating displays.
+  // Each landmark wears a distinct evolving Loom field, warmed with the rest of the world.
   if (makeCanvas || typeof document !== 'undefined' || typeof OffscreenCanvas !== 'undefined') {
-    const cols = [[0.16, 0.9, 0.49], [0.1, 0.6, 0.4], [0.7, 1, 0.84], [0.015, 0.06, 0.045]];
-    const ph = createPlaceholder(0, 512, cols, { make: makeCanvas }); ph.draw(0); releaseLoom();
-    const tex = new CanvasTexture(ph.canvas); tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4; textures.push(tex);
-    const mat = keepMat(new MeshBasicNodeMaterial({ side: DoubleSide }));
-    mat.colorNode = mix(vec3(0.06, 0.24, 0.14), texture(tex).rgb, loomContrast);
+    const make = makeCanvas || ((w, h) => { const c = typeof document !== 'undefined' ? document.createElement('canvas') : new OffscreenCanvas(w,h); c.width = w; c.height = h; return c; });
+    loomFrames = createLoomDisplayFrames(make, Q.name);
     for (const s of displaySpecs) {
       const f = track.frameAt(s), radius = s === displaySpecs[0] ? 21 : 29;
       let center = point(f, 0, radius + 16), fit = false;
@@ -191,9 +190,13 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       }
       if (!fit) continue;
       const holder = new Group(); orient(holder, f, center); group.add(holder);
+      const row = loomFrames.rows[displays.length], tex = new CanvasTexture(row.canvas);
+      tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4; textures.push(tex);
+      const mat = keepMat(new MeshBasicNodeMaterial({ side: DoubleSide }));
+      mat.colorNode = mix(vec3(0.06, 0.24, 0.14), texture(tex).rgb, loomContrast);
       const disc = new Mesh(keepGeo(new CircleGeometry(radius, 64)), mat); disc.name = 'mainframe-loom-display'; holder.add(disc);
       const rim = new Mesh(keepGeo(new TorusGeometry(radius + 0.6, 1, 8, 64)), metal); holder.add(rim);
-      displays.push({ disc, center, radius, frame: f });
+      displays.push({ disc, center, radius, frame: f, tex });
     }
   }
   // The raised road winds around a reactor sized to the current spiral's inner clearance.
@@ -210,12 +213,23 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     const a = i * Math.PI / 6, pillar = new Mesh(geometry, metal);
     pillar.position.set(Math.cos(a) * 39, 0, Math.sin(a) * 39); pillar.scale.set(2, 111, 2); core.add(pillar);
   }
-  // A deep foundation and distant walls anchor the entire facility. They are far below every hole.
+  // The foundation opens below the islands: a textured floor, even far below, flattens their silhouette.
   const low = Math.min(...samples.map((f) => f.p[1])) - 45, high = Math.max(...samples.map((f) => f.p[1])) + 65;
   const boundaryPoints = [...samples.map(f => f.p), ...billboards.flatMap(b => rectPoints(b, 1)), ...landmarks.map(r => r.capsule.B)];
   const minX = Math.min(...boundaryPoints.map(p => p[0])) - 70, maxX = Math.max(...boundaryPoints.map(p => p[0])) + 70;
   const minZ = Math.min(...boundaryPoints.map(p => p[2])) - 70, maxZ = Math.max(...boundaryPoints.map(p => p[2])) + 70;
-  const base = new Mesh(geometry, metal); base.position.set((minX + maxX) / 2, low, (minZ + maxZ) / 2); base.scale.set(maxX - minX, 4, maxZ - minZ); group.add(base);
+  const foundation = new Shape();
+  foundation.moveTo(minX, -minZ); foundation.lineTo(maxX, -minZ);
+  foundation.lineTo(maxX, -maxZ); foundation.lineTo(minX, -maxZ); foundation.closePath();
+  for (const field of track.fields || []) {
+    const ends = [track.frameAt(field.fromS), track.frameAt(field.toS)], hole = new Path();
+    const corners = [point(ends[0], -ends[0].w / 2 - 40, 0, -45), point(ends[1], -ends[1].w / 2 - 40, 0, 45),
+      point(ends[1], ends[1].w / 2 + 40, 0, 45), point(ends[0], ends[0].w / 2 + 40, 0, -45)];
+    corners.forEach((p, i) => i ? hole.lineTo(p[0], -p[2]) : hole.moveTo(p[0], -p[2]));
+    hole.closePath(); foundation.holes.push(hole);
+  }
+  const base = new Mesh(keepGeo(new ShapeGeometry(foundation).rotateX(-Math.PI / 2)), dark);
+  base.name = 'mainframe-foundation'; base.position.y = low; group.add(base);
   for (const [px, pz, sx, sz] of [[minX, (minZ + maxZ) / 2, 3, maxZ - minZ], [maxX, (minZ + maxZ) / 2, 3, maxZ - minZ], [(minX + maxX) / 2, minZ, maxX - minX, 3], [(minX + maxX) / 2, maxZ, maxX - minX, 3]]) {
     const wall = new Mesh(geometry, dark); wall.position.set(px, (low + high) / 2, pz); wall.scale.set(sx, high - low, sz); group.add(wall);
   }
@@ -310,13 +324,16 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     const lamps = new Mesh(geometry, stripeMat); lamps.scale.set(zone.width, 0.45, 0.35); lamps.position.set(0, height + 0.6, 0); holder.add(lamps);
     return { zone, frame: f, panel, floor, floorTiles, panelMat, floorMat, bars, stripeMat };
   });
-  return { group, scans, core, tubes, displays, landmarks, reservoir, counts: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.length])),
+  const floating = buildFloatingProcessors(track, art, samples, billboards); group.add(floating.group);
+  return { group, scans, core, tubes, displays, landmarks, reservoir, floating, counts: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.length])),
     update(dt, view, gentle = false) {
       if (view.paused) return;
+      floating.update(dt, gentle);
       updateBubbles(dt * (gentle ? 0.5 : 1));
       coolantTime.value += dt * (gentle ? 0.5 : 1);
       loomContrast.value += ((gentle ? 0.5 : 1) - loomContrast.value) * Math.min(1, dt / 0.3);
-      for (const display of displays) display.disc.rotation.z += dt * (gentle ? 0.045 : 0.09);
+      if (loomFrames?.update(dt, gentle)) for (const display of displays) display.tex.needsUpdate = true;
+      for (const display of displays) display.disc.rotation.z += dt * (gentle ? 0.18 : 0.45);
       for (const scan of scans) {
         const pose = scanPose(scan.zone, view.scanTimeS ?? view.timeS ?? 0, view.scanBpm || 120);
         if (view.scanReady === false) { pose.phase = 'warn'; pose.opacity = 0.18; }
@@ -345,8 +362,9 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       }
     },
     dispose() {
+      floating.dispose();
       group.removeFromParent(); group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
       geometries.forEach((g) => g.dispose()); materials.forEach((m) => m.dispose());
-      textures.forEach((t) => t.dispose());
+      textures.forEach((t) => t.dispose()); loomFrames?.dispose();
     } };
 }

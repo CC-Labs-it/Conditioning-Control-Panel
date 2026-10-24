@@ -11,6 +11,7 @@ import { step } from '../sim/kart.js';
 import { updateRespawn } from '../sim/respawn.js';
 import { createActions } from '../core/actions.js';
 import { S } from '../sim/state.js';
+import { updateStoneMotion, stonePolygon } from '../track/stoneMotion.js';
 import { fakeTrack, makeFeel, place, DT } from './sim-fake.mjs';
 
 const h = { id: 'hex', shape: 'hex', s: 100, x: 0, w: 24, len: 34 };
@@ -74,6 +75,7 @@ test('Mainframe bots traverse every giant-platform lane at ordinary and boosted 
     const ai = createAi(track, feel, { seed: 1 }), actions = createActions(), race = { phase: 'racing', timeS: 10 };
     let worst = 0;
     for (let tick = 0; tick < 35 / DT; tick++) {
+      updateStoneMotion(track.fields, DT);
       ai.drive(r, { race, racers: [r] }, DT, actions);
       step(r.st, actions, track, feel, DT, bus); updateRespawn(r.st, track, feel, DT, bus); race.timeS += DT;
       if (r.st[S.s] >= f.fromS && r.st[S.s] < f.toS) worst = Math.max(worst, Math.abs(r.st[S.lateral] - lane));
@@ -86,6 +88,37 @@ test('Mainframe bots traverse every giant-platform lane at ordinary and boosted 
     assert.ok(!events.includes('drop') && !events.includes('fall'), 'no fall: ' + label);
     assert.ok(worst < 1.5, 'held lane: ' + label);
   }
+});
+
+test('rotating links share the rendered outline and support at every heading; five main lanes stay fixed', () => {
+  const tr = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url)))), f = tr.fields[0];
+  const moving = f.stones.filter(h=>h.spin);
+  assert.equal(moving.length, 9);
+  assert.ok(moving.every(h=>h.id.startsWith('memory-link')));
+  assert.equal(f.stones.filter(h=>!h.id.startsWith('memory-link') && !h.spin).length,70);
+  const built = buildStones(tr,null,null), mesh=built.group.getObjectByName('stone-hex-hull'), matrix=new Matrix4(), p=new Vector3();
+  for(let n=0;n<24;n++) {
+    updateStoneMotion(tr.fields,3); built.update(3);
+    for (const h of moving) {
+      const centre=h.s+h.len/2, frame=tr.frameAt(centre), polygon=stonePolygon(h);
+      mesh.getMatrixAt(built.rows.findIndex(r=>r.id===h.id),matrix);
+      for(let j=0;j<6;j++) {
+        const v=STONE_HEX[j]; p.set(v[0],0,-v[1]).applyMatrix4(matrix);
+        const rel=p.toArray().map((v,k)=>v-frame.p[k]);
+        const x=rel.reduce((a,v,k)=>a+v*frame.b[k],0), s=centre+rel.reduce((a,v,k)=>a+v*frame.t[k],0);
+        assert.ok(Math.abs(x-h.x-polygon[j][0])<0.001);
+        assert.ok(Math.abs(s-centre-polygon[j][1])<0.001);
+        assert.ok(stoneIn({stones:[h]},centre+(s-centre)*0.95,h.x+(x-h.x)*0.95));
+        assert.ok(stoneDistance({stones:[h]},centre+(s-centre)*1.1,h.x+(x-h.x)*1.1)>0.3);
+      }
+      assert.ok(stoneLaneSpan(h,h.x));
+    }
+  }
+  const before=Array.from(mesh.instanceMatrix.array); updateStoneMotion(tr.fields,1); built.update(1,{paused:true});
+  assert.deepEqual(Array.from(mesh.instanceMatrix.array),before);
+  updateStoneMotion(tr.fields,0,false,true); updateStoneMotion(tr.fields,2,true);
+  near(moving[0].angle,moving[0].spin);
+  built.dispose();
 });
 
 test('Mainframe gallery approach keeps its outer shoulder above the lower reactor helix', () => {
@@ -116,12 +149,15 @@ test('giant hex rendering uses one solid platform per stone with the physical ou
   const rows = stoneLayout(track);
   assert.equal(rows.length, 1); assert.deepEqual(rows[0].p, [117, 76, 0]);
   const built = buildStones(track, { model() { assert.fail('hex platforms use their exact native mesh'); } }, null);
-  assert.equal(built.mode, 'hex'); assert.equal(built.count, 1); assert.equal(built.group.children.length, 4);
+  assert.equal(built.mode, 'hex'); assert.equal(built.count, 1);
+  assert.equal(built.group.children.filter(m=>m.isInstancedMesh).length, 4);
+  assert.ok(built.group.getObjectByName('stone-hover-motes'));
   const hull = built.group.children.find((m) => m.name === 'stone-hex-hull');
   near(hull.geometry.boundingBox.min.y, -3.2); near(hull.geometry.boundingBox.max.y, 0);
   const matrix = new Matrix4(), p = new Vector3(), corners = new Set();
   let disposed = 0;
   for (const mesh of built.group.children) {
+    if (!mesh.isInstancedMesh) continue;
     assert.equal(mesh.count, 1); mesh.getMatrixAt(0, matrix);
     mesh.geometry.addEventListener('dispose', () => disposed++);
     const pos = mesh.geometry.attributes.position;

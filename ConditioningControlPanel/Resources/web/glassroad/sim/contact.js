@@ -3,6 +3,7 @@
  * Saucers push apart along the line between them, projected on the road plane: the overlap is split by
  * weight, the closing speed is taken out and a sideways push (pushMps + pushPerDv x closing, capped) is
  * split the same way. Heavier = faster, boosting, Golden; a stalled kart is lighter. No spin, no stall.
+ * Glass and Golden bubbles instead launch the other kart outward and upward on contact, with a pair cooldown.
  * A push may carry a kart past an open edge (Phase A drops it) unless its feel says gentle.on (Gentle
  * Visuals or the player's steering assist): then it is held inside the road.
  * Ghosts never touch: the first contact.ghostS after go, and the whole rescue incl. its 1.5 s grace.
@@ -14,6 +15,7 @@ import { S, RESPAWN, BOOST } from './state.js';
 import { wrap, clamp } from '../core/math.js';
 import { gap } from './gaps.js';
 import { grantBoost } from './grant.js';
+import { BUBBLE_RAM } from '../core/bubble.js';
 
 const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 const QO = { normal: [0, 0, 0], p: [0, 0, 0] };
@@ -91,7 +93,7 @@ export function createContact(track, feel, events) {
     if (!live) { for (const r of racers) r.fxv.slip = 0; return; }
     for (const [k, v] of cool) { if (v - dt <= 0) cool.delete(k); else cool.set(k, v - dt); }
 
-    const R2 = 2 * feel.get('contact.radiusM'), maxH = feel.get('contact.maxHeightM');
+    const radius = feel.get('contact.radiusM'), maxH = feel.get('contact.maxHeightM');
     const n = racers.length;
     for (let i = 0; i < n; i++) {
       const ra = racers[i];
@@ -99,6 +101,9 @@ export function createContact(track, feel, events) {
       for (let j = i + 1; j < n; j++) {
         const rb = racers[j];
         if (rb.fxv.ghost) continue;
+        const shieldA = ra.fxv.shield === 'glass' || ra.fxv.shield === 'golden';
+        const shieldB = rb.fxv.shield === 'glass' || rb.fxv.shield === 'golden';
+        const R2 = (shieldA ? BUBBLE_RAM.radiusM : radius) + (shieldB ? BUBBLE_RAM.radiusM : radius);
         const a = ra.st, b = rb.st;
         const dx = b[S.posX] - a[S.posX], dy = b[S.posY] - a[S.posY], dz = b[S.posZ] - a[S.posZ];
         if (dx * dx + dy * dy + dz * dz >= R2 * R2) continue;
@@ -120,6 +125,25 @@ export function createContact(track, feel, events) {
         const closing = (a[S.velX] - b[S.velX]) * U[0] + (a[S.velY] - b[S.velY]) * U[1] + (a[S.velZ] - b[S.velZ]) * U[2];
         if (!cool.has(key)) {
           const c = Math.max(0, closing);
+          if (shieldA || shieldB) {
+            const fling = (r, side) => {
+              const st=r.st, speed=Math.min(BUBBLE_RAM.maxMps,BUBBLE_RAM.pushMps+c*0.25);
+              push(r,U[0]*side*speed,U[1]*side*speed,U[2]*side*speed);
+              const vn=st[S.velX]*nrm[0]+st[S.velY]*nrm[1]+st[S.velZ]*nrm[2];
+              const lift=Math.max(0,BUBBLE_RAM.upMps-vn);
+              push(r,nrm[0]*lift,nrm[1]*lift,nrm[2]*lift);
+              st[S.airborne]=1; st[S.grounded]=0; st[S.airTime]=0; st[S.hopT]=0;
+              st[S.latchSeg]=st[S.seg];
+            };
+            if (shieldA) fling(rb,1);
+            if (shieldB) fling(ra,-1);
+            cool.set(key,BUBBLE_RAM.cooldownS);
+            const p=[(a[S.posX]+b[S.posX])/2,(a[S.posY]+b[S.posY])/2,(a[S.posZ]+b[S.posZ])/2];
+            events.emit('bump',{a:i,b:j,dv:Math.max(c,18),p});
+            events.emit('bubble-ram',{a:i,b:j,attacker:shieldA?ra.i:rb.i,victim:shieldA?rb.i:ra.i,both:shieldA&&shieldB,p});
+            holdInside(ra); holdInside(rb);
+            continue;
+          }
           const p = Math.min(feel.get('contact.maxPushMps'), feel.get('contact.pushMps') + feel.get('contact.pushPerDv') * c);
           const ka = (c + p) * sa, kb = (c + p) * sb;   // take the closing speed out, then push apart
           // wave 2 STONES: on the stones the sideways part of the shove is mostly lost (a full push threw a kart
