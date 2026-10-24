@@ -261,6 +261,8 @@ export const FX_CUES = {
   },
   checkpoint() {},
   lap() {},
+  // The gate renderer already owns the crossing pulse and text; do not add a second camera beat.
+  'phrase-gate'() {},
   pause(fx, { on = false }) { fx.paused = !!on; },
 };
 
