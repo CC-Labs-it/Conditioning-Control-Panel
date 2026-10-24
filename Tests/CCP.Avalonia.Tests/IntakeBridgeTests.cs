@@ -98,7 +98,7 @@ public sealed class IntakeBridgeTests
         var asked = 0;
         var host = new IntakeHostWindow { FetchRemote = () => { asked++; return Task.FromResult((Batch(), (string?)null)); } };
         var sent = Capture(host);
-        void Ask() { host.HandleMessage("{\"type\":\"need-remote\"}"); Dispatcher.UIThread.RunJobs(); }
+        void Ask() { host.HandleMessage("{\"type\":\"need-remote\"}"); Dispatcher.UIThread.RunJobs(DispatcherPriority.Default); }
         try
         {
             // Local only, or mixed without consent: nothing is fetched and init says so.
@@ -198,7 +198,7 @@ public sealed class IntakeBridgeTests
         engine.End(new PhraseResult { Matched = true, Transcript = "good girls obey", Score = 1, LoudEnough = true });
         // FirstListen fires before the loop thread reaches its await, so the loop may resume on its own
         // thread and Post "final" to the dispatcher after End returns: pump until it lands.
-        SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return sent.Any(f => (string?)f["kind"] == "final"); }, TimeSpan.FromSeconds(10));
+        SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(DispatcherPriority.Default); return sent.Any(f => (string?)f["kind"] == "final"); }, TimeSpan.FromSeconds(10));
         var final = sent.Single(f => (string?)f["kind"] == "final");
         Assert.Equal(2, (int)final["id"]!);
         Assert.True((bool)final["matched"]!);
@@ -242,7 +242,7 @@ public sealed class IntakeBridgeTests
             else if (route == "tray") MainShellWindow.StopEverything();
             else shell.VoicePanic();
             engine.End(new PhraseResult { TimedOut = true });   // the route's abort, if it outran the stop
-            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
 
             Assert.False(engine.MicOpen);
             Assert.Equal(1, engine.Listens);
@@ -274,7 +274,7 @@ public sealed class IntakeBridgeTests
         host.Show();
         await Listen(host, engine, 9);
         IntakeHostWindow.StopMicsForPanic();
-        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
         Assert.False(engine.MicOpen);
         Assert.Equal(1, engine.Listens);
         Assert.True(host.IsVisible);
