@@ -46,7 +46,9 @@ public sealed partial class AccountSeedTests
 
     private static async Task Until(Func<bool> done)
     {
-        for (var i = 0; i < 200 && !done(); i++) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+        // P73: bounded by time, not by dispatcher turns (turn counts pass alone and fail under gate load).
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (!done() && clock.Elapsed < TimeSpan.FromSeconds(10)) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
         Assert.True(done());
     }
 

@@ -16,6 +16,8 @@ public sealed class PopQuizSchedulerTests
         private DateTimeOffset _now = DateTimeOffset.UnixEpoch;
         private readonly List<FakeTimer> _timers = new();
         public override DateTimeOffset GetUtcNow() => _now;
+        public override long GetTimestamp() => _now.UtcTicks;   // stepped too, so GetElapsedTime follows Advance
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
 
         public override ITimer CreateTimer(TimerCallback cb, object? state, TimeSpan due, TimeSpan period)
         {

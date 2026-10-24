@@ -21,8 +21,7 @@
 //       * UpdateProfileSharingSummary() on "discord" - see the case itself for why it lands here
 //         and not in the FX partial WPF reaches it through.
 //       * HasSeenProgramsTab and ProgramsIntroPopup.ShowIfFirstTime on "programs".
-//   - EmiDesk (EmiTargets.NoteTabOpened). The Bark hook is REAL now, through CoreBark, and fires
-//     in the same place WPF fires it - see ShowTab.
+//   - The Bark and EmiDesk open-counter hooks run in ShowTab, as on WPF.
 //   - The keys that are WINDOWS, not tabs, and the one launcher door: "patreon" (Settings · Account,
 //     as WPF ShowAppInfoPopup - wired), "fyp" (OpenFypFeed), "justdrop" (the shop host).
 //     fyp opens the feed (GameWindow.Fyp.cs); justdrop opens its GameWindow (MainShellWindow.JustDrop.cs). The "webapp" door is
@@ -162,6 +161,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // window-key intercepts and BEFORE the panel lookup, so an unknown key announces
             // itself here too, as it does there.
             CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
+
+            EmiDesk.EmiTargets.NoteTabOpened(tab); // WPF counts after launcher intercepts and redirects.
 
             if (!TabPanels.TryGetValue(tab, out var target)) return;
 
@@ -324,11 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (!await Platform.ExternalOpener.OpenAsync(this, url))
-                {
-                    try { if (Clipboard is { } cb) await cb.SetTextAsync(url); } catch { /* clipboard may be unavailable */ }
-                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_open_link_in_browser"),
-                        Loc.GetF("msg_browser_no_default_for", "open the CC Labs web app") + Loc.GetF("msg_browser_link_copied", url));
-                }
+                    await Dialogs.MessageDialog.ShowLinkCopiedAsync(this, url, "open the CC Labs web app");
                 RetireWebBannerBeat();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "DoorWebApp_Click failed"); }
