@@ -290,3 +290,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
     }
 }
+        /// <summary>WPF run-start prewarm: realize the idle surface without drawing or starting frames.</summary>
+        public static void EnsureCreated() => OnFx(_ => { });
+

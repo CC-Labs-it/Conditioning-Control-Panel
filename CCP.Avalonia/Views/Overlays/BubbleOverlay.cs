@@ -482,3 +482,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
     }
 }
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+            // WPF Bubble.Pop: emit before the run callback, which may end/clear the field.
+            // ponytail: model-only/headless bubbles have no window and use unit scaling.
+            var scaling = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+            ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
+                b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
+                b.Spec.IsLive ? 1.3 : 1.0);

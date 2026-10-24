@@ -599,3 +599,4 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
     }
 }
+            ChaosSkiaFxOverlay.EnsureCreated();   // WPF BeginRun: prewarm the sparkle surface
