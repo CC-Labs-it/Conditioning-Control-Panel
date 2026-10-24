@@ -10,8 +10,8 @@ export function applyKeepRoad(road, art) {
   const seam = map ? texture(map, vec2(uv().x.div(12), uv().y.div(16))).r : float(0);
   const stone = keepStoneMaterial('#45424c', art, false), original = road.material.colorNode;
   // An opaque slate floor with fixed magenta joints. Music is a subtle surface response.
-  const floor = stone.colorNode.add(original.mul(0.08))
-    .add(vec3(0.8, 0.035, 0.31).mul(seam).mul(road.uniforms.contrast).mul(0.3));
+  const floor = stone.colorNode.add(original.mul(0.02))
+    .add(vec3(0.8, 0.035, 0.31).mul(seam).mul(road.uniforms.contrast).mul(0.07));
   road.material.colorNode = mix(floor, original, step(2.5, attribute('surface', 'float')));
   road.material.color.copy(stone.color); road.material.transparent = false; road.material.opacity = 1;
   stone.dispose();
@@ -68,7 +68,12 @@ export function buildKeepDressing(track, art, pal, samples) {
     for (let attempt = 0; attempt < 30; attempt++, offset += 8) {
       const p = f.p.map((v, i) => v + f.b[i] * side * offset);
       const towersClear = (layout.towers || []).every((t) => Math.hypot(p[0] - t.x, p[2] - t.z) > radius + t.radiusM + 3);
-      if (towersClear && samples.every((a) => Math.hypot(p[0] - a.p[0], p[2] - a.p[2]) > radius + a.w / 2 + 5)) { fit = true; break; }
+      const buildingsClear = fortress.plan.buildings.every((a) => {
+        const dx = p[0] - a.x, dz = p[2] - a.z, yaw = a.yaw || 0;
+        const x = dx * Math.cos(yaw) - dz * Math.sin(yaw), z = dx * Math.sin(yaw) + dz * Math.cos(yaw);
+        return Math.hypot(Math.max(0, Math.abs(x) - a.w / 2), Math.max(0, Math.abs(z) - a.d / 2)) > radius + 6;
+      });
+      if (towersClear && buildingsClear && samples.every((a) => Math.hypot(p[0] - a.p[0], p[2] - a.p[2]) > radius + a.w / 2 + 5)) { fit = true; break; }
     }
     if (fit) {
       const holder = place('keep-colossus-' + kind, s, side * offset, { turn: side * 0.22, y: -1 });
