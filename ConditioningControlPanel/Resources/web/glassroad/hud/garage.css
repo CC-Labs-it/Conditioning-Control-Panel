@@ -11,5 +11,73 @@
 #race-garage .g-patterns button[data-pattern='2']{background-image:radial-gradient(var(--g-muted) 25%,transparent 27%)}
 #race-garage .g-patterns button[data-pattern='3']{background-image:conic-gradient(var(--g-muted) 25%,transparent 0 50%,var(--g-muted) 0 75%,transparent 0)}
 
-.g-footer>.g-course{margin-left:auto;min-width:0;gap:6px}.g-course .g-track{margin:0}.g-courses{display:flex;gap:5px}#race-garage .g-courses button{min-height:30px;padding:4px 10px;font-size:12px}#race-garage .g-courses button:disabled{opacity:1}.g-footer>.g-course+.g-race{margin-left:0}
-@media(max-width:650px){.g-footer>.g-course{position:absolute;left:0;right:0;top:6px;flex-direction:row;align-items:center;justify-content:space-between}.g-course .g-track{position:static}.g-footer{padding-top:25px}.g-footer>div:not(.g-course){margin-left:auto}}
+/* One left-side menu; the rest of the viewport belongs to the rotating kart ring. */
+.g-menu{position:absolute;left:30px;top:7%;width:calc(var(--g-menu,320px) - 60px);pointer-events:auto;border:1px solid #6f5147;border-radius:14px;background:#292220;box-shadow:0 7px 0 #1c1716,0 8px 20px #211c1b80;overflow:hidden}
+.g-title-card{padding:27px 23px 0}.g-title-card>p{font-size:9px;letter-spacing:.3em;font-weight:700;color:#af9788;margin:0 0 22px}.g-logo{font:italic 58px/.78 Georgia,serif;letter-spacing:-2.7px;white-space:nowrap}.g-logo span{display:block}.g-logo b{display:block;font-size:.81em;color:var(--g-rose);font-weight:400;margin-top:11px;margin-left:16px}.g-title-rule{height:6px;margin:24px 0 18px;background:repeating-conic-gradient(#a98778 0 25%,transparent 0 50%) 0 0/12px 12px;transform:skewX(-16deg);opacity:.65}
+.g-menu-options{display:flex;flex-direction:column;padding:0 11px 13px;gap:3px}#race-garage .g-menu-row{display:flex;align-items:center;gap:13px;min-height:52px;padding:12px 13px;border:1px solid transparent;border-radius:6px;text-align:left;background:transparent;transition:background .2s,border-color .2s,transform .2s}.g-menu-row svg{width:21px;height:23px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;opacity:.7}.g-menu-row>span{flex:1}.g-menu-row b{font-weight:500;font-size:15px}.g-menu-row small{display:block;font-size:10px;margin-top:4px;letter-spacing:.02em}.g-menu-row i{font-style:normal;color:#a58b7c;font-size:23px}#race-garage .g-menu-row:hover,#race-garage .g-menu-row:focus-visible{background:#44322f;border-color:#825b52;transform:translateX(2px)}#race-garage .g-menu-row:focus-visible{outline:2px solid var(--g-rose);outline-offset:0}#race-garage .g-menu-row[data-g=race]{min-height:72px;margin-bottom:7px;background:#efbdc9;color:#38242a;box-shadow:inset 0 -3px #b77387}.g-menu-row[data-g=race] b{font-size:22px;font-weight:600}.g-menu-row[data-g=race] i{color:#6b3e4c}.g-menu-row[data-g=race] svg{opacity:1}
+.g-selector{left:var(--g-stage-center,65%);right:auto;transform:translateX(-50%);bottom:10%;min-width:250px}.g-selector h1{font-size:34px;margin-bottom:12px}.g-selector>p{font-size:10px;color:#bca699;margin:14px 0 0;letter-spacing:.02em}#race-garage .g-nav{top:var(--g-arrow-y,77%);width:76px;height:76px}.g-nav.previous{left:var(--g-left-arrow,38%)}.g-nav.next{left:var(--g-right-arrow,93%)}
+.g-customizing .g-menu{visibility:hidden}.g-custom-top{top:32px}.g-controls{top:165px;max-height:calc(100dvh - 190px)}
+@media(min-width:1500px){.g-menu{left:38px;width:calc(var(--g-menu,378px) - 72px)}.g-title-card{padding:31px 27px 0}.g-logo{font-size:69px}.g-menu-options{padding:0 16px 19px}#race-garage .g-menu-row{min-height:59px}}
+@media(max-width:1050px) and (min-width:700px){.g-menu{left:20px;width:calc(var(--g-menu) - 40px)}.g-title-card{padding:23px 19px 0}.g-logo{font-size:52px}.g-menu-row b{font-size:13px}#race-garage .g-menu-row{gap:10px;padding:11px 10px}}
+@media(max-height:650px) and (min-width:700px){.g-menu{top:20px}.g-title-card{padding-top:17px}.g-title-card>p{margin-bottom:13px}.g-logo{font-size:45px}.g-title-rule{margin:18px 0 10px}#race-garage .g-menu-row{min-height:43px;padding:8px 12px}#race-garage .g-menu-row[data-g=race]{min-height:62px}.g-selector{bottom:6%}.g-selector h1{font-size:27px}.g-selector>p{display:none}.g-custom-top{top:28px}.g-controls{top:90px;max-height:calc(100dvh - 108px)}}
+@media(max-width:699px){.g-menu{left:16px;right:16px;top:auto;bottom:max(17px,env(safe-area-inset-bottom));width:auto;overflow:visible;border-radius:12px}.g-title-card{position:fixed;top:30px;left:22px;padding:0;border:0;pointer-events:none}.g-title-card>p,.g-title-rule{display:none}.g-logo{font-size:36px;letter-spacing:-1.6px}.g-logo span,.g-logo b{display:inline}.g-logo b{margin-left:8px}.g-menu-options{display:grid;grid-template-columns:1fr 1fr;padding:9px;gap:4px}#race-garage .g-menu-row{min-height:47px;padding:9px;gap:9px;transform:none}.g-menu-row svg{width:17px;height:20px}.g-menu-row b{font-size:12px}.g-menu-row i{font-size:18px}#race-garage .g-menu-row[data-g=race]{grid-row:span 2;margin:0;min-height:97px}.g-menu-row[data-g=race] b{font-size:23px}.g-menu-row small{font-size:9px;max-width:100px}.g-menu-row[data-g=controls]{grid-column:1/-1;justify-content:center;min-height:36px;padding:3px}.g-menu-row[data-g=controls]>span{flex:initial}.g-menu-row[data-g=controls] i{display:none}.g-selector{bottom:calc(207px + env(safe-area-inset-bottom));min-width:200px}.g-selector h1{font-size:25px;margin-bottom:8px}.g-selector>p{display:none}.g-custom-top{top:24px}.g-controls{top:50%;max-height:47dvh}.g-customizing .g-menu{display:none}}
+@media(prefers-reduced-motion:reduce){#race-garage .g-menu-row{transition:none;transform:none}}
+
+#race-garage .g-nav:active{transform:translate(-50%,-50%)}
+.g-menu-row[data-g=race] .g-track{color:#744653}
+
+.g-menu-row .g-track{position:static;margin:4px 0 0}
+@media(max-width:699px){.g-selector{bottom:calc(226px + env(safe-area-inset-bottom))}#race-garage .g-menu-row[data-g=controls]{grid-column:auto;justify-content:normal;min-height:47px;padding:9px}.g-menu-row[data-g=controls]>span{flex:1}.g-menu-row[data-g=controls] i{display:block}}
+#race-garage.g-calm .g-menu-row:hover,#race-garage.g-calm .g-menu-row:focus-visible{transform:none}#race-garage.g-calm .g-menu-row{transition:background .35s,border-color .35s}
+
+/* Ink-edged, saturated paint carries the same cartoon treatment into the menu. */
+#race-garage{--g-paper:#153b47;--g-panel:#174955;--g-line:#091822;--g-ink:#fff4df;--g-muted:#b7e7dc;--g-rose:#ff79ac;--g-custom-progress:0}
+.g-menu{background:#123541;border:3px solid #10101b;box-shadow:0 7px 0 #10101b,0 14px 25px #07162150;border-radius:19px;animation:g-menu-arrive .65s cubic-bezier(.16,1,.3,1) both}
+.g-title-card>p{color:#8be9d1}.g-logo{color:#fff4df;text-shadow:2px 3px #10101b,-1px -1px #10101b}.g-logo b{color:#ff79ac}.g-title-rule{background:repeating-conic-gradient(#ffce62 0 25%,transparent 0 50%) 0 0/12px 12px;opacity:1;animation:g-checks 9s linear infinite}
+#race-garage .g-menu-row{border-width:2px;border-radius:9px;transition:background .2s,border-color .2s,transform .24s cubic-bezier(.2,1.5,.4,1),box-shadow .2s}
+.g-menu-row svg{opacity:1;stroke-width:1.9}.g-menu-row i{color:#7be2ce}
+#race-garage .g-menu-row:hover,#race-garage .g-menu-row:focus-visible{background:#245867;border-color:#0a1823;box-shadow:0 3px 0 #081720;transform:translate(3px,-2px)}
+#race-garage .g-menu-row[data-g=race]{background:#ff79ac;border-color:#151323;color:#27162d;box-shadow:inset 0 -4px #d44380,0 3px 0 #10101b}.g-menu-row[data-g=race] i,.g-menu-row[data-g=race] .g-track{color:#5e1c41}
+#race-garage .g-menu-row[data-g=race]:hover{background:#ff99bc;transform:translateY(-3px);box-shadow:inset 0 -4px #e15d94,0 6px 0 #10101b}
+.g-selector h1{color:#fff4df;text-shadow:2px 3px #171425}.g-selector>p{color:#b7e7dc}#race-garage .g-positions button{background:#28646b;border:1px solid #10101b}#race-garage .g-positions button[aria-pressed=true]{background:#ff79ac;box-shadow:0 2px #10101b}
+.g-custom-top h2{text-shadow:2px 3px #10101b}.g-custom-top small{color:#8be9d1}.g-controls{border:3px solid #10101b;border-radius:17px;background:#153e4b;box-shadow:0 6px 0 #10101b}
+#race-garage .g-outfits button,#race-garage .g-patterns button{border-width:2px;border-radius:7px}#race-garage .g-outfits button[aria-pressed=true]{background:#ff79ac;color:#29152f;border-color:#10101b;box-shadow:inset 0 -3px #d44380}
+#race-garage [data-g=done]{background:#ffce62;color:#281b26;border:2px solid #10101b;box-shadow:0 4px #10101b;border-radius:10px;font-weight:600}
+.g-colors label{border-width:2px;border-radius:7px}.g-colors input{cursor:pointer}.g-label span{color:#8ee8d1}.g-skin-name{color:#c6ece1}
+/* The camera and DOM share one progress value, including a reversible return to the carousel. */
+.g-customizing .g-menu{visibility:visible;opacity:calc(1 - var(--g-custom-progress));transform:translateX(calc(var(--g-custom-progress) * -32px));pointer-events:none;animation:none}
+.g-customizing .g-menu button{pointer-events:none}
+.g-custom{opacity:var(--g-custom-progress)}.g-controls{transform:translateX(calc((1 - var(--g-custom-progress)) * 30px))}
+.g-scene-transition button,.g-scene-transition input{pointer-events:none!important}.g-scene-transition .g-custom-top{pointer-events:none}
+#card:not([data-kind=menu]){background:#101827b8;transition:background .35s}#card .card-body{border:3px solid #10101b;border-radius:18px;box-shadow:0 7px #10101b;background:#fff4df;color:#251b30}
+#card .card-body.in{animation:g-card-arrive .4s cubic-bezier(.16,1,.3,1) both}
+@keyframes g-menu-arrive{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+@keyframes g-card-arrive{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes g-checks{to{background-position:24px 0}}
+#race-garage.g-calm .g-menu,#race-garage.g-calm .g-title-rule{animation:none}#race-garage.g-calm .g-controls{transform:none}#race-garage.g-calm.g-customizing .g-menu{transform:none}#card.c-gentle .card-body.in{animation:g-soft-arrive .4s ease both}
+@keyframes g-soft-arrive{from{opacity:0}to{opacity:1}}
+@media(max-width:699px){.g-controls{left:4%;right:4%;width:auto}.g-customizing .g-menu{display:block}.g-customizing .g-title-card{opacity:calc(1 - var(--g-custom-progress))}.g-menu{border-radius:15px}.g-title-card{text-shadow:2px 3px #10101b}}
+@media(prefers-reduced-motion:reduce){.g-menu,.g-title-rule{animation:none}#race-garage .g-menu-row:hover,#race-garage .g-menu-row:focus-visible{transform:none}.g-customizing .g-menu,.g-controls{transform:none}#card .card-body.in{animation:g-soft-arrive .4s ease both}}
+
+/* Keep the carousel behind menu cards and fade each overlay without a scene cut. */
+#race-garage{animation:g-soft-arrive .4s ease both}.g-menu{animation:none}
+#card:not([data-kind=menu]){animation:g-soft-arrive .35s ease both}
+
+/* Course choice sits beside Race in the same compact menu. */
+#race-garage .g-course-choice{border-color:#317f84;background:#174b58;margin:1px 0 5px;min-height:58px}.g-course-choice svg{color:#ffce62}.g-course-choice small{font-size:10px;color:#afe8db;margin:0 0 2px}.g-course-choice b{font-size:16px!important}
+.g-track-picker{width:min(730px,calc(100vw - 32px));max-height:calc(100dvh - 40px);box-sizing:border-box;overflow:auto;border:3px solid #10101b;border-radius:20px;background:#143c49;color:#fff4df;padding:24px;box-shadow:0 8px #10101b;pointer-events:auto;animation:g-card-arrive .35s ease both}
+.g-track-picker::backdrop{background:#091925bd;animation:g-soft-arrive .3s ease both}.g-track-picker header{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:20px}.g-track-picker header small{font:700 10px 'Segoe UI',sans-serif;letter-spacing:.18em;color:#8ee8d1}.g-track-picker h2{font:italic 34px Georgia,serif;margin:5px 0 0;text-shadow:2px 2px #10101b}
+#race-garage .g-track-back{background:#ffce62;color:#271b2c;border:2px solid #10101b;box-shadow:0 3px #10101b;border-radius:9px;min-width:68px}
+.g-track-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+#race-garage .g-track-tile{position:relative;display:flex;align-items:flex-start;flex-direction:column;background:#102d39;border:3px solid #0b1420;border-radius:13px;padding:14px 17px;text-align:left;box-shadow:0 4px #091522;transition:transform .2s,background .2s,border-color .2s;overflow:hidden}
+#race-garage .g-track-tile:hover,#race-garage .g-track-tile:focus-visible{transform:translateY(-3px);border-color:var(--course-color);background:#194b57;outline:none}
+#race-garage .g-track-tile[aria-pressed=true]{border-color:var(--course-color);box-shadow:0 4px #091522,inset 0 -3px var(--course-color)}
+.g-track-tile svg{width:100%;height:102px;overflow:visible;margin:8px 0 10px}.g-track-tile path{fill:none;stroke:var(--course-color);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.g-track-tile .g-route-shadow{stroke:#080e19;stroke-width:5}.g-track-tile circle{fill:#fff4df;stroke:#080e19;stroke-width:1.5}
+.g-track-tile strong{font-size:20px;font-weight:600}.g-track-tile .g-course-details{font-size:11px;color:#b1ded8;margin-top:4px;min-height:16px}.g-course-mode{font-size:10px;color:var(--course-color)}.g-course-selected{position:absolute;right:13px;top:12px;font-size:10px;color:var(--course-color);opacity:0}.g-track-tile[aria-pressed=true] .g-course-selected{opacity:1}.g-track-status{font-size:12px;min-height:17px;margin:15px 0 0;color:#abe7da}
+.g-course-leaving::after{content:'';position:fixed;inset:0;background:#132f39;z-index:30;animation:g-soft-arrive .35s ease both;pointer-events:auto}.g-course-leaving .g-track-picker{pointer-events:none}
+#race-garage.g-calm .g-track-picker{animation:g-soft-arrive .4s ease both}#race-garage.g-calm .g-track-tile:hover,#race-garage.g-calm .g-track-tile:focus-visible{transform:none}
+@media(max-width:699px){#race-garage .g-menu-row[data-g=race]{grid-row:auto;min-height:57px}#race-garage .g-course-choice{min-height:57px;margin:0;padding:8px}.g-course-choice small{font-size:9px}.g-course-choice b{font-size:13px!important}.g-track-picker{padding:17px;width:calc(100vw - 24px)}.g-track-grid{gap:9px}#race-garage .g-track-tile{padding:10px}.g-track-tile svg{height:75px}.g-track-tile strong{font-size:16px}.g-track-tile .g-course-details{font-size:10px}.g-course-selected{font-size:8px;right:9px}.g-track-picker h2{font-size:29px}}
+@media(max-height:580px) and (min-width:700px){.g-track-picker{padding:16px}.g-track-tile svg{height:60px}.g-track-picker header{margin-bottom:12px}.g-track-tile strong{font-size:17px}}
+@media(prefers-reduced-motion:reduce){.g-track-picker{animation:g-soft-arrive .4s ease both}#race-garage .g-track-tile:hover,#race-garage .g-track-tile:focus-visible{transform:none}}
+
+.g-course-leaving .g-track-picker{animation:g-course-out .35s ease both}@keyframes g-course-out{to{opacity:0}}

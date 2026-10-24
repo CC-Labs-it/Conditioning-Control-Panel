@@ -11,8 +11,8 @@ import { placeKart } from '../dev/hook.js';
 import { waterRuns, waterSpills } from '../render/waterMath.js';
 import { makeFeel, recorder, DT } from './sim-fake.mjs';
 
-test('the garage catalog and course loader agree on all four bundled tracks', () => {
-  assert.deepEqual(COURSES.map(c => c.id).sort(), ['boudoir', 'keep', 'mainframe', 'threshold']);
+test('the garage catalog and course loader agree on all five bundled tracks', () => {
+  assert.deepEqual(COURSES.map(c => c.id).sort(), ['boudoir', 'goonworks', 'keep', 'mainframe', 'threshold']);
   for (const c of COURSES) {
     const url = new URL(courseUrl('http://localhost:18910/?chart=0&r=invite', c.id));
     assert.equal(selectedCourse(url.search).id, c.id);
@@ -23,8 +23,10 @@ test('the garage catalog and course loader agree on all four bundled tracks', ()
 
 for (const { id } of COURSES) test(`${id}: shared water spills and bubble launch operate on the real track`, () => {
   const track = loadTrack(JSON.parse(readFileSync(new URL(`../tracks/${id}.json`, import.meta.url), 'utf8')));
-  assert.ok(waterRuns(track).length > 0);
-  assert.ok(waterSpills(track).length > 0);
+  if (id !== 'goonworks') {
+    assert.ok(waterRuns(track).length > 0);
+    assert.ok(waterSpills(track).length > 0);
+  }
   for (const shield of ['glass', 'golden']) {
     const feel = makeFeel(), events = recorder();
     const racers = [0, 1].map(i => {

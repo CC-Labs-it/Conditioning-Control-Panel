@@ -60,7 +60,9 @@ export async function loadArt(renderer, { want = WANT, trackId = 'threshold', on
     .concat('spout-mainframe', 'stone-mainframe');
   if (trackId === 'boudoir') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
     .concat('spout-boudoir', 'stone-boudoir', 'glide-boudoir-beanie');
-  const plan = trackId === 'keep' ? keepArtPlan(want, materialTier) : { ids: want, aliases: {} };
+  if (trackId === 'goonworks') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|spiral-disc|stone-threshold|sky-)/.test(id))
+    .concat('glide-threshold-beanie');
+  const plan = trackId === 'keep' ? keepArtPlan(want, materialTier) : { ids: want, aliases: trackId === 'goonworks' ? { 'glide-keep-beanie': 'glide-threshold-beanie' } : {} };
   const resolve = (id) => plan.aliases[id] || id;
   const waterIds = ['water-normal', 'water-foam-mask', 'waterfall-sheet', 'waterfall-phase-mask'].map(id => id + (materialTier === 'phone' ? '-phone' : ''));
   const requested = [...new Set([...plan.ids, ...waterIds, ...MATERIAL_DETAIL_IDS.map((id) => materialDetailId(id, materialTier))])];
@@ -129,7 +131,7 @@ export async function loadArt(renderer, { want = WANT, trackId = 'threshold', on
     vertexShading,
     detail: (id) => tex.get(materialDetailId(id, materialTier)) || null,
     tex: (id) => tex.get(resolve(id)) || null,
-    model: (id) => models.get(id) || null,
+    model: (id) => models.get(resolve(id)) || null,
     row: (id) => rows.get(resolve(id)) || null,
     failed,
     dispose() { for (const t of tex.values()) t.dispose(); },

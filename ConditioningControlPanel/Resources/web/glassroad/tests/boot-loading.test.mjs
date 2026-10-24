@@ -35,6 +35,6 @@ test('warming card: a bar and a ring animated only with transforms (the composit
   assert.ok(/setProgress\(stage, p\)/.test(cards), 'cards.setProgress');
   assert.ok(/load\.p = Math\.max\(load\.p/.test(cards), 'the bar never runs backwards');
   const boot = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
-  for (const stage of ['Loading art', 'Building the road', 'Preparing shaders', 'Ready']) assert.ok(boot.includes(stage), stage);
+  for (const stage of ['Bringing the racers in', 'Setting the course', 'Getting the lights ready', 'Ready to roll']) assert.ok(boot.includes(stage), stage);
   assert.ok(!/Warming up/.test(boot), 'no bare "Warming up" left');
 });

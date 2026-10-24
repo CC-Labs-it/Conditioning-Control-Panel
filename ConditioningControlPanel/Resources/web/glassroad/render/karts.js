@@ -49,6 +49,7 @@ import {
   hitRimRgb, stunStar, kindHex, holdFace, rigTable, rigNumbers, createDirector, directorEvent, directorStep,
 } from './kartPose.js';
 import { dressKart, lookForSeat } from './wardrobe.js';
+import { createEmiLife } from './emiLife.js';
 import { createEmiSkin } from './emiSkin.js';
 import { skinFromWire } from '../hud/garageState.js';
 import { lookForTier } from './wardrobeMath.js';
@@ -284,7 +285,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     root.add(aura.mesh);
     list.push({
       i, root, body, model, mats, bones, look, accessory, face, head, tint: look ? look.cup : [1, 1, 1], tagHex: look ? look.hex : '#fff4fa',
-      dress, skin, rig, glideCap, propeller, caustics, underwater:0, dir: createDirector(),
+      dress, skin, rig, glideCap, propeller, caustics, underwater:0, life: art3d ? createEmiLife(model, {seed:i}) : null, lifeSignals:{}, lifeAir:0, dir: createDirector(),
       tag: null, tagName: '', pose: createPose(), react: Object.assign(createReact(i), { rig: !!rig }), pend: [], mem: {}, ghost: 0, mark,
       rims, rimBase: look ? look.rimLin.slice() : [0, 0, 0], rimSet: false, stars, aura,
     });
@@ -351,6 +352,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
     k.underwater=underwater;
     if(!paused){k.caustics.time.value+=dt*(gentle?.5:1);k.caustics.amount.value+=(underwater*(gentle?.5:1)-k.caustics.amount.value)*Math.min(1,dt/.35);}
     const { root, body, pose: p, react: r } = k;
+    k.life?.beforePose();
     root.visible = true;
     k.propeller.update(st[S.respawnPhase] === RESPAWN.NONE ? underwater : 0, dt, {gentle,paused});
     if (k.glideCap) k.glideCap.update(glide && st[S.airborne] > 0 && st[S.respawnPhase] === RESPAWN.NONE, dt, gentle);
@@ -387,6 +389,12 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       if (k.head) poseHead(k.head, o);
       if (k.face) k.face.set(o.face, o.blink, r.t);
     }
+    const signals=k.lifeSignals;
+    signals.time=r.t; signals.speed=Math.min(1,Math.max(0,st[S.speedPct])); signals.steer=st[S.steerSlew];
+    signals.boost=st[S.boostKind]>0?1:0; signals.air=st[S.airborne]; signals.land=k.lifeAir&&!signals.air?1:0;
+    signals.hit=o.stunK||0; signals.gentle=gentle; signals.motionOff=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    signals.near=near; signals.clip=k.dir.cur; signals.outfit=k.dress?.outfit||''; k.lifeAir=signals.air;
+    k.life?.update(dt,signals); k.dress?.life?.update(dt,signals);
     if (r.sprays.length) {
       if (particles && near) for (const [kind, n, item] of r.sprays) spray(k, kind, n, gentle, item);
       r.sprays.length = 0;
@@ -495,6 +503,7 @@ export function buildKarts(art, count, greyGeo, { seed = urlSeed(), looks = [] }
       if (k.stars) k.stars.material.dispose();
       k.aura.material.dispose();
       if (k.accessory) k.accessory.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
+      if (k.life) k.life.dispose();
       if (k.glideCap) k.glideCap.dispose();
       k.propeller.dispose();
       if (k.dress) k.dress.dispose();

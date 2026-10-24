@@ -68,6 +68,9 @@ import { keepMediaLayout } from './keepMedia.js';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createKeepDrawbridge } from './keepDrawbridge.js';
 import { createKeepBackdrop } from './keepBackdrop.js';
+import { buildGoonworks, applyGoonworksRoad, applyGoonworksRails, goonworksMediaLayout, goonworksSpiralLayout } from './goonworks.js';
+import { createGoonworksHazardView } from './goonworksHazards.js';
+import { getGoonworksLayout } from '../track/goonworks-layout.js';
 import { buildBoudoirDressing } from './boudoirDressing.js';
 import { boudoirMediaLayout } from './boudoirMedia.js';
 import { boudoirSpiralLayout } from './boudoirSpirals.js';
@@ -168,14 +171,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const immersion = createImmersion(track);
   if (isMainframe) scene.fog = new FogExp2('#063e49', 0);
   const boudoir = track.id === 'boudoir';
-  const keep = track.id === 'keep', pal = createPalette(track.id);
+  const keep = track.id === 'keep', goon = track.id === 'goonworks', pal = createPalette(track.id);
+  if (goon) scene.background = new Color('#f7d4ee');
   const owned = [], offs = [];
   const add = (m) => { if (m) { scene.add(m); owned.push(m); } return m; };
 
   let sun = null;
   if (art) {
     // the glTF props and kart are lit (standard / physical materials); everything else is unlit
-    const L = isMainframe ? { ...LOOK.artLight, sky: '#d1ffe8', ground: '#142c31' } : LOOK.artLight;
+    const L = isMainframe ? { ...LOOK.artLight, sky: '#d1ffe8', ground: '#142c31' } : goon ? { ...LOOK.artLight, sky: '#fff4fc', ground: '#713257' } : LOOK.artLight;
     scene.add(new HemisphereLight(L.sky, L.ground, L.hemi));
     sun = new DirectionalLight(L.sky, L.sun);
     sun.position.set(LOOK.lightDir[0], LOOK.lightDir[1], LOOK.lightDir[2]);
@@ -183,22 +187,24 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   }
   const sky = createSkyMaterial(pal, art);
   const skyMesh = add(new Mesh(new SphereGeometry(LOOK.skyRadiusM, 48, 32), sky.material));
-  skyMesh.renderOrder = -1; skyMesh.frustumCulled = false; skyMesh.visible = !keep;
+  skyMesh.renderOrder = -1; skyMesh.frustumCulled = false; skyMesh.visible = !keep && !goon;
   const keepBackdrop = keep ? createKeepBackdrop(scene, track) : null;
   const keepDrawbridge = keep ? createKeepDrawbridge(scene, track, art) : null;
   const road = createRoadMaterial(pal, art, track);
   if (keep) applyKeepRoad(road, art);
+  if (goon) applyGoonworksRoad(road, art, track);
   const roadMesh = add(meshFrom(track.meshes.road, road.material));
   // Built before warmup: shared static construction gives the glass road depth.
-  const showcaseDressing = (keep || boudoir) ? null : buildShowcaseDressing(track, pal, art);
+  const showcaseDressing = keep || goon || boudoir ? null : buildShowcaseDressing(track, pal, art);
   if (showcaseDressing) scene.add(showcaseDressing.group);
-  const court = isMainframe ? null : buildCourt(track, pal);
+  const court = isMainframe || goon ? null : buildCourt(track, pal);
   if (court) scene.add(court.group);
   // wave 2: the stepping stones of every field (render/stones.js), in the scene before the warm so their
   // materials link behind the card (Firefox links programs one by one)
   let stones = null;
-  try { stones = buildStones(track, art, pal); scene.add(stones.group); } catch (e) { console.warn('[glassroad/world] stones failed: ' + (e && e.message)); }
+  try { if (!goon) { stones = buildStones(track, art, pal); scene.add(stones.group); } } catch (e) { console.warn('[glassroad/world] stones failed: ' + (e && e.message)); }
   const rails = createRailMaterial(pal, art);
+  if (goon) applyGoonworksRails(rails);
   add(meshFrom(track.meshes.rails, rails.material));
   const boudoirForks = boudoir ? buildBoudoirForks(track, { roadMaterial: road.material, railMaterial: rails.material, phone: Q.name === 'phone' }) : null;
   if (boudoirForks) scene.add(boudoirForks.group);
@@ -222,15 +228,18 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (keepDressing) scene.add(keepDressing.group);
   const keepGates = keep ? createKeepGateView(scene, track, art, { gates: getKeepLayout(track).gates }) : null;
   const keepChains = keep ? createKeepChainView(scene, track, { chains: getKeepLayout(track).chains }) : null;
+  const goonworks = goon ? buildGoonworks(track, art, pal, samples) : null;
+  if (goonworks) scene.add(goonworks.group);
+  const goonworksHazards = goon ? createGoonworksHazardView(scene, track, getGoonworksLayout(track)) : null;
   let colossi = null;
-  try { colossi = art && !keep && !isMainframe && !boudoir ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
+  try { colossi = art && !keep && !isMainframe && !goon && !boudoir ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
   if (colossi) add(colossi.object);
-  const scatter = (keep || isMainframe || boudoir) ? null : buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
-  if (!keep && !isMainframe && !boudoir) add(scatter ? scatter.object : props(track));
-  if (!keep && !isMainframe && !boudoir) add(createNearDressing(track, { phone: Q.name === 'phone' }).object);
+  const scatter = (keep || isMainframe || goon || boudoir) ? null : buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
+  if (!keep && !isMainframe && !goon && !boudoir) add(scatter ? scatter.object : props(track));
+  if (!keep && !isMainframe && !goon && !boudoir) add(createNearDressing(track, { phone: Q.name === 'phone' }).object);
   let terrace = null, terraceScreen = null;
   try {
-    if (!keep && !isMainframe && !boudoir && art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
+    if (!keep && !isMainframe && !goon && !boudoir && art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
       terraceScreen = reelTexture();
       terrace = buildTerrace(art, track, pal, { phone: Q.name === 'phone', samples, screenMap: terraceScreen,
         avoid: [...(colossi ? colossi.placed : []), ...(scatter && scatter.heroes ? scatter.heroes.bodies : []), ...(scatter ? scatter.placed : [])] });
@@ -286,16 +295,17 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (renderer) {
     try {
       shadows = buildShadows(renderer, scene, sun, Q, { enabled: shadowsOn, track, samples, receivers: [roadMesh, padMesh, boudoirForks?.group.getObjectByName('fork-road')].filter(Boolean),
-        casters: boudoirDressing ? (boudoirDressing.casters || []) : keepDressing ? keepDressing.casters : colossi ? colossi.casters : [], scatterCasters: scatter ? [scatter.object] : [], karts: kartObjs, colossi: colossi ? colossi.placed : [] });
+        casters: boudoirDressing ? (boudoirDressing.casters || []) : goonworks ? goonworks.casters : keepDressing ? keepDressing.casters : colossi ? colossi.casters : [], scatterCasters: scatter ? [scatter.object] : [], karts: kartObjs, colossi: colossi ? colossi.placed : [] });
     } catch (e) { console.warn('[glassroad/world] shadows failed: ' + (e && e.message)); }
     if (shadows && renderer.onTier) offs.push(renderer.onTier(() => shadows.retier()));
   }
   // polish 3: the Loom spiral gates across the road and the media slots (placeholders only)
   let spirals = null, media = null;
   // onPass: the player crossed a gate; boot plays that gate's own Loom on screen
-  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: boudoir && spiralLayout !== null ? boudoirSpiralLayout(track) : keep && spiralLayout !== null ? keepSpiralLayout(track) : spiralLayout, photosafe, feel,
+  try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: spiralLayout === null ? null : goon ? goonworksSpiralLayout(track) : boudoir ? boudoirSpiralLayout(track) : keep ? keepSpiralLayout(track) : spiralLayout, photosafe, feel,
     onPass: (g) => { if (bus) bus.emit('gate-pass', g); } }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
-  try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout: boudoir ? boudoirMediaLayout(track) : keep ? keepMediaLayout(track) : undefined }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
+  try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout: goon ? goonworksMediaLayout(track) : boudoir ? boudoirMediaLayout(track) : keep ? keepMediaLayout(track) : undefined,
+    placeholderPalette: goon ? ['#bd006e', '#fff9ff'] : null }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
   // polish 4: the drop shortcut's rail opening and landing pad (track routes); the ring swells on the player's clean landing
   let routes = null;
   try { routes = routesMod ? routesMod.createRoutes(scene, track, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] route marks failed: ' + (e && e.message)); }
@@ -327,12 +337,16 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     for (const n of P4_EVENTS) on(n, (p) => ['p4', 0, n, p]);
     // Go bursts at the player's own kart (the countdown card is the HUD half of it)
     on('go', () => ['p4', 0, 'go', {}]);
-    on('racer-event', ({ racer = -1, name, p = {} }) => (P4_EVENTS.has(name) ? ['p4', racer, name, p] : [name === 'water-hop' ? 'splash' : name, racer, (p && p.tier) || 0, p]));
+    on('racer-event', ({ racer = -1, name, p = {} }) => (P4_EVENTS.has(name) ? ['p4', racer, name, p]
+      : name === 'goonworks-hit' || name === 'goonworks-launch' ? ['machine', racer, name === 'goonworks-launch' ? 1 : 0]
+      : [name === 'water-hop' ? 'splash' : name, racer, (p && p.tier) || 0, p]));
     on('bump', (p) => ['bump', p.a, p.dv || 0, p.p, p.b]);
     on('bubble-ram', (p) => ['ram', p.attacker, 0, p.p, p.victim]);
     on('scan-hit', (p) => ['machine', p.racer, p.effect === 'boost' ? 1 : 0]);
     on('industry-hit', (p) => ['machine', p.racer, 0]);
     on('industry-boost', (p) => ['machine', p.racer, 1]);
+    on('goonworks-hit', (p) => ['machine', p.racer ?? 0, 0]);
+    on('goonworks-launch', (p) => ['machine', p.racer ?? 0, 1]);
     for (const name of ['keep-gate-hit', 'keep-chain-hit']) on(name, () => ['bump', 0, 12]);
     for (const name of ['boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit']) on(name, p => [name, 0, 12, p]);
     on('bubble-pop', (p) => ['pop', p.racer, 0, p.p]);
@@ -358,7 +372,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (kind === 'splash') { if (waterfall) waterfall.splash(p || {}, gentle); return; }
     if (kind === 'chute') { if (waterfall) waterfall.chute(p || {}, gentle); return; }
     if (kind === 'stone') {
-      const deck = stones?.hit(p);
+      const deck = goonworks?.hit(p) || stones?.hit(p);
       if (obj && obj.visible) {
         const near = i === 0 || obj.position.distanceTo(kart.position) < Q.kartLodM;
         wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[deck ? 1 : 0], { gentle, gain: LOOK.ringGain * (deck ? .8 : .4) });
@@ -441,6 +455,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   function update(view) {
     if (keepGates) keepGates.update(view.raceTimeS ?? 0);
     if (keepChains) keepChains.update(view.raceTimeS ?? 0);
+    goonworksHazards?.update(view.raceTimeS ?? 0);
     const { kart: k, fx } = view;
     solo[0].st = k;
     const racers = view.karts && view.karts.length ? view.karts : solo;
@@ -538,6 +553,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (scatter) scatter.update(dt, scroll);
     if (colossi) colossi.update(dt, scroll);
     if (mainframe) mainframe.update(dt, view, gentle);
+    goonworks?.update(dt, view, gentle);
     boudoirDressing?.update({ ...view, dt, gentle });
     boudoirHazardView?.update(view.raceTimeS ?? 0, { gentle, paused: !!view.paused, active: view.mode === 'race', dt });
     mirrorRoom?.update(dt, view, gentle);
@@ -589,6 +605,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (keepChains) keepChains.dispose();
     if (keepBackdrop) keepBackdrop.dispose();
     if (keepDrawbridge) keepDrawbridge.dispose();
+    goonworks?.dispose();
+    goonworksHazards?.dispose();
+    road.goonworksFinish?.dispose();
     if (court) court.dispose();
     if (mainframe) mainframe.dispose();
     if (stones) stones.dispose();
@@ -596,9 +615,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

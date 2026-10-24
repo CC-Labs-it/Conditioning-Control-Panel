@@ -57,14 +57,14 @@ const M4 = new Matrix4(), VX = new Vector3(), VY = new Vector3(), VZ = new Vecto
 const SX = new Vector3(), SY = new Vector3();
 const ZERO = new Matrix4().makeScale(0, 0, 0);
 
-// At 900 m a depth pixel spans more than the screen's physical layer gaps.
-// Bias only these facing overlays; normal depth testing still hides them behind scenery.
+// Facing overlays keep depth testing while remaining distinct at long cross-level views.
 function mediaDepthLayer(material, layer = 1) {
   material.polygonOffset = true;
   material.polygonOffsetFactor = -layer;
   material.polygonOffsetUnits = -layer * 2;
   return material;
 }
+
 
 /** Shared videos get gesture retries and one recovery attempt for a stalled native loop. */
 export function createMediaPlayback({ target = globalThis.document, now = () => performance.now() / 1000 } = {}) {
@@ -186,7 +186,9 @@ function borderColour(sl, i) {
  * samples (road samples), feel (reads gentle.* when update's view does not say), make (canvas factory).
  */
 export function createMediaSlots(scene, track, opts = {}) {
-  const M = mediaLook(), layout = opts.layout || LAYOUTS.get(track.id);
+  const M = { ...mediaLook() }, layout = opts.layout || LAYOUTS.get(track.id);
+  const palette = opts.placeholderPalette || null;
+  if (palette) { M.screenHueRadps = 0; M.borderHueRadps = 0; }
   const buildTier = opts.tier || Q.name, T = tierOf(buildTier, M);
   const group = new Group();
   group.name = 'media';
@@ -232,9 +234,9 @@ export function createMediaSlots(scene, track, opts = {}) {
   slots.forEach((sl, i) => {
     sl.index = i;
     sl.p = programFor(sl.program ?? i, P);
-    sl.hue0 = ((i * 2.399) % TAU);                   // golden-angle spread: neighbours never share a hue
+    sl.hue0 = palette ? 0 : ((i * 2.399) % TAU);
     sl.spinDir = (i % 2 ? -1 : 1) * (sl.frame === 'tunnel' ? 0.7 : 1);
-    sl.base = borderColour(sl, i);
+    sl.base = palette ? new Color(palette[0]).toArray() : borderColour(sl, i);
     progs[sl.p].slots.push(sl);
   });
 
@@ -249,7 +251,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       sl.k = k;
     });
     const m = screenMaterial(texture(pg.tex), instancedBufferAttribute(new InstancedBufferAttribute(crop, 4), 'vec4'),
-      instancedBufferAttribute(new InstancedBufferAttribute(info, 4), 'vec4'), pg.spin, pg.warp, U, M);
+      instancedBufferAttribute(new InstancedBufferAttribute(info, 4), 'vec4'), pg.spin, pg.warp, U, M, palette);
     const im = new InstancedMesh(plane, m, n);
     im.frustumCulled = false; im.name = 'media-' + pg.ph.program;
     if (!pg.slots.length) im.count = 0;
@@ -696,7 +698,7 @@ export function createMediaSlots(scene, track, opts = {}) {
 }
 
 /** The placeholder screen: per-instance crop and hue, the program's turn or warp, a slow breathing zoom, Gentle contrast. */
-function screenMaterial(tex, crop, info, spin, warp, U, M) {
+function screenMaterial(tex, crop, info, spin, warp, U, M, palette = null) {
   const m = mediaDepthLayer(new MeshBasicNodeMaterial({ side: FrontSide }));
   const ang = spin.mul(U.time).mul(info.y);
   const breathe = float(1).sub(sin(U.time.mul(TAU * M.breatheHz).add(info.z.mul(TAU))).mul(0.5).add(0.5).mul(M.breatheAmp));
@@ -708,7 +710,11 @@ function screenMaterial(tex, crop, info, spin, warp, U, M) {
     const w = U.time.mul(0.35).add(info.z.mul(TAU));
     tuv = tuv.add(vec2(sin(tuv.y.mul(5.1).add(w)), cos(tuv.x.mul(4.3).sub(w.mul(0.8)))).mul(warp));
   }
-  const col = hue(tex.sample(tuv).rgb, info.x.add(U.time.mul(M.screenHueRadps)));
+  let col = hue(tex.sample(tuv).rgb, info.x.add(U.time.mul(M.screenHueRadps)));
+  if (palette) {
+    const low = vec3(...new Color(palette[0]).toArray()), high = vec3(...new Color(palette[1]).toArray());
+    col = mix(low, high, smoothstep(.12, .8, col.dot(vec3(.2126, .7152, .0722))));
+  }
   m.colorNode = mix(vec3(0.42, 0.36, 0.48), col, U.contrast).mul(M.screenGain);
   return m;
 }
@@ -728,8 +734,6 @@ function borderMaterial(size, col, U, M) {
   const p = uv().sub(0.5).mul(full);
   const d = max(abs(p.x).sub(size.x.mul(0.5)), abs(p.y).sub(size.y.mul(0.5)));
   const outside = smoothstep(B, 0, d).pow(2.2), rim = smoothstep(-0.35, 0, d).mul(smoothstep(0.25, 0, d));
-  // The border used to fill the whole picture and rely on a 6 cm depth gap to hide it.
-  // Cut out that interior in the shader and filter the edge over its pixel footprint.
   const pixel = max(fwidth(d), float(.002));
   const glow = max(outside.mul(0.85), rim).mul(smoothstep(pixel.negate(), pixel, d));
   m.colorNode = hue(col.xyz, col.w.add(U.time.mul(M.borderHueRadps))).mul(glow).mul(U.border);

@@ -68,6 +68,7 @@ import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
 import { poseOf } from './hud/presets.js';
 import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
+import { createLoading } from './hud/loading.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
@@ -76,6 +77,8 @@ import { getBoudoirLayout } from './track/boudoir-layout.js';
 import { createBoudoirPerfume } from './sim/boudoirPerfume.js';
 import { createBoudoirHazards } from './sim/boudoirHazards.js';
 import { createKeepHazards } from './sim/keepHazards.js';
+import { getGoonworksLayout } from './track/goonworks-layout.js';
+import { createGoonworksHazards } from './sim/goonworksHazards.js';
 
 const qs = new URLSearchParams(location.search);
 const course = selectedCourse(location.search);
@@ -97,6 +100,7 @@ const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/;
 const canvas = document.getElementById('view');
 const cardEl = document.getElementById('card');
 const note = document.getElementById('card-note');
+const loading=createLoading();
 /** Read-only status for the boot check (dev/boot-check.mjs) and the console. */
 const debug = { phase: 'boot', drops: 0, rescues: 0, laps: 0, fps: 0, events: {}, effects: [], place: 0 };
 window.__glassroad = debug;
@@ -104,7 +108,7 @@ window.__glassroad = debug;
 function fail(e) {
   console.error('[glassroad] boot failed', e);
   if (note) note.textContent = 'Could not start: ' + (e && e.message ? e.message : e);
-  debug.phase = 'failed';
+  debug.phase = 'failed';loading.fail();
 }
 
 /** ?botFall=1: once, steer the player to the outside of the first open stretch (a rescue to look at). */
@@ -199,13 +203,15 @@ async function boot() {
   const gentle = createGentle(feel);
   gentle.set(init.gentle);
   let hostGentle = !!(init.gentle && init.gentle.on) || !!feel.get('gentle.on');
+  loading.calm(hostGentle);
   if (qs.get('feel') === '1') openFeelSheet(feel, document.body);
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
   debug.trackId = track.id;
   const keepLayout = getKeepLayout(track);
   const boudoirLayout = getBoudoirLayout(track);
-  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : boudoirLayout ? createBoudoirHazards(track, boudoirLayout) : null;
+  const goonworksLayout = getGoonworksLayout(track);
+  const hazards = goonworksLayout ? createGoonworksHazards(track, goonworksLayout) : keepLayout ? createKeepHazards(track, keepLayout) : boudoirLayout ? createBoudoirHazards(track, boudoirLayout) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -217,7 +223,7 @@ async function boot() {
   const audio = createAudio(feel, bus, { gentle });
   const immersion = createImmersion(track);
   if (BOT) Object.defineProperty(debug, 'underwaterAudio', { get: () => audio.underwater });
-  for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
+  for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
   bus.on('effect-start', ({ kind }) => { if (!debug.effects.includes(kind)) debug.effects.push(kind); debug.effectNow = kind; });
@@ -231,15 +237,16 @@ async function boot() {
   hud.setCard('start', { title: trackName });
   // the warming card names each stage and its bar fills with the real progress (pass 3)
   const paintGap = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
-  hud.setLoading('Starting the renderer', 0.04);
+  const showLoading=(stage,p)=>{hud.setLoading(stage,p);loading.set(stage,p);};
+  showLoading('Opening the garage', 0.04);
 
   // the saved display options (frame cap, render scale, quality, fps readout) reach the renderer at boot
   const renderer = await createRenderer(canvas, { forceRenderer: init.caps.forceRenderer, options: hud.options });
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
-  hud.setLoading('Loading art', 0.08);
+  showLoading('Bringing the racers in', 0.08);
   const art = qs.get('art') === '0' ? null
-    : await loadArt(renderer, { trackId: track.id, onProgress: (d, n) => hud.setLoading('Loading art ' + d + '/' + n, 0.08 + 0.4 * d / n) });
-  hud.setLoading('Building the road', 0.5);
+    : await loadArt(renderer, { trackId: track.id, onProgress: (d, n) => showLoading('Bringing the racers in', 0.08 + 0.4 * d / n) });
+  showLoading('Setting the course', 0.5);
   await paintGap();
   if (art && art.failed.length) debug.artFailed = art.failed;
   debug.art = art ? { loaded: art.loaded, wanted: art.wanted, failed: art.failed.slice(0, 4) } : null;
@@ -283,7 +290,7 @@ async function boot() {
   debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
   debug.trackId = track.id;
   if (boudoirLayout) Object.defineProperty(debug, 'perfume', { get: () => perfume.inspect(), enumerable: true });
-  if (hazards) Object.defineProperty(debug, boudoirLayout ? 'boudoirHazards' : 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
+  if (hazards) Object.defineProperty(debug, goonworksLayout ? 'goonworksHazards' : boudoirLayout ? 'boudoirHazards' : 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
   debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   debug.terrace = world.terrace ? { count: world.terrace.count, ...world.terrace.diagnostics } : null;
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
@@ -301,7 +308,7 @@ async function boot() {
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
     if (hazards) {
       const drive = ai.drive;
-      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing' && !track.forkAtSeg?.(r.st[S.seg])) hazards.steer(r, out); };
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if ((ctx.race.phase === 'racing' || ctx.race.phase === 'finished') && !track.forkAtSeg?.(r.st[S.seg])) hazards.steer(r, out); };
       hazards.reset();
     }
     contact = createContact(track, feel, q);
@@ -677,7 +684,7 @@ async function boot() {
   });
 
   // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
-  hud.setLoading('Preparing shaders', 0.55);
+  showLoading('Getting the lights ready', 0.55);
   await paintGap();
   // Native mirrors skip capture from behind their planes. Warm from inside the hall
   // so its reflection pipelines compile behind the loading card, before the first lap.
@@ -692,9 +699,9 @@ async function boot() {
       peekCamera(cam.camera, track, { s: hall.s0 + 80, backM: 10, upM: 5, aheadM: 40 }, renderer.aspect);
     }
     warm = await renderer.compile(world.scene, cam.camera, undefined,
-      { onProgress: (k, n) => hud.setLoading('Preparing shaders ' + k + '/' + n, 0.55 + 0.4 * k / n) });
+      { onProgress: (k, n) => showLoading('Getting the lights ready', 0.55 + 0.4 * k / n) });
     if (warmPose) {
-      hud.setLoading('Preparing mirrors', .96);
+      showLoading('One last look', .96);
       await paintGap();
       const hall = boudoirLayout.landmarks.find(row => row.id === 'drawer-hall');
       // Temporary view copies put all racers in the capture without changing race state.
@@ -722,13 +729,14 @@ async function boot() {
       onProgress: (k, n) => hud.setLoading('Preparing water reflections ' + k + '/' + n, 0.96) });
   }
   // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
-  hud.setLoading('Last touches', 0.97);
+  showLoading('One last look', 0.97);
   await paintGap();
   gateScreen.warm(world.spirals && world.spirals.gates[0] ? world.spirals.gates[0].params : null);
-  hud.setLoading('Ready', 1);
+  showLoading('Ready to roll', 1);
   hud.setReady(true);
   bridge.ready();
   toMenu();
+  loading.finish();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
   const linkTok = course.online ? linkToken(location.search) : null;
   if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }
@@ -858,8 +866,8 @@ async function boot() {
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     for (let i = 0; i < kartViews.length; i++) kartViews[i].glide = !online && glideActive(racers.list[i].st);
-    if ((keepLayout || boudoirLayout) && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
-      const bridge = boudoirLayout?.mirrorJump || keepLayout.drawbridge;
+    if ((keepLayout || boudoirLayout || goonworksLayout) && inRace && !paused && !online && pst[S.lap] !== glideHintLap) {
+      const bridge = goonworksLayout?.launch || boudoirLayout?.mirrorJump || keepLayout.drawbridge;
       if (pst[S.s] >= bridge.rampS0 - 65 && pst[S.s] < bridge.rampS1) {
         glideHintLap = pst[S.lap]; hud.toast('Hold jump to fly with the propeller cap');
       }
@@ -887,9 +895,9 @@ async function boot() {
     }
     if (HT) hLap('world');
     renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
-    const inGarage=!!garage&&state==='menu'&&hud.card==='menu';
+    const garageScene=!!garage&&state==='menu',inGarage=garageScene&&hud.card==='menu';
     garage?.setVisible(inGarage);
-    if(inGarage)garage.render(frameDt,hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview||matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if(garageScene)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
     else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
     if (HT) hLap('render');
 

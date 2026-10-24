@@ -1,0 +1,128 @@
+/* GOONWORKS runtime construction. Every resource exists before the renderer warms the scene. */
+import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry,
+  OctahedronGeometry, BufferGeometry, Float32BufferAttribute, BufferAttribute, MeshBasicNodeMaterial,
+  Matrix4, Quaternion, Vector3, BackSide } from 'three/webgpu';
+import { vec3, float, uv, positionWorld, normalWorld, normalize, abs, mix, smoothstep, min } from 'three/tsl';
+import { goonworksWorldPlan } from './goonworksWorld.js';
+import { createGoonworksMaterial, createGoonworksTubeMaterial, createGoonworksPlatformMaterial, GOONWORKS_PALETTE as C } from './goonworksMaterials.js';
+import {goonworksTubeShell,goonworksPlatformGeometry} from './goonworksGeometry.js';
+import { Q } from './quality.js';
+export { applyGoonworksRoad, applyGoonworksRails } from './goonworksMaterials.js';
+export { goonworksMediaLayout, goonworksSpiralLayout } from './goonworksMedia.js';
+
+function islandGeometry(hex=false,cap=true){
+  const positions=[],tri=(a,b,c)=>positions.push(...a,...b,...c),count=hex?6:24;
+  const ring=(radius,y)=>Array.from({length:count},(_,i)=>{const a=i/count*Math.PI*2;
+    const x=hex?Math.cos(a)*.5:Math.sign(Math.cos(a))*Math.pow(Math.abs(Math.cos(a)),.45)*.5;
+    const z=hex?Math.sin(a)*.5:Math.sign(Math.sin(a))*Math.pow(Math.abs(Math.sin(a)),.45)*.5;
+    return[x*radius,y,z*radius];});
+  const rings=[ring(1,.5),ring(.98,.32),ring(.8,-.12),ring(.45,-.5)];
+  for(let i=0;i<count;i++){const j=(i+1)%count;if(cap)tri([0,.5,0],rings[0][j],rings[0][i]);
+    for(let k=1;k<rings.length;k++){tri(rings[k-1][i],rings[k-1][j],rings[k][j]);tri(rings[k-1][i],rings[k][j],rings[k][i]);}
+    tri([0,-.5,0],rings.at(-1)[i],rings.at(-1)[j]);}
+  const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(positions,3));g.computeVertexNormals();g.computeBoundingSphere();return g;
+}
+function starGeometry(){
+  const positions=[],tri=(a,b,c)=>positions.push(...a,...b,...c),points=Array.from({length:10},(_,i)=>{const a=i/10*Math.PI*2+Math.PI/2,r=i%2?.22:.5;return[Math.cos(a)*r,Math.sin(a)*r];});
+  for(let i=0;i<10;i++){const j=(i+1)%10,a=points[i],b=points[j];tri([0,0,.5],[...a,.5],[...b,.5]);tri([0,0,-.5],[...b,-.5],[...a,-.5]);tri([...a,.5],[...a,-.5],[...b,-.5]);tri([...a,.5],[...b,-.5],[...b,.5]);}
+  const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(positions,3));g.computeVertexNormals();g.computeBoundingSphere();return g;
+}
+function spiralGeometry(){
+  const P=[],N=[],U=[],I=[],steps=240;
+  for(let i=0;i<=steps;i++){const t=i/steps,a=t*Math.PI*6.2,r=.04+t*.4;
+    for(const side of[-1,1]){const width=.019,radius=r+side*width;P.push(Math.cos(a)*radius,Math.sin(a)*radius,0);N.push(0,0,1);U.push(t,(side+1)/2);}
+    if(i){const j=(i-1)*2;I.push(j,j+1,j+3,j,j+3,j+2);}
+  }
+  const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(P,3));g.setAttribute('normal',new Float32BufferAttribute(N,3));g.setAttribute('uv',new Float32BufferAttribute(U,2));g.setIndex(I);g.computeBoundingSphere();return g;
+}
+
+/** Extend only actual side and underside triangles. Existing gaps remain cut through every layer. */
+export function goonworksRibbonShell(track){
+  const source=track.meshes.road,P=new Float32Array(source.positions),N=source.normals,U=source.uvs,I=[],types=new Int8Array(P.length/3);
+  for(let i=0;i<types.length;i++){
+    const k=i*3,f=track.frameAt(U[i*2+1]),up=N[k]*f.n[0]+N[k+1]*f.n[1]+N[k+2]*f.n[2];
+    const side=N[k]*f.b[0]+N[k+1]*f.b[1]+N[k+2]*f.b[2];
+    if(up>.15){types[i]=0;continue;}types[i]=up<-.15?2:1;
+    if(types[i]===2||U[i*2]>.12)for(let a=0;a<3;a++)P[k+a]-=f.n[a]*1.4;
+    if(Math.abs(side)>.45)for(let a=0;a<3;a++)P[k+a]+=f.b[a]*Math.sign(side)*.035;
+  }
+  for(let i=0;i<source.indices.length;i+=3){const a=source.indices[i],b=source.indices[i+1],c=source.indices[i+2];
+    // End caps use local depth in UV.y rather than route distance. Their original thin cap remains.
+    if(Math.max(U[a*2+1],U[b*2+1],U[c*2+1])<=.251&&Math.max(Math.abs(U[a*2]),Math.abs(U[b*2]),Math.abs(U[c*2]))>1)continue;
+    if(types[a]&&types[b]&&types[c])I.push(a,b,c);}
+  return{positions:P,normals:new Float32Array(N),uvs:new Float32Array(U),indices:new Uint32Array(I)};
+}
+
+export function buildGoonworks(track,art=null,pal=null,samples=null){
+  const plan=goonworksWorldPlan(track),group=new Group();group.name='goonworks-funhouse';
+  if(!plan)return{group,update(){},hit(){},reset(){},dispose(){},stats:{},casters:[]};
+  const geometries={box:new BoxGeometry(1,1,1),sphere:new SphereGeometry(.5,20,12),
+    cylinder:new CylinderGeometry(.5,.5,1,20),cone:new CylinderGeometry(.48,.2,1,20),
+    torus:new TorusGeometry(.48,.02,6,40),arch:new TorusGeometry(.48,.025,8,40,Math.PI),star:starGeometry(),spiral:spiralGeometry(),island:islandGeometry(),openIsland:islandGeometry(false,false),hexIsland:islandGeometry(true),spark:new OctahedronGeometry(.5)};
+  const materials={};for(const[name,hex]of Object.entries(C))materials[name]=createGoonworksMaterial(hex,{ink:name==='ink',paper:name==='white'||name==='cream',unlit:name==='distant'});
+  const ink=createGoonworksMaterial(C.ink,{outline:true}),owned=[ink],extraGeometry=[];
+  function upload(data){const g=new BufferGeometry();g.setAttribute('position',new BufferAttribute(data.positions,3));g.setAttribute('normal',new BufferAttribute(data.normals,3));g.setAttribute('uv',new BufferAttribute(data.uvs,2));g.setIndex(new BufferAttribute(data.indices,1));g.computeBoundingSphere();extraGeometry.push(g);return g;}
+  const M=new Matrix4(),B=new Matrix4(),P=new Vector3(),S=new Vector3(),rotation=new Quaternion(),X=new Vector3(),Y=new Vector3(),Z=new Vector3();
+  const batches=new Map(),moving=[];
+  for(const row of plan.rows){const key=row.shape+':'+row.material+(row.motion?':moving':'');if(!batches.has(key))batches.set(key,[]);batches.get(key).push(row);}
+  for(const[key,rows]of batches){const[shape,material]=key.split(':'),geo=geometries[shape],mesh=new InstancedMesh(geo,materials[material],rows.length);
+    mesh.name='goonworks-'+key.replaceAll(':','-');group.add(mesh);
+    const outlined=rows.filter(r=>r.outline&&r.material!=='ink'&&r.material!=='distant');
+    const hull=outlined.length?new InstancedMesh(geo,ink,outlined.length):null;if(hull){hull.name=mesh.name+'-ink';group.add(hull);}
+    let h=0;
+    rows.forEach((row,index)=>{B.makeBasis(X.fromArray(row.axes[0]),Y.fromArray(row.axes[1]),Z.fromArray(row.axes[2]));rotation.setFromRotationMatrix(B);P.fromArray(row.p);S.fromArray(row.size);mesh.setMatrixAt(index,M.compose(P,rotation,S));
+      let hullIndex=-1;if(row.outline&&row.material!=='ink'&&row.material!=='distant'){hullIndex=h++;S.set(row.size[0]+.45,row.size[1]+.45,row.size[2]+.45);hull.setMatrixAt(hullIndex,M.compose(P,rotation,S));}
+      if(row.motion)moving.push({row,mesh,index,hull,hullIndex,rest:rotation.clone()});});
+    mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();if(hull){hull.instanceMatrix.needsUpdate=true;hull.computeBoundingSphere();}
+    if(key.endsWith(':moving')){mesh.boundingSphere.radius+=10;if(hull)hull.boundingSphere.radius+=10;}
+  }
+  // An opaque skirt gives the white ribbon a visible deep fuchsia thickness at every crossing.
+  const data=goonworksRibbonShell(track),shell=new BufferGeometry();
+  shell.setAttribute('position',new BufferAttribute(data.positions,3));shell.setAttribute('normal',new BufferAttribute(data.normals,3));shell.setAttribute('uv',new BufferAttribute(data.uvs,2));shell.setIndex(new BufferAttribute(data.indices,1));shell.computeBoundingSphere();extraGeometry.push(shell);
+  const shellMat=createGoonworksMaterial(C.fuchsia),up=normalize(normalWorld).y;
+  const sideInk=float(1).sub(smoothstep(.015,.042,min(abs(uv().x),abs(uv().x.sub(.25))))).mul(float(1).sub(smoothstep(.3,.7,abs(up))));
+  shellMat.colorNode=mix(shellMat.colorNode,vec3(.009,.002,.012),sideInk);owned.push(shellMat);
+  const ribbon=new Mesh(shell,shellMat);ribbon.name='goonworks-thick-ribbon';group.add(ribbon);
+
+  for(const outer of[false,true]){const data=goonworksTubeShell(track,outer);if(!data)continue;
+    const material=createGoonworksTubeMaterial(outer),tube=new Mesh(upload(data),material);owned.push(material);
+    tube.name=outer?'goonworks-rabbit-outer-shell':'goonworks-rabbit-inner-shell';group.add(tube);}
+
+  // Every broad field platform is one whole deck, never a repetition of the small stone kit.
+  const platformGroups=[];
+  for(const row of plan.platforms){const holder=new Group();holder.name='goonworks-platform-'+row.id;
+    B.makeBasis(X.fromArray(row.b),Y.fromArray(row.n),Z.fromArray(row.t).negate());holder.quaternion.setFromRotationMatrix(B);holder.position.fromArray(row.p);
+    const capMaterial=createGoonworksPlatformMaterial(row.w,row.len);owned.push(capMaterial);
+    const top=new Mesh(upload(goonworksPlatformGeometry(row.w,row.len)),capMaterial);top.name='single-surface-platform-cap';holder.add(top);
+    const skirt=new Mesh(geometries.openIsland,materials.fuchsia);skirt.scale.set(row.w-.3,4.8,row.len-.3);skirt.position.y=-3.1;holder.add(skirt);
+    group.add(holder);platformGroups.push({row,holder,rest:holder.position.clone(),age:Infinity});
+  }
+  // The sky carries static pale ink silhouettes, not a rainbow spiral or a distant ground plane.
+  const skyG=new SphereGeometry(plan.skyRadius,32,18),skyM=new MeshBasicNodeMaterial({side:BackSide,depthWrite:false,fog:false,toneMapped:false});
+  skyM.colorNode=mix(vec3(.83,.53,.69),vec3(.98,.87,.94),smoothstep(plan.center[1]-250,plan.center[1]+350,positionWorld.y));
+  const sky=new Mesh(skyG,skyM);sky.position.fromArray(plan.center);sky.name='goonworks-blush-atmosphere';sky.renderOrder=-2;sky.frustumCulled=false;group.add(sky);extraGeometry.push(skyG);owned.push(skyM);
+  const sparkleCount=Math.min(Q.name==='phone'?450:1900,plan.particles.length*11),sparkle=new InstancedMesh(geometries.spark,materials.white,sparkleCount);
+  sparkle.name='goonworks-ink-sparkles';group.add(sparkle);
+  const bubblesCount=Math.min(Q.name==='phone'?80:260,plan.particles.length*2),bubbles=new InstancedMesh(geometries.torus,materials.cream,bubblesCount);bubbles.name='goonworks-floating-bubbles';group.add(bubbles);
+  let time=0,disposed=false;const spin=new Quaternion(),axis=new Vector3();
+  function update(dt=0,view={},gentle=!!view.gentle){
+    if(disposed||view.paused)return;time+=Math.max(0,Math.min(dt,1))*(gentle?.45:1);
+    for(const item of moving){const{row,mesh,index,hull,hullIndex}=item;axis.fromArray(row.axes[row.motion.axis??1]);spin.setFromAxisAngle(axis,time*row.motion.spin+row.motion.phase);rotation.copy(spin).multiply(item.rest);P.fromArray(row.p);S.fromArray(row.size);mesh.setMatrixAt(index,M.compose(P,rotation,S));mesh.instanceMatrix.needsUpdate=true;
+      if(hullIndex>=0){S.set(row.size[0]+.45,row.size[1]+.45,row.size[2]+.45);hull.setMatrixAt(hullIndex,M.compose(P,rotation,S));hull.instanceMatrix.needsUpdate=true;}}
+    for(let i=0;i<sparkleCount;i++){const seed=plan.particles[Math.floor(i/11)%plan.particles.length],phase=i*2.399963+seed.phase,rise=((time*1.4+phase*2)%25+25)%25;
+      P.fromArray(seed.p);P.x+=Math.sin(phase+time*.09)*seed.spread;P.z+=Math.cos(phase+time*.07)*seed.spread;P.y+=rise;
+      const fade=Math.min(1,rise/3,(25-rise)/3),size=(.22+i%4*.12)*fade;S.set(size,size*(i%4===0?3:1),size);rotation.setFromAxisAngle(Y.set(0,1,0),phase+time*.2);sparkle.setMatrixAt(i,M.compose(P,rotation,S));}
+    sparkle.instanceMatrix.needsUpdate=true;
+    for(let i=0;i<bubblesCount;i++){const seed=plan.particles[Math.floor(i/2)%plan.particles.length],phase=i*1.74,rise=((time*2+phase*4)%36+36)%36;
+      P.fromArray(seed.p);P.x+=Math.sin(phase)*seed.spread;P.z+=Math.cos(phase)*seed.spread;P.y+=rise;const size=(1.4+i%3*.75)*Math.min(1,rise/3,(36-rise)/3);S.set(size,size,size);
+      rotation.setFromAxisAngle(Y.set(0,1,0),phase+time*.15);bubbles.setMatrixAt(i,M.compose(P,rotation,S));}bubbles.instanceMatrix.needsUpdate=true;
+    for(const platform of platformGroups){if(!Number.isFinite(platform.age))continue;platform.age+=Math.max(0,dt);const a=platform.age;if(a>=1.4){platform.age=Infinity;platform.holder.position.copy(platform.rest);continue;}
+      const u=a<.2?a/.2:Math.max(0,1-(a-.2)/1.2),dip=(gentle?.025:.18)*u*u*(3-2*u);platform.holder.position.copy(platform.rest).addScaledVector(axis.fromArray(platform.row.n),-dip);}
+  }
+  update();sparkle.computeBoundingSphere();bubbles.computeBoundingSphere();if(sparkle.boundingSphere)sparkle.boundingSphere.radius+=50;if(bubbles.boundingSphere)bubbles.boundingSphere.radius+=60;
+  const hit=event=>{const id=typeof event==='string'?event:event?.id,platform=platformGroups.find(p=>p.row.id===id);if(platform){platform.age=0;return platform.row;}return null;};
+  const reset=()=>{time=0;for(const p of platformGroups){p.age=Infinity;p.holder.position.copy(p.rest);}update();};
+  const stats={draws:0,parts:plan.rows.length,rooms:plan.rooms.length,media:plan.mounts.length,platforms:platformGroups.length,sparkles:sparkleCount,bubbles:bubblesCount,rejected:plan.rejected};group.traverse(o=>{if(o.isMesh)stats.draws++;});
+  return{group,plan,stats,casters:[],update,hit,reset,platforms:platformGroups,
+    dispose(){if(disposed)return;disposed=true;group.removeFromParent();group.traverse(o=>{if(o.isInstancedMesh)o.dispose();});Object.values(geometries).forEach(g=>g.dispose());extraGeometry.forEach(g=>g.dispose());Object.values(materials).forEach(m=>m.dispose());owned.forEach(m=>m.dispose());}};
+}
