@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Models.Program;
@@ -12,13 +13,21 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal static class ProgramCapabilities
     {
-        internal static readonly IReadOnlySet<QuestCategory> Raised = new HashSet<QuestCategory>
+        internal static readonly IReadOnlySet<QuestCategory> Raised = Build(OperatingSystem.IsWindows());
+
+        /// <summary>KeywordTrigger only where keyword input exists: KeywordTriggerHead.Sync hooks keys on Windows only.</summary>
+        internal static HashSet<QuestCategory> Build(bool keywordInput)
         {
-            QuestCategory.Flash, QuestCategory.Video, QuestCategory.Spiral, QuestCategory.PinkFilter,
-            QuestCategory.Bubbles, QuestCategory.LockCard, QuestCategory.BubbleCount, QuestCategory.Mantra,
-            QuestCategory.Autonomy, QuestCategory.Lockdown, QuestCategory.BlinkTrainer, QuestCategory.KeywordTrigger,
-            // Not raised: Remote/RemoteIssue, Session, Streak, Combined.
-        };
+            var set = new HashSet<QuestCategory>
+            {
+                QuestCategory.Flash, QuestCategory.Video, QuestCategory.Spiral, QuestCategory.PinkFilter,
+                QuestCategory.Bubbles, QuestCategory.LockCard, QuestCategory.BubbleCount, QuestCategory.Mantra,
+                QuestCategory.Autonomy, QuestCategory.Lockdown, QuestCategory.BlinkTrainer,
+                // Not raised: Remote/RemoteIssue, Session, Streak, Combined.
+            };
+            if (keywordInput) set.Add(QuestCategory.KeywordTrigger);
+            return set;
+        }
 
         /// <summary>Ritual tasks: SubmitRitualTask + the seeded roadmap (programs 3b). Tests flip it to prove the gate.</summary>
         internal static bool RitualsAvailable = true;

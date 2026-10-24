@@ -19,6 +19,7 @@ internal sealed partial class KeywordAudioRuntime
 {
     private readonly LinkedList<TriggerFireRecord> _recent = new();
     internal IReadOnlyList<TriggerFireRecord> RecentFires => _recent.ToArray();
+    internal void ClearRecentFires() => _recent.Clear();
     internal event Action<KeywordTrigger>? TriggerFired;
 
     private void Record(KeywordTrigger trigger, string source)
@@ -42,6 +43,9 @@ internal sealed partial class KeywordAudioRuntime
                 achievements.TryUnlockExclusive("pavlov");
         }
     }
+
+    /// <summary>The latest response chain; tests await it instead of yielding (P57).</summary>
+    internal Task LastDispatch { get; private set; } = Task.CompletedTask;
 
     private async Task Dispatch(IReadOnlyList<KeywordTrigger> fired)
     {
@@ -70,7 +74,7 @@ internal sealed partial class KeywordAudioRuntime
                 { FallbackPhraseCategory = "PuppyPraise", RequireAiAvailable = false } },
         };
         Record(demo, source);
-        _ = Dispatch(new[] { demo });
+        LastDispatch = Dispatch(new[] { demo });
     }
 }
 
@@ -103,10 +107,8 @@ internal static class KeywordResponses
         switch (effect)
         {
             case KeywordVisualEffect.SubliminalFlash:
-                var pool = CoreSettings.Current.SubliminalPool?.Where(kv => kv.Value).Select(kv => kv.Key).ToArray();
-                if (pool == null || pool.Length == 0)
-                    pool = CoreMods.GetDefaultSubliminalPool().Where(kv => kv.Value).Select(kv => kv.Key).ToArray();
-                if (pool.Length > 0) Overlay(h => SubliminalOverlay.Show(h, pool[Random.Shared.Next(pool.Length)]));
+                // WPF :1789 App.Subliminal.FlashSubliminal: the scheduler's show path (whisper, haptic, XP).
+                if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
                 break;
             case KeywordVisualEffect.ExactSubliminal:
                 Overlay(h => SubliminalOverlay.Show(h, trigger.Keyword.ToUpperInvariant()));

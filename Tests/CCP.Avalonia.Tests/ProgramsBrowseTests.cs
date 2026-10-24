@@ -48,7 +48,10 @@ public sealed class ProgramsBrowseTests
 
                 var texts = view.FindControl<ListBox>("ProgramLibraryList")!
                     .GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
-                Assert.Contains("Not available on this build yet: needs Keyword Triggers.", texts);
+                // Keyword input is Windows-only (ProgramCapabilities.Build), so only other OSes refuse kept/firmware_install.
+                const string refused = "Not available on this build yet: needs Keyword Triggers.";
+                if (System.OperatingSystem.IsWindows()) Assert.DoesNotContain(refused, texts);
+                else Assert.Contains(refused, texts);
                 Assert.DoesNotContain(texts, t => t.Contains("programs_needs_feature"));
             }
             finally

@@ -189,12 +189,16 @@ public sealed class KeywordAudioRuntimeTests
             for (var i = 0; i < 6; i++) KeywordTriggerHead.Engine.FireDemo("pulse " + i, "Tutorial");
             var feed = view.FindControl<StackPanel>("AwarenessPulseFeed")!;
             Assert.Equal(5, feed.Children.Count);
-            var row = Assert.IsType<StackPanel>(Assert.IsType<Border>(feed.Children[0]).Child);
-            Assert.Equal("\"pulse 5\"", Assert.IsType<TextBlock>(row.Children[0]).Text);
-            Assert.Equal(2, row.Children.OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().Count());
+            var row = Assert.IsType<Grid>(Assert.IsType<Border>(feed.Children[0]).Child);
+            Assert.Equal("\"pulse 5\"", Assert.IsType<TextBlock>(row.Children[1]).Text);
+            var chips = Assert.IsType<StackPanel>(row.Children[2]).Children.OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().ToList();
+            Assert.Equal(2, chips.Count);   // WPF tooltips are prose, not raw action keys
+            Assert.Equal("Draws a glowing box around the matched word on screen (OCR matches only)", ToolTip.GetTip(chips[0]));
+            Assert.Equal(4, Grid.GetColumn(row.Children[3]));   // source chip right of the * filler (WPF :204)
+            Assert.Equal("TUTORIAL", Assert.IsType<TextBlock>(Assert.IsType<Border>(row.Children[3]).Child).Text);
             Assert.Contains("fires today", view.FindControl<TextBlock>("TxtAwarenessFireCount")!.Text!);
         }
-        finally { window.Close(); }
+        finally { window.Close(); KeywordTriggerHead.Engine.ClearRecentFires(); }
     });
 
     [Fact]

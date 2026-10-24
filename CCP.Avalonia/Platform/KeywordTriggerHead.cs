@@ -162,7 +162,7 @@ internal sealed partial class KeywordAudioRuntime
             t.LastTriggeredAt = now;
             Record(t, "Keyboard");
         }
-        _ = Dispatch(fired);
+        LastDispatch = Dispatch(fired);
     }
 
     private CancellationTokenSource _pending = new();

@@ -127,13 +127,13 @@ public sealed class KeywordResponseTests
         var file = Path.GetTempFileName();
         try
         {
-            var gap = new TaskCompletionSource(); var plays = 0; var stops = 0; var xp = 0d;
+            var gap = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var plays = 0; var stops = 0; var xp = 0d;
             engine.Delay = (_, _) => gap.Task;
             CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { plays++; return () => stops++; };
             CoreProgression.AddXPProvider = (value, _) => xp += value;
             s.KeywordTriggers[0].Actions.Insert(0, new PlayAudioAction { FilePath = file, PlayCount = 2, DelayBetweenMs = 200 });
             Type(engine); Assert.Equal(1, plays); Assert.Equal(0, xp);
-            engine.StopAudio(); gap.SetResult(); await Task.Yield();
+            engine.StopAudio(); gap.SetResult(); await engine.LastDispatch;
             Assert.Equal(1, plays); Assert.Equal(1, stops); Assert.Equal(0, xp);
             Assert.True(engine.IsActive);
         }
@@ -146,13 +146,13 @@ public sealed class KeywordResponseTests
         var file = Path.GetTempFileName();
         try
         {
-            var gap = new TaskCompletionSource(); var order = new List<string>();
+            var gap = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var order = new List<string>();
             engine.Delay = (_, _) => gap.Task;
             CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => { order.Add("audio"); return () => { }; };
             CoreProgression.AddXPProvider = (_, _) => order.Add("xp");
             s.KeywordTriggers[0].Actions.Insert(0, new PlayAudioAction { FilePath = file, PlayCount = 2, DelayBetweenMs = 200 });
             Type(engine); Assert.Equal(new[] { "audio" }, order);
-            gap.SetResult(); await Task.Yield();
+            gap.SetResult(); await engine.LastDispatch;
             Assert.Equal(new[] { "audio", "audio", "xp" }, order);
         }
         finally { File.Delete(file); }
@@ -190,6 +190,21 @@ public sealed class KeywordResponseTests
             CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider) = saved; }
     }
 
+    /// <summary>WPF KeywordTriggerService :1789 FlashSubliminal: the scheduler's show path (whisper, haptic, XP).</summary>
+    [Fact]
+    public void SubliminalFlashGoesThroughTheSubliminalShowPath()
+    {
+        var s = CoreSettings.Current; var saved = (s.SubliminalPool, CoreSubliminal.ShowProvider);
+        try
+        {
+            var shown = new List<string>(); CoreSubliminal.ShowProvider = shown.Add;
+            s.SubliminalPool = new() { ["OBEY"] = true, ["OFF"] = false };
+            KeywordResponses.Visual(KeywordVisualEffect.SubliminalFlash, new KeywordTrigger { Keyword = "sit" }, () => { });
+            Assert.Equal(new[] { "OBEY" }, shown);
+        }
+        finally { (s.SubliminalPool, CoreSubliminal.ShowProvider) = saved; }
+    }
+
     [Fact]
     public void CannedCommentUsesEnabledCustomPhrasePool()
     {
@@ -219,8 +234,10 @@ public sealed class KeywordResponseTests
                 rule.Enabled = true; rule.Intensity = 1;
                 Assert.True(haptics.ConnectAsync().GetAwaiter().GetResult());
                 s.KeywordTriggers[0].Actions = new() { new HapticAction { Intensity = 0.5 } };
+                using var pulsed = new System.Threading.ManualResetEventSlim();
+                ConditioningControlPanel.Services.Haptics.Core.MockProviderV2.Toast = t => { toasts.Enqueue(t); if (t.Contains('%')) pulsed.Set(); }; // WithHaptics restores it
                 Type(engine);
-                Assert.True(System.Threading.SpinWait.SpinUntil(() => toasts.Any(t => t.Contains('%')), 3000));
+                Assert.True(pulsed.Wait(TimeSpan.FromSeconds(10)), string.Join(" | ", toasts));
             }
             finally { (rule.Enabled, rule.Intensity) = saved; haptics.Settings.SubliminalEnabled = subliminal; }
         });

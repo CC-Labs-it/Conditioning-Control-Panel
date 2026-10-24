@@ -23,9 +23,12 @@ public sealed class ProgramCapabilitiesTests
         ["first_week"] = new string[0],
         ["presentation"] = new string[0],
         ["the_takeover"] = new string[0],
-        ["kept"] = new string[0],
-        ["firmware_install"] = new string[0],
+        ["kept"] = KeywordNeeds,
+        ["firmware_install"] = KeywordNeeds,
     };
+
+    /// <summary>Keyword input is Windows-only (KeywordTriggerHead.Sync), so Linux cannot finish keyword tasks.</summary>
+    private static string[] KeywordNeeds => System.OperatingSystem.IsWindows() ? new string[0] : new[] { "KeywordTrigger" };
 
     [Fact]
     public void EveryBuiltInProgramIsClassifiedAndOnlyTheFinishableOnesAreEnrollable()
@@ -39,8 +42,16 @@ public sealed class ProgramCapabilitiesTests
                 .Distinct().OrderBy(s => s);
             Assert.True(Needs[p.Id].OrderBy(s => s).SequenceEqual(missing), $"{p.Id}: {string.Join(",", missing)}");
         }
-        Assert.Equal(new[] { "first_week", "presentation", "firmware_install", "the_takeover", "kept" },
+        Assert.Equal(all.Select(p => p.Id).Where(id => Needs[id].Length == 0),
             all.Where(p => ProgramService.UnavailableTasks(p, ProgramCapabilities.IsAvailable).Count == 0).Select(p => p.Id));
+    }
+
+    [Fact]
+    public void KeywordTriggerIsRaisedOnlyWhereKeywordInputExists()
+    {
+        Assert.Contains(QuestCategory.KeywordTrigger, ProgramCapabilities.Build(keywordInput: true));
+        Assert.DoesNotContain(QuestCategory.KeywordTrigger, ProgramCapabilities.Build(keywordInput: false));
+        Assert.Equal(System.OperatingSystem.IsWindows(), ProgramCapabilities.Raised.Contains(QuestCategory.KeywordTrigger));
     }
 
     /// <summary>The QuestService call that raises each category.</summary>
@@ -69,7 +80,7 @@ public sealed class ProgramCapabilitiesTests
                         && Path.GetFileName(f) != "QuestService.cs")
             .Select(f => Code(File.ReadAllText(f))));
 
-        foreach (var category in ProgramCapabilities.Raised)
+        foreach (var category in ProgramCapabilities.Build(keywordInput: true))
         {
             Assert.True(TrackCall.TryGetValue(category, out var call), $"{category} has no Track call mapped");
             Assert.True(Regex.IsMatch(code, $@"\bQuests\??\.{call}\s*\("), $"{category}: no {call}( call in the head or Core");
