@@ -251,7 +251,7 @@ public sealed class TakeoverTests
             Assert.True(w.SparkCount >= 22);
 
             now += TimeSpan.FromMilliseconds(150);
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // the cue drives itself off the window's frames
+            TakeoverAnnouncerOverlay.Frame();   // step the production callback at the controlled time
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, w.Opacity);
             Assert.Equal(1f, w.Bloom, 3);
