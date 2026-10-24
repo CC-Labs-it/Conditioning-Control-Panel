@@ -99,7 +99,10 @@ namespace ConditioningControlPanel.Services
                 case "duck_audio": CoreAudio.Duck(80); return null;
                 case "unduck_audio": CoreAudio.Unduck(); return null;
                 case "enable_strict_lock": s.StrictLockEnabled = true; CoreSettings.Save(); return null;
-                case "disable_strict_lock": s.StrictLockEnabled = false; CoreSettings.Save(); return null;
+                case "disable_strict_lock":
+                    if (RemoteControl.RemoteHoldings.RefusesStrictOff(LockdownService.Current?.IsActive == true,
+                        LockdownService.Current?.ForcedStrictLock == true)) return "the Lockdown holds the strict lock";
+                    s.StrictLockEnabled = false; CoreSettings.Save(); return null;
                 case "enable_panic": s.PanicKeyEnabled = true; CoreSettings.Save(); SyncPanicUi(); return null;
                 case "trigger_panic": StopEffects(force: true); return null;
                 default: return NotOnThisBuild;
@@ -120,10 +123,10 @@ namespace ConditioningControlPanel.Services
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop();
             }
-            // As WPF, Lockdown or not: this only reduces restraint, and LockdownService.Deactivate restores
-            // the pre-lockdown values when the timer ends.
+            // ponytail: explicit panic retains the head's emergency escape behavior. Remote endings hand back
+            // their holdings in RemoteRelay; stopping effects must not overwrite those settings.
             var s = CoreSettings.Current;
-            if (s.StrictLockEnabled || !s.PanicKeyEnabled)
+            if (force && (s.StrictLockEnabled || !s.PanicKeyEnabled))
             {
                 s.StrictLockEnabled = false;
                 s.PanicKeyEnabled = true;
