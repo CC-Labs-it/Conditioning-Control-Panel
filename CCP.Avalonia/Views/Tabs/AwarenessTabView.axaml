@@ -173,9 +173,8 @@
                         <!-- ==================== LIVE PULSE ====================
                              The heartbeat of the tab: amber wash + edge bar so it reads as the
                              one live surface on the page. Rows are built imperatively in
-                             MainWindow.RefreshAwarenessPulseFeed - AwarenessPulseFeed keeps its
-                             name AND its StackPanel type, so it stays empty here and shows the
-                             empty state. -->
+                             AwarenessTabView.Pulse.cs (WPF MainWindow.RefreshAwarenessPulseFeed);
+                             AwarenessPulseFeed keeps its name AND its StackPanel type. -->
                         <Border Theme="{StaticResource SettingCardStyle}">
                             <Grid>
                                 <Border Background="{StaticResource TabHueWashBrush}" CornerRadius="11"/>
