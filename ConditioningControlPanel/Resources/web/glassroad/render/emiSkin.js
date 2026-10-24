@@ -40,6 +40,11 @@ export function createEmiSkin(model,{cloneMaterials=true}={}) {
     let painted=mix(base,mix(u.primary,u.secondary,pattern).mul(shade),attribute('garageShell','float'));
     painted=mix(painted,u.antenna.mul(shade),d.x);painted=mix(painted,u.hands.mul(shade),d.y);painted=mix(painted,u.shoes.mul(shade),d.z);
     material.colorNode=mix(base,painted,u.amount);
+    // The existing shell mask adds a coated enamel highlight without another vertex buffer.
+    const shell=attribute('garageShell','float');
+    material.roughnessNode=mix(material.roughnessNode||float(material.roughness),float(.34),shell.mul(.45));
+    material.clearcoatNode=mix(material.clearcoatNode||float(material.clearcoat||0),float(.42),shell);
+    material.clearcoatRoughnessNode=mix(material.clearcoatRoughnessNode||float(material.clearcoatRoughness||.1),float(.24),shell);
   });
   return {
     set(s){for(const k of ['primary','secondary','antenna','hands','shoes','face'])u[k].value.set(s[k]);u.amount.value=s.original?0:1;u.pattern.value=s.pattern;},
