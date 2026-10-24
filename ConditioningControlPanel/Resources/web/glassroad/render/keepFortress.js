@@ -3,6 +3,7 @@ import { Group, Mesh, InstancedMesh, BoxGeometry, CylinderGeometry, MeshBasicNod
 import { materialColor, positionWorld, normalWorld, normalize, dot, clamp, vec3, texture, mix, float, fract, smoothstep, fwidth, uv, min, max, floor, hash, select } from 'three/tsl';
 import { LOOK } from './look.js';
 import { prisonPlan } from './keepPrison.js';
+import { waterSpills } from './waterMath.js';
 
 export function keepStoneMaterial(hex, art, mortar = true, outline = true) {
   const material = new MeshBasicNodeMaterial({ color: new Color(hex) });
@@ -49,6 +50,7 @@ export function buildKeepFortress(track, layout, art) {
     Q.setFromEuler(new Euler(0, angle, tilt, 'YXZ'));
     batches[batch].push(M.compose(P.fromArray(p), Q, S.fromArray(size)).clone());
   }
+  const spills = waterSpills(track);
   const count = Math.ceil(track.lengthM / 6), step = track.lengthM / count, frames = [];
   for (let i = 0; i < count; i++) {
     const f = track.frameAt((i + 0.5) * step);
@@ -60,7 +62,7 @@ export function buildKeepFortress(track, layout, art) {
   for (let i = 0; i < frames.length; i++) {
     if (!clearSpan(frames[i].s)) continue;
     const f = frames[i], name = landmarkAt(f.s)?.id || '';
-    const spiral = /spiral/.test(name), hall = layout.architecture.halls.some((a) => f.s >= a.s0 && f.s <= a.s1);
+    const spiral = /spiral/.test(name) || name === 'north-tower', hall = layout.architecture.halls.some((a) => f.s >= a.s0 && f.s <= a.s1);
     // Stone supports the actual spline only. The bridge and stepping field retain open water below.
     const broken = (layout.brokenEdges || []).some((a) => f.s >= a.s0 - 5 && f.s <= a.s1 + 5);
     for (let j = 0; j < 4; j++) {
@@ -71,11 +73,15 @@ export function buildKeepFortress(track, layout, art) {
       const hasRail = [f.s - step / 2, f.s, f.s + step / 2].every((s) => {
         const flags = track.frameAt(s).flags; return flags.includes('rail') || flags.includes(side < 0 ? 'railL' : 'railR');
       });
-      if (!hasRail || hall) continue;
-      const x = side * (f.w / 2 + 1.35), h = spiral ? 2.3 : /rampart|battlement|crown/.test(name) ? 2.8 : 1.2;
-      block('stone', f, x, h / 2 - .25, [1.8, h, step + .15]);
-      block('cap', f, x, h - .1, [2.2, .45, step + .15]);
-      if (h > 2 && i % 3 === 0) block('stone', f, x, h + .65, [2.1, 1.1, 2.8]);
+      if (!hasRail || hall || spills.some(v => v.side === side && f.s + step / 2 >= v.fromS && f.s - step / 2 <= v.toS)) continue;
+      const h = spiral ? 2.3 : /rampart|battlement|crown/.test(name) ? 2.8 : 1.2;
+      // Sample taper and banking per short wall segment, as for the supporting deck.
+      for (let j = 0; j < 3; j++) {
+        const at = track.frameAt(f.s + (j - 1) * step / 3), x = side * (at.w / 2 + 1.65);
+        block('stone', at, x, h / 2 - .25, [1.8, h, step / 3 + .15]);
+        block('cap', at, x, h - .1, [2.2, .45, step / 3 + .15]);
+      }
+      if (h > 2 && i % 3 === 0) block('stone', f, side * (f.w / 2 + 1.65), h + .65, [2.1, 1.1, 2.8]);
     }
     // Foundations stop under stacked roads. The spiral is carried by the central tower instead.
     if (!spiral && i % 5 === 0 && f.p[1] > groundY + 8) {

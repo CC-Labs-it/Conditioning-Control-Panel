@@ -53,6 +53,7 @@ import { createRoadWords } from './roadWords.js';
 import { createNearDressing } from './nearDressing.js';
 import { createWordRush } from './wordRush.js';
 import { createWaterfall } from './waterfall.js';
+import { buildWaterVolume } from './waterVolume.js';
 import { waterTable, tableCode } from './waterMath.js';
 import { buildStones } from './stones.js';
 import { buildKeepDressing, applyKeepRoad } from './keepDressing.js';
@@ -232,6 +233,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // the chute's waterfall sheet, spray and splash ring (render/waterfall.js; in the scene before the warm)
   let waterfall = null;
   try { waterfall = createWaterfall(track, pal, { particles, wakes }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
+  const waterVolume = buildWaterVolume(track, pal, art);
+  add(waterVolume.object);
   // polish 4: glowing skid ribbons under a drift (one pooled draw call for every kart)
   const skids = createSkids(feel, count);
   add(skids.object);
@@ -399,6 +402,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       const near = i === 0 || d <= Q.kartLodM;
       if (near) particles.kart(kk.root, r.st, kk.mem, dt, { mul: i ? LOOK.botSparkMul : 1, slip: (r.fxv && r.fxv.slip) || 0 });
       wakes.kart(i, kk.root, r.st, dt, near);
+      waterfall?.kart(i, r.st, dt, { gentle, visible: near, paused: !!view.paused });
       skids.kart(i, kk.root, r.st, near);
     }
     skids.update(dt, !!view.paused);
@@ -424,6 +428,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // water: the ripple and sheet clocks run at the Gentle scroll share (slower ripples, nothing pulses)
     if (road.uniforms.water && !view.paused) road.uniforms.water.t.value += dt * scroll;
     if (waterfall) waterfall.update(dt, { playerPos: kart.position, gentle, paused: !!view.paused, scroll });
+    waterVolume.update(dt, { gentle, paused: !!view.paused, scroll });
+    keepBackdrop?.update(dt, { gentle, paused: !!view.paused, scroll });
     // the song clock (music.songS) drives the music road; with a song the breath below rides its real beats
     const mf = musicRoad ? musicRoad.update(view.song || null, view.songS, { kartS: k[S.s] || 0, gentle }) : null;
     // beat breath: a soft swell with no step at the beat (rises over breathRise of the beat, falls to
@@ -497,6 +503,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (roadWords) roadWords.dispose();
     if (wordRush) wordRush.dispose();
     if (waterfall) waterfall.dispose();
+    waterVolume.dispose();
     if (showcaseDressing) showcaseDressing.dispose();
     if (keepDressing) keepDressing.dispose();
     if (keepGates) keepGates.dispose();
