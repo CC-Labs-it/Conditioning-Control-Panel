@@ -5,6 +5,7 @@ import { registerHooks } from 'node:module';
 import { loadTrack } from '../track/load.js';
 import { scanPose } from '../sim/mainframeScan.js';
 import { bodyClear, sampleTrack, WORLD_DEFAULTS } from '../render/colossiMath.js';
+import { mediaLook, placeBillboard } from '../render/mediaMath.js';
 
 const hooks = registerHooks({ resolve(specifier, context, next) {
   const files = { 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
@@ -13,8 +14,38 @@ const hooks = registerHooks({ resolve(specifier, context, next) {
 } });
 const { buildMainframe } = await import('../render/mainframe.js');
 const { createPalette } = await import('../render/materials/palette.js');
+const { Raycaster, Vector3 } = await import('three/webgpu');
 hooks.deregister();
 const track = loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json', import.meta.url), 'utf8')));
+const mediaLayout = JSON.parse(readFileSync(new URL('../tracks/mainframe.media.json', import.meta.url), 'utf8'));
+
+test('framed display bays keep billboard faces visible from the approaching road', () => {
+  const samples = sampleTrack(track, 4), world = buildMainframe(track, null, { samples, mediaLayout });
+  const faces = mediaLayout.billboards.map(b => placeBillboard(b, track, samples, mediaLook())).filter(Boolean);
+  assert.equal(faces.length, mediaLayout.billboards.length);
+  const opaque = []; world.group.updateMatrixWorld(true);
+  world.group.traverse(o => { if (o.isMesh && !o.material.transparent) opaque.push(o); });
+  const ray = new Raycaster(), start = new Vector3(), target = new Vector3(), direction = new Vector3(), blocked = [];
+  for (const face of faces) for (const lead of [30, 45, 60]) {
+    let visible = 0;
+    for (const u of [-0.3, 0, 0.3]) for (const v of [-0.25, 0, 0.25]) {
+      const f = track.frameAt(face.s - lead);
+      start.fromArray(f.p.map((x, i) => x + f.n[i] * 3));
+      target.fromArray(face.C.map((x, i) => x + face.X[i] * face.w * u + face.Y[i] * face.h * v));
+      direction.subVectors(target, start); ray.set(start, direction.clone().normalize()); ray.far = direction.length() - 0.1;
+      const hits = ray.intersectObjects(opaque, false);
+      if (!hits.length) visible++;
+      if (u === 0 && v === 0) assert.equal(hits.length, 0, `${face.id}: centre visible from ${lead} m`);
+      // A real scan gantry may briefly cover a narrow edge; walls, racks and cables may not.
+      const hit = hits.find(h => !h.object.parent.name.startsWith('scan:'));
+      if (hit) blocked.push(`${face.id}, ${lead} m, ${u}/${v}: ${hit.object.name || hit.object.parent.name}`);
+    }
+    assert.ok(visible >= 6, `${face.id}: at least two thirds of sampled face visible from ${lead} m`);
+  }
+  assert.deepEqual(blocked, []);
+  assert.ok(world.counts.wall > 250, 'the display bays retain substantial enclosed architecture');
+  world.dispose();
+});
 
 test('Mainframe constructs server batches and scan volumes before the first update', () => {
   const world = buildMainframe(track, null);

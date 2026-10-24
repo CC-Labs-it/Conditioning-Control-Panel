@@ -20,6 +20,7 @@
  */
 import { createBridge, songCharts, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
 import { createHostEscape } from './host/hostEscape.js';
+import { createCardMedia } from './host/cardMedia.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
 import { createClock } from './core/clock.js';
@@ -227,6 +228,13 @@ async function boot() {
   // and the Shadows option turns it on or off in applyOptions
   const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0',
     spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
+  // A visual review may keep the Loom faces without requesting or displaying private media.
+  const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
+  if (cardMedia) {
+    await cardMedia.ready;
+    window.addEventListener('pagehide', () => cardMedia.dispose(), { once: true });
+  }
+  Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null });
   const garage=await createGarage({art,renderer,canvas,track:trackName,laps,
     action:name=>hud.menuAction(name),sound:name=>{audio.start();audio.cue(name);}});
   if(garage){hud.setGarageNav(garage.nav);debug.garage=garage;}
