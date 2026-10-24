@@ -1,22 +1,44 @@
 /* Mainframe: original server-rack colossi and fixed cable conduits, built before shader warmup.
  * Static instanced architecture, one shared Loom texture. Scan timing comes from the shared sim law. */
-import { Group, Mesh, InstancedMesh, BoxGeometry, CylinderGeometry, TorusGeometry, SphereGeometry, CircleGeometry, CanvasTexture, SRGBColorSpace, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, DoubleSide } from 'three/webgpu';
-import { vec3, uniform, mix, texture, positionWorld } from 'three/tsl';
+import { Group, Mesh, InstancedMesh, BufferGeometry, Float32BufferAttribute, BoxGeometry, CylinderGeometry, TorusGeometry, SphereGeometry, CircleGeometry, CanvasTexture, SRGBColorSpace, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, DoubleSide } from 'three/webgpu';
+import { vec3, uniform, mix, texture, positionWorld, float, uv, smoothstep } from 'three/tsl';
 import { scanZones, scanPose } from '../sim/mainframeScan.js';
 import { sampleTrack, bodyClear, WORLD_DEFAULTS } from './colossiMath.js';
 import { Q } from './quality.js';
 import { createMachineMaterial, coolantCaustics } from './mainframeMaterials.js';
 import { createPlaceholder, releaseLoom } from './mediaPlaceholders.js';
-import { mediaLook, placeBillboard } from './mediaMath.js';
+import { mediaLook, placeBillboard, rectPoints } from './mediaMath.js';
 
 const point = (f, x, y, z = 0) => f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z);
+
+/** Fit the circular reactor room from the route itself, including translated or rotated courses. */
+export function reactorRoom(track) {
+  const section = track.sections.find(s => s.id === 'spiral-core');
+  if (!section) return null;
+  const frames = [1 / 6, 1 / 2, 5 / 6].map(u => track.frameAt(section.fromS + (section.toS - section.fromS) * u));
+  const [[ax, , az], [bx, , bz], [cx, , cz]] = frames.map(f => f.p);
+  const d = 2 * (ax * (bz - cz) + bx * (cz - az) + cx * (az - bz));
+  if (Math.abs(d) < 1e-6) return null;
+  const a = ax * ax + az * az, b = bx * bx + bz * bz, c = cx * cx + cz * cz;
+  const x = (a * (bz - cz) + b * (cz - az) + c * (az - bz)) / d;
+  const z = (a * (cx - bx) + b * (ax - cx) + c * (bx - ax)) / d;
+  const all = Array.from({ length: 25 }, (_, i) => track.frameAt(section.fromS + (section.toS - section.fromS) * i / 24));
+  const low = Math.min(...all.map(f => f.p[1])), high = Math.max(...all.map(f => f.p[1]));
+  const radius = Math.min(...all.map(f => Math.hypot(f.p[0] - x, f.p[2] - z) - f.w / 2 - 11));
+  return { center: [x, (low + high) / 2, z], radius: Math.max(1, radius), height: high - low + 60 };
+}
+
 export function buildMainframe(track, art, { samples = sampleTrack(track, 4), makeCanvas = null, mediaLayout = null } = {}) {
   const group = new Group(); group.name = 'mainframe';
   const geometry = new BoxGeometry(1, 1, 1), geometries = [geometry], materials = [], textures = [], rows = { shell: [], slot: [], green: [], cyan: [], floor: [], wall: [], tank: [], rib: [], amber: [] };
-  const coolantTime = uniform(0), loomContrast = uniform(1), displays = [];
-  const displaySpecs = [420, ...['core-approach', 'spiral-core'].map(id => {
-    const section = track.sections.find(s => s.id === id); return section ? section.toS - 25 : 0;
-  })].filter(s => s > 0);
+  const coolantTime = uniform(0), loomContrast = uniform(1), displays = [], landmarks = [];
+  const room = reactorRoom(track);
+  const reservoir = { waterY: track.reservoir?.waterY ?? 4,
+    submerged: track.sections.find(s => s.id === 'submerged'), emerge: track.sections.find(s => s.id === 'emerge') };
+  const displaySpecs = ['boot-hall', 'core-approach', 'spiral-core'].map(id => {
+    const section = track.sections.find(s => s.id === id);
+    return section ? id === 'boot-hall' ? section.fromS + (section.toS - section.fromS) * 0.7 : section.toS - 25 : 0;
+  }).filter(s => s > 0);
   const add = (kind, f, x, y, z, size) => rows[kind].push({ p: point(f, x, y, z), b: [...f.b], n: [...f.n], t: [...f.t], size });
   const length = track.lengthM, count = Q.name === 'phone' ? 34 : 60;
   // Use the media renderer's fitted faces, including any clearance-driven outward adjustment.
@@ -30,6 +52,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   const sectionAt = (s) => track.sections[track.sectionAt(s)]?.id || '';
   const isCanal = (s) => sectionAt(s).includes('canal');
   const isCore = (s) => sectionAt(s).includes('spiral') || sectionAt(s).includes('core');
+  const hasSpills = (s) => /spillway|coolant-chute/.test(sectionAt(s));
   const hasGap = (s) => track.nodeFlags(track.frameAt(s).seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 8 > v.fromS);
   // A capsule check against the WHOLE road keeps every rack out of nearby switchbacks too.
   for (let i = 0; i < count; i++) {
@@ -60,14 +83,18 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   // The course is inside a machine: continuous metal aisles, real overhead ribs and maintenance decks.
   const clearance = { ...WORLD_DEFAULTS, sideM: 0.3, clearM: 6, underM: 1 };
   for (let s = 0; s < length; s += 8) {
-    const f = track.frameAt(s + 4), id = sectionAt(s), core = isCore(s), canal = isCanal(s), under = id.includes('submerged');
-    const half = f.w / 2, gap = hasGap(s);
-    if (!gap && !canal) add('floor', f, 0, -1.3, 0, [f.w + 13, 1.4, 8.5]);
+    const f = track.frameAt(s + 4), id = sectionAt(s), core = isCore(s), canal = isCanal(s), under = /submerged|emerge/.test(id);
+    const half = f.w / 2, gap = hasGap(s), spills = hasSpills(s);
+    // Leave room for bank changes between each slab's midpoint and the real road at its ends.
+    if (!gap && !canal) add('floor', f, 0, -1.9, 0, [spills ? f.w - 1.2 : f.w + 13, 1.4, 8.5]);
     for (const side of [-1, 1]) {
-      if (!gap) add('rib', f, side * (half + 3), -0.2, 0, [3.8, 0.6, 8.5]);
+      if (!gap && !spills && !displayBay(s + 4, side)) add('rib', f, side * (half + 3), -0.2, 0, [3.8, 0.6, 8.5]);
       if (canal) continue;
-      if (core && (f.p[0] - 480) * f.b[0] * side + (f.p[2] - 425) * f.b[2] * side < 0) continue;
-      const off = side * (half + 8), height = under ? 19 : 28;
+      if (spills) continue; // Rails belong to the road; the open sides expose the falling coolant.
+      if (core && room && (f.p[0] - room.center[0]) * f.b[0] * side + (f.p[2] - room.center[2]) * f.b[2] * side < 0) continue;
+      const off = side * (half + 8), baseHeight = under ? Math.max(19, reservoir.waterY - f.p[1] + 8) : 28;
+      const exit = id === 'emerge' ? Math.max(0, Math.min(1, (s - reservoir.emerge.fromS) / (reservoir.emerge.toS - reservoir.emerge.fromS))) : 0;
+      const blend = exit * exit * (3 - 2 * exit), height = baseHeight + (28 - baseHeight) * blend;
       if (!bodyClear({ B: point(f, off, -2), D: f.n, len: height, r: 4.3 }, samples, clearance).ok) continue;
       if (displayBay(s + 4, side)) {
         // Continuous lintel and sill frame the opening; solid adjacent wall segments form the jambs.
@@ -84,7 +111,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
         add('cyan', f, off - side * 1.9, 3.5, 0, [0.15, 5.5, 0.7]);
       }
     }
-    if (!core && !canal && !displaySpecs.some(d => s > d - 100 && s < d + 20) && Math.round(s / 8) % 3 === 0
+    if (!core && !canal && !under && !displaySpecs.some(d => s > d - 100 && s < d + 20) && Math.round(s / 8) % 3 === 0
       && bodyClear({ B: point(f, 0, 27), D: f.n, len: 0, r: half + 8 }, samples, clearance).ok) {
       add('rib', f, 0, 27, 0, [f.w + 17, 1.6, 2]);
       add('floor', f, 0, 28, 0, [f.w + 17, 0.7, 24.5]);
@@ -94,11 +121,26 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   // Bundles follow the transported road frame. Never bridge a jump or a stone-field opening.
   for (let s = 0; s < length; s += 5) {
     const f = track.frameAt(s + 2.5);
-    if (track.nodeFlags(f.seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 5 > v.fromS)) continue;
+    if (hasSpills(s) || track.nodeFlags(f.seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 5 > v.fromS)) continue;
     for (const side of [-1, 1]) {
       if (displayBay(s + 2.5, side)) continue;
       for (let wire = 0; wire < 3; wire++) add('slot', f, side * (f.w / 2 + 0.85 + wire * 0.26), 0.45, 0, [0.2, 0.2, 5.15]);
       if (Math.round(s / 5) % 3 === 0) add('cyan', f, side * (f.w / 2 + 1.1), 0.46, 0, [0.85, 0.29, 0.16]);
+    }
+  }
+  // Cooling towers mark the bends; a taller pair brackets each platform gallery outside its void.
+  const towerSites = track.sections.filter(s => /canal|chicane|switchback|gantry-turn|spillway-turn/.test(s.id))
+    .map(s => ({ s: (s.fromS + s.toS) / 2, gallery: false }));
+  for (const field of track.fields || []) for (const s of [field.fromS - 16, field.toS + 16]) towerSites.push({ s, gallery: true });
+  for (const site of towerSites.slice(0, 8)) for (const side of [-1, 1]) {
+    if (displayBay(site.s, side)) continue;
+    const f = track.frameAt(site.s), height = site.gallery ? 58 : 46, radius = site.gallery ? 11 : 9;
+    for (let off = f.w / 2 + radius + 16, tries = 0; tries < 10; tries++, off += 8) {
+      const capsule = { B: point(f, side * off, -8), D: f.n, len: height, r: radius };
+      if (!bodyClear(capsule, samples).ok) continue;
+      landmarks.push({ f, off: side * off, height, radius, capsule, gallery: site.gallery });
+      add('rib', f, side * off, -7, 0, [radius * 2.1, 2, radius * 2.1]);
+      break;
     }
   }
   const basis = new Matrix4(), matrix = new Matrix4(), q = new Quaternion(), p = new Vector3(), size = new Vector3();
@@ -120,6 +162,19 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   const keepMat = (m) => { materials.push(m); return m; };
   const metal = keepMat(createMachineMaterial('#50696c', art)), dark = keepMat(createMachineMaterial('#172c30', art));
   const light = keepMat(createMachineMaterial('#62e0bb', art, { glow: true }));
+  const towerBody = new InstancedMesh(keepGeo(new CylinderGeometry(0.72, 1, 1, 6)), metal, Math.max(1, landmarks.length));
+  const towerBands = new InstancedMesh(keepGeo(new TorusGeometry(1, 0.055, 4, 12).rotateX(Math.PI / 2)), light, Math.max(1, landmarks.length * 3));
+  towerBody.name = 'mainframe-cooling-towers'; towerBands.name = 'mainframe-cooling-bands';
+  towerBody.count = landmarks.length; towerBands.count = landmarks.length * 3;
+  landmarks.forEach((r, i) => {
+    basis.makeBasis(x.fromArray(r.f.b), y.fromArray(r.f.n), z.fromArray(r.f.t).negate()); q.setFromRotationMatrix(basis);
+    matrix.compose(p.fromArray(point(r.f, r.off, r.height / 2 - 8)), q, size.set(r.radius, r.height, r.radius)); towerBody.setMatrixAt(i, matrix);
+    for (let j = 0; j < 3; j++) {
+      const h = r.height * (0.16 + j * 0.35), radius = r.radius * (1 - 0.28 * h / r.height) + 0.15;
+      matrix.compose(p.fromArray(point(r.f, r.off, h - 8)), q, size.setScalar(radius)); towerBands.setMatrixAt(i * 3 + j, matrix);
+    }
+  });
+  for (const mesh of [towerBody, towerBands]) { mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); group.add(mesh); }
   // One static frame from the real Loom, shared by three monumental rotating displays.
   if (makeCanvas || typeof document !== 'undefined' || typeof OffscreenCanvas !== 'undefined') {
     const cols = [[0.16, 0.9, 0.49], [0.1, 0.6, 0.4], [0.7, 1, 0.84], [0.015, 0.06, 0.045]];
@@ -141,8 +196,11 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
       displays.push({ disc, center, radius, frame: f });
     }
   }
-  // The raised road winds around a single unmistakable reactor, clear of the R75 racing envelope.
-  const core = new Group(); core.name = 'mainframe-reactor'; core.position.set(480, 42, 425); group.add(core);
+  // The raised road winds around a reactor sized to the current spiral's inner clearance.
+  const core = new Group(); core.name = 'mainframe-reactor';
+  if (room) { core.position.fromArray(room.center); core.scale.set(room.radius / 44.1, room.height / 108, room.radius / 44.1); }
+  else core.visible = false;
+  group.add(core);
   const drum = new Mesh(keepGeo(new CylinderGeometry(35, 39, 108, Q.name === 'phone' ? 32 : 64)), dark); core.add(drum);
   const coreRing = keepGeo(new TorusGeometry(43, 1.1, 8, 64).rotateX(Math.PI / 2));
   for (let h = -45; h <= 50; h += 19) { const ring = new Mesh(coreRing, metal); ring.position.y = h; core.add(ring); }
@@ -154,37 +212,58 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   }
   // A deep foundation and distant walls anchor the entire facility. They are far below every hole.
   const low = Math.min(...samples.map((f) => f.p[1])) - 45, high = Math.max(...samples.map((f) => f.p[1])) + 65;
-  const minX = Math.min(...samples.map((f) => f.p[0])) - 70, maxX = Math.max(...samples.map((f) => f.p[0])) + 70;
-  const minZ = Math.min(...samples.map((f) => f.p[2])) - 70, maxZ = Math.max(...samples.map((f) => f.p[2])) + 70;
+  const boundaryPoints = [...samples.map(f => f.p), ...billboards.flatMap(b => rectPoints(b, 1)), ...landmarks.map(r => r.capsule.B)];
+  const minX = Math.min(...boundaryPoints.map(p => p[0])) - 70, maxX = Math.max(...boundaryPoints.map(p => p[0])) + 70;
+  const minZ = Math.min(...boundaryPoints.map(p => p[2])) - 70, maxZ = Math.max(...boundaryPoints.map(p => p[2])) + 70;
   const base = new Mesh(geometry, metal); base.position.set((minX + maxX) / 2, low, (minZ + maxZ) / 2); base.scale.set(maxX - minX, 4, maxZ - minZ); group.add(base);
   for (const [px, pz, sx, sz] of [[minX, (minZ + maxZ) / 2, 3, maxZ - minZ], [maxX, (minZ + maxZ) / 2, 3, maxZ - minZ], [(minX + maxX) / 2, minZ, maxX - minX, 3], [(minX + maxX) / 2, maxZ, maxX - minX, 3]]) {
     const wall = new Mesh(geometry, dark); wall.position.set(px, (low + high) / 2, pz); wall.scale.set(sx, high - low, sz); group.add(wall);
   }
-  const tubes = track.sections.filter((s) => /canal|submerged/.test(s.id));
+  const tubes = track.sections.filter((s) => /canal|submerged|emerge/.test(s.id));
   const bubbleRows = [], bubbleGeo = keepGeo(new SphereGeometry(0.16, 6, 4));
   for (const section of tubes) {
     for (let s = section.fromS + 5; s < section.toS; s += 18) {
-      const f = track.frameAt(s), canal = section.id.includes('canal'), radius = canal ? 20.8 : f.w / 2 + 5, holder = new Group(); orient(holder, f, point(f, 0, canal ? 20 : 0)); group.add(holder);
-      const rib = new Mesh(keepGeo(new TorusGeometry(radius, 0.8, 6, Q.name === 'phone' ? 16 : 32, Math.PI)), metal); rib.name = 'mainframe-tube-arch'; holder.add(rib);
-      const glassMat = keepMat(new MeshBasicNodeMaterial({ color: canal ? '#79b7b1' : '#4198bc', transparent: true, opacity: 0.09, depthWrite: false, side: DoubleSide }));
+      const f = track.frameAt(s), canal = section.id.includes('canal'), radius = canal ? 20.8 : f.w / 2 + 5, holder = new Group(); orient(holder, f, point(f, 0, canal ? 20 : 0)); holder.userData.trackS = s; group.add(holder);
+      const exitT = section.id === 'emerge' ? Math.max(0, Math.min(1, (s - section.fromS) / (section.toS - section.fromS))) : 0;
+      const open = exitT * exitT * (3 - 2 * exitT);
+      const openRight = !!displayBay(s, 1), openLeft = !!displayBay(s, -1);
+      const arc = openRight || openLeft ? Math.PI / 2 : Math.PI;
+      const ribGeo = keepGeo(new TorusGeometry(radius, 0.8, 6, Q.name === 'phone' ? 16 : 32, arc).rotateZ(openRight ? Math.PI / 2 : 0));
+      const rib = new Mesh(ribGeo, metal); rib.name = 'mainframe-tube-arch'; if (!(openRight && openLeft)) holder.add(rib);
+      rib.scale.y = 1 + open * (27 / radius - 1);
+      const glassMat = keepMat(new MeshBasicNodeMaterial({ color: canal ? '#79b7b1' : '#4198bc', transparent: true, opacity: 0.09 * (1 - open), depthWrite: false, side: DoubleSide }));
       const glass = new Mesh(keepGeo(new CylinderGeometry(radius, radius, 18, 32, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2)), glassMat); holder.add(glass);
-      if (section.id.includes('submerged')) for (let i = 0; i < 18; i++) bubbleRows.push({ f, x: ((i * 7) % 23 - 11) * 1.15, phase: i / 18, s });
-    }
-    if (section.id.includes('submerged')) {
-      const tankSamples = samples.filter(f => f.s >= section.fromS && f.s <= section.toS);
-      const lo = [0, 2].map(k => Math.min(...tankSamples.map(f => f.p[k])) - 25), hi = [0, 2].map(k => Math.max(...tankSamples.map(f => f.p[k])) + 25);
-      const waterMat = keepMat(new MeshBasicNodeMaterial({ transparent: true, opacity: 0.4, depthWrite: false, side: DoubleSide }));
-      waterMat.colorNode = vec3(0.025, 0.25, 0.39).add(vec3(0.07, 0.26, 0.34).mul(coolantCaustics(positionWorld.xz, coolantTime)));
-      const surface = new Mesh(geometry, waterMat); surface.name = 'mainframe-reservoir-surface'; surface.position.set((lo[0] + hi[0]) / 2, 7, (lo[1] + hi[1]) / 2); surface.scale.set(hi[0] - lo[0], 0.05, hi[1] - lo[1]); group.add(surface);
+      glass.scale.y = rib.scale.y;
+      if (!canal && reservoir.waterY - f.p[1] > 1) for (let i = 0; i < 18; i++) bubbleRows.push({ f, x: ((i * 7) % 23 - 11) * 1.15, phase: i / 18, s });
     }
   }
-  const bubbles = new InstancedMesh(bubbleGeo, light, Math.max(1, bubbleRows.length)); bubbles.count = bubbleRows.length; bubbles.name = 'mainframe-coolant-bubbles'; group.add(bubbles);
+  if (reservoir.submerged) {
+    const from = reservoir.submerged.fromS, to = reservoir.emerge?.toS ?? reservoir.submerged.toS;
+    const n = Math.ceil((to - from) / 6), positions = [], uvs = [], indices = [];
+    for (let i = 0; i <= n; i++) {
+      const f = track.frameAt(from + (to - from) * i / n);
+      for (const side of [-1, 1]) {
+        const v = point(f, side * (f.w / 2 + 7), 0); positions.push(v[0], reservoir.waterY, v[2]); uvs.push((side + 1) / 2, i / n);
+      }
+      if (i < n) { const a = i * 2; indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    }
+    const g = keepGeo(new BufferGeometry()); g.setAttribute('position', new Float32BufferAttribute(positions, 3));
+    g.setAttribute('uv', new Float32BufferAttribute(uvs, 2)); g.setIndex(indices); g.computeVertexNormals();
+    const mat = keepMat(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide }));
+    mat.colorNode = vec3(0.025, 0.25, 0.39).add(vec3(0.07, 0.26, 0.34).mul(coolantCaustics(positionWorld.xz, coolantTime)));
+    mat.opacityNode = smoothstep(0, 0.035, uv().y).mul(float(1).sub(smoothstep(0.965, 1, uv().y))).mul(0.38);
+    const surface = new Mesh(g, mat); surface.name = 'mainframe-reservoir-surface'; group.add(surface);
+  }
+  const bubbleMat = keepMat(createMachineMaterial('#88deef', art, { glow: true }));
+  const bubbles = new InstancedMesh(bubbleGeo, bubbleMat, Math.max(1, bubbleRows.length)); bubbles.count = bubbleRows.length; bubbles.name = 'mainframe-coolant-bubbles'; group.add(bubbles);
   let bubbleTime = 0;
   function updateBubbles(dt) {
     bubbleTime += dt;
     bubbleRows.forEach((r, i) => {
-      const height = ((bubbleTime * 0.65 + r.phase * 12) % 12) + 0.7;
+      const depth = Math.max(0.5, reservoir.waterY - r.f.p[1] - 0.7);
+      const height = ((bubbleTime * 0.65 + r.phase * depth) % depth) + 0.35;
       p.fromArray(point(r.f, r.x + Math.sin(r.phase * 20 + bubbleTime * 0.4) * 0.3, height));
+      p.y = Math.min(p.y, reservoir.waterY - 0.2);
       matrix.compose(p, q.identity(), size.setScalar(0.5 + r.phase)); bubbles.setMatrixAt(i, matrix);
     });
     bubbles.instanceMatrix.needsUpdate = true; bubbles.computeBoundingSphere();
@@ -231,7 +310,7 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
     const lamps = new Mesh(geometry, stripeMat); lamps.scale.set(zone.width, 0.45, 0.35); lamps.position.set(0, height + 0.6, 0); holder.add(lamps);
     return { zone, frame: f, panel, floor, floorTiles, panelMat, floorMat, bars, stripeMat };
   });
-  return { group, scans, core, tubes, displays, counts: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.length])),
+  return { group, scans, core, tubes, displays, landmarks, reservoir, counts: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.length])),
     update(dt, view, gentle = false) {
       if (view.paused) return;
       updateBubbles(dt * (gentle ? 0.5 : 1));
