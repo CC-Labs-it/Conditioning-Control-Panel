@@ -121,10 +121,11 @@ public class LockdownExitRuleTests
     [Fact]
     public void LockdownService_UsesTheRules()
     {
-        var src = Source("Services", "Haptics", "LockdownService.cs");
+        // CCP.Core since the split, where the UTC clock is the UtcNow() seam (DateTime.UtcNow unless a test swaps it).
+        var src = SourceRoots.ReadProductFile("Services", "Haptics", "LockdownService.cs");
         Assert.Contains("LockdownExitRule.PhraseMatches(phrase)", src);
-        Assert.Contains("LockdownExitRule.Remaining(_activatedAt, _duration, DateTime.UtcNow)", src);
-        Assert.Contains("LockdownExitRule.ElapsedFraction(_activatedAt, _duration, DateTime.UtcNow)", src);
+        Assert.Contains("LockdownExitRule.Remaining(_activatedAt, _duration, UtcNow())", src);
+        Assert.Contains("LockdownExitRule.ElapsedFraction(_activatedAt, _duration, UtcNow())", src);
         Assert.DoesNotContain("DateTime.Now - _activatedAt", src);
         Assert.DoesNotContain("_activatedAt = DateTime.Now;", src);
         Assert.DoesNotContain("DateTime.Now - _startedAt", src);

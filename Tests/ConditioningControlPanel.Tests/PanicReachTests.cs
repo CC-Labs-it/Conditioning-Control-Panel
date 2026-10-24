@@ -69,10 +69,11 @@ public class PanicReachTests
     [Fact]
     public void The_voice_panic_runs_the_panic_keys_stop_pass_and_stops_the_engine()
     {
-        // The voice intent routes here and nowhere else.
+        // The voice intent routes here and nowhere else. The intent table is Core VoiceCommands since
+        // the split; the WPF host hands it the panic as a Run that reports whether it ran.
         var voice = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services",
-            "AutonomyService.VoiceCommands.cs"));
-        Assert.Contains("Run = () => App.MainWindowRef?.TriggerPanicFromRemote() == true,", voice);
+            "AutonomyService.VoiceCommandHost.cs"));
+        Assert.Contains("RunFor = name => name == \"panic\" ? () => App.MainWindowRef?.TriggerPanicFromRemote() == true : null,", voice);
 
         // It used to skip the toy, every game window, the tube, the Deeper player, a web video, a
         // running leash task (whose lines reopen a lock card) and the engine itself.
@@ -125,7 +126,7 @@ public class PanicReachTests
         Assert.Equal(VoicePanicReach.PanicKeyRuns(lockdown, panicKeyEnabled), blink == BlinkStopGate.Block.None);
         Assert.Equal(VoicePanicReach.PanicKeyRuns(lockdown, panicKeyEnabled),
             VoicePanicReach.Decide(lockdown, panicKeyEnabled, leashed: false) == VoicePanicReach.Reach.Full);
-        var blinkSrc = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Safety", "BlinkStopGate.cs"));
+        var blinkSrc = SourceRoots.ReadProductFile("Services", "Safety", "BlinkStopGate.cs");   // CCP.Core since the split
         Assert.Contains("VoicePanicReach.PanicKeyRuns(lockdownActive, panicKeyEnabled)", blinkSrc);
     }
 
@@ -193,12 +194,12 @@ public class PanicReachTests
     public void A_refused_voice_panic_says_nothing()
     {
         // The recogniser's "everything's off, you're safe" line only follows a panic that ran.
-        var voice = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services",
-            "AutonomyService.VoiceCommands.cs")).Replace("\r\n", "\n");
-        var run = Body(voice, "private static void ExecuteIntentAndConfirm(VoiceCommandIntent intent)");
+        // Core VoiceCommands since the split: the head's Say is what the tube speaks.
+        var voice = SourceRoots.ReadProductFile("Services", "Speech", "VoiceCommands.cs").Replace("\r\n", "\n");
+        var run = Body(voice, "private void ExecuteIntentAndConfirm(VoiceCommandIntent intent)");
         int refused = run.IndexOf("if (!ran) return;", StringComparison.Ordinal);
         Assert.True(refused > 0, "a refused Run must return before the confirmation");
-        Assert.True(refused < run.IndexOf("GigglePriority(VocabTokens.Apply(confirm)", StringComparison.Ordinal));
+        Assert.True(refused < run.IndexOf("Host.Say(VocabTokens.Apply(confirm)", StringComparison.Ordinal));
         Assert.True(refused < run.IndexOf("PickVoiceLine(", StringComparison.Ordinal));
     }
 

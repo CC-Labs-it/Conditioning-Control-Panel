@@ -143,8 +143,7 @@ namespace ConditioningControlPanel.Services
                 }
                 // Real time since the last tick, not TickMs: Task.Delay(33) lands every ~47 ms or later,
                 // so counting laps made the 700 ms dwell take ~1 s of the timeout (WPF a4a5aa43b).
-                var stepMs = Math.Min(Math.Max(nowMs - _lastMs, 0), ConditioningControlPanel.Services.Timing.TickStep.DwellMaxStepMs);
-                _lastMs = nowMs;
+                var stepMs = Services.Timing.TickStep.Ms(ref _lastMs, nowMs, Services.Timing.TickStep.DwellMaxStepMs);
                 if (onTarget <= 1.0) { DwellMs += stepMs; _inside.Add(raw); }
                 else DwellMs = Math.Max(0, DwellMs - stepMs);
             }

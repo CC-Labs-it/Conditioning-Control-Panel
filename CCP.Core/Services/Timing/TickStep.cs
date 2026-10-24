@@ -36,5 +36,16 @@ namespace ConditioningControlPanel.Services.Timing
             if (!(gap > 0) || !(maxMs > 0)) return 0;
             return Math.Min(gap, maxMs);
         }
+
+        /// <summary>The same step on a millisecond counter (Core BubbleAccuracyTest.Dwell's time since
+        /// the bubble showed, where 0 is a real start, not "unset"): between 0 and
+        /// <paramref name="maxMs"/>, zero when the counter went backwards.</summary>
+        public static double Ms(ref long lastMs, long nowMs, double maxMs)
+        {
+            var gap = nowMs - lastMs;
+            lastMs = nowMs;
+            if (gap <= 0 || !(maxMs > 0)) return 0;
+            return Math.Min(gap, maxMs);
+        }
     }
 }

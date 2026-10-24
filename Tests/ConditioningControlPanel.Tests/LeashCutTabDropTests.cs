@@ -278,7 +278,7 @@ public class LeashCutTabDropTests
     [Fact]
     public void The_settle_plans_again_before_the_pending_mark_and_a_failure_drops_held_leash_time()
     {
-        var src = File.ReadAllText(Path.Combine(SourceRoot(), "Services", "Chaster", "ChasterService.cs"));
+        var src = SourceRoots.ReadProductFile("Services", "Chaster", "ChasterService.cs");   // CCP.Core since the split
         var settle = src.Substring(src.IndexOf("public async Task<SettleOutcome> SettleAsync(", StringComparison.Ordinal));
         var still = settle.IndexOf("CircesTab.StillDue(plan, CircesTab.PlanPush(", StringComparison.Ordinal);
         var mark = settle.IndexOf("CircesTab.MarkPending(_tab, plan", StringComparison.Ordinal);
@@ -287,7 +287,8 @@ public class LeashCutTabDropTests
         Assert.Contains("if (!added.Ok) CircesTab.PushFailed(_tab, _utcNow());", settle);
         Assert.Contains("CircesTab.PushFailed(_tab, _utcNow()); SaveTab();", settle);
 
-        var cut = File.ReadAllText(Path.Combine(SourceRoot(), "Services", "Leash", "LeashCutSafety.cs"));
+        // The rule is Core's LeashCutSafety; the WPF targets (App.Chaster) live in LeashCutSafetyApp.cs.
+        var cut = File.ReadAllText(Path.Combine(SourceRoot(), "Services", "Leash", "LeashCutSafetyApp.cs"));
         Assert.Contains("App.Chaster?.DropUnpushedLeash()", cut);
         Assert.DoesNotContain("DropUnpushedLeashBookings() => false", cut);
     }

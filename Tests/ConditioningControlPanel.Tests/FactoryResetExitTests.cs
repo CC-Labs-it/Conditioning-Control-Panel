@@ -79,7 +79,7 @@ public sealed class FactoryResetExitTests
     [Fact]
     public void Seal_waits_out_a_write_in_flight_and_the_write_rechecks_it()
     {
-        var src = File.ReadAllText(Path.Combine(SourceRoot(), "Services", "Settings", "SettingsService.cs"));
+        var src = SourceRoots.ReadProductFile("Services", "Settings", "SettingsService.cs");   // CCP.Core since the split
         int seal = src.IndexOf("public void SealForReset()", StringComparison.Ordinal);
         int sealEnd = src.IndexOf("public void UnsealAfterFailedReset()", seal, StringComparison.Ordinal);
         Assert.Contains("lock (_saveLock) { }", src.Substring(seal, sealEnd - seal));
