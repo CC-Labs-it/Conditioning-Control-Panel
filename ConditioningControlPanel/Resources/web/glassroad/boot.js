@@ -64,6 +64,7 @@ import { createGateScreen } from './render/gateScreen.js';
 import { loadFonts } from './render/fonts.js';
 import { createAssist } from './sim/assist.js';
 import { createRoomSession } from './net/room.js';
+import { courseHash } from './net/courseHash.js';
 import { createLobbyApi, fetchTransport, hostTransport } from './net/lobbyApi.js';
 import { configureLobby } from './hud/lobby.js';
 import { linkToken, dropLinkParam } from './hud/lobbyMath.js';
@@ -209,6 +210,7 @@ async function boot() {
   if (qs.get('feel') === '1') openFeelSheet(feel, document.body);
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
+  const onlineCourseHash = await courseHash(trackJson, feel.toJSON());
   debug.trackId = track.id;
   const keepLayout = getKeepLayout(track);
   const boudoirLayout = getBoudoirLayout(track);
@@ -541,7 +543,7 @@ async function boot() {
   /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
   async function connectRoom(join) {
     if (!course.online) throw new Error('This course is for solo races');
-    const s = createRoomSession({ track, feel, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
+    const s = createRoomSession({ track, feel, courseHash: onlineCourseHash, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
     const welcome = await s.connect(join, { lookNow: join.look });
     return {
       session: s,
