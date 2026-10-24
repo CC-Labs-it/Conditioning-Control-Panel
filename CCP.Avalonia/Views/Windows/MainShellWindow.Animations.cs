@@ -5,9 +5,12 @@
 // the window's 30 fps beat (BeatLoop) instead of an infinite Animation (lag fix, P82), which also
 // parks it while the plate is hidden or the window minimised. Durations, amplitudes and colours verbatim.
 //
-// The glow is a sibling BoxShadow border: a looping Effect would force full-surface blurring.
-// The navigation funnel starts/stops it, and Settings > Performance stops it at Reduced/Off.
-// WPF re-arms this plate on the next tab visit, rather than immediately on a switch to Full.
+// ShowTab starts the pulse on Lockdown arrival and stops it on departure, as WPF does. The
+// glow lives on a sibling Border: an animated Effect would re-render the plate's contents.
+// A XAML attribute brush is immutable, so the start swaps in a mutable SolidColorBrush;
+// stop restores the original brush, shadow and opacity. The shared beat parks while minimised.
+// Settings > Performance stops the pulse at Reduced/Off; WPF re-arms it on the next
+// tab visit, rather than immediately on a switch to Full.
 //
 // Dropped, with the reason:
 //   StartSeasonTitleShimmer / StopSeasonTitleShimmer (WPF :35-83)
@@ -38,6 +41,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal bool LockdownPulsing => _lockdownPulseClock?.IsRunning == true;
 
+        private void ApplyLockdownPulse(string tab)
+        {
+            // WPF stops on every switch (:305) and starts again on Lockdown (:677), so re-selecting
+            // Lockdown restarts the pulse from #FF1493.
+            StopLockdownPulse();
+            if (tab == "lockdown" && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops)
+                StartLockdownPulse();
+        }
+
         internal void StartLockdownPulse()
         {
             if (_lockdownPulseClock != null) return;                 // already running
@@ -49,7 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (plate == null) return;
 
                 // See the header: the XAML brush is immutable, so the loop needs one of its own.
-                _lockdownRestingBrush ??= plate.BorderBrush;
+                _lockdownRestingBrush = plate.BorderBrush;
                 var brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x14, 0x93));
                 plate.BorderBrush = brush;
                 var glow = Named<Control>("LockdownTab")?.FindControl<Border>("LockdownImageGlow");
