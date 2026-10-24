@@ -23,6 +23,11 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
   const head = { 'Cache-Control': 'no-store', 'Cross-Origin-Opener-Policy': 'same-origin' };
+  // Static previews have no provider. The private selected-feed server owns its own endpoint.
+  if (req.url === '/__card-media/manifest.json') {
+    res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ enabled: false, sources: [] })); return;
+  }
   if (req.method === 'POST' && req.url === '/__diag') {   // the page's dev beacon, printed for the session log
     let body = ''; req.on('data', (c) => { if (body.length < 8000) body += c; });
     req.on('end', () => { console.log(new Date().toISOString().slice(11, 19), 'diag', body); res.writeHead(204, head); res.end(); });

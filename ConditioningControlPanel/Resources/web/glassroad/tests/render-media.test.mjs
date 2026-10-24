@@ -95,7 +95,7 @@ test('media: the tunnel lines its corridor with screens facing in, and its glass
 
 test('media: phone keeps fewer slots and smaller canvases', () => {
   const hi = tierOf('high'), ph = tierOf('phone');
-  assert.ok(ph.canvasPx < hi.canvasPx && ph.programs < hi.programs && ph.sourceFps <= hi.sourceFps && hi.placeholderFps === 0 && ph.maxUploads <= 2 && hi.maxUploads <= 2);
+  assert.ok(ph.canvasPx < hi.canvasPx && ph.programs < hi.programs && ph.sourceFps <= hi.sourceFps && hi.placeholderFps === 0 && ph.maxUploads === 1 && hi.maxUploads === 3);
   const all = layout.billboards.map((b) => placeBillboard(b, tr, samples, M));
   const kept = tierSlots(all, 'phone');
   assert.ok(kept.length < all.length && kept.length >= 5);
@@ -229,5 +229,5 @@ test('media: every placeholder program draws into a 2D context, and the Loom com
   }
   assert.equal(programFor(7, 4), 3);
   assert.equal(programFor(-1, 6), 5);
-  assert.equal(MEDIA_DEFAULTS.tiers.high.maxUploads, 2);
+  assert.equal(MEDIA_DEFAULTS.tiers.high.maxUploads, 3);
 });
