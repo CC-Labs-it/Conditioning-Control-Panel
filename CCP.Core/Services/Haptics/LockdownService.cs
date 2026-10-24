@@ -147,7 +147,7 @@ public class LockdownService : IDisposable
         if (!_isActive || _preStrictLock == wearersOwn) return;
         _preStrictLock = wearersOwn;
         WriteRecoveryFile(_preStrictLock, _prePanicKeyEnabled);
-        App.Logger?.Information("Lockdown: recorded strict lock corrected to the wearer's own ({Value})", wearersOwn);
+        Serilog.Log.Information("Lockdown: recorded strict lock corrected to the wearer's own ({Value})", wearersOwn);
     }
 
     /// <summary>
