@@ -21,10 +21,16 @@ Shift or Space hop and drift (hold through a turn, let go for the boost), E item
 to drop it behind as a trap), Escape pause. A standard gamepad works too (left stick, RT, LT, A, X item,
 stick down + X drops, Start; the d-pad, A and B work the cards). Touch: tap the round item slot.
 
+The garage now offers The Keep beside Threshold. Open `?track=keep` for its 1.315 km fortress circuit:
+three laps, seven bots, six timed portcullises, two clear bypasses at every gate, and the accepted Keep art.
+The warning footprint brightens before a gate lowers. Pause freezes the gates; restarting resets their cycle.
+Keep currently supports solo racing only. Online admission still uses Threshold's server track card.
+
 ## Url flags
 
 | Flag | What it does |
 |---|---|
+| `?track=threshold` / `?track=keep` | choose the course (also available in the garage) |
 | `?feel=1` | live feel sheet: every `feel.json` number, edits apply next tick, kept in this browser, Copy JSON to paste back |
 | `?renderer=webgl2` | force the WebGL2 backend (`webgpu` forces WebGPU; default picks WebGPU and falls back) |
 | `?quality=high\|mid\|phone` | pin the starting quality tier (the governor only steps down from it, then back up) |
