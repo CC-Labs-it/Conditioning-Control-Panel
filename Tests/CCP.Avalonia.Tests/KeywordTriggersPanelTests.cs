@@ -181,35 +181,33 @@ public sealed class KeywordTriggersPanelTests
     [Theory]
     [InlineData(0, -1)]
     [InlineData(120, 1)]
-    public Task WheelOverScrollableTriggerListMovesOuterViewport(double innerOffset, double delta) => Run((_, _, s) =>
+    public Task WheelOverScrollableTriggerListMovesOuterViewport(double innerOffset, double delta) => Run((view, panel, s) =>
     {
+        // Real user path: the panel inside the Awareness tab, wheel over its trigger list.
         s.KeywordTriggers.AddRange(Enumerable.Range(0, 20).Select(i => new KeywordTrigger { Keyword = $"word {i}" }));
-        var panel = new KeywordTriggersPanel();
+        panel.SyncFromSettings();
+        var host = (Window)TopLevel.GetTopLevel(panel)!;
+        (host.Width, host.Height) = (900, 500);
         Find<Expander>(panel, "KeywordTriggersExpander").IsExpanded = true;
-        var content = new StackPanel();
-        content.Children.Add(new Border { Height = 600 });
-        content.Children.Add(panel);
-        content.Children.Add(new Border { Height = 900 });
-        var outer = new ScrollViewer { Content = content };
-        var host = new Window { Width = 900, Height = 500, Content = outer };
-        try
-        {
-            host.Show(); Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
-            var inner = Find<StackPanel>(panel, "KeywordTriggerListPanel")
-                .GetVisualAncestors().OfType<ScrollViewer>().First();
-            Assert.True(inner.Extent.Height > inner.Viewport.Height + 120);
-            outer.Offset = new Vector(0, outer.Offset.Y + inner.TranslatePoint(default, outer)!.Value.Y - 100);
-            inner.Offset = new Vector(0, innerOffset);
-            host.UpdateLayout();
-            var before = outer.Offset.Y;
-            var point = inner.TranslatePoint(new Point(8, 20), host)!.Value;
-            host.MouseWheel(point, new Vector(0, delta));
-            Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
-            // WPF PreviewMouseWheel always redirects to the ancestor, even before the list's edge.
-            Assert.Equal(before - delta * 120, outer.Offset.Y, 1);
-            Assert.Equal(innerOffset, inner.Offset.Y, 1);
-        }
-        finally { host.Close(); }
+        Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
+        var inner = Find<StackPanel>(panel, "KeywordTriggerListPanel").GetVisualAncestors().OfType<ScrollViewer>().First();
+        var outer = inner.GetVisualAncestors().OfType<ScrollViewer>().First();
+        Assert.Same(view.GetVisualDescendants().OfType<ScrollViewer>().First(v => panel.GetVisualAncestors().Contains(v)), outer);
+        Assert.True(inner.Extent.Height > inner.Viewport.Height + 120);
+        var max = outer.Extent.Height - outer.Viewport.Height;
+        var target = outer.Offset.Y + inner.TranslatePoint(default, outer)!.Value.Y - 100;
+        outer.Offset = new Vector(0, delta < 0 ? Math.Clamp(target, 0, max - 130) : Math.Clamp(target, 130, max));
+        inner.Offset = new Vector(0, innerOffset);
+        host.UpdateLayout();
+        var before = outer.Offset.Y;
+        Assert.InRange(before - delta * 120, 0, max);                 // room to move: the assert below is not vacuous
+        var point = inner.TranslatePoint(new Point(8, 20), host)!.Value;
+        Assert.InRange(point.Y, 0, host.Bounds.Height);
+        host.MouseWheel(point, new Vector(0, delta));
+        Dispatcher.UIThread.RunJobs(); host.UpdateLayout();
+        // WPF PreviewMouseWheel always redirects to the ancestor, even before the list's edge.
+        Assert.Equal(before - delta * 120, outer.Offset.Y, 1);
+        Assert.Equal(innerOffset, inner.Offset.Y, 1);
     });
 
     [Theory]
