@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Friends drawer link feedback (sync #7)
+1. Open Friends. Copy link remains beside your code while Add friend is folded. Press it twice, renewing the link on another device between presses: the second clipboard value must be current. With no link available it copies the code and says so; clipboard failure says to try later. The note rises once, holds four seconds and fades out; repeated copies restart the hold. WPF `Controls/Friends/FriendsDrawer.Link.cs:92`. Rows: `sync7-friends-link`.
+2. Open Add friend. New link copies a replacement and retires the old link. Paste a friend link or twelve-character token: CCP- hides, Add claims it directly, and a successful claim clears the field. Type a token starting CCP one character at a time: it must survive at eight characters. Paste CCP-ABCDE: the code path remains intact. WPF `Controls/Friends/FriendsDrawer.cs:1027`. Rows: `sync7-friends-link`.
