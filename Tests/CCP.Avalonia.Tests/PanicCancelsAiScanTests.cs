@@ -14,7 +14,7 @@ public sealed class PanicCancelsAiScanTests
     [InlineData("CCP.Core/Services/RemoteControl/RemoteCommands.cs", "public static void StopEffects(bool force)", "if (force) Commands.AiCommandService.CancelAll();")]
     [InlineData("ConditioningControlPanel/MainWindow/MainWindow.xaml.cs", "private void HandlePanicKeyPress()", "CancelPendingAi();")]
     [InlineData("ConditioningControlPanel/MainWindow/MainWindow.xaml.cs", "private void RunEmergencyPanicTeardown()", "CancelPendingAi();")]
-    [InlineData("ConditioningControlPanel/MainWindow/MainWindow.RemoteControl.cs", "internal void TriggerPanicFromRemote()", "CancelPendingAi();")]
+    [InlineData("ConditioningControlPanel/MainWindow/MainWindow.RemoteControl.cs", "internal bool TriggerPanicFromRemote()", "CancelPendingAi();")]
     [InlineData("ConditioningControlPanel/Services/RemoteControlService.cs", "private void StopAllRemoteEffects(RemoteEndCause cause)", "if (force) MainWindow.CancelPendingAi();")]   // main 28078c756: RemoteEndCause, force = Panic
     public void PanicRouteCancelsPendingAi(string file, string signature, string call)
     {
