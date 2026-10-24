@@ -123,6 +123,40 @@ public sealed class WindowsDuckerTests : IDisposable
     }
 
     [Fact]
+    public void ADuckOfAnAppWithAParkedRestoreKeepsItsTrueOriginal()
+    {
+        var d = Make();
+        d.Duck(80);
+        d.Drain();
+        var parkedAt = _vol[10];                 // 0.16, the ducked level
+        _vol.Remove(10);                         // its session went away: the hand-back is parked
+        d.Unduck(-1);
+        d.Drain();
+        _vol[10] = parkedAt;                     // it plays again, still at the ducked level
+        d.Duck(80);
+        d.Drain();
+        Assert.Equal(0.8f, ReadJournal()[10], 3);   // the TRUE original, not 0.16
+        d.Unduck(-1);
+        d.Drain();
+        Assert.Equal(0.8f, _vol[10], 3);
+    }
+
+    [Fact]
+    public void AGoneEntryNeverLandsOnALiveAppThatHasItsOwnEntry()
+    {
+        _vol[11] = 0.5f;
+        _name[11] = "Spotify";                   // a second Spotify process, ducked too
+        var d = Make();
+        d.Duck(80);
+        d.Drain();
+        _vol.Remove(10);                         // the first one exits
+        d.Unduck(-1);
+        d.Drain();
+        Assert.Equal(0.5f, _vol[11], 3);         // its own original, not 10's
+        Assert.Equal(0.8f, ReadJournal()[10], 3);   // 10 is parked, not "restored" onto 11
+    }
+
+    [Fact]
     public void WindowsDuckingIsSeededOnlyFromAppStartUp()
     {
         var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Platform", "LibVlcAudio.cs"));

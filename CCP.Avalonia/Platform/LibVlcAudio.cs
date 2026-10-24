@@ -76,10 +76,30 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (OperatingSystem.IsWindows() && bundled != null) Core.Initialize(bundled);
             else { if (OperatingSystem.IsLinux()) LibVlcNative.Install(); Core.Initialize(); }
             // No global --no-video: video shares this instance. Audio media opt out per item instead.
-            _vlc = new LibVLC(options.Append("--quiet").ToArray());
+            _vlc = new LibVLC(WithOutput(options, OperatingSystem.IsWindows()).Append("--quiet").ToArray());
             Shared ??= _vlc;
             _vlc.SetUserAgent("Conditioning Control Panel", "CCP"); // the name pactl shows for our streams
         }
+
+        /// <summary>This instance's LibVLC (the Windows session test plays through the real output).</summary>
+        internal LibVLC Vlc => _vlc;
+
+        /// <summary>
+        /// Windows: LibVLC's default output (mmdevice) sets Player.Volume and Mute on the PROCESS's one
+        /// WASAPI session, which every player shares and Windows remembers (measured with silent WAVs:
+        /// players at 100 and 30 shared ONE session, it went to 0.027 and both read 30). Through DirectSound
+        /// each player's Volume/Mute is its own buffer's: measured 100 / 30 / 0 / 5 / mute on two players with
+        /// the session at 1.000 throughout, each player reading its own value. 0 is DirectSound's floor
+        /// (silence) and LibVLC's cubic scale is kept, so the linear gain mapping (<see cref="VlcVolume"/>)
+        /// still lands WPF's sample-gain levels. ",any" falls back to the default output if DirectSound
+        /// cannot open. A caller's own --aout (tests: dummy) wins. Linux: pulse is per stream already.
+        /// </summary>
+        internal static string[] WithOutput(string[] options, bool windows) =>
+            windows && !options.Any(o => o.StartsWith("--aout", StringComparison.Ordinal))
+                ? options.Prepend("--aout=directsound,any").ToArray() : options;
+
+        /// <summary>WPF's linear sample gain (0-1) as LibVLC's cubic 0-100 volume: 0.5 lands at about -6 dB.</summary>
+        internal static int VlcVolume(float gain) => (int)Math.Round(Math.Cbrt(Math.Clamp(gain, 0f, 1f)) * 100);
 
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
         internal LibVlcAudio(Func<string, string> pactl, string? duckJournal = null) { _vlc = null!; _pactl = pactl; _journal = duckJournal; }
@@ -141,7 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             media.AddOption(NoVideo);
             var player = new MediaPlayer(media);
             // WPF's volume is linear sample gain; LibVLC's is cubic, so 0.5 must land at ~-6 dB, not -18.
-            var vol = (int)Math.Round(Math.Cbrt(Math.Clamp(volume, 0f, 1f)) * 100);
+            var vol = VlcVolume(volume);
             var done = 0;
             void Finish()
             {
@@ -362,6 +382,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (_win != null) { _win.Shutdown(); return; }
             lock (_duckLock) { if (_isDucked) ForceUnduck(); }
             Drain();
+            lock (_duckLock) { _retry?.Dispose(); _retry = null; }
         }
 
         internal void Drain() => _duckWork.Wait(2000);
@@ -390,8 +411,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     lock (_duckLock)
                     {
                         if (!_isDucked) return;
-                        if (!_originalVolumes.TryAdd(index, new(si.Pid, si.Name, si.Volumes.Select(v => v.ToString()).ToArray()))) continue;
-                        _parked.Remove(index);
+                        if (_originalVolumes.ContainsKey(index)) continue;
+                        // A parked restore still owes this stream its TRUE original: keep that, never the live
+                        // (still ducked) level, or the journal and the next unduck leave the app quieter.
+                        _originalVolumes[index] = _parked.Remove(index, out var owed)
+                            ? owed : new DuckRecovery.PulseStream(si.Pid, si.Name, si.Volumes.Select(v => v.ToString()).ToArray());
                     }
                     // Journal BEFORE lowering: a crash between the two must still find the original.
                     Journal();
@@ -418,7 +442,58 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     if (!ok) _parked[index] = stream;
                 }
             }
+            lock (_duckLock)
+                if (_parked.Count > 0)
+                {
+                    // WPF RestoreRetryTick: retry every 5 s for 3 min, as the app's stream comes back.
+                    _retryDeadline = DateTime.UtcNow + RetryWindow;
+                    _retry?.Dispose();
+                    _retry = new Timer(_ => RetryTick(), null, RetryMs, RetryMs);
+                }
             Journal();
+        }
+
+        internal const int RetryMs = 5_000;
+        private static readonly TimeSpan RetryWindow = TimeSpan.FromMinutes(3);
+        private Timer? _retry;
+        private DateTime _retryDeadline;
+
+        internal bool RetryArmed { get { lock (_duckLock) return _retry != null; } }
+
+        private void RetryTick()
+        {
+            lock (_duckLock)
+            {
+                if (_parked.Count == 0 || DateTime.UtcNow > _retryDeadline)
+                {
+                    // Stop retrying; what is left stays in the journal for the next launch.
+                    _retry?.Dispose();
+                    _retry = null;
+                    return;
+                }
+            }
+            Enqueue(RetryParked);
+        }
+
+        /// <summary>WPF RestoreRetrySweep: the parked restores on the live streams, same PID else same app by
+        /// name, never a stream this run holds ducked right now.</summary>
+        internal void RetryParked()
+        {
+            Dictionary<int, DuckRecovery.PulseStream> parked;
+            HashSet<int> busy;
+            lock (_duckLock)
+            {
+                if (_parked.Count == 0) return;
+                parked = new(_parked);
+                busy = new(_originalVolumes.Keys);
+            }
+            var landed = DuckRecovery.RestorePulse(parked, _pactl, Environment.ProcessId, busy);
+            lock (_duckLock)
+            {
+                foreach (var index in landed) _parked.Remove(index);
+                if (_parked.Count == 0) { _retry?.Dispose(); _retry = null; }
+            }
+            if (landed.Count > 0) Journal();
         }
 
         /// <summary>Every original not yet handed back (WPF SaveDuckingState via DuckRecoveryRule.ToPersist).</summary>

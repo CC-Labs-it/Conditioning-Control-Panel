@@ -54,6 +54,60 @@ public sealed class DuckRecoveryTests : IDisposable
     }
 
     [Fact]
+    public void AParkedRestoreIsRetriedWhileTheRunGoesOn()
+    {
+        var gone = false;
+        var listing = "[" + Stream(7, 4242, "spotify") + "]";
+        var sets = new List<string>();
+        var audio = new LibVlcAudio(args =>
+        {
+            if (args.StartsWith("-f json")) return listing;
+            if (gone) throw new InvalidOperationException("No such entity");
+            return Record(sets, args);
+        }, Journal);
+        audio.Duck(80);
+        audio.Drain();
+        gone = true;                           // the app's stream ended while ducked
+        audio.Unduck(-1);
+        audio.Drain();
+        Assert.True(audio.RetryArmed);         // WPF RestoreRetryTick: every 5 s for 3 min
+        gone = false;
+        listing = "[" + Stream(9, 4242, "spotify", 13107) + "]";   // it plays again on a new stream
+        sets.Clear();
+        audio.RetryParked();
+        Assert.Equal(new[] { "set-sink-input-volume 9 65536 65536" }, sets);
+        Assert.False(File.Exists(Journal));
+        Assert.False(audio.RetryArmed);
+    }
+
+    [Fact]
+    public void ADuckOfAParkedStreamKeepsItsTrueOriginal()
+    {
+        var failOnce = false;
+        var listing = "[" + Stream(7, 4242, "spotify") + "]";
+        var sets = new List<string>();
+        var audio = new LibVlcAudio(args =>
+        {
+            if (args.StartsWith("-f json")) return listing;
+            if (failOnce) { failOnce = false; throw new InvalidOperationException("busy"); }
+            return Record(sets, args);
+        }, Journal);
+        audio.Duck(80);
+        audio.Drain();
+        failOnce = true;                       // the hand-back misses: 65536 is parked
+        audio.Unduck(-1);
+        audio.Drain();
+        listing = "[" + Stream(7, 4242, "spotify", 13107) + "]";   // still at the ducked level
+        audio.Duck(80);
+        audio.Drain();
+        Assert.Equal(new[] { "65536", "65536" }, DuckRecovery.LoadPulse(Journal)[7].Volumes);
+        sets.Clear();
+        audio.Unduck(-1);
+        audio.Drain();
+        Assert.Equal(new[] { "set-sink-input-volume 7 65536 65536" }, sets);
+    }
+
+    [Fact]
     public void LaunchRestoresARestartedAppByNameAndDropsTheJournal()
     {
         DuckRecovery.SavePulse(Journal, new Dictionary<int, DuckRecovery.PulseStream>
