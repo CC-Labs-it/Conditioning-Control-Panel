@@ -10,7 +10,7 @@ export function createKeepChainView(scene, track, { chains = [] } = {}) {
   function solid(hex) {
     const m = new MeshBasicNodeMaterial(), c = new Color(hex); m.colorNode = vec3(c.r, c.g, c.b).mul(shade); owned.push(m); return m;
   }
-  const iron = solid('#8296aa'), gold = solid('#efbd73'), dark = solid('#222b40');
+  const iron = solid('#9d86af'), gold = solid('#efbd73'), dark = solid('#120d20');
   const link = new TorusGeometry(.55, .14, 5, 10), weight = new IcosahedronGeometry(K.radiusM, 1), box = new BoxGeometry(1, 1, 1);
   const floorGeo = new PlaneGeometry(22, 6); geometries.push(link, weight, box, floorGeo);
   const matrix = new Matrix4(), axes = [new Vector3(), new Vector3(), new Vector3()], obj = new Object3D();
@@ -28,7 +28,25 @@ export function createKeepChainView(scene, track, { chains = [] } = {}) {
       obj.position.set(0, -i - .4, 0); obj.scale.set(1, 1.3, 1); obj.rotation.set(0, i % 2 * Math.PI / 2, 0);
       obj.updateMatrix(); links.setMatrixAt(i, obj.matrix);
     } pivot.add(links);
-    const ball = new Mesh(weight, iron); ball.position.y = -K.lengthM; pivot.add(ball);
+    const ball = new Mesh(weight, solid('#695174')); ball.scale.setScalar(.8); ball.name = 'forged-pendulum-core'; ball.position.y = -K.lengthM; pivot.add(ball);
+    // Recessed panels and hammered studs stay inside the existing collision sphere.
+    const panels = new InstancedMesh(box, iron, 12), studs = new InstancedMesh(weight, gold, 12);
+    panels.name = 'pendulum-armour-panels'; studs.name = 'pendulum-rivets';
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI / 6, y = i % 2 ? .6 : -.6, radius = 2.13;
+      obj.position.set(Math.sin(a) * radius, -K.lengthM + y, Math.cos(a) * radius);
+      obj.rotation.set(0, a, 0); obj.scale.set(.88, .7, .24); obj.updateMatrix(); panels.setMatrixAt(i, obj.matrix);
+      obj.position.set(Math.sin(a) * 2.31, -K.lengthM + y, Math.cos(a) * 2.31);
+      obj.scale.setScalar(.04); obj.updateMatrix(); studs.setMatrixAt(i, obj.matrix);
+    }
+    pivot.add(panels, studs);
+    const collarGeo = new TorusGeometry(.66, .18, 5, 12); geometries.push(collarGeo);
+    for (const y of [-.3, -K.lengthM + 2]) {
+      const collar = new Mesh(collarGeo, gold); collar.name = 'pendulum-chain-collar'; collar.position.y = y;
+      collar.rotation.x = Math.PI / 2; pivot.add(collar);
+    }
+    const axle = new Mesh(box, gold); axle.name = 'pendulum-bearing'; axle.position.set(row.x || 0, K.pivotM, 0);
+    axle.scale.set(2.3, 1.3, 3.2); holder.add(axle);
     const band = new Mesh(new TorusGeometry(K.radiusM + .02, .13, 5, 16), gold); geometries.push(band.geometry); band.position.y = -K.lengthM; pivot.add(band);
     const alpha = uniform(.15), warning = new MeshBasicNodeMaterial({ color: '#ffc58a', transparent: true, depthWrite: false, side: DoubleSide });
     warning.opacityNode = alpha; owned.push(warning);
@@ -37,5 +55,5 @@ export function createKeepChainView(scene, track, { chains = [] } = {}) {
   }
   function update(timeS) { for (const e of entries) { const p = keepChainPhase(e.row, timeS); e.pivot.rotation.z = p.angle; e.alpha.value = p.warning ? .24 : .08; } }
   update(0);
-  return { group, update, inspect: () => ({ count: entries.length }), dispose() { group.removeFromParent(); geometries.forEach(g => g.dispose()); owned.forEach(m => m.dispose()); } };
+  return { group, update, inspect: () => ({ count: entries.length }), dispose() { group.removeFromParent(); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); geometries.forEach(g => g.dispose()); owned.forEach(m => m.dispose()); } };
 }

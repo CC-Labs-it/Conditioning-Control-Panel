@@ -1,4 +1,5 @@
 /* Original prison architecture. Pure world-space pieces also provide physical media mounts. */
+import { keepRelics } from './keepRelics.js';
 import { keepDetails } from './keepDetails.js';
 export function prisonPlan(track, layout, { phone = false } = {}) {
   const boxes = [], drums = [], mounts = [], buildings = [], missingBricks = [];
@@ -66,7 +67,9 @@ export function prisonPlan(track, layout, { phone = false } = {}) {
         const p = transform(a, Math.sin(angle) * (face + 2.2), 0, Math.cos(angle) * (face + 2.2));
         const f = nearest(p); return { side, p, f, distance: Math.hypot(p[0] - f.p[0], p[2] - f.p[2]) };
       }).sort((a, b) => a.distance - b.distance);
-      const face = sides[0], yaw = (a.yaw || 0) + face.side * Math.PI / 2;
+      // E-shaped wings show media on their exterior, never toward an overlapping sibling wing.
+      const wing = /-wing-([0-3])$/.exec(a.id), exterior = wing ? [2, 3, 1, 0][Number(wing[1])] : null;
+      const face = exterior === null ? sides[0] : sides.find(f => f.side === exterior), yaw = (a.yaw || 0) + face.side * Math.PI / 2;
       const b = [Math.cos(yaw), 0, -Math.sin(yaw)], n = [0, 1, 0], t = [Math.sin(yaw), 0, Math.cos(yaw)];
       const p = [face.p[0], Math.min(a.topY - 9, face.f.p[1] + 12), face.p[2]];
       box('dark', 'prison-media-tablet', p.map((v, i) => v - t[i] * .3), [18, 10, .5], yaw);
@@ -163,6 +166,7 @@ export function prisonPlan(track, layout, { phone = false } = {}) {
     m.t = [f.b[0] * out / length, 0, f.b[2] * out / length]; m.b = [m.t[2], 0, -m.t[0]]; m.n = [0, 1, 0]; m.standoff = .15;
     box('stone', 'interior-media-tablet', m.p.map((v, i) => v - m.t[i] * .7), [15, 7, 1.1], Math.atan2(m.t[0], m.t[2]));
   }
+  boxes.push(...keepRelics(track, layout, mounts));
   for (const m of mounts) { const i = groupIndex.get(m.frame) || 0; m.phone = i % 4 < 2; groupIndex.set(m.frame, i + 1); }
   return { boxes, drums, mounts, buildings, interiors: details.interiors, missingBricks };
 }
