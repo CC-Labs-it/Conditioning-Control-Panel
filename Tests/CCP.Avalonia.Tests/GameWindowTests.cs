@@ -206,6 +206,29 @@ public sealed class GameWindowTests
         }
     }
 
+    [Theory]
+    [InlineData(true, global::ConditioningControlPanel.Models.MotionLevel.Full, 0.25, 0.5, true)]
+    [InlineData(true, global::ConditioningControlPanel.Models.MotionLevel.Full, 0.75, 0.75, true)]
+    [InlineData(true, global::ConditioningControlPanel.Models.MotionLevel.Reduced, 0.5, 0, true)]
+    [InlineData(true, global::ConditioningControlPanel.Models.MotionLevel.Off, 0.5, 0, true)]
+    [InlineData(false, global::ConditioningControlPanel.Models.MotionLevel.Full, 0.5, 0, false)]
+    public void PieceByPiece_GentleIntroSettingsReachPage(bool gentle,
+        global::ConditioningControlPanel.Models.MotionLevel level, double speed, double expected, bool reduced)
+        => Run((shell, launcher) =>
+        {
+            var s = CoreSettings.Current;
+            s.GentleVisuals = gentle;
+            s.GentleSpeed = speed;
+            s.MotionLevel = level;
+            var w = GameWindow.Launch(GameWindow.PbpId)!;
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Equal("pbp:settings", (string?)sent[0]["type"]);
+            Assert.Equal(expected, (double?)sent[0]["gentleIntroSpeed"]);
+            Assert.Equal(reduced, (bool?)sent[0]["reducedMotion"]);
+        });
+
     /// <summary>WPF PieceByPieceHostService through the launcher tile: the leash gate first, then Play opens the
     /// board; ready gets pbp:settings then pbp:identity and no shell init (:295-313); media-request answers from
     /// the own library with gifs split out (:447); pbp:net is refused off /v2/pbp/ and otherwise carries the token

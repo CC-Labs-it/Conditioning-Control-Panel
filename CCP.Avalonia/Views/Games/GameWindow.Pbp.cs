@@ -148,7 +148,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 _pbpSettingsPosted = true;
                 var s = CoreSettings.Current;
-                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds, s.MotionLevel != MotionLevel.Full, Array.Empty<string>()));
+                // ponytail: this head has no cross-platform OS animation cap; use the configured
+                // level without gentle, as the other Avalonia motion surfaces do.
+                Post(PbpHostRules.SettingsFrame(s.VideoMinDurationSeconds,
+                    s.GentleVisuals || s.MotionLevel != MotionLevel.Full, Array.Empty<string>(),
+                    PbpWatchRules.GentleIntroSpeed(s.GentleVisuals, s.MotionLevel, s.GentleSpeed)));
             }
             if (!_pbpIdentityPosted)
             {

@@ -158,6 +158,22 @@ public sealed class PbpHostRulesTests
         Assert.Equal("http://x/a.mp3", (string?)f["whispers"]![0]);
     }
 
+    [Theory]
+    [InlineData(true, ConditioningControlPanel.Models.MotionLevel.Full, 0.25, 0.5)]
+    [InlineData(true, ConditioningControlPanel.Models.MotionLevel.Full, 0.75, 0.75)]
+    [InlineData(true, ConditioningControlPanel.Models.MotionLevel.Full, 2, 1)]
+    [InlineData(true, ConditioningControlPanel.Models.MotionLevel.Full, double.NaN, 0.5)]
+    [InlineData(true, ConditioningControlPanel.Models.MotionLevel.Reduced, 0.5, 0)]
+    [InlineData(true, ConditioningControlPanel.Models.MotionLevel.Off, 0.5, 0)]
+    [InlineData(false, ConditioningControlPanel.Models.MotionLevel.Full, 0.5, 0)]
+    public void Settings_GentleIntroOverride_ReachesThePageOnlyWhenGentleIsTheOnlyBrake(
+        bool gentle, ConditioningControlPanel.Models.MotionLevel level, double speed, double expected)
+    {
+        var frame = PbpHostRules.SettingsFrame(15, gentle || level != ConditioningControlPanel.Models.MotionLevel.Full,
+            Array.Empty<string>(), PbpWatchRules.GentleIntroSpeed(gentle, level, speed));
+        Assert.Equal(expected, (double?)frame["gentleIntroSpeed"]);
+    }
+
     [Fact]
     public void MediaRequest_DefaultsAndClamps()
     {

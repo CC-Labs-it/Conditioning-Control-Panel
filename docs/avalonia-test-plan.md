@@ -641,6 +641,7 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 11. Haptics -> Intiface address: type a host without `ws://`; it connects the same as Windows. Rows: `feat-intiface-url`.
 12. Piece by Piece: launch from the launcher, play, close. Rows: `feat-pbp-host`.
 13. Chaster: Circe's mood meter and lines after a booking. Rows: `views-chaster-circe-mood`.
+14. Piece by Piece gentle intro: set Motion to Full, enable Gentle visuals and choose 0.25 speed; launch chess and confirm the clockwork intro runs at half speed. At 0.75 use that speed. With Motion Reduced or Off, confirm the intro follows reduced motion without a gentle override; with Gentle off and Full, use normal motion. WPF `Services/PieceByPiece/PieceByPieceHostService.cs` (`362aaff94`). Rows: `feat-pbp-host`.
 
 ### Rows (general check G)
 - [ ] `feat-stakes` - WPF `Services/Stakes/**`

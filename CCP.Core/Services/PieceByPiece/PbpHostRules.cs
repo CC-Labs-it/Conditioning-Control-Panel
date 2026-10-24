@@ -127,13 +127,15 @@ public static class PbpHostRules
     public static int VideoHoldSec(int configured) =>
         Math.Clamp(configured > 0 ? configured : DefaultVideoHoldSec, 10, 30);
 
-    public static JObject SettingsFrame(int videoMinDurationSeconds, bool reducedMotion, IEnumerable<string> whispers) =>
+    public static JObject SettingsFrame(int videoMinDurationSeconds, bool reducedMotion, IEnumerable<string> whispers,
+        double gentleIntroSpeed = 0) =>
         new()
         {
             ["type"] = "pbp:settings",
             ["videoHoldSec"] = VideoHoldSec(videoMinDurationSeconds),
             ["reducedMotion"] = reducedMotion,
             ["whispers"] = new JArray(whispers.Cast<object>().ToArray()),
+            ["gentleIntroSpeed"] = gentleIntroSpeed,
         };
 
     // ------------------------------------------------------------------ the player's own library
