@@ -16,10 +16,10 @@ test('Keep regenerates exactly and is a closed, two-lap fortress course with a l
   assert.ok(formatKeep(json).split('\n').length < 200);
   const t = keep(), end = walkKeep(KEEP_PIECES);
   assert.equal(t.id, 'keep'); assert.equal(t.laps, 2);
-  assert.ok(t.lengthM >= 2400 && t.lengthM <= 3000);
+  assert.ok(t.lengthM >= 4200 && t.lengthM <= 4800);
   assert.ok(Math.hypot(end.x, end.z) < 1e-7);
-  assert.ok(json.nodes.every((n) => n.w >= 26 && n.w <= 34 && n.flags.includes('rail')));
-  assert.ok(Math.max(...json.nodes.map((n) => n.p[1])) >= 70);
+  assert.ok(json.nodes.every((n) => n.w >= 26 && n.w <= 34));
+  assert.ok(Math.max(...json.nodes.map((n) => n.p[1])) >= 58);
   for (let i = 0; i < 8; i++) assert.ok(Math.abs(t.spawnPose(i).p[1]) < .001);
 });
 test('Keep gate halls have straight flat approaches, two 8m bypasses and no checkpoint on a gate', () => {
@@ -64,7 +64,7 @@ for (const seed of [1, 241023, 20261024]) test('Keep: all eight racers finish tw
   r.ai.drive = (kart, ctx, dt, out) => { drive(kart, ctx, dt, out); if (ctx.race.phase === 'racing') hazards.steer(kart, out); };
   r.racers.step = (dt, actions, race, ctx) => step(dt, actions, race, { ...ctx, hazards });
   hazards.reset();
-  r.run(420, () => r.racers.list.every((x) => x.finished));
+  r.run(650, () => r.racers.list.every((x) => x.finished));
   assert.ok(r.racers.list.every((x) => x.finished), 'finish times ' + r.racers.list.map((x) => x.finishS));
   assert.deepEqual(r.racers.list.map((x) => x.falls), Array(8).fill(0));
   assert.ok(r.racers.list.every((x) => x.lapTimes.length === 2));
@@ -73,15 +73,14 @@ for (const seed of [1, 241023, 20261024]) test('Keep: all eight racers finish tw
 
 
 
-test('Keep tower wraps twice with 32m vertical separation and a clear solid core', () => {
+test('Keep tower wraps one and a half turns with 32m vertical separation and a clear solid core', () => {
   const t = keep(), layout = getKeepLayout(t), spiral = layout.landmarks.find((p) => p.id === 'tower-spiral');
-  const tower = layout.towers[0], count = spiral.to - spiral.node, turnNodes = count / 2;
-  assert.equal(KEEP_PIECES.find((p) => p.id === 'tower-spiral').turn, -720);
-  assert.equal(turnNodes % 1, 0);
-  for (let k = 0; k < turnNodes; k++) {
-    const a = json.nodes[spiral.node + k].p, b = json.nodes[spiral.node + k + turnNodes].p;
-    assert.ok(Math.hypot(a[0] - b[0], a[2] - b[2]) < .005, 'stacked road station');
-    assert.ok(b[1] - a[1] >= 31.99, '32m between revolutions');
+  const tower = layout.towers[0], turnM = (spiral.s1 - spiral.s0) / 1.5;
+  assert.equal(KEEP_PIECES.find((p) => p.id === 'tower-spiral').turn, -540);
+  for (let s = spiral.s0 + 12; s < spiral.s1 - turnM - 12; s += 10) {
+    const a = t.frameAt(s).p, b = t.frameAt(s + turnM).p;
+    assert.ok(Math.hypot(a[0] - b[0], a[2] - b[2]) < .2, 'stacked road station');
+    assert.ok(b[1] - a[1] >= 31.9, '32m between revolutions');
   }
   for (let s = spiral.s0 + 2; s < spiral.s1 - 2; s += 5) {
     const f = t.frameAt(s), q = t.query(...f.p, f.seg);
@@ -101,7 +100,38 @@ test('Keep chains have a wide dedicated straight and the sluice is real flowing 
   assert.equal(json.nodes[sluice.node].surface, 'stream');
   assert.deepEqual(json.nodes[sluice.node].flow, [3, 0]);
   assert.equal(json.nodes[pool.node].surface, 'pool');
-  assert.ok(json.nodes[sluice.node].p[1] - json.nodes[pool.node].p[1] >= 9.9);
+  assert.equal(json.nodes[sluice.node].p[1], 2);
   assert.ok(pool.s1 - pool.s0 >= 50);
 });
 
+
+test('Keep prison blocks clear the road and exposed sections preserve the inner rail', () => {
+  const t = keep(), layout = getKeepLayout(t);
+  assert.equal(layout.castleBlocks.length, 4);
+  for (const b of layout.castleBlocks) for (let s = 0; s < t.lengthM; s += 5) {
+    const f = t.frameAt(s), dx = Math.max(0, Math.abs(f.p[0] - b.x) - b.w / 2), dz = Math.max(0, Math.abs(f.p[2] - b.z) - b.d / 2);
+    assert.ok(Math.hypot(dx, dz) > f.w / 2 + 2, b.id + ' clear at ' + s);
+  }
+  assert.equal(layout.brokenEdges.length, 3);
+  for (const edge of layout.brokenEdges) {
+    const f = t.frameAt((edge.s0 + edge.s1) / 2);
+    assert.ok(f.flags.includes('railR') && !f.flags.includes('railL') && !f.flags.includes('rail'));
+    assert.ok(f.w >= 34);
+  }
+});
+test('Keep has a real raised drawbridge gap and three complete lanes of 5m stepping stones', () => {
+  const t = keep(), layout = getKeepLayout(t), bridge = layout.drawbridge;
+  assert.equal(t.jumps.length, 1);
+  assert.ok(t.frameAt(bridge.gapS0 + 1).flags.includes('jump'));
+  assert.ok(t.frameAt(bridge.gapS1 + 1).p[1] < t.frameAt(bridge.gapS0).p[1] - 15);
+  assert.ok(t.frameAt(bridge.rampS0 + 25).t[1] > .25, 'physical upward takeoff slope');
+  const field = t.fields[0]; assert.equal(field.id, 'keep-stones');
+  assert.equal(field.stones.length, 15); assert.ok(field.toS - field.fromS > 40.9 && field.toS - field.fromS < 41.1);
+  for (const x of field.lanes) {
+    const stones = field.stones.filter((h) => h.x === x);
+    assert.ok(stones.every((h) => h.w === 5 && h.len === 5));
+    assert.ok(Math.abs(stones[0].s - field.fromS) < .01);
+    assert.ok(Math.abs(stones.at(-1).s + 5 - field.toS) < .01);
+    for (let i = 1; i < stones.length; i++) assert.ok(stones[i].s - stones[i-1].s - 5 <= 4.01);
+  }
+});

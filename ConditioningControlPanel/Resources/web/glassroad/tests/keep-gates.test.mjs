@@ -112,7 +112,7 @@ test('the eight real bots finish Keep with gates active and held safe lanes thro
   const rs=createRacers(tr,feel,events,{count:8,seed:241024}),ai=createAi(tr,feel,{seed:241024});
   const race={phase:'racing',timeS:0,lapStartS:0}, seen=new Set();
   for(const r of rs.list)r.raceView={phase:'racing',timeS:0,lapStartS:0,finish(){this.phase='finished';}};
-  for(let tick=0;tick<60*260&&!rs.list.every(r=>r.finished);tick++){
+  for(let tick=0;tick<60*650&&!rs.list.every(r=>r.finished);tick++){
     race.timeS+=DT;
     for(const r of rs.list){
       if(r.finished)continue;
