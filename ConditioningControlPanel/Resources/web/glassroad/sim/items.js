@@ -33,14 +33,34 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   for (let i = 0; i < track.nodeCount; i++) {
     if (!(track.nodeFlags(i) || []).includes('rail')) open.push([track.nodeS[i], track.nodeS[i + 1] - track.nodeS[i]]);
   }
-  function nearOpenEdge(s, m) {
+  function nearOpenEdge(s, m, seg = -1) {
+    const fork = track.forkAtSeg?.(seg);
+    if (fork) {
+      const local = fork.localS(s), lo = Math.max(0, local - m), hi = Math.min(fork.lengthM, local + m);
+      const count = Math.max(1, Math.ceil((hi - lo) / 2));
+      for (let i = 0; i <= count; i++) {
+        const flags = fork.frameAt(lo + (hi - lo) * i / count).flags || [];
+        if (!(flags.includes('rail') || (flags.includes('railL') && flags.includes('railR')))) return true;
+      }
+      if (local < m && nearOpenEdge(fork.fromS, m - local)) return true;
+      if (fork.lengthM - local < m && nearOpenEdge(fork.toS, m - (fork.lengthM - local))) return true;
+      return false;
+    }
     for (const [a, len] of open) { const d = wrap(s - a, L); if (d <= len + m || d >= L - m) return true; }
     return false;
   }
 
+  function advance(s, seg, metres) {
+    const fork = track.forkAtSeg?.(seg);
+    if (!fork) return { s: wrap(s + metres, L), seg: -1 };
+    const local = fork.localS(s) + metres;
+    return local < fork.lengthM ? { s: fork.mainS(local), seg }
+      : { s: wrap(fork.toS + local - fork.lengthM, L), seg: -1 };
+  }
+
   const fr = track.frameAt(0);   // scratch frame, reused
-  function point(s, x, h, out = [0, 0, 0]) {
-    const f = track.frameAt(s, fr);
+  function point(s, x, h, out = [0, 0, 0], seg = -1) {
+    const f = track.pathFrameAt ? track.pathFrameAt(s, seg, fr) : track.frameAt(s, fr);
     for (let k = 0; k < 3; k++) out[k] = f.p[k] + f.b[k] * x + f.n[k] * h;
     return out;
   }
@@ -57,8 +77,13 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   const racer = (i) => (list[i] && list[i].i === i ? list[i] : list.find((r) => r.i === i));
   const free = (r) => !r.finished && (r.st[S.respawnPhase] === RESPAWN.NONE || r.st[S.respawnPhase] === RESPAWN.GRACE);
   const low = (r) => r.st[S.grounded] || r.st[S.height] <= g('pickHeightM');
-  const near = (r, s, x, rad) => Math.abs(sd(r.st[S.s], s)) <= rad && Math.abs(r.st[S.lateral] - x) <= rad;
-  const pop = (kind, at, s, x, h = 0) => pops.push({ kind, at, s, x, h, t: 0 });
+  const near = (r, s, x, rad, seg = -1) => {
+    if (!track.forks?.length) return Math.abs(sd(r.st[S.s], s)) <= rad && Math.abs(r.st[S.lateral] - x) <= rad;
+    const f = track.pathFrameAt(s, seg), delta = f.p.map((v, i) => r.st[S.posX + i] - v - f.b[i] * x);
+    const dot = axis => delta.reduce((sum, v, i) => sum + v * axis[i], 0);
+    return Math.abs(dot(f.t)) <= rad && Math.abs(dot(f.b)) <= rad && Math.abs(dot(f.n)) <= g('pickHeightM') + 1;
+  };
+  const pop = (kind, at, s, x, h = 0, seg = -1) => pops.push({ kind, at, s, x, h, seg, t: 0 });
   const kartP = (r) => [r.st[S.posX], r.st[S.posY], r.st[S.posZ]];
 
   // ---- verdicts -------------------------------------------------------------------------------
@@ -133,26 +158,27 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   function use(r, standings) {
     const id = r.item.id, it = ITEMS[id], st = r.st, s = st[S.s], x = st[S.lateral];
     let mode = it.use === 'trap' || (r.input.back && (it.use === 'throw' || it.use === 'lob')) ? 'drop' : it.use;
-    const dropS = wrap(s - g('dropBehindM'), L);
-    if (id === 'shatter' && nearOpenEdge(mode === 'drop' ? dropS : s, g('shatterEdgeSafeM'))) {
+    const fork = track.forkAtSeg?.(st[S.seg]), seg = fork ? st[S.seg] : -1;
+    const dropS = fork ? fork.mainS(Math.max(0, fork.localS(s) - g('dropBehindM'))) : wrap(s - g('dropBehindM'), L);
+    if (id === 'shatter' && nearOpenEdge(mode === 'drop' ? dropS : s, g('shatterEdgeSafeM'), seg)) {
       events.emit('item-refused', { racer: r.i, id, reason: 'edge' });
       return;
     }
     let target = -1;
     if (mode === 'drop') {
-      if (traps.length >= g('maxTraps')) { const o = traps.shift(); pop(o.kind, 'fizzle', o.s, o.x); }
-      traps.push({ id: nextId++, kind: id, s: dropS, x, t: 0, layer: r.i });
+      if (traps.length >= g('maxTraps')) { const o = traps.shift(); pop(o.kind, 'fizzle', o.s, o.x, 0, o.seg); }
+      traps.push({ id: nextId++, kind: id, s: dropS, x, seg, t: 0, layer: r.i });
     } else if (mode === 'throw') {
       target = aheadOf(r, standings, g('throwRangeM'));
-      projectiles.push({ id: nextId++, kind: id, mode, by: r.i, target, t: 0, s: wrap(s + THROW_LEAD_M, L), x, h: g('throwHeightM'),
+      projectiles.push({ id: nextId++, kind: id, mode, by: r.i, target, t: 0, ...advance(s, seg, THROW_LEAD_M), x, h: g('throwHeightM'),
         v: Math.max(0, st[S.speedPct]) * feel.get('speed.topMps') + g('throwExtraMps') });
     } else if (mode === 'lob') {
       target = lobTarget(r.i, standings);
       if (target < 0) return;   // alone on the road: keep it
-      projectiles.push({ id: nextId++, kind: id, mode, by: r.i, target, t: 0, fromS: s, fromX: x, s, x, h: g('throwHeightM') });
+      projectiles.push({ id: nextId++, kind: id, mode, by: r.i, target, t: 0, fromS: s, fromX: x, fromP: point(s, x, g('throwHeightM'), undefined, seg), seg, s, x, h: g('throwHeightM') });
     } else if (mode === 'wide') {
       const me = standings.progressOf(r.i);
-      waves.push({ id: nextId++, kind: id, from: r.i, s, x, t: 0 });
+      waves.push({ id: nextId++, kind: id, from: r.i, s, x, seg, t: 0 });
       for (const o of list) {
         const d = standings.progressOf(o.i) - me;
         if (o !== r && free(o) && d > 0 && d <= g('pinkRangeM')) hit(o, r.i, id, 'wide', null);
@@ -202,7 +228,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       if (it.rollT >= g('rollS')) { it.rolling = false; events.emit('item-roll', { racer: r.i, id: it.id }); }
     } else if (it.id) it.heldT += dt;
     if (x.eff && (x.eff.t += dt) >= x.eff.durS + x.eff.out) x.eff = null;
-    if (x.glass > 0 && (x.glass -= dt) <= 0) { x.glass = 0; pop('glass', 'glass', r.st[S.s], r.st[S.lateral], 1); }
+    if (x.glass > 0 && (x.glass -= dt) <= 0) { x.glass = 0; pop('glass', 'glass', r.st[S.s], r.st[S.lateral], 1, r.st[S.seg]); }
     if (x.golden > 0) x.golden = Math.max(0, x.golden - dt);
     if (x.echo > 0 && (x.echoT -= dt) <= 0) x.echo = 0;
   }
@@ -213,31 +239,36 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       const tg = pr.target >= 0 ? racer(pr.target) : null;
       if (pr.mode === 'lob') {
         const k = Math.min(1, pr.t / g('lobFlightS'));
-        if (!tg) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h); return false; }
+        if (!tg) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h, pr.seg); return false; }
         pr.s = wrap(pr.fromS + sd(tg.st[S.s], pr.fromS) * k, L);
         pr.x = lerp(pr.fromX, tg.st[S.lateral], k);
         pr.h = g('throwHeightM') + g('lobHeightM') * 4 * k * (1 - k);
         if (k < 1) return true;
-        if (!free(tg)) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h); return false; }
-        const verdict = hit(tg, pr.by, pr.kind, 'lob', point(pr.s, pr.x, pr.h));
-        pop(pr.kind, verdict === 'mercy' ? 'hit' : verdict, pr.s, pr.x, pr.h);
+        if (!free(tg)) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h, pr.seg); return false; }
+        pr.seg = tg.st[S.seg];
+        const verdict = hit(tg, pr.by, pr.kind, 'lob', kartP(tg));
+        pop(pr.kind, verdict === 'mercy' ? 'hit' : verdict, pr.s, pr.x, pr.h, pr.seg);
         return false;
       }
-      if (pr.t >= g('throwLifeS')) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h); return false; }
-      pr.s = wrap(pr.s + pr.v * dt, L);
+      if (pr.t >= g('throwLifeS')) { pop(pr.kind, 'fizzle', pr.s, pr.x, pr.h, pr.seg); return false; }
+      Object.assign(pr, advance(pr.s, pr.seg, pr.v * dt));
+      const fork = track.forkAtSeg?.(pr.seg);
       const shatter = pr.kind === 'shatter';
       if (tg && free(tg)) {
         pr.x = damp(pr.x, tg.st[S.lateral], g('homeTcS'), dt);
-        if (shatter && nearOpenEdge(tg.st[S.s], g('shatterEdgeSafeM')) && sd(tg.st[S.s], pr.s) < SHATTER_WAIT_M) {
-          pr.s = wrap(tg.st[S.s] - SHATTER_WAIT_M, L);
+        const targetFork = track.forkAtSeg?.(tg.st[S.seg]);
+        const samePath = fork === targetFork;
+        const distance = fork && samePath ? fork.localS(tg.st[S.s]) - fork.localS(pr.s) : sd(tg.st[S.s], pr.s);
+        if (shatter && samePath && nearOpenEdge(tg.st[S.s], g('shatterEdgeSafeM'), tg.st[S.seg]) && distance < SHATTER_WAIT_M) {
+          pr.s = fork ? fork.mainS(Math.max(0, fork.localS(tg.st[S.s]) - SHATTER_WAIT_M)) : wrap(tg.st[S.s] - SHATTER_WAIT_M, L);
         }
       }
       pr.h = g('throwHeightM') + g('throwArcM') * Math.sin(Math.PI * Math.min(1, pr.t / ARC_S));
       for (const o of list) {
-        if (o.i === pr.by || !free(o) || !low(o) || !near(o, pr.s, pr.x, g('hitRadiusM'))) continue;
-        if (shatter && nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'))) continue;
-        const verdict = hit(o, pr.by, pr.kind, 'throw', point(pr.s, pr.x, pr.h));
-        pop(pr.kind, verdict === 'mercy' ? 'hit' : verdict, pr.s, pr.x, pr.h);
+        if (o.i === pr.by || !free(o) || !low(o) || !near(o, pr.s, pr.x, g('hitRadiusM'), pr.seg)) continue;
+        if (shatter && nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'), o.st[S.seg])) continue;
+        const verdict = hit(o, pr.by, pr.kind, 'throw', point(pr.s, pr.x, pr.h, undefined, pr.seg));
+        pop(pr.kind, verdict === 'mercy' ? 'hit' : verdict, pr.s, pr.x, pr.h, pr.seg);
         return false;
       }
       return true;
@@ -247,13 +278,13 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
   function trapsTick(dt) {
     traps = traps.filter((tp) => {
       tp.t += dt;
-      if (tp.t >= g('trapLifeS')) { pop(tp.kind, 'fizzle', tp.s, tp.x); return false; }
+      if (tp.t >= g('trapLifeS')) { pop(tp.kind, 'fizzle', tp.s, tp.x, 0, tp.seg); return false; }
       const rad = tp.kind === 'melt' ? g('meltRadiusM') : g('trapRadiusM');
       for (const o of list) {
-        if ((o.i === tp.layer && tp.t < g('trapArmS')) || !free(o) || !low(o) || !near(o, tp.s, tp.x, rad)) continue;
-        if (tp.kind === 'shatter' && nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'))) continue;
-        const verdict = hit(o, tp.layer, tp.kind, 'trap', point(tp.s, tp.x, 0));
-        pop(tp.kind, verdict === 'glass' || verdict === 'golden' ? verdict : 'trap', tp.s, tp.x);
+        if ((o.i === tp.layer && tp.t < g('trapArmS')) || !free(o) || !low(o) || !near(o, tp.s, tp.x, rad, tp.seg)) continue;
+        if (tp.kind === 'shatter' && nearOpenEdge(o.st[S.s], g('shatterEdgeSafeM'), o.st[S.seg])) continue;
+        const verdict = hit(o, tp.layer, tp.kind, 'trap', point(tp.s, tp.x, 0, undefined, tp.seg));
+        pop(tp.kind, verdict === 'glass' || verdict === 'golden' ? verdict : 'trap', tp.s, tp.x, 0, tp.seg);
         return false;
       }
       return true;
@@ -329,17 +360,21 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
     }
     for (const pr of projectiles) {
       const o = row('projectiles');
-      o.id = pr.id; o.kind = pr.kind; o.mode = pr.mode; point(pr.s, pr.x, pr.h, o.p); o.t = pr.t; o.target = pr.target; o.s = pr.s; o.x = pr.x;
+      o.id = pr.id; o.kind = pr.kind; o.mode = pr.mode; point(pr.s, pr.x, pr.h, o.p, pr.seg); o.t = pr.t; o.target = pr.target; o.s = pr.s; o.x = pr.x;
+      if (pr.mode === 'lob' && track.forks?.length) {
+        const target = racer(pr.target), k = Math.min(1, pr.t / g('lobFlightS'));
+        if (target) for (let j = 0; j < 3; j++) o.p[j] = lerp(pr.fromP[j], target.st[S.posX + j], k) + (j === 1 ? g('lobHeightM') * 4 * k * (1 - k) : 0);
+      }
     }
     const armS = g('trapArmS');
     for (const tp of traps) {
-      const o = row('traps'), f = track.frameAt(tp.s, fr);
+      const o = row('traps'), f = track.pathFrameAt ? track.pathFrameAt(tp.s, tp.seg, fr) : track.frameAt(tp.s, fr);
       for (let k = 0; k < 3; k++) { o.p[k] = f.p[k] + f.b[k] * tp.x; o.n[k] = f.n[k]; }
       o.id = tp.id; o.kind = tp.kind; o.t = tp.t; o.armed = tp.t >= armS; o.s = tp.s; o.x = tp.x;
     }
     for (const w of waves) {
       const o = row('waves');
-      o.id = w.id; o.kind = w.kind; o.from = w.from; point(w.s, w.x, 0, o.p); o.t = w.t; o.rangeM = g('pinkRangeM');
+      o.id = w.id; o.kind = w.kind; o.from = w.from; point(w.s, w.x, 0, o.p, w.seg); o.t = w.t; o.rangeM = g('pinkRangeM');
     }
     for (const r of list) {
       const x = R[r.i];
@@ -348,7 +383,7 @@ export function createItems(track, feel, events, { seed = 1 } = {}) {
       if (x.golden > 0) shield(r, 'golden', g('goldenS') - x.golden, x.golden / g('goldenS'), 0);
       if (x.echo > 0) shield(r, 'echo', g('echoS') - x.echoT, Math.max(0, x.echoT / g('echoS')), x.echo);
     }
-    for (const p of pops) { const o = row('pops'); o.kind = p.kind; o.at = p.at; point(p.s, p.x, p.h, o.p); o.t = p.t; }
+    for (const p of pops) { const o = row('pops'); o.kind = p.kind; o.at = p.at; point(p.s, p.x, p.h, o.p, p.seg); o.t = p.t; }
     return V;
   }
 

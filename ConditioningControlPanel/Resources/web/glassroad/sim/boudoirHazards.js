@@ -76,6 +76,7 @@ export function createBoudoirHazards(track, layout = null) {
     if (!r || r.finished || r.kind === 'remote' || !Number.isFinite(timeS)) return null;
     const st = r.st, m = mem(r), oldTime = m.time ?? Math.max(0, timeS - 1 / 60), dt = timeS - oldTime;
     m.time = timeS;
+    if (track.forkAtSeg?.(st[S.seg])) { m.after = null; m.cooldown.clear(); m.ribbon = null; return null; }
     if (st[S.respawnPhase] !== RESPAWN.NONE || dt < 0 || dt > .25 || dist(previous, st) > 25) { m.after = null; m.cooldown.clear(); m.ribbon = null; return null; }
     if (dt === 0) return null;
     const hit = (m.after && sweep(r, m.after, previous, oldTime, oldTime, m, events)) || sweep(r, previous, st, oldTime, timeS, m, events);
@@ -83,7 +84,7 @@ export function createBoudoirHazards(track, layout = null) {
     if (m.after) m.after.set(st); else m.after = cloneState(st);
     return hit;
   }
-  return { plan, rows, apply, steer: lanes.steer,
+  return { plan, rows, apply, steer(r, out) { if (!track.forkAtSeg?.(r.st[S.seg])) lanes.steer(r, out); },
     reset() { memory = new WeakMap(); hits = ribbonPasses = 0; lanes.reset(); },
     inspect(timeS = 0) { return { hits, ribbonPasses,
       presses: plan.presses.map(row => ({ ...row, ...powderPressPhase(row, timeS) })),

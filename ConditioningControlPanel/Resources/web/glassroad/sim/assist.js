@@ -120,7 +120,19 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     const owned = ph === RESPAWN.PULL || ph === RESPAWN.HOVER || ph === RESPAWN.RELEASE;
     const top = feel.get('speed.topMps');
     const s = st[S.s], lat = st[S.lateral];
-    const court = courts.at(s);
+    const fork = track.forkAtSeg?.(st[S.seg]);
+    const frameAhead = (d, out) => {
+      if (!fork) return track.frameAt(s + d, out);
+      const local = fork.localS(s) + d;
+      return local > fork.lengthM ? track.frameAt(fork.toS + local - fork.lengthM, out) : fork.frameAt(local, out);
+    };
+    const curveAhead = d => {
+      if (!fork) return bend[at(s + d)];
+      const a = frameAhead(d - 4, FR), b = frameAhead(d + 4, FA);
+      const dot = a.t.reduce((v, n, i) => v + n * b.t[i], 0), side = a.b.reduce((v, n, i) => v + n * b.t[i], 0);
+      return Math.atan2(side, Math.abs(dot)) * 180 / Math.PI / 8;
+    };
+    const court = fork ? null : courts.at(s);
     if (!court || steerIn || owned || (courtRoute && courtRoute.plan !== court)) courtRoute = null;
     if (court && !courtRoute) { courtRoute = courts.choose(court, 0, 0, 0, lat); courtCommitted = s >= court.court.fromS + 1; }
     if (courtRoute && !courtCommitted && s >= court.court.fromS + 1) {
@@ -129,7 +141,7 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     const ax = axes(st);
     const fwdV = st[S.velX] * ax.fx + st[S.velY] * ax.fy + st[S.velZ] * ax.fz;
     const speed = Math.max(0, fwdV);
-    const f0 = track.frameAt(s, FR);
+    const f0 = frameAhead(0, FR);
     const ft = ax.fx * f0.t[0] + ax.fy * f0.t[1] + ax.fz * f0.t[2];
     const backwards = ft < 0;
     view.active = false; view.pull = 0;
@@ -149,11 +161,11 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
       let vmax = g('cruisePct') * top;
       const look = Math.max(20, speed * 1.4);
       for (let d = 0; d <= look; d += STEP * 2) {
-        const v = bendSpeed(bend[at(s + d)], YP, share);
+        const v = bendSpeed(curveAhead(d), YP, share);
         vmax = Math.min(vmax, Math.sqrt(v * v + 2 * coast * d));
       }
       out.throttle = speed < vmax ? g('cruiseThrottle') * view.cruise : 0;
-      out.brake = lip[at(s)] ? 0 : clamp((speed - vmax - 3) / 8, 0, 0.5) * view.cruise;
+      out.brake = !fork && lip[at(s)] ? 0 : clamp((speed - vmax - 3) / 8, 0, 0.5) * view.cruise;
     }
 
     // steering help only on the ground, rolling forward, out of a drift
@@ -161,7 +173,8 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     // the player steering for a drop shortcut's opening (stick toward it, or the nose already turned out that way
     // with the stick not held the other way: polish 6, an opening on the OUTSIDE of a turn sees every kart's nose
     // point out while it turns in, and the lip holds a kart turning away, sim/routes.js turnsAway)
-    const z = steerIn && zones.length ? zoneAt(s, g('routeApproachM')) : null;
+    if (steerIn && !fork && (track.forks || []).some(f => s >= f.fromS - 30 && s <= f.fromS + 55)) return out;
+    const z = !fork && steerIn && zones.length ? zoneAt(s, g('routeApproachM')) : null;
     if (z && (Math.sign(a.steer) === z.side || (a.steer * z.side > -gap(feel, 'route.holdSteer') &&
       Math.atan2(ax.fx * f0.b[0] + ax.fy * f0.b[1] + ax.fz * f0.b[2], ft) * z.side > ROUTE_NOSE))) {
       out.steer = a.steer;
@@ -171,12 +184,12 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     // EASE (polish 6, the coil and the column bring r 20-45 turns): throttle held into a bend the kart cannot take
     // at this speed, the assist lifts it and dabs the brake, so the kart holds its line instead of running wide
     // onto the rail (or an open edge). Not on a lip, not under a boost, never when the player brakes.
-    if (a.throttle > dead && a.brake <= dead && !lip[at(s)] && st[S.boostKind] === BOOST.NONE) {
+    if (a.throttle > dead && a.brake <= dead && (fork || !lip[at(s)]) && st[S.boostKind] === BOOST.NONE) {
       yawParams(feel, YP);
       const dabMax = EASE_BRAKE * m.cap, decel = feel.get('engine.coastMps2') + feel.get('engine.brakeMps2') * dabMax * 0.5;
       let vmax = Infinity;
       for (let d = 0, look = Math.max(20, speed * EASE_LOOK_S); d <= look; d += STEP) {
-        const v = bendSpeed(bend[at(s + d)], YP, EASE_SHARE);
+        const v = bendSpeed(curveAhead(d), YP, EASE_SHARE);
         if (v < Infinity) vmax = Math.min(vmax, Math.sqrt(v * v + 2 * decel * d));
       }
       const over = speed - vmax;
@@ -185,14 +198,14 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
         if (over > EASE_LIFT_MPS) out.brake = clamp((over - EASE_LIFT_MPS) / 6, 0, dabMax);
       }
     }
-    const h = half[at(s)];
+    const h = fork ? frameAhead(0, FR).w / 2 : half[at(s)];
     // PULL: past pullFromHalf of the half width, back toward the centre
     const free = g('pullFromHalf') * h, ex = clamp((Math.abs(lat) - free) / Math.max(0.5, h - free), 0, 1);
     const courtLine = courtRoute ? courts.target(courtRoute, s, 0) : 0;
     const pull = courtRoute ? clamp((courtLine - lat) / 4, -1, 1) * g('pull') * m.pull
       : -Math.sign(lat) * ex * g('pull') * m.pull;
     // and a little heading alignment with the road a short way ahead (so it leans into a bend, never against it)
-    const fa = track.frameAt(s + Math.max(4, speed * g('alignLeadS')), FA);
+    const fa = frameAhead(Math.max(4, speed * g('alignLeadS')), FA);
     const at2 = ax.fx * fa.t[0] + ax.fy * fa.t[1] + ax.fz * fa.t[2], ab = ax.fx * fa.b[0] + ax.fy * fa.b[1] + ax.fz * fa.b[2];
     const hdg = Math.atan2(ab, at2);              // + = nose right of the road ahead
     const cap = g('max') * m.cap;
@@ -203,17 +216,17 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
       // AUTO: pure pursuit on the drive line, the centre with a small cut to the inside of a bend
       let la = Math.max(feel.get('ai.lookAheadMinM'), speed * feel.get('ai.lookAheadS'));
       if (courtRoute && s >= court.court.fromS) la = Math.min(la, 12);
-      const k = at(s + la), bk = bend[k];
+      const k = at(s + la), bk = curveAhead(la);
       const cutK = clamp(Math.abs(bk) / feel.get('ai.driftCurveDegPerM'), 0, 1);
-      const band = g('lineBandHalf') * Math.min(h, half[k]);
-      let target = lip[k] || lip[at(s)] ? 0 : clamp(Math.sign(bk) * g('lineCutM') * cutK, -band, band);
-      for (let i = 0; i < pads.length; i++) {
+      const band = g('lineBandHalf') * Math.min(h, fork ? frameAhead(la, FA).w / 2 : half[k]);
+      let target = !fork && (lip[k] || lip[at(s)]) ? 0 : clamp(Math.sign(bk) * g('lineCutM') * cutK, -band, band);
+      for (let i = 0; !fork && i < pads.length; i++) {
         const pd = pads[i], edge = pd.w / 2 + PAD_CLEAR_M;
         if (!pd.risky || wrap(pd.s - s, L) > Math.max(la * 2, PAD_LOOK_M) || Math.abs(target - pd.x) >= edge) continue;
         target = clamp(pd.x + (target >= pd.x ? edge : -edge), -(Math.min(h, half[k]) - PAD_RAIL_M), Math.min(h, half[k]) - PAD_RAIL_M);
       }
       if (courtRoute) target = courts.target(courtRoute, s, la, target);
-      const f = track.frameAt(s + la, FA);
+      const f = frameAhead(la, FA);
       const tx = f.p[0] + f.b[0] * target - st[S.posX], ty = f.p[1] + f.b[1] * target - st[S.posY], tz = f.p[2] + f.b[2] * target - st[S.posZ];
       const x = tx * ax.rx + ty * ax.ry + tz * ax.rz, z = tx * ax.fx + ty * ax.fy + tz * ax.fz;
       yawParams(feel, YP);

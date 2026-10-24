@@ -53,6 +53,7 @@ export function createBoudoirPerfume(track, events, { zones } = {}) {
     }
     api.ready = timeS >= safeUntil;
     for (const racer of racers) {
+      if (track.forkAtSeg?.(racer.st[S.seg])) { previous.delete(racer); continue; }
       const st = racer.st, now = { s: st[S.s], x: st[S.lateral], h: st[S.height], t: timeS, inside: null };
       const prev = previous.get(racer) || now;
       previous.set(racer, now);
