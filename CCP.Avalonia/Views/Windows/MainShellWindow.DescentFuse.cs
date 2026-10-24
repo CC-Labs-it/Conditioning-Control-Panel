@@ -9,7 +9,8 @@
 // ceremony focus (DescentShowDirector, DescentMigrationService) remain WPF-only. First light has
 // no caller here, as in WPF (only the owner's capture rig calls it).
 // ponytail: with no descent block service the reveal always holds at the bloom, and its 12 s
-// timeout counts animation frames, so a minimised window times out only on restore.
+// timeout is a one-shot timer independent of animation frames (WPF DispatcherTimer), so it
+// also fires while the window is minimised.
 using System;
 using Avalonia.Animation;
 using Avalonia.Controls;
