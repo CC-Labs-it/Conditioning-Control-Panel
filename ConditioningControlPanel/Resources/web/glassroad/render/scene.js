@@ -16,7 +16,7 @@
 import {
   Scene, Group, Mesh, InstancedMesh, Object3D, BufferGeometry, BufferAttribute, Float32BufferAttribute, Color, Vector2,
   SphereGeometry, LatheGeometry, TorusGeometry, CylinderGeometry, RingGeometry, IcosahedronGeometry,
-  HemisphereLight, DirectionalLight, Vector3,
+  HemisphereLight, DirectionalLight, Vector3, FogExp2,
 } from 'three/webgpu';
 import { S } from '../sim/state.js';
 import { clamp, lerp, smoothstep, qrotate, v3cross, v3norm } from '../core/math.js';
@@ -69,6 +69,7 @@ const mediaMod = await import('./media.js').catch((e) => { console.warn('[glassr
 const SPIRAL_LAYOUTS = new Map();
 if (spiralsMod && globalThis.location) SPIRAL_LAYOUTS.set('threshold', await spiralsMod.fetchSpiralLayout('threshold'));
 if (spiralsMod && globalThis.location?.search?.includes('mainframe')) SPIRAL_LAYOUTS.set('mainframe', await spiralsMod.fetchSpiralLayout('mainframe'));
+if (mediaMod && globalThis.location?.search?.includes('mainframe')) await mediaMod.loadMediaLayout('mainframe');
 
 /** Track MeshData -> Mesh, or null when the data is empty. */
 export function meshFrom(d, material) {
@@ -139,6 +140,9 @@ function props(track) {
 export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id), looks = [] } = {}) {
   const scene = new Scene();
   const isMainframe = track.id === 'mainframe';
+  // Fog stays in the warmed shader; its density eases as the kart dives into the coolant reservoir.
+  const submerged = track.sections.find(s => s.id === 'submerged');
+  if (isMainframe) scene.fog = new FogExp2('#063e49', 0);
   const pal = createPalette(isMainframe ? 'mainframe' : '');
   const owned = [], offs = [];
   const add = (m) => { if (m) { scene.add(m); owned.push(m); } return m; };
@@ -357,6 +361,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     }
     const dt = lastT === null ? 0 : clamp(view.timeS - lastT, 0, 0.1);
     lastT = view.timeS;
+    if (isMainframe && submerged && !view.paused) {
+      const within = Math.max(0, Math.min(1, (k[S.s] - submerged.fromS) / 24, (submerged.toS - k[S.s]) / 24));
+      const target = 0.013 * within * within * (3 - 2 * within);
+      scene.fog.density += (target - scene.fog.density) * Math.min(1, dt / 0.5);
+    }
+    fx.submerged = isMainframe && scene.fog ? scene.fog.density / 0.013 : 0;
     setLensCamera(view.camera);   // the lens rule's view height (render/lens.js) follows the rendering camera
     const gentle = !!feel.get('gentle.on');
     const scroll = gentle ? feel.get('gentle.scrollMul') : 1, contrast = gentle ? feel.get('gentle.contrastMul') : 1;

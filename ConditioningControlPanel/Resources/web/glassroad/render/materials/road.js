@@ -27,6 +27,7 @@ import { createMusicTiles } from './musicTiles.js';
 import { ROAD_HALF_WIDTH_RANGE, encodeRoadHalfWidth } from '../musicTilesMath.js';
 import { createMusicBands } from './musicBands.js';
 import { createWaterSurface, waterAttributes } from './water.js';
+import { machineSurface, coolantCaustics } from '../mainframeMaterials.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -324,19 +325,21 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // photosafe gated by the caller, 0 when refused or under Gentle)
   let surface = body.mul(S.baseGain).add(hot.mul(lineV.mul(S.lineGain))).add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)))
     .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze).mul(LOOK.roadGain);
-  // Mainframe's road is graphite circuit glass. Fixed traces use the same pixel filtering as the
+  // Mainframe's road is machined opaque metal. Fixed traces use the same pixel filtering as the
   // ribbon, while the existing song waves and streaming pattern still modulate their green light.
   if (track?.id === 'mainframe') {
     const lanes = aaLineN(abs(fract(p.x.div(3)).sub(0.5)).mul(3), 0.055, fwidth(p.x), 3);
     const joints = aaLineN(abs(fract(p.y.div(12)).sub(0.5)).mul(12), 0.065, fwidth(p.y), 12)
       .mul(smoothstep(5, 14, dist));
     const traces = max(lanes, joints.mul(0.45));
-    surface = vec3(0.012, 0.025, 0.028).add(body.mul(0.035))
+    const plates = machineSurface(p, vec3(0.045, 0.067, 0.073), art?.detail?.('detail-gold-wear'));
+    surface = plates.add(body.mul(0.018))
       .add(pal.col(0).mul(traces.mul(0.42).add(lineV.mul(0.12)).add(edgeW.mul(0.08))))
       .add(vec3(0.28, 0.75, 0.48).mul(centre.mul(S.centreGain).mul(u.contrast)))
       .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze);
   }
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
+  if (track?.id === 'mainframe') m.transparent = false;
   // the edge line sits over everything; the gutter darkens what is inside it, so the line reads against any hue
   // A broad quiet shoulder gives the clear edge a darker neighbour. The music and glitter remain
   // above it; there are no extra stripes or time-driven luminance changes near the kart.
@@ -354,17 +357,26 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const wa = waterAttributes();
   const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal, u: u.water, skyRamp });
   const wet = water.w;
-  const glassBody = mix(mix(surface.add(deepCol), water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
+  const glassBody = mix(mix(surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol), water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
   const musicBody = beatBands.apply(glassBody);
   const dry = float(1).sub(wet.mul(0.75));
-  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen).mul(dry)).add(polish.mul(dry)).mul(float(1).sub(gutter.mul(E.gutterDark)));
+  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen).mul(dry)).add(polish.mul(dry).mul(track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));
   const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);
+  const submerged = track?.id === 'mainframe' && track.sections.find(s => s.id === 'submerged');
+  if (submerged) {
+    const inside = smoothstep(submerged.fromS, submerged.fromS + 8, p.y)
+      .mul(float(1).sub(smoothstep(submerged.toS - 8, submerged.toS, p.y)));
+    const tankFloor = m.colorNode.mul(vec3(0.36, 0.8, 1.25))
+      .add(vec3(0.025, 0.2, 0.3).mul(coolantCaustics(p, u.water.t)).mul(u.contrast));
+    m.colorNode = mix(m.colorNode, tankFloor, inside);
+  }
   const ribbonAlpha = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
     .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)).add(gutter.mul(E.gutterAlpha)), 0, 1);
   const bodyAlpha = mix(ribbonAlpha, water.alpha, wet);
   m.opacityNode = max(mix(bodyAlpha, max(tiles.opacity, schlick.mul(0.08).add(tiles.opacity)), tiles.mask), edgeLine);
+  if (track?.id === 'mainframe') m.opacityNode = float(1);
   return { material: m, uniforms: u };
 }

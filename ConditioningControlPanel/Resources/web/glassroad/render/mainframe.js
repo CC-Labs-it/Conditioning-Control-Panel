@@ -1,24 +1,27 @@
 /* Mainframe: original server-rack colossi and fixed cable conduits, built before shader warmup.
- * Four static instanced batches, no texture allocation. Scan timing comes from the shared sim law. */
-import { Group, Mesh, InstancedMesh, BoxGeometry, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, Color, DoubleSide } from 'three/webgpu';
-import { vec3, normalWorld, normalize, dot, clamp } from 'three/tsl';
+ * Static instanced architecture, one shared Loom texture. Scan timing comes from the shared sim law. */
+import { Group, Mesh, InstancedMesh, BoxGeometry, CylinderGeometry, TorusGeometry, SphereGeometry, CircleGeometry, CanvasTexture, SRGBColorSpace, MeshBasicNodeMaterial, Matrix4, Quaternion, Vector3, DoubleSide } from 'three/webgpu';
+import { vec3, uniform, mix, texture, positionWorld } from 'three/tsl';
 import { scanZones, scanPose } from '../sim/mainframeScan.js';
-import { sampleTrack, bodyClear } from './colossiMath.js';
+import { sampleTrack, bodyClear, WORLD_DEFAULTS } from './colossiMath.js';
 import { Q } from './quality.js';
+import { createMachineMaterial, coolantCaustics } from './mainframeMaterials.js';
+import { createPlaceholder, releaseLoom } from './mediaPlaceholders.js';
 
 const point = (f, x, y, z = 0) => f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z);
-function material(hex, lit = true) {
-  const c = new Color(hex), m = new MeshBasicNodeMaterial();
-  const light = clamp(dot(normalize(normalWorld), normalize(vec3(0.35, 0.85, 0.4))).mul(0.4).add(0.6), 0.3, 1);
-  m.colorNode = lit ? vec3(c.r, c.g, c.b).mul(light) : vec3(c.r, c.g, c.b);
-  return m;
-}
-
-export function buildMainframe(track, art, { samples = sampleTrack(track, 4) } = {}) {
+export function buildMainframe(track, art, { samples = sampleTrack(track, 4), makeCanvas = null } = {}) {
   const group = new Group(); group.name = 'mainframe';
-  const geometry = new BoxGeometry(1, 1, 1), materials = [], rows = { shell: [], slot: [], green: [], cyan: [] };
+  const geometry = new BoxGeometry(1, 1, 1), geometries = [geometry], materials = [], textures = [], rows = { shell: [], slot: [], green: [], cyan: [], floor: [], wall: [], tank: [], rib: [], amber: [] };
+  const coolantTime = uniform(0), loomContrast = uniform(1), displays = [];
+  const displaySpecs = [420, ...['core-approach', 'spiral-core'].map(id => {
+    const section = track.sections.find(s => s.id === id); return section ? section.toS - 25 : 0;
+  })].filter(s => s > 0);
   const add = (kind, f, x, y, z, size) => rows[kind].push({ p: point(f, x, y, z), b: [...f.b], n: [...f.n], t: [...f.t], size });
   const length = track.lengthM, count = Q.name === 'phone' ? 34 : 60;
+  const sectionAt = (s) => track.sections[track.sectionAt(s)]?.id || '';
+  const isCanal = (s) => sectionAt(s).includes('canal');
+  const isCore = (s) => sectionAt(s).includes('spiral') || sectionAt(s).includes('core');
+  const hasGap = (s) => track.nodeFlags(track.frameAt(s).seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 8 > v.fromS);
   // A capsule check against the WHOLE road keeps every rack out of nearby switchbacks too.
   for (let i = 0; i < count; i++) {
     const f = track.frameAt((i + 0.5) * length / count), side = i % 2 ? 1 : -1;
@@ -44,6 +47,33 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4) } =
       add('cyan', f, side * off + edge * (width / 2 - 0.15), height / 2 - 7, face * (depth / 2 + 0.15), [0.1, height - 0.4, 0.1]);
     }
   }
+  // The course is inside a machine: continuous metal aisles, real overhead ribs and maintenance decks.
+  const clearance = { ...WORLD_DEFAULTS, sideM: 0.3, clearM: 6, underM: 1 };
+  for (let s = 0; s < length; s += 8) {
+    const f = track.frameAt(s + 4), id = sectionAt(s), core = isCore(s), canal = isCanal(s), under = id.includes('submerged');
+    const half = f.w / 2, gap = hasGap(s);
+    if (!gap && !canal) add('floor', f, 0, -1.3, 0, [f.w + 13, 1.4, 8.5]);
+    for (const side of [-1, 1]) {
+      if (!gap) add('rib', f, side * (half + 3), -0.2, 0, [3.8, 0.6, 8.5]);
+      if (canal) continue;
+      if (core && (f.p[0] - 480) * f.b[0] * side + (f.p[2] - 425) * f.b[2] * side < 0) continue;
+      const off = side * (half + 8), height = under ? 19 : 28;
+      if (!bodyClear({ B: point(f, off, -2), D: f.n, len: height, r: 4.3 }, samples, clearance).ok) continue;
+      add(under ? 'tank' : 'wall', f, off, height / 2 - 2, 0, [1.5, height, 8.5]);
+      add('slot', f, off - side * 0.95, 5, 0, [0.5, 9, 6.2]);
+      add(under ? 'cyan' : id.includes('boot') ? 'green' : 'amber', f, off - side * 1.25, 9.6, 0, [0.22, 0.22, 6.7]);
+      if (Math.round(s / 8) % 3 === 0) {
+        add('rib', f, off - side * 0.7, 11, 0, [2.2, 26, 1.2]);
+        add('cyan', f, off - side * 1.9, 3.5, 0, [0.15, 5.5, 0.7]);
+      }
+    }
+    if (!core && !canal && !displaySpecs.some(d => s > d - 100 && s < d + 20) && Math.round(s / 8) % 3 === 0
+      && bodyClear({ B: point(f, 0, 27), D: f.n, len: 0, r: half + 8 }, samples, clearance).ok) {
+      add('rib', f, 0, 27, 0, [f.w + 17, 1.6, 2]);
+      add('floor', f, 0, 28, 0, [f.w + 17, 0.7, 24.5]);
+      add('cyan', f, 0, 26.1, 0, [Math.min(12, f.w / 2), 0.12, 0.8]);
+    }
+  }
   // Bundles follow the transported road frame. Never bridge a jump or a stone-field opening.
   for (let s = 0; s < length; s += 5) {
     const f = track.frameAt(s + 2.5);
@@ -59,8 +89,8 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4) } =
     basis.makeBasis(x.fromArray(f.b), y.fromArray(f.n), z.fromArray(f.t).negate());
     object.quaternion.setFromRotationMatrix(basis); object.position.fromArray(position);
   };
-  for (const [kind, hex] of Object.entries({ shell: '#203b3d', slot: '#091918', green: '#5de58d', cyan: '#39b4b5' })) {
-    const mat = material(hex, kind === 'shell' || kind === 'slot'); materials.push(mat);
+  for (const [kind, hex] of Object.entries({ shell: '#405151', slot: '#152021', green: '#5de58d', cyan: '#39b4b5', floor: '#35484b', wall: '#50635d', tank: '#237389', rib: '#70807b', amber: '#efb751' })) {
+    const mat = createMachineMaterial(hex, art, { glow: ['green', 'cyan', 'amber'].includes(kind), vent: kind === 'slot', coolant: kind === 'tank' ? coolantTime : null }); materials.push(mat);
     const batch = rows[kind], mesh = new InstancedMesh(geometry, mat, batch.length); mesh.name = 'mainframe-' + kind;
     batch.forEach((r, i) => {
       basis.makeBasis(x.fromArray(r.b), y.fromArray(r.n), z.fromArray(r.t).negate()); q.setFromRotationMatrix(basis);
@@ -68,6 +98,80 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4) } =
     });
     mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); group.add(mesh);
   }
+  const keepGeo = (g) => { geometries.push(g); return g; };
+  const keepMat = (m) => { materials.push(m); return m; };
+  const metal = keepMat(createMachineMaterial('#50696c', art)), dark = keepMat(createMachineMaterial('#172c30', art));
+  const light = keepMat(createMachineMaterial('#62e0bb', art, { glow: true }));
+  // One static frame from the real Loom, shared by three monumental rotating displays.
+  if (makeCanvas || typeof document !== 'undefined' || typeof OffscreenCanvas !== 'undefined') {
+    const cols = [[0.16, 0.9, 0.49], [0.1, 0.6, 0.4], [0.7, 1, 0.84], [0.015, 0.06, 0.045]];
+    const ph = createPlaceholder(0, 512, cols, { make: makeCanvas }); ph.draw(0); releaseLoom();
+    const tex = new CanvasTexture(ph.canvas); tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4; textures.push(tex);
+    const mat = keepMat(new MeshBasicNodeMaterial({ side: DoubleSide }));
+    mat.colorNode = mix(vec3(0.06, 0.24, 0.14), texture(tex).rgb, loomContrast);
+    for (const s of displaySpecs) {
+      const f = track.frameAt(s), radius = s === displaySpecs[0] ? 21 : 29;
+      let center = point(f, 0, radius + 16), fit = false;
+      for (let i = 0; i < 20; i++) {
+        if (bodyClear({ B: center, D: f.n, len: 0, r: radius + 1.5 }, samples, { ...WORLD_DEFAULTS, sideM: 1, underM: 1 }).ok) { fit = true; break; }
+        center = center.map((v, k) => v + f.n[k] * 3);
+      }
+      if (!fit) continue;
+      const holder = new Group(); orient(holder, f, center); group.add(holder);
+      const disc = new Mesh(keepGeo(new CircleGeometry(radius, 64)), mat); disc.name = 'mainframe-loom-display'; holder.add(disc);
+      const rim = new Mesh(keepGeo(new TorusGeometry(radius + 0.6, 1, 8, 64)), metal); holder.add(rim);
+      displays.push({ disc, center, radius, frame: f });
+    }
+  }
+  // The raised road winds around a single unmistakable reactor, clear of the R75 racing envelope.
+  const core = new Group(); core.name = 'mainframe-reactor'; core.position.set(480, 42, 425); group.add(core);
+  const drum = new Mesh(keepGeo(new CylinderGeometry(35, 39, 108, Q.name === 'phone' ? 32 : 64)), dark); core.add(drum);
+  const coreRing = keepGeo(new TorusGeometry(43, 1.1, 8, 64).rotateX(Math.PI / 2));
+  for (let h = -45; h <= 50; h += 19) { const ring = new Mesh(coreRing, metal); ring.position.y = h; core.add(ring); }
+  const luminousRing = keepGeo(new TorusGeometry(39.4, 0.5, 6, 64).rotateX(Math.PI / 2));
+  for (let h = -41; h <= 49; h += 6) { const ring = new Mesh(luminousRing, light); ring.position.y = h; core.add(ring); }
+  for (let i = 0; i < 12; i++) {
+    const a = i * Math.PI / 6, pillar = new Mesh(geometry, metal);
+    pillar.position.set(Math.cos(a) * 39, 0, Math.sin(a) * 39); pillar.scale.set(2, 111, 2); core.add(pillar);
+  }
+  // A deep foundation and distant walls anchor the entire facility. They are far below every hole.
+  const low = Math.min(...samples.map((f) => f.p[1])) - 45, high = Math.max(...samples.map((f) => f.p[1])) + 65;
+  const minX = Math.min(...samples.map((f) => f.p[0])) - 70, maxX = Math.max(...samples.map((f) => f.p[0])) + 70;
+  const minZ = Math.min(...samples.map((f) => f.p[2])) - 70, maxZ = Math.max(...samples.map((f) => f.p[2])) + 70;
+  const base = new Mesh(geometry, metal); base.position.set((minX + maxX) / 2, low, (minZ + maxZ) / 2); base.scale.set(maxX - minX, 4, maxZ - minZ); group.add(base);
+  for (const [px, pz, sx, sz] of [[minX, (minZ + maxZ) / 2, 3, maxZ - minZ], [maxX, (minZ + maxZ) / 2, 3, maxZ - minZ], [(minX + maxX) / 2, minZ, maxX - minX, 3], [(minX + maxX) / 2, maxZ, maxX - minX, 3]]) {
+    const wall = new Mesh(geometry, dark); wall.position.set(px, (low + high) / 2, pz); wall.scale.set(sx, high - low, sz); group.add(wall);
+  }
+  const tubes = track.sections.filter((s) => /canal|submerged/.test(s.id));
+  const bubbleRows = [], bubbleGeo = keepGeo(new SphereGeometry(0.16, 6, 4));
+  for (const section of tubes) {
+    for (let s = section.fromS + 5; s < section.toS; s += 18) {
+      const f = track.frameAt(s), canal = section.id.includes('canal'), radius = canal ? 20.8 : f.w / 2 + 5, holder = new Group(); orient(holder, f, point(f, 0, canal ? 20 : 0)); group.add(holder);
+      const rib = new Mesh(keepGeo(new TorusGeometry(radius, 0.8, 6, Q.name === 'phone' ? 16 : 32, Math.PI)), metal); rib.name = 'mainframe-tube-arch'; holder.add(rib);
+      const glassMat = keepMat(new MeshBasicNodeMaterial({ color: canal ? '#79b7b1' : '#4198bc', transparent: true, opacity: 0.09, depthWrite: false, side: DoubleSide }));
+      const glass = new Mesh(keepGeo(new CylinderGeometry(radius, radius, 18, 32, 1, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2)), glassMat); holder.add(glass);
+      if (section.id.includes('submerged')) for (let i = 0; i < 18; i++) bubbleRows.push({ f, x: ((i * 7) % 23 - 11) * 1.15, phase: i / 18, s });
+    }
+    if (section.id.includes('submerged')) {
+      const tankSamples = samples.filter(f => f.s >= section.fromS && f.s <= section.toS);
+      const lo = [0, 2].map(k => Math.min(...tankSamples.map(f => f.p[k])) - 25), hi = [0, 2].map(k => Math.max(...tankSamples.map(f => f.p[k])) + 25);
+      const waterMat = keepMat(new MeshBasicNodeMaterial({ transparent: true, opacity: 0.4, depthWrite: false, side: DoubleSide }));
+      waterMat.colorNode = vec3(0.025, 0.25, 0.39).add(vec3(0.07, 0.26, 0.34).mul(coolantCaustics(positionWorld.xz, coolantTime)));
+      const surface = new Mesh(geometry, waterMat); surface.name = 'mainframe-reservoir-surface'; surface.position.set((lo[0] + hi[0]) / 2, 7, (lo[1] + hi[1]) / 2); surface.scale.set(hi[0] - lo[0], 0.05, hi[1] - lo[1]); group.add(surface);
+    }
+  }
+  const bubbles = new InstancedMesh(bubbleGeo, light, Math.max(1, bubbleRows.length)); bubbles.count = bubbleRows.length; bubbles.name = 'mainframe-coolant-bubbles'; group.add(bubbles);
+  let bubbleTime = 0;
+  function updateBubbles(dt) {
+    bubbleTime += dt;
+    bubbleRows.forEach((r, i) => {
+      const height = ((bubbleTime * 0.65 + r.phase * 12) % 12) + 0.7;
+      p.fromArray(point(r.f, r.x + Math.sin(r.phase * 20 + bubbleTime * 0.4) * 0.3, height));
+      matrix.compose(p, q.identity(), size.setScalar(0.5 + r.phase)); bubbles.setMatrixAt(i, matrix);
+    });
+    bubbles.instanceMatrix.needsUpdate = true; bubbles.computeBoundingSphere();
+  }
+  updateBubbles(0);
   // Delivered Mainframe cable spouts sit beside the stream, not over the driving corridor.
   const source = art?.model?.('spout-mainframe');
   if (source?.scene) {
@@ -83,34 +187,69 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4) } =
     const floorMat = new MeshBasicNodeMaterial({ color: '#b2f9bd', transparent: true, opacity: 0.02, depthWrite: false });
     materials.push(panelMat, floorMat);
     const panel = new Mesh(geometry, panelMat), floor = new Mesh(geometry, floorMat);
-    panel.scale.set(zone.width, 5.5, zone.len); panel.position.y = 2.75;
+    const height = zone.height ?? 5.5;
+    panel.scale.set(zone.width, height, zone.len); panel.position.y = height / 2;
     floor.scale.set(zone.width, 0.035, zone.len); holder.add(panel, floor);
+    const floorTiles = sectionAt(zone.s).includes('canal') ? new InstancedMesh(geometry, floorMat, Math.ceil(zone.width / 0.8)) : null;
+    if (floorTiles) { floor.visible = false; holder.add(floorTiles); }
     // Permanent dark gantry and two steady green edge marks show the trap before it activates.
-    const frameMat = material('#295354'); materials.push(frameMat);
+    const frameMat = createMachineMaterial('#687d74', art); materials.push(frameMat);
     for (const side of [-1, 1]) {
-      const post = new Mesh(geometry, frameMat); post.scale.set(0.45, 6.5, 0.7);
-      post.position.set(side * (f.w / 2 + 0.5), 3.25, 0); holder.add(post);
+      const post = new Mesh(geometry, frameMat); post.scale.set(1.3, height + 2.5, 1.8);
+      post.position.set(side * (f.w / 2 + 1), height / 2 + 1, 0); holder.add(post);
     }
-    const beam = new Mesh(geometry, frameMat); beam.scale.set(f.w + 1.5, 0.45, 0.7); beam.position.y = 6.4; holder.add(beam);
-    return { zone, panel, floor, panelMat, floorMat };
+    const beam = new Mesh(geometry, frameMat); beam.scale.set(f.w + 3.5, 1.5, 2); beam.position.y = height + 1.6; holder.add(beam);
+    const stripeMat = keepMat(new MeshBasicNodeMaterial({ color: '#8bffbd', transparent: true, opacity: 0.04, depthWrite: false }));
+    const barRows = [];
+    for (const x of [-zone.width / 2, zone.width / 2]) for (const z of [-zone.len / 2, zone.len / 2]) {
+      barRows.push({ x, y: height / 2, z, w: 0.2, h: height, d: 0.2 });
+    }
+    for (let x = -zone.width / 2; x <= zone.width / 2; x += 1.2) {
+      barRows.push({ x, y: height / 2, z: zone.len / 2, w: 0.12, h: height, d: 0.1 });
+    }
+    const bars = new InstancedMesh(geometry, stripeMat, barRows.length); holder.add(bars);
+    barRows.forEach((r, i) => { matrix.makeScale(r.w, r.h, r.d).setPosition(r.x, r.y, r.z); bars.setMatrixAt(i, matrix); });
+    bars.instanceMatrix.needsUpdate = true; bars.computeBoundingSphere();
+    const lamps = new Mesh(geometry, stripeMat); lamps.scale.set(zone.width, 0.45, 0.35); lamps.position.set(0, height + 0.6, 0); holder.add(lamps);
+    return { zone, frame: f, panel, floor, floorTiles, panelMat, floorMat, bars, stripeMat };
   });
-  return { group, scans, counts: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.length])),
+  return { group, scans, core, tubes, displays, counts: Object.fromEntries(Object.entries(rows).map(([k, r]) => [k, r.length])),
     update(dt, view, gentle = false) {
       if (view.paused) return;
+      updateBubbles(dt * (gentle ? 0.5 : 1));
+      coolantTime.value += dt * (gentle ? 0.5 : 1);
+      loomContrast.value += ((gentle ? 0.5 : 1) - loomContrast.value) * Math.min(1, dt / 0.3);
+      for (const display of displays) display.disc.rotation.z += dt * (gentle ? 0.045 : 0.09);
       for (const scan of scans) {
         const pose = scanPose(scan.zone, view.scanTimeS ?? view.timeS ?? 0, view.scanBpm || 120);
         if (view.scanReady === false) { pose.phase = 'warn'; pose.opacity = 0.18; }
-        scan.panel.position.x = scan.floor.position.x = pose.x;
-        scan.panelMat.color.set(pose.phase === 'warn' ? '#53c5d4' : '#77ffad');
-        const intensity = gentle ? 0.75 : 1, target = Math.max(0.02, pose.opacity * intensity);
+        scan.panel.position.x = scan.floor.position.x = scan.bars.position.x = pose.x;
+        if (scan.floorTiles && track.surfaceAt) {
+          const f = scan.frame, n = scan.floorTiles.count, width = scan.zone.width / n;
+          for (let i = 0; i < n; i++) {
+            const lateral = pose.x - scan.zone.width / 2 + (i + 0.5) * width;
+            const sf = track.surfaceAt(scan.zone.s + scan.zone.len / 2, lateral);
+            const height = sf.p.reduce((h, v, k) => h + (v - f.p[k]) * f.n[k], 0);
+            const sideN = sf.n.reduce((v, k, j) => v + k * f.b[j], 0), upN = sf.n.reduce((v, k, j) => v + k * f.n[j], 0);
+            p.set(lateral, height + 0.06, 0); q.setFromAxisAngle(z.set(0, 0, 1), Math.atan2(-sideN, upN));
+            matrix.compose(p, q, size.set(width + 0.03, 0.04, scan.zone.len)); scan.floorTiles.setMatrixAt(i, matrix);
+          }
+          scan.floorTiles.instanceMatrix.needsUpdate = true; scan.floorTiles.computeBoundingSphere();
+        }
+        const warning = pose.phase === 'warn', active = pose.phase === 'sweep' || pose.phase === 'hold';
+        scan.panelMat.color.set(warning ? '#ffc65c' : '#77ffad'); scan.stripeMat.color.copy(scan.panelMat.color);
+        const intensity = gentle ? 0.75 : 1, target = active ? 0.52 * intensity : warning ? 0.12 * intensity : 0.015;
         // 300 ms minimum full rise, with the same collision timing and bypass on every setting.
         const step = Math.min(1, dt / (gentle ? 0.3 : 0.18));
         scan.panelMat.opacity += (target - scan.panelMat.opacity) * step;
-        scan.floorMat.opacity += (Math.max(0.025, pose.phase === 'warn' ? 0.23 : target * 0.5) - scan.floorMat.opacity) * step;
+        scan.stripeMat.opacity += ((active ? 0.9 : warning ? 0.5 : 0.04) * intensity - scan.stripeMat.opacity) * step;
+        scan.floorMat.color.copy(scan.panelMat.color);
+        scan.floorMat.opacity += (Math.max(0.025, warning ? 0.4 : target * 0.65) - scan.floorMat.opacity) * step;
       }
     },
     dispose() {
       group.removeFromParent(); group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); });
-      geometry.dispose(); materials.forEach((m) => m.dispose());
+      geometries.forEach((g) => g.dispose()); materials.forEach((m) => m.dispose());
+      textures.forEach((t) => t.dispose());
     } };
 }
