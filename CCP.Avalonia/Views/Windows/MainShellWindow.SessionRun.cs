@@ -123,8 +123,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (App.Sessions is not { IsRunning: true, IsPaused: false } runner) return;
             runner.Pause();
-            PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
-            SpiralOverlay.Refresh(this);
+            PinkFilterOverlay.HideForVoice(this);   // WPF App.Overlay.Stop() also drops voice holds
+            SpiralOverlay.HideForVoice(this);
             SetPauseButton(true);
         }
 

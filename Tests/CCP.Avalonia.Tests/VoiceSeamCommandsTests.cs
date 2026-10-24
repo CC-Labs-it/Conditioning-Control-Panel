@@ -134,8 +134,17 @@ public sealed class VoiceSeamCommandsTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(live);
             var done = shell.Tube.SpokenAudioDone;
-            // Check before the queued terse confirmation can replace the old bubble and cut its audio.
-            Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi mute", Wake));
+            // Like WPF the action is queued (InvokeAsync); silence the confirmation so only the
+            // mute itself can cut the clip.
+            var say = shell.VoiceCmds.Host.Say;
+            shell.VoiceCmds.Host.Say = (_, _) => { };
+            try
+            {
+                Assert.True(shell.VoiceCmds.TryHandleInlineCommand("hey bambi mute", Wake));
+                Dispatcher.UIThread.RunJobs();
+            }
+            finally { shell.VoiceCmds.Host.Say = say; }
+            Assert.True(s.AvatarMuted);
             Assert.False(live);
             Assert.True(done.IsCompleted);
             shell.ApplyVoiceMute(true); // repeated mute is harmless and preserves the remembered volume

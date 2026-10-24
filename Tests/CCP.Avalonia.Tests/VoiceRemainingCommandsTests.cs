@@ -81,12 +81,12 @@ public sealed class VoiceRemainingCommandsTests
                 Assert.True(PinkFilterOverlay.IsShowing);
                 Assert.Equal(102, TintAlpha()); // voice's 40% floor
                 Assert.False(s.PinkFilterEnabled);
-                s.PinkFilterOpacity = 80;
+                s.PinkFilterOpacity = 45; // the setting clamps to 50
                 Say(shell, "go pink");
-                Assert.Equal(204, TintAlpha()); // never dim the user's stronger configured tint
+                Assert.Equal(114, TintAlpha()); // never dim the user's stronger configured tint
                 Assert.Single(PinkFilterOverlay.Shown); // repeated on is idempotent
                 PinkFilterOverlay.Refresh(shell);
-                Assert.Equal(204, TintAlpha());
+                Assert.Equal(114, TintAlpha());
 
                 // Release leaves a persistent feature alone only while its engine is running.
                 CoreSession.IsEngineRunningProvider = () => true;
@@ -114,9 +114,21 @@ public sealed class VoiceRemainingCommandsTests
                 SpiralOverlay.Refresh(shell);
                 Assert.False(PinkFilterOverlay.IsShowing || SpiralOverlay.IsShowing);
                 Assert.Contains("the spiral", shell.VoiceCmds.HelpLine());
+
+                // WPF Stop -> StopPinkFilter/Overlay.Stop: stopping the engine drops voice holds too.
+                CoreSession.IsEngineRunningProvider = () => CoreEngine.IsRunning;
+                CoreEngine.StoppedHook = shell.OnEngineStopped;
+                shell.StartEngine();
+                Say(shell, "go pink");
+                Assert.True(PinkFilterOverlay.IsShowing);
+                MainShellWindow.StopEngine();
+                Assert.False(PinkFilterOverlay.IsShowing);
+                Assert.Null(PinkFilterOverlay.VoiceOpacity);
             }
             finally
             {
+                CoreEngine.StoppedHook = null;
+                CoreEngine.Stop();
                 SpiralOverlay.CloseAll();
                 PinkFilterOverlay.CloseAll();
                 SpiralOverlay.SkipPlatformChecksForTests = PinkFilterOverlay.SkipPlatformChecksForTests = false;
@@ -207,8 +219,16 @@ public sealed class VoiceRemainingCommandsTests
                 o.Scheduler = CoreEngine.Video = scheduler;
                 async Task Open(bool strict)
                 {
-                    Assert.True(scheduler.Trigger(strict));
-                    for (int i = 0; i < 100 && (o.Sink?.FrameCount ?? 0) < 2; i++) await Task.Delay(30);
+                    var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    Action onStarted = () => started.TrySetResult();
+                    scheduler.VideoStarted += onStarted;
+                    try
+                    {
+                        Assert.True(scheduler.Trigger(strict));
+                        await started.Task.WaitAsync(TimeSpan.FromSeconds(10)); // after the pre-roll, Sink exists
+                    }
+                    finally { scheduler.VideoStarted -= onStarted; }
+                    await o.Sink!.SecondFrame.WaitAsync(TimeSpan.FromSeconds(10));
                     Assert.True(o.Sink?.FrameCount >= 2);
                 }
                 await Open(false);
