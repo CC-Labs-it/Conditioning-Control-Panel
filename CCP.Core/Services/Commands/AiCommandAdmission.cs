@@ -21,7 +21,7 @@ namespace ConditioningControlPanel.Services.Commands
     /// <para>2. Nothing AI-driven listened to a panic. A follow-up scheduled up to ten minutes
     /// earlier still fired after the panic and could start the spiral, flashes or a lock card
     /// again; an unprompted Takeover comment could do the same inside the five-minute quiet.
-    /// AI effects now stay off for the post-panic quiet (<see cref="Safety.PanicAftermath"/>), and
+    /// AI effects now stay off for the post-panic quiet (<see cref="Safety.CorePanicAftermath"/>), and
     /// a follow-up that a panic overtook while it waited never fires.</para>
     ///
     /// <para>3. Text the model puts INSIDE an effect (a subliminal, a lock card phrase the user

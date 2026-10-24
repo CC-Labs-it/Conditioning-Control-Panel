@@ -378,7 +378,7 @@ public sealed partial class ChasterService : IDisposable
             dropped = CircesTab.DropUnpushedLeash(_tab, _utcNow());
             SaveTab();
         }
-        App.Logger?.Information("[Chaster] leash cut: {Seconds}s of unpushed leash time dropped", dropped);
+        Serilog.Log.Information("[Chaster] leash cut: {Seconds}s of unpushed leash time dropped", dropped);
         if (dropped > 0)
         {
             try { LockChanged?.Invoke(); } catch (Exception ex) { Diag.Swallowed(ex, "chaster leash drop repaint"); }
