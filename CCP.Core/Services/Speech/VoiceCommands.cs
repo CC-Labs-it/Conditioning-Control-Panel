@@ -143,7 +143,7 @@ namespace ConditioningControlPanel.Services.Speech
         // -> Video.Stop() through a completely different file, and its aliases ("wait", "hold on")
         // are the ones a frustrated user actually reaches for. Panic does not use this guard: it is the
         // intended way out and reaches exactly as far as the panic key (hard rule 6, owner 2026-10-22):
-        // under Lockdown or with panic off it does nothing but the leash part (VoicePanicReach, asked
+        // under Lockdown or with panic off it does nothing but the leash part (CoreVoicePanicReach, asked
         // inside the head's panic, VoiceCommandHost.RunFor). Strict Lock alone leaves it whole, as it leaves the key.
 
         // ── Alias expansion ────────────────────────────────────────────────────
