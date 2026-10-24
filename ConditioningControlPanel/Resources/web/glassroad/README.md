@@ -34,6 +34,8 @@ Keep currently supports solo racing only. Online admission still uses Threshold'
 
 Validation (2026-10-24): 961 game tests pass, including three complete eight-racer simulations, crossing
 trajectories from four approach speeds, and constructed geometry clearance over roads and voids.
+Chrome completed both laps with no falls or runtime errors. Firefox verified art loading, pause, restart
+and all 23 selected media faces. Mounted screens are checked against bars and roof ribs, then viewed in-game.
 
 ## Url flags
 
