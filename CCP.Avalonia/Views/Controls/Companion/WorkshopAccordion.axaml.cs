@@ -46,9 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             //    head, so a rebind would configure a key for a feature that cannot fire. Same
             //    refusal as DevicesSettingsSection.axaml.cs's BtnCameraShortcutDevices.
             // Browser pause forwards from the cell to the shell's live Home WebHost.
-            //  · Roster.CompanionCardClicked / PersonalityAssignRequested — MainWindow's
-            //    CompanionCard_Click / BtnCompanionPersonality_Click (MainWindow.Patreon.cs), which
-            //    switch the active companion through App.Companion. No seam on this head.
+            //  · Roster.PersonalityAssignRequested — personality prompt assignment remains absent.
+            //    CompanionTabView wires CompanionCardClicked to the shell's shared-Core switch.
             //  · Community.Browse/Import/Export/RefreshPromptsRequested — the community-prompt
             //    service, still in the WPF head.
         }
