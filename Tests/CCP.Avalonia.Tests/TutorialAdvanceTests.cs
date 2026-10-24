@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Tours;
@@ -63,6 +64,18 @@ public sealed class TutorialAdvanceTests
             }
             return Task.CompletedTask;
         });
+
+    private static Point PointerCentre(Control target, Window host)
+    {
+        // Pointer input reads the rendered scene, not just the laid-out controls.
+        HeadlessRender.LiveTree(host);
+        var point = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), host);
+        Assert.NotNull(point);
+        var hit = host.InputHitTest(point.Value) as Visual;
+        Assert.True(hit == target || (hit != null && target.IsVisualAncestorOf(hit)),
+            "The rendered pointer scene must contain the tutorial target before input is injected.");
+        return point.Value;
+    }
 
     [Fact]
     public Task TextRequiresAnEditAndMatchingValueAndDetachesAfterAdvance() => AvaloniaTestDispatcher.RunAsync(() =>
@@ -130,8 +143,9 @@ public sealed class TutorialAdvanceTests
             host.AddHandler(InputElement.PointerPressedEvent, (_, e) => e.Handled = true, RoutingStrategies.Tunnel);
             var clicked = false;
             button.Click += (_, _) => clicked = true;
-            host.MouseDown(new Point(100, 100), MouseButton.Left);
-            host.MouseUp(new Point(100, 100), MouseButton.Left);
+            var point = PointerCentre(button, host);
+            host.MouseDown(point, MouseButton.Left);
+            host.MouseUp(point, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             Assert.False(clicked);
             Assert.Equal(index + 1, CoreTutorial.CurrentStepIndex);
@@ -189,17 +203,20 @@ public sealed class TutorialAdvanceTests
         var slider = new Slider { Minimum = 0, Maximum = 1, Value = 0.1 };
         return WithCard("iht_intensity", slider, (_, host, index) =>
         {
+            var point = PointerCentre(slider, host);
             slider.Value = 0.5;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(index, CoreTutorial.CurrentStepIndex);
-            host.MouseDown(new Point(100, 100), MouseButton.Left);
+            HeadlessRender.LiveTree(host);
+            host.MouseDown(point, MouseButton.Left);
             slider.Value = 0.9;
-            host.MouseUp(new Point(100, 100), MouseButton.Left);
+            host.MouseUp(point, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(index, CoreTutorial.CurrentStepIndex);
-            host.MouseDown(new Point(100, 100), MouseButton.Left);
+            HeadlessRender.LiveTree(host);
+            host.MouseDown(point, MouseButton.Left);
             slider.Value = 0.5;
-            host.MouseUp(new Point(100, 100), MouseButton.Left);
+            host.MouseUp(point, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(index + 1, CoreTutorial.CurrentStepIndex);
         });
