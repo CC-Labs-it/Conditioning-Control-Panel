@@ -2942,3 +2942,6 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 
 ## avalonia-port/main-20261024: +5620
 - Main sync #8: WPF main f81ea01fb merged (Oct 22 night bug hunt, 32 commits); delta ledger docs/avalonia-main-sync-20261024.md (2 ported-by-merge, 30 needs-port in 15 sync8-* lanes, 0 n/a). Red by design; gated in -compat.
+
+## avalonia-port/main-20261024-compat: +62
+- Compat for main sync #8: App.* in Core as Serilog/CoreSettings, LockdownExitRule/PanicAftermath/VoicePanicReach/TickStep into Core, main's WPF scan tests via SourceRoots and retargeted to where the stack split the code. rgate GATE-OK (run 40109201391).
