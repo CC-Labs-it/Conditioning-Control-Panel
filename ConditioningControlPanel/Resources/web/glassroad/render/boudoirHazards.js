@@ -2,7 +2,7 @@
 import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeometry, TorusGeometry, BufferGeometry, Float32BufferAttribute,
   PlaneGeometry, IcosahedronGeometry, MeshBasicNodeMaterial, Matrix4, Vector3, Quaternion, Color, DoubleSide } from 'three/webgpu';
 import { vec3, uniform, normalize, normalWorld, dot, clamp } from 'three/tsl';
-import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase, mascaraPhase, ribbonPhase } from '../track/boudoir-setpieces.js';
+import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase, mascaraHeads, mascaraPhase, ribbonPhase } from '../track/boudoir-setpieces.js';
 import { LOOK } from './look.js';
 export function createBoudoirHazardView(scene, track) {
   const plan = getBoudoirSetpieces(track), group = new Group(); group.name = 'boudoir-interactions'; scene.add(group);
@@ -19,8 +19,9 @@ export function createBoudoirHazardView(scene, track) {
   }
   function station(row) {
     const f = track.frameAt(row.s), holder = new Group(); holder.name = row.id; holder.position.fromArray(f.p); holder.quaternion.setFromRotationMatrix(basis(f)); group.add(holder);
-    const frame = new InstancedMesh(box, gold, 3);
-    [[-f.w / 2 - 2, 8, 0, 2, 16, 3], [f.w / 2 + 2, 8, 0, 2, 16, 3], [0, 16, 0, f.w + 6, 2, 3]].forEach((a, i) => {
+    const frame = new InstancedMesh(box, gold, 3); frame.name = row.id + '-shared-support';
+    const sweep = row.kind === 'sweeper', height = sweep ? 11.5 : 16, leg = sweep ? 1.1 : 2, depth = sweep ? 1.3 : 3;
+    [[-f.w / 2 - 2, height / 2, 0, leg, height, depth], [f.w / 2 + 2, height / 2, 0, leg, height, depth], [0, height, 0, f.w + 6, sweep ? 1.3 : 2, depth]].forEach((a, i) => {
       M.compose(P.set(...a.slice(0, 3)), Q.identity(), Scale.set(...a.slice(3))); frame.setMatrixAt(i, M);
     }); frame.instanceMatrix.needsUpdate = true; frame.computeBoundingSphere(); holder.add(frame);
     const opacity = uniform(.08), material = new MeshBasicNodeMaterial({ color: '#ffd09c', transparent: true, depthWrite: false, side: DoubleSide });
@@ -36,14 +37,15 @@ export function createBoudoirHazardView(scene, track) {
     for (const side of [-1, 1]) mesh(press, sphere, pink, [side * 2.5, 3.9, 0], [2.8, 1.1, 1.8]);
     mesh(entry.holder, cylinder, ink, [0, 13.6, 0], [.5, 5, .5]);
   }
-  for (const row of plan.sweepers) {
-    const entry = station(row), brush = new Group(); brush.name = 'mascara-moving-brush'; entry.holder.add(brush); entry.moving = brush;
+  function brushHead(parent, head) {
+    const brush = new Group(); brush.name = head.id + '-brush'; parent.add(brush);
+    brush.position.y = -head.armM; brush.scale.set(head.radiusM / 2.3, head.radiusM / 2.3, head.depthM / 6);
     const body = mesh(brush, cylinder, ink, [0, 0, 0], [2.15, 5.8, 2.15]); body.rotation.x = Math.PI / 2;
     const bristles = new InstancedMesh(ring, satin, 9);
     for (let i = 0; i < 9; i++) bristles.setMatrixAt(i, M.compose(P.set(0, 0, -2.7 + i * .675), Q.identity(), Scale.setScalar(1)));
     bristles.instanceMatrix.needsUpdate = true; bristles.computeBoundingSphere(); brush.add(bristles);
     // Both approach faces have individual bristles, raised spiral ridges and a gilt ferrule.
-    // Everything stays inside the same 4.6 m by 6 m moving collision envelope.
+    // The template scales to the compact collision radius and depth of each pendulum.
     const ends = new InstancedMesh(box, pink, 144); ends.name = 'mascara-radial-end-bristles'; let endIndex = 0;
     for (const sign of [-1, 1]) {
       mesh(brush, ring, gold, [0, 0, sign * 2.85]);
@@ -61,10 +63,28 @@ export function createBoudoirHazardView(scene, track) {
       }
     }
     ends.instanceMatrix.needsUpdate = true; ends.computeBoundingSphere(); brush.add(ends);
-    mesh(brush, cylinder, gold, [0, 7, 0], [.4, 9.3, .4]);
+    return brush;
+  }
+  for (const row of plan.sweepers) {
+    const entry = station(row); entry.heads = [];
+    for (const head of mascaraHeads(row)) {
+      const z = -(head.longitudinalM || 0), pendulum = new Group(); pendulum.name = head.id + '-pendulum';
+      pendulum.position.set(head.x, head.pivotY, z); entry.holder.add(pendulum);
+      mesh(entry.holder, box, gold, [head.x, 11.5, z / 2], [.7, .7, Math.abs(z) + 1.4]);
+      mesh(entry.holder, box, satin, [head.x, (11.5 + head.pivotY) / 2, z], [.65, 11.5 - head.pivotY, .6]);
+      const hinge = mesh(entry.holder, cylinder, gold, [head.x, head.pivotY, z], [.65, .85, .65]); hinge.rotation.x = Math.PI / 2;
+      mesh(entry.holder, ring, pink, [head.x, head.pivotY, z + .44], [.29, .29, .4]);
+      const arm = mesh(pendulum, cylinder, gold, [0, -head.armM / 2, 0], [.14, head.armM, .14]); arm.name = head.id + '-arm';
+      for (const y of [-1.2, -head.armM + 1.4]) mesh(pendulum, cylinder, pink, [0, y, 0], [.24, .65, .24]);
+      const brush = brushHead(pendulum, head); entry.heads.push({ row: head, pivot: pendulum, arm, brush }); byId.set(head.id, entry);
+    }
+    for (const side of [-1, 1]) {
+      mesh(entry.holder, sphere, pink, [side * (entry.f.w / 2 + 2), 12.2, 0], [1.1, .7, .8]);
+      mesh(entry.holder, box, ink, [side * (entry.f.w / 2 + 2), .6, 0], [2.6, 1.2, 2.6]);
+    }
     const side = row.offsetS % 2 > 1 ? 1 : -1, x = side * (entry.f.w / 2 + 6);
-    mesh(entry.holder, cylinder, satin, [x, 6, 0], [3.4, 12, 3.4]);
-    mesh(entry.holder, cylinder, gold, [x, 13.5, 0], [3.2, 3, 3.2]);
+    mesh(entry.holder, cylinder, satin, [x, 4, 0], [2.4, 8, 2.4]);
+    mesh(entry.holder, cylinder, gold, [x, 8.8, 0], [2.2, 1.6, 2.2]);
   }
   const arrow = own(new BufferGeometry()); arrow.setAttribute('position', new Float32BufferAttribute([
     -1, 0, 2, 1, 0, 2, 1, 0, -.2, -1, 0, 2, 1, 0, -.2, -1, 0, -.2,
@@ -87,11 +107,11 @@ export function createBoudoirHazardView(scene, track) {
   const dustGeometry = own(new IcosahedronGeometry(.23, 0)), dustMaterial = paint('#f7cfdf');
   const dust = new InstancedMesh(dustGeometry, dustMaterial, 160); dust.name = 'boudoir-impact-powder'; dust.frustumCulled = false; group.add(dust); dust.count = 0;
   let disposed = false, clock = 0;
-  function puff(entry, count = 18) {
+  function puff(entry, count = 18, at = {}) {
     const f = entry.f;
     for (let i = 0; i < count; i++) {
       const angle = i * 2.399, reach = 2 + i % 7;
-      burst.push({ born: clock, p: f.p.map((v, j) => v + f.n[j] * .7), v: f.b.map((v, j) => v * Math.cos(angle) * reach + f.t[j] * Math.sin(angle) * reach + f.n[j] * (2 + i % 4)) });
+      burst.push({ born: clock, p: f.p.map((v, j) => v + f.n[j] * .7 + f.b[j] * (at.x || 0) + f.t[j] * (at.z || 0)), v: f.b.map((v, j) => v * Math.cos(angle) * reach + f.t[j] * Math.sin(angle) * reach + f.n[j] * (2 + i % 4)) });
     }
     if (burst.length > 160) burst.splice(0, burst.length - 160);
   }
@@ -100,15 +120,19 @@ export function createBoudoirHazardView(scene, track) {
     if (disposed || paused || !Number.isFinite(timeS)) return;
     clock = Math.max(0, timeS);
     for (const entry of entries) {
-      const p = entry.row.kind === 'press' ? powderPressPhase(entry.row, clock) : mascaraPhase(entry.row, clock);
       if (entry.row.kind === 'press') {
+        const p = powderPressPhase(entry.row, clock);
         entry.moving.position.y = p.liftM;
         entry.opacity.value = (.04 + p.opacity * .55) * (gentle ? .65 : 1);
         if (active && p.phase === 'hold' && entry.phase !== 'hold') puff(entry, gentle ? 8 : 22);
         entry.phase = p.phase;
       } else {
-        entry.moving.position.set(p.x, p.y, 0);
-        entry.opacity.value = (.1 + .12 * Math.abs(p.vx) / (K.brushAmplitudeM * Math.PI * 2 / K.brushCycleS)) * (gentle ? .65 : 1);
+        let motion = 0;
+        for (const head of entry.heads) {
+          const p = mascaraPhase(head.row, clock); head.pivot.rotation.z = p.angle;
+          motion = Math.max(motion, Math.abs(p.vx) / (K.brushAmplitudeM * Math.PI * 2 / head.row.cycleS));
+        }
+        entry.opacity.value = (.1 + .12 * Math.min(1, motion)) * (gentle ? .65 : 1);
       }
     }
     for (const belt of belts) {
@@ -135,7 +159,7 @@ export function createBoudoirHazardView(scene, track) {
     belts.forEach(b => b.colour.value.set('#94e2c8')); dust.count = 0; update(0, { active: false }); }
   reset();
   return { group, plan, entries, belts, update, reset,
-    hit(event) { const e = byId.get(event?.id); if (e) puff(e); },
+    hit(event) { const e = byId.get(event?.id); if (e) puff(e, 18, event); },
     dispose() { if (disposed) return; disposed = true; group.removeFromParent(); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); },
   };
 }

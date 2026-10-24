@@ -10,27 +10,34 @@ import { getBoudoirLayout } from '../track/boudoir-layout.js';
 import { boudoirBoxesIntersect } from '../render/boudoirMedia.js';
 import { roadSamples } from '../render/mediaMath.js';
 import { createBoudoirHazards } from '../sim/boudoirHazards.js';
-import { getBoudoirSetpieces, powderPressPhase, mascaraPhase, mirrorGatePhase, ribbonPhase } from '../track/boudoir-setpieces.js';
+import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase, mascaraHeads, mascaraPhase, mirrorGatePhase, ribbonPhase } from '../track/boudoir-setpieces.js';
 import { fakeTrack, place, makeFeel, recorder, acts, DT } from './sim-fake.mjs';
 import { makeRace } from './sim-racers-harness.mjs';
 import { createItems } from '../sim/items.js';
 const track = fakeTrack({ w: 36 }), course = loadTrack(JSON.parse(readFileSync(new URL('../tracks/boudoir.json', import.meta.url), 'utf8')));
 const press = { id: 'puff', kind: 'press', s: 110, x: 0, w: 14, depthM: 8, offsetS: 0 };
-const sweeper = { id: 'brush', kind: 'sweeper', s: 110, x: 0, w: 17.6, depthM: 6, offsetS: 0 };
+const sweeper = { id: 'brush', kind: 'sweeper', s: 110, x: 0, w: 8.1, depthM: 2.5, offsetS: 0 };
 const ribbon = { id: 'belt', kind: 'conveyor', s0: 80, s1: 160, x: 0, w: 12, offsetS: 0 };
 const mirror = lane => ({ id: 'mirror-' + lane, kind: 'mirror', s: 110, x: [-9, 0, 9][lane], w: 7, depthM: 1.2, lane, sequence: 0, offsetS: 0 });
 const plan = (over = {}) => ({ presses: [], sweepers: [], conveyors: [], mirrorGates: [], ...over });
 const racer = (s, x = 0, height = 0, speed = 30) => ({ i: 0, st: place(track, { s, lateral: x, height, speed }), events: recorder(), feel: makeFeel() });
 const trapBounds = () => [...getBoudoirSetpieces(course).presses, ...getBoudoirSetpieces(course).sweepers].flatMap(row => {
-  const f = course.frameAt(row.s), bound = (name, x, y, size) => ({ name: row.id + '/' + name, s: row.s,
-    p: f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y), axes: [f.b, f.n, f.t], size });
-  const boxes = [bound('left-post', -f.w / 2 - 2, 8, [2, 16, 3]), bound('right-post', f.w / 2 + 2, 8, [2, 16, 3]),
-    bound('top', 0, 16, [f.w + 6, 2, 3])];
-  if (row.kind === 'press') boxes.push(bound('puff-travel', 0, 6.7, [14, 13.4, 8]), bound('piston', 0, 13.6, [1, 5, 1]));
+  const f = course.frameAt(row.s), bound = (name, x, y, size, z = 0) => ({ name: row.id + '/' + name, s: row.s,
+    p: f.p.map((v, i) => v + f.b[i] * x + f.n[i] * y + f.t[i] * z), axes: [f.b, f.n, f.t], size });
+  const boxes = [];
+  if (row.kind === 'press') boxes.push(bound('left-post', -f.w / 2 - 2, 8, [2, 16, 3]), bound('right-post', f.w / 2 + 2, 8, [2, 16, 3]),
+    bound('top', 0, 16, [f.w + 6, 2, 3]), bound('puff-travel', 0, 6.7, [14, 13.4, 8]), bound('piston', 0, 13.6, [1, 5, 1]));
   else {
     const side = row.offsetS % 2 > 1 ? 1 : -1;
-    boxes.push(bound('brush-travel', 0, 2.4, [17.6, 4.6, 6]), bound('stem-travel', 0, 9.4, [13.8, 9.3, .8]),
-      bound('bottle', side * (f.w / 2 + 6), 7.5, [6.8, 15, 6.8]));
+    boxes.push(bound('left-post', -f.w / 2 - 2, 6.45, [2.6, 12.9, 2.6]), bound('right-post', f.w / 2 + 2, 6.45, [2.6, 12.9, 2.6]),
+      bound('top', 0, 11.5, [f.w + 6.2, 2.8, 1.3]), bound('bottle', side * (f.w / 2 + 6), 4.8, [4.8, 9.6, 4.8]));
+    for (const head of row.heads) {
+      const low = head.pivotY - head.armM, high = head.pivotY - Math.sqrt(head.armM ** 2 - head.amplitudeM ** 2);
+      boxes.push(bound(head.id + '-travel', head.x, (low + high) / 2, [2 * (head.amplitudeM + head.radiusM), high - low + 2 * head.radiusM, head.depthM], head.longitudinalM),
+        bound(head.id + '-arm', head.x, head.pivotY - head.armM / 2, [head.amplitudeM * 2 + .5, head.armM, .5], head.longitudinalM),
+        bound(head.id + '-pivot', head.x, head.pivotY, [1.4, 1.4, 1.4], head.longitudinalM),
+        bound(head.id + '-hanger', head.x, 10.9, [.7, 2, Math.abs(head.longitudinalM) + 1.4], head.longitudinalM / 2));
+    }
   }
   return boxes;
 });
@@ -38,10 +45,24 @@ const trapBounds = () => [...getBoudoirSetpieces(course).presses, ...getBoudoirS
 test('Both long spirals contain four staggered sweepers with generous stable outside lanes', () => {
   const layout = getBoudoirLayout(course), rows = getBoudoirSetpieces(course).sweepers;
   assert.equal(rows.length, 14);
+  assert.equal(rows.flatMap(mascaraHeads).length, 35);
+  assert.deepEqual([...new Set(rows.map(row => row.heads.length))].sort(), [2, 3]);
   for (const id of ['shelf-climb', 'wardrobe-descent']) {
     const span = layout.landmarks.find(p => p.id === id), spiral = rows.filter(row => row.s > span.s0 && row.s < span.s1);
     assert.equal(spiral.length, 4);
     for (const row of spiral) assert.ok((course.frameAt(row.s).w - row.w) / 2 >= 7, 'at least 7 m on each stable outside path');
+  }
+});
+test('Independent pendulums follow true fixed-length arcs and leave clear outer paths through every phase', () => {
+  for (const row of getBoudoirSetpieces(course).sweepers) {
+    assert.equal(new Set(row.heads.map(head => head.cycleS)).size, row.heads.length);
+    for (let t = 0; t < 30; t += .125) for (const head of row.heads) {
+      const pose = mascaraPhase(head, t);
+      assert.ok(Math.abs(Math.hypot(pose.x - head.x, pose.y - head.pivotY) - head.armM) < 1e-9);
+      assert.ok(Math.abs(pose.x) + pose.radiusM <= row.w / 2, 'station width contains the entire moving brush');
+      assert.ok(pose.y - pose.radiusM > .4, 'brush never intersects the road');
+      for (const other of row.heads) if (other !== head) assert.ok(Math.abs(pose.z - other.longitudinalM) > (pose.depthM + other.depthM) / 2, 'independent brushes cannot interpenetrate');
+    }
   }
 });
 test('All trap gantries, bottles and full moving envelopes clear every other road level', () => {
@@ -94,14 +115,33 @@ test('Sustained throttle cannot pass a held powder press, and a racer already be
 test('Sweeping mascara catches a fast pass and applies a bounded real lateral impulse', () => {
   const h = createBoudoirHazards(track, plan({ sweepers: [sweeper] })), r = racer(117), prev = place(track, { s: 103, speed: 40 });
   assert.equal(h.apply(r, prev, .01), 'brush'); const f = track.frameAt(110), sideV = f.b.reduce((sum, v, i) => sum + v * r.st[S.velX + i], 0);
-  assert.ok(sideV > 6 && sideV < 7); assert.ok(r.st[S.engineV] < 20); assert.equal(r.events.all('boudoir-sweeper-hit').length, 1);
+  assert.ok(sideV > 5 && sideV < 5.3); assert.ok(r.st[S.engineV] < 22); assert.equal(r.events.all('boudoir-sweeper-hit').length, 1);
   for (const x of [-14, 14]) { const bypass = racer(117, x); assert.equal(h.apply(bypass, place(track, { s: 103, lateral: x, speed: 40 }), .01), null); }
 });
 test('A moving brush can hit a stationary kart, but does not repeat during cooldown', () => {
-  const h = createBoudoirHazards(track, plan({ sweepers: [sweeper] })), r = racer(110, 5.5, 0, 0);
+  const h = createBoudoirHazards(track, plan({ sweepers: [sweeper] })), r = racer(110, 3.1, 0, 0);
   let hit = false;
   for (let i = 0; i < 70; i++) { const previous = cloneState(r.st); hit = !!h.apply(r, previous, i * DT) || hit; }
   assert.equal(hit, true); assert.equal(r.events.all('boudoir-sweeper-hit').length, 1);
+});
+test('Every independent head collides at its rendered location, while outside lanes and one station cooldown stay fair', () => {
+  const station = getBoudoirSetpieces(course).sweepers[1], local = { ...station, s: 110,
+    heads: station.heads.map(head => ({ ...head, s: 110 })) };
+  for (const head of local.heads) {
+    const pose = mascaraPhase(head, 1), h = createBoudoirHazards(track, plan({ sweepers: [{ ...local, heads: [head] }] }));
+    const r = racer(119, pose.x), prev = place(track, { s: 101, lateral: pose.x, speed: 40 });
+    assert.equal(h.apply(r, prev, 1), station.id); assert.equal(r.events.all('boudoir-sweeper-hit')[0].payload.headId, head.id);
+    assert.equal(r.events.all('boudoir-sweeper-hit')[0].payload.impulseMps, K.brushImpulseMps);
+  }
+  for (const x of [-13, 13]) for (let time = .1; time < 12; time += .3) {
+    const h = createBoudoirHazards(track, plan({ sweepers: [local] })), r = racer(119, x);
+    assert.equal(h.apply(r, place(track, { s: 101, lateral: x, speed: 40 }), time), null);
+  }
+  const heads = [{ ...sweeper, id: 'first', stationId: 'pair', longitudinalM: -2.5 }, { ...sweeper, id: 'second', stationId: 'pair', longitudinalM: 2.5 }];
+  const h = createBoudoirHazards(track, plan({ sweepers: [{ ...sweeper, id: 'pair', heads }] })), r = racer(109);
+  assert.equal(h.apply(r, place(track, { s: 104, speed: 30 }), .01), 'pair');
+  const previous = cloneState(r.st); r.st.set(place(track, { s: 116, speed: 30 }));
+  assert.equal(h.apply(r, previous, .02), null); assert.equal(r.events.all('boudoir-sweeper-hit').length, 1);
 });
 test('Mirror lane shutters use the shared visible lift and always allow their open choice', () => {
   for (const lane of [0, 1, 2]) {
@@ -151,16 +191,28 @@ test('Sculpted trap meshes match their collision poses, pause freezes all motion
   assert.equal(view.entries.length, 22); assert.equal(view.belts.length, 3);
   view.update(6); const pressEntry = view.entries.find(e => e.row.kind === 'press'), brush = view.entries.find(e => e.row.kind === 'sweeper');
   assert.equal(pressEntry.moving.position.y, powderPressPhase(pressEntry.row, 6).liftM);
-  assert.equal(brush.moving.position.x, mascaraPhase(brush.row, 6).x);
-  const ends = brush.moving.getObjectByName('mascara-radial-end-bristles'), vertex = new Vector3(), matrix = new Matrix4(), positions = ends.geometry.attributes.position;
+  view.group.updateMatrixWorld(true);
+  for (const station of view.entries.filter(e => e.heads)) {
+    assert.equal(station.holder.children.filter(c => c.name.endsWith('-shared-support')).length, 1);
+    for (const head of station.heads) {
+      const pose = mascaraPhase(head.row, 6), centre = station.holder.worldToLocal(head.brush.getWorldPosition(new Vector3()));
+      assert.ok(Math.hypot(centre.x - pose.x, centre.y - pose.y, centre.z + pose.z) < 1e-5, 'visible compact brush centre equals collision pose');
+      const top = station.holder.worldToLocal(head.arm.localToWorld(new Vector3(0, .5, 0)));
+      const bottom = station.holder.worldToLocal(head.arm.localToWorld(new Vector3(0, -.5, 0)));
+      assert.ok(top.distanceTo(head.pivot.position) < 1e-5, 'arm stays physically attached to fixed pivot');
+      assert.ok(bottom.distanceTo(centre) < 1e-5, 'arm stays attached to brush head');
+    }
+  }
+  const firstHead = brush.heads[0], ends = firstHead.brush.getObjectByName('mascara-radial-end-bristles'), vertex = new Vector3(), matrix = new Matrix4(), positions = ends.geometry.attributes.position;
   assert.equal(ends.count, 144);
   for (let i = 0; i < ends.count; i++) {
     ends.getMatrixAt(i, matrix);
-    for (let j = 0; j < positions.count; j++) { vertex.fromBufferAttribute(positions, j).applyMatrix4(matrix);
-      assert.ok(Math.hypot(vertex.x, vertex.y) < 2.3 && Math.abs(vertex.z) < 3, 'visible end bristles fit the collision envelope'); }
+    for (let j = 0; j < positions.count; j++) { vertex.fromBufferAttribute(positions, j).applyMatrix4(matrix).multiply(firstHead.brush.scale);
+      assert.ok(Math.hypot(vertex.x, vertex.y) < firstHead.row.radiusM && Math.abs(vertex.z) < firstHead.row.depthM / 2, 'visible end bristles fit the collision envelope'); }
   }
-  const before = view.entries.map(e => e.moving.position.toArray()), arrows = [...view.belts[0].arrows.instanceMatrix.array], colours = view.belts.map(b => b.colour.value.toArray());
-  view.update(9, { paused: true }); assert.deepEqual(view.entries.map(e => e.moving.position.toArray()), before); assert.deepEqual([...view.belts[0].arrows.instanceMatrix.array], arrows);
+  const poses = () => view.entries.map(e => e.heads ? e.heads.map(h => h.pivot.rotation.z) : e.moving.position.toArray());
+  const before = poses(), arrows = [...view.belts[0].arrows.instanceMatrix.array], colours = view.belts.map(b => b.colour.value.toArray());
+  view.update(9, { paused: true }); assert.deepEqual(poses(), before); assert.deepEqual([...view.belts[0].arrows.instanceMatrix.array], arrows);
   assert.deepEqual(view.belts.map(b => b.colour.value.toArray()), colours);
   view.hit({ id: plan.presses[0].id }); view.update(6.1); assert.ok(view.group.getObjectByName('boudoir-impact-powder').count > 0);
   view.reset(); assert.equal(view.group.getObjectByName('boudoir-impact-powder').count, 0);
