@@ -45,7 +45,7 @@ export function buildKeepFortress(track, layout, art) {
   for (let i = 0; i < frames.length; i++) {
     const f = frames[i], name = landmarkAt(f.s)?.id || '';
     const spiral = /spiral/.test(name), hall = /gate|hall/.test(name), h = hall ? 22 : spiral ? 3.5 : 7;
-    block('deck', f, 0, -2.05, [f.w + 3.4, 4, step + 1.8]);
+    block('deck', f, 0, -2.6, [f.w + 3.4, 4, step + 1.8]);
     for (const side of [-1, 1]) {
       const x = side * (f.w / 2 + 1.35);
       block('wall', f, x, h / 2 - 0.2, [2.1, h, step + 0.35]);

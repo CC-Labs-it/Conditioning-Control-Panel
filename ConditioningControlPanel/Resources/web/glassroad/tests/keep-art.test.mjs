@@ -72,10 +72,10 @@ test('Keep is solid architecture with instanced decks, walls, halls and a tower,
     }
   });
   const point = new Vector3();
-  for (let s = 0; s < track.lengthM; s += 12) {
+  for (let s = 0; s < track.lengthM; s += 3) {
     const f = track.frameAt(s);
-    for (const x of [0, -f.w / 2 + 0.7, f.w / 2 - 0.7]) for (const solid of solids) {
-      point.fromArray(f.p).addScaledVector(new Vector3(...f.b), x).addScaledVector(new Vector3(...f.n), 1.4).applyMatrix4(solid.inverse);
+    for (const x of [0, -f.w / 2 + 0.7, f.w / 2 - 0.7]) for (const height of [0.03, 1.4]) for (const solid of solids) {
+      point.fromArray(f.p).addScaledVector(new Vector3(...f.b), x).addScaledVector(new Vector3(...f.n), height).applyMatrix4(solid.inverse);
       const inside = Math.abs(point.y) < 0.499 && (solid.cylinder ? Math.hypot(point.x, point.z) < 0.999 : Math.abs(point.x) < 0.499 && Math.abs(point.z) < 0.499);
       assert.ok(!inside, `${solid.name} blocks s=${s}, x=${x.toFixed(2)}`);
     }

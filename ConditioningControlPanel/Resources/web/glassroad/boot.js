@@ -19,6 +19,7 @@
  * (&tier=N also goes to the lobby as x-dev-tier). ?r=<token>: a friend's race link, claimed on the lobby card.
  */
 import { createBridge, songCharts, wantLobbySongs, lobbySongCharts, ROOM_ORIGIN } from './host/bridge.js';
+import { createCardMedia } from './host/cardMedia.js';
 import { createHostEscape } from './host/hostEscape.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -65,7 +66,7 @@ import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
 import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
 import { getKeepLayout } from './track/keep-layout.js';
-import { createKeepGates } from './sim/keepGates.js';
+import { createKeepHazards } from './sim/keepHazards.js';
 
 const qs = new URLSearchParams(location.search);
 const course = selectedCourse(location.search);
@@ -185,7 +186,7 @@ async function boot() {
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
   const keepLayout = getKeepLayout(track);
-  const hazards = keepLayout ? createKeepGates(track, { gates: keepLayout.gates }) : null;
+  const hazards = keepLayout ? createKeepHazards(track, keepLayout) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -195,6 +196,7 @@ async function boot() {
   const effects = createEffects(bus, feel, { gentle, photosafe });
   fx.state.screen = effects.screen;
   const audio = createAudio(feel, bus, { gentle });
+  for (const name of ['keep-gate-hit', 'keep-chain-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
   bus.on('effect-start', ({ kind }) => { if (!debug.effects.includes(kind)) debug.effects.push(kind); debug.effectNow = kind; });
@@ -227,6 +229,10 @@ async function boot() {
   // and the Shadows option turns it on or off in applyOptions
   const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0',
     spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
+  const cardMedia = createCardMedia(world.media, { bridge });
+  await cardMedia.ready;
+  window.addEventListener('pagehide', () => cardMedia.dispose(), { once: true });
+  Object.defineProperty(debug, 'cardMedia', { get: () => world.media?.stats() || null, enumerable: true });
   const garage=await createGarage({art,renderer,canvas,track:trackName,laps,trackId:track.id,online:course.online,
     changeTrack:id=>{const url=courseUrl(location.href,id);if(url)location.assign(url);},
     action:name=>hud.menuAction(name),sound:name=>{audio.start();audio.cue(name);}});
