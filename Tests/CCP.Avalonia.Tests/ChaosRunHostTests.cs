@@ -366,6 +366,7 @@ public sealed class ChaosRunHostTests
                 for (int i = 0; i < 3; i++) ChaosRunHost.SpawnTick();
                 Assert.True(BubbleOverlay.ChaosCount >= 3);
                 var b = BubbleOverlay.Field.Bubbles.First(x => x.Spec != null && !x.Popping);
+                Assert.False(b.Spec!.IsLive);   // this click-to-pop test explicitly enables only treats
                 BubbleOverlay.Pop(b);
                 Assert.True(state.Score > 0);
                 Assert.Equal(1, state.Combo);

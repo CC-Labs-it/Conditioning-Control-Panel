@@ -1590,34 +1590,13 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static string? ResolveModAudio(string? file) => ResolveBarkAudio(file);
 
-        // Last variant index served per voice-line rule, so PickVoiceLine avoids an immediate repeat.
-        private readonly Dictionary<string, int> _lastVoiceIdx = new(StringComparer.OrdinalIgnoreCase);
+        private VoiceLinePicker? _voiceLinePicker;
 
-        /// <summary>
-        /// Pick a variant (display text + resolved per-mod audio path) for the given rule id from the
-        /// ACTIVE mod's loaded ruleset, avoiding an immediate repeat. Lets inline voiced bubbles (the
-        /// "Hey Bambi" wake ack + voice-command confirmations) keep their text single-sourced in the
-        /// bark manifests so the spoken clip always matches the on-screen line. Null when the rule or
-        /// its pool is absent (caller falls back to its own text, unvoiced).
-        /// </summary>
+        /// <summary>Shared WPF/Avalonia manifest selection and immediate-repeat avoidance.</summary>
         public (string Text, string? Audio)? PickVoiceLine(string ruleId)
         {
-            if (string.IsNullOrWhiteSpace(ruleId)) return null;
-            BarkVariant? v;
             lock (_gate)
-            {
-                var rule = _rules.AllRules.FirstOrDefault(
-                    r => string.Equals(r.Id, ruleId, StringComparison.OrdinalIgnoreCase));
-                var pool = rule?.VariantPool;
-                if (pool == null || pool.Count == 0) return null;
-
-                var idx = _rng.Next(pool.Count);
-                if (pool.Count > 1 && _lastVoiceIdx.TryGetValue(ruleId, out var last) && idx == last)
-                    idx = (idx + 1) % pool.Count;
-                _lastVoiceIdx[ruleId] = idx;
-                v = pool[idx];
-            }
-            return (v.Text, ResolveBarkAudio(v.Audio));
+                return (_voiceLinePicker ??= new VoiceLinePicker(_rng)).Pick(_rules, ruleId, ResolveBarkAudio);
         }
 
         /// <summary>
