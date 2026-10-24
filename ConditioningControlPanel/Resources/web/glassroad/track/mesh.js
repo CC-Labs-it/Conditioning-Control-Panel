@@ -37,9 +37,12 @@ function builder(water = false) {
       const e1x = P[b * 3] - ax, e1y = P[b * 3 + 1] - ay, e1z = P[b * 3 + 2] - az;
       const e2x = P[d * 3] - ax, e2y = P[d * 3 + 1] - ay, e2z = P[d * 3 + 2] - az;
       const cx = e1y * e2z - e1z * e2y, cy = e1z * e2x - e1x * e2z, cz = e1x * e2y - e1y * e2x;
-      if (cx * Nn[a * 3] + cy * Nn[a * 3 + 1] + cz * Nn[a * 3 + 2] >= 0) I.push(a, b, d, a, d, c);
+      const forward = cx * Nn[a * 3] + cy * Nn[a * 3 + 1] + cz * Nn[a * 3 + 2] >= 0;
+      if (forward) I.push(a, b, d, a, d, c);
       else I.push(a, d, b, a, c, d);
+      return forward;
     },
+    triangle(a, b, c) { I.push(a, b, c); },
     get size() { return P.length / 3; },
     done() {
       const m = { positions: new Float32Array(P), normals: new Float32Array(Nn), uvs: new Float32Array(U), indices: new Uint32Array(I) };
@@ -74,6 +77,18 @@ function runs(Q, keep) {
 export function buildMeshes(track, dl) {
   const Q = dl.quads, L = track.lengthM;
   const columns = track.canalProfile ? 18 : COLS;
+  const curvedPads = new Set((track.boosts || []).filter(p => {
+    if (!track.canalProfile) return false;
+    for (let ds = 0; ds <= p.len; ds += Math.min(STRIP_STEP_M, p.len))
+      if (track.canalProfile(p.s + ds, p.x).blend > 0) return true;
+    return false;
+  }));
+  const curvedPadList = [...curvedPads];
+  const padRoadFaces = [];
+  const padOverlaps = (p, s0, s1) => {
+    const shift = Math.round(((p.s + p.len / 2) - (s0 + s1) / 2) / L) * L;
+    return s0 + shift < p.s + p.len && s1 + shift > p.s;
+  };
   const courtHoles = (track.courts || []).flatMap((c) => c.holes);
   const row = (q) => q % Q;              // row index of the start of quad q (wrapped)
   const rowS = (q) => dl.s[row(q)] + Math.floor(q / Q) * L;
@@ -114,9 +129,12 @@ export function buildMeshes(track, dl) {
       const rawS = rowS(q0 + k), offsetS = Math.floor(rawS / L) * L;
       const s0 = rawS - offsetS, s1 = rowS(q0 + k + 1) - offsetS;
       const holes = courtHoles.filter((h) => h.s < s1 && h.s + h.len > s0);
+      const underCurvedPad = curvedPadList.some(p => padOverlaps(p, s0, s1));
       if (holes.length) courtStrip(road, track, s0, s1, holes, offsetS);
       else for (let i = 0; i < columns; i++) {
-        road.quad(top[k][i], top[k][i + 1], top[k + 1][i], top[k + 1][i + 1]);
+        const a = top[k][i], b = top[k][i + 1], c = top[k + 1][i], d = top[k + 1][i + 1];
+        const forward = road.quad(a, b, c, d);
+        if (underCurvedPad) padRoadFaces.push(...(forward ? [[a, b, d], [a, d, c]] : [[a, d, b], [a, c, d]]));
         road.quad(bot[k][i], bot[k][i + 1], bot[k + 1][i], bot[k + 1][i + 1]);
       }
       road.quad(el[k][0], el[k][1], el[k + 1][0], el[k + 1][1]);
@@ -166,6 +184,7 @@ export function buildMeshes(track, dl) {
   }
 
   // decal strips that follow the surface: s0..s0+len, lateral x0 - w/2 .. x0 + w/2
+  const roadData = bendCanalMesh(road.done(), track);
   const f = makeFrame();
   const strip = (m, s0, len, x0, w, uCentre) => {
     const rowsN = Math.max(1, Math.ceil(len / STRIP_STEP_M)), ids = [];
@@ -181,7 +200,10 @@ export function buildMeshes(track, dl) {
     for (let k = 0; k < rowsN; k++) m.quad(ids[k][0], ids[k][1], ids[k + 1][0], ids[k + 1][1]);
   };
   const pads = builder();
-  for (const p of track.boosts) strip(pads, p.s, p.len, p.x, p.w, true);
+  for (const p of track.boosts) {
+    if (curvedPads.has(p)) roadDecal(pads, roadData, padRoadFaces, p, L);
+    else strip(pads, p.s, p.len, p.x, p.w, true);
+  }
   const jumps = builder();
   for (const j of track.jumps) {
     const w = track.frameAt(j.s - LIP_M).w;
@@ -189,7 +211,44 @@ export function buildMeshes(track, dl) {
   }
   const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
   const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField);
-  return { road: bendCanalMesh(road.done(), track), rails: bendCanalMesh(rails.done(), track), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
+  return { road: roadData, rails: bendCanalMesh(rails.done(), track), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
+}
+
+/** Clip curved pads onto the rendered road's triangles. Sampling just the lateral edges floats
+ * the pad across a canal; sampling the exact curve can bury it beneath the road's wider chords. */
+function roadDecal(out, road, faces, pad, lapM) {
+  const bounds = [[0, pad.x - pad.w / 2, 1], [0, pad.x + pad.w / 2, -1], [1, pad.s, 1], [1, pad.s + pad.len, -1]];
+  for (const face of faces) {
+    const meanS = face.reduce((sum, i) => sum + road.uvs[i * 2 + 1], 0) / 3;
+    const shift = Math.round((pad.s + pad.len / 2 - meanS) / lapM) * lapM;
+    let poly = face.map(i => ({ uv: [road.uvs[i * 2], road.uvs[i * 2 + 1] + shift],
+      p: Array.from(road.positions.subarray(i * 3, i * 3 + 3)), n: Array.from(road.normals.subarray(i * 3, i * 3 + 3)) }));
+    if (bounds.some(([axis, edge, sign]) => poly.every(v => (v.uv[axis] - edge) * sign < -1e-6))) continue;
+    for (const [axis, edge, sign] of bounds) {
+      const clipped = [];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        const da = (a.uv[axis] - edge) * sign, db = (b.uv[axis] - edge) * sign;
+        if (da >= 0) clipped.push(a);
+        if ((da >= 0) !== (db >= 0)) {
+          const t = da / (da - db), lerp = key => a[key].map((v, k) => v + (b[key][k] - v) * t);
+          clipped.push({ uv: lerp('uv'), p: lerp('p'), n: lerp('n') });
+        }
+      }
+      poly = clipped;
+      if (poly.length < 3) break;
+    }
+    poly = poly.filter((v, i) => {
+      const prev = poly[(i + poly.length - 1) % poly.length];
+      return Math.hypot(v.uv[0] - prev.uv[0], v.uv[1] - prev.uv[1]) > 1e-7;
+    });
+    if (poly.length < 3) continue;
+    const ids = poly.map(v => {
+      const length = Math.hypot(...v.n), n = v.n.map(value => value / length);
+      return out.v(v.p.map((value, k) => value + n[k] * DECAL_M), n, v.uv[0] - pad.x, v.uv[1] - pad.s);
+    });
+    for (let i = 1; i < ids.length - 1; i++) out.triangle(ids[0], ids[i], ids[i + 1]);
+  }
 }
 
 /** Split only affected road quads, at the exact collision bounds, on both visible faces. */
