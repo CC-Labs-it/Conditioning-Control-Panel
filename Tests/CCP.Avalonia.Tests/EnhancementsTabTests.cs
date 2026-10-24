@@ -31,9 +31,7 @@ public sealed class EnhancementsTabTests
 
     private static void Setup()
     {
-        if (global::Avalonia.Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        AmbientBeatLoopsTests.Setup();
     }
 
     private sealed class SteppedClock : TimeProvider

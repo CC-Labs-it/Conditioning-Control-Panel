@@ -326,7 +326,7 @@ namespace ConditioningControlPanel
         // so those tabs still show the state their cards depend on without owning the camera.
         private void UpdateLabTrackerUi(WebcamTrackingState s)
         {
-            bool live = (s == WebcamTrackingState.Tracking || s == WebcamTrackingState.FaceLost);
+            bool live = WebcamStatus.IsLive(s);
             var green = TryFindResource("SuccessGreenBrush") as Brush;
             var muted = TryFindResource("TextMutedBrush") as Brush;
             var panelAccent = TryFindResource("PanelAccentBrush") as Brush;
@@ -385,8 +385,7 @@ namespace ConditioningControlPanel
         /// "Stopped" beside fully-Russian card copy - and "FaceLost", which is not a sentence in
         /// any language. One mapper, so all four surfaces move together.
         /// </summary>
-        private static string WebcamStateText(WebcamTrackingState state)
-            => Loc.Get(WebcamTrackingStatus.LocalizationKey(state));
+        private static string WebcamStateText(WebcamTrackingState state) => Loc.Get(WebcamStatus.TextKey(state));
 
         /// <summary>
         /// "Configure in Settings" from any of the three webcam status chips, and from the

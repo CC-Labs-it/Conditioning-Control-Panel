@@ -97,7 +97,7 @@ public class RemoteHudRulesTests
     {
         var src = StripComments(SourceRoots.ReadProductFile("Services", "Remote", "RemoteControlService.V2.cs"));
         Assert.Contains("kind = \"signal\"", src);
-        Assert.Contains("StopAllRemoteEffects(force: true)", src);
+        Assert.Contains("StopAllRemoteEffects(RemoteEndCause.Panic)", src);   // main 28078c756
         Assert.Contains("\"more\", \"easy\", \"stop\"", src);
     }
 

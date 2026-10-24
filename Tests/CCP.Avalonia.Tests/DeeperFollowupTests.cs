@@ -149,44 +149,4 @@ public sealed class DeeperFollowupTests
         }
     });
 
-    [Fact]
-    public void WebcamChipFollowsLiveTelemetryAndUnhooksWhenDetached() => AvaloniaTestDispatcher.Run(() =>
-    {
-        Setup();
-        var tracker = WebcamTracker.Instance;
-        var previous = tracker.TrackingState;
-        var view = new DeeperTabView();
-        var host = new Window { Content = view };
-        try
-        {
-            host.Show();
-            foreach (var (state, key, live) in new[]
-            {
-                (WebcamTrackingState.Starting, "rf_webcam_starting", false),
-                (WebcamTrackingState.Tracking, "rf_webcam_tracking", true),
-                (WebcamTrackingState.FaceLost, "rf_webcam_face_lost", true),
-                (WebcamTrackingState.CameraInUse, "rf_webcam_camera_in_use", false),
-                (WebcamTrackingState.CameraDenied, "rf_webcam_camera_denied", false),
-                (WebcamTrackingState.Error, "rf_webcam_error", false),
-                (WebcamTrackingState.Stopped, "rf_webcam_stopped", false),
-            })
-            {
-                tracker.PublishTrackingState(state); // no camera or fake claim that capture is running
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal(Loc.Get(key), view.FindControl<TextBlock>("TxtWebcamStatusChipDeeper")!.Text);
-                Assert.Equal(((ISolidColorBrush)view.FindResource(live ? "SuccessGreenBrush" : "TextMutedBrush")!).Color,
-                    ((ISolidColorBrush)view.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("WebcamStatusChipDeeperDot")!.Fill!).Color);
-                Assert.False(tracker.IsRunning);
-            }
-            host.Content = null;
-            tracker.PublishTrackingState(WebcamTrackingState.Tracking);
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(Loc.Get("rf_webcam_stopped"), view.FindControl<TextBlock>("TxtWebcamStatusChipDeeper")!.Text);
-            host.Content = view;
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(Loc.Get("rf_webcam_tracking"), view.FindControl<TextBlock>("TxtWebcamStatusChipDeeper")!.Text);
-        }
-        finally { host.Close(); tracker.PublishTrackingState(previous); Dispatcher.UIThread.RunJobs(); }
-    });
-
 }

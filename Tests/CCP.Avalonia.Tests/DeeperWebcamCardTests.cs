@@ -24,7 +24,7 @@ public sealed class DeeperWebcamCardTests
     private static void Setup()
     {
         if (Application.Current == null)
-            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options())
+            AppBuilder.Configure<ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 

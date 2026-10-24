@@ -48,6 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamStatus;
+            RefreshWebcamStatus();
             CoreMods.ModChanged += OnModChanged;
             CoreSettings.Current.PropertyChanged += OnWebcamSettingsChanged;
             Platform.WebcamTracker.Instance.StateChanged += RefreshWebcamColumn;
@@ -60,11 +62,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             FinishImportReveal();
+            Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamStatus;
             CoreMods.ModChanged -= OnModChanged;
             CoreSettings.Current.PropertyChanged -= OnWebcamSettingsChanged;
             Platform.WebcamTracker.Instance.StateChanged -= RefreshWebcamColumn;
             base.OnDetachedFromVisualTree(e);
         }
+
+        internal void RefreshWebcamStatus() => Helpers.WebcamStatusPresentation.Paint(this,
+            "WebcamStatusChipDeeperDot", "TxtWebcamStatusChipDeeper", Platform.WebcamTracker.Instance.State);
 
         /// <summary>ModChanged can be raised off the UI thread, so the repaint is marshalled.</summary>
         private void OnModChanged(object? sender, ModPackage mod) =>
@@ -198,19 +204,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnWebcamSettingsChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName?.StartsWith("Webcam", StringComparison.Ordinal) == true)
-                Dispatcher.UIThread.Post(RefreshWebcamColumn);
+            // One revoke sets ~6 Webcam* settings; coalesce them into a single refresh.
+            if (e.PropertyName?.StartsWith("Webcam", StringComparison.Ordinal) == true && !_webcamRefreshQueued)
+            {
+                _webcamRefreshQueued = true;
+                Dispatcher.UIThread.Post(() => { _webcamRefreshQueued = false; RefreshWebcamColumn(); });
+            }
         }
+        private bool _webcamRefreshQueued;
 
         internal void RefreshWebcamColumn()
         {
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(RefreshWebcamColumn); return; }
             ViewModel?.RefreshWebcam();
-            var statusKey = Services.WebcamTrackingStatus.LocalizationKey(Platform.WebcamTracker.Instance.TrackingState);
-            TxtWebcamStatusChipDeeper.Bind(TextBlock.TextProperty, new Binding($"[{statusKey}]") { Source = LocalizationManager.Instance });
-            WebcamStatusChipDeeperDot.Fill = this.FindResource(Platform.WebcamTracker.Instance.TrackingState
-                is Services.WebcamTrackingState.Tracking or Services.WebcamTrackingState.FaceLost
-                ? "SuccessGreenBrush" : "TextMutedBrush") as IBrush ?? Brushes.Gray;
             bool consented = Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current);
             DeeperWebcamConsentCard.Background = new SolidColorBrush(Color.Parse(consented ? "#1A4ADE80" : "#1AFFD080"));
             DeeperWebcamConsentCard.BorderBrush = new SolidColorBrush(Color.Parse(consented ? "#4ADE80" : "#FFD080"));
