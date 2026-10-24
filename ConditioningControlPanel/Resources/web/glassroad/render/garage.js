@@ -1,4 +1,5 @@
 import * as T from 'three/webgpu';
+import {garageLayout} from './garageLayout.js';
 import {clone} from 'three/addons/utils/SkeletonUtils.js';
 import {texture,uv,vec2} from 'three/tsl';
 import {createVehicleLife} from './vehicleLife.js';
@@ -17,6 +18,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps}
   const base=art?.model('emi-teacup-kart');
   if(!base||KARTS.some(([id])=>!art.model('emi-vehicle-'+id)))return null;
   let storage;try{storage=localStorage;}catch{}
+  let layout=garageLayout(canvas.clientWidth,canvas.clientHeight);
   const state=loadGarage(storage),scene=new T.Scene(),camera=new T.PerspectiveCamera(33,1,.03,40);
   scene.background=new T.Color('#302a28');scene.fog=new T.Fog('#302a28',7,15);
   scene.add(new T.HemisphereLight(0xf2e9ff,0x4b3640,1.5));
@@ -42,7 +44,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps}
   const collection=KARTS.map(([id],index)=>{
     const holder=new T.Group(),asset=clone(art.model('emi-vehicle-'+id).scene);holder.add(asset);holder.userData.kartIndex=index;
     const meshes=[];asset.traverse(m=>{if(m.isSkinnedMesh){m.material=racerFinish(m.material);meshes.push(m);}});
-    vehicleLives.push(createVehicleLife(meshes,VEHICLE_MECHANISMS?.vehicles?.[id],{seed:index}));
+    vehicleLives.push(createVehicleLife(meshes,{...VEHICLE_MECHANISMS?.vehicles?.[id],vehicleId:id},{seed:index,art}));
     const contact=new T.Mesh(contactGeo,contactMat);contact.rotation.x=-Math.PI/2;contact.position.y=-.014;holder.add(contact);
     asset.traverse(m=>{if(!m.isMesh)return;m.frustumCulled=false;if(LOCKED.has(id)){m.material=new T.MeshBasicNodeMaterial({color:0x211e24});owned.push(m.material);}});scene.add(holder);return holder;
   });
@@ -61,16 +63,16 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps}
     moving={elapsed:0,duration:reduced?.32:1.12,from:orbit,to:orbit-route.steps*Math.PI/4,index:route.index,yaw,landed:false};
     arrows.press(Math.sign(route.steps));sound('menu-move');if(hop){mixer.stopAllAction();hop.reset().play();}paint();}
   function sparkle(){if(reduced)return;for(let i=0;i<20;i++){const mesh=new T.Mesh(particleGeo,particleMaterial);mesh.position.set((Math.random()-.5)*.4,.25,0);scene.add(mesh);particles.push({mesh,v:new T.Vector3((Math.random()-.5)*.9,Math.random()*.7+.2,(Math.random()-.5)*.7),life:0});}}
-  function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();const phone=w<650;
+  function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();layout=garageLayout(w,h);ui.layout(layout);const phone=layout.mobile;
     if(custom){camera.position.set(0,phone?1.2:1.3,phone?-4.4:-2.9);camera.lookAt(phone?new T.Vector3(0,.53,0):new T.Vector3(0,.65,0));camera.setViewOffset(w,h,0,phone?h*.18:0,w,h);rider.position.set(phone?0:.72,phone?-.12:-.30,0);}
-    else{camera.clearViewOffset();camera.position.set(0,phone?1.65:1.9,phone?-4.5:-4.7);camera.lookAt(0,.5,0);rider.position.set(0,0,0);}}
+    else{camera.setViewOffset(w,h,layout.offsetX,layout.offsetY,w,h);camera.position.set(0,phone?1.65:1.9,phone?-5.6:-4.7);camera.lookAt(0,.5,0);rider.position.set(0,0,0);}}
   const ease=x=>x*x*(3-2*x);
-  function update(dt,motionReduced,gentle=false){reduced=motionReduced||gentle;time+=dt;emiLife.beforePose();
+  function update(dt,motionReduced,gentle=false){reduced=motionReduced||gentle;ui.root.classList.toggle('g-calm',reduced);time+=dt;emiLife.beforePose();
     lifeSignals.time=time;lifeSignals.menu=true;lifeSignals.selected=true;lifeSignals.custom=custom;lifeSignals.motionOff=motionReduced;lifeSignals.gentle=gentle;lifeSignals.near=true;lifeSignals.outfit=state.outfit;lifeSignals.transition=0;lifeSignals.land=0;
     lifeSignals.clip=moving?'hop_squash':null;
     if(moving){const m=moving;m.elapsed+=dt;const u=Math.min(1,m.elapsed/m.duration);yaw=T.MathUtils.lerp(m.yaw,0,ease(Math.min(1,u/.2)));
       orbit=T.MathUtils.lerp(m.from,m.to,ease(reduced?u:T.MathUtils.clamp((u-.18)/.60,0,1)));
-      if(!reduced){const lift=Math.sin(T.MathUtils.clamp((u-.08)/.8,0,1)*Math.PI);rider.position.y=lift*.32;camera.position.z=(canvas.clientWidth<650?-4.5:-4.7)-lift*.5;camera.lookAt(0,.5+lift*.10,0);if(hop)mixer.setTime(u*clip.duration);}
+      if(!reduced){const lift=Math.sin(T.MathUtils.clamp((u-.08)/.8,0,1)*Math.PI);rider.position.y=lift*.32;camera.position.z=(layout.mobile?-5.6:-4.7)-lift*.5;camera.lookAt(0,.5+lift*.10,0);if(hop)mixer.setTime(u*clip.duration);}
       lifeSignals.transition=u;
       if(u>.9&&!m.landed){m.landed=true;lifeSignals.land=1;sparkle();}
       if(u===1){orbit=m.to;selected=m.index;state.kart=KARTS[selected][0];moving=null;mixer.stopAllAction();mixer.update(0);resize();paint();if(queued){const q=queued;queued=null;select(q.value,q.relative);}}
@@ -79,7 +81,7 @@ export async function createGarage({art,renderer,canvas,action,sound,track,laps}
     emiLife.update(dt,lifeSignals);
     const face=faceCell(reduced?'happy':moving?'grin':custom?'happy':time%13>10.8&&time%13<11.6?'wink':'happy');faceUv.value.set(face.col*.25,face.row*.25);
     for(let i=0;i<vehicleLives.length;i++){lifeSignals.selected=i===selected;vehicleLives[i].update(dt,lifeSignals);}
-    rider.rotation.y=yaw;arrows.update(dt,time,camera,{custom,reduced,busy:!!moving});
+    rider.rotation.y=yaw;arrows.update(dt,time,camera,{custom,reduced,busy:!!moving,layout});
     for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life+=dt;p.v.y-=dt*.6;p.mesh.position.addScaledVector(p.v,dt);p.mesh.scale.setScalar(Math.max(0,1-p.life));if(p.life>=1){scene.remove(p.mesh);particles.splice(i,1);}}
   }
   function hit(e){const r=canvas.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(pointer,camera);scene.updateMatrixWorld(true);

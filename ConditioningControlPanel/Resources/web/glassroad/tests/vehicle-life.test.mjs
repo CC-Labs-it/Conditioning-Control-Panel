@@ -4,11 +4,23 @@ import { readFileSync } from 'node:fs';
 import * as THREE from '../vendor/three/build/three.core.js';
 import { MeshoptDecoder } from '../vendor/three/addons/libs/meshopt_decoder.module.js';
 import { springStep, motionState, stepMechanism, partitionLifeTriangles } from '../render/vehicleLifeMath.js';
+import {meterBar,meterScale,METER_HEIGHTS,createFeedbackMeter,advanceMeterPhase} from '../render/feedbackMeter.js';
+
+const tslSource=readFileSync(new URL('../vendor/three/build/three.tsl.min.js',import.meta.url),'utf8')
+  .replaceAll('"three/webgpu"',JSON.stringify(new URL('../vendor/three/build/three.webgpu.min.js',import.meta.url).href));
+const tslModule='data:text/javascript;base64,'+Buffer.from(tslSource+'\n//# sourceURL=tsl.test-runtime.js').toString('base64');
+const accentSource=readFileSync(new URL('../render/vehicleAccents.js',import.meta.url),'utf8')
+  .replace("'three/webgpu'",JSON.stringify(new URL('../vendor/three/build/three.webgpu.min.js',import.meta.url).href))
+  .replace("'three/tsl'",JSON.stringify(tslModule));
+const accentModule='data:text/javascript;base64,'+Buffer.from(accentSource+'\n//# sourceURL=vehicleAccents.test-runtime.js').toString('base64');
 
 const runtimeSource = readFileSync(new URL('../render/vehicleLife.js', import.meta.url), 'utf8')
   .replace("'three/webgpu'", JSON.stringify(new URL('../vendor/three/build/three.core.js', import.meta.url).href))
-  .replace("'./vehicleLifeMath.js'", JSON.stringify(new URL('../render/vehicleLifeMath.js', import.meta.url).href));
+  .replace("'./vehicleLifeMath.js'", JSON.stringify(new URL('../render/vehicleLifeMath.js', import.meta.url).href))
+  .replace("'./feedbackMeter.js'",JSON.stringify(new URL('../render/feedbackMeter.js',import.meta.url).href))
+  .replace("'./vehicleAccents.js'",JSON.stringify(accentModule));
 const { createVehicleLife } = await import('data:text/javascript;base64,' + Buffer.from(runtimeSource + '\n//# sourceURL=vehicleLife.test-runtime.js').toString('base64'));
+const {rearShellSurface}=await import(accentModule);
 
 function rigidFixture() {
   const geometry = new THREE.BufferGeometry();
@@ -125,6 +137,36 @@ test('triangle cuts conserve triangles, reject mixed groups and leave static geo
   assert.equal(partitionLifeTriangles([0,1,99], ids, new Set([1,2])), null);
 });
 
+test('Feedback meter tags nine source-space bars, rejects shell, and independently moves seated heights',()=>{
+  const values=[];
+  for(let i=0;i<9;i++){
+    assert.equal(meterBar((i-4)*.088,.264+METER_HEIGHTS[i],-.683),i);
+    values.push(meterScale(i,1.25));
+    assert.ok(values[i]>.2&&values[i]<1.05);
+  }
+  assert.equal(new Set(values.map(v=>v.toFixed(4))).size,9);
+  assert.equal(meterBar(0,.35,-.658),-1);assert.equal(meterBar(.58,.34,-.683),-1);
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute([0,.264,-.683,0,.319,-.683,.58,.34,-.683],3));
+  const mesh=new THREE.Mesh(g),meter=createFeedbackMeter([mesh]);
+  meter.update(.016,{time:1.25});assert.equal(mesh.geometry.getAttribute('position').getY(0),Math.fround(.264));
+  assert.equal(mesh.geometry.getAttribute('position').getY(2),Math.fround(.34));
+  assert.notEqual(mesh.geometry.getAttribute('position').getY(1),Math.fround(.319));
+  meter.update(.016,{motionOff:true});assert.equal(mesh.geometry.getAttribute('position').getY(1),Math.fround(.319));
+  meter.dispose();assert.equal(mesh.geometry,g);
+});
+
+test('Feedback boost accelerates a continuous bounded phase, with frame-independent timing and exact freeze/reset',()=>{
+  const phase=3.2,dt=1/144;
+  const idle=advanceMeterPhase(phase,dt,{}),boosted=advanceMeterPhase(phase,dt,{boost:1});
+  assert.ok(boosted>idle&&boosted-phase<.014,'boost changes derivative without jumping phase');
+  assert.equal(advanceMeterPhase(phase,dt,{near:false,boost:1}),phase);
+  assert.equal(advanceMeterPhase(phase,dt,{motionOff:true}),0);
+  assert.ok(advanceMeterPhase(phase,dt,{gentle:true})<idle);
+  const run=fps=>{let p=0;for(let i=0;i<fps*2;i++)p=advanceMeterPhase(p,1/fps,{boost:i>=fps?1:0});return p;};
+  assert.ok(Math.abs(run(30)-run(144))<1e-12);
+  assert.ok(advanceMeterPhase(Math.PI*200-.001,.1,{boost:1})<1,'bounded wrap');
+});
+
 test('all shipped mechanisms preserve rest world vertices and pivots through two actual R4 clips', async t => {
   const core = new URL('../vendor/three/build/three.core.js', import.meta.url).href;
   const asModule = source => 'data:text/javascript;base64,' + Buffer.from(source + '\n//# sourceURL=vehicleLife.test-addon.js').toString('base64');
@@ -215,6 +257,31 @@ test('all shipped mechanisms preserve rest world vertices and pivots through two
     }
     life.dispose(); mixer.stopAllAction(); mixer.uncacheRoot(scene);
     for (const {mesh, geometry} of originals) assert.equal(mesh.geometry, geometry);
+    const mask=new THREE.Texture();
+    const lit=createVehicleLife(meshes,{...definition,vehicleId:id},{art:{tex:()=>mask}});
+    assert.equal(lit.metrics.accentDraws,4,id+' has physical Loom/light fittings');
+    assert.ok(lit.metrics.accentTriangles<1000,id+' accent triangle budget');
+    const mount=lit.metrics.accentMount;
+    assert.ok(Number.isFinite(mount.shellZ),id+' exact static-shell support');
+    for(let i=0;i<32;i++) {
+      const a=i*Math.PI/16,r=mount.radius-.008;
+      assert.ok(Number.isFinite(rearShellSurface(meshes,mount.x+Math.cos(a)*r,mount.y+Math.sin(a)*r)),id+' full rotor excursion remains over shell '+(mount.x+Math.cos(a)*r).toFixed(3)+','+(mount.y+Math.sin(a)*r).toFixed(3));
+    }
+    if(id==='pendulum'||id==='velvet-lock') {
+      const group=definition.groups[0],pivot=new THREE.Vector3(...group.pivot),axis=new THREE.Vector3(...group.axis);
+      let maxX=-Infinity;
+      for(const {geometry}of originals) {
+        const positions=geometry.getAttribute('position'),ids=geometry.getAttribute('_life')||geometry.getAttribute('_LIFE');
+        for(let i=0;i<positions.count;i++)if(ids.getX(i)===group.id)for(let step=0;step<=32;step++) {
+          expected.fromBufferAttribute(positions,i).sub(pivot).applyAxisAngle(axis,(step/16-1)*group.amplitude).add(pivot);
+          maxX=Math.max(maxX,expected.x);
+        }
+      }
+      assert.ok(mount.x-mount.radius>maxX+.005,id+' accent clears complete bob/heart sweep');
+    }
+    if(id==='feedback')assert.equal(lit.metrics.meterBars,9,'all9actualexportedbars tagged');
+    lit.update(.016,{time:2,speed:.7,boost:1});lit.update(.016,{motionOff:true});lit.dispose();
+    for(const {mesh,geometry}of originals)assert.equal(mesh.geometry,geometry,id+' accent/meter restoration');
   }
   assert.ok(compared > 1000, 'actual exported moving vertices sampled');
   t.diagnostic(compared + ' world vertex comparisons across rest and active mechanisms, hop_squash and lean_left; tolerance 0.002 mm');
