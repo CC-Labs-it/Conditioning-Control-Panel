@@ -1,5 +1,5 @@
 /* Per-instance uniforms keep the accepted face pixels and skin patterns attached to the source mesh. */
-import {BufferAttribute,Color} from 'three/webgpu';
+import {InterleavedBuffer,InterleavedBufferAttribute,Color} from 'three/webgpu';
 import {uniform,texture,attribute,positionGeometry,mix,float,step,fract} from 'three/tsl';
 
 export function createEmiSkin(model,{cloneMaterials=true}={}) {
@@ -25,15 +25,17 @@ export function createEmiSkin(model,{cloneMaterials=true}={}) {
     if(src.name!=='kart_surface')return;
     const g=m.geometry.clone(),j=g.getAttribute('skinIndex'),w=g.getAttribute('skinWeight');
     if(!j){g.dispose();return;}
-    const mask=new Float32Array(j.count),details=new Float32Array(j.count*3),names=m.skeleton.bones.map(b=>b.name);
+    const masks=new Float32Array(j.count*4),names=m.skeleton.bones.map(b=>b.name);
     for(let n=0;n<j.count;n++)for(let k=0;k<4;k++){
       if(w.getComponent(n,k)<.5)continue;
-      const name=names[j.getComponent(n,k)];if(name==='EMI_root')mask[n]=1;
-      if(['ant0','ant1','ant2','ballpiv'].includes(name))details[n*3]=1;
-      if(['shoulderL','shoulderR'].includes(name))details[n*3+1]=1;
-      if(['footL','footR'].includes(name))details[n*3+2]=1;
+      const name=names[j.getComponent(n,k)];if(name==='EMI_root')masks[n*4]=1;
+      if(['ant0','ant1','ant2','ballpiv'].includes(name))masks[n*4+1]=1;
+      if(['shoulderL','shoulderR'].includes(name))masks[n*4+2]=1;
+      if(['footL','footR'].includes(name))masks[n*4+3]=1;
     }
-    g.setAttribute('garageShell',new BufferAttribute(mask,1));g.setAttribute('garageDetail',new BufferAttribute(details,3));m.geometry=g;owned.push(g);
+    // Both masks share one GPU buffer, keeping the accepted skinned kart within WebGPU's eight-buffer floor.
+    const packed=new InterleavedBuffer(masks,4);
+    g.setAttribute('garageShell',new InterleavedBufferAttribute(packed,1,0));g.setAttribute('garageDetail',new InterleavedBufferAttribute(packed,3,1));m.geometry=g;owned.push(g);
     const d=attribute('garageDetail','vec3'),shade=base.r.mul(.299).add(base.g.mul(.587)).add(base.b.mul(.114)).mul(1.5).add(.42).min(1.2);
     let painted=mix(base,mix(u.primary,u.secondary,pattern).mul(shade),attribute('garageShell','float'));
     painted=mix(painted,u.antenna.mul(shade),d.x);painted=mix(painted,u.hands.mul(shade),d.y);painted=mix(painted,u.shoes.mul(shade),d.z);
