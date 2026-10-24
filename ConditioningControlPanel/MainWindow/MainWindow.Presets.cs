@@ -2303,11 +2303,14 @@ namespace ConditioningControlPanel
             // it the preset surface a user is most likely to be looking at mid-session.
             if (RefuseActionIfSessionLocked($"load-preset:{preset.Name}")) return;
 
-            // A preset writes both strict flags wholesale; mid-Lockdown they stay on (#1282).
+            // A preset writes both strict flags and the panic key wholesale; mid-Lockdown the strict
+            // flags stay on (#1282) and the panic key stays as Lockdown set it (owner, 2026-10-22).
             var cur = App.Settings.Current;
             bool strictBefore = cur.StrictLockEnabled, bubbleStrictBefore = cur.BubbleCountStrictLock;
+            bool panicBefore = cur.PanicKeyEnabled;
             preset.ApplyTo(cur);
             Services.LockdownStrictHold.RestoreAfterApply(cur, strictBefore, bubbleStrictBefore);
+            Services.LockdownPanicHold.RestoreAfterApply(cur, panicBefore);
             App.Settings.Save();
 
             _isLoading = true;

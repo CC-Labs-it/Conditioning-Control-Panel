@@ -43,6 +43,16 @@ public class PanicAftermathTests
     }
 
     [Fact]
+    public void Every_panic_bumps_the_count_an_ai_follow_up_checks()
+    {
+        var before = PanicAftermath.PanicCount;
+        PanicAftermath.ArmQuiet(Panic);
+        Assert.True(PanicAftermath.PanicCount > before);
+        PanicAftermath.EndQuiet();
+        Assert.True(PanicAftermath.PanicCount > before);   // a START never rewinds it
+    }
+
+    [Fact]
     public void Trigger_mode_stays_silent_in_the_quiet_tick_queue_and_lead_in()
     {
         var speech = Source("AvatarTube", "AvatarTubeWindow.Speech.cs");
@@ -77,7 +87,7 @@ public class PanicAftermathTests
         Assert.Equal(1, key.Split("PanicAftermath.ArmQuiet(").Length - 1);
 
         // A remote panic arms it too (quiet is harmless; owner, 2026-10-19).
-        var remote = Body(Source("MainWindow", "MainWindow.RemoteControl.cs"), "internal void TriggerPanicFromRemote()");
+        var remote = Body(Source("MainWindow", "MainWindow.RemoteControl.cs"), "internal bool TriggerPanicFromRemote()");
         Assert.Contains("PanicAftermath.ArmQuiet();", remote);
     }
 
@@ -177,8 +187,8 @@ public class PanicAftermathTests
         Assert.False(PanicAftermath.RemoteResumeRefused(noMark, s, 1, sessionPaused: true, pauseCount: 1));
 
         var rc = Source("MainWindow", "MainWindow.RemoteControl.cs");
-        Assert.DoesNotContain("NoteLocalPanicPause();", Body(rc, "internal void TriggerPanicFromRemote()"));
-        Assert.DoesNotContain("_panicPause =", Body(rc, "internal void TriggerPanicFromRemote()"));
+        Assert.DoesNotContain("NoteLocalPanicPause();", Body(rc, "internal bool TriggerPanicFromRemote()"));
+        Assert.DoesNotContain("_panicPause =", Body(rc, "internal bool TriggerPanicFromRemote()"));
     }
 
     [Fact]
