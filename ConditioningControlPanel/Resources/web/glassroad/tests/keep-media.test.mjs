@@ -13,12 +13,12 @@ const layout=keepMediaLayout(track),M=mediaLook(),course=getKeepLayout(track),pr
 
 test('Keep architecture supplies a half-video half-Loom mix on every tier including the tower climb',()=>{
   assert.equal(keepMediaLayout({id:'threshold'}),null);
-  assert.equal(layout.slots.length,54);assert.equal(new Set(layout.slots.map(s=>s.id)).size,54);
+  assert.equal(layout.slots.length,46);assert.equal(new Set(layout.slots.map(s=>s.id)).size,46);
   for(const tier of ['high','mid','phone']){
     const visible=tierSlots(layout.slots,tier,M),chosen=selectScrolllerSlots(visible);
     for(const frame of ['billboard','halo','tunnel']){
       const all=visible.filter(s=>s.frame===frame),videos=chosen.filter(s=>s.frame===frame);
-      assert.ok(all.length>=8);assert.equal(videos.length,all.length/2,frame+' '+tier);
+      assert.ok(all.length>=2);assert.equal(videos.length,all.length/2,frame+' '+tier);
     }
     assert.ok(visible.every(s=>[0,3].includes(s.program)),'procedural panels remain real Loom programs');
   }
@@ -36,7 +36,7 @@ test('Every Keep media face has real masonry backing and gatehouse screens face 
   };
   for(const slot of layout.slots){
     const points=[...rectPoints(slot,1),slot.C],mount=prison.mounts.find(m=>m.id===slot.mountId),f=track.frameAt(slot.s);
-    assert.ok(mount,'physical mount '+slot.id);assert.deepEqual(slot.C,mount.p);
+    assert.ok(mount,'physical mount '+slot.id);assert.deepEqual(slot.C,mount.p.map((v,i)=>v+mount.t[i]*1.2));
     assert.ok(points.every(p=>p.every(Number.isFinite)));
     const nearby=prison.boxes.filter(box=>Math.hypot(...box.p.map((v,i)=>v-slot.C[i]))<Math.hypot(...box.size)/2+12);
     for(const p of points)assert.ok([.1,.35,.7,1.5,3,5,8].some(d=>nearby.some(box=>inside(p.map((v,i)=>v-slot.Z[i]*d),box))),'stone behind '+slot.id);
@@ -91,4 +91,35 @@ test('Keep backdrop stays within a small draw budget and restores the scene on t
   assert.equal(scene.fog.isFogExp2,true);assert.ok(scene.fog.density<=.0007);
   backdrop.group.traverse(o=>{if(o.isMesh){o.geometry.computeBoundingSphere();assert.ok(Number.isFinite(o.geometry.boundingSphere.radius));}});
   backdrop.dispose();assert.equal(scene.children.length,0);assert.equal(scene.fog,priorFog);
+});
+test('Keep media fronts clear the actual bars, sills, buttresses and octagonal tower solids',()=>{
+  const dot=(a,b)=>a.reduce((n,v,i)=>n+v*b[i],0),sub=(a,b)=>a.map((v,i)=>v-b[i]);
+  const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+  function intersects(slot,box){
+    const c=Math.cos(box.yaw||0),s=Math.sin(box.yaw||0),ct=Math.cos(box.tilt||0),st=Math.sin(box.tilt||0);
+    const A=[slot.X,slot.Y,slot.Z],B=[[c*ct,st,-s*ct],[-c*st,ct,s*st],[s,0,c]],a=[slot.w/2,slot.h/2,.04],b=box.size.map(v=>v/2),d=sub(box.p,slot.C);
+    if(Math.hypot(...d)>Math.hypot(...a)+Math.hypot(...b))return false;
+    for(const axis of [...A,...B,...A.flatMap(x=>B.map(y=>cross(x,y)))]){
+      if(Math.hypot(...axis)<1e-7)continue;
+      const reach=A.reduce((n,x,i)=>n+Math.abs(dot(x,axis))*a[i],0)+B.reduce((n,x,i)=>n+Math.abs(dot(x,axis))*b[i],0);
+      if(Math.abs(dot(d,axis))>reach+.0001)return false;
+    }
+    return true;
+  }
+  let reproduced=0;const hits=[];
+  for(const slot of layout.slots){
+    const mount=prison.mounts.find(m=>m.id===slot.mountId),old={...slot,C:mount.p};
+    if(prison.boxes.some(box=>intersects(old,box)))reproduced++;
+    for(const box of prison.boxes)if(intersects(slot,box))hits.push({slot:slot.id,box:box.name,p:box.p,size:box.size});
+    for(const drum of prison.drums){
+      // The tower is an eight-sided prism. Each face separates the mounted rectangle from it.
+      const points=rectPoints(slot,1),above=points.every(p=>p[1]>drum.topY),below=points.every(p=>p[1]<drum.baseY);
+      const outside=Array.from({length:drum.sides},(_,i)=>{
+        const angle=(i+.5)*Math.PI*2/drum.sides,n=[Math.sin(angle),0,Math.cos(angle)],face=drum.radiusM*Math.cos(Math.PI/drum.sides);
+        return points.every(p=>dot(sub(p,[drum.x,0,drum.z]),n)>face+.02);
+      }).some(Boolean);
+      assert.ok(above||below||outside,slot.id+' intersects tower prism');
+    }
+  }
+  assert.deepEqual(hits,[]);assert.ok(reproduced>=6,'the original flush mounts reproduce the visible clipping');
 });
