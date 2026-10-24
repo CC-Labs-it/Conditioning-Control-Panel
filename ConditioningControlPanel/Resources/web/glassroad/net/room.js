@@ -26,7 +26,7 @@ import { createNetItems } from './items.js';
 
 const SIM_EVENTS = new Set(['checkpoint', 'lap', 'finish', 'drop', 'hop', 'land', 'boost-start', 'airborne', 'trick']);
 
-export function createRoomSession({ track, feel, lobby = null, platform = 'web', WS = globalThis.WebSocket, now = () => Date.now(),
+export function createRoomSession({ track, feel, courseHash = '', lobby = null, platform = 'web', WS = globalThis.WebSocket, now = () => Date.now(),
   timers = globalThis, log = () => {} } = {}) {
   const plat = PLATFORMS.includes(platform) ? platform : 'web';
   const clock = createServerClock({ now });
@@ -49,7 +49,7 @@ export function createRoomSession({ track, feel, lobby = null, platform = 'web',
     joinInfo = j;
     sock = openSocket(j.wsUrl, {
       WS,
-      onOpen() { clock.restartPings(); send({ t: 'hello', v: NET_V, ticket: j.ticket, clientMs: now() }); pingNow(); },
+      onOpen() { clock.restartPings(); send({ t: 'hello', v: NET_V, ticket: j.ticket, clientMs: now(), ...(courseHash ? { courseHash } : {}) }); pingNow(); },
       onMsg,
       onBatch(f) { for (const k of f.karts) if (k.seat !== st.seat && !st.keep.includes(k.seat)) interp.push(k, clock.tickMs(k.tick)); },
       onClose,

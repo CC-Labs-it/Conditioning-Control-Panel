@@ -16,6 +16,7 @@ import { pathToFileURL } from 'node:url';
 import { createFeel } from '../core/feel.js';
 import { createActions } from '../core/actions.js';
 import { loadTrack } from '../track/load.js';
+import { courseHash } from '../net/courseHash.js';
 import { createRace } from '../sim/race.js';
 import { createRacers } from '../sim/racers.js';
 import { createAi } from '../sim/ai.js';
@@ -34,7 +35,9 @@ export async function runNetBot({ lobbyBase, uid, auth = 'Bearer jwt-', mode = '
   track: trackId = 'threshold', platform = 'web', pauseAtS = -1, start = false, quiet = false, out = console.log, onSeated = null } = {}) {
   const say = (ev, o = {}) => { if (!quiet || ev === 'summary' || ev === 'error') out(JSON.stringify({ bot: uid, ev, ...o })); };
   const feel = createFeel(JSON.parse(readFileSync(new URL('feel.json', ROOT), 'utf8')));
-  const track = loadTrack(JSON.parse(readFileSync(new URL(`tracks/${trackId}.json`, ROOT), 'utf8')));
+  const trackJson = JSON.parse(readFileSync(new URL(`tracks/${trackId}.json`, ROOT), 'utf8'));
+  const track = loadTrack(trackJson);
+  const hash = await courseHash(trackJson, feel.toJSON());
   const lobby = createLobbyApi(fetchTransport({ base: lobbyBase, headers: { authorization: auth + uid }, credentials: 'omit' }));
   const n = [...uid].reduce((a, c) => a + c.charCodeAt(0), 0);
   const look = { outfit: LOOK_OUTFITS[n % LOOK_OUTFITS.length], vehicle: LOOK_VEHICLES[n % LOOK_VEHICLES.length] };
@@ -46,7 +49,7 @@ export async function runNetBot({ lobbyBase, uid, auth = 'Bearer jwt-', mode = '
   say('seated', { roomId: j.roomId, seat: j.seat });
   if (onSeated) onSeated(j);
 
-  const s = createRoomSession({ track, feel, lobby, platform, log: (lv, m) => say('log', { lv, m }) });
+  const s = createRoomSession({ track, feel, courseHash: hash, lobby, platform, log: (lv, m) => say('log', { lv, m }) });
   const queue = { emit(name, p) { if (name === 'item-hit' || name === 'item-fire') say(name, p.victim !== undefined ? { victim: p.victim, kind: p.kind, verdict: p.verdict } : { racer: p.racer, id: p.id }); } };
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
   let sim = null, loop = 0, done = null;

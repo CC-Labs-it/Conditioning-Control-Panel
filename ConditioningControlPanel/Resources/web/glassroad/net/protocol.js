@@ -239,7 +239,7 @@ export const TYPES = Object.freeze({
 
 /** Client -> room messages: field -> type ('?' suffix = optional). */
 export const C2R = Object.freeze({
-  hello: { v: 'u8', ticket: 'str', clientMs: 'num' },
+  hello: { v: 'u8', ticket: 'str', clientMs: 'num', courseHash: 'str?' },
   ping: { c: 'num' },
   ready: { on: 'bool' },
   start: {},
