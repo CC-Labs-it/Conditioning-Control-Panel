@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Lobby;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -28,7 +29,7 @@ public sealed class SubjectsFxTests
     }
 
     [Fact]
-    public Task CardsStaggerOnlyOnArrivalWithoutUndimmingTakenSubjects() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task CardsStaggerOnlyOnArrivalWithoutTouchingTheRowCard() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var previous = CoreSettings.ServiceProvider;
@@ -42,7 +43,7 @@ public sealed class SubjectsFxTests
             CoreSettings.Current.MotionLevel = MotionLevel.Full;
             var view = new AvailableSubjectsTabView();
             var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
-            list.ItemsSource = Enumerable.Range(0, 9).Select(i => new SubjectRow { Claimed = i == 2 }).ToArray();
+            Paint(view, 9);
             window = new Window { Width = 1300, Height = 700, Content = view };
             window.Show();
             Dispatcher.UIThread.RunJobs();
@@ -61,10 +62,11 @@ public sealed class SubjectsFxTests
             Step(view, clock, 300);
             Assert.All(cards, c => Assert.Equal(1, c.Opacity));
             Assert.False(view.SubjectsFxRunning);
-            Assert.Equal(0.6, cards[2].GetVisualDescendants().OfType<Border>().First(b => b.Width == 260).Opacity);
+            // The container animates, never the bound row card inside it.
+            Assert.All(cards, c => Assert.Equal(1, c.GetVisualDescendants().OfType<Border>().First().Opacity));
 
             // A service rebind while the page is being read must never replay the entrance.
-            list.ItemsSource = new[] { new SubjectRow() };
+            Paint(view, 1);
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, list.ContainerFromIndex(0)!.Opacity);
             view.IsVisible = false; view.IsVisible = true;
@@ -98,6 +100,7 @@ public sealed class SubjectsFxTests
         {
             CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
             var view = new AvailableSubjectsTabView();
+            Paint(view, 3);
             window = new Window { Width = 1300, Height = 700, Content = view };
             window.Show();
             Dispatcher.UIThread.RunJobs();
@@ -137,10 +140,11 @@ public sealed class SubjectsFxTests
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(MotionLevel.Full, CoreSettings.Current.MotionLevel);
-            shell.OpenNavSection("social");
-            Dispatcher.UIThread.RunJobs();
             var view = shell.Named<AvailableSubjectsTabView>("AvailableSubjectsTab")!;
             var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
+            Paint(view, 3); // the Lobby keeps its snapshot across the repaint on arrival
+            shell.OpenNavSection("social");
+            Dispatcher.UIThread.RunJobs();
             Assert.True(view.IsEffectivelyVisible);
             Assert.Equal(0, list.ContainerFromIndex(0)!.Opacity);
             Assert.True(view.SubjectsFxRunning);
@@ -157,6 +161,12 @@ public sealed class SubjectsFxTests
         }
         return Task.CompletedTask;
     });
+
+    // WPF staggers AvailableSubjectsList, which is the Lobby's Open column (MainWindow.SubjectsFx.cs:94).
+    private static void Paint(AvailableSubjectsTabView view, int open) => view.PaintSnapshot(
+        new LobbySnapshot(Enumerable.Range(0, open).Select(i => new LobbyRow
+            { Game = LobbyGame.Remote, Key = "r" + i, HostName = "Host" + i, RemoteTier = "light" }).ToArray(),
+            Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, false, false));
 
     private static void SetClock(TimeProvider clock) => AvailableSubjectsTabView.FxTime = clock;
     private static void Step(AvailableSubjectsTabView view, Clock clock, int ms)

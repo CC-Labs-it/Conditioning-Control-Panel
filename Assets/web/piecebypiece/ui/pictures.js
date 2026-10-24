@@ -19,14 +19,60 @@
  * The HOST owns persistence (desktop: PieceByPieceHostService.Media.cs, the site:
  * the web shim's localStorage). A host that never sends pbp:media-state (a plain
  * browser, the phone today) gets no picker and no ask: nothing here touches storage.
+ *
+ * The card (2026-10-14 polish pass): a real Back button top-left, the same as
+ * every door screen (door/back-button.js; Back does what Escape does), the
+ * card rising in and dropping out (door/screen-fx.js), the door's colours on
+ * the shared widget (ui/pictures.css, through its --np-* properties), and
+ * sound: a pluck on hover, a pop and a note when a pill, tab or tile turns on
+ * (and the pill pops), a knock when one turns off, a soft "no" when an r/ name
+ * is refused (audio/ui-cues.js).
  * ==========================================================================*/
 
 import { readChoice, needsChoice, choiceFrame, sameChoice, statusLine } from '../../backroom/shared/niches/choice.js';
 import { createNichePicker } from '../../backroom/shared/niches/picker.js';
 import { onHostMessage, postToHost } from '../bridge.js';
 import { presentation } from '../game/preferences.js';
+import { backButton, wireBack } from '../door/back-button.js';
+import { screenIn, screenOut, kick } from '../door/screen-fx.js';
+import { ui } from '../audio/ui-cues.js';
 
 export { statusLine };
+
+// the card's own sheet, beside the page's (loaded at once, so it is there before any card opens)
+if (typeof document !== 'undefined' && document.head && !document.getElementById('pbp-pictures-css')) {
+  const link = document.createElement('link');
+  link.id = 'pbp-pictures-css';
+  link.rel = 'stylesheet';
+  link.href = new URL('./pictures.css', import.meta.url).href;
+  document.head.append(link);
+}
+const cue = (name) => { try { ui[name](); } catch { /* sound is optional */ } };
+
+/**
+ * What a click inside the card should sound like, read AFTER the picker has
+ * repainted (its own click handler runs first and rebuilds the pills/tabs).
+ * Pure over a tiny lookup so the smoke can drive it:
+ *   find(selector) -> element-like { getAttribute } | null
+ * -> { cue: 'select' | 'press' | null, pop: selector | null }
+ */
+export function clickCue(target, find) {
+  const ds = (target && target.dataset) || {};
+  const quote = (v) => JSON.stringify(String(v));
+  if (ds.remove) return { cue: 'press', pop: null };
+  if (ds.niche) {
+    const sel = `[data-niche=${quote(ds.niche)}]`;
+    const now = find(sel);
+    return now && now.getAttribute('aria-pressed') === 'true' ? { cue: 'select', pop: sel } : { cue: 'press', pop: null };
+  }
+  if (ds.pick) {
+    const sel = `[data-pick=${quote(ds.pick)}]`;
+    const now = find(sel);
+    if (ds.pick === 'own' || ds.pick === 'app') return { cue: 'press', pop: null };
+    return { cue: 'select', pop: now ? sel : null };
+  }
+  return { cue: null, pop: null };
+}
 
 /** The frame a choice sends, typed for the chess host. Pure. */
 export function picturesFrame(state) {
@@ -80,7 +126,7 @@ function openModal(mode, { still = false } = {}) {
   if (modal) modal.done(false);
   return new Promise((resolve) => {
     const root = document.createElement('div');
-    root.className = 'pbp-np-modal' + (mode === 'first' ? ' is-first' : '');
+    root.className = 'pbp-np-modal' + (mode === 'first' ? ' is-first' : '') + (still ? ' still' : '');
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
     root.setAttribute('aria-label', mode === 'first' ? 'Pick your pictures' : 'Pictures');
@@ -90,12 +136,17 @@ function openModal(mode, { still = false } = {}) {
     let settled = false;
     const picker = createNichePicker({
       mode, state, still,
-      onChoose: (s) => { commit(s); finish(true); },
+      onChoose: (s) => { cue('press'); commit(s); finish(true); },
     });
+    // the head: Back top-left (Esc's twin), the title beside it
+    const head = document.createElement('div');
+    head.className = 'pbp-np-head';
+    head.innerHTML = backButton('Back');
     if (mode === 'manage') {
       const h = document.createElement('h2');
       h.className = 'pbp-np-title';
       h.textContent = 'Pictures';
+      head.append(h);
       const sub = document.createElement('p');
       sub.className = 'pbp-np-sub';
       sub.textContent = 'What Distraction mixes in. Saved when you close this.';
@@ -103,14 +154,47 @@ function openModal(mode, { still = false } = {}) {
       done.type = 'button';
       done.className = 'pbp-np-done';
       done.textContent = 'Done';
-      done.addEventListener('click', () => finish(true));
-      card.append(h, sub, picker.el, done);
+      done.addEventListener('click', () => { cue('press'); finish(true); });
+      card.append(head, sub, picker.el, done);
       picker.status(status());
     } else {
-      card.append(picker.el);
+      card.append(head, picker.el);
     }
     root.append(card);
     document.body.append(root);
+    const unwire = wireBack(head, () => finish(mode === 'manage'));
+
+    // feel: a pluck on hover, a pop and a note when something turns on
+    let hovered = null;
+    const onOver = (e) => {
+      const b = e.target && e.target.closest ? e.target.closest('button') : null;
+      if (b === hovered) return;
+      hovered = b;
+      if (b && !b.disabled) cue('hover');
+    };
+    const onPick = (e) => {
+      if (settled) return;
+      const t = e.target && e.target.closest ? e.target.closest('[data-niche],[data-pick],[data-remove]') : null;
+      if (!t) return;
+      const c = clickCue(t, (sel) => card.querySelector(sel));
+      if (c.cue) cue(c.cue);
+      if (c.pop) { const el = card.querySelector(c.pop); if (el) kick(el.closest('.np-pill') || el, 'pop', { still }); }
+    };
+    const onAdd = (e) => {
+      const input = e.target && e.target.querySelector ? e.target.querySelector('input') : null;
+      if (!input) return;
+      if (input.value) { cue('error'); kick(e.target, 'nope', { still }); return; }   // refused: the name is still there
+      cue('select');
+      const pills = card.querySelectorAll('.np-pill');
+      if (pills.length) kick(pills[pills.length - 1], 'pop', { still });
+    };
+    card.addEventListener('pointerover', onOver);
+    card.addEventListener('click', onPick);
+    card.addEventListener('submit', onAdd);
+    // IN: the veil fades up, the card's parts land in turn
+    cue('open');
+    requestAnimationFrame(() => root.classList.add('is-in'));
+    screenIn(card, { still });
 
     const watch = (what) => { if (what === 'online') picker.status(status()); };
     watchers.add(watch);
@@ -121,7 +205,7 @@ function openModal(mode, { still = false } = {}) {
       if (e.key !== 'Escape') return;
       e.stopImmediatePropagation();
       e.preventDefault();
-      if (!e.repeat) finish(mode === 'manage');
+      if (!e.repeat) { cue('back'); finish(mode === 'manage'); }
     };
     window.addEventListener('keydown', onKey, { capture: true });
 
@@ -134,10 +218,20 @@ function openModal(mode, { still = false } = {}) {
       }
       watchers.delete(watch);
       window.removeEventListener('keydown', onKey, { capture: true });
-      picker.dispose();
-      root.remove();
+      unwire();
+      card.removeEventListener('pointerover', onOver);
+      card.removeEventListener('click', onPick);
+      card.removeEventListener('submit', onAdd);
       if (modal && modal.root === root) modal = null;
       resolve(!!ok);
+      // OUT: quicker than it came, and it goes somewhere; nothing on it answers meanwhile
+      root.classList.remove('is-in');
+      root.classList.add('is-out');
+      root.inert = true;
+      let gone = false;
+      const remove = () => { if (gone) return; gone = true; picker.dispose(); root.remove(); };
+      screenOut(card, { still }).then(remove, remove);
+      setTimeout(remove, 400);   // a page that never runs the animation still loses the card
     }
     modal = { root, done: finish };
     setTimeout(() => { if (!settled) picker.focus(); }, 30);

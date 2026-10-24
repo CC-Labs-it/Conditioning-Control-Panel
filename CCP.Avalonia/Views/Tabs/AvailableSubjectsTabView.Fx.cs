@@ -60,7 +60,7 @@ public partial class AvailableSubjectsTabView
         // Hidden tabs have never measured their ItemsPresenter; realize from the window root.
         TopLevel.GetTopLevel(this)?.UpdateLayout();
         list.UpdateLayout();
-        // Animate the container, never the bound inner card: Taken must retain CardOpacity=0.6.
+        // Animate the container, never the bound inner row card (its own opacity stays authored).
         _entrances.Clear();
         long start = FxTime.GetTimestamp();
         int slot = 0;

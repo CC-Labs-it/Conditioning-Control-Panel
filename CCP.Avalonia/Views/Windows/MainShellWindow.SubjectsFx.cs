@@ -9,7 +9,7 @@
 // So this file registers, and deliberately does not start: the view owns the tuning constants and
 // a second StartLayers from here would reseed a composition the view already made.
 //
-// ponytail: AvailableSubjectsTabView.OnTabLoaded calls StartLayers, and StartLayers clears the
+// ponytail: AvailableSubjectsTabView's Loaded handler calls StartLayers, and StartLayers clears the
 // paused flag. Loaded fires once per attach, so in practice the park holds - but if that view is
 // ever re-attached while another tab is showing, it un-parks itself. The canvas still self-gates
 // on IsVisible, so the worst case is a composed-but-invisible surface, not a running clock.

@@ -19,7 +19,7 @@
 //   1. the layering that makes an orphan lethal is still what we think it is
 //      (index.html order + goon.css z-index + the :empty opt-out);
 //   2. boot.js clears the stage, the fx layers and the z70 chrome when the phase
-//      turns Recap, and Escape on the recap leaves;
+//      turns Recap, and Escape toggles local options without leaving;
 //   3. sudden death is DETACHED (owner's call 2026-08-03) — no runner is wired,
 //      and the engine settles the Live clock on score instead of hanging;
 //   4. the recap screen mounts, paints both verdicts ("You broke." / "You held."),
@@ -128,7 +128,7 @@ function stripComments(src) {
    * a full-height z70 scrim: leave it up and it covers the bottom strip where
    * exec/bubbles.js spawns the field, so every pop lands on the scrim and the
    * drop economy silently never produces an item for the whole match. It also
-   * makes Escape ambiguous at the exact moment Escape must mean MERCY. So the
+   * makes Escape ambiguous when the run starts. So the
    * chrome comes down on Countdown, and again on Live for the paths that never
    * show a countdown (rebuild / late join). */
   const armOf = (name) => {
@@ -144,19 +144,13 @@ function stripComments(src) {
   ok(liveArm.indexOf('closeChrome()') < liveArm.indexOf('mountMercyNow()'),
     'before mercy mounts, so nothing is ever over the button');
 
-  /* ...and the Escape ladder is UNTOUCHED. In Live, Escape is mercy, full stop:
-   * no sheet-peeling rung may creep in front of it. */
-  const escLadder = code.slice(code.indexOf('function onKeyDown('), code.indexOf('function holdExit('));
-  ok(!/closeChrome\(/.test(escLadder), 'the Escape ladder does NOT call closeChrome (Live Escape stays mercy)');
-  ok(escLadder.indexOf('declareMercy()') < escLadder.indexOf('sheets.close(null)'),
-    'mercy is still the FIRST rung of the ladder, ahead of every overlay closer');
+  // Escape toggles local options. Leaving and mercy remain explicit buttons.
+  const esc = code.slice(code.indexOf('function onKeyDown('), code.indexOf('const HEARTBEAT_MS'));
+  ok(/options\?\.toggle\(\)/.test(esc), 'Escape toggles the options card');
+  ok(!/declareMercy|actions\.leave|requestExit/.test(esc), 'Escape never concedes or leaves');
+  ok(esc.indexOf('sheets.close(null)') < esc.indexOf('options?.toggle()'),
+    'the top sheet closes before toggling options');
 
-  // The Escape ladder must have a Recap rung. Escape may never be a dead key.
-  const esc = code.slice(code.indexOf('function onKeyDown('), code.indexOf('function holdExit('));
-  ok(/GoonMatchPhase\.Recap/.test(esc), 'the Escape ladder knows about the Recap phase');
-  ok(/actions\.leave\('escape-recap'\)/.test(esc), 'Escape on the recap leaves (never a key that does nothing)');
-  ok(esc.indexOf('sheets.close(null)') < esc.indexOf("actions.leave('escape-recap')"),
-    'a sheet/drawer over the recap is peeled off first — one layer per press');
 }
 
 // ============================================ 3. sudden death is DETACHED
