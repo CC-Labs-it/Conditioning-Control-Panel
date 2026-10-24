@@ -5,7 +5,7 @@ import {selectedCourse,courseUrl} from '../track/catalog.js';
 test('course selection admits only known local assets',()=>{
   assert.equal(selectedCourse('?track=keep').id,'keep');
   for(const query of ['', '?track=../../secret', '?track=KEEP'])assert.equal(selectedCourse(query).id,'threshold');
-  assert.equal(selectedCourse('?track=keep&r=invite').online,false);
+  assert.equal(selectedCourse('?track=keep&r=invite').online,true);
   assert.equal(selectedCourse('?track=threshold').online,true);
 });
 test('switching course preserves preview settings but cannot carry an online room across layouts',()=>{

@@ -107,8 +107,9 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
   function step(dt, a, race, ctx = {}) {
     const { ai = null, items = null, standings = null, hazards = null } = ctx;
     const live = race.phase === 'racing' || race.phase === 'finished';
-    if (live) updateStoneMotion(track.fields, dt, !!feel.get('gentle.on'));
-    if (race.phase === 'racing') racers.clockS = race.timeS;
+    if (live) updateStoneMotion(track.fields, dt, !!feel.get('gentle.on'), false, ctx.timeS);
+    if (live && Number.isFinite(ctx.timeS)) racers.clockS = Math.max(0, ctx.timeS);
+    else if (race.phase === 'racing') racers.clockS = race.timeS;
     else if (race.phase === 'finished') racers.clockS += dt;
     const aiCtx = { racers: list, items, standings, race };
     const base = basePace();

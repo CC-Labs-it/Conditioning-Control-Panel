@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { POLL_MS, POLL_MAX_MS, pollEvery, listKey, pollStep, pollReset, pollNow } from '../hud/lobbyMath.js';
 import { createLobby } from '../hud/lobby.js';
 
-const row = (o = {}) => ({ roomId: 'abcdefabcdef', host: { name: 'Ana' }, seats: 8, filled: 2, laps: 3, staked: false, friend: false, startsIn: 30, ...o });
+const row = (o = {}) => ({ roomId: 'abcdefabcdef', track: 'threshold', host: { name: 'Ana' }, seats: 8, filled: 2, laps: 3, staked: false, friend: false, startsIn: 30, ...o });
 
 test('poll math: 15, 15, 30, 60 s and capped; the countdown never counts as a change', () => {
   assert.deepEqual([0, 1, 2, 3, 4, 99].map(pollEvery), [15000, 15000, 30000, 60000, 60000, 60000]);

@@ -31,7 +31,7 @@ export function createRoomSession({ track, feel, courseHash = '', lobby = null, 
   const plat = PLATFORMS.includes(platform) ? platform : 'web';
   const clock = createServerClock({ now });
   const interp = createInterp(track);
-  const uplink = createUplink({ phone: plat === 'phone' });
+  const uplink = createUplink({ phone: plat === 'phone', track });
   const handlers = new Map();
   const S0 = { roomId: null, seat: -1, cfg: null, seed: 0, seats: [], keep: [], phase: 'lobby', countAt: 0, startAt: 0, goTick: 0 };
   const st = { ...S0 };

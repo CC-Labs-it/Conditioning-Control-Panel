@@ -86,7 +86,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
   const st = {
     view: 'home', msg: '', busy: false,
     rows: [], listAt: -1e9, listMs: 0, listSeen: 0, poll: { key: null, same: 0 },
-    host: cleanHost(HOST_DEFAULTS), look: loadLook(storage()), choices: lookChoices(), looksAsked: false,
+    host: cleanHost({ ...HOST_DEFAULTS, laps: deps().trackLaps || HOST_DEFAULTS.laps }), look: loadLook(storage()), choices: lookChoices(), looksAsked: false,
     join: null, room: null, offs: [], welcome: null, seenAt: 0, seat: -1, phase: 'lobby', cfg: null, seed: 0, keep: [],
     seats: applySeats([]), start: null, raced: false, results: null, leaving: false,
     lastEmote: -Infinity, myPose: null, bubbles: {}, friends: null, sent: new Set(),
@@ -348,7 +348,7 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     st.listMs = Number(r.serverMs) || localNow(); st.listSeen = localNow();
     st.poll = pollStep(st.poll, listKey(r));
     const raw = new Map((r.rows || []).map((x) => [x && x.roomId, x]));
-    st.rows = tableRows(r, st.listMs).map((x) => ({ ...x, raw: raw.get(x.roomId) }));
+    st.rows = tableRows(r, st.listMs).filter(row => raw.get(row.roomId)?.track === track()).map((x) => ({ ...x, raw: raw.get(x.roomId) }));
     if (st.view === 'home') { st.msg = ''; paint(); }
   }
 
@@ -601,7 +601,11 @@ export function createLobby({ doc = globalThis.document, card, title, note, extr
     show(data = {}) {
       if(!st.room){const selected=deps().garageLook?.();if(selected)st.look=normLook(selected);}
       injectCss();
-      if (data.claim && !st.room) startClaim(data.claim);
+      if (data.roomId && !st.room) {
+        st.view = 'joining';
+        call(() => deps().api.join(data.roomId, normLook(st.look))).then(j => { if (j) seat(j, null); else { st.view = 'home'; paint(); } });
+      }
+      else if (data.claim && !st.room) startClaim(data.claim);
       else if (data.view === 'home' && !st.room) { st.view = 'home'; st.msg = ''; }
       else if (data.view === 'results' && st.results) st.view = 'results';
       startTicker();
