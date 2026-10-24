@@ -41,4 +41,5 @@ test('online rotating collision fields use shared race time across motion settin
   updateStoneMotion(fields, 1/60, false, false, 17);
   updateStoneMotion(calm, 1/30, true, false, 17);
   assert.equal(fields[0].stones[0].angle, calm[0].stones[0].angle);
+  assert.ok(Math.abs(calm[0].stones[0].angle - (17*1.2*.5) % (Math.PI*2)) < 1e-9);
 });
