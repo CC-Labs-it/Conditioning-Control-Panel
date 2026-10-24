@@ -15,6 +15,7 @@ import { WATER_LOOK, sheetRuns, isWaterSurface } from './waterMath.js';
 import { createWaterSpray } from './waterSpray.js';
 import { ambientWaterHeight } from './waterMotion.js';
 import { S } from '../sim/state.js';
+import { createAudioReactiveUniforms, reactiveWaterNodes } from './audioReactive.js';
 
 
 /** Road samples every stepM for sheetRuns: { s, y, surface }. */
@@ -27,11 +28,11 @@ export function sampleSurface(track, stepM = 1) {
   return out;
 }
 
-export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK } = {}) {
+export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK, reactive = createAudioReactiveUniforms() } = {}) {
   const object = new Group(); object.name = 'waterfall-and-contact-spray';
   const sprayPool = createWaterSpray(); object.add(sprayPool.object);
   const runs = track && track.frameAt ? sheetRuns(sampleSurface(track), L) : [];
-  const u = { t: uniform(0) };
+  const u = { t: uniform(0), reactive };
   const P = [], Nn = [], U = [], END = [], I = [];
   const points = [];   // { p: [x, y, z], lip: bool } for the spray
   for (const r of runs) {
@@ -64,7 +65,9 @@ export function createWaterfall(track, pal, { fluid = null, L = WATER_LOOK } = {
     const streak = pow(st, 4).mul(gain);
     const inFade = smoothstep(0, L.sheetRunM, attribute('aEnd', 'float'));
     const white = vec3(1, 0.98, 0.99);
-    mat.colorNode = pal.col(0).mul(0.4).add(pal.col(1).mul(0.15)).add(white.mul(streak.mul(0.9)));
+    const response = reactiveWaterNodes(p, reactive);
+    mat.colorNode = pal.col(0).mul(0.4).add(pal.col(1).mul(0.15)).add(white.mul(streak.mul(0.9)))
+      .add(pal.col(0).mul(response.light)).add(white.mul(response.crest));
     mat.opacityNode = clamp(float(L.sheetAlpha).mul(streak.add(0.45)).mul(inFade), 0, 1);
     mesh = new Mesh(g, mat);
     mesh.renderOrder = 0.75; mesh.frustumCulled = true; // water stays below pooled wake rings (1) and spray (2)

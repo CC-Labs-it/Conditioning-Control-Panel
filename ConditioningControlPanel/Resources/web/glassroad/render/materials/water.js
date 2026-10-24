@@ -8,11 +8,12 @@
  * underglow from below, a soft specular from LOOK.sheenDir and a sky reflection on the fresnel.
  * The raised water volume supplies Astra's existing masks through `fields = { slope(q), foam(q) }`.
  * Missing art uses the same procedural field coordinates and keeps the contact geometry intact.
- * Gentle: the scroll clock runs at half speed (the caller's uniform); nothing pulses.
+ * Gentle: the scroll clock runs at half speed; the shared music envelope reduces optical wave/light gain.
  */
 import { float, vec2, vec3, sin, cos, mix, smoothstep, clamp, max, abs, dot, pow, normalize, length, select, reflect, attribute } from 'three/tsl';
 import { LOOK } from '../look.js';
 import { WATER_LOOK } from '../waterMath.js';
+import { reactiveWaterNodes } from '../audioReactive.js';
 
 const TAU = Math.PI * 2;
 
@@ -40,7 +41,7 @@ function proceduralSlope(q) {
  * (seconds, Gentle slowed by the caller); skyRamp: pal.ramp wrapper for the reflection.
  * Returns { w, colour, alpha, foam, N }.
  */
-export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, skyRamp = null, fields = null, deformation = null, L = WATER_LOOK }) {
+export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, skyRamp = null, fields = null, deformation = null, reactive = null, L = WATER_LOOK }) {
   const w = waterWeight(surface);
   const pool = smoothstep(3.5, 4, surface);
   // scroll from the flow attribute (render/waterMath.js rippleScroll in numbers): along = v, lateral = u
@@ -53,10 +54,12 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
   };
   const qA = layer(0), qB = layer(1);
   const slopeOf = fields && fields.slope ? fields.slope : proceduralSlope;
+  const response = reactive ? reactiveWaterNodes(p, reactive) : null;
   const smallSlope = slopeOf(qA).add(slopeOf(qB).mul(0.6)).mul(L.bump);
   // Heightfield slopes are measured in lateral/along metres. They follow the same transported
   // tangent frame as the displaced vertices, including banked turns and the curved canal walls.
-  const slope = deformation ? deformation.slope.add(smallSlope.mul(0.12)) : smallSlope;
+  const wakeSlope = deformation ? deformation.slope.add(smallSlope.mul(0.12)) : smallSlope;
+  const slope = response ? wakeSlope.add(response.slope) : wakeSlope;
   // the road normal tilted by the slope (u along the road's right, v along its tangent: both lie in the plane)
   const N = deformation ? normalize(N0.sub(deformation.B.mul(slope.x)).sub(deformation.T.mul(slope.y)))
     : normalize(N0.add(vec3(slope.x, 0, slope.y)));
@@ -94,6 +97,12 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
     colour = mix(transmitted,reflected,grazing.mul(.67).add(.12))
       .add(vec3(0.72,0.9,1).mul(sharpSpec))
       .add(white.mul(foam).mul(0.075));
+  }
+  if (response) {
+    // Soft refracted bands and crest light use the same phase as the optical slope. Neither
+    // displaces the physical field nor changes the kart wake, spray origin or collision surface.
+    const liquidTint = pal.col(0).mul(0.55).add(pal.col(1).mul(0.45));
+    colour = colour.add(liquidTint.mul(response.light)).add(white.mul(response.crest));
   }
   const alpha = deformation ? float(.52).add(pow(float(1).sub(ndv),3).mul(.34)).add(foam.mul(.06)).clamp(.52,.93)
     : clamp(float(L.alpha).add(foam.mul(0.1)).add(spec.mul(0.3)), 0, 1);

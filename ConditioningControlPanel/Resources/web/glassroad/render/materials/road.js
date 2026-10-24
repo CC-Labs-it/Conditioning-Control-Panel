@@ -31,6 +31,7 @@ import { machineSurface, coolantCaustics } from '../mainframeMaterials.js';
 import { mainframeFloor } from '../mainframeFloor.js';
 import { createBoudoirRoadSurface } from '../boudoirMaterials.js';
 import { createBoudoirWaterPalette } from '../boudoirWater.js';
+import { createAudioReactiveUniforms, reactiveRoadLight, reactiveTint } from '../audioReactive.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -186,7 +187,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const P = { ...ROAD_POLISH, ...(LOOK.roadPolish || {}) };
   const S = { ...SPECTRUM_LOOK, ...(LOOK.roadSpectrum || {}) };
   const u = { phase: uniform(0), contrast: uniform(1), bright: uniform(0), sheen: uniform(1), music: musicUniforms(), energyNode: null,
-    water: { t: uniform(0), coverage: uniform(1) } };   // Standalone roads retain their water; a reactive volume owns its own skin.
+    water: { t: uniform(0), coverage: uniform(1) }, reactive: createAudioReactiveUniforms() };   // Standalone roads retain their water; a reactive volume owns its own skin.
   const lapM = track && track.lengthM > 0 ? track.lengthM : 0;
   const fit = (b) => (lapM ? fitPeriod(lapM, b) : b);
   const per = { ramp: fit(S.rampM), packet: fit(S.packetM), chevron: fit(S.chevronM), checker: fit(S.checkerM),
@@ -370,13 +371,14 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const wa = waterAttributes();
   const waterPal = boudoir ? createBoudoirWaterPalette(pal) : pal;
   const waterSky = boudoir ? x => mix(waterPal.col(2), waterPal.col(0), clamp(x, 0, 1)) : skyRamp;
-  const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal: waterPal, u: u.water, skyRamp: waterSky });
+  const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal: waterPal, u: u.water, skyRamp: waterSky, reactive: u.reactive });
   const wet = water.w.mul(u.water.coverage);
   const dryBody = boudoir ? surface : surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol);
   const glassBody = mix(mix(dryBody, water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
-  const musicBody = beatBands.apply(glassBody);
+  const reactiveLight = reactiveRoadLight({ p, trueEdge, distance: dist, u: u.reactive, tint: reactiveTint(pal, track?.id) });
+  const musicBody = beatBands.apply(glassBody).add(reactiveLight.mul(float(1).sub(wet)));
   const dry = float(1).sub(wet.mul(0.75));
   const finishSheen = boudoir ? boudoir.sheen.mul(u.sheen) : vec3(1, 0.96, 0.98).mul(sheen);
   const litCol = musicBody.add(finishSheen.mul(dry)).add(polish.mul(dry).mul(boudoir ? .08 : track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));

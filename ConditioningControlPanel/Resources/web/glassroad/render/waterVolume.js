@@ -8,6 +8,7 @@ import { createWaterField } from './waterField.js';
 import { createWaterFoam } from './waterFoam.js';
 import { createWaterReflections } from './waterReflections.js';
 import { Q } from './quality.js';
+import { createAudioReactiveUniforms, reactiveWaterNodes } from './audioReactive.js';
 
 const data = () => ({ p: [], uv: [], edge: [], flow: [], surface: [], field: [], normal: [], index: [] });
 function vertex(g, p, u, v, edge = 0, flow = [0, 0], surface = 3, frame = null, atlas = null) {
@@ -37,7 +38,7 @@ function runUV(field, run, s, lateral) {
     v: (run.rowOffset + along * (run.ny - 1) + 0.5) / field.height };
 }
 
-export function buildWaterVolume(track, pal, art = null, { quality = Q.name, scene = null, renderer = null } = {}) {
+export function buildWaterVolume(track, pal, art = null, { quality = Q.name, scene = null, renderer = null, reactive = createAudioReactiveUniforms() } = {}) {
   const object = new Group(); object.name = 'water-volume';
   const field = createWaterField(track, { quality });
   const runs = field.runs.map(r => ({ fromS: r.fromS, toS: r.toS })), spills = waterSpills(track, runs), top = data(), wall = data(), fall = data();
@@ -47,7 +48,7 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   heightTexture.generateMipmaps = false; heightTexture.flipY = false; heightTexture.needsUpdate = true;
   const heightSample = texture(heightTexture, attribute('aWaterUV', 'vec2')).level(0);
   const fieldNormal = normalize(attribute('aWaterN', 'vec3'));
-  const u = { t: uniform(0), motion: uniform(1), reflectionReady: uniform(0) };
+  const u = { t: uniform(0), motion: uniform(1), reflectionReady: uniform(0), reactive };
   const wind=ambientWaterNodes(positionLocal,u.t);
   const fieldHeight = heightSample.r.mul(2).sub(1).clamp(-0.8, 0.8).add(wind.height);
   const reflections = createWaterReflections({ scene, renderer, exclude: object, quality, track });
@@ -128,7 +129,7 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   const deformation = { slope: heightSample.gb.mul(2).sub(1).add(windSlope), foam: heightSample.a, height: fieldHeight,
     reflection: direction => cubeTexture(reflections.texture, direction).rgb, reflectionReady: u.reflectionReady,
     B: normalize(attribute('aWaterB','vec3')), T: normalize(attribute('aWaterT','vec3')) };
-  const surface = createWaterSurface({ surface: attribute('surface', 'float'), flow: attribute('flow', 'vec2'), p: uv(), trueEdge: attribute('aWaterEdge', 'float'), V: normalize(cameraPosition.sub(positionWorld)), N0: fieldNormal, pal, u, fields, deformation });
+  const surface = createWaterSurface({ surface: attribute('surface', 'float'), flow: attribute('flow', 'vec2'), p: uv(), trueEdge: attribute('aWaterEdge', 'float'), V: normalize(cameraPosition.sub(positionWorld)), N0: fieldNormal, pal, u, fields, deformation, reactive });
   skin.colorNode = surface.colour;
   skin.opacityNode = surface.alpha;
   skin.positionNode = positionLocal.add(fieldNormal.mul(fieldHeight));
@@ -137,14 +138,18 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name, sce
   const body = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
   const depth = attribute('aWaterEdge', 'float'), rim = float(1).sub(smoothstep(0, 0.2, depth));
   const ribbon = sin(uv().y.mul(1.3).sub(u.t.mul(2))).mul(0.18).add(0.82);
-  body.colorNode = mix(pal.col(2).mul(0.17), pal.col(1).mul(0.48), float(1).sub(depth)).add(vec3(1).mul(rim).mul(ribbon).mul(0.75));
+  const response = reactiveWaterNodes(uv(), reactive);
+  body.colorNode = mix(pal.col(2).mul(0.17), pal.col(1).mul(0.48), float(1).sub(depth)).add(vec3(1).mul(rim).mul(ribbon).mul(0.75))
+    .add(pal.col(0).mul(response.light).mul(float(1).sub(depth)));
   body.positionNode = positionLocal.add(fieldNormal.mul(fieldHeight).mul(float(1).sub(depth)));
   body.opacityNode = float(0.73).add(rim.mul(0.2)); add(wall, body, 'water-visible-depth', 0.25);
   const curtain = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, side: DoubleSide });
   const p = uv(), moving = vec2(p.x, p.y.div(12).sub(u.t.mul(0.65))), streak = sheet ? texture(sheet, moving).r : pow(sin(p.x.mul(100).add(p.y.mul(0.3)).sub(u.t.mul(3))).mul(0.5).add(0.5), 2);
   const foamPhase = phase ? texture(phase, moving).r : float(0.5);
   const edge = smoothstep(0, 0.06, p.x).mul(float(1).sub(smoothstep(0.94, 1, p.x))), fade = float(1).sub(smoothstep(0.7, 1, attribute('aWaterEdge', 'float')));
-  curtain.colorNode = pal.col(1).mul(0.18).add(vec3(0.45, 0.7, 0.85).mul(streak.mul(0.95).add(foamPhase.mul(0.35))));
+  const cascadeResponse = reactiveWaterNodes(p, reactive);
+  curtain.colorNode = pal.col(1).mul(0.18).add(vec3(0.45, 0.7, 0.85).mul(streak.mul(0.95).add(foamPhase.mul(0.35))))
+    .add(pal.col(0).mul(cascadeResponse.light)).add(vec3(0.8, 0.93, 1).mul(cascadeResponse.crest));
   curtain.positionNode = positionLocal.add(vec3(sin(p.y.mul(0.8).sub(u.t.mul(2.1))).mul(0.18), 0, sin(p.y.mul(0.6).add(u.t.mul(1.7))).mul(0.18)).mul(attribute('aWaterEdge', 'float')).mul(u.motion))
     .add(fieldNormal.mul(fieldHeight).mul(float(1).sub(smoothstep(0,0.2,attribute('aWaterEdge','float')))));
   curtain.opacityNode = streak.mul(0.5).add(0.3).mul(edge).mul(fade); add(fall, curtain, 'water-spills-into-void', 0.75);
