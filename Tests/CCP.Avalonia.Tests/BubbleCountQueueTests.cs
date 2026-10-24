@@ -21,6 +21,30 @@ namespace CCP.Avalonia.Tests;
 public sealed class BubbleCountQueueTests
 {
     [Fact]
+    public Task PauseEffectsCardReadsAndWritesTheCoreOption() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previous = CoreSettings.Current.BubbleCountPauseEffects;
+        try
+        {
+            CoreSettings.Current.BubbleCountPauseEffects = true;
+            var card = new BubbleCountFeatureControl();
+            var toggle = card.FindControl<CheckBox>("ChkPauseEffects")!;
+            Assert.True(toggle.IsChecked);
+            toggle.IsChecked = false;
+            Assert.False(CoreSettings.Current.BubbleCountPauseEffects);
+            CoreSettings.Current.BubbleCountPauseEffects = true;
+            card.RebindToCurrentSettings();
+            Assert.True(toggle.IsChecked);
+        }
+        finally { CoreSettings.Current.BubbleCountPauseEffects = previous; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TestNowOverALockCardWaitsForIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)

@@ -673,3 +673,16 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## 9. Main sync 7: Bubble Count hold and session bar
+
+1. WPF `c52e7f6d8 / BubbleCountFeatureControl`: enable “Pause other effects during Bubble Count”,
+   start the engine with Flash Images and bouncing text, then Test Now. Flashes stop through the
+   clip, answer and strict retries. Text pauses unless Show Over Videos is on. Change the option
+   during the round: the current round keeps its starting choice. Finish normally: flashes resume
+   only if previously running, still enabled and the engine is running. Panic during another round:
+   nothing restarts. Overlay pinning is blocked by the missing reconciler (see cloud unit notes).
+2. WPF `c52e7f6d8 / MainWindow.Presets.RefreshBarStatus`: start a timed session and observe its name
+   and time left above START/STOP. Pause/resume updates the pause mark immediately. An open-ended
+   session shows elapsed time. Disable the countdown: only the name and pause mark remain. Stop
+   the session: the status clears; a bare engine run shows “Running...”.

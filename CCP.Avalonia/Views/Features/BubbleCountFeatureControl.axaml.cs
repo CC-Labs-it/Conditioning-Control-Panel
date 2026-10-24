@@ -38,6 +38,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             SliderFreq.ValueChanged += SliderFreq_Changed;
             CmbDifficulty.SelectionChanged += CmbDifficulty_Changed;
             ChkStrict.IsCheckedChanged += ChkStrict_Changed;
+            ChkPauseEffects.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.BubbleCountPauseEffects = ChkPauseEffects.IsChecked == true;
+                CoreSettings.Save();
+            };
             // WPF Lab.cs:649-656 / 733-739: greyed only when ticked (Lockdown does not force it on).
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict,
                 () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow && CoreSettings.Current.BubbleCountStrictLock);
@@ -90,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                     }
                 }
                 ChkStrict.IsChecked = s.BubbleCountStrictLock;
+                ChkPauseEffects.IsChecked = s.BubbleCountPauseEffects;
             }
             finally { _isLoading = false; }
         }
@@ -99,7 +106,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (e.PropertyName == nameof(AppSettings.BubbleCountEnabled) ||
                 e.PropertyName == nameof(AppSettings.BubbleCountFrequency) ||
                 e.PropertyName == nameof(AppSettings.BubbleCountDifficulty) ||
-                e.PropertyName == nameof(AppSettings.BubbleCountStrictLock))
+                e.PropertyName == nameof(AppSettings.BubbleCountStrictLock) ||
+                e.PropertyName == nameof(AppSettings.BubbleCountPauseEffects))
             {
                 Dispatcher.UIThread.Post(LoadFromSettings);
             }

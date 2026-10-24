@@ -46,6 +46,7 @@ public sealed class SessionRunWireTests
                 Assert.True(CoreEngine.IsRunning);
                 Assert.True(shell.IsSessionFeatureLockActive);   // seeded by the runner, not the engine
                 Assert.StartsWith("Wire Test 00:", shell.Named<TextBlock>("TxtStartLabel")!.Text);
+                Assert.StartsWith("Wire Test - 00:", shell.Named<TextBlock>("TxtPresetsStatus")!.Text);
                 var presets = shell.Named<PresetsTabView>("PresetsTab")!;
                 var stopLabel = Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text!;
                 Assert.StartsWith("STOP SESSION (00:", stopLabel);
@@ -54,6 +55,7 @@ public sealed class SessionRunWireTests
                 // WPF MainWindow.xaml.cs:1726: the session is paused, not ended; the engine stops.
                 Assert.True(runner.IsRunning && runner.IsPaused);
                 Assert.Equal(1, runner.PauseCount);
+                Assert.EndsWith($" [{Loc.Get("label_paused")}]", shell.Named<TextBlock>("TxtPresetsStatus")!.Text);
                 Assert.False(CoreEngine.IsRunning || CoreFlash.IsRunning);
                 Assert.True(shell.IsSessionFeatureLockActive);
                 var pause = shell.Named<Button>("BtnPauseSession")!;
@@ -69,6 +71,7 @@ public sealed class SessionRunWireTests
                 runner.Stop(completed: false);   // the stop-session confirm's OK
                 Assert.False(runner.IsRunning || CoreEngine.IsRunning || pause.IsVisible);
                 Assert.False(shell.IsSessionFeatureLockActive);
+                Assert.Equal("", shell.Named<TextBlock>("TxtPresetsStatus")!.Text);
                 Assert.Equal(Loc.Get("label_start"), shell.Named<TextBlock>("TxtStartLabel")!.Text);
                 Assert.Equal(Loc.Get("btn_start_session"), Assert.IsType<TextBlock>(presets.BtnStartSession.Content).Text);
 

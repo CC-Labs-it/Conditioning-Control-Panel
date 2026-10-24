@@ -100,6 +100,16 @@
                                 </ComboBox>
                             </Grid>
 
+                            <Grid Height="34" ToolTip.Tip="{loc:Str tooltip_bubble_count_pause_effects}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{loc:Str setting_bubble_count_pause_effects}" FontSize="13"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkPauseEffects" Theme="{StaticResource ToggleStyle}"/>
+                            </Grid>
+
                             <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_prevent_closing_until_correctly_answered}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>

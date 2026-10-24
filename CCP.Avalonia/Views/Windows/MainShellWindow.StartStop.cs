@@ -119,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void UpdateStartButton(bool force = false)
         {
             if (!force && RemoteControllerConnected) return;   // WPF :941 keeps the remote label
+            RefreshBarStatus();
             var running = CoreEngine.IsRunning;
             if (Named<Button>("BtnStart") is { } b)
             {

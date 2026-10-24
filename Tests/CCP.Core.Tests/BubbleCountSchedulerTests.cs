@@ -17,6 +17,8 @@ public sealed class BubbleCountSchedulerTests
         public readonly List<(string Path, int Difficulty, bool Strict, Action<bool> Done)> Shown = new();
         public readonly List<(string Text, Action Then)> Messages = new();
         public int Closes;
+        public readonly List<bool> Holds = new();
+        public void SetEffectsHold(bool hold) => Holds.Add(hold);
         public double LastVideoDurationSeconds { get; set; } = 60;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
         public void ShowMessage(string text, int ms, Action then) => Messages.Add((text, then));
@@ -42,6 +44,90 @@ public sealed class BubbleCountSchedulerTests
     }
 
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    public void Effects_hold_captures_option_and_force_cleanup_never_restarts_flashes(
+        bool option, bool forceClose, bool resumes)
+    {
+        var s = CoreSettings.Current;
+        var (pause, enabled, flash, strict) = (s.BubbleCountPauseEffects, s.BubbleCountEnabled,
+            s.FlashEnabled, s.BubbleCountStrictLock);
+        var running = CoreEngine.IsRunning;
+        var flashes = CoreFlash.IsRunning;
+        var host = new Host();
+        var clock = new FakeClock();
+        var scheduler = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            s.BubbleCountPauseEffects = option;
+            s.BubbleCountEnabled = false;
+            s.BubbleCountStrictLock = false;
+            s.FlashEnabled = true;
+            CoreEngine.Start();
+            CoreFlash.Start();
+            scheduler.Trigger(forceTest: true);
+            Assert.Equal(option, scheduler.HoldsEffects);
+            Assert.Equal(!option, CoreFlash.IsRunning);
+            s.BubbleCountPauseEffects = !option; // this round keeps its original choice
+            clock.Advance(BubbleCountScheduler.LeadIn);
+            if (forceClose) scheduler.ForceCleanup();
+            else Assert.Single(host.Shown).Done(true);
+            Assert.False(scheduler.HoldsEffects);
+            Assert.Equal(option ? new[] { true, false } : System.Array.Empty<bool>(), host.Holds);
+            Assert.Equal(!option || resumes, CoreFlash.IsRunning);
+        }
+        finally
+        {
+            scheduler.ForceCleanup();
+            if (!running) CoreEngine.Stop();
+            if (!flashes) CoreFlash.Stop();
+            (s.BubbleCountPauseEffects, s.BubbleCountEnabled, s.FlashEnabled, s.BubbleCountStrictLock) =
+                (pause, enabled, flash, strict);
+        }
+    }
+
+    [Fact]
+    public void Strict_retry_keeps_hold_until_completion_and_disabled_flashes_stay_off()
+    {
+        var s = CoreSettings.Current;
+        var (pause, strict, mercy, flash, enabled) = (s.BubbleCountPauseEffects, s.BubbleCountStrictLock,
+            s.MercySystemEnabled, s.FlashEnabled, s.BubbleCountEnabled);
+        var running = CoreEngine.IsRunning;
+        var flashes = CoreFlash.IsRunning;
+        var host = new Host();
+        var clock = new FakeClock();
+        var scheduler = new BubbleCountScheduler(host, clock, () => Clips);
+        try
+        {
+            s.BubbleCountPauseEffects = s.BubbleCountStrictLock = true;
+            s.MercySystemEnabled = false;
+            s.BubbleCountEnabled = false;
+            s.FlashEnabled = true;
+            CoreEngine.Start();
+            CoreFlash.Start();
+            scheduler.Trigger(forceTest: true);
+            clock.Advance(BubbleCountScheduler.LeadIn);
+            Assert.Single(host.Shown).Done(false);
+            Assert.True(scheduler.HoldsEffects);
+            Assert.Equal(new[] { true }, host.Holds);
+            Assert.Single(host.Messages).Then();
+            s.FlashEnabled = false;
+            host.Shown[1].Done(true);
+            Assert.False(CoreFlash.IsRunning);
+            Assert.Equal(new[] { true, false }, host.Holds);
+        }
+        finally
+        {
+            scheduler.ForceCleanup();
+            if (!running) CoreEngine.Stop();
+            if (!flashes) CoreFlash.Stop();
+            (s.BubbleCountPauseEffects, s.BubbleCountStrictLock, s.MercySystemEnabled,
+                s.FlashEnabled, s.BubbleCountEnabled) = (pause, strict, mercy, flash, enabled);
+        }
+    }
 
     [Fact]
     public void Rules_match_wpf()

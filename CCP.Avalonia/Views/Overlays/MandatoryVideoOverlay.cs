@@ -840,7 +840,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _fill?.Dispose();
                 _fill = null;
                 if (_didDuck) { _didDuck = false; CoreAudio.Unduck(); }
-                BouncingTextOverlay.PauseForVideo(false);
+                BouncingTextOverlay.PauseForVideo(CoreEngine.BubbleCount?.HoldsEffects == true);
                 if (FillCount > 0) Log.Information("VideoService: blur fill {Avg:F3} ms/frame over {N} frames", FillMs / FillCount, FillCount);
             }
             finally { _closing = false; }

@@ -38,6 +38,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // opening it would end as a failed count and, in strict mode, retry forever.
         public bool CanPlay => Platform.LibVlcAudio.Shared != null;
 
+        // ponytail: this head has no WPF overlay reconciler/compositor anchors; see the cloud unit notes.
+        public void SetEffectsHold(bool hold) => Dispatcher.UIThread.Invoke(() =>
+            Overlays.BouncingTextOverlay.PauseForVideo(hold || CoreEngine.Video?.IsPlaying == true));
+
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Dispatcher.UIThread.Invoke(() =>
             BubbleCountWindow.ShowOnAllMonitors(path, (BubbleCountScheduler.Difficulty)difficulty, strict, onComplete));
 

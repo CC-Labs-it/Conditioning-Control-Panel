@@ -26,6 +26,8 @@ namespace ConditioningControlPanel.Services
         /// <summary>The game can play at all (Avalonia: the shared LibVLC loaded). False skips it,
         /// as WPF skips before counting it started (BubbleCountService.cs:373).</summary>
         bool CanPlay => true;
+        /// <summary>Take/release the head’s mandatory-video text hold for this round.</summary>
+        void SetEffectsHold(bool hold) { }
     }
 
     /// <summary>
@@ -57,6 +59,9 @@ namespace ConditioningControlPanel.Services
         private ITimer? _scheduler, _leadIn, _queued;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount;
+        private bool _heldFlashes;
+        /// <summary>The round captured Pause Other Effects, including lead-in and retries.</summary>
+        public bool HoldsEffects { get; private set; }
 
         public BubbleCountScheduler(IBubbleCountHost host, TimeProvider? time = null, Func<IReadOnlyList<string>>? library = null)
         {
@@ -121,7 +126,7 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _leadIn);
             Dispose(ref _queued);   // WPF panic: InteractionQueue.ForceReset drops the queued game
             var wasBusy = IsBusy;
-            Idle();   // WPF ForceCleanup: App.Bubbles.Resume()
+            Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
             _retryCount = 0;
             try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
             if (wasBusy) Log.Information("BubbleCountService: ForceCleanup called");
@@ -161,6 +166,14 @@ namespace ConditioningControlPanel.Services
                 return;
             }
             IsBusy = true;
+            // WPF c52e7f6d8: capture once, including the lead-in and strict retries.
+            HoldsEffects = CoreSettings.Current.BubbleCountPauseEffects;
+            if (HoldsEffects)
+            {
+                _heldFlashes = CoreFlash.IsRunning;
+                CoreFlash.Stop();
+                _host.SetEffectsHold(true);
+            }
             _retryCount = 0;
             CoreBubbles.Pause();   // WPF App.Bubbles.PauseAndClear: nothing else to count
             CoreSubliminal.TriggerBambiFreeze();   // WPF :353, before the 800 ms lead-in
@@ -245,8 +258,17 @@ namespace ConditioningControlPanel.Services
             });
         }
 
-        private void Idle()
+        private void Idle(bool resumeFlashes = true)
         {
+            if (HoldsEffects)
+            {
+                HoldsEffects = false;
+                var held = _heldFlashes;
+                _heldFlashes = false;
+                _host.SetEffectsHold(false);
+                if (held && resumeFlashes && CoreEngine.IsRunning && CoreSettings.Current.FlashEnabled)
+                    CoreFlash.Start();
+            }
             IsBusy = false;
             CoreBubbles.Resume();
         }

@@ -135,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Button>("BtnPauseSession") is not { } b) return;
             b.IsVisible = true;
             if (Named<TextBlock>("TxtPauseIcon") is { } icon) icon.Text = paused ? "\u25B6" : "\u23F8";
+            RefreshBarStatus();
             var count = App.Sessions?.PauseCount ?? 0;
             b.Bind(ToolTip.TipProperty, paused || count == 0
                 ? (Binding)new StrExtension(paused ? "tooltip_resume_session" : "tooltip_pause_session_100_xp_penalty_per_pause").ProvideValue(null!)
@@ -145,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// and both clock labels. Runs on the UI thread (the runner ticks through CoreDispatch).</summary>
         internal void OnSessionTick()
         {
+            RefreshBarStatus();
             RefreshSessionFeatureLock(force: false);
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
@@ -164,6 +166,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Source = SessionClockLabel.StartButton(name, remaining, showCountdown, "", Loc.Get("label_0_1_2_3"))
             });
+        }
+
+        // WPF c52e7f6d8: repaint from the existing session tick, never settings.
+        internal void RefreshBarStatus()
+        {
+            if (Named<TextBlock>("TxtPresetsStatus") is not { } status) return;
+            status.IsVisible = true;
+            if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner)
+            {
+                status.Text = CoreEngine.IsRunning ? Loc.Get("label_running") : "";
+                return;
+            }
+            status.Text = SessionClockLabel.BarStatus(session.GetModeAwareName(), runner.Elapsed,
+                runner.Remaining, session.DurationMinutes <= 0, CoreSettings.Current.ShowSessionCountdown,
+                runner.IsPaused ? $" [{Loc.Get("label_paused")}]" : "",
+                Loc.Get("label_session_bar_left"), Loc.Get("label_session_bar_elapsed"));
         }
 
         /// <summary>WPF OnSessionLogReady + ShowSessionSummaryWhenClear: the recap opens by itself,
