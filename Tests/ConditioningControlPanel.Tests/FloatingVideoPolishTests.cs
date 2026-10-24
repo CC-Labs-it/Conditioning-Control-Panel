@@ -25,6 +25,24 @@ public class FloatingVideoPolishTests
     }
 
     [Fact]
+    public void Only_a_full_screen_video_clears_the_bubbles()
+    {
+        // ccp-bugs #1487: a floating video cleared every bubble on screen.
+        Assert.True(VideoFlashRule.ClearsBubbles(floating: false));
+        Assert.False(VideoFlashRule.ClearsBubbles(floating: true));
+
+        Assert.DoesNotContain("PauseAndClear", Read("Services", "Video", "VideoService.FloatingInstances.cs")
+            .Replace("No Bubbles.PauseAndClear either", ""));
+        const string gated = "if (Video.VideoFlashRule.ClearsBubbles(floating: IsFloating)) App.Bubbles?.PauseAndClear();";
+        var main = Read("Services", "Video", "VideoService.cs");
+        var browser = Read("Services", "Video", "VideoService.Browser.cs");
+        Assert.Equal(1, Count(main, "App.Bubbles?.PauseAndClear()"));
+        Assert.Equal(1, Count(main, gated));
+        Assert.Equal(1, Count(browser, "App.Bubbles?.PauseAndClear()"));
+        Assert.Equal(1, Count(browser, gated));
+    }
+
+    [Fact]
     public void Neither_floating_path_stops_the_flash_service()
     {
         // The equal instances (browser) never call it; the LibVLC route goes through the prologue,

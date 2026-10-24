@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Fyp.Online;
-using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Chaos;
 
@@ -251,394 +250,49 @@ internal static class DtrhAssetManifest
     // server is involved, and nothing here writes third-party BYTES to disk - the cache is
     // a list of URLs, which is the same class of data as the niche selection in settings.
 
-    /// <summary>Marker prefix on a remote entry's name; the page mirrors this regex.</summary>
-    private const string RemoteNamePrefix = "online";
-    private const string RemoteConsumerId = "dtrh";
-    private const int MaxRemoteEntries = 60;
-    private const int RemoteKindLowWater = 12;           // refill a kind when it drops under this
-    /// <summary>Licence day limit (owner, 2026-10-21): a remote entry, and any copy of its bytes,
-    /// lives at most a day.</summary>
-    internal static readonly TimeSpan RemoteEntryTtl = TimeSpan.FromHours(24);
-
-    /// <summary>The day limit on one entry, pure: fresh while younger than
-    /// <see cref="RemoteEntryTtl"/>. No time (0) or a time more than an hour ahead (the clock went
-    /// back) is stale.</summary>
-    internal static bool RemoteEntryFresh(RemoteEntry e, long nowUnix)
-        => e.AtUnix > 0 && e.AtUnix - nowUnix <= 3600 && nowUnix - e.AtUnix < (long)RemoteEntryTtl.TotalSeconds;
-
-    private static readonly object RemoteLock = new();
-    private static List<RemoteEntry>? _remoteCache;      // null = not loaded from disk yet
-    private static int _remoteFetchInFlight;             // 0/1 via Interlocked
-
-    /// <summary><paramref name="IsLoop"/>: a MOVING PICTURE, the clip half of a gif post
-    /// (<see cref="FeedMediaKind.GifClip"/>). A video file, shown by the page where a picture
-    /// goes: silent, looping (owner, 2026-10-12: "we got a lot of still images").</summary>
-    internal sealed record RemoteEntry(string Id, string Url, bool IsImage, long AtUnix, bool IsLoop = false);
-
-    /// <summary>Marker after the share prefix on a moving picture's name; hostMedia.js mirrors it.</summary>
-    private const string LoopNamePrefix = "loop:";
-
-    private static string RemoteCachePath => Path.Combine(CorePaths.UserData, "dtrh_remote_media.json");
-
-    /// <summary>
-    /// Append the cached remote pool to <paramref name="m"/> and top the cache up in the
-    /// background. Returns how many entries were added. Never throws.
-    ///
-    /// SYNCHRONOUS BY NECESSITY, and therefore ONE LAUNCH BEHIND on a cold cache. Build() is
-    /// called from the host's OnPageReady on the UI thread and the manifest is posted exactly
-    /// once per page (there is no re-post path), so a network round trip here would either
-    /// block the UI thread or arrive after the only frame that could carry it. The cache is
-    /// persisted instead: the first ever DTRH launch with remote media enabled shows none and
-    /// warms the file; every launch after that is instant.
-    /// </summary>
-    private static int AppendRemote(Manifest m)
-    {
-        try
-        {
-            var s = App.Settings?.Current;
-            // Two gates, both required: the app-wide source must have left "local" AND the
-            // user must have accepted a consent card (either this one or the FYP feed's -
-            // HasRemoteMediaConsent is the property that knows about both).
-            if (s == null || s.MediaSource == "local" || !s.HasRemoteMediaConsent) return 0;
-
-            var pool = LoadRemoteCache();
-            int pct = s.MediaSource == "online" ? 100 : Math.Clamp(s.RemoteMediaRatio, 5, 95);
-            int added = 0;
-            // An entry with a copy on this machine goes out as a ccp.assets url: the page
-            // decides remote-ness by ORIGIN (hostMedia.js), so that copy is one the tube may
-            // draw (walls, cards). The rest stay CDN urls for the page's DOM layer.
-            var root = App.EffectiveAssetsPath;
-            var entries = new List<(bool IsImage, Entry Entry)>(pool.Count);
-            int copies = 0;
-            // `pool` is a snapshot, so no lock is needed to walk it.
-            foreach (var e in pool)
-            {
-                var name = $"{RemoteNamePrefix}{pct}:{(e.IsLoop ? LoopNamePrefix : "")}{NameFor(e)}";
-                var url = e.Url;
-                if (LocalCopies.TryGetValue(e.Url, out var copy) && File.Exists(copy) && !DropStaleCopy(e.Url, copy, DateTime.UtcNow))
-                {
-                    url = ToAssetUrl(root, copy);
-                    copies++;
-                }
-                entries.Add((e.IsImage, new Entry(name, url)));
-            }
-            // "Online" is online only: once enough copies are here to dress the tube, the
-            // library steps aside (owner, 2026-10-12: Scrolller picked, only local files showed).
-            if (pct == 100 && copies >= OnlineOnlyMinCopies)
-            {
-                m.Images.Clear();
-                m.Videos.Clear();
-            }
-            foreach (var (isImage, entry) in entries)
-            {
-                (isImage ? m.Images : m.Videos).Add(entry);
-                added++;
-            }
-            KickRemoteRefill();
-            KickLocalCopies(pool);
-            return added;
-        }
-        catch (Exception ex)
-        {
-            App.Logger?.Debug("DtrhAssetManifest: remote append failed: {E}", ex.Message);
-            return 0;
-        }
-    }
-
-    // ---- copies on this machine: what lets the tube draw online media ----
     //
-    // A CDN url is CORS-tainted, so the page can only show it in its DOM layer (flash and
-    // cascade cards). The bytes are fetched provider -> this machine by RemoteMediaCache and
-    // parked in {EffectiveAssetsPath}/.temp, which the page sees as https://ccp.assets/.
-    // The files are ours to release (ownerReleases) and the startup sweep takes them.
-
-    /// <summary>Remote url -> the temp file holding its bytes.</summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> LocalCopies =
-        new(StringComparer.Ordinal);
-    private static int _copyInFlight;                    // 0/1 via Interlocked
-    private const int OnlineOnlyMinCopies = 8;
-    private const int MaxClipCopies = 24;                // clips are the heavy ones
-    private const int CopyReadyEvery = 10;               // tell the host as they land, not only at the end
-
-    /// <summary>The day limit on one copy: a file whose creation time (its download time) is a
-    /// day old at <paramref name="nowUtc"/> leaves the map and is deleted. True when it went.</summary>
-    private static bool DropStaleCopy(string url, string path, DateTime nowUtc)
-    {
-        DateTime born;
-        try { born = File.GetCreationTimeUtc(path); } catch { born = DateTime.MinValue; }
-        if (!ScrolllerCacheBook.IsExpiredAt(born, nowUtc)) return false;
-        if (LocalCopies.TryRemove(new KeyValuePair<string, string>(url, path)))
-            RemoteMediaCache.ReleaseTempFile(path);
-        return true;
-    }
-
-    /// <summary>The hourly sweep: every copy past the day limit, or past it before the next
-    /// sweep, is dropped and deleted. <paramref name="all"/> drops every copy (the off switch).
-    /// Returns how many went; never throws.</summary>
-    internal static int SweepLocalCopies(bool all = false)
-    {
-        int gone = 0;
-        try
-        {
-            var ahead = DateTime.UtcNow + ScrolllerDiskCache.SweepPeriod;
-            foreach (var kvp in LocalCopies.ToArray())
-            {
-                if (all ? LocalCopies.TryRemove(kvp) && Release(kvp.Value) : DropStaleCopy(kvp.Key, kvp.Value, ahead)) gone++;
-            }
-        }
-        catch (Exception ex) { App.Logger?.Debug("DtrhAssetManifest: copy sweep failed: {E}", ex.Message); }
-        return gone;
-
-        static bool Release(string path) { RemoteMediaCache.ReleaseTempFile(path); return true; }
-    }
-
-    /// <summary>Tests only: park a copy as <see cref="KickLocalCopies"/> would.</summary>
-    internal static bool AddLocalCopyForTests(string url, string path) => LocalCopies.TryAdd(url, path);
-
-    /// <summary>Tests only: is <paramref name="url"/> still mapped to a copy?</summary>
-    internal static bool HasLocalCopyForTests(string url) => LocalCopies.ContainsKey(url);
+    // The cache, the copies, the refill and every rule live in Core DtrhRemoteMedia (shared with the
+    // Avalonia head); this head only supplies RemoteMediaCache as the copier and its ccp.assets urls.
 
     /// <summary>Raised off the UI thread when new copies landed: the host re-posts the manifest
     /// so a page that is already up starts drawing them.</summary>
-    internal static event Action? RemoteCopiesReady;
-
-    /// <summary>Copy the pool's entries to this machine, stills first, single-flight.</summary>
-    private static void KickLocalCopies(List<RemoteEntry> pool)
+    internal static event Action? RemoteCopiesReady
     {
-        // Moving pictures first (they are what the tube and the flashes reach for), then the
-        // stills, then the long clips.
-        var todo = pool.Where(e => e.IsLoop && !LocalCopies.ContainsKey(e.Url))
-            .Concat(pool.Where(e => e.IsImage && !LocalCopies.ContainsKey(e.Url)))
-            .Concat(pool.Where(e => !e.IsImage && !e.IsLoop).Take(MaxClipCopies).Where(e => !LocalCopies.ContainsKey(e.Url)))
-            .ToList();
-        if (todo.Count == 0) return;
-        if (Interlocked.CompareExchange(ref _copyInFlight, 1, 0) != 0) return;
-        _ = Task.Run(async () =>
-        {
-            int landed = 0, told = 0;
-            try
-            {
-                foreach (var e in todo)
-                {
-                    var s = App.Settings?.Current;
-                    if (s == null || s.MediaSource == "local" || !s.HasRemoteMediaConsent) break;
-                    var path = await RemoteMediaCache.MaterializeAsync(e.Url, CancellationToken.None, ownerReleases: true).ConfigureAwait(false);
-                    if (path == null) continue;
-                    if (!LocalCopies.TryAdd(e.Url, path)) { RemoteMediaCache.ReleaseTempFile(path); continue; }
-                    landed++;
-                    if (landed - told >= CopyReadyEvery) { told = landed; RaiseCopiesReady(); }
-                }
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("DtrhAssetManifest: local copies threw: {E}", ex.Message);
-            }
-            finally
-            {
-                Interlocked.Exchange(ref _copyInFlight, 0);
-                if (landed > 0) App.Logger?.Information("DtrhAssetManifest: {N} online entries copied for the tube", landed);
-                if (landed > told) RaiseCopiesReady();
-            }
-        });
+        add => DtrhRemoteMedia.CopiesReady += value;
+        remove => DtrhRemoteMedia.CopiesReady -= value;
     }
 
-    private static void RaiseCopiesReady()
+    /// <summary>Licence day limit (owner, 2026-10-21): a remote entry, and any copy of its bytes,
+    /// lives at most a day (Core <see cref="DtrhRemoteMedia.RemoteEntryTtlSeconds"/>).</summary>
+    internal static TimeSpan RemoteEntryTtl => TimeSpan.FromSeconds(DtrhRemoteMedia.RemoteEntryTtlSeconds);
+
+    /// <summary>Core <see cref="DtrhRemoteMedia.RemoteEntryFresh"/>.</summary>
+    internal static bool RemoteEntryFresh(DtrhRemoteMedia.RemoteEntry e, long nowUnix) => DtrhRemoteMedia.RemoteEntryFresh(e, nowUnix);
+
+    /// <summary>The hourly sweep (<see cref="Fyp.Online.ScrolllerCopySweeper"/>): every copy past the day
+    /// limit is dropped and deleted; <paramref name="all"/> drops every copy (the off switch).</summary>
+    internal static int SweepLocalCopies(bool all = false) => DtrhRemoteMedia.SweepLocalCopies(Copier.Release, all);
+
+    /// <summary>Tests only: park a copy as the copy pass would.</summary>
+    internal static bool AddLocalCopyForTests(string url, string path) => DtrhRemoteMedia.AddLocalCopyForTests(url, path);
+
+    /// <summary>Tests only: is <paramref name="url"/> still mapped to a copy?</summary>
+    internal static bool HasLocalCopyForTests(string url) => DtrhRemoteMedia.HasLocalCopyForTests(url);
+
+    private static readonly DtrhRemoteMedia.Copier Copier = new(
+        (url, ct) => RemoteMediaCache.MaterializeAsync(url, ct, ownerReleases: true),
+        RemoteMediaCache.ReleaseTempFile);
+
+    /// <summary>Append the cached remote pool to <paramref name="m"/> (a copied entry as its ccp.assets url;
+    /// with the source "online" and 8 copies here the library steps aside) and top the cache up in the
+    /// background. One launch behind on a cold cache; copies re-post the manifest as they land.
+    /// Returns how many entries were added. Never throws.</summary>
+    private static int AppendRemote(Manifest m)
     {
-        try { RemoteCopiesReady?.Invoke(); }
-        catch (Exception ex) { App.Logger?.Debug("DtrhAssetManifest: copies-ready handler threw: {E}", ex.Message); }
-    }
-
-    /// <summary>"scrolller/EroticHypnosis/12345" + ".webm" -> "EroticHypnosis-12345.webm".
-    /// The page never shows these, but DtrhAssetStatsStore keys engagement by name, so they
-    /// must not be able to collide with a preset filename (same reason mod entries carry a
-    /// "mod:" prefix). The "online&lt;pct&gt;:" prefix the caller adds does that job.</summary>
-    private static string NameFor(RemoteEntry e)
-    {
-        var parts = e.Id.Split('/');
-        var stem = parts.Length >= 3 ? $"{parts[1]}-{parts[2]}" : e.Id.Replace('/', '-');
-        var ext = "";
-        int cut = e.Url.IndexOfAny(new[] { '?', '#' });
-        var clean = cut >= 0 ? e.Url[..cut] : e.Url;
-        int dot = clean.LastIndexOf('.');
-        if (dot > 0 && clean.Length - dot <= 6) ext = clean[dot..];
-        return stem + ext;
-    }
-
-    /// <summary>The cache, loaded from disk on first use and pruned of stale entries.
-    /// Returns a snapshot the caller can enumerate without holding the lock.</summary>
-    private static List<RemoteEntry> LoadRemoteCache()
-    {
-        lock (RemoteLock)
-        {
-            if (_remoteCache == null)
-            {
-                _remoteCache = new List<RemoteEntry>();
-                try
-                {
-                    if (File.Exists(RemoteCachePath))
-                    {
-                        var o = JObject.Parse(File.ReadAllText(RemoteCachePath));
-                        if (o["entries"] is JArray arr)
-                        {
-                            foreach (var t in arr)
-                            {
-                                var id = (string?)t["id"];
-                                var url = (string?)t["url"];
-                                if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(url)) continue;
-                                _remoteCache.Add(new RemoteEntry(id!, url!, (bool?)t["image"] ?? false,
-                                    (long?)t["at"] ?? 0, (bool?)t["loop"] ?? false));
-                            }
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    App.Logger?.Debug("DtrhAssetManifest: remote cache load failed: {E}", ex.Message);
-                }
-            }
-            PruneRemoteLocked();
-            return new List<RemoteEntry>(_remoteCache);
-        }
-    }
-
-    /// <summary>
-    /// Drop entries older than the TTL (a CDN url is not forever). Caller holds
-    /// <see cref="RemoteLock"/>.
-    /// </summary>
-    private static void PruneRemoteLocked()
-    {
-        if (_remoteCache == null) return;
-        long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        _remoteCache.RemoveAll(e => !RemoteEntryFresh(e, now));
-
-        // Oldest first, per kind, so a run of clips can never push the last stills out.
-        foreach (var kind in new Func<RemoteEntry, bool>[]
-                 { e => e.IsImage, e => e.IsLoop, e => !e.IsImage && !e.IsLoop })
-        {
-            int over = _remoteCache.Count(e => kind(e)) - MaxRemoteEntries / 2;
-            if (over > 0) _remoteCache.RemoveAll(e => kind(e) && over-- > 0);
-        }
-    }
-
-    /// <summary>(stills, clips) in the cache. Caller holds <see cref="RemoteLock"/>.</summary>
-    internal static (int Stills, int Clips) CountKinds(IReadOnlyCollection<RemoteEntry>? cache)
-    {
-        if (cache == null) return (0, 0);
-        int stills = cache.Count(e => e.IsImage);
-        return (stills, cache.Count - stills);
-    }
-
-    /// <summary>Top the cache up off the UI thread, single-flight. Fire-and-forget by design:
-    /// whatever lands is for the NEXT manifest, so nothing waits on it.</summary>
-    private static void KickRemoteRefill()
-    {
-        // Each kind has its own low-water mark. One Any batch off a video-only sub used to fill
-        // the cache with 30 clips and nothing else, and a full cache never refilled, so the
-        // Goon Game's flash bubbles and drain wash had no picture to draw (Sep 23 desk run).
-        // Three kinds now: stills, moving pictures (loops) and long clips. The neediest one
-        // under its mark gets this fetch; a tie goes loops, stills, clips.
-        bool wantStills, wantLoops;
-        bool loopsDry = DateTimeOffset.UtcNow.ToUnixTimeSeconds() < Interlocked.Read(ref _loopsDryUntilUnix);
-        lock (RemoteLock)
-        {
-            var (stills, rest) = CountKinds(_remoteCache);
-            int loops = _remoteCache?.Count(e => e.IsLoop) ?? 0;
-            int clips = rest - loops;
-            if (stills >= RemoteKindLowWater && (loopsDry || loops >= RemoteKindLowWater) && clips >= RemoteKindLowWater) return;
-            wantLoops = !loopsDry && loops < RemoteKindLowWater && loops <= stills && loops <= clips;
-            wantStills = !wantLoops && stills < RemoteKindLowWater && stills <= clips;
-        }
-        if (Interlocked.CompareExchange(ref _remoteFetchInFlight, 1, 0) != 0) return;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                // Stills come from GIF posts' posters, the same kind the flashes draw; PICTURE
-                // pages are mostly memes and screenshots. Separate tenants keep the rotations apart.
-                var coord = wantLoops
-                    ? FypOnlineCoordinator.For(RemoteConsumerId + "-loops", RemoteChannels, FeedMediaKind.GifClip)
-                    : wantStills
-                    ? FypOnlineCoordinator.For(RemoteConsumerId + "-stills", RemoteChannels, FeedMediaKind.GifStill)
-                    : FypOnlineCoordinator.For(RemoteConsumerId, RemoteChannels, FeedMediaKind.Video);
-                var (entries, error) = await coord.FetchBatchAsync(CancellationToken.None).ConfigureAwait(false);
-                if (error != null)
-                {
-                    App.Logger?.Debug("DtrhAssetManifest: remote refill failed ({E})", error);
-                    if (wantLoops) MarkLoopsDry();
-                    return;
-                }
-                int kept = 0;
-                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                List<RemoteEntry> after;
-                lock (RemoteLock)
-                {
-                    _remoteCache ??= new List<RemoteEntry>();
-                    var known = new HashSet<string>(_remoteCache.Select(e => e.Id), StringComparer.Ordinal);
-                    foreach (var e in entries)
-                    {
-                        // RemoteMediaFormats is the ONE authority on what a remote entry may
-                        // be (blocker B7). The local extension lists at the top of this file
-                        // describe a disk the user controls; they do not describe a CDN.
-                        if (!RemoteMediaFormats.Validate(e, FeedMediaKind.Any, out var reason))
-                        {
-                            App.Logger?.Debug("DtrhAssetManifest: rejected remote entry {Id}: {Reason}", e.Id, reason);
-                            continue;
-                        }
-                        if (!known.Add(e.Id)) continue;
-                        bool image = e.Type == RemoteMediaFormats.TypeImage;
-                        _remoteCache.Add(new RemoteEntry(e.Id, e.Url, image, now, wantLoops && !image));
-                        kept++;
-                    }
-                    PruneRemoteLocked();
-                    SaveRemoteCacheLocked();
-                    after = new List<RemoteEntry>(_remoteCache);
-                }
-                if (wantLoops && kept == 0) MarkLoopsDry();
-                // Copy what just landed now, so a page that is already up gets it this session
-                // (RemoteCopiesReady re-posts the manifest) and not one launch later.
-                if (kept > 0) KickLocalCopies(after);
-                if (kept > 0)
-                    App.Logger?.Information("DtrhAssetManifest: remote pool +{N} (next launch shows them)", kept);
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Debug("DtrhAssetManifest: remote refill threw: {E}", ex.Message);
-            }
-            finally { Interlocked.Exchange(ref _remoteFetchInFlight, 0); }
-        });
-    }
-
-    /// <summary>When a loops fetch came back empty or failed, the loops kind sits out until
-    /// this time, so stills and clips still get their refills (a tie used to go to loops
-    /// forever while it stood at zero).</summary>
-    private static long _loopsDryUntilUnix;
-    private static void MarkLoopsDry() =>
-        Interlocked.Exchange(ref _loopsDryUntilUnix, DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1800);
-
-    /// <summary>DTRH's channel set. NICHE SELECTION IS SHARED APP-WIDE on purpose (see the
-    /// AppSettings remarks next to MediaSource): one taxonomy, one selection, many surfaces.
-    /// Only the rotation/dwell state is per-consumer, which is what the tenant id buys.</summary>
-    private static IReadOnlyList<string> RemoteChannels()
-    {
-        var s = App.Settings?.Current;
-        return FypOnlineCoordinator.ResolveChannels(s?.FypOnlineNiches, s?.FypOnlineCustomSubs);
-    }
-
-    /// <summary>Caller holds <see cref="RemoteLock"/>. Never throws.</summary>
-    private static void SaveRemoteCacheLocked()
-    {
-        try
-        {
-            var arr = new JArray();
-            foreach (var e in _remoteCache ?? new List<RemoteEntry>())
-                arr.Add(new JObject { ["id"] = e.Id, ["url"] = e.Url, ["image"] = e.IsImage, ["at"] = e.AtUnix, ["loop"] = e.IsLoop });
-            Directory.CreateDirectory(CorePaths.UserData);
-            File.WriteAllText(RemoteCachePath,
-                new JObject { ["entries"] = arr }.ToString(Newtonsoft.Json.Formatting.None));
-        }
-        catch (Exception ex)
-        {
-            App.Logger?.Debug("DtrhAssetManifest: remote cache save failed: {E}", ex.Message);
-        }
+        var root = App.EffectiveAssetsPath;
+        if (DtrhRemoteMedia.Take(App.Settings?.Current, copy => ToAssetUrl(root, copy), Copier) is not var (entries, stepAside)) return 0;
+        if (stepAside) { m.Images.Clear(); m.Videos.Clear(); }
+        foreach (var (isImage, name, url) in entries) (isImage ? m.Images : m.Videos).Add(new Entry(name, url));
+        return entries.Count;
     }
 }

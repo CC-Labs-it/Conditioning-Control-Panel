@@ -171,6 +171,19 @@ public static class LandingRules
         _ => false,
     };
 
+    /// <summary>The small word a good send leaves where the player is looking (WPF FriendsLanding.SentBeat):
+    /// the loc key and its English fallback.</summary>
+    public static (string Key, string English) SentWord(SendKind kind) => kind switch
+    {
+        SendKind.Invite => ("friends_land_knock_sent", "knock sent"),
+        SendKind.Watch => ("friends_land_watch_sent", "watch sent"),
+        _ => ("friends_land_poke_sent", "sent"),
+    };
+
+    /// <summary>A landed poke's Emi line and floating word (WPF FriendsLanding.Sink.Poke): only with the
+    /// bell on, and never while a game window has the screen (there it is a toast only).</summary>
+    public static bool PokeThrowsWord(bool noticesOn, bool overGame) => noticesOn && !overGame;
+
     /// <summary>The face Emi reacts with. Every value is a face EmiChains knows.</summary>
     public static string PokeFace(string? pokeId) => pokeId switch
     {
@@ -202,12 +215,17 @@ public static class LandingRules
         _ => Array.Empty<string>(),
     };
 
-    /// <summary>The one allowlisted host, pattern A of HtUrlHelper. Null for anything but digits.</summary>
+    /// <summary>
+    /// The one allowlisted host, pattern B of HtUrlHelper. Null for anything but digits.
+    /// Hypnotube answers 404 to a bare <c>/video/&lt;id&gt;</c> (pattern A) and serves the video for
+    /// <c>/video/&lt;any-slug&gt;-&lt;id&gt;.html</c>, so the wire's id alone gets a stand-in slug
+    /// (ticket 2026-10-15: a Leash watch assignment opened "video not found").
+    /// </summary>
     public static string? HtUrl(string? id)
     {
         if (string.IsNullOrEmpty(id) || id.Length > 8) return null;
         foreach (var c in id) if (!char.IsAsciiDigit(c)) return null;
-        return "https://hypnotube.com/video/" + id;
+        return "https://hypnotube.com/video/video-" + id + ".html";
     }
 
     /// <summary>The wire grammar for a system join code: 4 to 12 of A-Z, 0-9 and '-'.</summary>

@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -430,7 +431,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             await new AttentionTargetEditorDialog().ShowDialogSafe(owner);
         }
 
-        private async void BtnTestVideo_Click(object? sender, RoutedEventArgs e)
+        /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
+        internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
+
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = LogFault(TestVideoAsync());
+
+        // The click used to be async void (faults reached the global handler); a stored Task
+        // would swallow them silently, so log here instead.
+        private static async Task LogFault(Task run)
+        {
+            try { await run; }
+            catch (Exception ex) { Serilog.Log.Error(ex, "Test video failed"); }
+        }
+
+        private async Task TestVideoAsync()
         {
             // WPF BtnTestVideo_Click -> TriggerVideo(userInitiated: true), after its stuck-video prompt.
             // ponytail: WPF's second prompt ("another interaction is in progress") needs the interaction
@@ -441,7 +455,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
                 if (!await Dialogs.MessageDialog.ConfirmAsync(owner, "Video Playing",
                         "A video appears to be playing.\n\nIf you don't see a video, it may be stuck. Click Yes to force reset and try again.",
-                        okText: "Yes")) return;
+                        okText: "Yes", cancelText: "No")) return;
                 Serilog.Log.Warning("User requested force reset of stuck video state");
                 video.ForceCleanup();
             }

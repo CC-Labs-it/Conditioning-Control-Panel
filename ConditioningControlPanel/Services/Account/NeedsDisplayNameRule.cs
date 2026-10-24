@@ -22,11 +22,12 @@ namespace ConditioningControlPanel.Services
             new(@"[^a-zA-Z0-9À-ɏЀ-ӿ　-鿿 _.\-]", RegexOptions.CultureInvariant);
 
         /// <summary>
-        /// Ask when signed in and the server says so, or (older servers send no flag) when the
-        /// name we hold is empty or whitespace. Never ask an anonymous install.
+        /// Ask when signed in and the server says so. The server's answer wins both ways: it blanks the
+        /// name of a veteran whose name equals their patron name and still says false (owner 2026-10-22).
+        /// With no flag (older servers) ask when the name we hold is empty. Never ask an anonymous install.
         /// </summary>
         public static bool ShouldAsk(bool signedIn, string? displayName, bool? serverSaysNeeded)
-            => signedIn && (serverSaysNeeded == true || string.IsNullOrWhiteSpace(displayName));
+            => signedIn && (serverSaysNeeded ?? string.IsNullOrWhiteSpace(displayName));
 
         /// <summary>The first candidate that is not blank, trimmed, or null when every one is.</summary>
         public static string? FirstName(params string?[] candidates)

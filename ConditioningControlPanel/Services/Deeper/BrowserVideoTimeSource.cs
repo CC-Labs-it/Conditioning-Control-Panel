@@ -203,7 +203,9 @@ namespace ConditioningControlPanel.Services.Deeper
             catch (Exception ex) { App.Logger?.Debug("BrowserVideoTimeSource.SetVolume error: {Error}", ex.Message); }
         }
 
-        public Rect GetVideoRect()
+        public PlaybackRect GetVideoRect() => VideoServiceTimeSource.ToPlaybackRect(GetVideoRectDips());
+
+        private Rect GetVideoRectDips()
         {
             try
             {
