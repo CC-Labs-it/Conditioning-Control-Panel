@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <summary>
 /// The head half of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>: one Core <see cref="BarkEngine"/>, its
 /// mouth (the tube), and the seams WPF App.xaml.cs:313/336-346/604/2826 points at its BarkService.
-/// ponytail: the remaining WPF sources are tracked in docs/cloud/fin-feat-companion-barks.md.
+/// ponytail: the remaining WPF sources are the Missing list of the feat-companion-barks row in docs/avalonia-parity.md.
 /// </summary>
 internal static class BarkHead
 {
