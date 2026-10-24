@@ -36,7 +36,14 @@
   border: 1px solid color-mix(in srgb, var(--annex-cold), transparent 78%);
   border-radius: 3px;
 }
-.cam-tile svg.campus-plan { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* The feeds reuse `campus-plan` for its colours, so they also catch the campus's
+ * wide-window rule (styles.css, min-aspect-ratio 16/9: aspect-ratio + a
+ * translateX(-50%) pillarbox). Undo both here: on a window wider than 16:9 that
+ * shift slid every feed half a tile left and blacked out its right half. */
+.cam-tile svg.campus-plan {
+  position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;
+  aspect-ratio: auto; transform: none;
+}
 
 /* the campus seen through lab glass: darker sky than the campus's own dusk */
 .an-sky { fill: color-mix(in srgb, var(--campus-sky), black 22%); }
