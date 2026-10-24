@@ -14,8 +14,11 @@ namespace CCP.Core.Tests;
 
 /// <summary>Core RemoteRelay against a fake relay: no network. Rules from WPF RemoteControlService.</summary>
 [Collection(SessionStatics.Name)]
-public sealed class RemoteRelayTests
+public sealed class RemoteRelayTests : IDisposable
 {
+    // Remote panic now arms process-wide quiet; do not leak it into the next test.
+    public void Dispose() => ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<(string Path, JObject Body)> Seen = new();

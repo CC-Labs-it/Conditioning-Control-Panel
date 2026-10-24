@@ -18,6 +18,7 @@ using ConditioningControlPanel.Models.Program;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Program;
 using Xunit;
+using ConditioningControlPanel.Services.Safety;
 using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
@@ -91,8 +92,10 @@ public sealed class ProgramsRunLifecycleTests
             Assert.Empty(shell.OwnedWindows.OfType<SessionCompleteWindow>());
             Assert.Equal(Loc.Get("btn_program_start_session"), F<TextBlock>("TxtStartTodaySession").Text);
 
-            // A run to the end credits the day (SessionRunner.Stopped -> OnEngineSessionCompleted).
+            // A user starts today again after panic: release the quiet as WPF does.
+            Assert.True(PanicAftermath.TriggersSilenced());
             await shell.StartProgramSessionAsync();
+            Assert.False(PanicAftermath.TriggersSilenced());
             runner.Stop(completed: true);
             Dispatcher.UIThread.RunJobs();
             Assert.True(svc.TodayRecord!.SessionCompleted);
@@ -112,6 +115,7 @@ public sealed class ProgramsRunLifecycleTests
         }
         finally
         {
+            PanicAftermath.EndQuiet();
             CoreEngine.StoppedHook = null;
             if (shell != null) { AvApp.Sessions!.SessionLog.LogReady -= shell.OnSessionLogReady; CloseOwned(shell); shell.Close(); }
             Dispatcher.UIThread.RunJobs();

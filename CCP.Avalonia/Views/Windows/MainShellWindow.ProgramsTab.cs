@@ -278,6 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     return;
                 }
                 svc.AttachSessionRunner(runner);
+                if (!CoreEngine.IsRunning) ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
                 StartSession(session);   // the row repaints when the runner really starts (StartSession)
                 Serilog.Log.Information("[Programs] Started program session: {Name}", session.Name);
             }

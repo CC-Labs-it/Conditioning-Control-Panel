@@ -82,6 +82,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 && SettingsPaletteWindow.TryConsumeEscape();
             var rung = PanicPolicy.Decide(lockCardOpen, paletteClaimed, PanicPolicy.OverrideEnabled(s));
             Serilog.Log.Information("Panic key pressed ({Rung})", rung);
+            // The palette only consumes Escape; every actual panic rung arms the quiet.
+            // StopAll arms the full-stop route; early lock-card/grace rungs need it here too.
+            if (rung != PanicPolicy.Rung.DismissSettingsPalette) PanicAftermath.ArmQuiet();
             if (rung == PanicPolicy.Rung.DismissLockCard) { StopLockCards(); StopCameraForPanic(); }
             if (!PanicPolicy.StopsSurfaces(rung)) return;
             // WPF MainWindow.xaml.cs:1709: close the game surface that owns the screen, then the normal
@@ -102,7 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // after the grace pause and before the stop pass: her calm safety line, then 6 s of no other bark.
             if (rung == PanicPolicy.Rung.RunLadder && !gameOwnedTheScreen) Platform.BarkHead.Engine?.Raise("Panic");
             bool wasRunning = CoreEngine.IsRunning;
-            PanicSurfaces.StopAll("panic key", this);
+            PanicSurfaces.StopAll("panic key", this, aftermathArmed: true);
             if (wasRunning) ShowFromTray();   // WPF: Show + Activate the main window after a running stop
 
             if ((now - _lastPanicTime).TotalMilliseconds > 2000) _panicPressCount = 0;

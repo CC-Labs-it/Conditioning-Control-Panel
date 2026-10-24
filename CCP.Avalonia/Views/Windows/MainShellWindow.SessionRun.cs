@@ -111,6 +111,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 StartEffect(() =>   // effects come back, so the portal panic bind comes first
                 {
                     if (App.Sessions is not { IsPaused: true } r) return;
+                    ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
                     r.Resume();
                     PinkFilterOverlay.Refresh(this);
                     SpiralOverlay.Refresh(this);

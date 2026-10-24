@@ -105,8 +105,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>Stops every surface in order. One failing stop never skips the rest. Never throws.</summary>
-        internal static void StopAll(string reason, MainShellWindow? shell = null)
+        internal static void StopAll(string reason, MainShellWindow? shell = null, bool aftermathArmed = false)
         {
+            if (!aftermathArmed) ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
             Serilog.Log.Information("Panic: stopping every surface ({Reason})", reason);
             shell ??= MainShellWindow.Current;
             foreach (var s in All)
