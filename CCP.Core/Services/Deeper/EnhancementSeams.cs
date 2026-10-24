@@ -14,7 +14,7 @@ namespace ConditioningControlPanel.Services.Deeper
     public readonly record struct PlaybackPoint(double X, double Y);
 
     /// <summary>The five WebcamTrackingService events the engine listens to. The head adapts its
-    /// tracker; events may arrive on the capture thread (the engine marshals).</summary>
+    /// tracker; events may arrive on the capture thread (the engine marshals via CoreDispatch).</summary>
     public interface IEnhancementWebcam
     {
         event Action? OnBlink;
@@ -24,9 +24,9 @@ namespace ConditioningControlPanel.Services.Deeper
         event Action? OnFaceFound;
     }
 
-    /// <summary>What WPF's engine asked App.Overlay / App.Flash / App.Subliminal for on Stop.
-    /// The head's dispatcher implements it; a dispatcher without it (tests, dry run) has nothing
-    /// on screen to retire.</summary>
+    /// <summary>What the engine retires on Stop (overlay band depth, point-fired flashes and
+    /// subliminals). The head's dispatcher implements it; a dispatcher without it (tests, dry
+    /// run) has nothing on screen to retire.</summary>
     public interface IEnhancementRunCleanup
     {
         void ResetOverlayBands();

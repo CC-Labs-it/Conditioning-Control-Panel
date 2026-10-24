@@ -675,7 +675,9 @@ namespace ConditioningControlPanel
                     LockdownTab.Visibility = Visibility.Visible;
                     AnimateTabIn(LockdownTab);
                     StartLockdownPulse();
-                    RefreshPremiumGate(LockdownTab.LockdownGate);
+                    // Through the rule: a plain RefreshPremiumGate here re-drew the veil over a
+                    // running lockdown every time the tab opened after a sign-out.
+                    RefreshLockdownGate();
                     MaybeShowFeatureIntro("lockdown");
                     break;
 

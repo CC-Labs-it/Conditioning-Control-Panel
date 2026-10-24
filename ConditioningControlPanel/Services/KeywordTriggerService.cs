@@ -682,43 +682,14 @@ namespace ConditioningControlPanel.Services
         /// have to mean the same thing or the list silently fails to match.
         /// </summary>
         public static bool MatchesAppList(IEnumerable<string>? list, string processName)
-        {
-            if (list == null || string.IsNullOrWhiteSpace(processName)) return false;
-
-            foreach (var raw in list)
-            {
-                if (string.IsNullOrWhiteSpace(raw)) continue;
-                var entry = raw.Trim();
-                if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                    entry = entry.Substring(0, entry.Length - 4);
-                if (entry.Length == 0) continue;
-                if (string.Equals(entry, processName, StringComparison.OrdinalIgnoreCase)) return true;
-            }
-
-            return false;
-        }
+            => Awareness.AwarenessAppScopeRules.MatchesAppList(list, processName);
 
         /// <summary>
         /// Splits the comma / semicolon / newline separated text the Awareness tab collects into a
         /// clean list of process names, de-duplicated and with any ".exe" dropped.
         /// </summary>
         public static List<string> ParseAppList(string? text)
-        {
-            var result = new List<string>();
-            if (string.IsNullOrWhiteSpace(text)) return result;
-
-            foreach (var part in text.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var entry = part.Trim();
-                if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                    entry = entry.Substring(0, entry.Length - 4);
-                if (entry.Length == 0) continue;
-                if (result.Any(e => string.Equals(e, entry, StringComparison.OrdinalIgnoreCase))) continue;
-                result.Add(entry);
-            }
-
-            return result;
-        }
+            => Awareness.AwarenessAppScopeRules.ParseAppList(text);
 
         private DateTime _lastSampleAt = DateTime.MinValue;
 
@@ -782,43 +753,11 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
 
-            if (!TryResolveForegroundApp(out var process, out var isOwn))
-            {
-                // An allow list promises triggers fire ONLY somewhere named. A window that will not
-                // name itself is not somewhere named, so it fails closed. A block list makes the
-                // opposite promise - only the listed apps are off limits - so it fails open.
-                var allowUnknown = scope != AwarenessAppScope.OnlyListed;
-                if (!allowUnknown) LogSuppressed(source, "foreground window could not be identified");
-                return allowUnknown;
-            }
-
-            if (isOwn && ignoreOwnFocus)
-            {
-                LogSuppressed(source, "Control Panel itself has focus");
-                return false;
-            }
-
-            switch (scope)
-            {
-                case AwarenessAppScope.ExceptListed:
-                    if (MatchesAppList(settings.KeywordTriggerApps, process))
-                    {
-                        LogSuppressed(source, $"'{process}' is on the block list");
-                        return false;
-                    }
-                    return true;
-
-                case AwarenessAppScope.OnlyListed:
-                    if (!MatchesAppList(settings.KeywordTriggerApps, process))
-                    {
-                        LogSuppressed(source, $"'{process}' is not on the allow list");
-                        return false;
-                    }
-                    return true;
-
-                default:
-                    return true;
-            }
+            var known = TryResolveForegroundApp(out var process, out var isOwn);
+            var reason = Awareness.AwarenessAppScopeRules.SuppressionReason(scope, settings.KeywordTriggerApps,
+                process, known, isOwn, ignoreOwnFocus);
+            if (reason != null) LogSuppressed(source, reason);
+            return reason == null;
         }
 
         #endregion
@@ -1469,6 +1408,15 @@ namespace ConditioningControlPanel.Services
         private async Task DispatchMergedAsync(List<KeywordTrigger> firedTriggers, List<OcrWordHit>? matchedWords)
         {
             if (firedTriggers == null || firedTriggers.Count == 0) return;
+            // A panic's quiet (PanicAftermath, the same five minutes as Trigger Mode): a keyword on
+            // screen or typed must not flash, play or pulse the toy seconds after the panic stopped
+            // everything. The haptic mixer's own panic mute lasts 400 ms.
+            if (Safety.PanicAftermath.TriggersSilenced())
+            {
+                App.Logger?.Information("KeywordTriggers: [{Keywords}] held - a panic is still quiet",
+                    string.Join(",", firedTriggers.Select(t => t.Keyword)));
+                return;
+            }
             var first = firedTriggers[0];
 
             // If only one trigger matched, skip the merge allocation and dispatch directly.
