@@ -279,7 +279,7 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
     [Fact]
     public void The_gate_answers_a_refused_url_locally_and_remembers_refusals_from_whole_fetches()
     {
-        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Fyp", "Online", "ScrolllerWebGate.cs"));
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Fyp", "Online", "ScrolllerWebGate.cs"));
         int check = src.IndexOf("IsRefusedToday(url, DateTime.Now)", StringComparison.Ordinal);
         int route = src.IndexOf("var route = Route(url, e.Request.Method", StringComparison.Ordinal);
         Assert.True(check > 0 && check < route, "a refused url must be answered before any fetch is routed");
@@ -324,7 +324,7 @@ public sealed class ScrolllerCacheFormatTests : IDisposable
     [Fact]
     public void No_image_encoder_touches_cached_online_media()
     {
-        // The cache, the policy and the reuse rules moved to CCP.Core; the WebView2 gate stays in the head.
+        // The cache, the policy and the reuse rules moved to CCP.Core; the WebView2 gate moved too (shared with the Avalonia head).
         var files = SourceRoots.ProductDirectories.Select(r => Path.Combine(r, "Services", "Fyp", "Online"))
             .Where(Directory.Exists).SelectMany(d => Directory.GetFiles(d, "*.cs")).ToArray();
         Assert.Contains(files, f => f.EndsWith("ScrolllerDiskCache.cs"));

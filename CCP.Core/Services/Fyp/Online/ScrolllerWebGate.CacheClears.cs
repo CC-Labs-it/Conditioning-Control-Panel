@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Threading;
+using System.Threading;
 using Microsoft.Web.WebView2.Core;
+using Serilog;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Services.Fyp.Online;
@@ -15,7 +16,7 @@ namespace ConditioningControlPanel.Services.Fyp.Online;
 /// (<see cref="ScrolllerWebRoute.PassCharged"/>) and Chromium keeps them in the profile's disk
 /// cache. So every profile a gated core uses is cleared (DiskCache only: a page's localStorage and
 /// IndexedDB, the Goon prefs, survive) when its last clear is a day old: at attach, hourly from
-/// <see cref="ScrolllerCopySweeper"/>, and always on the off switch. A profile whose windows are
+/// the heads' copy sweepers (WPF ScrolllerCopySweeper, Avalonia ScrolllerHead), and always on the off switch. A profile whose windows are
 /// all closed has its cache folder deleted on disk instead. The last clear of each profile is kept
 /// in <c>{EffectiveAssetsPath}/.scrolller-cache/webview-clears.json</c>.
 ///
@@ -30,7 +31,7 @@ internal static partial class ScrolllerWebGate
     private sealed class LiveCore
     {
         public required WeakReference<CoreWebView2> Core;
-        public required Dispatcher Dispatcher;
+        public required SynchronizationContext? Context;   // the core's own thread (WPF Dispatcher, Avalonia UI thread)
         /// <summary>The user data folder's name (browser_data_fyp, ...): one clear per profile.</summary>
         public required string Profile;
         public required string Folder;
@@ -53,7 +54,7 @@ internal static partial class ScrolllerWebGate
     /// folder is a profile (browser_data_fyp, arcademy, backroom, ...). Replaceable by tests.</summary>
     internal static Func<IEnumerable<string>> ProfileRootsProvider = () =>
     {
-        try { return new[] { App.UserDataPath }; }
+        try { return new[] { CorePaths.UserData }; }
         catch { return Array.Empty<string>(); }
     };
 
@@ -122,7 +123,7 @@ internal static partial class ScrolllerWebGate
             var folder = core.Environment.UserDataFolder;
             var live = new LiveCore
             {
-                Core = new WeakReference<CoreWebView2>(core), Dispatcher = Dispatcher.CurrentDispatcher,
+                Core = new WeakReference<CoreWebView2>(core), Context = SynchronizationContext.Current,
                 Profile = ProfileKey(folder), Folder = folder,
             };
             lock (ClearsLock)
@@ -133,7 +134,7 @@ internal static partial class ScrolllerWebGate
             ReadClears().TryGetValue(live.Profile, out var stamp);
             if (ChromiumClearDue(stamp.At, ClearsUtcNow())) _ = ClearOneAsync(live, "due at attach");
         }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: cache-clear tracking failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerWebGate: cache-clear tracking failed: {E}", ex.Message); }
     }
 
     private static async Task<int> ClearAsync(string reason, bool force)
@@ -173,10 +174,25 @@ internal static partial class ScrolllerWebGate
                 if (profile.Length == 0 || open.Contains(profile) || stamps.ContainsKey(profile)) continue;
                 if (DeleteClosedProfileCache(folder)) { WriteClear(profile, folder, now); cleared++; }
             }
-            if (cleared > 0) App.Logger?.Information("ScrolllerWebGate: cleared {Count} browser disk cache(s) ({Reason})", cleared, reason);
+            if (cleared > 0) Log.Information("ScrolllerWebGate: cleared {Count} browser disk cache(s) ({Reason})", cleared, reason);
         }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: cache clear failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerWebGate: cache clear failed: {E}", ex.Message); }
         return cleared;
+    }
+
+    /// <summary>Runs <paramref name="work"/> on the core's own thread (WebView2 objects are thread-bound): at once when
+    /// already there or when the core had no context, else posted to it. Shared by both heads (WPF's Dispatcher and
+    /// Avalonia's UI thread are both a SynchronizationContext).</summary>
+    private static Task OnCoreThread(SynchronizationContext? context, Func<Task> work)
+    {
+        if (context == null || SynchronizationContext.Current == context) return work();
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Post(async _ =>
+        {
+            try { await work(); done.TrySetResult(); }
+            catch (Exception ex) { done.TrySetException(ex); }
+        }, null);
+        return done.Task;
     }
 
     /// <summary>Clears one live core's profile disk cache on its own thread. False when it is gone
@@ -185,18 +201,18 @@ internal static partial class ScrolllerWebGate
     {
         try
         {
-            if (!l.Core.TryGetTarget(out var core) || l.Dispatcher.HasShutdownStarted) { Forget(l); return false; }
-            await l.Dispatcher.InvokeAsync(() => core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.DiskCache))
-                .Task.Unwrap().WaitAsync(ClearBudget).ConfigureAwait(false);
+            if (!l.Core.TryGetTarget(out var core)) { Forget(l); return false; }
+            await OnCoreThread(l.Context, () => core.Profile.ClearBrowsingDataAsync(CoreWebView2BrowsingDataKinds.DiskCache))
+                .WaitAsync(ClearBudget).ConfigureAwait(false);
             WriteClear(l.Profile, l.Folder, ClearsUtcNow());
-            App.Logger?.Debug("ScrolllerWebGate: disk cache of {Profile} cleared ({Reason})", l.Profile, reason);
+            Log.Debug("ScrolllerWebGate: disk cache of {Profile} cleared ({Reason})", l.Profile, reason);
             return true;
         }
         catch (Exception ex)
         {
-            bool alive = l.Core.TryGetTarget(out _) && !l.Dispatcher.HasShutdownStarted;
+            bool alive = l.Core.TryGetTarget(out _);
             if (ForgetAfterFailedClear(ex, alive)) Forget(l);
-            App.Logger?.Debug("ScrolllerWebGate: disk cache clear of {Profile} failed: {E}", l.Profile, ex.Message);
+            Log.Debug("ScrolllerWebGate: disk cache clear of {Profile} failed: {E}", l.Profile, ex.Message);
             return false;
         }
     }
@@ -300,6 +316,6 @@ internal static partial class ScrolllerWebGate
                 File.Move(tmp, path, overwrite: true);
             }
         }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: clear stamp write failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerWebGate: clear stamp write failed: {E}", ex.Message); }
     }
 }

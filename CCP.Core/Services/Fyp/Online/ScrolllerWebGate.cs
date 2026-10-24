@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Web.WebView2.Core;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Fyp.Online;
 
@@ -321,7 +322,7 @@ internal static partial class ScrolllerWebGate
             if (whole && writer != null)
             {
                 try { writer.Stream.Flush(); writer.Commit(); }
-                catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: cache commit failed: {E}", ex.Message); }
+                catch (Exception ex) { Log.Debug("ScrolllerWebGate: cache commit failed: {E}", ex.Message); }
             }
             return whole;
         }
@@ -368,7 +369,7 @@ internal static partial class ScrolllerWebGate
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("ScrolllerWebGate: attach failed: {E}", ex.Message);
+            Log.Warning("ScrolllerWebGate: attach failed: {E}", ex.Message);
         }
     }
 
@@ -422,7 +423,7 @@ internal static partial class ScrolllerWebGate
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("ScrolllerWebGate: request hook failed: {E}", ex.Message);
+            Log.Warning("ScrolllerWebGate: request hook failed: {E}", ex.Message);
         }
     }
 
@@ -467,7 +468,7 @@ internal static partial class ScrolllerWebGate
                 e.Response = env.CreateWebResourceResponse(read.Value.Body, 200, "OK",
                     ResponseHeaders(type, read.Value.Total));
         }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: cached answer failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerWebGate: cached answer failed: {E}", ex.Message); }
         finally { try { deferral.Complete(); } catch { } }
     }
 
@@ -515,7 +516,7 @@ internal static partial class ScrolllerWebGate
             else
                 e.Response = env.CreateWebResourceResponse(null, f.Status, f.Reason, LocalErrorHeaders());
         }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: fetch answer failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerWebGate: fetch answer failed: {E}", ex.Message); }
         finally { try { deferral.Complete(); } catch { } }
     }
 
@@ -557,7 +558,7 @@ internal static partial class ScrolllerWebGate
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ScrolllerWebGate: fetch failed: {E}", ex.Message);
+            Log.Debug("ScrolllerWebGate: fetch failed: {E}", ex.Message);
             return new Fetched(502, "Bad Gateway", Array.Empty<byte>(), 0, "");
         }
     }
@@ -567,7 +568,7 @@ internal static partial class ScrolllerWebGate
     /// never the content type: a CDN may serve a real picture as application/octet-stream. Pure.</summary>
     internal static bool RefusedBody(string url, string? kind, byte[] body, int length)
     {
-        int n = Math.Min(length, Helpers.MediaTypeSniffer.MagicProbeBytes);
+        int n = Math.Min(length, ConditioningControlPanel.Helpers.MediaTypeSniffer.MagicProbeBytes);
         return n > 0 && !ScrolllerDiskCache.BodyFits(ScrolllerDiskCache.ExtensionOf(url), kind, body, n);
     }
 
@@ -655,12 +656,12 @@ internal static partial class ScrolllerWebGate
             var bytes = ChargeableLength(length, range);
             if (bytes <= 0)
             {
-                App.Logger?.Debug("ScrolllerWebGate: no length on a passed-through response, not charged");
+                Log.Debug("ScrolllerWebGate: no length on a passed-through response, not charged");
                 return;
             }
             ChargeCapped(url, bytes, TotalSize(status, length, range));
         }
-        catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: response hook failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("ScrolllerWebGate: response hook failed: {E}", ex.Message); }
     }
 
     /// <summary>Charges <paramref name="bytes"/> for a passed-through url, never past the file's
@@ -744,7 +745,7 @@ internal static partial class ScrolllerWebGate
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ScrolllerWebGate: real-byte meter unavailable, declared lengths charge: {E}", ex.Message);
+            Log.Debug("ScrolllerWebGate: real-byte meter unavailable, declared lengths charge: {E}", ex.Message);
         }
     }
 
@@ -753,7 +754,7 @@ internal static partial class ScrolllerWebGate
         core.GetDevToolsProtocolEventReceiver(evt).DevToolsProtocolEventReceived += (_, e) =>
         {
             try { handler(e.ParameterObjectAsJson); }
-            catch (Exception ex) { App.Logger?.Debug("ScrolllerWebGate: {Evt} failed: {E}", evt, ex.Message); }
+            catch (Exception ex) { Log.Debug("ScrolllerWebGate: {Evt} failed: {E}", evt, ex.Message); }
         };
     }
 
@@ -766,7 +767,7 @@ internal static partial class ScrolllerWebGate
         }
         catch (Exception ex)
         {
-            App.Logger?.Debug("ScrolllerWebGate: Network.enable failed, declared lengths charge: {E}", ex.Message);
+            Log.Debug("ScrolllerWebGate: Network.enable failed, declared lengths charge: {E}", ex.Message);
         }
     }
 
