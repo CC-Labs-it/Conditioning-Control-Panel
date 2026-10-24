@@ -2944,3 +2944,9 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 - Merged wire-win-webcam-calibration-b at be09ff13f0ea97c92e72c6dfcad763e387ad1aec into roster lane 8fb3c5f736771547456ba9b4a406b525a9144c96.
 - Workshop owns one roster-click subscription: shell-hosted clicks keep supported-companion checks, room refresh and tube avatar-set updates; standalone hosts retain Core switching. Hero/roster Core event refresh and detach cleanup remain. Both lanes' regression tests and assertions are retained.
 - Reconciled the parity ledger to one row per ID, keeping the most advanced status and distinct source evidence; no surface promoted beyond wired. Panic registry/tests retain both parents' entries in incoming-tip order, and prior progress entries remain.
+
+## avalonia-port/main-20261024: +5620
+- Main sync #8: WPF main f81ea01fb merged (Oct 22 night bug hunt, 32 commits); delta ledger docs/avalonia-main-sync-20261024.md (2 ported-by-merge, 30 needs-port in 15 sync8-* lanes, 0 n/a). Red by design; gated in -compat.
+
+## avalonia-port/main-20261024-compat: +62
+- Compat for main sync #8: App.* in Core as Serilog/CoreSettings, LockdownExitRule/PanicAftermath/VoicePanicReach/TickStep into Core, main's WPF scan tests via SourceRoots and retargeted to where the stack split the code. rgate GATE-OK (run 40109201391).
