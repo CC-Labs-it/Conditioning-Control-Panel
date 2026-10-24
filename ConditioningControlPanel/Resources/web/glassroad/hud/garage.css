@@ -29,3 +29,36 @@
 .g-menu-row .g-track{position:static;margin:4px 0 0}
 @media(max-width:699px){.g-selector{bottom:calc(226px + env(safe-area-inset-bottom))}#race-garage .g-menu-row[data-g=controls]{grid-column:auto;justify-content:normal;min-height:47px;padding:9px}.g-menu-row[data-g=controls]>span{flex:1}.g-menu-row[data-g=controls] i{display:block}}
 #race-garage.g-calm .g-menu-row:hover,#race-garage.g-calm .g-menu-row:focus-visible{transform:none}#race-garage.g-calm .g-menu-row{transition:background .35s,border-color .35s}
+
+/* Ink-edged, saturated paint carries the same cartoon treatment into the menu. */
+#race-garage{--g-paper:#153b47;--g-panel:#174955;--g-line:#091822;--g-ink:#fff4df;--g-muted:#b7e7dc;--g-rose:#ff79ac;--g-custom-progress:0}
+.g-menu{background:#123541;border:3px solid #10101b;box-shadow:0 7px 0 #10101b,0 14px 25px #07162150;border-radius:19px;animation:g-menu-arrive .65s cubic-bezier(.16,1,.3,1) both}
+.g-title-card>p{color:#8be9d1}.g-logo{color:#fff4df;text-shadow:2px 3px #10101b,-1px -1px #10101b}.g-logo b{color:#ff79ac}.g-title-rule{background:repeating-conic-gradient(#ffce62 0 25%,transparent 0 50%) 0 0/12px 12px;opacity:1;animation:g-checks 9s linear infinite}
+#race-garage .g-menu-row{border-width:2px;border-radius:9px;transition:background .2s,border-color .2s,transform .24s cubic-bezier(.2,1.5,.4,1),box-shadow .2s}
+.g-menu-row svg{opacity:1;stroke-width:1.9}.g-menu-row i{color:#7be2ce}
+#race-garage .g-menu-row:hover,#race-garage .g-menu-row:focus-visible{background:#245867;border-color:#0a1823;box-shadow:0 3px 0 #081720;transform:translate(3px,-2px)}
+#race-garage .g-menu-row[data-g=race]{background:#ff79ac;border-color:#151323;color:#27162d;box-shadow:inset 0 -4px #d44380,0 3px 0 #10101b}.g-menu-row[data-g=race] i,.g-menu-row[data-g=race] .g-track{color:#5e1c41}
+#race-garage .g-menu-row[data-g=race]:hover{background:#ff99bc;transform:translateY(-3px);box-shadow:inset 0 -4px #e15d94,0 6px 0 #10101b}
+.g-selector h1{color:#fff4df;text-shadow:2px 3px #171425}.g-selector>p{color:#b7e7dc}#race-garage .g-positions button{background:#28646b;border:1px solid #10101b}#race-garage .g-positions button[aria-pressed=true]{background:#ff79ac;box-shadow:0 2px #10101b}
+.g-custom-top h2{text-shadow:2px 3px #10101b}.g-custom-top small{color:#8be9d1}.g-controls{border:3px solid #10101b;border-radius:17px;background:#153e4b;box-shadow:0 6px 0 #10101b}
+#race-garage .g-outfits button,#race-garage .g-patterns button{border-width:2px;border-radius:7px}#race-garage .g-outfits button[aria-pressed=true]{background:#ff79ac;color:#29152f;border-color:#10101b;box-shadow:inset 0 -3px #d44380}
+#race-garage [data-g=done]{background:#ffce62;color:#281b26;border:2px solid #10101b;box-shadow:0 4px #10101b;border-radius:10px;font-weight:600}
+.g-colors label{border-width:2px;border-radius:7px}.g-colors input{cursor:pointer}.g-label span{color:#8ee8d1}.g-skin-name{color:#c6ece1}
+/* The camera and DOM share one progress value, including a reversible return to the carousel. */
+.g-customizing .g-menu{visibility:visible;opacity:calc(1 - var(--g-custom-progress));transform:translateX(calc(var(--g-custom-progress) * -32px));pointer-events:none;animation:none}
+.g-customizing .g-menu button{pointer-events:none}
+.g-custom{opacity:var(--g-custom-progress)}.g-controls{transform:translateX(calc((1 - var(--g-custom-progress)) * 30px))}
+.g-scene-transition button,.g-scene-transition input{pointer-events:none!important}.g-scene-transition .g-custom-top{pointer-events:none}
+#card:not([data-kind=menu]){background:#101827b8;transition:background .35s}#card .card-body{border:3px solid #10101b;border-radius:18px;box-shadow:0 7px #10101b;background:#fff4df;color:#251b30}
+#card .card-body.in{animation:g-card-arrive .4s cubic-bezier(.16,1,.3,1) both}
+@keyframes g-menu-arrive{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+@keyframes g-card-arrive{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes g-checks{to{background-position:24px 0}}
+#race-garage.g-calm .g-menu,#race-garage.g-calm .g-title-rule{animation:none}#race-garage.g-calm .g-controls{transform:none}#race-garage.g-calm.g-customizing .g-menu{transform:none}#card.c-gentle .card-body.in{animation:g-soft-arrive .4s ease both}
+@keyframes g-soft-arrive{from{opacity:0}to{opacity:1}}
+@media(max-width:699px){.g-controls{left:4%;right:4%;width:auto}.g-customizing .g-menu{display:block}.g-customizing .g-title-card{opacity:calc(1 - var(--g-custom-progress))}.g-menu{border-radius:15px}.g-title-card{text-shadow:2px 3px #10101b}}
+@media(prefers-reduced-motion:reduce){.g-menu,.g-title-rule{animation:none}#race-garage .g-menu-row:hover,#race-garage .g-menu-row:focus-visible{transform:none}.g-customizing .g-menu,.g-controls{transform:none}#card .card-body.in{animation:g-soft-arrive .4s ease both}}
+
+/* Keep the carousel behind menu cards and fade each overlay without a scene cut. */
+#race-garage{animation:g-soft-arrive .4s ease both}.g-menu{animation:none}
+#card:not([data-kind=menu]){animation:g-soft-arrive .35s ease both}

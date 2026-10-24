@@ -179,6 +179,7 @@ async function boot() {
   const gentle = createGentle(feel);
   gentle.set(init.gentle);
   let hostGentle = !!(init.gentle && init.gentle.on) || !!feel.get('gentle.on');
+  loading.calm(hostGentle);
   if (qs.get('feel') === '1') openFeelSheet(feel, document.body);
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
@@ -768,9 +769,9 @@ async function boot() {
     }
     if (HT) hLap('world');
     renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
-    const inGarage=!!garage&&state==='menu'&&hud.card==='menu';
+    const garageScene=!!garage&&state==='menu',inGarage=garageScene&&hud.card==='menu';
     garage?.setVisible(inGarage);
-    if(inGarage)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
+    if(garageScene)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
     else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt });   // 7. render
     if (HT) hLap('render');
 

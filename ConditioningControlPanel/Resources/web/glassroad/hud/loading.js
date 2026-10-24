@@ -2,6 +2,7 @@
 export function createLoading(doc=globalThis.document) {
   const root=doc.getElementById('race-loading');let progress=0,finished=false;
   return {
+    calm(on){root?.classList.toggle('boot-calm',!!on);},
     set(stage,value){if(!root||finished)return;progress=Math.max(progress,Math.min(1,Number(value)||0));
       root.querySelector('.boot-stage').textContent=stage;
       const percent=Math.round(progress*100);root.querySelector('[role=progressbar]').setAttribute('aria-valuenow',String(percent));
