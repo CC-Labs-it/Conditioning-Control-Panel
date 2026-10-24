@@ -11,20 +11,6 @@ using Serilog;
 
 namespace ConditioningControlPanel.Services.BackRoom;
 
-/// <summary>One answer to one <c>station-request</c> (CONTRACT section 2.2, <c>station-result</c>).
-/// A host refusal has <see cref="Status"/> 0 and a reason of <c>offline</c>, <c>closed</c> or
-/// <c>bad_op</c>; a request that ran out of time is <c>timeout</c>.</summary>
-public sealed record BackRoomStationResult(bool Ok, int Status, string? Reason, JToken? Body)
-{
-    public static BackRoomStationResult Refuse(string reason) => new(false, 0, reason, null);
-}
-
-/// <summary>What the host needs from the relay. The service owns one; tests hand in a fake.</summary>
-public interface IBackRoomRelay
-{
-    Task<BackRoomStationResult> RelayAsync(string station, string op, string? idem, JObject? body, CancellationToken ct = default);
-}
-
 /// <summary>
 /// THE STATION RELAY (CONTRACT section 3). The only way a Back Room page reaches the server: the
 /// page names a station and an op, this class looks the pair up in <see cref="Ops"/>, attaches the
@@ -115,14 +101,18 @@ public sealed class BackRoomApi : IBackRoomRelay
     /// <param name="adoptSp">Receives settlement balances; decoration state and layout replies are excluded.</param>
     /// <param name="applyPrizes">Receives (account sent for, revision, grants) from a counter reply.
     /// Null = <see cref="DefaultApplyPrizes"/>.</param>
+    /// <param name="baseUrl">Null = <see cref="BaseUrl"/>. The Avalonia head passes its sandbox-checked proxy.</param>
     public BackRoomApi(HttpClient? http, Func<(string UnifiedId, string Token)?> identity, Action<int>? adoptSp,
-        Action<string, long, string[]>? applyPrizes = null)
+        Action<string, long, string[]>? applyPrizes = null, string? baseUrl = null)
     {
         _http = http ?? SharedHttp;
         _identity = identity;
         _adoptSp = adoptSp;
         _applyPrizes = applyPrizes ?? ((account, revision, grants) => DefaultApplyPrizes?.Invoke(account, revision, grants));
+        _baseUrl = baseUrl ?? BaseUrl;
     }
+
+    private readonly string _baseUrl;
 
     /// <summary>The account's token door off AppSettings, or null when there is none to use.</summary>
     public static (string UnifiedId, string Token)? AppIdentity()
@@ -130,7 +120,7 @@ public sealed class BackRoomApi : IBackRoomRelay
         try
         {
             var s = CoreSettings.Current;
-            if (s.OfflineMode) return null;
+            if (s == null || s.OfflineMode) return null;
             if (string.IsNullOrWhiteSpace(s.UnifiedId) || string.IsNullOrWhiteSpace(s.AuthToken)) return null;
             return (s.UnifiedId, s.AuthToken);
         }
@@ -191,13 +181,13 @@ public sealed class BackRoomApi : IBackRoomRelay
         return BackRoomStationResult.Refuse("offline");
     }
 
-    private static HttpRequestMessage BuildRequest(string method, string path, (string UnifiedId, string Token) id,
+    private HttpRequestMessage BuildRequest(string method, string path, (string UnifiedId, string Token) id,
         string? idem, JObject? body)
     {
         HttpRequestMessage req;
         if (method == "GET")
         {
-            req = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
+            req = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
         }
         else
         {
@@ -206,7 +196,7 @@ public sealed class BackRoomApi : IBackRoomRelay
             var o = body != null ? (JObject)body.DeepClone() : new JObject();
             if (!string.IsNullOrEmpty(idem)) o["idem"] = idem;
             o["unified_id"] = id.UnifiedId;
-            req = new HttpRequestMessage(HttpMethod.Post, BaseUrl + path)
+            req = new HttpRequestMessage(HttpMethod.Post, _baseUrl + path)
             {
                 Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
             };

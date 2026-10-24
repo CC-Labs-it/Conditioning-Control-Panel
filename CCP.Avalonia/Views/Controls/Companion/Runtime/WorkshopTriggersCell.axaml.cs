@@ -4,7 +4,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using CoreAppSettings = ConditioningControlPanel.Models.AppSettings;
 using ConditioningControlPanel.Services;
@@ -44,7 +46,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
                 Write(() => CoreSettings.Current.TriggerIntervalSeconds = (int)_slider.Value);
             };
             this.FindControl<Button>("BtnEditTriggersCompanion")!.Click += (_, _) => EditTriggers();
-            // ponytail: tube timer, CompanionPhraseService count/management and phrase presets
+            // WPF forwards the real Phrase Manager action to its owning shell.
+            this.FindControl<Button>("BtnManagePhrases")!.Click += (sender, e) =>
+                this.FindAncestorOfType<MainShellWindow>()?.BtnManagePhrases_Click(sender, e);
+            // ponytail: tube timer, CompanionPhraseService count and phrase presets
             // remain wire-views-companion-workshop-triggers-cell-b; no playback is claimed here.
             SyncFromSettings();
         }

@@ -33,9 +33,7 @@ namespace ConditioningControlPanel.Services;
 public class GazeDebugCursorService : IDisposable
 {
     private const float DotRadius = 8f;          // core dot radius (DIPs)
-    private const float TrailLifeSec = 0.55f;    // trail node lifetime
-    private const int MaxTrailNodes = 64;
-    private const float TrailMinStepDips = 3f;   // new node only after this much travel
+    private const float TrailLifeSec = GazeCursorTrail.LifeSeconds;    // trail node lifetime
 
     // Idle pink / locked warm gold — same palette the old Ellipse fills used.
     private static readonly SKColor IdleBody = new(0xFF, 0x69, 0xB4);
@@ -60,8 +58,7 @@ public class GazeDebugCursorService : IDisposable
     private Point _lastPaintedPos;
     private bool _needsPaint;
 
-    private struct TrailNode { public float X, Y, Age; }
-    private readonly List<TrailNode> _trail = new(MaxTrailNodes);
+    private readonly GazeCursorTrail _trail = new();
 
     // Soft radial sprite for the dot bloom (shared, built once) + cached
     // tint filters so the paint path never allocates per frame.
@@ -250,8 +247,22 @@ public class GazeDebugCursorService : IDisposable
         _rimPaint = null;
     }
 
+    private int _monitorRevision = -1;
+
     private void HandleGazeMove(Point p)
     {
+        var revision = App.Webcam?.GazeMonitorRevision ?? 0;
+        if (_overlay != null && revision != _monitorRevision)
+        {
+            _monitorRevision = revision;
+            _overlay.Left = SystemParameters.VirtualScreenLeft;
+            _overlay.Top = SystemParameters.VirtualScreenTop;
+            _overlay.Width = Math.Max(1, SystemParameters.VirtualScreenWidth);
+            _overlay.Height = Math.Max(1, SystemParameters.VirtualScreenHeight);
+            CacheDpi();
+            _trail.Clear();
+            _needsPaint = true;
+        }
         _pos = p;
         _hasPos = true;
     }
@@ -318,32 +329,8 @@ public class GazeDebugCursorService : IDisposable
                 }
             }
 
-            // Age + cull trail nodes.
-            for (int i = _trail.Count - 1; i >= 0; i--)
-            {
-                var n = _trail[i];
-                n.Age += dt;
-                if (n.Age >= TrailLifeSec) _trail.RemoveAt(i);
-                else _trail[i] = n;
-            }
-
-            // Feed the trail from the latest cursor position (overlay-local).
-            if (_hasPos && !_faceLost && TryOverlayLocal(out float lx, out float ly))
-            {
-                bool add = _trail.Count == 0;
-                if (!add)
-                {
-                    var last = _trail[_trail.Count - 1];
-                    float dx = lx - last.X, dy = ly - last.Y;
-                    add = dx * dx + dy * dy >= TrailMinStepDips * TrailMinStepDips;
-                }
-                if (add)
-                {
-                    if (_trail.Count >= MaxTrailNodes) _trail.RemoveAt(0);
-                    _trail.Add(new TrailNode { X = lx, Y = ly, Age = 0f });
-                    _needsPaint = true;
-                }
-            }
+            (double X, double Y)? local = _hasPos && !_faceLost && TryOverlayLocal(out float lx, out float ly) ? (lx, ly) : null;
+            _needsPaint |= _trail.Tick(dt, local);
 
             // Repaint only when something changed — a static dot with a dead
             // trail costs nothing while the user fixates.
@@ -486,12 +473,12 @@ public class GazeDebugCursorService : IDisposable
         if (_overlay == null) return false;
 
         var bounds = App.Webcam?.Calibration?.MonitorBounds;
-        // A pre-hotfix save carries no DeviceName: the monitor is unknown, so fall back to
-        // "primary, at the origin" rather than trusting a stale X/Y. Same rule as FypHostService.
-        bool known = bounds?.DeviceName != null;
+        // A sleeping display can return at a different desktop origin. Resolve live bounds;
+        // the primary fallback is temporary and never replaces the calibration's identity.
+        var screen = App.Webcam?.GetGazeScreen();
         double scale = bounds is { DpiScale: > 0.25 and < 8.0 } ? bounds.DpiScale : 1.0;
-        double originX = known ? bounds!.X : 0;
-        double originY = known ? bounds!.Y : 0;
+        double originX = screen?.Bounds.X ?? 0;
+        double originY = screen?.Bounds.Y ?? 0;
 
         // monitor-local DIPs -> physical desktop px -> WPF units.
         double physX = _pos.X * scale + originX;
