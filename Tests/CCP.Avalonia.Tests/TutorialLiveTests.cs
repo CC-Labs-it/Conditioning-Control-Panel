@@ -254,7 +254,7 @@ public sealed class TutorialLiveTests
         other.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
         Dispatcher.UIThread.RunJobs();
         Assert.False(CoreTutorial.IsActive);
-        Assert.Equal(0, overlay.Opacity);
+        Assert.Equal(0, overlay.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1));  // fade target
         }
         finally { other.Close(); }
     });

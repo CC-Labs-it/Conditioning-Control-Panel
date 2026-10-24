@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -216,7 +217,7 @@ public sealed class TutorialTourTests : IDisposable
     }
 
     [Fact]
-    public Task ATourStartsStepsClosesAndPanicEndsIt() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task ATourStartsStepsClosesAndPanicEndsIt() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
         var service = new SettingsService();
@@ -285,7 +286,9 @@ public sealed class TutorialTourTests : IDisposable
             second!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             Assert.False(CoreTutorial.IsActive);
             Assert.True(second.IsVisible); // the WPF 200ms fade retains the card briefly
-            await Task.Delay(250);
+            Assert.Equal(0, second.GetBaseValue(Visual.OpacityProperty).GetValueOrDefault(1));  // fade target
+            Assert.Contains(second.Transitions!, t => t is DoubleTransition { Duration.TotalMilliseconds: 200 });
+            second.Close();                // stands in for the fade timer: no real waits (P08)
             Dispatcher.UIThread.RunJobs();
             Assert.False(CoreTutorial.IsActive);
             Assert.Null(ShellOverlay());
@@ -301,5 +304,6 @@ public sealed class TutorialTourTests : IDisposable
             CoreSettings.SaveImmediate();
             CoreSettings.ServiceProvider = null;
         }
+        return Task.CompletedTask;
     });
 }

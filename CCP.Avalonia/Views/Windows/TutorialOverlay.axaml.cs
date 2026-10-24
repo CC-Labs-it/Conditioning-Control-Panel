@@ -767,7 +767,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (parent is Control fe)
             {
-                var found = fe.FindControl<Control>(name);
+                // FindControl throws on a tree with no name scope (a window built in code).
+                var found = fe.FindNameScope()?.Find<Control>(name);
                 if (found != null) return found;
             }
 

@@ -18,6 +18,21 @@
 //     CoreSettings.Current.CustomAssetsPath is exactly where WPF writes the answer - CorePaths
 //     .EffectiveAssets reads it straight back through the head's provider.
 //
+// Still blocked, each naming its symbol rather than a vague service:
+//   - BtnSave_Click: SaveSettings() re-derives AppSettings from AppSettingsTab's controls, but on
+//     this head every one of those controls is already a live editor that writes Current and
+//     saves (GeneralSettingsSection, PerformanceSettingsSection, AudioSettingsSection, ...).
+//     Restoring the read-back would make the shell a SECOND writer of settings the sections
+//     already own - the exact hazard WPF's own Phase 8 comment spends 20 lines on. The rest of
+//     the handler (_allPresets, the "save as preset" offer, FlashSaveAbsorb) is preset machinery
+//     that is stubbed in MainShellWindow.Presets.cs.
+//   - LoadSettings / UpdateSliderTexts: same reason - each Settings section seeds itself.
+//   - The pack migration inside BtnPickAssetsFolder_Click: Services/PackEncryptionService.cs and
+//     Services/ContentPacks are not on this head, so no .packs folder is discovered to move.
+//   - The post-change rescan (App.Flash/Video/BubbleCount/ContentPacks RefreshImagesPath etc. and
+//     RefreshAssetTree): those four services and the assets tree are not on this head.
+//   - Services/Auth/SecurityHelper.IsPersonalFolderRoot: the #1053 refusal. Not in Core, so the
+//     guard is re-stated privately below; delete the local copy the day it moves.
 
 using System;
 using System.Collections.Generic;
@@ -243,7 +258,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void BtnTutorialModding_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             CloseTutorialOverlay();
-            if (CoreTutorial.IsActive) return;
+            // WPF opens Mod Creator even mid-tour; its LaunchTutorial refuses a second tour.
             new ModCreatorWindow(startWithTutorial: true).Show(this);
         }
 
