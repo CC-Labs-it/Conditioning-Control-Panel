@@ -64,10 +64,12 @@ namespace ConditioningControlPanel
             // Conditioning config (Preset.ApplyTo touches only config, never progression).
             if (rc.Preset != null)
             {
-                // Mid-Lockdown the strict flags stay on (#1282).
+                // Mid-Lockdown the strict flags stay on (#1282) and the panic key stays put.
                 bool strictBefore = s.StrictLockEnabled, bubbleStrictBefore = s.BubbleCountStrictLock;
+                bool panicBefore = s.PanicKeyEnabled;
                 rc.Preset.ApplyTo(s);
                 Services.LockdownStrictHold.RestoreAfterApply(s, strictBefore, bubbleStrictBefore);
+                Services.LockdownPanicHold.RestoreAfterApply(s, panicBefore);
             }
 
             // Browser mute.
