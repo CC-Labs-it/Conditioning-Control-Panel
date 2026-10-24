@@ -117,6 +117,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
         internal static VlcFrameSink? Sink => _sink;
         internal static Action<MediaPlayer> RouteAudio = LibVlcAudio.ApplyPreferredDevice;
+        /// <summary>Installs the MA_NOACTIVATE hook (a no-op off Win32). Tests swap it to see every game window get one.</summary>
+        internal static Action<TopLevel> InstallClickHook = w => Win32Properties.AddWndProcHookCallback(w, Win32Overlay.PreventClickRaise);
 
         // Multi-monitor support - static shared state
         private static readonly object _cleanupLock = new();
@@ -199,7 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // Installed before Show: clicks retain focus and cannot raise the game over its bubbles.
             // The Avalonia API is a no-op on platforms without a Win32 window implementation.
-            Win32Properties.AddWndProcHookCallback(this, Win32Overlay.PreventClickRaise);
+            InstallClickHook(this);
 
             // Key handler
             KeyDown += OnKeyDown;
@@ -518,7 +520,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     // Serialize with disposal: the queued route must never touch a released player.
                     lock (player)
-                        if (ReferenceEquals(player, _player)) RouteAudio(player);
+                        if (!_isCleaningUp && ReferenceEquals(player, _player)) RouteAudio(player);   // WPF xaml.cs:640 guard
                 });
             };
             _sink = new VlcFrameSink(player, () => _media,
