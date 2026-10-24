@@ -6,6 +6,7 @@ import { loadTrack } from '../track/load.js';
 import { phraseGateLayout, phraseExclusions } from '../track/phraseGates.js';
 import { createPhraseGateContact } from '../sim/phraseGates.js';
 import { createState, S } from '../sim/state.js';
+import { createBus } from '../core/events.js';
 import { phraseLook, gatePulse, gateMote, GATE_AMBIENT, GATE_CAPACITY } from '../render/phraseGateMotion.js';
 const hooks = registerHooks({ resolve(s, c, next) {
   const files = { 'three/tsl': 'three.tsl.min.js', 'three/webgpu': 'three.webgpu.min.js' };
@@ -129,4 +130,17 @@ test('Gentle reduces the cloud and a refused brightness budget softens the pulse
     assert.equal(pool.count,gentle?32:GATE_CAPACITY);assert.equal(Math.abs(pulse.position.z),0);assert.ok(pulse.material.opacity<=.2);
     effect.dispose();
   }
+});
+
+test('audio crossing event shares the exact visual onset and never repeats during hold or pause', () => {
+  const bus=createBus(),scene=new Scene(),effect=createPhraseGates(scene,tracks[1],{doc:null,bus});
+  const gate=effect.gates[0],events=[];
+  bus.on('phrase-gate',e=>{events.push(e);assert.equal(effect.stats.age,0);assert.equal(effect.stats.active,true);});
+  const at=z=>{const st=createState();st[S.s]=gate.s+z;for(let i=0;i<3;i++)st[S.posX+i]=gate.frame.p[i]+gate.frame.t[i]*z;return st;};
+  effect.update(at(-2),.1);effect.update(at(2),.1,{paused:true});assert.equal(events.length,0);
+  effect.update(at(2),.1);assert.equal(events.length,1);
+  assert.deepEqual(events[0],{id:gate.id,course:'mainframe',index:0,gentle:false});
+  effect.update(at(3),.6);effect.update(at(4),.6);assert.equal(events.length,1);
+  effect.clear();effect.update(at(-2),.1);effect.update(at(2),.1);assert.equal(events.length,2);
+  effect.dispose();
 });

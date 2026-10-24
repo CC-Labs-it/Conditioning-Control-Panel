@@ -340,7 +340,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   try { wordFx = createWordPopFx(scene, { particles, wakes, kart, bus, feel, photosafe }); } catch (e) { console.warn('[glassroad/world] word pop fx failed: ' + (e && e.message)); }
   // pass 4: the popped word rushes at the camera (render/wordRush.js, a DOM layer under the cards, on `word-pop`)
   let wordRush = null;
-  const phraseGates = createPhraseGates(scene, track, { feel, photosafe });
+  const phraseGates = createPhraseGates(scene, track, { feel, photosafe, bus });
   try { wordRush = globalThis.document ? createWordRush({ bus, feel }) : null; } catch (e) { console.warn('[glassroad/world] word rush failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)

@@ -5,10 +5,41 @@ import { createFeel } from '../core/feel.js';
 import { createBus } from '../core/events.js';
 import { createAudio } from '../audio/bus.js';
 import { AUDIO_CUES } from '../audio/cues.js';
+import { GATE_VOICES, phraseGateNotes } from '../audio/phraseGates.js';
 
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
 const contract = readFileSync(new URL('../CONTRACT.md', import.meta.url), 'utf8');
 const EVENTS = [...contract.slice(contract.indexOf('## 8. Events')).matchAll(/^\| `([a-z-]+)` \|/gm)].map((m) => m[1]);
+
+test('phrase gate voices are distinct, bounded and start at the crossing with a pulse-crest accent', () => {
+  const fingerprints = new Set();
+  for (const course of Object.keys(GATE_VOICES)) {
+    const notes = phraseGateNotes(course);
+    fingerprints.add(JSON.stringify(notes));
+    assert.equal(notes.length,5);assert.equal(notes[0].at,0);assert.equal(notes[3].at,.3);
+    assert.ok(notes.every(n=>n.dur>0 && n.dur<.7 && n.vol>0 && n.vol<=.115 && n.attack>=.008));
+    assert.ok(notes.reduce((v,n)=>v+n.vol,0)<.3);
+    assert.ok(phraseGateNotes(course,1)[0].semis>notes[0].semis);
+    assert.deepEqual(phraseGateNotes(course,5),notes,'bounded five-note cycle');
+    const soft=phraseGateNotes(course,0,true);assert.equal(soft[0].at,0);assert.equal(soft[3].at,.5);
+    assert.ok(soft.every((n,i)=>n.vol<notes[i].vol && n.attack>=.02));
+  }
+  assert.equal(fingerprints.size,5);
+  assert.deepEqual(phraseGateNotes('unknown'),phraseGateNotes('threshold'));
+});
+
+test('phrase notes use the unlocked shared context and obey pause, restart and disposal', async () => {
+  const bus=createBus(), {ctx,log}=fakeCtx();
+  const audio=createAudio(createFeel(feelJson),bus,{win:null,makeCtx:()=>ctx,fetchFn:async()=>{throw Error('offline');}});
+  const payload={course:'mainframe',index:0};
+  bus.emit('phrase-gate',payload);assert.equal(log.started,0);
+  await audio.start();const before=log.started;
+  bus.emit('phrase-gate',payload);assert.equal(log.started,before+5);
+  audio.setPaused(true);bus.emit('phrase-gate',payload);assert.equal(log.started,before+5);
+  audio.setPaused(false);await audio.start();audio.reset();
+  const again=log.started;bus.emit('phrase-gate',payload);assert.equal(log.started,again+5);
+  audio.dispose();const disposed=log.started;bus.emit('phrase-gate',payload);assert.equal(log.started,disposed);
+});
 
 /** A WebAudio stand-in that records every node and scheduled value. */
 function fakeCtx() {

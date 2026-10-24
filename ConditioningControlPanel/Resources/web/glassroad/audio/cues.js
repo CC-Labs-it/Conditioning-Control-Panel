@@ -8,6 +8,7 @@
  */
 import { SOUND, CHORDS, noiseBuffer } from './engine.js';
 import { ladderSemis } from './mix.js';
+import { playPhraseGate } from './phraseGates.js';
 
 export function makeSynth(ctx, out, feel, engine) {
   let nbuf = null;
@@ -94,6 +95,7 @@ const j = (syn, k) => syn.feel.get('juice.' + k);
 const chordOf = (i) => CHORDS[((i % CHORDS.length) + CHORDS.length) % CHORDS.length];
 
 export const AUDIO_CUES = {
+  'phrase-gate': playPhraseGate,
   countdown(syn) { syn.tone(syn.semis(0), { dur: 0.12, vol: 0.16 }); },
   go(syn) {
     syn.tone(syn.semis(12), { dur: 0.4, vol: 0.18 });
