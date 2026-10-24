@@ -8,11 +8,14 @@
  * No clips here: the shared kart mixer moves every piece.
  */
 import { SkinnedMesh, Skeleton, Matrix4, BufferGeometry, BufferAttribute, SRGBColorSpace, Color } from 'three/webgpu';
+import { createVehicleLife } from './vehicleLife.js';
+import { racerFinish } from './racerFinish.js';
 import { catalogFrom, lookForSeat as pick, sameJoints, cutIndex } from './wardrobeMath.js';
 
 const json = (f) => fetch(new URL('../art/models/' + f, import.meta.url)).then((r) => (r.ok ? r.json() : null)).catch(() => null);
 const [WARDROBE, VARIANTS] = await Promise.all([json('emi-bot-wardrobe.json'), json('emi-vehicle-variants.json')]);
 
+export const VEHICLE_MECHANISMS = await json('vehicle-mechanisms.json');
 export const CATALOG = catalogFrom(WARDROBE, VARIANTS);
 
 /** The look for a seat (render/wardrobeMath.js lookForSeat over the loaded catalog); want = a remote player's ids. */
@@ -43,7 +46,7 @@ function rebind(art, id, kartMesh, material) {
       console.warn('[glassroad/wardrobe] ' + id + ' rejected: its bones are not the accepted R4 set');
       return null;
     }
-    const m = new SkinnedMesh(s.geometry, material ? material(s.material) : s.material);
+    const m = new SkinnedMesh(s.geometry, material ? material(racerFinish(s.material)) : racerFinish(s.material));
     m.name = id; m.frustumCulled = false;
     m.bind(new Skeleton(names.map((n) => byName.get(n)), s.skeleton.boneInverses), I4);
     meshes.push(m);
@@ -102,6 +105,7 @@ export function dressKart(art, model, look, { tint = null, tintMix = 0.6 } = {})
   const kart = kartSurface(model), res = { outfit: null, vehicle: null, tris: 0, draws: 0, dispose() {} };
   if (!kart || !art || !look) return res;
   const parent = kart.parent, owned = [], added = [], srcGeo = kart.geometry;
+  let vehicleLife = null;
   if (look.vehicle) {
     const cut = cutGeometry(kart);
     const meshes = cut ? rebind(art, look.vehicle, kart, (m) => {
@@ -115,6 +119,8 @@ export function dressKart(art, model, look, { tint = null, tintMix = 0.6 } = {})
       kart.geometry = cut;
       for (const m of meshes) { m.castShadow = kart.castShadow; parent.add(m); added.push(m); res.tris += triCount(m.geometry); }
       res.vehicle = look.vehicle; res.draws += meshes.length;
+      vehicleLife = createVehicleLife(meshes, VEHICLE_MECHANISMS?.vehicles?.[look.vehicle.replace('emi-vehicle-', '')]);
+      res.life = vehicleLife; res.draws += vehicleLife.metrics.draws || 0;
     }
   }
   if (look.outfit) {
@@ -126,6 +132,7 @@ export function dressKart(art, model, look, { tint = null, tintMix = 0.6 } = {})
     }
   }
   res.dispose = () => {
+    vehicleLife?.dispose();
     for (const m of added) { parent.remove(m); m.skeleton.dispose(); }
     for (const m of owned) m.dispose();
     kart.geometry = srcGeo;
