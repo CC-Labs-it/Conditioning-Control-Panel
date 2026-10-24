@@ -121,12 +121,13 @@ export function buildMainframe() {
     stones.push({ id, node, ds: round(s0 + a - loaded.nodeS[node]), x: lateral, w: width, len: round(b - a), shape: 'hex' });
   };
   // Separate islands: broad landing faces, visible void and occasional lane-changing links.
-  const count = Math.round((s1 - s0) / 26), pitch = (s1 - s0 + 4) / count;
+  const count = Math.round((s1 - s0) / 26), pitch = (s1 - s0 + 1) / count;
   for (let row = 0; row < count; row++) {
-    const a = row * pitch, b = row === count - 1 ? s1 - s0 : a + pitch - 4;
+    const a = row * pitch, b = row === count - 1 ? s1 - s0 : a + pitch - 1;
     lanes.forEach((lateral, lane) => put(`memory-${lane}-${row}`, a, b, lateral, 18));
     if (row < count - 1) for (const [lane, lateral] of (row % 2 ? [-10, 30] : [-30, 10]).entries()) {
-      put(`memory-link-${lane}-${row}`, b - 4, b + 8, lateral, 16);
+      // Eight-metre links sit inside the shoulder pocket, separated even through a full rotation.
+      put(`memory-link-${lane}-${row}`, b - 3.5, b + 4.5, lateral, 8);
       if ((row + lane) % 3 === 0) stones.at(-1).spin = row % 2 ? -0.085 : 0.075;
     }
   }

@@ -326,7 +326,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
         wakes.ring(posOf(i), obj.quaternion, LOOK.ringMaxM[deck ? 1 : 0], { gentle, gain: LOOK.ringGain * (deck ? .8 : .4) });
         if (deck && near) {
           particles.dust(obj, gentle ? 1 : 2);
-          particles.burst(posOf(i), (i ? 14 : 28) * few, { colours: ['#ed3e9d', '#e8d6c0', '#b68ba5'],
+          particles.burst(posOf(i), (i ? 14 : 28) * few, { colours: track.id === 'mainframe' ? ['#50eeb2', '#e1fff4', '#45bacb'] : ['#ed3e9d', '#e8d6c0', '#b68ba5'],
             speed: gentle ? 1.4 : 3.8, sizeM: .18, lifeS: .9, sparkle: .3, up: 1.2, g: .5, near: i === 0 });
         }
       }

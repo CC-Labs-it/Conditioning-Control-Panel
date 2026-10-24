@@ -4,10 +4,11 @@
  * Gentle, and returns every platform to its starting pose on restart.
  */
 import { Group, InstancedMesh, BoxGeometry, BufferGeometry, Float32BufferAttribute, LineSegments, LineBasicMaterial, MeshBasicNodeMaterial, Matrix4, Vector3, Quaternion, Color } from 'three/webgpu';
-import { vec3, normalize, normalWorld, dot, clamp, mix } from 'three/tsl';
+import { vec2, vec3, positionGeometry, normalize, normalWorld, dot, clamp, mix } from 'three/tsl';
 import { LOOK } from './look.js';
 import { STONE_HEX } from '../track/courts.js';
 import { createStoneHover } from './stoneHover.js';
+import { machineSurface } from './mainframeMaterials.js';
 
 export const STONE_KIT = Object.freeze({ modelId: 'stone-threshold', deckM: 0.55, slab: Object.freeze([5, 0.8, 5]),
   rim: '#f3e2ce', brass: '#cda15f' });
@@ -91,7 +92,7 @@ export function buildStones(track, art, pal) {
   const group = new Group(); group.name = 'stepping-stones';
   const rows = stoneLayout(track), hexes = rows.filter((r) => r.shape === 'hex'), tiled = rows.filter((r) => r.shape !== 'hex'), owned = [], geometries = [], moving = [];
   const basis = new Matrix4(), rotation = new Quaternion();
-  const hexMeshes = [], spin = new Quaternion(), up = new Vector3(0,1,0);
+  const hexMeshes = [], spin = new Quaternion(), up = new Vector3(0,1,0), hexAges = hexes.map(()=>Infinity), lightColor = new Color();
   const x = new Vector3(), y = new Vector3(), z = new Vector3();
   const model = tiled.length && art && typeof art.model === 'function' ? art.model(track.id === 'mainframe' ? 'stone-mainframe' : track.id === 'keep' ? 'stone-keep' : STONE_KIT.modelId) : null;
   let mode = 'none';
@@ -167,13 +168,17 @@ export function buildStones(track, art, pal) {
       const geometry = hexGeometry(kind), material = new MeshBasicNodeMaterial(), c = new Color(tint);
       material.name = 'stone-hex-' + kind;
       const shade = clamp(dot(normalize(normalWorld), normalize(vec3(...LOOK.lightDir))).mul(0.4).add(0.6), 0.25, 1);
-      material.colorNode = vec3(c.r, c.g, c.b).mul(shade);
+      const base = vec3(c.r, c.g, c.b);
+      // The normalized source plate follows the hex through rotation; no additional mesh or texture.
+      material.colorNode = (track.id === 'mainframe' && kind === 'deck'
+        ? machineSurface(positionGeometry.xz.mul(vec2(18,25)), base, art?.detail?.('detail-gold-wear')) : base).mul(shade);
       geometries.push(geometry); owned.push(material);
       const mesh = new InstancedMesh(geometry, material, hexes.length), matrix = new Matrix4(), position = new Vector3(), scale = new Vector3();
       mesh.name = material.name;
       hexes.forEach((r, i) => {
         basis.makeBasis(x.fromArray(r.b), y.fromArray(r.n), z.fromArray(r.t).negate()); rotation.setFromRotationMatrix(basis);
         matrix.compose(position.fromArray(r.p), rotation, scale.set(r.w, 1, r.len)); mesh.setMatrixAt(i, matrix);
+        mesh.setColorAt(i, lightColor.setRGB(1,1,1));
       });
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); mesh.castShadow = true; group.add(mesh);
       hexMeshes.push(mesh); mesh.boundingSphere.radius += 12;
@@ -200,6 +205,17 @@ export function buildStones(track, art, pal) {
         for (const mesh of hexMeshes) mesh.setMatrixAt(i,matrix);
       });
       for (const mesh of hexMeshes) if (hexes.some(r=>r.source.spin)) mesh.instanceMatrix.needsUpdate = true;
+      hexes.forEach((r,i)=> {
+        if(!Number.isFinite(hexAges[i])) return;
+        const age=hexAges[i]+=Math.max(0,dt), rise=gentle?.45:.3;
+        const u=age<rise?age/rise:Math.max(0,1-(age-rise)/1.5), glow=u*u*(3-2*u);
+        if(age>=rise+1.5) hexAges[i]=Infinity;
+        for(const mesh of hexMeshes) {
+          const gain=mesh.name==='stone-hex-rim'?1.8:mesh.name==='stone-hex-deck'?1.5:.45;
+          lightColor.setRGB(1+glow*gain*.55,1+glow*gain,1+glow*gain*.9);
+          mesh.setColorAt(i,lightColor); mesh.instanceColor.needsUpdate=true;
+        }
+      });
       hover?.update(dt, gentle);
 
     const quiet = !!(view.gentle || view.reducedMotion);
@@ -217,9 +233,15 @@ export function buildStones(track, art, pal) {
     const id = typeof event === 'string' ? event : event?.id;
     let row = null;
     for (const m of moving) if (m.row.stone === id) { if (!Number.isFinite(m.age)) m.age = 0; row = m.row; }
+    const index=hexes.findIndex(r=>r.stone===id);
+    if(index>=0) { hexAges[index]=0; row=hexes[index]; }
     return row;
   }
-  function reset() { for (const m of moving) { m.age = Infinity; applyMotion(m); } }
+  function reset() {
+    for (const m of moving) { m.age = Infinity; applyMotion(m); }
+    hexAges.fill(Infinity);
+    for(const mesh of hexMeshes) { hexes.forEach((_,i)=>mesh.setColorAt(i,lightColor.setRGB(1,1,1))); mesh.instanceColor.needsUpdate=true; }
+  }
   let disposed = false;
   return { group, rows, mode, count: rows.length, update, hit, reset,
     dispose() {

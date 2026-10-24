@@ -12,7 +12,8 @@ import { updateRespawn } from '../sim/respawn.js';
 import { createActions } from '../core/actions.js';
 import { S } from '../sim/state.js';
 import { updateStoneMotion, stonePolygon } from '../track/stoneMotion.js';
-import { fakeTrack, makeFeel, place, DT } from './sim-fake.mjs';
+import { fakeTrack, makeFeel, place, DT, recorder, acts } from './sim-fake.mjs';
+import { segDist } from '../render/colossiMath.js';
 
 const h = { id: 'hex', shape: 'hex', s: 100, x: 0, w: 24, len: 34 };
 const field = { id: 'hex-field', fromS: 100, toS: 140, lanes: [0], stones: [h] };
@@ -136,6 +137,40 @@ test('Mainframe gallery approach keeps its outer shoulder above the lower reacto
   }
 });
 
+test('every neighbouring hex remains separated, including rotating connector shoulders',()=> {
+  const tr=loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json',import.meta.url)))), f=tr.fields[0];
+  let closest=Infinity;
+  for(let angle=0;angle<72;angle++) {
+    for(const h of f.stones) if(h.spin) h.angle=angle*Math.PI/36;
+    const rows=f.stones.map(h=>({h,p:stonePolygon(h).map(([x,s])=>[h.x+x,0,h.s+h.len/2+s])}));
+    for(let a=0;a<rows.length;a++) for(let b=a+1;b<rows.length;b++) {
+      const A=rows[a],B=rows[b];
+      if(Math.abs(A.h.x-B.h.x)>30||Math.abs(A.h.s+A.h.len/2-B.h.s-B.h.len/2)>35)continue;
+      let distance=Infinity;
+      for(let i=0;i<6;i++)for(let j=0;j<6;j++)distance=Math.min(distance,segDist(A.p[i],A.p[(i+1)%6],B.p[j],B.p[(j+1)%6]));
+      assert.ok(distance>=.7,`${A.h.id}/${B.h.id}: ${distance}m at angle${angle}`);closest=Math.min(closest,distance);
+    }
+  }
+  assert.ok(closest<=1.01,'easy one-metre passages remain');
+});
+
+test('five Mainframe routes allow slow starts and early manual hops with real distinct-contact payloads',()=> {
+  const tr=loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json',import.meta.url)))),f=tr.fields[0];
+  for(const speed of [0,8,20,34])for(const lane of f.lanes)for(const lead of [0,4,8]) {
+    const st=place(tr,{s:f.fromS,speed,lateral:lane+2.5}),ev=recorder(),feel=makeFeel(),a=acts({throttle:1}),hopped=new Set();
+    const route=f.stones.filter(h=>h.x===lane);
+    for(let tick=0;tick<60*35&&st[S.s]<f.toS+5;tick++) {
+      a.hopPressed=false;
+      if(lead)for(const h of route.slice(0,-1)) {const d=h.s+h.len-st[S.s];if(d>=0&&d<=lead&&!hopped.has(h.id)){a.hopPressed=true;hopped.add(h.id);break;}}
+      ev.t+=DT;updateStoneMotion(tr.fields,DT);step(st,a,tr,feel,DT,ev);updateRespawn(st,tr,feel,DT,ev);
+    }
+    const label=`speed${speed},lane${lane},lead${lead}`;
+    assert.ok(st[S.s]>=f.toS+5,label);assert.equal(ev.all('drop').length,0,label);assert.equal(ev.all('void').length,0,label);
+    const entered=ev.all('stone');assert.ok(entered.length>=12,label);
+    for(let i=0;i<entered.length;i++) {const p=entered[i].payload;assert.equal(p.field,f.id);assert.equal(p.p.length,3);assert.ok(p.p.every(Number.isFinite));if(i)assert.notEqual(p.id,entered[i-1].payload.id);}
+  }
+});
+
 const hooks = registerHooks({ resolve(specifier, context, next) {
   const files = { 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
   return files[specifier] ? { url: new URL('../vendor/three/build/' + files[specifier], import.meta.url).href, shortCircuit: true } : next(specifier, context);
@@ -169,4 +204,15 @@ test('giant hex rendering uses one solid platform per stone with the physical ou
   }
   assert.equal(corners.size, 6, 'exactly six top corners');
   built.dispose(); built.dispose(); assert.equal(disposed, 4, 'geometry disposed once');
+});
+
+test('a hex landing highlights only the entered platform, fades out, freezes and resets',()=> {
+  const tr=loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json',import.meta.url)))),view=buildStones(tr,null,null);
+  const deck=view.group.getObjectByName('stone-hex-deck'),first=view.rows[0],array=()=>Array.from(deck.instanceColor.array);
+  assert.equal(view.hit({id:first.stone}),first);view.update(.15);const normal=array();
+  assert.ok(normal[1]>1.4);assert.deepEqual(normal.slice(3,6),[1,1,1]);
+  view.update(1,{paused:true});assert.deepEqual(array(),normal);
+  view.update(2);assert.deepEqual(array().slice(0,3),[1,1,1]);
+  view.hit(first.stone);view.update(.15,{gentle:true});assert.ok(array()[1]<normal[1]);
+  view.reset();assert.ok(array().every(v=>v===1));view.dispose();
 });

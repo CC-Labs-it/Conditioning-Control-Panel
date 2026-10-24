@@ -326,17 +326,15 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // photosafe gated by the caller, 0 when refused or under Gentle)
   let surface = body.mul(S.baseGain).add(hot.mul(lineV.mul(S.lineGain))).add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)))
     .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze).mul(LOOK.roadGain);
-  // Mainframe's road is machined opaque metal. Fixed traces use the same pixel filtering as the
-  // ribbon, while the existing song waves and streaming pattern still modulate their green light.
+  // Mainframe departments own their opaque deck finishes. Shared navigation marks are restrained
+  // so the control tiles, grating, cable channels and black service deck retain their own identity.
   if (track?.id === 'mainframe') {
-    const lanes = aaLineN(abs(fract(p.x.div(3)).sub(0.5)).mul(3), 0.055, fwidth(p.x), 3);
-    const joints = aaLineN(abs(fract(p.y.div(12)).sub(0.5)).mul(12), 0.065, fwidth(p.y), 12)
-      .mul(smoothstep(5, 14, dist));
-    const traces = max(lanes, joints.mul(0.45));
-    const plates = mainframeFloor(track, p, machineSurface(p, vec3(0.045, 0.067, 0.073), art?.detail?.('detail-gold-wear')));
-    surface = plates.add(body.mul(0.018))
-      .add(pal.col(0).mul(traces.mul(0.42).add(lineV.mul(0.12)).add(edgeW.mul(0.08))))
-      .add(vec3(0.28, 0.75, 0.48).mul(centre.mul(S.centreGain).mul(u.contrast)))
+    const plates = mainframeFloor(track, p, machineSurface(p, vec3(0.085, 0.105, 0.12)), {
+      halfWidth: half, wear: art?.detail?.('detail-gold-wear'), roughness: art?.detail?.('detail-porcelain-roughness'),
+    });
+    const dash = smoothstep(.2,.35,fract(p.y.div(12))).mul(float(1).sub(smoothstep(.65,.8,fract(p.y.div(12)))));
+    surface = plates.add(body.mul(0.008)).add(pal.col(0).mul(edgeW.mul(0.035)))
+      .add(vec3(0.32, 0.38, 0.35).mul(centre.mul(dash).mul(S.centreGain * 0.45).mul(u.contrast)))
       .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze);
   }
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });

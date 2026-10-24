@@ -53,7 +53,7 @@ test('Mainframe memory tiles start supported in every lane and meet the exit dec
   const field = track.fields[0];
   assert.ok(field.toS - field.fromS >= 350);
   assert.equal(field.lanes.length, 5);
-  assert.ok(field.stones.every(stone => stone.shape === 'hex' && stone.w >= 16));
+  assert.ok(field.stones.every(stone => stone.shape === 'hex' && stone.w >= (stone.id.startsWith('memory-link') ? 8 : 18)));
   assert.ok(track.frameAt(field.fromS).w >= 100);
   for (const x of field.lanes) {
     assert.ok(stoneIn(field, field.fromS + 0.1, x));
@@ -61,7 +61,7 @@ test('Mainframe memory tiles start supported in every lane and meet the exit dec
     assert.ok(Math.abs(field.toS - (lane.at(-1).s + lane.at(-1).len)) <= 0.01);
     for (let i = 1; i < lane.length; i++) {
       const gap = lane[i].s - lane[i - 1].s - lane[i - 1].len;
-      assert.ok(gap >= 3.99 && gap <= 4.01, 'visible but forgiving four-metre gaps');
+      assert.ok(gap >= .99 && gap <= 1.01, 'visible but forgiving one-metre gaps');
     }
   }
 });

@@ -235,6 +235,16 @@ export function sampleOnLayer(layer, rnd, L = SPIRAL_LOOK, glow = 0, centre = fa
 /** Kind flags packed in a0.w: layer 2 (+1), glitter (+2), glow sprite (+4). */
 export const KIND = Object.freeze({ layer2: 1, glitter: 2, glow: 4 });
 
+/** Authored gate differences change particle data, never add materials or extra draws. */
+export function gateParticleLook(gate, L = SPIRAL_LOOK) {
+  if (!gate.appearance) return L;
+  const a = gate.appearance, out = { ...L };
+  const ranges = { armFill: [.2,.95], layer2ArmFill: [.15,.8], coreWhite: [0,.3],
+    glowShare: [.08,.25], glowAlpha: [.08,.22], layer2Share: [.15,.45], layer2Alpha: [.35,.9], frontShare: [.5,.85], energy: [.2,1.5] };
+  for (const [key, [lo, hi]] of Object.entries(ranges)) if (Number.isFinite(a[key])) out[key] = clamp(a[key], lo, hi);
+  return out;
+}
+
 /**
  * Particle buffers for one gate (n at the high budget; any prefix is a fair subset, so a tier draws the
  * first Q of them). Layout per particle, 3 x vec4:
@@ -243,13 +253,15 @@ export const KIND = Object.freeze({ layer2: 1, glitter: 2, glow: 4 });
  *   a2 = (twinkle phase, twinkle Hz, brightness, mode 0 angular / 1 radial)
  */
 export function buildParticles(params, gate, n, seed = 1, L = SPIRAL_LOOK) {
+  L = gateParticleLook(gate, L);
+  const secondaryLook = L.layer2ArmFill == null ? L : { ...L, armFill: L.layer2ArmFill };
   const rnd = makeRng(seed), a0 = new Float32Array(n * 4), a1 = new Float32Array(n * 4), a2 = new Float32Array(n * 4);
   const two = !!(params.layer2 && params.layer2.enabled), depth = Math.max(0, gate.depthM || 0), K = sliceCount(depth, L);
   const R = gate.radiusM || L.radiusM;
   for (let i = 0; i < n; i++) {
     const l2 = two && rnd() < L.layer2Share, layer = l2 ? params.layer2 : params.layer;
     const glow = rnd() < (L.glowShare || 0);
-    const p = sampleOnLayer(layer, rnd, L, params.glow || 0, glow);
+    const p = sampleOnLayer(layer, rnd, l2 ? secondaryLook : L, params.glow || 0, glow);
     const glitter = !glow && rnd() < L.glitterShare;
     // a deep gate is a short tunnel of spiral slices; the front slice (the one a driver meets first) holds
     // frontShare of the budget so the face reads as one clean spiral, the rest thin out behind it
@@ -262,7 +274,7 @@ export function buildParticles(params, gate, n, seed = 1, L = SPIRAL_LOOK) {
     const bandM = layer.duty * bandSpacing(layer, p.rc) * R;
     const size = glow ? clamp(bandM * L.glowSpan, L.glowMinM, L.glowMaxM)
       : clamp(bandM * (L.coreSpan ?? 1) * (0.7 + 0.6 * rnd()), L.sizeM[0], L.sizeM[1]) * (1 + L.sizeRimGain * p.rc) * (glitter ? L.glitterSize : 1);
-    const bright = (glow ? L.glowAlpha : p.halo ? L.haloAlpha : 1) * (l2 ? L.layer2Alpha : 1);
+    const bright = (glow ? L.glowAlpha : p.halo ? L.haloAlpha : 1) * (l2 ? L.layer2Alpha : 1) * (L.energy ?? 1);
     a0.set([p.x, p.th, z, (l2 ? KIND.layer2 : 0) + (glitter ? KIND.glitter : 0) + (glow ? KIND.glow : 0)], i * 4);
     a1.set([r, g, b, size], i * 4);
     a2.set([rnd(), L.twinkleHz[0] + rnd() * (L.twinkleHz[1] - L.twinkleHz[0]), bright, p.mode], i * 4);

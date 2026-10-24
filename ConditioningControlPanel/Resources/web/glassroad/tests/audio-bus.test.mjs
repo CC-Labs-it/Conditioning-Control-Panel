@@ -73,3 +73,53 @@ test('audio: silent until start, then every cue and the engine run on one contex
   assert.equal(made, 1, 'one context');
   audio.dispose();
 });
+
+test('platform chain ascends on distinct contacts, stays bounded and resets between fields or after a fall', () => {
+  const tones = [], syn = { ctx: { currentTime: 0 }, semis: n => 220 * 2 ** (n / 12),
+    tone(hz) { tones.push(hz); }, release() {}, hold() {} };
+  for (let i = 0; i < 12; i++) {
+    syn.ctx.currentTime = i * 1.2;
+    AUDIO_CUES.stone(syn, { id: 'hex-' + i, field: 'memory' });
+    const count = tones.length;
+    AUDIO_CUES.stone(syn, { id: 'hex-' + i, field: 'memory' });
+    assert.equal(tones.length, count, 'lingering on one island does not ring repeatedly');
+  }
+  const roots = tones.filter((_, i) => i % 3 === 0);
+  assert.ok(roots.every((hz, i) => !i || hz > roots[i - 1]));
+  for (let i = 12; i < 200; i++) {
+    syn.ctx.currentTime = i * 1.2;
+    AUDIO_CUES.stone(syn, { id: 'hex-' + i, field: 'memory' });
+  }
+  assert.ok(tones.at(-3) < 3000, 'long chains stay in the useful note range');
+  AUDIO_CUES.stone(syn, { id: 'next', field: 'another-field' });
+  assert.equal(tones.at(-3), roots[0]);
+  AUDIO_CUES.drop(syn);
+  AUDIO_CUES.stone(syn, { id: 'retry', field: 'another-field' });
+  assert.equal(tones.at(-3), roots[0]);
+  syn.ctx.currentTime += 9;
+  AUDIO_CUES.stone(syn, { id: 'later', field: 'another-field' });
+  assert.equal(tones.at(-3), roots[0]);
+});
+
+test('platform notes use the existing audio bus, stay local and honor pause and restart', async () => {
+  const bus = createBus(), { ctx, log } = fakeCtx();
+  const audio = createAudio(createFeel(feelJson), bus, { win: null, makeCtx: () => ctx, fetchFn: async () => { throw Error('offline'); } });
+  bus.emit('stone', { id: 'first', field: 'memory' });
+  assert.equal(log.started, 0);
+  await audio.start();
+  const before = log.started;
+  bus.emit('stone', { id: 'first', field: 'memory' });
+  assert.equal(log.started, before + 3);
+  bus.emit('racer-event', { racer: 1, name: 'stone', p: { id: 'bot', field: 'memory' } });
+  assert.equal(log.started, before + 3, 'other karts do not advance the local melody');
+  audio.setPaused(true);
+  bus.emit('stone', { id: 'second', field: 'memory' });
+  assert.equal(log.started, before + 3);
+  audio.setPaused(false); await audio.start();
+  audio.reset();
+  const reset = log.started, start = log.sets.length;
+  bus.emit('stone', { id: 'first', field: 'memory' });
+  assert.equal(log.started, reset + 3, 'restart allows the first island to ring again');
+  assert.equal(log.sets.slice(start).find(([kind, n]) => kind === 'setValueAtTime' && n > 100)[1], 220);
+  audio.dispose();
+});

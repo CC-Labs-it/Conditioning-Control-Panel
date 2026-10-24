@@ -25,7 +25,7 @@
  * up by stones.kickUpMps along the road normal ('lip' take-off); the road's own edges and court holes never kick.
  * Over a lip void the kart counts as on its own road while it is still within the snap band of the deck (no fall
  * probe, no hole latch, no edge glow at every stone edge); below that band the ordinary hole fall runs. Events
- * `stone { id, s, x }` (a stone the kart was not on before) and `void { s, x }` (once per flight, first below the
+ * `stone { id, field, s, x, p }` (distinct grounded contact) and `void { s, x }` (once per flight, first below the
  * deck over a void). Per-kart stone memory lives in a WeakMap too.
  * No three.js; every tuning number comes from feel each tick (sim/gaps.js for the few it lacks).
  */
@@ -41,7 +41,7 @@ import { baseYaw, gripYaw } from './steer.js';
 import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
-import { lipLeave, broadPlatformEdgeKick } from './stones.js';
+import { lipLeave, broadPlatformEdgeKick, fieldAtS } from './stones.js';
 import { armGlide, glideGravity, resetGlide } from './glide.js';
 
 export { applyBoost };
@@ -250,7 +250,7 @@ export function step(st, a, track, feel, dt, ev) {
   // wave 2 STONES: a stone the kart was not on before (a landing or the deck handing over to the first stone)
   if (ground) {
     const id = qb.stone ? qb.stone.id : null;
-    if (id !== null && id !== sm.on) ev.emit('stone', { id, s: qb.s, x: qb.lateral });
+    if (id !== null && id !== sm.on) ev.emit('stone', { id, field: fieldAtS(track,qb.s)?.id || null, s: qb.s, x: qb.lateral, p: [...P] });
     sm.on = id; sm.voided = false;
   }
 

@@ -2,14 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loomVariation, createLoomDisplayFrames } from '../render/loomVariety.js';
-import { bandHz, screenRateMul } from '../render/spiralMath.js';
+import { bandHz, screenRateMul, gateParams } from '../render/spiralMath.js';
+import { normalizeParams2 } from '../../arcademy/engine/loom/loomField.js';
 
-test('Mainframe gates and takeovers use six distinct layered, deforming Loom fields', () => {
+test('Mainframe gates and takeovers use six supported styles with varied layers and bounded motion', () => {
   const gates = JSON.parse(readFileSync(new URL('../tracks/mainframe.spirals.json', import.meta.url))).gates;
   assert.equal(new Set(gates.map(g => g.loom.layer.style)).size, 6);
-  gates.forEach((g, i) => {
-    assert.deepEqual(g.loom, loomVariation(i));
-    assert.ok(g.loom.layer2.enabled && g.loom.wobble.amp > 0 && g.loom.hueCycles > 0);
+  assert.ok(gates.some(g => !g.loom.layer2.enabled) && gates.some(g => g.loom.layer2.enabled));
+  assert.equal(new Set(gates.map(g => JSON.stringify(g.loom))).size, gates.length);
+  gates.forEach(g => {
+    assert.deepEqual(gateParams(g), normalizeParams2(g.loom));
+    assert.ok(g.loom.wobble.amp > 0 && g.loom.pulse.amp > 0);
     assert.notEqual(g.loom.layer.style, g.loom.layer2.style);
     assert.notEqual(g.loom.layer.speedMul, g.loom.layer2.speedMul);
     assert.ok(bandHz(g.loom) * screenRateMul(g.loom) <= 2.5);

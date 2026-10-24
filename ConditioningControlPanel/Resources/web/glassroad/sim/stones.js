@@ -68,10 +68,13 @@ export function lipLeave(prevQ, q) {
 
 /** A broad landing deck renews an early hop once at its actual lip, never over the rest of the void. */
 export function broadPlatformEdgeKick(track, prevQ, q, normalSpeed, kickUpMps) {
-  if (track?.id !== 'keep' || !prevQ?.stone || prevQ.stone.w < 24 || prevQ.stone.len < 24 ||
+  const stone = prevQ?.stone;
+  const broad = track?.id === 'keep' ? stone?.w >= 24 && stone?.len >= 24
+    : track?.id === 'mainframe' && stone?.shape === 'hex' && !stone.spin && stone.w >= 16 && stone.len >= 20;
+  if (!broad ||
       !lipLeave(prevQ, q) || prevQ.height < -.3 || q.height < -.3 || q.height > 1.5) return 0;
-  const stone = prevQ.stone, end = stone.s + stone.len;
+  const end = stone.s + stone.len;
   if (!Number.isFinite(end) || !Number.isFinite(prevQ.s) || !Number.isFinite(q.s) || !Number.isFinite(q.lateral) ||
-      prevQ.s > end || q.s < end || q.s <= prevQ.s || Math.abs(q.lateral - stone.x) > stone.w / 2) return 0;
+      prevQ.s > end || q.s < end || q.s <= prevQ.s || Math.abs(q.lateral - stone.x) > stone.w / (stone.shape === 'hex' ? 4 : 2)) return 0;
   return Math.max(0, Math.max(0, kickUpMps) - normalSpeed);
 }
