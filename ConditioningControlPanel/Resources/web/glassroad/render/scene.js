@@ -55,6 +55,7 @@ import { createWordRush } from './wordRush.js';
 import { createWaterfall } from './waterfall.js';
 import { waterTable, tableCode } from './waterMath.js';
 import { buildStones } from './stones.js';
+import { buildMainframe } from './mainframe.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -64,9 +65,10 @@ const itemsMod = await import('./items/visuals.js').catch((e) => { console.warn(
 const spiralsMod = await import('./spirals3d.js').catch((e) => { console.warn('[glassroad/world] no spiral gates: ' + (e && e.message)); return null; });
 const routesMod = await import('./routes.js').catch((e) => { console.warn('[glassroad/world] no route marks: ' + (e && e.message)); return null; });
 const mediaMod = await import('./media.js').catch((e) => { console.warn('[glassroad/world] no media slots: ' + (e && e.message)); return null; });
-// Threshold is the only track: its gate layout loads with the module so buildWorld stays synchronous
+// Layouts load with the module so every material exists before the renderer warms.
 const SPIRAL_LAYOUTS = new Map();
 if (spiralsMod && globalThis.location) SPIRAL_LAYOUTS.set('threshold', await spiralsMod.fetchSpiralLayout('threshold'));
+if (spiralsMod && globalThis.location?.search?.includes('mainframe')) SPIRAL_LAYOUTS.set('mainframe', await spiralsMod.fetchSpiralLayout('mainframe'));
 
 /** Track MeshData -> Mesh, or null when the data is empty. */
 export function meshFrom(d, material) {
@@ -136,14 +138,15 @@ function props(track) {
  */
 export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id), looks = [] } = {}) {
   const scene = new Scene();
-  const pal = createPalette();
+  const isMainframe = track.id === 'mainframe';
+  const pal = createPalette(isMainframe ? 'mainframe' : '');
   const owned = [], offs = [];
   const add = (m) => { if (m) { scene.add(m); owned.push(m); } return m; };
 
   let sun = null;
   if (art) {
     // the glTF props and kart are lit (standard / physical materials); everything else is unlit
-    const L = LOOK.artLight;
+    const L = isMainframe ? { ...LOOK.artLight, sky: '#d1ffe8', ground: '#142c31' } : LOOK.artLight;
     scene.add(new HemisphereLight(L.sky, L.ground, L.hemi));
     sun = new DirectionalLight(L.sky, L.sun);
     sun.position.set(LOOK.lightDir[0], LOOK.lightDir[1], LOOK.lightDir[2]);
@@ -157,8 +160,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // Built before warmup: shared static construction gives the glass road depth.
   const showcaseDressing = buildShowcaseDressing(track, pal, art);
   scene.add(showcaseDressing.group);
-  const court = buildCourt(track, pal);
-  scene.add(court.group);
+  const court = isMainframe ? null : buildCourt(track, pal);
+  if (court) scene.add(court.group);
   // wave 2: the stepping stones of every field (render/stones.js), in the scene before the warm so their
   // materials link behind the card (Firefox links programs one by one)
   let stones = null;
@@ -168,20 +171,22 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
   let edges = null;
   try { edges = createEdges(scene, track, pal, { pulse: rails.uniforms.pulse }); } catch (e) { console.warn('[glassroad/world] edges failed: ' + (e && e.message)); }
-  const pad = createPadMaterial(LOOK.padColour, art && art.tex('boost-chevron-mask')), lip = createPadMaterial(LOOK.lipColour);
+  const pad = createPadMaterial(isMainframe ? '#75f8a7' : LOOK.padColour, art && art.tex('boost-chevron-mask')), lip = createPadMaterial(LOOK.lipColour);
   const padMesh = add(meshFrom(track.meshes.pads, pad.material));
   add(meshFrom(track.meshes.jumps, lip.material));
   // the hero colossi lean over the road; the scatter keeps clear of them (WORLD lane)
   const samples = sampleTrack(track, 4);
+  const mainframe = isMainframe ? buildMainframe(track, art, { samples }) : null;
+  if (mainframe) scene.add(mainframe.group);
   let colossi = null;
-  try { colossi = art ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
+  try { colossi = art && !isMainframe ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
   if (colossi) add(colossi.object);
-  const scatter = buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
-  add(scatter ? scatter.object : props(track));
-  add(createNearDressing(track, { phone: Q.name === 'phone' }).object);   // VIEW: near cues, in the scene before the boot warm
+  const scatter = isMainframe ? null : buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
+  if (!isMainframe) add(scatter ? scatter.object : props(track));
+  if (!isMainframe) add(createNearDressing(track, { phone: Q.name === 'phone' }).object);
   let terrace = null, terraceScreen = null;
   try {
-    if (art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
+    if (!isMainframe && art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
       terraceScreen = reelTexture();
       terrace = buildTerrace(art, track, pal, { phone: Q.name === 'phone', samples, screenMap: terraceScreen,
         avoid: [...(colossi ? colossi.placed : []), ...(scatter && scatter.heroes ? scatter.heroes.bodies : []), ...(scatter ? scatter.placed : [])] });
@@ -428,6 +433,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (finish) finish.update(dt, turn * 0.5, gentle);
     if (scatter) scatter.update(dt, scroll);
     if (colossi) colossi.update(dt, scroll);
+    if (mainframe) mainframe.update(dt, view, gentle);
     rails.uniforms.flow.value = road.uniforms.phase.value;
     if (shadows && view.camera) { view.camera.layers.enable(CATCH_LAYER); view.camera.getWorldDirection(FWD); shadows.update(view.camera.position, FWD); }
 
@@ -467,13 +473,14 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (wordRush) wordRush.dispose();
     if (waterfall) waterfall.dispose();
     showcaseDressing.dispose();
-    court.dispose();
+    if (court) court.dispose();
+    if (mainframe) mainframe.dispose();
     if (stones) stones.dispose();
     if (terrace) terrace.dispose();
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles

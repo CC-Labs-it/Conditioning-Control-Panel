@@ -322,8 +322,20 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const polish = refl.add(edgeCol.mul(0.6).add(0.4).mul(rim)).mul(u.sheen).mul(mu.calm.mul(M.calmSheen).add(1)).add(vec3(1, 0.97, 0.99).mul(glint));
   // u.bright carries the beat breath; the drop wave and the shatter add their own light (mu.flash is
   // photosafe gated by the caller, 0 when refused or under Gentle)
-  const surface = body.mul(S.baseGain).add(hot.mul(lineV.mul(S.lineGain))).add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)))
+  let surface = body.mul(S.baseGain).add(hot.mul(lineV.mul(S.lineGain))).add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)))
     .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze).mul(LOOK.roadGain);
+  // Mainframe's road is graphite circuit glass. Fixed traces use the same pixel filtering as the
+  // ribbon, while the existing song waves and streaming pattern still modulate their green light.
+  if (track?.id === 'mainframe') {
+    const lanes = aaLineN(abs(fract(p.x.div(3)).sub(0.5)).mul(3), 0.055, fwidth(p.x), 3);
+    const joints = aaLineN(abs(fract(p.y.div(12)).sub(0.5)).mul(12), 0.065, fwidth(p.y), 12)
+      .mul(smoothstep(5, 14, dist));
+    const traces = max(lanes, joints.mul(0.45));
+    surface = vec3(0.012, 0.025, 0.028).add(body.mul(0.035))
+      .add(pal.col(0).mul(traces.mul(0.42).add(lineV.mul(0.12)).add(edgeW.mul(0.08))))
+      .add(vec3(0.28, 0.75, 0.48).mul(centre.mul(S.centreGain).mul(u.contrast)))
+      .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze);
+  }
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
   // the edge line sits over everything; the gutter darkens what is inside it, so the line reads against any hue
   // A broad quiet shoulder gives the clear edge a darker neighbour. The music and glitter remain
@@ -331,9 +343,11 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const shoulder = smoothstep(0.28, 0.6, trueEdge).mul(float(1).sub(smoothstep(1.15, 1.85, trueEdge)));
   // Solid panes keep their joints and colour when the surrounding ribbon streams or flashes.
   // The steady centre and all separate word/pad markings remain above this restrained surface.
-  const tileBody = tiles.colour.mul(tiles.relief).mul(haze).mul(LOOK.roadGain)
+  let tileBody = tiles.colour.mul(tiles.relief).mul(haze).mul(LOOK.roadGain)
     .add(vec3(1, 0.96, 0.98).mul(tiles.glaze).mul(u.sheen))
     .add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)).mul(LOOK.roadGain));
+  if (track?.id === 'mainframe') tileBody = surface.mul(tiles.relief)
+    .add(vec3(0.36, 0.72, 0.56).mul(tiles.glaze).mul(u.sheen).mul(0.5));
   // WATER (wave 1): stream and pool vertices (attribute `surface` 3 / 4, `flow` m/s) swap the glass body
   // for the water surface (materials/water.js) BEFORE the tiles and bands, so both keep working on water;
   // the glass sheen and polish thin out over it. The clock u.water.t is the caller's (Gentle halves it).
