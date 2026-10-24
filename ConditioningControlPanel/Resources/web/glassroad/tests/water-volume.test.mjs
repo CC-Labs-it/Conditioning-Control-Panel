@@ -41,7 +41,8 @@ test('water volume has shallow raised surface, visible depth and curtains fallin
   assert.equal(water.object.children.length, 3, 'all material paths exist before warm-up');
   for (const mesh of water.object.children) {
     assert.ok(mesh.renderOrder > 0 && mesh.renderOrder < 1, 'water composites after road but before wake rings and spray');
-    assert.equal(mesh.material.depthWrite, false, 'transparent water cannot occlude pooled spray');
+    assert.equal(mesh.material.depthWrite, mesh.name === 'water-surface-raised',
+      'reactive skin rejects later submerged shadow catchers; translucent walls and curtains do not write depth');
   }
 });
 
@@ -53,25 +54,25 @@ test('water respects canal bank height, dry stretches and separately authored re
   assert.deepEqual(waterRuns(tr), []);
 });
 
-test('pooled water spray follows curved contacts and is silent in the air, during respawn and pause', t => {
-  const tr = track(), bursts = [], rings = [];
+test('pooled physical water spray follows curved contacts and is silent in the air, during respawn and pause', t => {
+  const tr = track(), bursts = [];
   tr.surfaceAt = (s, x) => ({ ...tr.frameAt(s), p: [x, 5 + x * x * 0.1, -s], n: [-0.2 * x, 1, 0] });
-  const water = createWaterfall(tr, pal, { particles: { burst: (...p) => bursts.push(p) }, wakes: { ring: (...p) => rings.push(p) } });
+  const water = createWaterfall(tr, pal, { particles: { burst: (...p) => bursts.push(p) } });
   t.after(() => water.dispose());
   const st = createState(); st[S.s] = 10; st[S.lateral] = 3; st[S.velZ] = -12; st[S.grounded] = 1; st[S.driftDir] = 1;
-  water.kart(0, st, 0.25); assert.equal(bursts.length, 2); assert.equal(rings.length, 1);
-  assert.ok(bursts.every(b => b[0][1] > 5.2), 'spray is on the bank, not the road centre plane');
-  const drift = bursts[0]; st[S.driftDir] = 0; water.kart(0, st, 0.1);
-  const straight = bursts.at(-1);
-  assert.ok(straight[1] >= 3 && straight[2].sizeM >= 0.18 && straight[2].up >= 1.3, 'straight-running spray remains visible');
-  assert.ok(drift[1] > straight[1] && drift[2].sizeM > straight[2].sizeM, 'drift spray retains its stronger hierarchy');
-  const before = bursts.length;
+  water.kart(0, st, 0.25); assert.equal(bursts.length, 0, 'water never reuses the illustrated teardrop atlas');
+  assert.equal(water.spray.stats().emitted,24);
+  assert.ok(water.spray.data[1] > 5.2, 'spray is on the bank, not the road centre plane');
+  const drift = water.spray.stats().emitted; st[S.driftDir] = 0; water.kart(0, st, 0.1);
+  const straight = water.spray.stats().emitted-drift;
+  assert.ok(straight>=6&&straight<drift, 'straight-running spray stays visible while drift sheds more fluid');
+  const before = water.spray.stats().emitted;
   water.kart(0, st, 0.25, { paused: true });
   st[S.airborne] = 1; water.kart(0, st, 0.25); st[S.airborne] = 0;
   st[S.respawnPhase] = 1; water.kart(0, st, 0.25);
-  assert.equal(bursts.length, before);
+  assert.equal(water.spray.stats().emitted, before);
   water.splash({ s: 10, x: 3, p: [100, 30, 20], normal: [0, 1, 0], down: 7 });
-  assert.deepEqual(bursts.at(-1)[0], [100, 30.22, 20], 'real simulation contact wins over reconstructed frame');
+  assert.ok(Math.abs(water.spray.data[before*12+1]-30.12)<.001, 'real simulation contact wins over reconstructed frame');
 });
 
 test('spill curtain is folded in depth with separated layers rather than one flat sheet', t => {
