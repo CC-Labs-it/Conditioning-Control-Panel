@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## 9. Main sync 7: subliminals over video
+
+1. Play a mandatory video, then show a subliminal. Check that the words appear above the clip. Open a lock card above the video, then show another subliminal: the lock card stays above the words. Repeat with focus stealing on, with two video monitors, and with a card on a monitor without video. Stop/panic removes the card through the existing desktop-overlay surface. WPF `Services/Subliminal/SubliminalService.cs` (`549a4b7d3`). Rows: `549a4b7d3`.
