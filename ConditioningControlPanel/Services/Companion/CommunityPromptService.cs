@@ -48,7 +48,7 @@ namespace ConditioningControlPanel.Services
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
 
-            _promptsFolder = Path.Combine(App.UserDataPath, "community-prompts");
+            _promptsFolder = Path.Combine(App.UserDataPath, Companion.InstalledCommunityPrompts.FolderName);
             _manifestCachePath = Path.Combine(_promptsFolder, "manifest-cache.json");
 
             // Create prompts folder if needed
@@ -241,28 +241,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public CommunityPrompt? GetInstalledPrompt(string promptId)
         {
-            try
-            {
-                var filePath = GetPromptFilePath(promptId);
-                if (!File.Exists(filePath))
-                    return null;
-
-                var json = File.ReadAllText(filePath);
-                var prompt = JsonConvert.DeserializeObject<CommunityPrompt>(json);
-
-                if (prompt != null)
-                {
-                    prompt.IsInstalled = true;
-                    prompt.IsActive = promptId == ActivePromptId;
-                }
-
-                return prompt;
-            }
-            catch (Exception ex)
-            {
-                App.Logger?.Warning("Error loading prompt {Id}: {Error}", promptId, ex.Message);
-                return null;
-            }
+            return Companion.InstalledCommunityPrompts.Load(_promptsFolder, promptId, ActivePromptId);
         }
 
         /// <summary>

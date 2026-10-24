@@ -6,10 +6,9 @@
 // sync6-nav-rail-c added the edge spur, the art tint (navtint), the label glow, the 160 ms halo
 // fade, NavBadges pills, the rich row tooltip and ChromeFx's hover nudge (NudgeNavIcon).
 // ponytail: not yet here: the coin depth (BuildNavCoin, press travel, tilt, specular), the
-// hue-bevel ring gradient (a flat hue ring stands in) and the rail shadow (PaintDepthRail) - lane
-// sync6-nav-polish-b; the possession reroute seam (WPF PossessionReroute, written only by
-// Services/Possession/Effects/MisrouteEffect.cs - no Possession service on this head, so a seam
-// would have no writer). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
+// rail shadow (PaintDepthRail) - lane
+// wire-shell-nav-rail-b; the possession reroute seam (WPF PossessionReroute, written only by
+// Services/Possession/Effects/MisrouteEffect.cs - that effect has no writer on this head). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
 // Social pill stays down until the Lobby service lands.
 
 using System;
@@ -19,8 +18,6 @@ using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
-using Avalonia.Data;
-using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -51,7 +48,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // WPF NavRailRules: row tint 0x33, tile tint 0x40, ring idle/hover/active alpha, lit halo.
         private const byte NavFillAlpha = 0x33, NavTileTintAlpha = 0x40;
-        private const byte NavRingIdleAlpha = 0xCC, NavRingHoverAlpha = 0xF2;
         private const double NavGlowActive = 0.55;
         // WPF NavRailRules: the art wash (lit ~5%, idle none), the spur (90% edge, 60% ring),
         // the badge cap and its seen opacity; NavRail.cs: the 160 ms halo fade; ChromeFx: the nudge.
@@ -97,6 +93,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 foreach (var row in _navSectionRows) PaintNavBadge(row, NavBadges.Get(row.Section));
                 // WPF :118 + MainWindow.xaml.cs:3653: the active mod's medallions, again on a mod switch.
                 ApplyDoorArt();
+                ApplyModToNavRailLabels();
+                Closed += (_, _) => { _navLabelsClosed = true; ClearNavLabelBindings(); };
                 CoreMods.ModChanged += OnModChangedDoorArt;
                 Closed += (_, _) => CoreMods.ModChanged -= OnModChangedDoorArt;
                 _navRailReady = true;
@@ -105,7 +103,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Warning(ex, "InitializeNavRail failed; rail stays as authored"); }
         }
 
-        private void OnModChangedDoorArt(object? sender, Models.ModPackage e) => Dispatcher.UIThread.Post(ApplyDoorArt);
+        private void OnModChangedDoorArt(object? sender, Models.ModPackage e) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_navLabelsClosed) return;
+            ApplyDoorArt();
+            ApplyModToNavRailLabels();
+        });
 
         /// <summary>Decode cap for a medallion: 64px native art in a 40px icon, 2x headroom (WPF :816).</summary>
         private const int NavDoorArtDecodeWidth = 128;
@@ -114,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (nav/door_*.png) are the mod compatibility surface. A null resolve leaves the authored
         /// Source alone. Social's XAML placeholder (the Lobby picture under a shade) gives way to the
         /// shipped or modded nav/door_social.png, and the shade goes with it. ponytail: WPF's
-        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are row 90's (sync6-nav-polish).</summary>
+        /// per-mod embedded twins (nav/mods/&lt;mod-id&gt;/, polish wave 11) are lane wire-shell-nav-rail-b.</summary>
         internal void ApplyDoorArt()
         {
             try
@@ -133,9 +136,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
             catch (Exception ex) { Log.Warning(ex, "ApplyDoorArt failed; nav rail keeps its embedded medallions"); }
         }
-
-        private static readonly IValueConverter NavCaps =
-            new FuncValueConverter<object?, string?>(v => (v as string)?.ToUpper(CultureInfo.CurrentUICulture));
 
         /// <summary>WPF CacheNavSectionRows (:139): hue from the one table (NavStripTable.AccentRgb),
         /// the label bound upper-cased to the section's own key (WPF NavCapsConverter).</summary>
@@ -184,11 +184,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     {
                         Color = AmbientFxCanvas.Env.GlowColor, BlurRadius = 6, OffsetX = 0, OffsetY = 0, Opacity = 0.45,
                     };
-                if (row.Label != null && NavSections.Find(section) is { } s)
-                    row.Label.Bind(TextBlock.TextProperty, new Binding($"[{s.LabelKey}]")
-                    {
-                        Source = LocalizationManager.Instance, Mode = BindingMode.OneWay, Converter = NavCaps,
-                    });
                 var captured = row;
                 btn.PointerEntered += (_, _) => { PaintNavRing(captured, hover: true); NudgeNavIcon(captured, true); };
                 btn.PointerExited += (_, _) => { PaintNavRing(captured, hover: false); NudgeNavIcon(captured, false); };
@@ -417,14 +412,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return 0;
         }
 
-        /// <summary>WPF PaintNavRingParts (:687), flat: the hue at 0xCC idle, 0xF2 hover, solid and
-        /// 3.5px lit.</summary>
+        /// <summary>WPF PaintNavRingParts: vivid diagonal bevel, reversed when selected.</summary>
         private static void PaintNavRing(NavSectionRow row, bool hover)
         {
-            if (row.Ring is not { } ring) return;
-            byte a = row.Active ? (byte)0xFF : hover ? NavRingHoverAlpha : NavRingIdleAlpha;
-            ring.BorderBrush = new SolidColorBrush(WithAlpha(row.Hue, a));
-            ring.BorderThickness = new Thickness(row.Active ? 3.5 : 3);
+            var target = row.Ring ?? row.Tile;
+            if (target is null) return;
+            if (row.Tile is not null) row.Tile.Opacity = 1;
+            var gradient = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+            };
+            foreach (var stop in NavRailPaintRules.RingStops(row.Hue.ToUInt32(), row.Active, hover))
+                gradient.GradientStops.Add(new GradientStop(Color.FromUInt32(stop.Color), stop.Offset));
+            target.BorderBrush = gradient;
+            target.BorderThickness = new Thickness(NavRailPaintRules.RingThickness(row.Active));
         }
 
         /// <summary>The rail's search pill, one line as in WPF (:559). Toggle refuses during Lockdown.</summary>

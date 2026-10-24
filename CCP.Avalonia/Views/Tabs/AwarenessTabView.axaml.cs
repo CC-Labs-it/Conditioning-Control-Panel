@@ -338,6 +338,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             if (e.Key != Key.Enter) return;
             CommitAppList();
+            // WPF acknowledges Enter by moving focus off the canonicalized box.
             TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
         }
 
@@ -348,16 +349,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             {
                 var settings = CoreSettings.Current;
                 var parsed = AwarenessAppScopeRules.ParseAppList(TxtAwarenessAppList.Text);
-                if (parsed.SequenceEqual(settings.KeywordTriggerApps, StringComparer.OrdinalIgnoreCase)) return;
+                if (parsed.SequenceEqual(settings.KeywordTriggerApps ?? new(), StringComparer.OrdinalIgnoreCase)) return;
                 settings.KeywordTriggerApps = parsed;
                 CoreSettings.Save();
-                Serilog.Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
-                    parsed.Count, settings.KeywordTriggerAppScope);
                 TxtAwarenessAppList.Text = string.Join(", ", parsed);
+                Log.Information("Awareness app scope list set to {Count} app(s) ({Mode})",
+                    parsed.Count, settings.KeywordTriggerAppScope);
             }
             catch (Exception ex)
             {
-                Serilog.Log.Warning(ex, "Awareness tab: failed to commit app scope list");
+                Log.Warning(ex, "Awareness tab: failed to write KeywordTriggerApps");
             }
         }
 
