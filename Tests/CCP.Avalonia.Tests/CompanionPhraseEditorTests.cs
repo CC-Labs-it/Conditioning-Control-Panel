@@ -98,13 +98,13 @@ public sealed class CompanionPhraseEditorTests
         {
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            shell.ShowTab("companion"); // the user's path: Companion room -> Workshop -> Triggers cell
+            // v2 user path (WPF AiPage): Companion > AI adopts the Workshop Triggers cell.
             var room = shell.GetLogicalDescendants().OfType<CompanionRoomView>().Single();
             var workshop = (WorkshopRuntimeVm)room.FindControl<WorkshopAccordion>("WorkshopZone")!.DataContext!;
-            workshop.IsExpanded = true;
+            shell.ShowTab("companionai");
             Dispatcher.UIThread.RunJobs();
             var cell = workshop.Parts.Triggers;
-            Assert.True(room.IsVisualAncestorOf(cell));
+            Assert.True(shell.GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.AiPage>().Single().IsVisualAncestorOf(cell));
             cell.FindControl<Button>("BtnManagePhrases")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
             Assert.Single(shell.OwnedWindows.OfType<CompanionPhraseEditorDialog>());

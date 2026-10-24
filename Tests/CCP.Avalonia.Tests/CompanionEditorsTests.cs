@@ -192,7 +192,7 @@ public sealed class CompanionEditorsTests
         try
         {
             shell.Show();
-            shell.ShowTab("companion");
+            shell.ShowTab("personality");   // v2: Companion > Personality adopts MakeHerYoursView
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants()
                 .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
