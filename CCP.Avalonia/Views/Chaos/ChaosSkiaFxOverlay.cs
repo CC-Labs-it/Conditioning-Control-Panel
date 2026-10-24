@@ -69,6 +69,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         public static void ArmCursorGlow() => OnFx(w => w.Fx.ArmCursor());
 
+        /// <summary>WPF run-start prewarm: realize the idle surface without drawing or starting frames.</summary>
+        public static void EnsureCreated() => OnFx(_ => { });
+
         public static void DisarmCursorGlow() => OnUi(() => Active?.Fx.DisarmCursor());
 
         public static void MoveCursorGlowToPx(double px, double py) =>
@@ -290,6 +293,3 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
     }
 }
-        /// <summary>WPF run-start prewarm: realize the idle surface without drawing or starting frames.</summary>
-        public static void EnsureCreated() => OnFx(_ => { });
-

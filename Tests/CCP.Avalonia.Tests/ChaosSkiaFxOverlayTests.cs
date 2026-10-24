@@ -10,6 +10,9 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
 
@@ -180,10 +183,7 @@ public sealed class ChaosSkiaFxOverlayTests
         }
         return Task.CompletedTask;
     });
-}
-using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Services.Chaos;
-using ConditioningControlPanel.Avalonia.Views.Overlays;
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -254,4 +254,4 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
         }
         return Task.CompletedTask;
     });
-
+}

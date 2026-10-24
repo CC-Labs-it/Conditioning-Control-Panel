@@ -117,6 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             if (!_active || _state == null || _spawning) return;
             ChaosRunEffects.ApplyLifetimeBoons(_state);
+            ChaosSkiaFxOverlay.EnsureCreated();   // WPF BeginRun :412: prewarm the sparkle surface
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
             // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
@@ -599,4 +600,3 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
     }
 }
-            ChaosSkiaFxOverlay.EnsureCreated();   // WPF BeginRun: prewarm the sparkle surface

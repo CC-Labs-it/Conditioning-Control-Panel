@@ -11,6 +11,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -271,6 +272,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             b.Popping = true;
             ChaosLastPopX = b.CenterX;
             ChaosLastPopY = b.CenterY;
+            // WPF Bubble.Pop: emit before the run callback, which may end/clear the field.
+            // ponytail: model-only/headless bubbles have no window and use unit scaling.
+            var scaling = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+            ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
+                b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
+                b.Spec.IsLive ? 1.3 : 1.0);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
@@ -482,10 +489,3 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
     }
 }
-using ConditioningControlPanel.Avalonia.Views.Chaos;
-            // WPF Bubble.Pop: emit before the run callback, which may end/clear the field.
-            // ponytail: model-only/headless bubbles have no window and use unit scaling.
-            var scaling = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
-            ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
-                b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
-                b.Spec.IsLive ? 1.3 : 1.0);
