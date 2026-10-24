@@ -86,7 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             string? holder = null;
             try { holder = LeashHead.Service?.Snapshot.Me?.Holder.Name; } catch { }
             Serilog.Log.Information("Leash: panic key held 5 s, asking to cut");
-            LeashCutConfirmWindow.Ask(holder, () => _ = CutLeashAsync());   // the gate's cut path (leash-punish renamed CutFromLeashGateAsync)
+            LeashCutConfirmWindow.Ask(holder, () => _ = CutLeashAsync(this));   // the gate's cut path (leash-punish renamed CutFromLeashGateAsync)
         }
     }
 }

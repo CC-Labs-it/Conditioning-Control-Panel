@@ -102,8 +102,9 @@ public sealed class LeashCardsTests
         Assert.IsType<LeashHolderCard>(page.Section.Children[1]);
         var runner = new WatchRunner(); runner.StartAssignmentWatch(TaskVideo);
         var old = LeashTaskHost.Runner; LeashTaskHost.Runner = runner;
+        var oldSvc = LeashHead.Service; LeashHead.Service = svc;   // the card cuts through the shell's one cut path
         try { Click(page, "leash-cut"); Assert.False(runner.IsRunning); Assert.Contains("cut", svc.Calls); Assert.True(page.ShowingEmpty); }
-        finally { LeashTaskHost.Runner = old; }
+        finally { LeashTaskHost.Runner = old; LeashHead.Service = oldSvc; }
     });
     [Fact]
     public void SelfControlsSetOnlyThePlayersLevelQuietTimeAndCap_AndPreviewHasNoActions() => Run(() =>
@@ -115,6 +116,8 @@ public sealed class LeashCardsTests
         Assert.Single(Find<WrapPanel>(card, "leash-shelf").Children);
         Click(card, "leash-preview-toggle");
         Assert.Empty(Find<LeashHolderCard>(card, "leash-preview").GetLogicalDescendants().OfType<Button>());
+        Assert.Contains(Find<LeashHolderCard>(card, "leash-preview").GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("leash_preview_buttons"));
+        Assert.Equal(Loc.Get("leash_cut_tip"), ToolTip.GetTip(Find<Button>(card, "leash-cut")));
     });
     [Fact]
     public void WatchButtonStartsAnOpenVideoAssignment_AndDoesNotOfferCompletedWatches() => Run(() =>
@@ -150,6 +153,8 @@ public sealed class LeashCardsTests
         var svc = new Service { Reply = LeashSendStatus.Dnd };
         var held = Held(); var card = new LeashHolderCard(held with { DndUntil = Now.AddHours(1) }, () => svc);
         foreach (var id in new[] { "assign", "punish", "tug" }) Assert.False(Find<Button>(card, "leash-btn:" + id).IsEnabled);
+        Assert.Equal(Loc.GetF("leash_holder_dnd", Person.Name, ConditioningControlPanel.Controls.Leash.LeashUiRules.DndUntilText(Now.AddHours(1))),
+            Find<TextBlock>(card, "leash-holder-dnd").Text);
         Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
         Assert.NotNull(Find<StackPanel>(card, "leash-sheet:reward"));
         Assert.Equal(Loc.Get("leash_res_dnd"), Find<TextBlock>(card, "leash-holder-result").Text);
@@ -169,7 +174,11 @@ public sealed class LeashCardsTests
         Find<TextBox>(card, "leash-ht-box").Text = "12x34";
         Assert.Equal("1234", Find<TextBox>(card, "leash-ht-box").Text);
         Click(card, "leash-video-send"); Assert.Equal("punish:Video:12", svc.Calls.Last()); Assert.Equal("1234", svc.Watch!.Id);
-        Click(card, "leash-release"); Assert.Equal("release", svc.Calls.Last());
+        Click(card, "leash-release"); Assert.Equal("punish:Video:12", svc.Calls.Last());   // WPF asks first
+        var confirm = LeashCutConfirmWindow.Current!;
+        Assert.Equal(Loc.Get("leash_release_confirm_yes"), ((TextBlock)confirm.YesButton.Content!).Text);
+        confirm.YesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Dispatcher.UIThread.RunJobs();
+        Assert.Equal("release", svc.Calls.Last()); Assert.Null(LeashCutConfirmWindow.Current);
         Assert.Contains("assign:Minutes:30", svc.Calls); Assert.Contains("assign:Quests:2", svc.Calls);
         Assert.Contains("reward:Sticker:star:", svc.Calls); Assert.Contains("reward:Praise:proud:", svc.Calls);
         Assert.Contains("reward:Pardon::", svc.Calls); Assert.Contains("reward:Credit::900", svc.Calls);
@@ -187,8 +196,7 @@ public sealed class LeashCardsTests
         Assert.NotNull(Find<StackPanel>(card, "leash-sheet:reward")); Assert.NotNull(Find<LeashSentList>(card, "leash-sent"));
         page.IsVisible = false; svc.Seen.Clear(); svc.Push(Me(TaskVideo with { Aid = "a2" }), Held()); Assert.Empty(svc.Seen);
         page.IsVisible = true; page.OnShown(); Assert.Contains("a2", svc.Seen);
-        page.FoldForPanic(); Assert.DoesNotContain(card.GetLogicalDescendants().OfType<StackPanel>(), p => p.Tag as string == "leash-sheet:reward");
-        Assert.Contains(PanicSurfaces.All, s => s.Id == "leash-cards");
+        page.Section.Fold(); Assert.DoesNotContain(card.GetLogicalDescendants().OfType<StackPanel>(), p => p.Tag as string == "leash-sheet:reward");
     });
     [Fact]
     public void TugThrottleIsPerFriend_AndReceiptsUseHonestSentWording() => Run(() =>
@@ -198,6 +206,11 @@ public sealed class LeashCardsTests
         Click(card, "leash-btn:tug"); Assert.Equal(Loc.Get("leash_res_sent"), Find<TextBlock>(card, "leash-holder-result").Text);
         Click(card, "leash-btn:tug"); Assert.Single(svc.Calls);
         Assert.Equal(Loc.Get("leash_res_too_fast"), Find<TextBlock>(card, "leash-holder-result").Text);
+        // WPF LeashHolderCard.cs:722: a punishment always names the friend, even with receipts on.
+        Click(card, "leash-btn:punish"); Click(card, "leash-punish:lines:5");
+        Assert.Equal(Loc.GetF("leash_done_punish", Person.Name), Find<TextBlock>(card, "leash-holder-result").Text);
+        svc.Reply = LeashSendStatus.Queued; Click(card, "leash-btn:punish"); Click(card, "leash-punish:lines:5");
+        Assert.Equal(Loc.GetF("leash_done_punish_queued", Person.Name), Find<TextBlock>(card, "leash-holder-result").Text);
     });
     [Fact]
     public void FriendsDrawerHostsTheSameCards_WhileTheFriendsPageLeavesThemOnLeash() => Run(() =>

@@ -86,18 +86,14 @@ public sealed partial class FriendsDrawer : Border
         };
         (BorderBrush, BorderThickness, Focusable) = (Line2, new Thickness(1), true);
         var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto") };
-        var (scroll, top, line) = (new ScrollViewer { Content = _list, Padding = new Thickness(6, 4, 6, 8), MinHeight = 120 }, new Thickness(0, 1, 0, 0), Line);
+        if (!asPage) LeashSection = new Leash.LeashDrawerSection();   // one parent only: never re-home _list after Content
+        var (scroll, top, line) = (new ScrollViewer { Content = LeashSection == null ? _list : new StackPanel { Children = { LeashSection, _list } }, Padding = new Thickness(6, 4, 6, 8), MinHeight = 120 }, new Thickness(0, 1, 0, 0), Line);
         (_head.Background, _head.CornerRadius, _head.BorderBrush, _head.BorderThickness, _head.Padding) = (Raised, new CornerRadius(15, 15, 0, 0), line, new Thickness(0, 0, 0, 1), new Thickness(12, 12, 12, 10));
         (_addBox.IsVisible, _addBox.Padding, _addBox.BorderBrush, _addBox.BorderThickness) = (false, new Thickness(10, 8, 10, 8), line, top);
         (_foot.Background, _foot.BorderBrush, _foot.BorderThickness, _foot.CornerRadius, _foot.Padding) = (Foot, line, top, new CornerRadius(0, 0, 15, 15), new Thickness(8));
         Grid.SetRow(scroll, 1);
         Grid.SetRow(_addBox, 2);
         Grid.SetRow(_foot, 3);
-        if (!asPage)
-        {
-            LeashSection = new Leash.LeashDrawerSection();
-            scroll.Content = new StackPanel { Children = { LeashSection, _list } };
-        }
         root.Children.AddRange(new Control[] { _head, scroll, _addBox, _foot });
         Child = root;
         // The add box (WPF BuildAddBox): CCP- and five letters from the code alphabet.

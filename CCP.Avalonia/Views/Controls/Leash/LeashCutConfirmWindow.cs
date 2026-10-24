@@ -26,6 +26,10 @@ internal sealed class LeashCutConfirmWindow : Window
         string.IsNullOrWhiteSpace(holderName) ? Loc.Get("leash_cut_confirm_body_anon") : Loc.GetF("leash_cut_confirm_body", holderName!.Trim()),
         Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-cut-confirm", onYes);
 
+    /// <summary>WPF LeashCutConfirmWindow.Confirm: the same window with the caller's words (Let go uses it).</summary>
+    public static void Confirm(string title, string body, string yes, string no, string tag, Action onYes) =>
+        Show(title, body, yes, no, tag, onYes);
+
     private static void Show(string title, string body, string yes, string no, string tag, Action onYes)
     {
         if (_open != null) { try { _open.Activate(); } catch { } return; }
