@@ -1,16 +1,16 @@
 using System;
-using System.Linq;
 using System.IO;
-using Avalonia.Controls;
-using Avalonia.Media;
-using Avalonia.Media.Imaging;
-using ConditioningControlPanel.Avalonia.Views.Overlays;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -174,6 +174,21 @@ public sealed class ChaosAnnouncerOverlayTests
                 }
             }
             finally { File.Delete(path); }
+        });
+    }
+
+    // The live art keys (ChaosRunHost T-10 s / relapse, ChaosOverlayWindow "it noticed.") resolve from the
+    // shipped build output, not only from a user-data drop: CCP.Avalonia.csproj links WPF's announce PNGs.
+    [Theory]
+    [InlineData("ending_soon")]
+    [InlineData("relapse")]
+    [InlineData("it_noticed")]
+    public async Task Live_art_keys_ship_with_the_head(string key)
+    {
+        await Run(_ =>
+        {
+            Assert.True(File.Exists(Path.Combine(AppContext.BaseDirectory, "assets", "Chaos", "announce", key + ".png")));
+            Assert.NotNull(ChaosEffectBannerOverlay.ResolveArt(key));
         });
     }
 
