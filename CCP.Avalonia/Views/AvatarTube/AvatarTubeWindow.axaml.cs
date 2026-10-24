@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Services;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -1200,7 +1201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         public void GigglePriority(string text, bool playSound = true, bool aiGenerated = true,
                                    string? phraseAudioPath = null, bool barkVoice = false,
-                                   string? mood = null, Action? onSpoken = null)
+                                   string? mood = null, Action? onSpoken = null, bool unprompted = false)
         {
             // onSpoken: fires once her voiced clip has finished (at once when nothing plays) - the
             // spoken mantra holds the mic shut on it so the recognizer never hears her (SpokenMantra).
@@ -1209,7 +1210,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 ClearSpeechQueue();   // WPF Speech.cs:345-350: the priority line drops the queue
                 _isGiggling = false;
-                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken);
+                ShowSpeech(text, playSound, aiGenerated, phraseAudioPath, barkVoice, preset: false, onSpoken, unprompted);
             });
         }
 
@@ -1218,21 +1219,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text)
+        public void Giggle(string text, bool unprompted = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
-                if (_isGiggling) { _speechQueue.Enqueue(text); return; }
+                if (_isGiggling) { _speechQueue.Enqueue((text, unprompted)); return; }
                 if (!IsSpeechReady())
                 {
-                    _speechQueue.Enqueue(text);
+                    _speechQueue.Enqueue((text, unprompted));
                     _isGiggling = true;
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: unprompted);
             });
         }
 
@@ -1240,7 +1241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false)
         {
                 var spokenHandled = false;
                 try
@@ -1277,7 +1278,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
                     // Mute silences her VOICE and keeps the text (#445) - a muted companion that
                     // also stopped showing bubbles read as completely broken.
-                    if (!IsMuted) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, onSpoken); spokenHandled = true; }
+                    bool heldIdle = !ConditioningControlPanel.Services.Companion.CompanionIdleVoiceRule.ShouldVoiceNow(unprompted);
+                    if (heldIdle && !IsMuted) Log.Debug("[companion-voice] Held idle line with engine off");
+                    if (!IsMuted && !heldIdle) { PlaySpeechAudio(playSound, phraseAudioPath, barkVoice, onSpoken); spokenHandled = true; }
 
                     SyncAskButtonsFor(text);
                     _txtSpeech.Text = text;
@@ -1398,7 +1401,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         /// <summary>
         /// The voice for one bubble, with WPF's volume curves verbatim: a bark voiceline at
-        /// master^1.5 * 0.85, a phrase clip at * 0.56, the canned giggle at * 0.7. MasterVolume 0
+        /// master^1.5 * 0.85, a phrase clip at * 0.56, both scaled by CompanionVoiceGain;
+        /// the canned giggle stays at * 0.7. MasterVolume 0
         /// means "attempt no audio at all" (the mute egg), so it returns before touching a file.
         /// <para>"Mute Voice Lines" (#846) silences only the spoken VO and drops back to a sound
         /// cue, so she still reads as present - the single choke point every voiced line funnels
@@ -1426,11 +1430,13 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                         return;
                     }
                     if (!File.Exists(phraseAudioPath)) return;
+                    var gain = CompanionVoiceGain.Current(barkVoice ? CompanionVoiceGain.BarkTrim : CompanionVoiceGain.EventTrim);
+                    if (gain <= 0f) return;
                     handedOff = true;
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
                     var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                     SpokenAudioDone = clipDone.Task;
-                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
+                    _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, gain,
                                           barkVoice ? "bark-voice" : "phrase-audio",
                                           onFinished: () => { clipDone.TrySetResult(); onSpoken?.Invoke(); });
                     return;

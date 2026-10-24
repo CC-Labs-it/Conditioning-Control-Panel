@@ -39,6 +39,12 @@ public sealed class CompanionBarkHeadTests
             Assert.NotNull(CoreModsHooks.SwitchCompanion);
             Assert.NotNull(CoreModsHooks.ReloadBarkRules);
             Assert.NotNull(CoreSettingsHooks.SettingChangedSink);
+            s.CompanionSpeaksIdleWhenEngineOff = false;
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreSession.IsSessionRunningProvider = () => false;
+            Assert.NotNull(ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced);
+            Assert.False(ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced!("Idle"));
+            Assert.True(ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced!("AvatarClicked"));
             Assert.NotNull(CoreBark.AvatarClicked);
             Assert.True(BarkHead.Engine!.RuleCount > 0);   // the shipped bark_rules.json
             Assert.NotEmpty(CoreBark.AllLines);            // the Phrase Manager's bark rows
@@ -133,6 +139,8 @@ public sealed class CompanionBarkHeadTests
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var idleState = (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, CoreSettings.Current.CompanionSpeaksIdleWhenEngineOff);
+        var echo = ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced;
         var s = CoreSettings.Current;
         var hooks = (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion, CoreModsHooks.ReloadBarkRules,
             CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked);
@@ -145,6 +153,8 @@ public sealed class CompanionBarkHeadTests
         }
         finally
         {
+            (CoreSession.IsEngineRunningProvider, CoreSession.IsSessionRunningProvider, s.CompanionSpeaksIdleWhenEngineOff) = idleState;
+            ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced = echo;
             (CoreModsHooks.ActiveCompanionProvider, CoreModsHooks.SwitchCompanion, CoreModsHooks.ReloadBarkRules,
                 CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked) = hooks;
             (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider) = chaos;

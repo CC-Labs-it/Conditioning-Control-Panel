@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Main sync 7 companion voice and idle lines
+
+1. WPF `Views/Controls/Companion/Runtime/WorkshopBehaviorCell.xaml` / `AvatarTube/AvatarTubeWindow.Speech.cs`: open Companion behaviour. Voice level appears after Bubble duration, defaults to 80, persists across reopening; 0 silences spoken clips while text remains, 100 boosts them (capped at full scale). Giggle cues retain their level. Rows: `sync7-companion` (commit `c34ce92d2`, main-sync row 77).
+2. WPF `Views/Controls/Companion/Runtime/WorkshopBehaviorCell.xaml`: under Mute Voice Lines, enable/disable idle voice with engine off; checked means opt in, default unchecked. Reopen and verify persistence. Rows: `sync7-companion` (commit `f5455ca20`, main-sync row 218).
+3. WPF `AvatarTube/AvatarTubeWindow.Speech.cs` / `Services/Companion/BarkService.cs`: using the headless `CompanionVoiceIdleTests` harness, send an unprompted priority line with engine/session off: bubble remains, audio never starts, completion fires; opting in permits audio. A queued preset retains the idle flag until displayed. Prompted lines remain audible. Rows: `sync7-companion` (commits `20b2ccce0`, `e5830315e`, main-sync rows 217/226). The production idle timer, portrait/Circe talk clips and DtRH heard tracking have no host on this base; these steps do not claim them verified.

@@ -34,6 +34,15 @@ public sealed class BarkEngineTests : IDisposable
         return e;
     }
 
+    [Theory]
+    [InlineData("Idle", true)]
+    [InlineData("AvatarClicked", false)]
+    public void MouthReceivesUnpromptedFlagFromTrigger(string trigger, bool expected)
+    {
+        Assert.True(Engine(Rule(trigger, "line")).Raise(trigger, guaranteed: true));
+        Assert.Equal(expected, Assert.Single(_said).Unprompted);
+    }
+
     [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {
