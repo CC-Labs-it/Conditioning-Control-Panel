@@ -36,6 +36,9 @@ public sealed class QuestsTabLiveTests
             // paid unscaled XP) and advances the streak first; pin both so quote and payout match in any order.
             var oldProvider = ConditioningControlPanel.CoreSettings.ServiceProvider;
             var service = new SettingsService();
+            // SettingsService loads the shared profile. Pin the whole reward/reroll input,
+            // including skill points and progression epoch, rather than inheriting a prior save.
+            service.RestoreFrom(new AppSettings());
             ConditioningControlPanel.CoreSettings.ServiceProvider = () => service;
             var settings = ConditioningControlPanel.CoreSettings.Current;
             try
@@ -132,6 +135,7 @@ public sealed class QuestsTabLiveTests
             {
                 try { host?.Close(); } catch { }
                 quests?.Dispose();
+                service.SealForReset();
                 ConditioningControlPanel.CoreSettings.ServiceProvider = oldProvider;
                 AvApp.Quests = oldQuests;
                 try { Directory.Delete(dir, recursive: true); } catch { }
