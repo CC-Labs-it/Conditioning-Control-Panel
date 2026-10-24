@@ -48,6 +48,8 @@ import { kickWobble, moteDensity, bumpCount } from './kartPose.js';
 import { setLensCamera } from './lens.js';
 import { racerLabels } from '../hud/format.js';
 import { createMusicRoad } from './musicRoad.js';
+import { updateAudioReactiveUniforms } from './audioReactive.js';
+import { worldScreenLayout, worldScreenSolids, worldScreenExistingSlots } from './worldScreens.js';
 import { createWordBubbles } from './wordBubbles.js';
 import { createWordPopFx } from './wordPopFx.js';
 import { createRoadWords } from './roadWords.js';
@@ -88,6 +90,8 @@ if (spiralsMod && globalThis.location) SPIRAL_LAYOUTS.set('threshold', await spi
 if (spiralsMod && globalThis.location?.search?.includes('mainframe')) SPIRAL_LAYOUTS.set('mainframe', await spiralsMod.fetchSpiralLayout('mainframe'));
 const MAINFRAME_MEDIA_LAYOUT = mediaMod && globalThis.location?.search?.includes('mainframe')
   ? await mediaMod.loadMediaLayout('mainframe') : null;
+const THRESHOLD_MEDIA_LAYOUT = mediaMod && globalThis.location
+  ? await mediaMod.loadMediaLayout('threshold') : null;
 
 /** Track MeshData -> Mesh, or null when the data is empty. */
 export function meshFrom(d, material) {
@@ -202,7 +206,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   add(meshFrom(track.meshes.jumps, lip.material));
   // the hero colossi lean over the road; the scatter keeps clear of them (WORLD lane)
   const samples = sampleTrack(track, 4);
-  const mainframe = isMainframe ? buildMainframe(track, art, { samples, mediaLayout: MAINFRAME_MEDIA_LAYOUT }) : null;
+  const mainframe = isMainframe ? buildMainframe(track, art, { samples, mediaLayout: MAINFRAME_MEDIA_LAYOUT, reactive: road.uniforms.reactive }) : null;
   if (mainframe) scene.add(mainframe.group);
   const boudoirDressing = boudoir ? buildBoudoirDressing(track, art, pal, samples) : null;
   if (boudoirDressing) scene.add(boudoirDressing.group);
@@ -257,7 +261,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   for (const o of wakes.objects) add(o);
   // All fluid meshes and spray materials exist before shader warmup.
   const waterPal = boudoir ? createBoudoirWaterPalette(pal) : pal;
-  const waterVolume = buildWaterVolume(track, waterPal, art, { quality: Q.name });
+  const waterVolume = buildWaterVolume(track, waterPal, art, { quality: Q.name, reactive: road.uniforms.reactive });
   add(waterVolume.object);
   if (roadMesh && waterVolume.field) {
     const g = roadMesh.geometry, a = g.attributes;
@@ -265,7 +269,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     g.computeBoundingSphere();
   }
   let waterfall = null;
-  try { waterfall = createWaterfall(track, waterPal, { particles, wakes, fluid: waterVolume.field }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
+  try { waterfall = createWaterfall(track, waterPal, { particles, wakes, fluid: waterVolume.field, reactive: road.uniforms.reactive }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
   // polish 4: glowing skid ribbons under a drift (one pooled draw call for every kart)
   const skids = createSkids(feel, count);
   add(skids.object);
@@ -285,7 +289,15 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // onPass: the player crossed a gate; boot plays that gate's own Loom on screen
   try { spirals = spiralsMod ? spiralsMod.createSpiralGates(scene, track, { layout: boudoir && spiralLayout !== null ? boudoirSpiralLayout(track) : keep && spiralLayout !== null ? keepSpiralLayout(track) : spiralLayout, photosafe, feel,
     onPass: (g) => { if (bus) bus.emit('gate-pass', g); } }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
-  try { media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout: boudoir ? boudoirMediaLayout(track) : keep ? keepMediaLayout(track) : undefined }) : null; } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
+  let worldScreens = null;
+  try {
+    const layout = boudoir ? boudoirMediaLayout(track) : keep ? keepMediaLayout(track) : isMainframe ? MAINFRAME_MEDIA_LAYOUT : THRESHOLD_MEDIA_LAYOUT;
+    const solids = worldScreenSolids([mainframe?.group, keepDressing?.group, boudoirDressing?.group, mirrorRoom?.group, colossi?.object]);
+    worldScreens = worldScreenLayout(track, { tier: Q.name, samples, solids,
+      existingSlots: worldScreenExistingSlots(track, layout, { tier: Q.name, samples }) });
+    media = mediaMod ? mediaMod.createMediaSlots(scene, track, { feel, samples, layout,
+      extraSlots: worldScreens.slots, extraSlotsDynamic: false }) : null;
+  } catch (e) { console.warn('[glassroad/world] media slots failed: ' + (e && e.message)); }
   // polish 4: the drop shortcut's rail opening and landing pad (track routes); the ring swells on the player's clean landing
   let routes = null;
   try { routes = routesMod ? routesMod.createRoutes(scene, track, { photosafe }) : null; } catch (e) { console.warn('[glassroad/world] route marks failed: ' + (e && e.message)); }
@@ -489,7 +501,8 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     road.uniforms.phase.value = (road.uniforms.phase.value + dt * LOOK.bandScrollMps * band) % LOOK.bandLenM;
     road.uniforms.contrast.value = contrast;
     road.uniforms.sheen.value = gentle ? LOOK.sheenGentle : 1;
-    // water: the ripple and sheet clocks run at the Gentle scroll share (slower ripples, nothing pulses)
+    updateAudioReactiveUniforms(road.uniforms.reactive, view.audioReactive, dt, { paused: !!view.paused, gentle });
+    // Water and road share one measured music envelope and freeze together on pause.
     if (road.uniforms.water && !view.paused) road.uniforms.water.t.value += dt * scroll;
     if (waterfall) waterfall.update(dt, { playerPos: kart.position, gentle, paused: !!view.paused, scroll });
     waterVolume.update(dt, { gentle, paused: !!view.paused, scroll });
@@ -587,7 +600,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, terrace, court, stones, mainframe, boudoirDressing, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles

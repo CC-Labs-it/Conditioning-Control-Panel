@@ -380,7 +380,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     const crop = { cx: uniform(0.5), cy: uniform(0.5), sx: uniform(1), sy: uniform(1) };
     const sample = texture(tex), mat = ownMaterial(sample, crop, U, M), mesh = new Mesh(plane, mat);
     mesh.name = persistent ? 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-source-' + sl.id : 'media-source-' + sl.id;
-    mesh.matrixAutoUpdate = false; mesh.frustumCulled = false; mesh.visible = false;
+    mesh.matrixAutoUpdate = false; mesh.frustumCulled = true; mesh.visible = false;
     slotMatrix(sl, mesh.matrix, { lift: 0.01 });
     group.add(mesh);
     const o = { mesh, mat, tex, baseTex: tex, sample, crop, persistent, frame: sl.frame, shared: null,
@@ -392,7 +392,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }), 3);
       const sample = texture(ct); cm.colorNode = sample.rgb; cm.opacityNode = sample.a;
       o.credit = new Mesh(plane, cm); o.credit.name = 'media-' + (sl.frame === 'card' ? 'card' : 'world') + '-credit-' + sl.id;
-      o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = false; o.credit.renderOrder = 4; o.credit.visible = false;
+      o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = true; o.credit.renderOrder = 4; o.credit.visible = false;
       group.add(o.credit);
     }
     return o;
@@ -507,7 +507,7 @@ export function createMediaSlots(scene, track, opts = {}) {
       const cm = mediaDepthLayer(new MeshBasicNodeMaterial({ transparent: true, depthWrite: false }), 3);
       const ct = texture(creditTexture(text));
       cm.colorNode = ct.rgb; cm.opacityNode = ct.a;
-      o.credit = new Mesh(plane, cm); o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = false; o.credit.renderOrder = 4;
+      o.credit = new Mesh(plane, cm); o.credit.matrixAutoUpdate = false; o.credit.frustumCulled = true; o.credit.renderOrder = 4;
       group.add(o.credit);
     }
     const ready = () => {
@@ -591,9 +591,9 @@ export function createMediaSlots(scene, track, opts = {}) {
       // in place (perf, polish 6): a fresh haloSlots() a frame was steady race garbage
       for (let k = 0; k < haloSlotsOf.length; k++) placeSlot(haloPoseInto(haloSpec, haloFrame, haloN, orbit, k, haloSlotsOf[k]));
     }
-    for (const sl of opts.extraSlots || []) placeSlot(sl);
+    if (opts.extraSlotsDynamic !== false) for (const sl of opts.extraSlots || []) placeSlot(sl);
     for (const sl of flyingSlots) placeSlot(moveMainframePanel(sl, clock));
-    if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length || flyingSlots.length || opts.extraSlots?.length) flush();
+    if (shownTier !== Q.name) placeAll(); else if (haloSlotsOf.length || flyingSlots.length || (opts.extraSlotsDynamic !== false && opts.extraSlots?.length)) flush();
 
     // the shared upload budget: nearest overdue programs and live own sources within drawM
     const cam = view.camera;
