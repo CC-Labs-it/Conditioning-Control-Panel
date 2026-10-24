@@ -21,6 +21,7 @@ import {
 import { S } from '../sim/state.js';
 import { clamp, lerp, smoothstep, qrotate, v3cross, v3norm } from '../core/math.js';
 import { LOOK, SKIES, FALLBACK_SKY } from './look.js';
+import { waterBedPositions } from './waterBed.js';
 import { Q } from './quality.js';
 import { createPalette } from './materials/palette.js';
 import { createRoadMaterial } from './materials/road.js';
@@ -240,11 +241,16 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const particles = createParticles(feel, art), lines = createSpeedLines(feel), wakes = createWakes(feel, count, undefined, { waterAt }), motes = createMotes(pal, seed);
   add(particles.object); add(lines.object); add(motes.object);
   for (const o of wakes.objects) add(o);
-  // the chute's waterfall sheet, spray and splash ring (render/waterfall.js; in the scene before the warm)
-  let waterfall = null;
-  try { waterfall = createWaterfall(track, pal, { particles, wakes }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
-  const waterVolume = buildWaterVolume(track, pal, art);
+  // All fluid meshes and spray materials exist before shader warmup.
+  const waterVolume = buildWaterVolume(track, pal, art, { quality: Q.name });
   add(waterVolume.object);
+  if (roadMesh && waterVolume.field) {
+    const g = roadMesh.geometry, a = g.attributes;
+    g.setAttribute('position', new Float32BufferAttribute(waterBedPositions(a.position.array, a.uv.array, waterVolume.field, track), 3));
+    g.computeBoundingSphere();
+  }
+  let waterfall = null;
+  try { waterfall = createWaterfall(track, pal, { particles, wakes, fluid: waterVolume.field }); if (waterfall.object) add(waterfall.object); } catch (e) { console.warn('[glassroad/world] waterfall failed: ' + (e && e.message)); }
   // polish 4: glowing skid ribbons under a drift (one pooled draw call for every kart)
   const skids = createSkids(feel, count);
   add(skids.object);
@@ -554,9 +560,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, mainframe, waterVolume, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { stones?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { waterVolume.reset(); waterfall?.reset(); stones?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }
