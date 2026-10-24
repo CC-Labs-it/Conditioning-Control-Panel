@@ -105,6 +105,7 @@ public sealed class NavSearchTests
             window.Show();
             window.UpdateLayout();
             var handle = (Button)drawer.Children[0];
+            Assert.NotNull(handle.Cursor); // WPF Cursors.Hand (PageFavoritesDrawer.cs:89)
             Assert.True(handle.Bounds.Height > 400, $"handle height {handle.Bounds.Height}");
             Assert.True(((Border)handle.Content!).Bounds.Height > 400);
             var closedWidth = page.Bounds.Width;

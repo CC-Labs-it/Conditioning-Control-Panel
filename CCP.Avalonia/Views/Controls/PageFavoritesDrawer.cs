@@ -50,7 +50,7 @@ public sealed class PageFavoritesDrawer : Grid
         _face = new Border { CornerRadius = new CornerRadius(9), BorderThickness = new Thickness(1.5), Child = content };
         Handle = new Button
         {
-            Content = _face, Margin = new Thickness(2, 5, 2, 5), Padding = new Thickness(0),
+            Content = _face, Margin = new Thickness(2, 5, 2, 5), Padding = new Thickness(0), Cursor = FriendsDrawer.Hand(), // WPF PageFavoritesDrawer.cs:89
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch,
             Template = new FuncControlTemplate<Button>((button, _) => new ContentPresenter
