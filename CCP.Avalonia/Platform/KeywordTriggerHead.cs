@@ -184,7 +184,7 @@ internal sealed class KeywordAudioRuntime
     /// Start (#887), no settings touched, no cooldowns. Pulse feed + TriggerFired only.
     /// </summary>
     // ponytail: WPF also dispatches both actions (highlight box, avatar comment); they land with
-    // wire-shell-keyword-triggers-b.
+    // wire-shell-awareness-c-next.
     internal void FireDemo(string keyword, string source)
     {
         if (string.IsNullOrWhiteSpace(keyword)) return;
