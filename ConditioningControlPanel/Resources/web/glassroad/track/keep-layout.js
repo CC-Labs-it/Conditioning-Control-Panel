@@ -21,15 +21,15 @@ function pieces() {
     straight('forecourt', 90, 0), straight('outer-gate', 120, 0), straight('outer-exit', 60, 0),
     corner('cellblock-in', 45, 65, 3), straight('cellblock-approach', 90, 3), corner('cellblock-out', -45, 65, 3),
     straight('cell-gallery', 100, 3), corner('east-ascent', 90, 90, 4),
-    corner('tower-spiral', -540, 75, 52, { w: 26, linear: true, spiral: true }),
-    straight('tower-bridge', 70, 52, 26, { widenTo: 34 }), corner('tower-exit', 90, 75, 52),
-    straight('east-battlement', 90, 52, 34, { edge: 'L' }), corner('east-corner', 90, 75, 52),
-    straight('chain-hall', 180, 52, 34), straight('high-gate', 160, 52), straight('north-approach', 80, 56),
-    corner('north-tower', 90, 90, 58), straight('crown-walk', 120, 58, 34, { edge: 'L' }),
-    corner('dogleg-in', 45, 75, 48), straight('west-descent', 120, 20), corner('dogleg-out', -45, 75, 14),
+    corner('tower-spiral', -1260, 75, 116, { w: 26, linear: true, spiral: true }),
+    straight('tower-bridge', 70, 116, 26, { widenTo: 34 }), corner('tower-exit', 90, 75, 116),
+    straight('east-battlement', 90, 116, 34, { edge: 'L' }), corner('east-corner', 90, 75, 116),
+    straight('chain-hall', 180, 116, 34), straight('high-gate', 160, 116), straight('north-approach', 180, 116),
+    corner('north-tower', 810, 90, 16, { linear: true }), straight('crown-walk', 120, 16, 34, { edge: 'L' }),
+    corner('dogleg-in', 45, 75, 16), straight('west-descent', 120, 20), corner('dogleg-out', -45, 75, 14),
     straight('gallows-courtyard', 160, 14, 34), corner('courtyard-exit', -45, 75, 16),
     straight('outer-rampart', 140, 16, 34, { edge: 'L' }), corner('rampart-turn', 45, 75, 16),
-    corner('north-rampart-in', -45, 75, 16), straight('north-rampart-traverse', 263, 16, 32), corner('north-rampart-out', 45, 75, 16),
+    corner('north-rampart-in', -45, 75, 16), corner('serpentine-in', 45, 80, 22), straight('north-rampart-traverse', 30, 22, 32), corner('serpentine-cross', -90, 80, 22), straight('serpentine-return', 30, 22, 32), corner('serpentine-out', 45, 80, 16), corner('north-rampart-out', 45, 75, 16),
     straight('west-approach', 320, 16, 32), corner('west-tower', 90, 90, 14),
     straight('bridge-approach', 80, 14, 34), straight('drawbridge-ramp', 40, 24, 34, { kick: true }),
     straight('drawbridge-gap', 20, 8, 34, { jump: true, linear: true }), straight('drawbridge-landing', 60, 8, 34),
@@ -60,7 +60,7 @@ export function getKeepLayout(track) {
   const gates = halls.flatMap((hall, h) => hall.gates.map((s, i) => ({ id: hall.id + '-' + (i + 1), s, x: 0, w: 14, offsetS: i + h * .4 })));
   const chains = [40, 76, 112, 148].map((d, i) => ({ id: 'chain-' + (i + 1), s: chain.s0 + d, x: 0, w: 10, offsetS: i * 1.1 }));
   const start = walkKeep(KEEP_PIECES).starts[KEEP_PIECES.findIndex((p) => p.id === 'tower-spiral')];
-  const towers = [{ x: start.x + 75, z: start.z, radiusM: 59, baseY: -25, topY: 78 }];
+  const towers = [{ x: start.x + 75, z: start.z, radiusM: 59, baseY: -25, topY: 142 }];
   const castleBlocks = [
     { id: 'main-prison', x: 710, z: 397, w: 300, d: 140, baseY: -16, topY: 78 },
     { id: 'west-cellblock', x: 175, z: 340, w: 400, d: 220, baseY: -16, topY: 62 },

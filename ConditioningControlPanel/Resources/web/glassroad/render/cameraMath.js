@@ -320,7 +320,9 @@ export function createCamRig(feel) {
     const rescue = kart[S.respawnPhase] !== RESPAWN.NONE && kart[S.respawnPhase] !== RESPAWN.GRACE;
     F[0] = damp(F[0] + (rescue ? px - lastPosition[0] : kart[S.velX] * dt), px, tcH, dt);
     F[2] = damp(F[2] + (rescue ? pz - lastPosition[2] : kart[S.velZ] * dt), pz, tcH, dt);
-    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * dt * rig.loop), py, tcV, dt);
+    // Predict grounded climbs so the chase eye stays above rising roads.
+    const predictY = kart[S.grounded] > 0.5 && kart[S.airborne] < 0.5 ? 1 : rig.loop;
+    F[1] = damp(F[1] + (rescue ? py - lastPosition[1] : kart[S.velY] * dt * predictY), py, tcV, dt);
     lastPosition[0] = px; lastPosition[1] = py; lastPosition[2] = pz;
     const gentle = !!feel.get('gentle.on');
     for (const [kind, mag, side] of kickEdges(rig.watch, kart, dt, KL, rig.useVel)) rig.kick.hit(kind, mag, side, gentle);

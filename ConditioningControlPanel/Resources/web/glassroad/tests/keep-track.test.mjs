@@ -13,12 +13,12 @@ const keep = () => loadTrack(json);
 test('Keep regenerates exactly and is a closed, two-lap fortress course with a level grid', () => {
   assert.deepEqual(json, buildKeep());
   assert.deepEqual(validate(json), { ok: true, errors: [], warnings: [] });
-  assert.ok(formatKeep(json).split('\n').length < 200);
+  assert.ok(formatKeep(json).split('\n').length < 300);
   const t = keep(), end = walkKeep(KEEP_PIECES);
   assert.equal(t.id, 'keep'); assert.equal(t.laps, 2);
-  assert.ok(t.lengthM >= 4200 && t.lengthM <= 4800);
+  assert.ok(t.lengthM >= 6500 && t.lengthM <= 7600);
   assert.ok(Math.hypot(end.x, end.z) < 1e-7);
-  assert.ok(json.nodes.every((n) => n.w >= 26 && n.w <= 34));
+  assert.ok(json.nodes.every((n) => n.w >= 26 && n.w <= 40));
   assert.ok(Math.max(...json.nodes.map((n) => n.p[1])) >= 58);
   for (let i = 0; i < 8; i++) assert.ok(Math.abs(t.spawnPose(i).p[1]) < .001);
 });
@@ -73,10 +73,10 @@ for (const seed of [1, 241023, 20261024]) test('Keep: all eight racers finish tw
 
 
 
-test('Keep tower wraps one and a half turns with 32m vertical separation and a clear solid core', () => {
+test('Keep tower wraps three and a half turns with 32m vertical separation and a clear solid core', () => {
   const t = keep(), layout = getKeepLayout(t), spiral = layout.landmarks.find((p) => p.id === 'tower-spiral');
-  const tower = layout.towers[0], turnM = (spiral.s1 - spiral.s0) / 1.5;
-  assert.equal(KEEP_PIECES.find((p) => p.id === 'tower-spiral').turn, -540);
+  const tower = layout.towers[0], turnM = (spiral.s1 - spiral.s0) / 3.5;
+  assert.equal(KEEP_PIECES.find((p) => p.id === 'tower-spiral').turn, -1260);
   for (let s = spiral.s0 + 12; s < spiral.s1 - turnM - 12; s += 10) {
     const a = t.frameAt(s).p, b = t.frameAt(s + turnM).p;
     assert.ok(Math.hypot(a[0] - b[0], a[2] - b[2]) < .2, 'stacked road station');

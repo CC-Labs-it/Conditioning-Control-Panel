@@ -24,7 +24,7 @@ export function buildKeep() {
       const flags = p.jump ? ['jump', 'open'] : p.field ? ['open'] : p.edge && d >= 20 && d < len - 20 ? ['rail' + (p.edge === 'L' ? 'R' : 'L')] : ['rail'];
       if (!nodes.length) flags.unshift('start');
       nodes.push({ p: [round(x), round(y0 + (p.y - y0) * (p.kick ? u * u : p.linear ? u : smooth(u))), round(z)],
-        roll: round(bank), w: p.widenTo ? round(p.w + (p.widenTo - p.w) * smooth(Math.max(0, Math.min(1, (d - 10) / 35)))) : p.w, flags, speed: 1, surface: p.surface || 'glass', ...(p.flow ? { flow: p.flow } : {}) });
+        roll: round(bank), w: p.widenTo ? round(p.w + (p.widenTo - p.w) * smooth(Math.max(0, Math.min(1, (d - 10) / 35)))) : p.id === 'north-tower' ? 26 + 7 * Math.min(2, Math.floor(u * 810 / 360)) : p.w, flags, speed: 1, surface: p.surface || 'glass', ...(p.flow ? { flow: p.flow } : {}) });
     }
     y0 = p.y;
   });
@@ -44,6 +44,13 @@ export function buildKeep() {
   const fieldStart = node('stones'), fieldEnd = node('stones-exit');
   const fields = [{ id: 'keep-stones', from: fieldStart, to: fieldEnd, lanes: [-8, 0, 8],
     stones: Array.from({ length: 9 }, (_, i) => ({ id: 'keep-stones-' + i, node: fieldStart, ds: i * 30.5, x: 0, w: 28, len: 26 })) }];
+  const routes = [0, 1].map((i) => {
+    const from = node('north-tower', (35 + i * 360) / 810), to = from + 4;
+    const landFrom = node('north-tower', (365 + i * 360) / 810), landTo = node('north-tower', (485 + i * 360) / 810);
+    for (let k = from; k < to; k++) nodes[k].flags = ['railL'];
+    return { id: 'keep-stair-cut-' + i, kind: 'drop', side: 'R', from, to,
+      open: { ds: 2, len: 28 }, land: { from: landFrom, to: landTo }, pad: { node: node('north-tower', (430 + i * 360) / 810), x: 3 } };
+  });
   const track = {
     format: 'glassroad-track', version: 1, id: 'keep', name: { en: 'The Keep' }, author: 'ccl', created: '2026-10-24',
     loop: true, laps: 2, units: 'm', nodes,
@@ -53,7 +60,7 @@ export function buildKeep() {
       section('moat-escape', node('west-tower'), nodes.length, 'release', .6)],
     checkpoints: [0, node('cell-gallery'), node('tower-spiral', .45), node('tower-bridge'), node('north-tower'), node('gallows-courtyard'), node('west-approach'), node('bridge-approach'), node('stones-approach'), node('south-tower')],
     spawn: { node: 0, grid: [[-4, -5], [4, -9], [-4, -13], [4, -17], [-4, -21], [4, -25], [-4, -29], [4, -33]] },
-    items, boosts, jumps: [{ node: node('drawbridge-gap'), airLen: 20, height: 16 }], routes: [], courts: [], fields, hazards: [], media: [],
+    items, boosts, jumps: [{ node: node('drawbridge-gap'), airLen: 20, height: 16 }], routes, courts: [], fields, hazards: [], media: [],
     ai: { lines: [], pace: [1, 1.05, 1.1] }, beat: { bpm: null, offsetMs: 0, map: [] },
     limits: { fallY: -30, edgeGraceM: 1.2, edgeGraceS: .8 },
   };
