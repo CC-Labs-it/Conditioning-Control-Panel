@@ -211,6 +211,7 @@ test('a hex landing highlights only the entered platform, fades out, freezes and
   const deck=view.group.getObjectByName('stone-hex-deck'),first=view.rows[0],array=()=>Array.from(deck.instanceColor.array);
   assert.equal(view.hit({id:first.stone}),first);view.update(.15);const normal=array();
   assert.ok(normal[1]>1.4);assert.deepEqual(normal.slice(3,6),[1,1,1]);
+  view.hit({id:first.stone});view.update(0);assert.deepEqual(array(),normal,'a following racer never extinguishes an active highlight');
   view.update(1,{paused:true});assert.deepEqual(array(),normal);
   view.update(2);assert.deepEqual(array().slice(0,3),[1,1,1]);
   view.hit(first.stone);view.update(.15,{gentle:true});assert.ok(array()[1]<normal[1]);

@@ -234,7 +234,7 @@ export function buildStones(track, art, pal) {
     let row = null;
     for (const m of moving) if (m.row.stone === id) { if (!Number.isFinite(m.age)) m.age = 0; row = m.row; }
     const index=hexes.findIndex(r=>r.stone===id);
-    if(index>=0) { hexAges[index]=0; row=hexes[index]; }
+    if(index>=0) { if(!Number.isFinite(hexAges[index])) hexAges[index]=0; row=hexes[index]; }
     return row;
   }
   function reset() {
