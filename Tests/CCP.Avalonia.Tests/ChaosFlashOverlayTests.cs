@@ -197,21 +197,28 @@ public sealed class ChaosFlashOverlayTests
         await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             Setup();
+            var oldQuery = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
             try
             {
                 ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                // Real screens, so the queued hero would show if panic did not orphan it.
+                var screens = TwoScreens.Select((b, i) => MultiMonitorResultTests.MakeScreen(1, b, b, i == 0)).ToArray();
+                ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => screens;
                 var shown = 0;
+                var heroBefore = ChaosFlashOverlay.LastHeroShow;
                 ChaosFlashOverlay.ShowHero(new global::Avalonia.Controls.Border(), gif, 600, .1, false, () => shown++);
                 var pending = ChaosFlashOverlay.ShowPath(TwoScreens, gif, 600, .1);
                 PanicSurfaces.StopAll("pending chaos-flash test");
                 await pending;
                 await global::Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => { });
+                if (ChaosFlashOverlay.LastHeroShow is { } hero && hero != heroBefore) await hero;
                 Assert.Equal(0, shown);
                 Assert.Empty(ChaosFlashOverlay.HeroShown);
                 Assert.Empty(ChaosFlashOverlay.Shown);
             }
             finally
             {
+                ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = oldQuery;
                 ChaosFlashOverlay.CloseActive();
                 ChaosFlashOverlay.SkipPlatformChecksForTests = false;
                 Directory.Delete(dir, true);

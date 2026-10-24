@@ -43,6 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool IsHeroAnimating => Hero.IsAnimating;
         internal static double Alpha => Wash.Alpha;
         internal static Task? LastShow { get; private set; }
+        internal static Task? LastHeroShow { get; private set; }
 
         private static bool CanShow =>
             SkipPlatformChecksForTests || (!_refused && X11Overlay.IsAvailable && X11Overlay.IsCompositing);
@@ -88,7 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 if (gen != _heroPostGen || !CanShow) return;
                 var targets = ScreenList.Enumerate(host).Select(s => s.Bounds).ToArray();
-                LastShow = Hero.ShowAsync(targets, durationMs, opacity, () => path, still, shown);
+                LastHeroShow = Hero.ShowAsync(targets, durationMs, opacity, () => path, still, shown);
             });
         }
 
@@ -129,8 +130,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 return SpiralOverlay.Decode(path, ChaosFlashWash.MaxDecodeDim, ChaosFlashWash.MaxFrames);
             var width = Math.Min(codec.Info.Width, Math.Clamp(stageWidth, 640, 2560));
             var height = Math.Max(1, (int)Math.Round(codec.Info.Height * (double)width / codec.Info.Width));
-            using var full = SKBitmap.Decode(codec);
-            if (full == null) return (new(), TimeSpan.Zero);
+            // WPF DecodePixelWidth: let the codec downsample (JPEG/WebP) before the final exact scale.
+            var native = codec.GetScaledDimensions((float)width / codec.Info.Width);
+            if (native.Width < width || native.Height < height) native = codec.Info.Size;
+            using var full = new SKBitmap(codec.Info.WithSize(native).WithColorType(SKColorType.Bgra8888).WithAlphaType(SKAlphaType.Premul));
+            var result = codec.GetPixels(full.Info, full.GetPixels());
+            if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
+                return (new(), TimeSpan.Zero);
             using var scaled = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
             full.ScalePixels(scaled, new SKSamplingOptions(SKFilterMode.Linear));
             // Bitmap copies the pixels before the mutable worker-owned SKBitmap is disposed.
