@@ -143,6 +143,7 @@ internal static class FriendsLanding
         InviteDestination.Goon => Str("friends_land_dest_goon", "the Goon Game"),
         InviteDestination.Ramp => Str("friends_land_dest_ramp", "a Ramp link"),
         InviteDestination.Chess => Str("friends_land_dest_chess", "a game of chess"),
+        InviteDestination.Breakout => Str("friends_land_dest_breakout", "Breakout"),
         _ => Str("friends_land_dest_backroom", "the Back Room"),
     };
 
@@ -261,8 +262,14 @@ internal static class FriendsLanding
     }
 
     /// <summary>Destinations this head can open. ponytail: Back Room / Goon / chess hosts are not on this head
-    /// (GameWindow has the Breakout demo only), so their cards carry Not now and the x only.</summary>
-    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp;
+    /// so their cards carry Not now and the x only. Breakout can join its demo; full access waits for its host.</summary>
+    internal static bool CanJoin(InboxItem item) => item.Destination == InviteDestination.Ramp
+        || item.Destination == InviteDestination.Breakout && (!BreakoutFullAllowed || GameWindow.Games.ContainsKey("breakout"));
+
+    private static bool BreakoutFullAllowed => TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed;
+
+    /// <summary>Use the existing game host, including its single-window and panic lifecycle; tests replace it.</summary>
+    internal static Action<string> LaunchGame { get; set; } = id => GameWindow.Launch(id);
 
     /// <summary>WPF LauncherHost.OpenPanelTab: the panel up (it may be hidden behind the launcher), then the tab.
     /// Tests replace it.</summary>
@@ -273,11 +280,18 @@ internal static class FriendsLanding
         mw.ShowTab(tab);
     };
 
-    /// <summary>WPF Join :522. Ramp: link to Ramp lives on the Ramp card in the Studio tab.</summary>
-    private static void Join(InboxItem item)
+    /// <summary>WPF Join :522: Ramp opens Studio; Breakout uses the station’s full/demo door.</summary>
+    internal static void Join(InboxItem item)
     {
         Log.Information("[Friends] joining {Dest} from a knock", item.Destination);
         if (item.Destination == InviteDestination.Ramp) OpenPanelTab("studio");
+        if (item.Destination == InviteDestination.Breakout && CanJoin(item))
+        {
+            // ponytail: the full Breakout host is not registered on this head yet. Keep its Join
+            // hidden rather than send a Joined receipt for a demo the entitled account did not ask for.
+            try { LaunchGame(BreakoutFullAllowed ? "breakout" : "breakoutdemo"); }
+            catch (Exception ex) { Log.Warning(ex, "[Friends] breakout launch failed"); }
+        }
     }
 
     private static readonly FriendsSfxGate SfxGate = new();
