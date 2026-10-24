@@ -63,8 +63,12 @@ import { createDevHook, devAllowed } from './dev/hook.js';
 import { chipAlpha, kartPoint } from './hud/countdown.js';
 import { createGarage } from './render/garage.js';
 import { raceLook } from './hud/garageState.js';
+import { COURSES, selectedCourse, courseUrl } from './track/catalog.js';
+import { getKeepLayout } from './track/keep-layout.js';
+import { createKeepGates } from './sim/keepGates.js';
 
 const qs = new URLSearchParams(location.search);
+const course = selectedCourse(location.search);
 const BOT = qs.get('bot') === '1', BOT_FALL = BOT && qs.get('botFall') === '1';
 // ?dev=1: the scripted drives in dev/hook.js (window.__glassroad.dev); refused without the query and online
 const DEV = devAllowed(location.search);
@@ -168,7 +172,7 @@ async function boot() {
   // the diegetic faces (render/fonts.js) load beside the feel: road markings and bubble text measure with them
   const [feel, trackJson] = await Promise.all([
     loadFeel(),
-    fetch(new URL('./tracks/threshold.json', import.meta.url), { cache: 'no-store' }).then((r) => {
+    fetch(new URL('./tracks/' + course.id + '.json', import.meta.url), { cache: 'no-store' }).then((r) => {
       if (!r.ok) throw new Error('track ' + r.status);
       return r.json();
     }),
@@ -180,6 +184,8 @@ async function boot() {
   if (qs.get('feel') === '1') openFeelSheet(feel, document.body);
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
+  const keepLayout = getKeepLayout(track);
+  const hazards = keepLayout ? createKeepGates(track, { gates: keepLayout.gates }) : null;
   const TRACK_LAPS = track.laps, trackName = (track.name && track.name.en) || 'Threshold';
   let laps = TRACK_LAPS;                           // online: the room cfg laps (track.laps follows it for the sim)
 
@@ -209,7 +215,7 @@ async function boot() {
   // wave 1 art (never blocks: a missing asset keeps its greybox); ?art=0 races the greybox
   hud.setLoading('Loading art', 0.08);
   const art = qs.get('art') === '0' ? null
-    : await loadArt(renderer, { onProgress: (d, n) => hud.setLoading('Loading art ' + d + '/' + n, 0.08 + 0.4 * d / n) });
+    : await loadArt(renderer, { trackId: track.id, onProgress: (d, n) => hud.setLoading('Loading art ' + d + '/' + n, 0.08 + 0.4 * d / n) });
   hud.setLoading('Building the road', 0.5);
   await paintGap();
   if (art && art.failed.length) debug.artFailed = art.failed;
@@ -221,7 +227,8 @@ async function boot() {
   // and the Shadows option turns it on or off in applyOptions
   const world = buildWorld(track, feel, { art, bus, seed, count: COUNT, renderer, photosafe, shadowsOn: qs.get('shadows') !== '0',
     spiralLayout: qs.get('spirals') === '0' ? null : undefined });   // ?spirals=0 (dev): no spiral gates
-  const garage=await createGarage({art,renderer,canvas,track:trackName,laps,
+  const garage=await createGarage({art,renderer,canvas,track:trackName,laps,trackId:track.id,online:course.online,
+    changeTrack:id=>{const url=courseUrl(location.href,id);if(url)location.assign(url);},
     action:name=>hud.menuAction(name),sound:name=>{audio.start();audio.cue(name);}});
   if(garage){hud.setGarageNav(garage.nav);debug.garage=garage;}
   // passing through a spiral gate plays that gate's own Loom over the view (photosafe, Gentle halves it)
@@ -241,6 +248,8 @@ async function boot() {
   // dev (?bot=1): the shot harness pokes at the world; not enumerable, so the status JSON stays small
   if (BOT) Object.defineProperty(debug, 'world', { value: world, enumerable: false });
   debug.sections = track.sections.map((x) => ({ id: x.id, palette: x.palette, fromS: Math.round(x.fromS), toS: Math.round(x.toS) }));
+  debug.trackId = track.id;
+  if (hazards) Object.defineProperty(debug, 'keepGates', { get: () => hazards.inspect(racers.clockS), enumerable: true });
   debug.colossi = world.colossi ? world.colossi.placed.map((x) => ({ id: x.id, s: x.spec && x.spec.s, kind: x.spec && x.spec.kind })) : [];
   debug.terrace = world.terrace ? { count: world.terrace.count, ...world.terrace.diagnostics } : null;
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
@@ -256,11 +265,16 @@ async function boot() {
     race = createRace(track, feel, q);
     racers = createRacers(track, feel, q, s ? { net: s.layout(), seed: sd } : { count: COUNT, seed: sd });
     ai = createAi(track, feel, { seed: s ? sd + s.seat : sd });
+    if (hazards) {
+      const drive = ai.drive;
+      ai.drive = (r, ctx, dt, out) => { drive(r, ctx, dt, out); if (ctx.race.phase === 'racing') hazards.steer(r, out); };
+      hazards.reset();
+    }
     contact = createContact(track, feel, q);
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
-    sctx = { ai, items, standings };
+    sctx = { ai, items, standings, hazards };
     aiCtx = { racers: racers.list, items, standings, race };
     kartViews = racers.list.map((r) => ({ st: r.view, meta: r.meta, fxv: r.fxv }));
     mapXz = new Float32Array(racers.list.length * 2);
@@ -337,6 +351,7 @@ async function boot() {
   function resetAll() {
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
     effects.reset(); ai.reset(); fx.reset(); assist.reset();
+    if (hazards) hazards.reset();
     if (world.resetReactions) world.resetReactions();   // last race's cheer, sulk and faces never carry over
     fx.state.screen = effects.screen;
     const sec = P.st[S.sectionIdx];
@@ -430,12 +445,14 @@ async function boot() {
     if (online) endOnline();
     stopSong(); unpause(); resetAll();
     state = 'menu';
-    hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps });
+    hud.setCard('menu', { title: 'Racing Thoughts', track: trackName, laps, online: course.online,
+      courses: COURSES.map(c => ({ name: c.name, selected: c.id === track.id, url: courseUrl(location.href, c.id) })) });
   }
 
   // ---- online (wave B2): lobby transport, the room session behind the lobby UI, the run per room --------------
   /** The lobby transport and identity: dev local lobby, desktop host relay, or a direct fetch on the web. */
   function lobbyLink() {
+    if (!course.online) return null;
     const dev = qs.get('lobby');
     if (dev && LOCAL_URL.test(dev) && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
       const uid = qs.get('uid') || 'u_devpage1', name = qs.get('name') || uid;
@@ -463,6 +480,7 @@ async function boot() {
   const goS = feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm');
   /** The lobby UI's room: a net/room.js session behind the on / send / close / now shape hud/lobby.js codes to. */
   async function connectRoom(join) {
+    if (!course.online) throw new Error('This course is for solo races');
     const s = createRoomSession({ track, feel, lobby: lobbyApi, platform, log: (lv, m) => console.warn('[glassroad]', m) });
     const welcome = await s.connect(join, { lookNow: join.look });
     return {
@@ -626,7 +644,7 @@ async function boot() {
   bridge.ready();
   toMenu();
   // ?r=<token>: a friend's race link goes straight to the lobby card, which claims it (seated, waiting or refused)
-  const linkTok = linkToken(location.search);
+  const linkTok = course.online ? linkToken(location.search) : null;
   if (linkTok) { hud.setCard('lobby', { claim: linkTok }); lobbyUi = hud.lobby || lobbyUi; }
   if (BOT && !link) botT = performance.now() + 2500;   // attract: a short look at the menu, then race (never with a lobby)
 
@@ -744,7 +762,7 @@ async function boot() {
     // renderTime (sim time + alpha x dt), not simTime: whole sim steps would judder the world on a
     // display that is not 60 Hz
     world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
-      sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive });
+      raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, words: wordLive });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
       debug.song = { t: Math.round(songS * 100) / 100, section: m.sectionId, calm: +m.calm.toFixed(2), helix: +m.helix.toFixed(2),

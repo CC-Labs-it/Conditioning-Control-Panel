@@ -10,3 +10,6 @@
 #race-garage .g-patterns button[data-pattern='1']{background-image:repeating-linear-gradient(45deg,transparent 0 4px,var(--g-muted) 4px 7px)}
 #race-garage .g-patterns button[data-pattern='2']{background-image:radial-gradient(var(--g-muted) 25%,transparent 27%)}
 #race-garage .g-patterns button[data-pattern='3']{background-image:conic-gradient(var(--g-muted) 25%,transparent 0 50%,var(--g-muted) 0 75%,transparent 0)}
+
+.g-footer>.g-course{margin-left:auto;min-width:0;gap:6px}.g-course .g-track{margin:0}.g-courses{display:flex;gap:5px}#race-garage .g-courses button{min-height:30px;padding:4px 10px;font-size:12px}#race-garage .g-courses button:disabled{opacity:1}.g-footer>.g-course+.g-race{margin-left:0}
+@media(max-width:650px){.g-footer>.g-course{position:absolute;left:0;right:0;top:6px;flex-direction:row;align-items:center;justify-content:space-between}.g-course .g-track{position:static}.g-footer{padding-top:25px}.g-footer>div:not(.g-course){margin-left:auto}}
