@@ -15,7 +15,8 @@ import { step } from '../sim/kart.js';
 import { updateRespawn } from '../sim/respawn.js';
 import { createProgress } from '../sim/progress.js';
 import { registeredSkip } from '../sim/routes.js';
-import { makeFeel, DT } from './sim-fake.mjs';
+import { glideActive } from '../sim/glide.js';
+import { makeFeel, place, acts, recorder, DT } from './sim-fake.mjs';
 const json = JSON.parse(readFileSync(new URL('../tracks/goonworks.json', import.meta.url), 'utf8'));
 const track = loadTrack(json), layout = getGoonworksLayout(track);
 
@@ -66,6 +67,55 @@ test('leapfrog supplies ten broad landing decks with real small gaps and support
   }
   assert.ok(f.stones.every(s=>s.w===30&&s.len>28));
   assert.equal(track.jumps.length,1); assert.ok(track.nodeFlags(layout.byId['pinball-gap'].node).includes('glide'));
+});
+
+function pinballFlight({ speed = 30, held = true, release = Infinity } = {}) {
+  const launch = layout.launch, st = place(track, { s: launch.rampS0 - 25, speed });
+  const feel = makeFeel(), events = recorder();
+  let launched = false, launchS = 0, airtime = 0, activeTicks = 0, releaseChecked = false;
+  for (let tick = 0; tick < 600; tick++) {
+    const hop = held && airtime < release;
+    const previousAir = st[S.airborne];
+    step(st, acts({ throttle: 1, hop }), track, feel, DT, events);
+    updateRespawn(st, track, feel, DT, events);
+    assert.equal(events.all('drop').length, 0, 'Pinball flight stays above a physical landing');
+    if (!launched && !previousAir && st[S.airborne]) { launched = true; launchS = st[S.s]; }
+    if (!launched) continue;
+    airtime += DT;
+    if (glideActive(st)) activeTicks++;
+    if (!hop && release < Infinity) { assert.equal(glideActive(st), false, 'release ends lift immediately'); releaseChecked = true; }
+    if (!st[S.airborne] || events.all('land').length) return { st, airtime, activeTicks, releaseChecked, distance: st[S.s] - launchS };
+  }
+  assert.fail('Pinball flight did not land');
+}
+
+test('holding jump deploys the Pinball rotor and releasing it gives an earlier physical landing', () => {
+  for (const speed of [12, 30, 40]) {
+    const normal = pinballFlight({ speed, held: false }), held = pinballFlight({ speed });
+    const released = pinballFlight({ speed, release: .65 });
+    assert.ok(held.activeTicks > 20, 'held rotor deployed at speed ' + speed);
+    assert.ok(held.distance > normal.distance + 8, 'rotor extends the normal jump');
+    assert.ok(held.airtime > normal.airtime + .3, 'rotor slows the descent');
+    assert.ok(released.releaseChecked && released.distance < held.distance - 8, 'released rotor lands sooner');
+    assert.ok(held.st[S.s] >= layout.launch.landingS0 && held.st[S.s] < layout.launch.landingS1 + 35);
+    assert.equal(glideActive(held.st), false, 'landing closes the rotor');
+  }
+});
+
+test('Pinball rotor cannot rearm in the same flight or turn an ordinary hop into a glide', () => {
+  const feel = makeFeel(), events = recorder(), st = place(track, { s: layout.launch.rampS1 - 2, speed: 30 });
+  for (let i = 0; i < 60 && !glideActive(st); i++) step(st, acts({ throttle: 1, hop: true }), track, feel, DT, events);
+  assert.equal(glideActive(st), true);
+  step(st, acts({ throttle: 1, hop: false }), track, feel, DT, events);
+  for (let i = 0; i < 20; i++) {
+    step(st, acts({ throttle: 1, hop: true }), track, feel, DT, events);
+    assert.equal(glideActive(st), false);
+  }
+  const ordinary = place(track, { s: 40, speed: 30 });
+  for (let i = 0; i < 50; i++) {
+    step(ordinary, acts({ throttle: 1, hop: true, hopPressed: i === 0 }), track, feel, DT, events);
+    assert.equal(glideActive(ordinary), false);
+  }
 });
 
 test('all nonadjacent road crossings clear the full banked driving width', () => {

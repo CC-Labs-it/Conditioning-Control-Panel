@@ -61,6 +61,7 @@ export function cleanRamp(stops, x) {
 export function createSkyMaterial(pal, art = null) {
   const C = { ...SKY_SPECTRUM, ...(LOOK.skySpectrum || {}) };
   if (pal.theme === 'mainframe') Object.assign(C, { cleanStops: ['#20674d', '#245851', '#175669', '#2c8b73'], armGain: 0.5, nebGain: 0.3, hazeGain: 0.4 });
+  if (pal.theme === 'boudoir') Object.assign(C, { cleanStops: ['#d8a9c4', '#b999d0', '#f0d2bb', '#d5afdd'], armGain: .2, nebGain: .15, hazeGain: .25 });
   const keep = pal.theme === 'keep';
   if (keep) Object.assign(C, { cleanStops: ['#7b2459', '#3c244e', '#a33372', '#30263f'], armGain: 0.5, nebGain: 0.3, nebMix: 0.45 });
   // Keep's galaxy is scalar R8, not RGB. The host supplies the violet/magenta colour.

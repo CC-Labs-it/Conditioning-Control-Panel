@@ -29,6 +29,8 @@ import { createMusicBands } from './musicBands.js';
 import { createWaterSurface, waterAttributes } from './water.js';
 import { machineSurface, coolantCaustics } from '../mainframeMaterials.js';
 import { mainframeFloor } from '../mainframeFloor.js';
+import { createBoudoirRoadSurface } from '../boudoirMaterials.js';
+import { createBoudoirWaterPalette } from '../boudoirWater.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -337,6 +339,13 @@ export function createRoadMaterial(pal, art = null, track = null) {
       .add(vec3(0.32, 0.38, 0.35).mul(centre.mul(dash).mul(S.centreGain * 0.45).mul(u.contrast)))
       .mul(u.bright.add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(0.25)))).mul(haze);
   }
+  const boudoir = track?.id === 'boudoir' ? createBoudoirRoadSurface({ track, p, trueEdge, distance: dist, view: V, normal: normalWorld }) : null;
+  if (boudoir) {
+    // The finish stays attached to the deck. Music contributes light above the material,
+    // while each district keeps its wood, cloth, stone or porcelain identity.
+    surface = boudoir.colour.mul(u.bright.mul(.4).add(1).add(wave.mul(M.waveLight)).add(mu.flash.mul(crack.add(.25))))
+      .add(vec3(1, .88, .7).mul(music).mul(.16).mul(u.contrast));
+  }
   const m = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
   if (track?.id === 'mainframe') m.transparent = false;
   // the edge line sits over everything; the gutter darkens what is inside it, so the line reads against any hue
@@ -350,19 +359,24 @@ export function createRoadMaterial(pal, art = null, track = null) {
     .add(vec3(1, 0.95, 0.98).mul(centre.mul(S.centreGain).mul(u.contrast)).mul(LOOK.roadGain));
   if (track?.id === 'mainframe') tileBody = surface.mul(tiles.relief)
     .add(vec3(0.36, 0.72, 0.56).mul(tiles.glaze).mul(u.sheen).mul(0.5));
+  if (boudoir) tileBody = surface.mul(tiles.relief).add(boudoir.sheen.mul(tiles.glaze).mul(u.sheen));
   // WATER (wave 1): stream and pool vertices (attribute `surface` 3 / 4, `flow` m/s) swap the glass body
   // for the water surface (materials/water.js) BEFORE the tiles and bands, so both keep working on water;
   // the glass sheen and polish thin out over it. The clock u.water.t is the caller's (Gentle halves it).
   const wa = waterAttributes();
-  const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal, u: u.water, skyRamp });
+  const waterPal = boudoir ? createBoudoirWaterPalette(pal) : pal;
+  const waterSky = boudoir ? x => mix(waterPal.col(2), waterPal.col(0), clamp(x, 0, 1)) : skyRamp;
+  const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal: waterPal, u: u.water, skyRamp: waterSky });
   const wet = water.w;
-  const glassBody = mix(mix(surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol), water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
+  const dryBody = boudoir ? surface : surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol);
+  const glassBody = mix(mix(dryBody, water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
   const musicBody = beatBands.apply(glassBody);
   const dry = float(1).sub(wet.mul(0.75));
-  const litCol = musicBody.add(vec3(1, 0.96, 0.98).mul(sheen).mul(dry)).add(polish.mul(dry).mul(track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));
-  const lineCol = mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
+  const finishSheen = boudoir ? boudoir.sheen.mul(u.sheen) : vec3(1, 0.96, 0.98).mul(sheen);
+  const litCol = musicBody.add(finishSheen.mul(dry)).add(polish.mul(dry).mul(boudoir ? .08 : track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));
+  const lineCol = boudoir ? vec3(.92, .78, .57) : mix(vec3(1, 0.97, 0.99), edgeCol, E.lineTint).mul(E.lineGain);
   m.colorNode = mix(litCol, lineCol, edgeLine);
   const submerged = track?.id === 'mainframe' && track.sections.find(s => s.id === 'submerged');
   if (submerged) {
@@ -376,7 +390,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   }
   const ribbonAlpha = clamp(float(LOOK.roadAlpha).add(lineV.mul(0.25)).add(edgeW.mul(0.2)).add(centre.mul(0.2)).add(sheen.mul(0.5))
     .add(schlick.mul(0.25)).add(rim.mul(0.4)).add(glint.mul(0.5)).add(gutter.mul(E.gutterAlpha)), 0, 1);
-  const bodyAlpha = mix(ribbonAlpha, water.alpha, wet);
+  const bodyAlpha = mix(boudoir ? float(1) : ribbonAlpha, water.alpha, wet);
   m.opacityNode = max(mix(bodyAlpha, max(tiles.opacity, schlick.mul(0.08).add(tiles.opacity)), tiles.mask), edgeLine);
   if (track?.id === 'mainframe') m.opacityNode = float(1);
   return { material: m, uniforms: u };

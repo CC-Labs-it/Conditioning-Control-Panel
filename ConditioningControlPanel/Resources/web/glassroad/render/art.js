@@ -58,6 +58,8 @@ export async function loadArt(renderer, { want = WANT, trackId = 'threshold', on
   const materialTier = Q.name;
   if (trackId === 'mainframe') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
     .concat('spout-mainframe', 'stone-mainframe');
+  if (trackId === 'boudoir') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|stone-threshold)/.test(id))
+    .concat('spout-boudoir', 'stone-boudoir', 'glide-boudoir-beanie');
   if (trackId === 'goonworks') want = want.filter((id) => !/^(chess-|threshold-|card-(drop|lens|orbit|petal)|slot-cabinet|pocket-watch|spiral-disc|stone-threshold|sky-)/.test(id))
     .concat('glide-threshold-beanie');
   const plan = trackId === 'keep' ? keepArtPlan(want, materialTier) : { ids: want, aliases: trackId === 'goonworks' ? { 'glide-keep-beanie': 'glide-threshold-beanie' } : {} };
