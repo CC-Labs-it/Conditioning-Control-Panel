@@ -27,6 +27,11 @@ import { refusedMedia } from './media-limits.js';
 import { quality } from '../shared/quality.js';
 import { createScreenAnimationBudget } from './screen-animation-budget.js';
 import { screenTransition } from './screen-transition.js';
+import { createScreenDeal } from './screen-deal.js';
+import { sourceCredit, isScrolllerGif } from '../shared/source-credit.js';
+
+/** The walls hold the room's one "via Scrolller" mark while their gallery carries a Scrolller picture. */
+const CREDIT_KEY = 'room-walls';
 
 export const TURN_S = 9;
 const SCREEN_ASPECT = 2.12 / 1.22;
@@ -110,6 +115,7 @@ export async function createScreens(o) {
     house.push(still(prep(new T.CanvasTexture(c)))); captions.push(labelTexture(''));
   }
   let gallery = house, custom = false, epoch = 0, decodes = 0, disposed = false;
+  const faces = createScreenDeal(house.length);
   for (const m of o.meshes) { m.material = material(house[0].texture, captions[0]); m.material.uniforms.screen.value=m.userData.screenAspect||SCREEN_ASPECT;m.material.uniforms.cover.value=m.userData.screenCover?1:0; }
   const frustum = new T.Frustum(), viewProj = new T.Matrix4();
   const due = new Set();
@@ -129,33 +135,38 @@ export async function createScreens(o) {
     const since = Math.max(0, t - epoch);
     if (camera) frustum.setFromProjectionMatrix(viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     due.clear();
+    // #1451: a screen hidden with its pack holds nothing, so its pictures go to the screens still up.
+    const up = o.meshes.map((mesh) => { for (let p = mesh; p; p = p.parent) if (!p.visible) return false; return true; });
+    o.meshes.forEach((mesh, i) => { if (!up[i]) faces.release(i); });
+    const ratio = src => src.texture.image.width / src.texture.image.height;
     o.meshes.forEach((mesh, i) => {
+      if (!up[i]) return;
       const u = mesh.material.uniforms;
       const turn=mesh.userData.screenTurn||TURN_S;
       const state=screenTransition(since,turn,isStill,gallery.length,i);
-      const n=state.index,blend=state.mix;
       u.glitch.value=state.glitch;u.glitchFrame.value=state.frame;
       const grid=!!mesh.userData.screenGrid;u.grid.value=grid?1:0;
-      const a = gallery[(n + i) % gallery.length], b = gallery[(n + i + (grid?3:1)) % gallery.length];
-      u.a.value = a.texture; u.b.value = b.texture;
-      u.ratioA.value = a.texture.image.width / a.texture.image.height; u.ratioB.value = b.texture.image.width / b.texture.image.height;
-      const ratio = src => src.texture.image.width / src.texture.image.height;
       const panels = src => custom && !mesh.userData.screenCover && ratio(src) < u.screen.value * .8
         ? Math.min(gallery.length, 3, Math.max(2, Math.round(u.screen.value / ratio(src)))) : 1;
-      const extrasA = [gallery[(n+i+1)%gallery.length],gallery[(n+i+2)%gallery.length]];
-      const extrasB = [gallery[(n+i+(grid?4:2))%gallery.length],gallery[(n+i+(grid?5:3))%gallery.length]];
+      // One face per turn, held by screen-deal.js: the picture swaps where the old mix stepped from a to b
+      // (half way through the static), and no two screens up at once share a picture while the deal has
+      // another one free. The projector's six tiles are one face.
+      const face = faces.hold(i, state.index + state.mix, grid ? 6 : (k) => panels(gallery[k]));
+      const at = (j) => gallery[face[Math.min(j, face.length - 1)]];
+      const a = at(0), extrasA = [at(1), at(2)];
+      const b = grid ? at(3) : a, extrasB = grid ? [at(4), at(5)] : extrasA;
+      u.a.value = a.texture; u.b.value = b.texture;
+      u.ratioA.value = ratio(a); u.ratioB.value = ratio(b);
       u.panelsA.value=panels(a);u.panelsB.value=panels(b);
       for(const [name,src] of [['ax',extrasA[0]],['ay',extrasA[1]],['bx',extrasB[0]],['by',extrasB[1]]]) {
         u[name].value=src.texture;u['ratio'+name[0].toUpperCase()+name[1]].value=ratio(src);
       }
-      u.mixAmount.value = blend;
+      u.mixAmount.value = 0;
       u.showTitles.value = custom || mesh.userData.screenNoTitles ? 0 : 1;
-      u.titleA.value = captions[(n + i) % captions.length]; u.titleB.value = captions[(n + i + 1) % captions.length];
-      let visible=true;for(let p=mesh;p;p=p.parent)if(!p.visible)visible=false;
-      if (visible && camera && (a.tick || b.tick) && frustum.intersectsObject(mesh)) { due.add(a);
-        if(grid){[...extrasA,b,...extrasB].forEach(src=>due.add(src));}
-        if(u.panelsA.value>1)due.add(extrasA[0]);if(u.panelsA.value>2)due.add(extrasA[1]);
-        if (blend > 0) { due.add(b);if(u.panelsB.value>1)due.add(extrasB[0]);if(u.panelsB.value>2)due.add(extrasB[1]); } }
+      u.titleA.value = u.titleB.value = captions[face[0] % captions.length];
+      const shown = grid ? face.length : Math.min(face.length, u.panelsA.value);
+      if (camera && face.some((k, j) => j < shown && gallery[k].tick) && frustum.intersectsObject(mesh))
+        for (let j = 0; j < shown; j++) due.add(gallery[face[j]]);
     });
     decodes += screenBudget([...due], performance.now(), isStill, quality.performance);
   }
@@ -182,7 +193,11 @@ export async function createScreens(o) {
     if (disposed || version !== sourceVersion) { loaded.forEach(src => src.dispose ? src.dispose() : src.texture.dispose()); return 0; }
     if (!loaded.length) { if (urls.length && o.log) o.log('wall pictures: none readable, house art stays'); return 0; }
     const previous = custom ? gallery : [];
-    gallery = loaded; custom = true; epoch = now();
+    gallery = loaded; custom = true; epoch = now(); faces.reset(loaded.length);
+    try {
+      const online = urls.some((u, k) => results[k] && gifs.some((g) => g && g.url === u && isScrolllerGif(g)));
+      if (online) sourceCredit.hold(CREDIT_KEY); else sourceCredit.drop(CREDIT_KEY);
+    } catch (e) { /* the credit never breaks a deal */ }
     previous.forEach(free);
     return loaded.length;
     } finally { dealing = false; refreshAt = version !== sourceVersion ? -Infinity : now() + 72; }
@@ -192,6 +207,7 @@ export async function createScreens(o) {
     update, deal,
     dispose() {
       disposed = true; controller.abort(); window.removeEventListener('br-media-changed', sourceChanged);
+      sourceCredit.drop(CREDIT_KEY);
       for (const src of new Set([...house, ...gallery])) src.dispose ? src.dispose() : src.texture.dispose();
       captions.forEach(t => t.dispose());
       // One transition ShaderMaterial per screen, made here, so it is freed here too.
