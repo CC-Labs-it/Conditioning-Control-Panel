@@ -2968,3 +2968,10 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-companion-chat-threshold: +349
 - Live assistant watch chips via Core CompanionLinkIndex + CompanionLinkLauncher (remote guard, embedded browser, HTTPS fallback); row stays stub (lane -b: media takeover/autoplay).
 - Review fixes: native wheel chaining now proven by a headless test (fail-proven); ask-service links via the launcher. rgate 39697647617: Linux green, Windows known flakes only.
+## avalonia-port/wire-views-tab-play: cloud merge-fix
+- Retained the free Breakout Demo and Piece by Piece Play-wall launchers, repeat-click focus and games panic coverage alongside the incoming Mantra window factory and failure dialog.
+- Merged the companion prompt editor integration tip; parity has one row per id with combined evidence, and no row is assigned verified status by this merge.
+
+## avalonia-port/wire-views-tab-play: +94
+- Play wall free games (Breakout Demo, Piece by Piece) launch and focus their hosts; panic closes them.
+- Hand cursor on both buttons, asserted in PlayWallTests.
