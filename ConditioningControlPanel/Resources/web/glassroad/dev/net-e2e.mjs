@@ -199,7 +199,7 @@ const res = await waitFor(async () => {
   const x = await D();
   if (!midShot && x.lap >= 2) { midShot = true; await shot('5-lap3'); }
   return x.onlineResult ? x : null;
-}, 400000, 1000);
+}, Number(arg('race-wait-ms', 3000000)), 1000);
 check('page gets the room results', !!res, res && res.onlineResult);
 await shot('6-results');
 const e2e = JSON.parse(await ev('JSON.stringify(Object.assign({}, window.__e2e, { last: undefined }))') || '{}');

@@ -45,7 +45,7 @@ test('the lobby card: no poll while hidden, backs off on a quiet list, any press
   let clock = 1_000_000;
   t.mock.method(Date, 'now', () => clock);
   const d = fakeDom();
-  let calls = 0, rows = [row()];
+  let calls = 0, rows = [row(), row({ roomId: 'bbbbbbbbbbbb', track: 'mainframe', host: { name: 'OtherCourse' } })];
   const api = { list: async () => { calls++; return { rows, serverMs: clock }; } };
   const lobby = createLobby(d.parts);
   lobby.use({ api, identity: { displayName: 'Me', tier: 0 }, looks: async () => ({}) });
@@ -53,6 +53,8 @@ test('the lobby card: no poll while hidden, backs off on a quiet list, any press
   const at = async (ms) => { clock += ms; d.tick(); await flush(); };
   await at(0);
   assert.equal(calls, 1, 'the first list goes at once');
+  assert.ok(d.parts.extra.innerHTML.includes('Ana'));
+  assert.ok(!d.parts.extra.innerHTML.includes('OtherCourse'), 'foreign-course rooms stay out of the selected-course list');
   await at(15000); assert.equal(calls, 2);
   await at(15000); assert.equal(calls, 3, 'two answers alike: still 15 s');
   await at(15000); assert.equal(calls, 3, 'now 30 s');
