@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { scanPose, scanClock, scanZones, createMainframeScan } from '../sim/mainframeScan.js';
-import { selectTrack, allowsOnline } from '../track/selection.js';
+import { selectTrack, allowsOnline, courseSongs } from '../track/selection.js';
+import { songCharts } from '../host/bridge.js';
 import { createState, S, RESPAWN } from '../sim/state.js';
 
 const track = { id: 'mainframe' }, zone = scanZones(track)[0];
@@ -14,6 +15,28 @@ test('course selection is bundled, with no Mainframe online admission before a s
   assert.equal(selectTrack('?track=mainframe'), 'mainframe');
   for (const q of ['', '?track=../../private', '?track=https://other']) assert.equal(selectTrack(q), 'threshold');
   assert.equal(allowsOnline('mainframe'), false); assert.equal(allowsOnline('threshold'), true);
+});
+
+test('Mainframe never inherits dev or host songs through an absent or blank chart choice', () => {
+  const songs = ['/host/bambi/chart.json'];
+  for (const devHost of [false, true]) {
+    for (const search of ['?track=mainframe', '?track=mainframe&chart', '?track=mainframe&chart=', '?track=mainframe&chart=%20%09']) {
+      const charts = songCharts({ search, devHost, songs });
+      assert.ok(charts.length > 0, 'the real song selector would otherwise supply defaults or whitespace');
+      assert.deepEqual(courseSongs('mainframe', search, charts), [], search);
+      assert.deepEqual(courseSongs('threshold', search, charts), charts, 'Threshold keeps its songs');
+    }
+  }
+});
+
+test('Mainframe preserves an explicit song choice and chart=0 silence', () => {
+  const selected = 'https://glassroad-room.cclabs-race.workers.dev/song/chosen/chart.json?exp=9999999999999&sig=selected';
+  const search = '?track=mainframe&chart=' + encodeURIComponent(selected);
+  const charts = songCharts({ search, devHost: true, songs: ['/host/bambi/chart.json'] });
+  assert.deepEqual(courseSongs('mainframe', search, charts), [selected]);
+  assert.deepEqual(courseSongs('mainframe', '?track=mainframe', [selected]), [], 'an injected song list never implies a choice');
+  const muted = '?track=mainframe&chart=0';
+  assert.deepEqual(courseSongs('mainframe', muted, songCharts({ search: muted, devHost: true })), []);
 });
 test('scan phases forecast the sweep and keep an outside bypass for the whole cycle', () => {
   assert.equal(scanPose(zone, 0).phase, 'clear'); assert.equal(scanPose(zone, 2.5).phase, 'warn');

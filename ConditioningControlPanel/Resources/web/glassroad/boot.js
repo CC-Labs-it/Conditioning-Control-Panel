@@ -36,7 +36,7 @@ import { createContact } from './sim/contact.js';
 import { createStandings } from './sim/standings.js';
 import { createItems } from './sim/items.js';
 import { loadTrack } from './track/load.js';
-import { selectTrack, allowsOnline } from './track/selection.js';
+import { selectTrack, allowsOnline, courseSongs } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
 import { createRenderer } from './render/renderer.js';
 import { buildWorld } from './render/world.js';
@@ -169,7 +169,7 @@ async function boot() {
   const init = await bridge.init;
   CHARTS = songCharts({ search: location.search, devHost: DEV_HOST, songs: init.caps.songs });
   // Mainframe has no recorded Drone song yet. A personally selected chart or audio file remains usable.
-  if (TRACK_ID === 'mainframe' && !qs.has('chart')) CHARTS = [];
+  CHARTS = courseSongs(TRACK_ID, location.search, CHARTS);
   // the diegetic faces (render/fonts.js) load beside the feel: road markings and bubble text measure with them
   const [feel, trackJson] = await Promise.all([
     loadFeel(),
