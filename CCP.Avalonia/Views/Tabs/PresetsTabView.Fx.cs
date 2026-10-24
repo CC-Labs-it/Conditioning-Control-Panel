@@ -95,7 +95,9 @@ public partial class PresetsTabView
         _sheenHost = null;
     }
 
-    private void RefreshCardSheen()
+    internal Control? CardSheenHost => _selectedSheen == null ? null : _sheenHost;   // test seam
+
+    internal void RefreshCardSheen()
     {
         Control? target = null;
         if (IsEffectivelyVisible && _fxWindow is { IsActive: true } window

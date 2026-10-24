@@ -26,10 +26,10 @@ public sealed class GoonClockAndRoundsTests : IDisposable
         CoreDispatch.InvokeProvider = _savedInvoke;
     }
 
-    private static (MatchClock Host, MatchClock Guest) WiredPair(long guestSkewMs)
+    private static (MatchClock Host, MatchClock Guest) WiredPair(long guestSkewMs, TimeProvider? time = null)
     {
-        var host = new MatchClock(isClockMaster: true, "test:host");
-        var guest = new MatchClock(isClockMaster: false, "test:guest", guestSkewMs);
+        var host = new MatchClock(isClockMaster: true, "test:host", time: time);
+        var guest = new MatchClock(isClockMaster: false, "test:guest", guestSkewMs, time);
         host.Attach((m, _) => { guest.TryHandleMessage(m); return Task.CompletedTask; });
         guest.Attach((m, _) => { host.TryHandleMessage(m); return Task.CompletedTask; });
         return (host, guest);
@@ -66,7 +66,10 @@ public sealed class GoonClockAndRoundsTests : IDisposable
         var hops = 0;
         CoreDispatch.PostProvider = a => { Interlocked.Increment(ref hops); a(); };
 
-        var (host, guest) = WiredPair(guestSkewMs: 0);
+        // P08: a stepped clock. On real time a ms tick between SafeFireAt and ScheduleAt left the
+        // lead 1 ms short of the buffer (RTT is 0 in-process) and ScheduleAt refused it (CI flake).
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        var (host, guest) = WiredPair(guestSkewMs: 0, clock);
         using (host) using (guest)
         {
             var synced = 0;
@@ -76,8 +79,12 @@ public sealed class GoonClockAndRoundsTests : IDisposable
             Assert.Equal(1, Volatile.Read(ref hops));
 
             using var fired = new ManualResetEventSlim();
-            using var handle = host.ScheduleAt(host.SafeFireAt(), fired.Set, "fire");
+            var at = host.SafeFireAt();
+            using var handle = host.ScheduleAt(at, fired.Set, "fire");
             Assert.NotNull(handle);
+            clock.Advance(TimeSpan.FromMilliseconds(at - host.NowMatchMs - 1));
+            Assert.False(fired.IsSet);                      // not a millisecond early
+            clock.Advance(TimeSpan.FromMilliseconds(1));
             Assert.True(fired.Wait(TimeSpan.FromSeconds(5)));
             Assert.Equal(2, Volatile.Read(ref hops));
         }

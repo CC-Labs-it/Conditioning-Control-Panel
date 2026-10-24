@@ -346,7 +346,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
                 // An existing account carries this provider's email: ask rather than mint a twin
                 // (WPF AccountService.ConfirmCreateNewDespiteExistingAccount; default No).
-                if (authResponse.CanAutoLink && !await ConfirmCreateNewDespiteExistingAccount(provider, authResponse.AutoLinkDisplayName))
+                if (authResponse.CanAutoLink && !await ConfirmCreateNewDespiteExistingAccount(this, provider, authResponse.AutoLinkDisplayName))
                 {
                     AccountSeed.LogoutProvider(provider);
                     ShowProviderSelection();
@@ -381,19 +381,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             // A sandbox never opens a real provider page unless a loopback override points it home (ExternalOpener).
             if (!ExternalOpener.Allowed(url)) return;
             if (await ExternalOpener.OpenAsync(this, url)) return;
-            try { if (Clipboard is { } c) await c.SetTextAsync(url); } catch { /* clipboard may be locked by another app */ }
             if (_closed) return;
-            await MessageDialog.ShowAsync(this, Loc.Get("title_open_link_in_browser"),
-                Loc.GetF("msg_browser_no_default_for", purpose) + Loc.GetF("msg_browser_link_copied", url));
+            await MessageDialog.ShowLinkCopiedAsync(this, url, purpose);
         }
 
-        private async Task<bool> ConfirmCreateNewDespiteExistingAccount(string provider, string? existingDisplayName)
+        /// <summary>Also the shell's pending registration (MainShellWindow.PendingRegistration.cs), as WPF shares it.</summary>
+        internal static async Task<bool> ConfirmCreateNewDespiteExistingAccount(Window owner, string provider, string? existingDisplayName)
         {
             var label = provider switch { "patreon" => "Patreon", "discord" => "Discord", "substar" => "SubscribeStar", _ => provider };
             var body = string.IsNullOrWhiteSpace(existingDisplayName)
                 ? Loc.GetF("account_existing_email_prompt_unnamed", label)
                 : Loc.GetF("account_existing_email_prompt", label, existingDisplayName);
-            return await MessageDialog.ConfirmAsync(this, Loc.Get("account_existing_email_title"), body, defaultToCancel: true);
+            return await MessageDialog.ConfirmAsync(owner, Loc.Get("account_existing_email_title"), body, defaultToCancel: true);
         }
 
         #endregion

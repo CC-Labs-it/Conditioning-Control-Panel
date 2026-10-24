@@ -1590,34 +1590,13 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static string? ResolveModAudio(string? file) => ResolveBarkAudio(file);
 
-        // Last variant index served per voice-line rule, so PickVoiceLine avoids an immediate repeat.
-        private readonly Dictionary<string, int> _lastVoiceIdx = new(StringComparer.OrdinalIgnoreCase);
+        private VoiceLinePicker? _voiceLinePicker;
 
-        /// <summary>
-        /// Pick a variant (display text + resolved per-mod audio path) for the given rule id from the
-        /// ACTIVE mod's loaded ruleset, avoiding an immediate repeat. Lets inline voiced bubbles (the
-        /// "Hey Bambi" wake ack + voice-command confirmations) keep their text single-sourced in the
-        /// bark manifests so the spoken clip always matches the on-screen line. Null when the rule or
-        /// its pool is absent (caller falls back to its own text, unvoiced).
-        /// </summary>
+        /// <summary>Shared WPF/Avalonia manifest selection and immediate-repeat avoidance.</summary>
         public (string Text, string? Audio)? PickVoiceLine(string ruleId)
         {
-            if (string.IsNullOrWhiteSpace(ruleId)) return null;
-            BarkVariant? v;
             lock (_gate)
-            {
-                var rule = _rules.AllRules.FirstOrDefault(
-                    r => string.Equals(r.Id, ruleId, StringComparison.OrdinalIgnoreCase));
-                var pool = rule?.VariantPool;
-                if (pool == null || pool.Count == 0) return null;
-
-                var idx = _rng.Next(pool.Count);
-                if (pool.Count > 1 && _lastVoiceIdx.TryGetValue(ruleId, out var last) && idx == last)
-                    idx = (idx + 1) % pool.Count;
-                _lastVoiceIdx[ruleId] = idx;
-                v = pool[idx];
-            }
-            return (v.Text, ResolveBarkAudio(v.Audio));
+                return (_voiceLinePicker ??= new VoiceLinePicker(_rng)).Pick(_rules, ruleId, ResolveBarkAudio);
         }
 
         /// <summary>
@@ -1968,10 +1947,15 @@ namespace ConditioningControlPanel.Services
             // Resolve the variant's voiceline (if any) to a real path under the active mod.
             string? audioPath = ResolveBarkAudio(variant.Audio);
 
+            // ccp-bugs #1468: an Idle-trigger line is unprompted; the tube holds its sound while the
+            // engine is off (CompanionIdleVoice). The bubble shows either way.
+            bool unprompted = CompanionIdleVoice.IsUnprompted(rule.Trigger);
+            bool held = !CompanionIdleVoice.ShouldVoiceNow(unprompted);
+
             // DtRH session telemetry (local-only): a spoken bark counts toward the descent's
-            // "voiceover heard". Only read the clip duration when a run is live so the global
-            // bark path pays nothing off the game. No-ops elsewhere.
-            if (audioPath != null && Services.Chaos.DtrhHostService.IsRunActive)
+            // "voiceover heard" (a held idle line was not heard). Only read the clip duration when
+            // a run is live so the global bark path pays nothing off the game. No-ops elsewhere.
+            if (audioPath != null && !held && Services.Chaos.DtrhHostService.IsRunActive)
             {
                 double sec = 0;
                 try { using var r = new NAudio.Wave.AudioFileReader(audioPath); sec = r.TotalTime.TotalSeconds; }
@@ -1985,9 +1969,10 @@ namespace ConditioningControlPanel.Services
             bool priority = rule.Class != BarkClass.Normal || rule.Priority >= PriorityBarkThreshold;
             if (priority)
                 avatar.GigglePriority(line, playSound: audioPath == null, aiGenerated: false,
-                    phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood);
+                    phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood, unprompted: unprompted);
             else
-                avatar.Giggle(line, phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood);
+                avatar.Giggle(line, phraseAudioPath: audioPath, barkVoice: audioPath != null, mood: rule.Mood,
+                    unprompted: unprompted);
 
             // Self-echo guard so the bubble text can't trip awareness/OCR off its own output.
             App.KeywordTriggers?.MuteKeywordEcho(line, SelfEchoMuteMs);
