@@ -71,6 +71,7 @@ export function createPalette(theme = 'threshold') {
   };
   const pal = {
     t, rows, hue, flow, motion, theme,
+    primaryHex() { return "#" + tmp.copy(a[0].value).lerp(b[0].value, t.value).getHexString(); },
     flowWrap: 1e6,
     motionSource: null,
     col: (i) => mix(a[i], b[i], t),

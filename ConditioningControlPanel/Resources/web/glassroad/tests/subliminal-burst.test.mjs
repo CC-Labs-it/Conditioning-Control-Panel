@@ -1,17 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSubliminalBurst, subliminalCards, SUBLIMINAL_PHRASES } from '../fx/subliminalBurst.js';
+import { createSubliminalBurst, subliminalCards, subliminalParticle, subliminalPrimary, SUBLIMINAL_PHRASES } from '../fx/subliminalBurst.js';
 import { createBus } from '../core/events.js';
 import { createEffects } from '../fx/effects.js';
 import { makeFeel } from './sim-fake.mjs';
 
-function setup(width = 1280) {
+function setup(width = 1280, primary = '#c9eceb') {
   const calls = [], children = [];
-  const ctx = {};
-  for (const method of ['clearRect','save','restore','translate','rotate','scale','fillRect','strokeRect','strokeText','fillText','beginPath','moveTo','lineTo','closePath','fill']) ctx[method] = (...args) => calls.push([method, ...args]);
-  const canvas = { width: 0, height: 0, style: {}, setAttribute() {}, getContext(kind) { assert.equal(kind, '2d'); return ctx; }, remove() { children.splice(children.indexOf(this), 1); } };
-  const parent = { clientWidth: width, appendChild(c) { children.push(c); } }, doc = { createElement(kind) { assert.equal(kind, 'canvas'); return canvas; } };
-  const burst = createSubliminalBurst({ parent, doc });
+  const create = () => {
+    const ctx = {};
+    for (const method of ['clearRect','save','restore','translate','rotate','scale','fillRect','strokeRect','strokeText','beginPath','moveTo','lineTo','closePath','fill','arc','drawImage']) ctx[method] = (...args) => calls.push([method, ...args]);
+    ctx.fillText = (...args) => calls.push(['fillText', ...args, ctx.font, ctx.fillStyle]);
+    ctx.measureText = text => ({ width: Number.parseFloat(ctx.font.split(' ')[1]) * text.length * .6 });
+    ctx.createRadialGradient = () => ({ addColorStop: (...args) => calls.push(['colourStop', ...args]) });
+    return { width: 0, height: 0, style: {}, setAttribute() {}, getContext(kind) { assert.equal(kind, '2d'); return ctx; }, remove() { children.splice(children.indexOf(this), 1); } };
+  };
+  const parent = { clientWidth: width, appendChild(c) { children.push(c); } }, doc = { createElement(kind) { assert.equal(kind, 'canvas'); return create(); } };
+  const burst = createSubliminalBurst({ parent, doc, primary }), canvas = children[0];
+  calls.length = 0;
   return { burst, calls, children, canvas };
 }
 const screen = (extra = {}, params = {}) => ({ kind: 'brainDrain', k: 1, strength: 1, params: { seed: 3, gentle: false, ...params }, ...extra });
@@ -21,7 +27,7 @@ test('seven large overlapping cards form an asymmetric seeded stack with readabl
   assert.deepEqual(a, b); assert.equal(a.length, 7);
   assert.equal(new Set(a.map(c => c.text)).size, 7);
   assert.ok(a.every(c => SUBLIMINAL_PHRASES.includes(c.text) && c.w > .5 && c.h > .1 && c.alpha === 1));
-  assert.ok(a.some(c => c.tilt > .1) && a.some(c => c.tilt < -.1));
+  assert.ok(a.some(c => c.tilt > .07) && a.some(c => c.tilt < -.07));
   assert.ok(a.some((c, i) => i && Math.abs(c.x - a[i - 1].x) < (c.w + a[i - 1].w) / 2 && Math.abs(c.y - a[i - 1].y) < (c.h + a[i - 1].h) / 2));
   assert.notDeepEqual(a, moved);
   assert.ok(a.every((c, i) => Math.abs(c.x - moved[i].x) < .03 && Math.abs(c.tilt - moved[i].tilt) < .04));
@@ -34,14 +40,59 @@ test('one bounded canvas draws card outlines and sparks below HUD, freezes on pa
   assert.equal(children.length, 1); assert.equal(canvas.style.zIndex, '2'); assert.equal(canvas.style.pointerEvents, 'none');
   burst.update(s, 1, 9 / 19.5);
   assert.ok(canvas.width <= 1280 && canvas.height <= 1280);
-  assert.equal(calls.filter(c => c[0] === 'strokeText').length, 7);
-  assert.equal(calls.filter(c => c[0] === 'fill').length, 35);
+  assert.equal(calls.filter(c => c[0] === 'strokeText').length, 21);
+  assert.equal(calls.filter(c => c[0] === 'fill').length, 98);
+  assert.equal(calls.filter(c => c[0] === 'drawImage').length, 42);
+  assert.equal(calls.filter(c => ['fillRect', 'strokeRect'].includes(c[0])).length, 0, 'no background panels');
   const before = calls.length, state = burst.stats;
   for (let i = 0; i < 100; i++) burst.update(s, 0, 9 / 19.5);
   assert.equal(calls.length, before); assert.deepEqual(burst.stats, state);
   burst.update({ kind: 'none', k: 0 }, 0, 9 / 19.5);
   assert.equal(canvas.style.display, 'none'); assert.equal(burst.stats.clock, 0);
   burst.dispose(); burst.dispose(); assert.equal(children.length, 0);
+});
+
+test('primary colours free text, measured fitting makes every phrase larger and short phrases huge', () => {
+  const { burst, calls } = setup(1280, '#521744');
+  burst.update(screen(), 1, 16 / 9);
+  const text = calls.filter(c => c[0] === 'fillText');
+  assert.equal(text.length, 7);
+  assert.ok(text.every(c => c.at(-1) === '#521744'));
+  const sizes = text.map(c => Number.parseFloat(c.at(-2).split(' ')[1]));
+  assert.ok(sizes.every(s => s >= 86.4), JSON.stringify(sizes));
+  assert.ok(Math.max(...sizes) >= 130);
+  assert.equal(subliminalPrimary('bad'), '#c9eceb');
+  assert.equal(subliminalPrimary('#abc'), '#aabbcc');
+});
+
+test('smoke expands and drifts while smoke and sparks fade to zero on their own finite ages', () => {
+  for (const smoke of [false, true]) for (let i = 0; i < 14; i++) {
+    const first = subliminalParticle(i, 1, 17, smoke), later = subliminalParticle(i, 2, 17, smoke);
+    assert.ok(first.alpha > 0 && first.alpha <= 1);
+    assert.ok(later.y < first.y);
+    if (smoke) assert.ok(later.size > first.size);
+    assert.equal(subliminalParticle(i, 8, 17, smoke).alpha, 0);
+    assert.equal(subliminalParticle(i, 0, 17, smoke).alpha, 0);
+  }
+  const { burst } = setup(); burst.update(screen(), 1);
+  assert.ok(burst.stats.smoke > 0 && burst.stats.particles > 0);
+  burst.update(screen(), 8);
+  assert.equal(burst.stats.smoke, 0); assert.equal(burst.stats.particles, 0);
+});
+
+test('live primary callback follows the actual road, freezes on pause and survives replacement', () => {
+  let primary = '#521744', count = 0;
+  const { burst, calls } = setup(1280, () => { count++; return primary; });
+  burst.update(screen(), 1);
+  assert.equal(burst.stats.primary, '#521744');
+  const before = calls.length, reads = count;
+  primary = '#20c8dd'; burst.update(screen(), 0);
+  assert.equal(count, reads); assert.equal(calls.length, before); assert.equal(burst.stats.primary, '#521744');
+  burst.update(screen(), .1); assert.equal(burst.stats.primary, '#20c8dd');
+  primary = '#ffffff'; burst.update({ kind: 'melt', prevKind: 'brainDrain', prevK: .5 }, .1);
+  assert.equal(burst.stats.primary, '#20c8dd', 'replacement keeps the outgoing text theme');
+  const broken = setup(1280, () => { throw Error('unavailable'); });
+  broken.burst.update(screen(), 1); assert.equal(broken.burst.stats.primary, '#c9eceb');
 });
 
 test('replacement preserves the Brain Drain seed/Gentle state and fades the existing stack', () => {

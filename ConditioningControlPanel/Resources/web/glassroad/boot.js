@@ -261,7 +261,7 @@ async function boot() {
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
   const flashMedia = createFlashMedia({ source: seed => cardMedia?.sourceForFlash(seed) || null });
-  const subliminalBurst = createSubliminalBurst({ parent: document.body });
+  const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;
   window.addEventListener('pagehide', () => { flashMedia.dispose(); subliminalBurst.dispose(); }, { once: true });
   if (cardMedia) {
