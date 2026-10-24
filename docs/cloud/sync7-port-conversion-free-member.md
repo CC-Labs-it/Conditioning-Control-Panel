@@ -1,0 +1,34 @@
+# sync7-port-conversion-free-member
+
+- Base verified at `39260f198fad67d90bc988c63a00480830e5fefc`. The initial snapshot was clean but at another commit; its fetch was read-only, so work used the authorized fallback checkout.
+- WPF `831827339bb45fa028a7199b68ceb19d988eb727`: **partially ported**. The completed live-session recap shows `conv_session_taste` only without a paid tier, under the stats, with Continue unchanged. Decision: `CCP.Core/Services/Startup/Conversion/SessionRecapConversion.cs:7`; head: `CCP.Avalonia/Views/Windows/SessionCompleteWindow.axaml.cs:52`, markup `SessionCompleteWindow.axaml:139`. Tests: `ConversionMomentTests.TasteLineOnlyAtCompletedFreeLiveEnd` and `SessionSurfacesTests.TasteLineFollowsLiveCompletionAndTier` cover completion, history, and paid-account exclusions.
+- WPF `831827339`: **already-covered** helper `CCP.Core/Services/DailyFreeService.cs:201` (`SeededKeyFor`) and localization `CCP.Core/Localization/Languages/en.json:8601` (recap; neighbouring conversion keys also present). No replacement imports.
+- WPF `831827339`: **blocked-by-host** for companion-cap, Daily Gift relock, and patron-gallery rows. This base has the generic Inbox (`CCP.Avalonia/Views/Windows/MainShellWindow.Inbox.cs`) but no conversion notice card (`InboxNoticeCard`), conversion-row initialization/focus lifecycle, or `OpenPlanFromInbox` checkout route. DailyFree is startup-local (`CCP.Avalonia/App.axaml.cs:555`), not the retained WPF `App.DailyFree` host. Building that conversion host belongs to the sibling conversion lanes; this unit does not invent it or add unconsumed signals/rules.
+- WPF `f3f7288bf33e064110553ba15f8de9e7c61992ef`: **ported** the handler-level Blink Trainer premium demand, allowing Stop when already running (`CCP.Avalonia/Views/Tabs/BlinkTrainerTabView.axaml.cs:682`). Test: `BlinkTrainerTabLiveTests.DirectStartHandlerDemandsPremiumBeforeOpeningTheCamera`.
+- WPF `f3f7288bf`: **ported** spent Intake to the Prime priced card (`CCP.Avalonia/Views/Tabs/GradedIntakeTabView.axaml.cs:183`), free spent daily/weekly rerolls to an eight-second toast with See Basic (`CCP.Avalonia/Views/Tabs/QuestsTabView.axaml.cs:127`), keeping the paid-account information dialog. Both use `MainShellWindow.Patreon.cs:213` (`OpenPricedCard`), which reconnects a dead grant first. Tests: `VaultGateTests.SpentMomentCardUsesRequestedTierAndReconnectsDeadGrants` and `VaultGateTests.SpentPassAndRerollToastsOpenPricedCards`.
+- WPF `f3f7288bf`: **already-covered** DailyFree endpoint documentation (`CCP.Core/Services/DailyFreeService.cs:15`, `:52`). **blocked-by-host** DtRH capture-switch change: this head has no `--dtrh-m2test` or `--dtrh` command-line launch host. No tier-free capture door is added.
+- Read-only `parity/trunk` was fetched as requested. No code was imported from trunk; adapted source commits are the two WPF hashes credited above.
+- No new window, overlay, timer, or notification host; the existing Blink Trainer remains registered in `PanicSurfaces`.
+
+## Manual tester steps
+
+1. WPF `831827339`: complete a live session without a tier. Confirm “Basic opens the doors.” below the recap stats and Continue as the only action. Reopen from history, abort a session, and repeat with a paid tier: the line is absent.
+2. WPF `f3f7288bf`: invoke Blink Trainer Start without premium through keyboard/automation: refusal before camera work. A running session can always be stopped.
+3. WPF `f3f7288bf`: spend an Intake pass, press Start and the toast action: the Prime priced card opens. Exhaust daily and weekly rerolls without a tier: each toast has See Basic and opens its card. A dead linked grant routes to Reconnect instead. Paid accounts retain the informational reroll dialog.
+
+## Assumptions
+
+- Missing conversion notice and command-line hosts are reported rather than introducing sibling-lane infrastructure, per the unit's host rule.
+- The spent Intake CTA targets Prime exactly as this WPF commit specifies, without changing the pass entitlement policy owned by sibling commits.
+
+## Verification limits
+
+- `dotnet build CCP.Core -c Release` and `dotnet build CCP.Avalonia -c Release`: exit 0, zero errors.
+- `dotnet build` for every Linux test project listed in `.github/workflows/build.yml`: zero errors. This includes Core, Core.Settings, Core.Content, Avalonia, CatalogueStartup, Consent, GeneralSettings, Language, Migration, Report, Scheduler, and Snapshot. Migration passed on retry with `-m:1 -nr:false` after an MSBuild worker failure. Generated test binaries were removed between projects after native-dependency copies exhausted disk space on the first pass.
+- `bash .github/scripts/core-guards.sh`: exit 0, “All Core guards passed.” The base does not contain `test-plan-coverage.sh` (exit 127); no ledger or parity rows were changed.
+- With `DiffEngine_Disabled=true`, the new Core conversion test matrix passed 4/4 (exit 0). Replacing the production decision with `false` made it fail (exit 1: 1 failed, 3 passed); restoring the line passed 4/4 again.
+- `dotnet test Tests/CCP.Core.Tests -c Release --no-build`: exit 1; 3,956 passed, 1 failed, 5 skipped. The unchanged `BoardTilesTests.A_frame_fits_the_budget` measured 22.50 ms. A focused retry of that test plus ConversionMomentTests still failed the timing budget (13.77 ms), with all four conversion cases passing. Vosk model-dependent tests self-skipped; no tests were changed to skip or loosen assertions.
+- `dotnet test Tests/CCP.Avalonia.Tests -c Release --no-build --filter 'FullyQualifiedName~SessionSurfacesTests|FullyQualifiedName~BlinkTrainerTabLiveTests|FullyQualifiedName~VaultGateTests|FullyQualifiedName~GradedIntakeGateTests'`: attempted, but the known environment font failure (`Could not create glyphTypeface`, Inter) caused catastrophic xUnit failure. The stuck test processes were terminated; the wrapper reported exit 0, which is **not** a passing test result. UI assertions remain unverified here and need the supervisor's GitHub run. Test assembly compilation completed with zero errors.
+- WPF test cross-build with `-p:EnableWindowsTargeting=true -p:ValidateExecutableReferencesMatchSelfContained=false`: the first run caught a duplicate Core/WPF `ConversionRules` type; fixed by naming this unit's Core helper `SessionRecapConversion`. A retry exited 1 with MSB4166 (child worker crash). The final `-m:1 -nr:false` attempt lost its compiler process while MSBuild remained waiting and was terminated; its wrapper reported exit 0 without a completed build summary, which is not a successful compilation result. Final WPF test compilation is therefore unverified. No WPF source was changed; Windows runtime tests were not run on Linux.
+- After the helper rename, Core conversion tests again passed 4/4 (exit 0), the Avalonia test assembly and its app/Core references rebuilt with zero errors (exit 0), and Core guards passed again (exit 0).
+- `git diff --check`: exit 0.

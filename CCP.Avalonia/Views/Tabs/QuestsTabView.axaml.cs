@@ -124,8 +124,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             else ShowRerollLimit(CoreEntitlement.HasPremium ? "quest_reroll_weekly_none_patron" : "quest_reroll_weekly_none_free");
         }
 
-        private void ShowRerollLimit(string key)
+        internal void ShowRerollLimit(string key)
         {
+            if (!CoreEntitlement.HasPremium)
+            {
+                App.Notifications.Show(ConditioningControlPanel.Localization.Loc.Get(key),
+                    Helpers.NotificationType.Info, TimeSpan.FromSeconds(8),
+                    ConditioningControlPanel.Localization.Loc.Get("quest_reroll_see_basic"),
+                    () => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenPricedCard("quest_reroll", 1));
+                return;
+            }
             if (TopLevel.GetTopLevel(this) is Window owner)
                 _ = Dialogs.MessageDialog.ShowAsync(owner, ConditioningControlPanel.Localization.Loc.Get("quest_reroll_limit_title"), ConditioningControlPanel.Localization.Loc.Get(key));
         }

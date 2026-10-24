@@ -28,6 +28,91 @@ namespace CCP.Avalonia.Tests;
 public sealed class VaultGateTests
 {
     [Fact]
+    public Task SpentPassAndRerollToastsOpenPricedCards() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var shell = new MainShellWindow();
+        var host = new StackPanel();
+        global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
+        var oldReconnect = TierGate.ReconnectIsTheAnswerProvider;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var oldLab = CoreAccount.HasLabAccessProvider;
+        var oldAccountPremium = CoreAccount.HasPremiumAccessProvider;
+        var settings = CoreSettings.Current;
+        var spent = (settings.IntakePassSpentWeek, settings.IntakePassSpentUtc);
+        try
+        {
+            TierGate.ReconnectIsTheAnswerProvider = () => false;
+            CoreEntitlement.HasPremiumProvider = () => false;
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreAccount.HasLabAccessProvider = () => false;
+            CoreAccount.HasPremiumAccessProvider = () => false;
+            var quests = new QuestsTabView();
+            shell.Content = quests;
+            shell.Show();
+            shell.UpdateLayout();
+            foreach (var key in new[] { "quest_reroll_daily_none_free", "quest_reroll_weekly_none_free" })
+            {
+                quests.ShowRerollLimit(key);
+                Assert.Contains(host.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get(key));
+                Click(host, Loc.Get("quest_reroll_see_basic"));
+                Assert.NotNull(VaultGateDialog.Open);
+                VaultGateDialog.Open!.Close();
+                host.Children.Clear();
+            }
+            settings.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
+            settings.IntakePassSpentUtc = DateTime.UtcNow;
+            var intake = new GradedIntakeTabView();
+            shell.Content = intake;
+            shell.UpdateLayout();
+            intake.BtnStartIntake_Click(null, new RoutedEventArgs());
+            Click(host, Loc.Get("intake_gate_spent_cta"));
+            Assert.Contains(Loc.Get("vaultgate_chip_lab"), Texts(VaultGateDialog.Open!));
+        }
+        finally
+        {
+            TierGate.ReconnectIsTheAnswerProvider = oldReconnect;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+            CoreAccount.IsLoggedInProvider = oldLogin;
+            CoreAccount.HasLabAccessProvider = oldLab;
+            CoreAccount.HasPremiumAccessProvider = oldAccountPremium;
+            (settings.IntakePassSpentWeek, settings.IntakePassSpentUtc) = spent;
+            VaultGateDialog.Open?.Close();
+            shell.Close();
+            global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(new StackPanel());
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SpentMomentCardUsesRequestedTierAndReconnectsDeadGrants() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureAvalonia();
+        var shell = new MainShellWindow();
+        var old = TierGate.ReconnectIsTheAnswerProvider;
+        var reconnects = 0;
+        shell.ReconnectFromGateOverride = () => { reconnects++; return Task.CompletedTask; };
+        try
+        {
+            TierGate.ReconnectIsTheAnswerProvider = () => false;
+            shell.OpenPricedCard("gradedintake", 2);
+            Assert.Contains(Loc.Get("vaultgate_chip_lab"), Texts(VaultGateDialog.Open!));
+            VaultGateDialog.Open!.Close();
+            shell.OpenPricedCard("quest_reroll", 1);
+            Assert.NotNull(VaultGateDialog.Open);
+            VaultGateDialog.Open!.Close();
+            TierGate.ReconnectIsTheAnswerProvider = () => true;
+            shell.OpenPricedCard("gradedintake", 2);
+            shell.OpenPricedCard("quest_reroll", 1);
+            Assert.Equal(2, reconnects);
+            Assert.Null(VaultGateDialog.Open);
+        }
+        finally { TierGate.ReconnectIsTheAnswerProvider = old; VaultGateDialog.Open?.Close(); shell.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PadlockOpensTheCardAndItsLinksClick() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureAvalonia();

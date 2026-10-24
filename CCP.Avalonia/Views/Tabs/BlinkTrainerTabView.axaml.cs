@@ -676,8 +676,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// off the UI thread (only with current consent), then start. A refusal lands in the status
         /// row as Error, as on WPF. The start goes through StartEffect so the Wayland panic shortcut is
         /// bound before the overlay appears.</summary>
-        private async void BtnBlinkTrainerStartSession_Click(object? sender, RoutedEventArgs e)
+        internal async void BtnBlinkTrainerStartSession_Click(object? sender, RoutedEventArgs e)
         {
+            // WPF f3f7288bf: handler-level gate; stopping a running session is always allowed.
+            if (!BlinkTrainerSession.IsRunning && !TierGate.DemandPremium(Loc.Get("tab_blink_trainer"))) return;
             BtnBlinkTrainerStartSession.IsEnabled = false;   // #743: work is in flight
             try
             {
