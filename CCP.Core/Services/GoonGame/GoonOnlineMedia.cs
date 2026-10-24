@@ -199,6 +199,8 @@ namespace ConditioningControlPanel.Services.GoonGame.Online
         internal Task Pending { get; private set; } = Task.CompletedTask;
         internal static Func<string, IReadOnlyList<string>, FeedMediaKind, CancellationToken, Task<(List<FypAssetManifest.Entry> Entries, string? Error)>> Fetch =
             (tenant, channels, kind, ct) => FypOnlineCoordinator.For(tenant, () => NamedChannels[tenant[..tenant.LastIndexOf('-')]], kind).FetchBatchAsync(kind, ct);
+        // Back-off after a failed batch; tests swap it so the dry-feed case does not sit on the real clock.
+        internal static Func<CancellationToken, Task> RetryDelay = ct => Task.Delay(1500, ct);
         private void RunWave(int gen, CancellationToken ct)
         {
             Pending = Task.Run(async () =>
@@ -235,7 +237,7 @@ namespace ConditioningControlPanel.Services.GoonGame.Online
                 {
                     lock (_gate) if (gen == _gen) _failed = true;
                     dry++;
-                    await Task.Delay(1500, ct).ConfigureAwait(false);
+                    await RetryDelay(ct).ConfigureAwait(false);
                     continue;
                 }
                 List<FypAssetManifest.Entry> usable;

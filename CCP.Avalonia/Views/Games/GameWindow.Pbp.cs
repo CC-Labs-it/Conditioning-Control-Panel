@@ -1,7 +1,7 @@
 // PORTED from ConditioningControlPanel/Services/PieceByPiece/PieceByPieceHostService.cs (WPF 7.1.5).
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Online pictures and friend invites are in the Media/Friends partials.
-// Not here yet: PvP stakes (stakes-host), Lobby intents (feat-lobby), the kept Escape (pbp:escape),
+// Not here yet: PvP stakes (stakes-host), Lobby intents (views-tab-available-subjects, the unported Lobby tab), the kept Escape (pbp:escape),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;

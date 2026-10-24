@@ -101,10 +101,12 @@ public sealed class PbpMediaTests
     public async Task DryOrFailedFeedStopsAfterThreeBatches(bool failed, string state)
     {
         var old = GoonOnlineMedia.Fetch;
+        var oldDelay = GoonOnlineMedia.RetryDelay;
         var snaps = new ConcurrentQueue<GoonOnlineMedia.Snapshot>();
-        int calls = 0;
+        int calls = 0, delays = 0;
         try
         {
+            GoonOnlineMedia.RetryDelay = _ => { Interlocked.Increment(ref delays); return Task.CompletedTask; };
             GoonOnlineMedia.Fetch = (_, _, _, _) =>
             {
                 Interlocked.Increment(ref calls);
@@ -114,10 +116,11 @@ public sealed class PbpMediaTests
             pool.Start(new[] { "Sub" }); await pool.Pending.WaitAsync(TimeSpan.FromSeconds(15));
             Assert.Equal(state, snaps.Last().State); Assert.Equal(0, snaps.Last().Have);
             Assert.Equal(6, calls); // three dry batches per kind
+            Assert.Equal(failed ? 6 : 0, delays); // a failed batch backs off, a dry one does not
             pool.Start(Array.Empty<string>()); Assert.Equal("empty", snaps.Last().State);
             Assert.False(pool.More());
         }
-        finally { GoonOnlineMedia.Fetch = old; }
+        finally { GoonOnlineMedia.Fetch = old; GoonOnlineMedia.RetryDelay = oldDelay; }
     }
 
 }
