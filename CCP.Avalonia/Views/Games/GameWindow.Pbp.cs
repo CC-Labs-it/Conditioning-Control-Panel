@@ -2,7 +2,7 @@
 // The pure half (net whitelist, frames, reservoir, watchdog ladder) is Core Services/PieceByPiece/PbpHostRules;
 // this is the window glue. Not here yet (game-pbp-b): online pictures (.Media.cs: pbp:media-state /
 // media-flavour / media-more / online-media), PvP stakes (Core StakeBridge.ForApp
-// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs), the kept Escape (pbp:escape),
+// is not routed here yet: stakes-host), friend / Lobby intents (.Friends.cs),
 // MergedAccountRecovery and SeasonRecapService.TrackFeature.
 
 using System;
@@ -34,6 +34,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// </summary>
     internal sealed partial class GameWindow
     {
+        internal static GameWindow? ForegroundPbp()
+        {
+            lock (Open) return Open.FirstOrDefault(w => w.Spec.Id == PbpId && w.IsActive && !w._closing);
+        }
+
+        internal void PostPbpKeptEscape()
+        {
+            if (!IsReady || _closing) return;
+            Post(new { type = "pbp:escape" });
+            Web.FocusPage();
+        }
+
         internal const string PbpId = "piecebypiece";
 
         /// <summary>One client for the app session (WPF :119). 30 s covers the events long poll.</summary>
