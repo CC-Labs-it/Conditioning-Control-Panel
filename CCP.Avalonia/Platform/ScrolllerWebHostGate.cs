@@ -21,15 +21,37 @@ internal static class ScrolllerWebHostGate
     internal static readonly TimeSpan CoreRetry = TimeSpan.FromMilliseconds(100);
     internal const int CoreRetries = 50;
 
-    public static void Attach(NativeWebView web, Action<bool> ready)
+    /// <summary>How long a Linux view waits for the WebKit filter (store load / compile on the GLib thread) before it is
+    /// reported "no gate" (remote pages refused, local ones load) rather than left blank.</summary>
+    internal static readonly TimeSpan LinuxGateWait = TimeSpan.FromSeconds(5);
+
+    /// <summary><paramref name="newEngine"/> runs on the UI thread for every engine the view builds (and when one is
+    /// destroyed: the view is held again) and returns that engine's report.</summary>
+    public static void Attach(NativeWebView web, Func<Action<bool>> newEngine)
     {
+        static void OnUi(Action go) { if (Dispatcher.UIThread.CheckAccess()) go(); else Dispatcher.UIThread.Post(go); }
+        web.AdapterDestroyed += (_, _) => OnUi(() => newEngine());
         web.AdapterCreated += (_, e) =>
         {
             IPlatformHandle? handle = null;
             try { handle = e.TryGetPlatformHandle() ?? web.TryGetPlatformHandle(); } catch { }
-            void Go() => OnAdapter(handle, () => { try { return web.TryGetPlatformHandle(); } catch { return null; } }, ready);
-            if (Dispatcher.UIThread.CheckAccess()) Go(); else Dispatcher.UIThread.Post(Go);
+            OnUi(() => OnAdapter(handle, () => { try { return web.TryGetPlatformHandle(); } catch { return null; } }, newEngine()));
         };
+    }
+
+    /// <summary>One report with a deadline (UI thread): <see cref="Expire"/> reports "no gate" if nothing came yet; a late
+    /// "gated" still goes through (the filter is on that engine), a late failure after the deadline does not.</summary>
+    internal sealed class Deadline(Action<bool> ready)
+    {
+        private bool _answered;
+        public void Expire()
+        {
+            if (_answered) return;
+            _answered = true;
+            Log.Warning("ScrolllerWebHostGate: the WebKit filter did not report in time; only this head's own pages load");
+            ready(false);
+        }
+        public void Report(bool ok) { if (_answered && !ok) return; _answered = true; ready(ok); }
     }
 
     /// <summary>One adapter's handle onto its gate (UI thread: WebView2 objects are bound to it). A Windows core that is not
@@ -44,7 +66,9 @@ internal static class ScrolllerWebHostGate
                     AttachWindows(handle, handleAgain, ready, CoreRetries);
                     return;
                 case IGtkWebViewPlatformHandle g:
-                    ScrolllerWebKitFilter.Attach(g.WebKitWebView, ok => Dispatcher.UIThread.Post(() => ready(ok)));
+                    var deadline = new Deadline(ready);
+                    DispatcherTimer.RunOnce(deadline.Expire, LinuxGateWait);
+                    ScrolllerWebKitFilter.Attach(g.WebKitWebView, ok => Dispatcher.UIThread.Post(() => deadline.Report(ok)));
                     return;
                 default:
                     Log.Warning("ScrolllerWebHostGate: no Scrolller gate for a {Engine} web view; only this head's own pages load in it",
