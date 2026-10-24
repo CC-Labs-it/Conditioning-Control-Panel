@@ -2985,3 +2985,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## Cloud merge-fix: wire-shell-favorites-rail + wire-views-deeper-new-enhancement-dialog
 - Retain the shipped panic-test bootstrap (including Inter/AppFonts) and every panic surface, assertion and ordering constraint. Keep the favorites Click tips/inversion/pin cue alongside the incoming dashboard gesture caption and shared new-enhancement sample selection.
 - Consolidate the parity ledger to one row per ID, preserving both histories' evidence and advanced statuses without verified claims; retain both progress histories.
+
+## avalonia-port/wire-shell-favorites-rail: +403
+- Favorites drawer click-tips popup (hover/pin/Escape/focus return), persisted inverted dashboard clicks via Core DashboardClickRule, lilac glow on a new pin.
+- Review fixes: bounded glow wait, seeded intro gates, real Escape key routing, no temp PNG; gate run 39688122404 green; feat-split-card row now cites DashboardClickRule (no duplicate inversion).
