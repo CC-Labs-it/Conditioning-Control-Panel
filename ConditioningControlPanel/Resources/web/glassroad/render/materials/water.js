@@ -56,7 +56,7 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
   const smallSlope = slopeOf(qA).add(slopeOf(qB).mul(0.6)).mul(L.bump);
   // Heightfield slopes are measured in lateral/along metres. They follow the same transported
   // tangent frame as the displaced vertices, including banked turns and the curved canal walls.
-  const slope = deformation ? deformation.slope.add(smallSlope.mul(0.24)) : smallSlope;
+  const slope = deformation ? deformation.slope.add(smallSlope.mul(0.12)) : smallSlope;
   // the road normal tilted by the slope (u along the road's right, v along its tangent: both lie in the plane)
   const N = deformation ? normalize(N0.sub(deformation.B.mul(slope.x)).sub(deformation.T.mul(slope.y)))
     : normalize(N0.add(vec3(slope.x, 0, slope.y)));
@@ -83,22 +83,19 @@ export function createWaterSurface({ surface, flow, p, trueEdge, V, N0, pal, u, 
   const white = vec3(1, 0.98, 0.99);
   let colour = body.add(glow).add(sky.mul(fres)).add(white.mul(spec)).add(white.mul(foam.mul(L.foamGain)));
   if (deformation) {
-    // A dark transmitted body gives the real wave slopes somewhere to reflect bright light.
-    // Two broad environment strips bend and split over the transported heightfield normal.
-    const slowCurrent = sin(qA.x.mul(0.28).add(sin(qB.y.mul(0.2))).add(qA.y.mul(0.12))).mul(0.5).add(0.5);
+    // Actual nearby architecture and screens reflect through the displaced normal.
+    // Transmission stays clear enough to reveal the recessed physical bed.
     const elevation = (deformation.height || float(0)).mul(0.45).add(0.5).clamp(0,1);
-    const transmitted = pal.col(2).mul(0.23).add(vec3(0.008,0.025,0.035))
-      .mul(slowCurrent.mul(0.22).add(elevation.mul(0.25)).add(0.62));
-    const reflected = pal.col(0).mul(0.22).add(vec3(0.025,0.065,0.085));
-    const stripA = pow(float(1).sub(abs(R.y.sub(0.18)).mul(6.5)).max(0),3);
-    const stripB = pow(float(1).sub(abs(R.y.add(R.x.mul(0.18)).sub(0.58)).mul(10)).max(0),4);
-    const grazing = pow(float(1).sub(ndv),1.6);
-    const reflectedLight = stripA.mul(0.58).add(stripB.mul(0.34)).mul(grazing.mul(0.72).add(0.28));
+    const transmitted = pal.col(2).mul(0.13).add(vec3(0.018,0.065,0.078)).mul(elevation.mul(0.18).add(0.82));
+    const fallback = pal.col(0).mul(0.13).add(vec3(.015,.035,.045));
+    const reflected = deformation.reflection ? mix(fallback,deformation.reflection(R),deformation.reflectionReady || float(1)) : fallback;
+    const grazing = pow(float(1).sub(ndv),5).mul(.98).add(.02);
     const sharpSpec = pow(clamp(dot(N,H),0,1),90).mul(0.95);
-    colour = mix(transmitted,reflected,grazing.mul(0.74))
-      .add(vec3(0.72,0.9,1).mul(reflectedLight.add(sharpSpec)))
-      .add(white.mul(foam).mul(0.55));
+    colour = mix(transmitted,reflected,grazing.mul(.78).add(.16))
+      .add(vec3(0.72,0.9,1).mul(sharpSpec))
+      .add(white.mul(foam).mul(0.075));
   }
-  const alpha = clamp(float(L.alpha).add(foam.mul(0.1)).add(spec.mul(0.3)), 0, 1);
+  const alpha = deformation ? float(.26).add(pow(float(1).sub(ndv),3).mul(.59)).add(foam.mul(.08)).clamp(.26,.93)
+    : clamp(float(L.alpha).add(foam.mul(0.1)).add(spec.mul(0.3)), 0, 1);
   return { w, colour, alpha, foam, N, pool };
 }

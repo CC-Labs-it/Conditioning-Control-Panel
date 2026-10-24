@@ -45,7 +45,7 @@ test('one fixed texture carries signed shape, shading slopes and foam, uploads o
   assert.equal(pixels,water.field.pixels);
   assert.equal(texture.generateMipmaps,false);
   assert.equal(texture.flipY,false);
-  assert.ok(water.object.children.every(m=>m.material.positionNode),'surface, depth rim and spill lip share deformation');
+  assert.ok(water.object.children.filter(m=>!m.isInstancedMesh).every(m=>m.material.positionNode),'surface, depth rim and spill lip share deformation');
   const version=texture.version;
   water.update(0);assert.equal(texture.version,version);
   water.field.disturb({s:15,x:3,radius:4,strength:.6,foam:.9,dirX:1});

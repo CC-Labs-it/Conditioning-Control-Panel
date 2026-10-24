@@ -1,9 +1,11 @@
 // Shared shallow water bodies and gravity-fed spill curtains. All shaders exist before warm-up.
 import { Group, Mesh, BufferGeometry, Float32BufferAttribute, InterleavedBuffer, InterleavedBufferAttribute, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, ClampToEdgeWrapping, NoColorSpace, MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
-import { uniform, uv, vec2, vec3, float, sin, mix, smoothstep, texture, positionWorld, cameraPosition, normalize, pow, attribute, positionLocal } from 'three/tsl';
+import { uniform, uv, vec2, vec3, float, sin, mix, smoothstep, texture, cubeTexture, positionWorld, cameraPosition, normalize, pow, attribute, positionLocal } from 'three/tsl';
 import { WATER_VOLUME as L, waterSpills } from './waterMath.js';
 import { createWaterSurface } from './materials/water.js';
 import { createWaterField } from './waterField.js';
+import { createWaterFoam } from './waterFoam.js';
+import { createWaterReflections } from './waterReflections.js';
 import { Q } from './quality.js';
 
 const data = () => ({ p: [], uv: [], edge: [], flow: [], surface: [], field: [], normal: [], index: [] });
@@ -34,7 +36,7 @@ function runUV(field, run, s, lateral) {
     v: (run.rowOffset + along * (run.ny - 1) + 0.5) / field.height };
 }
 
-export function buildWaterVolume(track, pal, art = null, { quality = Q.name } = {}) {
+export function buildWaterVolume(track, pal, art = null, { quality = Q.name, scene = null, renderer = null } = {}) {
   const object = new Group(); object.name = 'water-volume';
   const field = createWaterField(track, { quality });
   const runs = field.runs.map(r => ({ fromS: r.fromS, toS: r.toS })), spills = waterSpills(track, runs), top = data(), wall = data(), fall = data();
@@ -45,7 +47,9 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name } = 
   const heightSample = texture(heightTexture, attribute('aWaterUV', 'vec2')).level(0);
   const fieldHeight = heightSample.r.mul(2).sub(1).clamp(-0.8, 0.8);
   const fieldNormal = normalize(attribute('aWaterN', 'vec3'));
-  const u = { t: uniform(0), motion: uniform(1) };
+  const u = { t: uniform(0), motion: uniform(1), reflectionReady: uniform(0) };
+  const reflections = createWaterReflections({ scene, renderer, exclude: object, quality, track });
+  const froth = createWaterFoam(track, field, spills, { quality });
   const tex = id => art?.detail?.(id) || art?.tex?.(id + (Q.name === 'phone' ? '-phone' : '')) || null;
   const normal = tex('water-normal'), foam = tex('water-foam-mask'), sheet = tex('waterfall-sheet'), phase = tex('waterfall-phase-mask');
   for (const run of field.runs) {
@@ -114,15 +118,16 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name } = 
     }
   }
   function add(g, mat, name, order) { if (!g.index.length) { mat.dispose(); return; } const mesh = new Mesh(geometry(g), mat); mesh.name = name; mesh.renderOrder = order; object.add(mesh); }
-  // The nearly opaque displaced surface owns depth. Later road shadow catchers must
+  // The displaced surface owns depth even when clear. Later road shadow catchers must
   // stay below it; otherwise their bed triangles composite over the visible waves.
   const skin = new MeshBasicNodeMaterial({ transparent: true, depthWrite: true, side: DoubleSide });
   const fields = { ...(normal ? { slope: q => texture(normal, q.mul(0.25)).rg.mul(2).sub(1) } : {}), ...(foam ? { foam: q => texture(foam, q.mul(0.25)).r } : {}) };
   const deformation = { slope: heightSample.gb.mul(2).sub(1), foam: heightSample.a, height: fieldHeight,
+    reflection: direction => cubeTexture(reflections.texture, direction).rgb, reflectionReady: u.reflectionReady,
     B: normalize(attribute('aWaterB','vec3')), T: normalize(attribute('aWaterT','vec3')) };
   const surface = createWaterSurface({ surface: attribute('surface', 'float'), flow: attribute('flow', 'vec2'), p: uv(), trueEdge: attribute('aWaterEdge', 'float'), V: normalize(cameraPosition.sub(positionWorld)), N0: fieldNormal, pal, u, fields, deformation });
   skin.colorNode = surface.colour;
-  skin.opacityNode = float(0.97);
+  skin.opacityNode = surface.alpha;
   skin.positionNode = positionLocal.add(fieldNormal.mul(fieldHeight));
   // Water follows the road (0); later wakes and spray depth-test against the real wave surface.
   add(top, skin, 'water-surface-raised', 0.5);
@@ -140,15 +145,20 @@ export function buildWaterVolume(track, pal, art = null, { quality = Q.name } = 
   curtain.positionNode = positionLocal.add(vec3(sin(p.y.mul(0.8).sub(u.t.mul(2.1))).mul(0.18), 0, sin(p.y.mul(0.6).add(u.t.mul(1.7))).mul(0.18)).mul(attribute('aWaterEdge', 'float')).mul(u.motion))
     .add(fieldNormal.mul(fieldHeight).mul(float(1).sub(smoothstep(0,0.2,attribute('aWaterEdge','float')))));
   curtain.opacityNode = streak.mul(0.5).add(0.3).mul(edge).mul(fade); add(fall, curtain, 'water-spills-into-void', 0.75);
+  froth.object.renderOrder = 0.85; object.add(froth.object);
   let uploadedVersion = field.stats.version;
-  return { object, field, heightTexture, uniforms: u, runs, spills, stats: { runs: runs.length, spills: spills.length, vertices: (top.p.length + wall.p.length + fall.p.length) / 3, surfaceVertices: top.p.length / 3 },
-    update(dt, { gentle = false, paused = false, scroll = gentle ? 0.5 : 1 } = {}) {
+  return { object, field, heightTexture, reflections, foam: froth, uniforms: u, runs, spills, stats: { runs: runs.length, spills: spills.length, vertices: (top.p.length + wall.p.length + fall.p.length) / 3, surfaceVertices: top.p.length / 3 },
+    async warmReflections(options) { const ready = await reflections.warm(options); u.reflectionReady.value = ready ? 1 : 0; return ready; },
+    update(dt, { gentle = false, paused = false, scroll = gentle ? 0.5 : 1, playerPos = null, playerS = 0 } = {}) {
       if (paused) return;
       u.t.value += Math.max(0, dt) * scroll; u.motion.value = gentle ? 0.5 : 1;
       const changed = field.step(dt, { gentle, paused });
       if (changed || uploadedVersion !== field.stats.version) { heightTexture.needsUpdate = true; uploadedVersion = field.stats.version; }
+      froth.update(dt, { gentle, paused, playerS });
+      reflections.update(dt, { paused, playerPos, playerS, wet: runs.some(r => playerS >= r.fromS - 45 && playerS <= r.toS + 30) });
+      u.reflectionReady.value = reflections.stats.ready ? 1 : 0;
     },
-    reset() { field.reset(); heightTexture.needsUpdate = true; uploadedVersion = field.stats.version; },
-    dispose() { for (const child of object.children) { child.geometry.dispose(); child.material.dispose(); } heightTexture.dispose(); field.dispose?.(); object.clear(); },
+    reset() { field.reset(); heightTexture.needsUpdate = true; uploadedVersion = field.stats.version; froth.reset(); },
+    dispose() { for (const child of object.children) { if (child === froth.object) continue; child.geometry.dispose(); child.material.dispose(); } froth.dispose(); reflections.dispose(); heightTexture.dispose(); field.dispose?.(); object.clear(); },
   };
 }

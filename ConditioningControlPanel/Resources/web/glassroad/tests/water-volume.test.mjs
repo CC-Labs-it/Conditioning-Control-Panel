@@ -38,10 +38,10 @@ test('water volume has shallow raised surface, visible depth and curtains fallin
   water.update(1); assert.equal(water.uniforms.t.value, 1);
   water.update(1, { paused: true }); assert.equal(water.uniforms.t.value, 1);
   water.update(1, { gentle: true }); assert.equal(water.uniforms.t.value, 1.5);
-  assert.equal(water.object.children.length, 3, 'all material paths exist before warm-up');
+  assert.equal(water.object.children.length, 4, 'surface, depth, curtains and dimensional foam exist before warm-up');
   for (const mesh of water.object.children) {
     assert.ok(mesh.renderOrder > 0 && mesh.renderOrder < 1, 'water composites after road but before wake rings and spray');
-    assert.equal(mesh.material.depthWrite, mesh.name === 'water-surface-raised',
+    assert.equal(mesh.material.depthWrite, mesh.name === 'water-surface-raised' || mesh.name === 'water-dimensional-foam',
       'reactive skin rejects later submerged shadow catchers; translucent walls and curtains do not write depth');
   }
 });
