@@ -86,7 +86,9 @@ export function buildMainframe() {
 export function formatTrack(track) {
   return '{\n' + Object.entries(track).map(([key, value]) => {
     const flatRows = Array.isArray(value) && value.length && typeof value[0] === 'object';
-    return '  ' + JSON.stringify(key) + ': ' + (flatRows ? '[\n' + value.map(row => '    ' + JSON.stringify(row)).join(',\n') + '\n  ]' : JSON.stringify(value));
+    const rows = flatRows ? value.map(row => JSON.stringify(row)) : [];
+    const lines = key === 'nodes' ? Array.from({ length: Math.ceil(rows.length / 2) }, (_, i) => rows.slice(i * 2, i * 2 + 2).join(',')) : rows;
+    return '  ' + JSON.stringify(key) + ': ' + (flatRows ? '[\n' + lines.map(row => '    ' + row).join(',\n') + '\n  ]' : JSON.stringify(value));
   }).join(',\n') + '\n}\n';
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
