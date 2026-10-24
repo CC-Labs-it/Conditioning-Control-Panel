@@ -32,7 +32,9 @@ test('Shelf ascent and wardrobe descent keep all lanes attached to their correct
     const span = layout.landmarks.find(p => p.id === id);
     for (let s = span.s0 + 5; s < span.s1 - 5; s += 5) for (const x of [-.45, 0, .45]) {
       const f = track.frameAt(s), p = f.p.map((v, i) => v + f.b[i] * f.w * x), q = track.query(...p, f.seg);
-      assert.ok(q.onRoad && Math.abs(q.s - s) < .1, id + ' layer at ' + s);
+      const fork = track.forks?.find(path => path.id === q.forkId);
+      const mouth = fork && (q.forkS < fork.mouthM || q.forkS > fork.lengthM - fork.mouthM);
+      assert.ok(q.onRoad && (Math.abs(q.s - s) < .1 || (mouth && Math.abs(q.height) < .65)), id + ' layer at ' + s);
     }
   }
 });

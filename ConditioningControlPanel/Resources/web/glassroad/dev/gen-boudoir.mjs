@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { loadTrack } from '../track/load.js';
 import { validate } from '../track/schema.js';
 import { BOUDOIR_PIECES, boudoirPieceLength, boudoirSegmentCount, walkBoudoir, getBoudoirLayout } from '../track/boudoir-layout.js';
+import { makeBoudoirForks } from '../track/boudoir-forks.js';
 const RAD = Math.PI / 180, smooth = u => u * u * (3 - 2 * u), round = x => +x.toFixed(3) || 0;
 export function buildBoudoir() {
   const plan = walkBoudoir(BOUDOIR_PIECES), nodes = [], starts = [];
@@ -40,12 +41,12 @@ export function buildBoudoir() {
   const section = (p, i) => ({ id: p.id === 'bath-stream' ? 'coolant-canal' : p.id, from: starts[i], to: starts[i + 1] ?? nodes.length,
     act: i < 7 ? 'induction' : i < 26 ? 'deepening' : 'release', palette: i < 7 ? 'dawn' : i < 26 ? 'deep' : 'afterglow',
     sky: i < 7 ? 'spiral-slow' : i < 26 ? 'spiral-deep' : 'spiral-wide', bandSpeed: .7 });
-  const routes = [0, 1].map(i => {
-    const from = node('wardrobe-descent', (35 + i * 360) / 810), to = from + 4;
+  const routes = [35, 395].map((angle, i) => {
+    const from = node('wardrobe-descent', angle / 810), to = from + 4;
     for (let j = from; j < to; j++) nodes[j].flags = ['railL'];
     return { id: 'wardrobe-cut-' + (i + 1), kind: 'drop', side: 'R', from, to, open: { ds: 2, len: 28 },
-      land: { from: node('wardrobe-descent', (365 + i * 360) / 810), to: node('wardrobe-descent', (485 + i * 360) / 810) },
-      pad: { node: node('wardrobe-descent', (430 + i * 360) / 810), x: 3 } };
+      land: { from: node('wardrobe-descent', (angle + 330) / 810), to: node('wardrobe-descent', (angle + 450) / 810) },
+      pad: { node: node('wardrobe-descent', (angle + 395) / 810), x: 3 } };
   });
   const fieldFrom = node('compacts'), fieldTo = node('compacts-exit');
   const fields = [{ id: 'boudoir-compacts', from: fieldFrom, to: fieldTo, lanes: [-9, 0, 9],
@@ -64,6 +65,7 @@ export function buildBoudoir() {
   for (const [id, x] of [['powder-return', 3], ['shelf-climb', -3], ['wardrobe-descent', 4], ['bath-stream', -4]])
     for (let i = 0; i < 5; i++) track.items.push({ node: node(id, .35), x, ds: i * 4, kind: 'bubble' });
   const loaded = loadTrack(track), at = (id, d = 0) => loaded.nodeS[node(id)] + d;
+  track.forks = makeBoudoirForks(loaded, node);
   track.waterSpills = [{ fromS: at('bath-stream', 100), toS: at('bath-stream', 150), side: -1, dropM: 36 },
     { fromS: at('bath-turn', 70), toS: at('bath-turn', 105), side: 1, dropM: 40 },
     { fromS: at('bath-chute', 20), toS: at('bath-chute', 55), side: 1, dropM: 34 }];

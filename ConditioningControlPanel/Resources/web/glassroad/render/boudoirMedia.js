@@ -45,6 +45,8 @@ export function boudoirWorldPlan(track) {
   if (plans.has(track)) return plans.get(track);
   const road = roadSamples(track, 5), rows = [], mounts = [], heroes = [], interiors = [], particles = [];
   const corridors = road.map(f => ({ p: at(f, 0, 6), size: [f.w + 3, 16, 8], axes: basisAt(f) }));
+  for (const fork of track.forks || []) for (const f of fork.samples(5))
+    corridors.push({ p: at(f, 0, 6), size: [f.w + 3, 16, 8], axes: basisAt(f) });
   // Curved banks rise above their centreline. Check actual shoulder surfaces as well.
   for (const f of road) if (track.frameAt(f.s).surface === 'stream') for (const share of [-.95, -.7, -.35, .35, .7, .95]) {
     const surface = track.surfaceAt(f.s, f.w / 2 * share);
