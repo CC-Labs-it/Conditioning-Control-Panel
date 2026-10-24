@@ -33,9 +33,10 @@ The WPF image comes from the **`wpf-render` artifact of a specific `build` workf
 `wpf-render/release-content-mod-manager-rows.png`. Download the artifact to compare it beside
 `Snapshots/release-content-mod-manager-rows.verified.png`; a local-only image path is insufficient.
 `Tests/ConditioningControlPanel.Tests/VerifiedRowRenderTests.cs` renders offscreen with a disposable
-profile and fails if a row cannot render. Its `Rows` table mirrors the Avalonia snapshot table:
-`win-layered-audio.png` (480×660, no tracks, master off, 70%) and
-`release-content-mod-manager-rows.png` (700×500, CCP Default selected, no release-content service).
+profile and fails if a row cannot render. Its `Rows` table mirrors the Avalonia snapshot state at
+the WPF window's own size: `win-layered-audio.png` (480×660, no tracks, master off, 70%) and
+`release-content-mod-manager-rows.png` (WPF 860 wide, height fitted to content, at least 580;
+the Avalonia baseline is 700×500; CCP Default selected, no release-content service).
 Both current rows can be constructed headlessly; **no verified snapshot rows are excluded**.
 The frozen WPF Mod Manager has its current Customise/Companion layout, so differences from the
 Avalonia baseline remain visible for review. When adding a snapshot row, add its WPF factory and

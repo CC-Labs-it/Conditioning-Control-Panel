@@ -20,14 +20,17 @@ namespace ConditioningControlPanel.Tests;
 [Collection(CompanionWpfRenderCollection.Name)]
 public sealed class VerifiedRowRenderTests
 {
-    private sealed record Row(int Width, int Height, Func<Window> Create);
+    // Height null = the WPF window's SizeToContent="Height": max(MinHeight, content height).
+    private sealed record Row(int Width, int? Height, Func<Window> Create);
 
-    // Keep dimensions/state aligned with the Avalonia snapshot's default constructors.
+    // State matches the Avalonia snapshot's default constructors; size is the WPF window's own
+    // (Mod Manager: Width=860, SizeToContent=Height, MinHeight=580 vs Avalonia 700x500), so the
+    // side-by-side shows the size difference instead of a squeezed WPF layout.
     // Add a constructible verified row here in one line. Currently no rows are excluded.
     private static readonly Dictionary<string, Row> Rows = new()
     {
         ["win-layered-audio"] = new(480, 660, () => new LayeredAudioWindow()),
-        ["release-content-mod-manager-rows"] = new(700, 500, () => new ModManagerDialog()),
+        ["release-content-mod-manager-rows"] = new(860, null, () => new ModManagerDialog()),
     };
 
     public static TheoryData<string> RowIds => new(Rows.Keys);
@@ -68,14 +71,16 @@ public sealed class VerifiedRowRenderTests
                 TextElement.SetFontFamily(host, window.FontFamily);
                 TextElement.SetFontSize(host, window.FontSize);
                 TextElement.SetFontWeight(host, window.FontWeight);
-                host.Measure(new Size(row.Width, row.Height));
-                host.Arrange(new Rect(0, 0, row.Width, row.Height));
+                host.Measure(new Size(row.Width, row.Height ?? double.PositiveInfinity));
+                var height = row.Height
+                    ?? (int)Math.Ceiling(Math.Max(window.MinHeight, host.DesiredSize.Height));
+                host.Arrange(new Rect(0, 0, row.Width, height));
                 host.UpdateLayout();
 
-                var bitmap = new RenderTargetBitmap(row.Width, row.Height, 96, 96, PixelFormats.Pbgra32);
+                var bitmap = new RenderTargetBitmap(row.Width, height, 96, 96, PixelFormats.Pbgra32);
                 bitmap.Render(host);
                 // A blank/solid background must fail even when a valid PNG could be encoded.
-                var pixels = new int[row.Width * row.Height];
+                var pixels = new int[row.Width * height];
                 bitmap.CopyPixels(pixels, row.Width * 4, 0);
                 Assert.True(pixels.Distinct().Take(33).Count() > 32, "Expected painted controls and text");
                 var encoder = new PngBitmapEncoder();
@@ -86,7 +91,7 @@ public sealed class VerifiedRowRenderTests
                 using var saved = File.OpenRead(path);
                 var frame = BitmapFrame.Create(saved, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
                 Assert.Equal(row.Width, frame.PixelWidth);
-                Assert.Equal(row.Height, frame.PixelHeight);
+                Assert.Equal(height, frame.PixelHeight);
             }
             finally { window.Close(); }
         }));
@@ -127,7 +132,7 @@ public sealed class VerifiedRowRenderTests
         foreach (var (name, value) in new (string, object)[]
         {
             ("_activeMod", vanilla), ("_baseMod", vanilla),
-            ("_installedMods", new Dictionary<string, ModPackage> { [vanilla.Id] = vanilla }),
+            ("_installedMods", new Dictionary<string, ModPackage> { }),
         })
             typeof(ModService).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(mods, value);
         try
