@@ -125,8 +125,8 @@ public sealed class ScrolllerRelayServerTests : IDisposable
         var root = RepoRoot();
         foreach (var (file, seam) in new[]
         {
-            ("Views/Games/GameWindow.cs", "ScrolllerRelay.RewriteJson(JsonConvert.SerializeObject(message), ScrolllerRelay.LoopbackOrigin(PageUrl))"),
-            ("Views/Windows/IntakeHostWindow.cs", "ScrolllerRelay.RewriteJson(JsonConvert.SerializeObject(message), ScrolllerRelay.LoopbackOrigin(PageUrl))"),
+            ("Views/Games/GameWindow.cs", "Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl)"),
+            ("Views/Windows/IntakeHostWindow.cs", "Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl)"),
             ("Views/Controls/WebHost.axaml.cs", "ScrolllerRelay.RewriteJson(json, origin)"),
         })
             Assert.Contains(seam, File.ReadAllText(Path.Combine(root, "CCP.Avalonia", file)));

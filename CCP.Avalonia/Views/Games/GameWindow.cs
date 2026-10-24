@@ -234,8 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post) through the page's string carrier.</summary>
         internal void Post(object message)
         {
-            // Every Scrolller media url becomes the loopback relay path (Core ScrolllerRelay): the page never fetches the CDN.
-            var json = ScrolllerRelay.RewriteJson(JsonConvert.SerializeObject(message), ScrolllerRelay.LoopbackOrigin(PageUrl));
+            // Scrolller media: raw urls for a Windows view WPF's gate answers, the loopback relay otherwise (WebHost.ScrolllerFrame).
+            var json = Web.ScrolllerFrame(JsonConvert.SerializeObject(message), PageUrl);
             Posted?.Invoke(json);
             if (_closing) return;
             _ = Web.PostJsonAsync(json);
