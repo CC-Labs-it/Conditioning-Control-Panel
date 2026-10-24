@@ -3,9 +3,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Services;
 using Serilog;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
 
 namespace ConditioningControlPanel.Avalonia.Platform
 {
@@ -46,6 +49,43 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (!Allowed(target)) return false;
             try { return Shell(target!); }
             catch (Exception ex) { Log.Warning("Could not open {Target}: {Error}", Path.IsPathRooted(target!) ? target : "link", ex.Message); return false; }
+        }
+
+        // WPF BrowserLauncher: keep the Windows launch strategies behind this head's OS seam.
+        internal static Func<string, string, bool> BrowserFallback = (file, args) =>
+        {
+            try
+            {
+                using var p = Process.Start(new ProcessStartInfo(file, args)
+                    { UseShellExecute = false, CreateNoWindow = true });
+                return true;
+            }
+            catch { return false; }
+        };
+
+        private static MessageDialog? _browserPrompt;
+        internal static void CloseBrowserPrompt() => _browserPrompt?.Close();
+
+        internal static Func<Window, string, string, Task> BrowserPrompt = async (owner, url, purpose) =>
+        {
+            try { if (owner.Clipboard is { } clipboard) await clipboard.SetTextAsync(url); } catch { }
+            var dialog = new MessageDialog(Loc.Get("title_open_link_in_browser"),
+                Loc.GetF("msg_browser_no_default_for", purpose) + Loc.GetF("msg_browser_link_copied", url), showCancel: false);
+            _browserPrompt = dialog;
+            try { await dialog.ShowDialogSafe(owner); }
+            finally { if (ReferenceEquals(_browserPrompt, dialog)) _browserPrompt = null; }
+        };
+
+        internal static async Task<bool> OpenBrowserOrPromptAsync(Window owner, string url, string purpose)
+        {
+            if (!Allowed(url)) return false;
+            if (Open(url)) return true;
+            if (OperatingSystem.IsWindows() &&
+                (BrowserFallback("explorer.exe", url) ||
+                 BrowserFallback("cmd.exe", $"/c start \"\" \"{url}\"") ||
+                 BrowserFallback("rundll32.exe", $"url.dll,FileProtocolHandler {url}"))) return true;
+            await BrowserPrompt(owner, url, purpose);
+            return false;
         }
 
         /// <summary>Open through the window's platform launcher (portal-aware), else the shell. False when refused or failed.</summary>

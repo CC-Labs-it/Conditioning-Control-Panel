@@ -24,24 +24,10 @@
 // UpdateBannerWelcomeMessage re-runs on LocalizationManager.LanguageChanged, which is what
 // actually keeps it honest.
 //
-// STILL BLOCKED, each naming what it needs rather than guessing at "when X moves to Core":
-//   ShowOgWelcomePopup / TryPresentSeasonRecap / ShowWhatsNewIfNeeded - App.Achievements,
-//     App.Seasons and the startup dialog queue in ConditioningControlPanel/App.xaml.cs. The
-//     dialogs themselves DO exist here (CCP.Avalonia/Views/Dialogs/WhatsNewDialog.axaml.cs,
-//     Views/Controls/SeasonRecapCard); what is missing is the "has this launch already shown a
-//     modal" arbitration those read from App.
-//   (RefreshMarqueeFromSettings / CheckServerUpdateBanner are PORTED: MainShellWindow.ServerBanners.cs over Core
-//     V2AuthService, as CheckServerAnnouncement is in MainShellWindow.Announcement.cs.)
-//   (CheckIntakePassNudge / StartIntakeFromNudge / _serverAnnouncementShownThisLaunch are PORTED:
-//     MainShellWindow.IntakeNudge.cs.)
-//   (BannerWebLink_Click is ported below: the beat's inline SafeHyperlinkButton opens through
-//   ExternalOpener, which has no no-default-browser prompt - WPF BrowserLauncher's fallback.)
-//   LocOr - a Loc.Get with an English literal fallback. Used only by the marquee and takeaway
-//     formatters, neither of which runs here; Loc.Get already returns the key when a string is
-//     missing, so there is nothing to restore in isolation.
-//   (StartMarqueeAnimation is PORTED onto the page that carries the strip: SettingsTabView.Marquee.cs.)
-//   SweepBannerSheen - MainShellWindow.ChromeFx.cs, still a stub. The BannerSheen border is in
-//     the XAML and parked at Opacity 0, so its absence costs nothing visible.
+// Remaining dependencies: the returning-user modal startup ladder and monthly rollover
+// service are not ported. ShowOgWelcomePopup has no WPF caller. Server feeds, intake nudge,
+// scrolling strip and browser fallback live in their respective partials/platform helpers.
+// BannerFx owns the live sheen, drum, pop, sparkle and shared-clock halo.
 
 using System;
 using System.Linq;
@@ -130,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _bannerRotationTimer.Start();
             Closed += (_, _) => _bannerRotationTimer.Stop();
             InitializeBannerPool();
+            InitializeBannerFx();
         }
 
         /// <summary>
@@ -209,10 +196,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var nextIndex = (_bannerCurrentIndex + 1) % banners.Length;
             ApplyPendingBannerPoolText(banners[_bannerCurrentIndex], banners[nextIndex]);
             Crossfade(banners[_bannerCurrentIndex], banners[nextIndex]);
+            OnBannerBeatChanged(banners[_bannerCurrentIndex], banners[nextIndex]);
             _bannerCurrentIndex = nextIndex;
-
-            // ponytail: WPF also calls SweepBannerSheen() here. MainShellWindow.ChromeFx.cs is
-            // still a stub, so the sheen pass is skipped rather than faked.
         }
 
         /// <summary>
@@ -224,6 +209,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             EnsureFadeTransition(outgoing);
             EnsureFadeTransition(incoming);
+            if (!global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowTransitions)
+            {
+                outgoing.Transitions = null;
+                incoming.Transitions = null;
+            }
 
             outgoing.Opacity = 0;
             incoming.Opacity = 1;
@@ -241,13 +231,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             var secondary = BannerSecondary;
             if (secondary is not null) secondary.Text = message;
+            SweepBannerSheen(force: true);
 
             if (_bannerRotationTimer is { IsEnabled: false }) _bannerRotationTimer.Start();
         }
 
         /// <summary>WPF BannerWebLink_Click (MainWindow.Marquee.cs:464): the beat's own link opens the
         /// web app (SafeHyperlinkButton -> ExternalOpener) and, having worked, retires the beat.</summary>
-        private void BannerWebLink_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => RetireWebBannerBeat();
+        private async void BannerWebLink_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            e.Handled = true;
+            try { await Platform.ExternalOpener.OpenBrowserOrPromptAsync(this, "https://app.cclabs.app", "open the CC Labs web app"); }
+            catch (Exception ex) { Log.Warning(ex, "Banner browser prompt failed"); }
+            finally { RetireWebBannerBeat(); }
+        }
 
         /// <summary>
         /// Spends the One Account banner beat and takes it out of the live rotation. Called from

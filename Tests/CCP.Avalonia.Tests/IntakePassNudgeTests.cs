@@ -102,6 +102,13 @@ public sealed class IntakePassNudgeTests
         Silent(() => CoreAccount.IsLoggedInProvider = () => false);      // signed out
         CoreAccount.IsLoggedInProvider = () => true;
 
+        // WPF DtRH host stands down even during its countdown (not just while descending).
+        var active = typeof(global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost)
+            .GetField("_active", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var wasActive = active.GetValue(null);
+        try { Silent(() => active.SetValue(null, true)); }
+        finally { active.SetValue(null, wasActive); }
+
         // A server announcement routed this launch takes the one popup slot (WPF Marquee.cs:913).
         var s = CoreSettings.Current;
         s.UnifiedId = "u1";

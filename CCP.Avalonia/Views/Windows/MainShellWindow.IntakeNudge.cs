@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Never on top of something the user is in the middle of (WPF: session, DtRH, intake,
                 // Arcademy and every WebView2 game host; here the game windows and the intake host).
                 if (CoreSession.IsSessionRunning) return;
+                if (Chaos.ChaosRunHost.IsActive) return;
                 if (Games.GameWindow.IsAnyOpen()) return;
                 if (IntakeHostWindow.Snapshot().Length > 0) return;
 
