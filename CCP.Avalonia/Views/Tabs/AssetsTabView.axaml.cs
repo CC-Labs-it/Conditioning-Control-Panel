@@ -37,8 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
-    /// ponytail: not on this head yet - the Content Packs tree node and pack cards (ContentPackService
-    /// is seeded but builds no cards; the section is hidden in WPF too), video thumbnails (WPF uses the
+    /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too), video thumbnails (WPF uses the
     /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
     /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
     /// </summary>
@@ -176,7 +175,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }));
 
             // WPF keeps the open folder across a rescan/preset switch; re-find it in the new tree.
-            var openPath = _selectedFolder?.FullPath;
+            var openFolder = _selectedFolder;
+            var openPath = openFolder?.FullPath;
             _assetTree.Clear();
             _selectedFolder = null;
             _currentFolderFiles.Clear();
@@ -193,8 +193,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 node.IsExpanded = true;
                 _assetTree.Add(node);
             }
+            AddContentPacksNode();
             UpdateAssetCounts();
-            if (!string.IsNullOrEmpty(openPath) && Find(_assetTree, openPath) is { } reopen)
+            if (openFolder is { IsPackFolder: true, PackId: not null, PackFileType: not null })
+            {
+                var reopenPack = _assetTree.SelectMany(n => n.Children).SelectMany(n => n.Children)
+                    .FirstOrDefault(n => n.PackId == openFolder.PackId && n.PackFileType == openFolder.PackFileType);
+                if (reopenPack != null)
+                {
+                    for (var p = reopenPack.Parent; p != null; p = p.Parent) p.IsExpanded = true;
+                    AssetTreeView.SelectedItem = reopenPack;
+                    if (!ReferenceEquals(_selectedFolder, reopenPack)) SelectFolder(reopenPack);
+                }
+            }
+            else if (!string.IsNullOrEmpty(openPath) && Find(_assetTree, openPath) is { } reopen)
             {
                 for (var p = reopen.Parent; p != null; p = p.Parent) p.IsExpanded = true;
                 AssetTreeView.SelectedItem = reopen;
@@ -240,6 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void SelectFolder(AssetTreeItem folder)
         {
             _selectedFolder = folder;
+            if (TrySelectPackFolder(folder)) { RecalculateFolderCheckState(folder); return; }
             if (!string.IsNullOrEmpty(folder.FullPath))
             {
                 LoadFolderThumbnails(folder.FullPath);
@@ -254,7 +267,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private static void RecalculateFolderCheckState(AssetTreeItem folder)
         {
-            if (!string.IsNullOrEmpty(folder.FullPath) && Directory.Exists(folder.FullPath))
+            if (IsPackLeaf(folder))
+            {
+                var files = ContentPackStore.Current?.GetPackFiles(folder.PackId!, folder.PackFileType) ?? new List<PackFileEntry>();
+                folder.CheckedFileCount = files.Count(f => !S.DisabledAssetPaths.Contains(ContentPackStore.SelectionKey(folder.PackId!, f)));
+            }
+            else if (!string.IsNullOrEmpty(folder.FullPath) && Directory.Exists(folder.FullPath))
                 folder.CheckedFileCount = MediaFiles(folder.FullPath).Count(f => !S.DisabledAssetPaths.Contains(Rel(f)));
             foreach (var child in folder.Children) RecalculateFolderCheckState(child);
             folder.UpdateCheckState();
@@ -290,6 +308,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// and a folder switch drops the old folder's queued decodes.</summary>
         private async Task LoadThumbnailAsync(AssetThumbnailViewModel item, int generation)
         {
+            if (TryCachedPackThumb(item)) return;
             item.IsLoadingThumbnail = true;
             try
             {
@@ -299,13 +318,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     try
                     {
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
-                        using var fs = File.OpenRead(item.FullPath);
-                        return Bitmap.DecodeToWidth(fs, 100);
+                        using Stream? fs = item.PackFile != null
+                            ? item.PackStore?.GetPackFileStream(item.PackId!, item.PackFile)
+                            : File.OpenRead(item.FullPath);
+                        return fs == null ? null : Bitmap.DecodeToWidth(fs, 100);
                     }
                     catch { return null; }   // unreadable/unsupported: no thumbnail, as WPF
                     finally { _thumbGate.Release(); }
                 });
-                if (bmp != null) await Dispatcher.UIThread.InvokeAsync(() => item.Thumbnail = bmp);
+                if (bmp != null) await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (item.PackFile != null) CachePackThumb(item, bmp);
+                    if (generation == _thumbGeneration) item.Thumbnail = bmp;
+                    else if (item.PackFile == null) bmp.Dispose();
+                });
             }
             finally
             {
@@ -341,7 +367,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private static void UpdateFolderFilesCheckState(AssetTreeItem folder, bool isChecked)
         {
-            if (Directory.Exists(folder.FullPath))
+            if (IsPackLeaf(folder))
+                foreach (var file in ContentPackStore.Current?.GetPackFiles(folder.PackId!, folder.PackFileType) ?? new List<PackFileEntry>())
+                {
+                    var key = ContentPackStore.SelectionKey(folder.PackId!, file);
+                    if (isChecked) S.DisabledAssetPaths.Remove(key);
+                    else S.DisabledAssetPaths.Add(key);
+                }
+            else if (Directory.Exists(folder.FullPath))
                 foreach (var file in MediaFiles(folder.FullPath))
                 {
                     if (isChecked) S.DisabledAssetPaths.Remove(Rel(file));
@@ -380,7 +413,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (file.IsChecked)
             {
                 S.DisabledAssetPaths.Remove(file.RelativePath);
-                AssetFolderExclusion.FileEnabled(S.DisabledAssetFolders, file.RelativePath);
+                if (file.PackFile == null) AssetFolderExclusion.FileEnabled(S.DisabledAssetFolders, file.RelativePath);
             }
             else S.DisabledAssetPaths.Add(file.RelativePath);
             InvalidateAssetPoolsAfterSelectionChange();
@@ -400,17 +433,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private async void ThumbnailItem_OpenInExplorer_Click(object? sender, RoutedEventArgs e)
         {
             // WPF ExplorerLauncher.RevealInExplorer selects the file; the portable open shows its folder.
-            if (sender is Control { DataContext: AssetThumbnailViewModel file })
+            if (sender is Control { DataContext: AssetThumbnailViewModel file } && file.PackFile == null)
                 await Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), Path.GetDirectoryName(file.FullPath));
         }
 
-        private void OpenAssetPreview(AssetThumbnailViewModel file)
+        internal Func<Windows.MiniPlayerWindow> CreateAssetPreview = () => new();
+
+        internal void OpenAssetPreview(AssetThumbnailViewModel file)
         {
+            string? extracted = null;
+            Windows.MiniPlayerWindow? win = null;
             try
             {
-                if (!File.Exists(file.FullPath)) { Log.Warning("File not found for preview: {File}", file.FullPath); return; }
-                var win = new Windows.MiniPlayerWindow();
-                win.LoadFile(file.FullPath);
+                var path = file.PackFile == null ? file.FullPath : file.PackStore?.GetPackFileTempPath(file.PackId!, file.PackFile);
+                extracted = file.PackFile != null ? path : null;
+                if (!File.Exists(path)) { Log.Warning("File not found for preview: {File}", path); return; }
+                win = CreateAssetPreview();
+                if (file.PackFile != null) win.Closed += (_, _) => file.PackStore?.DeleteTempFile(path!);
+                win.LoadFile(path!);
                 if (TopLevel.GetTopLevel(this) is Window owner)
                 {
                     // WPF previewWindow.Closed: re-activate the main window, but only while our process
@@ -422,8 +462,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
                 else win.Show();
                 LastPreview = win;
+                extracted = null; // Closed owns the temporary file after the window is shown.
             }
-            catch (Exception ex) { Log.Error(ex, "Failed to open asset preview for {File}", file.Name); }
+            catch (Exception ex)
+            {
+                win?.Close();
+                Log.Error(ex, "Failed to open asset preview for {File}", file.Name);
+            }
+            finally { if (extracted != null) file.PackStore?.DeleteTempFile(extracted); }
         }
 
         /// <summary>The last preview opened (tests drive it).</summary>
@@ -481,7 +527,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             int images = 0, videos = 0;
             foreach (var folder in items)
             {
-                if (Directory.Exists(folder.FullPath))
+                if (IsPackLeaf(folder))
+                {
+                    var files = ContentPackStore.Current?.GetPackFiles(folder.PackId!, folder.PackFileType) ?? new List<PackFileEntry>();
+                    var count = files.Count(f => all || !S.DisabledAssetPaths.Contains(ContentPackStore.SelectionKey(folder.PackId!, f)));
+                    if (folder.PackFileType == ContentPackStore.ImageType) images += count;
+                    else videos += count;
+                }
+                else if (Directory.Exists(folder.FullPath))
                 {
                     string[] files;
                     try { files = Directory.GetFiles(folder.FullPath); } catch { files = Array.Empty<string>(); }
@@ -533,6 +586,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
                 var images = Count("images", CountImageExtensions);
                 var videos = Count("videos", CountVideoExtensions);
+                if (ContentPackStore.Current is { } store)
+                    foreach (var id in store.GetActivePackIds())
+                        foreach (var file in store.GetPackFiles(id))
+                        {
+                            if (preset.DisabledAssetPaths?.Contains(ContentPackStore.SelectionKey(id, file)) == true) continue;
+                            if (file.FileType == ContentPackStore.ImageType) images++;
+                            else if (file.FileType == ContentPackStore.VideoType) videos++;
+                        }
                 if (preset.EnabledImageCount != images) preset.EnabledImageCount = images;
                 if (preset.EnabledVideoCount != videos) preset.EnabledVideoCount = videos;
             }
@@ -786,6 +847,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             IsVideo = VideoExtensions.Contains(Path.GetExtension(fullPath).ToLowerInvariant());
         }
 
+        public AssetThumbnailViewModel(ContentPackStore store, string packId, PackFileEntry file)
+        {
+            FullPath = "";
+            RelativePath = ContentPackStore.SelectionKey(packId, file);
+            Name = file.OriginalName;
+            IsVideo = file.FileType == ContentPackStore.VideoType;
+            PackStore = store;
+            PackId = packId;
+            PackFile = file;
+        }
+
+        internal ContentPackStore? PackStore { get; }
+        internal string? PackId { get; }
+        internal PackFileEntry? PackFile { get; }
         public string FullPath { get; }
         public string RelativePath { get; }
         public string Name { get; }
