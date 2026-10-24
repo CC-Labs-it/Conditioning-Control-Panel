@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Desktop linked evidence
+
+1. In Haptics, open setup help; change the provider address and close setup. The page reflects the new address. WPF `MainWindow/MainWindow.Haptics.cs:685-694`. Rows: `shell-haptics`.
+2. Hover until a tooltip opens, then navigate by code or keyboard without moving the pointer. The tooltip closes. WPF `MainWindow/MainWindow.ToolTipHygiene.cs:120-145`. Rows: `shell-tooltip-hygiene`.
+3. Summon EMI with a talking feature enabled and the mute question allowed. Try each answer in a fresh app session; Escape or dismiss keeps speech. WPF `Windows/EmiDesk/EmiMutePromptWindow.xaml.cs:37-57`. Rows: `win-emi-mute-prompt`.
+4. Open Takeover: the orb is decorative and brightens when active. Navigate away/back and enable reduced motion; the clock parks while hidden or reduced. WPF `Controls/TakeoverOrb.cs:130-185,327-339`. Rows: `ctrl-takeover-orb`.
