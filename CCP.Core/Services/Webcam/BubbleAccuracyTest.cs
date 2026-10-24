@@ -115,6 +115,9 @@ namespace ConditioningControlPanel.Services
 
             public Dwell(double cx, double cy) { _cx = cx; _cy = cy; }
 
+            // nowMs of the previous tick (0 = the bubble's start, as WPF's lastTick = started).
+            private long _lastMs;
+
             public double DwellMs { get; private set; }
             public double Progress => DwellMs / DwellNeededMs;
             public bool Popped => DwellMs >= DwellNeededMs;
@@ -138,8 +141,12 @@ namespace ConditioningControlPanel.Services
                     double ey = (_avg.Average(q => q.Y) - _cy) / PopRadiusY;
                     onTarget = Math.Sqrt(ex * ex + ey * ey);
                 }
-                if (onTarget <= 1.0) { DwellMs += TickMs; _inside.Add(raw); }
-                else DwellMs = Math.Max(0, DwellMs - TickMs);
+                // Real time since the last tick, not TickMs: Task.Delay(33) lands every ~47 ms or later,
+                // so counting laps made the 700 ms dwell take ~1 s of the timeout (WPF a4a5aa43b).
+                var stepMs = Math.Min(Math.Max(nowMs - _lastMs, 0), ConditioningControlPanel.Services.Timing.TickStep.DwellMaxStepMs);
+                _lastMs = nowMs;
+                if (onTarget <= 1.0) { DwellMs += stepMs; _inside.Add(raw); }
+                else DwellMs = Math.Max(0, DwellMs - stepMs);
             }
 
             /// <summary>The recal sample of a popped bubble: the median pre-lock point while on it.</summary>
