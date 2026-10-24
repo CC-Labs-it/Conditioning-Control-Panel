@@ -46,7 +46,7 @@ public partial class EmiDeskWindow
             _patFeedbackTimer.Tick -= OnPatFeedbackTick;
             _patFeedbackTimer = null;
         }
-        if (_patFeedback is not null) DrawFace(RestFace);
+        if (_patFeedback is not null) DrawFace(EmiChains.RestFace);
         _patFeedback = null;
     }
 }
