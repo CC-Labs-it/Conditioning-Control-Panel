@@ -8,7 +8,7 @@
  */
 import {
   Sprite, SpriteNodeMaterial, MeshBasicNodeMaterial, InstancedBufferAttribute, DynamicDrawUsage, AdditiveBlending,
-  DoubleSide, Color, InstancedMesh, Matrix4, Quaternion, Vector3, Euler, PlaneGeometry,
+  DoubleSide, Color, InstancedMesh, Matrix4, Quaternion, Vector3, Euler, PlaneGeometry, SphereGeometry,
 } from 'three/webgpu';
 import {
   instancedDynamicBufferAttribute, uniform, uv, vec2, vec3, float, texture, mix, smoothstep, sin, cos, atan, log, length,
@@ -114,6 +114,29 @@ export function shellCloud(geometry, cap) {
     },
     end() { mesh.count = n; mesh.visible = n > 0; mesh.instanceMatrix.needsUpdate = true; aInfo.needsUpdate = true; },
     dispose() { m.dispose(); geometry.dispose(); },
+  };
+}
+
+/** One real shell per protected kart, with no billboard pull, iridescent cycling or white flash. */
+export function shieldCloud(cap = 16) {
+  const aInfo = new InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(DynamicDrawUsage);
+  const info = instancedDynamicBufferAttribute(aInfo, 'vec3');
+  const material = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+  const fres = pow(float(1).sub(abs(dot(normalView, positionViewDirection))), L.shieldFresPow);
+  material.colorNode = mix(mix(col3(L.shieldTint), col3(L.shieldGold), info.y), col3(L.shieldAmber), info.z);
+  material.opacityNode = fres.mul(1 - L.shieldBody).add(L.shieldBody).mul(info.x);
+  const geometry = new SphereGeometry(1, 40, 24), mesh = new InstancedMesh(geometry, material, cap);
+  mesh.name = 'item-shield-shells'; mesh.count = 0; mesh.frustumCulled = false; mesh.renderOrder = 3;
+  const matrix = new Matrix4(), position = new Vector3(), scale = new Vector3(); let count = 0;
+  return { mesh, cap,
+    begin() { count = 0; },
+    push(x, y, z, rotation, radius, alpha, gold, warning) {
+      if (count >= cap || alpha <= .001) return false;
+      mesh.setMatrixAt(count, matrix.compose(position.set(x, y, z), rotation, scale.set(...L.shieldShape).multiplyScalar(radius)));
+      aInfo.array.set([alpha, gold, warning], count * 3); count++; return true;
+    },
+    end() { mesh.count = count; mesh.visible = count > 0; mesh.instanceMatrix.needsUpdate = true; aInfo.needsUpdate = true; },
+    dispose() { mesh.dispose(); geometry.dispose(); material.dispose(); },
   };
 }
 

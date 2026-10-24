@@ -41,7 +41,7 @@ test('bubble ram cooldown, paired shields, ghost protection and pause',()=>{
   assert.equal(rec.all('bubble-ram').length,1,'rescue grace cannot be rammed');
 });
 
-test('bubble contact reaches its visible shell and still respects rails and assisted edge protection',()=>{
+test('bubble contact preserves its gameplay envelope and respects rails and assisted edge protection',()=>{
   for(const mode of ['open','rail','gentle','assist']) {
     const feel=makeFeel(mode==='gentle'?{'gentle.on':true}:{}), tr=fakeTrack({flags:()=>mode==='rail'?['rail']:[]});
     const rec=recorder(),c=createContact(tr,feel,rec);

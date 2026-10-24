@@ -3,8 +3,6 @@
  * No three.js here, so tests/render-*.test.mjs read it under bare node. Colours are CSS hex or 0..1 rgb.
  */
 
-import { BUBBLE_RAM } from '../../core/bubble.js';
-
 /** Per quality tier (render/quality.js Q.name): pooled objects and how alive the icons are. */
 export const ITEM_TIERS = {
   high: { bubbles: 48, motes: 10, iconPx: 256, iconFps: 30, puddles: 12, copies: 3 },
@@ -24,7 +22,7 @@ export const ITEM_LOOK = {
   bubbleR: 0.55, heldR: 0.42, heldUpM: 2.1, heldBobM: 0.12, heldBobHz: 0.6,
   // the player's own rides low in the cup's back right; hidden in the world while the HUD slot shows it
   playerHeldScale: 0.7, playerHeldAt: [0.8, 1.05, 0.35], playerHeldInWorld: false,
-  // a bubble near the camera shrinks so it spans at most this share of the view's height (shields exempt)
+  // Item sprites near the camera shrink; shields use their own small world-space shell.
   nearMaxFrac: 0.08,
   throwR: 0.6, lobR: 0.9, trapR: 0.5, trapHoverM: 0.45, trapUnarmedAlpha: 0.45, pickupR: 0.7, pickupHoverM: 1.3,
   shellRim: 0.9, shellAlpha: 0.12, shellWhite: 0.55, iconFill: 0.727, shellFill: 0.96, // the art/fx bubble spans 186 of 256 px
@@ -49,7 +47,12 @@ export const ITEM_LOOK = {
   // pink wave: a flat ring opening along the road
   waveColour: '#ff5cbf', waveAlpha: 0.45, waveWidthM: 3,
   // shields
-  shieldR: BUBBLE_RAM.radiusM, shieldUpM: 0.75, goldTint: '#ffcf6b',
+  // Visual size is deliberately independent of the unchanged contact envelope in core/bubble.js.
+  shieldR: 1.08, playerShieldR: .94, shieldUpM: .68, shieldShape: [1, .85, 1.08],
+  shieldAlpha: .48, playerShieldAlpha: .34, shieldGentle: .65, shieldBody: .012, shieldFresPow: 3.2,
+  shieldTint: '#a9d7e3', shieldGold: '#d8bd7d', shieldAmber: '#d0a067',
+  shieldInS: .25, shieldOutS: .8, shieldWarnS: 3, shieldWarnShare: .4, shieldPulseHz: .35, shieldPulseDepth: .06,
+  goldTint: '#ffcf6b',
   echoSideM: 1.7, echoBackM: 1.4, echoSwayM: 0.35, echoAlpha: 0.38, echoFlickerHz: 2.5, echoFlickerAmp: 0.15,
   goldMotes: 14,
   // ---- polish 2 ----
@@ -109,6 +112,7 @@ export const AURA_LOOK = {
   // camera, so it must never push the middle of the view to white) playerAlpha with a softer rim
   size: [1.55, 1.3, 1.9], upM: 0.75, alpha: 0.55, playerAlpha: 0.3, fresPow: 1.6, bands: 3, bandClimbHz: 0.9, bandTwist: 2,
   gentle: 0.5, ringM: 2.1, ringAlpha: 0.6,
+  surgeAlpha: .26, surgePlayerAlpha: .13, surgeBandHz: .25, surgeBandColour: .14, surgeBandAlpha: .1,
   // motes rising off the aura, per second (high tier; mid and phone scale by the tier's mote share)
   motesPerS: 22, moteSpeedMps: 1.8, moteSizeM: 0.22, moteLifeS: 0.8,
 };
