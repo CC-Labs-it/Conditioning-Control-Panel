@@ -60,6 +60,10 @@ export function cleanRamp(stops, x) {
 
 export function createSkyMaterial(pal, art = null) {
   const C = { ...SKY_SPECTRUM, ...(LOOK.skySpectrum || {}) };
+  const keep = pal.theme === 'keep';
+  if (keep) Object.assign(C, { cleanStops: ['#7b2459', '#3c244e', '#a33372', '#30263f'], armGain: 0.5, nebGain: 0.3, nebMix: 0.45 });
+  // Keep's galaxy is scalar R8, not RGB. The host supplies the violet/magenta colour.
+  const galaxySample = (map, at) => keep ? vec3(0.7, 0.14, 0.38).mul(texture(map, at).r) : texture(map, at).rgb;
   // the clean gradient on the palette's hue clock, a little of the section colour mixed in
   const hueClock = pal.hue || float(0);
   const ramp = (x) => mix(cleanRamp(C.cleanStops, x.add(hueClock)), pal.col(1), C.cleanTint);
@@ -91,7 +95,7 @@ export function createSkyMaterial(pal, art = null) {
     let haze = vec3(0, 0, 0), stars = float(0);
     SKY_PALETTES.forEach((id, i) => {
       const g = art.tex(`sky-${id}-galaxy`), s = art.tex(`sky-${id}-stars`);
-      if (g) haze = haze.add(texture(g, eq).rgb.mul(w[i]));
+      if (g) haze = haze.add(galaxySample(g, eq).mul(w[i]));
       if (s) stars = stars.add(texture(s, eq).r.mul(w[i]));
     });
     if (ramp) {
@@ -118,7 +122,7 @@ export function createSkyMaterial(pal, art = null) {
         const q = normalize(cameraPosition.add(d.mul(S.hazeR)));
         const e = vec2(seamU(atan(q.x, q.z).div(Math.PI * 2).add(0.5)), float(0.5).sub(asin(clamp(q.y, -1, 1)).div(Math.PI)));
         let far = vec3(0, 0, 0);
-        SKY_PALETTES.forEach((id, i) => { const g = art.tex(`sky-${id}-galaxy`); if (g) far = far.add(texture(g, e).rgb.mul(w[i])); });
+        SKY_PALETTES.forEach((id, i) => { const g = art.tex(`sky-${id}-galaxy`); if (g) far = far.add(galaxySample(g, e).mul(w[i])); });
         // recoloured through the clean gradient too (the raw galaxy carried the red and green)
         const farLum = dot(far, vec3(0.2126, 0.7152, 0.0722));
         ground = ground.add(ramp(nx.mul(C.nebSpan).add(0.6)).mul(farLum.mul(C.hazeGain)).mul(S.hazeGain).mul(u.contrast));

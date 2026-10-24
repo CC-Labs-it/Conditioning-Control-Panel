@@ -55,6 +55,9 @@ import { createWordRush } from './wordRush.js';
 import { createWaterfall } from './waterfall.js';
 import { waterTable, tableCode } from './waterMath.js';
 import { buildStones } from './stones.js';
+import { buildKeepDressing, applyKeepRoad } from './keepDressing.js';
+import { createKeepGateView } from './keepGates.js';
+import { getKeepLayout } from '../track/keep-layout.js';
 
 const FWD = new Vector3();
 const P4_EVENTS = new Set(['drift-start', 'drift-tier', 'drift-boost', 'trick', 'trick-land']);
@@ -136,7 +139,7 @@ function props(track) {
  */
 export function buildWorld(track, feel, { art = null, bus = null, seed = 1, count = 8, renderer = null, shadowsOn = true, photosafe = null, spiralLayout = SPIRAL_LAYOUTS.get(track.id), looks = [] } = {}) {
   const scene = new Scene();
-  const pal = createPalette();
+  const keep = track.id === 'keep', pal = createPalette(track.id);
   const owned = [], offs = [];
   const add = (m) => { if (m) { scene.add(m); owned.push(m); } return m; };
 
@@ -153,10 +156,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const skyMesh = add(new Mesh(new SphereGeometry(LOOK.skyRadiusM, 48, 32), sky.material));
   skyMesh.renderOrder = -1; skyMesh.frustumCulled = false;
   const road = createRoadMaterial(pal, art, track);
+  if (keep) applyKeepRoad(road, art);
   const roadMesh = add(meshFrom(track.meshes.road, road.material));
   // Built before warmup: shared static construction gives the glass road depth.
-  const showcaseDressing = buildShowcaseDressing(track, pal, art);
-  scene.add(showcaseDressing.group);
+  const showcaseDressing = keep ? null : buildShowcaseDressing(track, pal, art);
+  if (showcaseDressing) scene.add(showcaseDressing.group);
   const court = buildCourt(track, pal);
   scene.add(court.group);
   // wave 2: the stepping stones of every field (render/stones.js), in the scene before the warm so their
@@ -173,15 +177,18 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   add(meshFrom(track.meshes.jumps, lip.material));
   // the hero colossi lean over the road; the scatter keeps clear of them (WORLD lane)
   const samples = sampleTrack(track, 4);
+  const keepDressing = keep ? buildKeepDressing(track, art, pal, samples) : null;
+  if (keepDressing) scene.add(keepDressing.group);
+  const keepGates = keep ? createKeepGateView(scene, track, art, { gates: getKeepLayout(track).gates }) : null;
   let colossi = null;
-  try { colossi = art ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
+  try { colossi = art && !keep ? buildColossi(art, track, pal, { samples }) : null; } catch (e) { console.warn('[glassroad/world] colossi failed: ' + (e && e.message)); }
   if (colossi) add(colossi.object);
-  const scatter = buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
-  add(scatter ? scatter.object : props(track));
-  add(createNearDressing(track, { phone: Q.name === 'phone' }).object);   // VIEW: near cues, in the scene before the boot warm
+  const scatter = keep ? null : buildScatter(art, track, seed, { pal, avoid: colossi ? colossi.placed : [], samples });
+  if (!keep) add(scatter ? scatter.object : props(track));
+  if (!keep) add(createNearDressing(track, { phone: Q.name === 'phone' }).object);
   let terrace = null, terraceScreen = null;
   try {
-    if (art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
+    if (!keep && art && art.model(Q.name === 'phone' ? 'threshold-slot-row-lod1' : 'threshold-slot-row-lod0')) {
       terraceScreen = reelTexture();
       terrace = buildTerrace(art, track, pal, { phone: Q.name === 'phone', samples, screenMap: terraceScreen,
         avoid: [...(colossi ? colossi.placed : []), ...(scatter && scatter.heroes ? scatter.heroes.bodies : []), ...(scatter ? scatter.placed : [])] });
@@ -227,7 +234,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (renderer) {
     try {
       shadows = buildShadows(renderer, scene, sun, Q, { enabled: shadowsOn, track, samples, receivers: [roadMesh, padMesh].filter(Boolean),
-        casters: colossi ? colossi.casters : [], scatterCasters: scatter ? [scatter.object] : [], karts: kartObjs, colossi: colossi ? colossi.placed : [] });
+        casters: keepDressing ? keepDressing.casters : colossi ? colossi.casters : [], scatterCasters: scatter ? [scatter.object] : [], karts: kartObjs, colossi: colossi ? colossi.placed : [] });
     } catch (e) { console.warn('[glassroad/world] shadows failed: ' + (e && e.message)); }
     if (shadows && renderer.onTier) offs.push(renderer.onTier(() => shadows.retier()));
   }
@@ -343,6 +350,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // when the racer list changes
   let labelsOf = null, labels = [];
   function update(view) {
+    if (keepGates) keepGates.update(view.raceTimeS ?? 0);
     const { kart: k, fx } = view;
     solo[0].st = k;
     const racers = view.karts && view.karts.length ? view.karts : solo;
@@ -466,14 +474,16 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (roadWords) roadWords.dispose();
     if (wordRush) wordRush.dispose();
     if (waterfall) waterfall.dispose();
-    showcaseDressing.dispose();
+    if (showcaseDressing) showcaseDressing.dispose();
+    if (keepDressing) keepDressing.dispose();
+    if (keepGates) keepGates.dispose();
     court.dispose();
     if (stones) stones.dispose();
     if (terrace) terrace.dispose();
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones,
+  return { scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, musicRoad, roadWords, wordRush, terrace, court, stones, keepDressing, keepGates,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
