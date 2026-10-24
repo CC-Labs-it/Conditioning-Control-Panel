@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Stakes(TxtStakesStrict, TabPresets.Strict);
             Stakes(TxtStakesCirce, TabPresets.Circe);
             RefreshMood(ChasterHead.Service); // WPF :1123, the heat row may have just gone on or off
+            PaintMenuHelp(); // Natasha's row may have just gone on or off
         }
 
         private static void Stakes(TextBlock line, string presetId)

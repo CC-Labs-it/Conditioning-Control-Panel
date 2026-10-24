@@ -1,18 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
-using Avalonia.Input.Raw;
-using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -21,239 +18,186 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Services.Chaster;
 using ConditioningControlPanel.Services;
-using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Chaster;
 using Xunit;
+
 namespace CCP.Avalonia.Tests;
 
+/// <summary>The menu, the how-it-works card, the price box and Reset times (WPF ChasterTabView.xaml.cs
+/// :1176-1290, ChasterTabView.Help.cs, ChasterTabView.PriceEdit.cs; WPF ChasterTabRenderTests
+/// The_menu_is_one_row_per_price..., Clicking_the_figure_opens_a_box..., Escape_in_the_open_price_box...),
+/// against a fake Chaster and a memory-only SecretStore.</summary>
 public sealed class ChasterMenuTests
 {
-    private static void Click(Window window, Control control)
+    private const string NoLock = "[]";
+    private static readonly string Locked =
+        "[{\"_id\":\"l1\",\"title\":\"Test Cage\",\"status\":\"locked\",\"role\":\"wearer\",\"endDate\":\"" + DateTime.UtcNow.AddDays(2).ToString("o") + "\"}]";
+
+    private sealed class FakeChaster : HttpMessageHandler
     {
-        control.BringIntoView();
-        Dispatcher.UIThread.RunJobs();
-        ChasterBillTests.Click(window, control);
+        public volatile string Locks = NoLock;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(r.RequestUri!.AbsolutePath switch
+                {
+                    "/auth/profile" => "{\"username\":\"kitten\"}",
+                    "/locks" => Locks,
+                    _ => "{}",
+                }),
+            });
     }
 
-    private sealed class FakeChaster(bool locked) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            var body = request.RequestUri!.AbsolutePath == "/locks"
-                ? !locked ? "[]" : "[{\"_id\":\"l1\",\"title\":\"Test Cage\",\"status\":\"locked\",\"role\":\"wearer\",\"endDate\":\"" + DateTime.UtcNow.AddDays(2).ToString("o") + "\"}]" : "{}";
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
-        }
-    }
-
-    private sealed class MemoryTokens : IChasterTokenStore
-    {
-        private ChasterStoredTokens? _tokens = new("acc", "ref", DateTime.UtcNow.AddHours(1));
-        public ChasterStoredTokens? Read() => _tokens;
-        public void Write(ChasterStoredTokens tokens) => _tokens = tokens;
-        public void Clear() => _tokens = null;
-    }
-
-    private static async Task Run(Func<ChasterService, ChasterTabView, Window, Task> body, bool locked = true)
+    private static async Task Run(Func<ChasterService, FakeChaster, ChasterTabView, Window, Task> body)
     {
         if (Application.Current is null)
-            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var oldProvider = CoreSettings.ServiceProvider;
-        var oldHead = ChasterHead.Service;
-        var settings = new SettingsService();
-        CoreSettings.ServiceProvider = () => settings;
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
-        var old = (s.ChasterPriceOverrides, s.ChasterDayLimit, s.ChasterBacklogLimit, s.ChasterRelockPastEnd, s.ChasterFlashDodge,
-            s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPaused, s.ChasterPrices);
-        var oldMotion = s.MotionLevel;
-        s.MotionLevel = MotionLevel.Off; // These tests prove menu rules/input, not the deferred page FX.
-        s.ChasterLockId = "l1"; s.ChasterTabEnabled = true; s.ChasterPaused = false;
-        s.ChasterPrices = new List<string> { "attention", "typo" };
-        s.ChasterPriceOverrides = new();
-        s.ChasterRelockPastEnd = false;
-        s.ChasterFlashDodge = false;
-        var directory = Directory.CreateTempSubdirectory("ccp-chaster-menu-").FullName;
-        var chaster = new ChasterService(new ChasterClient(new FakeChaster(locked)), new MemoryTokens(), Path.Combine(directory, "tab.json"),
-            () => new ChasterOptions(s.ChasterTabEnabled, s.ChasterLockId, new HashSet<string>(s.ChasterPrices),
-                TabLimits.FromMinutes(LimitChange.Effective(s.ChasterDayLimit, DateTime.UtcNow), LimitChange.Effective(s.ChasterBacklogLimit, DateTime.UtcNow)),
-                Paused: s.ChasterPaused, PriceOverrides: s.ChasterPriceOverrides));
+        var old = (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge);
+        var (oldGet, oldSet) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+        var secrets = new Dictionary<string, string?>();   // memory only: never the OS keyring
+        CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
+        CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+        (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge) =
+            ("l1", true, new List<string> { "attention" }, new Dictionary<string, int>(), false);
+        var dir = Directory.CreateTempSubdirectory("ccp-chaster-menu-").FullName;
+        new SecretChasterTokenStore().Write(new ChasterStoredTokens("acc", "ref", DateTime.UtcNow.AddHours(1)));
+        var fake = new FakeChaster();
+        var chaster = new ChasterService(new ChasterClient(fake), new SecretChasterTokenStore(), Path.Combine(dir, "chaster_tab.json"),
+            () => new ChasterOptions(CoreSettings.Current.ChasterTabEnabled, CoreSettings.Current.ChasterLockId,
+                new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>())));
         ChasterHead.Service = chaster;
         var tab = new ChasterTabView();
-        var window = new Window { Width = 1200, Height = 2600, Content = tab };
+        var w = new Window { Width = 1200, Height = 3000, Content = tab };
         try
         {
-            window.Show(); Dispatcher.UIThread.RunJobs();
-            await body(chaster, tab, window);
+            w.Show();
+            await chaster.RefreshLockAsync();
+            tab.OnTabShown();
+            Dispatcher.UIThread.RunJobs();
+            await body(chaster, fake, tab, w);
         }
         finally
         {
-            window.Close();
-            ChasterHead.Service = oldHead;
+            w.Close();
+            ChasterHead.Service = null;
             chaster.Dispose();
-            (s.ChasterPriceOverrides, s.ChasterDayLimit, s.ChasterBacklogLimit, s.ChasterRelockPastEnd, s.ChasterFlashDodge,
-                s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPaused, s.ChasterPrices) = old;
-            s.MotionLevel = oldMotion;
-            settings.SaveImmediate();
-            CoreSettings.ServiceProvider = oldProvider;
-            try { Directory.Delete(directory, true); } catch { }
+            new SecretChasterTokenStore().Clear();
+            try { Directory.Delete(dir, true); } catch { }
+            (s.ChasterLockId, s.ChasterTabEnabled, s.ChasterPrices, s.ChasterPriceOverrides, s.ChasterFlashDodge) = old;
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (oldGet, oldSet);
+            service.SaveImmediate(); CoreSettings.ServiceProvider = null;
         }
     }
 
-    [Fact]
-    public Task MenuOrdersRowsAndTogglesTheSavedSetAndMatchingKey() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, tab, w) =>
+    private static void Click(Window w, Control c)
     {
-        var (costs, earns) = TabPageText.Split(TabPrices.All);
-        var costRows = tab.FindControl<UniformGrid>("CostRows")!.Children.OfType<ToggleButton>().ToList();
-        Assert.Equal(costs.Select(p => p.Id), costRows.Select(r => r.Tag));
-        Assert.Equal(earns.Select(p => p.Id), tab.FindControl<UniformGrid>("EarnRows")!.Children.Select(r => r.Tag));
-        var attention = costRows.Single(r => (string)r.Tag! == "attention");
-        var missesTip = Assert.IsType<TextBlock>(ToolTip.GetTip(tab.FindControl<UniformGrid>("EarnRows")!.Children.OfType<ToggleButton>()
-            .Concat(costRows).Single(r => (string)r.Tag! == CircesMisses.EventId)));
-        Assert.Equal((Loc.Get("chaster_misses_hint"), 320d, TextWrapping.Wrap), (missesTip.Text, missesTip.MaxWidth, missesTip.TextWrapping));
-        Assert.True(attention.IsChecked);
-        var before = CoreSettings.Current.ChasterPrices;
-        Click(w, attention);
-        Assert.False(attention.IsChecked);
-        Assert.DoesNotContain("attention", CoreSettings.Current.ChasterPrices);
-        Assert.NotSame(before, CoreSettings.Current.ChasterPrices);
-        var gentle = tab.FindControl<ToggleButton>("BtnPresetGentle")!;
-        Click(w, gentle);
-        Assert.All(costRows.Concat(tab.FindControl<UniformGrid>("EarnRows")!.Children.OfType<ToggleButton>()), row =>
-            Assert.Equal(CoreSettings.Current.ChasterPrices.Contains((string)row.Tag!), row.IsChecked == true));
-        Assert.True(gentle.IsChecked);
-        Assert.Equal(Loc.Get("chaster_menu_hint_locked"), tab.FindControl<TextBlock>("TxtMenuHint")!.Text);
+        var p = c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), w)!.Value;
+        w.MouseDown(p, MouseButton.Left);
+        w.MouseUp(p, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void Key(Window w, Key key, PhysicalKey physical)
+    {
+        w.KeyPress(key, RawInputModifiers.None, physical, "");
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [Fact]
+    public Task TheMenuIsTwoBoardsOfRowsThatWriteThePricesAndTheRedFlashLineFollowsNatasha() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, _, tab, w) =>
+    {
+        Assert.True(tab.FindControl<StackPanel>("MenuPanel")!.IsVisible);
+        Assert.Equal(TabPrices.All.Select(p => p.Id).OrderBy(x => x), tab.PriceRows.Keys.OrderBy(x => x));
+        var costs = tab.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("CostRows")!.Children.Cast<Control>().Select(c => (string)c.Tag!).ToList();
+        Assert.NotEmpty(costs);
+        Assert.All(costs, id => Assert.True(TabPrices.Find(id)!.Seconds > 0, id + " is on the wrong board"));
+        Assert.True(tab.PriceRows["attention"].IsChecked);   // the saved set is pushed onto the rows
+
+        // a row flips its price into the saved set and out again, and the fourth key follows
+        Click(w, tab.PriceRows["session"]);
+        Assert.Contains("session", CoreSettings.Current.ChasterPrices!);
+        Click(w, tab.PriceRows["session"]);
+        Assert.DoesNotContain("session", CoreSettings.Current.ChasterPrices!);
+
+        // red flashes need Natasha's row, and print its figure once it is on
+        var sub = tab.FindControl<TextBlock>("TxtFlashDodgeSub")!;
+        Assert.Equal(Loc.Get("chaster_flash_dodge_needs"), sub.Text);
+        Click(w, tab.PriceRows[NatashasFavourite.EventId]);
+        Assert.Equal(Loc.GetF("chaster_flash_dodge_sub", NatashasFavourite.DodgeMs / 1000,
+            CircesTab.Format(TabPriceEdit.Effective(NatashasFavourite.EventId, null), signed: false)), sub.Text);
+        Click(w, tab.FindControl<CheckBox>("ChkFlashDodge")!);
+        Assert.True(CoreSettings.Current.ChasterFlashDodge);
+
+        // how it works: behind a link, opens and closes
+        var card = tab.FindControl<Border>("HowItWorksCard")!;
+        Assert.False(card.IsVisible);
         Click(w, tab.FindControl<Button>("BtnHowItWorks")!);
-        Assert.True(tab.FindControl<Border>("HowItWorksCard")!.IsVisible);
+        Assert.True(card.IsVisible);
         Click(w, tab.FindControl<Button>("BtnHowItWorks")!);
-        Assert.False(tab.FindControl<Border>("HowItWorksCard")!.IsVisible);
+        Assert.False(card.IsVisible);
         await Task.CompletedTask;
     }));
 
     [Fact]
-    public Task StampEnterCommitsEscapeCancelsAndEmptyRestoresDefault() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, w) =>
+    public Task ClickingAFigureOpensABoxEnterKeepsEscDropsResetClearsAndALockFreezesIt() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, fake, tab, w) =>
     {
-        // WPF shows the menu only while linked (LinkedPanel, ChasterTabView.xaml:642), so editing runs linked with no lock.
-        ChasterHead.Service = null;
-        try
-        {
-            tab.Refresh();
-            Assert.False(tab.FindControl<StackPanel>("LinkedMenuPanel")!.IsVisible);
-        }
-        finally { ChasterHead.Service = chaster; }
-        await chaster.RefreshLockAsync();
+        var hint = tab.FindControl<TextBlock>("TxtMenuHint")!;
+        var reset = tab.FindControl<Button>("BtnResetPrices")!;
         Assert.Equal(LockLookup.None, chaster.LockLookup);
-        {
-            CoreSettings.Current.ChasterPriceOverrides = new();
-            tab.Refresh();
-            Assert.True(tab.FindControl<StackPanel>("LinkedMenuPanel")!.IsVisible);
-            var stamp = tab.StampFor("attention")!;
-            var row = stamp.GetVisualAncestors().OfType<ToggleButton>().First();
-            var rowOn = row.IsChecked;
-            Click(w, stamp);
-            Assert.Equal("attention", tab.EditingPriceId);
-            Assert.Equal(rowOn, row.IsChecked); // the stamp's tunnel handler claims the row click
-            var editor = ((Grid)row.Content!).Children.OfType<TextBox>().Single();
-            editor.Text = "7"; w.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, ""); Dispatcher.UIThread.RunJobs();
-            Assert.Null(tab.EditingPriceId);
-            Assert.Equal(420, TabPriceEdit.Effective("attention", CoreSettings.Current.ChasterPriceOverrides));
-            Assert.Equal(FontStyle.Italic, stamp.FontStyle);
-            Assert.True(tab.FindControl<Button>("BtnResetPrices")!.IsVisible);
-            Assert.True(tab.BeginPriceEdit("attention"));
-            ((Grid)row.Content!).Children.OfType<TextBox>().Single().Text = "8";
-            w.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, ""); Dispatcher.UIThread.RunJobs();
-            Assert.Null(tab.EditingPriceId);
-            Assert.Equal(420, TabPriceEdit.Effective("attention", CoreSettings.Current.ChasterPriceOverrides));
-            tab.BeginPriceEdit("attention");
-            w.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
-            Assert.Equal(rowOn, row.IsChecked);
-            ((Grid)row.Content!).Children.OfType<TextBox>().Single().Text = "6";
-            tab.FindControl<Button>("BtnHowItWorks")!.Focus();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Null(tab.EditingPriceId);
-            Assert.Equal(360, TabPriceEdit.Effective("attention", CoreSettings.Current.ChasterPriceOverrides));
-            tab.BeginPriceEdit("attention");
-            ((Grid)row.Content!).Children.OfType<TextBox>().Single().Text = "";
-            tab.CommitPriceEdit();
-            Assert.Empty(CoreSettings.Current.ChasterPriceOverrides);
-            Assert.False(tab.FindControl<Button>("BtnResetPrices")!.IsVisible);
-            Assert.False(tab.BeginPriceEdit(CircesMisses.EventId));
-            tab.BeginPriceEdit("attention");
-            ((Grid)row.Content!).Children.OfType<TextBox>().Single().Text = "9";
-            tab.CommitPriceEdit();
-            Click(w, tab.FindControl<Button>("BtnResetPrices")!);
-            Assert.Empty(CoreSettings.Current.ChasterPriceOverrides);
-        }
-    }, locked: false));
+        Assert.Equal(Loc.Get("chaster_menu_hint_edit"), hint.Text);
+        Assert.False(reset.IsVisible);
 
-    [Fact]
-    public Task ARunningLockRefusesEditingAndClosesAnExistingEditor() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, tab, _) =>
-    {
-        await chaster.RefreshLockAsync();
-        tab.RepaintForLock();
-        Assert.False(tab.BeginPriceEdit("attention"));
-        ChasterHead.Service = null;
-        Assert.True(tab.BeginPriceEdit("attention"));
-        ChasterHead.Service = chaster;
-        tab.RepaintForLock();
+        // a click on the figure edits and never flips the row
+        var stamp = tab.StampFor("typo")!;
+        Assert.False(EscapeClaim.InASurface(stamp));
+        Click(w, stamp);
+        Assert.Equal("typo", tab.EditingPriceId);
+        Assert.False(stamp.IsVisible);
+        Assert.DoesNotContain("typo", CoreSettings.Current.ChasterPrices!);
+        var box = tab.PriceEditor!;
+        Assert.True(EscapeClaim.InASurface(box));   // its Esc is the box's, not a panic press
+        box.Text = "2";
+        Key(w, global::Avalonia.Input.Key.Enter, PhysicalKey.Enter);
         Assert.Null(tab.EditingPriceId);
-        Assert.False(tab.FindControl<Button>("BtnResetPrices")!.IsVisible);
-    }));
+        Assert.Equal(120, CoreSettings.Current.ChasterPriceOverrides["typo"]);
+        Assert.True(stamp.IsVisible);
+        Assert.Contains("+2:00", stamp.Text);
+        Assert.Equal(FontStyle.Italic, stamp.FontStyle);
+        Assert.True(reset.IsVisible);
 
-    [Fact] // P07 / WPF ChasterTabView.xaml.cs:173: the 30 s hero tick leaves the stamps alone
-    public Task TheHeroTickDoesNotRepaintStampsALockChangeDoes() => AvaloniaTestDispatcher.RunAsync(() => Run((_, tab, _) =>
-    {
-        var stamp = tab.StampFor("attention")!;
-        stamp.Text = "sentinel";
-        tab.RefreshHero(); // what SlowTick runs
-        Assert.Equal("sentinel", stamp.Text);
-        tab.RepaintForLock();
-        Assert.NotEqual("sentinel", stamp.Text);
-        return Task.CompletedTask;
-    }));
+        // Esc drops what was typed
+        Assert.True(tab.BeginPriceEdit("typo"));
+        tab.PriceEditor!.Text = "9";
+        Key(w, global::Avalonia.Input.Key.Escape, PhysicalKey.Escape);
+        Assert.Null(tab.EditingPriceId);
+        Assert.Equal(120, CoreSettings.Current.ChasterPriceOverrides["typo"]);
 
-    [Fact]
-    public Task LimitsLowerImmediatelyRaiseAfterADayAndBacklogFollowsDay() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, tab, w) =>
-    {
-        var s = CoreSettings.Current;
-        s.ChasterDayLimit = new LimitSetting(120, 0, null);
-        s.ChasterBacklogLimit = new LimitSetting(360, 0, null);
-        tab.Refresh();
-        Click(w, tab.FindControl<Button>("BtnLimits")!);
-        Assert.True(tab.FindControl<Border>("LimitsCard")!.IsVisible);
-        var day = tab.FindControl<Slider>("SliderDayLimit")!;
-        var backlog = tab.FindControl<Slider>("SliderBacklogLimit")!;
-        day.Value = 60;
-        Assert.Equal(60, s.ChasterDayLimit.Minutes);
-        Assert.False(s.ChasterDayLimit.HasPending);
-        day.Value = 600;
-        Assert.Equal(60, s.ChasterDayLimit.Minutes);
-        Assert.Equal(600, s.ChasterDayLimit.PendingMinutes);
-        Assert.Equal(600, s.ChasterBacklogLimit.PendingMinutes);
-        Assert.Equal(600, backlog.Value);
-        Assert.True(s.ChasterDayLimit.PendingAtUtc > DateTime.UtcNow.AddHours(23));
-        Assert.True(tab.FindControl<TextBlock>("TxtDayPending")!.IsVisible);
-        tab.FindControl<CheckBox>("ChkRelock")!.IsChecked = true;
-        Assert.True(s.ChasterRelockPastEnd);
-        tab.FindControl<CheckBox>("ChkFlashDodge")!.IsChecked = true;
-        Assert.True(s.ChasterFlashDodge);
-        await Task.CompletedTask;
-    }));
-    [Fact]
-    public Task LanguageSwitchRepaintsTheMenuNamesStampsAndHelp() => AvaloniaTestDispatcher.RunAsync(() => Run(async (_, tab, _) =>
-    {
-        try
-        {
-            LocalizationManager.Instance.SetLanguage("de");
-            Dispatcher.UIThread.RunJobs();
-            var row = tab.FindControl<UniformGrid>("CostRows")!.Children.OfType<ToggleButton>().Single(r => (string)r.Tag! == "attention");
-            var words = ((Grid)row.Content!).Children.OfType<StackPanel>().Single();
-            Assert.Equal(TabMenuCopy.ShortName("attention", Loc.Get), words.Children.OfType<TextBlock>().First().Text);
-            Assert.Equal(TabPageText.Price(TabPriceEdit.Shown(TabPrices.Find("attention")!, CoreSettings.Current.ChasterPriceOverrides), Loc.Get("chaster_each")), tab.StampFor("attention")!.Text);
-            Assert.Equal(Loc.Get("chaster_menu_hint_locked"), tab.FindControl<TextBlock>("TxtMenuHint")!.Text);
-        }
-        finally { LocalizationManager.Instance.SetLanguage("en"); }
-        await Task.CompletedTask;
-    }));
+        // sizes picked elsewhere never open a box
+        Assert.False(tab.BeginPriceEdit("leash"));
+        Assert.False(tab.BeginPriceEdit(CircesMisses.EventId));
+        Assert.False(tab.BeginPriceEdit(TabDayEnd.StreakEventId));
 
+        // Reset times puts every figure back
+        Click(w, reset);
+        Assert.Empty(CoreSettings.Current.ChasterPriceOverrides);
+        Assert.Contains("+0:30", stamp.Text);
+        Assert.False(reset.IsVisible);
+
+        // a lock starting closes an open box and freezes the figures
+        Assert.True(tab.BeginPriceEdit("typo"));
+        fake.Locks = Locked;
+        await chaster.RefreshLockAsync();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(LockLookup.Chosen, chaster.LockLookup);
+        Assert.Null(tab.EditingPriceId);
+        Assert.Equal(Loc.Get("chaster_menu_hint_locked"), hint.Text);
+        Assert.False(tab.BeginPriceEdit("typo"));
+        Assert.Equal(Loc.Get("chaster_price_edit_locked"), ToolTip.GetTip(stamp));
+    }));
 }

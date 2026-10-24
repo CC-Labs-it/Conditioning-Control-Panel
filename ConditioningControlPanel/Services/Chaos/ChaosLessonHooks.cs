@@ -57,7 +57,7 @@ public static class ChaosLessonHooks
     private static double _channelFraction;                                       // sub-second tick remainder
     private static DateTime _busyUntilUtc = DateTime.MinValue;                    // blindfold derive
     private static int _loopDefuses;                                              // snap_field per-loop
-    private static bool _loopDirty;                                               // silk_touch: a detonation landed
+    // silk_touch's per-loop flag lives in Core ChaosRunLessons (shared with the Avalonia head).
 
     /// <summary>Fresh descent: clear every per-run tracker (nothing leaks across runs).</summary>
     public static void OnRunStarted()
@@ -70,7 +70,7 @@ public static class ChaosLessonHooks
         _channelFraction = 0;
         _busyUntilUtc = DateTime.MinValue;
         _loopDefuses = 0;
-        _loopDirty = false;
+        ChaosRunLessons.OnRunStarted();
     }
 
     // ============================ pops (treat-class) ============================
@@ -187,18 +187,13 @@ public static class ChaosLessonHooks
     // ============================ detonations / loops / runs ============================
 
     /// <summary>A detonation (or a touched Tease) landed — this loop is no longer clean.</summary>
-    public static void OnDetonation() => Safe(() => _loopDirty = true);
+    public static void OnDetonation() => Safe(ChaosRunLessons.OnDetonation);
 
     /// <summary>A loop (wave) finished: judge silk_touch, reset the per-loop tallies.</summary>
     public static void OnLoopCompleted()
     {
-        try
-        {
-            if (!_loopDirty) ChaosLessons.Tick("silk_touch");
-            _loopDirty = false;
-            _loopDefuses = 0;
-        }
-        catch (Exception ex) { App.Logger?.Debug("ChaosLessonHooks.OnLoopCompleted: {E}", ex.Message); }
+        ChaosRunLessons.OnLoopCompleted();
+        _loopDefuses = 0;
     }
 
     /// <summary>The descent ended. <paramref name="ranFullCourse"/> = the clock ran out (a quit
@@ -208,12 +203,8 @@ public static class ChaosLessonHooks
         try
         {
             EndChannel();   // a hold can be live at the buzzer
-            if (!ranFullCourse) return;
-            OnLoopCompleted();   // the final loop ends at the buzzer, not a wave transition
-            if (shieldsLeft > 0) ChaosLessons.Tick("popup_notification");
-            // extreme_tier asks for Relentless (Hard) — an Inescapable (Extreme) clear is harder,
-            // so it counts too.
-            if (difficulty >= ChaosDifficulty.Hard) ChaosLessons.Tick("extreme_tier");
+            if (ranFullCourse) _loopDefuses = 0;   // the final loop ends at the buzzer
+            ChaosRunLessons.OnRunCompleted(shieldsLeft, difficulty, ranFullCourse);
         }
         catch (Exception ex) { App.Logger?.Debug("ChaosLessonHooks.OnRunCompleted: {E}", ex.Message); }
     }

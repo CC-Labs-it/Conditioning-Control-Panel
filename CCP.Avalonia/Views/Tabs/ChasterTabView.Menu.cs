@@ -1,5 +1,8 @@
-// Adapted from WPF ChasterTabView.xaml.cs:1147-1306 and ChasterTabView.Help.cs.
-// ponytail: row/trailer FX and the browser trailer remain wire-views-tab-chaster-b.
+// PORTED from ConditioningControlPanel/Views/Tabs/ChasterTabView.xaml.cs: 5. the menu (BuildMenu, Row,
+// PaintRowLit, PriceToggle_Changed :1176-1290), ApplyPriceToggles (:1149) and the red flash switch
+// (ChkFlashDodge_Changed :1168), on Core TabPrices / TabPageText / TabMenuCopy.
+// ponytail: the row trailer (hover popup, Row_MouseEnter/Leave) and FxRow / FxKeyTurned (Fx.cs) are not
+// ported (views-tab-chaster).
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,140 +13,171 @@ using Avalonia.Data;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
-using Avalonia.Platform;
 using Avalonia.Styling;
-using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
-namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 
-public partial class ChasterTabView
+namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
-    private readonly Dictionary<string, ToggleButton> _priceToggles = new();
-    private readonly Dictionary<string, Border> _rowDims = new();
-
-    private void MenuInit()
+    public partial class ChasterTabView
     {
-        var (costs, earnBacks) = TabPageText.Split(TabPrices.All);
-        foreach (var price in costs) CostRows.Children.Add(MenuRow(price, CostColour));
-        foreach (var price in earnBacks) EarnRows.Children.Add(MenuRow(price, EarnColour));
-        // The render proof frames the new menu; production keeps WPF's initial hero position.
-        if (RenderProof.Rendering)
-            AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => { LimitsCard.IsVisible = true; Boards.BringIntoView(); });
-        DetachedFromVisualTree += (_, _) => LocalizationManager.Instance.LanguageChanged -= MenuLanguageChanged;
-        AttachedToVisualTree += (_, _) =>
+        private static readonly FontFamily Mono = new("Consolas, Courier New");
+        private readonly Dictionary<string, ToggleButton> _priceToggles = new();
+        private readonly Dictionary<string, Border> _rowDims = new();
+        private bool _menuBuilt;
+
+        internal IReadOnlyDictionary<string, ToggleButton> PriceRows => _priceToggles;
+
+        private void MenuInit()
         {
-            LocalizationManager.Instance.LanguageChanged -= MenuLanguageChanged;
-            LocalizationManager.Instance.LanguageChanged += MenuLanguageChanged;
-        };
-    }
-
-    private void MenuLanguageChanged(object? sender, EventArgs e)
-    {
-        foreach (var (id, row) in _priceToggles)
-            ((Grid)row.Content!).Children.OfType<StackPanel>().Single().Children.OfType<TextBlock>().First().Text = TabMenuCopy.ShortName(id, Loc.Get);
-        PaintStamps();
-        PaintLimits(ChasterHead.Service?.Caps ?? TabLimits.Default);
-    }
-
-    private ToggleButton MenuRow(TabPrice price, Color colour)
-    {
-        var brush = new SolidColorBrush(colour);
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        var plate = new Panel { Background = new SolidColorBrush(Color.FromArgb(0x30, colour.R, colour.G, colour.B)) };
-        if (TabMenuCopy.ArtFor(price.Id) is { } art)
-        {
-            try { plate.Children.Add(new Image { Source = new Bitmap(AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/" + art))), Stretch = Stretch.UniformToFill }); }
-            catch (Exception ex) { Serilog.Log.Debug(ex, "[Chaster] row art {Art}", art); }
+            DetachedFromVisualTree += (_, _) => LocalizationManager.Instance.LanguageChanged -= MenuLanguageChanged;
+            AttachedToVisualTree += (_, _) =>
+            {
+                LocalizationManager.Instance.LanguageChanged -= MenuLanguageChanged;
+                LocalizationManager.Instance.LanguageChanged += MenuLanguageChanged;
+            };
         }
-        var dim = new Border { Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x12, 0x30)), Opacity = 0.62, IsHitTestVisible = false };
-        plate.Children.Add(dim);
-        grid.Children.Add(new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(8), ClipToBounds = true, Margin = new Thickness(0, 0, 10, 0), Child = plate });
-        _rowDims[price.Id] = dim;
-        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        words.Children.Add(new TextBlock { Text = TabMenuCopy.ShortName(price.Id, Loc.Get), FontFamily = Display, FontSize = 13.5, FontWeight = FontWeight.SemiBold, Foreground = Brush("TextLightBrush"), TextTrimming = TextTrimming.CharacterEllipsis });
-        var whereRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0) };
-        var where = new TextBlock { FontSize = 10.5, Opacity = 0.85, Foreground = Brush("TextMutedBrush"), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        where.Bind(TextBlock.TextProperty, new Binding("[" + TabMenuCopy.WhereKey(price.Id) + "]") { Source = LocalizationManager.Instance });
-        where.Bind(ToolTip.TipProperty, new Binding("[" + TabMenuCopy.WhereKey(price.Id) + "]") { Source = LocalizationManager.Instance });
-        whereRow.Children.Add(where);
-        var tier = TabMenuCopy.BadgeTier(price.Gate);
-        if (tier > 0) whereRow.Children.Add(new TierBadge { Tier = tier, MaxWidthOverride = 46, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-        words.SizeChanged += (_, e) => where.MaxWidth = Math.Max(0, e.NewSize.Width - (tier > 0 ? 52 : 0));
-        words.Children.Add(whereRow);
-        Grid.SetColumn(words, 1); grid.Children.Add(words);
-        var stamp = new TextBlock { FontFamily = new FontFamily("Consolas, Courier New"), FontSize = 12.5, FontWeight = FontWeight.Bold, Foreground = brush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
-        Grid.SetColumn(stamp, 2); grid.Children.Add(stamp); WireStamp(price, stamp);
-        var row = new ToggleButton { Theme = (ControlTheme)Resources["CirceRow"]!, Tag = price.Id, BorderBrush = brush, BorderThickness = new Thickness(1), Background = brush, Content = grid, HorizontalContentAlignment = HorizontalAlignment.Stretch, Padding = new Thickness(8, 6), Margin = new Thickness(0, 0, 8, 8) };
-        if (price.Id == CircesMisses.EventId)
-        {
-            // WPF (ChasterTabView.xaml.cs:1271): a bound, wrapping tip, so it follows a language switch.
-            var tip = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
-            tip.Bind(TextBlock.TextProperty, new Binding("[chaster_misses_hint]") { Source = LocalizationManager.Instance });
-            ToolTip.SetTip(row, tip);
-        }
-        row.Click += PriceToggle_Changed;
-        _priceToggles[price.Id] = row;
-        return row;
-    }
 
-    internal void ApplyPriceToggles()
-    {
-        var on = new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>(), StringComparer.Ordinal);
-        _loading = true;
-        try
+        // Row names, stamps and limit figures are set from code, so a language switch repaints them.
+        private void MenuLanguageChanged(object? sender, EventArgs e)
         {
             foreach (var (id, row) in _priceToggles)
-            {
-                row.IsChecked = on.Contains(id);
-                _rowDims[id].Opacity = on.Contains(id) ? 0 : 0.62;
-            }
-            ChkFlashDodge.IsChecked = CoreSettings.Current.ChasterFlashDodge;
+                ((Grid)row.Content!).Children.OfType<StackPanel>().Single().Children.OfType<TextBlock>().First().Text = TabMenuCopy.ShortName(id, Loc.Get);
+            PaintStamps();
+            PaintLimits(ChasterHead.Service?.Caps ?? TabLimits.Default);
         }
-        finally { _loading = false; }
-        PaintStamps();
-    }
 
-    private void PriceToggle_Changed(object? sender, RoutedEventArgs e)
-    {
-        if (_loading || sender is not ToggleButton { Tag: string id } row) return;
-        var settings = CoreSettings.Current;
-        var next = new List<string>(settings.ChasterPrices ?? new List<string>());
-        next.Remove(id); if (row.IsChecked == true) next.Add(id);
-        settings.ChasterPrices = next;
-        CoreSettings.Save();
-        ApplyPriceToggles(); RefreshPresets(); RefreshHero();
-    }
+        internal void BuildMenu()
+        {
+            if (_menuBuilt) return;
+            _menuBuilt = true;
+            var (costs, earnBacks) = TabPageText.Split(TabPrices.All);
+            foreach (var price in costs) CostRows.Children.Add(Row(price, CostColour));
+            foreach (var price in earnBacks) EarnRows.Children.Add(Row(price, EarnColour));
+            JackpotArt.Source = Helpers.ModArt.TryLoad(TabMenuCopy.ArtFor(TabMenuCopy.JackpotId), 88);
+        }
 
-    private void ChkFlashDodge_Changed(object? sender, RoutedEventArgs e)
-    {
-        if (_loading) return;
-        CoreSettings.Current.ChasterFlashDodge = ChkFlashDodge.IsChecked == true;
-        CoreSettings.Save();
-    }
+        /// <summary>Push the saved set onto the rows. Never the other way round: the settings list
+        /// is the truth and the rows are a view of it.</summary>
+        internal void ApplyPriceToggles()
+        {
+            BuildMenu();
+            var on = new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>(), StringComparer.Ordinal);
+            _loading = true;
+            try
+            {
+                foreach (var (id, row) in _priceToggles)
+                {
+                    row.IsChecked = on.Contains(id);
+                    PaintRowLit(id, on.Contains(id));
+                }
+                ChkFlashDodge.IsChecked = CoreSettings.Current.ChasterFlashDodge;
+            }
+            finally { _loading = false; }
+            PaintStamps();
+        }
 
-    private void BtnHowItWorks_Click(object? sender, RoutedEventArgs e) => HowItWorksCard.IsVisible = !HowItWorksCard.IsVisible;
-    internal void PaintMenuHelp()
-    {
-        var open = FiguresEditable();
-        TxtMenuHint.Text = Loc.Get(open ? "chaster_menu_hint_edit" : "chaster_menu_hint_locked");
-        var overrides = CoreSettings.Current.ChasterPriceOverrides;
-        BtnResetPrices.IsVisible = open && overrides is { Count: > 0 } && overrides.Keys.Any(id => TabPriceEdit.IsEdited(id, overrides));
-        var natashaOn = CoreSettings.Current.ChasterPrices?.Contains(NatashasFavourite.EventId) == true;
-        TxtFlashDodgeSub.Text = natashaOn ? Loc.GetF("chaster_flash_dodge_sub", NatashasFavourite.DodgeMs / 1000, CircesTab.Format(TabPriceEdit.Effective(NatashasFavourite.EventId, overrides), signed: false)) : Loc.Get("chaster_flash_dodge_needs");
-        FlashDodgeRow.Opacity = natashaOn ? 1 : 0.7;
-    }
+        /// <summary>A picture, a short name, where it happens with the tier sign, and the price on a
+        /// stamp. The row that charges for staying away says how in its tooltip.</summary>
+        private ToggleButton Row(TabPrice price, Color colour)
+        {
+            var brush = new SolidColorBrush(colour);
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
 
-    private void BtnResetPrices_Click(object? sender, RoutedEventArgs e)
-    {
-        if (!FiguresEditable()) return;
-        CancelPriceEdit();
-        CoreSettings.Current.ChasterPriceOverrides = new();
-        CoreSettings.Save();
-        Serilog.Log.Information("[Chaster] prices reset to the table by the player"); // WPF Help.cs:45
-        PaintStamps();
+            // the picture, dimmed to a shade while the row is off
+            var thumb = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(8), ClipToBounds = true, Margin = new Thickness(0, 0, 10, 0) };
+            var plate = new Panel();
+            if (Helpers.ModArt.TryLoad(TabMenuCopy.ArtFor(price.Id), 80) is { } art)
+                plate.Children.Add(new Image { Source = art, Stretch = Stretch.UniformToFill });
+            else plate.Background = new SolidColorBrush(Color.FromArgb(0x30, colour.R, colour.G, colour.B));
+            var dim = new Border { CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x12, 0x30)), Opacity = 0.62, IsHitTestVisible = false };
+            plate.Children.Add(dim);
+            thumb.Child = plate;
+            grid.Children.Add(thumb);
+            _rowDims[price.Id] = dim;
+
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            words.Children.Add(new TextBlock
+            {
+                Text = TabMenuCopy.ShortName(price.Id, Loc.Get), FontFamily = Display, FontSize = 13.5, FontWeight = FontWeight.SemiBold,
+                TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Brush("TextLightBrush"),
+            });
+            var whereRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 1, 0, 0) };
+            var where = new TextBlock { FontSize = 10.5, Opacity = 0.85, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = Brush("TextMutedBrush") };
+            where.Bind(TextBlock.TextProperty, Bound(TabMenuCopy.WhereKey(price.Id)));
+            where.Bind(ToolTip.TipProperty, Bound(TabMenuCopy.WhereKey(price.Id)));
+            whereRow.Children.Add(where);
+            var tier = TabMenuCopy.BadgeTier(price.Gate);
+            if (tier > 0)
+                whereRow.Children.Add(new TierBadge { Tier = tier, MaxWidthOverride = 46, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
+            words.Children.Add(whereRow);
+            // WPF TAB-13: the horizontal row measures at unlimited width, so cap the line at the column less the sign.
+            var signRoom = tier > 0 ? 52.0 : 0.0;
+            words.SizeChanged += (_, e) => where.MaxWidth = Math.Max(0, e.NewSize.Width - signRoom);
+            Grid.SetColumn(words, 1);
+            grid.Children.Add(words);
+
+            var stamp = new TextBlock
+            {
+                Text = TabPageText.Price(price, Loc.Get("chaster_each")),
+                FontFamily = Mono, FontSize = 12.5, FontWeight = FontWeight.Bold,
+                Foreground = brush, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0),
+            };
+            Grid.SetColumn(stamp, 2);
+            grid.Children.Add(stamp);
+            WireStamp(price, stamp);
+
+            var row = new ToggleButton
+            {
+                Theme = (ControlTheme)this.FindResource("CirceRow")!,
+                Tag = price.Id,
+                Background = brush,
+                BorderBrush = brush,
+                Content = grid,
+            };
+            if (price.Id == CircesMisses.EventId)
+            {
+                var tip = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
+                tip.Bind(TextBlock.TextProperty, Bound("chaster_misses_hint"));
+                ToolTip.SetTip(row, tip);
+            }
+            row.Click += PriceToggle_Changed;
+            _priceToggles[price.Id] = row;
+            return row;
+        }
+
+        private void PaintRowLit(string id, bool on)
+        {
+            if (_rowDims.TryGetValue(id, out var dim)) dim.Opacity = on ? 0 : 0.62;
+        }
+
+        private static Binding Bound(string key) =>
+            new($"[{key}]") { Source = LocalizationManager.Instance, Mode = BindingMode.OneWay };
+
+        private void PriceToggle_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_loading || sender is not ToggleButton { Tag: string id } row) return;
+            var settings = CoreSettings.Current;
+            var on = row.IsChecked == true;
+            // A new list every time: the service reads the setting from another thread.
+            var next = new List<string>(settings.ChasterPrices ?? new List<string>());
+            next.Remove(id);
+            if (on) next.Add(id);
+            settings.ChasterPrices = next;
+            CoreSettings.Save();
+            PaintRowLit(id, on);
+            // One hand-flipped row can land exactly on a preset, or step off one.
+            RefreshPresets();
+        }
+
+        /// <summary>Red flashes with a 4 s ring to dodge them, or none at all (the default).</summary>
+        private void ChkFlashDodge_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_loading) return;
+            CoreSettings.Current.ChasterFlashDodge = ChkFlashDodge.IsChecked == true;
+            CoreSettings.Save();
+        }
     }
 }

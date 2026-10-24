@@ -4,7 +4,8 @@
 // the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
 // Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
 // ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
-// LockTitle letters, trailer and most Fx. Menu/help/price editing and limits are separate partials. The numbers + receipt (Numbers.cs), calendar (Calendar.cs) and keys (Keys.cs) are partials.
+// LockTitle letters, the row trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
+// menu (Menu.cs), how-it-works/hint/reset (Help.cs), the price box (PriceEdit.cs) and the limits (Limits.cs) are partials.
 // The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
 // bursts included) are later slices. Unlink, the switch + consent and pause are real (slice 2).
 using System;
@@ -54,6 +55,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) => { _attached = true; Subscribe(IsVisible); };
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
             PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) Subscribe(_attached && IsVisible); };
+            // WPF :102: a long lock name shrinks to the hero's inner width instead of clipping.
+            HeroCard.SizeChanged += (_, _) => HeroTitle.FitWidth = Math.Max(0, HeroCard.Bounds.Width - 52);
             LadderInit();
             NumbersInit();
             MenuInit();
@@ -68,12 +71,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             Refresh();
             LadderOnShown();
+            // WPF FxOnShown (Fx.cs:159-160): the word lands, then idles.
+            HeroTitle.PlayEntry();
+            HeroTitle.Start();
             _ = LoadLocksAsync();
             _ = ChasterHead.Service?.RefreshLockAsync();
         }
 
         private void Subscribe(bool on)
         {
+            if (!on) HeroTitle.Stop(); // WPF Fx.cs:262 on hide, linked or not
             if (on && _subscribed == null && ChasterHead.Service is { } c)
             {
                 _subscribed = c;
@@ -100,7 +107,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // WPF :173: stamps repaint when the lock changes, not on the 30 s tick (P07).
         internal void RepaintForLock() { RefreshHero(); PaintStamps(); }
-        private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() => { RefreshHero(); RefreshAdded(); RefreshNumbers(); });
+        private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() =>
+        {
+            RefreshHero(); RefreshAdded(); RefreshNumbers();
+            if (booking.AppliedSeconds != 0) HeroTitle.Jolt(); // WPF :157 -> Fx.cs:676, the padlocks take a tug
+        });
 
         internal void Refresh()
         {
@@ -113,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AccountStrip.IsVisible = linked;
             AddedRow.IsVisible = linked;
             NumbersPanel.IsVisible = linked;
-            LinkedMenuPanel.IsVisible = linked; // WPF: the menu and limits sit inside LinkedPanel (ChasterTabView.xaml:642)
+            MenuPanel.IsVisible = linked; // WPF: the menu and limits sit inside LinkedPanel (ChasterTabView.xaml:642)
             if (linked) { RefreshNumbers(); RefreshPresets(); }
             if (linked) RefreshAdded(); else HideLadder();
             SwitchPill.IsVisible = linked;
@@ -225,6 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PaintChasterChip(chaster);
             RefreshMood(chaster);
             HeroTitle.IsVisible = linked;
+            if (linked) HeroTitle.Text = Loc.Get("chaster_hero_title"); // WPF :253
             HeroPills.Children.Clear();
             if (!linked)
             {
