@@ -176,6 +176,7 @@ export function step(st, a, track, feel, dt, ev) {
   if (wasGround && a.hopPressed && !stalled) {
     // just before a drop shortcut's kicker lip the hop sees that lip too (the trick's early window)
     hop(st, feel, ev, V, qa.normal, speed, hopTrack(track, qa, V, speed, feel.get('trick.earlyS')));
+    if (st[S.airborne] && (qa.surface === 'stream' || qa.surface === 'pool')) ev.emit('water-hop', { s: qa.s, x: qa.lateral, speed: Math.abs(speed), down: 0, kind: 'hop', p: [...P], normal: [...qa.normal] });
     maybeStartDrift(st, a, feel, speed, ev);
   }
   const air = st[S.airborne] > 0;
@@ -223,8 +224,8 @@ export function step(st, a, track, feel, dt, ev) {
       if (st[S.airborne]) { st[S.airborne] = 0; st[S.grounded] = 1; v3reject(V, V, n); }
       const m = feel.get('water.poolLandMul');
       v3scale(V, V, m); st[S.engineV] *= m;
-      ev.emit('splash', { s: qb.s, x: qb.lateral, speed: arrive, down: Math.max(0, -vn) });
     }
+    if (air && (qb.surface === 'stream' || qb.surface === 'pool')) ev.emit('splash', { s: qb.s, x: qb.lateral, speed: arrive, down: Math.max(0, -vn), p: [...P], normal: [...n] });
     if (air && under && onLanding(track, st, qb) === under) landRoute(track, st, under, qb, F, feel, ev, prevS);
     else if (air && fall && qb === QD) fallLand(track, st, qb, ev);
     else if (air) resetFall(st);

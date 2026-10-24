@@ -10,10 +10,11 @@
  * (render/wakes.js ring, wider with the fall) and a burst of drops at the splash point.
  * No per-frame loop: update advances one clock and one spray timer; the runs are a handful of points.
  */
-import { Mesh, BufferGeometry, BufferAttribute, MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
+import { Mesh, BufferGeometry, BufferAttribute, MeshBasicNodeMaterial, DoubleSide, Quaternion, Vector3 } from 'three/webgpu';
 import { uniform, uv, float, vec3, floor, fract, hash, pow, smoothstep, attribute, clamp } from 'three/tsl';
 import { LOOK } from './look.js';
-import { WATER_LOOK, sheetRuns, splashRingM } from './waterMath.js';
+import { WATER_LOOK, sheetRuns, splashRingM, isWaterSurface } from './waterMath.js';
+import { S } from '../sim/state.js';
 
 const SPRAY_COLOURS = Object.freeze(['#ffffff', '#e6f6ff', '#ffffff']);
 
@@ -64,14 +65,14 @@ export function createWaterfall(track, pal, { particles = null, wakes = null, L 
     mat.colorNode = pal.col(0).mul(0.4).add(pal.col(1).mul(0.15)).add(white.mul(streak.mul(0.9)));
     mat.opacityNode = clamp(float(L.sheetAlpha).mul(streak.add(0.45)).mul(inFade), 0, 1);
     mesh = new Mesh(g, mat);
-    mesh.renderOrder = 2; mesh.frustumCulled = true;
+    mesh.renderOrder = 0.75; mesh.frustumCulled = true; // water stays below pooled wake rings (1) and spray (2)
   }
 
   let timer = 0;
   const few = (gentle) => (gentle ? 0.6 : 1);
   function spray(pt, gentle, mul = 1) {
     if (!particles) return;
-    particles.burst(pt.p, Math.round(L.sprayCount * few(gentle) * mul), { colours: SPRAY_COLOURS, speed: L.spraySpeedMps * (pt.lip ? 1 : 0.7),
+    particles.burst(pt.p, Math.round(L.sprayCount * few(gentle) * mul), { family: 'melt', colours: SPRAY_COLOURS, speed: L.spraySpeedMps * (pt.lip ? 1 : 0.7),
       sizeM: 0.16, lifeS: 0.55, sparkle: 0.25, up: pt.lip ? 2.2 : 1.4, g: 0.9 });
   }
   /** Advance the streak clock (scroll = the Gentle share) and the spray timer; playerPos gates the spray. */
@@ -88,11 +89,40 @@ export function createWaterfall(track, pal, { particles = null, wakes = null, L 
     }
   }
   /** CONTRACT `splash { s, x, speed, down }`: the ring and drops at the landing point. */
-  function splash({ s = 0, x = 0, down = 0 } = {}, gentle = false) {
+  const up = new Vector3(0, 1, 0), normal = new Vector3(), rotation = new Quaternion(), kartMemory = new Map();
+  function contact(s, x, payload = {}) {
+    const f = track.surfaceAt ? track.surfaceAt(s, x) : track.frameAt(s);
+    const n = payload.normal || f.n;
+    const p = payload.p || (track.surfaceAt ? f.p : f.p.map((v, k) => v + f.b[k] * x));
+    rotation.setFromUnitVectors(up, normal.fromArray(n).normalize());
+    return { p: p.map((v, k) => v + n[k] * 0.13), q: rotation };
+  }
+  function splash({ s = 0, x = 0, down = 0, kind = 'land', ...payload } = {}, gentle = false) {
     if (!track || !track.frameAt) return;
-    const f = track.frameAt(s), pt = [f.p[0] + f.b[0] * x + f.n[0] * 0.1, f.p[1] + f.b[1] * x + f.n[1] * 0.1, f.p[2] + f.b[2] * x + f.n[2] * 0.1];
-    if (wakes) wakes.ring(pt, null, splashRingM(down, L), { gentle, colour: '#ffffff', gain: LOOK.ringGain * 0.9 });
-    if (particles) particles.burst(pt, Math.round(L.splashCount * few(gentle)), { colours: SPRAY_COLOURS, speed: 3.2, sizeM: 0.18, lifeS: 0.6, sparkle: 0.2, up: 2.6, g: 0.9 });
+    const pt = contact(s, x, payload), hop = kind === 'hop';
+    if (wakes) wakes.ring(pt.p, pt.q, splashRingM(down, L) * (hop ? 0.65 : 1), { gentle, colour: '#ffffff', gain: LOOK.ringGain * 0.9 });
+    if (particles) particles.burst(pt.p, Math.round(L.splashCount * few(gentle) * (hop ? 0.65 : 1.5)), { family: 'melt', colours: SPRAY_COLOURS, speed: hop ? 2 : 3.8, sizeM: 0.2, lifeS: 0.7, sparkle: 0, up: hop ? 1.8 : 3.3, g: 0.9 });
+  }
+  /** Pooled spray follows actual wet contacts, including lateral drift on curved banks. */
+  function kart(i, st, dt, { gentle = false, visible = true, paused = false } = {}) {
+    if (paused || !(dt > 0)) return;
+    let memory = kartMemory.get(i);
+    if (!memory) { memory = { spray: 0, ring: 0 }; kartMemory.set(i, memory); }
+    const s = st[S.s], f = track.frameAt(s), speed = Math.hypot(st[S.velX], st[S.velY], st[S.velZ]);
+    if (!visible || !st[S.grounded] || st[S.airborne] || st[S.respawnPhase] || !isWaterSurface(f.surface) || speed < 3) { memory.spray = memory.ring = 0; return; }
+    const drifting = st[S.driftDir] !== 0;
+    memory.spray += dt; memory.ring += dt;
+    if (memory.spray < (drifting ? 0.07 : 0.1)) return;
+    memory.spray = 0;
+    for (const side of [-1, 1]) {
+      const x = Math.max(-f.w / 2 + 0.1, Math.min(f.w / 2 - 0.1, st[S.lateral] + side * LOOK.saucerR * 1.15));
+      const pt = contact(s - Math.min(1.1, speed * 0.04), x);
+      particles?.burst(pt.p, Math.round((drifting ? 6 : 3) * few(gentle)), { family: 'melt', colours: SPRAY_COLOURS, speed: drifting ? 3.2 : 1.8, sizeM: drifting ? 0.25 : 0.19, lifeS: drifting ? 0.8 : 0.65, sparkle: 0, up: drifting ? 2.2 : 1.4, g: 0.9 });
+    }
+    if (memory.ring >= (drifting ? 0.24 : 0.45)) {
+      memory.ring = 0; const pt = contact(s, st[S.lateral]);
+      wakes?.ring(pt.p, pt.q, drifting ? 2.1 : 1.5, { gentle, colour: '#ffffff', lifeS: 0.6, gain: LOOK.ringGain * 0.24 });
+    }
   }
   /** CONTRACT `chute { s }`: the lip nearest s sprays at once. */
   function chute({ s = 0 } = {}, gentle = false) {
@@ -101,6 +131,6 @@ export function createWaterfall(track, pal, { particles = null, wakes = null, L 
     const pt = best ? points[runs.indexOf(best) * 2] : null;
     if (pt) spray(pt, gentle, 2);
   }
-  return { object: mesh, runs, points, uniforms: u, update, splash, chute,
-    dispose() { if (mesh) { mesh.geometry.dispose(); mat.dispose(); } } };
+  return { object: mesh, runs, points, uniforms: u, update, splash, chute, kart,
+    dispose() { kartMemory.clear(); if (mesh) { mesh.geometry.dispose(); mat.dispose(); } } };
 }

@@ -3,8 +3,8 @@
  * Stream and pool vertices (road attribute `surface` 3 / 4) render as water in render/materials/water.js;
  * the chute (stream nodes on a steep grade) wears a waterfall sheet (render/waterfall.js). The shapes here
  * are the same ones the shader draws, as numbers: the ripple scroll from the flow attribute, the foam
- * weights, the sheet placement from node grades, the wake and splash sizes. Astra's normal / flow / foam
- * masks later replace the procedural fields in water.js, never these rules.
+ * weights, sheet placement, water volume bounds, wakes and splashes. Existing art masks replace
+ * procedural shading fields without changing these physical placement rules.
  */
 
 export const WATER_LOOK = Object.freeze({
@@ -21,12 +21,57 @@ export const WATER_LOOK = Object.freeze({
   alpha: 0.9, foamGain: 0.55,
   gentleScrollMul: 0.5,         // Gentle: the scroll clock at half speed, nothing pulses
   chuteGradeDeg: 25,            // a stream node steeper than this is a chute (SIM's water.chuteGradeDeg twin)
-  sheetLiftM: 0.28, sheetOverM: 0.35, sheetRunM: 2.5,   // the sheet floats over the road, past the rails, runs past the lip and foot
+  sheetLiftM: 0.12, sheetOverM: 0.35, sheetRunM: 2.5,   // shallow water stays close to the physical contact plane
   streakM: 2.6, streakW: 0.45, sheetSpeedMps: 9, sheetAlpha: 0.4,
   sprayEveryS: 0.24, sprayNearM: 70, sprayCount: 3, spraySpeedMps: 2.4,
   wakeWidthMul: 1.8, wakeWhite: 0.65,
   splashRingM: [2.2, 5.5], splashDownMps: [2, 12], splashCount: 14,
 });
+
+export const WATER_VOLUME = Object.freeze({ liftM: 0.1, waveM: 0.025, depthM: 1.4, stepM: 2, spillDropM: 16 });
+
+/** Wet stretches with physical support. The reservoir renderer owns submerged waterlines. */
+export function waterRuns(track) {
+  const points = track.nodeS ? [...track.nodeS, track.lengthM] : Array.from({ length: Math.ceil(track.lengthM / 2) + 1 }, (_, i) => Math.min(track.lengthM, i * 2));
+  const runs = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i + 1], f = track.frameAt((a + b) / 2);
+    if (b <= a) continue;
+    const section = track.sections?.find(v => a >= v.fromS && a < v.toS)?.id || '';
+    if (!isWaterSurface(f.surface) || /submerged|emerge/.test(section) || f.n[1] < 0.45 || f.flags?.includes('jump')) continue;
+    const last = runs.at(-1);
+    if (last && Math.abs(last.toS - a) < 0.001) last.toS = b;
+    else runs.push({ fromS: a, toS: b });
+  }
+  return runs;
+}
+
+/** A shallow canal waterline meets its banks instead of climbing their walls. */
+export function waterHalfWidth(track, s, frame = track.frameAt(s)) {
+  const half = Math.max(0.1, frame.w / 2 - 0.04);
+  if (!track.canalProfile || track.canalProfile(s, half, {}).height <= WATER_VOLUME.liftM) return half;
+  let lo = 0, hi = half;
+  for (let i = 0; i < 14; i++) { const x = (lo + hi) / 2; if (track.canalProfile(s, x, {}).height > WATER_VOLUME.liftM) hi = x; else lo = x; }
+  return lo;
+}
+
+/** Authored spills are clipped to wet runs; ordinary courses get short alternating edge spills. */
+export function waterSpills(track, runs = waterRuns(track)) {
+  const requested = Array.isArray(track.waterSpills) ? track.waterSpills : runs.filter(r => r.toS - r.fromS > 18).map((r, i) => {
+    const length = Math.min(24, (r.toS - r.fromS) * 0.35), fromS = r.fromS + (r.toS - r.fromS - length) * 0.55;
+    return { fromS, toS: fromS + length, side: i % 2 ? 1 : -1, dropM: WATER_VOLUME.spillDropM };
+  });
+  return requested.flatMap(spill => {
+    if (![spill.fromS, spill.toS].every(Number.isFinite) || ![-1, 1].includes(spill.side)) return [];
+    return runs.flatMap(run => {
+      const fromS = Math.max(run.fromS, spill.fromS), toS = Math.min(run.toS, spill.toS);
+      if (toS - fromS < 1) return [];
+      const mid = (fromS + toS) / 2;
+      if (waterHalfWidth(track, mid) < track.frameAt(mid).w / 2 - 0.1) return [];
+      return [{ fromS, toS, side: spill.side, dropM: Math.max(3, Math.min(40, Number(spill.dropM) || WATER_VOLUME.spillDropM)) }];
+    });
+  });
+}
 
 /** Road attribute codes (track/mesh.js `surface`). */
 export const SURFACE_CODE = Object.freeze({ glass: 0, grip: 1, haze: 2, stream: 3, pool: 4 });

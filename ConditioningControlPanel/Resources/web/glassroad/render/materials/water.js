@@ -2,12 +2,12 @@
  * mixes in by the `surface` attribute (3 stream, 4 pool; anything else is glass). No draw of its own: the
  * road is still one batch, this is a branch inside its shader.
  *
- * Procedural for now: two ripple fields scrolled with the `flow` attribute (direction and speed from the
+ * Two ripple fields scroll with the `flow` attribute (direction and speed from the
  * current; a still pool breathes at WATER_LOOK.baseScrollMps) make the normal; foam gathers toward the
  * rails and on a pool's edges; the body takes the section palette (pal.col, never a fixed colour), a faint
  * underglow from below, a soft specular from LOOK.sheenDir and a sky reflection on the fresnel.
- * Astra's masks later replace the fields: pass `fields = { slope(q) -> vec2, foam(q) -> float }` built on
- * textures sampled at the same scrolled coordinates and nothing else changes.
+ * The raised water volume supplies Astra's existing masks through `fields = { slope(q), foam(q) }`.
+ * Missing art uses the same procedural field coordinates and keeps the contact geometry intact.
  * Gentle: the scroll clock runs at half speed (the caller's uniform); nothing pulses.
  */
 import { float, vec2, vec3, sin, cos, mix, smoothstep, clamp, max, abs, dot, pow, normalize, length, select, reflect, attribute } from 'three/tsl';
