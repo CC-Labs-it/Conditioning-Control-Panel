@@ -166,3 +166,79 @@ test('actual card renderer reports eight decoded faces separately from advancing
   media.dispose();
   assert.deepEqual(clips.map(v => [v.pauses, v.loads]), [[0, 0], [0, 0]]);
 });
+
+function stagedRenderer(count = 8) {
+  const canvases = [], copies = [], gradient = { addColorStop() {} };
+  const make = (width, height) => {
+    const canvas = { width, height, pixels: null }, context = new Proxy({
+      fillRect() { canvas.pixels = null; },
+      drawImage(source, x, y, w, h) {
+        if (source.copyError) throw { name: 'InvalidStateError' };
+        if (source.videoWidth) { canvas.pixels = source; copies.push({ canvas, source, w, h }); }
+      },
+    }, { get: (o, k) => k in o ? o[k] : k === 'createLinearGradient' || k === 'createRadialGradient' ? () => gradient : () => {} });
+    canvas.getContext = () => context; canvases.push(canvas); return canvas;
+  };
+  const extraSlots = Array.from({ length: count }, (_, i) => ({ id: 'card-' + i, frame: 'card', program: 1,
+    C: [0, 8, -i * 3], X: [1, 0, 0], Y: [0, 1, 0], Z: [0, 0, 1], w: 21.5, h: 9.4, s: i * 3 }));
+  const media = createMediaSlots(null, { id: 'test' }, { layout: {}, samples: [], extraSlots, make, tier: 'high' });
+  return { media, canvases, copies };
+}
+function texturesOf(media) {
+  const textures = new Set();
+  for (const o of media.object.children) if (o.name.startsWith('media-card-source')) {
+    o.material.colorNode.traverse(n => { if (n.isTextureNode && n.value) textures.add(n.value); });
+  }
+  return [...textures];
+}
+test('WebGL shared video textures stay canvas-backed, bounded and budgeted across eight faces', async () => {
+  const h = stagedRenderer(), clips = [video(), video()];
+  Object.assign(clips[0], { videoWidth: 1920, videoHeight: 1080 });
+  Object.assign(clips[1], { videoWidth: 720, videoHeight: 1280 });
+  const canvasCount = h.canvases.length;
+  for (let i = 0; i < 8; i++) h.media.setSource('card-' + i, { kind: 'video', el: clips[i % 2], borrowed: true });
+  await settle(); assert.equal(h.copies.length, 0, 'decoded is not copied until budget allows');
+  h.media.update(1 / 60, { eye: [0, 8, 0] });
+  assert.equal(h.copies.length, 2, 'one copy per owner, not eight copies per face');
+  assert.deepEqual(h.copies.map(c => [c.w, c.h]).sort((a, b) => a[0] - b[0]), [[360, 640], [640, 360]]);
+  const textures = texturesOf(h.media);
+  assert.equal(textures.length, 2);
+  for (const texture of textures) {
+    // The shipped WebGL getImage accepts HTMLCanvasElement, while a video would yield undefined .data.
+    assert.ok(h.canvases.includes(texture.image)); assert.ok(!texture.image.videoWidth);
+    assert.ok(clips.includes(texture.image.pixels)); assert.equal(texture.isVideoTexture, undefined);
+  }
+  assert.equal(h.canvases.length, canvasCount, 'source binding creates no per-face canvases');
+  const before = h.copies.length; h.media.update(0, { eye: [0, 8, 0] });
+  assert.equal(h.copies.length, before, 'paused upload budget makes no copies');
+  for (let i = 0; i < 120; i++) {
+    const before = h.copies.length; h.media.update(1 / 60, { eye: [0, 8, 0] });
+    assert.ok(h.copies.length - before <= h.media.stats().maxMediaUploads);
+  }
+  assert.ok(h.copies.length <= 2 + 2 * 2 * h.media.stats().videoUploadFps + 2, 'video cadence stays capped');
+  h.media.setSource('card-0', null); assert.ok(textures.every(t => t.image.pixels), 'other borrowers retain pixels');
+  for (let i = 1; i < 8; i++) h.media.setSource('card-' + i, null);
+  assert.ok(textures.every(t => t.image.width === 2 && t.image.height === 2 && t.image.pixels === null), 'last release erases decoded pixels');
+  assert.deepEqual(clips.map(c => c.pauses), [0, 0], 'borrowed decoders remain host owned');
+  h.media.dispose();
+});
+test('Failed canvas copies retain placeholders and retry within the same upload budget', async () => {
+  const h = stagedRenderer(1), clip = video(); clip.copyError = true;
+  h.media.setSource('card-0', { kind: 'video', el: clip, borrowed: true }); await settle();
+  h.media.update(1 / 60, { eye: [0, 8, 0] });
+  assert.equal(h.media.stats().readyCardVideos, 0); assert.equal(h.media.stats().sharedVideoUploadsTotal, 0);
+  assert.deepEqual(h.media.stats().sharedVideoCopyErrors, ['InvalidStateError']);
+  clip.copyError = false; h.media.update(.1, { eye: [0, 8, 0] });
+  assert.equal(h.media.stats().readyCardVideos, 1); assert.deepEqual(h.media.stats().sharedVideoCopyErrors, []);
+  const texture = texturesOf(h.media)[0]; h.media.dispose();
+  assert.equal(texture.image.pixels, null); assert.equal(texture.image.width, 2);
+});
+test('Renderer-owned video uses the same canvas path and releases its decoder on source off', async () => {
+  const h = stagedRenderer(1), clip = video();
+  h.media.setSource('card-0', { kind: 'video', el: clip }); await settle();
+  h.media.update(.1, { eye: [0, 8, 0] });
+  const texture = texturesOf(h.media)[0]; assert.ok(h.canvases.includes(texture.image));
+  h.media.setSource('card-0', null);
+  assert.equal(clip.pauses, 1); assert.equal(clip.loads, 1); assert.equal(texture.image.pixels, null);
+  h.media.dispose();
+});

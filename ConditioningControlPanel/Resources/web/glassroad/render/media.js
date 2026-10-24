@@ -330,12 +330,22 @@ export function createMediaSlots(scene, track, opts = {}) {
   const sharedVideos = new Map();
   // Every owner exists before shader warmup, even on phone. Faces only change a texture binding.
   const sharedPool = Array.from({ length: MAX_MEDIA_CLIPS }, () => {
-    const tex = new Texture(blankSource); tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4; tex.needsUpdate = true;
-    const owner = { tex, el: null, refs: new Set(), ready: false, uploaded: false, idleDisposed: false, uploads: 0 };
+    // r186 WebGL's regular texture upload accepts canvases, but not HTMLVideoElement.
+    // One reusable canvas per decoder keeps the warmed graph and shared upload budget.
+    const canvas = opts.make ? opts.make(2, 2) : Object.assign(document.createElement('canvas'), { width: 2, height: 2 });
+    const context = canvas.getContext('2d', { alpha: false });
+    context.fillStyle = '#15121b'; context.fillRect(0, 0, 2, 2);
+    const tex = new Texture(canvas); tex.colorSpace = SRGBColorSpace; tex.anisotropy = 4; tex.needsUpdate = true;
+    const owner = { tex, canvas, context, el: null, refs: new Set(), ready: false, uploaded: false, idleDisposed: false, uploads: 0, uploadError: null };
     owner.src = budget.add({ every: 1 / T.videoFps, kind: 'shared-video', owner, on: false });
     return owner;
   });
   const videoCapacity = () => Math.min(sharedPool.length, mediaClipLimit(Q.name));
+  function clearVideoCanvas(owner) {
+    owner.canvas.width = 2; owner.canvas.height = 2;
+    owner.context.fillStyle = '#15121b'; owner.context.fillRect(0, 0, 2, 2);
+    owner.uploadError = null;
+  }
   let creditTex = null;
   function creditTexture(text) {
     if (creditTex && creditTex.text === text) return creditTex.tex;
@@ -401,7 +411,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (!owner.refs.size) {
       sharedVideos.delete(owner.el); budget.list[owner.src].on = false;
       if (!owner.idleDisposed) owner.tex.dispose();
-      owner.tex.image = blankSource; owner.idleDisposed = true;
+      clearVideoCanvas(owner); owner.idleDisposed = true;
       owner.el = null; owner.ready = false; owner.uploaded = false;
     }
     o.shared = null; o.tex = o.baseTex; o.sample.value = o.baseTex;
@@ -467,7 +477,8 @@ export function createMediaSlots(scene, track, opts = {}) {
     if (!el || !['image', 'video', 'canvas'].includes(src.kind)) { placeSlot(sl); flush(); return false; }
     const o = persistentSources.get(sl.index) || makeOwnSource(sl);
     o.el = el; o.kind = src.kind; o.borrowed = !!src.el && src.borrowed === true;
-    if (src.kind === 'video' && o.borrowed && !retainShared(o, sl.index, el)) {
+    if (src.kind === 'video' && !retainShared(o, sl.index, el)) {
+      if (!o.borrowed) { try { el.pause?.(); el.removeAttribute?.('src'); el.load?.(); } catch { /* source rejected */ } }
       o.el = null; o.kind = null; o.borrowed = false;
       if (!o.persistent) { group.remove(o.mesh); o.mat.dispose(); o.baseTex.dispose(); }
       placeSlot(sl); flush(); return false;
@@ -597,14 +608,25 @@ export function createMediaSlots(scene, track, opts = {}) {
       else if (x.kind === 'shared-video') {
         const owner = x.owner;
         if (owner.ready) {
-          if (!owner.uploaded) {
+          const vw = owner.el.videoWidth || 1, vh = owner.el.videoHeight || 1, scale = Math.min(1, 640 / Math.max(vw, vh));
+          const width = Math.max(1, Math.round(vw * scale)), height = Math.max(1, Math.round(vh * scale));
+          if (owner.canvas.width !== width || owner.canvas.height !== height) {
             // Retain the warmed sampler graph, but release r186's old-size GPU allocation.
             if (!owner.idleDisposed) owner.tex.dispose();
-            owner.tex.image = owner.el; owner.idleDisposed = false; owner.uploaded = true;
-            for (const index of owner.refs) { const o = own.get(index); if (o) { o.ready = true; placeSlot(slots[index]); } }
-            flush();
+            owner.idleDisposed = true; owner.canvas.width = width; owner.canvas.height = height;
           }
-          owner.tex.needsUpdate = true; owner.uploads++; uploads++; sharedVideoUploads++; sharedVideoUploadsTotal++;
+          let copied = false;
+          try { owner.context.drawImage(owner.el, 0, 0, width, height); copied = true; owner.uploadError = null; }
+          catch (e) { owner.uploadError = e?.name || 'VideoCopyError'; }
+          if (copied) {
+            if (!owner.uploaded) {
+              owner.uploaded = true;
+              for (const index of owner.refs) { const o = own.get(index); if (o) { o.ready = true; placeSlot(slots[index]); } }
+              flush();
+            }
+            owner.idleDisposed = false; owner.tex.needsUpdate = true;
+            owner.uploads++; uploads++; sharedVideoUploads++; sharedVideoUploadsTotal++;
+          }
         }
       }
       else { const o = own.get(x.slot); if (o && o.ready) { o.tex.needsUpdate = true; uploads++; } }
@@ -619,7 +641,7 @@ export function createMediaSlots(scene, track, opts = {}) {
     playback.dispose();
     for (const o of persistentSources.values()) { o.baseTex.dispose(); o.creditTex.dispose(); }
     persistentSources.clear();
-    for (const owner of sharedPool) if (!owner.idleDisposed) owner.tex.dispose();
+    for (const owner of sharedPool) { if (!owner.idleDisposed) owner.tex.dispose(); clearVideoCanvas(owner); }
     for (const pg of progs) pg.tex.dispose();
     if (creditTex) creditTex.tex.dispose();
     group.traverse((o) => { if (o.material) o.material.dispose(); });
@@ -652,6 +674,7 @@ export function createMediaSlots(scene, track, opts = {}) {
         worldVideoCounts, mediaVideoDecoders: new Set(videos.map(o => o.el)).size, mediaVideoPlayback: playback.snapshot(videos.map(o => o.el)),
         videoCapacity: videoCapacity(), prewarmedVideoTextures: sharedPool.length,
         sharedVideoTextures: sharedVideos.size, sharedVideoUploads, sharedVideoUploadsTotal,
+        sharedVideoCopyErrors: [...sharedVideos.values()].map(o => o.uploadError).filter(Boolean),
         maxMediaUploads: tierOf(Q.name, M).maxUploads, videoUploadFps: tierOf(Q.name, M).videoFps,
       };
     },
