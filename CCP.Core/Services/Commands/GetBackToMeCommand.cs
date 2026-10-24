@@ -44,6 +44,8 @@ namespace ConditioningControlPanel.Services.Commands
             }
 
             var delay = Math.Clamp(_data.Delay, 1, MaxDelaySec);
+            // A panic while this waits cancels it: nothing AI-driven comes back after a panic.
+            var panicsAtSchedule = Safety.PanicAftermath.PanicCount;
 
             try
             {
@@ -53,6 +55,11 @@ namespace ConditioningControlPanel.Services.Commands
 
                 // Consent can have changed during the delay: re-gate before asking the AI anything.
                 _cancellationToken.ThrowIfCancellationRequested();
+                if (!AiCommandAdmission.FollowUpStands(panicsAtSchedule, Safety.PanicAftermath.PanicCount))
+                {
+                    Log.Information("GetBackToMeCommand: a panic came first, follow-up dropped");
+                    return false;
+                }
                 if (AiCommandService.Refusal(AICommandType.getbacktome) is { } refusal)
                 {
                     Log.Information("GetBackToMeCommand: {Reason} - follow-up dropped", refusal);
@@ -61,13 +68,16 @@ namespace ConditioningControlPanel.Services.Commands
 
                 await SendTokenMessage(_data.Token, _data.JsonOnly, _data.Text);
 
-                // Each nested command passes the same gate as a top-level one at the moment it fires,
-                // with this follow-up's own budget (never the reply's shared counter).
+                // Each nested command passes the same gate as a top-level one at the moment it fires
+                // (switches, panic quiet, output moderation), with this follow-up's own budget
+                // (never the reply's shared counter).
                 var fired = 0;
                 foreach (var subCommand in _data.Commands ?? new())
                 {
                     if (_cancellationToken.IsCancellationRequested) break;
+                    if (subCommand == null) continue;
                     var why = AiCommandService.Refusal(AICommandType.getbacktome) ?? AiCommandService.Refusal(subCommand.Command)
+                        ?? (!AiCommandService.Admits(subCommand) ? $"refused ({AiCommandService.Judge(subCommand)})" : null)
                         ?? (fired >= AiCommandService.MaxCommandsPerResponse ? $"follow-up cap reached ({AiCommandService.MaxCommandsPerResponse})" : null);
                     if (why != null)
                     {
@@ -97,8 +107,9 @@ namespace ConditioningControlPanel.Services.Commands
         {
             if (!string.IsNullOrEmpty(text))
             {
-                // Operator-supplied text — not AI-generated, so no AI badge.
-                ShowAvatarMessage(text, aiGenerated: false);
+                // The model wrote this line inside its getbacktome command, so it wears the AI
+                // badge (it passed output moderation with the command).
+                ShowAvatarMessage(text, aiGenerated: true);
             }
             // R2-NEW-H-1: migrate to typed AI API. Refusals are silently dropped on
             // this remote-control surface (the local user didn't directly prompt — a
@@ -106,6 +117,9 @@ namespace ConditioningControlPanel.Services.Commands
             // ModerationLog. IsAiGenerated propagates so canned fallbacks don't wear
             // the AI badge.
             if (AiProvider?.Invoke() is not { } ai) return;
+            // The reply's own commands dispatch one level deeper, so a getbacktome in it counts
+            // against the depth cap instead of starting a fresh chain.
+            AiCommandAdmission.EnterFollowUp(_depth + 1);
             // Scoped to this async method: the reply's own commands, executed inside the call, see this
             // follow-up's token and are dropped if a panic cancels it meanwhile (audit #1987).
             // Restored explicitly so the scope ends with the round trip, not with the method.
