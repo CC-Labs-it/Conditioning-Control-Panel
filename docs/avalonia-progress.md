@@ -2989,3 +2989,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-favorites-rail: +403
 - Favorites drawer click-tips popup (hover/pin/Escape/focus return), persisted inverted dashboard clicks via Core DashboardClickRule, lilac glow on a new pin.
 - Review fixes: bounded glow wait, seeded intro gates, real Escape key routing, no temp PNG; gate run 39688122404 green; feat-split-card row now cites DashboardClickRule (no duplicate inversion).
+
+## avalonia-port/wire-views-companion-make-her-yours: +209
+- Z4 Community link browses and installs through the Workshop cell's single CommunityPromptService. The readout shows the installed name, and Z4 and the Workshop rows refresh together. Row wired.
+- Stacked on wire-views-companion-workshop-community-cell (5e10cd18a).
