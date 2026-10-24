@@ -6,7 +6,7 @@ export function garageArrows(scene) {
   [[-.45,0],[.02,.44],[.20,.26],[-.09,0],[.20,-.26],[.02,-.44]].forEach(([x,y],i)=>i?shape.lineTo(x,y):shape.moveTo(x,y));shape.closePath();
   const geo=new ExtrudeGeometry(shape,{depth:.12,bevelEnabled:true,bevelSize:.045,bevelThickness:.035,bevelSegments:3,steps:1});
   const arrows=[-1,1].map(dir=>{
-    const root=new Group(),material=new MeshStandardNodeMaterial({color:0xe9a7bc,metalness:.25,roughness:.3});
+    const root=new Group(),material=new MeshStandardNodeMaterial({color:0xff79ac,metalness:.25,roughness:.3});
     const mesh=new Mesh(geo,material);mesh.rotation.y=Math.PI;mesh.rotation.z=dir===-1?Math.PI:0;root.add(mesh);scene.add(root);
     root.userData.garageDirection=dir;
     return {root,material,dir,hover:0,target:0,kick:0};
@@ -27,7 +27,7 @@ export function garageArrows(scene) {
         a.root.rotation.z+=reduced?0:Math.sin(time*3)*.035*a.hover+a.kick*.12*a.dir;
         const size=layout?.mobile?0.19:0.25;
         a.root.scale.setScalar(reduced?size:size*(1+a.hover*.16-a.kick*.17));
-        a.material.color.set(busy?0x9a7a84:a.target?0xffd8a1:0xe9a7bc);
+        a.material.color.set(busy?0x587989:a.target?0xffd35c:0xff79ac);
       }
     },
     dispose(){geo.dispose();for(const a of arrows){scene.remove(a.root);a.material.dispose();}},
