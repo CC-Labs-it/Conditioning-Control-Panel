@@ -5,6 +5,7 @@ import { loadTrack } from '../track/load.js';
 import { validate } from '../track/schema.js';
 import { BOUDOIR_PIECES, boudoirPieceLength, boudoirSegmentCount, walkBoudoir, getBoudoirLayout } from '../track/boudoir-layout.js';
 import { makeBoudoirForks } from '../track/boudoir-forks.js';
+import { makeBoudoirBoosts } from '../track/boudoir-boosts.js';
 const RAD = Math.PI / 180, smooth = u => u * u * (3 - 2 * u), round = x => +x.toFixed(3) || 0;
 export function buildBoudoir() {
   const plan = walkBoudoir(BOUDOIR_PIECES), nodes = [], starts = [];
@@ -59,13 +60,12 @@ export function buildBoudoir() {
     ai: { lines: [], pace: [1, 1.05, 1.1] }, beat: { bpm: null, offsetMs: 0, map: [] }, limits: { fallY: -55, edgeGraceM: 1.2, edgeGraceS: .8 } };
   for (const [id, u] of [['vanity-grid', .55], ['drawer-hall', .2], ['shelf-climb', .6], ['shelf-gallery', .5], ['upper-gallery', .5], ['wardrobe-bridge', .2], ['wardrobe-descent', .7], ['bath-approach', .5], ['bath-stream', .25], ['compacts-exit', .5], ['home', .5]])
     for (const x of [-7, -2.5, 2.5, 7]) track.items.push({ node: node(id, u), x, kind: 'box' });
-  for (const id of ['vanity-grid', 'shelf-gallery', 'upper-runout', 'bath-approach', 'mirror-approach', 'home']) {
-    const n = node(id, .65); nodes[n].flags.push('boost'); track.boosts.push({ node: n, x: 0, w: 5, len: 7 });
-  }
   for (const [id, x] of [['powder-return', 3], ['shelf-climb', -3], ['wardrobe-descent', 4], ['bath-stream', -4]])
     for (let i = 0; i < 5; i++) track.items.push({ node: node(id, .35), x, ds: i * 4, kind: 'bubble' });
   const loaded = loadTrack(track), at = (id, d = 0) => loaded.nodeS[node(id)] + d;
   track.forks = makeBoudoirForks(loaded, node);
+  track.boosts = makeBoudoirBoosts(loadTrack(track));
+  for (const pad of track.boosts) if (!nodes[pad.node].flags.includes('boost')) nodes[pad.node].flags.push('boost');
   track.waterSpills = [{ fromS: at('bath-stream', 100), toS: at('bath-stream', 150), side: -1, dropM: 36 },
     { fromS: at('bath-turn', 70), toS: at('bath-turn', 105), side: 1, dropM: 40 },
     { fromS: at('bath-chute', 20), toS: at('bath-chute', 55), side: 1, dropM: 34 }];
