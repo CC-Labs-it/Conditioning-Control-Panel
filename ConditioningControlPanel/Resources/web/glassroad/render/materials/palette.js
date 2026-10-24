@@ -19,6 +19,7 @@ import { Color, DataTexture, RGBAFormat, UnsignedByteType, LinearFilter, RepeatW
 import { uniform, mix, texture, vec2, fract, float } from 'three/tsl';
 import { PALETTES, FALLBACK_PALETTE } from '../look.js';
 import { SPECTRUM_BASE, SPECTRUM_LOOK, RAMP_ROWS, rampBytes, rampAt, roadRampAt, sectionKey, flowMps } from '../spectrum.js';
+import { KEEP_COLOURS } from '../keepTheme.js';
 
 const rampTexs = new Map();
 /** The shared ramp texture (rows dawn, deep, afterglow); road: the road-levelled twin. */
@@ -33,7 +34,7 @@ export function spectrumRamp(road = false) {
   return tex;
 }
 
-export function createPalette() {
+export function createPalette(theme = 'threshold') {
   const a = [0, 1, 2].map(() => uniform(new Color()));
   const b = [0, 1, 2].map(() => uniform(new Color()));
   const t = uniform(1);
@@ -41,7 +42,7 @@ export function createPalette() {
   const hue = uniform(0), flow = uniform(0), motion = uniform(1);
   const tmp = new Color();
   let fromKey = null, toName = null, fromRows = [1, 0, 0], toRows = [1, 0, 0];
-  const base = (name) => SPECTRUM_BASE[name] || PALETTES[name] || SPECTRUM_BASE[sectionKey(name)] || PALETTES[FALLBACK_PALETTE];
+  const base = (name) => theme === 'keep' ? KEEP_COLOURS : SPECTRUM_BASE[name] || PALETTES[name] || SPECTRUM_BASE[sectionKey(name)] || PALETTES[FALLBACK_PALETTE];
   const load = (us, list) => {
     for (let i = 0; i < 3; i++) {
       us[i].value.setRGB(0, 0, 0);
@@ -64,14 +65,14 @@ export function createPalette() {
     return at(0).rgb.mul(rows.x).add(at(1).rgb.mul(rows.y)).add(at(2).rgb.mul(rows.z));
   };
   const pal = {
-    t, rows, hue, flow, motion,
+    t, rows, hue, flow, motion, theme,
     flowWrap: 1e6,
     motionSource: null,
     col: (i) => mix(a[i], b[i], t),
     /** The spectrum ramp at x (a TSL float; wraps), hue clock added, rows blended by the section mix. */
-    ramp(x) { return rampNode(spectrumRamp(false), x); },
+    ramp(x) { return theme === 'keep' ? mix(pal.col(0), pal.col(1), fract(x)) : rampNode(spectrumRamp(false), x); },
     /** The road-levelled ramp at x (same clock and rows): for patterns streaming past the eye. */
-    rampRoad(x) { return rampNode(spectrumRamp(true), x); },
+    rampRoad(x) { return theme === 'keep' ? mix(pal.col(2), pal.col(0), fract(x).mul(0.35)) : rampNode(spectrumRamp(true), x); },
     /** from: a palette id or [[id, weight], ...] (weights sum to 1); mixT 0 = from, 1 = to. */
     set(from, to, mixT) {
       const list = Array.isArray(from) ? from : [[from, 1]];
