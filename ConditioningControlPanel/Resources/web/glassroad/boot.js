@@ -31,6 +31,7 @@ import { createGamepad } from './input/gamepad.js';
 import { createTouch } from './input/touch.js';
 import { glideActive, resetGlide } from './sim/glide.js';
 import { S, RESPAWN } from './sim/state.js';
+import { createImmersion } from './track/immersion.js';
 import { createRace } from './sim/race.js';
 import { createRacers } from './sim/racers.js';
 import { createAi } from './sim/ai.js';
@@ -204,6 +205,8 @@ async function boot() {
   const effects = createEffects(bus, feel, { gentle, photosafe });
   fx.state.screen = effects.screen;
   const audio = createAudio(feel, bus, { gentle });
+  const immersion = createImmersion(track);
+  if (BOT) Object.defineProperty(debug, 'underwaterAudio', { get: () => audio.underwater });
   for (const name of ['keep-gate-hit', 'keep-chain-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
   bus.on('*', (p, name) => { debug.events[name] = (debug.events[name] || 0) + 1; });
@@ -663,6 +666,12 @@ async function boot() {
   const warm = await renderer.compile(world.scene, cam.camera, undefined,
     { onProgress: (k, n) => hud.setLoading('Preparing shaders ' + k + '/' + n, 0.55 + 0.4 * k / n) });
   debug.warm = warm;
+  if (world.waterVolume.warmReflections) {
+    hud.setLoading('Preparing water reflections', 0.96);
+    await paintGap();
+    await world.waterVolume.warmReflections({ playerPos: world.kart.position, playerS: 0,
+      onProgress: (k, n) => hud.setLoading('Preparing water reflections ' + k + '/' + n, 0.96) });
+  }
   // and the gate screen's own context and Loom program (its first build froze the race at the first gate)
   hud.setLoading('Last touches', 0.97);
   await paintGap();
@@ -765,6 +774,7 @@ async function boot() {
     audio.update(pst[S.speedPct], {                               // 5. audio
       boosting: pst[S.boostKind] > 0, drifting: pst[S.driftDir] !== 0, driftTier: pst[S.driftStage],
       airborne: pst[S.airborne] > 0, onRoad: pst[S.grounded] > 0, edge: fs.edgeGlow > 0, paused: frozen, duck: fs.duck,
+      submerged: inRace ? immersion(pst[S.s], cam.camera.position.y) : 0,
     }, inRace ? racers.nearby(feel.get('ai.audibleKarts'), 80) : []);
     // rumble follows fs.rumble (zero under Gentle): re-sent every juice.rumbleMs at its current level,
     // and at once when it steps up (drift tiers 2 and 3), so the ladder ramps and a landing fades

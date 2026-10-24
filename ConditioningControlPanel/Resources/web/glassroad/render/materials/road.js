@@ -184,7 +184,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   const P = { ...ROAD_POLISH, ...(LOOK.roadPolish || {}) };
   const S = { ...SPECTRUM_LOOK, ...(LOOK.roadSpectrum || {}) };
   const u = { phase: uniform(0), contrast: uniform(1), bright: uniform(0), sheen: uniform(1), music: musicUniforms(), energyNode: null,
-    water: { t: uniform(0) } };   // the water scroll clock (seconds; scene.js advances it by the Gentle share)
+    water: { t: uniform(0), coverage: uniform(1) } };   // Standalone roads retain their water; a reactive volume owns its own skin.
   const lapM = track && track.lengthM > 0 ? track.lengthM : 0;
   const fit = (b) => (lapM ? fitPeriod(lapM, b) : b);
   const per = { ramp: fit(S.rampM), packet: fit(S.packetM), chevron: fit(S.chevronM), checker: fit(S.checkerM),
@@ -355,7 +355,7 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // the glass sheen and polish thin out over it. The clock u.water.t is the caller's (Gentle halves it).
   const wa = waterAttributes();
   const water = createWaterSurface({ surface: wa.surface, flow: wa.flow, p, trueEdge, V, N0: normalWorld, pal, u: u.water, skyRamp });
-  const wet = water.w;
+  const wet = water.w.mul(u.water.coverage);
   const glassBody = mix(mix(surface.add(track?.id === 'mainframe' ? deepCol.mul(0.15) : deepCol), water.colour, wet), tileBody, tiles.mask).mul(float(1).sub(shoulder.mul(0.17)));
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.

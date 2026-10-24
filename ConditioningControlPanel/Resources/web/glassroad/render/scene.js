@@ -22,6 +22,7 @@ import { S } from '../sim/state.js';
 import { clamp, lerp, smoothstep, qrotate, v3cross, v3norm } from '../core/math.js';
 import { LOOK, SKIES, FALLBACK_SKY } from './look.js';
 import { waterBedPositions } from './waterBed.js';
+import { createImmersion } from '../track/immersion.js';
 import { Q } from './quality.js';
 import { createPalette } from './materials/palette.js';
 import { createRoadMaterial } from './materials/road.js';
@@ -153,6 +154,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const isMainframe = track.id === 'mainframe';
   // Fog stays in the warmed shader; its density eases as the kart dives into the coolant reservoir.
   const submerged = track.sections.find(s => s.id === 'submerged');
+  const immersion = createImmersion(track);
   if (isMainframe) scene.fog = new FogExp2('#063e49', 0);
   const keep = track.id === 'keep', pal = createPalette(track.id);
   const owned = [], offs = [];
@@ -242,8 +244,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   add(particles.object); add(lines.object); add(motes.object);
   for (const o of wakes.objects) add(o);
   // All fluid meshes and spray materials exist before shader warmup.
-  const waterVolume = buildWaterVolume(track, pal, art, { quality: Q.name });
+  const waterVolume = buildWaterVolume(track, pal, art, { quality: Q.name, scene, renderer });
   add(waterVolume.object);
+  road.uniforms.water.coverage.value = 0;
   if (roadMesh && waterVolume.field) {
     const g = roadMesh.geometry, a = g.attributes;
     g.setAttribute('position', new Float32BufferAttribute(waterBedPositions(a.position.array, a.uv.array, waterVolume.field, track), 3));
@@ -419,10 +422,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     const dt = lastT === null ? 0 : clamp(view.timeS - lastT, 0, 0.1);
     lastT = view.timeS;
     if (isMainframe && submerged && !view.paused) {
-      const emerge = track.sections.find(s => s.id === 'emerge');
-      const inside = k[S.s] >= submerged.fromS && k[S.s] <= (emerge?.toS ?? submerged.toS);
-      const depth = (track.reservoir?.waterY ?? 4) - (view.camera?.position.y ?? k[S.posY] + 3);
-      const within = inside ? smoothstep(-0.6, 5, depth) : 0;
+      const within = immersion(k[S.s], view.camera?.position.y ?? k[S.posY] + 3);
       const target = 0.013 * within;
       scene.fog.density += (target - scene.fog.density) * Math.min(1, dt / 0.5);
     }
@@ -439,7 +439,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
       const r = racers[i], kk = karts.list[i];
       if (!r || !r.st || (r.meta && r.meta.left)) { karts.hide(kk); continue; }   // online: a seat that left is removed
       const d = i ? Math.hypot(r.st[S.posX] - k[S.posX], r.st[S.posY] - k[S.posY], r.st[S.posZ] - k[S.posZ]) : 0;
-      karts.pose(kk, r.st, r.fxv, dt, d, { glide: !!r.glide, squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '' });
+      karts.pose(kk, r.st, r.fxv, dt, d, { glide: !!r.glide, underwater: r.st[S.respawnPhase] ? 0 : immersion(r.st[S.s], r.st[S.posY] + 0.65), paused: !!view.paused, squash: i ? null : fx.squash || 0, gentle, topMps, name: r.meta ? labels[i] || r.meta.name : '' });
       kk.root.updateMatrixWorld();
       const near = i === 0 || d <= Q.kartLodM;
       if (near) particles.kart(kk.root, r.st, kk.mem, dt, { mul: i ? LOOK.botSparkMul : 1, slip: (r.fxv && r.fxv.slip) || 0 });
@@ -470,7 +470,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // water: the ripple and sheet clocks run at the Gentle scroll share (slower ripples, nothing pulses)
     if (road.uniforms.water && !view.paused) road.uniforms.water.t.value += dt * scroll;
     if (waterfall) waterfall.update(dt, { playerPos: kart.position, gentle, paused: !!view.paused, scroll });
-    waterVolume.update(dt, { gentle, paused: !!view.paused, scroll });
+    waterVolume.update(dt, { gentle, paused: !!view.paused, scroll, playerPos: kart.position, playerS: k[S.s] });
     keepBackdrop?.update(dt, { gentle, paused: !!view.paused, scroll });
     // the song clock (music.songS) drives the music road; with a song the breath below rides its real beats
     const mf = musicRoad ? musicRoad.update(view.song || null, view.songS, { kartS: k[S.s] || 0, gentle }) : null;
@@ -564,5 +564,5 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { waterVolume.reset(); waterfall?.reset(); stones?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { if (scene.fog) scene.fog.density = 0; waterVolume.reset(); waterfall?.reset(); stones?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }
