@@ -15,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Platform.Storage;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs
@@ -213,9 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         /// empty list, so this head shows no bark rows, which is the truth on a head with no bark
         /// engine rather than a lie about one.
         ///
-        /// ponytail: voice-line files (CompanionPhraseService.ResolveVoiceLineFolder) are still
-        /// head-side, so that row kind is missing here. Collapses into one GetAllPhrases() call
-        /// when the service moves to Core.
+        /// Voice-line rows use the shared WPF-compatible listing and id migration.
         /// </summary>
         internal static List<CompanionPhrase> LoadPhrases()
         {
@@ -244,6 +243,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                     });
                 }
             }
+
+            result.AddRange(CompanionVoiceLines.Load());
 
             foreach (var custom in settings.CustomCompanionPhrases)
             {

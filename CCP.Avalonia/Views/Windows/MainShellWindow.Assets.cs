@@ -16,16 +16,16 @@
 //
 // Phrase presets (InitializePhrasePresets and its handlers) live on the cell that owns the controls:
 // CCP.Avalonia/Views/Controls/Companion/Runtime/WorkshopTriggersCell.axaml.cs. Video thumbnails (local and
-// pack) are OpenCV's first frame in AssetsTabView.Packs.cs (VideoThumb), standing in for ShellThumbnailHelper.
+// pack) use Platform/ShellVideoThumbnail on Windows and OpenCV on other platforms.
 //
 // Not ported, because WPF never reaches it: the packs strip. MainWindow.xaml.cs:208 PacksSectionEnabled is
 // a const false, PacksSection and BtnRefreshPacks/BtnDeleteDownloadedPacks are Collapsed, so RefreshPacksAsync,
 // the pack-card download/activate/upgrade/Patreon/Discord handlers, the four OnPack* callbacks, the preview
 // rotation and PacksScrollViewer_PreviewMouseWheel are dead code there.
 //
-// Still open (wire-shell-assets-b-next): HorizontalScrollViewer_/InnerScrollViewer_PreviewMouseWheel, the
-// wheel-chaining helpers QuestsTabView, KeywordTriggersPanel and UpdatesSettingsSection forward to. Avalonia
-// has no PreviewMouseWheel and chains scrolls itself, so they need re-deriving per surface, not porting.
+// Nested wheel forwarding now lives in Helpers/ParentWheel.cs on the keyword list and patch notes.
+// Quests' horizontal-only viewer naturally bubbles vertical wheel input to its parent.
+// Voice-line rows and active counts use CCP.Core CompanionVoiceLines through the phrase editor.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

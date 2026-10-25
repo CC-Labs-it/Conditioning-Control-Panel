@@ -35,13 +35,13 @@ public partial class AssetsTabView
     }
 
     /// <summary>WPF gets video thumbnails from the Windows shell (ShellThumbnailHelper, MainWindow.Assets.cs:918) and, for
-    /// pack videos, decrypts to a temp file first and deletes it after (:801-806). Portable stand-in: OpenCV's first decodable
+    /// pack videos, decrypts to a temp file first and deletes it after (:801-806). Windows uses the same shell image factory; other platforms use OpenCV's first decodable
     /// frame. Null (placeholder stays, as WPF on a shell failure) when the file cannot be opened. Worker thread.</summary>
     private static Bitmap? VideoThumb(AssetThumbnailViewModel item)
     {
         var path = item.PackFile != null ? item.PackStore?.GetPackFileTempPath(item.PackId!, item.PackFile) : item.FullPath;
         if (string.IsNullOrEmpty(path)) return null;
-        try { return VideoFrameThumb(path); }
+        try { return Platform.ShellVideoThumbnail.Load(path, VideoFrameThumb); }
         finally { if (item.PackFile != null) item.PackStore?.DeleteTempFile(path); }
     }
 

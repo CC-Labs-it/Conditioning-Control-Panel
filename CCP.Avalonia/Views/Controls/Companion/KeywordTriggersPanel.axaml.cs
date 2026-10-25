@@ -39,6 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public KeywordTriggersPanel()
         {
             AvaloniaXamlLoader.Load(this);
+            Helpers.ParentWheel.Attach(this.FindControl<ScrollViewer>("ParentWheelScroll")!);
 
             _expander = this.FindControl<Expander>("KeywordTriggersExpander")!;
             _txtScreenOcrOffHint = this.FindControl<TextBlock>("TxtScreenOcrOffHint")!;

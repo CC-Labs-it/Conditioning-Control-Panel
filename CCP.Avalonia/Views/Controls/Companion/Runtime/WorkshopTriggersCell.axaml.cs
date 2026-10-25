@@ -64,7 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
         internal Func<string, string, Task> Inform;
 
         // WPF App.CompanionPhrases.GetActivePhraseCount(); the editor's LoadPhrases is this head's
-        // GetAllPhrases (voice-line rows still missing, see that method).
+        // GetAllPhrases, including the shared voice-line listing.
         private static int ActivePhraseCount() => CompanionPhraseEditorDialog.LoadPhrases().Count(p => p.IsEnabled);
 
         /// <summary>WPF UpdatePhraseCountDisplay (MainWindow.Patreon.cs:1327).</summary>

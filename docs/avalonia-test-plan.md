@@ -1,0 +1,5 @@
+# Avalonia manual test plan
+
+1. Open Library, select local and installed-pack video folders on Windows. Confirm Explorer-selected thumbnails appear; corrupt media keeps its placeholder. On Linux confirm first-frame thumbnails. WPF `MainWindow.Assets.cs:801-806,918` Rows: `shell-assets`
+2. Open Companion Workshop Triggers with packaged or downloaded voice audio. Disable one line, remove another, save a preset, switch away and back. Confirm enabled voice rows contribute to the displayed and saved active count; removed rows stay hidden. Repeat with a legacy positional voice id and audio arriving after startup. WPF `CompanionPhraseService.cs:230-252,430-576`; `MainWindow.Assets.cs:1788-1874` Rows: `shell-assets`
+3. Place the pointer over the keyword-trigger list, then the patch-notes list. Wheel down while the inner list can still scroll: the outer page moves and the inner offset stays fixed. On Quests, wheel over the horizontal rewards strip and confirm the outer page moves. WPF `MainWindow.Assets.cs:419-460` Rows: `shell-assets`
