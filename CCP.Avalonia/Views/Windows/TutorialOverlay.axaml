@@ -193,10 +193,8 @@
                 MaxWidth="460"
                 Padding="20"
                 HorizontalAlignment="Left"
-                VerticalAlignment="Top">
-            <Border.Effect>
-                <DropShadowEffect Color="#FF69B4" BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="0.4"/>
-            </Border.Effect>
+                VerticalAlignment="Top"
+                BoxShadow="0 0 20 #66FF69B4">
 
             <Grid>
                 <Grid.RowDefinitions>

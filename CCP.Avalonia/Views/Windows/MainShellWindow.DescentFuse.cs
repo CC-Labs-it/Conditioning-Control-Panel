@@ -4,8 +4,8 @@
 //
 // ponytail: the chrome dimming is not ported - DescentFuseChrome (WPF head) and this head's
 // RefreshThemeAwareElements do not share a dim step, so the neutral chrome never darkens here.
-// ponytail: zero opens only the Live show; the catch-up crack, the post-zero retry and the
-// ceremony focus/hand-off (DescentShowDirector, DescentMigrationService) remain WPF-only.
+// Zero handling and the bounded post-zero retry are in MainShellWindow.DescentFuseShows.cs. The
+// shows themselves are retired on both heads (DescentFuseWindow.ShowsRetired); room SFX remain a follow-up.
 using System;
 using Avalonia.Animation;
 using Avalonia.Controls;
@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (fuse is null) return;
                 fuse.PhaseChanged += (_, e) => ApplyFusePhase(e.Current);
                 fuse.Tick += (_, remaining) => OnFuseTick(remaining);
-                fuse.ZeroReached += (_, _) => _ = OpenLiveFuseShow();
+                InitializeFuseShows(fuse);
                 ApplyFusePhase(fuse.LastAnnouncedPhase);
             }
             catch (Exception ex) { Log.Debug("[Fuse] Header surfaces could not be wired: {E}", ex.Message); }

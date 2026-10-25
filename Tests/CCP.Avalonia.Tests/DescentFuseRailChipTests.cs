@@ -27,7 +27,7 @@ public sealed class DescentFuseRailChipTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -107,8 +107,9 @@ public sealed class DescentFuseRailChipTests
             Assert.False(chip.IsVisible);
             Assert.False(chip.IsWobbling);
 
-            // The live show the same zero opened draws on the ported canvas.
-            var show = DescentFuseWindow.OnScreen.Single();
+            // The zero opens no show (WPF ShowsRetired); the retired show still draws on the ported canvas.
+            Assert.Empty(DescentFuseWindow.OnScreen);
+            var show = DescentFuseWindow.OpenShow(DescentShowKind.Live)!;
             Assert.Same(show.FindControl<Grid>("StageHost"), show.Stage.Parent);
             Assert.Equal(DescentFuseStage.Freeze, show.Stage.Frame.Stage);
         }
