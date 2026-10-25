@@ -87,6 +87,46 @@ public sealed class BarkEngineTests : IDisposable
         finally { _s.BarkIdleRotation = priorRotation; }
     }
 
+    /// <summary>WPF BarkService.cs:1938 saves the idle rotation with suppressCloudBackup: true, so an idle
+    /// line never triggers a cloud backup. Covers both saves: the pool reset and the commit.</summary>
+    [Fact]
+    public void IdleRotationSavesNeverRequestACloudBackup()
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var svc = new ConditioningControlPanel.Services.SettingsService { SaveDebounceDueTimeMilliseconds = int.MaxValue };
+        var suppressed = typeof(ConditioningControlPanel.Services.SettingsService).GetField("_suppressCloudBackupPending",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        try
+        {
+            CoreSettings.ServiceProvider = () => svc;
+            (svc.Current.AvatarEnabled, svc.Current.MasterVolume, svc.Current.BarkChatSuppressionMs) = (true, 50, 0);
+            var idle = Rule("Idle", "x");
+
+            // Pool exhausted -> reset save (BarkEngine DispatchIdle); no mouth, so nothing commits.
+            svc.Current.BarkIdleRotation = new List<string> { idle.Id };
+            var e = new BarkEngine(() => new BarkRuleSet(new[] { idle }), new Random(7));
+            e.Start();
+            Assert.False(e.DispatchIdle());
+            Assert.True(svc.HasPendingSave);
+            Assert.True((bool)suppressed.GetValue(svc)!);
+            ConditioningControlPanel.Services.SettingsService.DisarmAllPendingSaves();
+
+            // A fired idle line -> commit save. Pins the outcome only: the variant save in the same
+            // commit (PersistVariantRotation) is suppressed too, so this half cannot fail-prove :364.
+            svc.Current.BarkIdleRotation = new List<string>();
+            e = new BarkEngine(() => new BarkRuleSet(new[] { idle }), new Random(7)) { Speak = _said.Add };
+            e.Start();
+            Assert.True(e.DispatchIdle());
+            Assert.True(svc.HasPendingSave);
+            Assert.True((bool)suppressed.GetValue(svc)!);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.SettingsService.DisarmAllPendingSaves();
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    }
+
     [Fact]
     public void TheHighestPriorityRuleWhoseConditionsPassSpeaksWithSubstitutions()
     {

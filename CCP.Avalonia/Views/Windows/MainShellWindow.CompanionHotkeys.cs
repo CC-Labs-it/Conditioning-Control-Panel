@@ -50,9 +50,13 @@ public partial class MainShellWindow
     internal void BringToForegroundAndOpenChat()
     {
         if (_windowClosed) return;
-        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
-        Show(); Activate(); Topmost = true; Topmost = false;
-        ShowAvatarTube();
-        Tube?.OpenChatInput();
+        try   // WPF SessionIO.cs:1204-1228: a hotkey callback must never throw into the message loop
+        {
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Show(); Activate(); Topmost = true; Topmost = false;
+            ShowAvatarTube();
+            Tube?.OpenChatInput();
+        }
+        catch (Exception ex) { Serilog.Log.Warning(ex, "Companion chat hotkey: bring to foreground failed"); }
     }
 }

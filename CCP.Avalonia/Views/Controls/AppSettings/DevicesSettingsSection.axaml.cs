@@ -767,12 +767,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         /// open tube, which is <see cref="AvatarTubeWindow.Live"/> here rather than App.AvatarWindow.
         /// Awaited, not fire-and-forget: Avalonia's ShowDialog is async, and writing the setting
         /// before the answer lands would store whatever the previous combo was.
-        ///
-        /// <para><b>ChatShortcutGlobal is stored but not registered.</b> The checkbox's "activate
-        /// from any app" half is GlobalHotkeyService, a Win32 RegisterHotKey that stays in the WPF
-        /// head. Storing the user's choice is still right - it is one settings file across both
-        /// heads, and WPF honours it - and the IN-WINDOW binding this method applies works on this
-        /// head either way, which is exactly what WPF falls back to when the flag is off.</para>
+        /// ChatShortcutGlobal is registered by MainShellWindow.RefreshCompanionHotkeys (Win32 only).
         /// </summary>
         private async void BtnChatShortcut_Click(object? sender, RoutedEventArgs e)
         {

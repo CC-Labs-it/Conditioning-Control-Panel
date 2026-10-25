@@ -175,7 +175,7 @@ namespace ConditioningControlPanel.Services.Bark
                         _usedIdleRules.Clear();
                         if (_lastIdleRuleId != null) _usedIdleRules.Add(_lastIdleRuleId);
                         CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
-                        CoreSettings.Save();
+                        CoreSettings.Save(suppressCloudBackup: true);   // WPF BarkService.cs:1938
                         unused = eligible.Where(r => !_usedIdleRules.Contains(r.Id)).ToList();
                         if (unused.Count == 0) unused = eligible;
                     }
@@ -361,7 +361,7 @@ namespace ConditioningControlPanel.Services.Bark
                 _usedIdleRules.Add(rule.Id);
                 _lastIdleRuleId = rule.Id;
                 CoreSettings.Current.BarkIdleRotation = new List<string>(_usedIdleRules);
-                CoreSettings.Save();
+                CoreSettings.Save(suppressCloudBackup: true);   // WPF BarkService.cs:1938
             }
         }
 
