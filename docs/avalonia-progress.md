@@ -3098,3 +3098,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-app-settings: +170
 - Settings re-open refreshes General (startup registration/video), Devices (mic/camera re-enumeration), Performance and Notifications repaint; AppSettingsRefreshTests (General startup-video repaint fail-proven, other hooks asserted). Row stays stub.
 - Remaining lane -b: embed existing ExclusivesTabView in an Account PlansMode and wire vault-motion follow/park.
+
+## avalonia-port/wire-views-tab-spiral: +361
+- Spiral room fog-entry/splash cues wired once per visit; cue ladders shared in Core `DescentRoomAudio`.
+- rgate green except one unrelated Windows Tube flake (P94); fail-proof rcheck shows the audio tests catch a missing cue.
