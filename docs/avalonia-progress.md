@@ -3433,3 +3433,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 - Cloud session, local review + gate.
 - Studio > Bubble Count: For You defer (one replay, 500 ms polls, 90 s deadline), Pause other effects editor + per-round flash/text hold, localized empty-library warning. Row stays stub (shared interaction queue, overlay parking, ghost feed).
 - Review fix: label ellipsis, ledger deviations restored. rcheck BubbleCountQueueTests 5/5; rgate GATE-OK.
+
+## avalonia-port/wire-shell-haptics-device: +200
+- Mock haptics feedback toast in Avalonia matching WPF MockToast, including ALL STOP staying visible after panic.
+- Tested with a stepped clock (no sleeps). Fail-proven (rcheck 39697261650 red / 39697752707 green); render-all exemption covers only the toast.
