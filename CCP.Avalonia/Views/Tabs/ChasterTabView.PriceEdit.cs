@@ -42,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _stamps[price.Id] = stamp;
             if (TabPriceEdit.Editable(price.Id))
                 // Tunnel, before the row sees it: a click on the figure edits, it never flips the row.
-                stamp.AddHandler(PointerPressedEvent, (_, e) => { if (BeginPriceEdit(price.Id)) e.Handled = true; }, RoutingStrategies.Tunnel);
+                stamp.AddHandler(PointerPressedEvent, (_, e) => { if (e.GetCurrentPoint(stamp).Properties.IsLeftButtonPressed && BeginPriceEdit(price.Id)) e.Handled = true; }, RoutingStrategies.Tunnel);
             PaintStamp(price.Id);
         }
 

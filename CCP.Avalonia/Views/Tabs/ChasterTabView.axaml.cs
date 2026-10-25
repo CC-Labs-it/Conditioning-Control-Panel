@@ -4,8 +4,8 @@
 // the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
 // Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
 // ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
-// limits, the row trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
-// menu (Menu.cs), how-it-works/hint/reset (Help.cs) and the price box (PriceEdit.cs) are partials.
+// LockTitle letters, the row trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
+// menu (Menu.cs), how-it-works/hint/reset (Help.cs), the price box (PriceEdit.cs) and the limits (Limits.cs) are partials.
 // The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
 // bursts included) are later slices. Unlink, the switch + consent and pause are real (slice 2).
 using System;
@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             HeroCard.SizeChanged += (_, _) => HeroTitle.FitWidth = Math.Max(0, HeroCard.Bounds.Width - 52);
             LadderInit();
             NumbersInit();
+            MenuInit();
             KeysInit();
             Refresh();
             LadderRenderSample();
@@ -102,7 +103,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // All three arrive on whatever thread found out.
         private void OnLinkChanged() => Dispatcher.UIThread.Post(OnTabShown);
-        private void OnLockChanged() => Dispatcher.UIThread.Post(() => { RefreshHero(); PaintStamps(); });
+        private void OnLockChanged() => Dispatcher.UIThread.Post(RepaintForLock);
+
+        // WPF :173: stamps repaint when the lock changes, not on the 30 s tick (P07).
+        internal void RepaintForLock() { RefreshHero(); PaintStamps(); }
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() =>
         {
             RefreshHero(); RefreshAdded(); RefreshNumbers();
@@ -113,13 +117,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             var chaster = ChasterHead.Service;
             var linked = chaster?.IsLinked == true;
+            ApplyPriceToggles();
+            RefreshLimits();
             UnlinkedPanel.IsVisible = !linked;
             FactRow.IsVisible = !linked;
             AccountStrip.IsVisible = linked;
             AddedRow.IsVisible = linked;
             NumbersPanel.IsVisible = linked;
-            MenuPanel.IsVisible = linked;
-            if (linked) { RefreshNumbers(); ApplyPriceToggles(); RefreshPresets(); }
+            MenuPanel.IsVisible = linked; // WPF: the menu and limits sit inside LinkedPanel (ChasterTabView.xaml:642)
+            if (linked) { RefreshNumbers(); RefreshPresets(); }
             if (linked) RefreshAdded(); else HideLadder();
             SwitchPill.IsVisible = linked;
             PausePill.IsVisible = linked;
@@ -128,7 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ShowLinking(chaster?.IsLinking == true);
             TxtFactCap1.Text = TxtFactCap2.Text = CircesTab.Format((chaster?.Caps ?? TabLimits.Default).DailySeconds, signed: false);
             if (!linked) LockRow.IsVisible = false;
-            RefreshHero();
+            RepaintForLock();
             ConsentCard.IsVisible = false;
             if (!linked) return;
             var on = CoreSettings.Current.ChasterTabEnabled;

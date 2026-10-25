@@ -1,7 +1,6 @@
 <!-- PORTED from ConditioningControlPanel/Views/Controls/Companion/V2/ConversationPage.xaml.
-     Deviations: WPF collapses the old room under this page; this head mounts the page as the room's
-     first section and keeps the room (parity row views-companion-v2-conversation, collapse lands with
-     companion-v2-pages-b). The fallback settings sheet is not ported: WPF only draws it when the
+     CompanionTabView mounts it beside the collapsed room, as WPF does (companion-v2-pages-b).
+     Deviations: the fallback settings sheet is not ported: WPF only draws it when the
      Companion pages are not registered (preview harness); the real app navigates (see code-behind).
      MDL2 glyphs -> fx:IconGlyph; button text sits in a TextBlock (Avalonia access-key '_'). -->
 <UserControl xmlns="https://github.com/avaloniaui"
