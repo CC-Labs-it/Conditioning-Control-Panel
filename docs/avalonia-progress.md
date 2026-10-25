@@ -3385,3 +3385,7 @@ Windows "Test process did not return valid JSON (non-object)" discovery flake: x
 ## avalonia-port/wire-feat-mod-personality-picks: +118
 - Switching mods now brings back the companion personality picked in that mod, and the live chips update to match.
 - Review fixes: the test no longer checks a fence that could not catch a bug; fail-proof plus rgate green except a known Linux flake.
+
+## avalonia-port/sync7-mandatory-video-c: +235
+- Video card "Shows as" switch; a floating mandatory video is one small unfocused topmost window (no attention checks; strict/Lockdown/Chaos stay full screen). WPF bd659f9f3.
+- Rows 17/21/20 stay needs-port under their owning lanes sync7-mandatory-video-d/-e/-f.
