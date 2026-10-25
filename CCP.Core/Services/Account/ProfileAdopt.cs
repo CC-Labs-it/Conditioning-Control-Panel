@@ -234,12 +234,18 @@ namespace ConditioningControlPanel.Services
                     string.IsNullOrEmpty(scopedSeason) ? "(none)" : scopedSeason);
             return seasonAdvances;
         }
+        /// <summary>Raised after a cloud merge lifted <see cref="AppSettings.TotalConditioningMinutes"/>. The head
+        /// re-baselines its FeatureDayLog here, as WPF ProfileSyncService.cs:2187 does, so the gain is not credited
+        /// to today (the "1,000-minute day" bug).</summary>
+        public static event Action<AppSettings>? ConditioningMinutesLifted;
+
         // WPF ProfileSyncService: cloud minutes can lift the local total, never reduce it.
         private static void AdoptConditioningMinutes(AppSettings settings, V2User user)
         {
-            if (user.TotalConditioningMinutes is { } minutes && double.IsFinite(minutes)
-                && minutes > settings.TotalConditioningMinutes)
-                settings.TotalConditioningMinutes = minutes;
+            if (user.TotalConditioningMinutes is not { } minutes || !double.IsFinite(minutes)
+                || minutes <= settings.TotalConditioningMinutes) return;
+            settings.TotalConditioningMinutes = minutes;
+            ConditioningMinutesLifted?.Invoke(settings);
         }
     }
 }

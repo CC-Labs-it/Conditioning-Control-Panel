@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>WPF App.FeatureDayLog (App.xaml.cs:1045): the per-day feature log over the same
         /// feature_day_log.json. Null on the headless render path or if its construction failed.</summary>
         internal static FeatureDayLogService? FeatureDayLog { get; private set; }
+        private static void RebaselineDayLogAfterCloudMerge(global::ConditioningControlPanel.Models.AppSettings _) => FeatureDayLog?.Rebaseline("v2 cloud merge");
 
         /// <summary>WPF App.WindowAwareness (App.xaml.cs:2674), the legacy title observer. X11/XWayland
         /// titles only; unlike WPF, the privacy rules run on each title first (docs/avalonia-decisions.md).</summary>
@@ -772,6 +773,9 @@ namespace ConditioningControlPanel.Avalonia
                 // Its loss must not cost the launch.
                 try { FeatureDayLog = new FeatureDayLogService(() => Achievements?.Progress); }
                 catch (Exception exDayLog) { Serilog.Log.Warning(exDayLog, "[FeatureDayLog] service construction failed; per-day feature use is not recorded this run"); }
+                // WPF ProfileSyncService.cs:2187: minutes another device banked belong to other days, not today.
+                ProfileAdopt.ConditioningMinutesLifted -= RebaselineDayLogAfterCloudMerge;
+                ProfileAdopt.ConditioningMinutesLifted += RebaselineDayLogAfterCloudMerge;
                 CoreProgram.UnlockAchievementProvider = id => Achievements?.TryUnlock(id);
                 // WPF App.xaml.cs: the invite ladder's badges and the invites wire (friends' proxy and
                 // door; a sandbox reaches only a loopback CCP_FRIENDS_API_URL, else nothing is sent).

@@ -31,6 +31,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var tier = !loggedIn ? 0 : CoreAccount.HasLabAccess ? 2 : CoreAccount.HasPremiumAccess ? 1 : 0;
             badge.IsVisible = tier > 0;
             badge.Kind = tier == 2 ? IconKind.Beaker : IconKind.LockClosed;
+            // WPF's coloured emoji: the tier's semantic icon brush, not the chip's inherited foreground.
+            badge.Bind(global::ConditioningControlPanel.Avalonia.Controls.IconGlyph.ForegroundProperty,
+                badge.GetResourceObservable(tier == 2 ? global::ConditioningControlPanel.Avalonia.Controls.IconBrushes.Tier2
+                    : global::ConditioningControlPanel.Avalonia.Controls.IconBrushes.Tier1));
             // Keep the signed-out CTA bound to the mod accent, as WPF SetResourceReference does.
             button.Bind(Button.BorderBrushProperty, new global::Avalonia.Markup.Xaml.MarkupExtensions.DynamicResourceExtension(
                 !loggedIn ? "PinkBrush" : tier == 2 ? "AccountChipTier2Brush" : tier == 1 ? "AccountChipTier1Brush" : "AccountChipNeutralBrush"));
@@ -82,8 +86,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             UpdateStatPills();
             // WPF MainWindow.xaml.cs:3716: signed-in startup fetch, after the window has loaded.
-            Opened += (_, _) => StartupPillFetch = StartupPillFetchAsync();
-            Opened += (_, _) => StartupVideo = PlayStartupVideoAsync();
+            // WPF runs both once from Loaded (MainWindow.xaml.cs:3716/3794). Opened fires again on every
+            // tray restore (Hide/Show), so the handler removes itself.
+            void OnFirstOpened(object? _, EventArgs __)
+            {
+                Opened -= OnFirstOpened;
+                StartupPillFetch = StartupPillFetchAsync();
+                StartupVideo = PlayStartupVideoAsync();
+            }
+            Opened += OnFirstOpened;
             _statPillTimer = new global::Avalonia.Threading.DispatcherTimer { Interval = System.TimeSpan.FromSeconds(30) };
             _statPillTimer.Tick += (_, _) => UpdateStatPills();
             _statPillTimer.Start();

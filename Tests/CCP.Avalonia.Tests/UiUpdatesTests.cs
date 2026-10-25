@@ -54,6 +54,11 @@ public sealed class UiUpdatesTests
             shell.Show();
             Assert.True(shell.StartupVideo.IsCompletedSuccessfully);
             Assert.Equal(force, scheduler.IsPlaying);
+            // A tray restore (Tray.cs Hide, then Show) re-fires Opened; WPF plays it once, from Loaded.
+            scheduler.ForceCleanup();
+            shell.Hide();
+            shell.Show();
+            Assert.False(scheduler.IsPlaying);
         }
         finally
         {
@@ -93,6 +98,9 @@ public sealed class UiUpdatesTests
                 premium = tier > 0; lab = tier == 2;
                 shell.RefreshProfileBubble(); // the existing entitlement-change choke point
                 Assert.Equal(tier > 0, shell.Named<Control>("TxtAccountChipBadge")!.IsVisible);
+                if (tier > 0)
+                    Assert.Equal(global::Avalonia.Media.Color.Parse(tier == 2 ? "#FFB47BFF" : "#FFF0C24B"),
+                        Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(shell.Named<global::ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtAccountChipBadge")!.Foreground).Color);
                 Assert.Equal(global::Avalonia.Media.Color.Parse(tier == 2 ? "#B47BFF" : tier == 1 ? "#FFD700" : "#3D3D60"),
                     Assert.IsAssignableFrom<global::Avalonia.Media.ISolidColorBrush>(shell.Named<Button>("BtnAccountChip")!.BorderBrush).Color);
             }
