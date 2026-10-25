@@ -219,6 +219,8 @@
          next to the binary. -->
     <AvaloniaResource Include="..\ConditioningControlPanel\Fonts\Fredoka.ttf" Link="Resources\fonts\Fredoka.ttf" />
     <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\guide\intro.png" Link="Resources\chaos\guide\intro.png" />
+    <!-- WPF ChaosArt bubble sprites (assets/Chaos/bubbles/{variant}.png, _staging excluded): BubbleOverlay.SpriteFor. -->
+    <AvaloniaResource Include="..\ConditioningControlPanel\assets\Chaos\bubbles\*.png" Link="Resources\chaos\bubbles\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\fonts\NotoEmoji-wght.ttf" Link="Resources\fonts\NotoEmoji-wght.ttf" />
     <Content Include="..\ConditioningControlPanel\Fonts\OFL-Fredoka.txt;..\Assets\fonts\OFL-NotoEmoji.txt;..\Assets\emi\fonts\OFL-NotoSansMono.txt" Link="ThirdPartyNotices\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

@@ -14,23 +14,25 @@ public static class AmbientBubblePayloads
     public static EffectBubbleSpec? Roll(AppSettings s, Random random, int activeTriggers)
     {
         if (!s.BubbleTriggersEnabled || activeTriggers >= MaxTriggers) return null;
-        // ponytail: v2 ownership and motion variants remain with the bubble-motion lane.
+        // ponytail: v2 Brain Drain ownership remains with the bubble-motion lane.
         var ids = (s.BubbleTriggerVariants ?? new()).Where(id => id != MagnetBubble.VariantId).ToArray();
         if (ids.Length == 0 || random.Next(100) >= Math.Clamp(s.BubbleTriggerChance, 0, 100)) return null;
-        return Build(ids[random.Next(ids.Length)]);
+        // WPF BuildTriggerSpec: the dashboard Motion setting; "Mixed" does not parse -> FloatUp.
+        ChaosMotion? motion = Enum.TryParse<ChaosMotion>(s.ChaosMotionMode, out var m) ? m : null;
+        return Build(ids[random.Next(ids.Length)], motion);
     }
 
-    public static EffectBubbleSpec? Build(string id)
+    public static EffectBubbleSpec? Build(string id, ChaosMotion? motion = null)
     {
         if (id == "glitch") return new EffectBubbleSpec
         {
             VariantId = id, Payload = new OverlayPayload("braindrain", 0.30) { Strength = 60, DurationMult = 1.2, Ambient = true },
             SizePx = 200, Tint = 0xFF9A40FFu, Label = "GLITCH", IsLive = false,
-            Motion = ChaosMotion.FloatUp, TreatLifeMs = 7000,
+            Motion = motion ?? ChaosMotion.FloatUp, TreatLifeMs = 7000,
         };
         var variant = ChaosBubbleVariants.All.FirstOrDefault(v => v.Id == id);
         if (variant == null) return null;
-        var spec = ChaosBubbleVariants.Build(variant, 0.3, motionOverride: ChaosMotion.FloatUp, ambient: true);
+        var spec = ChaosBubbleVariants.Build(variant, 0.3, motionOverride: motion, ambient: true);
         spec.Payload.DurationMult = 2.5;
         return spec;
     }

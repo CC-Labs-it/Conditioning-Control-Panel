@@ -10,12 +10,14 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;   // AmbientFxCanvas.Env
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
+using NatashasFavourite = ConditioningControlPanel.Services.Chaster.NatashasFavourite;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
 {
@@ -33,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: FloatUp bubbles only. Bubbles v2 motions (Rain/Spiral In), Brain Drain,
+    /// <para>ponytail: plain bubbles FloatUp only (trigger bubbles follow the Chaos Motion setting). Bubbles v2 motions (Rain/Spiral In), Brain Drain,
     /// the avatar egg, gaze pops, lucky glow/sparkles, mod pop-sound overrides and bubble
     /// achievements remain follow-up work. Ambient payloads and Natasha share this host.</para>
     /// </summary>
@@ -61,6 +63,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
         /// cache kept the first mod's art for the life of the process).</summary>
         internal static void LoadBubbleImage() => Image = Helpers.ModArt.TryLoad("bubble.png");
+
+        private static readonly Dictionary<string, Bitmap?> Sprites = new();
+        /// <summary>WPF Bubble ctor (:3420): flash wears bubble.png, a sweeper its own art, every other
+        /// variant assets/Chaos/bubbles/{id}.png; null = no sprite (tinted bubble.png + label).
+        /// shortcut: bundled art only (WPF also reads UserAssetsPath first); add that when a user-art port lands.</summary>
+        internal static Bitmap? SpriteFor(ConditioningControlPanel.Services.Chaos.EffectBubbleSpec spec) =>
+            spec.VariantId == "flash" ? Image : (spec.IsSweeper ? SpriteOf("sweeper") : null) ?? SpriteOf(spec.VariantId);
+
+        private static Bitmap? SpriteOf(string id)
+        {
+            if (!Sprites.TryGetValue(id, out var bmp))
+                Sprites[id] = bmp = Helpers.ModArt.TryLoadBuiltIn($"chaos/bubbles/{id}.png", 384);
+            return bmp;
+        }
 
         /// <summary>The "N/300 today" line listens to this (WPF AmbientXpBudgetChanged).</summary>
         internal static event Action? XpBudgetChanged;
@@ -177,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var spec = AmbientBubblePayloads.Roll(s, Field.Random, Field.Bubbles.Count(b => b.AmbientTrigger || b.Spec is { IsLive: false }));
             var bubble = spec == null
                 ? AmbientBubble.Spawn(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, s, mod, clickable)
-                : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec);
+                : AmbientBubble.SpawnChaos(Field.Random, i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, spec.Motion);
             bubble.AmbientTrigger = spec != null;
             bubble.Clickable = clickable;
             bubble.Natasha = ChasterHead.Service?.CanBook("natasha") == true && ConditioningControlPanel.Services.Chaster.NatashasFavourite.Roll(Field.Random);
@@ -305,7 +321,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var paid = Field.Pop(b, s);
             if (paid > 0) CoreProgression.AddXP(paid, "Bubble");
             if (b.AmbientTrigger && b.Spec?.Payload is { } payload)
+            {
+                // WPF ShowChaosEffectLabel: the effect's word flashes at the bubble.
+                Chaos.ChaosPopText.Show(b.CenterX, b.CenterY,
+                    ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.PopWordFor(b.Spec.VariantId), Color.FromUInt32(b.Spec.Tint));
                 BubblePayloadHost.Run(payload);
+            }
             XpBudgetChanged?.Invoke();
             App.NoteFeatureUsed(ConditioningControlPanel.Services.Companion.Brain.MemorySignalWriter.FeatureBubbles);   // WPF OnBubblePopped
             var master = s.MasterVolume / 100f;
@@ -362,7 +383,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         };
         private static readonly IPen FallbackPen = new Pen(Brushes.White, 2);
         private static readonly IBrush NatashaWash = new SolidColorBrush(Color.FromRgb(0xE0, 0x2A, 0x4A));
-        private static readonly IPen ResistMint = new Pen(new SolidColorBrush(Color.FromRgb(0x5F, 0xFF, 0xD0)), 3);
+        private static readonly IPen ResistMint = new Pen(new SolidColorBrush(Color.FromRgb(0x5F, 0xFF, 0xD0)), 5, lineCap: PenLineCap.Round);
+        private static readonly IBrush LabelShadow = new SolidColorBrush(Color.FromArgb(0xB0, 0, 0, 0));
+
+        /// <summary>WPF Bubble.RingArc: clockwise from twelve o'clock, <paramref name="progress"/> of the way round.</summary>
+        internal static Geometry RingArc(Point c, double r, double progress)
+        {
+            progress = Math.Clamp(progress, 0, 1);
+            if (progress >= 0.999) return new EllipseGeometry(new Rect(c.X - r, c.Y - r, 2 * r, 2 * r));
+            var g = new StreamGeometry();
+            using (var ctx = g.Open())
+            {
+                var a = progress * 2 * Math.PI;
+                ctx.BeginFigure(new Point(c.X, c.Y - r), false);
+                ctx.ArcTo(new Point(c.X + r * Math.Sin(a), c.Y - r * Math.Cos(a)), new Size(r, r), 0, progress > 0.5, SweepDirection.Clockwise);
+                ctx.EndFigure(false);
+            }
+            return g;
+        }
         private static readonly IPen FuseYellow = new Pen(new SolidColorBrush(Color.FromRgb(255, 210, 40)), 4);
         private static readonly IPen FuseRed = new Pen(new SolidColorBrush(Color.FromRgb(255, 45, 45)), 4);
         private static readonly Dictionary<uint, (IBrush, IPen)> TintCache = new();
@@ -394,6 +432,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 300, Y = 250, Size = 200, Angle = 20 });
                 BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 750, Y = 300, Size = 240, Popping = true, Scale = 1.4, Fade = 0.5 });
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 1000, Y = 150, Size = 180, AmbientTrigger = true, Natasha = true,
+                    Spec = AmbientBubblePayloads.Build("pink") });
             }
         }
 
@@ -482,6 +522,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 double ox = _w.Bounds.X / _w.Scaling, oy = _w.Bounds.Y / _w.Scaling;
                 var img = BubbleOverlay.Image;
                 var bubbles = BubbleOverlay.Field.Bubbles;
+                var tier = AmbientFxCanvas.Env.CurrentTier;   // once per frame, not per bubble
+                bool glow = AmbientFxCanvas.Env.AllowGlow(tier), loops = AmbientFxCanvas.Env.AllowAmbientLoops;
+                var haloBlur = glow ? Math.Min(NatashasFavourite.HaloBlurDip, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)) : 0;
                 for (var i = 0; i < bubbles.Count; i++)
                 {
                     var b = bubbles[i];
@@ -489,23 +532,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
                           * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
+                    var sprite = b.Spec != null ? BubbleOverlay.SpriteFor(b.Spec) : null;
                     using (dc.PushTransform(m))
                     using (dc.PushOpacity(Math.Clamp(b.Fade, 0, 1)))
                     {
-                        if (b.Spec != null)   // effect bubble: its variant tint under the sprite
+                        if (b.Natasha && !b.Popping && glow)
+                        {
+                            // WPF MarkNatasha halo (a DropShadowEffect), flaring on the blink like :4371.
+                            var op = NatashasFavourite.HaloOpacity + 2.0 * (loops ? NatashasFavourite.WashAlphaAt(b.AliveSeconds) : 0);
+                            var halo = new BoxShadow { Blur = haloBlur * k, Color = Color.FromArgb((byte)(255 * Math.Clamp(op, 0, 1)), NatashasFavourite.R, NatashasFavourite.G, NatashasFavourite.B) };
+                            dc.DrawRectangle(null, null, new RoundedRect(new Rect(cx - size / 2, cy - size / 2, size, size), size / 2), new BoxShadows(halo));
+                        }
+                        if (b.Spec != null && sprite == null)   // no variant sprite: its tint under bubble.png
                         {
                             var (fill, pen) = TintPaint(b.Spec.Tint);
                             dc.DrawEllipse(fill, pen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         }
-                        if (img != null) dc.DrawImage(img, new Rect(cx - size / 2, cy - size / 2, size, size));
+                        if ((sprite ?? img) is { } art) dc.DrawImage(art, new Rect(cx - size / 2, cy - size / 2, size, size));
                         else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                         if (b.Natasha && !b.Popping)
                         {
-                            var n = ConditioningControlPanel.Services.Chaster.NatashasFavourite.BubbleWashAt(b.AliveSeconds, true);
+                            var n = NatashasFavourite.BubbleWashAt(b.AliveSeconds, loops);
                             using (dc.PushOpacity(n)) dc.DrawEllipse(NatashaWash, null, new Point(cx, cy), size / 2, size / 2);
-                            if (b.Resisting)
-                                dc.DrawEllipse(null, ResistMint,
-                                    new Point(cx, cy), size / 2 * b.ResistProgress, size / 2 * b.ResistProgress);
                         }
                         if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45, red at the brink
                         {
@@ -514,6 +562,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             dc.DrawEllipse(null, b.FuseRemainingMs <= brinkMs ? FuseRed : FuseYellow, new Point(cx, cy), rr, rr);
                         }
                     }
+                    // WPF: label and mint ring sit in the bubble's grid, unrotated.
+                    if (sprite == null && !b.Popping && b.Spec?.Label is { Length: > 0 } label)
+                    {
+                        var em = Math.Max(14, b.Size * 0.30) * k;
+                        FormattedText Glyph(IBrush fg) => new(label, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                            new Typeface(FontFamily.Default, FontStyle.Normal, FontWeight.Bold), em, fg);
+                        var t = Glyph(Brushes.White);
+                        var at = new Point(cx - t.Width / 2, cy - t.Height / 2);
+                        dc.DrawText(Glyph(LabelShadow), at + new Point(1.5, 1.5));   // WPF _labelShadow
+                        dc.DrawText(t, at);
+                    }
+                    if (b.Resisting)
+                        dc.DrawGeometry(null, ResistMint, RingArc(new Point(cx, cy), Math.Max(1, size / 2 - 3), b.ResistProgress));
                 }
             }
         }

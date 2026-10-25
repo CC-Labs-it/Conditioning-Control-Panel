@@ -27,6 +27,40 @@ public sealed class AmbientPayloadRunnerTests
         Assert.Null(AmbientBubblePayloads.Roll(s, new Random(1), 0));
     }
 
+    [Theory]
+    [InlineData("RainDown", "flash", ChaosMotion.RainDown)]
+    [InlineData("RoamBounce", "glitch", ChaosMotion.RoamBounce)]
+    [InlineData("Mixed", "flash", ChaosMotion.FloatUp)]
+    public void TriggerSpecFollowsTheDashboardMotionSetting(string mode, string id, ChaosMotion expected)
+    {
+        var s = new AppSettings { BubbleTriggersEnabled = true, BubbleTriggerChance = 100, BubbleTriggerVariants = new() { id }, ChaosMotionMode = mode };
+        Assert.Equal(expected, AmbientBubblePayloads.Roll(s, new Random(1), 0)!.Motion);
+    }
+
+    [Fact]
+    public void MotionRowsTravelLikeWpf()
+    {
+        var spec = AmbientBubblePayloads.Build("flash")!;
+        var rain = AmbientBubble.SpawnChaos(new Random(2), 0, 0, 0, 1920, 1080, 1, spec, ChaosMotion.RainDown);
+        Assert.Equal(-rain.Size, rain.Y);   // just above the top
+        var y = rain.Y; rain.Step(); Assert.True(rain.Y > y);
+        var steps = 0;
+        while (rain.Step() == AmbientBubble.Result.Alive && steps++ < 10000) { }
+        Assert.True(rain.Y > 1080 + 50);   // left by the bottom, as a miss
+
+        var side = AmbientBubble.SpawnChaos(new Random(3), 0, 0, 0, 1920, 1080, 1, spec, ChaosMotion.SideDrift);
+        var x = side.X; side.Step();
+        Assert.NotEqual(x, side.X);
+        Assert.True(side.X < 0 || side.X > 1920 - side.Size);   // enters from a side edge
+
+        var roam = AmbientBubble.SpawnChaos(new Random(4), 0, 0, 0, 1920, 1080, 1, spec, ChaosMotion.RoamBounce);
+        for (var i = 0; i < 5000; i++)
+        {
+            Assert.Equal(AmbientBubble.Result.Alive, roam.Step());
+            Assert.InRange(roam.X, 0, 1920 - roam.Size);
+        }
+    }
+
     [Fact]
     public void HeavyPayloadYieldsAndStopInvalidatesAlreadyPostedDelivery()
     {

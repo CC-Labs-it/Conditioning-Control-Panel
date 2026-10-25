@@ -105,6 +105,9 @@ namespace ConditioningControlPanel.Services
         public bool Deflating { get; private set; }
         private double _channelMs, _channelStartFuseSec;
         private DateTime _channelStartUtc;
+        // WPF Bubble motion rows (:3334-3361, :4095-4122); FloatUp needs only _top.
+        public Chaos.ChaosMotion Motion { get; private set; }
+        private double _vx, _vy, _startY, _left, _right, _bottom;
 
         public enum Result { Alive, Missed, Done, Detonated, Defused, PlayerPop, Resisted }
 
@@ -186,10 +189,10 @@ namespace ConditioningControlPanel.Services
             return b;
         }
 
-        /// <summary>WPF Bubble ctor with a Chaos spec, FloatUp only: the spec's size, the chaos
+        /// <summary>WPF Bubble ctor with a Chaos spec on its motion row (chaos runs pass FloatUp): the spec's size, the chaos
         /// pace (bigger drifts slower, SpeedMult, CHAOS_SPEED_MULT), the ambient wobble and rise.</summary>
         public static AmbientBubble SpawnChaos(Random r, int screen, double areaX, double areaY, double areaW, double areaH,
-            double scaling, Chaos.EffectBubbleSpec spec)
+            double scaling, Chaos.EffectBubbleSpec spec, Chaos.ChaosMotion motion = Chaos.ChaosMotion.FloatUp)
         {
             var b = new AmbientBubble { Screen = screen, Clickable = true, Spec = spec, Size = spec.SizePx };
             if (spec.IsLive) b.FuseTotalMs = b.FuseRemainingMs = Math.Max(1, spec.FuseMs);   // WPF :3362
@@ -201,6 +204,26 @@ namespace ConditioningControlPanel.Services
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
             b.Y = (areaY + areaH) / scaling;
+            b.Motion = motion;
+            b._left = areaX / scaling;
+            b._right = (areaX + areaW) / scaling - b.Size;
+            b._bottom = (areaY + areaH) / scaling + 50;
+            switch (motion)
+            {
+                case Chaos.ChaosMotion.RainDown: b.Y = areaY / scaling - b.Size; break;
+                case Chaos.ChaosMotion.RoamBounce:
+                    b.Y = (areaY + r.Next(50, (int)Math.Max(100, areaH - b.Size - 50))) / scaling;
+                    var ang = r.NextDouble() * Math.PI * 2;
+                    b._vx = Math.Cos(ang) * b._speed * 1.4;
+                    b._vy = Math.Sin(ang) * b._speed * 1.4;
+                    break;
+                case Chaos.ChaosMotion.SideDrift:
+                    b.Y = b._startY = (areaY + r.Next(120, (int)Math.Max(240, areaH - b.Size - 120))) / scaling;
+                    var fromLeft = r.Next(2) == 0;
+                    b.X = b._startX = fromLeft ? b._left - b.Size : b._right + b.Size;
+                    b._vx = (fromLeft ? 1 : -1) * b._speed * 1.15;
+                    break;
+            }
             return b;
         }
 
@@ -251,9 +274,26 @@ namespace ConditioningControlPanel.Services
                 case 2: offset = Math.Cos(_timeAlive * 5.4) * 25; Angle = (Angle - 0.66) % 360; break;
                 case 3: offset = Math.Sin(_timeAlive * 3) * 30 + Math.Cos(_timeAlive * 6) * 15; Angle = (Angle + 0.54) % 360; break;
             }
-            Y -= _speed;
-            X = _startX + offset;
-            if (Y >= _top) return Result.Alive;
+            bool exited;
+            switch (Motion)
+            {
+                case Chaos.ChaosMotion.RainDown:
+                    Y += _speed; X = _startX + offset; exited = Y > _bottom; break;
+                case Chaos.ChaosMotion.RoamBounce:
+                    X += _vx; Y += _vy;
+                    if (X < _left) { X = _left; _vx = Math.Abs(_vx); }
+                    else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); }
+                    double topB = _top + Size + 50, botB = _bottom - Size - 50;
+                    if (Y < topB) { Y = topB; _vy = Math.Abs(_vy); }
+                    else if (Y > botB) { Y = botB; _vy = -Math.Abs(_vy); }
+                    exited = false; break;
+                case Chaos.ChaosMotion.SideDrift:
+                    X += _vx; Y = _startY + offset;
+                    exited = _vx > 0 ? X > _right + Size : X < _left - Size; break;
+                default:
+                    Y -= _speed; X = _startX + offset; exited = Y < _top; break;
+            }
+            if (!exited) return Result.Alive;
             return Spec is { IsLive: true } ? GoOff(null) : Result.Missed;   // WPF :4212: a live that escapes detonates
         }
     }
