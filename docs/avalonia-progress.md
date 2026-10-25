@@ -3110,3 +3110,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-tab-fx-presets-quests-achievements: +481
 - Presets/quests focal FX (selected sheen, hover/press, arrival stagger, weekly tween) ported; row stays stub, follow-up lane -b.
 - Review fixes: visible-only Loaded stagger, scoped no-replay test (was failing on CI), stale doc reference dropped.
+
+## avalonia-port/wire-shell-webcam: +437
+- Calibration Verify gains the WPF four-bubble accuracy check (Core CalibrationBubbleProbe) and GazeLock/LongStare feed in WPF order; headless tests.
+- Row stays stub; near-miss auto-trim, mouth MAR and long-stare consumers go to wire-shell-webcam-b.
