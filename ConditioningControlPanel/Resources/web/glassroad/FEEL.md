@@ -11,12 +11,20 @@ default so the code has no hidden number.
 - `speed.minMps` 3: crawl floor while throttle is held (plan "min").
 - `speed.maxPct` 1.3: ceiling of speedPct (forward speed / topMps) with every boost stacked (added).
 
-## engine
+## cleanPace
 Solo clean driving gradually adds 30% to the normal ceiling over 12 seconds. Heard-song tempo and
 intensity add up to another 26%, eased over two seconds. A collision clears the streak and holds
 rebuilding for 1.5 seconds. Braking/coasting releases it over three seconds; rescue and stall clear it.
 The `cleanPace` group holds these values. Online keeps the authority's existing pace until parity.
 
+- `cleanPace.cleanGain` 0.3: extra top-speed share earned by a full clean streak.
+- `cleanPace.musicGain` 0.26: maximum extra share from heard-song tempo and intensity.
+- `cleanPace.buildS` 12: clean-driving seconds to earn the full streak.
+- `cleanPace.releaseS` 3: seconds for braking/coasting to release the streak.
+- `cleanPace.musicEaseS` 2: time constant for music-driven changes to the ceiling.
+- `cleanPace.minMps` 8: minimum engine speed for earning a clean streak.
+
+## engine
 - `engine.bandGains` [0.9, 0.8, 0.55, 0.35, 0.25]: five equal bands over 0..top; engineV gains `gain * top` per second in its band. The last two bands are the weight.
 - `engine.chaseTcS` 0.15: velocity chases engineV, `v += (engineV - v) * dt / 0.15`.
 - `engine.brakeMps2` 22: engineV loss per second under full brake (added).
