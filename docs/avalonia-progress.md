@@ -3480,3 +3480,9 @@ All five companion roster cards now repaint their assigned prompt name (mod-awar
 Lab tab Focus Gaze now covers flash images and video attention targets. Flash pop and linger have their own switches, separate from mouse clicks: 600 ms dwell, 1.10 inflate, and a 250 ms linger throttle and cooldown. Gaze can take only the first hydra step off an original flash (WPF FlashService.cs:2955), and linked children inherit the boosted lifetime. A blink on video clicks nothing, but it clears the dwell and cools down. Settings → Devices gets a monitor picker with primary fallback, face/blink/gaze counters, and a 12-line diagnostics log. A failed camera open now shows CameraDenied.
 Row shell-lab-tab stays stub. Still missing: GazeRefineOverlay, gaze-lock/cursor, drift correction, the Quick Recal hotkey, and the capture probe.
 Tests: ShellLabTabTests (fail-proven x3), MandatoryVideoOverlayTests, WebcamTrackerTests, WebcamCalibrationTests. rgate 39900942341 is red only on known flakes (GoonClock P108, RaceTrack).
+
+## avalonia-port/fin-feat-spiral: +702
+- Spiral video picks play looped and silent on the overlay; THE LOOM opens via GameWindow (games panic surface) with save/overwrite/delete/reveal on Core DtrhLoomStore; mod-aware art, 700px collapse, Select GIF confirmation.
+- Delayed session spiral guard ported (WPF SessionEngine.cs:826-838); the Avalonia head now ships Spirals/spiral.gif like WPF (csproj :708) so default installs pass it.
+- Tests: SessionRunnerTests.Spiral_DelayedStart*, SpiralFinishTests (default-path, Loom, native video bounded poll), PanicSurfaces allowlist. Fail-proofs: rcheck 39921591384, 39922349918 (red), 39927322722 (green). Gate 39928158450: known flakes only.
+- feat-spiral stays stub (session corner GIF policy, Deeper holds, Spiral embed bridge, WebHost profile/failure seams).

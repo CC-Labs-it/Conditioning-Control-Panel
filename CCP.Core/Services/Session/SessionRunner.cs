@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
@@ -53,6 +54,17 @@ namespace ConditioningControlPanel.Services
         /// with it directly (SetSustainedOverlayOpacity) and never writes PinkFilterOpacity (#471).</summary>
         public double? PinkOpacity { get; private set; }
 
+        /// <summary>The exe's Spirals folder the delayed-start guard reads (WPF SessionEngine.cs:827); tests repoint it.</summary>
+        internal static string SpiralsFolder { get; set; } = Path.Combine(AppContext.BaseDirectory, "Spirals");
+
+        /// <summary>SessionEngine._randomizedSpiralStartMinute: the preset's start ±3 min.</summary>
+        public double SpiralStartMinute { get; private set; }
+
+        /// <summary>The ramped spiral opacity in percent while a RAMPING session drives it, else null.
+        /// WPF drives the overlay with it (SetSustainedOverlayOpacity("spiral")) and never writes
+        /// SpiralOpacity; a constant session writes it once instead (#897, SessionEngine.cs:731-844).</summary>
+        public double? SpiralOpacity { get; private set; }
+
         /// <summary>The session corner GIF is on screen (WPF _cornerGifWindow != null).</summary>
         public bool CornerGifShown { get; private set; }
 
@@ -100,9 +112,10 @@ namespace ConditioningControlPanel.Services
             CurrentPhaseIndex = 0;
             IsPaused = false;
             PauseCount = 0;
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;
             _pausedElapsed = _lastElapsed = TimeSpan.Zero;
             PinkStartMinute = RandomizedStart(session.Settings.PinkFilterEnabled, session.Settings.PinkFilterStartMinute, _random);
+            SpiralStartMinute = RandomizedStart(session.Settings.SpiralEnabled, session.Settings.SpiralStartMinute, _random);
             _startTime = DateTime.Now;
             _stopwatch.Restart();
 
@@ -194,6 +207,10 @@ namespace ConditioningControlPanel.Services
             // SessionEngine.cs:1479: a delayed tint stays off until its randomised minute (Tick).
             s.PinkFilterEnabled = ss.PinkFilterEnabled && ss.PinkFilterStartMinute == 0;
             if (s.PinkFilterEnabled) s.PinkFilterOpacity = ss.PinkFilterStartOpacity;
+
+            // SessionEngine.cs:1384: a delayed spiral stays off until its randomised minute (Tick).
+            s.SpiralEnabled = ss.SpiralEnabled && ss.SpiralStartMinute == 0;
+            if (s.SpiralEnabled) s.SpiralOpacity = ss.SpiralOpacity;
         }
 
         /// <summary>SessionEngine.RandomizeStartTimes (SessionEngine.cs:966): a delayed start moves by up to 3 min either way.
@@ -277,6 +294,25 @@ namespace ConditioningControlPanel.Services
                 s.PinkFilterEnabled = true;
                 Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
             }
+            // Spiral delayed start (SessionEngine.cs:823-851). A non-ramping session never drives the
+            // overlay, so its opacity lands in settings here the way an immediate start does.
+            if (session.Settings.SpiralEnabled && !s.SpiralEnabled)
+            {
+                // WPF SessionEngine.cs:826-838: a custom file or a gif in the exe's Spirals folder, which
+                // every head ships (spiral.gif) - so on a default install this guard passes.
+                var folder = SpiralsFolder;
+                if (!File.Exists(s.SpiralPath) && !(Directory.Exists(folder) && Directory.GetFiles(folder, "*.gif").Length > 0))
+                {
+                    session.Settings.SpiralEnabled = false;
+                    Log.Warning("Spiral enabled in session but no spiral files found - skipping");
+                }
+                else if (minutes >= SpiralStartMinute)
+                {
+                    if (session.Settings.SpiralOpacity == session.Settings.SpiralOpacityEnd) s.SpiralOpacity = session.Settings.SpiralOpacity;
+                    s.SpiralEnabled = true;
+                    Log.Information("Spiral activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, SpiralStartMinute);
+                }
+            }
             TickCornerGif(session.Settings, minutes);
             Ticked?.Invoke();
         }
@@ -303,18 +339,27 @@ namespace ConditioningControlPanel.Services
                 var pink = RampCurves.ApplyCurve((minutes - PinkStartMinute) / (total - PinkStartMinute), curve);
                 PinkOpacity = Lerp(ss.PinkFilterStartOpacity, ss.PinkFilterEndOpacity, pink);
             }
+
+            // SessionEngine.cs:731: only when the session actually ramps, so a constant one leaves the
+            // user's slider live (#897).
+            if (ss.SpiralEnabled && ss.SpiralOpacity != ss.SpiralOpacityEnd && minutes >= SpiralStartMinute)
+            {
+                var spiral = RampCurves.ApplyCurve((minutes - SpiralStartMinute) / (total - SpiralStartMinute), curve);
+                SpiralOpacity = Lerp(ss.SpiralOpacity, ss.SpiralOpacityEnd, spiral);
+            }
         }
 
         // ---- the session corner GIF (WPF SessionEngine.cs:862-896, 1731-1797, 2126-2320) ----
 
         /// <summary>WPF CanRaiseCornerGif over Core <see cref="CornerGifPlanner.AllowSessionCornerGif"/>.
-        /// The user's spiral master is read live: unlike WPF, this runner never writes SpiralEnabled.</summary>
-        private static bool CanRaiseCornerGif(SessionSettings ss)
+        /// The user's spiral master is the pre-session snapshot, as WPF UserSpiralAllowed
+        /// (SessionEngine.cs:1786): Apply overrides SpiralEnabled with the session's own value.</summary>
+        private bool CanRaiseCornerGif(SessionSettings ss)
         {
             var s = CoreSettings.Current;
             return CornerGifPlanner.AllowSessionCornerGif(ss.CornerGifEnabled, s.SessionCornerGifAllowed,
                 CoreCornerGif.StandaloneActive, CornerGifPlanner.SessionCornerArtIsSpiral(ss.CornerGifPath),
-                s.SpiralEnabled, CoreCornerGif.SpiralOverlayActive);
+                _snapshot?.SpiralEnabled ?? s.SpiralEnabled, CoreCornerGif.SpiralOverlayActive);
         }
 
         /// <summary>The per-second admission recheck, delayed start and delayed end.</summary>
@@ -416,7 +461,7 @@ namespace ConditioningControlPanel.Services
 
             var s = CoreSettings.Current;
             s.ClearSessionFlashRamp();   // SessionEngine.cs:390, ahead of the restore
-            PinkOpacity = null;
+            PinkOpacity = SpiralOpacity = null;   // WPF ReleaseOpacityRampHolds
             _snapshot?.RestoreTo(s);
             _snapshot = null;
             _custody?.Restore(s);

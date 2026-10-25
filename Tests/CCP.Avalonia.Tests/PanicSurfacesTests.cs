@@ -260,6 +260,7 @@ public sealed class PanicSurfacesTests
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
         ["InlineLoopVideo"] = "muted help poster detaches on card close; gaze panes detach and free players when the 'gaze-minigame' surface closes the game",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
+        ["SpiralOverlay"] = "spiral images and videos: the 'engine' surface (OnEngineStopped -> StopDesktopOverlays -> SpiralOverlay.CloseAll) releases the decoder; SpiralFinishTests asserts it",
         ["SpiralRailHost"] = "a rail chip, not a surface: no audio, window or device; it only draws the shared glyph (WPF parity)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",
         ["HelpVideoWindow"] = "WPF parity: the help window's muted tutorial clip (freed on close); WPF panic leaves that window alone",
