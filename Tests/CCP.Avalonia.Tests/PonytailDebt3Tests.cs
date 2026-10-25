@@ -23,6 +23,8 @@ public sealed class PonytailDebt3Tests
     [InlineData("Cancel", "Break")]
     [InlineData("MediaPlayPause", "XF86AudioPlay")]
     [InlineData("VolumeMute", "XF86AudioMute")]
+    [InlineData("BrowserBack", "XF86Back")]
+    [InlineData("LaunchMail", "XF86Mail")]
     [InlineData("Escape", "Escape")]   // unchanged: names X already knows pass through
     public void PanicKeyNamesMapToRealXKeysymNames(string stored, string xName) =>
         Assert.Equal(xName, X11PanicKey.XKeyName(stored));
@@ -40,7 +42,9 @@ public sealed class PonytailDebt3Tests
         try
         {
             log = new FeatureDayLogService(() => new AchievementProgress(), Path.Combine(dir, "feature_day_log.json"));
-            log.Log.GetOrAddDay(DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)).Cm = 25;
+            var now = DateTime.Now;   // today and tomorrow, so a run that crosses midnight still finds its 25
+            foreach (var day in new[] { now, now.AddDays(1) })
+                log.Log.GetOrAddDay(day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)).Cm = 25;
             prop.SetValue(null, log);
             Assert.Equal(25, LeashHead.DayInputs()!.Value.MinutesToday);
 

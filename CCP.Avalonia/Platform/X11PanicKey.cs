@@ -224,6 +224,10 @@ internal static class X11PanicKey
         ["VolumeMute"] = "XF86AudioMute", ["VolumeDown"] = "XF86AudioLowerVolume", ["VolumeUp"] = "XF86AudioRaiseVolume",
         ["MediaNextTrack"] = "XF86AudioNext", ["MediaPreviousTrack"] = "XF86AudioPrev", ["MediaStop"] = "XF86AudioStop",
         ["MediaPlayPause"] = "XF86AudioPlay", ["Sleep"] = "XF86Sleep",
+        ["BrowserBack"] = "XF86Back", ["BrowserForward"] = "XF86Forward", ["BrowserRefresh"] = "XF86Refresh",
+        ["BrowserStop"] = "XF86Stop", ["BrowserSearch"] = "XF86Search", ["BrowserFavorites"] = "XF86Favorites",
+        ["BrowserHome"] = "XF86HomePage", ["LaunchMail"] = "XF86Mail", ["SelectMedia"] = "XF86AudioMedia",
+        ["LaunchApplication1"] = "XF86MyComputer", ["LaunchApplication2"] = "XF86Calculator",
     };
 
     /// <summary>The X keysym for a stored key name ("Escape", "F8", "A", "D1", "NumPad0", "OemTilde"); 0 when unknown.</summary>
