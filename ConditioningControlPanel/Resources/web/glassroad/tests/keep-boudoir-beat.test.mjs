@@ -14,7 +14,7 @@ test('presses and mirrored lanes change on whole beats and always leave a full o
   assert.equal(keepGatePhase(row,0,{},frame(7)).phase,'warn');
   assert.equal(keepGatePhase(row,0,{},frame(8)).phase,'lower');
   assert.equal(keepGatePhase(row,0,{},frame(9)).liftM,0);
-  assert.equal(powderPressPhase(row,999,frame(9)).liftM,0);
+  assert.equal(powderPressPhase(row,999,frame(4.5)).liftM,0);
   for(let beat=0;beat<80;beat+=.03) {
     const poses = [0,1,2].map(lane => mirrorGatePhase({offsetS:0,lane},0,frame(beat)));
     assert.ok(poses.some(p => p.liftM === 8.4));
@@ -24,13 +24,12 @@ test('presses and mirrored lanes change on whole beats and always leave a full o
 });
 test('whole-beat pendulums retain bounded cadence and exact velocity derivatives', () => {
   for(const bpm of [40,96.75,128,240]) {
-    const bs=60/bpm, period=Math.max(4,Math.ceil(brush.cycleS/bs/4)*4);
-    assert.equal(period%4,0); assert.ok(period*bs>=brush.cycleS);
+    const bs=60/bpm, period=4;
     for(let beat=.17;beat<period;beat+=.19) {
       const epsilon=.00001, p=mascaraPhase(brush,0,frame(beat,bpm)), a=mascaraPhase(brush,0,frame(beat-epsilon/bs,bpm)), b=mascaraPhase(brush,0,frame(beat+epsilon/bs,bpm));
       assert.ok(Math.abs((b.x-a.x)/(2*epsilon)-p.vx)<1e-6);
       assert.ok(Math.abs((b.y-a.y)/(2*epsilon)-p.vy)<1e-6);
-      assert.ok(Math.abs(p.vx)<=Math.asin(2.9/8.6)*8.6*Math.PI*2/6.4+1e-9);
+      assert.ok(Math.abs(p.vx)<=Math.asin(2.9/8.6)*8.6*Math.PI*2/(period*bs)+1e-9);
     }
     assert.ok(Math.abs(mascaraPhase(brush,0,frame(period/2,bpm)).vx)<1e-10);
   }
@@ -64,9 +63,9 @@ test('initial pickup keeps pendulums at their authored height and continuous thr
 });
 
 test('seek release preserves pendulum position and velocity for offset swings', () => {
-  const epsilon = .00001;
+  const epsilon = .000001;
   for (const bpm of [40,96.75,240]) for (const offsetS of [0,1.4,-2.2,15.8]) {
-    const row = {...brush,offsetS}, bs = 60/bpm, period = Math.max(4,Math.ceil(brush.cycleS/bs/4)*4);
+    const row = {...brush,offsetS}, bs = 60/bpm, period = 4;
     const offset = Math.round(offsetS/bs), release = ((-offset%period)+period)%period;
     for (const boundary of [release,release+Math.max(2,Math.ceil(3/bs))]) {
       const poses = [-epsilon,0,epsilon].map(dt => mascaraPhase(row,0,frame(boundary+dt/bs,bpm,{rearming:true})));
@@ -75,8 +74,9 @@ test('seek release preserves pendulum position and velocity for offset swings', 
         assert.ok(Math.hypot(p.vx-poses[1].vx,p.vy-poses[1].vy)<.001);
       }
     }
-    const held = keepChainPhase(row,0,frame(release-epsilon,bpm,{rearming:true}));
-    const moving = keepChainPhase(row,0,frame(release+epsilon,bpm,{rearming:true}));
+    const keepPeriod = Math.max(4,Math.ceil(brush.cycleS/bs/4)*4), keepRelease = ((-offset%keepPeriod)+keepPeriod)%keepPeriod;
+    const held = keepChainPhase(row,0,frame(keepRelease-epsilon,bpm,{rearming:true}));
+    const moving = keepChainPhase(row,0,frame(keepRelease+epsilon,bpm,{rearming:true}));
     assert.ok(held.safe); assert.ok(!moving.safe);
     assert.ok(Math.hypot(moving.x-held.x,moving.y-held.y)<.001);
   }
@@ -85,7 +85,7 @@ test('seek release preserves pendulum position and velocity for offset swings', 
 test('mirror shutters lower continuously after pickup and seek without repeating the opening grace', () => {
   const bpm = 96.75, bs = 60/bpm, epsilon = .00001;
   for (const rearming of [false,true]) for (const offsetS of [0,1.4,-2.2,15.8]) {
-    const offset = Math.round(offsetS/bs), release = rearming ? ((-offset%16)+16)%16 : 0;
+    const offset = Math.round(offsetS/bs), release = rearming ? ((-offset%8)+8)%8 : 0;
     const poses = beat => [0,1,2].map(lane => mirrorGatePhase({lane,offsetS},0,frame(beat,bpm,{rearming})));
     const held = poses(release-epsilon), moving = poses(release+epsilon);
     for (let lane=0;lane<3;lane++) {

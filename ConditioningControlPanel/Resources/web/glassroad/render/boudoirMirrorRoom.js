@@ -1,9 +1,9 @@
-/* Two real planar views serve the whole hall. Facets never create their own render passes. */
+/* Two wall views and one approaching shutter view share a two-capture runtime budget. */
 import { Group, Mesh, InstancedMesh, MeshBasicNodeMaterial, BoxGeometry, SphereGeometry, Shape, ShapeGeometry,
   Matrix4, Vector2, Vector3, Quaternion, Color } from 'three/webgpu';
-import { reflector, vec3, uv, fract, abs, smoothstep, mix } from 'three/tsl';
+import { reflector, vec3, uniform, mix } from 'three/tsl';
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
-import { getBoudoirSetpieces, mirrorGatePhase, BOUDOIR_HAZARD } from '../track/boudoir-setpieces.js';
+import { getBoudoirSetpieces, mirrorGatePhase, releasedMirrorGatePhase, BOUDOIR_HAZARD } from '../track/boudoir-setpieces.js';
 import { Q } from './quality.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 
@@ -49,18 +49,26 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     }
     return frame;
   }
-  let started = false, frozen = false, enabled = true, elapsed = 0, gentleOn = false, disposed = false, warming = false;
-  const localCamera = new Vector3(), drawSize = new Vector2(), gateColor = new Color(), batches = [], diagnostics = { mirrors: 0, shutters: 0, reflectionNodes: 2,
+  let started = false, frozen = false, enabled = true, elapsed = 0, gentleOn = false, disposed = false, warming = false, frontStation = null;
+  const gateRows = getBoudoirSetpieces(track).mirrorGates;
+  const localCamera = new Vector3(), drawSize = new Vector2(), gateColor = new Color(), batches = [], diagnostics = { mirrors: 0, shutters: 0, reflectionNodes: 3,
     reflectionPasses: 0, active: true, paused: false, maxTexturePx: quality === 'phone' ? 384 : MIRROR_ROOM.maxTexturePx, targets: [] };
-  for (const side of [-1, 1]) {
+  for (const side of [-1, 1, 0]) {
     const target = new Group(); target.name = 'mirror-plane:' + side;
-    target.position.set(side * MIRROR_ROOM.sideM, 0, 0); target.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2; group.add(target);
+    target.position.set(side * MIRROR_ROOM.sideM, 0, side ? 0 : -(gateRows[0].s - hall.s0) + .04);
+    target.rotation.y = side ? side < 0 ? Math.PI / 2 : -Math.PI / 2 : 0; group.add(target);
     const node = reflector({ target, resolutionScale: quality === 'phone' ? .25 : .5, bounces: false, samples: 0 });
-    const mat = material('mirror-live-scene:' + side, '#ffffff'); mat.colorNode = node.rgb.mul(.9).add(vec3(.018, .009, .025)); mirrorMaterials.push(mat);
-    const prism = material('mirror-prismatic-shutter:' + side, '#ffffff');
-    const diagonal = fract(uv().x.mul(5).add(uv().y.mul(3))), cut = smoothstep(.45, .5, abs(diagonal.sub(.5)));
-    prism.colorNode = node.rgb.mul(.55).add(mix(vec3(.16, .28, .31), vec3(.35, .16, .29), diagonal).mul(.7)).add(vec3(.42, .31, .16).mul(cut));
-    shutterMaterials.push(prism);
+    const mat = material((side ? 'mirror-live-scene:' : 'mirror-prismatic-shutter:') + side, '#ffffff');
+    mat.colorNode = node.rgb.mul(.96).add(vec3(.012, .008, .016));
+    (side ? mirrorMaterials : shutterMaterials).push(mat);
+    if (!side) {
+      for (let station = 0; station < 3; station++) {
+        const pane = station ? material('mirror-prismatic-shutter:' + station, '#ffffff') : mat;
+        pane.userData.reflectionMix = uniform(0);
+        pane.colorNode = mix(vec3(.21, .16, .25), node.rgb.mul(.96).add(vec3(.012, .008, .016)), pane.userData.reflectionMix);
+        if (station) shutterMaterials.push(pane);
+      }
+    }
     const base = node.reflector, nativeUpdate = base.updateBefore.bind(base); let lastCapture = -Infinity;
     // Cap actual target dimensions as well as scale, including high-DPI desktop windows.
     base._updateResolution = (renderTarget, renderer) => {
@@ -71,7 +79,8 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
       // Pipeline discovery must never recurse into a real capture. General boot warming also
       // precedes the first world update; the explicit hall warm owns its reflected variants.
       if (disposed || frame.renderer._isPreCompiling || (!started && !warming)
-        || (!warming && started && (!enabled || frozen || elapsed - lastCapture < 1 / (gentleOn ? 12 : MIRROR_ROOM.captureHz)))) return;
+        || (!warming && started && (!enabled || frozen || (side ? frontStation !== null : frontStation === null)
+          || elapsed - lastCapture < 1 / (gentleOn ? 12 : MIRROR_ROOM.captureHz)))) return;
       const excluded = [...mirrorMaterials, ...shutterMaterials, backingMat], saved = excluded.map(m => m.visible), renderer = frame.renderer;
       const renderTarget = renderer.getRenderTarget(), mrt = renderer.getMRT(), autoClear = renderer.autoClear;
       // Both mirror banks and all shutter glass leave the reflected pass. Frames and racers remain.
@@ -80,6 +89,7 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
       finally { excluded.forEach((m, i) => { m.visible = saved[i]; }); renderer.setMRT(mrt); renderer.setRenderTarget(renderTarget); renderer.autoClear = autoClear; }
     };
     reflections.push(node);
+    if (!side) continue;
     const count = Math.floor((length - 10) / 17), gap = (length - 10) / count;
     for (let i = 0; i < count; i++) {
       const z = -(5 + gap * (i + .5)), pane = new Mesh(face, mat); pane.name = 'live-mirror:' + side + ':' + i;
@@ -105,9 +115,8 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     block('ink', 0, 21, z, 39, 2, 2); block('rose', 0, 20.75, z + .2, 36, .8, 2.1);
     block('gold', 0, 19.9, z + .3, 36, .16, 2.15);
   }
-  const gateRows = getBoudoirSetpieces(track).mirrorGates;
   for (const row of gateRows) {
-    const pane = new Mesh(shutterFace, shutterMaterials[row.lane % 2]); pane.name = 'mirror-shutter-glass:' + row.id;
+    const pane = new Mesh(shutterFace, shutterMaterials[row.station]); pane.name = 'mirror-shutter-glass:' + row.id;
     const holder = framedPanel(pane, row.x, BOUDOIR_HAZARD.mirrorHeightM / 2, -(row.s - hall.s0), 0, 6.5, 5.6, row.depthM);
     holder.name = 'mirror-shutter:' + row.id;
     const lampMat = material('mirror-lane-signal:' + row.id, '#76d7b4'), lamp = new Mesh(box, lampMat);
@@ -131,10 +140,21 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     if (view.camera?.position) { group.worldToLocal(localCamera.copy(view.camera.position)); enabled = mirrorRoomNear(localCamera, length); }
     diagnostics.active = enabled;
     if (frozen || disposed) return;
+    // All three panes at a station share one plane. The approaching glass reflects the
+    // actual kart and world, including while it lifts to release a bumped driver.
+    const next = gateRows.find(row => row.lane === 0 && localCamera.z + row.s - hall.s0 >= 0
+      && localCamera.z + row.s - hall.s0 < 48);
+    frontStation = enabled && next ? next.station : null;
+    diagnostics.frontStation = frontStation;
+    shutterMaterials.forEach((mat, station) => {
+      const target = station === frontStation ? 1 : 0, u = mat.userData.reflectionMix;
+      u.value += (target - u.value) * Math.min(1, Math.max(0, dt || 0) / .35);
+    });
+    if (next) group.getObjectByName('mirror-plane:0').position.z = -(next.s - hall.s0) + .04;
     elapsed += Math.max(0, Math.min(.1, dt || 0));
     const timeS = view.raceTimeS ?? view.timeS ?? 0;
     for (const gate of gates) {
-      const phase = mirrorGatePhase(gate.row, timeS, machineryBeatAt(track,timeS)); gate.holder.position.y = phase.liftM + BOUDOIR_HAZARD.mirrorHeightM / 2;
+      const phase = releasedMirrorGatePhase(track, gate.row, timeS, machineryBeatAt(track,timeS)); gate.holder.position.y = phase.liftM + BOUDOIR_HAZARD.mirrorHeightM / 2;
       gateColor.set(phase.liftM >= 6.8 ? '#76d7b4' : phase.phase === 'warn' ? '#e6b563' : '#9b4177');
       gate.lampMat.color.lerp(gateColor, Math.min(1, (dt || 0) / .35));
     }
@@ -180,6 +200,10 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     const quaternion = camera.quaternion.clone(), up = camera.up.clone(), raw = renderer.three;
     const renderTarget = raw.getRenderTarget(), mrt = raw.getMRT(), autoClear = raw.autoClear;
     const pass = renderer.post(scene, camera), look = new Vector3();
+    const front = group.getObjectByName('mirror-plane:0'), frontZ = front.position.z;
+    const warmCamera = group.worldToLocal(camera.position.clone());
+    const warmStation = gateRows.find(row => row.lane === 0 && warmCamera.z + row.s - hall.s0 > 0);
+    if (warmStation) front.position.z = -(warmStation.s - hall.s0) + .04;
     // Use the live camera and restored runtime visibility. The grouped boot warm uses
     // a different visibility/shadow state and cannot cover these reflected target programs.
     warming = true;
@@ -215,7 +239,8 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
         await new Promise(resolve => setTimeout(resolve, 0));
       }
     } finally {
-      warming = false; camera.quaternion.copy(quaternion); camera.up.copy(up); camera.updateMatrixWorld(true);
+      warming = false; front.position.z = frontZ; group.updateMatrixWorld(true);
+      camera.quaternion.copy(quaternion); camera.up.copy(up); camera.updateMatrixWorld(true);
       raw.setMRT(mrt); raw.setRenderTarget(renderTarget); raw.autoClear = autoClear;
     }
   }

@@ -149,6 +149,19 @@ test('Mirror lane shutters use the shared visible lift and always allow their op
     assert.equal(!!h.apply(r, place(track, { s: 105, lateral: x, speed: 40 }), 3), lane !== 0);
   }
 });
+test('A mirror bump visibly opens every lane long enough to accelerate through without repeated catches', () => {
+  const h = createBoudoirHazards(track, plan({ mirrorGates: [0, 1, 2].map(mirror) }));
+  const r = racer(108, 0), throttle = acts({ throttle: 1 });
+  for (let i = 0; i < 150; i++) {
+    const previous = cloneState(r.st);
+    step(r.st, throttle, track, r.feel, DT, r.events); h.apply(r, previous, 3 + i * DT);
+    if (i === 30) assert.ok(h.inspect(3 + i * DT).mirrorGates.every(row => row.liftM === 8.4));
+  }
+  assert.ok(r.st[S.s] > 120, 'driver clears the station under sustained throttle');
+  assert.equal(r.events.all('boudoir-mirror-hit').length, 1);
+  assert.ok(h.inspect(7).mirrorGates.some(row => row.liftM < 1.6), 'escape opening expires');
+  h.reset(); assert.ok(h.inspect(3).mirrorGates.some(row => row.liftM < 1.6));
+});
 test('Conveyor centre accelerates or brakes actual velocity while its stable outside lane stays unchanged', () => {
   for (const [time, x, sign] of [[1, 0, 1], [9, 0, -1], [1, 10, 0], [9, 10, 0]]) {
     const h = createBoudoirHazards(track, plan({ conveyors: [ribbon] })), r = racer(110, x, 0, 28), previous = cloneState(r.st), start = r.st[S.engineV];

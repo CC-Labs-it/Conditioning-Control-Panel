@@ -3,7 +3,7 @@ import { S, BOOST, RESPAWN, cloneState } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { gateSweep, createKeepGates } from './keepGates.js';
 import { makeQuery } from '../track/query.js';
-import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose, mirrorGatePhase as mirrorPose } from '../track/boudoir-setpieces.js';
+import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose, releasedMirrorGatePhase, releaseBoudoirMirror, resetBoudoirMirrors } from '../track/boudoir-setpieces.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 const RADIUS = .7, HEIGHT = 1.6;
 const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
@@ -11,8 +11,10 @@ const dist = (a, b) => Math.hypot(...[0, 1, 2].map(i => a[S.posX + i] - b[S.posX
 function local(st, f) { const d = [0, 1, 2].map(i => st[S.posX + i] - f.p[i]); return [dot(d, f.b), dot(d, f.t), dot(d, f.n)]; }
 function clearBoost(st) { st[S.boostKind] = BOOST.NONE; st[S.boostT] = st[S.boostAmount] = st[S.boostHoldS] = 0; st[S.driftDir] = st[S.driftCharge] = st[S.driftStage] = 0; }
 export function createBoudoirHazards(track, layout = null) {
+  resetBoudoirMirrors(track);
   const timed = pose => (row, timeS) => pose(row, timeS, machineryBeatAt(track, timeS));
-  const powderPressPhase = timed(pressPose), mascaraPhase = timed(brushPose), ribbonPhase = timed(ribbonPose), mirrorGatePhase = timed(mirrorPose);
+  const powderPressPhase = timed(pressPose), mascaraPhase = timed(brushPose), ribbonPhase = timed(ribbonPose);
+  const mirrorGatePhase = (row, timeS) => releasedMirrorGatePhase(track, row, timeS, machineryBeatAt(track, timeS));
   const plan = layout?.presses ? layout : getBoudoirSetpieces(track, layout || undefined);
   const rows = [...plan.presses, ...plan.sweepers.flatMap(mascaraHeads), ...plan.mirrorGates].map(row => ({ ...row, frame: track.frameAt(row.s) }));
   const unique = [...plan.presses, ...plan.sweepers, ...plan.mirrorGates.filter(row => row.lane === 1)].map(row => ({ ...row, x: 0, w: 14 }));
@@ -53,6 +55,7 @@ export function createBoudoirHazards(track, layout = null) {
       }
       clearBoost(st);
       if (fresh) {
+        if (row.kind === 'mirror') releaseBoudoirMirror(track, row, time);
         const stallS = brush ? .25 : row.kind === 'mirror' ? .22 : .35;
         st[S.stalled] = Math.max(st[S.stalled], stallS); m.cooldown.set(contactId, time + 1.1); hits++;
         events?.emit(brush ? 'boudoir-sweeper-hit' : row.kind === 'mirror' ? 'boudoir-mirror-hit' : 'boudoir-press-hit',
@@ -81,7 +84,10 @@ export function createBoudoirHazards(track, layout = null) {
     const st = r.st, m = mem(r), oldTime = m.time ?? Math.max(0, timeS - 1 / 60), dt = timeS - oldTime;
     m.time = timeS;
     if (track.forkAtSeg?.(st[S.seg])) { m.after = null; m.cooldown.clear(); m.ribbon = null; return null; }
-    if (st[S.respawnPhase] !== RESPAWN.NONE || dt < 0 || dt > .25 || dist(previous, st) > 25) { m.after = null; m.cooldown.clear(); m.ribbon = null; return null; }
+    if (st[S.respawnPhase] !== RESPAWN.NONE || dt < 0 || dt > .25 || dist(previous, st) > 25) {
+      if (dt < 0 || dt > .25) resetBoudoirMirrors(track);
+      m.after = null; m.cooldown.clear(); m.ribbon = null; return null;
+    }
     if (dt === 0) return null;
     const hit = (m.after && sweep(r, m.after, previous, oldTime, oldTime, m, events)) || sweep(r, previous, st, oldTime, timeS, m, events);
     if (!hit) conveyor(r, timeS, dt, m, events);
@@ -89,7 +95,7 @@ export function createBoudoirHazards(track, layout = null) {
     return hit;
   }
   return { plan, rows, apply, steer(r, out) { if (!track.forkAtSeg?.(r.st[S.seg])) lanes.steer(r, out); },
-    reset() { memory = new WeakMap(); hits = ribbonPasses = 0; lanes.reset(); },
+    reset() { memory = new WeakMap(); hits = ribbonPasses = 0; lanes.reset(); resetBoudoirMirrors(track); },
     inspect(timeS = 0) { return { hits, ribbonPasses,
       presses: plan.presses.map(row => ({ ...row, ...powderPressPhase(row, timeS) })),
       sweepers: plan.sweepers.map(row => ({ ...row, heads: mascaraHeads(row).map(head => ({ ...head, ...mascaraPhase(head, timeS) })) })),
