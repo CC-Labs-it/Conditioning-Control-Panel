@@ -1,39 +1,59 @@
-/* A pinball soundstage printed into the enamel. Shapes answer the shared measured spectrum. */
+/* Broad soundstage graphics printed into the enamel, driven by the heard music. */
 import { float, vec2, vec3, fract, abs, max, mix, smoothstep, sin, fwidth, atan } from 'three/tsl';
 import { floorSpectrum, floorPhrase, floorWave, floorLine } from './floorSpectrum.js';
+
 export function goonworksMusicFloor({ p, base, top, edge, half, pink, accent, reactive: u, music }) {
   const gentle = u.gentle, beat = music.tileBeat, bar = music.tileBar;
   const clock = mix(beat.div(4), bar.div(8), gentle);
-  const active = mix(u.energy.mul(4).clamp(0, 1), u.energy, gentle).mul(music.tileOn).mul(mix(float(1), float(.28), gentle));
+  const active = mix(u.energy.mul(5).clamp(0, 1), u.energy, gentle)
+    .mul(music.tileOn).mul(mix(float(1), float(.28), gentle));
   const playable = smoothstep(.8, 2.4, edge).mul(top);
-  const centreRoom = smoothstep(1.4, 3.6, abs(p.x)).mul(.78).add(.14);
-  const visibility = float(1).sub(smoothstep(.75, 2.1, max(fwidth(p.x), fwidth(p.y))));
-  const normalized = abs(p.x).div(max(half.sub(2), 1)), band = floorSpectrum(normalized, u);
-  const beatBreath = mix(floorWave(beat.div(2)), float(.5), gentle).mul(u.bass);
-  // Stereo rivers bend with eight frequency bands; the travelling ball rides the heard beat.
-  const along = p.y.div(32), bend = sin(along.mul(Math.PI * 2).sub(clock)).mul(u.mid.mul(2).add(.6));
-  const channel = half.mul(.48).add(bend).add(band.mul(2.4));
-  const side = abs(p.x).sub(channel), river = floorLine(side, .35);
-  const head = fract(along.sub(clock.div(2)));
-  const ball = float(1).sub(smoothstep(.2, .45, vec2(side.div(2), head.sub(.5).mul(7)).length()));
-  const stereo = river.mul(band.mul(.5).add(.35)).add(ball.mul(.65));
-  // Record-sized pinwheels stretch individual petals to the spectrum.
-  const q = vec2(p.x.div(half.mul(1.4)), fract(p.y.div(36).add(.5)).sub(.5));
-  const r = q.length(), a = atan(q.x, q.y);
-  const spokeBand = floorSpectrum(abs(sin(a.mul(.5))), u);
-  const spoke = sin(a.mul(8).add(clock.mul(1.7)).add(r.mul(8))).mul(.5).add(.5);
-  const ringR = spokeBand.mul(.18).add(.22).add(beatBreath.mul(.06));
-  const disc = float(1).sub(smoothstep(ringR, ringR.add(.08), r));
-  const pinwheel = spoke.mul(disc).mul(.7).add(floorLine(r.sub(ringR), .018).mul(.45));
-  // A mirrored spectrum staircase grows from both shoulders toward a quiet word lane.
-  const stairHeight = band.mul(.66).add(u.bass.mul(.16));
-  const row = fract(p.y.div(24).sub(clock.div(4)));
-  const steps = smoothstep(row.sub(.08), row.add(.08), stairHeight);
-  const lens = floorLine(sin(p.x.mul(1.35)), .19);
-  const spectrum = steps.mul(lens.mul(.35).add(.45)).add(floorLine(row.sub(stairHeight), .025).mul(.3));
-  const pattern = floorPhrase([stereo, pinwheel, spectrum], bar);
-  const hue = floorWave(normalized.mul(.5).add(bar.div(16))).mul(.6).add(band.mul(.3));
-  const tint = mix(pink, accent, hue).mul(.85).add(vec3(.10, .07, .08));
-  const fill = pattern.mul(active).mul(playable).mul(centreRoom).mul(visibility).clamp(0, .82);
-  return mix(base, base.mul(.38).add(tint), fill).add(tint.mul(fill).mul(u.treble.mul(.16).add(.08)));
+  // Keep the centre lettering clear without erasing the whole driving view.
+  const centreRoom = smoothstep(.8, 2.2, abs(p.x)).mul(.65).add(.35);
+  // These are metre-wide graphics. Only the far horizon loses them, not normal chase distance.
+  const visibility = float(1).sub(smoothstep(4, 10, max(fwidth(p.x), fwidth(p.y))));
+  const span = max(half.sub(2), 1), normalized = abs(p.x).div(span).clamp(0, 1);
+  const band = floorSpectrum(normalized, u);
+  const breath = mix(floorWave(beat.div(2)), float(.5), gentle).mul(u.bass);
+
+  // Eight mirrored columns grow in the road direction, like a giant equalizer under the kart.
+  const column = fract(normalized.mul(8)), row = fract(p.y.div(24));
+  const gutter = smoothstep(.04, .12, column).mul(float(1).sub(smoothstep(.88, .96, column)));
+  const level = band.div(band.add(.2)).mul(.8).add(u.bass.mul(.1)).add(.08);
+  const barFill = float(1).sub(smoothstep(level, level.add(.06), row));
+  const cap = float(1).sub(smoothstep(.025, .07, abs(row.sub(level))));
+  const equalizer = barFill.mul(.98).add(cap.mul(.5)).mul(gutter);
+  const barBed = gutter.mul(float(1).sub(smoothstep(.92, .98, row)));
+
+  // Paired vinyl pinwheels spread across the lane; each petal follows a measured frequency band.
+  const q = vec2(abs(p.x).sub(span.mul(.48)).div(span.mul(.5)),
+    fract(p.y.div(30).add(.5)).sub(.5).mul(2));
+  const radius = q.length(), angle = atan(q.x, q.y);
+  const spokeBand = floorSpectrum(abs(sin(angle.mul(.5))), u);
+  const reach = spokeBand.mul(.36).add(.48).add(breath.mul(.12));
+  const disc = float(1).sub(smoothstep(reach, reach.add(.1), radius));
+  const petal = sin(angle.mul(8).add(clock.mul(2)).add(radius.mul(5))).mul(.5).add(.5);
+  const pinwheel = disc.mul(petal.mul(.64).add(.26))
+    .add(floorLine(radius.sub(reach), .035).mul(.45));
+  const record = float(1).sub(smoothstep(.93, 1.03, radius));
+
+  // Wide stereo ribbons weave through the central half of the road, with bass-driven wake rings.
+  const wave = sin(p.y.mul(.19).sub(clock.mul(1.4)))
+    .mul(u.mid.mul(2.6).add(1.2)).add(band.mul(2));
+  const riverAt = span.mul(.32).add(wave), distance = abs(abs(p.x).sub(riverAt));
+  const width = u.bass.mul(1.5).add(1.25);
+  const river = float(1).sub(smoothstep(width, width.add(.65), distance));
+  const wake = floorLine(abs(p.x).add(p.y.mul(.32)).sub(clock.mul(3)).mod(12).sub(6), .65);
+  const stereo = river.mul(.8).add(wake.mul(.38).mul(u.treble.mul(.7).add(.3)));
+  const riverBed = float(1).sub(smoothstep(width.add(.7), width.add(1.5), distance));
+
+  const shape = floorPhrase([equalizer, pinwheel, stereo], bar).clamp(0, 1);
+  const bed = floorPhrase([barBed, record, riverBed], bar).clamp(0, 1);
+  const hue = floorWave(normalized.mul(.6).add(bar.div(16))).mul(.65).add(band.mul(.25));
+  const cyan = mix(accent, vec3(.025, .72, .78), .7);
+  const tint = mix(pink, cyan, hue).mul(.92).add(vec3(.025, .02, .025));
+  const ink = mix(vec3(.055, .012, .075), accent.mul(.18), .35);
+  const paint = mix(mix(base, ink, bed.mul(.72)), tint, shape.mul(.98));
+  // Apply energy once, after composition, so Gentle keeps the full slow envelope rise.
+  return mix(base, paint, active.mul(playable).mul(centreRoom).mul(visibility));
 }
