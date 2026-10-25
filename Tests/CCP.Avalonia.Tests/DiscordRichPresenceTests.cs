@@ -26,7 +26,7 @@ public sealed class DiscordRichPresenceTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
     }
@@ -140,6 +140,36 @@ public sealed class DiscordRichPresenceTests
             {
                 (AvApp.DiscordRpc, DiscordRichPresenceService.PostToUi) = (oldRpc, oldPost);
                 (s.DiscordRichPresenceEnabled, s.HasLinkedDiscord, s.OfflineMode) = (false, false, false);
+            }
+            return Task.CompletedTask;
+        }));
+    }
+
+    [Fact]
+    public async Task StartupSeedsCoreActivitiesWithoutEnablingTheRpc()
+    {
+        await WithRuntimeDir(_ => AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            (service.Current.DiscordRichPresenceEnabled, service.Current.HasLinkedDiscord) = (false, false);
+            var (oldRpc, oldPost, oldBridge) = (AvApp.DiscordRpc, DiscordRichPresenceService.PostToUi, CoreDiscord.ServiceProvider);
+            try
+            {
+                AvApp.StartRichPresence();
+                Assert.Same(AvApp.DiscordRpc, CoreDiscord.Service);
+                CoreFlash.Start();
+                Assert.Equal("Conditioning", AvApp.DiscordRpc!.CurrentState);
+                CoreFlash.Stop();
+                Assert.Equal("Browsing", AvApp.DiscordRpc.CurrentState);
+                Assert.False(AvApp.DiscordRpc.IsEnabled || AvApp.DiscordRpc.IsConnected);
+            }
+            finally
+            {
+                CoreFlash.Stop();
+                AvApp.DiscordRpc?.Dispose();
+                (AvApp.DiscordRpc, DiscordRichPresenceService.PostToUi, CoreDiscord.ServiceProvider) = (oldRpc, oldPost, oldBridge);
             }
             return Task.CompletedTask;
         }));

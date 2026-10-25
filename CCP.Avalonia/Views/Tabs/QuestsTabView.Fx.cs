@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// </summary>
     public partial class QuestsTabView
     {
-        private const int QuestBurstCount = 85;        // WPF EventFx QuestBurstCount
+        internal const int QuestBurstCount = 85;        // WPF EventFx QuestBurstCount
         private const double StoryboardSeconds = 24;   // the WPF storyboard's natural length: longest leg 12 s, auto-reversed
         private const double ShimmerSeconds = 3, GlowSeconds = 1.5;
 
@@ -95,6 +95,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     }
             }
 
+            StepFixPulse(t);   // QuestsTabView.StreakFix.cs
+
             if (Env.AllowAmbientLoops && TxtSeasonTitle.IsEffectivelyVisible
                 && TxtSeasonTitle.Foreground is LinearGradientBrush brush && TxtSeasonTitle.Effect is DropShadowEffect glow)
             {
@@ -130,11 +132,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF CelebrateQuestComplete: sparks at the cap of the bar that just filled - the weekly fill, or the
         /// daily card showing <paramref name="definitionId"/>; an unmeasured fill falls back to its track.
-        /// ponytail: off-tab WPF bursts on the Quests nav button instead; that needs the shell's event-burst layer
-        /// (shell-event-fx). The popup and chime still announce it.</summary>
+        /// Off-tab or unmeasured anchors fall back to the owning shell's Quests nav row.</summary>
         private void CelebrateQuestComplete(QuestType type, string? definitionId)
         {
-            if (!IsEffectivelyVisible) return;
+            if (!IsEffectivelyVisible)
+            {
+                (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.CelebrateQuestNav();
+                return;
+            }
             UpdateLayout(); // the daily fill may still be mid-tween, so the burst can anchor at its start width (as WPF's ActualWidth read does)
             Control? fill, track;
             if (type == QuestType.Weekly) { fill = WeeklyProgressFill; track = WeeklyProgressTrack; }
@@ -148,7 +153,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 track = card?.ProgressTrack ?? DailyCardsGrid;
             }
             if (fill is { Bounds.Width: > 1 } && _burst.Fire(fill, QuestBurstCount, rightEdge: true)) return;
-            if (track != null) _burst.Fire(track, QuestBurstCount, rightEdge: true);
+            // WPF EventFx.cs:224-228: fallbacks after the fill burst from their centre.
+            if (track != null && _burst.Fire(track, QuestBurstCount)) return;
+            (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.CelebrateQuestNav();
         }
     }
 }

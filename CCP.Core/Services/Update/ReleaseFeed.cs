@@ -100,6 +100,45 @@ namespace ConditioningControlPanel.Services
                    message.Contains("transport");
         }
 
+        /// <summary>How long the installer download may receive nothing before the attempt fails.</summary>
+        public static readonly TimeSpan DownloadStallTimeout = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// WPF UpdateService.CopyWithStallTimeoutAsync (ddc9dd047): copies <paramref name="source"/> to
+        /// <paramref name="destination"/> and throws <see cref="TimeoutException"/> when one read waits
+        /// longer than <paramref name="stallTimeout"/>. HttpClient.Timeout stops counting once the
+        /// headers arrive, so without this a quiet connection hung the update forever. The clock
+        /// restarts per chunk (a slow moving download is never cut); the caller's cancel stays a cancel.
+        /// </summary>
+        public static async System.Threading.Tasks.Task<long> CopyWithStallTimeoutAsync(Stream source, Stream destination,
+            TimeSpan stallTimeout, Action<long>? onProgress, System.Threading.CancellationToken ct)
+        {
+            var buffer = new byte[81920];
+            long copied = 0;
+            using var stall = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(ct);
+            while (true)
+            {
+                stall.CancelAfter(stallTimeout);
+                int read;
+                try
+                {
+                    read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), stall.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        $"The download stalled: no data for {stallTimeout.TotalSeconds:F0} seconds.");
+                }
+                if (read <= 0) return copied;
+
+                // The write is local disk: it runs on the caller's token, off the stall clock.
+                stall.CancelAfter(System.Threading.Timeout.InfiniteTimeSpan);
+                await destination.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                copied += read;
+                onProgress?.Invoke(copied);
+            }
+        }
+
         // ---- install location ---------------------------------------------------------------
 
         /// <summary>

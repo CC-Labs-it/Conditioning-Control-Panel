@@ -8,6 +8,7 @@
 
 # --- temporary (removed by L10 icons-shell-chrome) ---
 Views/Windows/MainShellWindow.axaml :: Text="&#xE713;" FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI" :: font: temporary - MDL2 settings gear, the one icon-font site at L0b; L10 converts it to IconGlyph Kind=Settings
+Views/Windows/EmiDesk/EmiFace.cs :: "Noto Sans Symbols 2, Segoe UI Symbol, Segoe UI Emoji, Nirmala UI, MS Gothic, Courier New, monospace" :: font: content - Emi's kaomoji mood text (chat content, not an icon); WPF EmiFace.cs fallback chain for its glyphs
 
 # --- content (c).1: companion/chat text ---
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
@@ -43,6 +44,17 @@ Views/Chaos/ChaosRunHost.cs :: ☠ RELAPSE — one more loop :: WPF ChaosModeSer
 Views/Chaos/ChaosRunHost.cs :: ⏳ ten seconds. make them count. :: WPF ChaosModeService.cs:1073 run event-feed sentence (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🔮 prism! 10x :: run event-feed sentence, WPF ChaosModeService.cs:1837 verbatim (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: 🪨 heavy drop! x3 :: run event-feed sentence, WPF ChaosModeService.cs:1870 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ✋ no focus — it triggers :: run event-feed sentence, WPF ChaosModeService.cs:1958 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 💥 a tap isn't a hold :: run event-feed sentence, WPF ChaosModeService.cs:1966 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 💥 you let go :: run event-feed sentence, WPF ChaosModeService.cs:1974 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ⛓ snap chain holds :: run event-feed sentence, WPF ChaosModeService.cs:2081 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ♥ resistance crumbles :: run event-feed sentence, WPF ChaosModeService.cs:2092 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 📿 the collar holds :: run event-feed sentence, WPF ChaosModeService.cs:2106 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 📿 unleashed — the field :: run event-feed sentence, WPF ChaosModeService.cs:2115 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 💥 {name} triggered! :: run event-feed sentence, WPF ChaosModeService.cs:2127 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ⏱ last breath! x :: run event-feed sentence, WPF ChaosModeService.cs:2040 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: 🐌 slow burn! x3 :: run event-feed sentence, WPF ChaosModeService.cs:2048 verbatim (content (c).3)
+Views/Chaos/ChaosRunHost.cs :: ✔ snapped {spec :: run event-feed sentence, WPF ChaosModeService.cs:2049 verbatim (content (c).3)
 
 # --- art, D6 "keep as art": whole files that are illustration, not icons ---
 Controls/HelpLoops/ :: * :: path: D6 art - help-loop scene illustrations
@@ -50,6 +62,7 @@ Controls/SpiralGlyph.cs :: * :: path: D6 art - spiral glyph drawing
 Controls/ChasterRailChip.cs :: * :: path: D6 art - Chaster rail chip lock drawing
 Controls/DescentFuseRailChip.cs :: * :: path: D6 art - descent fuse rail chip drawing
 Views/Controls/SeasonRecapCard. :: * :: path: D6 art - season recap card illustration
+Views/Controls/Leash/LeashHelpSlip.cs :: * :: path: D6 art - leash ink-slip pictograms (WPF owner-approved mockup drawings)
 Helpers/BreakoutCardArt.cs :: * :: path: D6 art - breakout card art
 Views/Features/SplitFeatureCard. :: * :: path: D6 art - split feature card illustration
 Views/Windows/TutorialOverlay. :: * :: path: D6 art - tutorial overlay spotlight/arrows

@@ -129,7 +129,7 @@ namespace ConditioningControlPanel
         /// same accent, so a mod that only sets accentColor would otherwise flatten every gradient
         /// on the tab into one colour.
         /// </summary>
-        private const double VaultPartnerHueShift = -59.0;
+        private const double VaultPartnerHueShift = Services.UI.VaultColor.PartnerHueShift;
 
         internal static Color VaultPartner(Color accent) => ShiftHue(accent, VaultPartnerHueShift);
 
@@ -145,38 +145,8 @@ namespace ConditioningControlPanel
         /// </summary>
         internal static Color ShiftHue(Color c, double degrees)
         {
-            double r = c.R / 255.0, g = c.G / 255.0, b = c.B / 255.0;
-            double max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b));
-            double delta = max - min;
-
-            double h;
-            if (delta <= 0.0) h = 0;                                   // grey: hue is arbitrary
-            else if (max == r) h = 60 * (((g - b) / delta) % 6);
-            else if (max == g) h = 60 * (((b - r) / delta) + 2);
-            else h = 60 * (((r - g) / delta) + 4);
-
-            h = (h + degrees) % 360;
-            if (h < 0) h += 360;
-
-            double v = max;
-            double s = max <= 0 ? 0 : delta / max;
-
-            double chroma = v * s;
-            double x = chroma * (1 - Math.Abs((h / 60.0) % 2 - 1));
-            double m = v - chroma;
-
-            (double R, double G, double B) rgb = h switch
-            {
-                < 60 => (chroma, x, 0),
-                < 120 => (x, chroma, 0),
-                < 180 => (0, chroma, x),
-                < 240 => (0, x, chroma),
-                < 300 => (x, 0, chroma),
-                _ => (chroma, 0, x),
-            };
-
-            static byte Byte(double v01) => (byte)Math.Clamp(Math.Round((v01) * 255), 0, 255);
-            return Color.FromArgb(c.A, Byte(rgb.R + m), Byte(rgb.G + m), Byte(rgb.B + m));
+            var rgb = Services.UI.VaultColor.ShiftHue(c.R, c.G, c.B, degrees);
+            return Color.FromArgb(c.A, rgb.R, rgb.G, rgb.B);
         }
 
         /// <summary>A live card's resting edge (the partner hue, 1px) - was a literal #4DB478FF.</summary>

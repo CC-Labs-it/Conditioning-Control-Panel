@@ -7,29 +7,24 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 internal sealed partial class WebcamTracker
 {
-    private readonly MouthGestures _mouth = new();
-    public event Action? OnMouthOpen;
+    private readonly TongueDetector _tongue = new();
     public event Action? OnTongueOut;
 
     // WPF inner-lip polygon, in source-frame coordinates. No frame or pixels leave this method.
     private static readonly int[] LipIndices =
         { 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 191, 80, 81, 82 };
 
-    internal static double MouthAspectRatio(float[][] lm)
-    {
-        static double Distance(float[] a, float[] b) => Math.Sqrt(Math.Pow(a[0] - b[0], 2) + Math.Pow(a[1] - b[1], 2));
-        double width = Distance(lm[78], lm[308]);
-        return width > 1e-6 ? (Distance(lm[81], lm[178]) + Distance(lm[13], lm[14])
-            + Distance(lm[311], lm[402])) / (3 * width) : 0;
-    }
+    /// <summary>Tests call it bare; an idle tracker never delivers (same rule as the mouth event).</summary>
+    internal bool ProcessTongue(Mat bgr, float[][] lm, DateTime now) => ProcessTongue(bgr, lm, now, _run);
 
-    // Shared by the capture path and synthetic-landmark tests; no camera needed.
-    internal void ProcessMouth(Mat bgr, float[][] lm, DateTime now)
+    /// <summary>WPF: tongue HSV only while Core's MAR detector holds the mouth open; the frame's own run
+    /// tags the event, so a stop drops it before delivery.</summary>
+    private bool ProcessTongue(Mat bgr, float[][] lm, DateTime now, Run? run)
     {
-        if (_mouth.UpdateMouth(MouthAspectRatio(lm), CoreSettings.Current.WebcamSensitivity, now))
-            Dispatcher.UIThread.Post(() => OnMouthOpen?.Invoke());
         double ratio = _mouth.IsOpen ? TongueRatio(bgr, lm) : 0;
-        if (_mouth.UpdateTongue(ratio, now)) Dispatcher.UIThread.Post(() => OnTongueOut?.Invoke());
+        bool fired = _tongue.Update(_mouth.IsOpen, ratio, now);
+        if (fired) Dispatcher.UIThread.Post(() => { if (run != null && ReferenceEquals(_run, run)) OnTongueOut?.Invoke(); });
+        return fired;
     }
 
     internal static double TongueRatio(Mat bgr, float[][] lm)

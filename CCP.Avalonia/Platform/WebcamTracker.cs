@@ -156,8 +156,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// BlinkDetector + GazeEngine, the same pipeline WebcamTrackingService.ProcessFrame runs on WPF:
     /// blinks, face lost/found, head pose, raw iris, gaze side and the projected gaze point. Camera
     /// open only between Start and Stop, only with current consent.
-    /// Mouth/tongue gestures follow WPF MAR/HSV rules (WebcamTracker.Gestures.cs).
-    /// ponytail: gaze lock-on awaits the calibration bubble test and live gaze-pop targets.
+    /// Mouth MAR is shared with Core; tongue HSV follows WPF (WebcamTracker.Gestures.cs, Core TongueDetector).
+    /// Gaze lock-on (Core GazeLock) and long stare (Core LongStareDetector) run as WPF EmitGazeEvents does.
     /// </summary>
     internal sealed partial class WebcamTracker
     {
@@ -169,9 +169,25 @@ namespace ConditioningControlPanel.Avalonia.Platform
         internal static string ModelDir = Path.Combine(AppContext.BaseDirectory, "Resources", "Models");
 
         public event Action? OnBlink;
+        public event Action? OnMouthOpen;
         /// <summary>Eyes held shut past BlinkDetector.EyesClosedLongMs (WPF OnEyesClosedLong).</summary>
         public event Action? OnEyesClosedLong;
         public event Action? StateChanged;
+        private volatile WebcamTrackingState _state = WebcamTrackingState.Stopped;
+        public WebcamTrackingState State => _state;
+
+        internal void SetTrackingState(WebcamTrackingState state)
+        {
+            lock (_gate)
+            {
+                // A frame finishing after Stop must not relight any capture indicator.
+                if (WebcamStatus.IsLive(state) && !IsRunning) return;
+                if (!WebcamStatus.IsLive(state) && IsRunning) return;
+                if (_state == state) return;
+                _state = state;
+            }
+            Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+        }
         public event Action? OnFaceLost;
         public event Action? OnFaceFound;
         /// <summary>Median-filtered iris vector, what calibration samples (WPF OnRawIris).</summary>
@@ -184,6 +200,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Gaze in DIPs of the calibrated monitor; fires only with a calibration.</summary>
         public event Action<ScreenPoint>? OnGazeMove;
         public event Action<ScreenPoint>? OnLongStare;
+        private sealed record GazeSnapshot(double X, double Y);
+        private volatile GazeSnapshot? _lastPreLockGaze;
+        public ScreenPoint? LastPreLockGaze => _lastPreLockGaze is { } p ? new ScreenPoint(p.X, p.Y) : null;
+        public void SetGazeAttractor(double x, double y, double radius) => _gazeLock.SetTarget(x, y, radius);
+        public void ClearGazeAttractor() => _gazeLock.Clear();
         /// <summary>Start's stage and status text, 1.0 when tracking is up (WPF OnStartupProgress, same
         /// texts); drives the loading splash. A failed start ends with StateChanged and LastError.</summary>
         public event Action<double, string>? OnStartupProgress;
@@ -201,6 +222,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
         private volatile WebcamCalibrationData? _calibration;
         private volatile bool _calibrationLoaded;
+
+        /// <summary>Face found/lost from the capture thread: only while this run is still current, so a
+        /// Stop (panic) that overtakes the frame is never followed by a green Tracking/Face lost.</summary>
+        private void PublishIfCurrent(Run? run, WebcamTrackingState state)
+        {
+            lock (_gate) { if (_run == run) SetTrackingState(state); }
+        }
 
         public bool IsRunning => _run != null;
         /// <summary>Why the last start failed, for the user; null after a good start.</summary>
@@ -231,7 +259,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>A loop a timed-out Stop abandoned still holds the camera; Start refuses until it exits.</summary>
         internal bool IsClosing => _wedged is { IsAlive: true };
         private readonly BlinkDetector _blink = new();
+        private readonly MouthOpenDetector _mouth = new();
         private readonly GazeEngine _gaze = new();
+        private readonly GazeLock _gazeLock = new();
         private readonly LongStareDetector _longStare = new();
         private int _busy;
         /// <summary>Bumped by every Stop (and so by panic). A start that began before it never publishes
@@ -262,11 +292,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (IsRunning) return true;
             if (Interlocked.Exchange(ref _busy, 1) != 0) return false;
             var run = new Run();
+            bool began = false;
             try
             {
                 LastError = null;
                 StartWasStopped = false;
+                // WPF WebcamTrackingService.cs:838-843 refuses before any state change: no consent stays Stopped.
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current)) { LastError = "Webcam consent is not current."; return false; }
+                SetTrackingState(WebcamTrackingState.Starting);
+                began = true;
                 // WPF #743: a loop a timed-out Stop gave up on may still hold the camera.
                 if (IsClosing)
                 {
@@ -315,8 +349,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     return false;
                 }
                 _blink.Reset();
-                _gaze.Reset();
                 _mouth.Reset();
+                _gaze.Reset();
+                _tongue.FaceMissing();
                 _longStare.Clear();
                 run.Thread = new Thread(() => Loop(run)) { IsBackground = true, Name = "WebcamCapture", Priority = ThreadPriority.BelowNormal };
                 bool stale;
@@ -333,6 +368,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     return false;
                 }
                 Progress(0.92, "Starting capture…");
+                SetTrackingState(WebcamTrackingState.Tracking);
                 run.Thread.Start();
                 Progress(1.0, "Ready");
                 Log.Information("[Webcam] tracking started");
@@ -341,6 +377,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 Interlocked.Exchange(ref _busy, 0);
+                if (began && !IsRunning) SetTrackingState(StartWasStopped ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
                 Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
             }
         }
@@ -369,6 +406,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             Run? run;
             lock (_gate) { _gen++; run = Interlocked.Exchange(ref _run, null); }
+            SetTrackingState(WebcamTrackingState.Stopped);
             if (run == null) return;
             run.Stop = true;
             // WPF Stop: bounded join; a wedged driver must not hang the caller forever. The loop
@@ -410,7 +448,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 run.Release();
                 // Ended on its own (read failures, revoke): no longer running.
                 if (Interlocked.CompareExchange(ref _run, null, run) == run)
+                {
+                    SetTrackingState(LastError == null ? WebcamTrackingState.Stopped : WebcamTrackingState.Error);
                     Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+                }
             }
         }
 
@@ -445,18 +486,39 @@ namespace ConditioningControlPanel.Avalonia.Platform
             Log.Information("[Webcam] runtime offset {State} (persist={Persist})", offset == null ? "cleared" : "set", persist);
         }
 
+        /// <summary>WPF ApplyGazeTrim: fold a bubble-test correction into the calibration's GazeTrim
+        /// (Core GazeTrimData.Compose), optionally saving it.</summary>
+        public void ApplyGazeTrim(double x0, double x1, double y0, double y1, double centerX, double centerY, bool persist)
+        {
+            GazeTrimData composed;
+            lock (_gate)
+            {
+                if (Calibration is not { } current) return;
+                composed = GazeTrimData.Compose(current.GazeTrim, x0, x1, y0, y1, centerX, centerY, DateTime.UtcNow);
+                var updated = current.WithGazeTrim(composed);
+                if (persist) updated.Save();
+                Calibration = updated;
+            }
+            Log.Information("[Webcam] gaze trim applied: total x0={X0:F0} x1={X1:F3} y0={Y0:F0} y1={Y1:F3} (persist={Persist})",
+                composed.X0, composed.X1, composed.Y0, composed.Y1, persist);
+        }
+
         /// <summary>WPF ProcessFrame: face, mesh, face lost/found, head pose,
-        /// iris, EAR blink, mouth/tongue, then the gaze chain (EmitGazeEvents minus lock-on).</summary>
+        /// iris, EAR blink, mouth MAR/tongue, then the shared gaze lock, follower and long-stare chain.</summary>
         private void ProcessFrame(Run run, Mat bgr)
         {
             var found = run.Face!.Detect(bgr);
-            if (found is not { } f0) { NoFace(); return; }
+            if (found is not { } f0) { NoFace(run); return; }
             int x = Math.Clamp(f0.X, 0, bgr.Width - 1), y = Math.Clamp(f0.Y, 0, bgr.Height - 1);
             var r = new Rect(x, y, Math.Clamp(f0.Width, 0, bgr.Width - x), Math.Clamp(f0.Height, 0, bgr.Height - y));
-            if (r.Width < 16 || r.Height < 16) { NoFace(); return; }
+            if (r.Width < 16 || r.Height < 16) { NoFace(run); return; }
             var lm = run.Mesh!.Detect(bgr, r);
-            if (lm == null) { NoFace(); return; }
-            if (_gaze.FaceSeen()) Dispatcher.UIThread.Post(() => OnFaceFound?.Invoke());
+            if (lm == null) { NoFace(run); return; }
+            if (_gaze.FaceSeen())
+            {
+                PublishIfCurrent(run, WebcamTrackingState.Tracking);
+                Dispatcher.UIThread.Post(() => OnFaceFound?.Invoke());
+            }
             if (HeadPose(_gaze, lm, bgr.Width, bgr.Height) is { } pose)
                 Dispatcher.UIThread.Post(() => OnHeadPose?.Invoke(pose.Yaw, pose.Pitch));
             var left = run.Iris!.Detect(bgr, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], isRightEye: false);
@@ -470,7 +532,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (ev == BlinkEvent.Blink) Dispatcher.UIThread.Post(() => OnBlink?.Invoke());
                 else if (ev == BlinkEvent.EyesClosedLong) Dispatcher.UIThread.Post(() => OnEyesClosedLong?.Invoke());
             }
-            ProcessMouth(bgr, lm, DateTime.UtcNow);
+            ProcessMouthLandmarks(lm, DateTime.UtcNow, run);   // WPF :1740 order: after blink, skipped when both irises are missing
+            ProcessTongue(bgr, lm, DateTime.UtcNow, run);
             (double Dx, double Dy)? vl = left == null ? null
                 : _gaze.NormalizeIris(left.IrisCenter, lm[FaceMeshDetector.LeftEyeOuterIdx], lm[FaceMeshDetector.LeftEyeInnerIdx], rightEye: false);
             (double Dx, double Dy)? vr = right == null ? null
@@ -485,9 +548,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             EmitProjectedGaze(m.X, m.Y, DateTime.UtcNow);
         }
 
+        /// <summary>WPF EmitGazeEvents' final stages. Also feeds synthetic projected points in tests.</summary>
         internal void EmitProjectedGaze(double x, double y, DateTime now)
         {
-            var p = _gaze.Follow(x, y);
+            _lastPreLockGaze = new GazeSnapshot(x, y); // accuracy uses the uncontracted projection
+            var locked = _gazeLock.Apply(x, y);
+            var p = _gaze.Follow(locked.X, locked.Y);
             Dispatcher.UIThread.Post(() => OnGazeMove?.Invoke(new ScreenPoint(p.X, p.Y)));
             if (_longStare.Push(now, p.X, p.Y) is { } stare)
                 Dispatcher.UIThread.Post(() => OnLongStare?.Invoke(new ScreenPoint(stare.X, stare.Y)));
@@ -518,11 +584,29 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { gaze.HeadPoseFailed(); Log.Debug("[Webcam] head pose failed: {Error}", ex.Message); return null; }
         }
 
-        internal void NoFace()
+        internal bool ProcessMouthLandmarks(float[][] landmarks, DateTime now) => ProcessMouthLandmarks(landmarks, now, _run);
+
+        /// <summary>The frame's own capture run tags the event, so a stop drops it before delivery.</summary>
+        private bool ProcessMouthLandmarks(float[][] landmarks, DateTime now, Run? run)
         {
-            if (_gaze.FaceMissing()) Dispatcher.UIThread.Post(() => OnFaceLost?.Invoke());
+            bool fired = _mouth.Update(MouthOpenDetector.ComputeMar(landmarks), now, CoreSettings.Current.WebcamSensitivity);
+            if (fired) Dispatcher.UIThread.Post(() => { if (run != null && ReferenceEquals(_run, run)) OnMouthOpen?.Invoke(); });
+            return fired;
+        }
+
+        /// <summary>Tests call it bare; the capture thread passes its run so a stale run never publishes.</summary>
+        internal void NoFace() => NoFace(null);
+
+        private void NoFace(Run? run)
+        {
+            if (_gaze.FaceMissing())
+            {
+                PublishIfCurrent(run, WebcamTrackingState.FaceLost);
+                Dispatcher.UIThread.Post(() => OnFaceLost?.Invoke());
+            }
             _blink.CancelClosure();
             _mouth.FaceMissing();
+            _tongue.FaceMissing();
             if (_gaze.NoFaceFrames > GazeEngine.FaceLostFramesThreshold * 2) _longStare.Clear();
         }
     }

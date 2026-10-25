@@ -49,6 +49,16 @@ namespace ConditioningControlPanel.Services.Commands
                 return;
             }
 
+            // The post-panic quiet and output moderation of the text the effect would show
+            // (AiCommandAdmission, WPF 61eeb4d0d). Nested getbacktome commands pass the same gate
+            // through Admits.
+            var verdict = Judge(commandData);
+            if (verdict != AiCommandAdmission.Verdict.Run)
+            {
+                Log.Information("AiCommandService: {Cmd} refused ({Verdict})", commandData.Command, verdict);
+                return;
+            }
+
             // Per-batch cap.
             if (Interlocked.Increment(ref _batchCount) > MaxCommandsPerResponse)
             {
@@ -72,7 +82,7 @@ namespace ConditioningControlPanel.Services.Commands
 
             try
             {
-                var command = CommandFactory.CreateCommand(commandData, cts.Token, depth: 0);
+                var command = CommandFactory.CreateCommand(commandData, cts.Token, depth: AiCommandAdmission.FollowUpDepth);
                 if (command == null)
                 {
                     // Unreachable on WPF (the per-effect gate refuses every type the factory lacks);
@@ -101,6 +111,39 @@ namespace ConditioningControlPanel.Services.Commands
             finally
             {
                 RemoveToken(token, cts);
+            }
+        }
+
+        /// <summary>The live verdict for one AI command: current switches, Lab access, the
+        /// post-panic quiet and the output guard.</summary>
+        internal static AiCommandAdmission.Verdict Judge(AiCommandData commandData)
+        {
+            var settings = CoreSettings.Current?.CompanionPrompt;
+            return AiCommandAdmission.Decide(commandData,
+                masterOn: ConditioningControlPanel.Services.Companion.AiEffectControlGate.IsOn(settings, CoreAccount.HasLabAccess),
+                effectAllowed: settings != null && IsEffectAllowed(commandData.Command, settings),
+                panicQuiet: Safety.PanicAftermath.TriggersSilenced(),
+                textBlocked: TextBlocked);
+        }
+
+        /// <summary>TRUE when the command may run now (see <see cref="Judge"/>).</summary>
+        internal static bool Admits(AiCommandData commandData) => Judge(commandData) == AiCommandAdmission.Verdict.Run;
+
+        /// <summary>Output moderation for text inside an effect, the same guard the chat reply
+        /// passes. A guard that throws refuses.</summary>
+        private static bool TextBlocked(string text)
+        {
+            try
+            {
+                var check = CoreModerationLog.Guard.CheckOutput(text);
+                if (check.Allow || !check.Category.HasValue) return false;
+                CoreModerationLog.Record(check.Category.Value, source: "output", modelHint: "effect");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning("AiCommandService: effect text check failed ({Type})", ex.GetType().Name);
+                return true;
             }
         }
 

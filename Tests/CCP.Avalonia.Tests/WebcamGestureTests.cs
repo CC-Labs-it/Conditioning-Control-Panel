@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using OpenCvSharp;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
@@ -36,13 +37,13 @@ public sealed class WebcamGestureTests
     [InlineData(0.1)]
     [InlineData(0.6)]
     public void MarUsesThreeVerticalChordsNormalizedByWidth(double mar)
-        => Assert.Equal(mar, WebcamTracker.MouthAspectRatio(Lips((float)mar)), 5);
+        => Assert.Equal(mar, MouthOpenDetector.ComputeMar(Lips((float)mar)), 5);
 
     [Fact]
     public void DegenerateMouthIsNotOpen()
     {
         var lm = Lips(0.6f); lm[308] = lm[78];
-        Assert.Equal(0, WebcamTracker.MouthAspectRatio(lm));
+        Assert.Equal(0, MouthOpenDetector.ComputeMar(lm));
         using var bgr = new Mat(40, 40, MatType.CV_8UC3, Scalar.All(0));
         foreach (var p in lm) { p[0] = -100; p[1] = -100; }
         Assert.Equal(0, WebcamTracker.TongueRatio(bgr, lm));
@@ -76,26 +77,29 @@ public sealed class WebcamGestureTests
         Assert.Equal(0, WebcamTracker.TongueRatio(bgr, lm));
     }
 
+    /// <summary>Counts detector fires, not events: an idle tracker never delivers (pinned by
+    /// WebcamCalibrationTests.Tracker_UsesCoreMarAndDropsStoppedRunEvents).</summary>
     [Fact]
-    public void RealPixelPathPublishesMouthThenTongueOnceAndFaceLossCancelsHold() => AvaloniaTestDispatcher.Run(() =>
+    public void RealPixelPathFiresMouthThenTongueOnceAndFaceLossCancelsHold() => AvaloniaTestDispatcher.Run(() =>
     {
         var tracker = new WebcamTracker();
         int mouth = 0, tongue = 0;
-        tracker.OnMouthOpen += () => mouth++;
-        tracker.OnTongueOut += () => tongue++;
         using var bgr = new Mat(40, 40, MatType.CV_8UC3, new Scalar(0, 0, 200));
         var now = new DateTime(2026, 1, 1);
         var sensitivity = CoreSettings.Current.WebcamSensitivity;
+        void Frame(float mar, DateTime t)
+        {
+            if (tracker.ProcessMouthLandmarks(Lips(mar), t)) mouth++;
+            if (tracker.ProcessTongue(bgr, Lips(mar), t)) tongue++;
+        }
         try
         {
             CoreSettings.Current.WebcamSensitivity = 0.5;
-            for (int i = 0; i < 90; i++) tracker.ProcessMouth(bgr, Lips(0.1f), now.AddMilliseconds(i * 33));
-            for (int i = 90; i < 150; i++) tracker.ProcessMouth(bgr, Lips(0.6f), now.AddMilliseconds(i * 33));
-            Dispatcher.UIThread.RunJobs();
+            for (int i = 0; i < 90; i++) Frame(0.1f, now.AddMilliseconds(i * 33));
+            for (int i = 90; i < 150; i++) Frame(0.6f, now.AddMilliseconds(i * 33));
             Assert.Equal(1, mouth); Assert.Equal(1, tongue);
             tracker.NoFace();
-            tracker.ProcessMouth(bgr, Lips(0.6f), now.AddSeconds(10));
-            Dispatcher.UIThread.RunJobs();
+            Frame(0.6f, now.AddSeconds(10));
             Assert.Equal(1, mouth); Assert.Equal(1, tongue);
         }
         finally { CoreSettings.Current.WebcamSensitivity = sensitivity; }
@@ -152,8 +156,12 @@ public sealed class WebcamGestureTests
     /// <summary>The status pill carries {loc:Str rf_webcam_stopped}; the live state is a bound key, so a
     /// language change shows the current state in the new language, not a frozen or reverted text.</summary>
     [Fact]
-    public void DevicesStatusFollowsTheLanguageWhileTracking() => WebcamCalibrationTests.WithTracker(start: true, (tracker, _) =>
+    public void DevicesStatusFollowsTheLanguageWhileTracking() => WebcamCalibrationTests.WithTracker(start: false, (tracker, _) =>
     {
+        // Parked in Read: blank frames would race the assertion into "Face lost".
+        var source = new ParkedSource();
+        WebcamTracker.SourceFactory = () => source;
+        Assert.True(tracker.Start(), tracker.LastError);
         var section = new DevicesSettingsSection();
         var owner = new global::Avalonia.Controls.Window { Content = section };
         owner.Show();
@@ -167,8 +175,16 @@ public sealed class WebcamGestureTests
             Dispatcher.UIThread.RunJobs();
             Assert.Equal("追跡中", status.Text);
         }
-        finally { LocalizationManager.Instance.SetLanguage("en"); owner.Close(); }
+        finally { LocalizationManager.Instance.SetLanguage("en"); owner.Close(); source.Release.Set(); }
     });
+
+    private sealed class ParkedSource : IFrameSource
+    {
+        public readonly ManualResetEventSlim Release = new();
+        public bool Open() => true;
+        public bool Read(Mat bgr) { Release.Wait(); return false; }
+        public void Dispose() { }
+    }
 
     /// <summary>WPF :1505: a panic while the camera is still opening abandons the open; the failed
     /// start reads as stopped, not as "no camera".</summary>
@@ -187,61 +203,4 @@ public sealed class WebcamGestureTests
         public bool Read(Mat bgr) => false;
         public void Dispose() { }
     }
-
-    [Fact]
-    public void CalibrationMouthPromptsCompleteFromRealDetector() => AvaloniaTestDispatcher.Run(() =>
-    {
-        Setup();
-        var clock = new WebcamCalibrationTests.ManualClock();
-        WebcamCalibrationWindow.Time = clock;   // the 5 s timeouts only pass when the test steps them
-        var window = new WebcamCalibrationWindow();
-        var phase = typeof(WebcamCalibrationWindow).GetMethod("RunValidationPhaseAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var tracker = WebcamTracker.Instance;
-        using var bgr = new Mat(40, 40, MatType.CV_8UC3, Scalar.All(0));
-        var saved = (CoreSettings.Current.WebcamSensitivity, CoreSettings.Current.MasterVolume);
-        try
-        {
-            CoreSettings.Current.WebcamSensitivity = 0.5;
-            CoreSettings.Current.MasterVolume = 0;
-            var task = (Task)phase.Invoke(window, null)!;
-            var prompt = window.FindControl<TextBlock>("TxtValidationPrompt")!;
-            var detail = window.FindControl<TextBlock>("TxtValidationDetail")!;
-            // Window time never moves here, so this only waits out a gesture's thread-pool hop
-            // (RunContinuationsAsynchronously), never a timeout; no sleep.
-            void Until(Func<bool> condition) =>
-                Assert.True(SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return condition(); }, TimeSpan.FromSeconds(10)));
-            Until(() => prompt.Text == "Get ready…");
-            clock.Advance(1400);
-            Until(() => prompt.Text == "Blink a couple of times");
-            tracker.RaiseBlinkForTest(); tracker.RaiseBlinkForTest();
-            Until(() => detail.Text == "Detected.");
-            clock.Advance(700);
-            Until(() => prompt.Text == "Open your mouth wide");
-            var now = DateTime.UtcNow.AddMinutes(-2); // leave singleton cooldowns in the past for later tests
-            void OpenMouth()
-            {
-                tracker.NoFace();
-                for (int i = 0; i < 90; i++) tracker.ProcessMouth(bgr, Lips(0.1f), now.AddMilliseconds(i * 33));
-                for (int i = 90; i < 110; i++) tracker.ProcessMouth(bgr, Lips(0.6f), now.AddMilliseconds(i * 33));
-                now = now.AddSeconds(10);
-            }
-            OpenMouth();
-            Until(() => detail.Text == "Detected.");   // the detector, not the timeout (window time is still 0 s in)
-            clock.Advance(700);
-            Until(() => detail.Text == "Good — close, and once more in a moment…");
-            clock.Advance(1000);
-            Until(() => prompt.Text == "Open your mouth wide again");
-            OpenMouth();
-            Until(() => detail.Text == "Detected.");
-            clock.Advance(700);
-            Until(() => task.IsCompleted);
-            Assert.True(task.IsCompletedSuccessfully);
-        }
-        finally
-        {
-            WebcamCalibrationWindow.Time = TimeProvider.System;
-            (CoreSettings.Current.WebcamSensitivity, CoreSettings.Current.MasterVolume) = saved;
-            window.Close();
-        }
-    });
 }

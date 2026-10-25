@@ -280,8 +280,24 @@ namespace ConditioningControlPanel
             RefreshPremiumGate(RemoteControlTab?.RemoteControlGate, "remote");
             RefreshPremiumGate(AwarenessTab?.AwarenessGate, "awareness");
             // Lockdown is not in the rotation and has no DailyFreeKey.
-            RefreshPremiumGate(LockdownTab?.LockdownGate);
+            RefreshLockdownGate();
             if (SheListeningTab != null) RefreshPremiumGate(SheListeningTab.SheListeningGate, "voice");
+        }
+
+        /// <summary>
+        /// The Lockdown page's padlock veil. Never drawn over a RUNNING lockdown
+        /// (<see cref="Services.LockdownExitRule.ShowsPremiumVeil"/>): it covers the timer's
+        /// five-click handle and the Emergency Exit, so a sign-out mid-lockdown left no way out but
+        /// the clock. OnLockdownDeactivated calls this again, so the veil returns when it ends.
+        /// </summary>
+        internal void RefreshLockdownGate()
+        {
+            var gate = LockdownTab?.LockdownGate;
+            if (gate == null) return;
+            RefreshPremiumGate(gate);
+            if (!Services.LockdownExitRule.ShowsPremiumVeil(App.Patreon?.HasPremiumAccess == true,
+                                                             App.Lockdown?.IsActive == true))
+                gate.Visibility = Visibility.Collapsed;
         }
 
         #endregion
@@ -2146,20 +2162,9 @@ namespace ConditioningControlPanel
                 var webView = GetBrowserWebView();
                 if (webView?.CoreWebView2 != null)
                 {
-                    if (isPaused)
-                    {
-                        webView.CoreWebView2.IsMuted = true;
-                        await webView.CoreWebView2.ExecuteScriptAsync(@"
-                            document.querySelectorAll('audio, video').forEach(el => el.pause());
-                        ");
-                    }
-                    else
-                    {
-                        webView.CoreWebView2.IsMuted = false;
-                        await webView.CoreWebView2.ExecuteScriptAsync(@"
-                            document.querySelectorAll('audio, video').forEach(el => el.play());
-                        ");
-                    }
+                    webView.CoreWebView2.IsMuted = isPaused;
+                    await webView.CoreWebView2.ExecuteScriptAsync(
+                        Services.BrowserMediaPlaybackScript.ForPaused(isPaused));
                 }
             }
             catch (Exception ex)
