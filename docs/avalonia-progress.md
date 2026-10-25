@@ -3424,3 +3424,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/fin-ctrl-v2-get-it-row: +1
 
 - NOOP lane: dependency analysis; `ctrl-v2-get-it-row` stays stub (blocked by svc-prize-ownership, feat-bubble-pop). Stub reason now names the missing GrantsChanged repaint. rgate GATE-OK (run 39928533953).
+
+## avalonia-port/fin-feat-brain-drain-keep-clear: +1
+
+- Dependency-only NOOP: keep-clear effect needs the unported Brain Drain blur overlay (`views-studio-brain-drain-feature`); row stays `stub`. Corrected the row's WPF line refs (OverlayService.cs:3251,3264,3811). rgate GATE-OK (run 39921269080).
