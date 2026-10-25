@@ -53,6 +53,7 @@ import { createMusicRoad } from './musicRoad.js';
 import { updateAudioReactiveUniforms } from './audioReactive.js';
 import { createPressContacts } from './pressContacts.js';
 import { createSpiralBeatClock } from './spiralBeat.js';
+import { largeMediaLayout } from './worldMediaScale.js';
 import { worldScreenLayout, worldScreenSolids, worldScreenExistingSlots } from './worldScreens.js';
 import { createWordBubbles } from './wordBubbles.js';
 import { createWordPopFx } from './wordPopFx.js';
@@ -341,8 +342,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     onPass: (g) => { if (bus) bus.emit('gate-pass', g); } }) : null; } catch (e) { console.warn('[glassroad/world] spiral gates failed: ' + (e && e.message)); }
   let worldScreens = null;
   try {
-    const layout = goon ? goonworksMediaLayout(track) : boudoir ? boudoirMediaLayout(track) : keep ? keepMediaLayout(track) : isMainframe ? MAINFRAME_MEDIA_LAYOUT : THRESHOLD_MEDIA_LAYOUT;
+    const authoredLayout = goon ? goonworksMediaLayout(track) : boudoir ? boudoirMediaLayout(track) : keep ? keepMediaLayout(track) : isMainframe ? MAINFRAME_MEDIA_LAYOUT : THRESHOLD_MEDIA_LAYOUT;
     const solids = worldScreenSolids([mainframe?.group, keepDressing?.group, boudoirDressing?.group, mirrorRoom?.group, goonworks?.group, boudoirForks?.group, colossi?.object]);
+    const layout = largeMediaLayout(track, authoredLayout, { samples, solids, tier: Q.name });
     worldScreens = worldScreenLayout(track, { tier: Q.name, samples, solids,
       existingSlots: worldScreenExistingSlots(track, layout, { tier: Q.name, samples }) });
     media = mediaMod ? mediaMod.createMediaSlots(scene, track, { art, feel, samples, layout,

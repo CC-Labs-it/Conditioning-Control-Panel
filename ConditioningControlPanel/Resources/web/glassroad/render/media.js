@@ -211,7 +211,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   const haloStart = slots.length;
   if (haloSpec) for (const sl of haloSlots(haloSpec, haloFrame, haloN, orbit, M)) slots.push(sl);
   const tun = layout.tunnel ? tunnelLayout(layout.tunnel, track, M, T.tunnelStepMul) : null;
-  if (tun) for (const sl of tun.slots) slots.push(sl);
+  if (tun) for (const sl of layout.tunnelSlots || tun.slots) slots.push(sl);
   for (const sl of opts.extraSlots || []) slots.push(sl);
   slots.forEach((sl, i) => { sl.program = i; });
 
