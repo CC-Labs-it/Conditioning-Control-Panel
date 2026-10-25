@@ -52,6 +52,7 @@ import { prepareWorldLayouts } from './render/scene.js';
 import { createCourseController } from './core/courseSession.js';
 import { scopedBus, scopedBridge } from './core/lifetime.js';
 import { createChaseCamera } from './render/camera.js';
+import { createCourseIntro } from './render/courseIntro.js';
 import { createGentle } from './fx/gentle.js';
 import { createPhotosafe } from './fx/photosafe.js';
 import { createFx } from './fx/reactions.js';
@@ -516,7 +517,20 @@ async function boot(course, options, lifetime, isCurrent) {
   hud.on('option', ({ options }) => applyOptions(options || hud.options));
 
   let glideHintLap = -1;
+  const intro = createCourseIntro(track);
+  let introElapsed = 0, introTarget = null, raceAudioStart = null;
+  const introHud = document.getElementById('hud');
+  // Media attribution remains readable while race instruments are hidden.
+  if (hud.credit) hud.credit.style.visibility = 'visible';
+  lifetime.defer(() => { if (hud.credit) hud.credit.style.visibility = ''; });
+  // Gentle cuts pass through a 300 ms curtain on each side of the scene change.
+  const introVeil = document.createElement('div');
+  introVeil.style.cssText = 'position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:10';
+  introVeil.setAttribute('aria-hidden', 'true'); document.body.append(introVeil);
+  lifetime.defer(() => introVeil.remove());
+  lifetime.defer(() => { introHud.style.visibility = ''; });
   function resetAll() {
+    introElapsed = 0; introTarget = null; introHud.style.visibility = '';
     glideHintLap = -1;
     for (const r of racers.list) resetGlide(r.st);
     race.reset(); racers.place(); contact.reset(); standings.reset(); items.reset();
@@ -612,7 +626,7 @@ async function boot(course, options, lifetime, isCurrent) {
   function setPaused(on) {
     on = !!on;
     if (on === paused) return;
-    if (on && (state !== 'race' || (race.phase !== 'countdown' && race.phase !== 'racing'))) return;
+    if (on && state !== 'intro' && (state !== 'race' || (race.phase !== 'countdown' && race.phase !== 'racing'))) return;
     paused = on;
     // online the room never waits: the sim, the clock and the song keep going and only your kart coasts
     if (!online) { clock.pause(on); audio.setPaused(on); }
@@ -623,21 +637,30 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   function begin() {
     state = 'race';
+    introHud.style.visibility = '';
     garage?.setVisible(false);
     hud.setCard(null);
     canvas.focus({ preventScroll: true });
     race.start();
     queue.flush(bus);
-    bridge.runStarted({ track: track.id, laps });
+    // Start scheduling only after the tour; the recording's zero remains GO.
+    const align = () => -race.goInS;
+    if (pickedSong || CHARTS.length) Promise.resolve(raceAudioStart).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
   function startRace() {
     if (!lifetime.alive) return;
+    if (online) return;
+    stopSong();
     const started = audio.start(); unpause(); resetAll();
     if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
-    begin();
-    // The recording's beginning is heard at GO, after the entire countdown.
-    const align = () => -race.goInS;
-    if (pickedSong || CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
+    raceAudioStart = started;
+    state = 'intro'; introElapsed = 0;
+    cam.snap(P.view, track, renderer.aspect);
+    introTarget = cam.camera.clone();
+    garage?.setVisible(false); hud.setCard(null);
+    introHud.style.visibility = 'hidden';
+    canvas.focus({ preventScroll: true });
+    bridge.runStarted({ track: track.id, laps });
   }
   function toMenu() {
     stopSong();
@@ -1022,6 +1045,20 @@ async function boot(course, options, lifetime, isCurrent) {
     if (online) online.s.drawRemotes();                           //    remote karts at this frame's server time (100 ms back)
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
     if (!frozen) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
+    if (state === 'intro') {
+      if (!frozen) introElapsed = Math.min(intro.duration, introElapsed + frameDt);
+      const gentleIntro = hostGentle || !!feel.get('gentle.on') || !!hud.options.gentlePreview || matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!frozen) introTarget.copy(cam.camera);
+      const done = intro.apply(cam.camera, introElapsed, { gentle: gentleIntro, target: introTarget });
+      let curtain = 0;
+      if (gentleIntro) for (const cut of [1.5, 3, 4.5]) {
+        const t = Math.max(0, 1 - Math.abs(introElapsed - cut) / .3);
+        curtain = Math.max(curtain, t * t * (3 - 2 * t));
+      }
+      introVeil.style.opacity = String(curtain);
+      debug.intro = { elapsed: introElapsed, shot: intro.shotAt(introElapsed) };
+      if (done && !frozen) begin();
+    }
     if (HT) hLap('cam');
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();
@@ -1048,8 +1085,11 @@ async function boot(course, options, lifetime, isCurrent) {
       }
     }
     if (BOT) debug.gliding = !!kartViews[0]?.glide;
-    world.update({ kart: P.view, karts: kartViews, fx: fs, timeS: renderTime, beat: clock.beat,
-      raceTimeS: racers.clockS, sectionIdx: pst[S.sectionIdx], items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive,
+    const introShot = state === 'intro' ? intro.shotAt(introElapsed) : -1;
+    const viewSection = introShot >= 0 && introShot < 3 ? track.sectionAt(intro.shots[introShot].s) : pst[S.sectionIdx];
+    const viewFx = state === 'intro' ? { ...fs, paletteMix: { from: viewSection, to: viewSection, t: 1 } } : fs;
+    world.update({ kart: P.view, karts: kartViews, fx: viewFx, timeS: renderTime, beat: clock.beat,
+      raceTimeS: racers.clockS, sectionIdx: viewSection, items: iv, mode, camera: cam.camera, paused, song, songS, audioReactive, words: wordLive,
       scanTimeS: sc.timeS, scanBpm: sc.bpm, scanReady: scan.ready, perfumeReady: perfume.ready });
     if (BOT && song && world.musicRoad) {                         //    dev only: the boot check reads the music road
       const m = world.musicRoad.frame;
@@ -1059,7 +1099,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (BOT) debug.boxAheadM = boxAhead(P.view, iv.boxes);        //    dev only: the boot check's item box shot
     if (BOT && world.roadWords) debug.roadWords = world.roadWords.stats();   // dev only: the painted road words
     const rph = state === 'race' ? race.phase : null;              //    J2: chips off through the count, back after go
-    const chipA = rph ? chipAlpha(rph, goAt < 0 ? 0 : (now - goAt) / 1000, feel.get('gentle.on') ? 1.2 : 0.6) : 1;
+    const chipA = state === 'intro' ? 0 : rph ? chipAlpha(rph, goAt < 0 ? 0 : (now - goAt) / 1000, feel.get('gentle.on') ? 1.2 : 0.6) : 1;
     if (chipA < 1) dimChips(chipA);
     let goPoint = null;
     if (kartV && rph && (rph === 'countdown' || rph === 'ready' || (goAt > 0 && now - goAt < 1500))) {
@@ -1069,7 +1109,7 @@ async function boot(course, options, lifetime, isCurrent) {
       if (k) { kartAt.x = k.x; kartAt.y = k.y; goPoint = kartAt; }
     }
     if (HT) hLap('world');
-    renderer.setHold(state === 'race');                           //    no tier step (a relink) mid-race or under the pause card
+    renderer.setHold(state === 'race' || state === 'intro');                           //    no tier step (a relink) mid-race or under the pause card
     const garageScene=!!garage&&state==='menu',inGarage=garageScene&&hud.card==='menu';
     garage?.setVisible(inGarage);
     if(garageScene)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
@@ -1093,6 +1133,7 @@ async function boot(course, options, lifetime, isCurrent) {
       if (BOT) botT = now + 5000;
     }
     if (HT) hLap('hud');
+    if (state !== 'intro') introVeil.style.opacity = '0';
     debug.phase = paused ? 'paused' : state === 'race' ? race.phase : state;
     debug.lap = pst[S.lap]; debug.s = pst[S.s]; debug.timeS = race.timeS; debug.speedPct = pst[S.speedPct];
     debug.place = place; debug.item = it.id;
