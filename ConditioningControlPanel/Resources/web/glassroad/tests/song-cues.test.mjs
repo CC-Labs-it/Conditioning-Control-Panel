@@ -27,13 +27,32 @@ test('crossings align at all required speeds and frame rates without changing ka
     const st=kart(500), before=st.slice(); run.update(10.1,st); assert.deepEqual(st,before);
   }
 });
-test('cross planes lock before impact while watch rigs stay ahead through a long hold', () => {
-  const cross=createSongCueRun(song(),track), watch=createSongCueRun(song('WATCH'),track); let lock;
-  for(let i=0;i<9*60;i++) {
+test('cross planes lock before impact; watch spots settle on the road, stay put and get driven past', () => {
+  const cross=createSongCueRun(song(),track), watch=createSongCueRun(song('WATCH'),track); let lock, spot, passed=false;
+  for(let i=0;i<12*60;i++) {
     const t=i/60, st=kart(200+30*t);
     const row=cross.update(t,st).live[0]; if(row?.locked) { lock ??= row.s; assert.equal(row.s,lock); }
-    const seen=watch.update(t,st).live[0]; if(seen && t>=6) assert.ok(Math.abs(seen.s-st[S.s]-45)<.001);
+    const seen=watch.update(t,st).live[0];
+    if(seen?.locked) {
+      spot ??= seen.s; assert.equal(seen.s,spot);   // fixed in the world: never rides along with the kart
+      if(t<=6) assert.ok(seen.s>st[S.s]+30);        // the drop lands well ahead of the kart
+    }
+    passed ||= seen?.state==='passed';
   }
+  // Placed where the kart is 1.5 s after the cue, then left behind once the kart has gone by.
+  assert.ok(Math.abs(spot-(200+30*7.5))<1); assert.ok(passed); assert.equal(watch.live.length,0);
+});
+test('a re-dropping rig drops a fresh fixed screen on each of its beats', () => {
+  const c=song('WATCH'); c.cues[0].params={redrop:true}; c.cues[0].jolts=[{word:'signal',n:2}]; c.cues[0].endAnchor={event:'hit',n:1};
+  const run=createSongCueRun(c,track); assert.deepEqual(run.cues.map(x=>[x.id,x.startS]),[['a',6],['a~1',12]]);
+  const spots=new Map();
+  for(let i=0;i<16*60;i++){const t=i/60;for(const r of run.update(t,kart(200+30*t)).live) if(r.locked) spots.set(r.id,r.s);}
+  assert.ok(Math.abs(spots.get('a')-(200+30*7.5))<1); assert.ok(Math.abs(spots.get('a~1')-(200+30*13.5))<1);
+});
+test('sky and zone pieces need no road spot and survive a stopped kart', () => {
+  const c=song('WATCH'); c.cues[0].kind='SHIFT'; const run=createSongCueRun(c,track);
+  for(let i=0;i<8*60;i++){const t=i/60,st=kart(300,t>5?0:30);run.update(t,st);}
+  assert.equal(run.live.length,1); assert.equal(run.live[0].state,'hit'); assert.equal(run.live[0].ahead,0);
 });
 test('stops, reverse, off-road, upper roads, rescue, teleport and late seek cannot fire crossings', () => {
   for(const mode of ['stop','reverse','edge','upper','rescue','teleport','seek']) {

@@ -700,7 +700,9 @@ async function boot(course, options, lifetime, isCurrent) {
     race.start();
     queue.flush(bus);
     // Start scheduling only after the tour; the recording's zero remains GO.
-    const align = () => -race.goInS;
+    // ?dev=1&songAt=N (dev only): the recording starts N seconds in at GO, for cue checks.
+    const songAt = DEV ? Math.max(0, Number(qs.get('songAt')) || 0) : 0;
+    const align = () => songAt - race.goInS;
     if (pickedSong || CHARTS.length) Promise.resolve(raceAudioStart).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
   function startRace() {
@@ -1140,6 +1142,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     const pv = P.view;
     const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety });
+    if (DEV) debug.songS = songS;
     const cueEpoch = cueView?.revision ?? -1;
     if (cueRunSeen !== songCues || cueRevision !== cueEpoch) {
       cueBurst.clear(); world.veils.clear(); world.marquees.clear(); cueRunSeen = songCues; cueRevision = cueEpoch;

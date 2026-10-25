@@ -630,7 +630,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     airWords.update(view.airWords, dt, { paused: !!view.paused, mode: view.mode, gentle });
     veils.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle,
       bass: view.audioReactive?.bass || 0, palette: [pal.primaryHex(), pal.accentHex()] });
-    marquees?.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle, songS: view.songS });
+    marquees?.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle, songS: view.songS, song: view.song });
   }
 
   let disposed = false;
