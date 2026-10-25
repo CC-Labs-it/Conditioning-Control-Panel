@@ -84,6 +84,10 @@ that combination fails with `NETSDK1191`.
 `DOTNET_ROLL_FORWARD=Major` is needed because no 8.0 runtime is installed alongside the .NET 10 SDK,
 so `dotnet run` on any of these projects otherwise refuses to start. It affects running, not building.
 
+On a Codex Cloud image, wrap test runs in `bash .github/scripts/cloud-test-env.sh dotnet test ...`: its
+fontconfig prefers WOFF2 fonts SkiaSharp cannot load ("Could not create glyphTypeface"). Do not write
+your own fontconfig; the script is a no-op elsewhere.
+
 Three runners prove behaviour rather than compilation, and each answers a different question:
 
 ```bash
