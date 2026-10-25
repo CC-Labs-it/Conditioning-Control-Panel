@@ -32,6 +32,7 @@ export function industryZones(track) {
 }
 const ease = v => { v = clamp(v, 0, 1); return v * v * (3 - 2 * v); };
 export function industryPose(zone, timeS, beat = null) {
+  if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   if (beat && zone.kind === 'piston') {
     const offset = Math.round(zone.offsetS / beat.beatS);
     // An initial offset must enter at clear, never skip straight to a closed press.

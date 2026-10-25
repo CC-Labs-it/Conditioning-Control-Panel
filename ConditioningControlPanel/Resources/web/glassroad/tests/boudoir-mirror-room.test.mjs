@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { loadTrack } from '../track/load.js';
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
-import { getBoudoirSetpieces, mirrorGatePhase, releaseBoudoirMirror, resetBoudoirMirrors } from '../track/boudoir-setpieces.js';
+import { getBoudoirSetpieces, mirrorGatePhase, releaseBoudoirMirror, breakBoudoirMirror, resetBoudoirMirrors } from '../track/boudoir-setpieces.js';
 const hooks = registerHooks({ resolve(specifier, context, next) {
   const files = { 'three/webgpu': 'three.webgpu.min.js', 'three/tsl': 'three.tsl.min.js' };
   return files[specifier] ? { url: new URL('../vendor/three/build/' + files[specifier], import.meta.url).href, shortCircuit: true } : next(specifier, context);
@@ -45,7 +45,8 @@ test('physical shutters share collision poses, preserve a clear lane, and freeze
 });
 
 test('closed shutter glass faces the driver ahead of its thick backing', () => {
-  const { room } = setup(), row = getBoudoirSetpieces(track).mirrorGates.find(r => r.station === 0 && r.lane === 1);
+  const { room } = setup(), row = getBoudoirSetpieces(track).mirrorGates.find(r => r.station === 0 && r.lane === 2);
+  room.update(0,{raceTimeS:3});
   const origin = room.group.localToWorld(new Vector3(row.x, 3, -(row.s - hall.s0) + 3));
   const direction = new Vector3(0, 0, -1).applyQuaternion(room.group.quaternion);
   const hits = new Raycaster(origin, direction, 0, 5).intersectObject(room.group, true);
@@ -63,17 +64,35 @@ test('impact escape lifts the real shutter meshes and expires without changing o
   resetBoudoirMirrors(track); room.dispose();
 });
 
+test('cracked panes leave persistent floor shards and an actually empty route, with pause and race reset', () => {
+  const { room, camera } = setup(), row = getBoudoirSetpieces(track).mirrorGates.find(r => r.station === 0 && r.breakable);
+  const shards = []; room.group.traverse(o => { if (o.name.startsWith('mirror-shutter:' + row.id + ':shard-')) shards.push(o); });
+  assert.equal(shards.length,8);
+  const snapshot = () => shards.map(o => [...o.position.toArray(), ...o.rotation.toArray()].map(v => v === 0 ? 0 : v));
+  const intact = snapshot(); assert.equal(breakBoudoirMirror(track,row,3),true);
+  room.update(.1,{camera,raceTimeS:3.1},true); const held=snapshot();
+  room.update(1,{camera,raceTimeS:4,paused:true},true); assert.deepEqual(snapshot(),held);
+  room.update(.8,{camera,raceTimeS:4},true); const smashed=snapshot(); assert.notDeepEqual(smashed,intact);
+  const origin=room.group.localToWorld(new Vector3(row.x,3,-(row.s-hall.s0)+3));
+  const direction=new Vector3(0,0,-1).applyQuaternion(room.group.quaternion);
+  assert.equal(new Raycaster(origin,direction,0,5).intersectObject(room.group,true).length,0,'No invisible backplate blocks the shattered opening');
+  room.update(1,{camera,raceTimeS:100}); assert.deepEqual(snapshot(),smashed,'Shards stay smashed for later racers');
+  resetBoudoirMirrors(track); room.update(.1,{camera,raceTimeS:3}); assert.deepEqual(snapshot(),intact);
+  assert.ok(new Raycaster(origin,direction,0,5).intersectObject(room.group,true).length>0,'New race restores physical glass and backing');
+  room.dispose();
+});
+
 test('native captures exclude every reflective face and restore renderer state with bounded resolution and frequency', () => {
   const { room, scene, camera } = setup();
-  let target = { id: 'main-target' }, mrt = { id: 'main-mrt' }, draws = 0;
+  let target = { id: 'main-target' }, mrt = { id: 'main-mrt' }, draws = 0, clears = 0;
   const originalTarget = target, originalMrt = mrt;
   const renderer = { autoClear: false, coordinateSystem: WebGLCoordinateSystem,
     getDrawingBufferSize: out => out.set(3840, 2160), getRenderTarget: () => target, getMRT: () => mrt,
-    setRenderTarget: value => { target = value; }, setMRT: value => { mrt = value; }, clear() {},
+    setRenderTarget: value => { target = value; }, setMRT: value => { mrt = value; }, clear() { clears++; },
     render(capturedScene, reflectedCamera) {
       draws++; assert.notEqual(target, originalTarget); assert.equal(mrt, null);
       assert.equal(capturedScene, scene);
-      if (room.diagnostics.frontStation !== null) {
+      if (reflectedCamera === room.reflections[2].reflector.getVirtualCamera(camera)) {
         const reflected = room.group.worldToLocal(reflectedCamera.position.clone());
         const original = room.group.worldToLocal(camera.position.clone()), plane = room.group.getObjectByName('mirror-plane:0');
         assert.ok(Math.abs(reflected.z - (2 * plane.position.z - original.z)) < .00001, 'front reflection mirrors the real camera across the shutter plane');
@@ -81,28 +100,70 @@ test('native captures exclude every reflective face and restore renderer state w
       }
       room.group.traverse(o => { if (/^mirror-(live-scene|prismatic-shutter|backplate)/.test(o.material?.name || '')) assert.equal(o.material.visible, false); });
     } };
-  const capture = () => room.reflections.forEach((node, i) => node.reflector.updateBefore({ scene, camera, renderer,
+  const capture = (captureCamera = camera) => room.reflections.forEach((node, i) => node.reflector.updateBefore({ scene, camera: captureCamera, renderer,
     material: room.group.children.find(m => m.material?.name === (i === 2 ? 'mirror-prismatic-shutter:0' : 'mirror-live-scene:' + (i ? 1 : -1))).material }));
   capture(); assert.equal(draws, 0, 'general boot warm cannot make real reflection captures');
   room.update(.1, { camera, raceTimeS: 1 });
+  for (const node of room.reflections) assert.equal(node.reflector.updateBeforeType,'render');
+  capture(camera.clone()); assert.equal(draws,0,'Water and secondary cameras cannot replace the player reflection');
   renderer._isPreCompiling = true; capture(); assert.equal(draws, 0, 'pipeline compilation cannot recurse into scene captures');
-  renderer._isPreCompiling = false; capture(); assert.equal(draws, 1);
+  renderer._isPreCompiling = false; capture(); assert.equal(draws, 2);
   assert.equal(target, originalTarget); assert.equal(mrt, originalMrt); assert.equal(renderer.autoClear, false);
-  capture(); assert.equal(draws, 1, 'same frame never recaptures');
-  room.update(.1, { camera, raceTimeS: 1.1, paused: true }); capture(); assert.equal(draws, 1);
+  capture(); assert.equal(draws, 2, 'same frame never recaptures');
+  room.update(.1, { camera, raceTimeS: 1.1, paused: true }); capture(); assert.equal(draws, 2);
   for (const node of room.reflections) for (const rt of node.reflector.renderTargets.values()) {
     assert.ok(rt.width <= 512 && rt.height <= 512); assert.ok(rt.width > 0 && rt.height > 0);
   }
-  room.update(.1, { camera: { position: new Vector3(10000, 10000, 10000) }, raceTimeS: 2 }); capture(); assert.equal(draws, 1);
-  room.update(.1, { camera, raceTimeS: 2.1 }); capture(); assert.equal(draws, 2);
+  room.update(.1, { camera: { position: new Vector3(10000, 10000, 10000) }, raceTimeS: 2 }); capture(); assert.equal(draws, 2);
+  room.update(.1, { camera, raceTimeS: 2.1 }); capture(); assert.equal(draws, 4);
   camera.position.copy(room.group.localToWorld(new Vector3(0, 5, -180))); camera.updateMatrixWorld(true);
-  room.update(.1, { camera, raceTimeS: 2.2 }); capture(); assert.equal(draws, 4, 'two side captures resume after passing every station');
+  room.update(.1, { camera, raceTimeS: 2.2 }); capture();
+  assert.equal(clears,0,'Passing behind the old plane holds its valid texture during the fade');
+  room.update(.35,{camera,raceTimeS:2.55}); room.update(0,{camera,raceTimeS:2.55});
+  capture(); assert.equal(draws,7,'Both side captures resume after the old front reflection fades');
   room.dispose(); room.dispose(); assert.equal(scene.children.length, 0);
+});
+
+test('approaching shutters keep both wall views fresh within the same two-pass budget', () => {
+  const {room,scene,camera}=setup(),captures=[0,0,0];let target=null,mrt=null;
+  const renderer={autoClear:false,coordinateSystem:WebGLCoordinateSystem,
+    getDrawingBufferSize:out=>out.set(1280,720),getRenderTarget:()=>target,getMRT:()=>mrt,
+    setRenderTarget:value=>{target=value;},setMRT:value=>{mrt=value;},clear(){assert.fail('A live view must never clear its texture');},
+    render(s,reflectedCamera){
+      const index=room.reflections.findIndex(node=>node.reflector.getVirtualCamera(camera)===reflectedCamera);
+      assert.ok(index>=0);captures[index]++;
+    }};
+  const capture=()=>room.reflections.forEach((node,i)=>node.reflector.updateBefore({scene,camera,renderer,
+    material:room.group.children.find(m=>m.material?.name===(i===2?'mirror-prismatic-shutter:0':'mirror-live-scene:'+(i?1:-1))).material}));
+  for(let tick=0;tick<10;tick++){
+    const before=[...captures];room.update(.07,{camera,raceTimeS:1+tick*.07});
+    assert.equal(room.diagnostics.frontStation,0);capture();
+    assert.equal(captures.reduce((a,b)=>a+b,0)-before.reduce((a,b)=>a+b,0),2,'One front and one wall capture');
+    assert.equal(captures[2]-before[2],1,'Front view remains live');
+    const held=[...captures];capture();assert.deepEqual(captures,held,'No repeated capture in the same frame');
+  }
+  assert.ok(captures[0]>=4&&captures[1]>=4,'Neither wall retains its warm-up image');
+  const held=[...captures];room.update(.2,{camera,raceTimeS:5,paused:true});capture();
+  assert.deepEqual(captures,held,'Pause preserves all three reflections');
+  room.dispose();
 });
 
 test('near test includes the long hall ends without enabling distant rooms', () => {
   for (const z of [0, -100, -200]) assert.equal(mirrorRoomNear(new Vector3(0, 4, z), 200), true);
   for (const p of [new Vector3(130, 4, -100), new Vector3(0, 4, 120), new Vector3(0, 4, -330)]) assert.equal(mirrorRoomNear(p, 200), false);
+});
+
+test('shared front reflection changes station only after the old pane has faded completely', () => {
+  const {room,camera}=setup(),plane=room.group.getObjectByName('mirror-plane:0');
+  room.update(.35,{camera,raceTimeS:3}); const oldZ=plane.position.z;
+  const oldMaterial=room.group.children.find(o=>o.material?.name==='mirror-prismatic-shutter:0').material;
+  assert.equal(oldMaterial.userData.reflectionMix.value,1);
+  camera.position.copy(room.group.localToWorld(new Vector3(0,5,-65))); camera.updateMatrixWorld(true);
+  for(let i=0;i<4;i++) { room.update(.1,{camera,raceTimeS:3.1+i*.1}); assert.equal(plane.position.z,oldZ,'No wrong-station texture while old glass remains visible'); }
+  assert.equal(oldMaterial.userData.reflectionMix.value,0);
+  room.update(.01,{camera,raceTimeS:3.5}); assert.notEqual(plane.position.z,oldZ);
+  assert.equal(room.diagnostics.frontStation,1); assert.equal(room.reflections[2].reflector.forceUpdate,true,'New plane requests a fresh capture before display');
+  room.dispose();
 });
 
 test('runtime warm captures use the same camera and restore paused capture policy and renderer state', async () => {

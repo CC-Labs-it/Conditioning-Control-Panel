@@ -2,7 +2,7 @@
  * The caller supplies race time; the shared adapter maps it to heard song time in solo. */
 import { S, RESPAWN } from './state.js';
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
-import { machineryBeatAt, machineryRearming, beatCycle } from '../track/machineryBeat.js';
+import { machineryBeatAt, machineryRearming, beatCycle, machineryDuration } from '../track/machineryBeat.js';
 
 export const PERFUME = Object.freeze({ cycleS: 12, warnS: 3, sprayS: 5, activeS: 5.6,
   clearS: 9, fadeS: 10.2, rearmS: 2, heightM: 2.5, radiusM: .65, speedMps: 18, dragPerS: 3.2 });
@@ -10,13 +10,16 @@ const smooth = v => { v = Math.max(0, Math.min(1, v)); return v * v * (3 - 2 * v
 
 /** Shared phase authority for simulation and drawing. All fades last at least 600 ms. */
 export function perfumePhase(zone, timeS, out = {}, beat = null) {
+  const pace = beat?.fallback ? beat.pace : 1;
+  if (beat?.fallback) { timeS *= pace; beat = null; }
   if (beat) {
     const step = beat.beatS, offset = Math.round((zone.offsetS || 0) / step);
-    const warn = Math.round(PERFUME.warnS / step), spray = warn + Math.ceil((PERFUME.sprayS - PERFUME.warnS) / step);
-    const active = spray + Math.ceil((PERFUME.activeS - PERFUME.sprayS) / step);
-    const clear = Math.max(active + 1, Math.round(PERFUME.clearS / step));
-    const fade = clear + Math.ceil((PERFUME.fadeS - PERFUME.clearS) / step);
-    const period = Math.max(Math.ceil(PERFUME.cycleS / step / 4) * 4, Math.ceil((fade + 1) / 4) * 4);
+    const duration = seconds => machineryDuration(seconds, beat);
+    const warn = Math.round(duration(PERFUME.warnS) / step), spray = warn + Math.ceil(duration(PERFUME.sprayS - PERFUME.warnS) / step);
+    const active = spray + Math.ceil(Math.max(.6, duration(PERFUME.activeS - PERFUME.sprayS)) / step);
+    const clear = Math.max(active + 1, Math.round(duration(PERFUME.clearS) / step));
+    const fade = clear + Math.ceil(Math.max(.6, duration(PERFUME.fadeS - PERFUME.clearS)) / step);
+    const period = Math.max(Math.ceil(duration(PERFUME.cycleS) / step / 4) * 4, Math.ceil((fade + 1) / 4) * 4);
     const t = beatCycle(beat.beat + offset, period);
     // Initial pickup and every seek wait for a full clear/warn/spray sequence.
     const safe = machineryRearming(beat, offset, period) || beat.beat < beatCycle(-offset, period);
@@ -28,10 +31,11 @@ export function perfumePhase(zone, timeS, out = {}, beat = null) {
     return Object.assign(out, { phase, mist, warning, active: phase === 'active', cycleS: t * step });
   }
   const K = PERFUME, t = ((Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (zone.offsetS || 0)) % K.cycleS + K.cycleS) % K.cycleS;
-  const phase = t < K.warnS || t >= K.fadeS ? 'clear' : t < K.sprayS ? 'warn' : t < K.activeS ? 'spray' : t < K.clearS ? 'active' : 'fade';
-  const mist = t < K.sprayS || t >= K.fadeS ? 0 : t < K.activeS ? smooth((t - K.sprayS) / (K.activeS - K.sprayS))
-    : t < K.clearS ? 1 : 1 - smooth((t - K.clearS) / (K.fadeS - K.clearS));
-  const warning = phase === 'warn' ? smooth((t - K.warnS) / .6) : phase === 'spray' || phase === 'active' ? 1
+  const activeS = K.sprayS + Math.max(K.activeS - K.sprayS, .6 * pace), fadeS = K.clearS + Math.max(K.fadeS - K.clearS, .6 * pace);
+  const phase = t < K.warnS || t >= fadeS ? 'clear' : t < K.sprayS ? 'warn' : t < activeS ? 'spray' : t < K.clearS ? 'active' : 'fade';
+  const mist = t < K.sprayS || t >= fadeS ? 0 : t < activeS ? smooth((t - K.sprayS) / (activeS - K.sprayS))
+    : t < K.clearS ? 1 : 1 - smooth((t - K.clearS) / (fadeS - K.clearS));
+  const warning = phase === 'warn' ? smooth((t - K.warnS) / (.6 * pace)) : phase === 'spray' || phase === 'active' ? 1
     : phase === 'fade' ? mist : 0;
   return Object.assign(out, { phase, mist, warning, active: phase === 'active', cycleS: t });
 }

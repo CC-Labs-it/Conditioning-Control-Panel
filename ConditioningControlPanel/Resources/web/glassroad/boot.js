@@ -45,7 +45,7 @@ import { loadTrack } from './track/load.js';
 import { selectTrack, allowsOnline, courseSongs } from './track/selection.js';
 import { createMainframeScan, scanClock } from './sim/mainframeScan.js';
 import { createMainframeIndustry } from './sim/mainframeIndustry.js';
-import { setMachineryBeat } from './track/machineryBeat.js';
+import { setMachineryBeat, MACHINERY_PACE } from './track/machineryBeat.js';
 import { createRenderer } from './render/renderer.js';
 import { buildWorld } from './render/world.js';
 import { createArtLibrary, GARAGE_ART_IDS } from './render/art.js';
@@ -1075,7 +1075,8 @@ async function boot(course, options, lifetime, isCurrent) {
     const machinerySong = machineryMusic?.song || machineryMusic?.analysis;
     sctx.cleanPace = !online;
     sctx.songDrive = machineryMusic?.playing ? songDrive(machinerySong, machineryMusic.songS) : 0;
-    if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished') && !!machineryMusic?.playing,
+    if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished'),
+      fallback: !machineryMusic?.playing || !(machinerySong?.bpm >= 40 && machinerySong?.bpm <= 240),
       songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? steps * clock.dt : 0),
       bpm: machinerySong?.bpm, offsetS: machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0, playing: simOn });
     if (simOn) for (let i = 0; i < steps; i++) {                    // 2. sim
@@ -1101,7 +1102,7 @@ async function boot(course, options, lifetime, isCurrent) {
       racers.step(clock.dt, pa, race, sctx);
       debug.cleanTopMps = P.feel.get('speed.topMps');
       if (race.phase === 'racing' || race.phase === 'finished') {
-        const sc = scanClock(online ? null : audio.music, racers.clockS);
+        const sc = scanClock(online ? null : audio.music, racers.clockS, online ? 1 : MACHINERY_PACE);
         scan.update(racers.list, sc.timeS, sc.bpm);
         perfume.update(racers.list, racers.clockS, clock.dt);
       }
@@ -1189,7 +1190,7 @@ async function boot(course, options, lifetime, isCurrent) {
     reactiveOptions.gentle = hostGentle || !!feel.get('gentle.on') || !!opts.gentlePreview;
     reactiveOptions.muted = opts.volMaster === 0 || opts.volMusic === 0;
     const audioReactive = music ? music.readReactivity(frameDt, reactiveOptions) : null;
-    const sc = scanClock(inRace && !online ? music : null, racers.clockS);
+    const sc = scanClock(inRace && !online ? music : null, racers.clockS, online ? 1 : MACHINERY_PACE);
     if (BOT) debug.scan = { hits: scan.hits, ready: scan.ready, timeS: sc.timeS };
     if (DEV) debug.songS = songS;
     const cueEpoch = cueView?.revision ?? -1;

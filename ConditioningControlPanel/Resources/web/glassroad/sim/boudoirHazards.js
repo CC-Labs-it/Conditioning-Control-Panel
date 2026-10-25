@@ -3,7 +3,7 @@ import { S, BOOST, RESPAWN, cloneState } from './state.js';
 import { clamp, wrap } from '../core/math.js';
 import { gateSweep, createKeepGates } from './keepGates.js';
 import { makeQuery } from '../track/query.js';
-import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose, releasedMirrorGatePhase, releaseBoudoirMirror, resetBoudoirMirrors } from '../track/boudoir-setpieces.js';
+import { BOUDOIR_HAZARD as K, getBoudoirSetpieces, powderPressPhase as pressPose, mascaraHeads, mascaraPhase as brushPose, ribbonPhase as ribbonPose, releasedMirrorGatePhase, releaseBoudoirMirror, breakBoudoirMirror, resetBoudoirMirrors } from '../track/boudoir-setpieces.js';
 import { machineryBeatAt } from '../track/machineryBeat.js';
 const RADIUS = .7, HEIGHT = 1.6;
 const dot = (a, b) => a.reduce((sum, v, i) => sum + v * b[i], 0);
@@ -35,8 +35,14 @@ export function createBoudoirHazards(track, layout = null) {
       if (fraction === null) continue;
       const time = ta + (tb - ta) * fraction, h = A[2] + (B[2] - A[2]) * fraction;
       const phase = brush ? mascaraPhase(row, time) : row.kind === 'mirror' ? mirrorGatePhase(row, time) : powderPressPhase(row, time);
+      if (phase.broken) continue;
       const low = brush ? phase.y - phase.radiusM : phase.liftM, high = low + (brush ? phase.radiusM * 2 : row.kind === 'mirror' ? K.mirrorHeightM : K.pressHeightM);
       if (h + HEIGHT < low || h > high || h < -1.5) continue;
+      if (row.kind === 'mirror' && breakBoudoirMirror(track, row, time)) {
+        hits++;
+        events?.emit('boudoir-mirror-break', { id: row.id, racer: r.i, s: row.s, x: row.x });
+        return row.id;
+      }
       const contactId = row.stationId || row.id, fresh = time >= (m.cooldown.get(contactId) ?? -Infinity);
       if (brush && !fresh) continue;
       const along = [st[S.velX], st[S.velY], st[S.velZ]], f = row.frame;
@@ -85,7 +91,7 @@ export function createBoudoirHazards(track, layout = null) {
     m.time = timeS;
     if (track.forkAtSeg?.(st[S.seg])) { m.after = null; m.cooldown.clear(); m.ribbon = null; return null; }
     if (st[S.respawnPhase] !== RESPAWN.NONE || dt < 0 || dt > .25 || dist(previous, st) > 25) {
-      if (dt < 0 || dt > .25) resetBoudoirMirrors(track);
+      if (dt < 0 || dt > .25) resetBoudoirMirrors(track, false);
       m.after = null; m.cooldown.clear(); m.ribbon = null; return null;
     }
     if (dt === 0) return null;
