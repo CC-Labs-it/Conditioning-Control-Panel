@@ -12,7 +12,6 @@ using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Webcam;
 using OpenCvSharp;
 using Xunit;
-using AvApp = ConditioningControlPanel.Avalonia.App;
 
 namespace CCP.Avalonia.Tests;
 
@@ -59,7 +58,7 @@ public sealed class WebcamGazeTests
     public void QuickRecal_WithNoGaze_RefusesAsWpf_AndRestoresTheOldOffset() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var s = CoreSettings.Current;

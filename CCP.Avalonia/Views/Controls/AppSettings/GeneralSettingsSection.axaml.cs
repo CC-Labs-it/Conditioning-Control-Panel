@@ -26,10 +26,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// shell's rail door. The startup-video
     /// picker is wired to Avalonia's native <c>StorageProvider</c>; choosing a file only stores
     /// the path, playback of it stays with the video engine.
-    /// <c>IAppSettingsSection</c> lives in the WPF head's AppSettingsTabView; <see cref="OnSectionShown"/>
-    /// keeps the shape so the host can pick it up when it is ported.
+    /// <see cref="OnSectionShown"/> also runs on every Settings-door open, even while the
+    /// section remains attached, as on WPF.
     /// </summary>
-    public partial class GeneralSettingsSection : UserControl
+    public partial class GeneralSettingsSection : UserControl, IAppSettingsSection
     {
         public GeneralSettingsSection()
         {

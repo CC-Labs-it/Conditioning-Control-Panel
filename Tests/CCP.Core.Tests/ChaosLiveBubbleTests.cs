@@ -171,4 +171,45 @@ public class ChaosLiveBubbleTests
         Assert.Equal(ChaosFieldMath.Detonation.Hit, ChaosFieldMath.ApplyDetonation(s, false));
         Assert.Equal((4, 0, 0.0), (s.Detonated, s.Combo, s.Heat));
     }
+
+    /// <summary>WPF's three ring phases (BubbleService.cs:4166-4190): solid yellow while burning,
+    /// a yellow/red alternation from RING_FLASH_FROM_MS, solid red with a pulsing opacity in the
+    /// brink window; and the danger ramp (:4155) that speeds up the breathe in the last 1200 ms.</summary>
+    [Fact]
+    public void The_fuse_ring_burns_yellow_then_flashes_then_pulses_red_and_the_danger_ramps()
+    {
+        var (f, b, _) = Field(Live(5000));
+        f.Step();
+        Assert.Equal(0xFFFFD228u, b.FuseRingArgb);   // 255,210,40 at full opacity
+        Assert.Equal(0, b.DangerFactor);
+
+        b.FuseRemainingMs = 2000;   // flash window: red pole to yellow pole, opacity 0.8..1
+        var greens = new HashSet<uint>();
+        for (int i = 0; i < 20; i++)
+        {
+            f.Step();
+            uint c = b.FuseRingArgb;
+            Assert.Equal(255u, (c >> 16) & 0xFF);
+            Assert.InRange((c >> 24) & 0xFF, 203u, 255u);
+            greens.Add((c >> 8) & 0xFF);
+        }
+        Assert.True(greens.Count > 5, "the flash phase alternates");
+
+        b.FuseRemainingMs = 600;   // brink: solid red, opacity pulses 0.65..1
+        var alphas = new HashSet<uint>();
+        for (int i = 0; i < 10; i++)
+        {
+            f.Step();
+            uint c = b.FuseRingArgb;
+            Assert.Equal(0xFF2D2Du, c & 0xFFFFFF);
+            Assert.InRange(c >> 24, 165u, 255u);
+            alphas.Add(c >> 24);
+        }
+        Assert.True(alphas.Count > 3, "the brink pulses");
+
+        b.FuseRemainingMs = 600;
+        Assert.Equal(0.5, b.DangerFactor, 6);   // half-way through the 1200 ms telegraph
+        b.FuseRemainingMs = 1300;
+        Assert.Equal(0, b.DangerFactor);
+    }
 }
