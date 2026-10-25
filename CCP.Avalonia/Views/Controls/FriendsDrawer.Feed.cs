@@ -81,8 +81,19 @@ public sealed partial class FriendsDrawer
             FillFeedLine(text, entry.Event, snap.Friends, IsNew(entry));
             var (key, n) = FriendsFeedRules.Ago(entry.Event.AtUtc, DateTime.UtcNow);
             var body = new Grid { ColumnDefinitions = new ColumnDefinitions("10,*,Auto"), MinHeight = 22 };
-            // ponytail: omit WPF's dot glow Effect under the shared looping drawer FX.
-            if (IsNew(entry)) body.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = Pink, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Tag = "friends-feed-new" });
+            if (IsNew(entry))
+            {
+                // ponytail: WPF's static Glow(Pink, 6, 0.9) as a sibling BoxShadow (P82).
+                // Keep the ellipse crisp; no Effect under the shared looping drawer FX.
+                body.Children.Add(new Border
+                {
+                    Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Background = Pink,
+                    BoxShadow = new BoxShadows(new BoxShadow { Blur = 6, Color = ((ISolidColorBrush)Pink).Color }), Opacity = 0.9,
+                    HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center,
+                    IsHitTestVisible = false, Tag = "friends-feed-new-glow",
+                });
+                body.Children.Add(new Ellipse { Width = 6, Height = 6, Fill = Pink, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, Tag = "friends-feed-new" });
+            }
             Grid.SetColumn(text, 1);
             body.Children.Add(text);
             var ago = Tagged(Label(n is int age ? Loc.GetF(key, age) : Loc.Get(key), 10, Dim, Mono), "friends-feed-ago");

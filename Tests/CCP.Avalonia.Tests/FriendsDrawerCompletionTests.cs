@@ -9,6 +9,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -25,6 +26,56 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class FriendsDrawerTests
 {
+    [Fact]
+    public Task FreshFeedGlowMatchesWpfAndClearsOnFold() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        JuiceApp();
+        var feed = new FriendsFeed(() => "account");
+        feed.Add(new FriendEvent(FriendEventKind.PokeReceived, "friend", "Friend", DateTime.UtcNow, "glow", Detail: "hi"));
+        // No request rows: this visual contract needs no platform font measurement or network.
+        var (svc, wire) = Service();
+        wire.StateBody = """{"ok":true,"friends":[],"incoming":[],"outgoing":[],"blocked":[]}""";
+        await svc.RefreshAsync();
+        var d = new FriendsDrawer(svc, asPage: true) { FeedSource = () => feed };
+        d.OnOpened();
+        void assertGlows(int count)
+        {
+            var glows = d.GetLogicalDescendants().OfType<Border>().Where(b => Equals(b.Tag, "friends-feed-new-glow")).ToArray();
+            Assert.Equal(count, glows.Length);
+            foreach (var glow in glows)
+            {
+                Assert.Equal(6, glow.Width);
+                Assert.Equal(6, glow.Height);
+                Assert.Equal(new CornerRadius(3), glow.CornerRadius);
+                Assert.False(glow.IsHitTestVisible);
+                Assert.Equal(0.9, glow.Opacity);
+                Assert.Equal(1, glow.BoxShadow.Count);
+                var shadow = glow.BoxShadow[0];
+                Assert.Equal(6, shadow.Blur);
+                Assert.Equal(0, shadow.OffsetX);
+                Assert.Equal(0, shadow.OffsetY);
+                Assert.Equal(Color.FromRgb(0xFF, 0x5F, 0xB4), shadow.Color);
+                Assert.Null(glow.Effect);
+                var body = Assert.IsType<Grid>(glow.Parent);
+                var dot = Assert.Single(body.Children, c => Equals(c.Tag, "friends-feed-new"));
+                Assert.True(body.Children.IndexOf(glow) < body.Children.IndexOf(dot));
+                Assert.Null(dot.Effect);
+            }
+        }
+        try
+        {
+            Assert.NotNull(Tagged<Control>(d, "friends-feed-new"));
+            assertGlows(1);
+            Assert.Equal(0, feed.Unread);
+            d.Render(); // read but still fresh during this opening
+            assertGlows(1);
+            d.OnClosed();
+            d.OnOpened();
+            assertGlows(0);
+        }
+        finally { d.OnClosed(); }
+    });
+
     [Fact]
     public Task FeedReadsOnlyVisibleLinesAndKeepsDotsUntilFolded() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
