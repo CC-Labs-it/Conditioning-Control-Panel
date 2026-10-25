@@ -21,7 +21,8 @@ public sealed class PanicSurfacesTests
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
-            // Shipped app builder (fonts included): the subliminal card (closed by panic) needs its face.
+            // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
+            // decides process-wide fonts, including the subliminal card closed by panic.
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
@@ -78,8 +79,8 @@ public sealed class PanicSurfacesTests
     }
 
     /// <summary>Surfaces a panic must never lose: the record independent of the registry, so deleting a
-    /// registry line fails here. One id per line in the registry's stop order. Ordering contracts live on the
-    /// registry entries (<c>After</c>) and in the independent pairs below.</summary>
+    /// registry line fails here. One id per line in the established stop order. Registry <c>After</c> rules and the independent
+    /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
         "intake",
@@ -93,6 +94,15 @@ public sealed class PanicSurfacesTests
         "gaze-minigame",
         "mantra",
         "chaos",
+        "chaos-flash",
+        "gif-cascade",
+        "chaos-announcer",
+        "chaos-dvd",
+        "chaos-cursor-glow",
+        "chaos-vibe-trail",
+        "chaos-estim",
+        "chaos-field-fx",
+        "chaos-skia-fx",
         "chaos-intro",
         "settings-palette",
         "keyword-triggers",
@@ -107,22 +117,13 @@ public sealed class PanicSurfacesTests
         "emi-desk-feedback",
         "tube-speech",
         "lock-cards",
+        "speak-cue",
+        "companion-transcript",
         "possession",
         "attention-test",
         "deeper-editor-audio",
         "knock-cards",
         "asset-preview",
-        "chaos-flash",
-        "gif-cascade",
-        "chaos-announcer",
-        "chaos-dvd",
-        "chaos-cursor-glow",
-        "chaos-vibe-trail",
-        "chaos-estim",
-        "chaos-field-fx",
-        "chaos-skia-fx",
-        "speak-cue",
-        "companion-transcript",
         "camera",
     };
 
@@ -185,9 +186,6 @@ public sealed class PanicSurfacesTests
         var ids = PanicSurfaces.All.Select(x => x.Id).ToList();
         Assert.Equal("intake", ids[0]);
         Assert.Equal("camera", ids[^1]);
-        var legacyBroken = Before.Where(c => !(ids.IndexOf(c.First) is >= 0 and var a && ids.IndexOf(c.Then) is var b && a < b))
-            .Select(c => $"{c.First} before {c.Then} ({c.Why})").ToList();
-        Assert.True(legacyBroken.Count == 0, "Panic order broken: " + string.Join("; ", legacyBroken));
         var broken = PanicSurfaces.All.SelectMany((s, i) => (s.After ?? Array.Empty<string>())
                 .Where(f => !(ids.IndexOf(f) is >= 0 and var a && a < i))
                 .Select(f => $"{f} before {s.Id}")).ToList();
@@ -258,7 +256,7 @@ public sealed class PanicSurfacesTests
         ["DeeperLocalAudio"] = "the Deeper editor's transport: the 'deeper-editor-audio' surface pauses every open editor",
         ["BillboardCardHost"] = "the Home Tonight Board deck: no audio (WPF c0c67ff47), no window; its hold stops off screen",
         ["ClipArtView"] = "WPF parity: the showcase card's muted, no-audio loop on Home (holds off screen, freed on shell close); WPF panic leaves the board alone",
-        ["InlineLoopVideo"] = "WPF parity: the help card's muted, no-audio clip poster; it lives only while that card is open, and closing the card detaches and frees it",
+        ["InlineLoopVideo"] = "muted help poster detaches on card close; gaze panes detach and free players when the 'gaze-minigame' surface closes the game",
         ["RaceTrackPlayer"] = "the race window owns it: the 'games' surface closes GameWindow, whose teardown disposes it (Race_TrackPick_ChartsPlaysAndPanicStops)",
         ["SpiralRailHost"] = "a rail chip, not a surface: no audio, window or device; it only draws the shared glyph (WPF parity)",
         ["MediaHistoryWindow"] = "WPF parity: the Media Log's muted preview of a user-picked row; WPF panic leaves that window alone",

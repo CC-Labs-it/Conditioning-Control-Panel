@@ -95,6 +95,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     }
             }
 
+            StepFixPulse(t);   // QuestsTabView.StreakFix.cs
+
             if (Env.AllowAmbientLoops && TxtSeasonTitle.IsEffectivelyVisible
                 && TxtSeasonTitle.Foreground is LinearGradientBrush brush && TxtSeasonTitle.Effect is DropShadowEffect glow)
             {
