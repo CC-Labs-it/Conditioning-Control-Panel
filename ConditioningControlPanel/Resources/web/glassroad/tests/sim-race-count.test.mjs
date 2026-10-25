@@ -63,3 +63,26 @@ test('syncCount: an outside clock carries the count; pulses never repeat, go fir
   assert.ok(race.timeS < 0.05);
   race.syncCount(-3);
 });
+
+test('catching up after GO cannot turn a late throttle press into a launch boost', () => {
+  for (const lateS of [.5, 3]) {
+    const { feel, race, ev, st, a } = setup();
+    race.start();
+    race.syncCount(feel.get('juice.countdownPulses') * 60 / feel.get('clock.bpm') + lateS);
+    a.throttle = 1;
+    race.update(DT, a, st);
+    assert.equal(race.phase, 'racing');
+    assert.equal(ev.filter(e => e[0] === 'go').length, 1);
+    assert.equal(ev.filter(e => e[0] === 'launch-boost').length, 0, 'press arrived after GO');
+  }
+});
+
+test('a throttle press on the actual GO frame still launches when the beat falls between sim steps', () => {
+  const { race, ev, st, a } = setup();
+  race.start();
+  while (race.goInS > DT) race.update(DT, a, st);
+  a.throttle = 1;
+  race.update(DT, a, st);
+  assert.equal(race.phase, 'racing');
+  assert.equal(ev.filter(e => e[0] === 'launch-boost').length, 1);
+});

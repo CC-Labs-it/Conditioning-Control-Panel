@@ -126,7 +126,7 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
       return;
     }
     if (mode === 'lob' && lobTarget(r.i, standings) < 0) return;            // alone on the road: keep it
-    send(seatArg(r, { t: 'fire', id: shotId, item: id, mode, tick: tick(), s, x }));
+    if (send(seatArg(r, { t: 'fire', id: shotId, item: id, mode, tick: tick(), s, x })) === false) return;
     shotId = (shotId % 65535) + 1;
     if (mode === 'self') self(r, id, standings);
     r.item.id = null; r.item.rolling = false; r.item.rollT = 0; r.item.heldT = 0;
@@ -153,8 +153,8 @@ export function createNetItems(track, feel, events, { send = () => {}, tick = ()
       if (b.downT > 0) continue;
       if (b.kind === 'box') {
         if (r.item.id || r.item.rolling || x.pendT > 0 || !near(r, b.s, b.x, g('boxRadiusM'))) continue;
-        b.downT = g('boxRespawnS'); b.upT = 0; x.pendT = PENDING_S;          // hidden here at once, filled on roll
-        send(seatArg(r, { t: 'pickup', box: i, tick: tick() }));
+        if (send(seatArg(r, { t: 'pickup', box: i, tick: tick() })) === false) continue;
+        b.downT = g('boxRespawnS'); b.upT = 0; x.pendT = PENDING_S;          // hidden once sent, filled on roll
       } else if (near(r, b.s, b.x, g('bubbleRadiusM'))) {
         b.downT = g('bubbleRespawnS'); b.upT = 0;
         grantBoost(r.st, g('bubbleAmount'), g('bubbleHoldS'), 'bubble', feel, sink(r.i));
