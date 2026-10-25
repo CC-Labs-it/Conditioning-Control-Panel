@@ -85,15 +85,15 @@ export function createSoftMaterial(src, pal, { haze = 1, tint = null, rimGain = 
   const wearMap = finish.metalness > 0.5 ? currentArt()?.detail('detail-gold-wear') : null;
   // Source-local scalar variation needs no UV changes on the immutable watch/chess models.
   const wear = wearMap ? texture(wearMap, positionGeometry.xy.div(0.22)).r : float(0);
-  const glazeMap = pal.theme === 'threshold' && finish.metalness < .5 && !keepsOwnColour(src)
+  const glazeMap = finish.metalness < .5 && !keepsOwnColour(src)
     ? currentArt()?.detail('detail-porcelain-roughness') : null;
   // Diagonal source projection gives curved porcelain a quiet fired-glaze variation.
   // Existing mipmapped art keeps the glaze smooth at a distance, without a new texture owner.
   const glazeUV = positionGeometry.xy.add(positionGeometry.zz.mul(.37)).div(.24);
   const glaze = glazeMap ? texture(glazeMap, glazeUV).r.sub(.5) : float(0);
-  const specPower = specExponent.mul(wear.mul(-0.22).add(1)).mul(glaze.mul(.22).add(1));
+  const specPower = specExponent.mul(wear.mul(-0.28).add(1)).mul(glaze.mul(.38).add(1));
   const spec = pow(max(dot(Nf, H), 0), specPower).mul(specGain.mul(W.specGain))
-    .mul(wear.mul(-0.15).add(1)).mul(glaze.mul(-.12).add(1));
+    .mul(wear.mul(-0.22).add(1)).mul(glaze.mul(-.20).add(1));
   const edge = max(float(1).sub(abs(dot(Nf, V))), 0);   // never negative under pow (NaN guard)
   let col = lit.add(base.mul(pal.col(1)).mul(sky));
   if (fill > 0) col = max(col, base.mul(fill));

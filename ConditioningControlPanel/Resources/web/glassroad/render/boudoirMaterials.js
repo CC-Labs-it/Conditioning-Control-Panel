@@ -4,9 +4,9 @@ import { float, vec3, sin, abs, fract, min, max, mix, smoothstep, fwidth, normal
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
 
 export const BOUDOIR_SURFACES = Object.freeze({
-  vanity: Object.freeze({ name: 'rosewood', base: '#874b53', dark: '#542935', light: '#ab7273', border: '#542935', sheen: .025 }),
+  vanity: Object.freeze({ name: 'rosewood', base: '#874b53', dark: '#542935', light: '#ab7273', border: '#542935', sheen: .045 }),
   gallery: Object.freeze({ name: 'ivory parquet', base: '#d4c3a4', dark: '#bba27b', light: '#eadbc0', border: '#322538', sheen: .035 }),
-  wardrobe: Object.freeze({ name: 'stitched satin', base: '#7f294a', dark: '#55192f', light: '#9f4968', border: '#42182e', sheen: .035 }),
+  wardrobe: Object.freeze({ name: 'stitched satin', base: '#7f294a', dark: '#55192f', light: '#9f4968', border: '#42182e', sheen: .055 }),
   spa: Object.freeze({ name: 'porcelain', base: '#e1ddce', dark: '#1f6d70', light: '#f0e5d0', border: '#1f6d70', sheen: .07 }),
   mirror: Object.freeze({ name: 'pale stone', base: '#d2cbd1', dark: '#aaa5b1', light: '#eae2da', border: '#9e929e', sheen: .06 }),
 });
@@ -79,28 +79,28 @@ export function createBoudoirRoadSurface({ track, p, trueEdge, distance, view, n
   const boardShift = sin(x.mul(TAU / 5.6)).mul(1.1);
   const grainCoord = x.add(sin(s.mul(TAU / fit(44))).mul(.12));
   const flameCoord = grainCoord.add(sin(s.mul(TAU / fit(15))).mul(.19));
-  const grain = wave(flameCoord, .62).mul(.075).add(wave(grainCoord, 1.8).mul(.065));
+  const grain = wave(flameCoord, .62).mul(.11).add(wave(grainCoord, 1.8).mul(.095));
   const pores = wave(flameCoord.add(s.mul(.15 / fit(6))), .15).mul(.018);
   const boards = seam(x, 2.8, .035).add(seam(s.add(boardShift), fit(9.5), .028)).min(1);
   const boardWax = seam(x, 2.8, .16).sub(boards).max(0);
-  const wood = tint('vanity', grain.add(pores).add(.52)).mul(one().sub(boards.mul(.38)))
-    .add(rgb('#bc8680').mul(boardWax).mul(.035));
+  const wood = tint('vanity', grain.add(pores).add(.52)).mul(one().sub(boards.mul(.46)))
+    .add(rgb('#bc8680').mul(boardWax).mul(.065));
 
   // Diagonal parquet blocks use two broad grain directions and restrained gold inlay.
   const diagonalA = s.add(x), diagonalB = s.sub(x), parquetPeriod = fit(6);
   const parquet = wave(diagonalA, parquetPeriod * 2).mul(wave(diagonalB, parquetPeriod * 2));
   const parquetJoints = max(seam(diagonalA, parquetPeriod, .045), seam(diagonalB, parquetPeriod, .045));
-  const parquetGrain = mix(wave(diagonalA, .7), wave(diagonalB, .7), parquet.mul(.5).add(.5)).mul(.04);
+  const parquetGrain = mix(wave(diagonalA, .7), wave(diagonalB, .7), parquet.mul(.5).add(.5)).mul(.065);
   const parquetBevel = max(seam(diagonalA, parquetPeriod, .15), seam(diagonalB, parquetPeriod, .15))
     .sub(parquetJoints).max(0);
   const gallery = mix(tint('gallery', parquet.mul(.17).add(parquetGrain).add(.62)), gold, parquetJoints.mul(.65))
     .mul(one().sub(parquetBevel.mul(.075)));
 
   // Fabric keeps a broad velvet nap. Small weave and stitched borders fade by footprint.
-  const nap = wave(x.add(sin(s.mul(TAU / fit(84))).mul(.3)), 8).mul(.12);
+  const nap = wave(x.add(sin(s.mul(TAU / fit(84))).mul(.3)), 8).mul(.19);
   const threadAlong = wave(x.add(s.mul(.6 / fit(.6))), .6);
   const threadAcross = wave(x.sub(s.mul(.6 / fit(.6))), .6);
-  const weave = threadAlong.mul(threadAcross).mul(.035);
+  const weave = threadAlong.mul(threadAcross).mul(.05);
   const stitchDash = wave(s, fit(.9)).mul(.5).add(.5);
   const borderStitch = seam(trueEdge.sub(.65), 1.1, .045).mul(one().sub(smoothstep(1.5, 2.5, trueEdge)));
   const satin = mix(tint('wardrobe', nap.add(weave).add(.52)), gold, borderStitch.mul(stitchDash).mul(.8));
@@ -110,12 +110,12 @@ export function createBoudoirRoadSurface({ track, p, trueEdge, distance, view, n
   const tileTone = wave(x, 9).mul(wave(s, fit(9))).mul(.06).add(.88);
   const tileBevel = max(seam(x, 4.5, .16), seam(s, tilePeriod, .16)).sub(tileJoints).max(0);
   const porcelain = mix(rgb('#b5d0c3'), rgb(BOUDOIR_SURFACES.spa.light), tileTone)
-    .mul(one().sub(tileJoints.mul(.29)).sub(tileBevel.mul(.055)));
+    .mul(one().sub(tileJoints.mul(.36)).sub(tileBevel.mul(.085)));
 
   // Wide stone slabs and faint continuous mineral veins, independent of scrolling effects.
   const veinCoord = x.add(s.mul(18 / fit(230))).add(sin(s.mul(TAU / fit(73))).mul(1.7));
   const mineralCoord = veinCoord.add(sin(s.mul(TAU / fit(21))).mul(.22));
-  const veins = seam(mineralCoord, 18, .18).mul(.22);
+  const veins = seam(mineralCoord, 18, .18).mul(.31);
   const mineralHalo = seam(mineralCoord, 18, .65).sub(veins).max(0).mul(.025);
   const stoneJoints = max(seam(x, 8, .025), seam(s, fit(12), .025));
   const stone = tint('mirror', wave(s.add(x), fit(38)).mul(.035).add(.83))

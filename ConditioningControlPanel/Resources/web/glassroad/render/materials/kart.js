@@ -53,9 +53,9 @@ export function createKartSurface(src, look, R) {
   const glaze = currentArt()?.detail('detail-porcelain-roughness');
   if (glaze) {
     const ceramic = clamp(attribute('_cup_tint', 'float').add(attribute('_saucer_tint', 'float')).mul(keep), 0, 1);
-    const rough = clamp(texture(glaze, uv().mul(6)).r, 0.2, 0.65);
+    const rough = clamp(texture(glaze, uv().mul(6)).r.mul(.72).add(.08), 0.22, 0.52);
     m.roughnessNode = mix(materialRoughness, rough, ceramic.mul(0.65));
-    m.clearcoatNode = mix(float(src.clearcoat || 0), float(0.32), ceramic);
+    m.clearcoatNode = mix(float(src.clearcoat || 0), float(0.38), ceramic);
     m.clearcoatRoughnessNode = mix(float(src.clearcoatRoughness || 0.1), float(0.24), ceramic);
   }
   const fres = pow(float(1).sub(abs(normalView.dot(positionViewDirection))), R.rimPow);
