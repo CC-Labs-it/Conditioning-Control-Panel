@@ -63,6 +63,13 @@ import { createPhraseGates } from './phraseGates.js';
 import { createAirWords } from './airWords.js';
 import { createVeils } from './veil.js';
 import { createMarquees } from './marquee.js';
+import { createCueShift } from './cueShift.js';
+import { createCueGantries } from './cueGantry.js';
+import { createCueBar } from './cueBar.js';
+import { createCueParticles } from './cueParticles.js';
+import { createCueWindows } from './cueWindows.js';
+import { createCueGiants } from './cueGiants.js';
+import { createCueProps } from './cueProps.js';
 import { createWaterfall } from './waterfall.js';
 import { buildWaterVolume } from './waterVolume.js';
 import { waterTable, tableCode } from './waterMath.js';
@@ -200,11 +207,11 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const owned = [], offs = [];
   const add = (m) => { if (m) { scene.add(m); owned.push(m); } return m; };
 
-  let sun = null;
+  let sun = null, hemi = null;
   if (art) {
     // the glTF props and kart are lit (standard / physical materials); everything else is unlit
     const L = isMainframe ? { ...LOOK.artLight, sky: '#d1ffe8', ground: '#142c31' } : goon ? { ...LOOK.artLight, sky: '#fff4fc', ground: '#713257' } : LOOK.artLight;
-    scene.add(new HemisphereLight(L.sky, L.ground, L.hemi));
+    hemi = new HemisphereLight(L.sky, L.ground, L.hemi); scene.add(hemi);
     sun = new DirectionalLight(L.sky, L.sun);
     sun.position.set(LOOK.lightDir[0], LOOK.lightDir[1], LOOK.lightDir[2]);
     scene.add(sun);
@@ -369,6 +376,12 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   const veils = createVeils(scene, track, { feel, photosafe });
   let cueMediaSource = () => null;
   const marquees = globalThis.document ? createMarquees(scene, track, { feel, photosafe, source: seed => cueMediaSource(seed) }) : null;
+  // The rest of the song cue kit. Canvas-backed pieces need a document; the fog and particles do not.
+  const cueShift = createCueShift(scene, { hemi, sun }), cueParticles = createCueParticles(scene);
+  const doc = !!globalThis.document;
+  const gantries = doc ? createCueGantries(scene, track) : null, cueBar = doc ? createCueBar(scene, track) : null;
+  const cueWindows = doc ? createCueWindows(scene, track, { source: seed => cueMediaSource(seed) }) : null;
+  const cueGiants = createCueGiants(scene), cueProps = doc ? createCueProps(scene, track, { particles: cueParticles }) : null;
   try { wordRush = globalThis.document ? createWordRush({ bus, feel, track, pal }) : null; } catch (e) { console.warn('[glassroad/world] word rush failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)
@@ -632,7 +645,24 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     airWords.update(view.airWords, dt, { paused: !!view.paused, mode: view.mode, gentle });
     veils.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle,
       bass: view.audioReactive?.bass || 0, palette: [pal.primaryHex(), pal.accentHex()] });
-    marquees?.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle, songS: view.songS });
+    marquees?.update(view.songCues, dt, { paused: !!view.paused, gentle: view.cueGentle ?? gentle, songS: view.songS, song: view.song });
+    const cues = view.songCues || [], cueOpts = { songS: view.songS, song: view.song, kart: k, camera: view.camera, dt,
+      paused: !!view.paused, gentle: view.cueGentle ?? gentle, speed: view.cueSpeed || 0, solo: view.cueSolo !== false };
+    cueShift.update(cues, view.songS, { paused: !!view.paused, bpm: view.song?.bpm || 0, gentle: cueOpts.gentle, at: view.camera?.position });
+    gantries?.update(cues, cueOpts);
+    cueBar?.update(cues, view.songCueList || [], cueOpts);
+    cueWindows?.update(cues, cueOpts);
+    cueGiants.update(cues, cueOpts);
+    cueProps?.update(cues, cueOpts);
+    for (const row of view.cueFired || []) {
+      // Crossing a veil throws confetti off it; the install bar shatters into shards in the sky.
+      if (row.kind === 'VEIL' && row.frame) cueParticles.burst('confetti', [row.frame.p[0] + row.frame.n[0] * 3, row.frame.p[1] + row.frame.n[1] * 3, row.frame.p[2] + row.frame.n[2] * 3],
+        { count: 70, dir: row.frame.t, speed: 18, spread: .9, up: 5, size: 1.1, life: 2.4, gentle: cueOpts.gentle });
+      if (row.kind === 'BURST' && row.params?.variant === 'shards' && cueBar)
+        cueParticles.burst('shards', [cueBar.anchor.x, cueBar.anchor.y, cueBar.anchor.z], { count: 160, dir: [0, .2, 0], speed: 34, spread: 1, up: 8,
+          size: 4.5, life: 3.5, gravity: 10, gentle: cueOpts.gentle });
+    }
+    cueParticles.update(dt, { paused: !!view.paused });
   }
 
   let disposed = false;
@@ -660,6 +690,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     airWords.dispose();
     veils.dispose();
     marquees?.dispose(); cueMediaSource = () => null;
+    for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.dispose();
     if (waterfall) waterfall.dispose();
     waterVolume.dispose();
     underwaterFx.dispose();
@@ -680,9 +711,9 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { veils, marquees, setItemMediaSource: source => { cueMediaSource = source; itemVis?.setMediaSource(source); }, primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
+  return { veils, marquees, cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps, setItemMediaSource: source => { cueMediaSource = source; itemVis?.setMediaSource(source); }, primaryColour: () => pal.primaryHex(), musicColours: () => [pal.primaryHex(), pal.accentHex()], scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, airWords, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles
-    resetReactions: () => { itemVis?.clear(); marquees?.clear(); veils.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
+    resetReactions: () => { itemVis?.clear(); marquees?.clear(); veils.clear(); for (const x of [cueShift, cueParticles, gantries, cueBar, cueWindows, cueGiants, cueProps]) x?.clear(); phraseGates.clear(); airWords.clear(); if (scene.fog) scene.fog.density = 0; underwaterFx.reset(); waterVolume.reset(); waterfall?.reset(); stones?.reset(); boudoirHazardView?.reset(); goonworks?.reset(); goonworksHazards?.reset(); karts.resetReactions(); skids.clear(); if (wordVis) wordVis.clear(); if (wordFx) wordFx.clear(); if (roadWords) roadWords.clear(); if (wordRush) wordRush.clear(); } };
 }

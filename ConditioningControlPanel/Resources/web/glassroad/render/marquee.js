@@ -3,30 +3,41 @@ import { Group, Mesh, InstancedMesh, Object3D, BoxGeometry, PlaneGeometry, Torus
 import { acquireLoomAtlas } from './loomAtlas.js';
 import { wordTheme } from './wordTheme.js';
 
-const CAPACITY = 6, LINKS = 18, CW = 512, CH = 288;
+const CAPACITY = 12, LINKS = 30, CW = 512, CH = 288;
 const unit = x => Math.max(0, Math.min(1, Number(x) || 0));
 const ease = x => { const u = unit(x); return u * u * (3 - 2 * u); };
 
-// Song-relative motion only. The camera and physical road never participate.
-export function marqueePose(row, songS, gentle = false, side = 0) {
-  const w = Math.max(12, Math.min(30, (row.frame?.w || 24) * .78)), h = w * .5625;
+// Song-relative motion only, around a fixed road spot. The camera and physical road never participate.
+// The drop lands exactly on startS (gravity: slow at the top, fastest at impact), bounces twice, then sways
+// one swing per two beats and dips on every beat. An exit at endS snaps one chain (swing off the road) or winches up.
+const FALL_S = 1.05, FALL_M = 46;
+export function marqueePose(row, songS, gentle = false, side = 0, beat = null) {
+  const w = Math.max(14, Math.min(32, (row.frame?.w || 24) * .9)) * (side ? .78 : 1), h = w * .5625;
   const age = songS - row.startS, exit = Math.max(0, songS - row.endS);
-  const fall = 32 * (1 - unit((age + 1.1) / 1.1) ** 2);
-  const bounce = gentle || age < 0 || age >= .72 ? 0 : Math.abs(Math.sin(age / .36 * Math.PI)) * 2.2 * (1 - age / .72);
+  const u = unit((age + FALL_S) / FALL_S), fall = FALL_M * (1 - u * u);
+  const bounce = gentle || age < 0 || age >= .9 ? 0 : Math.abs(Math.sin(age / .45 * Math.PI)) * 2.6 * (1 - age / .9) ** 1.5;
+  let sway = 0, dip = 0;
+  if (!gentle && age > 0 && beat?.bpm > 0) {
+    const ph = (songS - (beat.downbeatS || 0)) * beat.bpm / 60, frac = ph - Math.floor(ph);
+    const settle = unit(age / 1.2);
+    sway = Math.sin(ph * Math.PI) * .07 * settle;
+    dip = Math.exp(-frac * 7) * .7 * settle;
+  } else if (!gentle && age > 0) sway = Math.sin(age * 1.3 + side) * .05;
   let jolt = 0;
   if (!gentle) for (const at of row.joltTimes || []) {
     const d = songS - at;
-    if (d >= 0 && d < .65) jolt += Math.sin(d * Math.PI * 4 / .65) * (1 - d / .65) * .035;
+    if (d >= 0 && d < .65) jolt += Math.sin(d * Math.PI * 4 / .65) * (1 - d / .65) * .09;
   }
-  const swing = gentle || age < 0 ? 0 : Math.sin(age * 1.3 + side) * .045 + jolt;
-  const snap = row.params?.exit === 'snap', away = ease(exit / (gentle ? 2.4 : 1.6));
-  const direction = side || 1, roll = swing + (!gentle && snap ? direction * away * 1.1 : 0);
-  const x = side * ((row.frame?.w || 24) / 2 + w / 2 + 1.5) + (snap ? direction * away * (w + 12) : 0);
+  const snap = row.params?.exit === 'snap', away = ease(exit / (gentle ? 2.4 : 1.3));
+  const direction = side || (row.params?.snapSide ?? 1);
+  const roll = sway + jolt + (!gentle && snap ? direction * away * 1.25 : 0);
+  const x = side * ((row.frame?.w || 24) / 2 + w / 2 + 2) + (snap ? direction * away * (w + 18) : 0);
   // Rotation cannot lower any corner into the seven-metre road clearance.
   const extent = Math.abs(Math.cos(roll)) * (h + .8) / 2 + Math.abs(Math.sin(roll)) * (w + .8) / 2;
-  const y = Math.max(7.2 + extent, 8.4 + h / 2 + fall + bounce + away * 38);
-  return { x, y, w, h, roll, yaw: gentle ? 0 : Math.sin(Math.max(0, age) * .7) * .055,
-    whip: gentle ? 0 : bounce * .4 + Math.abs(jolt) * 14, away, bottom: y - extent };
+  const y = Math.max(7.2 + extent, 7.8 + h / 2 + fall + bounce - dip + away * (snap ? 14 : 44));
+  return { x, y, w, h, roll, yaw: gentle ? 0 : Math.sin(Math.max(0, age) * .7) * .05,
+    whip: gentle ? 0 : bounce * .5 + Math.abs(jolt) * 10 + dip * .6 + (age > -FALL_S && age < 0 ? .8 : 0), away, bottom: y - extent,
+    snapped: snap && exit > 0 ? (direction > 0 ? 0 : 1) : -1 };
 }
 
 /** A bounded copy of the existing consent-valid decoder, cleared even on a paused source-off. */
@@ -71,9 +82,23 @@ export function createMarqueeSurface(canvas, atlas, style = 0) {
     texture.needsUpdate = true;
     return true;
   }
+  let termKey = null;
+  /** A terminal face: green monospace text on black with a block cursor. Never touches media. */
+  function terminal(text, cursor) {
+    const key = text + (cursor ? '|' : '');
+    if (disposed || key === termKey) return false;
+    termKey = key; last = null; blank();
+    ctx.fillStyle = '#061309'; ctx.fillRect(0, 0, CW, CH);
+    ctx.fillStyle = '#52e256'; ctx.font = '700 64px ui-monospace, Consolas, monospace'; ctx.textBaseline = 'middle';
+    const line = '> ' + text;
+    ctx.fillText(line, 28, CH / 2);
+    if (cursor) { const w = ctx.measureText?.(line)?.width ?? line.length * 38; ctx.fillRect(34 + w, CH / 2 - 30, 34, 60); }
+    texture.needsUpdate = true;
+    return true;
+  }
   blank(); paint(null, 0);
-  return { texture, paint, get privatePixels() { return privatePixels; },
-    clear() { blank(); last = null; lastPaint = -Infinity; texture.needsUpdate = true; },
+  return { texture, paint, terminal, get privatePixels() { return privatePixels; },
+    clear() { blank(); last = null; termKey = null; lastPaint = -Infinity; texture.needsUpdate = true; },
     dispose() { if (disposed) return; blank(); disposed = true; last = null; canvas.width = canvas.height = 1; texture.dispose(); } };
 }
 
@@ -88,12 +113,12 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
   const matrix = new Matrix4(), xAxis = new Vector3(), yAxis = new Vector3(), zAxis = new Vector3();
   const dummy = new Object3D(), from = new Vector3(), to = new Vector3(), delta = new Vector3(), up = new Vector3(0, 1, 0);
   let clock = 0, disposed = false, cursor = 0, copies = 0;
-  const material = options => { const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, ...options }); materials.push(m); return m; };
+  const material = options => { const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false, ...options }); materials.push(m); return m; };
   for (let i = 0; i < CAPACITY; i++) {
     const root = new Group(), hanger = new Group(), screen = new Group(); root.add(hanger, screen); object.add(root);
     root.name = 'marquee-slot-' + i; root.visible = false;
     const ink = material({ color: theme.ink }), rim = material({ color: theme.accent });
-    const metal = material({ color: '#a7a4ad' }), cloth = material({ color: theme.accent });
+    const metal = material({ color: '#2a2230' }), cloth = material({ color: theme.accent });
     const surface = createMarqueeSurface(make(), atlas?.texture, i);
     const picture = material({ map: surface.texture, side: DoubleSide });
     const backing = new Mesh(box, ink), border = new Mesh(box, rim), face = new Mesh(plane, picture);
@@ -109,8 +134,9 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     for (const s of slots) { s.root.visible = false; s.id = null; s.row = null; s.surface.clear(); }
     clock = 0; cursor = 0;
   }
+  let beat = null;
   function pose(s, row, time, gentle) {
-    const p = marqueePose(row, time, gentle || s.soft, s.side), f = row.frame;
+    const p = marqueePose(row, time, gentle || s.soft, s.side, beat), f = row.frame;
     s.root.position.fromArray(f.p);
     matrix.makeBasis(xAxis.fromArray(f.b), yAxis.fromArray(f.n), zAxis.fromArray(f.t).negate());
     s.root.quaternion.setFromRotationMatrix(matrix);
@@ -129,7 +155,9 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
       const anchorX = s.side ? p.x + sign * (p.w / 2 + 2) : sign * (f.w / 2 + 3);
       // In a side pair both anchors stay outside the road, including their mounts.
       const outsideX = s.side ? s.side * Math.max(f.w / 2 + 3, Math.abs(anchorX)) : anchorX;
-      from.set(outsideX, 64, -4); to.set(sign * p.w * .43, p.h / 2 + .15, 0).applyMatrix4(s.screen.matrix);
+      to.set(sign * p.w * .43, p.h / 2 + .15, 0).applyMatrix4(s.screen.matrix);
+      // Chains rise out of sight to anchors beyond the road edge, so nothing ever stands on the road.
+      from.set(outsideX, p.y + 70, -2);
       s.anchors[side].position.copy(from); s.anchors[side].scale.set(1.2, .8, 1.2);
       delta.subVectors(to, from); const length = delta.length(); delta.normalize();
       for (let j = 0; j < LINKS; j++) {
@@ -138,9 +166,9 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
         dummy.position.z += Math.sin(u * Math.PI) * Math.sin(time * 10 - u * 6) * p.whip;
         dummy.quaternion.setFromUnitVectors(up, delta);
         if (chains) dummy.rotateY(j % 2 * Math.PI / 2);
-        dummy.scale.set(chains ? .22 : cables ? .15 : row.params?.variant === 'satin' ? .65 : .4,
-          length / LINKS * (chains ? .61 : 1.05), chains ? .22 : .1);
-        if (row.params?.exit === 'snap' && p.away > 0) dummy.scale.multiplyScalar(1 - p.away);
+        dummy.scale.set(chains ? .5 : cables ? .22 : row.params?.variant === 'satin' ? .65 : .4,
+          length / LINKS * (chains ? .62 : 1.05), chains ? .5 : .14);
+        if (p.snapped === side) dummy.scale.multiplyScalar(Math.max(0, 1 - p.away * 3));
         dummy.updateMatrix(); (chains ? s.chain : s.straps).setMatrixAt(idx, dummy.matrix);
       }
     }
@@ -148,13 +176,15 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
   }
   const hide = () => { if (visibility?.hidden) clear(); };
   visibility?.addEventListener?.('visibilitychange', hide);
-  function update(rows = [], dt = 0, { paused = false, gentle = safety?.on ?? !!feel?.get('gentle.on'), songS = clock } = {}) {
+  function update(rows = [], dt = 0, { paused = false, gentle = safety?.on ?? !!feel?.get('gentle.on'), songS = clock, song = null } = {}) {
+    beat = song?.bpm > 0 ? { bpm: song.bpm, downbeatS: song.downbeatS || 0 } : null;
     if (disposed) return;
     if (visibility?.hidden) { clear(); return; }
     if (!paused && Number.isFinite(songS)) clock = songS;
     const wanted = new Map();
-    for (const row of rows) if (row.kind === 'MARQUEE' && row.frame && row.alpha > .001) {
-      const sides = row.params?.count === 2 ? [-1, 1] : [0];
+    // A spot is only shown once it has settled on the road, so it never slides with the kart.
+    for (const row of rows) if (row.kind === 'MARQUEE' && row.frame && row.locked && row.alpha > .001) {
+      const sides = row.params?.count === 3 ? [-1, 0, 1] : row.params?.count === 2 ? [-1, 1] : [0];
       for (const side of sides) wanted.set(row.id + ':' + side, { row, side });
     }
     for (const s of slots) if (s.id && !wanted.has(s.id)) { s.root.visible = false; s.id = null; s.row = null; s.surface.clear(); }
@@ -169,6 +199,12 @@ export function createMarquees(scene, track, { feel, photosafe, gentle: safety, 
     let budget = 2;
     for (let j = 0; j < slots.length; j++) {
       const i = (cursor + j) % slots.length, s = slots[i]; if (!s.id) continue;
+      const term = s.row?.params?.terminal;
+      if (term) {
+        // Typed one letter per 0.11 s from the cue; the cursor blinks on the beat.
+        const typed = String(s.row.params.text || '').slice(0, Math.max(0, Math.floor((clock - s.row.startS) / .11)));
+        s.surface.terminal(typed, Math.floor(clock * 2.2) % 2 === 0); continue;
+      }
       const picture = source(i);
       if (s.surface.paint(picture, clock, { paused, allowed: budget > 0 })) { copies++; if (picture) budget--; }
     }

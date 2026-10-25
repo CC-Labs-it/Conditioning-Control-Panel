@@ -23,7 +23,7 @@ test('hidden tabs purge copied marquee pixels even when animation is suspended',
   assert.equal(effect.stats.privateSurfaces, 0); assert.equal(effect.stats.active, 0);
   effect.update([row()], 0, { paused: true }); assert.equal(effect.stats.privateSurfaces, 0); effect.dispose();
 });
-const row = (extra = {}) => ({ id: 'screen', kind: 'MARQUEE', startS: 3, endS: 8, bornS: 1, alpha: 1,
+const row = (extra = {}) => ({ id: 'screen', kind: 'MARQUEE', startS: 3, endS: 8, bornS: 1, alpha: 1, locked: true,
   frame: { p: [0, 0, 0], b: [1, 0, 0], n: [0, 1, 0], t: [0, 0, -1], w: 32 },
   params: { variant: 'chains', exit: 'snap' }, joltTimes: [4, 5, 6], ...extra });
 function canvas() {
@@ -41,8 +41,10 @@ test('drop lands on the cue, bounces twice, holds and exits with seven metres of
   const r = row(), settled = marqueePose(r, 3);
   assert.ok(marqueePose(r, 2).y > settled.y + 25);
   assert.ok(marqueePose(r, 3.18).y > settled.y);
-  assert.ok(marqueePose(r, 3.54).y > marqueePose(r, 3.36).y);
-  assert.ok(marqueePose(r, 10).y > marqueePose(r, 8).y + 30);
+  assert.ok(marqueePose(r, 3.675).y > marqueePose(r, 3.45).y);   // the second, smaller bounce
+  assert.ok(Math.abs(marqueePose(r, 10).x) > 20);                  // a snapped chain swings it off the road
+  const winch = row({ params: { exit: 'winch' } });
+  assert.ok(marqueePose(winch, 10).y > marqueePose(winch, 8).y + 30);
   for (const gentle of [false, true]) for (const side of [-1, 0, 1]) for (const exit of ['snap', 'winch']) {
     for (let t = 0; t < 12; t += .017) {
       const p = marqueePose(row({ params: { exit } }), t, gentle, side);
@@ -139,7 +141,7 @@ test('real course frames keep a proper rotation and show the picture toward the 
 
 test('unavailable Loom still builds warmed screens with a procedural fallback', () => {
   const { effect, canvases } = setup({ acquireAtlas() { throw new Error('unavailable'); } });
-  assert.equal(effect.stats.capacity, 6);
+  assert.equal(effect.stats.capacity, 12);
   assert.ok(canvases.every(c => c.calls.filter(v => v === 'clear').length > 8));
   effect.update([row()], .1, { songS: 4 }); assert.equal(effect.stats.active, 1);
   assert.equal(effect.stats.privateSurfaces, 0); effect.dispose();

@@ -24,13 +24,14 @@ function frames(fx, seconds, options = {}, onFrame = () => {}) {
 }
 
 test('veils span the road plus shoulders with bounded height, prebuilt resources and pause', () => {
-  assert.deepEqual(veilSize(cue.frame, { height: 99 }), { width: 24, height: 5 });
-  assert.equal(veilSize(cue.frame, { height: 0.5 }).height, 3);
+  // A curtain: road width plus shoulders, two to three kart heights, bounded either way.
+  assert.deepEqual(veilSize(cue.frame, { height: 99 }), { width: 28, height: 9 });
+  assert.equal(veilSize(cue.frame, { height: 0.5 }).height, 5);
   const scene = new Scene(), requests = [], fx = createVeils(scene, {}, { photosafe: { request: k => { requests.push(k); return true; } } });
   const resources = fx.object.children.map(m => [m.geometry, m.material]);
   fx.update([cue], .1); assert.equal(fx.stats.visible, 1);
   const mesh = fx.object.children.find(m => m.visible);
-  assert.equal(mesh.scale.x, 24); assert.equal(mesh.scale.y, 4);
+  assert.equal(mesh.scale.x, 28); assert.equal(mesh.scale.y, veilSize(cue.frame, cue.params).height);
   assert.equal(requests.length, 1); assert.equal(mesh.material.depthWrite, false);
   const state = fx.stats; fx.update([cue], 1, { paused: true }); assert.deepEqual(fx.stats, state);
   fx.update([cue], .1); assert.equal(requests.length, 1);
