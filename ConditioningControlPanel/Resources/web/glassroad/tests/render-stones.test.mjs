@@ -59,7 +59,7 @@ test('stone layout: one coherent row per challenge island, the root 0.55 under t
   assert.equal(rows.length, tiles);
   assert.equal(new Set(rows.map((r) => r.stone)).size, field.stones.length, 'every stone has a tile');
   for (const r of rows) assert.ok(r.tiles === 1 && r.scaleT >= 1.4 && r.scaleX === 2, r.id + ' tile scale ' + r.scaleT);
-  assert.ok(rows.length >= 10, 'tiles ' + rows.length);
+  assert.ok(rows.length >= field.lanes.length * 2, 'tiles ' + rows.length);
   for (const r of rows) {
     const f = track.frameAt(r.s);
     const d = r.p.map((v, i) => v - f.p[i]);
