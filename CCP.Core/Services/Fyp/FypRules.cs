@@ -16,6 +16,18 @@ namespace ConditioningControlPanel.Services.Fyp;
 /// </summary>
 internal static class FypRules
 {
+    /// <summary>WPF OnEyeGaze: calibration-monitor DIPs -> physical desktop -> feed client.
+    /// Unknown monitor origins and invalid calibration scales retain the legacy fallback.</summary>
+    public static (double X, double Y, bool Inside) GazePoint(double x, double y,
+        double calibrationScale, double monitorX, double monitorY, bool knownMonitor,
+        double webX, double webY, double webScale, double width, double height)
+    {
+        var dpi = calibrationScale is > 0.25 and < 8 ? calibrationScale : 1;
+        var nx = (x * dpi + (knownMonitor ? monitorX : 0) - webX) / webScale / width;
+        var ny = (y * dpi + (knownMonitor ? monitorY : 0) - webY) / webScale / height;
+        return (Math.Clamp(nx, 0, 1), Math.Clamp(ny, 0, 1), nx >= 0 && nx <= 1 && ny >= 0 && ny <= 1);
+    }
+
     // Passive-XP cap: a misbehaving page can't fountain XP (12/min beats any real 20-40s slice rate).
     public const int MaxClipXpPerMinute = 12;
     public const int ClipXp = 5;

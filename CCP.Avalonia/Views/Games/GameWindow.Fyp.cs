@@ -22,8 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// The For You feed's host (WPF Services/Fyp/FypHostService.cs): <c>fyp/index.html</c> on the app's origin,
     /// the library through the asset gate every game uses, the rules in Core <see cref="FypRules"/> (shared
     /// with WPF). BRIGHT LINE: batches and probes go straight to the provider, media only when RemoteAllowed.
-    /// <para>ponytail: not on this head yet - eye control (init says off; a toggle gets eyeStatus "unsupported"),
-    /// ghost mode (WPF's own unavailable answer), calibrate and EMI's fypOpened/fypClosed.</para>
+    /// <para>ponytail: not on this head yet - native ghost mode and EMI's fypOpened/fypClosed moment bus.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -68,7 +67,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     };
                 }
                 var assets = FypAssets();
-                Post(FypRules.BuildInit(CoreSettings.Current, assets, eyeControl: false, FypStatsPath));
+                Post(FypRules.BuildInit(CoreSettings.Current, assets, eyeControl: true, FypStatsPath));
+                if (CoreSettings.Current.FypEyeControl) FypEyeTask = EnableFypEyes();
                 Log.Information("[Game] fyp: page ready, init sent ({N} library clips)", assets.Count);   // WPF :124 "launched"
             }
             catch (Exception ex) { Log.Warning("[Game] fyp: init failed: {E}", ex.Message); }
@@ -144,11 +144,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "file-menu":
                     ShowFypFileMenu((string?)o["id"]);
                     return true;
+                case "calibrate":
+                    FypEyeTask = CalibrateFypEyes();
+                    return true;
                 case "settings-changed":
                     ApplyFypSetting((string?)o["key"], o["value"]);
                     return true;
                 default:
-                    return false;   // close / log / boot-error: the shell's; calibrate: see ponytail
+                    return false;   // close / log / boot-error: the shell's
             }
         }
 
@@ -187,12 +190,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Post(new { type = "ghost-unavailable", reason = "unsupported" });
                     break;
                 case FypRules.SettingEffect.EyeControlOn:
-                    // WPF FailEyeControl (:1278): stored off again, and the page told the truth - the camera
-                    // exists (WebcamTracker), this host just does not drive the feed from it yet.
-                    s.FypEyeControl = false;
-                    PostFypEyeStatus("unsupported");
+                    FypEyeTask = EnableFypEyes();
                     break;
                 case FypRules.SettingEffect.EyeControlOff:
+                    DisableFypEyes();
+                    PostFypEyeStatus(null);
+                    break;
                 case FypRules.SettingEffect.EyeGazeChanged:
                     PostFypEyeStatus(null);
                     break;
@@ -203,7 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void PostFypEyeStatus(string? reason)
         {
             var s = CoreSettings.Current;
-            Post(new { type = "eyeStatus", enabled = s.FypEyeControl, gaze = s.FypEyeGaze, running = false, calibrated = false, reason });
+            Post(new { type = "eyeStatus", enabled = s.FypEyeControl, gaze = s.FypEyeGaze, running = FypCameraRunning(), calibrated = WebcamTracker.Instance.Calibration != null, reason });
         }
 
         /// <summary>WPF ServeRemoteBatch (:360): one batch per ask, single-flight, refused quietly without RemoteAllowed.</summary>

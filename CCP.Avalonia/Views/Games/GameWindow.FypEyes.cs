@@ -1,0 +1,121 @@
+using System;
+using System.Threading.Tasks;
+using Avalonia;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp;
+using ConditioningControlPanel.Services.Webcam;
+using Serilog;
+
+namespace ConditioningControlPanel.Avalonia.Views.Games;
+
+internal sealed partial class GameWindow
+{
+    private bool _fypEyeEnabling, _fypEyeSubscribed, _fypOwnsCamera;
+    internal Func<DateTime> FypEyeClock = () => DateTime.UtcNow;
+    private DateTime _fypLastGaze = DateTime.MinValue;
+    internal Task? FypEyeTask;
+    // Hardware/modal boundaries only: tests never open a camera or a real consent window.
+    internal Func<bool> FypCameraRunning = () => WebcamTracker.Instance.IsRunning;
+    internal Func<Task<bool>> FypStartCamera = () => WebcamTracker.Instance.StartAsync();
+    internal Action FypStopCamera = () => _ = WebcamTracker.Instance.StopAsync();
+    internal Func<Task<bool>>? FypConsent;
+    internal Func<Task>? FypCalibration;
+
+    private async Task<bool> GetFypConsent()
+    {
+        if (FypConsent != null) return await FypConsent();
+        if (WebcamConsent.IsCurrent(CoreSettings.Current)) return true;
+        var dialog = new WebcamConsentDialog();
+        return await dialog.ShowDialog<bool>(this) && dialog.ConsentGiven;
+    }
+
+    private async Task EnableFypEyes()
+    {
+        if (_fypEyeEnabling || _fypEyeSubscribed || _closing) return;
+        _fypEyeEnabling = true;
+        try
+        {
+            await Task.Yield(); // leave the browser callback before opening a modal dialog
+            if (!await GetFypConsent()) { FailFypEyes("consent"); return; }
+            if (_closing || !CoreSettings.Current.FypEyeControl) return;
+            if (!FypCameraRunning())
+            {
+                PostFypEyeStatus("starting");
+                if (!await FypStartCamera())
+                {
+                    FailFypEyes(WebcamTracker.Instance.State == WebcamTrackingState.Error ? "error" : "no-camera");
+                    return;
+                }
+                _fypOwnsCamera = true;
+            }
+            // Closing / toggling off during Start must return the camera we acquired.
+            if (_closing || !CoreSettings.Current.FypEyeControl) { DisableFypEyes(); return; }
+            var camera = WebcamTracker.Instance;
+            camera.OnBlink += FypBlink;
+            camera.OnEyesClosedLong += FypEyesClosed;
+            // ponytail: one subscription per enabled visit; gaze mode/calibration are gated in the handler.
+            camera.OnGazeMove += FypGaze;
+            _fypEyeSubscribed = true;
+            PostFypEyeStatus(null);
+        }
+        catch (Exception ex) { Log.Warning("[FYP] eye enable failed: {E}", ex.Message); FailFypEyes("error"); }
+        finally { _fypEyeEnabling = false; }
+    }
+
+    private void FailFypEyes(string reason)
+    {
+        CoreSettings.Current.FypEyeControl = false;
+        DisableFypEyes();
+        PostFypEyeStatus(reason);
+    }
+
+    private void DisableFypEyes()
+    {
+        var camera = WebcamTracker.Instance;
+        if (_fypEyeSubscribed)
+        {
+            camera.OnBlink -= FypBlink;
+            camera.OnEyesClosedLong -= FypEyesClosed;
+            camera.OnGazeMove -= FypGaze;
+        }
+        _fypEyeSubscribed = false;
+        if (_fypOwnsCamera) FypStopCamera();
+        _fypOwnsCamera = false;
+    }
+
+    internal void FypBlink() { if (_fypEyeSubscribed && !_closing) Post(new { type = "blink" }); }
+    internal void FypEyesClosed() { if (_fypEyeSubscribed && !_closing) Post(new { type = "eyesClosed" }); }
+
+    private async Task CalibrateFypEyes()
+    {
+        await Task.Yield();
+        if (_closing || WebcamCalibrationWindow.IsShowing) return;
+        try
+        {
+            if (FypCameraRunning())
+            {
+                if (FypCalibration != null) await FypCalibration();
+                else await WebcamCalibrationWindow.ShowDialogWithRecalibrate(this);
+            }
+            if (!_closing) PostFypEyeStatus(null);
+        }
+        catch (Exception ex) { Log.Warning("[FYP] calibration failed: {E}", ex.Message); }
+    }
+
+    internal void FypGaze(Point point)
+    {
+        if (!_fypEyeSubscribed || _closing || !CoreSettings.Current.FypEyeGaze
+            || WebcamTracker.Instance.Calibration is not { } calibration) return;
+        var bounds = calibration.MonitorBounds;
+        var now = FypEyeClock();
+        if ((now - _fypLastGaze).TotalMilliseconds < 100 || Web.Bounds.Width <= 0 || Web.Bounds.Height <= 0) return;
+        var origin = Web.PointToScreen(default);
+        var gaze = FypRules.GazePoint(point.X, point.Y, bounds?.DpiScale ?? 1, bounds?.X ?? 0, bounds?.Y ?? 0,
+            bounds?.DeviceName != null, origin.X, origin.Y, RenderScaling, Web.Bounds.Width, Web.Bounds.Height);
+        _fypLastGaze = now;
+        Post(new { type = "gaze", x = gaze.X, y = gaze.Y, inside = gaze.Inside });
+    }
+}

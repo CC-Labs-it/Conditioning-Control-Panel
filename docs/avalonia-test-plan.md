@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### For You eye control follow-up
+
+1. Open For You from Play with premium access; enable eye control. Decline consent: toggle resets with the consent reason. Accept current consent: starting status precedes camera acquisition; a failed camera open resets the toggle. WPF `Services/Fyp/FypHostService.cs:951`. Rows: `feat-fyp-host`.
+2. With camera tracking, blink to replace a tile, hold eyes closed for two seconds to replace the page. Enable gaze and calibrate; gaze selects the tile under the eyes, including on mixed-DPI monitors; outside gaze is ignored. Turn gaze off to return to random selection. WPF `Services/Fyp/FypHostService.cs:1101`. Rows: `feat-fyp-host`.
+3. Close/panic during camera startup and during the consent/calibration dialog: no owned modal or feed remains. A camera started by the feed stops; a camera already running for another feature remains running. Reopen with the saved eye setting: enable again without duplicate handlers. WPF `Services/Fyp/FypHostService.cs:1014`. Rows: `feat-fyp-host`.
