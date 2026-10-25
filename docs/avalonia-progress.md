@@ -3154,3 +3154,11 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-theme-main-window: +1
 - Review nits: tab themes reindented, help cursor/rest brushes asserted (fail-proven), ledger cites gate not unbacked counts.
 - rgate 39691420992: only P108 GoonClock red.
+
+## avalonia-port/wire-feat-companion-ai-cloud-chat: +282
+- Avalonia startup seeds one Core moderation session before the AI provider; refusal records carry no chat text.
+- Selecting Local restores the WPF Ollama setup offer (Yes/Cancel; Yes opens the wizard, Ready stays silent); tests await the in-flight offer.
+
+## avalonia-port/wire-win-emi-desk: +268
+- EMI Desk pat faces (poke ladder moved to Core): pat, wink, glee and chime, annoyed, rage. A live face eats clicks the way WPF does.
+- The full chain player, particles and body are deferred to wire-win-emi-desk-b. The row stays stub.
