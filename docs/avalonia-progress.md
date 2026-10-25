@@ -3191,3 +3191,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-feat-split-card: +659
 - feat-split-card: WPF half depth (travel/tilt/spring), dashboard click inversion and cached grey HalfMute via Core DashboardDepthLaw/CardMuteRule; re-gating via the shell's RefreshFx; tilt keeps one transition per transform, grey art scales first (no PNG round trip).
 - Gaps logged: no Avalonia DashboardInvertClicks writer; single FeatureCard ignores inversion.
+
+## avalonia-port/wire-shell-programs-tab: +311
+- Live Programs session clock/bar/sheen driven by the shell tick; Core ProgramSessionProgress shared with WPF.
+- Review fixes: test seam without reflection, parity FX items moved to shell-programs-fx; sheen/hide/panic/percent fail-proven.
