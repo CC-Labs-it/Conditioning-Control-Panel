@@ -13,6 +13,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -245,24 +246,39 @@ public sealed class LauncherFxTests
     [Fact]
     public void GrantChanges_RevealAndRevokeRace_WithoutRestagingUnchangedTiles() => Run(MotionLevel.Full, (_, w, _) =>
     {
-        var old = ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider;
-        bool owns = false;
-        ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = _ => owns;
+        // Driven through the head's real ownership store: a counter reply's snapshot lands via
+        // PrizeOwnership.ApplySnapshot, which must raise PrizeGrants.GrantsChanged itself.
+        var (old, oldSeam) = (ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider, PrizeOwnership.IsGranted);
+        var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+        var secrets = new Dictionary<string, string?>();   // AuthToken lives in CoreSecrets
+        CoreSecrets.RetrieveProvider = k => secrets.TryGetValue(k, out var v) ? v : null;
+        CoreSecrets.StoreProvider = (k, v) => secrets[k] = v;
+        var s = CoreSettings.Current;
+        (s.UnifiedId, s.AuthToken, s.OfflineMode) = ("u-launch", "t-launch", false);
+        PrizeOwnership.IsGranted = PrizeOwnership.Held;
+        PrizeOwnership.ResetHeld();
+        ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => PrizeOwnership.IsGranted(id);
+        var track = ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrack(0);
         try
         {
             w.BuildTiles();
             var grid = w.FindControl<UniformGrid>("GamesGrid")!;
             var first = grid.Children[0];
-            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            PrizeOwnership.ApplySnapshot("u-launch", 1, new[] { "unrelated.prize" });
             Assert.Same(first, grid.Children[0]);
-            owns = true;
-            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            Assert.DoesNotContain(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
+            PrizeOwnership.ApplySnapshot("u-launch", 2, new[] { "unrelated.prize", track });
             Assert.Contains(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
-            owns = false;
-            ConditioningControlPanel.Services.Prizes.PrizeGrants.RaiseGrantsChanged();
+            PrizeOwnership.ApplySnapshot("u-launch", 3, new[] { "unrelated.prize" });
             Assert.DoesNotContain(grid.Children.OfType<Border>(), b => Equals(b.Tag, "race"));
         }
-        finally { ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = old; }
+        finally
+        {
+            ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = old;
+            PrizeOwnership.IsGranted = oldSeam;
+            PrizeOwnership.ResetHeld();
+            (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
+        }
     });
 
     [Fact]

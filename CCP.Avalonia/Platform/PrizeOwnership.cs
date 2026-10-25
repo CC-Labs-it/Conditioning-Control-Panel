@@ -49,12 +49,17 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             var current = FriendsHead.Identity()?.UnifiedId;
             if (string.IsNullOrEmpty(accountId) || grants is null || current != accountId) return;
+            bool changed;
             lock (Gate)
             {
                 if (_heldAccount == accountId && revision < _revision) return;
-                (_heldAccount, _revision) = (accountId, revision);
-                _grants = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                var next = new HashSet<string>(grants.Where(g => !string.IsNullOrWhiteSpace(g)).Select(g => g.Trim()), StringComparer.Ordinal);
+                changed = !(_heldAccount == accountId ? _grants : new HashSet<string>()).SetEquals(next);   // WPF: a new account starts from empty
+                (_heldAccount, _revision, _grants) = (accountId, revision, next);
             }
+            // WPF OwnershipService.Changed -> PrizeGrants.GrantsChanged (PrizeGrants.Attach): raised
+            // outside the lock, only when the held grant set actually changed.
+            if (changed) PrizeGrants.RaiseGrantsChanged();
         }
 
         /// <summary>Test cleanup (P02): forget every held snapshot.</summary>
