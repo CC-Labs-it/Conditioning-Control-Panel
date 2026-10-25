@@ -15,6 +15,7 @@ import { makeFrame } from './frames.js';
 import { supportIntervals } from './courts.js';
 import { surfaceId } from './schema.js';
 import { bendCanalMesh } from './canal.js';
+import { createRoadDepth } from './roadDepth.js';
 
 // RAIL_H: 1.2 m since the EDGES lane (was 0.9: a railed edge read too like an open one); render/look.js railHeightM matches
 const COLS = 4, THICK_M = 0.25, RAIL_H = 1.2, RAIL_T = 0.08, DECAL_M = 0.02, LIP_M = 3, STRIP_STEP_M = 1;
@@ -82,6 +83,7 @@ function runs(Q, keep) {
 
 export function buildMeshes(track, dl) {
   const Q = dl.quads, L = track.lengthM;
+  const depthAt = createRoadDepth(track);
   const columns = track.canalProfile ? 18 : COLS;
   const curvedPads = new Set((track.boosts || []).filter(p => {
     if (!track.canalProfile) return false;
@@ -124,22 +126,23 @@ export function buildMeshes(track, dl) {
       const r = closed && k === nq ? Q : row(q0 + k), v = closed && k === nq ? L : rowS(q0 + k);
       const c = at(dl.c, r), n = at(dl.n, r), b = at(dl.b, r), h = dl.w[r] / 2, nn = neg(n);
       const sf = rowWater(r), fa = fw[0], fl = fw[1];
+      const thick = depthAt(v);
       const tr = [], br = [];
       for (let i = 0; i <= columns; i++) {
         const x = -h + (2 * h * i) / columns;
         tr.push(road.v(off(c, b, x, n, 0), n, x, v, sf, fa, fl));
-        br.push(road.v(off(c, b, x, n, -THICK_M), nn, x, v, sf, fa, fl));
+        br.push(road.v(off(c, b, x, n, -thick), nn, x, v, sf, fa, fl));
       }
       top.push(tr); bot.push(br);
-      el.push([road.v(off(c, b, -h, n, 0), neg(b), 0, v, sf, fa, fl), road.v(off(c, b, -h, n, -THICK_M), neg(b), THICK_M, v, sf, fa, fl)]);
-      er.push([road.v(off(c, b, h, n, 0), b, 0, v, sf, fa, fl), road.v(off(c, b, h, n, -THICK_M), b, THICK_M, v, sf, fa, fl)]);
+      el.push([road.v(off(c, b, -h, n, 0), neg(b), 0, v, sf, fa, fl), road.v(off(c, b, -h, n, -thick), neg(b), thick, v, sf, fa, fl)]);
+      er.push([road.v(off(c, b, h, n, 0), b, 0, v, sf, fa, fl), road.v(off(c, b, h, n, -thick), b, thick, v, sf, fa, fl)]);
     }
     for (let k = 0; k < nq; k++) {
       const rawS = rowS(q0 + k), offsetS = Math.floor(rawS / L) * L;
       const s0 = rawS - offsetS, s1 = rowS(q0 + k + 1) - offsetS;
       const holes = courtHoles.filter((h) => h.s < s1 && h.s + h.len > s0);
       const underCurvedPad = curvedPadList.some(p => padOverlaps(p, rawS, rowS(q0 + k + 1)));
-      if (holes.length) courtStrip(road, track, s0, s1, holes, offsetS);
+      if (holes.length) courtStrip(road, track, s0, s1, holes, offsetS, depthAt);
       else for (let i = 0; i < columns; i++) {
         const a = top[k][i], b = top[k][i + 1], c = top[k + 1][i], d = top[k + 1][i + 1];
         const forward = road.quad(a, b, c, d);
@@ -153,13 +156,14 @@ export function buildMeshes(track, dl) {
       for (const [k, sign] of [[0, -1], [nq, 1]]) {
         const r = row(q0 + k), c = at(dl.c, r), n = at(dl.n, r), b = at(dl.b, r), h = dl.w[r] / 2;
         const t = at(dl.t, r), tn = [t[0] * sign, t[1] * sign, t[2] * sign], sf = rowWater(r), fa = fw[0], fl = fw[1];
+        const thick = depthAt(rowS(q0 + k));
         const a = road.v(off(c, b, -h, n, 0), tn, -h, 0, sf, fa, fl), bb = road.v(off(c, b, h, n, 0), tn, h, 0, sf, fa, fl);
-        const cc = road.v(off(c, b, -h, n, -THICK_M), tn, -h, THICK_M, sf, fa, fl), d = road.v(off(c, b, h, n, -THICK_M), tn, h, THICK_M, sf, fa, fl);
+        const cc = road.v(off(c, b, -h, n, -thick), tn, -h, thick, sf, fa, fl), d = road.v(off(c, b, h, n, -thick), tn, h, thick, sf, fa, fl);
         road.quad(a, bb, cc, d);
       }
     }
   }
-  courtWalls(road, track);
+  courtWalls(road, track, depthAt);
 
   // rails
   const rails = builder();
@@ -264,7 +268,7 @@ function roadDecal(out, road, faces, pad, lapM) {
 }
 
 /** Split only affected road quads, at the exact collision bounds, on both visible faces. */
-function courtStrip(m, track, s0, s1, holes, offsetS) {
+function courtStrip(m, track, s0, s1, holes, offsetS, depthAt) {
   const cuts = [s0, s1];
   for (const h of holes) for (const s of [h.s, h.s + h.len]) if (s > s0 && s < s1) cuts.push(s);
   cuts.sort((a, b) => a - b);
@@ -277,12 +281,12 @@ function courtStrip(m, track, s0, s1, holes, offsetS) {
       const left0 = Math.abs(lo + half) < 1e-6 ? -f0.w / 2 : lo, left1 = Math.abs(lo + half) < 1e-6 ? -f1.w / 2 : lo;
       const right0 = Math.abs(hi - half) < 1e-6 ? f0.w / 2 : hi, right1 = Math.abs(hi - half) < 1e-6 ? f1.w / 2 : hi;
       const cols = Math.max(1, Math.ceil((hi - lo) / 4));
-      for (const depth of [0, -THICK_M]) {
+      for (const lower of [false, true]) {
         let prev = null;
         for (let k = 0; k <= cols; k++) {
           const x0 = left0 + (right0 - left0) * k / cols, x1 = left1 + (right1 - left1) * k / cols;
-          const ids = [m.v(off(f0.p, f0.b, x0, f0.n, depth), depth ? neg(f0.n) : f0.n, x0, a + offsetS, ...w0),
-            m.v(off(f1.p, f1.b, x1, f1.n, depth), depth ? neg(f1.n) : f1.n, x1, b + offsetS, ...w1)];
+          const ids = [m.v(off(f0.p, f0.b, x0, f0.n, lower ? -depthAt(a) : 0), lower ? neg(f0.n) : f0.n, x0, a + offsetS, ...w0),
+            m.v(off(f1.p, f1.b, x1, f1.n, lower ? -depthAt(b) : 0), lower ? neg(f1.n) : f1.n, x1, b + offsetS, ...w1)];
           if (prev) m.quad(prev[0], ids[0], prev[1], ids[1]);
           prev = ids;
         }
@@ -292,21 +296,21 @@ function courtStrip(m, track, s0, s1, holes, offsetS) {
 }
 
 /** The exposed glass thickness inside each opening; no bottom cap spans a hole. */
-function courtWalls(m, track) {
+function courtWalls(m, track, depthAt) {
   for (const c of track.courts || []) for (const h of c.holes) {
     for (const side of [-1, 1]) {
       let prev = null;
       const n = Math.max(1, Math.ceil(h.len / STRIP_STEP_M)), x = h.x + side * h.w / 2;
       for (let k = 0; k <= n; k++) {
         const s = h.s + h.len * k / n, f = track.frameAt(s), normal = f.b.map((v) => -side * v), wf = [surfaceId(f.surface), ...track.flowAt(f.seg, f.segT, [0, 0])];
-        const ids = [0, -THICK_M].map((d) => m.v(off(f.p, f.b, x, f.n, d), normal, x, s, ...wf));
+        const ids = [0, -depthAt(s)].map((d) => m.v(off(f.p, f.b, x, f.n, d), normal, x, s, ...wf));
         if (prev) m.quad(prev[0], prev[1], ids[0], ids[1]);
         prev = ids;
       }
     }
     for (const [s, sign] of [[h.s, 1], [h.s + h.len, -1]]) {
       const f = track.frameAt(s), normal = f.t.map((v) => sign * v), wf = [surfaceId(f.surface), ...track.flowAt(f.seg, f.segT, [0, 0])];
-      const ids = [0, -THICK_M].flatMap((d) => [-1, 1].map((side) => {
+      const ids = [0, -depthAt(s)].flatMap((d) => [-1, 1].map((side) => {
         const x = h.x + side * h.w / 2;
         return m.v(off(f.p, f.b, x, f.n, d), normal, x, s, ...wf);
       }));
