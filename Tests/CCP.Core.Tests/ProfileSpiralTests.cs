@@ -127,6 +127,48 @@ public sealed class ProfileSpiralTests : IDisposable
                 { Content = new StringContent("{}") });
     }
 
+    private sealed class SyncWire : HttpMessageHandler
+    {
+        internal Newtonsoft.Json.Linq.JObject? Payload;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Payload = Newtonsoft.Json.Linq.JObject.Parse(await request.Content!.ReadAsStringAsync(ct));
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+                """{"descent_migration":{"required":true,"restore_basis_xp":8000}}""") };
+        }
+    }
+
+    [Fact]
+    public async Task SyncAdvertisesAutoOnlyWithHost_AndSubmitsPendingRestoreWithLedger()
+    {
+        var saved = (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider);
+        var settings = new SettingsService();
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            CoreAccount.IsLoggedInProvider = () => true;
+            var s = settings.Current;
+            s.UnifiedId = "fake-user"; s.AuthToken = "fake-token"; s.OfflineMode = false;
+            var wire = new SyncWire();
+            var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire);
+            sync.MarkLoaded(Array.Empty<string>());
+            Assert.True(await sync.PushAsync("no host"));
+            Assert.Null(wire.Payload!["descent_auto"]);
+            var now = DateTime.UtcNow;
+            sync.UtcNow = () => now.AddMinutes(1);
+            sync.MigrationResponse = (settings, response) =>
+                DescentAutoRestore.Apply(settings, response, null, now);
+            Assert.True(await sync.PushAsync("offer"));
+            Assert.True(wire.Payload.Value<bool>("descent_auto"));
+            Assert.Equal("restore", s.PendingDescentMigrationChoice);
+            sync.UtcNow = () => now.AddMinutes(2);
+            Assert.True(await sync.PushAsync("submit"));
+            Assert.Equal("restore", (string?)wire.Payload["descent_migration"]!["choice"]);
+            Assert.Equal((int)ProfileAdopt.TotalXp(s), wire.Payload.Value<int>("xp"));
+        }
+        finally { (CoreSettings.ServiceProvider, CoreAccount.IsLoggedInProvider) = saved; }
+    }
+
     private sealed class Wire : HttpMessageHandler
     {
         internal int Calls;

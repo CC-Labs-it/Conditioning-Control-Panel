@@ -24,6 +24,40 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class ProfileSpiralTests
 {
+    [Fact]
+    public void RoomCuesChooseFirstExistingAsset_RespectMute_AndUseWpfMix()
+    {
+        var saved = (CoreSettings.ServiceProvider, CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider);
+        var settings = new SettingsService();
+        var path = System.IO.Path.GetTempFileName();
+        var played = new System.Collections.Generic.List<(float Volume, string Tag)>();
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.MasterVolume = 50;
+            CoreModArt.AudioOverridePathProvider = name => name is "chaos/ui_deepen.mp3" or "chaos/reveal_chime.mp3" ? path : "";
+            CoreAudio.PlayOneShotProvider = (_, volume, tag, _, _) => played.Add((volume, tag));
+            SpiralTabView.PlayRoomCue(false);
+            SpiralTabView.PlayRoomCue(true);
+            Assert.Equal(2, played.Count);
+            Assert.Equal(.21f, played[0].Volume, 3);
+            Assert.Equal("descent-fog-enter", played[0].Tag);
+            Assert.Equal(.17f, played[1].Volume, 3);
+            settings.Current.MasterVolume = 0;
+            SpiralTabView.PlayRoomCue(false);
+            Assert.Equal(2, played.Count);
+            settings.Current.MasterVolume = 50;
+            CoreModArt.AudioOverridePathProvider = _ => "";
+            SpiralTabView.PlayRoomCue(false);
+            Assert.Equal(2, played.Count);
+        }
+        finally
+        {
+            (CoreSettings.ServiceProvider, CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider) = saved;
+            System.IO.File.Delete(path);
+        }
+    }
+
     private sealed class Wire : HttpMessageHandler
     {
         internal const string Lit = """{"user":{"descent":{"devotion_days":12,"stage":{"n":3,"next_at":21}}}}""";
@@ -121,6 +155,38 @@ public sealed class ProfileSpiralTests
             Assert.Equal("spiral", shell.CurrentTab);
             var room = shell.Named<SpiralTabView>("SpiralTab")!;
             Assert.True(room.IsShowingSpiral);
+            var oldBark = BarkHead.Engine;
+            var greeting = new ConditioningControlPanel.Services.Bark.BarkRule {
+                Id = "test_spiral_greeting", Trigger = "DescentFirstSpiralOpen", Repeatable = false, ScopeRaw = "lifetime",
+                Conditions = new System.Collections.Generic.Dictionary<string, object> { ["stage"] = 3d },
+                VariantPool = new() { new ConditioningControlPanel.Services.Bark.BarkVariant("welcome") } };
+            var bark = new ConditioningControlPanel.Services.Bark.BarkEngine(() =>
+                new ConditioningControlPanel.Services.Bark.BarkRuleSet(new[] { greeting }));
+            var greetings = 0;
+            bark.Speak = _ => greetings++;
+            s.AvatarEnabled = true; s.BarkChatSuppressionMs = 0;
+            bark.Start();
+            BarkHead.Engine = bark;
+            try
+            {
+                room.OnTabShown(); room.OnTabShown();
+                Assert.Equal(1, greetings); // existing lifetime rule owns the latch
+            }
+            finally { BarkHead.Engine = oldBark; s.BarkLifetimeFired.Remove(greeting.Id); }
+            var embed = room.MapEmbed!;
+            Assert.NotNull(embed.AllowNavigation);
+            Assert.False(embed.AllowNavigation!(new Uri("https://example.test/")));
+            Assert.Null(embed.RequestHeader); // credentials never enter the map
+            embed.OnWebMessage("{bad");
+            embed.OnWebMessage("{\"type\":\"ready\"}"); // other page protocols do not unlock this bridge
+            embed.OnWebMessage("{\"type\":\"spiral:ready\"}");
+            embed.OnNavigationFailed();
+            Assert.Null(room.MapEmbed);
+            shell.ProfileDescent.NotifySurfaces("repaint after failure");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(room.MapEmbed); // no retry storm within an entry
+            shell.OpenSpiralMapFromProfile();
+            Assert.NotNull(room.MapEmbed); // explicit entry retries
             s.PendingDescentMigrationChoice = null;
             shell.ProfileDescent.NotifySurfaces("offer persisted");
             Dispatcher.UIThread.RunJobs();

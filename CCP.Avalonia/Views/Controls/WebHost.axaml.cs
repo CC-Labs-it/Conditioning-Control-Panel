@@ -72,6 +72,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// hangs its status line and catalogue lookup on.
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
+        public event Action? NavigationFailed;
+        public event Action? NavigationSucceeded;
+        internal void OnNavigationFailed() => NavigationFailed?.Invoke();
 
         /// <summary>
         /// The seam the engine's NavigationCompleted routes through, internal so a headless test
@@ -229,7 +232,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.NavigationStarted += OnNavigationStarted;
-                    _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source);
+                    _web.NavigationCompleted += (_, e) =>
+                    {
+                        if (!e.IsSuccess) OnNavigationFailed();
+                        else NavigationSucceeded?.Invoke();
+                        OnNavigationCompleted(e.Request ?? _web?.Source);
+                    };
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);

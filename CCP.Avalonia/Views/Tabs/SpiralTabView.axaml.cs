@@ -36,9 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// (its spiral geometry, spin, breath and marquee), the waiting room's ambience, the embed
     /// slab, the help chip and the 32px inset that keeps it alive over a browser.</para>
     ///
-    /// <para>The room reads the shell's shared profile reader. Remaining gaps: migration offer
-    /// runtime notifications, browser state/ready/failure protocol, room sounds and companion greeting.
-    /// The retained first-light entry point still has no canvas on this head.</para>
+    /// <para>The room reads the shell's shared profile reader and the token-free §9 map protocol.
+    /// The retained first-light entry point has no live migration caller in WPF.</para>
     ///
     /// <para><b>Escape is never handled here.</b> The global panic key must reach its hook
     /// untouched; nothing in this tab looks at the keyboard at all.</para>
@@ -54,7 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private const string SplashCopy = "opening the spiral";
 
         /// <summary>The map route, verbatim from <c>SpiralEmbedView.BuildUrl("map")</c>. Navigation
-        /// is locked to this origin over there; the WebHost has no such lock yet.</summary>
+        /// is locked to this origin by SpiralEmbedState.</summary>
         private const string EmbedUrl = "https://app.cclabs.app/embed/spiral?mode=map";
 
         // ============================== the fog era's FX ==============================
@@ -186,6 +185,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The embed, for as long as this tab is the one on screen in the spiral state.</summary>
         private WebHost? _embed;
+        private bool _embedReady, _embedGaveUp, _entrySfxSpent, _splashChimed;
+        internal WebHost? MapEmbed => _embed;
         private DescentService? _profileReader;
         internal void SetProfileReader(DescentService reader) { _profileReader = reader; Refresh(); }
         internal void RefreshFromProfile() { if (!_panicParked) Refresh(); }
@@ -276,11 +277,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// menu, a first light), so the room is re-read from scratch rather than trusted from
         /// whenever this view was last painted.
         ///
-        /// <para>ponytail: needs <c>DescentBarkWatcher.NotifySpiralOpened()</c> (WPF head), which the
-        /// original calls here and on every entry to let the companion say hello to the room once
-        /// ever. It is decoration and it never blocks the entry it rides on.</para>
+        /// <para>The bark rule owns the lifetime latch, exactly as in WPF.</para>
         /// </summary>
-        internal void OnTabShown() { _panicParked = false; Refresh(); }
+        internal void OnTabShown()
+        {
+            _panicParked = false; _embedGaveUp = false; Refresh();
+            if (_state != SpiralRoomState.Spiral) return;
+            var block = _profileReader?.Current;
+            ConditioningControlPanel.Avalonia.Platform.BarkHead.Engine?.Raise("DescentFirstSpiralOpen", c => c
+                .Set("stage", (double)(block?.Stage?.N ?? 0))
+                .Set("banked_days", (double)(block?.Stage?.BankedDays ?? block?.DevotionDays ?? 0)));
+        }
 
         /// <summary>The fuse drives the fog; the shell forwards its shared reader's block changes.</summary>
         private void Wire()
@@ -318,6 +325,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>Park everything: no clocks, no browser, nothing holding a frame.</summary>
         private void Suspend()
         {
+            _entrySfxSpent = _splashChimed = false;
+            _embedGaveUp = false;
             Unwire();
             ApplyHelpChip(false);
             StopFogFx();
@@ -344,7 +353,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     CoreSettings.Current,
                     fuse?.LastAnnouncedPhase ?? DescentFusePhase.Dark,
                     fuse?.IsArmed == true,
-                    // ponytail: live offer notifications await the migration host; persisted withhold is real.
                     spiralWithheld: ProfileSpiral.IsWithheld(CoreSettings.Current),
                     hasBlock: _profileReader?.Current is not null));
             }
@@ -380,8 +388,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _fogCopy.IsVisible = true;
                     ApplyFogReadout();
                     StartFogFx();
-                    // ponytail: needs DescentRoomSfx.PlayFogEntry() (WPF head), one door sound per
-                    // entry. Audio is decoration; the room paints without it.
+                    if (!_entrySfxSpent) { _entrySfxSpent = true; PlayRoomCue(false); }
                     break;
 
                 case SpiralRoomState.Spiral:
@@ -395,7 +402,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     // or handed to the waiting panel because it failed) is the state a repaint must
                     // leave alone. Without this, a routine sync would drop the splash back over a
                     // canvas that had already been revealed, with no watchdog left to lift it.
-                    if (_embed != null) break;
+                    if (_embedGaveUp) { ShowWaitingUnderSpiral(); break; }
+                    if (_embed != null) { PostMapState(); break; }
 
                     _waitingPanel.IsVisible = false;
                     StopWaitingAmbience();
@@ -552,21 +560,46 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ============================== the embed ==============================
 
-        /// <summary>
-        /// Build the browser, once, for as long as this tab is the one on screen in the spiral
-        /// state.
-        ///
-        /// <para>ponytail: <c>SpiralEmbedView</c> (WebView2, Windows-only) becomes
-        /// <see cref="WebHost"/>. <c>Start()</c> has no twin and needs none — WebHost probes for
-        /// an engine and navigates on <c>Source</c>. <c>PostState(block)</c> could be written
-        /// today against <c>WebHost.InvokeScriptAsync</c>, once the canvas page's message shape is
-        /// pinned down. What genuinely has no seam is the pair that report back:
-        /// <c>Navigated</c> (the splash's cue) and <c>Failed</c> (which handed the room to the
-        /// waiting panel and latched <c>_embedGaveUp</c> for the rest of the entry) — WebHost
-        /// wraps neither NavigationCompleted nor the failure signal, so nothing here can tell a
-        /// loaded page from a dead one. The URL is the real one and the lifecycle — built on
-        /// entering the state, dropped on leaving it — is the real one.</para>
-        /// </summary>
+        // WPF §9: the page is a token-free renderer. Only the latest block is posted on ready.
+        private void PostMapState()
+        {
+            if (!_embedReady || _embed is null) return;
+            _ = _embed.PostJsonAsync(SpiralEmbedState.Build(_profileReader?.Current,
+                CoreSettings.Current.MotionLevel != MotionLevel.Full, AmbientFxCanvas.Env.CurrentTier)
+                .ToString(Newtonsoft.Json.Formatting.None));
+        }
+
+        private void FailMap()
+        {
+            _embedGaveUp = true;
+            TeardownEmbed();
+            ShowWaitingUnderSpiral();
+        }
+
+        internal static string RoomCuePath(string name) =>
+            ConditioningControlPanel.CoreModArt.AudioOverridePath("chaos/" + name + ".mp3")
+            ?? ConditioningControlPanel.Services.ContentLocator.Resolve("Resources/sounds/chaos/" + name + ".mp3");
+
+        internal static void PlayRoomCue(bool splash)
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (App.DescentCountdown?.AudioEnabled == false || s.MasterVolume <= 0) return;
+                var names = splash ? new[] { "descent_spiral_open", "reveal_chime" } : new[] { "descent_fog_enter", "ui_deepen" };
+                foreach (var name in names)
+                {
+                    var path = RoomCuePath(name);
+                    if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) continue;
+                    ConditioningControlPanel.CoreAudio.PlayOneShot(path,
+                        Math.Clamp(s.MasterVolume / 100f * (splash ? .34f : .42f), 0, 1),
+                        splash ? "descent-spiral-open" : "descent-fog-enter");
+                    return;
+                }
+            }
+            catch (Exception ex) { Log.Debug("[Spiral] room cue: {E}", ex.Message); }
+        }
+
         private void EnsureEmbed()
         {
             if (_embed != null) return;
@@ -574,9 +607,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             try
             {
-                var embed = new WebHost { Source = new Uri(EmbedUrl) };
+                var embed = new WebHost { AllowNavigation = SpiralEmbedState.Allows, InjectCarrier = true };
+                embed.NavigationSucceeded += () => { if (_embed == embed) OnSplashDeadline(null, EventArgs.Empty); };
+                embed.NavigationFailed += () => { if (_embed == embed) FailMap(); };
+                embed.WebMessage += body =>
+                {
+                    if (_embed != embed) return;
+                    try
+                    {
+                        if ((string?)Newtonsoft.Json.Linq.JObject.Parse(body)["type"] != "spiral:ready") return;
+                        _embedReady = true;
+                        PostMapState(); // latest reader state wins the boot race
+                    }
+                    catch (Newtonsoft.Json.JsonException) { }
+                };
                 _embed = embed;
                 _embedHost.Children.Add(embed);
+                embed.Source = new Uri(EmbedUrl);
             }
             catch (Exception ex)
             {
@@ -584,8 +631,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // canvas's ?mode=map route has not deployed yet. That is why the fallback is a room
                 // rather than an apology.
                 Log.Debug("[Spiral] room embed could not start: {E}", ex.Message);
-                TeardownEmbed();
-                ShowWaitingUnderSpiral();
+                FailMap();
             }
         }
 
@@ -606,6 +652,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void TeardownEmbed()
         {
+            _embedReady = false;
             StopSplashWatchdog();
             if (_embed == null) return;
             try
@@ -641,8 +688,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// The embed said nothing inside the deadline. Reveal it anyway: whatever the browser has is
         /// more honest than a splash that has stopped meaning "loading" and started meaning "hung".
         ///
-        /// <para>With no <c>Navigated</c> event to promote the embed early, this deadline is
-        /// currently the ONLY thing that lifts the splash on a machine that has an engine.</para>
+
         /// </summary>
         private void OnSplashDeadline(object? sender, EventArgs e)
         {
@@ -784,9 +830,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _spiralSplash.Opacity = 1;
                 _spiralSplash.IsVisible = true;
 
-                // ponytail: needs DescentRoomSfx.PlaySplashOpen() (WPF head), one chime per ENTRY
-                // and never per retry: a cue that repeated while a browser struggled would sound
-                // exactly like the thing being stuck.
+                if (!_splashChimed) { _splashChimed = true; PlayRoomCue(true); }
 
                 if (!AllowAmbientLoops)
                 {

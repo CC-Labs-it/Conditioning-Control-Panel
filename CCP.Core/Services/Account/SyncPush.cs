@@ -74,6 +74,8 @@ namespace ConditioningControlPanel.Services
         public DateTime? LastSyncTime { get; private set; }
         /// <summary>The live reader; an accepted push refreshes only an already-lit account (WPF).</summary>
         public Descent.DescentService? DescentReader { get; set; }
+        /// <summary>The head queues silent restore after the rest of the sync response, with account fencing.</summary>
+        public Action<AppSettings, JObject>? MigrationResponse { get; set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -171,7 +173,11 @@ namespace ConditioningControlPanel.Services
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
-                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics));
+                var payload = JObject.FromObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics));
+                if (MigrationResponse != null) payload["descent_auto"] = true;
+                if (Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice))
+                    payload["descent_migration"] = new JObject { ["choice"] = s.PendingDescentMigrationChoice };
+                var body = payload.ToString(Formatting.None);
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -228,9 +234,9 @@ namespace ConditioningControlPanel.Services
                 {
                     var reply = JObject.Parse(json);
                     ProfileAdopt.ApplySyncResponse(s, reply, UtcNow());
-                    // WPF HandleDescentMigrationAck: settle/heal an account migrated on any device. This head never
-                    // takes the offer (no descent_auto), so only the ack half runs here.
+                    // Settle an ack before considering a new offer.
                     Descent.DescentMigrationAck.Apply(s, reply);
+                    MigrationResponse?.Invoke(s, reply);
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).

@@ -37,7 +37,11 @@ public partial class MainShellWindow
         _profileDescent = new DescentService(() => CoreSettings.Current, AccountSeed.NewV2());
         _profileDescent.AdoptProgression = AdoptSpiralProgression;
         _profileDescent.BlockChanged += OnSpiralBlockChanged;
-        if (AccountSeed.Sync is { } sync) sync.DescentReader = _profileDescent;
+        if (AccountSeed.Sync is { } sync)
+        {
+            sync.DescentReader = _profileDescent;
+            sync.MigrationResponse = OnMigrationResponse;
+        }
         Named<SpiralTabView>("SpiralTab")?.SetProfileReader(_profileDescent);
         AccountSeed.ProfileLoaded += OnSpiralProfileLoaded;
         // WPF's Trainer Card poll (MainWindow.ProfileVat.cs:133-170): runs only while the card is on
@@ -62,7 +66,11 @@ public partial class MainShellWindow
             AccountSeed.ProfileLoaded -= OnSpiralProfileLoaded;
             _profileDescent.BlockChanged -= OnSpiralBlockChanged;
             _profileDescent.AdoptProgression = null;
-            if (AccountSeed.Sync?.DescentReader == _profileDescent) AccountSeed.Sync.DescentReader = null;
+            if (AccountSeed.Sync?.DescentReader == _profileDescent)
+            {
+                AccountSeed.Sync.DescentReader = null;
+                AccountSeed.Sync.MigrationResponse = null;
+            }
             _profileDescent.Reset();
         };
     }
@@ -89,6 +97,35 @@ public partial class MainShellWindow
         Named<SpiralTabView>("SpiralTab")?.RefreshFromProfile();
         EvaluateProfileSpiralPoll();
     });
+
+    private void OnMigrationResponse(ConditioningControlPanel.Models.AppSettings settings, JObject reply)
+    {
+        var account = settings.UnifiedId;
+        var token = settings.AuthToken;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_profileSpiralClosed || settings != CoreSettings.Current || account != settings.UnifiedId
+                || token != settings.AuthToken || !CoreAccount.IsLoggedIn) return;
+            try
+            {
+                if (DescentAutoRestore.Apply(settings, reply, _profileDescent?.Current, DateTime.UtcNow))
+                {
+                    CoreSettings.Save();
+                    AccountSeed.Sync?.Nudge("descent silent restore"); // cooldown-safe; pending choice survives failure
+                }
+                if (DescentAutoRestore.Drip(settings, DateTime.Now) is { } stage)
+                {
+                    CoreSettings.Save();
+                    Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(
+                        $"Stage {DescentStageCopy.RomanNumeral(stage)}. You walked this once already. Walk it again with me.",
+                        playSound: false, aiGenerated: false);
+                }
+                _profileDescent?.NotifySurfaces("migration response");
+                UpdateQuickLoginUI();
+            }
+            catch (Exception ex) { Serilog.Log.Debug("[Descent] Migration response could not apply ({Kind})", ex.GetType().Name); }
+        });
+    }
 
     private void AdoptSpiralProgression(JObject user)
     {
