@@ -3295,3 +3295,8 @@ Header mod selector regains the WPF "Open Mod Manager" footer row, and Home feat
 - What remains: AppUpdater.GitHubApi, the 2 Avalonia consent links, PKGBUILD url and the metainfo homepage. The app id and handoff identities are unchanged.
 - rcheck: RCHECK-OK. rgate run 39790204255: GATE-OK.
 - Review fixes (c3c07cca6, docs/comment only, no gate per P116): ledger row 149 ticked in this lane; AppUpdater comment cites UpdateService.cs:270-271.
+
+## avalonia-port/updater-stall-timeout: +191 -11 (stacked on repo-urls)
+- Ported WPF ddc9dd047: installer download stall timeout through Core ReleaseFeed.CopyWithStallTimeoutAsync, with a loopback stalled-stream test that was fail-proven.
+- rcheck: RCHECK-OK. rgate 39792261287: green except the known BubbleCount Windows flake (P115). One commit, 47b0a64ec. Ledger row 13 ticked (149 moved to repo-urls).
+- Review fixes (a5635b8fe): Core caller-cancel test (fail-proven), DownloadDir seam keeps the stall test out of the real updater folder, WPF second copy recorded as a decision. rgate 39803894556: GATE-OK.
