@@ -3453,3 +3453,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/fin-shell-autonomy: +542
 - Takeover countdown bar, diagnostic Test dialogs, event audio, Mind Wipe recheck, Pop Quiz busy guard; ledger row stays `stub`.
 - Review ACCEPT; fixes (068bde1d3): event audio reuses ModCompanionContent.ResolveActive, single Mind Wipe recheck in AutonomyScheduler.Run. rcheck 39921773360 green (fail-proof 39921324849 red), rgate 39922479600 GATE-OK. Not pushed.
+
+## avalonia-port/fin-shell-companion-fx: +127
+
+All five companion roster cards now repaint their assigned prompt name (mod-aware) and AI-personality tooltip on tab show and mod switch, via Core `InstalledCommunityPrompts.Load`; stale prompts clear. Test: CompanionPromptLabelsTests (fail-proven). Ledger: shell-companion-fx wired.
