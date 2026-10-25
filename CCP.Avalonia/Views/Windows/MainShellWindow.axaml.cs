@@ -151,6 +151,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             // WPF MainWindow.xaml.cs:3531-3535: one forced share-status poll per launch.
             Opened += (_, _) => PollCatalogueStatuses(force: true);
+            Opened += (_, _) => InitializeQuestStamps();
         }
 
         /// <summary>Uses an already-loaded catalogue without making the parameterless shell open

@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -75,6 +76,91 @@ public sealed class QuestShellCompletionTests
         Assert.Equal(expected.X, Canvas.GetLeft(layer) + 280, 3);
         Assert.Equal(expected.Y, Canvas.GetTop(layer) + 280, 3);
         Assert.True(shell.Named<QuestsTabView>("QuestsTab")!.FindControl<Border>("QuestCompleteBanner")!.IsVisible);
+        Assert.Equal("settings", shell.CurrentTab);
+    });
+
+    [Fact]
+    public void CompletionSpeaksOnlyWhenAnnouncementsAreEnabled() => Run((shell, quests) =>
+    {
+        var oldBuild = ConditioningControlPanel.Services.Flash.FlashVoicePool.Build;
+        var oldPlay = CoreAudio.PlayStoppableProvider;
+        var file = Path.GetTempFileName();
+        var spoken = 0;
+        try
+        {
+            ConditioningControlPanel.Services.Flash.FlashVoicePool.Reset();
+            ConditioningControlPanel.Services.Flash.FlashVoicePool.Build = _ => new List<string> { file };
+            CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) =>
+            {
+                if (tag == "flash-sound") spoken++;
+                return () => { };
+            };
+            quests.TrackBubblesPopped(10_000);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, spoken);
+            CoreSettings.Current.SuppressPerkNotifications = false;
+            CoreSettings.Current.FlashAudioEnabled = false;
+            quests.TrackSpiralMinutes(10_000);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, spoken);
+            AvApp.StopDesktopOverlays(false);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop();
+            CoreAudio.PlayStoppableProvider = oldPlay;
+            ConditioningControlPanel.Services.Flash.FlashVoicePool.Build = oldBuild;
+            ConditioningControlPanel.Services.Flash.FlashVoicePool.Reset();
+            File.Delete(file);
+        }
+    });
+
+    [Fact]
+    public void HeaderRosterTracksTheBoardAndCollapsesWithoutAService() => Run((shell, quests) =>
+    {
+        var host = shell.Named<Grid>("QuestStampHost")!;
+        Assert.True(host.IsVisible);
+        Assert.Equal(new[] { "d0", "d1", "d2", "w" }, host.Children.Cast<Grid>().Select(c => c.Tag));
+        Assert.Equal(20, host.Children[0].Width);
+        Assert.Equal(23, host.Children[3].Width);
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        var first = (Grid)host.Children[0];
+        Assert.Empty(first.Children.OfType<Border>().Where(b => b.Height == 2.5));
+        quests.TrackBubblesPopped(10_000);
+        Dispatcher.UIThread.RunJobs();
+        first = (Grid)host.Children[0];
+        Assert.Equal(15, Assert.Single(first.Children.OfType<Border>().Where(b => b.Height == 2.5)).Width);
+        Assert.True(first.Children.OfType<IconGlyph>().Single().IsVisible);
+        Assert.Equal(4, host.Children.Count);
+        AvApp.Quests = null;
+        shell.RefreshQuestStamps();
+        Assert.False(host.IsVisible);
+        Assert.Empty(host.Children);
+        AvApp.Quests = quests;
+    });
+
+    [Fact]
+    public void StampDetailsShowRemainingAndDoneAndPanicDismissesThem() => Run((shell, quests) =>
+    {
+        CoreSettings.Current.MotionLevel = MotionLevel.Off;
+        shell.HoverQuestStamp("d0");
+        Assert.True(shell.QuestStampDetails!.IsOpen);
+        var card = Assert.IsType<Border>(shell.QuestStampDetails.Child);
+        var stack = Assert.IsType<StackPanel>(card.Child);
+        var target = QuestDefinition.DailyQuests.Find(d => d.Id == "pop_parade_d")!.TargetValue;
+        Assert.Contains(stack.Children.OfType<TextBlock>(), text => text.Text == $"{target} to go");
+        var cell = (Grid)shell.Named<Grid>("QuestStampHost")!.Children[0];
+        Assert.Equal(1.5, ((ScaleTransform)((TransformGroup)cell.RenderTransform!).Children[0]).ScaleX);
+        quests.TrackBubblesPopped(10_000);
+        Dispatcher.UIThread.RunJobs();
+        shell.HoverQuestStamp("d0");
+        card = Assert.IsType<Border>(shell.QuestStampDetails.Child);
+        stack = Assert.IsType<StackPanel>(card.Child);
+        Assert.Contains(stack.Children.OfType<TextBlock>(), text => text.Text == "done");
+        var frame = stack.Children.OfType<Grid>().First();
+        Assert.NotNull(frame.Children.OfType<Image>().Single().Source);
+        PanicSurfaces.All.Single(surface => surface.Id == "quest-stamps").Stop(shell);
+        Assert.False(shell.QuestStampDetails.IsOpen);
         Assert.Equal("settings", shell.CurrentTab);
     });
 
