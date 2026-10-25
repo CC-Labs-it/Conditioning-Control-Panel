@@ -324,6 +324,50 @@ public sealed class FriendsDrawerTests
         Assert.Equal(Loc.Get("friends_report_done"), Tagged<TextBlock>(d, "friends-result")!.Text);
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task TheFriendsPageAsksOnceAndRespectsBothAnswers(bool share) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var previousAsked = PresenceAsk.Asked;
+        var previousMark = PresenceAsk.MarkAsked;
+        bool asked = false;
+        PresenceAsk.Asked = () => asked;
+        PresenceAsk.MarkAsked = () => asked = true;
+        var page = new global::ConditioningControlPanel.Avalonia.Views.Tabs.FriendsTabView(svc);
+        try
+        {
+            await svc.RefreshAsync();
+            page.OnShown();
+            var ask = Tagged<Border>(page, "friends-presence-ask");
+            Assert.NotNull(ask);
+            Assert.True(ask.IsVisible);
+            Assert.Contains(ask.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("friends_presence_ask"));
+            Assert.Equal(1, Grid.GetRow(ask));
+            Click(page, share ? "friends-presence-yes" : "friends-presence-no");
+            Assert.True(asked);
+            Assert.Equal(share, svc.PresenceShared);
+            Assert.False(ask.IsVisible);
+            page.OnHidden();
+            page.OnShown();
+            Assert.False(ask.IsVisible);  // switching away and back never repeats an answered question
+            // Already sharing never asks, even when no marker exists yet.
+            asked = false;
+            svc.PresenceShared = true;
+            page.Drawer.Render();
+            Assert.False(ask.IsVisible);
+            var signedOut = new global::ConditioningControlPanel.Avalonia.Views.Tabs.FriendsTabView(Service(null).Svc);
+            Assert.False(Tagged<Border>(signedOut, "friends-presence-ask")!.IsVisible);
+        }
+        finally
+        {
+            page.OnHidden();
+            PresenceAsk.Asked = previousAsked;
+            PresenceAsk.MarkAsked = previousMark;
+        }
+    });
+
     [Fact]
     public Task ThePresenceSwitchFlipsSharingAndAnswersTheAsk() => AvaloniaTestDispatcher.RunAsync(async () =>
     {

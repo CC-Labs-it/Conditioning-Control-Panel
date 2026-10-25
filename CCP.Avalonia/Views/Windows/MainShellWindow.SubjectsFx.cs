@@ -9,28 +9,15 @@
 // So this file registers, and deliberately does not start: the view owns the tuning constants and
 // a second StartLayers from here would reseed a composition the view already made.
 //
-// ponytail: AvailableSubjectsTabView.OnTabLoaded calls StartLayers, and StartLayers clears the
+// ponytail: AvailableSubjectsTabView's Loaded handler calls StartLayers, and StartLayers clears the
 // paused flag. Loaded fires once per attach, so in practice the park holds - but if that view is
 // ever re-attached while another tab is showing, it un-parks itself. The canvas still self-gates
 // on IsVisible, so the worst case is a composed-but-invisible surface, not a running clock.
 //
-// Still notes, both of them motion this head cannot express yet:
-//   * StaggerSubjectCards - the roster's entrance stagger. Needs MotionFx.StaggerIn (still in the
-//     WPF head) and the item containers: WPF walks list.ItemContainerGenerator after a forced
-//     UpdateLayout, and the Avalonia twin is ItemsControl.ContainerFromIndex after a
-//     realization pass. Both halves are missing, and a stagger with no gate would animate under
-//     reduced motion. The WPF file's allowRetry dance (ShowTab makes the tab visible BEFORE the
-//     roster binds) has the same shape here - EnsureTabFx runs inside ShowTab too.
-//   * OnSubjectConnectPress - the press squish on a roster card's Connect button. MotionFx
-//     .PressSquish, and the handler belongs to AvailableSubjectsTabView, which this layer does
-//     not own.
-//
-// Members of the WPF file still dropped (5):
-//   private const int SubjectsFogPuffs / private const double SubjectsFogIntensity
-//        (both live on AvailableSubjectsTabView now, at the same values)
-//   internal void OnAvailableSubjectsTabVisibilityChanged(…)   - replaced by EnsureTabFx
-//   private void StaggerSubjectCards(…)
-//   internal void OnSubjectConnectPress(…)
+// The entrance stagger now lives beside the roster in AvailableSubjectsTabView.Fx.cs.
+// OnSubjectConnectPress is not ported: current WPF never calls it (Lobby frame replaced Connect).
+// The view's visibility/loaded hooks replace WPF's shell
+// callbacks, while this partial continues to own tab-level ambient parking.
 
 using System;
 using Avalonia.Controls;
