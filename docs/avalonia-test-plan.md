@@ -496,6 +496,7 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 34. Season recap: Leaderboard -> recap button opens the card window. Rows: `ctrl-season-recap-card`, `ctrl-season-recap-window`.
 35. Attention check during a session: the prompt appears and must be answered. WPF `App.xaml.cs:3229-3246`. Rows: `ctrl-attention-check`.
 36. Launcher tiles: hover sheen and the comet around the edge. WPF `Windows/Launcher/LauncherWindow.Fx.cs:141`, `:381`. Rows: `ctrl-card-sheen-adorner`, `ctrl-perimeter-comet-adorner`.
+37. Back Room counter (test account, Drift & Bounce not yet owned): open the Flashes card and buy Drift & Bounce with Get it. Expect the offer to hide and the motion picker to appear in the same card without reopening it. Grant or revoke without a purchase and a detached row are not reachable by a tester on this head (snapshots only arrive with a counter reply); `V2GetItRowTests` covers those headless. WPF `Controls/V2GetItRow.xaml.cs:68`, `Features/FlashFeatureControl.xaml.cs`. Rows: `ctrl-v2-get-it-row`.
 
 ### Rows (general check G)
 - [ ] `feat-adaptive-side-art` - WPF `Features/AdaptiveSideArt.cs`
@@ -673,5 +674,3 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
-
-33. With a fake counter or test account, open the Flashes card, grant Drift & Bounce through a snapshot (without pressing Get it), then revoke it through a newer snapshot. The offer hides and the motion picker appears on grant; the offer returns and the picker disappears on revoke. Detach the row and repeat: it must no longer repaint. WPF `Controls/V2GetItRow.xaml.cs` and `Features/FlashFeatureControl.xaml.cs`. Rows: `ctrl-v2-get-it-row`.
