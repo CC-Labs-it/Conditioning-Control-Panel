@@ -77,6 +77,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _notRememberedShown = true;
                     await MessageDialog.ShowAsync(owner ?? this, Loc.Get("login_not_remembered_title"), Loc.Get("login_not_remembered_body"));
                 }
+                // WPF MainWindow.Login.cs:209 (#749): a first sign-in through Discord attaches it too, so
+                // offer sharing here as the link flow does. The offer self-guards on consent.
                 // WPF Login.cs:214: the sharing question does not wait for the background profile load,
                 // and the profile load does not wait for the answer.
                 var offer = AccountSeed.Discord?.IsAuthenticated == true

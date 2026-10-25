@@ -13,6 +13,9 @@ namespace ConditioningControlPanel.Services
     {
         private readonly AppSettings _saved = new();
 
+        /// <summary>The user's own spiral switch before the session overrode it (WPF SessionEngine.UserSpiralAllowed).</summary>
+        public bool SpiralEnabled => _saved.SpiralEnabled;
+
         public static SessionSettingsSnapshot Capture(AppSettings current)
         {
             var snapshot = new SessionSettingsSnapshot();

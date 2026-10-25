@@ -94,6 +94,7 @@ public sealed class WebcamTrackerTests
             Assert.False(WebcamTracker.Instance.Start());
             Assert.False(WebcamTracker.Instance.IsRunning);
             Assert.StartsWith("No camera could be opened", WebcamTracker.Instance.LastError);
+            Assert.Equal(WebcamTrackingState.CameraDenied, WebcamTracker.Instance.State);
             Assert.True(src.Disposed);
         });
     }
@@ -134,7 +135,7 @@ public sealed class WebcamTrackerTests
             Assert.Equal(WebcamTrackingState.Stopped, t.State);
             WebcamTracker.SourceFactory = () => new FakeSource { OpenResult = false };
             Assert.False(t.Start());
-            Assert.Equal(WebcamTrackingState.Error, t.State);
+            Assert.Equal(WebcamTrackingState.CameraDenied, t.State); // WPF: Open false on every backend
         });
     }
 
