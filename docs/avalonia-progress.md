@@ -3118,3 +3118,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-leash: +596
 - Leash page: own card (holder/day, Cut, tasks/pardons, strictness, DND, video cap, Watch), repaint on show and stop listening when hidden; Core PendingGateCount shared with WPF. Row stays stub; follow-up -b.
 - Review fixes: named fail-proofs (x2), renders moved to durable evidence, feat-leash row refreshed.
+
+## avalonia-port/wire-views-tab-settings: +351
+- Home Click tips popup + saved left/right gesture inversion on feature cards, DashboardToggleHintRule in Core.
+- Review fixes: real-pointer test (fail-proven), ledger rows corrected; P108 core flake only.
