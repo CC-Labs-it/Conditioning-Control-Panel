@@ -113,7 +113,8 @@ test('Keep is solid architecture with instanced decks, walls, halls and a tower,
     }
   }
   // A failed crossing must still visibly fall into the moat, never onto hidden architectural decking.
-  for (const [a, b] of [...track.jumps.map((j) => [j.s, j.landS]), ...track.fields.map((f) => [f.fromS, f.toS])]) {
+  for (const [a, b] of [...track.jumps.map((j) => [j.s, j.landS]), ...track.fields.map((f) => [f.fromS, f.toS]),
+    ...track.aerials.map(a => [a.gapS0, a.gapS1])]) {
     for (let s = a + 1; s < b - 1; s += 3) {
       const f = track.frameAt(s);
       for (const x of [-f.w / 2, 0, f.w / 2]) for (const depth of [1, 3, 8, 16]) for (const solid of solids) {

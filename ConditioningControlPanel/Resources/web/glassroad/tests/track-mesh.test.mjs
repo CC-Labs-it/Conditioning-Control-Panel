@@ -85,5 +85,7 @@ test('track: driveline quads cover the loop', () => {
   assert.equal(d.s[0], 0);
   assert.ok(Math.abs(d.s[d.count - 1] - tr.lengthM) < 1e-9);
   for (let r = 1; r < d.count; r++) assert.ok(d.s[r] > d.s[r - 1]);
-  assert.equal(d.gap.reduce((a, b) => a + b, 0), d.rows);
+  const aerialQuads = Array.from({ length: d.quads }, (_, i) => i)
+    .filter(i => tr.aerials.some(a => d.s[i] >= a.gapS0 && d.s[i + 1] <= a.gapS1)).length;
+  assert.equal(d.gap.reduce((a, b) => a + b, 0), d.rows + aerialQuads);
 });

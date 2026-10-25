@@ -69,8 +69,11 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
     // it keeps rolling: after the first seconds, never slower than a crawl for long
     const racing = r.trace.filter((x) => x.t > 12);
     const slow = Math.min(...racing.map((x) => x.v));
-    assert.ok(slow > 12, mode + ': keeps rolling, slowest ' + slow.toFixed(1) + ' m/s');
-    assert.ok(r.trace.every((x) => !x.item && (!x.hop || r.track.fields.some(f => f.platforming && x.s >= f.fromS && x.s < f.toS))), mode + ': automatic hops stay inside authored platform challenges');
+    const slowAt = racing.find(x => x.v === slow);
+    assert.ok(slow > 12, mode + ': keeps rolling, slowest ' + slow.toFixed(1) + ' m/s at ' + slowAt?.s.toFixed(1) + ' m');
+    assert.ok(r.trace.every(x => !x.item && (!x.hop ||
+      x.auto >= .99 && x.cruise >= .99 && r.track.aerials.some(j => x.s >= j.rampS0 && x.s < j.landingS1) ||
+      r.track.fields.some(f => f.platforming && x.s >= f.fromS && x.s < f.toS))), mode + ': automatic jumps and hat holds stay in their authored challenges');
     assert.equal(r.events('launch-boost').length, 0, mode + ': never takes the launch boost');
     assert.equal(r.events('drift-start').length, 0, mode + ': never drifts');
     const lapS = r.t;
@@ -83,14 +86,15 @@ test('hands off from the grid: the autopilot and the soft cruise carry the kart 
   }
 });
 
-test('throttle held with player jumps: assist steers after about 2 s and the lap has no fall', () => {
+test('throttle held with player jumps and hat holds: assist steers and the lap has no fall', () => {
   let r;
   r = solo({ hands: (t, st) => {
     const field = fieldAtS(r.track, st[S.s]);
     const stone = field?.platforming && stoneIn(field, st[S.s], st[S.lateral]);
     const span = stone && stoneLaneSpan(stone, st[S.lateral]);
     const jump = st[S.grounded] > 0 && span && span[1] - st[S.s] >= 0 && span[1] - st[S.s] <= 3 && span[1] < field.toS - 2;
-    return { throttle: 1, hop: !!jump, hopPressed: !!jump };
+    const hat = r.track.aerials.some(j => st[S.s] >= j.rampS0 && st[S.s] < j.landingS1);
+    return { throttle: 1, hop: !!jump || hat, hopPressed: !!jump };
   } });
   r.run(200, () => r.P.st[S.lap] >= 1);
   assert.ok(r.P.st[S.lap] >= 1, 'a lap with the throttle held');

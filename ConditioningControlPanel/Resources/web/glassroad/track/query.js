@@ -44,7 +44,7 @@ export function flowAt(nodes, seg, segT, out = [0, 0]) {
   return out;
 }
 
-export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], fields = [], profile = null) {
+export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], fields = [], profile = null, aerials = []) {
   const { N, SUB, samplePos: S } = sp;
   // bounding sphere per segment over its samples
   const centre = new Float64Array(N * 3), radius = new Float64Array(N);
@@ -114,12 +114,13 @@ export function createQuery(sp, refN, rollAt, widthAt, nodes, courts = [], field
     const wx = px - fr.p[0], wy = py - fr.p[1], wz = pz - fr.p[2];
     const lat = wx * fr.b[0] + wy * fr.b[1] + wz * fr.b[2];
     const h = wx * fr.n[0] + wy * fr.n[1] + wz * fr.n[2];
-    const gap = sp.gap[seg], half = fr.w / 2, fl = fr.flags;
+    const sa = sp.sFromU(seg, u);
+    const at = sa >= sp.lengthM ? sa - sp.lengthM : sa;
+    const gap = sp.gap[seg] || aerials.some(a => at >= a.gapS0 && at < a.gapS1), half = fr.w / 2, fl = fr.flags;
     out.seg = seg;
     if (out.forkId !== undefined) { out.forkId = null; out.forkS = 0; out.pathScale = 1; out.beyond = false; }
     out.segT = fr.segT;
-    const sa = sp.sFromU(seg, u);
-    out.s = sa >= sp.lengthM ? sa - sp.lengthM : sa;
+    out.s = at;
     out.lateral = lat;
     out.height = h;
     out.normal[0] = fr.n[0]; out.normal[1] = fr.n[1]; out.normal[2] = fr.n[2];

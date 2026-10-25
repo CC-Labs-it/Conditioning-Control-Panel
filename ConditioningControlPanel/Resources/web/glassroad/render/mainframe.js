@@ -63,7 +63,9 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   const isCanal = (s) => sectionAt(s).includes('canal');
   const isCore = (s) => /spiral|core|bus-descent/.test(sectionAt(s));
   const hasSpills = (s) => /spillway|coolant-chute|bus-descent/.test(sectionAt(s));
-  const hasGap = (s) => track.nodeFlags(track.frameAt(s).seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 8 > v.fromS);
+  const aerialOverlap = (s0, s1) => (track.aerials || []).some(a => s0 < a.gapS1 && s1 > a.gapS0);
+  const hasGap = (s) => track.nodeFlags(track.frameAt(s).seg).includes('jump') ||
+    aerialOverlap(s - .25, s + 8.25) || (track.fields || []).some((v) => s < v.toS && s + 8 > v.fromS);
   // A capsule check against the WHOLE road keeps every rack out of nearby switchbacks too.
   for (let i = 0; i < count; i++) {
     const s = (i + 0.5) * length / count, f = track.frameAt(s), side = i % 2 ? 1 : -1;
@@ -131,7 +133,8 @@ export function buildMainframe(track, art, { samples = sampleTrack(track, 4), ma
   // Bundles follow the transported road frame. Never bridge a jump or a stone-field opening.
   for (let s = 0; s < length; s += 5) {
     const f = track.frameAt(s + 2.5);
-    if (hasSpills(s) || track.nodeFlags(f.seg).includes('jump') || (track.fields || []).some((v) => s < v.toS && s + 5 > v.fromS)) continue;
+    if (hasSpills(s) || track.nodeFlags(f.seg).includes('jump') || aerialOverlap(s - .1, s + 5.1) ||
+      (track.fields || []).some((v) => s < v.toS && s + 5 > v.fromS)) continue;
     for (const side of [-1, 1]) {
       if (displayBay(s + 2.5, side)) continue;
       for (let wire = 0; wire < 3; wire++) add('slot', f, side * (f.w / 2 + 0.85 + wire * 0.26), 0.45, 0, [0.2, 0.2, 5.15]);
