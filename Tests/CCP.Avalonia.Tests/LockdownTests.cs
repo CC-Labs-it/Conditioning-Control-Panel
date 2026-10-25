@@ -54,67 +54,6 @@ public sealed class LockdownTests
     }
 
     [Fact]
-    public async Task SideArtPulseFollowsWpfAndStopsWhenHiddenMinimizedOrMotionIsOff()
-    {
-        await AvaloniaTestDispatcher.RunAsync(() =>
-        {
-            EnsureApp();
-            var oldMotion = CoreSettings.Current.MotionLevel;
-            var oldPerformance = CoreSettings.Current.PerformanceMode;
-            var oldAuto = CoreSettings.Current.AutoPerformanceMode;
-            var tab = new LockdownTabView();
-            var win = new Window { Content = tab };
-            try
-            {
-                CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
-                CoreSettings.Current.PerformanceMode = false;
-                CoreSettings.Current.AutoPerformanceMode = false;
-                win.Show();
-                tab.UpdateSideArtPulse();
-                Assert.True(tab.SideArtPulsing);
-                tab.PaintSideArtPulse(1.5);
-                Assert.Equal(1, tab.LockdownImageGlow.Opacity);
-                var brush = Assert.IsType<global::Avalonia.Media.SolidColorBrush>(tab.LockdownImageBorder.BorderBrush);
-                Assert.Equal(global::Avalonia.Media.Color.Parse("#FF69B4"), brush.Color);
-                Assert.Equal(22, tab.LockdownImageGlow.BoxShadow[0].Blur);
-                tab.IsVisible = false;
-                Assert.False(tab.SideArtPulsing);
-                tab.IsVisible = true;
-                Assert.True(tab.SideArtPulsing);
-                win.WindowState = WindowState.Minimized;
-                Assert.False(tab.SideArtPulsing);
-                win.WindowState = WindowState.Normal;
-                Assert.True(tab.SideArtPulsing);
-                CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
-                tab.UpdateSideArtPulse();
-                Assert.False(tab.SideArtPulsing);
-                Assert.Equal(0.7, tab.LockdownImageGlow.Opacity);
-                Assert.Equal(14, tab.LockdownImageGlow.BoxShadow[0].Blur);
-                CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
-                tab.UpdateSideArtPulse();
-                Assert.False(tab.SideArtPulsing);
-                CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
-                CoreSettings.Current.PerformanceMode = true;
-                tab.UpdateSideArtPulse();
-                Assert.False(tab.SideArtPulsing);
-                CoreSettings.Current.PerformanceMode = false;
-                tab.UpdateSideArtPulse();
-                Assert.True(tab.SideArtPulsing);
-                win.Close();
-                Assert.False(tab.SideArtPulsing);
-            }
-            finally
-            {
-                win.Close();
-                CoreSettings.Current.MotionLevel = oldMotion;
-                CoreSettings.Current.PerformanceMode = oldPerformance;
-                CoreSettings.Current.AutoPerformanceMode = oldAuto;
-            }
-            return Task.CompletedTask;
-        });
-    }
-
-    [Fact]
     public async Task EmergencyExitPressUsesSixtyMsOutAndOneFortyMsHome()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

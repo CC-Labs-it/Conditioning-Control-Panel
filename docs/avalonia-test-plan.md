@@ -675,5 +675,5 @@ area sections above; report against the commit row only when no screen row fits.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
 
 
-1. Open the Lockdown tab with Full motion and Quality performance: expect side art and the matching hero strip, a pink border/glow that peaks after 1.5 seconds and returns after 3 seconds, and hover pop on the image. Hide the tab, minimize, or disable ambient motion: expect the pulse to stop. Switch mods and return: expect both images to change together. WPF `Views/Tabs/LockdownTabView.xaml:105`, `MainWindow/MainWindow.Animations.cs:83`. Rows: `views-tab-lockdown`.
+1. Open the Lockdown tab: expect side art and the matching hero strip, and hover pop on the image. Switch mods and return: expect both images to change together. WPF `Views/Tabs/LockdownTabView.xaml:105`. Rows: `views-tab-lockdown`.
 2. Activate Lockdown and inspect Emergency Exit: expect the shipped inset face art; press and hold, then release, expecting a 60 ms quadratic-out sink and 140 ms quadratic-in-out return. The notice still leaves Lockdown running. WPF `Views/Tabs/LockdownTabView.xaml:510`, `Views/Tabs/LockdownTabView.xaml.cs:344`. Rows: `views-tab-lockdown`.

@@ -598,7 +598,7 @@
                              own pink border instead of the velvet outline because on WPF
                              StartLockdownPulse animates its border and glow directly. The Avalonia
                              glow is a sibling BoxShadow border so the plate's contents need no
-                             animated effect layer. The shared frame clock drives the WPF pulse. -->
+                             animated effect layer. MainShellWindow.Animations drives the WPF pulse. -->
                         <Grid Grid.Column="1" Margin="10,0,0,10" MinHeight="200" MaxHeight="520">
                             <Border x:Name="LockdownImageGlow" CornerRadius="12" IsHitTestVisible="False"
                                     BoxShadow="0 0 14 0 #FF1493" Opacity="0.7"/>
