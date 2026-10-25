@@ -24,6 +24,11 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// These load muted.</summary>
         public IReadOnlyList<Screen> SecondaryScreens { get; init; } = Array.Empty<Screen>();
 
+        /// <summary>Floating mandatory video: the primary window's rectangle in PHYSICAL pixels
+        /// instead of the whole screen. The window then never takes focus (panic and Esc reach a
+        /// video through the global key hook). Null = full screen, as always.</summary>
+        public System.Drawing.Rectangle? FloatingBounds { get; init; }
+
         /// <summary>Master x video volume, 0..1. External mute folds in through <see cref="Muted"/>.</summary>
         public double Volume { get; init; } = 1.0;
 
@@ -40,6 +45,11 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// <summary>Start position for the chaos random-segment mode. 0 = from the top.</summary>
         public long StartAtMs { get; init; }
 
+        /// <summary>Gentle visuals: the page's playbackRate (1 = normal) and the fade-in on the
+        /// first frame in ms (0 = none). The window itself can never fade (see BrowserVideoWindow).</summary>
+        public double PlaybackRate { get; init; } = 1.0;
+        public int FadeInMs { get; init; }
+
         /// <summary>
         /// This clip runs under a strict lock, as a FIXED fact of the session rather than the live
         /// probe <see cref="IsHostStrict"/> answers. It rides the page's <c>load</c> message, where
@@ -47,6 +57,10 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// it a Bluetooth headset's play/pause tap pauses the element behind our backs.
         /// </summary>
         public bool Strict { get; init; }
+
+        /// <summary>The page's "via Scrolller" badge + end card (<see cref="ScrolllerCredit.PagePayload"/>);
+        /// null for every clip that is not Scrolller's.</summary>
+        public object? Credit { get; init; }
 
         /// <summary>Runs on each window after construction and BEFORE Show() - the host's hook for
         /// strict handlers and anything that must be wired before the HWND is realized.</summary>
@@ -161,6 +175,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
         // point the veto is down.
         private readonly List<BrowserVideoWindow> _dropped = new();
         private BrowserVideoWindow? _primary;
+        private bool _floating;   // this session is the floating window: it never takes focus
         // ONE timer sweeps EVERY window; the deadline itself lives per window
         // (BrowserVideoWindow.FirstFrameDeadlineUtc). A session-wide deadline could only judge the
         // primary, which is exactly how a black mirror stayed invisible - see ArmFirstFrameWatch.
@@ -227,6 +242,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// null = the page did not report it (older cached page HTML); leave the host's own pause
         /// bookkeeping alone in that case.</summary>
         public event Action<long, bool?>? Time;
+        public long PlayedMs { get; private set; }
 
         /// <summary>Natural end of the clip.</summary>
         public event Action? Ended;
@@ -247,6 +263,20 @@ namespace ConditioningControlPanel.Services.Video.Browser
         /// <summary>An attention-check target was pressed (target id). Never accompanied by
         /// <see cref="Clicked"/> for the same press - the page routes one or the other.</summary>
         public event Action<string>? AttentionClicked;
+
+        /// <summary>The "via Scrolller" badge was pressed, on any screen. Never accompanied by
+        /// <see cref="Clicked"/> for the same press.</summary>
+        public event Action? CreditClicked;
+
+        /// <summary>The primary's picture ended and the page is showing the "via Scrolller" end card;
+        /// <see cref="Ended"/> follows once the card is done.</summary>
+        public event Action? MediaEnded;
+
+        /// <summary>Tell every screen the credit link will open once the video is over.</summary>
+        public void MarkCreditQueued() => Broadcast(new { type = "creditQueued" });
+
+        /// <summary>Show the "via ..." end card now, over the clip while it ends (CreditOutroTiming).</summary>
+        public void ShowCreditOutro() => Broadcast(new { type = "outro" });
 
         /// <summary>Target id + its viewport-fraction rectangle, ~10 Hz while the target bounces and
         /// only when the show message asked for it (gaze click enabled). Pure position bookkeeping.</summary>
@@ -428,9 +458,11 @@ namespace ConditioningControlPanel.Services.Video.Browser
             StopSession();   // a previous session must never outlive its video
 
             var session = ++_sessionId;
+            PlayedMs = 0;
             _failedRaised = false;
             _isHostPaused = req.IsHostPaused;
             _isHostStrict = req.IsHostStrict;
+            _floating = req.FloatingBounds != null;
             // Resolved once per session, not per window: the load posts below run in a loop and the
             // settings could change between iterations, splitting one clip across two devices.
             var sinkLabel = BrowserSinkLabel.Resolve();
@@ -472,7 +504,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
             BrowserVideoWindow? win = null;
             try
             {
-                win = new BrowserVideoWindow(screen, primary);
+                win = new BrowserVideoWindow(screen, primary, req.FloatingBounds);
                 win.SessionStartTick = Environment.TickCount64;
                 // Only the PRIMARY is armed here. InitWindowsAsync brings the windows up ONE AT A
                 // TIME, so arming a mirror now would charge it for the whole time it spends queued
@@ -506,6 +538,8 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     blurBackground = req.BlurBackground,
                     hideCursor = req.HideCursor,
                     startAtMs = req.StartAtMs,
+                    rate = req.PlaybackRate,
+                    fadeMs = req.FadeInMs,
                     // Arms the page's Media Session guard (player.js setMediaKeyGuard), which is what
                     // stops an OS/Bluetooth media key from pausing a video the user must not be able
                     // to stop. Every window carries it: a mirror is just as pausable as the primary.
@@ -514,6 +548,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     // the Windows default; the page treats every failure the same way and reports it
                     // back as {type:'sink'}.
                     sinkLabel = BrowserSinkLabel.ForWindow(primary, sinkLabel),
+                    credit = req.Credit,
                 });
 
                 try { req.ConfigureBeforeShow?.Invoke(win, screen, primary); }
@@ -522,7 +557,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
                 win.Show();
                 // Focus BEFORE the host stamps WS_EX_NOACTIVATE: the page needs keyboard focus for
                 // its {type:'key'} reports, and after the style lands the window can never take it.
-                if (primary) win.FocusWeb();
+                if (primary && !_floating) win.FocusWeb();
 
                 try { req.ConfigureAfterShow?.Invoke(win, screen, primary); }
                 catch (Exception ex) { App.Logger?.Debug("BrowserVideo: ConfigureAfterShow threw: {E}", ex.Message); }
@@ -569,7 +604,7 @@ namespace ConditioningControlPanel.Services.Video.Browser
             }
             // The control had no CoreWebView2 to focus when the window was shown, so re-assert it
             // now that one exists - otherwise the page never receives a keydown.
-            if (session == _sessionId) _primary?.FocusWeb();
+            if (session == _sessionId && !_floating) _primary?.FocusWeb();
         }
 
         /// <summary>Tear the session down. Idempotent, never throws, raises nothing.</summary>
@@ -659,6 +694,9 @@ namespace ConditioningControlPanel.Services.Video.Browser
                     case "attentionClick":
                         AttentionClicked?.Invoke((string?)o["id"] ?? "");
                         return;
+                    case "creditClick":
+                        CreditClicked?.Invoke();
+                        return;
                     case "attentionMove":
                         AttentionMoved?.Invoke((string?)o["id"] ?? "",
                             (double?)o["xPct"] ?? 0, (double?)o["yPct"] ?? 0,
@@ -715,9 +753,13 @@ namespace ConditioningControlPanel.Services.Video.Browser
                         Playing?.Invoke();
                         break;
                     case "time":
+                        PlayedMs = (long?)o["playedMs"] ?? 0;
                         // `paused` is absent on older cached page HTML — pass null through rather than
                         // defaulting to false, which would be the blind-clear this fixed (#874).
                         Time?.Invoke((long?)o["ms"] ?? 0, (bool?)o["paused"]);
+                        break;
+                    case "mediaEnded":
+                        MediaEnded?.Invoke();
                         break;
                     case "ended":
                         StopFirstFrameWatch();

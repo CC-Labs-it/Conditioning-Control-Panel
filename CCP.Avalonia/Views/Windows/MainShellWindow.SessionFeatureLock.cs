@@ -25,15 +25,11 @@
 //     Studio rack's Haptics page (WPF :276).
 //
 // WHAT IS NOT, and why - not one of these is "wired when a service moves to Core":
-//   - Six WPF markers have no Avalonia control to carry them yet (BubblePop CmbMotion and five
-//     LockCard repeat/target dials).
+//   - BubblePop CmbMotion has no Avalonia control to carry its marker yet. The five LockCard
+//     repeat/target controls and their Owned markers are already present.
 //   - ApplySessionLockToFeaturePopup's OTHER caller: _activeFeaturePopupContent, the dashboard
 //     tile popup. The popup host is MainShellWindow.TakeoverUi.cs / FeatureSettingsPopup, still a
 //     stub, so nothing sets that field and the painter is called for the rack only.
-//   - IsProgramSessionActive and the program half of SessionFeatureLockReason ("First Week is
-//     running this - Day 3") need App.Programs (ConditioningControlPanel/Services/
-//     ProgramService.cs) for ActiveProgram.Title and Today.DayIndex. The session-generic reason
-//     is what every caller gets here, which is the same string WPF falls back to.
 //   - SetToggleLock's ToolTipService.ShowOnDisabled has no Avalonia twin to need: Avalonia shows
 //     a ToolTip on a disabled control already, which is the whole reason WPF needed the flag.
 //
@@ -77,18 +73,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
-        /// Why the dials are grey. Never blank while the lock is active: a greyed-out control
-        /// with no explanation reads as a bug.
-        /// <para>ponytail: the program-specific line ("First Week is running this - Day 3") needs
-        /// App.Programs; this head always gives the session-generic reason, which is WPF's own
-        /// fallback string.</para>
+        /// WPF SessionFeatureLock.cs:95-137: name the program and day only for its own running
+        /// session. A preset or remote session keeps the ordinary session reason even while the
+        /// user is enrolled in a program. Core ProgramService owns session identity; this head
+        /// only selects the localized presentation.
         /// </summary>
         internal string SessionFeatureLockReason
         {
             get
             {
-                try { return Loc.Get("session_lock_reason"); }
-                catch { return "session_lock_reason"; }
+                try
+                {
+                    var runner = App.Sessions;
+                    var svc = App.Programs;
+                    if (runner?.IsRunning != true || svc?.IsProgramSession(runner.CurrentSession) != true)
+                        return Loc.Get("session_lock_reason");
+
+                    var title = svc.ActiveProgram?.Title;
+                    var day = svc.Today?.DayIndex ?? 0;
+                    if (!string.IsNullOrWhiteSpace(title) && day > 0)
+                        return Loc.GetF("program_lock_reason", title!, day);
+                    if (!string.IsNullOrWhiteSpace(title))
+                        return Loc.GetF("program_lock_reason_no_day", title!);
+                    return Loc.Get("program_lock_reason_generic");
+                }
+                catch { return Loc.Get("session_lock_reason"); }
             }
         }
 

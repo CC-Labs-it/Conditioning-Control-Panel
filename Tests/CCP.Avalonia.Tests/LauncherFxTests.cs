@@ -31,7 +31,7 @@ public sealed class LauncherFxTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -55,6 +55,7 @@ public sealed class LauncherFxTests
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(LauncherWindow.BackToLauncher(shell));
+                shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
                 Dispatcher.UIThread.RunJobs();
                 var launcher = LauncherWindow.Instance!;
                 launcher.UpdateLayout();
@@ -78,6 +79,38 @@ public sealed class LauncherFxTests
     {
         for (double t = 0; t < seconds; t += 0.02) w.StepFx(0.02);
     }
+
+    [Fact]
+    public void CtaAndWanderingTileSheensParkOnHideAndMotionGate() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        Dispatcher.UIThread.RunJobs(); launcher.UpdateLayout();
+        var cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        Assert.True(cta.IsTicking);
+        Assert.True(launcher.WanderTicking);
+        launcher.WanderSheenPass();
+        var wander = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.WanderSheen);
+        Assert.True(wander.IsTicking);
+        launcher.BuildTiles(); Dispatcher.UIThread.RunJobs(); launcher.UpdateLayout();
+        Assert.False(wander.IsTicking); Assert.Null(launcher.WanderSheen);
+        Assert.Same(cta, launcher.CtaSheen); Assert.True(cta.IsTicking); Assert.True(launcher.WanderTicking);   // rebuild restarts the wander only
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        launcher.OnFxActivated(false);
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+        launcher.OnFxActivated(true);
+        cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        // WPF StartWanderingSheen returns on _perfLow: the Performance tier closes the ambient gate.
+        CoreSettings.Current.PerformanceMode = true;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(launcher.WanderTicking); Assert.Null(launcher.CtaSheen);
+        CoreSettings.Current.PerformanceMode = false;
+        launcher.Hide();
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+    });
 
     [Fact]
     public void Clock_RunsOnlyWhileShownAndNotMinimised() => Run(MotionLevel.Full, (_, launcher, _) =>
@@ -294,5 +327,107 @@ public sealed class LauncherFxTests
         launcher.Close();
         Dispatcher.UIThread.RunJobs();
         Assert.False(shell.IsVisible);                   // the held step never ran
+    });
+
+    // ------------------------------------------------------------------ the edge (WPF LauncherWindow.Edge.cs)
+
+    private static void Frames(LauncherWindow w, int n)
+    {
+        for (int i = 0; i < n; i++) w.StepFx(0.02);
+    }
+
+    /// <summary>Hide + Show restarts the open cue with no dispatcher turn in between, so no real tick runs.</summary>
+    private static (Border Glow, Border Glint) Reopen(LauncherWindow w)
+    {
+        w.Hide();
+        w.Show();
+        return (w.FindControl<Border>("EdgeGlow")!, w.FindControl<Border>("EdgeGlint")!);
+    }
+
+    [Fact]
+    public void Edge_FlaresBreathesAndGlints_OnWpfTiming() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        var (glow, glint) = Reopen(launcher);
+        Frames(launcher, 7);                              // FlareEdge: 0.85 at 140 ms
+        Assert.Equal(0.85, glow.Opacity, 2);
+        Assert.Equal(0.9 * 140 / 250, glint.Opacity, 2);  // RunGlint: fades in over 250 ms
+        Frames(launcher, 18);                             // 500 ms: the glint holds 0.9
+        Assert.Equal(0.9, glint.Opacity, 2);
+        Frames(launcher, 20);                             // 900 ms: back to rest
+        Assert.Equal(0.3, glow.Opacity, 2);
+        Frames(launcher, 31);                             // 1.52 s: the glint is gone
+        Assert.Equal(0, glint.Opacity);
+        Frames(launcher, 130);                            // breath (from 0.92 s): 0.30 -> 0.44 over 3.2 s
+        Assert.Equal(0.44, glow.Opacity, 2);
+        Frames(launcher, 484);                            // 13.8 s: no idle glint yet
+        Assert.Equal(0, glint.Opacity);
+        Frames(launcher, 20);                             // 14.2 s: the idle glint passes (OnEdgeIdle, 14 s)
+        Assert.True(glint.Opacity > 0.5, $"idle glint {glint.Opacity}");
+    });
+
+    [Fact]
+    public void Edge_FocusBack_GlintsAtMostEveryFourSeconds() => Run(MotionLevel.Full, (_, launcher, cues) =>
+    {
+        var clock = new SteppedUtc();
+        LauncherWindow.LauncherSfx.Clock = clock;
+        try
+        {
+            var (_, glint) = Reopen(launcher);
+            Frames(launcher, 80);                         // the open glint is done
+            cues.Clear();
+            clock.Now += TimeSpan.FromSeconds(3.9);
+            launcher.OnFxActivated(true);                 // inside the 4 s gap: no second cue
+            launcher.StepFx(0.1);
+            Assert.DoesNotContain("launcher-edge", cues);
+            Assert.Equal(0, glint.Opacity);
+
+            clock.Now += TimeSpan.FromSeconds(0.2);       // 4.1 s since the open's cue
+            launcher.OnFxActivated(true);
+            launcher.StepFx(0.1);
+            Assert.Contains("launcher-edge", cues);
+            Assert.True(glint.Opacity > 0, "focus back runs the glint");
+        }
+        finally { LauncherWindow.LauncherSfx.Clock = TimeProvider.System; }
+    });
+
+    [Fact]
+    public void Edge_ParksWhenMinimisedOrHidden() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        var (glow, glint) = Reopen(launcher);
+        Frames(launcher, 7);
+        launcher.WindowState = WindowState.Minimized;
+        Assert.False(launcher.FxTicking);
+        Assert.Equal(0.3, glow.Opacity);
+        Assert.Equal(0, glint.Opacity);
+        launcher.WindowState = WindowState.Normal;
+        Frames(launcher, 7);
+        launcher.Hide();
+        Assert.False(launcher.FxTicking);
+        Assert.Equal(0.3, glow.Opacity);
+        Assert.Equal(0, glint.Opacity);
+    });
+
+    [Fact]
+    public void Edge_WindowIsRounded_AndTheGlintTurnsInTheUnitBox() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        Assert.Equal(Win32Properties.WindowCornerPreference.Round, Win32Properties.GetWindowCornerPreference(launcher));
+        Assert.Contains(WindowTransparencyLevel.Transparent, launcher.TransparencyLevelHint);
+        Assert.Equal(0, ((ISolidColorBrush)launcher.Background!).Color.A);
+        var frame = launcher.FindControl<Border>("WindowFrame")!;
+        Assert.True(frame.ClipToBounds);
+        Assert.Equal(new CornerRadius(8), frame.CornerRadius);
+        launcher.WindowState = WindowState.Maximized;
+        Assert.Equal(new CornerRadius(0), frame.CornerRadius);
+        launcher.WindowState = WindowState.Normal;
+        Assert.Equal(new CornerRadius(8), frame.CornerRadius);
+
+        // WPF RelativeTransform: a quarter turn carries the band's right-middle end to the bottom-middle.
+        var b = launcher.FindControl<Border>("EdgeGlint")!.Bounds;
+        Assert.True(b.Width > b.Height && b.Height > 0);
+        launcher.EdgeGlintSpin.Angle = 90;
+        launcher.ApplyGlintSpin();
+        var p = new Point(b.Width, b.Height / 2) * launcher.EdgeGlintRel.Matrix;
+        Assert.Equal(b.Width / 2, p.X, 3);
+        Assert.Equal(b.Height, p.Y, 3);
     });
 }

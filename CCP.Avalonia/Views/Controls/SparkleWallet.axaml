@@ -1,0 +1,88 @@
+<!-- PORTED from ConditioningControlPanel/Controls/SparkleWallet.xaml. Same 29 x 138 pill, colours and
+     order. Deviations, all forced: the hover/focus/press triggers -> template selectors; the gold
+     diamond Path -> a Fluent Diamond glyph (icon rule); the fixed "^_^" face uses WalletEmiFace,
+     the flat path of WPF EmiFace in the same visor rect (SparkleWallet.xaml:42);
+     the two popup cards are their own controls (SparkleWalletInviteCard / SparkleWalletHelpCard) so
+     the headless render draws them. Motion runs on BeatLoops (P82), see the code-behind. -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:local="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
+             x:Class="ConditioningControlPanel.Avalonia.Views.Controls.SparkleWallet"
+             Height="29" Width="138" UseLayoutRounding="True">
+    <UserControl.Styles>
+        <Style Selector="Button#WalletButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border x:Name="Outline" Background="#271A32" BorderBrush="#B982B5" BorderThickness="1"
+                            CornerRadius="14" Padding="2,0,23,0">
+                        <ContentPresenter Content="{TemplateBinding Content}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button#WalletButton:pointerover /template/ Border#Outline">
+            <Setter Property="BorderBrush" Value="#FFD580"/>
+        </Style>
+        <Style Selector="Button#WalletButton:focus-visible /template/ Border#Outline">
+            <Setter Property="BorderBrush" Value="#FFD580"/>
+        </Style>
+        <Style Selector="Button#WalletButton:pressed /template/ Border#Outline">
+            <Setter Property="Background" Value="#3A2348"/>
+        </Style>
+    </UserControl.Styles>
+    <Grid>
+        <Button x:Name="WalletButton" Padding="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+            <Grid ColumnDefinitions="31,*">
+                <Viewbox Width="30" Height="28" IsHitTestVisible="False">
+                    <!-- The croupier EMI (SparkleWallet.xaml:29 to 44): body + waving arm over 954x995,
+                         the arm turns about its shoulder. -->
+                    <Grid Width="954" Height="995">
+                        <Image Source="avares://CCP.Avalonia/Resources/emi/wallet_croupier_body.png" Stretch="Fill"
+                               RenderOptions.BitmapInterpolationMode="HighQuality"/>
+                        <Image x:Name="WaveArm" Source="avares://CCP.Avalonia/Resources/emi/wallet_croupier_arm.png"
+                               Stretch="Fill" RenderOptions.BitmapInterpolationMode="HighQuality"
+                               RenderTransformOrigin="84.8%,67.6%">
+                            <Image.RenderTransform><RotateTransform/></Image.RenderTransform>
+                        </Image>
+                        <fx:WalletEmiFace x:Name="MascotFace" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                          Margin="320,297,0,0" Width="389" Height="349"/>
+                    </Grid>
+                </Viewbox>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="2,0,0,0">
+                    <TextBlock x:Name="WalletLabel" TextTrimming="CharacterEllipsis" Foreground="#D9BCD9" FontSize="8"
+                               LineHeight="9"/>
+                    <StackPanel x:Name="BalanceRow" Orientation="Horizontal" RenderTransformOrigin="50%,50%">
+                        <StackPanel.RenderTransform><ScaleTransform/></StackPanel.RenderTransform>
+                        <fx:IconGlyph Kind="Diamond" Variant="Filled" Size="11" Foreground="#FFD580"
+                                      VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBlock x:Name="BalanceText" Text="0" Foreground="#FFF0CA" FontSize="15" FontWeight="Bold"
+                                   LineHeight="17"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Button>
+        <Canvas x:Name="SparkleLayer" IsHitTestVisible="False" ClipToBounds="False"/>
+        <Border x:Name="GainBadge" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-8,24,0"
+                Background="#34223F" BorderBrush="#FFD580" BorderThickness="1" CornerRadius="8" Padding="5,1"
+                IsVisible="False" IsHitTestVisible="False">
+            <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+            <TextBlock x:Name="GainText" Foreground="#FFE8A9" FontSize="10" FontWeight="Bold"/>
+        </Border>
+        <Popup x:Name="InvitePopup" PlacementTarget="{Binding #WalletButton}" Placement="Bottom"
+               VerticalOffset="7" IsLightDismissEnabled="True">
+            <local:SparkleWalletInviteCard x:Name="InviteCard"/>
+        </Popup>
+        <!-- The "?" rides inside the pill's right end, a sibling of WalletButton so its click never
+             bubbles into the wallet's own (SparkleWallet.xaml:6 to 10, 88 to 93). -->
+        <Button x:Name="HelpButton" Theme="{StaticResource HelpButtonStyle}" Width="17" Height="17"
+                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,5,0"
+                Background="#33201F2E" BorderBrush="#B982B5" Foreground="#F2DDF0"/>
+        <Popup x:Name="HelpPopup" PlacementTarget="{Binding #WalletButton}" Placement="Bottom"
+               VerticalOffset="7" IsLightDismissEnabled="True">
+            <local:SparkleWalletHelpCard x:Name="HelpCard"/>
+        </Popup>
+    </Grid>
+</UserControl>

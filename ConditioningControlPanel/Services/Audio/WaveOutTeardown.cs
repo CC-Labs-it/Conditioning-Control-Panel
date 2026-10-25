@@ -137,15 +137,17 @@ namespace ConditioningControlPanel.Services
         /// for the same player answers <see cref="Outcome.Duplicate"/>. Tests drive this directly.
         /// </summary>
         internal static Outcome Run(IWavePlayer? output, IReadOnlyList<IDisposable?> sources,
-                                    int waitMs, int graceMs, string tag = "test")
+                                    int waitMs, int graceMs, string tag = "test",
+                                    Func<ManualResetEventSlim, int, bool>? wait = null)
         {
             if (output == null && sources.Count == 0) return Outcome.Nothing;
             if (!TryClaim(output, sources)) return Outcome.Duplicate;
-            return RunClaimed(output, sources, waitMs, graceMs, tag);
+            return RunClaimed(output, sources, waitMs, graceMs, tag, wait);
         }
 
         private static Outcome RunClaimed(IWavePlayer? output, IReadOnlyList<IDisposable?> sources,
-                                          int waitMs, int graceMs, string tag)
+                                          int waitMs, int graceMs, string tag,
+                                          Func<ManualResetEventSlim, int, bool>? wait = null)
         {
             if (output != null)
             {
@@ -173,7 +175,10 @@ namespace ConditioningControlPanel.Services
                 // A running device owes us a PlaybackStopped once its thread leaves the driver.
                 // A stopped one only needs a moment to finish unwinding (the event may already
                 // be behind us, so a missing signal there is not a failure).
-                bool reportedOut = reported.Wait(wasRunning ? waitMs : graceMs) || !wasRunning;
+                // ponytail: the internal Run test entry can drive the wait without real time;
+                // Release always uses the real event wait and the production deadlines.
+                int timeout = wasRunning ? waitMs : graceMs;
+                bool reportedOut = (wait != null ? wait(reported, timeout) : reported.Wait(timeout)) || !wasRunning;
 
                 try { output.PlaybackStopped -= onStopped; } catch (Exception ex) { Diag.Swallowed(ex); }
 

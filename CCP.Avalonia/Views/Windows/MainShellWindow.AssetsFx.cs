@@ -3,8 +3,9 @@
 // 130 ms ease-out, gated on AllowTransitions) and the Media Log pulse (3 x 0.45 s dips to 0.45 when
 // App.MediaHistory grew since the log was last opened; stopped on hide and on click).
 //
-// ponytail: the pack-card sheen (CardSheenAdorner over a hovered pack card) waits for real pack
-// cards - the packs section is hidden and builds no cards from the seeded ContentPackService.
+// The pack-card sheen is also wired on the existing dormant AssetsTabView template: one card
+// at a time, gated by transitions, detached on leave, effective hide and unload. The packs strip
+// stays collapsed as on WPF; real ContentPackService card construction belongs to shell-assets.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {

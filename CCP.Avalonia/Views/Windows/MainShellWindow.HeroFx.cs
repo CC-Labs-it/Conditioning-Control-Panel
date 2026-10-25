@@ -9,10 +9,10 @@
 // Awarded and LevelUp. The bar tweens to its new width (0.6s QuadraticEaseOut, MotionFx.BarFill)
 // and a level-up flashes XPBarFlashOverlay (250ms up, auto-reversed), both off at MotionLevel Off.
 // The profile menu's Level/XP rail is painted from the same numbers.
+// XP readout, meniscus and chip pop now follow WPF on the existing shared beat (see below).
 //
 // STILL MISSING vs WPF, so the row stays a stub:
-//   the meniscus (AnimateXpMeniscus, ApplyXpMeniscusPulse), PopLevelChip, the level-up burst
-//   (FireBurstAt); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
+//   the level-up burst (FireBurstAt); the rank title (TxtPlayerTitle, a {loc:Str} a code write would lose);
 //   the Start button's charge/exhale/ignition/heartbeat set and FlashSaveAbsorb - no caller here
 //   (BtnStart_Click and the settings-save half are stubs); level-up sound and toast.
 // Sign-in, startup profile restore and logout repaint through UpdateQuickLoginUI
@@ -25,8 +25,9 @@ using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
-using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -44,7 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             InitializeBankFx();
             Action<ProgressionBank.XpAward> awarded = award => Dispatcher.UIThread.Post(() => OnBankAward(award));
-            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { AbortBankFlight(writeTruth: false); FlashLevelUp(); UpdateLevelDisplay(); });
+            Action<int> levelUp = _ => Dispatcher.UIThread.Post(() => { AbortBankFlight(writeTruth: false); FlashLevelUp(); PopLevelChip(); UpdateLevelDisplay(); });
+            HookHeroXpFx();
             ProgressionBank.XPAwarded += awarded;
             ProgressionBank.LevelUp += levelUp;
             Closed += (_, _) => { ProgressionBank.XPAwarded -= awarded; ProgressionBank.LevelUp -= levelUp; ShutdownBankFx(); _xpOdometer?.Stop(); };
@@ -89,61 +91,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("UpdateLevelDisplay: {E}", ex.Message); }
         }
 
-        private double _lastXpShown = double.NaN;
-        private int _lastXpLevelShown = -1;
-        private FrameClock? _xpOdometer;   // on the window's shared frame beat (AmbientBeatLoopsTests)
-
-
-        internal void SettleXpOdometerForTests()
-        {
-            _xpOdometer?.Stop();
-            _xpOdometer = null;
-            if (_xpOdometerTarget != null && Named<TextBlock>("TxtXP") is { } txt) txt.Text = _xpOdometerTarget;
-        }
-
-        private string? _xpOdometerTarget;
-
-        private void AnimateXpReadout(TextBlock txt, double xp, double needed, int level)
-        {
-            double from = (!double.IsNaN(_lastXpShown) && level == _lastXpLevelShown) ? _lastXpShown : 0;
-            _lastXpShown = xp;
-            _lastXpLevelShown = level;
-            RunXpOdometer(txt, from, xp, needed, 0.7);
-        }
-
-        private void RunXpOdometer(TextBlock txt, double from, double xp, double needed, double seconds)
-        {
-            _xpOdometer?.Stop();
-            _xpOdometer = null;
-            _xpOdometerTarget = $"{xp:F0} / {(int)needed} XP";
-            if (!AmbientFxCanvas.Env.AllowTransitions || !IsVisible || seconds <= 0
-                || Math.Abs(xp - from) < 0.5)
-            {
-                // WPF ChromeFx.cs:693 truncates on the snap path; only the odometer rounds (F0).
-                txt.Text = _xpOdometerTarget = $"{(int)xp} / {(int)needed} XP";
-                return;
-            }
-            string tail = " / " + ((int)needed) + " XP";
-            txt.Text = from.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
-            var started = System.Diagnostics.Stopwatch.GetTimestamp();
-            var timer = new FrameClock(txt) { Interval = TimeSpan.FromMilliseconds(16) };
-            timer.Tick += (_, _) =>
-            {
-                try
-                {
-                    double p = Math.Clamp(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds / seconds, 0, 1);
-                    double e = 1 - (1 - p) * (1 - p);   // QuadraticEase, EaseOut
-                    txt.Text = (from + (xp - from) * e).ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
-                    if (p < 1) return;
-                }
-                catch (Exception ex) { Log.Debug("XP odometer: {E}", ex.Message); }
-                timer.Stop();
-                if (ReferenceEquals(_xpOdometer, timer)) _xpOdometer = null;
-            };
-            _xpOdometer = timer;
-            timer.Start();
-        }
-
         /// <summary>FillXpBarTo: the fill is a fraction of the bar's parent grid (not the rounded track).</summary>
         private void FillXpBar(bool animate)
         {
@@ -156,7 +103,164 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     new DoubleTransition { Property = WidthProperty, Duration = TimeSpan.FromSeconds(0.6), Easing = new QuadraticEaseOut() },
                 }
                 : null;
-            bar.Width = _xpFraction * available;
+            double targetWidth = _xpFraction * available;
+            bar.Width = targetWidth;
+            AnimateXpMeniscus(targetWidth, animate);
+        }
+
+        private BeatLoop? _xpMeniscusPulse, _xpOdometer, _levelChipPop;
+        private double _xpMeniscusFillWidth, _lastXpShown = double.NaN;
+        private int _lastXpLevelShown;
+        private string? _xpReadoutTarget;
+        private bool _heroClosed;
+        internal bool XpMeniscusPulsing => _xpMeniscusPulse?.IsRunning == true;
+        internal bool XpReadoutCounting => _xpOdometer?.IsRunning == true;
+        internal bool LevelChipPopping => _levelChipPop?.IsRunning == true;
+
+        private void HookHeroXpFx()
+        {
+            Opened += (_, _) =>
+            {
+                // Opened fires again on every tray Hide/Show: never stack the static subscription (P41).
+                AmbientFxCanvas.Env.MotionGateChanged -= RefreshHeroXpFx;
+                AmbientFxCanvas.Env.MotionGateChanged += RefreshHeroXpFx;
+                RefreshHeroXpFx();
+            };
+            Activated += (_, _) => ApplyXpMeniscusPulse();
+            Deactivated += (_, _) => ApplyXpMeniscusPulse();
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) RefreshHeroXpFx();
+            };
+            Closed += (_, _) =>
+            {
+                _heroClosed = true;
+                AmbientFxCanvas.Env.MotionGateChanged -= RefreshHeroXpFx;
+                _xpMeniscusPulse?.Stop();
+                _xpOdometer?.Stop();
+                _levelChipPop?.Stop();
+            };
+        }
+
+        private void RefreshHeroXpFx()
+        {
+            ApplyXpMeniscusPulse();
+            if (AmbientFxCanvas.Env.AllowTransitions && IsVisible && WindowState != WindowState.Minimized) return;
+            _xpOdometer?.Stop();
+            if (_xpReadoutTarget != null && Named<TextBlock>("TxtXP") is { } txt) txt.Text = _xpReadoutTarget;
+            _levelChipPop?.Stop();
+            PaintLevelChipPop(1);
+            FillXpBar(animate: false);
+        }
+
+        // Adapted from parity/trunk 7b6f94800 (AnimateXpReadout); use the existing shared beat
+        // instead of importing the trunk's independent 16ms DispatcherTimer.
+        private void AnimateXpReadout(TextBlock txt, double xp, double needed, int level)
+        {
+            string target = $"{(int)xp} / {(int)needed} XP";
+            // Awarded and LevelUp can repaint the same total in one dispatcher turn. Keep the
+            // first count alive rather than snapping it to its own target on the second repaint.
+            if (_xpOdometer?.IsRunning == true && level == _lastXpLevelShown && xp == _lastXpShown
+                && target == _xpReadoutTarget && AmbientFxCanvas.Env.AllowTransitions && IsVisible) return;
+            double from = !double.IsNaN(_lastXpShown) && level == _lastXpLevelShown ? _lastXpShown : 0;
+            (_lastXpShown, _lastXpLevelShown) = (xp, level);
+            RunXpOdometer(txt, from, xp, needed, 0.7);
+        }
+
+        /// <summary>The readout count on the shared beat; THE BANK (BankFx.cs) drives it per step with its own duration.</summary>
+        private void RunXpOdometer(TextBlock txt, double from, double xp, double needed, double duration)
+        {
+            _xpOdometer?.Stop();
+            // WPF ChromeFx.cs:693 truncates on the snap path; only the odometer rounds (F0).
+            _xpReadoutTarget = $"{(int)xp} / {(int)needed} XP";
+            if (_heroClosed || !AmbientFxCanvas.Env.AllowTransitions || !IsVisible || duration <= 0
+                || WindowState == WindowState.Minimized || Math.Abs(xp - from) < 0.5)
+            {
+                txt.Text = _xpReadoutTarget;
+                return;
+            }
+            string tail = $" / {(int)needed} XP";
+            txt.Text = from.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
+            _xpOdometer = new BeatLoop(txt, seconds =>
+            {
+                double p = Math.Clamp(seconds / duration, 0, 1);
+                double eased = 1 - (1 - p) * (1 - p);
+                txt.Text = (from + (xp - from) * eased).ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
+                if (p >= 1) _xpOdometer?.Stop();
+            });
+            _xpOdometer.Start();
+        }
+
+        internal void SettleXpOdometerForTests()
+        {
+            _xpOdometer?.Stop();
+            if (_xpReadoutTarget != null && Named<TextBlock>("TxtXP") is { } txt) txt.Text = _xpReadoutTarget;
+        }
+
+        // WPF AnimateXpMeniscus: exactly the fill's 600ms quadratic-out target and easing.
+        private void AnimateXpMeniscus(double toWidth, bool animate)
+        {
+            _xpMeniscusFillWidth = toWidth;
+            if (Named<Border>("XPMeniscus") is not { RenderTransform: TranslateTransform slide } dot) return;
+            slide.Transitions = animate && AmbientFxCanvas.Env.AllowTransitions
+                ? new Transitions
+                {
+                    new DoubleTransition { Property = TranslateTransform.XProperty,
+                        Duration = TimeSpan.FromSeconds(0.6), Easing = new QuadraticEaseOut() },
+                } : null;
+            slide.X = Math.Max(0, toWidth - (double.IsNaN(dot.Width) ? 12 : dot.Width) / 2);
+            ApplyXpMeniscusPulse();
+        }
+
+        private void ApplyXpMeniscusPulse()
+        {
+            if (Named<Border>("XPMeniscus") is not { } dot) return;
+            bool ambient = !_heroClosed && AmbientFxCanvas.Env.AllowAmbientLoops && IsActive
+                && IsVisible && WindowState != WindowState.Minimized;
+            if (_xpMeniscusFillWidth < 5 || !ambient)
+            {
+                _xpMeniscusPulse?.Stop();
+                dot.Opacity = _xpMeniscusFillWidth < 5 ? 0 : 0.55;
+                return;
+            }
+            _xpMeniscusPulse?.Stop();
+            _xpMeniscusPulse ??= new BeatLoop(dot, seconds => dot.Opacity = 0.35 + 0.60 * BeatLoop.Breath(seconds, 2));
+            _xpMeniscusPulse.Start();
+        }
+
+        // WPF PopLevelChip: scale/tilt peak at 180ms, settle at 600ms. Plain transform writes on
+        // the shared beat avoid Animation.RunAsync's invalid Transform target cast.
+        internal void PopLevelChip()
+        {
+            if (_heroClosed || !AmbientFxCanvas.Env.AllowTransitions) return;
+            _levelChipPop?.Stop();
+            if (Named<Border>("LevelChip") is not { } chip) return;
+            _levelChipPop = new BeatLoop(chip, seconds =>
+            {
+                double p = Math.Clamp(seconds / 0.6, 0, 1);
+                PaintLevelChipPop(p);
+                if (p >= 1) _levelChipPop?.Stop();
+            });
+            _levelChipPop.Start();
+        }
+
+        private void PaintLevelChipPop(double p)
+        {
+            if (Named<Border>("LevelChip")?.RenderTransform is not TransformGroup { Children.Count: 2 } group
+                || group.Children[0] is not ScaleTransform scale || group.Children[1] is not RotateTransform rotate) return;
+            double amount;
+            if (p <= 0.3)
+            {
+                double t = p / 0.3;
+                amount = 1 - (1 - t) * (1 - t);
+            }
+            else
+            {
+                double t = 1 - (p - 0.3) / 0.7;
+                amount = t * t * t - t * 0.6 * Math.Sin(t * Math.PI);
+            }
+            scale.ScaleX = scale.ScaleY = 1 + 0.35 * amount;
+            rotate.Angle = -4 * amount;
         }
 
         /// <summary>CelebrateLevelUp's FlashOverlay(XPBarFlashOverlay): 0 -> 1 over 250ms, auto-reversed.</summary>
