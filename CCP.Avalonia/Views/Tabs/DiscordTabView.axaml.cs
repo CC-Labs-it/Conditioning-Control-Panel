@@ -395,6 +395,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// through the sender's DataContext exactly as the WPF handler reads it.</summary>
         private void ProfileAchievementTile_Click(object? sender, PointerReleasedEventArgs e)
         {
+            // WPF MouseLeftButtonUp (DiscordTabView.xaml:981/1048): right and middle clicks do nothing.
+            if (e is { InitialPressMouseButton: not MouseButton.Left }) return;
             if (sender is Control { DataContext: ProfileAchievementTile tile }) Host?.ToggleOwnAchievementPin(tile.Id);
         }
     }

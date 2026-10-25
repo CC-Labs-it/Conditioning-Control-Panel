@@ -148,6 +148,13 @@ public sealed class ProfileAvatarSlotAndPinTests
             Assert.Equal(TimeSpan.FromSeconds(2.5), shell._pinCapNoticeTimer!.Interval);
             Assert.True(shell._pinCapNoticeTimer.IsEnabled);
 
+            var tile0 = new Border { DataContext = new ProfileAchievementTile(ids[0], ids[0]) };
+            foreach (var button in new[] { global::Avalonia.Input.MouseButton.Right, global::Avalonia.Input.MouseButton.Middle })
+                click.Invoke(page, new object?[] { tile0, new global::Avalonia.Input.PointerReleasedEventArgs(tile0,
+                    new global::Avalonia.Input.Pointer(1, global::Avalonia.Input.PointerType.Mouse, true), shell, default, 0,
+                    new global::Avalonia.Input.PointerPointProperties(), global::Avalonia.Input.KeyModifiers.None, button) });
+            Assert.Equal(ids.Take(4), Pinned());   // WPF MouseLeftButtonUp: only a left click pins
+
             Click(ids[0]);   // a second click unpins
             Assert.Equal(ids.Skip(1).Take(3), Pinned());
             Click(ids[5]);   // locked: not pinnable
