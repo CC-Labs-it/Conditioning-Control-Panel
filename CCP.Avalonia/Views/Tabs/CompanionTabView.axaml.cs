@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (shown)
             {
                 Room.HeroZone.ApplyAvatarArt();   // the hero re-read + portrait the page header shows (WPF Room.Sync)
+                Room.RefreshCommunity();   // WPF SyncCompanionTabUI -> UpdateCommunityPromptsUI (MainWindow.CompanionTab.cs:147)
                 // WPF MainWindow.TabNavigation.cs:505 ShowTab("companion") -> InitializePhrasePresets, v2 or not:
                 // the Triggers cell's combo (on Companion > AI under v2) re-reads presets saved elsewhere.
                 Room.WorkshopZone.RefreshPhrasePresets();

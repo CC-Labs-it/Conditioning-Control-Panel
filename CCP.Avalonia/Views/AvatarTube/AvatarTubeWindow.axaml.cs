@@ -1433,9 +1433,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
                     if (!File.Exists(phraseAudioPath)) return;
                     handedOff = true;
-                    _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
+                    // Publish the new clip BEFORE cutting the old one: the cut fires the old line's
+                    // onSpoken, and a voice-host waiter resuming on the pool must already see this clip.
                     var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                     SpokenAudioDone = clipDone.Task;
+                    _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
                     _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
                                           barkVoice ? "bark-voice" : "phrase-audio",
                                           onFinished: () => { clipDone.TrySetResult(); onSpoken?.Invoke(); });
