@@ -163,11 +163,11 @@ test('the higher rebound clears the far lip and lands well onto the deck sooner 
       const u = Math.min(1, (f.st[S.s] - start.s) / (end.s - start.s));
       const baseline = start.y + (end.y - start.y) * phraseEase(u);
       const above = f.st[S.posY] - baseline;
-      assert.ok(above <= 2.601, tr.id + ': rebound remains within its bounded height envelope');
+      assert.ok(above <= 2.201, tr.id + ': rebound remains within its bounded height envelope');
       peak = Math.max(peak, above);
       if (previousS < zone.gapS1 && f.st[S.s] >= zone.gapS1) lipClearance = f.st[S.posY] - tr.frameAt(f.st[S.s]).p[1];
     }
-    assert.ok(peak > 2.55, tr.id + ': visibly higher spring');
+    assert.ok(peak > 2.15, tr.id + ': visibly higher spring');
     assert.ok(lipClearance > .6, `${tr.id}: clear the far edge instead of skimming it (${lipClearance})`);
     assert.ok(end.s >= zone.gapS1 + 7.9 && end.s < zone.landingS1, 'catch safely onto the landing deck');
     assert.ok(f.ev.t - catchTime <= oldDuration * .9 + DT, tr.id + ': quicker rebound despite the longer clear landing');
