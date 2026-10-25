@@ -5,7 +5,7 @@ import { Group, Mesh, InstancedMesh, BoxGeometry, SphereGeometry, CylinderGeomet
 import { vec3, float, uv, attribute, positionWorld, normalWorld, normalize, abs, mix, smoothstep, min } from 'three/tsl';
 import { goonworksWorldPlan } from './goonworksWorld.js';
 import { createGoonworksMaterial, createGoonworksTubeMaterial, createGoonworksPlatformMaterial, GOONWORKS_PAPER_MATERIALS, GOONWORKS_PALETTE as C } from './goonworksMaterials.js';
-import {goonworksTubeShell,goonworksPlatformGeometry} from './goonworksGeometry.js';
+import {goonworksTubeShell,goonworksTubeSolids,goonworksPlatformGeometry} from './goonworksGeometry.js';
 import { Q } from './quality.js';
 import { machineryBeatAt, gearBeatTravel } from '../track/machineryBeat.js';
 import { createGearSpiralPaint } from './gearSpirals.js';
@@ -105,10 +105,15 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   const sideInk=float(1).sub(smoothstep(.015,.042,abs(uv().x))).mul(float(1).sub(smoothstep(.3,.7,abs(up))));
   shellMat.colorNode=mix(shellMat.colorNode,vec3(.009,.002,.012),sideInk);owned.push(shellMat);
   const ribbon=new Mesh(shell,shellMat);ribbon.name='goonworks-thick-ribbon';group.add(ribbon);
+  // Its whole-course box fills empty air. The fitter reserves the sampled road corridor.
+  ribbon.userData.screenPlacementIgnore=true;
 
   for(const outer of[false,true]){const data=goonworksTubeShell(track,outer);if(!data)continue;
     const material=createGoonworksTubeMaterial(outer),tube=new Mesh(upload(data),material);owned.push(material);
-    tube.name=outer?'goonworks-rabbit-outer-shell':'goonworks-rabbit-inner-shell';group.add(tube);}
+    tube.name=outer?'goonworks-rabbit-outer-shell':'goonworks-rabbit-inner-shell';
+    // One set of wall proxies covers both skins without filling the hollow interior.
+    if(outer)tube.userData.screenPlacementSolids=goonworksTubeSolids(data);
+    else tube.userData.screenPlacementIgnore=true;group.add(tube);}
 
   // Every broad field platform is one whole deck, never a repetition of the small stone kit.
   const platformGroups=[];
@@ -130,6 +135,7 @@ export function buildGoonworks(track,art=null,pal=null,samples=null){
   const skyG=new SphereGeometry(plan.skyRadius,32,18),skyM=new MeshBasicNodeMaterial({side:BackSide,depthWrite:false,fog:false,toneMapped:false});
   skyM.colorNode=mix(vec3(.62,.51,.69),vec3(.86,.8,.78),smoothstep(plan.center[1]-250,plan.center[1]+350,positionWorld.y));
   const sky=new Mesh(skyG,skyM);sky.position.fromArray(plan.center);sky.name='goonworks-blush-atmosphere';sky.renderOrder=-2;sky.frustumCulled=false;group.add(sky);extraGeometry.push(skyG);owned.push(skyM);
+  sky.userData.screenPlacementIgnore=true;
   const sparkleCount=Math.min(Q.name==='phone'?450:1900,plan.particles.length*11),sparkle=new InstancedMesh(geometries.spark,materials.white,sparkleCount);
   sparkle.name='goonworks-ink-sparkles';group.add(sparkle);
   const bubblesCount=Math.min(Q.name==='phone'?80:260,plan.particles.length*2),bubbles=new InstancedMesh(geometries.torus,materials.cream,bubblesCount);bubbles.name='goonworks-floating-bubbles';group.add(bubbles);

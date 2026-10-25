@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {loadTrack} from '../track/load.js';
-import {goonworksWorldPlan,goonworksBoxesIntersect} from '../render/goonworksWorld.js';
+import {goonworksWorldPlan,goonworksBoxesIntersect,goonworksSegmentBlocked} from '../render/goonworksWorld.js';
 import {goonworksMediaLayout,goonworksSpiralLayout} from '../render/goonworksMedia.js';
-import {goonworksTubeShell,goonworksPlatformGeometry} from '../render/goonworksGeometry.js';
+import {goonworksTubeShell,goonworksTubeSolids,goonworksPlatformGeometry} from '../render/goonworksGeometry.js';
+import {spatialCandidates} from '../render/spatialCandidates.js';
 import {goonworksScreenVisibility} from '../render/goonworksVisibility.js';
 import {selectScrolllerSlots} from '../render/mediaSelection.js';
 const track=loadTrack(JSON.parse(readFileSync(new URL('../tracks/goonworks.json',import.meta.url),'utf8')));
@@ -38,19 +39,39 @@ test('GOONWORKS rabbit tube has shared continuous rings and platforms have no ov
   const cap=goonworksPlatformGeometry(30,28);assert.equal(Array.from(cap.normals).filter((v,i)=>i%3===1&&v===1).length,4);
 });
 test('GOONWORKS does not dress the supported race corridor with scenery',()=>{
-  const exceptions=r=>r.id.startsWith('horizon-')||r.id==='white-cartoon-cloud'||r.id.endsWith('-white-bezel');
+  const exceptions=r=>r.id.startsWith('horizon-')||r.id==='white-cartoon-cloud';
   const hits=[];
   for(const r of plan.rows){if(exceptions(r))continue;for(const c of plan.corridor)if(goonworksBoxesIntersect(r,c)){hits.push(r.id);break;}}
   assert.deepEqual(hits,[]);
+});
+
+test('rabbit wall proxies cover rendered opaque triangles while oval window centres remain open',()=>{
+  const data=goonworksTubeShell(track,true),walls=goonworksTubeSolids(data);
+  const near=spatialCandidates(walls.map(row=>({...row,radius:Math.hypot(...row.size)/2}))),P=data.positions,U=data.uvs;
+  for(let i=0;i<data.indices.length;i+=3){
+    const ids=Array.from(data.indices.slice(i,i+3)),p=[0,1,2].map(k=>ids.reduce((sum,id)=>sum+P[id*3+k]/3,0));
+    const[a,s]=[0,1].map(k=>ids.reduce((sum,id)=>sum+U[id*2+k]/3,0));
+    const oval=(Math.abs(((s/76)%1+1)%1-.5)*76/24)**2+(Math.min(Math.abs(Math.sin(a-.04)),Math.abs(Math.sin(a+.04)))/.6)**2;
+    if(oval<.98)continue;
+    assert.ok(near(p,1).some(row=>goonworksBoxesIntersect({p,size:[.02,.02,.02]},row)),'Every opaque triangle centroid belongs to a wall patch');
+  }
+  for(let offset=38;offset<data.range.s1-data.range.s0;offset+=76){
+    const f=track.frameAt(data.range.s0+offset);
+    for(const side of[-1,1]){
+      const from=f.p.map((v,k)=>v+f.n[k]*22+f.b[k]*side*22),to=f.p.map((v,k)=>v+f.n[k]*22+f.b[k]*side*26);
+      assert.ok(!near(from,5).some(row=>goonworksSegmentBlocked(from,to,row)),'The real oval window stays open through both wall skins');
+    }
+  }
 });
 test('GOONWORKS broad platform tops match every physical support row without merging gaps',()=>{
   const stones=track.fields.flatMap(f=>f.stones);assert.equal(plan.platforms.length,stones.length);
   for(const p of plan.platforms){assert.equal(p.w,p.source.w);assert.equal(p.len,p.source.len);assert.ok(p.w>=24);assert.ok(p.len>=24);}
   for(let i=1;i<plan.platforms.length;i++){const a=plan.platforms[i-1],b=plan.platforms[i];assert.ok(b.s-(a.s+a.len)>=1.5);}
 });
-test('GOONWORKS CRT cabinets give the shared media system a balanced clip and Loom layout',()=>{
+test('GOONWORKS mounts give the shared media system a balanced clip and Loom layout without duplicate cabinets',()=>{
   const media=goonworksMediaLayout(track);assert.ok(media.slots.length>=30);assert.equal(new Set(media.slots.map(s=>s.id)).size,media.slots.length);
-  for(const s of media.slots){assert.ok(s.C.every(Number.isFinite));assert.ok(plan.rows.some(r=>r.id===s.backId));assert.ok([0,3].includes(s.program));}
+  for(const s of media.slots){assert.ok(s.C.every(Number.isFinite));assert.ok(plan.mounts.some(m=>m.id===s.mountId));assert.ok([0,3].includes(s.program));}
+  assert.ok(!plan.rows.some(r=>r.id.endsWith('-cabinet')||r.id.endsWith('-white-bezel')),'Only fitted media may render a housing, including when an authored mount is dropped');
   assert.equal(selectScrolllerSlots(media.slots).length,Math.ceil(media.slots.length/2));assert.deepEqual(goonworksSpiralLayout(track).gates,[]);
 });
 test('GOONWORKS screens show meaningful clear picture area from driver height at multiple approaches',()=>{

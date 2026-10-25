@@ -79,9 +79,20 @@ export function worldScreenSolids(roots = []) {
     if (!root) continue;
     root.updateWorldMatrix?.(true, true);
     root.traverse(node => {
-      if (!node.isMesh || !node.visible || !node.geometry) return;
+      if (!node.isMesh || !node.visible || !node.geometry || node.userData.screenPlacementIgnore) return;
       const materials = Array.isArray(node.material) ? node.material : [node.material];
       if (!materials.some(m => m && m.visible !== false && (!m.transparent || m.opacity >= .65))) return;
+      if (node.userData.screenPlacementSolids) {
+        const m = node.matrixWorld.elements;
+        const direction = v => [0, 1, 2].map(k => m[k] * v[0] + m[k + 4] * v[1] + m[k + 8] * v[2]);
+        for (const row of node.userData.screenPlacementSolids) {
+          const axes = row.axes.map(direction), scale = axes.map(a => Math.hypot(...a));
+          if (scale.some(v => v < 1e-7)) continue;
+          result.push({ ...row, name: node.name + '-panel', p: direction(row.p).map((v, k) => v + m[12 + k]),
+            axes: axes.map((a, k) => mul(a, 1 / scale[k])), size: row.size.map((v, k) => v * scale[k]) });
+        }
+        return;
+      }
       const geo = node.geometry;
       if (!geo.boundingBox) geo.computeBoundingBox();
       const bounds = geo.boundingBox;
