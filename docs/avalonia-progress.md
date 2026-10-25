@@ -3106,3 +3106,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-feat-spiral: +420
 - The spiral randomizer and the personal-folder refusal now live in Core and are shared by WPF and Avalonia. Each run keeps one pick, never repeats the previous image, and refuses personal folders with a logged warning. The Avalonia head's duplicate check is removed.
 - Review fix: a random spiral that can't be decoded is re-picked once, so the run isn't left blank (fail-proven). Gate: rgate 39697469596 failed only on two known flakes, and both passed in rcheck 39701813936.
+
+## avalonia-port/wire-shell-tab-fx-presets-quests-achievements: +481
+- Presets/quests focal FX (selected sheen, hover/press, arrival stagger, weekly tween) ported; row stays stub, follow-up lane -b.
+- Review fixes: visible-only Loaded stagger, scoped no-replay test (was failing on CI), stale doc reference dropped.
