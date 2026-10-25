@@ -3464,3 +3464,6 @@ All five companion roster cards now repaint their assigned prompt name (mod-awar
 
 ## avalonia-port/flake-workshop-community-win: +14
 - WorkshopCommunityCellTests Windows timeouts root-caused: Avalonia raises WindowOpenedEvent before ShowDialog sets Owner, so the helper's owner check never matched a late dialog (export/browse await a file write first). Helper now checks Owner on the instance Opened event; the import dialog is made late on purpose so every OS covers it. Fail-proof rcheck 40188504621 (red), Windows 20x green 40188453349, rgate 40199015916 GATE-OK.
+
+## avalonia-port/wire-win-descent-fuse: +326
+- Descent Fuse shows retired like WPF (ShowsRetired); only a late zero with no crack owed retries over SyncPush; panic closes any show.

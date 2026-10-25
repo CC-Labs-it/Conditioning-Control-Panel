@@ -34,26 +34,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    head and the Core timelines get the flag they expect.
     ///  - <c>Application.Current.MainWindow</c> is the desktop lifetime's <c>MainWindow</c>, and
     ///    Avalonia has no settable <c>Owner</c>, so ownership is <c>Show(parent)</c>.
-    ///  - <c>DescentRoomSfx</c>, <c>App.DescentMigration</c>, <c>App.DescentCountdown</c> and
-    ///    <c>App.ProfileSync</c> are still in the WPF head, so each is a stub below.
+    ///  - Room sounds remain a follow-up; the existing CoreAudio backend is the playback seam.
     ///
-    /// <para><b>STILL UNREACHABLE — blocked on unported callers, not on this window.</b>
-    /// <see cref="Open"/> is complete and takes its owner correctly; what is missing is everything
-    /// that would call it. All four WPF call sites were checked:</para>
-    /// <list type="bullet">
-    ///   <item><c>DescentShowDirector</c>
-    ///   (ConditioningControlPanel/Services/Descent/DescentShowDirector.cs:156/233/406) opens the
-    ///   Live, CatchUp and Ignition shows. CCP.Core/Services/Descent/ carries the SHOW — the
-    ///   timelines and the handoff this file already uses — but not the director. The Live open
-    ///   is now MainShellWindow.DescentFuse.cs on Core <c>DescentCountdownService.ZeroReached</c>;
-    ///   CatchUp and Ignition remain unreached.</item>
-    ///   <item><see cref="ForceCloseAll"/> is the panic path's
-    ///   (MainWindow.StartStop.cs:525), and this head has no <c>StopEngine</c> to call it from.</item>
-    /// </list>
-    /// <para>The gate is the director's, not this window's: it opens the Live show only when the
-    /// countdown phase reaches Zero. Opening the show from anywhere else would put a fullscreen
-    /// topmost surface over the user with no countdown behind it, so no substitute entry point
-    /// was invented.</para>
+    /// <para>Retired like WPF (<see cref="ShowsRetired"/>): <see cref="Open"/> refuses every
+    /// kind, so the Live zero and late zero open nothing. PanicSurfaces still closes any show.</para>
     /// </summary>
     public partial class DescentFuseWindow : Window
     {
@@ -77,6 +61,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly bool _reduced;
         private readonly Stopwatch _clock = new();
         private readonly DescentFuseHandoff _handoff = new();
+
+        /// <summary>The bloom's resync, kept so a test awaits it instead of polling.</summary>
+        internal System.Threading.Tasks.Task LastResync { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
 
         private readonly DescentFuseStageVisual _visual;
         private readonly Border _backdropLayer;
@@ -158,9 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (kind == DescentShowKind.Live)
             {
-                // ponytail: needs DescentMigrationService.HoldOffers from
-                // ConditioningControlPanel/Services/Descent/DescentMigrationService.cs (reached as
-                // App.DescentMigration). No Core seam exposes it.
+                // No offer hold to take: WPF retired the ceremony, so there is no offer to hold.
                 // Holding the ceremony back until the light returns is choreography, not defence:
                 // without it an offer answered during the drain drops the ceremony on top of a
                 // crack that is four seconds from finishing.
@@ -173,11 +158,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             lock (Live) Live.Add(this);
         }
 
-        /// <summary>
-        /// Open a show, or return null if one is already up. The single-open guard is the point:
-        /// two fullscreen topmost windows over each other is unrecoverable without the panic key.
-        /// </summary>
+        /// <summary>THE CEREMONY IS OVER - WPF DescentFuseWindow.xaml.cs:168-181 (owner, 6.11.0: the
+        /// cracked-screen animation "might just confuse people now"). Every show refuses to open;
+        /// each caller treats null as "nothing played".</summary>
+        internal const bool ShowsRetired = true;
+
         public static DescentFuseWindow? Open(DescentShowKind kind)
+        {
+            if (ShowsRetired)
+            {
+                Log.Information("[Fuse] The {Kind} show is retired (the ceremony is over) - not opening it.", kind);
+                return null;
+            }
+            return OpenShow(kind);
+        }
+
+        /// <summary>
+        /// The pre-retirement opener, kept so the drawn show stays testable. Returns null if one is
+        /// already up: two fullscreen topmost windows over each other is unrecoverable without the panic key.
+        /// </summary>
+        internal static DescentFuseWindow? OpenShow(DescentShowKind kind)
         {
             try
             {
@@ -289,7 +289,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // ---------------------------------------------------------- crack + handoff
 
-        private void FrameCrack(double elapsed)
+        internal void FrameCrack(double elapsed)
         {
             var frame = DescentFuseTimeline.FrameAt(_kind, elapsed, _reduced);
             _visual.SetFrame(frame);
@@ -335,16 +335,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             if (frame.SinceBloom < 0) return;
 
-            // ponytail: needs DescentMigrationService.IsCeremonyOpen
-            // (ConditioningControlPanel/Services/Descent/DescentMigrationService.cs) — false here,
-            // so this head always walks the timeout branch and shows the standing line rather than
-            // crossfading. That is the contract's own no-offer path, not a fake one: the ceremony
-            // really is still coming on the next sync, so nothing is written and nothing loops.
+            // WPF IsCeremonyOpen is constant false since the ceremony retired. Keep its honest
+            // timeout line; sync attempts can still settle the silent migration acknowledgment.
             switch (_handoff.Advance(frame.SinceBloom, ceremonyOpen: false))
             {
                 case DescentHandoffAction.Resync:
-                    // ponytail: needs ProfileSyncService.SyncProfileAsync from
-                    // ConditioningControlPanel/Services/Settings/ProfileSyncService.cs. No Core seam.
+                    LastResync = MainShellWindow.RequestFuseSync();
                     break;
 
                 case DescentHandoffAction.CrossfadeToCeremony:
@@ -450,8 +446,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_holdingOffers) return;
             _holdingOffers = false;
-            // ponytail: needs DescentMigrationService.ReleaseOffers - the paired release for the
-            // HoldOffers above, same file, same missing seam.
+            // Nothing to release: the ceremony (and its offers) is retired on both heads.
         }
 
         private void SafeClose()
