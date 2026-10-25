@@ -25,7 +25,7 @@ internal sealed class RequiredNameAsk
             if (CoreSettings.Current.UnifiedId != uid || !NeedsDisplayNameRule.ShouldAsk(true, CoreSettings.Current.UserDisplayName, null)) return;
             var dialog = new DisplayNameDialog(NeedsDisplayNameRule.Suggest(AccountSeed.Discord?.Username, AccountSeed.Discord?.DisplayName), SaveAsync);
             _active = dialog;
-            try { await dialog.ShowDialog<bool>(owner); }
+            try { await dialog.ShowDialogSafe<bool>(owner); }
             finally { if (_active == dialog) _active = null; }
         }, () => _askedUid = null);
     }

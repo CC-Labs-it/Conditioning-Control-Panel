@@ -86,7 +86,6 @@ public sealed class PanicSurfacesTests
     /// contracts live on the registry entries (<c>After</c>), not here.</summary>
     private static readonly string[] SafetyCritical =
     {
-        "startup-modals",
         "ai-followups",
         "attention-test",
         "blink-trainer",
@@ -120,6 +119,7 @@ public sealed class PanicSurfacesTests
         "program-session",
         "remote-haptics",
         "speak-cue",
+        "startup-modals",
         "takeover",
         "tour",
         "tube-speech",

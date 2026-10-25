@@ -65,9 +65,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             if (_closed) return;
             _saving = false;
             if (error == null) { DisplayName = name; Close(true); return; }
-            status.Text = error;
             _txtDisplayName.IsEnabled = true;
             OnTextChanged();
+            ShowStatus(error);
             _txtDisplayName.Focus();
         }
 
@@ -139,8 +139,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             var text = (_txtDisplayName.Text ?? "").Trim();
             if (_save != null)
             {
-                _btnConfirm.IsEnabled = !_saving && NeedsDisplayNameRule.Check(text) == DisplayNameShape.Ok;
+                var shape = NeedsDisplayNameRule.Check(text);
+                _btnConfirm.IsEnabled = !_saving && shape == DisplayNameShape.Ok;
                 _txtCharCount.Text = Loc.GetF("label_char_count_of_max", text.Length, 20);
+                // WPF DisplayNameDialog.xaml.cs:111: the live bad-characters line.
+                ShowStatus(shape == DisplayNameShape.BadChars ? Loc.Get("name_ask_bad_chars") : null);
             }
             else if (_isDeleteMode)
             {
@@ -152,6 +155,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
                 _txtCharCount.Text = Loc.GetF("label_char_count_of_max", length, 20);
                 _btnConfirm.IsEnabled = length >= 2 && length <= 20;
             }
+        }
+
+        private void ShowStatus(string? line)
+        {
+            var status = this.FindControl<TextBlock>("TxtStatus")!;
+            status.Text = line ?? "";
+            status.IsVisible = !string.IsNullOrEmpty(line);
         }
 
         private void TxtDisplayName_KeyDown(object? sender, KeyEventArgs e)

@@ -62,14 +62,36 @@ public sealed class StartupModalTests
         int opened = 0, abandoned = 0;
         owner.Hide();
         StartupLadder.EnqueueModal("ask", 40, _ => { opened++; return Task.CompletedTask; }, () => abandoned++);
+        int passive = 0;
+        StartupLadder.PresentOrInbox(new() { Key = "held", Title = "Held", Open = () => passive++ });
         clock.Advance(TimeSpan.FromSeconds(5));
         Assert.Equal(0, opened);
-        PanicSurfaces.StopAll("test");
+        MainShellWindow.IsStartupDialogShowing = true;   // the wizard's own flag, not the ladder's
+        try
+        {
+            PanicSurfaces.StopAll("test");
+            Assert.True(MainShellWindow.IsStartupDialogShowing);
+        }
+        finally { MainShellWindow.IsStartupDialogShowing = false; }
         owner.Show();
         clock.Advance(TimeSpan.FromSeconds(5));
         Assert.Equal(0, opened);
         Assert.Equal(1, abandoned);
+        Assert.Equal(1, passive);   // the held surface is not stranded by the panic
         Assert.True(StartupLadder.IsLadderIdle);
+    });
+
+    [Fact]
+    public void DrainUnderASettlingCardStillOpensTheHeldSurface() => Run((owner, clock) =>
+    {
+        var seen = new List<string>();
+        StartupLadder.PresentOrInbox(new() { Key = "card", Title = "Card", Open = () => seen.Add("card") });
+        StartupLadder.EnqueueModal("modal", 40, _ => { seen.Add("modal"); return Task.CompletedTask; });
+        StartupLadder.PresentOrInbox(new() { Key = "held", Title = "Held", Open = () => seen.Add("held") });
+        clock.Advance(TimeSpan.FromSeconds(1));   // the modal drains inside the card's 3 s settle
+        Assert.Equal(new[] { "card", "modal" }, seen);
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Equal(new[] { "card", "modal", "held" }, seen);
     });
 
     [Fact]
@@ -107,9 +129,16 @@ public sealed class StartupModalTests
             var confirm = dialog.FindControl<Button>("BtnConfirm")!;
             Assert.False(confirm.IsEnabled);
             Assert.False(dialog.FindControl<Button>("BtnCancel")!.IsVisible);
+            var status = dialog.FindControl<TextBlock>("TxtStatus")!;
+            dialog.FindControl<TextBox>("TxtDisplayName")!.Text = "bad!name";
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(confirm.IsEnabled);
+            Assert.True(status.IsVisible);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("name_ask_bad_chars"), status.Text);
             dialog.FindControl<TextBox>("TxtDisplayName")!.Text = "valid-name";
             Dispatcher.UIThread.RunJobs();
             Assert.True(confirm.IsEnabled);
+            Assert.False(status.IsVisible);
             confirm.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(1, saves);
             Assert.True(dialog.IsVisible);

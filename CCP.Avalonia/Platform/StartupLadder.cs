@@ -104,11 +104,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             foreach (var pair in Shows) StartupInbox.RunSafely(pair.Value.Abandoned, pair.Key, "abandon");
             Shows.Clear();
             _waitingKey = null;
+            // Only the ladder's own flag: the wizard and welcome-back raise it themselves.
+            if (_modalUp) Views.Windows.MainShellWindow.IsStartupDialogShowing = false;
             _modalUp = false;
-            Views.Windows.MainShellWindow.IsStartupDialogShowing = false;
             _modalTimer?.Dispose();
             _modalTimer = null;
             RequiredNameAsk.CloseForPanic();
+            if (_held.Count > 0) EnsurePassiveWatch();   // held surfaces re-route on the next 1 s tick, not mid-panic
+
         }
 
         public static StartupInbox Inbox { get; } = new();
@@ -211,7 +214,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>One tick of the watch: re-routes the held surfaces once nothing passive is up.</summary>
         internal static void PumpHeld()
         {
-            if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
+            // WPF FlushDeferred re-holds and starts the watch: a drain under a settling card must not strand them.
+            if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) { if (_held.Count > 0) EnsurePassiveWatch(); return; }
             _passiveTimer?.Dispose();
             _passiveTimer = null;
             var held = _held.ToList();
