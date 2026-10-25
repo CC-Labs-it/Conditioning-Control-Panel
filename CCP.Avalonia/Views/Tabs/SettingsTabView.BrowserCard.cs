@@ -24,6 +24,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     public partial class SettingsTabView
     {
         private bool _browserCardSyncing;
+        private BrowserAudioSyncHost? _audioSyncHost;
 
         /// <summary>Tests: how many times the mute script was sent to the page.</summary>
         internal int BrowserMuteApplies { get; private set; }
@@ -34,6 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserWebHost.PropertyChanged += (_, e) => { if (e.Property == WebHost.SourceProperty) SyncBrowserPrompt(); };
             AttachedToVisualTree += (_, _) =>
             {
+                _audioSyncHost ??= new BrowserAudioSyncHost(BrowserWebHost);
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 Platform.WebcamTracker.Instance.StateChanged += OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
@@ -42,6 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             DetachedFromVisualTree += (_, _) =>
             {
+                _audioSyncHost?.Dispose();
+                _audioSyncHost = null;
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };

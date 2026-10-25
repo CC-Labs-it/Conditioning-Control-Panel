@@ -118,6 +118,7 @@ public sealed class PanicSurfacesTests
         "possession",
         "program-session",
         "remote-haptics",
+        "browser-audio-sync",
         "speak-cue",
         "takeover",
         "tour",

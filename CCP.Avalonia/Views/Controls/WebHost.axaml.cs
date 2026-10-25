@@ -72,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// hangs its status line and catalogue lookup on.
         /// </summary>
         public event Action<Uri>? NavigationCompleted;
+        public event Action? NavigationBeginning;
 
         /// <summary>Completion outcome, for decorative embeds that must fall back on a failed load.</summary>
         public event Action<Uri, bool>? NavigationFinished;
@@ -269,6 +270,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
+            NavigationBeginning?.Invoke();
             var target = e.Request;
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }

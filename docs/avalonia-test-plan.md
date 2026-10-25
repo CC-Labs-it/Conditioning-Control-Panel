@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. WPF `AudioSyncService.OnVideoDetectedAsync`, `MainWindow.Browser.HandleAudioSyncVideoDetected`: on Home, enable Haptics audio sync, connect a toy, open a direct HTTP video and play. Expect “Preparing Haptic Sync...” then playback with haptics; pause, seek to an unloaded chunk and end. With no device or a failed download, video must still play. Panic during preparation must pause video, stop haptics and never resume from a late completion. Navigate away during preparation and confirm the new page is unaffected. Rows: `host-audio-sync`
