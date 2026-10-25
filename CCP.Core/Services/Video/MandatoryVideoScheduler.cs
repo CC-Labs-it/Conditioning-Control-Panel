@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Services
         private readonly Random _random = new();
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _preroll, _cascadeDefer;
+        private bool _deferIsReplay;   // the held request carries a verdict replay: dropping it must run AfterEnd
 
         /// <summary>Head probe for WPF TriggerVideo's cascade guard; no UI dependency in Core.</summary>
         public Func<bool>? CascadeIsRaining { get; set; }
@@ -334,8 +335,8 @@ namespace ConditioningControlPanel.Services
                     if (_time.GetUtcNow() >= deadline ||
                         (!userEarned && (!_running || !CoreSettings.Current.MandatoryVideosEnabled)))
                     {
-                        Dispose(ref _cascadeDefer);
-                        if (_running) ScheduleNext();
+                        if (DropDefer()) AfterEnd();
+                        else if (_running) ScheduleNext();
                         return;
                     }
                     if (CascadeIsRaining?.Invoke() == true)
@@ -343,8 +344,8 @@ namespace ConditioningControlPanel.Services
                         pending!.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
                         return;
                     }
-                    Dispose(ref _cascadeDefer);
-                    Trigger(strictOverride, path, userEarned);
+                    var replay = DropDefer();
+                    if (!Trigger(strictOverride, path, userEarned) && replay && !_playing) AfterEnd();
                 }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                 _cascadeDefer = pending;
                 // ponytail: the existing head exposes IsRaining, not WPF RunWhenClear. Poll
@@ -437,17 +438,27 @@ namespace ConditioningControlPanel.Services
             {
                 if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
                 if (mercy || !Trigger(strict)) AfterEnd();
+                else if (_cascadeDefer != null && !_playing) _deferIsReplay = true;   // held behind GIF rain
             });
         }
 
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
-            Dispose(ref _cascadeDefer);
+            var heldReplay = DropDefer();
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (Finish() && _running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
+            if ((Finish() || heldReplay) && _running) CoreBubbles.Resume();   // Stop() clears _running first: no resume after an engine stop
+        }
+
+        /// <summary>Cancels a held cascade request; true when it carried a verdict replay.</summary>
+        private bool DropDefer()
+        {
+            var replay = _deferIsReplay && _cascadeDefer != null;
+            _deferIsReplay = false;
+            Dispose(ref _cascadeDefer);
+            return replay;
         }
 
         private bool Finish()

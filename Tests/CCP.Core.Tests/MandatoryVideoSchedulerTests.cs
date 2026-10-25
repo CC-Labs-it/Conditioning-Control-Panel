@@ -265,6 +265,40 @@ public sealed class MandatoryVideoSchedulerTests
         }
     });
 
+    [Theory]   // review P2: a verdict replay held behind GIF rain must still run AfterEnd when dropped
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_verdict_replay_dropped_behind_the_cascade_resumes_bubbles(bool forceCleanup) => With(60, true, () =>
+    {
+        var s = CoreSettings.Current;
+        var a = s.AttentionChecksEnabled;
+        s.AttentionChecksEnabled = true;
+        var bubbles = new List<string>();
+        CoreBubbles.PauseAction = () => bubbles.Add("pause");
+        CoreBubbles.ResumeAction = () => bubbles.Add("resume");
+        try
+        {
+            var clock = new FakeClock(); var host = new Host(); var rain = false;
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+            v.Start();
+            v.Trigger(); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            v.NoteSpawn(); v.Ended();                        // missed: verdict message up
+            rain = true;
+            host.Then!();                                    // the replay is held behind the rain
+            Assert.DoesNotContain("resume", bubbles);
+            if (forceCleanup) v.ForceCleanup();
+            else clock.Advance(TimeSpan.FromSeconds(91));   // the 90 s hold expires
+            Assert.Equal("resume", bubbles[^1]);
+            Assert.Single(host.Shown);
+            v.Stop();
+        }
+        finally
+        {
+            s.AttentionChecksEnabled = a;
+            CoreBubbles.PauseAction = CoreBubbles.ResumeAction = null;
+        }
+    });
+
     /// <summary>#1145: the Mercy picker moves the threshold (here 2 misses).</summary>
     [Fact]
     public void Mercy_comes_after_the_picked_number_of_misses() => With(60, true, () =>
