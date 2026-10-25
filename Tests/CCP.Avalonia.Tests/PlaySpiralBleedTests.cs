@@ -29,7 +29,11 @@ public sealed class PlaySpiralBleedTests
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
 
+            var oldTime = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+            var time = new SteppedTime();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = time;
             var w = new MainShellWindow();
+            try {
             w.Show();
             w.Activate();
             Dispatcher.UIThread.RunJobs();
@@ -46,6 +50,8 @@ public sealed class PlaySpiralBleedTests
 
             w.ShowTab("settings");
             Dispatcher.UIThread.RunJobs();
+            time.Advance(System.TimeSpan.FromSeconds(.7));      // past the 100 ms outgoing tab fade
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             Assert.False(badge.IsAnimating, "Play's tier badge kept animating on another tab");
             Assert.All(rims, r => Assert.False(r.IsVisible, "a Play rim still draws over another tab"));
             Assert.All(rims, r => Assert.False(r.IsAnimating, "a Play rim kept lapping on another tab"));
@@ -54,7 +60,12 @@ public sealed class PlaySpiralBleedTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(badge.IsAnimating, "coming back to Play did not restart its badge");
             Assert.All(rims, r => Assert.True(r.IsVisible && r.IsAnimating, "coming back to Play did not restore a rim"));
-            w.Close();
+            }
+            finally
+            {
+                w.Close();
+                global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = oldTime;
+            }
             return Task.CompletedTask;
         });
     }

@@ -1,2 +1,3 @@
+# Avalonia manual test plan
 
 1. WPF `ConditioningControlPanel/MainWindow/MainWindow.ChromeFx.cs` Rows: `shell-chrome-fx`. With Full motion, switch Presets to Quests and back quickly: incoming fades over 200ms with a 12px directional slide; outgoing fades over 100ms without taking clicks. Return during that fade and check controls remain clickable. Cards rise 10px with 40ms stagger capped at six slots, at most eight eligible cards; dimmed/hidden cards and authored transforms stay intact. Repeat with Reduced (crossfade only), Off (instant), and the Dashboard browser tab (no slide). Change motion to Off during a switch and close during a stagger; all values settle and no transition clock remains. Automated: `ChromeTabTransitionsTests`, Core `ChromeFxNavTests`.

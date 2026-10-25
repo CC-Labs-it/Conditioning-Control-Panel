@@ -2,6 +2,8 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -55,6 +57,8 @@ public sealed class ChromeTabTransitionsTests
                 cardHost.Children.Add(cards[i]);
             }
             cards[1].RenderTransform = new ScaleTransform(1.1, 1.1);
+            var grouped = new TranslateTransform(); // WPF MotionFx.Find reuses a group's translate
+            cards[2].RenderTransform = new TransformGroup { Children = { new ScaleTransform(1.1, 1.1), grouped } };
             ((ContentControl)presets).Content = new Border { Child = new ScrollViewer { Content = cardHost } };
             shell.ShowTab("presets");
             Assert.Equal(motion == MotionLevel.Off ? 1 : 0, presets.Opacity);
@@ -73,6 +77,8 @@ public sealed class ChromeTabTransitionsTests
                 Assert.Null(hidden.RenderTransform);
                 Step(.20);
                 Assert.InRange(cards[6].Opacity, .08, .10); // capped 240 ms delay
+                Assert.IsType<TransformGroup>(cards[2].RenderTransform);
+                Assert.InRange(grouped.Y, 1.1, 1.3); // 170 ms into the 260 ms rise
                 Assert.Equal(cards[6].Opacity, cards[7].Opacity);
             }
             else
@@ -103,6 +109,68 @@ public sealed class ChromeTabTransitionsTests
             Step(.01);
             Assert.Equal(1, presets.Opacity);
             Assert.DoesNotContain(BeatLoop.Running, b => ReferenceEquals(b.Owner, shell));
+        }
+        finally
+        {
+            shell?.Close();
+            BeatLoop.Time = oldClock;
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+    });
+
+    /// <summary>Default Full motion, real input: once the 620 ms choreography is over the outgoing tab
+    /// is gone, every incoming card is fully drawn and a click lands on the new tab.</summary>
+    [Fact]
+    public void FullMotionSwitchSettlesAndTakesInput() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldClock = BeatLoop.Time;
+        CoreSettings.ServiceProvider = () => newSettings;
+        var clock = new Clock();
+        BeatLoop.Time = clock;
+        MainShellWindow? shell = null;
+        try
+        {
+            var s = CoreSettings.Current;
+            s.Welcomed = s.HasAcceptedAgeVerification = true;
+            s.WhatMovedCardShown = 1;
+            s.SeenFeatureIntros.AddRange(FeatureIntros.All.Keys);
+            Assert.Equal(MotionLevel.Full, s.MotionLevel);
+            shell = new MainShellWindow();
+            ToolTip.SetServiceEnabled(shell, false);
+            shell.Show();
+            var presets = shell.Named<ContentControl>("PresetsTab")!;
+            var quests = shell.Named<ContentControl>("QuestsTab")!;
+            var cards = new Button[4];
+            var host = new StackPanel();
+            for (int i = 0; i < cards.Length; i++) host.Children.Add(cards[i] = new Button { Content = new TextBlock { Text = "card" }, Width = 200, Height = 40 });
+            quests.Content = new Border { Child = host };
+            shell.ShowTab("presets");
+            clock.Now += TimeSpan.FromSeconds(.7).Ticks; BeatLoop.StepAll();
+            shell.ShowTab("quests");
+            Assert.True(presets.IsVisible); // outgoing still fading: the choreography is live
+            Assert.Equal(0, cards[0].Opacity);
+            clock.Now += TimeSpan.FromSeconds(.7).Ticks; BeatLoop.StepAll();
+            Assert.False(presets.IsVisible);
+            Assert.True(presets.IsHitTestVisible);
+            Assert.Equal(1, quests.Opacity);
+            Assert.All(cards, c => Assert.Equal(1, c.Opacity));
+            Assert.DoesNotContain(BeatLoop.Running, b => ReferenceEquals(b.Owner, shell));
+
+            Dispatcher.UIThread.RunJobs();
+            for (int i = 0; i < 3; i++) { AvaloniaHeadlessPlatform.ForceRenderTimerTick(); Dispatcher.UIThread.RunJobs(); }
+            var target = cards[0];
+            var p = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), shell)!.Value;
+            bool clicked = false;
+            target.Click += (_, _) => clicked = true;
+            shell.MouseDown(p, MouseButton.Left);
+            shell.MouseUp(p, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(clicked, $"a click at {p} did not reach the new tab: hit {(shell.InputHitTest(p) as Control)?.GetType().Name}");
         }
         finally
         {

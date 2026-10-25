@@ -107,7 +107,7 @@ public class Phase8RedirectContractTests
     {
         // Three separate maps have to agree or code-driven navigation lands with the active
         // indicator inside a door nobody opened.
-        Assert.Contains("\"progression\"", StripComments(ReadSource("Services", "ChromeFxNav.cs")),
+        Assert.Contains("\"progression\"", StripComments(ReadSource("Services", "UI", "ChromeFxNav.cs")),
                         StringComparison.Ordinal);
         // Nav rework (2026-10-06): the section table is the one map; ChromeFx paints the section
         // row through RefreshSectionRail, so its own tab map is gone.

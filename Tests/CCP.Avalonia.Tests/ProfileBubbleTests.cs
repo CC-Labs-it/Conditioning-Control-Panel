@@ -184,6 +184,8 @@ public sealed class ProfileBubbleTests
 
             shell.ShowTab("settings");                          // the tab hides: the loop stops (P01)
             Dispatcher.UIThread.RunJobs();
+            time.Advance(TimeSpan.FromSeconds(.7));             // past the 100 ms outgoing tab fade
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             Assert.False(shell.OgBorderLoopRunning);
             // Freshen the shared animation clock first: a transition still running on it (the
             // section wash/edge crossfade of an earlier navigation) would hand the stagger the

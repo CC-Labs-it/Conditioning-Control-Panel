@@ -151,7 +151,8 @@ public sealed class GlowRenderProofTests
         {
             // Frozen clocks: the two frames differ only by the glow, not by the Ken Burns drift or a sheen.
             FxAdorner.Time = new SteppedTime();
-            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
+            var beat = new SteppedTime();
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = beat;
             (s.MotionLevel, s.PerformanceMode) = (MotionLevel.Full, false);
             CoreEntitlement.HasPremiumProvider = null;
             CoreEntitlement.HasLabProvider = null;
@@ -161,6 +162,8 @@ public sealed class GlowRenderProofTests
             Dispatcher.UIThread.RunJobs();
             w.ShowTab("exclusives");
             Dispatcher.UIThread.RunJobs();
+            beat.Advance(TimeSpan.FromSeconds(.7));             // let the tab entrance settle first
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
             var glow = ExclusivesTabView.LockGlow(lockGlyph)!;

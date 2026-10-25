@@ -35,7 +35,8 @@ public partial class MainShellWindow
         var offset = ChromeFxNav.EntranceOffset(from, to, 12);
         if (level == MotionLevel.Full && !ChromeFxNav.IsAirspaceTab(to))
             _chromeCards = FindChromeCards(incoming);
-        _tabChromeBeat = new BeatLoop(this, seconds =>
+        // 60 fps like WPF's storyboard: at the ambient 30 fps the 100 ms fade got ~3 frames.
+        _tabChromeBeat = new BeatLoop(this, fps: 60, step: seconds =>
         {
             if (CoreSettings.Current.MotionLevel == MotionLevel.Off)
             {
@@ -97,7 +98,7 @@ public partial class MainShellWindow
             {
                 card.Opacity = 1;
                 // Stagger owns Y only; never disturb Width or another animation's X.
-                if (card.RenderTransform is TranslateTransform t) t.Y = 0;
+                if (FindTranslate(card) is { } t) t.Y = 0;
             }
         _chromeIncoming = _chromeOutgoing = null;
         _chromeCards = null;
@@ -105,7 +106,7 @@ public partial class MainShellWindow
 
     private static TranslateTransform? TabTranslate(Control control)
     {
-        if (control.RenderTransform is TranslateTransform existing) return existing;
+        if (FindTranslate(control) is { } existing) return existing;
         // An authored scale/group/rotation is never ours, even when currently identity.
         if (control.RenderTransform is not null) return null;
         var slide = new TranslateTransform();
@@ -115,8 +116,16 @@ public partial class MainShellWindow
 
     private static void ResetChromeSlide(Control control)
     {
-        if (control.RenderTransform is TranslateTransform t) t.X = t.Y = 0;
+        if (FindTranslate(control) is { } t) t.X = t.Y = 0;
     }
+
+    // WPF MotionFx.Find<TranslateTransform>: the transform itself or a direct TransformGroup child.
+    internal static TranslateTransform? FindTranslate(Control control) => control.RenderTransform switch
+    {
+        TranslateTransform t => t,
+        TransformGroup g => g.Children.OfType<TranslateTransform>().FirstOrDefault(),
+        _ => null,
+    };
 
     internal static List<Control> FindChromeCards(Control? node)
     {

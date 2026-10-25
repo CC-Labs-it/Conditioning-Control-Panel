@@ -31,11 +31,13 @@ public sealed class GeneralDeeperSwitchTests
                     .SetupWithoutStarting();
 
             var s = CoreSettings.Current;
-            var before = s.EnableDeeper;
+            var (before, motion) = (s.EnableDeeper, s.MotionLevel);
             MainShellWindow? w = null;
             try
             {
                 s.EnableDeeper = false;
+                // Nav, not choreography: Full motion keeps the outgoing tab up for its 100 ms fade.
+                s.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
                 w = new MainShellWindow();
                 w.Show();
                 Dispatcher.UIThread.RunJobs();
@@ -59,7 +61,7 @@ public sealed class GeneralDeeperSwitchTests
             finally
             {
                 w?.Close();
-                s.EnableDeeper = before;
+                (s.EnableDeeper, s.MotionLevel) = (before, motion);
             }
             return Task.CompletedTask;
         });

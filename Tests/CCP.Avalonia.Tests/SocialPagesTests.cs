@@ -66,6 +66,8 @@ public sealed class SocialPagesTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var settings = new SettingsService();
+        // Nav, not choreography: Full motion keeps the outgoing tab up for its 100 ms fade.
+        settings.Current.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
         CoreSettings.ServiceProvider = () => settings;
         var (svc, wire) = Service();
         var oldSvc = FriendsHead.Service;
