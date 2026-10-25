@@ -673,3 +673,6 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+300. EMI ring dismissal and host doors. WPF `Windows/EmiDesk/EmiRingWindow.xaml.cs` + `Windows/EmiDesk/EmiDeskWindow.Ring.cs` + `Services/EmiDesk/EmiTargets.cs`. Rows: `win-emi-ring`.
+    Summon EMI, open cards, click a card and then reopen. Click EMI to toggle; click a gap or another application and check the click reaches it while cards fold once. Reopen during the fold; Escape folds globally without stealing focus. Drag past six DIPs and resize near a screen corner. Check the small fan settle and reverse fold. Pin DtRH/Intake in options; their live gates and existing hosts must launch/refuse normally. Just Drop appears only when its account door is available. Panic while cards are up folds them. Repeat on Windows and X11; Wayland global input and sub-poll X11 presses remain a known gap.

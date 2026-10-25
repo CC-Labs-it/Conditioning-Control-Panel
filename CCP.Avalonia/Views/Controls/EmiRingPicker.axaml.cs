@@ -154,6 +154,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 if (sender is not ToggleButton tb || tb.Tag is not string id) return;
 
                 bool nowPinned = EmiSuggester.TogglePin(id);
+                // WPF EmiDeskWindow.NotePin: one successful pin retires the lesson forever.
+                if (nowPinned) EmiState.NotePinMade();
                 if (tb.IsChecked != nowPinned)
                 {
                     _loading = true;
