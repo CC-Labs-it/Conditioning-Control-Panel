@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+### Companion bark continuation (fin4)
+
+1. Enable companion and master volume; display a flash and a subliminal, pop a bubble, earn XP/levels (including companion), unlock an achievement, advance/finish/refresh quests, complete/break mantra streaks and activate/deactivate/tick lockdown. With an eligible rule and a free 60-second floor, expect the matching reaction and substituted level, XP, achievement, streak or remaining seconds. WPF `Services/Companion/BarkService.cs:654`. Rows: `feat-companion-barks`.
+2. Set the companion idle interval, leave her speech-ready and wait for a tick. Expect eligible idle lines to rotate across rules before recycling, with no immediate repeat at the cycle boundary; mute or active speech suppresses them. Change the slider and check the new cadence; close the tube and confirm its timer stops. WPF `AvatarTube/AvatarTubeWindow.Speech.cs:1571`. Rows: `feat-companion-barks`.
+3. Start with CCP_BARK_DRYRUN=1. Exercise a bark and an idle tick; expect no bubble/voice or persisted rotation/lifetime latch write, while repeated one-shots remain suppressed in that process. WPF `Services/Companion/BarkService.cs:184`. Rows: `feat-companion-barks`.

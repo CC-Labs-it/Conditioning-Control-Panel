@@ -134,6 +134,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
             var value = (int)SliderIdleIntervalCompanion.Value;
             TxtIdleIntervalCompanion.Text = $"{value}s";
             CoreSettings.Current.IdleGiggleIntervalSeconds = value;
+            Views.AvatarTube.AvatarTubeWindow.Live?.RestartIdleTimer();
             CoreSettings.Save();
             // ponytail: WPF also restarts the tube's idle timer. This head's tube IS ported
             // (CCP.Avalonia/Views/AvatarTube/AvatarTubeWindow.axaml.cs) but has no idle-giggle

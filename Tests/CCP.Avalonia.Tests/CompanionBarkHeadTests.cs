@@ -1,3 +1,4 @@
+using App = ConditioningControlPanel.Avalonia.App;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Headless;
@@ -108,6 +109,132 @@ public sealed class CompanionBarkHeadTests
             eng.Measure = null;
             (BarkHead.Engine, BouncingTextOverlay.CornerHit) = old;
         }
+    });
+
+    [Theory]
+    [InlineData("LevelUp", "LevelUp")]
+    [InlineData("Awarded", "XPChanged")]
+    [InlineData("CompanionLevelUp", "CompanionLevelUp")]
+    [InlineData("MantraCompleted", "MantraCompleted")]
+    [InlineData("StreakChanged", "MantraStreakChanged")]
+    [InlineData("StreakBroken", "MantraStreakBroken")]
+    public void ExistingServiceEventsReachBarksAndStopDetaches(string source, string trigger) => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var rule = Rule(trigger, "reacted");
+        rule.ClassRaw = "safety"; // repeated events bypass timing, exposing duplicate or dangling handlers
+        var e = Seeded(rule, out var spoken);
+        int count = 0;
+        e.BarkSpoken += (_, _) => count++;
+        BarkHead.WireSources(e);
+        // Raise the service's event itself: tests the adapter without banking XP or mutating a live mantra session.
+        var type = source == "CompanionLevelUp" ? typeof(ConditioningControlPanel.Services.Companion.CompanionCore)
+            : source is "LevelUp" or "Awarded" ? typeof(ProgressionBank) : App.Mantra.GetType();
+        var name = source == "CompanionLevelUp" ? "LevelUp" : source;
+        var field = type.GetField(name, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        object? target = type == App.Mantra.GetType() ? App.Mantra : null;
+        object?[] args = source switch
+        {
+            "LevelUp" or "StreakChanged" => new object?[] { 7 },
+            "Awarded" => new object?[] { 4d, "test" },
+            "CompanionLevelUp" => new object?[] { ConditioningControlPanel.Models.CompanionId.OGBambiSprite, 7 },
+            _ => System.Array.Empty<object?>(),
+        };
+        try
+        {
+            ((System.Delegate?)field.GetValue(target))?.DynamicInvoke(args);
+            Assert.Equal("reacted", spoken());
+            Assert.Equal(1, count);
+            BarkHead.Stop();
+            // A fresh safety rule bypasses timing so a dangling subscription would be visible.
+            e.ReloadRules();
+            ((System.Delegate?)field.GetValue(target))?.DynamicInvoke(args);
+            Assert.Equal(1, count);
+        }
+        finally { BarkHead.Stop(); }
+    });
+
+    [Theory]
+    [InlineData("QuestsRefreshed", "QuestsRefreshed")]
+    [InlineData("QuestCompleted", "QuestCompleted")]
+    [InlineData("QuestProgressChanged", "QuestProgressChanged")]
+    [InlineData("Unlocked", "AchievementUnlocked")]
+    [InlineData("LockdownActivated", "LockdownActivated")]
+    [InlineData("LockdownDeactivated", "LockdownDeactivated")]
+    [InlineData("CountdownTick", "LockdownCountdownTick")]
+    [InlineData("Popped", "BubblePopped")]
+    public void HostedEventsReachTheEngine(string source, string trigger) => WithSeamsRestored(_ =>
+    {
+        var oldQuest = App.Quests;
+        var oldLock = ConditioningControlPanel.Services.LockdownService.Current;
+        var achievementField = typeof(App).GetField("<Achievements>k__BackingField", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var oldAchievements = achievementField.GetValue(null);
+        var dir = Directory.CreateTempSubdirectory();
+        using var quests = new ConditioningControlPanel.Services.QuestService(null, dir.FullName);
+        using var lockdown = new ConditioningControlPanel.Services.LockdownService();
+        var achievements = new ConditioningControlPanel.Services.AchievementEngine(new ConditioningControlPanel.Services.AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
+        try
+        {
+            BarkHead.Stop();
+            App.Quests = quests;
+            ConditioningControlPanel.Services.LockdownService.Current = lockdown;
+            achievementField.SetValue(null, achievements);
+            var e = Seeded(Rule(trigger, "event"), out var spoken);
+            BarkHead.WireSources(e);
+            object? target = source == "Unlocked" ? achievements : source.StartsWith("Lockdown") || source == "CountdownTick" ? lockdown : source == "Popped" ? null : quests;
+            var type = target?.GetType() ?? typeof(BubbleOverlay);
+            var field = type.GetField(source, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static)!;
+            var handler = (System.Delegate)field.GetValue(target)!;
+            var parameters = handler.GetType().GetMethod("Invoke")!.GetParameters();
+            var args = new object?[parameters.Length];
+            for (int i = 0; i < args.Length; i++)
+            {
+                var t = parameters[i].ParameterType;
+                args[i] = t == typeof(object) ? target : t.IsValueType ? System.Activator.CreateInstance(t)
+                    : System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(t);
+            }
+            handler.DynamicInvoke(args);
+            Assert.Equal("event", spoken());
+        }
+        finally
+        {
+            BarkHead.Stop();
+            App.Quests = oldQuest;
+            ConditioningControlPanel.Services.LockdownService.Current = oldLock;
+            achievementField.SetValue(null, oldAchievements);
+            dir.Delete(true);
+        }
+    });
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DisplayedVisualsRaiseTheirBark(bool flash) => WithSeamsRestored(s =>
+    {
+        var old = BarkHead.Engine;
+        var card = new global::Avalonia.Controls.Window();
+        try
+        {
+            BarkHead.Engine = Seeded(Rule(flash ? "FlashDisplayed" : "SubliminalDisplayed", "shown"), out var spoken);
+            if (flash) FlashOverlay.Paid("synthetic.png", s, 0, 1);
+            else SubliminalOverlay.Present(card);
+            Assert.Equal("shown", spoken());
+        }
+        finally { card.Close(); BarkHead.Engine = old; }
+    });
+
+    [Fact]
+    public void IdleTickCallsTheEngineOnlyWhenSpeechIsReady() => WithSeamsRestored(_ =>
+    {
+        var old = BarkHead.Engine;
+        var tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
+        try
+        {
+            BarkHead.Engine = Seeded(Rule("Idle", "idle"), out var spoken);
+            tube.IdleTick();
+            Assert.Equal("idle", spoken());
+        }
+        finally { tube.Close(); BarkHead.Engine = old; }
     });
 
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
