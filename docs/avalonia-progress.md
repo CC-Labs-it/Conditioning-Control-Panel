@@ -3410,3 +3410,8 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 - Tube look picker (WPF order, custom labels with blank-label fallback, per-mod restore, 200 ms fade, companion coupling), detached Ctrl+wheel/arrow zoom, Core make-room with user takeover and restore. The emote registry is cached and parse errors are not fatal.
 - Row avatar-tube-window stays stub: animation, speech producers, reactions and Fuse are still missing.
 - Evidence: ~/ccp-port/evidence/review-fin-avatar-tube-window/ (full.diff, failproofs-fix.md).
+
+## avalonia-port/fin-ctrl-spiral-embed-view: +188
+- Cloud session, local review (ACCEPT 55) + fix round.
+- Review fix: ledger row cites the PR body, not docs/cloud; SpiralEmbedViewTests 13/13 via rcheck, environment theory fail-proven (devtools=true -> 3 red).
+- rgate run 39924588177: green except known P115 flakes (RaceTrack, GoonClock).
