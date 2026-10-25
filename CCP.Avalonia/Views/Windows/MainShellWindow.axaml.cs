@@ -62,12 +62,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public string Id { get; }
         public string Name { get; }
         public IBrush AccentBrush { get; }
+        public bool IsAction { get; }
 
-        public ModSelectorItem(string id, string name, IBrush accentBrush)
+        public ModSelectorItem(string id, string name, IBrush accentBrush, bool isAction = false)
         {
             Id = id;
             Name = name;
             AccentBrush = accentBrush;
+            IsAction = isAction;
         }
     }
 
@@ -91,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             // WPF put these on the Window element itself; Avalonia routes them as attached events.
             HookResizeEdges();
+            HookLauncherPanelFade();
             HookWindowChromeState();
             // handledEventsToo: a drop the Sessions tab already imported must still clear the overlay.
             AddHandler(DragDrop.DropEvent, Window_Drop, RoutingStrategies.Bubble, handledEventsToo: true);
@@ -143,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             InitializeRapidBlinkStop();   // MainShellWindow.BlinkStop.cs (WPF LabTab.cs:168 WireRapidBlinkRecalibrateShortcut)
             InitializeRemoteControlOverlay(); // MainShellWindow.RemoteControl.cs (WPF MainWindow.RemoteControl.cs:784)
             InitializeLeashGate(); // MainShellWindow.LeashGate.cs (WPF MainWindow.Leash.cs InitializeLeash)
+            Platform.KeywordTriggerHead.Sync(); // WPF MainWindow.xaml.cs:341: a saved-on switch arms at boot
             InitializeLeashHold(); // MainShellWindow.LeashHold.cs (WPF MainWindow.Leash.cs hold-to-cut)
             // WPF MainWindow.xaml.cs:3695: the tube is built on load when the companion is enabled.
             Opened += (_, _) => { if (CoreSettings.Current.AvatarEnabled) InitializeAvatarTube(); };
@@ -342,10 +346,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 //   private static Color LightenColor(…)
 //   private static Color DarkenColor(…)
 //   private void RefreshBrowserLoadingText(…)
-//   private static System.Windows.Media.ImageSource? ModTileVariant(…)
-//   private const int TileDecodeWidth
-//   private const int WideTileDecodeWidth
-//   private void LoadFeatureImages(…)
+//   Home feature art / ModTileVariant moved to MainShellWindow.ModTileArt.cs; remaining
+//   feature-description and rail-chip art are still owned by their view-specific ports.
 //   private static ImageSource? LoadModImageDecoded(…)
 //   private static void ApplyArtFraming(…)
 //   private static ModArtFraming? ActiveModFraming(…)

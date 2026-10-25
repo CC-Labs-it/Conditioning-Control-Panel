@@ -15,8 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// and AudioService does not exist here, so only master volume 0 mutes.
     /// Files resolve through ContentLocator only: WPF's ModResourceResolver.ResolveAudioPath (a
     /// mod's replacement cue, the .wav/.mp3 swap) has no Core sounds seam yet, so a mod cannot
-    /// re-voice these here; a stock install sounds right.
-    /// The pet-streak Chime is not here yet (no pet streak on this head).</para>
+    /// re-voice these here; a stock install sounds right.</para>
     /// </summary>
     internal static class EmiSfx
     {
@@ -33,6 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private static readonly object Gate = new();
         private static DateTimeOffset _lastPat = DateTimeOffset.MinValue;
+        private static DateTimeOffset _lastChime = DateTimeOffset.MinValue;
         private static DateTimeOffset _lastRing = DateTimeOffset.MinValue;
         private static DateTimeOffset _lastToss = DateTimeOffset.MinValue;
         private static DateTimeOffset _lastLand = DateTimeOffset.MinValue;
@@ -41,6 +41,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (Throttle(ref _lastPat))
                 Play(new[] { "emi/pat.mp3", "chaos/chip_pop.mp3", "bubbles/Pop3.mp3" }, PatScale, "emi-sfx-pat");
+        }
+
+        public static void Chime()
+        {
+            if (Throttle(ref _lastChime))
+                Play(new[] { "emi/chime.mp3", "chaos/reveal_chime.mp3", "chime1.mp3" }, 0.15f, "emi-sfx-chime");
         }
 
         public static void RingOpen()
