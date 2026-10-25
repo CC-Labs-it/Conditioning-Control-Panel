@@ -117,7 +117,10 @@ namespace ConditioningControlPanel.Avalonia
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).
-            CoreQuests.CameraProbe = () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any();
+            // Windows: WPF's strict DirectShow count (App.xaml.cs:503); its WinRT fallback is not ported.
+            CoreQuests.CameraProbe = () => OperatingSystem.IsWindows()
+                ? Platform.WindowsCameras.EnumerateStrict().Count > 0
+                : System.IO.Directory.EnumerateFiles("/dev", "video*").Any();
             CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
                 Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 

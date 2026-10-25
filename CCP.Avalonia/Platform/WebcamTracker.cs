@@ -25,13 +25,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// exposes; listing them would offer a "camera" that yields no frames.</summary>
     internal static class V4l2Cameras
     {
-        /// <summary>sysfs root; tests point it at a fake tree.</summary>
-        internal static string Root = "/sys/class/video4linux";
+        internal const string DefaultRoot = "/sys/class/video4linux";
+
+        /// <summary>sysfs root; tests point it at a fake tree, which also wins over the Windows DirectShow list.</summary>
+        internal static string Root = DefaultRoot;
 
         public static IReadOnlyList<(int Index, string Name)> Enumerate()
         {
             var list = new List<(int, string)>();
-            if (OperatingSystem.IsWindows())
+            if (OperatingSystem.IsWindows() && Root == DefaultRoot)
             {
                 foreach (var camera in WindowsCameras.Enumerate()) list.Add((camera.Index, camera.Name));
                 return list;

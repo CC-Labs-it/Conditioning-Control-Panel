@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// <summary>
 /// The head half of WPF 7.1.5 <c>Services/Companion/BarkService.cs</c>: one Core <see cref="BarkEngine"/>, its
 /// mouth (the tube), and the seams WPF App.xaml.cs:313/336-346/604/2826 points at its BarkService.
-/// ponytail: the rest of WireSubscriptions (:660-925) is the next unit (line cap): flash / subliminal / bubble,
+/// ponytail: TongueOut (:662) is wired; the rest of WireSubscriptions (:660-925) is the next unit (line cap): MouthOpen (:660), flash / subliminal / bubble,
 /// video, level-ups, achievements, quests, mantra and lockdown have sources here already.
 /// </summary>
 internal static class BarkHead
