@@ -250,7 +250,7 @@
                                 FontWeight="Bold" FontSize="12"
                                 Cursor="Hand"
                                 Click="BtnBackupSettingsNow_Click">
-                            <fx:IconLabel Key="btn_backup_now" Kind="Cloud"/>
+                            <fx:IconLabel x:Name="TxtBtnBackupSettingsNow" Key="btn_backup_now" Kind="Cloud"/>
 
                         </Button>
                         <Button x:Name="BtnRestoreSettings"
@@ -259,7 +259,7 @@
                                 FontWeight="Bold" FontSize="12"
                                 Cursor="Hand"
                                 Click="BtnRestoreSettings_Click">
-                            <TextBlock Text="{loc:Str btn_restore_from_cloud}"/>
+                            <TextBlock x:Name="TxtBtnRestoreSettings" Text="{loc:Str btn_restore_from_cloud}"/>
                         </Button>
                     </StackPanel>
                 </StackPanel>

@@ -97,6 +97,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public event Action<string>? WebMessage;
 
+        // The native adapter asks at first attachment, before navigation. Keep OS setup in the caller.
+        internal event Action<WebViewEnvironmentRequestedEventArgs>? EnvironmentRequested;
+
         /// <summary>
         /// One extra request header for a url, or null (the usual answer). The stand-in for WPF's
         /// <c>AddWebResourceRequestedFilter</c> + <c>Request.Headers.SetHeader</c> (JustDropHostService.AttachAuthHeader):
@@ -213,7 +216,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// probe; the constructor can still fail after it passes, and a caller about to drive the
         /// page through script needs to know about this control, not about the machine.
         /// </summary>
-        public bool HasEngine => _web is not null;
+        public bool HasEngine => _web is not null || ScriptInvoker != null;
+
+        // Native script boundary; tests supply a per-instance page adapter without opening a desktop.
+        internal Func<string, Task<string?>>? ScriptInvoker { get; set; }
+
+        /// <summary>Live pause from the Workshop switch (WebHostMedia.SetPausedAsync). Re-applied mutes honour it, so a
+        /// navigation while paused stays muted, as WPF's engine-level IsMuted does.</summary>
+        internal bool MediaPaused { get; set; }
 
         /// <summary>
         /// Runs JS in the current page and returns its result, or null when there is no engine.
@@ -228,8 +238,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
-            if (_web is null || string.IsNullOrEmpty(javaScript)) return null;
-            try { return await _web.InvokeScript(javaScript); }
+            if (string.IsNullOrEmpty(javaScript)) return null;
+            try
+            {
+                if (ScriptInvoker != null) return await ScriptInvoker(javaScript);
+                return _web == null ? null : await _web.InvokeScript(javaScript);
+            }
             catch (Exception ex)
             {
                 Log.Debug("WebHost: InvokeScript failed: {Error}", ex.Message);
@@ -274,6 +288,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 try
                 {
                     _web = new NativeWebView();
+                    // A native child does not inherit the parent's brush (Spiral's no-white-flash sink).
+                    BindNativeBackground(_web);
                     // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
                     // throws EntryPointNotFoundException in an async void, which takes the whole app down.
                     if (LinuxChoice != "wpe")
@@ -284,6 +300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
+                    _web.EnvironmentRequested += (_, e) => EnvironmentRequested?.Invoke(e);
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
@@ -318,6 +335,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _fallback.IsVisible = _web is null;
             ApplySource();
         }
+
+        internal void BindNativeBackground(NativeWebView native) =>
+            native.Bind(NativeWebView.BackgroundProperty, this.GetObservable(BackgroundProperty));
 
         internal void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {

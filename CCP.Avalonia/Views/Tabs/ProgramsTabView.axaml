@@ -966,8 +966,8 @@
                                                                  Minimum="0" Maximum="100" Value="0"
                                                                  Theme="{StaticResource ProgramHeroBar}"/>
                                                     <!-- The sheen: a narrow white gradient swept across
-                                                         the bar. The loop is started/stopped in code on
-                                                         WPF; opacity 0 at rest here too. -->
+                                                         the bar on the shared BeatLoop, started/stopped
+                                                         by the live session row; opacity 0 at rest. -->
                                                     <Rectangle x:Name="SessionSheen"
                                                                Width="150" HorizontalAlignment="Left"
                                                                Opacity="0" IsHitTestVisible="False">
