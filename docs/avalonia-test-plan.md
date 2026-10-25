@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+33. With a fake counter or test account, open the Flashes card, grant Drift & Bounce through a snapshot (without pressing Get it), then revoke it through a newer snapshot. The offer hides and the motion picker appears on grant; the offer returns and the picker disappears on revoke. Detach the row and repeat: it must no longer repaint. WPF `Controls/V2GetItRow.xaml.cs` and `Features/FlashFeatureControl.xaml.cs`. Rows: `ctrl-v2-get-it-row`.

@@ -25,7 +25,7 @@ public sealed class V2GetItRowTests
     private static void EnsureApp()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
@@ -52,7 +52,7 @@ public sealed class V2GetItRowTests
         {
             EnsureApp();
             var s = CoreSettings.Current;
-            var (id, offline, seam) = (s.UnifiedId, s.OfflineMode, PrizeOwnership.IsGranted);
+            var (id, token, offline, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted);
             var unified = CoreAccount.UnifiedUserId;
             var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
             var secrets = new System.Collections.Generic.Dictionary<string, string?>();
@@ -62,7 +62,8 @@ public sealed class V2GetItRowTests
             try
             {
                 (s.UnifiedId, s.AuthToken, s.OfflineMode) = (null, null, false);
-                PrizeOwnership.IsGranted = _ => false;
+                PrizeOwnership.IsGranted = PrizeOwnership.Held;
+                PrizeOwnership.ResetHeld();
                 var card = new FlashFeatureControl();
                 host = new Window { Content = card };
                 host.Show();
@@ -92,16 +93,22 @@ public sealed class V2GetItRowTests
                 btn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Assert.Equal(1, opened);
 
-                PrizeOwnership.IsGranted = g => g == PrizeOwnership.FlashDriftBounce;
-                row.Apply();
+                PrizeOwnership.ApplySnapshot("u-test", 1, new[] { PrizeOwnership.FlashDriftBounce });
+                Dispatcher.UIThread.RunJobs();
                 Assert.False(row.IsVisible);
                 Assert.True(row.IsRowHidden);
+                Assert.True(card.FindControl<Control>("RowMotion")!.IsVisible);
+                PrizeOwnership.ApplySnapshot("u-test", 2, Array.Empty<string>());
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(row.IsVisible);
+                Assert.False(card.FindControl<Control>("RowMotion")!.IsVisible);
             }
             finally
             {
                 host?.Close();
+                PrizeOwnership.ResetHeld();
                 CoreAccount.UnifiedUserId = unified;
-                (s.UnifiedId, s.OfflineMode, PrizeOwnership.IsGranted) = (id, offline, seam);
+                (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted) = (id, token, offline, seam);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
             }
             return Task.CompletedTask;
@@ -193,6 +200,65 @@ public sealed class V2GetItRowTests
                 (s.UnifiedId, s.AuthToken, s.OfflineMode, s.SkillPoints, PrizeOwnership.IsGranted) = (id, token, offline, sp, seam);
                 (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
             }
+        });
+    }
+
+    [Fact]
+    public async Task Snapshot_repaints_without_a_counter_and_detach_unsubscribes()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var s = CoreSettings.Current;
+            var (id, token, offline, seam) = (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted);
+            var (get, put) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider);
+            var secrets = new System.Collections.Generic.Dictionary<string, string?>();
+            CoreSecrets.RetrieveProvider = n => secrets.TryGetValue(n, out var v) ? v : null;
+            CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
+            Window? host = null;
+            try
+            {
+                (s.UnifiedId, s.AuthToken, s.OfflineMode) = (null, null, false);
+                PrizeOwnership.IsGranted = PrizeOwnership.Held;
+                PrizeOwnership.ResetHeld();
+                var row = new V2GetItRow();
+                row.Configure(V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
+                host = new Window { Content = row };
+                host.Show();
+                Assert.True(row.IsVisible);
+                Assert.Equal(Loc.Get("v2_get_bubble_blurb"), row.FindControl<TextBlock>("TxtBlurb")!.Text);
+                Assert.Equal(V2PurchaseRowState.SignIn, row.Row.State);
+                int opened = 0;
+                row.OpenLogin = () => { opened++; return Task.CompletedTask; };
+                row.FindControl<Button>("BtnGet")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(1, opened);
+
+                (s.UnifiedId, s.AuthToken) = ("u-bubbles", "t-bubbles");
+                row.Apply();
+                Assert.Equal(V2PurchaseRowState.Unavailable, row.Row.State);
+                PrizeOwnership.ApplySnapshot("u-bubbles", 1, new[] { PrizeOwnership.BubbleRain });
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(row.IsRowHidden);
+                Assert.False(row.IsVisible);
+                // A revoke restores the offer, without a purchase service or direct Apply.
+                PrizeOwnership.ApplySnapshot("u-bubbles", 2, Array.Empty<string>());
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(row.IsRowHidden);
+                Assert.True(row.IsVisible);
+                host.Content = null;
+                var state = row.Row;
+                PrizeOwnership.ApplySnapshot("u-bubbles", 3, new[] { PrizeOwnership.BubbleRain });
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(state, row.Row); // detached rows no longer listen
+            }
+            finally
+            {
+                host?.Close();
+                PrizeOwnership.ResetHeld();
+                (s.UnifiedId, s.AuthToken, s.OfflineMode, PrizeOwnership.IsGranted) = (id, token, offline, seam);
+                (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider) = (get, put);
+            }
+            return Task.CompletedTask;
         });
     }
 

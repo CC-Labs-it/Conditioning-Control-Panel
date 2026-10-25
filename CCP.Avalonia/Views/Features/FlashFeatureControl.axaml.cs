@@ -144,13 +144,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         }
 
         // ---- Flashes v2 motion picker (WPF FlashFeatureControl.xaml.cs:414-560) ----------------
-        // WPF rebuilds on PrizeGrants.GrantsChanged. On this head ownership changes at runtime only
-        // when a Get it buy lands its grants (PrizeOwnership.ApplySnapshot), and that is exactly when
-        // the row turns Hidden: rebuild then, so the bought Drift & Bounce shows at once.
+        // The row repaints on every ownership change, including revokes and non-buy snapshots.
         private void OnGetRowChanged()
         {
-            if (!RowGetFlashesV2.IsRowHidden || RowMotion.IsVisible
-                || !Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce)) { RefreshV2Box(); return; }
+            if (RowMotion.IsVisible == Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.FlashDriftBounce))
+            {
+                RefreshV2Box();
+                return;
+            }
             var wasLoading = _isLoading;
             _isLoading = true;
             try { BuildMotionPicker(); }
