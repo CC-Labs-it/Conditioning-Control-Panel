@@ -3219,3 +3219,6 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-feat-feature-card: +276
 - FeatureCard TeaseTier attaches the shared-clock gold/diamond TierFxBorder; hover lift/rim snap at Off; window focus/minimize and loaded-only motion gates; FeatureCardFxTests (fail-proven).
 - Ledger `feat-feature-card` stays stub: DimWhenInactive, DashboardDepth, DashboardInvertClicks, ShowV2Badge left for wire-feat-feature-card-b.
+
+## avalonia-port/wire-shell-launcher: +198
+Panel crossfade through launcher doors (WPF 180/260 ms + guard) on the shared FrameClock; hide mid-fade still opens the launcher; repeated press and Lockdown-mid-fade guarded. 5 headless facts (3 fail-proven by rcheck 39749675334); door tests elsewhere step the fade. rgate 39753216263 green except known flake RaceTrackPlayerTests. Row shell-launcher stays stub (cloak/ladder -> wire-shell-launcher-b).
