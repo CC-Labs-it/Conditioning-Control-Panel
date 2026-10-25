@@ -82,6 +82,49 @@ public class ChasterHooksTests
         Assert.Equal(OwedRows.OrderBy(id => id), unwired);
     }
 
+    [Fact]
+    public void One_failed_video_attention_check_books_the_attention_row_once()
+    {
+        // Bug hunt 2026-10-22: the video's end calls TrackAttentionCheckFailed AND
+        // TrackVideoAttentionCheckFailed for one failed check, and both booked "attention", so one
+        // failure put +10:00 on the lock (+12:30 with heat on) instead of +5:00.
+        var app = Path.Combine(RepoRoot(), "ConditioningControlPanel");
+        var video = File.ReadAllText(Path.Combine(app, "Services", "Video", "VideoService.cs"));
+        Assert.Contains("TrackAttentionCheckFailed();", video);
+        Assert.Contains("TrackVideoAttentionCheckFailed();", video);
+
+        var achievements = File.ReadAllText(Path.Combine(app, "Services", "Progression", "AchievementService.cs"));
+        Assert.Contains("App.Chaster?.Note(\"attention\")", Body(achievements, "public void TrackAttentionCheckFailed()"));
+        Assert.DoesNotContain("App.Chaster", Body(achievements, "public void TrackVideoAttentionCheckFailed()"));
+    }
+
+    [Theory]
+    [InlineData("MainWindow.RemoteControl.cs", "internal bool TriggerPanicFromRemote()")]
+    [InlineData("MainWindow.xaml.cs", "private void HandlePanicKeyPress()")]
+    [InlineData("MainWindow.xaml.cs", "private void RunEmergencyPanicTeardown()")]
+    public void Every_panic_path_opens_the_chaster_safety_hold(string file, string signature)
+    {
+        // Bug hunt 2026-10-22: the voice panic ("red", "safe word", "make it stop") runs
+        // TriggerPanicFromRemote, which never opened the hold, so prices kept booking for the ten
+        // minutes the panic key would have held them. The off-thread fallback skipped it too.
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "MainWindow", file));
+        Assert.Contains("App.Chaster?.NoteSafetyExit()", Body(source, signature));
+    }
+
+    // The text of one method: from its signature to the next member at the same indent.
+    private static string Body(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0, signature + " not found");
+        var from = start + signature.Length;
+        var next = new[] { "\n        private ", "\n        internal ", "\n        public ", "\n    private ", "\n    internal ", "\n    public " }
+            .Select(m => source.IndexOf(m, from, StringComparison.Ordinal))
+            .Where(i => i > 0)
+            .DefaultIfEmpty(source.Length)
+            .Min();
+        return source[from..next];
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

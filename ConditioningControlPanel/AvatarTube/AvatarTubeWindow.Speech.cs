@@ -988,7 +988,7 @@ namespace ConditioningControlPanel
                 SpeechTail.Margin = new Thickness(tailLeft, tailTop, 0, 0);
                 SpeechTailFlip.ScaleY = plan.Tail == AvatarTubeLayout.TailEdge.Bottom ? 1 : -1;
 
-                string decision = $"{(int)plan.Bubble.X},{(int)plan.Bubble.Y},{(int)plan.Bubble.W}x{(int)plan.Bubble.H}|{plan.Tail}|{plan.GrowsLeft}";
+                string decision = AvatarTubeLayout.SpeechBubblePlacement.LogKey(plan, avatar, work, obstacle, s);
                 if (decision != _lastBubbleDecision)
                 {
                     _lastBubbleDecision = decision;

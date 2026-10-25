@@ -108,7 +108,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeMotionChrome()
         {
             Opened += (_, _) => { AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome; AmbientFxCanvas.Env.MotionGateChanged += OnMotionChrome; };
-            Closed += (_, _) => AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
+            Closed += (_, _) =>
+            {
+                AmbientFxCanvas.Env.MotionGateChanged -= OnMotionChrome;
+                StopLockdownPulse();
+            };
         }
 
         internal void OnMotionChrome()
@@ -118,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Before the first navigation the frame wears Home's hue (the XAML default; WPF _edgeHue).
                 PaintSectionEdge(NavStripRules.Accent(_washSection ?? NavSections.Home), CoreSettings.Current.MotionLevel, 0);
                 PageStrip?.UpdateSheenClock();
+                if (!AmbientFxCanvas.Env.AllowAmbientLoops) StopLockdownPulse();
                 if (Named<Tabs.SettingsTabView>("SettingsTab") is { } dash)
                 {
                     dash.SyncFavoritesDrawerFx();   // WPF PaintFavoritesDrawer: the handle glow's breath

@@ -247,6 +247,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private static void TranscodeToWav(string source, string dest, IProgress<double>? progress, CancellationToken ct)
         {
+            // A short file transcodes inside the first 100 ms wait, so an already-cancelled pick must stop here.
+            ct.ThrowIfCancellationRequested();
             var vlc = LibVlcAudio.Shared ?? throw new InvalidOperationException(GameWindow.RaceNoAudioMessage);
             using var done = new ManualResetEventSlim(false);
             bool failed = false;
