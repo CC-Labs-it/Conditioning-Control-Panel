@@ -107,6 +107,7 @@ public sealed class LauncherWindowTests
         try
         {
             ld.Activate(TimeSpan.FromMinutes(30));
+            ConditioningControlPanel.Avalonia.Platform.StartupLadder.Hold();
             LauncherWindow.RouteBoot(shell);
             Assert.True(shell.IsVisible);
             Assert.Null(LauncherWindow.Instance);
