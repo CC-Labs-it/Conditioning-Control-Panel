@@ -54,7 +54,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public SpiralFeatureControl()
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
-            SettingsAndArt.SizeChanged += (_, _) => ResizeSideArt();
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             ChkRandomize.IsCheckedChanged += ChkRandomize_Changed;
@@ -94,18 +93,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CoreMods.ModChanged -= OnModChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
-        }
-
-        private bool _sideArtCollapsed;
-        private void ResizeSideArt()
-        {
-            var width = SettingsAndArt.Bounds.Width;
-            if (width <= 0) return;
-            // WPF AdaptiveSideArt: 48px hysteresis prevents scrollbar-induced layout oscillation.
-            _sideArtCollapsed = width < (_sideArtCollapsed ? 748 : 700);
-            SettingsAndArt.ColumnDefinitions[1].Width = _sideArtCollapsed ? new GridLength(0) : new GridLength(2, GridUnitType.Star);
-            SettingsAndArt.ColumnDefinitions[0].MaxWidth = _sideArtCollapsed ? double.PositiveInfinity : 780;
-            SideArt.IsVisible = !_sideArtCollapsed;
         }
 
         // WPF Loaded/Unloaded: live Loom saves and mod switches repaint the attached library.
@@ -207,9 +194,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (s.SessionCornerGifAllowed == want) return;
             s.SessionCornerGifAllowed = want;
             CoreSettings.Save();
-            // ponytail: WPF then calls SessionEngine.Active.RefreshCornerGifPolicy()
-            // (ConditioningControlPanel/Services/Session/SessionEngine.cs), still in the WPF head,
-            // so the change lands on the next session rather than the running one.
+            App.Sessions?.RefreshCornerGifPolicy();   // live, as WPF SpiralFeatureControl.xaml.cs:165
         }
 
         private void SliderOpacity_Changed(object? sender, RangeBaseValueChangedEventArgs e)

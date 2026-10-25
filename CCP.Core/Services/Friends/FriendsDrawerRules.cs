@@ -82,6 +82,30 @@ internal static class FriendsDrawerRules
     /// <summary>The loc key for what an online friend is doing.</summary>
     public static string ActivityKey(PresenceActivity a) => "friends_activity_" + a.ToString().ToLowerInvariant();
 
+    /// <summary>The glyph face chain for the platform marks: MDL2 first, a fallback behind it
+    /// (FontFallbackTests), so a machine without MDL2 still draws something.</summary>
+    public const string GlyphFont = "Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI";
+
+    /// <summary>The marks a row wears after the name: one per platform the friend is online on,
+    /// desktop / phone / web whatever order the wire used, each with its tooltip key
+    /// (<c>friends_platform_&lt;id&gt;</c>). None when offline or when the server sent none.</summary>
+    public static IReadOnlyList<(string Platform, string Glyph, string TipKey)> PlatformMarks(Friend f)
+    {
+        if (!f.Online) return Array.Empty<(string, string, string)>();
+        var list = new List<(string, string, string)>(3);
+        foreach (var p in FriendPlatform.Normalise(f.Platforms))
+            list.Add((p, PlatformGlyph(p), "friends_platform_" + p));
+        return list;
+    }
+
+    /// <summary>MDL2: PC1, CellPhone, Globe.</summary>
+    public static string PlatformGlyph(string platform) => platform switch
+    {
+        FriendPlatform.Phone => "",
+        FriendPlatform.Web => "",
+        _ => "",
+    };
+
     /// <summary>The loc key (and its one argument, or null) for how long ago someone was here.</summary>
     public static (string Key, int? Arg) SeenKey(DateTimeOffset lastSeen, DateTimeOffset now)
     {

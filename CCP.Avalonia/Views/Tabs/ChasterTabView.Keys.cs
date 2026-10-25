@@ -2,8 +2,7 @@
 // and RefreshPresets (:1075-1124), Stakes (ChasterTabView.Help.cs:52), on Core TabPresets.
 // A key rewrites the price list and requests the preset's limits, as WPF; it never touches the lock
 // itself (prices only book when an event happens), so it does not go through the import confirm.
-// ponytail: FxPreset/FxKeyTurned (Fx.cs) are not ported; the menu and limits rows the WPF click
-// also refreshes (ApplyPriceToggles, RefreshLimits) are not on this head yet.
+// ponytail: FxPreset/FxKeyTurned (Fx.cs) remain in the named follow-up slice.
 using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
@@ -39,7 +38,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 CoreSettings.Save();
                 RefreshNumbers();
             }
+            ApplyPriceToggles();
+            RefreshLimits();
             RefreshPresets();
+            RefreshHero();
         }
 
         /// <summary>Light the key for the set that is on. The fourth key lights for a hand-built set.</summary>
@@ -54,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Stakes(TxtStakesStrict, TabPresets.Strict);
             Stakes(TxtStakesCirce, TabPresets.Circe);
             RefreshMood(ChasterHead.Service); // WPF :1123, the heat row may have just gone on or off
+            PaintMenuHelp(); // Natasha's row may have just gone on or off
         }
 
         private static void Stakes(TextBlock line, string presetId)

@@ -403,7 +403,7 @@ Related (shared, not in-region): `DualMonitorEnabled` (all screens vs primary), 
   auto-memory, the compositor cluster is "default ON PUSHED, play-test pending" — path A is the hot
   path but keep B/C working.
 - **Glyph fallback (#615)** landed in `SubliminalLayer` (Arial for Latin, a system fallback family
-  for CJK/Cyrillic/emoji, resolved once via `GlyphFallback.Resolve` and used for both measure and
+  for CJK/Cyrillic/emoji, resolved once via `GlyphFallback.Split`, now in `CCP.Core/Services/Compositor/GlyphFallback.cs` and used for both measure and
   draw). Color-emoji outline copies read as a slight thickening — left as-is for parity
   (`SubliminalLayer.cs:230`).
 - **Graded Intake reuse:** the web core reads `SubliminalPool` keys but renders its own subliminals

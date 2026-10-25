@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
-    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length), Shatter,
+    /// <para>ponytail: not here yet, each a later branch - audio + ducking (lifetime then follows the sound's length),
     /// the lucky glow pulse and toast, Natasha's favourite, the avatar's FlashClicked giggle (no phrase categories on this head),
     /// the Pendulum motion style (Drift and Bounce is below), GIF animation (first frame only), content-pack and remote pools, avatar pre-announce.</para>
     /// </summary>
@@ -305,7 +305,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var dt = Clock.GetElapsedTime(_lastDriftTick, now).TotalSeconds;
             _lastDriftTick = now;
             foreach (var (w, m) in Drifting)
-                if (w is not FlashOverlayWindow { Exit: not null } && FlashMotion.Step(m, dt))   // a leaving flash holds still
+                if (w is not FlashOverlayWindow { Exit: not null } && w is not FlashOverlayWindow { Shatter: not null }
+                    && FlashMotion.Step(m, dt))   // a leaving flash holds still
                 {
                     var p = new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y));
                     var pad = (w as FlashOverlayWindow)?.GlowPadPx ?? 0;   // the glow card sits round the picture
@@ -376,13 +377,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// (BuildExit, FlashService.cs:2334) or the plain cut for None.</summary>
         internal static void Pop(FlashOverlayWindow w)
         {
-            if (w.Exit != null || !Active.Any(e => e.Window == w)) return;
+            if (w.Exit != null || w.Shatter != null || !Active.Any(e => e.Window == w)) return;
             Active.RemoveAll(e => e.Window == w);
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: false, fromGaze: false, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            if (FlashShatter.DecidesClick(s.FlashShatterEnabled, PrizeOwnership.OwnsFlashV2())
+                && w.TryBeginShatter(s.MotionLevel, Rng))
+            {
+                Exiting.Add(w);
+                w.Closed += (_, _) => Exiting.Remove(w);
+                return;
+            }
             if (FlashExit.Pick(s.FlashExitStyle, _lastExitStyle, Rng) is not { } style) { w.Close(); return; }
             _lastExitStyle = style;
             Exiting.Add(w);

@@ -81,6 +81,9 @@ namespace ConditioningControlPanel.Services
             // or Discord. See HandleDeviceCodeConfirmed in LoginDialog for
             // how this gets applied via V2AuthService.ApplyUserDataToSettings.
             public V2AuthService.V2User? User { get; set; }
+
+            // Top-level needs_display_name (onboarding contract); null on older servers.
+            public bool? NeedsDisplayName { get; set; }
         }
 
         /// <summary>
@@ -226,7 +229,9 @@ namespace ConditioningControlPanel.Services
                             AuthToken = authToken,
                             UnifiedId = unifiedId,
                             IsNewUser = isNewUser,
-                            User = user
+                            User = user,
+                            NeedsDisplayName = obj["needs_display_name"]?.Type == JTokenType.Boolean
+                                ? (bool)obj["needs_display_name"]! : user?.NeedsDisplayName
                         };
                     }
                     case 202:

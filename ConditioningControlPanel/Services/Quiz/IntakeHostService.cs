@@ -71,6 +71,24 @@ namespace ConditioningControlPanel.Services.Quiz
 
         public static bool IsActive => _host != null;
 
+        /// <summary>True while the game window is in front and can keep Escape as its pause.</summary>
+        public static bool IsInFront => _host?.IsForeground == true;
+
+        /// <summary>True once the page has said <c>ready</c> and is not on its way out.</summary>
+        public static bool IsReady => _host?.IsReady == true && !_exiting;
+
+        /// <summary>Hand the page a kept Escape after PanicPolicy.KeptEscapeGoesTo allows it,
+        /// then return keyboard focus so the pause card works without another click.</summary>
+        public static void PostKeptEscape()
+        {
+            try
+            {
+                _host?.Post(new { type = CaucusHostService.KeptEscapeType });
+                _host?.FocusWeb();
+            }
+            catch (Exception ex) { App.Logger?.Debug("IntakeHost: kept Escape post failed: {E}", ex.Message); }
+        }
+
         /// <summary>The page reported boot-error this app session (a genuine load/init failure).
         /// The Lab entry point can check this to route to the classic quiz instead.</summary>
         public static bool BootFailedThisSession { get; private set; }
@@ -163,6 +181,9 @@ namespace ConditioningControlPanel.Services.Quiz
             try
             {
                 if (_host == null) return;
+                // Panic and every other host close: the mic closes and the wake word comes back NOW,
+                // not after the page's goodbye.
+                ReleaseSpeechMic("closing");
                 if (_host.IsReady && !_exiting)
                 {
                     _exiting = true;
@@ -913,54 +934,13 @@ namespace ConditioningControlPanel.Services.Quiz
         /// <summary>The user's ACTIVE subliminal phrases (SubliminalPool entries toggled on),
         /// shuffled + capped so the init message stays small. Null when none are active.</summary>
         private static string[]? SampleActiveSubliminals()
-        {
-            try
-            {
-                var pool = App.Settings.Current.SubliminalPool;
-                var active = pool?.Where(kvp => kvp.Value).Select(kvp => kvp.Key)
-                    .Where(t => !string.IsNullOrWhiteSpace(t)).ToList();
-                if (active == null || active.Count == 0) return null;
-                var rng = new Random();
-                for (int i = active.Count - 1; i > 0; i--)
-                {
-                    int j = rng.Next(i + 1);
-                    (active[i], active[j]) = (active[j], active[i]);
-                }
-                return active.Take(40).ToArray();
-            }
-            catch { return null; }
-        }
+            => IntakeSubliminals.Sample(App.Settings?.Current?.SubliminalPool);
 
-        // Audio inlined into the init config: only enabled phrases, and only when a matching clip
-        // exists. Small per-clip + total budgets keep the message light (the whisper mp3s are
-        // ~15-55KB each); the page re-guards clip length (>8s skipped) at play time.
-        private const long SubClipMaxBytes = 512 * 1024;          // skip a single clip larger than this
-        private const long SubAudioBudgetBytes = 6 * 1024 * 1024; // total raw audio inlined per launch
-        private static readonly string[] SubAudioExtsLower = { ".mp3", ".wav", ".ogg" };
-
-        /// <summary>The user's ENABLED subliminal phrases as <c>{ text, audio? }</c> entries for the
-        /// web core's render/subliminals.js. <c>audio</c> is a base64 data: URI of the phrase's
-        /// connected whisper clip when one exists (resolved with the SAME text→file matching
-        /// <see cref="ConditioningControlPanel.Services.SubliminalService"/> uses: active-mod
-        /// <c>resources/sounds/flashes_audio</c> first, then the default <c>Resources/sub_audio</c>).
-        /// Shuffled + capped so the init message stays light; null when no phrases are enabled.</summary>
+        /// <summary>Enabled phrases and their whispers use the shared Core builder.</summary>
         private static object[]? BuildSubliminalPool()
         {
             try
             {
-                var pool = App.Settings?.Current?.SubliminalPool;
-                var active = pool?.Where(kvp => kvp.Value).Select(kvp => kvp.Key)
-                    .Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim()).ToList();
-                if (active == null || active.Count == 0) return null;
-
-                var rng = new Random();
-                for (int i = active.Count - 1; i > 0; i--)
-                {
-                    int j = rng.Next(i + 1);
-                    (active[i], active[j]) = (active[j], active[i]);
-                }
-                if (active.Count > 400) active = active.GetRange(0, 400);
-
                 // Resolve the two audio dirs once (both may sit outside the ccp.game/ccp.assets roots,
                 // which is exactly why clips are inlined below instead of served by URL).
                 // The shared clips are Bambi-voiced: CCP Default never falls back to them.
@@ -985,33 +965,8 @@ namespace ConditioningControlPanel.Services.Quiz
                 // every whisper playback on the same SubAudioAudible flag (enabled AND not muted).
                 bool audioEnabled = App.Settings?.Current?.SubAudioAudible == true;
 
-                long budget = SubAudioBudgetBytes;
-                var list = new List<object>(active.Count);
-                foreach (var text in active)
-                {
-                    string? dataUri = null;
-                    if (audioEnabled)
-                    {
-                        try
-                        {
-                            var file = ResolveSubliminalAudioFile(text, modAudioDir, defaultAudioDir);
-                            if (file != null)
-                            {
-                                var len = new FileInfo(file).Length;
-                                if (len > 0 && len <= SubClipMaxBytes && len <= budget)
-                                {
-                                    var bytes = File.ReadAllBytes(file);
-                                    dataUri = "data:" + MimeForAudio(file) + ";base64," + Convert.ToBase64String(bytes);
-                                    budget -= bytes.Length;
-                                }
-                            }
-                        }
-                        catch { dataUri = null; } // any read failure = text-only for this phrase
-                    }
-
-                    list.Add(dataUri != null ? (object)new { text, audio = dataUri } : new { text });
-                }
-                return list.ToArray();
+                return IntakeSubliminals.Build(App.Settings?.Current?.SubliminalPool,
+                    audioEnabled, modAudioDir, defaultAudioDir);
             }
             catch (Exception ex)
             {
@@ -1019,56 +974,6 @@ namespace ConditioningControlPanel.Services.Quiz
                 return null;
             }
         }
-
-        /// <summary>Find the whisper clip for <paramref name="text"/>, mirroring
-        /// <c>SubliminalService.FindLinkedAudio</c>: exact filename match against case/apostrophe
-        /// variants, then a case-insensitive directory scan. Mod dir wins over the default dir.</summary>
-        private static string? ResolveSubliminalAudioFile(string text, string? modDir, string? defaultDir)
-        {
-            var clean = text.Trim();
-            var variants = new[]
-            {
-                clean,
-                clean.ToUpperInvariant(),
-                clean.ToLowerInvariant(),
-                clean.Replace('’', '\''),
-                clean.Replace('\'', '’'),
-                clean.ToUpperInvariant().Replace('’', '\''),
-            };
-            var exts = new[] { ".mp3", ".wav", ".ogg", ".MP3", ".WAV", ".OGG" };
-
-            foreach (var dir in new[] { modDir, defaultDir })
-            {
-                if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) continue;
-
-                foreach (var v in variants)
-                    foreach (var ext in exts)
-                    {
-                        var p = Path.Combine(dir, v + ext);
-                        if (File.Exists(p)) return p;
-                    }
-
-                try
-                {
-                    var norm = clean.ToUpperInvariant().Replace('’', '\'');
-                    foreach (var f in Directory.GetFiles(dir))
-                    {
-                        if (Array.IndexOf(SubAudioExtsLower, Path.GetExtension(f).ToLowerInvariant()) < 0) continue;
-                        var name = Path.GetFileNameWithoutExtension(f).ToUpperInvariant().Replace('’', '\'');
-                        if (name == norm) return f;
-                    }
-                }
-                catch { /* scan is best-effort */ }
-            }
-            return null;
-        }
-
-        private static string MimeForAudio(string file) => Path.GetExtension(file).ToLowerInvariant() switch
-        {
-            ".wav" => "audio/wav",
-            ".ogg" => "audio/ogg",
-            _ => "audio/mpeg",
-        };
 
         /// <summary>Stable per-install subject number (4 digits, e.g. "0417") persisted beside the
         /// user data. Kept OUT of AppSettings on purpose: it is pure fiction, not a setting.</summary>
@@ -1160,7 +1065,8 @@ namespace ConditioningControlPanel.Services.Quiz
             {
                 CancelExitWatchdog();
                 StopHeartbeatWatch();
-                StopSpeechBridge("closed", notifyPage: false);   // never leave the mic open behind a closed window
+                // Never leave the mic open behind a closed window, never keep the wake word's mic.
+                ReleaseSpeechMic("closed");
                 try { _host?.Dispose(); } catch { }
                 _host = null;
                 _exiting = false;

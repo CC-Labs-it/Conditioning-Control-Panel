@@ -61,10 +61,20 @@
          own OpenCV + ONNX Runtime natives, so nothing native ships from here. -->
     <PackageReference Include="OpenCvSharp4" Version="4.9.0.20240103" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.20.1" />
-    <!-- SkiaSharp (managed + its own win/mac natives): the compositor layers in Services/Compositor.
-         2.88.8 = what SkiaSharp.Views.WPF pins in the WPF head, so WPF ships unchanged; the Avalonia
-         head gets 3.119.x through Avalonia.Skia and that wins there. Linux natives come from each
-         head (Avalonia.Skia brings them; the Core test project references them itself). -->
+    <!-- WebRTC data channel for the Goon Game 1v1 transport (Services\GoonGame\GoonWebRtcTransport.cs), moved here
+         from the WPF head with the transport; both heads get it transitively.
+         Pure managed .NET (BouncyCastle DTLS + its own SCTP stack), MIT, no native libs — so
+         it survives the single-file / self-contained publish with no extraction shim.
+         DATA CHANNEL ONLY: no media tracks are ever created; mic/cam never cross the wire.
+         Verified at coding time on net8.0 + Windows 11 (26200): two in-process peers reach
+         `connected` in ~0.85 s, an ordered/reliable channel opens at ~0.97 s, a 60 KB string
+         round-trips intact (SCTP fragmentation works), and public STUN yields an srflx
+         candidate. See docs/GOON_GAME_PLAN.md "Transport decisions". -->
+    <PackageReference Include="SIPSorcery" Version="10.0.14" />
+    <!-- SkiaSharp (managed + its own win/mac natives): the compositor layers and text rules in
+         Services/Compositor (GlyphFallback.cs). 2.88.8 = what SkiaSharp.Views.WPF pins in the WPF head,
+         so WPF ships unchanged; the Avalonia head resolves 3.119.x through Avalonia.Skia and that wins there.
+         Linux natives come from each head (Avalonia.Skia brings them; the Core test project references them itself). -->
     <PackageReference Include="SkiaSharp" Version="2.88.8" />
   </ItemGroup>
 
@@ -93,6 +103,13 @@
          ExcludeFromSingleFile mirrors the WPF head's original setting: the files must be real
          files on disk for File.ReadAllText, not bundled into a single-file exe. -->
     <Content Include="Localization\Languages\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+    <!-- Header banner line pool (Resources\banner\lines.<lang>.json): read from disk at
+         runtime by BannerPoolService, so it ships next to the exe like the EMI lines above. -->
+    <Content Include="..\Assets\banner\*.json" Link="Resources\banner\%(RecursiveDir)%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>

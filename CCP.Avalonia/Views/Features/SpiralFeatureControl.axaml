@@ -9,10 +9,10 @@
        LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%" (Avalonia points are absolute
                                             unless given as %)
        ImageBrush HeroArtBrush/SideArtBrush -> named Borders painted by ModArt.BindFeaturePlates.
-       feat:AdaptiveSideArt.CollapseBelow -> local size handler (700px + 48px hysteresis)
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
        all event handlers                ->  wired in code-behind (porting convention) -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -58,7 +58,7 @@
         <!-- VELVET KIT 2 · ROUND 3 · DENSITY. The settings column is capped (3*, MaxWidth 780) so a
              slider stops being a ~1200px runway in the wide Studio detail pane, and the width that
              buys back becomes ONE big art card instead of dead margin. -->
-        <Grid x:Name="SettingsAndArt">
+        <Grid x:Name="SettingsAndArt" sideart:AdaptiveSideArt.CollapseBelow="700">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" MaxWidth="780"/>
                 <ColumnDefinition Width="2*"/>

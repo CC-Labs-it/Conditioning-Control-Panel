@@ -66,6 +66,7 @@
     <!-- 40% and 50% alpha accent brushes (for hover/selected overlays) -->
     <SolidColorBrush x:Key="TransparentPink40Brush" Color="{StaticResource TransparentPink40}"/>
     <SolidColorBrush x:Key="TransparentPink50Brush" Color="{StaticResource TransparentPink50}"/>
+    <SolidColorBrush x:Key="SelectionPinkBrush" Color="{StaticResource SelectionPink}"/>
 
     <!-- New: de-saturated accent for headers/labels -->
     <SolidColorBrush x:Key="PinkSoftBrush" Color="{StaticResource PinkSoft}"/>
