@@ -3069,3 +3069,8 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-win-help-video: +143
 - HelpVideoWindow plays a topic's tutorial clip like WPF StartClip: it starts on Opened (WPF Loaded), plays muted (`:no-audio`), loops, and goes through the head's LibVLC VlcFrameSink. It fails soft and frees the clip on close. Row win-help-video: stub -> wired, now one row.
 - Test: a real 2 s clip with an audio track. Fail-proven by removing the loop, removing `:no-audio`, and starting the clip in the constructor. The wait is event-driven, with no sleep. The panic allowlist gives the WPF-parity reason.
+
+## avalonia-port/wire-dialogs-asset-submit: +237
+- dialogs-asset-submit: mod Share in Manage Mods opens AssetSubmitDialog(requireDownloadUrl) -> MEGA link -> ccp-mod/v1 envelope via Core CatalogueClient, record + toast (WPF MainWindow.ModCatalogue.cs:24-178, ModManagerDialog.xaml.cs:459/692).
+- Test: AssetSubmitWireTests.ModManagerShareAsksForTheMegaLinkThenSubmitsTheModEnvelope (fake handler, awaits LastShare, restores App.Mods/CoreMods); duplicate stale ledger row removed. Ledger: shell-mod-catalogue -> wired (same WPF file).
+- Not run live against the real catalogue/MEGA; --render-all cannot show the Share button.
