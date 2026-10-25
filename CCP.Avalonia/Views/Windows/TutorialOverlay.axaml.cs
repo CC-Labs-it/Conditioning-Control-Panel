@@ -550,6 +550,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             _spotlightCanvas.Children.Add(darkPath);
 
+            // WPF's input hole is the target rect itself (SetWindowRgn on highlightBounds); the 8 px
+            // glow margin is drawn clear but still swallows clicks.
+            if (clickThroughHole)
+                _spotlightCanvas.Children.Add(new Path
+                {
+                    Data = new CombinedGeometry(GeometryCombineMode.Exclude,
+                        new RectangleGeometry(glowBounds) { RadiusX = 8, RadiusY = 8 }, new RectangleGeometry(highlightBounds)),
+                    Fill = Brushes.Transparent,
+                    IsHitTestVisible = true,
+                });
+
             var glowBorder = new Border
             {
                 Width = glowBounds.Width,
