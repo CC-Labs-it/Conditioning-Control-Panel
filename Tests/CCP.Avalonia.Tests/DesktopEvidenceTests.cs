@@ -141,6 +141,9 @@ public sealed class DesktopEvidenceTests
             orb.Resume(); Assert.True(orb.IsRunning);
             panel.IsVisible = false; Settle(); Assert.False(orb.IsRunning);
             panel.IsVisible = true; Settle(); Assert.True(orb.IsRunning);
+            // WPF :336: a minimized window parks the orb; restoring resumes it.
+            host.WindowState = WindowState.Minimized; Settle(); Assert.False(orb.IsRunning);
+            host.WindowState = WindowState.Normal; host.Activate(); Settle(); Assert.True(orb.IsRunning);
             settings.MotionLevel = MotionLevel.Reduced;
             AmbientFxCanvas.Env.RaiseMotionGateChanged();
             Assert.False(orb.IsRunning);
