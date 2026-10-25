@@ -10,7 +10,9 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using IconKind = FluentIcons.Common.Symbol;
 using ConditioningControlPanel.Avalonia.Tours;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -64,7 +66,12 @@ public sealed class ModCreatorFinishTests
             Assert.Equal(2, entries.Count);
             Assert.Equal("Repeat Me", (string?)entries[0]!["promptText"]);
             Assert.NotEqual((string?)entries[0]!["id"], (string?)entries[1]!["id"]);
-            Click(cards.Children[0].GetLogicalDescendants().OfType<Button>().Single(b => Equals(b.Content, "Remove")));
+            // WPF "\u2715 Remove" / warning prefix are icons here, not dropped glyphs.
+            Assert.Contains(IconKind.Warning, cards.Children[0].GetLogicalDescendants().OfType<IconGlyph>().Select(g => g.Kind));
+            var remove = cards.Children[0].GetLogicalDescendants().OfType<Button>().Single(b =>
+                b.Content is StackPanel sp && sp.Children.OfType<TextBlock>().Any(t => t.Text == "Remove"));
+            Assert.Equal(IconKind.Dismiss, ((StackPanel)remove.Content!).Children.OfType<IconGlyph>().Single().Kind);
+            Click(remove);
             Assert.Equal(3, cards.Children.Count);
             Call(w, "ClearSideFileState");
             Assert.Empty(cards.Children);

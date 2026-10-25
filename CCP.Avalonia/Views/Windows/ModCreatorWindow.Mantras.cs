@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             public Border Root = null!;
             public TextBox PhraseBox = null!;
             public TextBox PromptBox = null!;
-            public TextBlock ContainHint = null!;
+            public DockPanel ContainHint = null!;
             public TextBox ResponseBox = null!;
             public CheckBox EnabledCheck = null!;
             public MantraAudioRef PromptAudio = null!;
@@ -151,7 +151,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             headerRow.Children.Add(card.EnabledCheck);
             var removeBtn = new Button
             {
-                Content = "Remove",
+                // WPF "\u2715 Remove" (Mantras.cs:191): the glyph becomes a Dismiss icon beside the text.
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 4,
+                    Children =
+                    {
+                        new IconGlyph { Kind = IconKind.Dismiss, Size = 10, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = "Remove", VerticalAlignment = VerticalAlignment.Center },
+                    },
+                },
                 Background = Brushes.Transparent,
                 Foreground = new SolidColorBrush(Color.FromRgb(255, 100, 100)),
                 BorderThickness = new Thickness(0),
@@ -174,14 +184,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             body.Children.Add(CreateFieldLabel("Prompt text (what she says - must contain the phrase)"));
             card.PromptBox = CreateDarkTextBox("Say it for me, sweetie: good girls obey", multiline: true, height: 52);
             body.Children.Add(card.PromptBox);
-            card.ContainHint = new TextBlock
+            // WPF warning-sign prefix (Mantras.cs:221) becomes a Warning icon.
+            var hintBrush = new SolidColorBrush(Color.FromRgb(255, 112, 112));
+            var warnIcon = new IconGlyph { Kind = IconKind.Warning, Variant = IconVariant.Filled, Size = 11, Foreground = hintBrush, Margin = new Thickness(0, 1, 4, 0), VerticalAlignment = VerticalAlignment.Top };
+            DockPanel.SetDock(warnIcon, Dock.Left);
+            card.ContainHint = new DockPanel
             {
-                Text = "Prompt text must contain the phrase word-for-word.",
-                Foreground = new SolidColorBrush(Color.FromRgb(255, 112, 112)),
-                FontSize = 11,
                 Margin = new Thickness(0, 0, 0, 4),
-                TextWrapping = TextWrapping.Wrap,
                 IsVisible = false,
+                Children =
+                {
+                    warnIcon,
+                    new TextBlock
+                    {
+                        Text = "Prompt text must contain the phrase word-for-word.",
+                        Foreground = hintBrush,
+                        FontSize = 11,
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                },
             };
             body.Children.Add(card.ContainHint);
             card.PhraseBox.TextChanged += (_, _) => UpdateMantraContainHint(card);
