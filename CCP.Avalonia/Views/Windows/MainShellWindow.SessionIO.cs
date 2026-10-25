@@ -80,7 +80,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     {
         private AssetImportService? _assetImportService;
 
-        private static string[] DroppedPaths(DragEventArgs e) =>
+        internal static string[] DroppedPaths(DragEventArgs e) =>
             e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToArray()
             ?? Array.Empty<string>();
 
@@ -145,8 +145,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Named<Tabs.PresetsTabView>("PresetsTab")?.HandlePresetDrop(files[0]);
                     break;
                 case DropType.Enhancement:
-                    // WPF ImportEnhancementFiles with no App.EnhancementLibrary (DeeperTab.cs:819).
-                    App.Notifications.Show(Loc.Get("deeper_import_library_not_ready"), Helpers.NotificationType.Warning);
+                    ImportEnhancementFiles(files);
                     break;
                 case DropType.Mod:
                     await HandleModDropAsync(files[0]);

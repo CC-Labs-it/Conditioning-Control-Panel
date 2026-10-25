@@ -160,6 +160,8 @@
                              grow the card past 380px and the banner brush then filled the whole
                              page. Charms live on ProfileCharmLayer (overlay, out of layout) so
                              they can never add height again. -->
+                        <!-- WPF accent glow: sibling shadow, so no animated/effect layer is applied to the card. -->
+                        <Border x:Name="ProfileAccentGlow" Margin="8" CornerRadius="14" IsHitTestVisible="False"/>
                         <Border x:Name="ProfileHeroCard" Margin="8"
                                 CornerRadius="14" ClipToBounds="True"
                                 MinHeight="275" MaxHeight="362"

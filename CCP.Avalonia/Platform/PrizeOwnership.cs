@@ -17,12 +17,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal static class PrizeOwnership
     {
-        /// <summary>Core <see cref="PrizeGrants.FlashDriftBounce"/>.</summary>
+        /// <summary>Core prize ids, shared with the WPF ownership gate.</summary>
         internal const string FlashDriftBounce = PrizeGrants.FlashDriftBounce;
         internal const string FlashPendulum = PrizeGrants.FlashPendulum;
         internal const string JackpotRemix = PrizeGrants.JackpotRemix;
         internal const string BubbleRain = PrizeGrants.BubbleRain;
         internal const string BubbleSpiralIn = PrizeGrants.BubbleSpiralIn;
+        internal static bool OwnsFlashV2() => IsGranted(FlashDriftBounce) || IsGranted(FlashPendulum);
 
         /// <summary>The DEBUG override spec, read once; always null in Release.</summary>
         internal static readonly string? OverrideSpec = OwnershipService.ReadDebugOverride();

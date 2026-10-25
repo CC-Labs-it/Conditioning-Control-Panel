@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void WireCellHostActions(WorkshopShelfParts parts)
         {
             parts.Behavior.ChatShortcutRequested += async (_, _) => await RebindChatShortcutAsync();
+            WirePhrasePresets(parts);
 
             // Deliberately NOT wired, each for the reason a previous layer already recorded:
             //
@@ -48,8 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             // Browser pause forwards from the cell to the shell's live Home WebHost.
             //  · Roster.PersonalityAssignRequested — personality prompt assignment remains absent.
             //    CompanionTabView wires CompanionCardClicked to the shell's shared-Core switch.
-            //  · Community.Browse/Import/Export/RefreshPromptsRequested — the community-prompt
-            //    service, still in the WPF head.
+            // Community owns its shared-service actions and native picker presentation.
         }
 
         /// <summary>
