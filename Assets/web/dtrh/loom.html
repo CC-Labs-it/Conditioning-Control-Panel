@@ -149,6 +149,15 @@
     </div>
     <div id="loom"></div>
   </div>
+  <script>
+    // WebKit supplies the string carrier before page scripts; bridge.js captures it at import time.
+    if (!(window.chrome && window.chrome.webview) && typeof window.invokeCSharpAction === 'function') {
+      const carrier = new EventTarget();
+      carrier.postMessage = m => window.invokeCSharpAction(JSON.stringify(m));
+      window.chrome = window.chrome || {};
+      window.chrome.webview = carrier;
+    }
+  </script>
   <script type="module" src="./loomBoot.js"></script>
 </body>
 </html>

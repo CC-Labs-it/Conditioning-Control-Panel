@@ -195,6 +195,15 @@ public sealed class WebAssetServer : IDisposable
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
+        // Only Loom GIFs, through the store's slug whitelist; never expose the profile/sidecars.
+        if (rel.StartsWith("ccp.spirals/", StringComparison.Ordinal))
+        {
+            var name = rel["ccp.spirals/".Length..];
+            if (!name.StartsWith("loom_", StringComparison.Ordinal) || !name.EndsWith(".gif", StringComparison.Ordinal)) return null;
+            var gif = ConditioningControlPanel.Services.Chaos.DtrhLoomStore.GifPathFor(name[5..^4]);
+            var folder = ConditioningControlPanel.Services.Chaos.DtrhLoomStore.SpiralsFolder + Path.DirectorySeparatorChar;
+            return gif != null && LinksStayInside(gif, folder) ? gif : null;
+        }
         bool asset = rel.StartsWith(AssetsPrefix, StringComparison.Ordinal);
         if (asset)
         {

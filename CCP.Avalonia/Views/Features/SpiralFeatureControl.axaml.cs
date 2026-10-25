@@ -54,19 +54,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
 
+            Helpers.ModArt.BindFeaturePlates(this, "features/spiral_overlay.png", HeroArt, SideArt);
+
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             ChkRandomize.IsCheckedChanged += ChkRandomize_Changed;
             ChkSessionCornerGif.IsCheckedChanged += ChkSessionCornerGif_Changed;
             SliderOpacity.ValueChanged += SliderOpacity_Changed;
             CmbMonitor.DropDownOpened += (_, _) => PopulateMonitors();
             CmbMonitor.SelectionChanged += CmbMonitor_Changed;
-            BtnOpenLoom.Click += (_, _) =>
-            {
-                // ponytail: needs Services.Chaos.LoomHostService.Launch()
-                // (ConditioningControlPanel/Services/Chaos/), still in the WPF head. Its live-save
-                // feed, Services.Chaos.DtrhLoomStore.Changed, is in the same place - which is why
-                // this panel does not subscribe to it either.
-            };
+            BtnOpenLoom.Click += (_, _) => Games.GameWindow.Launch("loom");
             BtnCornerGifs.Click += BtnCornerGifs_Click;
             BtnSelectGif.Click += BtnSelectGif_Click;
             BtnOpenSpiralFolder.Click += BtnOpenSpiralFolder_Click;
@@ -81,6 +77,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += RebindToCurrentSettings;
             RebindToCurrentSettings();
+            ConditioningControlPanel.Services.Chaos.DtrhLoomStore.Changed += OnLibraryChanged;
+            CoreMods.ModChanged += OnModChanged;
             RefreshLibrary();
         }
 
@@ -88,6 +86,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= RebindToCurrentSettings;
             Unhook();
+            ConditioningControlPanel.Services.Chaos.DtrhLoomStore.Changed -= OnLibraryChanged;
+            CoreMods.ModChanged -= OnModChanged;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -106,6 +106,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (_hooked != null) _hooked.PropertyChanged -= OnSettingsPropertyChanged;
             _hooked = null;
         }
+
+        private void OnLibraryChanged() => Dispatcher.UIThread.Post(RefreshLibrary);
+
+        private void OnModChanged(object? sender, ModPackage mod) => OnLibraryChanged();
 
         private void LoadFromSettings()
         {
@@ -183,9 +187,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             if (s.SessionCornerGifAllowed == want) return;
             s.SessionCornerGifAllowed = want;
             CoreSettings.Save();
-            // ponytail: WPF then calls SessionEngine.Active.RefreshCornerGifPolicy()
-            // (ConditioningControlPanel/Services/Session/SessionEngine.cs), still in the WPF head,
-            // so the change lands on the next session rather than the running one.
+            // ponytail: persisted only. The session-scoped corner-GIF host and WPF's live
+            // SessionEngine.Active.RefreshCornerGifPolicy are not ported yet.
         }
 
         private void SliderOpacity_Changed(object? sender, RangeBaseValueChangedEventArgs e)

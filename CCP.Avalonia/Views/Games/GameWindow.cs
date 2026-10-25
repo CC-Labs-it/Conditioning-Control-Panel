@@ -46,7 +46,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [JustDropId] = new(JustDropId, "jd_door_title", "", JustDropDoorOpen),
             // WPF PieceByPieceHostService.cs:221 StartUrl; free for everyone since 2026-09-27 (:188), no gate.
             [PbpId] = new(PbpId, "launcher_game_piecebypiece_title", "piecebypiece/index.html"),
-            // WPF CaucusHostService.Launch: dtrh/race.html behind the racing-purchase door (GameWindow.Race.cs).
+            // WPF LoomHostService: free spiral studio, same singleton/panic lifetime as these hosts.
+            ["loom"] = new("loom", "The Loom", "dtrh/loom.html"),
+            // WPF CaucusHostService.Launch: behind the racing-purchase door (GameWindow.Race.cs).
             ["race"] = new("race", "launcher_game_race_title", "dtrh/race.html", RaceGate),
         };
 
@@ -84,12 +86,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
-            Title = Loc.Get(spec.TitleKey);
+            Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Content = Web;
             Web.WebMessage += OnPageMessage;
+            // Loom's module can announce ready before CurrentUrl is set (the origin guard then
+            // refuses it). Navigation completion is after module setup: deliver its initial rack here too.
+            if (spec.Id == "loom") Web.NavigationCompleted += url =>
+            {
+                if (PageUrl != null && SameOrigin(url, PageUrl)) HandleLoom(new JObject { ["type"] = "ready" });
+            };
             // The page never leaves the served origin; anything else is refused before the engine loads it.
             Web.AllowNavigation = url => PageUrl != null && SameOrigin(url, PageUrl);
             Opened += (_, _) => { lock (Open) Open.Add(this); if (IsRace) StartRace(); };
@@ -125,6 +133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             JObject o;
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
+            if (Spec.Id == "loom") { HandleLoom(o); return; }
             if (Spec.Id == FypId && HandleFyp(o)) return;
             if (Spec.Id == JustDropId) { HandleJustDrop(o); return; }   // the remote site never gets the games' frames
             if (Spec.Id == PbpId && HandlePbp(o)) return;
