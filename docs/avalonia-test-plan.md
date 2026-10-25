@@ -673,3 +673,6 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. WPF `Windows/Friends/FriendNotices.cs`, `Services/Friends/FriendsLanding.cs`: with two test accounts and notices enabled, receive a poke; confirm the bottom-right non-activating card, Poke back, body opening the named friend, repeat folding, three visible cards and +N more, hover pausing, missed-poke Inbox fallback and reopening. Close/body clicks must not file a missed poke. Start a hold or panic while a card is up: it closes and the unseen poke waits in Inbox. Rows: `feat-friends-open-tables`
+2. WPF `Services/Friends/FriendsLanding.cs`: receive a request; Accept sends once, body opens the drawer. Existing requests produce the singular/plural waiting notice; bell off files rows silently. Check shutdown closes all notices. Known stub: Goon Join, launcher tables/lobby, watch actions and exact avatar/motion/SFX parity. Rows: `feat-friends-open-tables`

@@ -354,6 +354,11 @@ public sealed partial class FriendsDrawer : Border
         }
         return t;
     }
+    internal void OpenOn(string friendId)
+    {
+        if (_openId != friendId) Toggle(friendId);
+    }
+
     internal void Toggle(string friendId)
     {
         _openId = _openId == friendId ? null : friendId;
