@@ -63,7 +63,8 @@ public sealed class ContentHitTestTests
                     {
                         // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
                         HeadlessRender.LiveTree(w);
-                        if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
+                        // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
+                        if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || !b.IsHitTestVisible || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
                         // Click-proof on purpose (WPF Hidden): only the Presets rack row actions at rest; their hover path has its own test.
                         if (b.GetVisualAncestors().OfType<StackPanel>().Any(s => s.Classes.Contains("rackActions") && !s.IsHitTestVisible)) continue;
                         var p = Centre(b, w);

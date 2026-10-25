@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -15,6 +16,7 @@ using Avalonia.VisualTree;
 using IconKind = FluentIcons.Common.Symbol;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
+using ScrolllerCreditLine = ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditLine;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
@@ -52,7 +54,7 @@ public sealed class AssetsTabTests
             shell.ShowTab("assets");
             var packs = tab.AssetTree.Single(n => n.IsPackFolder);
             var pack = Assert.Single(packs.Children);
-            Assert.Equal("Test Pack", pack.Name);
+            Assert.Equal("test-pack", pack.Name); // WPF BuildPackTree: not built in -> raw pack id, not the manifest name
             Assert.Equal(new[] { "images", "videos" }, pack.Children.Select(n => n.Name));
             Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 5, 3), tab.TxtAssetCounts.Text);
             var images = pack.Children.Single(n => n.PackFileType == "image");
@@ -104,6 +106,62 @@ public sealed class AssetsTabTests
             Assert.All(tab.CurrentFolderFiles, f => Assert.False(f.IsChecked));
             tab.BtnSelectAllAssets.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(2, ContentPackStore.Current.GetAllActivePackImages().Count);
+
+            // Panic closes an open pack preview and its decrypted temp goes with it (P06; WPF left it open).
+            tab.OpenAssetPreview(tab.CurrentFolderFiles[0]);
+            var panicked = shell.OwnedWindows.OfType<MiniPlayerWindow>().Single(w => w.IsVisible);
+            Assert.Single(Directory.GetFiles(Path.Combine(assets, ".temp")));
+            PanicSurfaces.StopAll("asset-preview-test", shell);
+            Assert.False(panicked.IsVisible);
+            Assert.Empty(Directory.GetFiles(Path.Combine(assets, ".temp")));
+        }
+        finally { ContentPackStore.Current = oldStore; }
+    });
+
+    [Fact]
+    public Task PackFilesSortByNameVideoFolderCheckFeedsThePoolAndDeactivateHidesThePack() => Run(async (shell, tab, s) =>
+    {
+        var oldStore = ContentPackStore.Current;
+        var assets = ConditioningControlPanel.CorePaths.EffectiveAssets;
+        var guid = Guid.NewGuid().ToString("N");
+        var dir = Path.Combine(assets, ".packs", guid);
+        Directory.CreateDirectory(Path.Combine(dir, "content"));
+        File.WriteAllBytes(Path.Combine(dir, "content", "video.enc"), PackEncryptionService.Encrypt(new byte[16]));
+        var manifest = new InstalledPackManifest
+        {
+            PackId = "library-pack", PackGuid = guid, PackName = "Library pack",
+            Files = new List<PackFileEntry>   // manifest order is NOT name order
+            {
+                new() { OriginalName = "v.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" },
+                new() { OriginalName = "u.mp4", ObfuscatedName = "video.enc", FileType = "video", Extension = ".mp4" }
+            }
+        };
+        PackEncryptionService.SaveEncryptedManifest(JsonConvert.SerializeObject(manifest), Path.Combine(dir, ContentPackStore.ManifestFileName));
+        var store = new ContentPackStore(() => assets, () => s, () => { });
+        ContentPackStore.Current = store;
+        try
+        {
+            tab.OnTabShown();
+            var pack = Assert.Single(tab.AssetTree.Single(n => n.IsPackFolder).Children);
+            pack.IsExpanded = true;
+            var videos = Assert.Single(pack.Children);
+            Assert.Equal(ContentPackStore.VideoType, videos.PackFileType);
+            tab.AssetTreeView.SelectedItem = videos;
+            await tab.ThumbnailLoads;
+            // WPF MainWindow.Assets.cs:724 sorts pack files by OriginalName, not manifest order.
+            Assert.Equal(new[] { "u.mp4", "v.mp4" }, tab.CurrentFolderFiles.Select(f => f.Name));
+            Assert.Equal(2, store.GetAllActivePackVideos().Count);
+            // A real Space on the videos folder's checkbox empties the encrypted video pool.
+            var cb = await Realized(shell, () => tab.AssetTreeView.GetVisualDescendants().OfType<CheckBox>()
+                .FirstOrDefault(c => c.DataContext == videos));
+            PressSpace(shell, cb);
+            Assert.Empty(store.GetAllActivePackVideos());
+            Assert.Contains("pack:library-pack/v.mp4", s.DisabledAssetPaths);
+            // Deactivating hides the pack from the Library but keeps it installed (WPF BuildPackTree reads active ids only).
+            store.DeactivatePack("library-pack");
+            tab.RefreshAssetTree();
+            Assert.DoesNotContain(tab.AssetTree, n => n.IsPackFolder);
+            Assert.True(store.IsPackInstalled("library-pack"));
         }
         finally { ContentPackStore.Current = oldStore; }
     });
@@ -312,6 +370,154 @@ public sealed class AssetsTabTests
         await tab.ThumbnailLoads;
     });
 
+    /// <summary>WPF AssetsTabView.xaml:454-461 + ScrolllerCredit.OpenHome: the online source's credit line links
+    /// scrolller.com, and the link is refused under Strict Lock.</summary>
+    [Fact]
+    public Task ScrolllerCreditLineLinksScrolllerOutsideEveryLock() => Run((shell, tab, s) =>
+    {
+        var line = tab.FindControl<ScrolllerCreditLine>("TxtScrolllerCredit")!;
+        Assert.Equal("Media from Scrolller", ((TextBlock)line.Link.Content!).Text);
+        Assert.Contains(Loc.Get("label_online_media_credit"), line.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text));
+        var opened = new List<string>();
+        var old = ScrolllerCreditLine.Opener;
+        ScrolllerCreditLine.Opener = url => { opened.Add(url); return true; };
+        try
+        {
+            s.StrictLockEnabled = true;
+            line.Link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Empty(opened);                                  // a browser over Strict Lock is a way out
+            s.StrictLockEnabled = false;
+            line.Link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(new[] { "https://scrolller.com" }, opened);
+        }
+        finally { ScrolllerCreditLine.Opener = old; s.StrictLockEnabled = false; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PackCardHoverMovesOneSheenAndLeavingStopsItsClock() => Run(async (shell, tab, s) =>
+    {
+        // WPF deliberately ships the pack strip collapsed; expose its existing template for the
+        // dormant hover path, without enabling a product feature or installing any pack.
+        tab.PacksSection.IsVisible = true;
+        var cards = await Realized(shell, () =>
+        {
+            var found = tab.PackCardsItemsControl.GetVisualDescendants().OfType<Border>()
+                .Where(c => c.Classes.Contains("packCard")).ToArray();
+            return found.Length >= 2 ? found : null;
+        });
+        var layer = AdornerLayer.GetAdornerLayer(cards[0])!;
+        HoverPack(shell, cards[0], true);
+        var first = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.True(first.IsTicking);
+        HoverPack(shell, cards[0], true);
+        Assert.Same(first, Assert.Single(layer.Children.OfType<CardSheenAdorner>()));
+        HoverPack(shell, cards[1], true);
+        var second = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.NotSame(first, second);
+        Assert.False(first.IsTicking);
+        // A late leave from the previous card must not clear the new card's sheen.
+        HoverPack(shell, cards[0], false);
+        Assert.Same(second, Assert.Single(layer.Children.OfType<CardSheenAdorner>()));
+        HoverPack(shell, cards[1], false);
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(second.IsTicking);
+    });
+
+    [Fact]
+    public Task PackCardSheenFollowsARealPointerMove() => Run(async (shell, tab, s) =>
+    {
+        // Same path as above, but through headless mouse input and the shell's hit testing.
+        tab.PacksSection.IsVisible = true;
+        var cards = await Realized(shell, () =>
+        {
+            var found = tab.PackCardsItemsControl.GetVisualDescendants().OfType<Border>()
+                .Where(c => c.Classes.Contains("packCard")).ToArray();
+            return found.Length >= 2 ? found : null;
+        });
+        cards[0].BringIntoView();
+        shell.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        var layer = AdornerLayer.GetAdornerLayer(cards[0])!;
+        Point Centre(Control c) => c.TranslatePoint(new Point(c.Bounds.Width / 2, c.Bounds.Height / 2), shell)!.Value;
+        void Move(Point p)
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // hit testing reads the last rendered frame
+            shell.MouseMove(p, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Move(Centre(cards[0]));
+        var first = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.Same(cards[0], AdornerLayer.GetAdornedElement(first));
+        Move(Centre(cards[1]));
+        var second = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        Assert.NotSame(first, second);
+        Assert.False(first.IsTicking);
+        Move(new Point(1, 1));
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(second.IsTicking);
+    });
+
+    [Fact]
+    public Task PackCardSheenDetachesWhenTheStripOrTabHidesAndMotionOffRefusesIt() => Run(async (shell, tab, s) =>
+    {
+        tab.PacksSection.IsVisible = true;
+        var card = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+            .OfType<Border>().FirstOrDefault(c => c.Classes.Contains("packCard")));
+        var layer = AdornerLayer.GetAdornerLayer(card)!;
+        HoverPack(shell, card, true);
+        var sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        tab.PacksSection.IsVisible = false;
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+        HoverPack(shell, card, true);
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        tab.PacksSection.IsVisible = true;
+        s.MotionLevel = MotionLevel.Off;
+        HoverPack(shell, card, true);
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        s.MotionLevel = MotionLevel.Full;
+        HoverPack(shell, card, true);
+        sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        tab.IsVisible = false;
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+    });
+
+    [Fact]
+    public Task RebuildingPackCardsRemovesTheDetachedCardsSheen() => Run(async (shell, tab, s) =>
+    {
+        tab.PacksSection.IsVisible = true;
+        var card = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+            .OfType<Border>().FirstOrDefault(c => c.Classes.Contains("packCard")));
+        var layer = AdornerLayer.GetAdornerLayer(card)!;
+        HoverPack(shell, card, true);
+        var sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        tab.PackCardsItemsControl.ItemsSource = Array.Empty<PackCardViewModel>();
+        shell.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+    });
+
+    [Fact]
+    public Task UnloadingTheTabStopsThePackCardSheenClock() => Run(async (shell, tab, s) =>
+    {
+        tab.PacksSection.IsVisible = true;
+        var card = await Realized(shell, () => tab.PackCardsItemsControl.GetVisualDescendants()
+            .OfType<Border>().FirstOrDefault(c => c.Classes.Contains("packCard")));
+        var layer = AdornerLayer.GetAdornerLayer(card)!;
+        HoverPack(shell, card, true);
+        var sheen = Assert.Single(layer.Children.OfType<CardSheenAdorner>());
+        var content = shell.Content;
+        shell.Content = null;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(layer.Children.OfType<CardSheenAdorner>());
+        Assert.False(sheen.IsTicking);
+        shell.Content = content;
+    });
+
     [Fact]
     public Task DoubleClickingAThumbnailOpensItInTheMiniPlayer() => Run(async (shell, tab, s) =>
     {
@@ -380,6 +586,11 @@ public sealed class AssetsTabTests
     });
 
     // ---- harness ----------------------------------------------------------------------
+
+    private static void HoverPack(Window shell, Control card, bool on) => card.RaiseEvent(
+        new PointerEventArgs(on ? InputElement.PointerEnteredEvent : InputElement.PointerExitedEvent,
+            card, new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), shell, default,
+            0, PointerPointProperties.None, KeyModifiers.None));
 
     private static Task<Border> Thumbnail(Window shell, AssetsTabView tab) => Realized(shell, () =>
         tab.ThumbnailsItemsControl.GetVisualDescendants().OfType<Border>()

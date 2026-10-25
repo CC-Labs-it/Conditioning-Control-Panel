@@ -176,6 +176,15 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>Exact static input region for a tutorial; null restores the whole window.
+    /// Windows uses a window region, not the cursor-polled bubble helper.</summary>
+    internal static bool SetWindowInputRegion(TopLevel window, PixelRect[]? rects)
+    {
+        if (TryGet(window, OverlayBackend.Win32, out var hwnd))
+            return Win32Overlay.SetWindowInputRegion(window, hwnd, rects);
+        return rects is null ? SetClickThrough(window, false) : SetInputRects(window, rects, rects.Length);
+    }
+
     private static IntPtr _rectBuf;   // grown, never freed: one per process, reused every frame
     private static int _rectCap;
 

@@ -162,10 +162,7 @@ namespace ConditioningControlPanel
         private bool _avatarWasAttachedBeforeBrowserFullscreen = false;
 
         // Auto-pause state when minimized with attached avatar
-        private bool _autonomyWasPausedOnMinimize = false;
-        private bool _avatarWasMutedOnMinimize = false;
-        private bool _wasAutonomyRunningBeforeMinimize = false;
-        private bool _wasAvatarUnmutedBeforeMinimize = false;
+        private readonly Services.WindowMinimizeRecovery _windowMinimizeRecovery = new();
 
         // Achievement tracking
         private Dictionary<string, Image> _achievementImages = new();
@@ -2765,20 +2762,12 @@ namespace ConditioningControlPanel
             // the resolver distinguishes. It does not - so order the lookups by specificity
             // instead: themed variant first (it only exists app-side), unless the active mod is
             // a third-party one, whose base-path override must win.
-            var suffix = App.Mods?.ActiveModId switch
+            foreach (var path in Services.UI.ModTileArt.Candidates(baseName, App.Mods?.ActiveModId))
             {
-                Models.BuiltInMods.BambiSleepId => "_bambi",
-                Models.BuiltInMods.SissyHypnoId => "_sissy",
-                Models.BuiltInMods.DronificationId => "_drone",
-                Models.BuiltInMods.LockedId => "_locked",
-                _ => null,
-            };
-            if (suffix != null)
-            {
-                var themed = LoadModImageDecoded($"features/{baseName}{suffix}.png", decodeWidth);
-                if (themed != null) return themed;
+                var image = LoadModImageDecoded(path, decodeWidth);
+                if (image != null) return image;
             }
-            return LoadModImageDecoded($"features/{baseName}.png", decodeWidth);
+            return null;
         }
 
         // Dashboard tile decode caps. The mosaic lives in a 1489x901 design Viewbox, so a
@@ -3473,41 +3462,19 @@ namespace ConditioningControlPanel
         /// </summary>
         private string GetModeAwareQuestImagePath(Models.QuestDefinition quest)
         {
-            // Use EffectiveImagePath which prefers cached remote images over embedded
-            var imagePath = quest.EffectiveImagePath;
-
-            if (string.IsNullOrEmpty(imagePath))
-                return imagePath;
-
-            // For embedded resources, check if mod has overrides or if mode-specific swap is needed
-            if (imagePath.StartsWith("pack://"))
+            var path = quest.EffectiveImagePath;
+            if (string.IsNullOrEmpty(path)) return path;
+            const string prefix = "pack://application:,,,/Resources/";
+            if (path.StartsWith(prefix, StringComparison.Ordinal))
             {
-                // Extract relative path from pack URI
-                var prefix = "pack://application:,,,/Resources/";
-                if (imagePath.StartsWith(prefix))
-                {
-                    var relativePath = imagePath.Substring(prefix.Length);
-                    if (Services.ModResourceResolver.HasModOverride(relativePath))
-                        return Services.ModResourceResolver.ResolveUri(relativePath);
-                }
-
-                // Legacy mode-specific swaps for built-in mods
-                if (App.Settings?.Current?.IsSissyMode == true)
-                {
-                    if (imagePath.Contains("logo.png"))
-                        return "pack://application:,,,/Resources/logo2.png";
-                    if (imagePath.Contains("bambi takeover.png"))
-                        return "pack://application:,,,/Resources/features/mandatory_videos.png";
-                }
-                // CCP Default uses the same neutral wordmark as Sissy.
-                if (App.Mods?.IsCCPDefault == true)
-                {
-                    if (imagePath.Contains("logo.png"))
-                        return "pack://application:,,,/Resources/logo2.png";
-                }
+                var relative = path.Substring(prefix.Length);
+                if (Services.ModResourceResolver.HasModOverride(relative))
+                    return Services.ModResourceResolver.ResolveUri(relative);
             }
-
-            return imagePath;
+            if (path.StartsWith("pack://", StringComparison.Ordinal) && QuestStampRules.LegacyImageOverride(path,
+                App.Settings?.Current?.IsSissyMode == true, App.Mods?.IsCCPDefault == true) is { } resource)
+                return prefix + resource;
+            return path;
         }
 
         /// <summary>

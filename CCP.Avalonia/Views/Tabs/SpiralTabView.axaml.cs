@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using File = System.IO.File;
+using IOPath = System.IO.Path;
+using ConditioningControlPanel.Services;
 using System.Threading;
 using Avalonia;
 using Avalonia.Animation;
@@ -43,15 +46,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///     but its live inputs (an offer in hand, an open ceremony) and <c>App.Descent</c> (the block)
     ///     are WPF-head services, so <see cref="Refresh"/> passes false for those and Spiral is
     ///     unreachable — see the placeholder there.</item>
-    ///   <item><c>SpiralFirstLightVisual</c> is a WPF <c>DrawingVisual</c>, so <c>FogHost</c> stays
-    ///     empty and FIRST LIGHT hands straight back rather than holding a black room for its three
-    ///     and a half seconds. The reveal's frame loop, its block wait and its timeout go with it;
-    ///     all three exist only to drive that canvas.</item>
+    ///   <item>The first-light canvas supplies the fog; the one-shot reveal still needs the
+    ///     ceremony director and block-service handoff, timeout and cancellation integration.</item>
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
     ///     native process-loss reporting and a pre-document carrier remain
     ///     unavailable on this seam.</item>
-    ///   <item><c>MotionFx</c>, <c>DescentRoomSfx</c> and <c>DescentBarkWatcher</c> are
-    ///     WPF-head services; each is a stub at its call site. <c>HelpPopover</c> is real on
+    ///   <item><c>DescentBarkWatcher</c> still needs the live descent block service.
+    ///     Room SFX and the Windows motion cap are ported. <c>HelpPopover</c> is real on
     ///     this head and carries the shared Core topic.</item>
     /// </list>
     ///
@@ -153,14 +154,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// a field captured once would leave the ember loop running for the rest of the session
         /// after someone turned motion off mid-run.</para>
         ///
-        /// <para>ponytail: the ONE thing WPF has that this head does not is the cap to Reduced
-        /// when Windows' animation-effects flag is off — see AmbientFxCanvas.Env.Level, which owns
-        /// that note. AllowTransitions is spelled out rather than read from Env because Env carries
-        /// only the ambient half; MotionFx.cs:56 is this same comparison.</para>
+        /// <para>Env also applies WPF's Windows animation and Gentle Visuals caps.</para>
         /// </summary>
         private static bool AllowAmbientLoops => AmbientFxCanvas.Env.AllowAmbientLoops;
 
-        private static bool AllowTransitions => CoreSettings.Current.MotionLevel != MotionLevel.Off;
+        private static bool AllowTransitions => AmbientFxCanvas.Env.AllowTransitions;
 
         // Test seams: headless has no browser engine, so the engine-path reveal is driven by faking both.
         internal static Func<bool> EngineAvailable = () => WebHost.IsAvailable;
@@ -189,6 +187,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private readonly DriftField _motes;
 
         // ---- clocks ----
+        private SpiralFirstLightVisual? _visual;
+        private BeatLoop? _fogFrames;
         private CancellationTokenSource? _fogFx;
         private CancellationTokenSource? _emberFx;
         private CancellationTokenSource? _splashFx;
@@ -198,6 +198,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>True while the splash owns the surface — set the instant the spiral era is
         /// painted, cleared when the embed is revealed, when it fails, or on leaving the tab.</summary>
         private bool _splashUp;
+        // WPF spends these on paint, and rearms only on exit: visibility and OnTabShown both refresh.
+        private bool _entrySfxSpent, _splashChimed;
+
+        // The head resolves assets; Core owns the cue ladder and mix.
+        internal Func<string, string> SoundResolver { get; set; } = ResolveRoomSound;
+
+        private static string ResolveRoomSound(string name)
+        {
+            var relative = $"chaos/{name}.mp3";
+            var path = CoreModArt.AudioOverridePath(relative) ??
+                ContentLocator.Resolve(IOPath.Combine("Resources", "sounds", relative));
+            return File.Exists(path) ? path : "";
+        }
+
+        private void PlayRoomSound(DescentRoomCue cue) => DescentRoomAudio.Play(
+            cue, App.DescentCountdown?.AudioEnabled ?? true,
+            CoreSettings.Current.MasterVolume, SoundResolver);
 
         /// <summary>The embed, for as long as this tab is the one on screen in the spiral state.</summary>
         private SpiralEmbedView? _embed;
@@ -333,11 +350,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void Suspend()
         {
             Unwire();
+            StopFogFrames();
             ApplyHelpChip(false);
             StopFogFx();
             HideSplash(fade: false);
             StopWaitingAmbience();
             TeardownEmbed();
+            _entrySfxSpent = _splashChimed = false;
             _embedGaveUp = false;
         }
 
@@ -393,15 +412,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     HideSplash(fade: false);
 
                     _fogHost.IsVisible = true;
+                    StartFogFrames();
                     _fogCopy.IsVisible = true;
                     ApplyFogReadout();
                     StartFogFx();
-                    // ponytail: needs DescentRoomSfx.PlayFogEntry() (WPF head), one door sound per
-                    // entry. Audio is decoration; the room paints without it.
+                    if (!_entrySfxSpent)
+                    {
+                        _entrySfxSpent = true;
+                        PlayRoomSound(DescentRoomCue.FogEntry);
+                    }
                     break;
 
                 case SpiralRoomState.Spiral:
                     StopFogFx();
+                    StopFogFrames();
                     _fogHost.IsVisible = false;
                     _fogCopy.IsVisible = false;
 
@@ -447,6 +471,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 default:
                     StopFogFx();
+                    StopFogFrames();
                     TeardownEmbed();
                     HideSplash(fade: false);
                     _fogHost.IsVisible = false;
@@ -471,8 +496,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// user's own ceremony commits (owner ruling 2026-08-16). Called by
         /// <c>DescentShowDirector</c> after it has brought the window forward and navigated here.
         ///
-        /// <para>ponytail: needs Controls/SpiralFirstLightVisual (a WPF DrawingVisual) — the reveal
-        /// IS that canvas, and without it there is nothing to play. It fails SOFT the way every
+        /// <para>ponytail: the drawing control is ported, but the ceremony director and descent
+        /// block service are absent. Without their wait/timeout/cancellation there is no handoff. It fails SOFT the way every
         /// other first-light failure does in the original (a thrown frame, a withdrawn block, a
         /// twelve-second timeout): hand the room straight back to the ordinary selection rather
         /// than hold a black rectangle for three and a half seconds. Nothing is lost — the withhold
@@ -481,8 +506,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// </summary>
         internal void BeginFirstLight()
         {
-            Log.Information("[Spiral] first light: no canvas on this head - handing the room back quietly.");
+            Log.Information("[Spiral] first light: no block handoff on this head - handing the room back quietly.");
             Refresh();
+        }
+
+        // The fog holds the Core reveal timeline before the first stroke, even under reduced
+        // motion: snapping to a finished figure here would reveal a spiral still withheld by the fuse.
+        private void StartFogFrames()
+        {
+            if (_visual == null)
+            {
+                var accent = Color.FromRgb(0xFF, 0x69, 0xB4);
+                if (this.TryFindResource("PinkColor", out var c) && c is Color color) accent = color;
+                else if (this.TryFindResource("PinkBrush", out var b) && b is ISolidColorBrush brush) accent = brush.Color;
+                _visual = new SpiralFirstLightVisual(accent);
+                _fogHost.Children.Add(_visual);
+            }
+            _visual.Begin(false);
+            if (!AllowAmbientLoops)
+            {
+                StopFogFrames();
+                _visual.SetFrame(SpiralFirstLightTimeline.DrawStartSeconds, 0);
+                return;
+            }
+            if (_fogFrames != null) return; // repaints must not restart the seeded field
+            _fogFrames = new BeatLoop(_visual, t => _visual.SetFrame(SpiralFirstLightTimeline.DrawStartSeconds, t));
+            _fogFrames.Start();
+        }
+
+        private void StopFogFrames()
+        {
+            _fogFrames?.Stop();
+            _fogFrames = null;
         }
 
         // ============================== the "?" ==============================
@@ -808,9 +863,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _spiralSplash.Opacity = 1;
                 _spiralSplash.IsVisible = true;
 
-                // ponytail: needs DescentRoomSfx.PlaySplashOpen() (WPF head), one chime per ENTRY
-                // and never per retry: a cue that repeated while a browser struggled would sound
-                // exactly like the thing being stuck.
+                if (!_splashChimed)
+                {
+                    _splashChimed = true;
+                    PlayRoomSound(DescentRoomCue.SplashOpen);
+                }
 
                 if (!AllowAmbientLoops)
                 {

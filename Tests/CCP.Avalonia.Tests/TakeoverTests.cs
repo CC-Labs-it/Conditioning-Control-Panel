@@ -251,8 +251,13 @@ public sealed class TakeoverTests
             Assert.True(w.SparkCount >= 22);
 
             now += TimeSpan.FromMilliseconds(150);
-            AvaloniaHeadlessPlatform.ForceRenderTimerTick();   // the cue drives itself off the window's frames
-            Dispatcher.UIThread.RunJobs();
+            // The cue drives itself off the window's frames (RequestAnimationFrame): tick until it runs.
+            // The clock is frozen, so extra ticks repaint the same frame; later steps call Frame() directly.
+            for (var i = 0; i < 50 && w.Opacity != 1; i++)
+            {
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                Dispatcher.UIThread.RunJobs();
+            }
             Assert.Equal(1, w.Opacity);
             Assert.Equal(1f, w.Bloom, 3);
 

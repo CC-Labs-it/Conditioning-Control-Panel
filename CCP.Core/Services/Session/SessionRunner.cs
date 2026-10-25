@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Services
     ///
     /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
     /// ducking, phase events,
-    /// EMI Desk, Discord, friends, season recap and achievement tracking. No settings are written for them,
+    /// EMI Desk, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
     public sealed class SessionRunner
@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Services
         private PhrasePoolCustody? _custody;
         private DateTime _startTime;
         private TimeSpan _lastElapsed;
-        private TimeSpan _pausedElapsed;
+        internal TimeSpan _pausedElapsed; // internal: tests step the paused clock (ProgramsSessionProgressTests)
         private readonly Random _random = new();
 
         public SessionLogService SessionLog { get; }
@@ -121,6 +121,7 @@ namespace ConditioningControlPanel.Services
 
             _timer = new Timer(_ => CoreDispatch.Post(() => Tick(Elapsed)), null, 1000, 1000);
             SessionLog.BeginSession(session);
+            CoreDiscord.Service?.SetSessionActivity(session.Name); // WPF SessionEngine:260, after feature starts
             Log.Information("Session started: {Name}", session.Name);
         }
 
@@ -439,6 +440,9 @@ namespace ConditioningControlPanel.Services
 
             try { SessionLog.EndSession(completed, elapsed, xp); }
             catch (Exception ex) { Log.Error(ex, "SessionLog.EndSession failed"); }
+            // WPF SessionEngine:390 sits between SessionStopped (386) and SessionCompleted (429); Stopped fuses
+            // both, so idle goes first: after it, a completion handler starting the next session would be clobbered.
+            CoreDiscord.Service?.SetIdleActivity();
             CurrentSession = null;
             // WPF SessionEngine.SessionStopped + SessionCompleted, as one call (ProgramEngineBridge).
             try { Stopped?.Invoke(session, completed); }

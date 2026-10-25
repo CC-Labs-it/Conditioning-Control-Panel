@@ -44,8 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///
     /// <para><b>Opener:</b> <c>AssetsTabView.OpenAssetPreview</c> (WPF <c>MainWindow.OpenAssetPreview</c>,
     /// MainWindow.Assets.cs:1206), from a Library thumbnail double-click or the context-menu Preview:
-    /// <c>LoadFile(path)</c> then <c>Show(owner)</c>. Pack-file previews (WPF's temp extraction) wait on
-    /// the Content Packs tree. <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) also opens it.</para>
+    /// <c>LoadFile(path)</c> then <c>Show(owner)</c>. Encrypted-pack files open from a temporary decrypt
+    /// (WPF's temp extraction). <c>--video-check &lt;file&gt;</c> (VideoCheck.cs) also opens it.</para>
     /// </summary>
     public partial class MiniPlayerWindow : Window
     {
@@ -87,6 +87,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal WriteableBitmap? VideoFrame => _frames?.Bitmap;
         internal bool FrameBufferFreed => _frames?.Freed ?? true;
 
+        private static readonly HashSet<MiniPlayerWindow> OpenPlayers = new();
+        internal static void CloseAllForPanic()
+        {
+            foreach (var player in new List<MiniPlayerWindow>(OpenPlayers)) player.Close();
+        }
+
         public MiniPlayerWindow()
         {
             AvaloniaXamlLoader.Load(this);
@@ -116,7 +122,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _seekSlider.AddHandler(RangeBase.ValueChangedEvent, SeekSlider_ValueChanged);
             PointerPressed += Window_PointerPressed;
             KeyDown += Window_KeyDown;
-            Opened += (_, _) => _ = ShowNoticeAndClose();
+            Opened += (_, _) => { OpenPlayers.Add(this); _ = ShowNoticeAndClose(); };
+            Closed += (_, _) => OpenPlayers.Remove(this);
 
             // Render-proof state only: --render-all builds this window without LoadFile, and an
             // all-collapsed window renders as a black rectangle that proves nothing. This is the
