@@ -85,6 +85,7 @@ test('fast beat kicks catch a stationary racer when a solid spoke crosses the op
   const row = rows.find(r => r.kind === 'wheel');
   for (const bpm of [96.75, 180, 240]) {
     setMachineryBeat(track, {enabled:true,songS:0,raceS:0,bpm,offsetS:0,playing:true});
+    try {
     const toys = createGoonworksHazards(track, layout), r = racer(row, 0);
     toys.apply(r, cloneState(r.st), 0);
     let hit = null;
@@ -92,8 +93,8 @@ test('fast beat kicks catch a stationary racer when a solid spoke crosses the op
     assert.equal(hit, row.id, 'closed moving spoke at ' + bpm + ' BPM');
     const pose0 = goonworksPose(row, 0, machineryBeatAt(track, 0));
     const pose1 = goonworksPose(row, 60/bpm, machineryBeatAt(track, 60/bpm));
-    assert.ok(Math.abs(Math.abs(pose1.angle-pose0.angle)-Math.PI/2)<1e-9, 'one opening per beat');
-    setMachineryBeat(track, null);
+    assert.ok(Math.abs(Math.abs(pose1.angle-pose0.angle)-Math.PI)<1e-9, 'two openings per heard beat');
+    } finally { setMachineryBeat(track, null); }
   }
 });
 
