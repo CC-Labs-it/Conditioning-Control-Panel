@@ -72,10 +72,20 @@ namespace ConditioningControlPanel.Services.Safety
         /// (no flashes or spiral in front of it that a pause would leave up), no Lock Card is
         /// open, and the previous claim was not inside <see cref="GamePauseDoubleTap"/>: a quick
         /// second Escape is a full panic, so getting out is still two taps away at most.</para>
+        ///
+        /// <para>Two more (bug hunt 2026-10-22). <paramref name="frontGameReady"/>: the game in front
+        /// must be up (its page said ready and is not on its way out). A booting or reloading page
+        /// cannot pause, so keeping the press there did nothing at all, and Escape taps more than 2 s
+        /// apart never got out of a page that would not load. <paramref name="fromPanicKey"/>: only a
+        /// real key press is a pause. The Remote HUD's Stop and the leash gate's Panic button run the
+        /// same panic path; the HUD never takes focus, so the game stayed in front and its Stop only
+        /// paused the game.</para>
         /// </summary>
         internal static bool GameClaimsEscapeAsPause(string? panicKey, bool gameInFront, bool engineRunning,
-            bool lockCardOpen, DateTime? lastClaimUtc, DateTime nowUtc)
+            bool lockCardOpen, DateTime? lastClaimUtc, DateTime nowUtc,
+            bool frontGameReady = true, bool fromPanicKey = true)
         {
+            if (!fromPanicKey || !frontGameReady) return false;
             if (!string.Equals(panicKey?.Trim(), "Escape", StringComparison.OrdinalIgnoreCase)) return false;
             if (!gameInFront || engineRunning || lockCardOpen) return false;
             if (lastClaimUtc is { } last && nowUtc - last < GamePauseDoubleTap && nowUtc >= last) return false;

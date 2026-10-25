@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Views.Tabs
             _clickChoiceClose.Tick += (_, _) =>
             {
                 _clickChoiceClose.Stop();
-                if (!_clickChoicePinned && !ClickChoiceAnchor.IsMouseOver && !ClickChoiceBody.IsMouseOver && !ClickChoiceBody.IsKeyboardFocusWithin)
+                if (Services.UI.DashboardClickRules.ShouldClose(_clickChoicePinned, ClickChoiceAnchor.IsMouseOver, ClickChoiceBody.IsMouseOver, ClickChoiceBody.IsKeyboardFocusWithin))
                     ClickChoicePopup.IsOpen = false;
             };
             Loaded += (_, _) => RefreshClickPreference();
@@ -340,7 +340,7 @@ namespace ConditioningControlPanel.Views.Tabs
 
         private readonly System.Windows.Threading.DispatcherTimer _clickChoiceClose = new()
         {
-            Interval = TimeSpan.FromMilliseconds(450),
+            Interval = TimeSpan.FromMilliseconds(Services.UI.DashboardClickRules.HoverCloseMilliseconds),
         };
         private bool _refreshingClickChoice;
         private bool _clickChoicePinned;

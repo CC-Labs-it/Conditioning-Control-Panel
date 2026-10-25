@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
@@ -123,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         // actually loaded never starts the timer, which is the WPF rule verbatim.
         private readonly DispatcherTimer _poseTimer;
         private int _currentPoseIndex;
-        private readonly int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
+        private int _currentAvatarSet = Math.Max(1, CoreSettings.Current.SelectedAvatarSet);
         private Bitmap?[] _avatarPoses = new Bitmap?[4];
 
         // The bubble's auto-hide. One timer, replaced per bubble; the hover hold re-arms it at 1s.
@@ -1133,6 +1134,27 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             "avatar_title_bambi_cow",             // Set 7
         };
 
+        /// <summary>WPF SwitchToCompanionAvatar (AvatarTubeWindow.Avatar.cs:819) + the static branch of
+        /// SwitchToAvatarSet (:395): a roster switch puts the companion's set on the tube and saves it,
+        /// globally and per mod. The companion itself is already switched by the caller, so the
+        /// set->companion coupling is not re-fired. All sets are unlocked (WPF IsAvatarSetUnlocked).
+        /// ponytail: WPF's single-emote-mod pin has nothing to pin here - emote mode did not port.</summary>
+        public void SwitchToCompanionAvatar(CompanionId companionId) => RunOnAvatar(() =>
+        {
+            // WPF GetAvatarSetForCompanion (:525) is the inverse of CompanionForAvatarSet; derive it
+            // so the mapping lives once. No set -> set 1 (BambiSprite's default).
+            int set = 1;
+            for (int n = 3; n <= 7; n++)
+                if (CompanionForAvatarSet(n) == companionId) { set = n; break; }
+            _currentAvatarSet = set;
+            var s = CoreSettings.Current;
+            s.SelectedAvatarSet = set;
+            ConditioningControlPanel.Services.Companion.ModAvatarLooks.Store(s.ModAvatarSet, CoreMods.ActiveModId, set);
+            CoreSettings.Save();
+            _poseTimer.Stop();
+            ApplyAvatarSet();
+        });
+
         /// <summary>The persona an avatar set belongs to; null for sets 1-2, which are generic
         /// sprites with no companion behind them. From AvatarTubeWindow.Avatar.cs.</summary>
         private static CompanionId? CompanionForAvatarSet(int setNumber) => setNumber switch
@@ -1345,9 +1367,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        /// <summary>The user's avatar mute. WPF mirrors this setting into a field the quick menu
-        /// flips; reading the setting itself is the same answer with nothing to keep in sync.</summary>
-        public bool IsMuted => CoreSettings.Current.AvatarMuted;
+        private bool _windowMuted;
+        /// <summary>Saved voice mute plus the shell's temporary attached-minimize mute.</summary>
+        public bool IsMuted => CoreSettings.Current.AvatarMuted || _windowMuted;
+
+        internal void SetWindowMute(bool muted)
+        {
+            _windowMuted = muted;
+            UpdateQuickMenuState();
+        }
 
         /// <summary>
         /// Auto-hide, at the user's Bubble Duration (1-10s). A long line gets an ESL-friendly
@@ -1383,6 +1411,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// through on WPF. The cue is the giggle; WPF's PlayFallbackBubbleSound picks between the
         /// giggles and the "um" set, and that coin flip lives in Reactions.cs.</para>
         /// </summary>
+        /// <summary>WPF IsSpeakingAudio as a task: completes when her LATEST voiced clip ends (cut or
+        /// finished). The voice host waits on it so a bark that cut her confirmation still holds the mic.</summary>
+        internal Task SpokenAudioDone { get; private set; } = Task.CompletedTask;
+
         private void PlaySpeechAudio(bool playSound, string? phraseAudioPath, bool barkVoice, Action? onSpoken = null)
         {
             var handedOff = false;
@@ -1402,8 +1434,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (!File.Exists(phraseAudioPath)) return;
                     handedOff = true;
                     _stopSpoken();   // WPF PlaySpokenAudio (Speech.cs:1896): cut the previous line, no overlap
+                    var clipDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    SpokenAudioDone = clipDone.Task;
                     _stopSpoken = CoreAudio.PlayStoppable(phraseAudioPath!, curved * (barkVoice ? 0.85f : 0.56f),
-                                          barkVoice ? "bark-voice" : "phrase-audio", onFinished: onSpoken);
+                                          barkVoice ? "bark-voice" : "phrase-audio",
+                                          onFinished: () => { clipDone.TrySetResult(); onSpoken?.Invoke(); });
                     return;
                 }
 

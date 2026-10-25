@@ -10,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Models.Program;
 using ConditioningControlPanel.Services.Program;
@@ -260,6 +261,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var days = program.AllDays.GroupBy(d => d.DayIndex).ToDictionary(g => g.Key, g => g.First());
             var glow = MainShellWindow.ProgramRadialGlowBrush(accent, 170);
             var pips = new List<ProgramDayPip>(Math.Max(0, program.LengthDays));
+            _ignitedPips.Clear(); // new containers, new one-shot carriers
+            var igniteBrush = MainShellWindow.ProgramRadialGlowBrush(accent, 220); // WPF MainWindow.ProgramsTab.cs:777
 
             for (int i = 1; i <= program.LengthDays; i++)
             {
@@ -324,6 +327,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
 
                 if (milestone) pip.NodeSize += 6;
+                if (_dayJustCompleted && i == enrollment.CurrentDay)
+                {
+                    pip.Ignite = true;
+                    pip.IgniteBrush = igniteBrush;
+                }
                 pip.Tip = day != null && !string.IsNullOrWhiteSpace(day.Title) ? $"{tip} · {day.Title}" : tip;
                 pips.Add(pip);
             }
