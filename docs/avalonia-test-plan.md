@@ -673,3 +673,5 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+14. Upgrade launch: use an accepted, welcomed sandbox with an older LastSeenVersion. What’s New appears after the startup gate clears; feature cards remain unspent in the Inbox while it is up. Dismiss: the version stamps and the modal flag clears. A second launch shows no notes. An empty version stamps silently. Panic closes the notes; a busy startup that reaches the five-minute deadline leaves the old version owed. WPF `MainWindow/MainWindow.Marquee.cs:296-389` + `Services/Startup/StartupPresenter.cs:435-479`. Rows: `win-feature-intro`.

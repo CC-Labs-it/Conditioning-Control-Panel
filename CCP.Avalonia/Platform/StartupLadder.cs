@@ -18,12 +18,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// Passive surfaces open one at a time (WPF 8cbcbea01): while a feature card or an
     /// announcement is up, or one opened under <see cref="StartupQueueCore.PassiveSettle"/> ago,
     /// the next waits and is re-routed once it has gone.
-    /// ponytail: no modal ladder, launcher hold or game-host park on this head, so
-    /// LadderBusy / GameHostUp / LauncherHolding stay false and Route never answers Defer; port the
-    /// pump when the startup modals move onto a shared ladder.
+    /// Upgrade What's New holds passive offers until its modal host settles (ModalPending).
+    /// ponytail: launcher hold and game-host park still await their startup hosts.
     /// </summary>
     internal static class StartupLadder
     {
+        internal static bool ModalPending;
+
         public static StartupInbox Inbox { get; } = new();
 
         private static DateTime? _firstLaunchUntilUtc;
@@ -55,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static QuietInputs World(DateTime nowUtc) => new()
         {
+            LadderBusy = ModalPending,
             ModalUp = Views.Windows.MainShellWindow.IsStartupDialogShowing || AppUpdater.IsUpdateDialogActive,
             TutorialActive = CoreTutorial.IsActive,
             SessionRunning = CoreSession.IsSessionRunning,
@@ -68,7 +70,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (item == null) return;
             if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => PresentOrInbox(item)); return; }
 
-            if (StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow)) == StartupRouting.Present)
+            var route = StartupQueueCore.Route(StartupSurfaceKind.Passive, World(UtcNow));
+            if (route == StartupRouting.Defer)
+            {
+                if (!_held.Any(h => string.Equals(h.Key, item.Key, StringComparison.OrdinalIgnoreCase))) _held.Add(item);
+                EnsurePassiveWatch();
+                return;
+            }
+            if (route == StartupRouting.Present)
             {
                 // One passive surface on screen at a time: the next one waits for it to close.
                 if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp()))
@@ -115,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>One tick of the watch: re-routes the held surfaces once nothing passive is up.</summary>
         internal static void PumpHeld()
         {
-            if (StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
+            if (ModalPending || StartupQueueCore.PassiveWaits(_lastPassiveUtc, UtcNow, PassiveWindowUp())) return;
             _passiveTimer?.Dispose();
             _passiveTimer = null;
             var held = _held.ToList();
@@ -126,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Test seam: forget the quiet window, the passive pacing, the passive windows up and every row.</summary>
         internal static void ResetForTests()
         {
+            ModalPending = false;
             _firstLaunchUntilUtc = null;
             _lastPassiveUtc = null;
             _held.Clear();

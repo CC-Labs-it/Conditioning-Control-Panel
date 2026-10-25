@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("chaos-estim", _ => Chaos.ChaosEStimOverlay.CloseActive()),   // lightning + cursor halo (WPF ChaosModeService.cs:3185)
             new("chaos-field-fx", _ => Overlays.ChaosFieldFxOverlay.CloseActive()),   // WPF ChaosModeService teardown CloseActive
             new("chaos-skia-fx", _ => Chaos.ChaosSkiaFxOverlay.CloseActive()),   // WPF ForceShutdown -> ChaosSkiaFxOverlay.CloseActive; also outside a run
+            new("upgrade-intro", sh => sh?.StopUpgradeIntroForPanic()),
             new("chaos-intro", _ => Chaos.ChaosIntroWindow.CloseForPanic()),   // the modal first-run card (WPF left it up)
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),
