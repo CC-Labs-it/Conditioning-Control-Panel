@@ -35,13 +35,8 @@
                                           x:Names are kept so the wiring is a one-line change.
        feat:AdaptiveSideArt           ->  kept (Helpers/AdaptiveSideArt.cs), same threshold as WPF.
                                           The 3*/2* split with MaxWidth="780" is kept verbatim.
-       hover:HoverPop.IsEnabled       ->  dropped: its only target, ImgLockdownFeature, is not on this head.
-       poss:Possession.Role/Name/Exclude -> dropped throughout; the Possession tagger is a WPF
-                                          service. Re-add as attached properties when it moves.
-       pack:// ImageSource            ->  dropped. This head ships no Resources/ PNGs yet, so the
-                                          hero art strip, the side-art plate and the Emergency
-                                          Exit face plate keep their geometry and scrim and draw
-                                          no bitmap. Re-add as avares:// when the art moves. -->
+       poss:Possession.Role/Name/Exclude -> awaits the shell Possession host.
+       Art uses ModArt (override first) and the shipped Emergency Exit plate. -->
 <UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
@@ -127,9 +122,23 @@
     <UserControl.Styles>
         <Style Selector="Grid#EERoot">
             <Setter Property="RenderTransform" Value="scale(1)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14">
+                        <TransformOperationsTransition.Easing><QuadraticEaseInOut/></TransformOperationsTransition.Easing>
+                    </TransformOperationsTransition>
+                </Transitions>
+            </Setter>
         </Style>
         <Style Selector="Button#BtnEmergencyExit:pressed Grid#EERoot">
             <Setter Property="RenderTransform" Value="scale(0.965)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.06">
+                        <TransformOperationsTransition.Easing><QuadraticEaseOut/></TransformOperationsTransition.Easing>
+                    </TransformOperationsTransition>
+                </Transitions>
+            </Setter>
         </Style>
     </UserControl.Styles>
 
@@ -143,13 +152,12 @@
 
                     <!-- HERO. Replaces the 44px-emoji header row. On WPF the art strip is an
                          ImageBrush bound to ImgLockdownFeature.Source so the per-mod art swap
-                         repaints the hero too; this head ships no PNGs, so the strip keeps its
-                         geometry, its right-to-left opacity mask and a hue wash, and takes the
-                         bound ImageBrush back when the art moves. -->
+                         repaints the hero too. Both use the same resolved source and the
+                         strip keeps WPF's right-to-left opacity mask. -->
                     <Border Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
                             BorderBrush="{StaticResource TabHueBorderBrush}" BorderThickness="2" Margin="0,0,0,10">
                         <Grid>
-                            <Border CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
+                            <Border x:Name="LockdownHeroArt" CornerRadius="0,16,16,0" Width="240" HorizontalAlignment="Right"
                                     Background="{StaticResource TabHueWashBrush}">
                                 <Border.OpacityMask>
                                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -480,12 +488,9 @@
                                                  idle ember pulse needs LockdownPhotosafe and is
                                                  stubbed in the code-behind.
 
-                                                 The art is the mushroom dome ONLY on WPF,
+                                                 The art is the mushroom dome,
                                                  deliberately cropped clear of any baked-in
-                                                 lettering, so the words stay a loc key. This head
-                                                 ships no PNG, so the face plate draws its inset
-                                                 frame alone and the crimson slab still reads as
-                                                 the button. -->
+                                                 lettering, so the words stay a loc key. The face plate uses that same shipped art. -->
                                             <Button x:Name="BtnEmergencyExit"
                                                     Cursor="Hand" Background="Transparent" BorderThickness="0"
                                                     Padding="0" Margin="0,16,0,2" MinHeight="150"
@@ -503,16 +508,6 @@
                                                 </Button.Template>
 
                                                 <Grid x:Name="EERoot" RenderTransformOrigin="50%,50%">
-                                                    <Grid.Transitions>
-                                                        <Transitions>
-                                                            <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.14">
-                                                                <TransformOperationsTransition.Easing>
-                                                                    <QuadraticEaseInOut/>
-                                                                </TransformOperationsTransition.Easing>
-                                                            </TransformOperationsTransition>
-                                                        </Transitions>
-                                                    </Grid.Transitions>
-
                                                     <!-- Hazard plate -->
                                                     <Border x:Name="EEPlate" CornerRadius="20" BorderThickness="7" Background="#160810"
                                                             BorderBrush="{StaticResource EEHazardBrush}">
@@ -603,15 +598,15 @@
                              own pink border instead of the velvet outline because on WPF
                              StartLockdownPulse animates its border and glow directly. The Avalonia
                              glow is a sibling BoxShadow border so the plate's contents need no
-                             animated effect layer. The art migration is owned by the Lockdown tab lane. -->
+                             animated effect layer. The shared frame clock drives the WPF pulse. -->
                         <Grid Grid.Column="1" Margin="10,0,0,10" MinHeight="200" MaxHeight="520">
                             <Border x:Name="LockdownImageGlow" CornerRadius="12" IsHitTestVisible="False"
                                     BoxShadow="0 0 14 0 #FF1493" Opacity="0.7"/>
                             <Border x:Name="LockdownImageBorder" CornerRadius="12"
                                     BorderThickness="2" ClipToBounds="True" Background="#12FFFFFF"
                                     BorderBrush="#FF1493">
-                                <fx:IconGlyph Kind="LockClosed" Variant="Filled" Size="64" Opacity="0.55"
-                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <Image x:Name="ImgLockdownFeature" Stretch="Uniform" Margin="10"
+                                       fx:HoverPop.IsEnabled="True" RenderTransformOrigin="50%,50%"/>
                             </Border>
                         </Grid>
                     </Grid>

@@ -46,6 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             LoadPossessionSettings();
             UpdateQuestHint();
+            RefreshArtwork();
 
             // Tabs are shown and hidden rather than rebuilt, so the first attach fires once.
             // Re-read on every show for the same reason BambiTakeoverTabView does: something else
@@ -56,22 +57,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             AttachedToVisualTree += (_, _) =>
             {
                 LoadPossessionSettings();
+                RefreshArtwork();
+                CoreMods.ModChanged += OnArtworkChanged;
+                global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MotionGateChanged += UpdateSideArtPulse;
                 // P01: a minimised window draws nothing, so the breath stops with it.
                 _host = TopLevel.GetTopLevel(this) as Window;
                 if (_host != null) _host.PropertyChanged += OnHostChanged;
                 UpdateEmergencyExitPulse();
+                UpdateSideArtPulse();
             };
             DetachedFromVisualTree += (_, _) =>
             {
                 if (_host != null) _host.PropertyChanged -= OnHostChanged;
                 _host = null;
                 StopEmergencyExitPulse();
+                _sidePulse?.Stop();
+                CoreMods.ModChanged -= OnArtworkChanged;
+                global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.MotionGateChanged -= UpdateSideArtPulse;
             };
             PropertyChanged += (_, e) =>
             {
                 if (e.Property != IsVisibleProperty) return;
                 if (IsVisible) LoadPossessionSettings();
                 UpdateEmergencyExitPulse();
+                UpdateSideArtPulse();
             };
 
             // WPF MainWindow.Lab.cs InitializeLockdown: the panels follow the running lockdown. The
@@ -84,6 +93,59 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ld.TimerRestarted += _ => Dispatcher.UIThread.Post(() => TxtLockdownTimer.Text = Clock(ld.Remaining));
                 ShowLockdownState();
             }
+        }
+
+        // WPF descImageMap swaps one source for the side plate AND hero. Keep the same
+        // assignment on mod changes; the Emergency Exit face is always the built-in art.
+        private void OnArtworkChanged(object? sender, Models.ModPackage? mod) =>
+            Dispatcher.UIThread.Post(RefreshArtwork);
+
+        private void RefreshArtwork()
+        {
+            var art = Helpers.ModArt.TryLoad("lockdown_icon.png");
+            ImgLockdownFeature.Source = art;
+            LockdownHeroArt.Background = new ImageBrush(art)
+                { Stretch = Stretch.UniformToFill, AlignmentX = AlignmentX.Right, Opacity = 0.9 };
+            EEFacePlate.Background = new ImageBrush(Helpers.ModArt.TryLoadBuiltIn("lockdown/emergency_exit.png"))
+                { Stretch = Stretch.UniformToFill };
+        }
+
+        private global::ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock? _sidePulse;
+        private readonly System.Diagnostics.Stopwatch _sideClock = new();
+        internal bool SideArtPulsing => _sidePulse?.IsEnabled == true;
+
+        // WPF MainWindow.Animations.StartLockdownPulse; shared Core curve and shared frame
+        // source. No effect on the art or permanent shell animation. Hidden tabs cost no frames.
+        internal void UpdateSideArtPulse()
+        {
+            var want = IsVisible && VisualRoot != null && _host?.WindowState != WindowState.Minimized
+                && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.AllowAmbientLoops;
+            if (!want)
+            {
+                _sidePulse?.Stop();
+                PaintSideArtPulse(0);
+                // WPF Stop removes the storyboard and restores the authored 14px glow.
+                LockdownImageGlow.BoxShadow = new BoxShadows(new BoxShadow { Color = Color.Parse("#FF1493"), Blur = 14 });
+                return;
+            }
+            if (SideArtPulsing) return;
+            _sidePulse ??= new global::ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock(this) { Interval = TimeSpan.FromMilliseconds(33) };
+            _sidePulse.Tick -= OnSideArtFrame;
+            _sidePulse.Tick += OnSideArtFrame;
+            _sideClock.Restart();
+            PaintSideArtPulse(0);
+            _sidePulse.Start();
+        }
+
+        private void OnSideArtFrame(object? sender, EventArgs e) => PaintSideArtPulse(_sideClock.Elapsed.TotalSeconds);
+
+        internal void PaintSideArtPulse(double seconds)
+        {
+            var p = Services.UI.LockdownPulse.At(seconds);
+            var color = Color.FromRgb(p.R, p.G, p.B);
+            LockdownImageBorder.BorderBrush = new SolidColorBrush(color);
+            LockdownImageGlow.BoxShadow = new BoxShadows(new BoxShadow { Color = color, Blur = p.Blur });
+            LockdownImageGlow.Opacity = p.Opacity;
         }
 
         // ==== Duration (WPF LockdownTabView.xaml.cs:36) =====================================
@@ -392,7 +454,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void OnHostChanged(object? sender, global::Avalonia.AvaloniaPropertyChangedEventArgs e)
         {
-            if (e.Property == Window.WindowStateProperty) UpdateEmergencyExitPulse();
+            if (e.Property == Window.WindowStateProperty)
+            {
+                UpdateEmergencyExitPulse();
+                UpdateSideArtPulse();
+            }
         }
 
         /// <summary>Starts or stops the breath to match what is on screen. Called from every state
