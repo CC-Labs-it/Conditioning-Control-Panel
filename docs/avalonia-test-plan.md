@@ -673,3 +673,10 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+
+## Silent flash clip host (part -a)
+
+1. Accept remote-media consent, select Online images and enabled niches, then use the Flash test button twice after warming. Clips loop silently, with the poster visible while waiting for a decoder; local-only mode performs no fetch. WPF `Services/Flash/FlashService.cs:3922-4004`. Rows: `host-flash-clip-player`
+2. Trigger overlapping bursts; clips fit within the 480 px decode limit and the configured GIF speed applies. Pop/fade flashes and trigger another burst: leaving clips give up their slot. WPF `Services/Media/FlashClipPlayer.cs:14-119`. Rows: `host-flash-clip-player`
+3. **[SAFETY]** Press panic while clips play and while another burst/download is pending. All flashes close; pending windows never appear. Trigger again explicitly: the remote pool warms again. WPF `Services/Flash/FlashService.cs:5146`. Rows: `host-flash-clip-player`

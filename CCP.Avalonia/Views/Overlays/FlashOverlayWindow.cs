@@ -29,6 +29,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed class FlashOverlayWindow : Window
     {
         private readonly Image _image;
+        private readonly Bitmap _poster;
+        private FlashClipPlayer? _clip;
+        private DispatcherTimer? _clipRetry;
+        internal bool HasClip => _clip != null;
+        internal void StartClip(string? path, int width, int height)
+        {
+            if (path == null) return;
+            void Try()
+            {
+                _clip = FlashClipPlayer.TryStart(LibVlcAudio.Shared, path, width, height,
+                    frame => { _image.Source = frame; _image.InvalidateVisual(); },
+                    ConditioningControlPanel.CoreSettings.Current.FlashGifSpeedMultiplier,
+                    out var atCap, flash: true, stopped: () => _image.Source = _poster);
+                if (_clip != null || !atCap) { _clipRetry?.Stop(); _clipRetry = null; }
+            }
+            _clipRetry = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) =>
+            {
+                if (FlashClipPlayer.CanStartFlash) Try();
+            });
+            Try();
+            _clipRetry?.Start();
+        }
+        private void Leaving()
+        {
+            _clipRetry?.Stop();
+            _clipRetry = null;
+            if (_clip != null) _clip.Evictable = true;
+        }
+
         // The picture, its glow card and the TvOff whiten move together on an exit; the sparks do not.
         private readonly Panel _card, _root;
         private readonly Border _glow, _whiten;
@@ -57,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal void BeginExit(FlashExitState exit)
         {
             if (Exit != null) return;
+            Leaving();
             Exit = exit;
             IsHitTestVisible = false;
             X11Overlay.SetClickThrough(this, true);
@@ -211,6 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         public FlashOverlayWindow(Bitmap picture)
         {
+            _poster = picture;
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
@@ -232,7 +263,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             _root = new Panel { Children = { _card } };
             Content = _root;
-            Closed += (_, _) => picture.Dispose();
+            Closed += (_, _) =>
+            {
+                _clipRetry?.Stop(); _clipRetry = null;
+                _clip?.Dispose(); _clip = null;
+                _image.Source = null;
+                picture.Dispose();
+            };
         }
 
         /// <summary>
@@ -244,7 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _alpha = alpha;
             Fade(0, alpha, fade);
-            DispatcherTimer.RunOnce(() => Fade(alpha, 0, fade, Close), lifetime);
+            DispatcherTimer.RunOnce(() => { Leaving(); Fade(alpha, 0, fade, Close); }, lifetime);
         }
 
         /// <summary>WPF's heartbeat ramp - linear, alpha written in 1/32 steps (FADE_ALPHA_EPSILON) -
