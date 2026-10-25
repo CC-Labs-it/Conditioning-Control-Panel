@@ -142,6 +142,11 @@ public sealed class DeeperEditorInteractionTests
         Set(w, "_ctxItem", rule);
         var menu = (ContextMenu)typeof(DeeperEditorWindow).GetMethod("CreateItemContextMenu",
             BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, null)!;
+        Assert.Equal(5, menu.Items.Count); // WPF has no separator before Jump
+        Assert.Equal(KeyGesture.Parse("Ctrl+D"), ((MenuItem)menu.Items[0]!).InputGesture);
+        Assert.Equal(KeyGesture.Parse("Delete"), ((MenuItem)menu.Items[3]!).InputGesture);
+        Assert.NotNull(menu.BorderBrush);
+        Assert.Same(w.FindResource("DeeperAccentBrush"), menu.BorderBrush);
         Assert.False(((MenuItem)menu.Items[1]!).IsEnabled);
         Assert.False(((MenuItem)menu.Items[2]!).IsEnabled);
         ((MenuItem)menu.Items[3]!).RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
@@ -192,8 +197,47 @@ public sealed class DeeperEditorInteractionTests
             ConditioningControlPanel.CoreSettings.Current.DeeperEditorTimelineHeight = 800;
             w.ApplyPersistedSidebarWidth();
             Assert.Equal(400, w.PreviewTimelineGrid.RowDefinitions[2].Height.Value);
+            Assert.Equal(120, w.PreviewTimelineGrid.RowDefinitions[0].MinHeight); // WPF xaml:684
         }
         finally { ConditioningControlPanel.CoreSettings.Current.DeeperEditorTimelineHeight = old; }
+    });
+
+    [Fact]
+    public Task TimelineSplitterDragCompletedSavesTheTimelineHeight() => Run((w, _) =>
+    {
+        var old = ConditioningControlPanel.CoreSettings.Current.DeeperEditorTimelineHeight;
+        try
+        {
+            w.PreviewTimelineGrid.RowDefinitions[2].Height = new GridLength(230);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(230, w.PreviewTimelineGrid.RowDefinitions[2].ActualHeight, 0);
+            w.TimelineSplitter.RaiseEvent(new global::Avalonia.Input.VectorEventArgs
+                { RoutedEvent = global::Avalonia.Controls.Primitives.Thumb.DragCompletedEvent });
+            Assert.Equal(230, ConditioningControlPanel.CoreSettings.Current.DeeperEditorTimelineHeight);
+        }
+        finally { ConditioningControlPanel.CoreSettings.Current.DeeperEditorTimelineHeight = old; }
+    });
+
+    [Fact]
+    public Task RightClickOnARulePinSelectsItAndOpensTheItemMenu() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var rule = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 3 } };
+        model.Rules.Add(rule);
+        Call(w, "RebuildRuleVisuals");
+        var pin = w.TimelineCanvas.Children.OfType<global::Avalonia.Controls.Shapes.Rectangle>()
+            .Single(c => ReferenceEquals(c.Tag, rule));
+        global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick(); // hit testing reads the last frame
+        Dispatcher.UIThread.RunJobs();
+        var at = pin.TranslatePoint(new Point(pin.Bounds.Width / 2, 4), w)!.Value;
+        w.MouseDown(at, MouseButton.Right);
+        w.MouseUp(at, MouseButton.Right);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(rule, Field(w, "_selectedRule"));
+        Assert.Same(rule, Field(w, "_ctxItem"));
+        Assert.NotSame(w.TimelineCtxMenu, w.TimelineCanvas.ContextMenu);
+        Assert.False(((MenuItem)w.TimelineCanvas.ContextMenu!.Items[1]!).IsEnabled);
+        w.TimelineCanvas.ContextMenu.Close();
     });
 
     [Fact]

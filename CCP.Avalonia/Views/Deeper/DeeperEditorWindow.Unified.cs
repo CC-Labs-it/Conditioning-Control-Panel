@@ -170,18 +170,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private ContextMenu CreateItemContextMenu()
         {
-            var menu = new ContextMenu();
-            void Add(string key, EventHandler<RoutedEventArgs> action, bool enabled = true)
+            // WPF TimelineCtxMenu look: dark background, accent border (DeeperEditorWindow.xaml:209-212).
+            var menu = new ContextMenu
+            {
+                Background = TryFindBrush("DarkerBgBrush"),
+                BorderBrush = TryFindBrush("DeeperAccentBrush"),
+                BorderThickness = new Thickness(2),
+            };
+            void Add(string key, EventHandler<RoutedEventArgs> action, string? gesture = null, bool enabled = true)
             {
                 var item = new MenuItem { Header = Loc.Get("deeper_editor_ctx_item_" + key), IsEnabled = enabled };
+                if (gesture != null) item.InputGesture = KeyGesture.Parse(gesture); // display only, like WPF InputGestureText
                 item.Click += action;
                 menu.Items.Add(item);
             }
-            Add("duplicate", CtxItemDuplicate_Click);
-            Add("copy", CtxItemCopy_Click, _ctxItem is not EnhancementRule);
-            Add("cut", CtxItemCut_Click, _ctxItem is not EnhancementRule);
-            Add("delete", CtxItemDelete_Click);
-            menu.Items.Add(new Separator());
+            Add("duplicate", CtxItemDuplicate_Click, "Ctrl+D");
+            Add("copy", CtxItemCopy_Click, "Ctrl+C", _ctxItem is not EnhancementRule);
+            Add("cut", CtxItemCut_Click, "Ctrl+X", _ctxItem is not EnhancementRule);
+            Add("delete", CtxItemDelete_Click, "Delete");
             Add("jump", CtxItemJump_Click);
             return menu;
         }

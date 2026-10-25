@@ -319,8 +319,9 @@
             </Grid.ColumnDefinitions>
 
             <!-- Left: preview + timeline -->
-            <Grid Grid.Column="0" x:Name="PreviewTimelineGrid" RowDefinitions="*,6,160">
-                <GridSplitter x:Name="TimelineSplitter" Grid.Row="1" Height="6"
+            <Grid Grid.Column="0" x:Name="PreviewTimelineGrid" RowDefinitions="*,4,160">
+                <GridSplitter x:Name="TimelineSplitter" Grid.Row="1" Height="4" Margin="10,0"
+                              Background="{DynamicResource DeeperLaneSeparatorBrush}"
                               HorizontalAlignment="Stretch" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext"/>
 
                 <!-- Preview pane -->

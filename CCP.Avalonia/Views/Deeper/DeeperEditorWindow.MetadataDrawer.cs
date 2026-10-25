@@ -219,6 +219,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 if (w < 320) w = 320;
                 if (w > 520) w = 520;
                 col.Width = new GridLength(w, GridUnitType.Pixel);
+                PreviewTimelineGrid.RowDefinitions[0].MinHeight = 120;
                 PreviewTimelineGrid.RowDefinitions[2].MinHeight = 120;
                 PreviewTimelineGrid.RowDefinitions[2].Height = new GridLength(
                     Math.Clamp(CoreSettings.Current.DeeperEditorTimelineHeight, 120, 400));
@@ -228,9 +229,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void TimelineSplitter_DragCompleted(object? sender, VectorEventArgs e)
         {
-            CoreSettings.Current.DeeperEditorTimelineHeight = Math.Max(120,
-                (int)Math.Round(PreviewTimelineGrid.RowDefinitions[2].ActualHeight));
-            CoreSettings.Save();
+            try
+            {
+                CoreSettings.Current.DeeperEditorTimelineHeight = Math.Max(120,
+                    (int)Math.Round(PreviewTimelineGrid.RowDefinitions[2].ActualHeight));
+                CoreSettings.Save();
+            }
+            catch (Exception ex) { Log.Warning(ex, "DeeperEditor: timeline height would not persist"); }
         }
 
         /// <summary>
