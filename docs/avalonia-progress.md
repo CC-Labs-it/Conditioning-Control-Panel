@@ -3461,3 +3461,6 @@ All five companion roster cards now repaint their assigned prompt name (mod-awar
 ## avalonia-port/wire-views-tab-assets: +27
 - Restacked on wire-shell-assets (P105 duplicate dropped): panic closes Library previews (pack temp decrypts deleted), pack nodes named like WPF (built-in name, else raw id).
 - Ledger: shell-assets/views-tab-assets rows name the pack tree; duplicate win-mini-player row merged, opener noted.
+
+## avalonia-port/flake-workshop-community-win: +14
+- WorkshopCommunityCellTests Windows timeouts root-caused: Avalonia raises WindowOpenedEvent before ShowDialog sets Owner, so the helper's owner check never matched a late dialog (export/browse await a file write first). Helper now checks Owner on the instance Opened event; the import dialog is made late on purpose so every OS covers it. Fail-proof rcheck 40188504621 (red), Windows 20x green 40188453349, rgate 40199015916 GATE-OK.
