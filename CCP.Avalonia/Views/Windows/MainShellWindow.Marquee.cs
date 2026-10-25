@@ -41,8 +41,7 @@
 //     formatters, neither of which runs here; Loc.Get already returns the key when a string is
 //     missing, so there is nothing to restore in isolation.
 //   (StartMarqueeAnimation is PORTED onto the page that carries the strip: SettingsTabView.Marquee.cs.)
-//   SweepBannerSheen - MainShellWindow.ChromeFx.cs, still a stub. The BannerSheen border is in
-//     the XAML and parked at Opacity 0, so its absence costs nothing visible.
+//   Banner message sheens are ported in MainShellWindow.ChromeFx.cs.
 
 using System;
 using System.Linq;
@@ -66,8 +65,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>
         /// True while a startup modal owns the screen. FeatureIntroPopup reads this to refuse to
-        /// stack a card on a modal. Set around the first-run wizard (FirstRunWizard.axaml.cs);
-        /// WPF's other startup modals have no ladder on this head yet.
+        /// stack a card on a modal. Set around the first-run wizard and the welcome-back offer;
+        /// WPF's other startup modals (What's New, season recap) have no startup caller here yet.
         /// </summary>
         public static bool IsStartupDialogShowing { get; set; }
 
@@ -196,8 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Crossfade(banners[_bannerCurrentIndex], banners[nextIndex]);
             _bannerCurrentIndex = nextIndex;
 
-            // ponytail: WPF also calls SweepBannerSheen() here. MainShellWindow.ChromeFx.cs is
-            // still a stub, so the sheen pass is skipped rather than faked.
+            SweepBannerSheen();
         }
 
         /// <summary>
@@ -228,6 +226,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (secondary is not null) secondary.Text = message;
 
             if (_bannerRotationTimer is { IsEnabled: false }) _bannerRotationTimer.Start();
+            SweepBannerSheen(force: true);
         }
 
         /// <summary>WPF BannerWebLink_Click (MainWindow.Marquee.cs:464): the beat's own link opens the
