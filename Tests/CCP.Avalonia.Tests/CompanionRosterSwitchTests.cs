@@ -23,6 +23,42 @@ namespace CCP.Avalonia.Tests;
 public sealed class CompanionRosterSwitchTests
 {
     [Fact]
+    public Task AssignedPromptLabelAndRosterSwitchReachTheLiveVoice() => WithRoster((shell, room, roster) =>
+    {
+        var s = CoreSettings.Current;
+        var oldId = s.GetCompanionPromptId(2);
+        var oldPrompt = s.CompanionPrompt;
+        var oldActive = s.ActiveCommunityPromptId;
+        var folder = System.IO.Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName);
+        System.IO.Directory.CreateDirectory(folder);
+        var id = "test-roster-" + Guid.NewGuid().ToString("N");
+        var file = System.IO.Path.Combine(folder, id + ".json");
+        System.IO.File.WriteAllText(file, "{\"Name\":\"Kind voice\",\"PromptSettings\":{\"Personality\":\"be kind\"}}");
+        try
+        {
+            s.SetCompanionPromptId(2, id);
+            roster.Refresh();
+            var label = roster.FindControl<TextBlock>("TxtCompanion2Prompt")!;
+            Assert.Equal("Kind voice", label.Text);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("tooltip_ai_personality", "Kind voice"), ToolTip.GetTip(label));
+            Click(shell, roster.FindControl<Border>("CompanionCard2")!, MouseButton.Left);
+            Assert.Equal(id, s.ActiveCommunityPromptId);
+            Assert.Equal("be kind", s.CompanionPrompt.Personality);
+            s.SetCompanionPromptId(2, "missing");
+            roster.Refresh();
+            Assert.Equal("", label.Text);
+            Assert.Null(ToolTip.GetTip(label));
+        }
+        finally
+        {
+            s.SetCompanionPromptId(2, oldId);
+            s.CompanionPrompt = oldPrompt;
+            s.ActiveCommunityPromptId = oldActive;
+            System.IO.File.Delete(file);
+        }
+    });
+
+    [Fact]
     public Task RealRosterCardsSwitchCoreAndRefreshHeroAndActiveRing() => WithRoster((shell, room, roster) =>
     {
         int switches = 0;

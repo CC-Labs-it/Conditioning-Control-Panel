@@ -6,6 +6,8 @@ using Avalonia;
 using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Companion;
+using System.IO;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 {
@@ -103,6 +105,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime
 
                 card.BorderBrush = id == activeId && Color.TryParse(colors[i], out var c)
                     ? new SolidColorBrush(c) : Brushes.Transparent;
+
+                var promptName = InstalledCommunityPrompts.AssignedName(
+                    Path.Combine(CorePaths.UserData, InstalledCommunityPrompts.FolderName), s, i) ?? "";
+                var label = this.FindControl<TextBlock>($"TxtCompanion{i}Prompt")!;
+                label.Text = mods?.MakeModAware(promptName) ?? promptName;
+                ToolTip.SetTip(label, string.IsNullOrEmpty(label.Text) ? null : Loc.GetF("tooltip_ai_personality", label.Text));
 
                 this.FindControl<TextBlock>($"TxtCompanion{i}Lock")!.IsVisible = false;
                 card.Opacity = 1.0;
