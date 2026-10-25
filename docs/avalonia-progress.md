@@ -3183,3 +3183,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-tab-friends: +161
 - Friends page once-only presence question ported (Core FriendsPresenceAsk shared by WPF + Avalonia).
 - Review fixes: ledger rows no longer list the ask as missing; feed/trails and tables point at lanes friends-feed / friends-open-tables. Gate run 39699624563 green apart from the known RaceTrack flake.
+
+## avalonia-port/wire-ctrl-card-sheen-adorner: +309
+- CardSheenAdorner hosted on the selected preset/session card, the Chaster hero, the Launcher CTA and wandering launcher tiles (WPF radii and timing); the launcher tile glow stays on its DropShadowEffect.
+- Assets hover sheen deferred to lane -b; the row stays `stub`.

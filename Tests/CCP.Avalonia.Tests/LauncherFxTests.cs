@@ -31,7 +31,7 @@ public sealed class LauncherFxTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
@@ -78,6 +78,38 @@ public sealed class LauncherFxTests
     {
         for (double t = 0; t < seconds; t += 0.02) w.StepFx(0.02);
     }
+
+    [Fact]
+    public void CtaAndWanderingTileSheensParkOnHideAndMotionGate() => Run(MotionLevel.Full, (_, launcher, _) =>
+    {
+        Dispatcher.UIThread.RunJobs(); launcher.UpdateLayout();
+        var cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        Assert.True(cta.IsTicking);
+        Assert.True(launcher.WanderTicking);
+        launcher.WanderSheenPass();
+        var wander = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.WanderSheen);
+        Assert.True(wander.IsTicking);
+        launcher.BuildTiles(); Dispatcher.UIThread.RunJobs(); launcher.UpdateLayout();
+        Assert.False(wander.IsTicking); Assert.Null(launcher.WanderSheen);
+        Assert.Same(cta, launcher.CtaSheen); Assert.True(cta.IsTicking); Assert.True(launcher.WanderTicking);   // rebuild restarts the wander only
+        CoreSettings.Current.MotionLevel = MotionLevel.Reduced;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+        CoreSettings.Current.MotionLevel = MotionLevel.Full;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        launcher.OnFxActivated(false);
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+        launcher.OnFxActivated(true);
+        cta = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.CardSheenAdorner>(launcher.CtaSheen);
+        // WPF StartWanderingSheen returns on _perfLow: the Performance tier closes the ambient gate.
+        CoreSettings.Current.PerformanceMode = true;
+        ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+        Assert.False(launcher.WanderTicking); Assert.Null(launcher.CtaSheen);
+        CoreSettings.Current.PerformanceMode = false;
+        launcher.Hide();
+        Assert.Null(launcher.CtaSheen); Assert.False(cta.IsTicking); Assert.False(launcher.WanderTicking);
+    });
 
     [Fact]
     public void Clock_RunsOnlyWhileShownAndNotMinimised() => Run(MotionLevel.Full, (_, launcher, _) =>
