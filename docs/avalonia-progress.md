@@ -3222,3 +3222,8 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 
 ## avalonia-port/wire-shell-launcher: +198
 Panel crossfade through launcher doors (WPF 180/260 ms + guard) on the shared FrameClock; hide mid-fade still opens the launcher; repeated press and Lockdown-mid-fade guarded. 5 headless facts (3 fail-proven by rcheck 39749675334); door tests elsewhere step the fade. rgate 39753216263 green except known flake RaceTrackPlayerTests. Row shell-launcher stays stub (cloak/ladder -> wire-shell-launcher-b).
+
+## avalonia-port/wire-shell-leaderboard-fx: +588
+- Leaderboard podium entrance + gold glow breath on the shared beat, refresh-only rank washes (cap 12), rank-snapshot engine moved to Core and shared by both heads, you-bar rank delta wired; glow blur tier-capped as WPF.
+- Tests: LeaderboardFxTests (2, fail-proven), LeaderboardRankSnapshotTests (2). Ledger: shell-leaderboard-fx wired; shell-leaderboard / views-tab-leaderboard stale delta notes corrected.
+- Limits: gate red only on known flakes (GoonClock P108, RaceTrack); WPF tests compiled not run; no live Keincheck run.
