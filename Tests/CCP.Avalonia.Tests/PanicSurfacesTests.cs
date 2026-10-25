@@ -91,6 +91,7 @@ public sealed class PanicSurfacesTests
         "ai-followups",
         "blink-trainer",
         "gaze-minigame",
+        "shell-hero",
         "mantra",
         "chaos",
         "chaos-flash",

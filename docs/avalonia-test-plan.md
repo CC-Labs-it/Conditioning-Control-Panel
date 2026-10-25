@@ -673,3 +673,7 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+1. WPF `MainWindow/MainWindow.HeroFx.cs:172-527` — idle Start drifts and exhales; press Start/Stop and check dip, wash, staggered rings and running heartbeat. Disable motion, reduce motion, enable performance mode, deactivate/minimize: loops park; remote connection keeps its green disabled button. Rows: `shell-hero-fx`
+2. WPF `MainWindow/MainWindow.HeroFx.cs:697-757` — click Save: current settings flush, tick draws in 400ms, ripple fades in 520ms; tick holds 1600ms and fades over 260ms. Motion Off skips it. Panic/close cancels one-shots. Rows: `shell-hero-fx`
+3. WPF `MainWindow/MainWindow.UiUpdates.cs:52-79`; `MainWindow/MainWindow.xaml.cs:764-820` — compare rank at 19/20/49/50/99/100 and after mod change; earn a level: chip pops, bar flashes, right-edge burst precedes reset, localized notice and level-up audio play (volume curve), repeated audio replaces prior clip, panic stops it. Bank pot/flight hold remains missing. Rows: `shell-hero-fx`

@@ -27,9 +27,9 @@
 //     this head every one of those controls is already a live editor that writes Current and
 //     saves (GeneralSettingsSection, PerformanceSettingsSection, AudioSettingsSection, ...).
 //     Restoring the read-back would make the shell a SECOND writer of settings the sections
-//     already own - the exact hazard WPF's own Phase 8 comment spends 20 lines on. The rest of
-//     the handler (_allPresets, the "save as preset" offer, FlashSaveAbsorb) is preset machinery
-//     that is stubbed in MainShellWindow.Presets.cs.
+//     already own - the exact hazard WPF's own Phase 8 comment spends 20 lines on. This
+//     handler now flushes Current and fires FlashSaveAbsorb; the preset offer belongs to
+//     MainShellWindow.Presets.cs.
 //   - LoadSettings / UpdateSliderTexts: same reason - each Settings section seeds itself.
 //   - The pack migration inside BtnPickAssetsFolder_Click: Services/PackEncryptionService.cs and
 //     Services/ContentPacks are not on this head, so no .packs folder is discovered to move.
@@ -243,6 +243,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>ponytail: see the "Still blocked" note at the top of this file - restoring
         /// SaveSettings() here would make the shell a second writer of settings each Settings
         /// section already owns and saves.</summary>
-        private void BtnSave_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) { }
+        private void BtnSave_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            // ponytail: sections already own their settings; flush their current model, no second UI writer.
+            CoreSettings.SaveImmediate();
+            FlashSaveAbsorb();
+        }
     }
 }
