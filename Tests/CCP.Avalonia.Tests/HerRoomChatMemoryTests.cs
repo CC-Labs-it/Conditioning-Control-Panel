@@ -30,8 +30,7 @@ public sealed class HerRoomChatMemoryTests
     private static (CompanionBrain brain, string dir) Setup(string baseUrl)
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
-                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();

@@ -20,8 +20,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    <c>new PinkRushPopup(CoreSettings.Current.PinkRushEndTime.Value)</c>.
     ///  - <c>DoubleAnimation</c> on Opacity becomes a <see cref="DoubleTransition"/> plus a plain
     ///    Opacity assignment - Avalonia animates through the property system, not a Storyboard.
-    ///  - <c>SystemParameters.WorkArea</c> becomes <c>Screens.Primary.WorkingArea</c>, populated
-    ///    only once the window has a handle, so placement moves to OnOpened.
+    ///  - WPF PositionWindow/PassiveToastWindow reuse AchievementPopup.PlacePassive, which
+    ///    applies scaled corner placement and the X11/Win32 no-activate shim before showing.
     ///  - <c>App.Logger</c> becomes Serilog's static <c>Log</c>.
     /// </summary>
     public partial class PinkRushPopup : Window
@@ -55,9 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             this.FindControl<TextBlock>("TxtPinkRushTitle")!.Text = CoreMods.PinkRushName;
             this.FindControl<TextBlock>("TxtPinkRushSubtitle")!.Text = CoreMods.PinkRushDescription;
 
-            // ponytail: needs Helpers.PassiveToastWindow (Win32 WS_EX_NOACTIVATE), which kept this
-            // toast from stealing mouse capture from fullscreen games (ccp-bugs #1000), wired when
-            // a per-platform equivalent lands. ShowActivated="False" is the portable half.
+            AchievementPopup.PlacePassive(this, 20);
 
             _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _countdownTimer.Tick += CountdownTimer_Tick;
@@ -76,26 +74,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
             this.FindControl<Button>("BtnClose")!.Click += BtnClose_Click;
             AddHandler(InputElement.PointerPressedEvent, Window_PointerPressed, handledEventsToo: false);
-        }
-
-        /// <summary>Bottom-right of the work area, or centred if the work area is unreadable.</summary>
-        protected override void OnOpened(EventArgs e)
-        {
-            base.OnOpened(e);
-            try
-            {
-                var workArea = Screens.Primary?.WorkingArea
-                    ?? throw new InvalidOperationException("no primary screen");
-
-                Position = new PixelPoint(
-                    workArea.Right - (int)Width - 20,
-                    workArea.Bottom - (int)Height - 20);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Failed to position Pink Rush popup");
-                WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            }
         }
 
         private void CountdownTimer_Tick(object? sender, EventArgs e) => UpdateCountdown();
