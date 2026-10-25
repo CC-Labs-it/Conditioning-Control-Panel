@@ -14,5 +14,6 @@ export function courseSongs(trackId, search, charts) {
     return ['/private-audio/tracks-2026-10-24/mainframe/out/v3/race-chart.json'];
   }
   if (trackId === 'keep' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) return ['/private-audio/locked-cock/out/v3/race-chart.json'];
+  if (trackId === 'goonworks' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) return ['/private-audio/goonworks/race-chart.json'];
   return ['mainframe', 'keep', 'goonworks'].includes(trackId) && !chart?.trim() ? [] : charts;
 }
