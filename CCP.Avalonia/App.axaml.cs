@@ -87,6 +87,9 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The Core quest board (WPF App.Quests), built by StartQuests before the shell.</summary>
         internal static QuestService? Quests { get; set; }
 
+        /// <summary>WPF App.QuestDefinitions: the quest catalogue and the season title.</summary>
+        internal static QuestDefinitionService? QuestDefinitions { get; set; }
+
         /// <summary>WPF App.Programs (App.xaml.cs:2704), the full writing instance since programs 3a
         /// (docs/avalonia-decisions.md): timers, startup repair + rollover, Dispose flush. A file stamped by
         /// a newer build loads read-only (IsReadOnly) and the Programs tab greys its lifecycle controls.</summary>
@@ -122,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia
             CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
                 Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 
-            var definitions = new QuestDefinitionService();
+            var definitions = QuestDefinitions = new QuestDefinitionService();
             _ = definitions.InitializeAsync(); // cache first, then the server, as WPF
             Quests = new QuestService(definitions);
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
