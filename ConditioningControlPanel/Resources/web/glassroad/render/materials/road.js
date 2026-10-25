@@ -33,6 +33,7 @@ import { createBoudoirRoadSurface } from '../boudoirMaterials.js';
 import { createBoudoirWaterPalette } from '../boudoirWater.js';
 import { createAudioReactiveUniforms, reactiveRoadLight, reactiveTint, mainframeTileLight } from '../audioReactive.js';
 import { thresholdGlassFinish } from '../thresholdFinish.js';
+import { boudoirMusicFloor } from './boudoirMusicFloor.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
 export const ROAD_POLISH = Object.freeze({
@@ -383,6 +384,8 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
   const reactiveLight = reactiveRoadLight({ p, trueEdge, distance: dist, u: u.reactive, tint: reactiveTint(pal, track?.id) });
   let musicBody = beatBands.apply(glassBody).add(reactiveLight.mul(float(1).sub(wet)));
+  if (boudoir) musicBody = boudoirMusicFloor({ p, base: glassBody, trueEdge: mix(float(8), trueEdge, edgeVisible),
+    distance: dist, wet, reactive: u.reactive, music: mu, lapM });
   if (track?.id === 'mainframe') musicBody = mix(musicBody,mainframeTileLight(p, u.reactive, mu, trueEdge, musicBody),float(1).sub(wet));
   const dry = float(1).sub(wet.mul(0.75));
   const finishSheen = boudoir ? boudoir.sheen.mul(u.sheen) : vec3(1, 0.96, 0.98).mul(sheen).mul(castGlass ? castGlass.glaze : 1);

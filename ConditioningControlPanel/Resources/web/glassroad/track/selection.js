@@ -15,5 +15,6 @@ export function courseSongs(trackId, search, charts) {
   }
   if (trackId === 'keep' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) return ['/private-audio/locked-cock/out/v3/race-chart.json'];
   if (trackId === 'goonworks' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) return ['/private-audio/goonworks/race-chart.json'];
-  return ['mainframe', 'keep', 'goonworks'].includes(trackId) && !chart?.trim() ? [] : charts;
+  if (trackId === 'boudoir' && !chart?.trim() && charts.includes('/private-audio/pink-road/chart.json')) return ['/private-audio/boudoir/race-chart.json'];
+  return ['mainframe', 'keep', 'goonworks', 'boudoir'].includes(trackId) && !chart?.trim() ? [] : charts;
 }

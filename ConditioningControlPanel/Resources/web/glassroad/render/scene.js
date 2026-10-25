@@ -600,7 +600,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     boudoirDressing?.update({ ...view, dt, gentle });
     boudoirHazardView?.update(view.raceTimeS ?? 0, { gentle, paused: !!view.paused, active: view.mode === 'race', dt });
     mirrorRoom?.update(dt, view, gentle);
-    perfumeView?.update(view.scanTimeS ?? view.raceTimeS ?? 0, { ready: view.perfumeReady, gentle, paused: !!view.paused, active: view.mode === 'race', dt });
+    perfumeView?.update(view.raceTimeS ?? 0, { ready: view.perfumeReady, gentle, paused: !!view.paused, active: view.mode === 'race', dt });
     rails.uniforms.flow.value = road.uniforms.phase.value;
     if (shadows && view.camera) { view.camera.layers.enable(CATCH_LAYER); view.camera.getWorldDirection(FWD); shadows.update(view.camera.position, FWD); }
 

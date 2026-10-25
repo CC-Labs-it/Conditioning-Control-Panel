@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import { MAINFRAME_CHART, verseChart, mixEnvelope } from './verseChart.mjs';
 import { KEEP_CHART, lockedChunks, lockedChart } from './lockedChart.mjs';
 import { GOON_CHART, GOON_AUDIO, GOON_SHA256, goonChart } from './goonChart.mjs';
+import { BOUDOIR_CHART, BOUDOIR_AUDIO, BOUDOIR_SHA256, boudoirChart, remixEvents } from './boudoirChart.mjs';
 import { verifiedRecording, sendRecording } from './privateRecording.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -22,6 +23,30 @@ const MOUNTS = [['/arcademy/', ARCADEMY], ['/private-audio/', PRIVATE]];
 const PORT = Number(process.argv[2] || process.env.PORT || 8790);
 let mainframeChart;
 let keepChart;
+let boudoirRecording, boudoirChartBody;
+async function readBoudoirRecording() {
+  if (!boudoirRecording) boudoirRecording = verifiedRecording([
+    process.env.GLASSROAD_BOUDOIR_RECORDING || 'C:/Users/Admin/Downloads/Think Pink - remix v5.mp3',
+    join(PRIVATE, 'tracks-2026-10-24/sissy/remix/out/think-pink_remix_v5.mp3'),
+  ], BOUDOIR_SHA256).catch(e => { boudoirRecording = null; throw e; });
+  return boudoirRecording;
+}
+async function readBoudoirChart() {
+  if (!boudoirChartBody) boudoirChartBody = (async () => {
+    const recording = await readBoudoirRecording(), dir = join(PRIVATE, 'tracks-2026-10-24/sissy/remix');
+    const [beat, words, arrangement, events] = await Promise.all([
+      readFile(join(dir, 'work/beat.json'), 'utf8'), readFile(join(dir, 'work/words.json'), 'utf8'),
+      readFile(join(dir, 'work/remix.py'), 'utf8'), readFile(join(dir, 'out/think-pink_remix_v5_events.csv'), 'utf8'),
+    ]);
+    const { stdout } = await promisify(execFile)('ffmpeg', ['-v', 'error', '-threads', '2',
+      '-i', recording.file, '-vn', '-ac', '1', '-ar', '8000', '-threads', '2', '-f', 'f32le', 'pipe:1'],
+    { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024, windowsHide: true });
+    const pcm = new Float32Array(stdout.buffer.slice(stdout.byteOffset, stdout.byteOffset + stdout.byteLength));
+    return JSON.stringify(boudoirChart(JSON.parse(beat), JSON.parse(words), arrangement,
+      remixEvents(events), pcm.length / 8000, mixEnvelope(pcm)));
+  })().catch(e => { boudoirChartBody = null; throw e; });
+  return boudoirChartBody;
+}
 let goonRecording, goonChartBody;
 async function readGoonRecording() {
   if (!goonRecording) goonRecording = verifiedRecording([
@@ -92,6 +117,18 @@ const MIME = {
 const server = createServer(async (req, res) => {
   const head = { 'Cache-Control': 'no-store', 'Cross-Origin-Opener-Policy': 'same-origin' };
   const pathname = new URL(req.url, 'http://local').pathname;
+  if (pathname === BOUDOIR_CHART || pathname === BOUDOIR_AUDIO) {
+    if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
+    try {
+      if (pathname === BOUDOIR_AUDIO) sendRecording(req, res, (await readBoudoirRecording()).bytes, head);
+      else {
+        const body = await readBoudoirChart();
+        res.writeHead(200, { ...head, 'Content-Type': 'application/json' });
+        res.end(req.method === 'HEAD' ? undefined : body);
+      }
+    } catch { res.writeHead(503, head); res.end('Private Boudoir recording unavailable'); }
+    return;
+  }
   if (pathname === GOON_CHART || pathname === GOON_AUDIO) {
     if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(405, head); res.end(); return; }
     try {

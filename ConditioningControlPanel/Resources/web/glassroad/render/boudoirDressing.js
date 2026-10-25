@@ -7,6 +7,8 @@ import { vec3, float, positionGeometry, normalGeometry, positionWorld, normalWor
 import { createSoftMaterial } from './materials/colossus.js';
 import { boudoirWorldPlan } from './boudoirMedia.js';
 import { Q } from './quality.js';
+import { beatOf } from '../audio/chart.js';
+import { createSpiralBeatClock } from './spiralBeat.js';
 
 function lipstickGeometry() {
   const geometry = new CylinderGeometry(.5, .5, 1, 20, 1), positions = geometry.attributes.position;
@@ -131,7 +133,7 @@ export function buildBoudoirDressing(track, art, pal, samples) {
       B.makeBasis(X.fromArray(row.axes[0]), Y.fromArray(row.axes[1]), Z.fromArray(row.axes[2]));
       quaternion.setFromRotationMatrix(B);
       mesh.setMatrixAt(i, M.compose(P.fromArray(row.p), quaternion, S.fromArray(row.size)));
-      if (row.motion) moving.push({ row, mesh, index: i, restQ: quaternion.clone() });
+      if (row.motion) moving.push({ row, mesh, index: i, restQ: quaternion.clone(), angle: 0, rise: 0 });
     });
     mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere(); group.add(mesh);
     if (key.endsWith(':moving') && mesh.boundingSphere) mesh.boundingSphere.radius += 16;
@@ -142,15 +144,30 @@ export function buildBoudoirDressing(track, art, pal, samples) {
   const sparkle = new InstancedMesh(geometries.sparkle, sparkleMaterial, Math.max(1, count));
   sparkle.name = 'boudoir-pearl-sparkles'; sparkle.count = count; group.add(sparkle);
   let time = 0, disposed = false;
-  function update({ dt = 0, gentle = false, paused = false } = {}) {
+  const beat = { index: 0, phase: 0, lenS: .5 }, sparkleBeat = createSpiralBeatClock();
+  const emptyBeats = [], grid = { bpm: 99, beats: emptyBeats, downbeatS: 0 };
+  function update(view = {}) {
+    const { dt = 0, gentle = false, paused = false } = view;
     if (disposed || paused) return;
     time += Math.max(0, Math.min(dt, 1)) * (gentle ? .5 : 1);
+    const song = view.beatSong || view.song, musical = song?.bpm > 0 && Number.isFinite(view.songS);
+    if (musical) {
+      grid.bpm = song.bpm; grid.beats = song.beats || emptyBeats; grid.downbeatS = song.downbeatS || 0;
+      beatOf(grid, view.songS, beat);
+    }
+    const pulse = sparkleBeat.update(dt, view, gentle), blend = 1 - Math.exp(-Math.max(0, Math.min(dt, .1)) / (gentle ? .35 : .12));
     for (const item of moving) {
       const { row, mesh, index } = item, m = row.motion;
-      const angle = Math.sin(time * m.speed + m.phase) * m.amp;
-      rotation.setFromAxisAngle(axis.fromArray(m.axis), angle);
+      const period = musical ? Math.max(4, Math.round(Math.PI * 2 / (m.speed * beat.lenS) / 4) * 4) : 0;
+      const phase = musical ? (beat.index + beat.phase) * Math.PI * 2 / period : time * m.speed;
+      const angle = Math.sin(phase + m.phase) * m.amp * (musical && gentle ? .5 : 1);
+      const rise = Math.sin(musical ? (beat.index + beat.phase) * Math.PI / 8 + m.phase : time * .6 + m.phase) * m.rise;
+      // Ease pickup and seeks into the heard bar phase without a snap in the scenery.
+      item.angle = musical ? item.angle + (angle - item.angle) * blend : angle;
+      item.rise = musical ? item.rise + (rise - item.rise) * blend : rise;
+      rotation.setFromAxisAngle(axis.fromArray(m.axis), item.angle);
       pivot.fromArray(m.pivot); P.fromArray(row.p).sub(pivot).applyQuaternion(rotation).add(pivot);
-      P.y += Math.sin(time * .6 + m.phase) * m.rise;
+      P.y += item.rise;
       restQ.copy(rotation).multiply(item.restQ); S.fromArray(row.size);
       mesh.setMatrixAt(index, M.compose(P, restQ, S)); mesh.instanceMatrix.needsUpdate = true;
     }
@@ -159,7 +176,7 @@ export function buildBoudoirDressing(track, art, pal, samples) {
       const rise = ((time * 1.2 + phase * 2) % 16 + 16) % 16, radius = .16 + (i % 4) * .07;
       P.fromArray(seed.p); P.x += Math.sin(time * .17 + phase) * 5; P.z += Math.cos(time * .13 + phase) * 5; P.y += rise;
       quaternion.setFromAxisAngle(Y.set(0, 1, 0), time * .35 + phase);
-      const fade = Math.min(1, rise / 2, (16 - rise) / 2);
+      const fade = Math.min(1, rise / 2, (16 - rise) / 2) * (1 + (pulse - 1) * .28);
       S.set(radius * fade, radius * (i % 3 ? 1 : 3) * fade, radius * fade);
       sparkle.setMatrixAt(i, M.compose(P, quaternion, S));
     }
