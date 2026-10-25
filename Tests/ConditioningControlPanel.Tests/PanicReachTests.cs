@@ -183,7 +183,7 @@ public class PanicReachTests
     public void The_panic_keys_leash_exception_is_the_one_the_voice_mirrors()
     {
         var leash = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "MainWindow", "MainWindow.Leash.cs"));
-        Assert.Contains("try { LeashOnPanicPress(panicRuns: false); }",
+        Assert.Contains("try { LeashOnPanicPress(panicRuns: false, fromKey: true); }",
             Body(leash, "private bool LeashPanicKeyWhilePanicOff(System.Windows.Input.Key key)"));
         var key = Body(MainWindowSource(), "private void OnGlobalKeyPressed(Key key)");
         Assert.Contains("if (Controls.Leash.LeashSurfaces.IsLeashed && !LeashHoldSwallows(key)) LeashPanicKeyWhilePanicOff(key);", key);
