@@ -5,7 +5,7 @@
 // The head owns one Core SessionRunner (App.Sessions), which runs only the ported subset - flash,
 // subliminal, bouncing text, lock cards (docs/avalonia-decisions.md).
 // BtnPauseSession_Click (:2021) too.
-// ponytail: dropped, each with no service on this head: corner-GIF options, remote gates, program/punch-card/Bark/profile-sync hooks, the takeaway-shelf refresh, the
+// ponytail: dropped, each with no service on this head: remote gates, program/punch-card/Bark/profile-sync hooks, the takeaway-shelf refresh, the
 // Withdraw summary suppression and the video-teardown wait before the recap (no video service yet).
 // ponytail: both confirms use MessageDialog, so the buttons read OK/Cancel rather than WPF's
 // "▶ Start Session"/"Not yet" and "Yes, stop"/"Keep going"; the text above them is WPF's.
@@ -54,6 +54,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (gen != _engineGen || App.Sessions is not { IsRunning: false } runner) return;
                 try
                 {
+                    Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
                     runner.Start(session);
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
@@ -174,10 +175,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnSessionLogReady(object? sender, SessionLogReadyEventArgs e)
         {
+            if (_windowClosed || _exitRequested) return;
             if (_suppressNextSessionSummary) { _suppressNextSessionSummary = false; return; }
             var log = e.Log;
             Dispatcher.UIThread.Post(() =>
             {
+                if (_windowClosed || _exitRequested) return;
                 try
                 {
                     var dialog = new SessionCompleteWindow(log);

@@ -24,12 +24,16 @@ namespace ConditioningControlPanel.Views.Tabs
         public SettingsTabView()
         {
             InitializeComponent();
+            // The logo plate is rounded but its well bands and wordmark are square: ClipToBounds
+            // clips to the rectangle, so they painted dark corners past the curve. 11 = the plate's
+            // 12 px radius less its 1 px bevel.
+            ExclusivesTabView.RoundClipOnResize(LogoFaceClip, 11);
             // Esc in the click-choice popup closes it, it is not the panic key's press (TAB-8).
             Services.Safety.EscapeClaim.Mark(ClickChoiceBody);
             _clickChoiceClose.Tick += (_, _) =>
             {
                 _clickChoiceClose.Stop();
-                if (!_clickChoicePinned && !ClickChoiceAnchor.IsMouseOver && !ClickChoiceBody.IsMouseOver && !ClickChoiceBody.IsKeyboardFocusWithin)
+                if (Services.UI.DashboardClickRules.ShouldClose(_clickChoicePinned, ClickChoiceAnchor.IsMouseOver, ClickChoiceBody.IsMouseOver, ClickChoiceBody.IsKeyboardFocusWithin))
                     ClickChoicePopup.IsOpen = false;
             };
             Loaded += (_, _) => RefreshClickPreference();
@@ -336,7 +340,7 @@ namespace ConditioningControlPanel.Views.Tabs
 
         private readonly System.Windows.Threading.DispatcherTimer _clickChoiceClose = new()
         {
-            Interval = TimeSpan.FromMilliseconds(450),
+            Interval = TimeSpan.FromMilliseconds(Services.UI.DashboardClickRules.HoverCloseMilliseconds),
         };
         private bool _refreshingClickChoice;
         private bool _clickChoicePinned;
