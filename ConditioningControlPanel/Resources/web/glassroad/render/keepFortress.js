@@ -86,7 +86,8 @@ export function buildKeepFortress(track, layout, art) {
     const f = track.frameAt((i + 0.5) * step);
     frames.push({ s: (i + 0.5) * step, p: [...f.p], b: [...f.b], n: [...f.n], t: [...f.t], w: f.w, flags: f.flags });
   }
-  const excluded = [...(track.jumps || []).map((j) => [j.s, j.landS]), ...(track.fields || []).map((f) => [f.fromS, f.toS])];
+  const excluded = [...(track.jumps || []).map((j) => [j.s, j.landS]), ...(track.fields || []).map((f) => [f.fromS, f.toS]),
+    ...(track.aerials || []).map(a => [a.gapS0, a.gapS1])];
   if (layout.drawbridge) excluded.push([layout.drawbridge.rampS0, layout.drawbridge.gapS1]);
   const clearSpan = (s, half = step / 2 + 1.3) => !excluded.some(([a, b]) => s + half >= a && s - half <= b);
   for (let i = 0; i < frames.length; i++) {

@@ -55,8 +55,9 @@ test('mechanics halls expose straight broad stations and no jump or stone gaps',
 });
 
 test('boost chains offer supported side lines and a clear coast line with recovery space before toys and jumps', () => {
-  assert.ok(track.boosts.length >= 20 && track.boosts.length <= 28);
-  assert.ok(padRuns.length >= 8 && padRuns.every(run => run.length >= 2 && run.length <= 4));
+  assert.ok(json.boosts.length >= 20 && json.boosts.length <= 28, 'authored side-chain plan retained');
+  assert.ok(track.boosts.length >= 18 && track.boosts.length <= 28, 'long-flight approaches retain the other boost choices');
+  assert.ok(padRuns.length >= 7 && padRuns.every(run => run.length >= 2 && run.length <= 4));
   assert.ok(padRuns.some(run => run[0].x < 0) && padRuns.some(run => run[0].x > 0));
   const toys = goonworksSetpieces(track, layout);
   const approaches = [...toys.map(row => row.s - row.depth / 2), layout.field.s0, layout.launch.rampS0,

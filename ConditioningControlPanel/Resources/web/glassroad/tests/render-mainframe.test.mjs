@@ -89,6 +89,8 @@ test('spill edges and the hex gallery void stay open below the driving surface',
   }
   for (const field of track.fields) for (let s = field.fromS + 12; s < field.toS - 12; s += 24)
     for (const x of [-40, 0, 40]) check(s, x, 160);
+  for (const zone of track.aerials) for (let s = zone.gapS0 + 1; s < zone.gapS1 - 1; s += 5)
+    for (const x of [-zone.widthM * .4, 0, zone.widthM * .4]) check(s, x, 5);
   world.dispose();
 });
 

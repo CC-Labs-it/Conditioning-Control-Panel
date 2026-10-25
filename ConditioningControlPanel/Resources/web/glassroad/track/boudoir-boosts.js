@@ -56,6 +56,11 @@ export function getBoudoirBoostPlan(track) {
     });
     return { id, landmark, purpose, pads };
   });
+  // A long-flight cut retires pads in its approach and void. Authoring without aerials keeps the source plan.
+  if (track.aerials?.length) for (let i = runs.length - 1; i >= 0; i--) {
+    runs[i].pads = runs[i].pads.filter(p => track.boosts.some(b => b.node === p.node && b.x === p.x));
+    if (!runs[i].pads.length) runs.splice(i, 1);
+  }
   const pads = runs.flatMap(run => run.pads).sort((a, b) => a.s - b.s);
   for (const p of pads) {
     const wetRunoff = track.frameAt(p.s).surface === 'stream' ? 10 : 0;

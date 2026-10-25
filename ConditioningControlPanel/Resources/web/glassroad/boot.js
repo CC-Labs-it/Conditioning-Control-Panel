@@ -63,6 +63,8 @@ import { createSongCache } from './audio/songCache.js';
 import { createHud } from './hud/hud.js';
 import { createDirectionWarning } from './hud/direction.js';
 import { createWordRun } from './sim/words.js';
+import { createAirWordRun, bindAirWords } from './sim/airWords.js';
+import { AERIAL_REVISION } from './track/aerial.js';
 import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
 import { createSlotFx } from './render/items/slotfx.js';
@@ -257,7 +259,8 @@ async function boot(course, options, lifetime, isCurrent) {
   if (qs.get('feel') === '1' && !shared.feelSheet) { shared.feelSheet = true; openFeelSheet(feel, document.body); }
   if (!(trackJson.laps > 0)) trackJson.laps = 3;
   const track = loadTrack(trackJson);
-  const onlineCourseHash = await courseHash(trackJson, shared.baseFeel);
+  const onlineCourseHash = await courseHash(trackJson, shared.baseFeel,
+    { aerialRevision: AERIAL_REVISION, aerials: track.aerials });
   if (!lifetime.alive) return;
   debug.trackId = track.id;
   const keepLayout = getKeepLayout(track);

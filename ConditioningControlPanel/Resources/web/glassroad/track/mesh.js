@@ -42,7 +42,13 @@ function builder(water = false) {
       else I.push(a, d, b, a, c, d);
       return forward;
     },
-    triangle(a, b, c) { I.push(a, b, c); },
+    triangle(a, b, c) {
+      // UV clipping can leave micrometre corners that collapse in the uploaded Float32 positions.
+      // Keep every visible sliver, but never submit an empty or inverted physical triangle.
+      const edge = (i) => [0, 1, 2].map(k => Math.fround(P[i * 3 + k]) - Math.fround(P[a * 3 + k]));
+      const u = edge(b), v = edge(c), cross = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      if (Math.hypot(...cross) > 1e-10 && cross.reduce((sum, n, k) => sum + n * Nn[a * 3 + k], 0) > 0) I.push(a, b, c);
+    },
     get size() { return P.length / 3; },
     done() {
       const m = { positions: new Float32Array(P), normals: new Float32Array(Nn), uvs: new Float32Array(U), indices: new Uint32Array(I) };
@@ -214,6 +220,7 @@ export function buildMeshes(track, dl) {
     const w = track.frameAt(j.s - LIP_M).w;
     strip(jumps, j.s - LIP_M, LIP_M, 0, w, false);
   }
+  for (const a of track.aerials || []) strip(jumps, a.gapS0 - LIP_M, LIP_M, 0, track.frameAt(a.gapS0).w, false);
   const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
   const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField);
   return { road: roadData, rails: bendCanalMesh(rails.done(), track), pads: { ...pads.done(), padDesign: new Float32Array(padDesign) }, jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
@@ -368,6 +375,21 @@ function buildRouteMeshes(track, builder) {
       fr.p[2] + fr.b[2] * x + fr.t[2] * d + fr.n[2] * lift], fr.n, us[i], gain));
     m.quad(ids[0], ids[1], ids[2], ids[3]);
   };
+  // Wide repeated forward arrows make the lip and the exit legible from the chase view.
+  // Reuse the existing warmed route paint, including its Gentle and pause behavior.
+  for (const a of track.aerials || []) {
+    for (const [m, s0, s1] of [[edge, a.rampS0 + 3, a.gapS0 - 4], [land, a.landingS0 + 4, a.landingS1 - 4]]) {
+      for (let s = s0; s <= s1; s += 8) {
+        track.frameAt(s, f);
+        for (const x of [-f.w * .25, 0, f.w * .25]) for (const side of [-1, 1])
+          flat(m, f, [[x, 2], [x, 1.1], [x + side * 2.5, -.8], [x + side * 2.5, -1.7]], [0, 0, .1, .1], 1.25);
+      }
+    }
+    for (const [m, s] of [[edge, a.gapS0 - .8], [land, a.gapS1 + .8]]) {
+      track.frameAt(s, f);
+      flat(m, f, [[-f.w / 2, -.3], [f.w / 2, -.3], [-f.w / 2, .3], [f.w / 2, .3]], [0, 1, 0, 1], 1.4);
+    }
+  }
   for (const r of rs) {
     const side = r.side === 'L' ? -1 : 1, s0 = r.openS0, len = r.openS1 - r.openS0;
     // the kicker lip: a ramp rising to the edge and its face dropping away, u runs along it

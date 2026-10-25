@@ -12,9 +12,10 @@ import { buildMeshes } from './mesh.js';
 import { buildCourts, buildFields } from './courts.js';
 import { canalProfile, canalNormal } from './canal.js';
 import { installForks } from './forks.js';
+import { buildAerials, aerialGapAt, aerialBoostAllowed } from './aerial.js';
 
 /** @returns {object} Track; throws an Error listing the schema errors */
-export function loadTrack(json, { validate = true } = {}) {
+export function loadTrack(json, { validate = true, aerials: includeAerials = true } = {}) {
   if (validate) {
     const r = validateJson(json);
     if (!r.ok) throw new Error('track invalid: ' + r.errors.join('; '));
@@ -60,7 +61,13 @@ export function loadTrack(json, { validate = true } = {}) {
     return out;
   };
 
-  const boosts = json.boosts.map((b) => ({ node: b.node, x: b.x, w: b.w, len: b.len, s: nodeS[b.node] }));
+  // Offline base-course generators opt out so historical source JSON stays reproducible.
+  const aerials = includeAerials ? buildAerials({ id: json.id, nodeS, lengthM, frameAt }) : [];
+  const aerialTrack = { aerials, lengthM };
+  // Leave the spline intact, but expose each cut as a real jump to every ground consumer.
+  for (let i = 0; i < N; i++) if (aerialGapAt(aerialTrack, (nodeS[i] + nodeS[i + 1]) / 2)) nodes[i].flags = ['jump'];
+  const boosts = json.boosts.map((b) => ({ node: b.node, x: b.x, w: b.w, len: b.len, s: nodeS[b.node] }))
+    .filter(b => aerialBoostAllowed(aerialTrack, b.s, b.len));
   const jumps = json.jumps.map((j) => {
     let land = j.node + 1;
     while (isGap(land) && land < j.node + N) land++;
@@ -93,7 +100,7 @@ export function loadTrack(json, { validate = true } = {}) {
 
   const track = {
     id: json.id, name: json.name, laps: json.laps, loop: true, lengthM, nodeCount: N, nodeS,
-    sections, sectionAt, boosts, jumps, items, routes, courts, fields, reservoir: json.reservoir, waterSpills: json.waterSpills,
+    sections, sectionAt, boosts, jumps, items, routes, courts, fields, aerials, reservoir: json.reservoir, waterSpills: json.waterSpills,
     limits: { fallY: lm.fallY, edgeGraceM: lm.edgeGraceM, edgeGraceS: lm.edgeGraceS },
     spawnPose,
     nodeFlags: (i) => nodes[((i % N) + N) % N].flags,
@@ -101,13 +108,19 @@ export function loadTrack(json, { validate = true } = {}) {
     /** Water flow at (seg, segT) into out, see track/query.js flowAt. */
     flowAt: (seg, segT, out) => flowAt(nodes, ((seg % N) + N) % N, segT, out),
     frameAt, surfaceAt, canalProfile: profile,
-    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields, profile),
+    query: createQuery(sp, refN, rollAt, widthAt, nodes, courts, fields, profile, aerials),
     checklines: null,
   };
   track.checklines = buildChecklines(track, json.checkpoints);
   installForks(track, json.forks);
   let dl = null, meshes = null;
-  Object.defineProperty(track, 'driveline', { enumerable: true, get: () => (dl ||= buildDriveline(track, sp)) });
+  Object.defineProperty(track, 'driveline', { enumerable: true, get: () => {
+    if (!dl) {
+      dl = buildDriveline(track, sp);
+      for (let i = 0; i < dl.quads; i++) if (aerialGapAt(track, (dl.s[i] + dl.s[i + 1]) / 2)) dl.gap[i] = 1;
+    }
+    return dl;
+  } });
   Object.defineProperty(track, 'meshes', { enumerable: true, get: () => (meshes ||= buildMeshes(track, track.driveline)) });
   return track;
 }

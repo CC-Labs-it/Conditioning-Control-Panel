@@ -30,15 +30,15 @@ test('whole slab sinks, including underside and edge faces with opposite shading
   }
 });
 
-test('Mainframe canal bed sinks even when its mesh UVs cross the lap seam', () => {
-  const track=loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json',import.meta.url),'utf8')));
+for (const aerials of [false, true]) test('Mainframe canal bed sinks on ' + (aerials ? 'aerial-course road runs' : 'the historical wrapped road run'), () => {
+  const track=loadTrack(JSON.parse(readFileSync(new URL('../tracks/mainframe.json',import.meta.url),'utf8')), { aerials });
   const field=createWaterField(track),mesh=track.meshes.road;
   const bed=waterBedPositions(mesh.positions,mesh.uvs,field,track);
   const canal=track.sections.find(s=>s.id==='coolant-canal');
   let checked=0;
   for(let i=0;i<mesh.positions.length/3;i++) {
     const raw=mesh.uvs[i*2+1],s=raw%track.lengthM;
-    if(raw<track.lengthM||s<canal.fromS+5||s>canal.toS-5)continue;
+    if((!aerials&&raw<track.lengthM)||s<canal.fromS+5||s>canal.toS-5)continue;
     const distance=Math.hypot(...[0,1,2].map(k=>bed[i*3+k]-mesh.positions[i*3+k]));
     assert.ok(Math.abs(distance-1.05)<.001,'wrapped wet vertices must move below the deepest trough');
     checked++;

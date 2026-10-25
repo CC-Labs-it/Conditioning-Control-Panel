@@ -67,8 +67,11 @@ const detail = (run, result) => JSON.stringify({ run: run.id, contacts: contacts
   maxError: result.maxError, minMargin: result.minMargin, maxSpeed: result.maxSpeed, brakeDistance: result.brakeDistance });
 
 test('Dense authored sequences are real distinct triggers with supported full footprints', () => {
-  assert.ok(track.boosts.length >= 40 && track.boosts.length <= 60);
-  assert.deepEqual(plan.pads.map(({ node, x, w, len }) => ({ node, x, w, len })), json.boosts);
+  assert.ok(track.boosts.length >= 30 && track.boosts.length <= 60);
+  const authoredPlan = getBoudoirBoostPlan(loadTrack(json, { aerials: false }));
+  assert.deepEqual(authoredPlan.pads.map(({ node, x, w, len }) => ({ node, x, w, len })), json.boosts);
+  assert.deepEqual(plan.pads.map(({ node, x, w, len }) => ({ node, x, w, len })),
+    track.boosts.map(({ node, x, w, len }) => ({ node, x, w, len })));
   assert.equal(new Set(track.boosts.map(p => p.node + '/' + p.x)).size, track.boosts.length);
   for (const run of plan.runs) {
     assert.ok(run.pads.length >= 2 && run.pads.length <= 4, run.id);
@@ -153,8 +156,8 @@ test('Driving a branch past the same lap distances never collects a remote main-
   assert.ok(checked > 0, 'at least one real branch passes mapped main pads');
 });
 
-for (const held of [false, true]) test('Actual run-up pads leave a landable mirror flight, held rotor ' + held, () => {
-  const run = plan.runs.find(r => r.id === 'mirror-runup'), st = supported(run.pads[0].s - 10, 0), feel = makeFeel(), events = recorder();
+for (const held of [false, true]) test('The original mirror flight remains landable after the new aerial exit, held rotor ' + held, () => {
+  const st = supported(layout.mirrorJump.rampS0 - 5, 0, 26), feel = makeFeel(), events = recorder();
   let launched = false, landed = false, takeoff = 0;
   for (let tick = 0; tick < 1200; tick++) {
     step(st, acts({ throttle: 1, hop: held, steer: steerTo(st, track, st[S.s] + 18, 0) }), track, feel, DT, events);
@@ -162,7 +165,7 @@ for (const held of [false, true]) test('Actual run-up pads leave a landable mirr
     if (!launched && st[S.airborne]) { launched = true; takeoff = st[S.engineV]; }
     if (launched && st[S.grounded]) { landed = true; break; }
   }
-  assert.deepEqual(contacts(events), run.pads.map(indexOf));
+  assert.deepEqual(contacts(events), [], 'the new aerial exit leaves a clear mirror approach');
   assert.ok(landed && st[S.s] >= layout.mirrorJump.landingS0 && st[S.s] < layout.mirrorJump.landingS1);
   assert.ok(takeoff < 31, 'unboosted takeoff after the readable run-up');
   assert.deepEqual(damage(events), []);

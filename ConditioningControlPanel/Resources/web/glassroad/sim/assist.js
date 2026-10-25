@@ -70,7 +70,9 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
     }
     // a jump lip and its gap: the line runs straight down the middle there
     for (const j of track.jumps || []) for (let d = -40; d <= (j.landS > j.s ? j.landS - j.s : 20) + 6; d += STEP) lip[Math.floor(wrap(j.s + d, L) / STEP) % N] = 1;
+    for (const j of track.aerials || []) for (let s = j.rampS0 - 40; s <= j.landingS1; s += STEP) lip[atIndex(s)] = 1;
   }
+  function atIndex(s) { return Math.floor(wrap(s, L) / STEP) % N; }
   const at = (s) => Math.floor(wrap(s, L) / STEP) % N;
   const pads = (track.boosts || []).map((pd) => {
     yawParams(feel, YP);
@@ -166,9 +168,15 @@ export function createAssist(track, feel, { mode = 'light' } = {}) {
         const v = bendSpeed(curveAhead(d), YP, share);
         vmax = Math.min(vmax, Math.sqrt(v * v + 2 * coast * d));
       }
-      out.throttle = speed < vmax ? g('cruiseThrottle') * view.cruise : 0;
+      // During a long flight the air carries speed while the engine can coast down. Keep landing thrust ready.
+      const aerial = !fork && st[S.airborne] > 0 && (track.aerials || []).some(j => s >= j.rampS0 && s < j.landingS1);
+      out.throttle = (aerial ? st[S.engineV] : speed) < vmax ? g('cruiseThrottle') * view.cruise : 0;
       out.brake = !fork && lip[at(s)] ? 0 : clamp((speed - vmax - 3) / 8, 0, 0.5) * view.cruise;
     }
+
+    // Only fully hands-off cruise opens the hat. Any actual input returns this choice to the player.
+    if (!fork && !backwards && view.auto >= .99 && view.cruise >= .99 && st[S.driftDir] === 0 &&
+      (track.aerials || []).some(j => s >= j.rampS0 && s < j.landingS1)) out.hop = true;
 
     // steering help only on the ground, rolling forward, out of a drift
     if (backwards || st[S.grounded] <= 0 || st[S.driftDir] !== 0 || speed < 2) return out;

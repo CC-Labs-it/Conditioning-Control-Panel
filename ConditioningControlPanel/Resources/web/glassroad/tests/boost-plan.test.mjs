@@ -24,8 +24,8 @@ for (const id of ['threshold', 'keep', 'mainframe']) {
     assert.ok(json.boosts.length >= (id === 'threshold' ? 16 : 100));
     assert.ok(plan.runs.length >= 2);
     assert.ok(plan.runs.every((r) => r.length >= 2 && r.length <= 4));
-    const exclusions = boostExclusions(track);
-    for (const p of json.boosts.slice(originalCount)) assert.ok(safeBoostStation(track, track.nodeS[p.node], { ...p, exclusions }), 'safe pad at ' + p.node);
+    const authored = loadTrack(json, { aerials: false }), exclusions = boostExclusions(authored);
+    for (const p of json.boosts.slice(originalCount)) assert.ok(safeBoostStation(authored, authored.nodeS[p.node], { ...p, exclusions }), 'safe authored pad at ' + p.node);
     for (const r of plan.runs) for (let i = 1; i < r.length; i++) {
       const gap = track.nodeS[r[i]] - track.nodeS[r[i - 1]];
       assert.ok(gap > 9 && gap < 38, 'separate short pad entries');
@@ -100,12 +100,25 @@ for (const id of ['threshold', 'mainframe']) for (const seed of [1, 241023, 2026
   }
   const fallCounts = new Int32Array(8), before = new Float64Array(8), L = r.track.lengthM;
   const added = r.track.boosts.slice(id === 'mainframe' ? 8 : 4);
+  const combatFlights = new Set();
   for (let tick = 0; tick < (id === 'mainframe' ? 1200 : 900) * 60 && !r.racers.list.every((kart) => kart.finished); tick++) {
     for (const kart of r.racers.list) before[kart.i] = kart.st[S.s];
+    const logStart = r.log.length, combatDrops = new Set();
     r.tick();
+    // A recorded bubble attack can deliberately throw a kart over a rail. Attribute only that same flight.
+    for (let i = logStart; i < r.log.length; i++) {
+      const event = r.log[i], wrapped = event.name === 'racer-event';
+      const name = wrapped ? event.payload.name : event.name, payload = wrapped ? event.payload.p : event.payload;
+      const who = wrapped ? event.payload.racer : 0;
+      if (name === 'bubble-ram') { combatFlights.add(payload.victim); if (payload.both) combatFlights.add(payload.attacker); }
+      if (name === 'land') combatFlights.delete(who);
+      if (name === 'drop') { if (combatFlights.has(who)) combatDrops.add(who); combatFlights.delete(who); }
+    }
     for (const kart of r.racers.list) {
       if (kart.falls > fallCounts[kart.i]) {
-        assert.ok(!added.some((pad) => ((before[kart.i] - pad.s + L) % L) <= pad.len + 60), 'new pad rollout caused a drop');
+        assert.ok(combatDrops.has(kart.i) || !added.some((pad) => ((before[kart.i] - pad.s + L) % L) <= pad.len + 60),
+          'new pad rollout caused a drop: ' + JSON.stringify({ id, seed, racer: kart.i, s: before[kart.i], lateral: kart.st[S.lateral], height: kart.st[S.height],
+            pads: added.filter(pad => ((before[kart.i] - pad.s + L) % L) <= pad.len + 60).map(p => p.node) }));
         fallCounts[kart.i] = kart.falls;
       }
     }
