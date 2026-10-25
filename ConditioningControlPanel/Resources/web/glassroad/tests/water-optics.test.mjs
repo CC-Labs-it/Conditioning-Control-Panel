@@ -5,7 +5,7 @@ const hooks=registerHooks({resolve(specifier,context,next){
   const files={'three':'three.webgpu.min.js','three/webgpu':'three.webgpu.min.js','three/tsl':'three.tsl.min.js'};
   return files[specifier]?{url:new URL('../vendor/three/build/'+files[specifier],import.meta.url).href,shortCircuit:true}:next(specifier,context);
 }});
-const {WebGLCoordinateSystem,Group}=await import('three/webgpu');
+const {WebGLCoordinateSystem,Group,Scene,Mesh,PlaneGeometry,MeshBasicNodeMaterial,Renderer,DoubleSide,BackSide,FrontSide}=await import('three/webgpu');
 const {createWaterReflections}=await import('../render/waterReflections.js');
 const {createWaterFoam}=await import('../render/waterFoam.js');
 const {createWaterField}=await import('../render/waterField.js');
@@ -32,14 +32,14 @@ test('local reflection capture warms every face and restores render state before
   const reflection=createWaterReflections({renderer:r.api,scene:{},exclude});t.after(()=>reflection.dispose());
   const progress=[];
   assert.equal(await reflection.warm({playerPos:[2,3,4],onProgress:(n,total)=>progress.push([n,total])}),true);
-  assert.deepEqual(r.state.renders.map(x=>x.face),[0,1,2,3,4,5]);assert.equal(r.state.compiles,1,'one unculled compile covers all cube orientations');
+  assert.deepEqual(r.state.renders.map(x=>x.face),[0,0,1,2,3,4,5]);assert.equal(r.state.compiles,1,'one unculled compile covers all cube orientations');
   assert.deepEqual(progress,[[1,6],[2,6],[3,6],[4,6],[5,6],[6,6]]);
   assert.equal(reflection.stats.size,64);assert.equal(reflection.stats.ready,true);
   assert.equal(r.state.target,old.target);assert.equal(r.state.face,old.face);assert.equal(r.state.mip,old.mip);assert.equal(r.state.mrt,old.mrt);
   assert.equal(exclude.visible,true);assert.equal(r.api.shadowMap.enabled,true);assert.equal(r.api.xr.enabled,true);assert.equal(r.api.autoClear,false);
-  reflection.update(.5,{paused:true});assert.equal(r.state.renders.length,6);
-  reflection.update(.5,{wet:false});assert.equal(r.state.renders.length,6);
-  reflection.update(.5,{playerPos:[10,4,9]});assert.equal(r.state.renders.length,7,'a slow frame still captures at most one face');
+  reflection.update(.5,{paused:true});assert.equal(r.state.renders.length,7);
+  reflection.update(.5,{wet:false});assert.equal(r.state.renders.length,7);
+  reflection.update(.5,{playerPos:[10,4,9]});assert.equal(r.state.renders.length,8,'a slow frame still captures at most one face');
   assert.deepEqual(reflection.camera.position.toArray(),[10,6.4,9]);
 });
 test('failed reflection capture is reported and leaves no hidden water or stale render target',async t=>{
@@ -66,16 +66,25 @@ test('reflection warm stages hidden and distant variants, then restores them eve
       assert.equal(camera.layers.test(shadowCatcher.layers),false,'no-shadow cube variants exclude shadow-only catcher materials');
       if(fail)throw Error('compile failure');
     };
+    let staged=0,clean=0;
     r.api.render=(sc,camera)=>{
-      assert.equal(hidden.visible,false);assert.equal(hidden.frustumCulled,true);assert.equal(hidden.count,0);
-      assert.equal(hidden.material.visible,false);assert.equal(camera.layers.mask,1);normalRender(sc,camera);
+      if(hidden.visible) {
+        staged++;assert.equal(hidden.frustumCulled,false);assert.equal(hidden.count,1);assert.equal(hidden.material.visible,true);
+      } else {
+        clean++;assert.equal(hidden.frustumCulled,true);assert.equal(hidden.count,0);assert.equal(hidden.material.visible,false);
+      }
+      assert.equal(camera.layers.mask,1);normalRender(sc,camera);
     };
     const reflection=createWaterReflections({scene,renderer:r.api,exclude});t.after(()=>reflection.dispose());
     t.mock.method(console,'warn',()=>{});
     assert.equal(await reflection.warm(),!fail);assert.equal(compiles,1);
     assert.equal(hidden.visible,false);assert.equal(hidden.frustumCulled,true);assert.equal(hidden.count,0);
     assert.equal(hidden.material.visible,false);assert.equal(exclude.visible,true);assert.equal(waterChild.visible,false);
-    if(!fail)reflection.update(.2,{playerPos:[1,2,3]});
+    if(!fail) {
+      assert.equal(staged,1,'one actual unculled draw warms runtime front/back pipeline variants');
+      assert.equal(clean,6,'every exported cube face is overwritten with normal visibility');
+      reflection.update(.2,{playerPos:[1,2,3]});
+    }
     assert.equal(compiles,1,'normal captures never restage or recompile hidden variants');
   }
 });
@@ -83,6 +92,27 @@ function track(){return {lengthM:60,nodeS:[0,60],sections:[],
   frameAt(s){return {p:[0,8,-s],b:[1,0,0],n:[0,1,0],t:[0,0,-1],w:16,surface:'stream',flow:[2,.2],flags:[]};},
   surfaceAt(s,x){return {...this.frameAt(s),p:[x,8,-s]};},
 };}
+test('real r186 draw dispatch warms distant transparent front/back cube pipelines before first wet capture',async t=>{
+  const scene=new Scene(),exclude=new Group(),geometry=new PlaneGeometry(),material=new MeshBasicNodeMaterial({transparent:true,side:DoubleSide});
+  const distant=new Mesh(geometry,material);distant.visible=false;scene.add(exclude,distant);
+  const r=renderer(exclude),pipelines=new Set(),cold=[];
+  const dispatcher={_currentSourceMaterial:null,_handleObjectFunction(object,mat){
+    const key=mat.side;
+    if(!pipelines.has(key)){pipelines.add(key);cold.push(key);}
+  }};
+  r.api.render=(sc,camera)=>sc.traverseVisible(object=>{
+    if(object.isMesh)Renderer.prototype.renderObject.call(dispatcher,object,sc,camera,object.geometry,object.material,null,{});
+  });
+  const reflection=createWaterReflections({scene,renderer:r.api,exclude});
+  t.after(()=>{reflection.dispose();geometry.dispose();material.dispose();});
+  assert.equal(await reflection.warm(),true);
+  assert.deepEqual(cold,[BackSide,FrontSide],'actual runtime cull states warmed behind the cover');
+  assert.equal(material.side,DoubleSide);assert.equal(distant.visible,false);
+  cold.length=0;distant.visible=true;
+  reflection.update(.2,{playerPos:[800,4,0]});
+  assert.deepEqual(cold,[],'first visible distant media requires no new front/back cube pipeline');
+});
+
 test('foam is bounded real geometry on wave crests and falling spill lips, with pause and reset',t=>{
   const tr=track(),field=createWaterField(tr);
   for(const s of [12,16,20,24])field.disturb({s,x:0,radius:6,strength:.5,foam:1});

@@ -65,7 +65,14 @@ export function createWaterReflections({ scene, renderer, exclude, quality='mid'
               // this no-shadow capture; compiling ShadowNodeMaterial without shadows
               // asks its shadow-mask lighting model for a float that does not exist.
               scene.updateMatrixWorld?.(true);
-              if(face===0) await three.compileAsync(scene,faceCamera);
+              if(face===0) {
+                await three.compileAsync(scene,faceCamera);
+                // r186's async compiler sees a transparent material after its temporary
+                // front/back side is restored. An actual unculled draw warms both cull
+                // pipelines, including distant media that first enter a later cube view.
+                // The clean capture below overwrites this staging face before it is used.
+                three.render(scene,faceCamera);
+              }
             } finally {
               for(const [object,visible,culled,count] of saved){object.visible=visible;object.frustumCulled=culled;if(object.count!==count)object.count=count;}
               for(const material of materials)material.visible=false;
