@@ -100,7 +100,7 @@ export function buildMainframe() {
     const target = from + Math.round(turns / 2), land = { from: target - 3, to: Math.min(descent.to - 1, target + 13) };
     for (let n = from; n < to; n++) nodes[n].flags = ['railR'];
     track.routes.push({ id: 'bus-cut-' + (i + 1), kind: 'drop', side: 'L', from, to,
-      open: { ds: 3, len: 25 }, land, pad: { node: target + 6, x: -4 } });
+      land, pad: { node: target + 6, x: -4 } });
   }
   track.waterSpills = [
     { fromS: at('spillway-turn', 65), toS: at('spillway-turn', 105), side: 1, dropM: 28 },

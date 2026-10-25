@@ -36,7 +36,7 @@
     "poolLandMul": 0.75, "poolThrustMul": 0.85, "poolDragTcS": 1.2 },
   "wall": { "normalKeep": 0.4, "engineLoss": 0.12, "cueFullDvMps": 12, "shakeFrac": 0.5, "topM": 1.5 },
   "route": { "catchPct": 0.25, "catchHoldS": 2.5, "cleanLenM": 24, "cleanLatM": 3.5, "cleanDeg": 25, "cleanAmount": 0.15, "cleanHoldS": 0.6, "kickUpMps": 2.5,
-    "airPull": 1, "airMaxMps": 5, "airAccel": 6 },
+    "airPull": 2, "airMaxMps": 10, "airAccel": 30 },
   "stones": { "kickUpMps": 3.5, "clearGapM": 4, "minClearMps": 14, "leadM": 25, "flightCapM": 7.5, "shoveMul": 0.3 },
   "glide": { "gravityMps2": 6, "fallMps": 7, "maxS": 2.6 },
   "hop": { "upMps": 6.8, "gravityHopMps2": 26, "gravityMps2": 28, "gravityEaseS": 0.25 },

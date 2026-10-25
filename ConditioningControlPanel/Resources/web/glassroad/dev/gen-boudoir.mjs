@@ -45,7 +45,7 @@ export function buildBoudoir() {
   const routes = [35, 395].map((angle, i) => {
     const from = node('wardrobe-descent', angle / 810), to = from + 4;
     for (let j = from; j < to; j++) nodes[j].flags = ['railL'];
-    return { id: 'wardrobe-cut-' + (i + 1), kind: 'drop', side: 'R', from, to, open: { ds: 2, len: 28 },
+    return { id: 'wardrobe-cut-' + (i + 1), kind: 'drop', side: 'R', from, to,
       land: { from: node('wardrobe-descent', (angle + 330) / 810), to: node('wardrobe-descent', (angle + 450) / 810) },
       pad: { node: node('wardrobe-descent', (angle + 395) / 810), x: 3 } };
   });

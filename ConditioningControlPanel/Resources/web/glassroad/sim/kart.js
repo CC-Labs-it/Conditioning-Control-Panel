@@ -38,7 +38,7 @@ import { updateDrift, cancelDrift, driftYaw, maybeStartDrift } from './drift.js'
 import { hop, gravityMps2 } from './hop.js';
 import { takeoff, land } from './air.js';
 import { gripYaw, slewSteer } from './steer.js';
-import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway } from './routes.js';
+import { beneath, onLanding, firstBeneath, landRoute, catchCap, resetRoute, edgeAt, hopTrack, airCatch, turnsAway, guideLanding } from './routes.js';
 import { fallBeneath, fallLand, resetFall } from './falls.js';
 import { waterAt, waterOut, blendPush, gradeDeg, surfaceKind } from './flow.js';
 import { lipLeave, broadPlatformEdgeKick, fieldAtS } from './stones.js';
@@ -123,6 +123,7 @@ export function step(st, a, track, feel, dt, ev) {
   yaw *= W.steerMul;                               // a chute steers less (wave 1 WATER)
   st[S.yawRate] = yaw;
   qrotate(F, qaxis(QY, U, -yaw * dt), F);         // + yaw turns right: clockwise seen from above
+  if (wasGround) guideLanding(track, st, qa, F, feel, dt);
   const loop = wasGround && has(qa.flags, 'magnet');
   if (loop) {
     // aim at the kart's own line a little way up the road: the wheel's sideways shift never walks it into a rail
@@ -204,11 +205,11 @@ export function step(st, a, track, feel, dt, ev) {
   if (air && track.routes && track.routes.length) {
     let lq = qb;
     if (!own) {
-      under = beneath(track, st, P, QR); lq = QR;
+      under = beneath(track, st, P, QR, gap(feel, 'route.catchMarginM')); lq = QR;
       if (under && QR.height <= 0) qb = QR;
     } else under = onLanding(track, st, qb);      // the plain probe (its far search) already found it
     if (under && firstBeneath(st, under)) { ev.emit('route-drop', { id: under.id }); if (wasEdge) ev.emit('edge-exit', { to: 'route' }); }
-    if (under) airCatch(track, lq, V, feel, dt);  // the glass catch: the flight eases toward the landing road's middle
+    if (under) airCatch(track, lq, V, feel, dt, F);
   }
   // polish 6: any other road beneath a flying kart off its own road holds off the edge drop and catches it
   if (air && !under && !own && fallBeneath(track, st, P, QD, ev, wasEdge)) {
@@ -259,11 +260,13 @@ export function step(st, a, track, feel, dt, ev) {
   // a drop shortcut's open side is a rail but for its kicker opening, which lets every kart through (Gentle too)
   const edgeKind = ed < radius ? edgeAt(track, qb, lat, radius) : null;
   // polish 6: on the ground the opening holds a kart turning away from it (sim/routes.js turnsAway)
-  const kerb = edgeKind === 'rail' || (edgeKind === 'kicker' && !air && turnsAway(st, lat, feel));
+  // Counter-steering or a lingering drift must not block a nose deliberately aimed through the arch.
+  const towardOpening = edgeKind === 'kicker' && v3dot(F, track.frameAt(qb.s, FR).b) * (lat >= 0 ? 1 : -1) > 0.35;
+  const kerb = edgeKind === 'rail' || (edgeKind === 'kicker' && !air && !towardOpening && turnsAway(st, lat, feel));
   // a kart above the rail top, or already beyond the rail line in the air, flies past it (polish 4)
   const overRail = air && (qb.height > gap(feel, 'wall.topM') || ed < 0);
   const soft = feel.get('gentle.on') && edgeKind !== 'kicker';
-  if (road && !overRail && (qb.railed || kerb || soft) && ed < radius && qb.height > -radius) {
+  if (road && !overRail && ((qb.railed && edgeKind !== 'kicker') || kerb || soft) && ed < radius && qb.height > -radius) {
     const b = (track.pathFrameAt ? track.pathFrameAt(qb.s, qb.seg, FR) : track.frameAt(qb.s, FR)).b, side = lat >= 0 ? 1 : -1, pen = radius - ed;
     v3addScaled(P, P, b, -side * pen); lat -= side * pen; ed = radius;
     const into = v3dot(V, b) * side;

@@ -44,6 +44,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
       '<span class="hud-pips"><i></i><i></i><i></i></span>' +
       '<span class="hud-speed"><b>0</b> km/h</span>' +
       '<div class="hud-toast" role="status"></div>' +
+      '<div class="hud-direction" role="status" aria-live="polite" aria-hidden="true"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M8 26V13a8 8 0 0 1 16 0v8m-5-5 5 5 5-5"/></svg><span>Wrong way<small>Turn around</small></span></div>' +
     '</div>' +
     '<div class="hud-count" aria-hidden="true"><img class="hud-count-flag" alt="" draggable="false" hidden><span></span></div>' +
     '<div class="hud-go" aria-hidden="true"><i class="hud-go-ring"></i><i class="hud-go-ring r2"></i><span>Go</span></div>' +
@@ -56,7 +57,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     pips: [...root.querySelectorAll('.hud-pips i')], pipRow: $('.hud-pips'), item: $('.hud-item'), icon: $('.hud-item-icon'), ghost: $('.hud-item-ghost'),
     pop: $('.hud-pop'), speedBox: $('.hud-speed'),
     place: $('.hud-place'), placeArt: $('.hud-place-art'), placeN: $('.hud-place b'), placeSuf: $('.hud-place sup'), placeOf: $('.hud-place small'),
-    toast: $('.hud-toast'), note: $('.hud-note'),
+    toast: $('.hud-toast'), note: $('.hud-note'), direction: $('.hud-direction'),
   };
   const map = createMinimap($('.hud-map'), { doc });
   // warm the icon cache so the roll never waits on a load
@@ -218,7 +219,7 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
    * racer), finished, bestLapS (optional).
    */
   function update({ lap = 0, laps: L = 1, timeS = 0, speedPct = 0, countdown = null, paused = false,
-    place = 0, count = 0, item = null, map: xz = null, finished = false, bestLapS = 0, kartAt = null } = {}) {
+    place = 0, count = 0, item = null, map: xz = null, finished = false, bestLapS = 0, kartAt = null, wrongWay = false } = {}) {
     laps = L;
     const gentle = gentleOn();
     root.classList.toggle('gentle', gentle);
@@ -242,6 +243,12 @@ export function createHud({ root, card }, feel, bus, { doc = globalThis.document
     if (flagOn !== last.flag) { last.flag = flagOn; if (flagOn && !el.flag.src) el.flag.src = kit.url('flag-start'); el.flag.hidden = !flagOn; }
     root.classList.toggle('paused', !!paused);
     root.classList.toggle('finished', !!finished);
+    const directionOn = !!wrongWay && !paused && !finished;
+    if (last.direction !== directionOn) {
+      last.direction = directionOn;
+      el.direction.classList.toggle('on', directionOn);
+      el.direction.setAttribute('aria-hidden', String(!directionOn));
+    }
     setPlace(place, count);
     slot(finished ? null : item, gentle);
     if (xz && root.dataset.screen === 'race') map.draw(xz, leader);

@@ -60,6 +60,7 @@ import { createEffects } from './fx/effects.js';
 import { createAudio } from './audio/bus.js';
 import { createSongCache } from './audio/songCache.js';
 import { createHud } from './hud/hud.js';
+import { createDirectionWarning } from './hud/direction.js';
 import { createWordRun } from './sim/words.js';
 import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
@@ -285,6 +286,7 @@ async function boot(course, options, lifetime, isCurrent) {
   for (const name of ['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit', 'boudoir-mirror-hit', 'goonworks-hit']) bus.on(name, () => bus.emit('wall', { dv: 12 }));
   configureLobby({ track: track.id, trackLaps: TRACK_LAPS });
   const hud = createHud({ root: document.getElementById('hud'), card: cardEl }, feel, bus);
+  const directionWarning = createDirectionWarning(track);
   lifetime.defer(() => hud.dispose());
   // Host state stays live while art and shaders load behind the cover.
   const applyHostGentle = m => {
@@ -1122,7 +1124,8 @@ async function boot(course, options, lifetime, isCurrent) {
     if (holding) { hudItem.id = it.id; hudItem.rolling = it.rolling; hudItem.rollT = it.rollT; hudItem.rollS = feel.get('items.rollS'); }
     hud.update({ lap: pst[S.lap], laps, timeS: race.timeS, speedPct: pst[S.speedPct], countdown: null,
       sectionIdx: pst[S.sectionIdx], paused, place, count: racers.list.length, item: holding ? hudItem : null,
-      map: mapXz, finished: P.finished, bestLapS: P.bestLapS, kartAt: goPoint });
+      map: mapXz, finished: P.finished, bestLapS: P.bestLapS, kartAt: goPoint,
+      wrongWay: directionWarning.update(pst, frozen ? 0 : frameDt, inRace && race.phase === 'racing' && !P.finished) });
     gateScreen.update(frameDt, paused, effects.screen);
     slotFx.update(paused ? 0 : frameDt, holding && !P.finished ? hudItem : null, !!feel.get('gentle.on'));
 
