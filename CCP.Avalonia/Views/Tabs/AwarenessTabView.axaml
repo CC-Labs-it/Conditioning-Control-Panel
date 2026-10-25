@@ -169,6 +169,7 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0">
+                        <ContentControl x:Name="CompanionPrivacyHost" Margin="0,0,0,14"/>
 
                         <!-- ==================== LIVE PULSE ====================
                              The heartbeat of the tab: amber wash + edge bar so it reads as the
@@ -605,6 +606,9 @@
                              above; this drawer is the authoring surface underneath them. It deliberately
                              re-hosts NO app-scoping UI - CmbAwarenessAppScope in SAFETY above is the one
                              editor for KeywordTriggerAppScope. Internals untouched by round 4. -->
+                        <Expander x:Name="CompanionTuningFold" Header="{loc:Str companion_workshop_cell_awareness}" IsVisible="False" IsExpanded="False" Margin="0,4,0,12">
+                            <ContentControl x:Name="CompanionTuningHost"/>
+                        </Expander>
                         <cmp:KeywordTriggersPanel x:Name="KeywordPanel"
                                                   Margin="0,4,0,4"
                                                   AutomationProperties.AutomationId="AwarenessCustomTriggers"/>

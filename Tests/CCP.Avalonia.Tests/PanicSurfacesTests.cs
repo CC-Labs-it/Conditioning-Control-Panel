@@ -88,6 +88,7 @@ public sealed class PanicSurfacesTests
     {
         "ai-followups",
         "attention-test",
+        "awareness-companion",
         "blink-trainer",
         "camera",
         "chaos",

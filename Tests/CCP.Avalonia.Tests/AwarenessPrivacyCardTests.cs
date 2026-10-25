@@ -59,6 +59,7 @@ public sealed class AwarenessPrivacyCardTests
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var service = new SettingsService();
@@ -78,7 +79,7 @@ public sealed class AwarenessPrivacyCardTests
         {
             shell.Show();
             Dispatcher.UIThread.RunJobs();
-            shell.GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Views.Tabs.CompanionTabView>().Single().IsVisible = true;
+            shell.ShowTab("awareness");
             Dispatcher.UIThread.RunJobs();
             var card = shell.GetLogicalDescendants().OfType<AwarenessPrivacyView>().Single();
             var vm = card.ViewModel!;
@@ -149,10 +150,11 @@ public sealed class AwarenessPrivacyCardTests
     });
 
     [Fact]
-    public Task RefreshTicksOnlyWhileTheRoomIsShown() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task RefreshTicksOnlyWhileTheHostingTabIsShown() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<AvApp>()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var shell = new MainShellWindow();
@@ -161,11 +163,11 @@ public sealed class AwarenessPrivacyCardTests
             shell.Show();
             Dispatcher.UIThread.RunJobs();
             var tab = shell.GetLogicalDescendants().OfType<ConditioningControlPanel.Avalonia.Views.Tabs.CompanionTabView>().Single();
-            var card = tab.GetLogicalDescendants().OfType<AwarenessPrivacyView>().Single();
-            tab.IsVisible = true;
+            var card = shell.GetLogicalDescendants().OfType<AwarenessPrivacyView>().Single();
+            shell.ShowTab("awareness");
             Dispatcher.UIThread.RunJobs();
             Assert.True(card.IsRefreshing);
-            tab.IsVisible = false;
+            shell.ShowTab("companion");
             Dispatcher.UIThread.RunJobs();
             Assert.False(card.IsRefreshing);
         }

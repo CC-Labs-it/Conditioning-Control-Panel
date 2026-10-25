@@ -174,8 +174,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // The zone re-reads its own state rather than being told what to do: it may well
                 // have changed while the tab was hidden, and a resume that restored the state at
                 // park time would be a lie.
-                AwarenessZone.StartRefresh();   // WPF IsVisibleChanged -> StartRefresh (re-reads first)
-                AwarenessZone.SyncCursorBlink();
+                if (AwarenessZone.FindAncestorOfType<CompanionRoomView>() == this)
+                {
+                    AwarenessZone.StartRefresh();
+                    AwarenessZone.SyncCursorBlink();
+                }
                 ChatZone.ViewModel?.Sync();
                 MemoryZone.ViewModel?.Sync();
                 PersonalityZone.ViewModel.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> PersonalityVm.Sync
@@ -201,8 +204,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 ConversationZone.Park();
                 HeroZone.StopAmbientLoop();
-                AwarenessZone.StopCursorBlink();
-                AwarenessZone.StopRefresh();
+                if (AwarenessZone.FindAncestorOfType<CompanionRoomView>() == this)
+                {
+                    AwarenessZone.StopCursorBlink();
+                    AwarenessZone.StopRefresh();
+                }
             }
             catch (InvalidOperationException) { /* already torn down */ }
         }
@@ -256,7 +262,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public void RevealEngineRoom() => EngineZone.ExpandAndReveal();
 
         /// <inheritdoc/>
-        public void RevealWorkshop(string? cellTitle = null) => WorkshopZone.ExpandAndReveal(cellTitle);
+        public void RevealWorkshop(string? cellTitle = null)
+        {
+            if (Services.Companion.CompanionExperience.IsV2Enabled
+                && cellTitle == CompanionRoomAnchors.WorkshopAwarenessCell
+                && TopLevel.GetTopLevel(this) is Windows.MainShellWindow owner)
+            {
+                owner.ShowTab("awareness");
+                owner.Named<Tabs.AwarenessTabView>("AwarenessTab")?.RevealCompanionTuning();
+                return;
+            }
+            WorkshopZone.ExpandAndReveal(cellTitle);
+        }
 
         /// <summary>The Companion > Personality / Permissions zone pills (shell TabPanels): scroll
         /// the room to the zone WPF's page hosts. Laid out first: the tab was hidden a moment ago.</summary>
@@ -274,6 +291,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// priority is starved in this app, and the card may not have been arranged yet.</remarks>
         public void FocusAwareness()
         {
+            if (Services.Companion.CompanionExperience.IsV2Enabled
+                && TopLevel.GetTopLevel(this) is Windows.MainShellWindow owner) owner.ShowTab("awareness");
             Dispatcher.UIThread.Post(() =>
             {
                 try

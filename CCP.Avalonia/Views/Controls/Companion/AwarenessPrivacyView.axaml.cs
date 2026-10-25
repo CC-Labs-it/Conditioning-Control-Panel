@@ -47,7 +47,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             AvaloniaXamlLoader.Load(this);
             DataContext = new AwarenessPrivacyViewModel(
                 () => TopLevel.GetTopLevel(this) as MainShellWindow,
-                () => this.FindAncestorOfType<CompanionRoomView>()?.RevealWorkshop(CompanionRoomAnchors.WorkshopAwarenessCell));
+                () =>
+                {
+                    if (this.FindAncestorOfType<Tabs.AwarenessTabView>() is { } tab) tab.RevealCompanionTuning();
+                    else this.FindAncestorOfType<CompanionRoomView>()?.RevealWorkshop(CompanionRoomAnchors.WorkshopAwarenessCell);
+                });
             Loaded += OnLoaded;
             DataContextChanged += (_, _) =>
             {

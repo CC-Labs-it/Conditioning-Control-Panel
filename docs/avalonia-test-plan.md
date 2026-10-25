@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Awareness Companion hosting
+
+1. Open Awareness: the existing “What she can see” card appears before Live Pulse; fine-tuning sits collapsed before Custom Triggers. Switch away and back: one card and one tuning cell remain. Check consent, deny/title chips, pause and two-step wipe through this card. WPF `Views/Tabs/AwarenessTabView.Companion.cs:11-22`. Rows: `views-awareness-companion`.
+2. Press the card’s fine-tuning link: its drawer expands and scrolls into view. Follow the room’s awareness link: Awareness opens; fine-tuning opens from the workshop anchor. Change intensity/cooldowns and reopen to check persistence. WPF `Views/Tabs/AwarenessTabView.Companion.cs:24-28`. Rows: `views-awareness-companion`.
+3. Switch Awareness → Companion → Settings: the hidden card stops refreshing; return to Awareness to resume. Arm wipe then press panic: the confirmation disarms and the refresh stops. Missing v2 wire/history remains explicitly reported by the card. WPF `Views/Controls/Companion/AwarenessPrivacyView.xaml.cs`. Rows: `views-awareness-companion`.
