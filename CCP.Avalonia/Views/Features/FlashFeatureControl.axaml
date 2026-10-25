@@ -8,14 +8,15 @@
        LinearGradientBrush "0,0"/"1,0"   ->  "0%,0%"/"100%,0%"
        ImageBrush HeroArtBrush/SideArtBrush -> dropped (feature art not an AvaloniaResource here
                                             yet; x:Name on a brush is AVLN2000); wash stands in
-       feat:AdaptiveSideArt.CollapseBelow -> dropped
+       feat:AdaptiveSideArt.CollapseBelow -> sideart:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs), same threshold as WPF
        feat:SessionLock.Owned            -> sessionLock:SessionLock.Owned (Views/Features/SessionLock.cs)
        all event handlers                ->  wired in code-behind (porting convention) -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+             xmlns:ctl="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls"
              x:Class="ConditioningControlPanel.Avalonia.Views.Features.FlashFeatureControl">
 
     <!-- Velvet Kit 2 density pass. The root stays a StackPanel: MainWindow.SessionFeatureLock.cs
@@ -59,7 +60,7 @@
         </Border>
 
         <!-- VELVET KIT 2 · ROUND 3 · DENSITY: settings column capped, art card takes the rest. -->
-        <Grid>
+        <Grid sideart:AdaptiveSideArt.CollapseBelow="700">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" MaxWidth="780"/>
                 <ColumnDefinition Width="2*"/>
@@ -186,6 +187,10 @@
                                           VerticalAlignment="Center" Theme="{StaticResource DarkComboBoxStyle}"/>
                             </Grid>
 
+                            <TextBlock x:Name="TxtExitShatterNote" Text="{loc:Str flash_exit_shatter_note}" IsVisible="False"
+                                       FontSize="11.5" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
+                                       Margin="0,-2,0,6"/>
+
                             <Grid Height="34" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_hydra_mode_clicking_an_image_spawns_two_more}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
@@ -257,9 +262,9 @@
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
 
-                            <!-- Flashes v2 (Back Room prizes). Collapsed while nothing v2 is owned; ownership
-                                 is PrizeOwnership's word, never a setting. Only the motion rows are here yet:
-                                 V2GetItRow, rounded corners, draggable, shatter and Jackpot Remix are not. -->
+                            <!-- Flashes v2 ownership comes from PrizeOwnership, never a setting.
+                                 The Get it row keeps the box open while unowned; owned prizes expose
+                                 motion and Shatter. Rounded corners, draggable and Jackpot Remix remain unported. -->
                             <Border x:Name="BoxFlashV2" IsVisible="False" Margin="0,10,0,2"
                                     CornerRadius="10" Padding="12,8,12,6" BorderThickness="1"
                                     Background="#14FFE08A" BorderBrush="#33FFE08A"
@@ -276,6 +281,9 @@
                                                    FontWeight="SemiBold" Foreground="#FFE08A" Opacity="0.92"
                                                    VerticalAlignment="Center"/>
                                     </StackPanel>
+
+                                    <!-- WPF RowGetFlashesV2: the standalone way in; hides itself once the prize lands. -->
+                                    <ctl:V2GetItRow x:Name="RowGetFlashesV2"/>
 
                                     <Grid x:Name="RowMotion" Height="36" Background="Transparent" IsVisible="False"
                                           ToolTip.Tip="{loc:Str tooltip_flash_motion}">
@@ -306,6 +314,17 @@
                                         <TextBlock Grid.Column="2" x:Name="TxtDriftSpeed" Text="1x" HorizontalAlignment="Right"
                                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                                    FontSize="13" FontWeight="Bold"/>
+                                    </Grid>
+                                    <Grid x:Name="RowShatter" Height="34" Background="Transparent" IsVisible="False"
+                                          ToolTip.Tip="{loc:Str tooltip_flash_shatter}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{loc:Str setting_flash_shatter}" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                        <CheckBox Grid.Column="1" x:Name="ChkFlashShatter"
+                                                  Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>

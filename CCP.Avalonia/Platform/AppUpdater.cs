@@ -28,8 +28,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// </summary>
     internal static class AppUpdater
     {
-        // WPF UpdateService.cs:151-152.
-        internal const string GitHubApi = "https://api.github.com/repos/CodeBambi/Conditioning-Control-Panel---CSharp-WPF";
+        // WPF UpdateService.cs:270-271.
+        internal const string GitHubApi = "https://api.github.com/repos/CC-Labs-it/Conditioning-Control-Panel";
 
         /// <summary>Test transport; null = the default one.</summary>
         internal static HttpMessageHandler? Handler;
@@ -43,9 +43,11 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static UpdateInfo? Latest { get; private set; }
         private static bool _busy;
+        private static bool _offering;
 
-        /// <summary>WPF App.IsUpdateDialogActive: an update offer or manual check owns the screen.</summary>
-        internal static bool IsUpdateDialogActive => _busy;
+        /// <summary>WPF App.IsUpdateDialogActive: raised only while a newer version is offered
+        /// (App.xaml.cs:5507), not while a manual check still waits on the network.</summary>
+        internal static bool IsUpdateDialogActive => _offering;
         private static string UserData => CorePaths.UserData;
 
         /// <summary>
@@ -193,7 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>The notification dialog: Install (Windows) / Download (elsewhere), or Later = quiet for 24h.</summary>
         private static async Task OfferAsync(Window owner, UpdateInfo info)
         {
-            _busy = true;
+            _busy = _offering = true;
             try
             {
                 var dialog = OpenDialog = new UpdateNotificationDialog(info)
@@ -209,7 +211,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 OpenDialog = null;
-                _busy = false;
+                _busy = _offering = false;
             }
         }
 
@@ -304,7 +306,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        private static async Task<string> DownloadInstallerAsync(string api, string version, Action<int> progress)
+        /// <summary>Per-read stall window and retry backoff; tests shrink both.</summary>
+        internal static TimeSpan StallTimeout = ReleaseFeed.DownloadStallTimeout;
+        internal static Func<int, TimeSpan> RetryDelay = attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt));
+        /// <summary>Where the installer lands (wiped first); tests point it at their own temp folder.</summary>
+        internal static string DownloadDir = Path.Combine(Path.GetTempPath(), "ConditioningControlPanel_Update");
+
+        internal static async Task<string> DownloadInstallerAsync(string api, string version, Action<int> progress)
         {
             using var client = Client(TimeSpan.FromMinutes(10));
             string? url = null;
@@ -318,7 +326,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             if (Sandboxed && !LoopbackUrl.IsHonoured(url, out _))
                 throw new InvalidOperationException($"Sandboxed profile: refusing non-loopback installer URL {url}");
 
-            var dir = Path.Combine(Path.GetTempPath(), "ConditioningControlPanel_Update");
+            var dir = DownloadDir;
             try { if (Directory.Exists(dir)) Directory.Delete(dir, true); } catch { }
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, Path.GetFileName(new Uri(url).LocalPath));
@@ -327,21 +335,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 try
                 {
-                    if (attempt > 1) await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+                    if (attempt > 1) await Task.Delay(RetryDelay(attempt));
                     using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
                     response.EnsureSuccessStatusCode();
                     var total = response.Content.Headers.ContentLength ?? -1;
                     await using var src = await response.Content.ReadAsStreamAsync();
                     await using var dst = File.Create(path);
-                    var buffer = new byte[81920];
-                    long done = 0;
-                    int read, last = -1;
-                    while ((read = await src.ReadAsync(buffer)) > 0)
+                    var last = -1;
+                    // A stalled read fails the attempt (TimeoutException = transient, so it retries).
+                    await ReleaseFeed.CopyWithStallTimeoutAsync(src, dst, StallTimeout, done =>
                     {
-                        await dst.WriteAsync(buffer.AsMemory(0, read));
-                        done += read;
                         if (total > 0 && (int)(done * 100 / total) is var p && p != last) progress(last = p);
-                    }
+                    }, default);
                     return path;
                 }
                 catch (Exception ex) when (ReleaseFeed.IsTransientNetworkError(ex))

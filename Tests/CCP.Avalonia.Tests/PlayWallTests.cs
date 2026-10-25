@@ -1,4 +1,6 @@
 using System;
+using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -7,6 +9,8 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Views.Games;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -24,17 +28,17 @@ public sealed class PlayWallTests
         AvaloniaTestDispatcher.Run(() =>
         {
             if (Application.Current is null)
-                AppBuilder.Configure<AvApp>()
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var service = new SettingsService();
             var prevSettings = CoreSettings.ServiceProvider;
             CoreSettings.ServiceProvider = () => service;
             var (week, utc) = (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc);
-            var (loggedIn, lab) = (CoreAccount.IsLoggedInProvider, CoreAccount.HasLabAccessProvider);
-            bool isLoggedIn = false, isLab = false;
+            var (loggedIn, lab) = (CoreAccount.IsLoggedInProvider, CoreAccount.HasPremiumAccessProvider);
+            bool isLoggedIn = false, isPaid = false;
             CoreAccount.IsLoggedInProvider = () => isLoggedIn;
-            CoreAccount.HasLabAccessProvider = () => isLab;
+            CoreAccount.HasPremiumAccessProvider = () => isPaid;
             (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc) = ("", null);
             var shell = new MainShellWindow();
             shell.Show();
@@ -70,19 +74,25 @@ public sealed class PlayWallTests
                 Assert.Equal(days == 1 ? Loc.Get("intake_gate_spent_body_one_day") : Loc.GetF("intake_gate_spent_body", days), line.Text);
                 Assert.False(where.IsVisible);
 
-                // Tier 2: no band, no line.
-                isLab = true;
+                // Any paid tier (WPF 2a1fd1e88, was Prime only): no band, no line.
+                isPaid = true;
                 AvApp.IntakePass.RaiseChanged();
                 Dispatcher.UIThread.RunJobs();
                 Assert.False(band.IsVisible);
                 Assert.False(line.IsVisible);
 
-                // GAMES: four cards, no host on this head, so the Play button refuses honestly.
-                foreach (var n in new[] { "BtnPlayBreakoutDemo", "BtnPlayBreakout", "BtnPlayGoon", "BtnPlayChess" })
+                // The two unregistered hosts still refuse honestly; the two free hosts are reachable.
+                foreach (var n in new[] { "BtnPlayBreakout", "BtnPlayGoon" })
                 {
                     var b = C<Button>(n);
                     Assert.False(b.IsEnabled, n);
                     Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(b));
+                }
+                foreach (var n in new[] { "BtnPlayBreakoutDemo", "BtnPlayChess" })
+                {
+                    Assert.True(C<Button>(n).IsEnabled, n);
+                    Assert.Null(ToolTip.GetTip(C<Button>(n)));
+                    Assert.NotNull(C<Button>(n).Cursor); // WPF PlayTabView.xaml:365/:453 Cursor="Hand"
                 }
                 Assert.NotNull(C<Image>("PlayBreakoutArt").Source);
 
@@ -103,11 +113,71 @@ public sealed class PlayWallTests
             {
                 shell.Close();
                 CoreAccount.IsLoggedInProvider = loggedIn;
-                CoreAccount.HasLabAccessProvider = lab;
+                CoreAccount.HasPremiumAccessProvider = lab;
                 (service.Current.IntakePassSpentWeek, service.Current.IntakePassSpentUtc) = (week, utc);
                 service.SaveImmediate();
                 CoreSettings.ServiceProvider = prevSettings;
             }
         });
     }
+
+    [Theory]
+    [InlineData("BtnPlayBreakoutDemo", "breakoutdemo", "/backroom/stations/breakout/play.html")]
+    [InlineData("BtnPlayChess", "piecebypiece", "/piecebypiece/index.html")]
+    public void FreeGameButton_OpensExistingHost_Refocuses_AndPanicCloses(string buttonName, string gameId, string page)
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var service = new SettingsService();
+            var previousSettings = CoreSettings.ServiceProvider;
+            var previousAccount = CoreAccount.IsLoggedInProvider;
+            var previousServer = GameWindow.Server;
+            CoreSettings.ServiceProvider = () => service;
+            CoreAccount.IsLoggedInProvider = () => false;
+            var root = Directory.CreateTempSubdirectory("play-free-games-");
+            using var server = new WebAssetServer(root.FullName);
+            GameWindow.Server = () => server;
+            var shell = new MainShellWindow();
+            try
+            {
+                shell.Show();
+                shell.ShowTab("play");
+                Dispatcher.UIThread.RunJobs();
+                var button = shell.Named<Control>("PlayTab")!.FindControl<Button>(buttonName)!;
+                Assert.True(button.IsEnabled);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                var game = Assert.IsType<GameWindow>(GameWindow.OpenForTests(gameId));
+                Assert.Equal(page, game.PageUrl!.AbsolutePath);
+                if (gameId == "breakoutdemo")
+                    Assert.True(game.PageUrl.Query.Contains("demo=1", StringComparison.Ordinal));
+
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(game, Assert.Single(GameWindow.OpenWindowsForTests()));
+                Assert.True(game.IsVisible);
+                var panic = PanicSurfaces.All.Single(s => s.Id == "games");
+                Assert.True(panic.OwnsTheScreen!());
+                panic.Stop(shell);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Empty(GameWindow.OpenWindowsForTests());
+                Assert.False(panic.OwnsTheScreen());
+            }
+            finally
+            {
+                GameWindow.CloseAllForPanic();
+                shell.Close();
+                GameWindow.Server = previousServer;
+                CoreAccount.IsLoggedInProvider = previousAccount;
+                service.SealForReset();
+                CoreSettings.ServiceProvider = previousSettings;
+                root.Delete(true);
+            }
+        });
+    }
+
 }

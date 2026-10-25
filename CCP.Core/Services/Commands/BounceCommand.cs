@@ -18,7 +18,8 @@ namespace ConditioningControlPanel.Services.Commands
         {
             try
             {
-                return Task.FromResult(Surface?.Invoke(_data.On, _data.Words) == true);
+                // Capped and trimmed (AiCommandAdmission.BounceWords, WPF 61eeb4d0d); null plays the user's own words.
+                return Task.FromResult(Surface?.Invoke(_data.On, AiCommandAdmission.BounceWords(_data.Words)) == true);
             }
             catch (Exception ex)
             {

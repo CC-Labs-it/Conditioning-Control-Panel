@@ -899,6 +899,10 @@ namespace ConditioningControlPanel.Services
                 _saveDebounceTimer = null;
                 Armed.TryRemove(this, out _);
             }
+            // A save that passed its seal check before the flag was set may still be writing. Wait
+            // it out here: it re-checks the seal inside this lock, so once this returns no write is
+            // in flight and none can start, and the reset's move and sweep are the last word.
+            lock (_saveLock) { }
             Log.Warning("Settings sealed for factory reset — every further save is a no-op");
         }
 
@@ -953,6 +957,8 @@ namespace ConditioningControlPanel.Services
 
                 lock (_saveLock)
                 {
+                    // Sealed while this snapshot was being serialized: the reset owns the file now.
+                    if (_sealed) return;
                     if (sequence < Interlocked.Read(ref _lastWrittenSaveSequence))
                     {
                         Log.Debug("Settings save #{Sequence} dropped — a newer snapshot already reached disk", sequence);

@@ -174,6 +174,7 @@ public sealed class LauncherLinksTests
         var dlg = new LauncherMediaDialog();
         var (online, local) = (dlg.SourceChips.First(c => Equals(c.Tag, "online")), dlg.SourceChips.First(c => Equals(c.Tag, "local")));
         Assert.True(local.IsChecked == true && !dlg.RatioRowVisible);
+        Assert.False(dlg.CreditLine.IsVisible);   // WPF LauncherMediaDialog.xaml.cs:139: no Scrolller credit on local media
 
         dlg.ConsentOverride = (_, _) => Task.FromResult(false);   // "No" writes nothing
         online.IsChecked = true;
@@ -184,6 +185,7 @@ public sealed class LauncherLinksTests
         online.IsChecked = true;
         dlg.LastChange.GetAwaiter().GetResult();
         Assert.True(s.MediaSource == "online" && s.HasRemoteMediaConsent && s.BackRoomMediaSource == "auto");
+        Assert.True(dlg.CreditLine.IsVisible);    // "Media from Scrolller" while online is in play
 
         online.IsChecked = false;                                  // never no source at all
         dlg.LastChange.GetAwaiter().GetResult();
