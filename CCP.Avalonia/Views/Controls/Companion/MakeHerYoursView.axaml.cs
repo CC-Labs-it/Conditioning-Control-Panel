@@ -12,6 +12,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -109,6 +110,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     public sealed class MakeHerYoursViewModel : INotifyPropertyChanged
     {
         private readonly global::Avalonia.Visual? _host;
+        // WPF App.CommunityPrompts: one service, owned by the room's Workshop COMMUNITY cell. v2 adopts this view
+        // onto Companion > Personality, outside the collapsed room, so fall back to the shell's room.
+        private Runtime.WorkshopCommunityCell? Community =>
+            ((_host?.FindAncestorOfType<CompanionRoomView>() ?? Shell?.RoomView())?.WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Community;
+        private Window? Owner() => _host == null ? null : TopLevel.GetTopLevel(_host) as Window;
         private readonly ObservableCollection<PresetChip> _presets = new();
         private bool _isSpiceOn;
         private string _activeLine = string.Empty;
@@ -169,6 +175,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             OpenTraitDashboardCommand = new CompanionRelayCommand(OpenPromptEditor);
             ViewCompiledPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
             ForkPromptCommand = new CompanionRelayCommand(OpenPromptEditor);
+            // WPF BtnBrowsePrompts_Click: same flow as the Workshop cell's Browse; installing never activates.
+            CommunityPromptsCommand = new CompanionRelayCommand(() =>
+            {
+                // WPF UpdateCommunityPromptsUI after an install: the Workshop rows and this readout together.
+                if (Community is { } cell) _ = Runtime.WorkshopCommunityCell.BrowseAsync(Owner, cell.Service, () => { cell.RefreshInstalledPrompts(); Sync(); });
+            });
             ResetPersonalityCommand = new CompanionRelayCommand(() =>
             {
                 if (_preview) return;   // WPF mock: NoOp
@@ -176,8 +188,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 PersonalityService.ClearCustomPromptOverride(CoreSettings.Current);
                 CoreSettings.Save();
                 Sync();
+                RefreshCommunityRows();   // WPF MainWindow.Patreon.cs:2249 UpdateCommunityPromptsUI
             });
             Sync();
+        }
+
+        /// <summary>The Workshop COMMUNITY rows' active dot follows a reset or preset pick made here.</summary>
+        private void RefreshCommunityRows()
+        {
+            // Through the shell, not the visual tree: under v2 this zone is adopted by Companion > Personality.
+            Shell?.RoomView()?.RefreshCommunity();
         }
 
         internal Windows.MainShellWindow? Shell =>
@@ -243,10 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public ICommand ResetPersonalityCommand { get; }
         public ICommand ViewCompiledPromptCommand { get; }
         public ICommand ForkPromptCommand { get; }
-        // ponytail: WPF BtnBrowsePrompts_Click opens the community prompt browser
-        // (App.CommunityPrompts, WPF-head CommunityPromptService); no browser exists on this head, so the
-        // link stays a null command (disabled) rather than a dead button that looks alive.
-        public ICommand? CommunityPromptsCommand => null;
+        public ICommand CommunityPromptsCommand { get; }
 
         /// <summary>Re-reads settings and the personality service (WPF MakeHerYoursRuntimeVm.SyncCore).</summary>
         public void Sync()
@@ -267,9 +284,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             var communityId = settings.ActiveCommunityPromptId;
             if (!string.IsNullOrEmpty(communityId))
             {
-                // ponytail: WPF shows the installed prompt's NAME (CommunityPromptService.GetInstalledPrompt,
-                // head-only); this head has no installed-prompt store yet, so the id stands in.
-                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", communityId);
+                // WPF MakeHerYoursRuntimeVm: the installed prompt's NAME, id when the file is missing.
+                ActivePersonalityLine = Loc.GetF("companion_personality_active_custom_fmt", Community?.Service.GetInstalledPrompt(communityId)?.Name ?? communityId);
                 CanResetPersonality = true;
                 return;
             }
@@ -348,6 +364,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (Shell is { } shell) await shell.ActivatePersonalityPresetAsync(id);
             // Reads back what happened: a cancelled acknowledgement leaves the old preset active.
             Sync();
+            RefreshCommunityRows();
         }
 
         private async void OpenPromptEditor()

@@ -108,6 +108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             foreach (var d in _visibilityWatch) d.Dispose();
             _visibilityWatch.Clear();
+            ParkClocks();
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -159,6 +160,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             RefreshRoster();
         }
 
+        /// <summary>WPF UpdateCommunityPromptsUI on tab show (MainWindow.CompanionTab.cs:147) and after a
+        /// deactivate (MainWindow.Patreon.cs:2249): the rows' active dot follows the setting. Skipped while
+        /// the cell is detached - it rebuilds on attach, and a detached read would leak a service.</summary>
+        internal void RefreshCommunity()
+        {
+            if ((WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Community is { } cell
+                && global::Avalonia.VisualTree.VisualExtensions.IsAttachedToVisualTree(cell))
+                cell.RefreshInstalledPrompts();
+        }
+
         // ponytail: ICompanionRoomVm (zone interfaces) lives in the WPF head; hero, chat and memory are
         // live, the other zones seed their own viewmodels until their runtime crosses.
 
@@ -190,6 +201,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 // have changed while the tab was hidden, and a resume that restored the state at
                 // park time would be a lie.
                 ChatZone.ViewModel?.Sync();
+                ChatZone.SyncThinking();
                 MemoryZone.ViewModel?.Sync();
                 PersonalityZone.ViewModel.Sync();   // WPF CompanionRoomRuntimeVm.Sync -> PersonalityVm.Sync
                 AttentionZone.ViewModel?.Sync();
@@ -197,10 +209,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 HeroZone.GetLogicalDescendants().OfType<RelationshipConstellation>().FirstOrDefault()?.PlayIntro();
                 // WPF UpdateCompanionCardsUI runs on the same show: the roster's levels and ring.
                 (WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Roster.Refresh();
-                // ponytail: WPF also calls ChatZone.SyncThinking() here. This head's
-                // ChatThresholdView has no thinking clock to sync - WPF's dots are three
-                // RepeatBehavior=Forever Storyboards (CmpThinkingDotsStoryboard) and the port
-                // draws the dots static. Add the call when that animation exists here.
+                RefreshCommunity();
             }
             catch (InvalidOperationException)
             {
@@ -213,6 +222,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             try
             {
                 HeroZone.StopAmbientLoop();
+                ChatZone.StopThinking();
                 // The privacy card parks itself off its own visibility (AwarenessPrivacyView): under v2 it
                 // lives on the Awareness tab, where the room's edges are not its edges.
             }

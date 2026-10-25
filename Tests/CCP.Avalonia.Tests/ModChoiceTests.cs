@@ -8,11 +8,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using CCP.Tests.Shared;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -53,6 +55,74 @@ public sealed class ModChoiceTests
     });
 
     [Fact]
+    public Task CompanionChipPicksAreRememberedAndRestoredByTheHeaderModSwitch() => Run(async (shell, svc, server) =>
+    {
+        var s = CoreSettings.Current;
+        s.ModPersonalityPreset.Clear();
+        s.UserPersonalityPresets.Add(new PersonalityPreset { Id = "pick-neutral", Name = "Neutral pick" });
+        s.UserPersonalityPresets.Add(new PersonalityPreset { Id = "pick-drone", Name = "Drone pick" });
+        s.SlutModeEnabled = false;
+        // Companion v2 collapses the room; the chips live on Companion > Personality, whose OnShown re-syncs them.
+        shell.ShowTab("personality");
+        Dispatcher.UIThread.RunJobs();
+        var personality = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single().ViewModel;
+        personality.Presets.Single(p => p.Id == "pick-neutral").IsSelected = true;
+        Assert.Equal("pick-neutral", s.ModPersonalityPreset[BuiltInMods.CCPDefaultId]);
+
+        var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        personality.Presets.Single(p => p.Id == "pick-drone").IsSelected = true;
+        Assert.Equal("pick-drone", s.ModPersonalityPreset[BuiltInMods.DronificationId]);
+
+        // A mod restore is not a fresh pick: it must keep a custom prompt. (No fence assert here:
+        // ModService fences on every mod switch, so it cannot tell a broken restore apart.)
+        s.ActiveCommunityPromptId = "remembered-custom";
+        s.CompanionPrompt.UseCustomPrompt = true;
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.CCPDefaultId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("pick-neutral", s.ActivePersonalityPresetId);
+        Assert.Equal("remembered-custom", s.ActiveCommunityPromptId);
+        Assert.True(s.CompanionPrompt.UseCustomPrompt);
+        Assert.True(personality.Presets.Single(p => p.Id == "pick-neutral").IsSelected);
+        Assert.False(personality.Presets.Single(p => p.Id == "pick-drone").IsSelected);
+        Assert.Equal(2, s.ModPersonalityPreset.Count);
+
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("pick-drone", s.ActivePersonalityPresetId);
+        Assert.True(personality.Presets.Single(p => p.Id == "pick-drone").IsSelected);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ModSwitchWithoutAnAvailableStoredPickDoesNotInventAnExplicitChoice() => Run(async (shell, svc, server) =>
+    {
+        var s = CoreSettings.Current;
+        s.ModPersonalityPreset.Clear();
+        s.ActivePersonalityPresetId = "gone-personality";
+        s.PersonaVoiceFenceUtc = DateTime.UnixEpoch;
+        var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(s.ModPersonalityPreset);
+        Assert.Equal("gone-personality", s.ActivePersonalityPresetId);
+        // ModService fences replies on every real mod change, independently of restoring a pick.
+        Assert.True(s.PersonaVoiceFenceUtc > DateTime.UnixEpoch);
+        Assert.NotEqual("gone-personality", PersonalityService.Shared.GetActivePreset().Id);
+
+        s.ModPersonalityPreset[BuiltInMods.CCPDefaultId] = "removed-pick";
+        combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.CCPDefaultId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("gone-personality", s.ActivePersonalityPresetId);
+        // ModService fences replies on every real mod change, independently of restoring a pick.
+        Assert.True(s.PersonaVoiceFenceUtc > DateTime.UnixEpoch);
+        Assert.Equal("removed-pick", s.ModPersonalityPreset[BuiltInMods.CCPDefaultId]);
+        Assert.Equal(PersonalityPresets.NeutralDefaultId, PersonalityService.Shared.GetActivePreset().Id);
+        await Task.CompletedTask;
+    });
+
+    [Fact]
     public Task UninstallingANonActiveModRefreshesTheComboAndTheChipKeepsItsName() => Run(async (shell, svc, server) =>
     {
         // A user mod, installed before the shell is built, so it is one of the combo's rows.
@@ -84,6 +154,65 @@ public sealed class ModChoiceTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(BuiltInMods.DronificationId, (combo.SelectionBoxItem as ModSelectorItem)?.Id);   // chip not blank
         shell.Close();
+    });
+
+    [Fact]
+    public Task HeaderManagerFooterOpensManagerWithoutChangingTheModOrPendingChoice() => Run(async (shell, svc, server) =>
+    {
+        var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+        var active = AvApp.Mods!.ActiveModId;
+        PendingModChoice.Record(BuiltInMods.BambiSleepId, active);
+        var footer = Assert.Single(shell.AvailableMods, i => i.Id == "__open_mod_manager__");
+        Assert.Same(footer, shell.AvailableMods.Last());
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_open_mod_manager"), footer.Name);
+
+        combo.IsDropDownOpen = true;
+        combo.SelectedItem = footer;
+        Assert.False(combo.IsDropDownOpen);
+        Assert.Equal(active, ((ModSelectorItem)combo.SelectedItem!).Id);
+        var manager = await Owned<ModManagerDialog>(shell);
+        Assert.Equal(active, AvApp.Mods.ActiveModId);
+        Assert.Equal(BuiltInMods.BambiSleepId, PendingModChoice.Pending);
+        Assert.Equal(active, (combo.SelectionBoxItem as ModSelectorItem)?.Id);
+        manager.Close();
+        await WaitFor(() => !shell.OwnedWindows.OfType<ModManagerDialog>().Any());
+        Assert.Equal(active, ((ModSelectorItem)combo.SelectedItem!).Id);
+    });
+
+    [Fact]
+    public Task HeaderModSwitchRepaintsHomeArtAndExternalModChangeRestoresShippedArt() => Run(async (shell, svc, server) =>
+    {
+        var dash = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
+        var cards = new[] { dash.CardFlash, dash.CardSubliminal, dash.CardBouncingText,
+            dash.CardBubblePop, dash.CardLockCard, dash.CardMystery, dash.CardVault };
+        var pairs = new[] { dash.ComboVideoBubble, dash.ComboSpiralPink, dash.ComboMindDrain };
+        var old = CoreModArt.OverridePathProvider;
+        var scratch = Directory.CreateTempSubdirectory("ccp-home-art-");
+        var png = Path.Combine(scratch.FullName, "art.png");
+        using (var bmp = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(6, 3), new Vector(96, 96)))
+            bmp.Save(png);
+        try
+        {
+            CoreModArt.OverridePathProvider = p => AvApp.Mods!.ActiveModId == BuiltInMods.DronificationId
+                && p.StartsWith("features/", StringComparison.Ordinal) ? png : null;
+            var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
+            combo.SelectedItem = shell.AvailableMods.Single(i => i.Id == BuiltInMods.DronificationId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.All(cards, card => Assert.Equal(2, ((global::Avalonia.Media.Imaging.Bitmap)card.Icon!).Size.AspectRatio));
+            Assert.All(pairs, pair =>
+            {
+                Assert.Equal(2, ((global::Avalonia.Media.Imaging.Bitmap)pair.IconA!).Size.AspectRatio);
+                Assert.Equal(2, ((global::Avalonia.Media.Imaging.Bitmap)pair.IconB!).Size.AspectRatio);
+            });
+            var custom = dash.CardFlash.Icon;
+            // Uninstalling the active mod switches it without going through ApplyActiveModChange.
+            AvApp.Mods!.ActivateMod(BuiltInMods.CCPDefaultId);
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotSame(custom, dash.CardFlash.Icon);
+            Assert.NotEqual(2, ((global::Avalonia.Media.Imaging.Bitmap)dash.CardFlash.Icon!).Size.AspectRatio);
+        }
+        finally { CoreModArt.OverridePathProvider = old; scratch.Delete(true); }
+        await Task.CompletedTask;
     });
 
     [Fact]
@@ -238,7 +367,11 @@ public sealed class ModChoiceTests
         server.Handle = original;
         var attempts = server.PackGets;
         PressDownload(picker);
-        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId && card.IsInstalled);
+        // PackInstalled marks the card and activates the mod before the RequestPackAsync continuation
+        // relabels the button, so wait for the label too.
+        var close = ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_close");
+        await WaitFor(() => AvApp.Mods.ActiveModId == BuiltInMods.BambiSleepId && card.IsInstalled
+            && picker.FindControl<TextBlock>("TxtDownload")!.Text == close);
         Assert.Equal(attempts + 1, server.PackGets);
         Assert.True(card.IsInstalled);
         Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("modpicker_btn_close"),

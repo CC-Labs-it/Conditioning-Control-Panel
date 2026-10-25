@@ -533,7 +533,7 @@ public class SpiralRoomTests
     public void EveryDoorIntoTheSpiralGoesThroughShowTab()
     {
         Assert.Contains("ShowTab(SpiralRoom.TabKey)",
-            AppFile("Controls", "SpiralRailHost.cs"), StringComparison.Ordinal);
+            File.ReadAllText(Path.Combine(ProductDir, "Controls", "SpiralRailHost.cs")), StringComparison.Ordinal);   // WPF head: CCP.Avalonia has a twin
 
         Assert.Contains("ShowTab(SpiralRoom.TabKey)",
             AppFile("MainWindow", "MainWindow.ProfileSpiral.cs"), StringComparison.Ordinal);

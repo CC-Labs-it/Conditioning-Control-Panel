@@ -389,9 +389,7 @@ namespace ConditioningControlPanel
             if (QuestsTab.BtnQuestSubRoadmap == null) return;
 
             var modId = App.Mods?.ActiveModId;
-            bool supported = modId == Models.BuiltInMods.CCPDefaultId
-                          || modId == Models.BuiltInMods.BambiSleepId
-                          || modId == Models.BuiltInMods.SissyHypnoId;
+            bool supported = Models.BuiltInMods.SupportsBimboJournal(modId);
 
             QuestsTab.BtnQuestSubRoadmap.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
 
@@ -680,44 +678,8 @@ namespace ConditioningControlPanel
             }
         }
 
-        private static string? GetBonusChipTooltip(string source)
-        {
-            string M(string text) => App.Mods?.MakeModAware(text) ?? text;
-
-            // Check for explicit mod override first
-            string? modTip = null;
-            if (source.StartsWith("Streak Power"))
-                modTip = App.Mods?.GetBoostTooltip("streak_power");
-            else
-            {
-                var skillId = source switch
-                {
-                    "Sparkle Boost" => "sparkle_boost_1",
-                    "Extra Sparkly" => "sparkle_boost_2",
-                    "Maximum Sparkle" => "sparkle_boost_3",
-                    "Night Shift" => "night_shift",
-                    "Early Bird Bimbo" => "early_bird_bimbo",
-                    "PINK RUSH ACTIVE!" => "pink_rush",
-                    _ => null
-                };
-                if (skillId != null)
-                    modTip = App.Mods?.GetBoostTooltip(skillId);
-            }
-            if (modTip != null) return modTip;
-
-            // Fall back to defaults with MakeModAware
-            if (source.StartsWith("Streak Power")) return M("Skill tree bonus: +0.5% XP per day of consecutive use (max 15%)");
-            return source switch
-            {
-                "Sparkle Boost" => M("Skill tree bonus: +10% XP from Sparkle Boost"),
-                "Extra Sparkly" => M("Skill tree bonus: +15% XP from Extra Sparkly (stacks with Sparkle Boost)"),
-                "Maximum Sparkle" => M("Skill tree bonus: +20% XP from Maximum Sparkle (stacks with other Sparkle skills)"),
-                "Night Shift" => M("Skill tree bonus: +50% XP for conditioning between 11 PM and 5 AM"),
-                "Early Bird Bimbo" => M("Skill tree bonus: +50% XP for conditioning between 5 AM and 8 AM"),
-                "PINK RUSH ACTIVE!" => M("Skill tree bonus: 3x XP multiplier! Random 60-second windows of boosted XP"),
-                _ => null
-            };
-        }
+        private static string? GetBonusChipTooltip(string source) =>
+            Models.SkillTreeRules.GetBonusChipTooltip(source, id => App.Mods?.GetBoostTooltip(id));
 
         /// <summary>
         /// Start a timer to periodically update stat pill values (conditioning time, online users, rank).
@@ -2179,68 +2141,14 @@ namespace ConditioningControlPanel
                     return;
                 }
 
-                var newPacksFolder = Path.Combine(selectedPath, ".packs");
+                // Shared discovery includes the old and legacy/default roots, never the destination.
+                var packFoldersToMove = PackFolderMover.Find(oldEffectivePath, App.UserAssetsPath, selectedPath);
+                var totalBytes = packFoldersToMove.Sum(p => p.Bytes);
                 var shouldMovePacks = false;
-                var packFoldersToMove = new List<(string SourceFolder, string PackName)>();
-                long totalBytes = 0;
-
-                // Check multiple locations for existing packs (retrocompatibility)
-                // 1. Current effective path (where user currently has assets)
-                // 2. Default path (in case packs were stranded there from before)
-                var locationsToCheck = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    Path.Combine(oldEffectivePath, ".packs"),
-                    Path.Combine(App.UserAssetsPath, ".packs")
-                };
-
-                // Don't check the new location (we're moving TO there)
-                locationsToCheck.Remove(newPacksFolder);
-
-                App.Logger?.Information("Asset folder change: checking {Count} locations for packs: {Locations}",
-                    locationsToCheck.Count, string.Join(", ", locationsToCheck));
-
-                foreach (var packsFolder in locationsToCheck)
-                {
-                    if (!Directory.Exists(packsFolder)) continue;
-
-                    foreach (var dir in Directory.GetDirectories(packsFolder))
-                    {
-                        var manifestPath = Path.Combine(dir, ".manifest.enc");
-                        if (!File.Exists(manifestPath)) continue;
-
-                        // Try to read pack name from manifest
-                        string packName = Path.GetFileName(dir); // Default to GUID if we can't read name
-                        try
-                        {
-                            var json = Services.PackEncryptionService.LoadEncryptedManifest(manifestPath);
-                            var manifest = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(json);
-                            if (manifest?.PackName != null)
-                            {
-                                packName = (string)manifest.PackName;
-                            }
-                        }
-                        catch { }
-
-                        packFoldersToMove.Add((dir, packName));
-
-                        // Calculate folder size
-                        try
-                        {
-                            foreach (var file in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
-                            {
-                                totalBytes += new FileInfo(file).Length;
-                            }
-                        }
-                        catch { }
-                    }
-                }
-
-                App.Logger?.Information("Found {Count} packs to potentially move, total size: {Size} bytes",
-                    packFoldersToMove.Count, totalBytes);
 
                 if (packFoldersToMove.Count > 0)
                 {
-                    var sizeText = FormatFileSize(totalBytes);
+                    var sizeText = PackFolderMover.FormatSize(totalBytes);
                     var packNames = string.Join("\n• ", packFoldersToMove.Select(p => p.PackName));
 
                     var moveResult = MessageBox.Show(
@@ -2261,78 +2169,9 @@ namespace ConditioningControlPanel
                 {
                     try
                     {
-                        // Create new packs folder if needed
-                        if (!Directory.Exists(newPacksFolder))
-                        {
-                            var di = Directory.CreateDirectory(newPacksFolder);
-                            di.Attributes |= FileAttributes.Hidden;
-                        }
-
-                        var movedCount = 0;
-                        var registeredCount = 0;
-                        foreach (var (sourceFolder, packName) in packFoldersToMove)
-                        {
-                            var guid = Path.GetFileName(sourceFolder);
-                            var destDir = Path.Combine(newPacksFolder, guid);
-                            if (!Directory.Exists(destDir))
-                            {
-                                // Use copy+delete instead of Directory.Move to support
-                                // moving packs across different drive volumes
-                                CopyDirectoryRecursive(sourceFolder, destDir);
-                                Directory.Delete(sourceFolder, recursive: true);
-                                movedCount++;
-                                App.Logger?.Information("Moved pack '{PackName}' from {Source} to {Dest}", packName, sourceFolder, destDir);
-                            }
-                            else
-                            {
-                                App.Logger?.Warning("Pack folder already exists at destination, skipping: {Dest}", destDir);
-                            }
-
-                            // Register pack in settings (fix for packs not being detected after move)
-                            var manifestPath = Path.Combine(destDir, ".manifest.enc");
-                            if (File.Exists(manifestPath))
-                            {
-                                try
-                                {
-                                    var json = Services.PackEncryptionService.LoadEncryptedManifest(manifestPath);
-                                    var manifest = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(json);
-                                    var packId = (string?)manifest?.PackId;
-
-                                    if (!string.IsNullOrEmpty(packId))
-                                    {
-                                        // Ensure settings collections exist
-                                        App.Settings.Current.InstalledPackIds ??= new List<string>();
-                                        App.Settings.Current.PackGuidMap ??= new Dictionary<string, string>();
-                                        App.Settings.Current.ActivePackIds ??= new List<string>();
-
-                                        // Add to InstalledPackIds if not present
-                                        if (!App.Settings.Current.InstalledPackIds.Contains(packId))
-                                        {
-                                            App.Settings.Current.InstalledPackIds.Add(packId);
-                                        }
-
-                                        // Update PackGuidMap (overwrite if different GUID was stored)
-                                        App.Settings.Current.PackGuidMap[packId] = guid;
-
-                                        // Auto-activate pack so it shows immediately
-                                        if (!App.Settings.Current.ActivePackIds.Contains(packId))
-                                        {
-                                            App.Settings.Current.ActivePackIds.Add(packId);
-                                        }
-
-                                        registeredCount++;
-                                        App.Logger?.Information("Registered pack in settings: {PackId} -> {Guid}", packId, guid);
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    App.Logger?.Warning(ex, "Failed to register pack from manifest: {Path}", manifestPath);
-                                }
-                            }
-                        }
-
-                        App.Logger?.Information("Moved {MovedCount}/{Total} packs, registered {RegCount} in settings",
-                            movedCount, packFoldersToMove.Count, registeredCount);
+                        // Core verifies the complete copy before removing the old pack, and registers
+                        // the destination manifest with the same installed/active settings collections.
+                        PackFolderMover.Move(packFoldersToMove, selectedPath, App.Settings.Current);
                     }
                     catch (Exception ex)
                     {
@@ -2367,33 +2206,6 @@ namespace ConditioningControlPanel
 
                 App.Logger?.Information("Custom assets path set to: {Path}", selectedPath);
             }
-        }
-
-        /// <summary>
-        /// Recursively copies a directory. Works across drive volumes unlike Directory.Move.
-        /// </summary>
-        private static void CopyDirectoryRecursive(string sourceDir, string destinationDir)
-        {
-            Directory.CreateDirectory(destinationDir);
-            foreach (var file in Directory.GetFiles(sourceDir))
-            {
-                File.Copy(file, Path.Combine(destinationDir, Path.GetFileName(file)), overwrite: true);
-            }
-            foreach (var dir in Directory.GetDirectories(sourceDir))
-            {
-                CopyDirectoryRecursive(dir, Path.Combine(destinationDir, Path.GetFileName(dir)));
-            }
-        }
-
-        private static string FormatFileSize(long bytes)
-        {
-            if (bytes >= 1024L * 1024 * 1024)
-                return $"{bytes / (1024.0 * 1024.0 * 1024.0):F1} GB";
-            if (bytes >= 1024 * 1024)
-                return $"{bytes / (1024.0 * 1024.0):F1} MB";
-            if (bytes >= 1024)
-                return $"{bytes / 1024.0:F1} KB";
-            return $"{bytes} bytes";
         }
 
         internal void BtnRefreshAssets_Click(object sender, RoutedEventArgs e)

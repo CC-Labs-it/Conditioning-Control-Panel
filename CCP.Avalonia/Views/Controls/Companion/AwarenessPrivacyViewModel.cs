@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -23,12 +22,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// ON edge goes through <see cref="MainShellWindow.SetAwarenessEnabled"/> (entitlement, then the
     /// consent dialog). Nothing widens because a segment was pressed.
     ///
-    /// <para><b>The v2 observer and ledger are not on this head</b>, so WPF's own rule
+    /// <para><b>The v2 observer is not on this head</b>, so WPF's own rule
     /// (<c>IsLegacyPipeline = on &amp;&amp; !AwarenessObserver.IsEnabled</c>) reads as "legacy whenever
     /// on": the warning band shows, the wire says "not reported" and the JSON stays empty. That band
     /// over-warns here (the head's poll does enforce the deny list and incognito drop), which is the
-    /// safe direction (docs/avalonia-decisions.md, 2026-10-08). No ledger also means no known-apps
-    /// row; the seen-apps row is the window in front right now (no keyword-trigger ring here).</para>
+    /// safe direction (docs/avalonia-decisions.md, 2026-10-08). The shared ledger supplies retained known-apps and erasure; the seen-apps row is the window in front right now (no keyword-trigger ring here).</para>
     /// </summary>
     public sealed class AwarenessPrivacyViewModel : INotifyPropertyChanged
     {
@@ -39,7 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private readonly ObservableCollection<AwarenessChip> _deny = new();
         private readonly ObservableCollection<AwarenessChip> _allow = new();
         private readonly ObservableCollection<AwarenessChip> _seen = new();
-        private readonly List<string> _denyKeys = new(), _allowKeys = new(), _seenKeys = new();
+        private readonly ObservableCollection<AwarenessChip> _known = new();
+        private readonly List<string> _denyKeys = new(), _allowKeys = new(), _seenKeys = new(), _knownKeys = new();
 
         private AwarenessIntensity _intensity = AwarenessIntensity.Off;
         private bool _isJsonExpanded, _isPaused, _isLegacyPipeline;
@@ -73,9 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Fill(vm._deny, "", Loc.Get("companion_awareness_deny_passwords"), Loc.Get("companion_awareness_deny_banking"), Loc.Get("companion_awareness_deny_email"));
             Fill(vm._allow, "");
             Fill(vm._seen, "companion_awareness_seen_tip", "Chrome", "Discord", "Steam");
-            var known = new ObservableCollection<AwarenessChip>();
-            Fill(known, "companion_awareness_forget_tip", "YouTube", "Discord");
-            vm.KnownApps = known;
+            Fill(vm._known, "companion_awareness_forget_tip", "YouTube", "Discord");
             switch (exhibit)
             {
                 case "Dormant":
@@ -196,9 +193,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public IReadOnlyList<AwarenessChip> SeenApps => _seen;
         public bool HasSeenApps => _seen.Count > 0;
         public string SeenAppsLabel => Loc.Get("companion_awareness_seen_label");
-        /// <summary>Empty: no activity ledger on this head, and the row is not invented.</summary>
-        public IReadOnlyList<AwarenessChip> KnownApps { get; private set; } = Array.Empty<AwarenessChip>();
-        public bool HasKnownApps => KnownApps.Count > 0;
+        /// <summary>WPF: retained ledger ids plus unaccrued transitions, most recent first.</summary>
+        public IReadOnlyList<AwarenessChip> KnownApps => _known;
+        public bool HasKnownApps => _known.Count > 0;
         public string KnownAppsLabel => Loc.Get("companion_awareness_known_label");
 
         /// <summary>True when an app is title-allow-listed; on asks which app, off empties the list.</summary>
@@ -237,6 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 if (_preview) { _retentionDays = value; Raise(); Raise(nameof(RetentionLabel)); return; }
                 CoreSettings.Current.AwarenessRetentionDays = value;   // setter clamps to 7..90
                 CoreSettings.Save();
+                AwarenessLive.Ledger?.PruneRetention(DateTime.Now);
+                AwarenessLive.Ledger?.PruneOnDisk();
                 Log.Information("Awareness: retention set to {Days}d", CoreSettings.Current.AwarenessRetentionDays);
                 Sync();
             }
@@ -282,7 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 foreach (var n in new[] { nameof(IsPaused), nameof(PauseLabel), nameof(IsLegacyPipeline),
                              nameof(IncognitoCopy), nameof(WireCaption), nameof(RetentionDays), nameof(RetentionLabel),
                              nameof(Intensity), nameof(DialHint), nameof(AllowPageTitles), nameof(PageTitlesLabel),
-                             nameof(HasTitleAllowList), nameof(HasSeenApps) })
+                             nameof(HasTitleAllowList), nameof(HasSeenApps), nameof(HasKnownApps) })
                     Raise(n);
             }
             catch (Exception ex) { Log.Debug("Awareness panel sync failed: {E}", ex.Message); }
@@ -315,6 +314,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
                 next.Add((current + "\u0001" + clean + "\u0001" + tip, () => new AwarenessChip(current, new RelayCommand(() => AddToDeny(clean)), tip)));
             }
             RefillIfChanged(_seen, _seenKeys, next);
+
+            next = new();
+            if (AwarenessLive.Ledger is { } ledger)
+                foreach (var id in ledger.KnownAppIds.Concat(ledger.RecentTransitions.Select(t => t.AppId))
+                    .Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxAppChips))
+                {
+                    var appId = id;
+                    var tip = Loc.Get("companion_awareness_forget_tip");
+                    next.Add((appId + "\u0001" + tip, () => new AwarenessChip(appId,
+                        new RelayCommand(() => { AwarenessLive.Forget(appId); Sync(); }), tip)));
+                }
+            RefillIfChanged(_known, _knownKeys, next);
         }
 
         /// <summary>Refills a row only when its keys changed (WPF #1323: refilling every tick stalled the UI).</summary>
@@ -437,21 +448,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             Sync();
         }
 
-        /// <summary>
-        /// Erases what this head stores about awareness: the activity-ledger file and its .tmp
-        /// sibling (WPF <c>AwarenessLive.WipeFilesDirectly</c>; this head writes no ledger, so they exist
-        /// only in a copied profile). The legacy poll keeps no history beyond the window in front, and
-        /// there is no projected frame or awareness memory here to clear. The two-step confirm ran first.
-        /// </summary>
+        /// <summary>WPF's full erasure pipeline, after the existing two-step confirmation.</summary>
         private void Wipe()
         {
-            var path = Path.Combine(CorePaths.UserData, "awareness_ledger.json");
-            foreach (var file in new[] { path, path + ".tmp" })
-            {
-                try { if (File.Exists(file)) File.Delete(file); }
-                catch (Exception ex) { Log.Warning(ex, "Awareness: failed to delete {File}", file); }
-            }
-            Log.Information("Awareness: everything she noticed has been erased");
+            AwarenessLive.WipeEverything();
             Sync();
         }
 
