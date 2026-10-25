@@ -42,7 +42,57 @@ public sealed record Friend(
     int Tier,
     bool Online,
     FriendPresence Presence,
-    bool Squelched);
+    bool Squelched)
+{
+    /// <summary>Where they are online (Friends Everywhere S3): a subset of <see cref="FriendPlatform.Order"/>,
+    /// in that order. Empty when offline or from a server that predates platforms (no marks drawn).</summary>
+    public IReadOnlyList<string> Platforms { get; init; } = Array.Empty<string>();
+}
+
+/// <summary>The devices a friend can be online from (Friends Everywhere S3). This client always
+/// polls as <see cref="Desktop"/>. Loc key <c>friends_platform_&lt;id&gt;</c>.</summary>
+public static class FriendPlatform
+{
+    public const string Desktop = "desktop";
+    public const string Phone = "phone";
+    public const string Web = "web";
+
+    /// <summary>The one order the wire, the row marks and the tooltips use.</summary>
+    public static readonly IReadOnlyList<string> Order = new[] { Desktop, Phone, Web };
+
+    // One shared read-only list per subset (bit i = Order[i]), so equal sets are the same reference
+    // and record equality on Friend holds from one poll to the next (no needless redraws).
+    private static readonly IReadOnlyList<string>[] Subsets = BuildSubsets();
+
+    private static IReadOnlyList<string>[] BuildSubsets()
+    {
+        var all = new IReadOnlyList<string>[1 << Order.Count];
+        all[0] = Array.Empty<string>();
+        for (var mask = 1; mask < all.Length; mask++)
+        {
+            var list = new List<string>(Order.Count);
+            for (var i = 0; i < Order.Count; i++) if ((mask & (1 << i)) != 0) list.Add(Order[i]);
+            all[mask] = list.ToArray();
+        }
+        return all;
+    }
+
+    /// <summary>The wire's <c>platforms</c> as this client keeps it: known ids only, no repeats, in
+    /// <see cref="Order"/> whatever order they came in. Null or junk reads as none. Equal sets come
+    /// back as the same cached instance.</summary>
+    public static IReadOnlyList<string> Normalise(IEnumerable<string?>? ids)
+    {
+        if (ids == null) return Subsets[0];
+        var mask = 0;
+        foreach (var id in ids)
+        {
+            if (id == null) continue;
+            var key = id.Trim().ToLowerInvariant();
+            for (var i = 0; i < Order.Count; i++) if (Order[i] == key) mask |= 1 << i;
+        }
+        return Subsets[mask];
+    }
+}
 
 /// <summary>A pending request, incoming or outgoing. <see cref="Via"/> is the mutual friend's
 /// name when the server knows one, else null.</summary>
@@ -112,8 +162,17 @@ public static class InviteDestination
     /// <summary>Piece by Piece. The code is the server's challenge id (<c>c_</c> + 16 hex),
     /// minted by <c>/v2/pbp/challenge</c> with the friend as target.</summary>
     public const string Chess = "chess";
+    /// <summary>Racing Thoughts, sent from the web (Friends Everywhere W4). No code; Join opens the
+    /// web race in the browser.</summary>
+    public const string Race = "race";
+    /// <summary>Breakout, sent from the web demo (Friends Everywhere W4). No code; Join opens the
+    /// Breakout station.</summary>
+    public const string Breakout = "breakout";
 
-    public static readonly IReadOnlyList<string> All = new[] { Goon, BackRoom, Remote, Ramp, Chess };
+    public static readonly IReadOnlyList<string> All = new[] { Goon, BackRoom, Remote, Ramp, Chess, Race, Breakout };
+
+    /// <summary>The web race Join opens for a <see cref="Race"/> invite.</summary>
+    public const string RaceWebUrl = "https://app.cclabs.app/race";
 
     /// <summary>What the drawer offers and the service sends. Remote was dropped (owner,
     /// 2026-09-28): its PIN never travelled, so an invite was a dead end. It stays in

@@ -135,6 +135,11 @@ namespace ConditioningControlPanel
 
             s.SlutModeEnabled = enabled;
             App.Settings?.Save();
+
+            // The switch only changes how she answers in the chat box, so a player who flips it
+            // and keeps playing sees nothing (ticket 2026-10-16: "Slut Mode doesn't do anything").
+            // One bubble line tells them where to look. Text only, no synthetic speech.
+            _avatarTubeWindow?.Giggle(Loc.Get(enabled ? "companion_spice_on_line" : "companion_spice_off_line"));
             return enabled;
         }
 

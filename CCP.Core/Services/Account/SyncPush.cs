@@ -24,6 +24,39 @@ namespace ConditioningControlPanel.Services
     {
         public const SyncBody.Field Sent = SyncBody.Field.UnifiedId | SyncBody.Field.Xp | SyncBody.Field.Level
             | SyncBody.Field.DescentEpoch | SyncBody.Field.Achievements;
+        public const SyncBody.Field Privacy = SyncBody.Field.AllowDiscordDm | SyncBody.Field.ShowOnlineStatus
+            | SyncBody.Field.ShareProfilePicture | SyncBody.Field.PublicShareAvatar
+            | SyncBody.Field.GoonShareAvatar | SyncBody.Field.GoonShareDm;
+
+        /// <summary>Only audiences explicitly chosen here for this account are known; unrelated defaults never leave.</summary>
+        public static SyncBody.Field ConsentFields(AppSettings s) =>
+            !string.IsNullOrEmpty(s.UnifiedId) && string.Equals(s.ConsentOwnedAccount, s.UnifiedId, StringComparison.Ordinal)
+                ? (SyncBody.Field)s.ConsentOwnedFields & Privacy : SyncBody.Field.None;
+
+        /// <summary>WPF's push-on-change privacy handlers. The owned fields are saved even offline and every later
+        /// push (the after-load push included) carries them, so no separate retry flag is needed. Adapted from parity/trunk 4f739180ca68a1e45f62c70a78d2bfbd0f1afcc0, owning each field
+        /// individually so changing one switch does not overwrite other audiences with fresh-install defaults.</summary>
+        public async Task<bool> PushPrivacyAsync(SyncBody.Field field)
+        {
+            var s = CoreSettings.Current;
+            if (!RememberPrivacyChange(s, field)) return false;
+            CoreSettings.Save();
+            if (!Loaded || !SignedIn(s)) return false;
+            if (await PushAsync("privacy", waitForGate: true)) return true;
+            Nudge("privacy");
+            return false;
+        }
+
+        public static bool RememberPrivacyChange(AppSettings s, SyncBody.Field field)
+        {
+            if (field == SyncBody.Field.None || (field & Privacy) != field) throw new ArgumentOutOfRangeException(nameof(field));
+            if (string.IsNullOrEmpty(s.UnifiedId)) return false;
+            if (!string.Equals(s.ConsentOwnedAccount, s.UnifiedId, StringComparison.Ordinal)) s.ConsentOwnedFields = 0;
+            s.ConsentOwnedAccount = s.UnifiedId;
+            s.ConsentOwnedFields |= (long)field;
+            return true;
+        }
+
         public static readonly TimeSpan Cooldown = TimeSpan.FromSeconds(30);
         public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(120);
         private static readonly TimeSpan NudgeSettle = TimeSpan.FromSeconds(3), NudgeCooldownSlack = TimeSpan.FromSeconds(2);
@@ -109,16 +142,22 @@ namespace ConditioningControlPanel.Services
         /// shrunk to local-only). Xp is the TOTAL, as WPF sends it.</summary>
         /// <param name="cosmetics">An explicit loadout save (WPF BuildCosmeticsPayload after a load: the sanitized
         /// loadout, the empty one included - that is the unequip-everything clear). Null leaves the key out.</param>
-        public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null) => new()
+        public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null, SyncBody.Field consent = SyncBody.Field.None) => new()
         {
             Known = (achievements == null ? Sent & ~SyncBody.Field.Achievements : Sent)
-                    | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics),
+                    | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics) | (consent & Privacy),
             UnifiedId = s.UnifiedId,
             Xp = (int)ProfileAdopt.TotalXp(s),
             Level = s.PlayerLevel,
             DescentEpoch = Descent.DescentEpochs.ClientEpoch,
             Achievements = achievements?.Distinct().OrderBy(a => a, StringComparer.Ordinal).ToList(),
             Cosmetics = cosmetics,
+            AllowDiscordDm = s.AllowDiscordDm,
+            ShowOnlineStatus = s.ShowOnlineStatus,
+            ShareProfilePicture = s.ShareProfilePicture,
+            PublicShareAvatar = s.PublicShareRealAvatar,
+            GoonShareAvatar = s.GoonShareAvatar,
+            GoonShareDm = s.GoonShareDiscordDm,
         };
 
         /// <summary>WPF PersistOwnCosmetics' push, after <paramref name="chosen"/> was saved to settings. Every push
@@ -171,7 +210,7 @@ namespace ConditioningControlPanel.Services
                 var server = _serverAchievements;
                 var clearing = _pendingCosmeticsClear;
                 var cosmetics = CosmeticsPayload(s, clearing);
-                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics));
+                var body = JsonConvert.SerializeObject(Body(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s)));
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {

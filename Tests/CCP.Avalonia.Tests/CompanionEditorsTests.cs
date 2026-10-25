@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Features;
@@ -31,7 +32,7 @@ public sealed class CompanionEditorsTests
     private static void Setup()
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
@@ -41,7 +42,9 @@ public sealed class CompanionEditorsTests
 
     private static async Task Until(Func<bool> done)
     {
-        for (var i = 0; i < 200 && !done(); i++) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
+        // Bounded by time, not turns: turn counts pass alone and fail under gate load (PLAYBOOK P73).
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!done() && DateTime.UtcNow < deadline) { await Task.Yield(); Dispatcher.UIThread.RunJobs(); }
         Assert.True(done());
     }
 
@@ -133,6 +136,87 @@ public sealed class CompanionEditorsTests
             owner.Close();
             CoreSettings.ServiceProvider = null;
         }
+    });
+
+    [Fact]
+    public Task PromptEditor_community_badge_uses_installed_name_or_localized_unknown() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var id = "badge-" + Guid.NewGuid().ToString("N");
+        var folder = System.IO.Path.Combine(CorePaths.UserData, ConditioningControlPanel.Services.Companion.InstalledCommunityPrompts.FolderName);
+        var path = System.IO.Path.Combine(folder, id + ".json");
+        System.IO.Directory.CreateDirectory(folder);
+        try
+        {
+            CoreSettings.Current.ActiveCommunityPromptId = id;
+            System.IO.File.WriteAllText(path, "{\"Id\":\"" + id + "\",\"Name\":\"My community persona\"}");
+            var installed = new CompanionPromptEditorDialog();
+            var badge = installed.FindControl<TextBlock>("TxtActivePromptName")!;
+            Assert.Equal("My community persona", badge.Text);
+            Assert.Equal(Color.FromRgb(147, 112, 219), ((SolidColorBrush)badge.Foreground!).Color);
+            LocalizationManager.Instance.SetLanguage("de");
+            Assert.Equal("My community persona", badge.Text); // literal names must survive language changes
+            installed.Close();
+
+            System.IO.File.Delete(path);
+            var missing = new CompanionPromptEditorDialog();
+            badge = missing.FindControl<TextBlock>("TxtActivePromptName")!;
+            Assert.Equal(Loc.Get("label_unknown_prompt"), badge.Text);
+            Assert.Equal(Color.FromRgb(255, 107, 107), ((SolidColorBrush)badge.Foreground!).Color);
+            LocalizationManager.Instance.SetLanguage("en");
+            Assert.Equal(Loc.Get("label_unknown_prompt"), badge.Text);
+            missing.Close();
+
+            System.IO.File.WriteAllText(path, "broken json");
+            var corrupt = new CompanionPromptEditorDialog();
+            Assert.Equal(Loc.Get("label_unknown_prompt"), corrupt.FindControl<TextBlock>("TxtActivePromptName")!.Text);
+            corrupt.Close();
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+            CoreSettings.ServiceProvider = null;
+            LocalizationManager.Instance.SetLanguage("en");
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PromptEditor_is_reachable_from_make_her_yours_links() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("companion");
+            // WPF v2: Companion > Personality adopts Make-her-yours (Pages/PersonalityPage.xaml.cs:43).
+            shell.Named<SectionTabStrip>("SectionStrip")!.PillFor("personality")!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var view = shell.GetLogicalDescendants()
+                .OfType<ConditioningControlPanel.Avalonia.Views.Controls.Companion.MakeHerYoursView>().Single();
+            // Adjust/traits are dormant Train 3 controls in WPF; drive the two live links.
+            foreach (var command in new[] { view.ViewModel.ViewCompiledPromptCommand, view.ViewModel.ForkPromptCommand })
+            {
+                var button = view.GetLogicalDescendants().OfType<Button>().Single(b => b.Command == command);
+                button.BringIntoView();
+                Dispatcher.UIThread.RunJobs();
+                var at = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), shell)!.Value;
+                shell.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+                shell.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                await Until(() => shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Any());
+                var editor = shell.OwnedWindows.OfType<CompanionPromptEditorDialog>().Single();
+                Click(editor.FindControl<Button>("BtnCancel")!);
+                await Until(() => !editor.IsVisible);
+            }
+        }
+        finally { shell.Close(); CoreSettings.ServiceProvider = null; }
     });
 
     private sealed class SteppedClock : TimeProvider

@@ -23,9 +23,9 @@ namespace ConditioningControlPanel.Services
     {
         #region Fields
 
-        private readonly StringBuilder _buffer = new(200);
-        private DateTime _lastKeyTime = DateTime.MinValue;
-        private DateTime _lastGlobalTriggerTime = DateTime.MinValue;
+        private readonly KeywordTextInput _input = new();
+        private readonly KeywordCooldowns _cooldowns = new();
+        private DateTime _lastGlobalTriggerTime { get => _cooldowns.LastGlobal; set => _cooldowns.LastGlobal = value; }
         private bool _isActive;
         private bool _disposed;
 
@@ -58,8 +58,6 @@ namespace ConditioningControlPanel.Services
         // Maps lowercase keyword → UTC time when the mute expires. Muted keywords are
         // skipped across ALL sources (OCR / keyboard / clipboard) so a trigger's own
         // output (flash text, bubble, spoken word) cannot re-arm it.
-        private readonly Dictionary<string, DateTime> _mutedKeywords = new(StringComparer.OrdinalIgnoreCase);
-        private readonly object _muteLock = new();
 
         // --- Awareness Engine: live pulse ring buffer ---
         // Bounded history of recent trigger fires for the Awareness tab pulse feed.
@@ -81,20 +79,7 @@ namespace ConditioningControlPanel.Services
 
         private bool IsKeywordMuted(string keyword)
         {
-            if (string.IsNullOrEmpty(keyword)) return false;
-            // The _mutedKeywords dict is the single source of truth. RecordFire
-            // writes to it only when AwarenessLoopProtectionEnabled is on, but
-            // ForceMuteKeyword writes unconditionally for self-echoing effects,
-            // so both cases are honored by a direct dict lookup here.
-            lock (_muteLock)
-            {
-                if (_mutedKeywords.TryGetValue(keyword, out var expiresAt))
-                {
-                    if (DateTime.UtcNow < expiresAt) return true;
-                    _mutedKeywords.Remove(keyword);
-                }
-                return false;
-            }
+            return !string.IsNullOrEmpty(keyword) && _cooldowns.IsMuted(keyword, DateTime.UtcNow);
         }
 
         /// <summary>
@@ -106,15 +91,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private void ForceMuteKeyword(string keyword, int muteMs)
         {
-            if (string.IsNullOrEmpty(keyword) || muteMs <= 0) return;
-            lock (_muteLock)
-            {
-                var expiresAt = DateTime.UtcNow.AddMilliseconds(muteMs);
-                // Extend rather than shrink if an existing mute is already longer.
-                if (!_mutedKeywords.TryGetValue(keyword, out var existing) || existing < expiresAt)
-                    _mutedKeywords[keyword] = expiresAt;
-            }
-            App.Logger?.Debug("ForceMuteKeyword: '{Keyword}' muted for {Ms}ms (self-echo guard)", keyword, muteMs);
+            _cooldowns.Mute(keyword, muteMs, DateTime.UtcNow);
         }
 
         /// <summary>
@@ -159,31 +136,7 @@ namespace ConditioningControlPanel.Services
         {
             var settings = App.Settings?.Current;
 
-            // 1. Temporal mute — suppress this exact keyword for a short window across all sources.
-            //    Two layers write to the same _mutedKeywords dict:
-            //      a) Optional user-controlled loop protection window (AwarenessLoopProtectionMs)
-            //      b) HARD per-keyword cooldown (KeywordPerKeywordCooldownSeconds, default 15s)
-            //         which ALWAYS applies regardless of loop-protection setting.
-            //    We take the longer of the two so a user who cranks loop protection above 15s
-            //    still gets what they asked for.
-            if (settings != null && !string.IsNullOrEmpty(trigger.Keyword))
-            {
-                int loopMs = settings.AwarenessLoopProtectionEnabled ? settings.AwarenessLoopProtectionMs : 0;
-                int hardMs = settings.KeywordPerKeywordCooldownSeconds * 1000;
-                int finalMs = Math.Max(loopMs, hardMs);
-
-                if (finalMs > 0)
-                {
-                    var expiresAt = DateTime.UtcNow.AddMilliseconds(finalMs);
-                    lock (_muteLock)
-                    {
-                        // Extend (don't shrink) existing mute entries — a ForceMuteKeyword
-                        // already in progress should not be cut short by this.
-                        if (!_mutedKeywords.TryGetValue(trigger.Keyword, out var existing) || existing < expiresAt)
-                            _mutedKeywords[trigger.Keyword] = expiresAt;
-                    }
-                }
-            }
+            if (settings != null) _cooldowns.Record(trigger, settings, DateTime.UtcNow);
 
             // 2. Live pulse ring buffer — newest entry at the front, drop oldest past capacity.
             var record = new TriggerFireRecord
@@ -230,7 +183,7 @@ namespace ConditioningControlPanel.Services
             }
 
             _isActive = true;
-            _buffer.Clear();
+            _input.Clear();
             App.Logger?.Debug("KeywordTriggerService started");
         }
 
@@ -241,7 +194,7 @@ namespace ConditioningControlPanel.Services
         {
             if (!_isActive) return;
             _isActive = false;
-            _buffer.Clear();
+            _input.Clear();
             StopTriggerAudio();
             App.Logger?.Debug("KeywordTriggerService stopped");
         }
@@ -261,68 +214,25 @@ namespace ConditioningControlPanel.Services
         public void OnKeyPressed(Key key, int vkCode)
         {
             if (!_isActive || _disposed) return;
-
             var settings = App.Settings?.Current;
-            if (settings == null || !settings.KeywordTriggersEnabled) return;
-
-            // Entitlement can lapse while the hook is live (the ? box's free day rotating out at
-            // midnight, a subscription expiring mid-session). Start() checks HasAccess() once and
-            // never again, so without this per-press re-check the feature kept firing from behind
-            // the re-drawn padlock veil - which also covers the OFF toggle (the "can't turn it
-            // off after it rotated" reports). Cheap: a dictionary lookup + cached tier flags.
-            if (!HasAccess()) return;
-
-            // App scope, checked before the buffer rather than before the match. Dropping the
-            // keystrokes is the point: if it only refused to FIRE, a keyword typed into a blocked
-            // app would still be sitting in the rolling buffer, ready to go off the moment focus
-            // moved somewhere allowed. Clearing also means a word half-typed either side of an app
-            // switch cannot be stitched into a match that was never typed anywhere.
-            if (!IsForegroundAppAllowed("Keyboard"))
-            {
-                if (_buffer.Length > 0) _buffer.Clear();
-                return;
-            }
-
-            // Check buffer timeout — reset if too much time has passed
+            if (settings == null || !settings.KeywordTriggersEnabled || !HasAccess()) return;
+            if (!IsForegroundAppAllowed("Keyboard")) { _input.Clear(); return; }
             var now = DateTime.Now;
-            var timeoutMs = settings.KeywordBufferTimeoutMs;
-            if ((now - _lastKeyTime).TotalMilliseconds > timeoutMs && _buffer.Length > 0)
+            var special = key switch
             {
-                _buffer.Clear();
-            }
-            _lastKeyTime = now;
-
-            // Handle special keys
-            if (key == Key.Return || key == Key.Escape || key == Key.Tab)
+                Key.Return or Key.Escape or Key.Tab => (KeywordInputKey?)KeywordInputKey.Clear,
+                Key.Back => KeywordInputKey.Backspace,
+                Key.Space => KeywordInputKey.Space,
+                _ => null,
+            };
+            if (special is { } k)
             {
-                _buffer.Clear();
+                if (_input.Key(k, now, settings.KeywordBufferTimeoutMs)) CheckForMatches();
                 return;
             }
-
-            if (key == Key.Back)
-            {
-                if (_buffer.Length > 0)
-                    _buffer.Remove(_buffer.Length - 1, 1);
-                return;
-            }
-
-            if (key == Key.Space)
-            {
-                _buffer.Append(' ');
-                CheckForMatches();
-                return;
-            }
-
-            // Translate vkCode → actual character using Win32
-            var ch = TranslateVkCode(vkCode);
-            if (ch == null) return;
-
-            _buffer.Append(ch.Value);
-
-            // Cap buffer length
-            if (_buffer.Length > 200)
-                _buffer.Remove(0, _buffer.Length - 200);
-
+            _input.Key(KeywordInputKey.None, now, settings.KeywordBufferTimeoutMs);
+            if (TranslateVkCode(vkCode) is not { } ch) return;
+            _input.Append(ch, now, settings.KeywordBufferTimeoutMs);
             CheckForMatches();
         }
 
@@ -358,23 +268,22 @@ namespace ConditioningControlPanel.Services
                 cleanText.ToUpper().Replace("\u2019", "'"),
             };
 
-            // Check active mod's audio directory first
-            var modPath = App.Mods?.ActiveMod?.InstalledPath;
-            if (modPath != null)
-            {
-                var modAudioDir = Path.Combine(modPath, "resources", "sounds", "flashes_audio");
-                if (Directory.Exists(modAudioDir))
+            // Active mod's audio directory first, then the default sub_audio directory - Bambi-voiced,
+            // so never for CCP Default. Those mods get the recorded neutral clips instead
+            // (Resources/Audio/backroom/words). The order lives in SpokenClipRule.
+            return SpokenClipRule.Resolve(
+                App.Mods?.ActiveModId,
+                modClip: () =>
                 {
-                    var result = SearchAudioDirectory(modAudioDir, cleanText, textVariants, extensions, isModCache: true);
-                    if (result != null) return result;
-                }
-            }
-
-            // Fall back to default sub_audio directory - Bambi-voiced, so never for CCP Default.
-            // Those mods get the recorded neutral clips instead (Resources/Audio/backroom/words).
-            if (!ModAudioPolicy.UsesSharedSubAudio(App.Mods?.ActiveModId))
-                return BackRoom.BackRoomVoice.FindNeutralClip(keyword);
-            return SearchAudioDirectory(_audioPath, cleanText, textVariants, extensions, isModCache: false);
+                    var modPath = App.Mods?.ActiveMod?.InstalledPath;
+                    if (modPath == null) return null;
+                    var modAudioDir = Path.Combine(modPath, "resources", "sounds", "flashes_audio");
+                    return Directory.Exists(modAudioDir)
+                        ? SearchAudioDirectory(modAudioDir, cleanText, textVariants, extensions, isModCache: true)
+                        : null;
+                },
+                sharedClip: () => SearchAudioDirectory(_audioPath, cleanText, textVariants, extensions, isModCache: false),
+                neutralClip: () => BackRoom.BackRoomVoice.FindNeutralClip(keyword));
         }
 
         private string? SearchAudioDirectory(string directory, string cleanText, string[] textVariants, string[] extensions, bool isModCache)
@@ -683,43 +592,14 @@ namespace ConditioningControlPanel.Services
         /// have to mean the same thing or the list silently fails to match.
         /// </summary>
         public static bool MatchesAppList(IEnumerable<string>? list, string processName)
-        {
-            if (list == null || string.IsNullOrWhiteSpace(processName)) return false;
-
-            foreach (var raw in list)
-            {
-                if (string.IsNullOrWhiteSpace(raw)) continue;
-                var entry = raw.Trim();
-                if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                    entry = entry.Substring(0, entry.Length - 4);
-                if (entry.Length == 0) continue;
-                if (string.Equals(entry, processName, StringComparison.OrdinalIgnoreCase)) return true;
-            }
-
-            return false;
-        }
+            => Awareness.AwarenessAppScopeRules.MatchesAppList(list, processName);
 
         /// <summary>
         /// Splits the comma / semicolon / newline separated text the Awareness tab collects into a
         /// clean list of process names, de-duplicated and with any ".exe" dropped.
         /// </summary>
         public static List<string> ParseAppList(string? text)
-        {
-            var result = new List<string>();
-            if (string.IsNullOrWhiteSpace(text)) return result;
-
-            foreach (var part in text.Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var entry = part.Trim();
-                if (entry.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                    entry = entry.Substring(0, entry.Length - 4);
-                if (entry.Length == 0) continue;
-                if (result.Any(e => string.Equals(e, entry, StringComparison.OrdinalIgnoreCase))) continue;
-                result.Add(entry);
-            }
-
-            return result;
-        }
+            => Awareness.AwarenessAppScopeRules.ParseAppList(text);
 
         private DateTime _lastSampleAt = DateTime.MinValue;
 
@@ -783,43 +663,11 @@ namespace ConditioningControlPanel.Services
                 return true;
             }
 
-            if (!TryResolveForegroundApp(out var process, out var isOwn))
-            {
-                // An allow list promises triggers fire ONLY somewhere named. A window that will not
-                // name itself is not somewhere named, so it fails closed. A block list makes the
-                // opposite promise - only the listed apps are off limits - so it fails open.
-                var allowUnknown = scope != AwarenessAppScope.OnlyListed;
-                if (!allowUnknown) LogSuppressed(source, "foreground window could not be identified");
-                return allowUnknown;
-            }
-
-            if (isOwn && ignoreOwnFocus)
-            {
-                LogSuppressed(source, "Control Panel itself has focus");
-                return false;
-            }
-
-            switch (scope)
-            {
-                case AwarenessAppScope.ExceptListed:
-                    if (MatchesAppList(settings.KeywordTriggerApps, process))
-                    {
-                        LogSuppressed(source, $"'{process}' is on the block list");
-                        return false;
-                    }
-                    return true;
-
-                case AwarenessAppScope.OnlyListed:
-                    if (!MatchesAppList(settings.KeywordTriggerApps, process))
-                    {
-                        LogSuppressed(source, $"'{process}' is not on the allow list");
-                        return false;
-                    }
-                    return true;
-
-                default:
-                    return true;
-            }
+            var known = TryResolveForegroundApp(out var process, out var isOwn);
+            var reason = Awareness.AwarenessAppScopeRules.SuppressionReason(scope, settings.KeywordTriggerApps,
+                process, known, isOwn, ignoreOwnFocus);
+            if (reason != null) LogSuppressed(source, reason);
+            return reason == null;
         }
 
         #endregion
@@ -835,19 +683,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private static IEnumerable<KeywordTrigger> OrderedByPresetPriority(List<KeywordTrigger> triggers)
         {
-            // Materialize once; small list, cheap to partition.
-            for (int i = 0; i < triggers.Count; i++)
-            {
-                var t = triggers[i];
-                if (t?.Id?.StartsWith("preset:", StringComparison.Ordinal) == true)
-                    yield return t;
-            }
-            for (int i = 0; i < triggers.Count; i++)
-            {
-                var t = triggers[i];
-                if (t?.Id?.StartsWith("preset:", StringComparison.Ordinal) != true)
-                    yield return t;
-            }
+            return KeywordMatchRules.Ordered(triggers);
         }
 
         #region OCR Word Matching
@@ -938,11 +774,14 @@ namespace ConditioningControlPanel.Services
             foreach (var trigger in OrderedByPresetPriority(triggers))
             {
                 if (!trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword)) continue;
-                if (trigger.MatchType == KeywordMatchType.Regex) continue;
                 if (IsKeywordMuted(trigger.Keyword)) continue; // per-keyword hard cooldown
                 if (trigger.IsOnCooldown) continue;             // per-trigger cooldown
 
-                var words = FindMatchedWords(trigger.Keyword, allWords);
+                // #1456: regex triggers used to be skipped here, so they only ever fired from the
+                // keyboard. They now run the same pattern over the scan's text.
+                var words = trigger.MatchType == KeywordMatchType.Regex
+                    ? FindRegexMatchedWords(trigger.Keyword, allWords)
+                    : FindMatchedWords(trigger.Keyword, allWords);
                 if (words != null && words.Count > 0)
                 {
                     firedTriggers.Add(trigger);
@@ -1130,20 +969,7 @@ namespace ConditioningControlPanel.Services
                 return;
 
             // Collect all triggers whose keyword appears in the text, then merge.
-            var firedTriggers = new List<KeywordTrigger>();
-            foreach (var trigger in OrderedByPresetPriority(triggers))
-            {
-                if (!trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword)) continue;
-                if (trigger.IsOnCooldown) continue;
-                if (IsKeywordMuted(trigger.Keyword)) continue;
-
-                bool matched = trigger.MatchType == KeywordMatchType.Regex
-                    ? TryRegexMatch(text, trigger.Keyword)
-                    : ContainsWholeWord(text, trigger.Keyword);
-
-                if (matched)
-                    firedTriggers.Add(trigger);
-            }
+            var firedTriggers = KeywordMatchRules.Collect(triggers, text, now, IsKeywordMuted);
 
             if (firedTriggers.Count == 0) return;
 
@@ -1231,6 +1057,76 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
+        /// Regex keyword over one OCR scan (#1456). The scan's tokens are joined with single
+        /// spaces, in scan order, into the same kind of free text the keyboard matcher sees, and
+        /// the pattern runs over it with the keyboard's options (case-insensitive, 100 ms
+        /// timeout). Each match becomes ONE hit whose rect is the union of the tokens it
+        /// touches on the first token's screen, so the highlight draws one box per match. A bad
+        /// pattern, a timeout or an empty match finds nothing.
+        /// </summary>
+        internal static List<OcrWordHit>? FindRegexMatchedWords(string pattern, List<OcrWordHit> wordHits)
+        {
+            if (wordHits == null || wordHits.Count == 0 || string.IsNullOrEmpty(pattern)) return null;
+
+            var sb = new System.Text.StringBuilder();
+            var starts = new int[wordHits.Count];
+            for (int i = 0; i < wordHits.Count; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                starts[i] = sb.Length;
+                sb.Append(wordHits[i].Text ?? "");
+            }
+            var text = sb.ToString();
+
+            var results = new List<OcrWordHit>();
+            try
+            {
+                foreach (Match m in Regex.Matches(text, pattern, RegexOptions.IgnoreCase,
+                             TimeSpan.FromMilliseconds(100)))
+                {
+                    if (m.Length == 0) continue;
+                    int end = m.Index + m.Length;
+                    OcrWordHit? first = null;
+                    int minX = 0, minY = 0, maxRight = 0, maxBottom = 0;
+                    for (int i = 0; i < wordHits.Count; i++)
+                    {
+                        var w = wordHits[i];
+                        int wEnd = starts[i] + (w.Text ?? "").Length;
+                        if (wEnd <= m.Index || starts[i] >= end) continue;
+                        var r = w.ScreenRect;
+                        if (first == null)
+                        {
+                            first = w;
+                            minX = r.X; minY = r.Y; maxRight = r.Right; maxBottom = r.Bottom;
+                        }
+                        else if (ReferenceEquals(w.Screen, first.Screen))
+                        {
+                            if (r.X < minX) minX = r.X;
+                            if (r.Y < minY) minY = r.Y;
+                            if (r.Right > maxRight) maxRight = r.Right;
+                            if (r.Bottom > maxBottom) maxBottom = r.Bottom;
+                        }
+                    }
+                    if (first == null) continue; // the match sat only on joining spaces
+
+                    results.Add(new OcrWordHit
+                    {
+                        Text = m.Value,
+                        ScreenRect = new System.Drawing.Rectangle(minX, minY, maxRight - minX, maxBottom - minY),
+                        Screen = first.Screen,
+                    });
+                }
+            }
+            catch
+            {
+                // Bad pattern or timeout: same as the keyboard path, the trigger simply does not fire.
+                return null;
+            }
+
+            return results.Count > 0 ? results : null;
+        }
+
+        /// <summary>
         /// Case-insensitive whole-word comparison of an OCR token against a single
         /// keyword word. Leading/trailing punctuation on the OCR token is stripped
         /// before comparing so "sit." / "sit," / "'sit'" all match the keyword "sit"
@@ -1262,20 +1158,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private static bool ContainsWholeWord(string haystack, string keyword)
         {
-            if (string.IsNullOrEmpty(haystack) || string.IsNullOrEmpty(keyword)) return false;
-            try
-            {
-                var parts = keyword.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                var escaped = string.Join("\\s+", parts.Select(Regex.Escape));
-                var pattern = $@"\b{escaped}\b";
-                return Regex.IsMatch(haystack, pattern,
-                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
-                    TimeSpan.FromMilliseconds(100));
-            }
-            catch
-            {
-                return false;
-            }
+            return KeywordMatchRules.ContainsWholeWord(haystack, keyword);
         }
 
         #endregion
@@ -1295,30 +1178,17 @@ namespace ConditioningControlPanel.Services
             if ((now - _lastGlobalTriggerTime).TotalSeconds < settings.KeywordGlobalCooldownSeconds)
                 return;
 
-            var bufferText = _buffer.ToString();
+            var bufferText = _input.Text;
             if (string.IsNullOrEmpty(bufferText)) return;
 
             // Collect all triggers whose keyword is in the rolling buffer, then
             // merge-dispatch. Clearing the buffer happens after the scan so that
             // all simultaneous hits in the same buffer are found in one pass.
-            var firedTriggers = new List<KeywordTrigger>();
-            foreach (var trigger in OrderedByPresetPriority(triggers))
-            {
-                if (!trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword)) continue;
-                if (trigger.IsOnCooldown) continue;
-                if (IsKeywordMuted(trigger.Keyword)) continue;
-
-                bool matched = trigger.MatchType == KeywordMatchType.Regex
-                    ? TryRegexMatch(bufferText, trigger.Keyword)
-                    : ContainsWholeWord(bufferText, trigger.Keyword);
-
-                if (matched)
-                    firedTriggers.Add(trigger);
-            }
+            var firedTriggers = KeywordMatchRules.Collect(triggers, bufferText, now, IsKeywordMuted);
 
             if (firedTriggers.Count == 0) return;
 
-            _buffer.Clear(); // Prevent re-triggering on the same buffer
+            _input.Clear(); // Prevent re-triggering on the same buffer
             foreach (var t in firedTriggers)
             {
                 t.LastTriggeredAt = now;
@@ -1332,17 +1202,7 @@ namespace ConditioningControlPanel.Services
 
         private static bool TryRegexMatch(string input, string pattern)
         {
-            try
-            {
-                return Regex.IsMatch(input, pattern,
-                    RegexOptions.IgnoreCase,
-                    TimeSpan.FromMilliseconds(100));
-            }
-            catch
-            {
-                // Bad regex pattern — silently fail
-                return false;
-            }
+            return KeywordMatchRules.Match(input, pattern);
         }
 
         #endregion
@@ -1397,6 +1257,15 @@ namespace ConditioningControlPanel.Services
         private async Task DispatchMergedAsync(List<KeywordTrigger> firedTriggers, List<OcrWordHit>? matchedWords)
         {
             if (firedTriggers == null || firedTriggers.Count == 0) return;
+            // A panic's quiet (PanicAftermath, the same five minutes as Trigger Mode): a keyword on
+            // screen or typed must not flash, play or pulse the toy seconds after the panic stopped
+            // everything. The haptic mixer's own panic mute lasts 400 ms.
+            if (Safety.PanicAftermath.TriggersSilenced())
+            {
+                App.Logger?.Information("KeywordTriggers: [{Keywords}] held - a panic is still quiet",
+                    string.Join(",", firedTriggers.Select(t => t.Keyword)));
+                return;
+            }
             var first = firedTriggers[0];
 
             // If only one trigger matched, skip the merge allocation and dispatch directly.
@@ -1481,7 +1350,8 @@ namespace ConditioningControlPanel.Services
 
             // Duck once up-front if any audio action wants it.
             bool anyDuck = actions.OfType<PlayAudioAction>().Any(a => a.DuckSystemAudio);
-            if (anyDuck && App.Settings?.Current?.AudioDuckingEnabled == true)
+            if (anyDuck && !HoldsAudio(App.IsEngineRunning, App.IsSessionRunning)
+                && App.Settings?.Current?.AudioDuckingEnabled == true)
             {
                 App.Audio?.Duck(App.Settings?.Current?.DuckingLevel ?? 80);
                 duckGen = App.Audio?.DuckGeneration ?? -1;
@@ -1525,6 +1395,7 @@ namespace ConditioningControlPanel.Services
             switch (action)
             {
                 case PlayAudioAction audio:
+                    if (AudioHeldForEngineOff(trigger, "PlayAudio")) return 0;
                     return await DispatchPlayAudioAsync(audio);
 
                 case VisualEffectAction visual:
@@ -1825,7 +1696,8 @@ namespace ConditioningControlPanel.Services
                 }
 
                 double audioDuration = 0;
-                if (!string.IsNullOrEmpty(trigger.AudioFilePath) && File.Exists(trigger.AudioFilePath))
+                if (!string.IsNullOrEmpty(trigger.AudioFilePath) && File.Exists(trigger.AudioFilePath)
+                    && !AudioHeldForEngineOff(trigger, "legacy audio"))
                 {
                     for (int i = 0; i < trigger.AudioPlayCount; i++)
                     {
@@ -1922,7 +1794,7 @@ namespace ConditioningControlPanel.Services
 
                     case KeywordVisualEffect.MindWipe:
                         // Only trigger if audio files exist (TriggerOnce shows a MessageBox when empty)
-                        if (App.MindWipe?.AudioFileCount > 0)
+                        if (App.MindWipe?.AudioFileCount > 0 && !AudioHeldForEngineOff(trigger, "MindWipe"))
                             App.MindWipe.TriggerOnce();
                         break;
 
@@ -1963,10 +1835,28 @@ namespace ConditioningControlPanel.Services
             if (string.IsNullOrEmpty(path)) return 0;
             var resolved = ResolveAudioPath(path);
             if (string.IsNullOrEmpty(resolved) || !File.Exists(resolved)) return 0;
-            return PlayTriggerAudio(resolved, volumePercent);
+            return PlayTriggerAudio(resolved, volumePercent, asked: true);
         }
 
-        private double PlayTriggerAudio(string path, int volumePercent)
+        /// <summary>
+        /// ccp-bugs #1414: a keyword trigger never plays AUDIO while neither the engine nor a
+        /// session is running (its own clip, the legacy flat clip, and the Mind Wipe effect, which
+        /// is a sound and nothing else). Highlights, avatar comments, haptics, XP and the picture
+        /// effects are untouched, and so is the Test button (<see cref="PreviewAudioClip"/>).
+        /// </summary>
+        internal static bool HoldsAudio(bool engineRunning, bool sessionRunning) =>
+            !Audio.EngineOffAudioLog.IsRunning(engineRunning, sessionRunning);
+
+        private static bool AudioHeldForEngineOff(KeywordTrigger trigger, string what)
+        {
+            if (!HoldsAudio(App.IsEngineRunning, App.IsSessionRunning)) return false;
+            App.Logger?.Information("KeywordTrigger '{Kw}': {What} held, the engine is not running",
+                trigger?.Keyword, what);
+            Audio.EngineOffAudioLog.NoteHeld("keyword-trigger", what);
+            return true;
+        }
+
+        private double PlayTriggerAudio(string path, int volumePercent, bool asked = false)
         {
             lock (_audioLock)
             {
@@ -1985,14 +1875,14 @@ namespace ConditioningControlPanel.Services
                     App.Audio?.ApplyPreferredDevice(_triggerPlayer);
 
                     // Apply volume curve (same as AudioService)
-                    var volume = volumePercent / 100.0f;
                     var masterVolume = (App.Settings?.Current?.MasterVolume ?? 100) / 100.0f;
-                    var curvedVolume = Math.Max(0.05f, (float)Math.Pow(volume * masterVolume, 1.5));
+                    var curvedVolume = KeywordMatchRules.AudioVolume(volumePercent, App.Settings?.Current?.MasterVolume ?? 100);
                     _triggerAudioFile.Volume = curvedVolume;
 
                     _triggerPlayer.Init(_triggerAudioFile);
                     _triggerPlayer.Play();
                     App.Audio?.NoteOutputSuccess();
+                    Audio.EngineOffAudioLog.Note("keyword-trigger", path, asked);
 
                     App.Logger?.Information("PlayTriggerAudio: playing '{Path}' curved={Curve:0.00} master={Master:0.00} thread={Thread}",
                         Path.GetFileName(path), curvedVolume, masterVolume, System.Threading.Thread.CurrentThread.ManagedThreadId);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -10,10 +11,12 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp.Online;
 using LibVLCSharp.Shared;
 using MediaType = ConditioningControlPanel.Models.MediaType;
 using Serilog;
@@ -32,8 +35,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     ///    and looping like WPF's MediaElement; a GIF animates from the spiral's bounded SkiaSharp decoder
     ///    (WPF XamlAnimatedGif), showing its first frame until the frames are ready.
     ///  - This head has no RemoteMediaCache, so an online entry is never "cached": it gets the
-    ///    streamed-only card with Copy link / Open source, and no Load preview button.
-    ///  - Reveal-in-folder opens the containing folder (Explorer's select-the-file is Win32).
+    ///    streamed-only card with Copy link / Open source, and (with remote-media consent) Load preview,
+    ///    which fetches the still into memory instead of into the cache.
+    ///  - LibVLC raises nothing for an unreadable clip, so the MediaFailed plate is decided up front
+    ///    (<see cref="MediaHistoryPreviewRules.VideoLooksBroken"/>).
     /// </summary>
     public partial class MediaHistoryWindow : Window
     {
@@ -48,8 +53,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private readonly TextBlock _txtCount, _txtEmpty, _searchPlaceholder, _copyLinkText;
         private readonly TextBlock _previewHint, _previewMissing, _previewName, _previewPath;
         private readonly Image _previewImage;
+        /// <summary>WPF MediaHistoryWindow.xaml.cs:35: "via Scrolller" on an online row's preview.</summary>
+        internal readonly ScrolllerCreditBadge Credit = new() { Margin = new Thickness(0, 0, 8, 6) };
         private readonly Button _btnFilterAll, _btnFilterImages, _btnFilterVideos, _btnFilterAudio;
-        private readonly Button _btnPreviewOpenFolder, _btnPreviewOpenFile, _btnPreviewCopyLink, _btnPreviewOpenSource;
+        private readonly Button _btnPreviewOpenFolder, _btnPreviewOpenFile, _btnPreviewCopyLink, _btnPreviewOpenSource, _btnPreviewLoad;
+        private MediaPreviewPlan? _plan;   // the selected row's plan; what the action buttons obey
 
         private MediaPlayer? _player;
         private Media? _media;
@@ -74,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _previewName = this.FindControl<TextBlock>("PreviewName")!;
             _previewPath = this.FindControl<TextBlock>("PreviewPath")!;
             _previewImage = this.FindControl<Image>("PreviewImage")!;
+            (_previewImage.Parent as Panel)?.Children.Add(Credit);
             _btnFilterAll = this.FindControl<Button>("BtnFilterAll")!;
             _btnFilterImages = this.FindControl<Button>("BtnFilterImages")!;
             _btnFilterVideos = this.FindControl<Button>("BtnFilterVideos")!;
@@ -82,6 +91,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _btnPreviewOpenFile = this.FindControl<Button>("BtnPreviewOpenFile")!;
             _btnPreviewCopyLink = this.FindControl<Button>("BtnPreviewCopyLink")!;
             _btnPreviewOpenSource = this.FindControl<Button>("BtnPreviewOpenSource")!;
+            _btnPreviewLoad = this.FindControl<Button>("BtnPreviewLoad")!;
 
             _mediaList.ItemsSource = _view;
             _mediaList.SelectionChanged += MediaList_SelectionChanged;
@@ -97,6 +107,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _btnPreviewOpenFile.Click += (_, _) => OpenSelectedFile();
             _btnPreviewCopyLink.Click += async (_, _) => await CopyLinkAsync();
             _btnPreviewOpenSource.Click += async (_, _) => await OpenSourceAsync();
+            _btnPreviewLoad.Click += async (_, _) => await LoadPreviewAsync();
 
             // One handler on the list instead of one inside the DataTemplate; Click bubbles.
             _mediaList.AddHandler(Button.ClickEvent, OpenFolder_Click);
@@ -253,10 +264,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             StopPreview();
             _previewHint.IsVisible = false;
             _previewName.Text = row.DisplayName;
+            Credit.SetShown(ScrolllerCreditRules.IsScrolllerMedia(row.Entry.FilePath));
 
             // No RemoteMediaCache on this head: an online entry is never cached here.
-            var plan = MediaHistoryPreviewRules.Plan(row.Entry.FilePath, row.Entry.Type, row.FileExists,
-                remoteCached: false, remoteConsent: false);
+            var plan = _plan = MediaHistoryPreviewRules.Plan(row.Entry.FilePath, row.Entry.Type, row.FileExists,
+                remoteCached: false, remoteConsent: RemoteConsent());
 
             _previewPath.Text = plan.SourceText;
             _btnPreviewOpenFolder.IsEnabled = plan.CanOpenFolder;
@@ -265,6 +277,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _btnPreviewOpenFile.IsVisible = !plan.IsRemote;
             _btnPreviewCopyLink.IsVisible = plan.CanCopyLink;
             _btnPreviewOpenSource.IsVisible = plan.CanOpenSource;
+            _btnPreviewLoad.IsVisible = _btnPreviewLoad.IsEnabled = plan.CanLoadPreview;
 
             if (plan.Kind == MediaPreviewKind.LocalMissing || plan.Kind == MediaPreviewKind.RemoteUncached)
             {
@@ -296,7 +309,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     return;
                 }
             }
-            if (row.Entry.Type == MediaType.Video) PlayLoop(row.Entry.FilePath);
+            if (row.Entry.Type == MediaType.Video && MediaHistoryPreviewRules.VideoLooksBroken(row.Entry.FilePath))
+                ShowMissing("label_file_not_found");   // WPF PreviewVideo_MediaFailed
+            else if (row.Entry.Type == MediaType.Video) PlayLoop(row.Entry.FilePath);
             else if (gif) _ = AnimateGifAsync(row.Entry.FilePath, _previewGeneration);
         }
 
@@ -343,7 +358,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
             _media = new Media(vlc, path, FromType.FromPath);
             _media.AddOption(":input-repeat=65535");   // WPF PreviewVideo_MediaEnded: loop
-            _media.AddOption(":no-audio");
+            _media.AddOption(LibVlcSilence.NoAudioOption);
             player.Play(_media);
         }
 
@@ -356,7 +371,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void ShowPreviewNone()
         {
+            Credit.SetShown(false);
             StopPreview();
+            _plan = null;
             _previewHint.IsVisible = true;
             _previewImage.IsVisible = false;
             _previewMissing.IsVisible = false;
@@ -368,6 +385,122 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _btnPreviewOpenFile.IsVisible = true;
             _btnPreviewCopyLink.IsVisible = false;
             _btnPreviewOpenSource.IsVisible = false;
+            _btnPreviewLoad.IsVisible = false;
+        }
+
+        /// <summary>WPF RemoteConsent: the app-wide remote-media gate every other surface reads
+        /// (MediaSource != "local" and HasRemoteMediaConsent). The media log is not a way around it.</summary>
+        private static bool RemoteConsent()
+        {
+            var s = CoreSettings.Current;
+            return s.MediaSource != "local" && s.HasRemoteMediaConsent;
+        }
+
+        private static readonly System.Net.Http.HttpClient Http = CreateClient();
+
+        // WPF RemoteMediaCache.CreateClient's headers: CDNs that refuse a request without a User-Agent must not
+        // drop this head to the streamed-only card.
+        private static System.Net.Http.HttpClient CreateClient()
+        {
+            var c = new System.Net.Http.HttpClient(ConditioningControlPanel.Services.Deeper.UrlSafety.CreateGuardedHandler()) { Timeout = TimeSpan.FromSeconds(20) };
+            c.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36");
+            c.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://scrolller.com/");
+            c.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "image/webp,image/jpeg,image/png,video/*,*/*;q=0.8");
+            return c;
+        }
+
+        /// <summary>Test seam: the bytes behind an online still (WPF RemoteMediaCache.OpenAsync), at most
+        /// <see cref="WelcomeShow.FirstShowStageWindow.MaxPictureBytes"/>; null when the host refused or sent no image.</summary>
+        internal static Func<string, System.Threading.CancellationToken, System.Threading.Tasks.Task<byte[]?>> FetchRemote =
+            (url, token) => FetchFollowingRedirectsAsync(
+                (u, t) => Http.GetAsync(u, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, t), url, token);
+
+        /// <summary>WPF RemoteMediaCache follows redirects (CDNs answer 302). The guarded handler cannot, so each
+        /// hop is followed here and re-runs the handler's connect-time private-IP guard; http(s) only, 5 hops.</summary>
+        internal static async System.Threading.Tasks.Task<byte[]?> FetchFollowingRedirectsAsync(
+            Func<Uri, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage>> get,
+            string url, System.Threading.CancellationToken token)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var current)) return null;
+            for (int hop = 0; ; hop++)
+            {
+                if (current.Scheme != Uri.UriSchemeHttps && current.Scheme != Uri.UriSchemeHttp) return null;
+                using var response = await get(current, token);
+                int code = (int)response.StatusCode;
+                if (code >= 300 && code < 400 && response.Headers.Location is { } location)
+                {
+                    if (hop >= 5) return null;
+                    var next = location.IsAbsoluteUri ? location : new Uri(current, location);
+                    if (current.Scheme == Uri.UriSchemeHttps && next.Scheme == Uri.UriSchemeHttp) return null; // .NET's auto-redirect refuses this downgrade too
+                    current = next;
+                    continue;
+                }
+                return await ReadCappedAsync(response, token);
+            }
+        }
+
+        private static async System.Threading.Tasks.Task<byte[]?> ReadCappedAsync(System.Net.Http.HttpResponseMessage response, System.Threading.CancellationToken token)
+        {
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > WelcomeShow.FirstShowStageWindow.MaxPictureBytes) return null;
+            await using var body = await response.Content.ReadAsStreamAsync(token);
+            using var copy = new MemoryStream();
+            var buffer = new byte[81920];
+            int n;
+            while ((n = await body.ReadAsync(buffer, token)) > 0)
+            {
+                if (copy.Length + n > WelcomeShow.FirstShowStageWindow.MaxPictureBytes) return null;
+                copy.Write(buffer, 0, n);
+            }
+            return copy.ToArray();
+        }
+
+        /// <summary>WPF PreviewLoad_Click / ShowRemotePreview(fetch: true): the only way this window reaches out,
+        /// and only on a press, behind consent. One still, 720 wide, decoded off the UI thread; the generation
+        /// guard drops a result whose row was deselected meanwhile. A failed draw puts the retry back.</summary>
+        private async System.Threading.Tasks.Task LoadPreviewAsync()
+        {
+            if (_mediaList.SelectedItem is not MediaHistoryRow row) return;
+            var url = row.Entry.FilePath;
+            if (!MediaHistoryPreviewRules.IsRemote(url) || !RemoteConsent()) return;   // the floor under the hidden button
+            var generation = _previewGeneration;
+            _btnPreviewLoad.IsEnabled = false;
+            _previewMissing.Text = Loc.Get("label_media_loading_preview");
+            _previewMissing.IsVisible = true;
+            Bitmap? decoded = null;
+            string failure = "label_media_streamed_only";
+            try
+            {
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(20));
+                var bytes = await FetchRemote(url, cts.Token);
+                if (bytes != null)
+                {
+                    // The bytes were here and we could not read them: never say nothing was kept.
+                    failure = "label_no_preview";
+                    decoded = await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try { using var s = new MemoryStream(bytes); return Bitmap.DecodeToWidth(s, 720); }
+                        catch (Exception) { return null; }   // swallow: an unreadable still is the "no preview" card
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("MediaHistoryWindow: online preview failed for {Host}: {Error}",
+                    Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : "?", ex.Message);
+            }
+            if (generation != _previewGeneration) { decoded?.Dispose(); return; }
+            if (decoded == null)
+            {
+                ShowMissing(failure);
+                bool allowed = _plan?.IsRemote == true && RemoteConsent();
+                _btnPreviewLoad.IsVisible = _btnPreviewLoad.IsEnabled = allowed;
+                return;
+            }
+            _previewImage.Source = _still = decoded;
+            _previewImage.IsVisible = true;
+            _previewMissing.IsVisible = false;
+            _btnPreviewLoad.IsVisible = false;
         }
 
         /// <summary>Stop joins the decoder thread, so after it no callback touches the frame buffer.</summary>
@@ -402,18 +535,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 RevealInExplorer(row.Entry.FilePath);
         }
 
-        /// <summary>WPF ExplorerLauncher.RevealInExplorer: the containing folder, also when the file
-        /// is gone (#998). Nothing to reveal for an online item.</summary>
+        /// <summary>WPF ExplorerLauncher.RevealInExplorer: the file selected in the file manager, its folder
+        /// when the file is gone (#998). Nothing to reveal for an online item.</summary>
         private static void RevealInExplorer(string path)
         {
             if (string.IsNullOrEmpty(path) || MediaHistoryPreviewRules.IsRemote(path)) return;
-            try
-            {
-                var dir = Path.GetDirectoryName(path);
-                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
-                    ExternalOpener.Open(dir);
-            }
-            catch (Exception ex) { Log.Warning(ex, "MediaHistoryWindow: failed to open folder for {Path}", path); }
+            ExternalOpener.Reveal(path);
         }
 
         private void OpenSelectedFile()
