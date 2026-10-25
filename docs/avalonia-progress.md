@@ -3074,3 +3074,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 - dialogs-asset-submit: mod Share in Manage Mods opens AssetSubmitDialog(requireDownloadUrl) -> MEGA link -> ccp-mod/v1 envelope via Core CatalogueClient, record + toast (WPF MainWindow.ModCatalogue.cs:24-178, ModManagerDialog.xaml.cs:459/692).
 - Test: AssetSubmitWireTests.ModManagerShareAsksForTheMegaLinkThenSubmitsTheModEnvelope (fake handler, awaits LastShare, restores App.Mods/CoreMods); duplicate stale ledger row removed. Ledger: shell-mod-catalogue -> wired (same WPF file).
 - Not run live against the real catalogue/MEGA; --render-all cannot show the Share button.
+
+## avalonia-port/wire-views-tab-blink-trainer: +68
+- BlinkTrainer side art rides the shared AdaptiveSideArt (adaptive-side-art lane); duplicate control/Core rule dropped; real-tab resize test fail-proven.
+- rgate: all green except one unrelated Windows-only ProgramTodayCard flake (P94).
