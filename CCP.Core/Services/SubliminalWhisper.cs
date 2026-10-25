@@ -53,9 +53,11 @@ namespace ConditioningControlPanel.Services
         {
             listFiles ??= (dir, _) => Directory.Exists(dir) ? Directory.GetFiles(dir) : null;
             var clean = text.Trim();
-            if (modAudioDir != null && Search(modAudioDir, clean, dir => listFiles(dir, true)) is { } m) return m;
-            if (!ModAudioPolicy.UsesSharedSubAudio(modId)) return FindNeutralClip(text);
-            return Search(subAudioDir, clean, dir => listFiles(dir, false));
+            // One order for every spoken clip (WPF ec388b526 SpokenClipRule): mod, shared if allowed, neutral.
+            return SpokenClipRule.Resolve(modId,
+                modClip: () => modAudioDir != null ? Search(modAudioDir, clean, dir => listFiles(dir, true)) : null,
+                sharedClip: () => Search(subAudioDir, clean, dir => listFiles(dir, false)),
+                neutralClip: () => FindNeutralClip(text));
         }
 
         private static string? Search(string directory, string clean, Func<string, string[]?> list)

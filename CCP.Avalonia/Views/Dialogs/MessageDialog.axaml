@@ -33,12 +33,16 @@
                        FontSize="14" TextWrapping="Wrap" LineHeight="20"/>
         </ScrollViewer>
 
-        <Grid Grid.Row="2" Margin="0,20,0,0" ColumnDefinitions="*,Auto,Auto">
+        <Grid Grid.Row="2" Margin="0,20,0,0" ColumnDefinitions="*,Auto,Auto,Auto">
+            <Button x:Name="BtnNo" Grid.Column="2" Theme="{StaticResource SecondaryButton}"
+                    Margin="0,0,10,0" IsVisible="False">
+                <TextBlock Text="{loc:Str btn_no}"/>
+            </Button>
             <Button x:Name="BtnCancel" Grid.Column="1" Theme="{StaticResource SecondaryButton}"
                     Margin="0,0,10,0">
                 <TextBlock Text="{loc:Str btn_cancel}"/>
             </Button>
-            <Button x:Name="BtnOk" Grid.Column="2" Theme="{StaticResource ActionButton}"
+            <Button x:Name="BtnOk" Grid.Column="3" Theme="{StaticResource ActionButton}"
                     IsDefault="True">
                 <TextBlock Text="{loc:Str btn_ok}"/>
             </Button>

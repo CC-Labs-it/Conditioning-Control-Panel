@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Models.Program;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Program;
@@ -34,7 +35,7 @@ public sealed class ProgramsRunLifecycleTests
     public Task EnrollStartPanicCompleteAndWithdrawFromTheShell() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<AvApp>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
 
@@ -82,6 +83,28 @@ public sealed class ProgramsRunLifecycleTests
             Assert.True(runner.IsRunning && svc.IsProgramSession(runner.CurrentSession));
             Assert.Equal(Loc.Get("programs_session_in_progress"), F<TextBlock>("TxtStartTodaySession").Text);
             Assert.False(F<Button>("BtnStartTodaySession").IsEnabled);
+            Assert.True(F<Grid>("TodaySessionProgressRow").IsEffectivelyVisible);
+            Assert.True(F<TextBlock>("TxtTodaySessionProgress").IsEffectivelyVisible);
+            Assert.Contains(ConditioningControlPanel.Services.Program.ProgramSessionProgress.Clock(TimeSpan.FromMinutes(runner.CurrentSession!.DurationMinutes)),
+                F<TextBlock>("TxtTodaySessionProgress").Text);
+            Assert.InRange(F<ProgressBar>("TodaySessionProgressBar").Value, 0, 100);
+            Assert.Equal(ProgramHeatTier.Warm, tab.IgnitionTier); // day 1/7 already crosses Warm
+            Assert.True(tab.SessionSheenRunning);
+            var dayPips = F<ItemsControl>("ProgramDayStrip").ItemsSource;
+            runner.Pause();
+            shell.OnSessionTick();
+            var pausedClock = F<TextBlock>("TxtTodaySessionProgress").Text;
+            Assert.Contains(Loc.GetF("programs_session_progress_paused", ""), pausedClock);
+            shell.OnSessionTick();
+            Assert.Equal(pausedClock, F<TextBlock>("TxtTodaySessionProgress").Text);
+            Assert.Same(dayPips, F<ItemsControl>("ProgramDayStrip").ItemsSource); // ticks never rebuild
+            var glyph = F<ConditioningControlPanel.Avalonia.Controls.IconGlyph>("TxtTodaySessionGlyph");
+            glyph.Kind = FluentIcons.Common.Symbol.Gift;
+            shell.OnSessionTick();
+            Assert.Equal(FluentIcons.Common.Symbol.Gift, glyph.Kind); // P07: clock only
+            runner.Resume();
+            shell.OnSessionTick();
+            Assert.DoesNotContain(Loc.GetF("programs_session_progress_paused", ""), F<TextBlock>("TxtTodaySessionProgress").Text);
 
             // Panic ends it, uncredited, with no "ended early" recap on top; the row repaints.
             PanicSurfaces.StopAll("test", shell);
@@ -90,6 +113,9 @@ public sealed class ProgramsRunLifecycleTests
             Assert.False(svc.TodayRecord!.SessionCompleted);
             Assert.Empty(shell.OwnedWindows.OfType<SessionCompleteWindow>());
             Assert.Equal(Loc.Get("btn_program_start_session"), F<TextBlock>("TxtStartTodaySession").Text);
+            Assert.False(F<Grid>("TodaySessionProgressRow").IsVisible);
+            Assert.False(F<TextBlock>("TxtTodaySessionProgress").IsVisible);
+            Assert.Equal(0, F<ProgressBar>("TodaySessionProgressBar").Value);
 
             // A run to the end credits the day (SessionRunner.Stopped -> OnEngineSessionCompleted).
             await shell.StartProgramSessionAsync();

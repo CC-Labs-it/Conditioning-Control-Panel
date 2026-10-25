@@ -120,7 +120,7 @@ public sealed class IntakePageTests
 
                 view.RegisterExternallySavedSession(session, path);
                 view.RegisterExternallySavedSession(session, path);   // a second register adds nothing
-                Dispatcher.UIThread.RunJobs();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Default);
 
                 Assert.Single(manager.AllSessions, s => s.Id == "intake-drafted");
                 Assert.Same(session, view.RevealSession("intake-drafted"));
@@ -146,8 +146,11 @@ public sealed class IntakePageTests
             File.WriteAllText(Path.Combine(web, "w.png"), "x");
             Directory.CreateDirectory(Path.Combine(assets, "images"));
             Directory.CreateDirectory(Path.Combine(assets, ".temp"));
-            foreach (var f in new[] { "images/a.gif", "images/off.png", "images/page.html", ".temp/t.png" })
+            foreach (var f in new[] { "images/a.gif", "images/off.png", "images/page.html", ".temp/t.png", ".temp/ccp_temp_remote_1.webm", ".temp/ccp_temp_2.png", "images/.temp/ccp_temp_remote_1.webm" })
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(assets, f))!);
                 File.WriteAllText(Path.Combine(assets, f), "x");
+            }
             File.WriteAllText(Path.Combine(outside, "secret.png"), "x");
             File.CreateSymbolicLink(Path.Combine(assets, "images", "link.png"), Path.Combine(outside, "secret.png"));
             Directory.CreateSymbolicLink(Path.Combine(assets, "images", "out"), outside);
@@ -157,6 +160,10 @@ public sealed class IntakePageTests
             Assert.Equal(Path.Combine(assets, "images", "a.gif"), server.ResolveFile(P("images/a.gif")));
             Assert.Null(server.ResolveFile(P("images/page.html")));     // not media
             Assert.Null(server.ResolveFile(P(".temp/t.png")));          // the app's own folder
+            Assert.Null(server.ResolveFile(P(".temp/ccp_temp_2.png")));  // a pack decrypt stays unserved
+            // ...except DtRH's copy of an online entry (Core DtrhRemoteMedia), which the tube draws
+            Assert.Equal(Path.Combine(assets, ".temp", "ccp_temp_remote_1.webm"), server.ResolveFile(P(".temp/ccp_temp_remote_1.webm")));
+            Assert.Null(server.ResolveFile(P("images/.temp/ccp_temp_remote_1.webm")));
             Assert.Null(server.ResolveFile(P("images/off.png")));       // unchecked in the Assets tree
             Assert.Null(server.ResolveFile(P("../settings.json")));
             Assert.Null(server.ResolveFile(P("../" + Path.GetFileName(web) + "/w.png")));
@@ -178,6 +185,91 @@ public sealed class IntakePageTests
             Directory.Delete(outside, true);
         }
     }
+
+    [Fact]
+    public async Task DownloadedAudioPlaysThroughTheAuthenticatedPageOrigin()
+    {
+        var web = Directory.CreateTempSubdirectory("intake-web-").FullName;
+        var content = Directory.CreateTempSubdirectory("intake-content-").FullName;
+        var outside = Directory.CreateTempSubdirectory("intake-outside-").FullName;
+        const string rel = "intake/assets/vo/line.mp3";
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(content, "intake/assets/vo"));
+            File.WriteAllText(Path.Combine(content, rel), "downloaded");
+            File.WriteAllText(Path.Combine(content, "intake/assets/vo/private.json"), "{}");
+            File.WriteAllText(Path.Combine(outside, "secret.mp3"), "secret");
+            File.CreateSymbolicLink(Path.Combine(content, "intake/assets/vo/link.mp3"), Path.Combine(outside, "secret.mp3"));
+            using var server = new WebAssetServer(web) { ContentRoot = () => content };
+            using var http = new HttpClient(new HttpClientHandler { UseCookies = false });
+            Assert.Equal(Path.GetFullPath(Path.Combine(content, rel)), server.ResolveFile("/" + rel));
+            Assert.Equal(HttpStatusCode.Forbidden,
+                (await http.GetAsync($"http://127.0.0.1:{server.Port}/{rel}")).StatusCode);
+            var response = await http.GetAsync(server.Url(rel));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("audio/mpeg", response.Content.Headers.ContentType!.MediaType);
+            Assert.Equal("downloaded", await response.Content.ReadAsStringAsync());
+            Assert.Null(server.ResolveFile("/intake/assets/vo/private.json"));
+            Assert.Null(server.ResolveFile("/intake/assets/vo/link.mp3"));
+            Assert.Null(server.ResolveFile("/intake/assets/vo/../../../secret.mp3"));
+            // Install-dir wins, including the Circe hotfix clips that deliberately override a stale pack.
+            Directory.CreateDirectory(Path.Combine(web, "intake/assets/vo"));
+            File.WriteAllText(Path.Combine(web, rel), "installed");
+            Assert.Equal("installed", await (await http.GetAsync(server.Url(rel))).Content.ReadAsStringAsync());
+            // A pack can arrive after the server was created; no stale readiness flag or restart.
+            const string late = "intake/assets/vo/later.mp3";
+            Assert.Null(server.ResolveFile("/" + late));
+            File.WriteAllText(Path.Combine(content, late), "later");
+            Assert.Equal("later", await (await http.GetAsync(server.Url(late))).Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            Directory.Delete(web, true);
+            Directory.Delete(content, true);
+            Directory.Delete(outside, true);
+        }
+    }
+
+    [Fact]
+    public Task InitIncludesOnlyTheEnabledSubliminalPool() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var settings = CoreSettings.Current;
+        var previous = settings.SubliminalPool;
+        var host = new IntakeHostWindow();
+        try
+        {
+            settings.SubliminalPool = new() { [" present "] = true, ["disabled"] = false };
+            var init = JObject.FromObject(host.InitMessage());
+            var item = Assert.Single((JArray)init["config"]!["subliminals"]!);
+            Assert.Equal("present", (string?)item["text"]);
+            Assert.Equal(" present ", (string?)Assert.Single((JArray)init["config"]!["media"]!["subliminals"]!));
+            var sprite = (string)init["config"]!["media"]!["bubbleSprite"]!;
+            Assert.StartsWith("data:image/png;base64,", sprite);
+            Assert.Equal(new byte[] { 0x89, 0x50, 0x4e, 0x47 }, Convert.FromBase64String(sprite.Split(',')[1]).Take(4));
+        }
+        finally { settings.SubliminalPool = previous; host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ReadyPostsInitThenTheActualFullscreenMode() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var host = new IntakeHostWindow { WindowState = WindowState.FullScreen };
+        var sent = new System.Collections.Generic.List<JObject>();
+        host.Posted += json => sent.Add(JObject.Parse(json));
+        try
+        {
+            host.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Equal(new[] { "init", "fullscreen" }, sent.Select(m => (string?)m["type"]).ToArray());
+            Assert.Equal(1, (int?)sent[0]["protocol"]);
+            Assert.False((bool?)sent[0]["config"]!["endless"]);
+            Assert.True((bool?)sent[1]["on"]);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public async Task TheFallbackPanelNeverShowsTheToken()

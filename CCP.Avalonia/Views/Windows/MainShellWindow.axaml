@@ -480,7 +480,7 @@
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                 <TextBlock Text="&#x2190;" FontSize="13" FontWeight="Bold" Margin="0,-2,4,0"
                                            Foreground="{DynamicResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <TextBlock Text="{loc:Str nav_back_label}" FontSize="11" FontWeight="SemiBold"
+                                <TextBlock x:Name="TxtNavBackLabel" Text="{loc:Str nav_back_label}" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextLightBrush}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
@@ -622,7 +622,7 @@
                                 </Border>
                             </ControlTemplate>
                         </Button.Template>
-                        <TextBlock Text="{loc:Str nav_door_webapp}" FontSize="11" FontWeight="SemiBold"
+                        <TextBlock x:Name="TxtNavWebAppLabel" Text="{loc:Str nav_door_webapp}" FontSize="11" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextLightBrush}" HorizontalAlignment="Center"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     </Button>
@@ -664,9 +664,12 @@
                      switcher. Phase 1 moved navigation into the rail, so the header is now
                      just identity (elastic) + the right-hand chrome cluster (Auto). -->
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
+                <!-- WPF MainWindow.xaml:843: the Sparkle wallet, natively 29 x 138, left of the identity. -->
+                <cmp:SparkleWallet x:Name="HeaderSparkleWallet" Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center"/>
 
                 <!-- Title + Player Title + App Name + Version -->
                 <!-- #860: a Grid, not a StackPanel, so this cluster can give width back.
@@ -679,7 +682,7 @@
                      own row) can claim the leftover width between the version text and the
                      right-hand chrome. Nothing spreads: columns 0-4 are still Auto/capped, and
                      the banner is the only thing that grows. -->
-                <Grid Grid.Column="0" VerticalAlignment="Center">
+                <Grid Grid.Column="1" VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*" MaxWidth="200"/>
@@ -766,15 +769,25 @@
                             </ComboBox.Template>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4" Margin="0,0,8,0"
-                                                Background="{Binding AccentBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="White"
-                                                   VerticalAlignment="Center" FontSize="11"
+                                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*">
+                                        <Grid.Styles>
+                                            <Style Selector="TextBlock">
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </Style>
+                                            <Style Selector="TextBlock.action">
+                                                <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+                                            </Style>
+                                        </Grid.Styles>
+                                        <Border Grid.Row="0" Grid.ColumnSpan="2" Height="1" Background="#3A3A5C"
+                                                Margin="0,-4,0,5" IsVisible="{Binding IsAction}"/>
+                                        <Border Grid.Row="1" Width="8" Height="8" CornerRadius="4" Margin="0,0,8,0"
+                                                Background="{Binding AccentBrush}" VerticalAlignment="Center"
+                                                IsVisible="{Binding !IsAction}"/>
+                                        <fx:IconGlyph Grid.Row="1" Kind="Settings" Size="10" Margin="0,0,8,0"
+                                                      Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center"
+                                                      IsVisible="{Binding IsAction}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Name}"
+                                                   Classes.action="{Binding IsAction}" VerticalAlignment="Center" FontSize="11"
                                                    TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"/>
                                     </Grid>
                                 </DataTemplate>
@@ -790,7 +803,8 @@
                              spare and nothing needs a pinned LineHeight to avoid clipping.
                              AutomationProperties.Name keeps the localized string on the control
                              for screen readers - the visible letters are split across runs. -->
-                        <Button x:Name="BtnManageMods" Click="BtnManageMods_Click"
+                        <!-- WPF 7.1.5 moved this entry to the combo footer. Keep the named launcher for existing callers. -->
+                        <Button x:Name="BtnManageMods" Click="BtnManageMods_Click" IsVisible="False"
                                 ToolTip.Tip="{loc:Str tooltip_manage_mods}"
                                 Margin="4,0,0,0" Height="28" VerticalAlignment="Center"
                                 Background="Transparent" BorderThickness="0" Cursor="Hand">
@@ -976,20 +990,38 @@
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False">
-                                <Run Text="{loc:Str label_banner_web_xp}"/>
-                                <Run Text=" "/>
-                                <!-- WPF Hyperlink + RequestNavigate (MainWindow.xaml:1842) -> an inline
-                                     SafeHyperlinkButton (ExternalOpener); Click retires the beat. -->
+                                <!-- WPF Hyperlink + RequestNavigate (MainWindow.xaml:1174) -> an inline
+                                     SafeHyperlinkButton (ExternalOpener); Click retires the beat.
+                                     WPF's CharacterEllipsis trims the whole line, Hyperlink included,
+                                     so a narrow header shows "see it on the we…". Avalonia never trims
+                                     an InlineUIContainer: it drops it whole, or (stale size) lets it
+                                     overrun. So lead + link sit in one embedded DockPanel, measured
+                                     at the line width: the lead keeps its width and the link takes
+                                     what is left and ellipsizes, as WPF does. -->
                                 <InlineUIContainer BaselineAlignment="Center">
-                                    <fx:SafeHyperlinkButton x:Name="BannerWebLink" Padding="0" Margin="0" BorderThickness="0"
-                                                            NavigateUri="https://app.cclabs.app"
-                                                            Click="BannerWebLink_Click">
-                                        <TextBlock Text="{loc:Str label_banner_web_link}" FontWeight="Bold" FontSize="12"
-                                                   FontStyle="Italic" Foreground="{DynamicResource PinkBrush}"
-                                                   TextDecorations="Underline"/>
-                                    </fx:SafeHyperlinkButton>
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Left" FontSize="12" FontStyle="Italic"
+                                                   Foreground="{DynamicResource PinkBrush}" TextTrimming="CharacterEllipsis">
+                                            <Run Text="{loc:Str label_banner_web_xp}"/>
+                                            <Run Text=" "/>
+                                        </TextBlock>
+                                        <fx:SafeHyperlinkButton x:Name="BannerWebLink" Padding="0" Margin="0" BorderThickness="0"
+                                                                HorizontalAlignment="Left"
+                                                                NavigateUri="https://app.cclabs.app"
+                                                                Click="BannerWebLink_Click">
+                                            <TextBlock Text="{loc:Str label_banner_web_link}" FontWeight="Bold" FontSize="12"
+                                                       FontStyle="Italic" Foreground="{DynamicResource PinkBrush}"
+                                                       TextDecorations="Underline" TextTrimming="CharacterEllipsis"/>
+                                        </fx:SafeHyperlinkButton>
+                                    </DockPanel>
                                 </InlineUIContainer>
                             </TextBlock>
+                            <!-- WPF's optional authored pool beat: no line means no rotation slot. -->
+                            <TextBlock x:Name="TxtBannerPool" Foreground="{DynamicResource PinkBrush}"
+                                       FontSize="12" FontStyle="Italic"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       TextAlignment="Center" TextTrimming="CharacterEllipsis"
+                                       Opacity="0" IsHitTestVisible="False"/>
                             <!-- Chrome FX (PR-1): one-shot sheen pass over the banner when the
                                  message changes. Its own ClipToBounds host so the band can't
                                  escape the card - deliberately NOT ClipToBounds on the shared
@@ -1026,7 +1058,7 @@
                      button, Help, and the profile bubble (avatar + hover account menu).
                      Bug Report lives in the title bar (BtnTitleBarBugReport) - the copy that
                      used to sit here was a duplicate and was removed for the bubble. -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- THE PREMIUM SPARK (WPF MainWindow.xaml:1237, polish 12): 54 x 42 card held to the
                          34 px row by -4 px margins. Controls/PremiumSpark.cs, MainShellWindow.PremiumSpark.cs. -->
                     <fx:PremiumSpark x:Name="HeaderPremiumSpark" Margin="0,-4,12,-4" VerticalAlignment="Center"/>
@@ -1187,8 +1219,8 @@
                             </ControlTheme>
                         </ComboBox.ItemContainerTheme>
                     </ComboBox>
-                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_1_5_is_out}"
-                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_1_5_stay_tuned}"
+                    <Button x:Name="BtnUpdateAvailable" Content="{loc:Str btn_v7_1_14_is_out}"
+                            Click="BtnUpdateAvailable_Click" ToolTip.Tip="{loc:Str tooltip_v7_1_14_bring_a_friend}"
                             FontSize="11" FontWeight="Bold" Cursor="Hand">
                         <Button.Theme>
                             <ControlTheme TargetType="Button">
@@ -1346,7 +1378,7 @@
                          bounce+burst, flash wobble, achievement glow. All logic lives in
                          MainWindow.ProfileBubble.cs; the visuals are named here so that partial
                          can paint and animate them without template digging. -->
-                    <Button x:Name="BtnProfileBubble" Width="34" Height="34" Margin="8,0,0,0"
+                    <Button x:Name="BtnProfileBubble" Width="34" Height="34" Margin="8,0,0,0" ClipToBounds="False"
                             Click="BtnProfileBubble_Click" Cursor="Hand"
                             PointerEntered="ProfileBubble_MouseEnter" PointerExited="ProfileBubble_MouseLeave">
                         <Button.Template>
@@ -1382,11 +1414,19 @@
                                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                    Margin="0,0,-13,-6" IsVisible="False"
                                    RenderOptions.BitmapInterpolationMode="HighQuality"
-                                   RenderTransformOrigin="0.5,0.5">
+                                   RenderTransformOrigin="0.5,0.5"
+                                   PointerEntered="ProfileTierBadge_MouseEnter" PointerExited="ProfileTierBadge_MouseLeave">
                                 <Image.RenderTransform>
                                     <RotateTransform Angle="-12"/>
                                 </Image.RenderTransform>
                             </Image>
+                            <!-- WPF tier hover: left of the badge, above the account menu, never a hit target. -->
+                            <Popup x:Name="ProfileTierBadgePopup" PlacementTarget="{Binding #ProfileBubbleTierBadge}"
+                                   Placement="Left" IsLightDismissEnabled="False" IsHitTestVisible="False" Focusable="False">
+                                <Image x:Name="ProfileTierBadgeBig" Height="72" Margin="12"
+                                       RenderOptions.BitmapInterpolationMode="HighQuality"
+                                       RenderTransformOrigin="100%,50%" IsHitTestVisible="False"/>
+                            </Popup>
                         </Grid>
                     </Button>
                     <!-- The bubble's account menu. StaysOpen + manual close-grace timers, same
@@ -1774,6 +1814,10 @@
                 <!-- Companion Tab (v5.9 - Hero + AI Brain redesign) -->
                 <views:CompanionTabView x:Name="CompanionTab" Margin="10,5,10,10" IsVisible="False" />
                 <!-- Companion > AI (WPF MainWindow.CompanionTabs.cs "companionai", 48f587200) -->
+                <!-- Companion > Personality / Permissions / Links (WPF MainWindow.CompanionTabs.cs, 5681c132a) -->
+                <cmpPages:PersonalityPage x:Name="CompanionPersonalityTab" Margin="10,5,10,10" IsVisible="False" />
+                <cmpPages:PermissionsPage x:Name="CompanionPermissionsTab" Margin="10,5,10,10" IsVisible="False" />
+                <cmpPages:LinksPage x:Name="CompanionLinksTab" Margin="10,5,10,10" IsVisible="False" />
                 <cmpPages:AiPage x:Name="CompanionAiTab" Margin="10,5,10,10" IsVisible="False" />
 
 
@@ -2414,7 +2458,7 @@
                                             <TextBlock Text="{loc:Str label_getting_started}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_quick_overview_of_the_basics_start_button_add}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialGettingStarted_Click"
+                                        <Button x:Name="BtnTutorialGettingStarted" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialGettingStarted_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2432,7 +2476,7 @@
                                             <TextBlock Text="{loc:Str label_settings_tab}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_flash_images_videos_subliminals_overlays_audi}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialSettings_Click"
+                                        <Button x:Name="BtnTutorialSettings" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialSettings_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2450,7 +2494,7 @@
                                             <TextBlock Text="{loc:Str label_presets_sessions}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_save_configurations_run_timed_sessions_create}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialPresets_Click"
+                                        <Button x:Name="BtnTutorialPresets" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialPresets_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2468,7 +2512,7 @@
                                             <TextBlock Text="{loc:Str tab_progression}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_xp_system_level_unlocks_scheduler_and_intensi}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialProgression_Click"
+                                        <Button x:Name="BtnTutorialProgression" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialProgression_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2486,7 +2530,7 @@
                                             <TextBlock Text="{loc:Str tab_achievements}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_unlock_achievements_by_reaching_milestones_an}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAchievements_Click"
+                                        <Button x:Name="BtnTutorialAchievements" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAchievements_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2504,7 +2548,7 @@
                                             <TextBlock Text="{loc:Str label_companion_settings_2}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_speech_bubbles_trigger_messages_and_ai_person}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialCompanion_Click"
+                                        <Button x:Name="BtnTutorialCompanion" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialCompanion_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2522,7 +2566,7 @@
                                             <TextBlock Text="{loc:Str label_patreon_exclusives}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_ai_chat_window_awareness_slut_mode_and_premiu}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialPatreon_Click"
+                                        <Button x:Name="BtnTutorialPatreon" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialPatreon_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2540,7 +2584,7 @@
                                             <TextBlock Text="{loc:Str label_awareness_engine}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_awareness_engine_desc}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAwareness_Click"
+                                        <Button x:Name="BtnTutorialAwareness" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAwareness_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2558,7 +2602,7 @@
                                             <TextBlock Text="{loc:Str label_avatar_companion}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_interacting_detaching_resizing_evolution_stag}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAvatar_Click"
+                                        <Button x:Name="BtnTutorialAvatar" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialAvatar_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2576,7 +2620,7 @@
                                             <TextBlock Text="{loc:Str label_modding_guide}" Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"/>
                                             <TextBlock Text="{loc:Str label_opens_the_mod_creator_with_a_step_by_step_wal}" Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialModding_Click"
+                                        <Button x:Name="BtnTutorialModding" Grid.Column="2" Content="{loc:Str btn_start_guide}" Click="BtnTutorialModding_Click"
                                                 Theme="{StaticResource SmallPinkButton}" VerticalAlignment="Center"/>
                                     </Grid>
                                 </Border>
@@ -2623,7 +2667,7 @@
                         <!-- Footer -->
                         <Border Grid.Row="2" Background="{DynamicResource SurfaceBgBrush}" CornerRadius="0,0,10,10" Padding="20,15">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Content="{loc:Str btn_start_interactive_tutorial}" Click="BtnStartTutorial_Click" Margin="0,0,15,0"
+                                <Button x:Name="BtnStartTutorial" Content="{loc:Str btn_start_interactive_tutorial}" Click="BtnStartTutorial_Click" Margin="0,0,15,0"
                                         Background="Transparent" Foreground="{DynamicResource PinkBrush}" BorderBrush="{DynamicResource PinkBrush}" BorderThickness="1"
                                         Padding="20,10" FontWeight="SemiBold" Cursor="Hand">
                                     <Button.Template>

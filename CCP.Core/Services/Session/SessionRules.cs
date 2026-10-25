@@ -81,6 +81,9 @@ namespace ConditioningControlPanel.Services
 
         public bool IsPending(string name) => _pending.Exists(p => p.Name == name);
 
+        /// <summary>The features still waiting, in queue order (one per deferral; WPF read the list itself).</summary>
+        public IEnumerable<string> PendingNames => _pending.ConvertAll(p => p.Name);
+
         public void Clear() => _pending.Clear();
 
         /// <summary>Starts every entry whose minute has arrived. Reverse order, as WPF: firing removes in place.

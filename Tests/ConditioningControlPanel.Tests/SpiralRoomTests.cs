@@ -689,7 +689,8 @@ public class SpiralRoomTests
         Assert.Contains("ShowSplash()", view, StringComparison.Ordinal);
 
         // The embed raises it, and only on a SUCCESSFUL navigation - a failure still goes to Fail.
-        var embed = AppFile("Controls", "SpiralEmbedView.cs");
+        // Pinned to the WPF head: CCP.Avalonia/Controls/SpiralEmbedView.cs is its own head's twin.
+        var embed = File.ReadAllText(Path.Combine(ProductDir, "Controls", "SpiralEmbedView.cs"));
         Assert.Contains("public event EventHandler? Navigated;", embed, StringComparison.Ordinal);
         Assert.Contains("Navigated?.Invoke(this, EventArgs.Empty)", embed, StringComparison.Ordinal);
     }

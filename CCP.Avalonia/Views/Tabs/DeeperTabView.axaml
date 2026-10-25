@@ -22,14 +22,14 @@
        x:Name on those two ImageBrushes  - still AVLN2000; only a StyledElement can be named,
          which is why the BORDER carries the name and the brush is built in code.
        Border.OpacityMask                - kept; Avalonia has OpacityMask on Visual.
-       feat:AdaptiveSideArt.CollapseBelow - attached behaviour lives in the WPF head.
+       feat:AdaptiveSideArt.CollapseBelow - kept (Helpers/AdaptiveSideArt.cs), same threshold as WPF.
        PanningMode, VirtualizingPanel.*, ScrollViewer.CanContentScroll and the ItemsControl's
          inner-ScrollViewer template - the outer ScrollViewer already scrolls the page.
        <Style TargetType="Button" BasedOn="DeeperRoundButton"/> (the implicit style) - an
          Avalonia Style setter OUTRANKS a ControlTheme, so an implicit selector would clobber
          the OutlineButton theme on the six webcam-card buttons. The nine plain buttons that
          WPF rounded implicitly carry Theme="{StaticResource DeeperRoundButton}" instead. -->
-<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -49,64 +49,6 @@
             <GradientStop Color="#147B5CFF" Offset="0"/>
             <GradientStop Color="#00000000" Offset="0.55"/>
         </LinearGradientBrush>
-
-        <!-- ponytail: local copy of Resources/Theme/Controls.xaml:DeeperRoundButton, hoist when a
-             second view needs it. Standard body button, 8px corners; Background / BorderBrush /
-             Padding stay TemplateBound so every inline setter at the call sites keeps working. -->
-        <ControlTheme x:Key="DeeperRoundButton" TargetType="Button">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd" CornerRadius="8"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.85"/>
-            </Style>
-            <Style Selector="^:pressed /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.70"/>
-            </Style>
-            <Style Selector="^:disabled /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.40"/>
-            </Style>
-        </ControlTheme>
-
-        <!-- ponytail: local copy of Resources/Theme/Controls.xaml:DeeperRoundIconButton, hoist
-             when a second view needs it. Icon-only buttons, 6px corners, no size defaults. -->
-        <ControlTheme x:Key="DeeperRoundIconButton" TargetType="Button">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="bd" CornerRadius="6"
-                            Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            Padding="{TemplateBinding Padding}">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.85"/>
-            </Style>
-            <Style Selector="^:pressed /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.70"/>
-            </Style>
-            <Style Selector="^:disabled /template/ Border#bd">
-                <Setter Property="Opacity" Value="0.40"/>
-            </Style>
-        </ControlTheme>
 
         <!-- Pill theme for the All / Video / Audio / Haptics / Webcam toggles. -->
         <ControlTheme x:Key="DeeperPillStyle" TargetType="ToggleButton">
@@ -182,7 +124,7 @@
         <!-- Per-row template. DataContext = DeeperLibraryRowVm; the original
              EnhancementLibraryEntry hangs off vm.Entry for action handlers. -->
         <DataTemplate x:Key="DeeperLibraryRowTemplate" x:DataType="vm:DeeperLibraryRowVm">
-            <Border x:Name="RowBorder" Classes="deeper-row" Classes.selected="{Binding IsSelected}"
+            <Border x:Name="RowBorder" Classes="deeper-row" Classes.selected="{Binding IsSelected}" Classes.highlighted="{Binding IsHighlighted}"
                     Background="{DynamicResource PanelBgBrush}"
                     BorderBrush="{DynamicResource DeeperAccentTransparent20Brush}"
                     BorderThickness="1" CornerRadius="6"
@@ -334,7 +276,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentBrush}"/>
         </Style>
         <!-- WPF DataTrigger IsSelected: keyboard/click selection. -->
-        <Style Selector="Border.deeper-row.selected">
+        <Style Selector="Border.deeper-row.selected, Border.deeper-row.highlighted">
             <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent20Brush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource DeeperAccentBrush}"/>
         </Style>
@@ -470,16 +412,12 @@
                  Velvet Kit 2 · round 3 layout. The hub column is capped (3*, MaxWidth 780) so the
                  library rows stop being a 1080px runway, and the width that buys back becomes one
                  art plate instead of dead margin. WPF collapsed the art column below 1000px via
-                 feat:AdaptiveSideArt; that attached behaviour is still in the WPF head, so the
-                 column stays put here. -->
-            <Grid Grid.Row="1" ColumnDefinitions="3*,2*">
-                <Grid.Styles>
-                    <!-- ColumnDefinition MaxWidth is not settable inline on Avalonia's shorthand;
-                         the 780 cap rides on the column's content instead. -->
-                    <Style Selector="StackPanel#DeeperHubColumn">
-                        <Setter Property="MaxWidth" Value="780"/>
-                    </Style>
-                </Grid.Styles>
+                 feat:AdaptiveSideArt (Helpers/AdaptiveSideArt.cs, same threshold). -->
+            <Grid Grid.Row="1" sideart:AdaptiveSideArt.CollapseBelow="1000">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="3*" MaxWidth="780"/>
+                    <ColumnDefinition Width="2*"/>
+                </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" x:Name="DeeperHubColumn">
 
@@ -602,9 +540,8 @@
 
                                     <!-- Row B: filter pills + sort dropdown. WPF put the pills in a
                                          horizontal StackPanel because AdaptiveSideArt gave the hub
-                                         the full width below 1000px. Without that behaviour the
-                                         column is ~540px in the shell, so the pills WrapPanel
-                                         instead of running under the sort cluster. -->
+                                         the full width below 1000px. Kept as a WrapPanel here so the
+                                         pills still fit when the art column is shown (~540px hub). -->
                                     <Grid ColumnDefinitions="*,Auto">
                                         <WrapPanel Grid.Column="0" Orientation="Horizontal">
                                             <ToggleButton x:Name="BtnDeeperPillAll" x:FieldModifier="internal"
@@ -811,7 +748,7 @@
                                                 <Button HorizontalAlignment="Left" Margin="16,6,0,0"
                                                         Padding="8,3" FontSize="10"
                                                         Theme="{StaticResource OutlineButton}"
-                                                        Click="BtnOpenDeviceSettings_Click">
+                                                        x:Name="BtnDeeperDeviceSettings" Click="BtnOpenDeviceSettings_Click">
                                                     <TextBlock Text="{loc:Str set2_configure_in_settings}"/>
                                                 </Button>
                                             </StackPanel>
@@ -868,12 +805,12 @@
                                         <WrapPanel Orientation="Horizontal">
                                             <Button Theme="{StaticResource OutlineButton}"
                                                     Padding="10,4" Margin="0,0,6,6" FontSize="10"
-                                                    Click="BtnDeeperWebcamCalibrate_Click">
+                                                    x:Name="BtnDeeperWebcamCalibrate" Click="BtnDeeperWebcamCalibrate_Click">
                                                 <TextBlock Text="{loc:Str blink_trainer_calibration_btn}"/>
                                             </Button>
                                             <Button Theme="{StaticResource OutlineButton}"
                                                     Padding="10,4" Margin="0,0,6,6" FontSize="10"
-                                                    Click="BtnDeeperWebcamQuickRecal_Click">
+                                                    x:Name="BtnDeeperWebcamQuickRecal" Click="BtnDeeperWebcamQuickRecal_Click">
                                                 <TextBlock Text="{loc:Str blink_trainer_calibration_quick}"/>
                                             </Button>
                                             <!-- Start/Stop tracker. Required to actually calibrate: the

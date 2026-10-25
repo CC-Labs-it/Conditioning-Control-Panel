@@ -151,6 +151,7 @@ namespace ConditioningControlPanel
 
                 // Same reason for the remote HUD pill: unowned and topmost by design.
                 DisposeRemoteHud();
+                try { Controls.ScrolllerCreditChip.Dispose(); } catch { }
 
                 // Kill all audio and effects first - ensures clean exit
                 App.KillAllAudio();
@@ -168,6 +169,9 @@ namespace ConditioningControlPanel
                 // Restore any active session's settings before persisting (else the overridden
                 // pools get saved and the message sets look wiped next launch).
                 EnsureSessionRestoredForExit();
+                // ...then every other borrowed value (ramp, Takeover pulse, remote controller),
+                // AFTER the session like a normal stop: the final save must hold the user's own.
+                SettleTemporarySettingsForExit();
 
                 // The Companion drawers are viewmodel state, written into CompanionSectionOpen on a
                 // tab-hide transition. Quitting while still sitting on the Companion tab is not one,
@@ -384,6 +388,31 @@ namespace ConditioningControlPanel
                 base.OnClosing(e);
         }
 
+        /// <summary>
+        /// Exit while something still holds a TEMPORARY value in the saved settings: hand each one
+        /// back before the last save, the way its own stop would. The final saves (SaveSettings here,
+        /// SaveImmediate in App.OnExit) used to write them as the user's own, and the restores that
+        /// run later in teardown (Autonomy.Dispose, the remote's Dispose) are never saved:
+        /// <list type="bullet">
+        /// <item>the intensity ramp: OnClosing stopped only its timer, so the ramped flash / spiral /
+        /// pink opacity, master and whisper volume and blur were kept;</item>
+        /// <item>a Takeover spiral / pink pulse (30 s): the boosted opacity and the switch it turned
+        /// on were kept;</item>
+        /// <item>a connected remote controller: the strict lock it switched on, the Brain Drain it
+        /// switched on and the opacities Easy faded were kept.</item>
+        /// </list>
+        /// Called again from App.OnExit for a shutdown that skips this window's close. Idempotent.
+        /// </summary>
+        internal void SettleTemporarySettingsForExit()
+        {
+            try { if (_rampTimer != null) StopRampTimer(); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Exit: ramp restore failed"); }
+            try { App.Autonomy?.CancelActivePulses(); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Exit: Takeover pulse restore failed"); }
+            try { App.RemoteControl?.ReleaseHoldingsForExit(); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Exit: remote holdings release failed"); }
+        }
+
         protected override void OnDpiChanged(System.Windows.DpiScale oldDpi, System.Windows.DpiScale newDpi)
         {
             // Moving to a monitor with a different scale factor makes WPF rebuild every visible layered
@@ -428,19 +457,16 @@ namespace ConditioningControlPanel
                 }
 
                 // Restore autonomy and avatar mute state if we paused them on minimize
-                if (_autonomyWasPausedOnMinimize && _wasAutonomyRunningBeforeMinimize)
+                var recovery = _windowMinimizeRecovery.Restored();
+                if (recovery.ResumeAutonomy)
                 {
                     App.Autonomy?.Start();
-                    _autonomyWasPausedOnMinimize = false;
-                    _wasAutonomyRunningBeforeMinimize = false;
                     App.Logger?.Debug("MainWindow: Restored autonomy mode after restore from minimize");
                 }
 
-                if (_avatarWasMutedOnMinimize && _wasAvatarUnmutedBeforeMinimize)
+                if (recovery.UnmuteAvatar)
                 {
                     _avatarTubeWindow?.SetMuteAvatar(false);
-                    _avatarWasMutedOnMinimize = false;
-                    _wasAvatarUnmutedBeforeMinimize = false;
                     App.Logger?.Debug("MainWindow: Restored avatar unmuted state after restore from minimize");
                 }
 
@@ -469,19 +495,17 @@ namespace ConditioningControlPanel
                 {
                     // Pause autonomy if it's running — but never during Lockdown: minimize
                     // would otherwise be a silent escape from Takeover (#514).
-                    if (App.Autonomy?.IsEnabled == true && App.Lockdown?.IsActive != true)
+                    var recovery = _windowMinimizeRecovery.Minimized(true, App.Autonomy?.IsEnabled == true,
+                        App.Lockdown?.IsActive == true, _avatarTubeWindow.IsMuted);
+                    if (recovery.PauseAutonomy)
                     {
-                        _wasAutonomyRunningBeforeMinimize = true;
-                        _autonomyWasPausedOnMinimize = true;
                         App.Autonomy.Stop();
                         App.Logger?.Debug("MainWindow: Auto-paused autonomy mode on minimize (attached avatar)");
                     }
 
                     // Mute avatar if it's not already muted
-                    if (_avatarTubeWindow.IsMuted == false)
+                    if (recovery.MuteAvatar)
                     {
-                        _wasAvatarUnmutedBeforeMinimize = true;
-                        _avatarWasMutedOnMinimize = true;
                         _avatarTubeWindow.SetMuteAvatar(true);
                         App.Logger?.Debug("MainWindow: Auto-muted avatar on minimize (attached avatar)");
                     }
