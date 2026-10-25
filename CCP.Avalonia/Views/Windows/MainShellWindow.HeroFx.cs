@@ -157,7 +157,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // instead of importing the trunk's independent 16ms DispatcherTimer.
         private void AnimateXpReadout(TextBlock txt, double xp, double needed, int level)
         {
-            string target = $"{(int)xp} / {(int)needed} XP";
+            // The odometer's own end text (F0 rounds, WPF {0:F0}); only a running count is compared.
+            string target = xp.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + $" / {(int)needed} XP";
             // Awarded and LevelUp can repaint the same total in one dispatcher turn. Keep the
             // first count alive rather than snapping it to its own target on the second repaint.
             if (_xpOdometer?.IsRunning == true && level == _lastXpLevelShown && xp == _lastXpShown
@@ -180,6 +181,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             string tail = $" / {(int)needed} XP";
+            _xpReadoutTarget = xp.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;   // where the count lands
             txt.Text = from.ToString("F0", System.Globalization.CultureInfo.CurrentCulture) + tail;
             _xpOdometer = new BeatLoop(txt, seconds =>
             {
