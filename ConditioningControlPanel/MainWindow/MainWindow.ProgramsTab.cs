@@ -1387,13 +1387,8 @@ namespace ConditioningControlPanel
         // -----------------------------------------------------------------------------------
 
         /// <summary>mm:ss, or h:mm:ss past the hour. Never negative.</summary>
-        private static string FormatProgramClock(TimeSpan span)
-        {
-            if (span < TimeSpan.Zero) span = TimeSpan.Zero;
-            return span.TotalHours >= 1
-                ? $"{(int)span.TotalHours}:{span.Minutes:D2}:{span.Seconds:D2}"
-                : $"{(int)span.TotalMinutes}:{span.Seconds:D2}";
-        }
+        private static string FormatProgramClock(TimeSpan span) =>
+            ConditioningControlPanel.Services.Program.ProgramSessionProgress.Clock(span);
 
         /// <summary>programs.json stamped by a newer build loads read-only (ProgramService.IsReadOnly,
         /// docs/avalonia-decisions.md programs 3a): every lifecycle control greys, since Core refuses them.</summary>
@@ -1489,9 +1484,10 @@ namespace ConditioningControlPanel
 
                 if (isOurs && current != null)
                 {
-                    var total = TimeSpan.FromMinutes(Math.Max(1, current.DurationMinutes));
-                    var elapsed = engine!.ElapsedTime;
-                    if (elapsed > total) elapsed = total;
+                    var progress = ConditioningControlPanel.Services.Program.ProgramSessionProgress.From(
+                        engine!.ElapsedTime, current.DurationMinutes);
+                    var total = progress.Total;
+                    var elapsed = progress.Elapsed;
 
                     tab.TodaySessionProgressBar.Foreground = accent;
                     tab.TodaySessionProgressBar.Value = Math.Clamp(engine.ProgressPercent, 0, 100);

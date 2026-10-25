@@ -21,8 +21,7 @@
 //       * UpdateProfileSharingSummary() on "discord" - see the case itself for why it lands here
 //         and not in the FX partial WPF reaches it through.
 //       * HasSeenProgramsTab and ProgramsIntroPopup.ShowIfFirstTime on "programs".
-//   - EmiDesk (EmiTargets.NoteTabOpened). The Bark hook is REAL now, through CoreBark, and fires
-//     in the same place WPF fires it - see ShowTab.
+//   - The Bark and EmiDesk open-counter hooks run in ShowTab, as on WPF.
 //   - The keys that are WINDOWS, not tabs, and the one launcher door: "patreon" (Settings · Account,
 //     as WPF ShowAppInfoPopup - wired), "fyp" (OpenFypFeed), "justdrop" (the shop host).
 //     fyp opens the feed (GameWindow.Fyp.cs); justdrop opens its GameWindow (MainShellWindow.JustDrop.cs). The "webapp" door is
@@ -154,14 +153,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (tab == "justdrop") { OpenJustDrop(); return; }
             if (WindowKeys.Contains(tab)) return;                 // a window, not a tab - see header
 
-            // Bark hook: announce navigation (gated/chanced in the rules so it isn't spammy).
-            // Routed through BarkTabAliases so renamed tabs keep answering to their old bark key.
-            // Placed exactly where WPF places it (MainWindow.TabNavigation.cs:158) - AFTER the
-            // window-key intercepts and BEFORE the panel lookup, so an unknown key announces
-            // itself here too, as it does there.
+            // WPF refuses an unknown key before the bark hook (TabNavigation.cs:274-295).
+            // The head's panel table owns which destinations actually exist here.
+            if (!TabPanels.TryGetValue(tab, out var target))
+            {
+                Serilog.Log.Warning("ShowTab({Tab}) ignored: no such tab", tab);
+                return;
+            }
+
+            // Window launchers have already returned. Real tabs keep their legacy bark aliases.
             CoreBark.NotifyTabNavigated(BarkTabAliases.TryGetValue(tab, out var barkTab) ? barkTab : tab);
 
-            if (!TabPanels.TryGetValue(tab, out var target)) return;
+            EmiDesk.EmiTargets.NoteTabOpened(tab); // WPF counts after the bark hook (TabNavigation.cs:298).
 
             foreach (var name in new HashSet<string>(TabPanels.Values))
             {
@@ -227,7 +230,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         Named<Controls.Companion.Pages.AiPage>("CompanionAiTab")?.OnShown(RoomView());
                         break;
                     case "lockdown": MaybeShowFeatureIntro("lockdown"); break;
-                    case "blinktrainer": MaybeShowFeatureIntro("blinktrainer"); break;
+                    case "blinktrainer":
+                        // WPF refreshes on every ShowTab. Coming from another tab the view's own
+                        // IsVisible hook already did; only a re-visit of the visible page needs it.
+                        if (_tabBefore == "blinktrainer") Named<Tabs.BlinkTrainerTabView>("BlinkTrainerTab")?.Refresh();
+                        MaybeShowFeatureIntro("blinktrainer");
+                        break;
                     // WPF :581 - only once the room shows the map (its IsVisible hook re-read the gates).
                     case "spiral":
                         if (Named<Tabs.SpiralTabView>("SpiralTab")?.IsShowingSpiral == true)
@@ -241,6 +249,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                     // WPF MainWindow.TabNavigation.cs:292/367: throttled share-status polls on tab open.
                     case "presets":
+                        RefreshTakeawayShelf();
                         _ = CheckCatalogueSubmissionStatusesAsync(CatalogueKindPresets);
                         _ = CheckCatalogueSubmissionStatusesAsync(CatalogueKindSessions);
                         break;
@@ -251,6 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "leaderboard": _ = Named<Tabs.LeaderboardTabView>("LeaderboardTab")?.RefreshLeaderboardAsync(); RefreshSeasonRecapReview(); break;
                     // WPF MainWindow.SocialTabs.cs: subscribe and ask for a fresh list (the page folds itself on hide).
                     case "friends": Named<Tabs.FriendsTabView>("FriendsTab")?.OnShown(); break;
+                    case "leash": Named<Tabs.LeashTabView>("LeashTab")?.OnShown(); break;
 
                     // WPF MainWindow.Exclusives.cs RefreshExclusivesTab "on tab show": gates can move between visits.
                     case "premium": RefreshExclusivesTab(); break;
@@ -322,11 +332,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 if (!await Platform.ExternalOpener.OpenAsync(this, url))
-                {
-                    try { if (Clipboard is { } cb) await cb.SetTextAsync(url); } catch { /* clipboard may be unavailable */ }
-                    await Dialogs.MessageDialog.ShowAsync(this, Loc.Get("title_open_link_in_browser"),
-                        Loc.GetF("msg_browser_no_default_for", "open the CC Labs web app") + Loc.GetF("msg_browser_link_copied", url));
-                }
+                    await Dialogs.MessageDialog.ShowLinkCopiedAsync(this, url, "open the CC Labs web app");
                 RetireWebBannerBeat();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "DoorWebApp_Click failed"); }

@@ -245,14 +245,14 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Template">
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Border x:Name="ContainerBorder" Background="Transparent">
+                    <Border x:Name="ContainerBorder" Background="{TemplateBinding Background}">
                         <ContentPresenter Content="{TemplateBinding Content}"
                                           ContentTemplate="{TemplateBinding ContentTemplate}"
                                           HorizontalAlignment="Stretch"/>
                     </Border>
                 </ControlTemplate>
             </Setter>
-            <Style Selector="^:selected /template/ Border#ContainerBorder">
+            <Style Selector="^:selected">
                 <Setter Property="Background" Value="{DynamicResource TransparentPink40Brush}"/>
             </Style>
         </ControlTheme>
@@ -349,9 +349,6 @@
         <Style Selector="Border.lbpodium.r1">
             <Setter Property="BorderBrush" Value="#8CFFD700"/>
             <Setter Property="Padding" Value="12,9,12,10"/>
-            <Setter Property="Effect">
-                <DropShadowEffect Color="#FFFFD700" BlurRadius="26" OffsetX="0" OffsetY="0" Opacity="0.28"/>
-            </Setter>
         </Style>
         <Style Selector="Border.lbpodium.r1 TextBlock#Crown">
             <Setter Property="IsVisible" Value="True"/>
@@ -542,6 +539,9 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="tabs:LeaderboardRow">
+                  <Grid Classes="lbpodium-slot" VerticalAlignment="Bottom">
+                    <Border x:Name="PodiumGoldGlow" IsVisible="{Binding IsRank1}" Margin="6,0" CornerRadius="12"
+                            IsHitTestVisible="False" Opacity="0.28" BoxShadow="0 0 24 0 #FFFFD700"/>
                     <Border x:Name="Card" Classes="lbpodium"
                             Classes.r1="{Binding IsRank1}" Classes.r2="{Binding IsRank2}" Classes.r3="{Binding IsRank3}"
                             Margin="6,0" Padding="12,6,12,6" CornerRadius="12" VerticalAlignment="Bottom"
@@ -643,6 +643,7 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
+                  </Grid>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

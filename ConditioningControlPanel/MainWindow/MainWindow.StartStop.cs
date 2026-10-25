@@ -627,6 +627,9 @@ namespace ConditioningControlPanel
             _rampBaseValues["MasterVolume"] = settings.MasterVolume;
             _rampBaseValues["SubAudioVolume"] = settings.SubAudioVolume;
             _rampBaseValues["BrainDrainBlurStrength"] = settings.BrainDrainBlurStrength;
+            // Every tick writes ramped values into the saved settings: keep the bases on disk so a
+            // crash mid-ramp is undone at the next launch (SessionSettingsJournal).
+            Services.SessionSettingsJournal.WriteRamp(App.UserDataPath, Services.SessionSettingsJournal.BuildRamp(_rampBaseValues));
             
             _rampStartTime = DateTime.Now;
             
@@ -688,6 +691,7 @@ namespace ConditioningControlPanel
                 _rampBaseValues.Clear();
                 App.Logger?.Information("Ramp timer stopped - values reset to base");
             }
+            Services.SessionSettingsJournal.ClearRamp(App.UserDataPath);
         }
 
         private void RampTimer_Tick(object? sender, EventArgs e)

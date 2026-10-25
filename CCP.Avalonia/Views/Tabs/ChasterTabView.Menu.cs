@@ -15,6 +15,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Chaster;
 
@@ -28,6 +29,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private bool _menuBuilt;
 
         internal IReadOnlyDictionary<string, ToggleButton> PriceRows => _priceToggles;
+
+        private void MenuInit()
+        {
+            DetachedFromVisualTree += (_, _) => LocalizationManager.Instance.LanguageChanged -= MenuLanguageChanged;
+            AttachedToVisualTree += (_, _) =>
+            {
+                LocalizationManager.Instance.LanguageChanged -= MenuLanguageChanged;
+                LocalizationManager.Instance.LanguageChanged += MenuLanguageChanged;
+            };
+        }
+
+        // Row names, stamps and limit figures are set from code, so a language switch repaints them.
+        private void MenuLanguageChanged(object? sender, EventArgs e)
+        {
+            foreach (var (id, row) in _priceToggles)
+                ((Grid)row.Content!).Children.OfType<StackPanel>().Single().Children.OfType<TextBlock>().First().Text = TabMenuCopy.ShortName(id, Loc.Get);
+            PaintStamps();
+            PaintLimits(ChasterHead.Service?.Caps ?? TabLimits.Default);
+        }
 
         internal void BuildMenu()
         {

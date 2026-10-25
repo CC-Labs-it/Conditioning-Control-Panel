@@ -12,7 +12,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
     /// <c>ChkSuppressPerkNotifications</c> live perk announcements and <c>ChkBannerPool</c> the
     /// header banner's pool beat.
     /// </summary>
-    public partial class NotificationsSettingsSection : UserControl
+    public partial class NotificationsSettingsSection : UserControl, IAppSettingsSection
     {
         private bool _isLoading = true;
         private SettingsService? _subscribedService;
@@ -43,6 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
 
         private void OnCurrentReplaced() => Dispatcher.UIThread.Post(SyncFromSettings);
 
+        // WPF IsVisibleChanged re-seeds on every Settings-door open.
+        public void OnSectionShown() => SyncFromSettings();
+
         /// <summary>Paints the rows from settings without raising an edit.</summary>
         internal void SyncFromSettings()
         {
@@ -72,8 +75,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         }
 
         /// <summary>WPF NotificationsSettingsSection.xaml.cs:101-108: a live editor for the header
-        /// banner's pool beat. That beat (BannerPoolService) is not ported to this head yet
-        /// (parity row shell-marquee); the preference still persists for it and for WPF.</summary>
+        /// banner's pool beat. The Core BannerPoolService reads this flag on every draw, so the
+        /// shell's pool beat (MainShellWindow.Marquee.cs) honours a change live, as in WPF.</summary>
         private void ChkBannerPool_Changed(object? sender, RoutedEventArgs e)
         {
             if (_isLoading) return;

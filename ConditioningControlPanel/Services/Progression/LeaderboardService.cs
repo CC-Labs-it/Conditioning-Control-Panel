@@ -154,63 +154,8 @@ public class LeaderboardService : IDisposable
     {
         try
         {
-            // Prefer server-provided rank (works for any rank, not just top 200)
-            if (YourRank.HasValue && YourTotal.HasValue && YourTotal.Value > 0)
-            {
-                var percentile = (int)Math.Ceiling((double)YourRank.Value / YourTotal.Value * 100);
-                var clampedPercentile = Math.Min(99, Math.Max(1, percentile));
-
-                App.Logger?.Debug("GetPlayerPercentile: Server rank {Position}/{Total} = Top {Percentile}%",
-                    YourRank.Value, YourTotal.Value, clampedPercentile);
-
-                return clampedPercentile;
-            }
-
-            // Fallback: scan local entries (only works if player is within the fetched set)
-            if (Entries.Count == 0 || TotalUsers == 0)
-            {
-                App.Logger?.Debug("GetPlayerPercentile: No entries ({Count}) or users ({Total})", Entries.Count, TotalUsers);
-                return 0;
-            }
-
-            var unifiedId = App.UnifiedUserId;
-            var discordId = App.Discord?.UserId;
-            var displayName = App.UserDisplayName;
-
-            int position = -1;
-            for (int i = 0; i < Entries.Count; i++)
-            {
-                var entry = Entries[i];
-                if (!string.IsNullOrEmpty(unifiedId) && entry.UnifiedId == unifiedId)
-                {
-                    position = i + 1;
-                    break;
-                }
-                if (!string.IsNullOrEmpty(discordId) && entry.DiscordId == discordId)
-                {
-                    position = i + 1;
-                    break;
-                }
-                if (!string.IsNullOrEmpty(displayName) && string.Equals(entry.DisplayName, displayName, StringComparison.OrdinalIgnoreCase))
-                {
-                    position = i + 1;
-                    break;
-                }
-            }
-
-            if (position <= 0)
-            {
-                App.Logger?.Debug("GetPlayerPercentile: Player not found in leaderboard");
-                return 0;
-            }
-
-            var fallbackPercentile = (int)Math.Ceiling((double)position / TotalUsers * 100);
-            var clampedFallback = Math.Min(99, Math.Max(1, fallbackPercentile));
-
-            App.Logger?.Debug("GetPlayerPercentile: Fallback scan rank {Position}/{Total} = Top {Percentile}%",
-                position, TotalUsers, clampedFallback);
-
-            return clampedFallback;
+            return LeaderboardClient.PlayerPercentile(YourRank, YourTotal, Entries, TotalUsers,
+                App.UnifiedUserId, App.Discord?.UserId, App.UserDisplayName);
         }
         catch (Exception ex)
         {

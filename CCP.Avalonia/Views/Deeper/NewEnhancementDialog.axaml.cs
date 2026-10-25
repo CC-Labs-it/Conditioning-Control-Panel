@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ConditioningControlPanel.Services;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
@@ -11,11 +12,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// PORTED from ConditioningControlPanel/Views/Deeper/NewEnhancementDialog.xaml.cs. Deviations:
     ///  - DialogResult becomes Close(bool); callers use ShowDialog&lt;bool&gt;.
     ///  - OpenFileDialog becomes the StorageProvider file picker.
-    ///  - The three interactive tutorials are stubs. AppSettings is
-    ///    NOT what blocks them - the HypnoTube flow's one settings write is restored below - and
-    ///    nor is the overlay, which is ported
-    ///    (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs). See StartInteractiveTutorial and
-    ///    BrowseAsync for what each one is actually waiting on.
+    ///  - The three interactive tutorials remain in follow-up lane
+    ///    wire-views-deeper-new-enhancement-dialog-b: the legacy overlay's native input region
+    ///    and automatic advancement need porting before the walkthroughs can be enabled.
+    ///    Known-video sample selection is shared with WPF through HypnotubeDefaultLinks.
     /// </summary>
     public partial class NewEnhancementDialog : Window
     {
@@ -71,12 +71,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void BtnTryHypnoTubeTutorial_Click()
         {
-            // ponytail: WPF prefers the first TikTok entry of
-            // ConditioningControlPanel/AvatarTube/AvatarTubeWindow.Speech.cs KnownVideoLinks and
-            // falls back to this literal; that window is WebView2-hosted and not on this head, so
-            // only the fallback is available - which is the value WPF ships when the lookup misses.
             _rbVideo.IsChecked = true;
-            _txtSource.Text = "https://hypnotube.com/video/bambis-naughty-tiktok-collection-117314.html";
+            try
+            {
+                _txtSource.Text = HypnotubeDefaultLinks.SelectTikTokTutorialVideo(
+                    CoreModsHooks.KnownVideoLinksProvider?.Invoke() ?? HypnotubeDefaultLinks.KnownVideoTitles);
+            }
+            catch
+            {
+                _txtSource.Text = HypnotubeDefaultLinks.SelectTikTokTutorialVideo(null);
+            }
 
             // Mark the flag so a future first-time hint does not double up. Same write WPF makes,
             // and it lands here for the same reason: the user has now seen the walkthrough offer.
@@ -91,31 +95,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         }
 
         /// <summary>
-        /// ponytail: still a no-op, but NOT for the reason the old note gave. TutorialOverlay is
-        /// ported (CCP.Avalonia/Views/Windows/TutorialOverlay.axaml.cs, live ctor
-        /// <c>TutorialOverlay(Window)</c>) and App.Tutorial is now the <c>CoreTutorial</c> seam,
-        /// so the two things that note named as head-only are both here. What blocks it:
-        ///
-        /// <list type="number">
-        ///   <item>Nothing seeds <c>CoreTutorial</c> on this head (CCP.Avalonia/App.axaml.cs:71) -
-        ///     the step lists are sentences about WPF controls and stay in
-        ///     ConditioningControlPanel/Services/TutorialService.cs. <c>Start</c> is a silent
-        ///     no-op, so showing the overlay would dim this dialog behind an empty card, which is
-        ///     worse than the button doing nothing visible.</item>
-        ///   <item>Part 2 needs <c>TutorialEventBus.PendingPart2Tutorial</c>
-        ///     (ConditioningControlPanel/Services/TutorialEventBus.cs). <c>CoreTutorial</c> carries
-        ///     no event bus by design, so that hand-off has no seam at all - it is an addition to
-        ///     Core, not a call into it. The WPF original sets it in BtnCreate_Click, after
-        ///     validation, precisely so a fumbled first click cannot leave the flag armed forever.</item>
-        /// </list>
-        ///
-        /// <para>Part 1's whole visible effect - pick the media type, pre-fill the source - already
-        /// happens in the three callers. Restore as:
-        /// <c>if (CoreTutorial.IsActive) CoreTutorial.Skip(); CoreTutorial.Start(part1); if
-        /// (!CoreTutorial.IsActive) return; new TutorialOverlay(this).Show();</c> - where
-        /// <c>part1</c> is the WPF <c>TutorialType</c> name as a string
-        /// ("DeeperEditorInteractiveLocalVideo" / "…LocalAudio" / "…HT"), since the seam takes a
-        /// name rather than an enum Core refuses to copy.</para>
+        /// ponytail: wire-views-deeper-new-enhancement-dialog-b owns the remaining walkthroughs.
+        /// TutorialHead already seeds CoreTutorial and CoreTutorialEvents already carries Part 2.
+        /// The legacy TutorialOverlay still lacks automatic control/event advancement and native
+        /// partial input regions; opening it here would obscure the Browse/Create controls.
+        /// Port those interactions with success-only editor continuation before enabling the tours.
         /// </summary>
         private void StartInteractiveTutorial()
         {

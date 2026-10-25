@@ -28,10 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// head that can read Patreon may repair it.</para>
     ///
     /// <para><see cref="ApplyTierGate"/> and the master toggle's refusal now call the real
-    /// <c>TierGate</c> (CCP.Core/Services/TierGate.cs), not a local stand-in. It still fails
-    /// closed here - this head seeds no <c>CoreEntitlement</c> providers, so there is no account
-    /// to read - but the band copy and the refusal are the shipped ones, and the day a head seeds
-    /// an entitlement this control opens with no further edit.</para>
+    /// <c>TierGate</c> (CCP.Core/Services/TierGate.cs), not a local stand-in, over the providers
+    /// <c>AccountSeed</c> installs. Like WPF (AiPermissionsGrid.xaml.cs:53 IsVisibleChanged,
+    /// MainWindow.UiUpdates.cs:951 on a tier change) the band repaints on becoming visible and on
+    /// either provider's <c>TierChanged</c>, so a mid-session sign-in or upgrade unlocks it.</para>
     ///
     /// <para>Motion budget: zero.</para>
     /// </summary>
@@ -46,6 +46,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public AiPermissionsGrid()
         {
             InitializeComponent();
+            if (global::ConditioningControlPanel.Services.Companion.CompanionExperience.IsV2Enabled)
+            {
+                // WPF's V2 sheet stacks its two permission groups instead of squeezing columns.
+                PermissionColumns.ColumnDefinitions.Clear();
+                PermissionColumns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                PermissionColumns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                Grid.SetColumn(MemoryPane, 0);
+                Grid.SetRow(MemoryPane, 1);
+                MemoryPane.Margin = new global::Avalonia.Thickness(0, 16, 0, 0);
+                PreviewBetaTag.IsVisible = false;
+                HeaderTierTag.IsVisible = false;
+            }
             Helpers.ModArt.BindFeaturePlates(this, "features/lab_aimemory_hero.png", null, LabAiMemoryHeroArt);
             SyncFromSettings();
             Loaded += (_, _) => ApplyTierGate();
@@ -55,12 +67,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         {
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon is { } p) p.TierChanged += OnTierChanged;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar is { } ss) ss.TierChanged += OnTierChanged;
             SyncFromSettings();
+            ApplyTierGate();
         }
+
+        protected override void OnPropertyChanged(global::Avalonia.AvaloniaPropertyChangedEventArgs change)
+        {
+            base.OnPropertyChanged(change);
+            if (change.Property == IsVisibleProperty && IsVisible) ApplyTierGate();
+        }
+
+        // Providers raise this off the UI thread (a poll or a sign-in callback).
+        private void OnTierChanged(object? sender, global::ConditioningControlPanel.Models.PatreonTier tier) => Dispatcher.UIThread.Post(ApplyTierGate);
 
         protected override void OnDetachedFromVisualTree(global::Avalonia.VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon is { } p) p.TierChanged -= OnTierChanged;
+            if (global::ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar is { } ss) ss.TierChanged -= OnTierChanged;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -140,12 +166,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             }
         }
 
+        // The retired route refused under Lockdown; WPF's CTA does not, and ShowTab has no Lockdown
+        // check either - a Patreon/account page is not an escape from a lock.
         private void BtnEffectsLockCta_Click(object? sender, RoutedEventArgs e)
-            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnGateUnlock_Click(sender, e);
+            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.ShowTab("patreon");
 
         /// <summary>WPF MainWindow.Patreon.cs BtnClearChatMemory_Click: confirm, then the brain forgets the
-        /// conversation (session.json + live turn log) and the local-provider history is cleared.
-        /// ponytail: no AiLiveActions feed on this head yet, so there is no feed to clear.</summary>
+        /// conversation (session.json + live turn log), local-provider history and live-actions feed are cleared.</summary>
         private async void BtnClearChatMemory_Click(object? sender, RoutedEventArgs e)
         {
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
@@ -155,6 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             {
                 App.Brain?.ForgetConversation();
                 (App.Ai as Services.AIService.AiServiceStrategy)?.ClearLocalHistory();
+                App.AiLiveActions.Clear();
                 await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("btn_forget_everything"),
                     Loc.Get("dialog_forget_everything_done"));
             }
@@ -242,6 +270,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
             if (on) return;
             try { App.Brain?.ForgetConversation(); }
             catch (Exception ex) { Log.Warning(ex, "ChkChatMemoryEnabled_Changed: brain wipe failed"); }
+            try { (App.Ai as Services.AIService.AiServiceStrategy)?.ClearLocalHistory(); }
+            catch (Exception ex) { Log.Warning(ex, "ChkChatMemoryEnabled_Changed: local wipe failed"); }
         }
 
         private void SliderMaxHapticIntensity_ValueChanged(object? sender, RangeBaseValueChangedEventArgs e)
