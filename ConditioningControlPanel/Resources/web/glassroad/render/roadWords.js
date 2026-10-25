@@ -21,15 +21,16 @@ import { S } from '../sim/state.js';
 import { createRoadRun, ROAD_LOOK } from '../sim/roadWords.js';
 import { FACES } from './fonts.js';
 import { Q } from './quality.js';
-import { STYLES, STYLE, phraseStyle, paintText, packAtlas, markLook, frameLook } from './roadWordsMath.js';
-import { createDecalSampler, clearWordLane } from './surfaceDecals.js';
+import { STYLES, STYLE, phraseStyle, packAtlas, markLook, frameLook } from './roadWordsMath.js';
+import { createDecalSampler } from './surfaceDecals.js';
+import { roadLetteringProfile, glyphFit, letteringLane, letteringFootprint } from './roadLettering.js';
 
 export const ROAD_PAINT = Object.freeze({
   atlasW: 2048, atlasH: 4096,      // one sheet per song; the phone tier holds half (atlasPhoneH); rows shrink to fit
   atlasPhoneH: 2048,
   rowPx: [128, 112, 96, 84, 72],   // atlas row heights tried in order
-  padPx: 0.16,                     // glow room round each marking (share of the row)
-  stretch: 2.6,                    // letters this many times longer along the road than drawn
+  padPx: 0.24,                     // continuous outline and glow stay inside their own cell
+  stretch: 1.95,                   // wider letter faces stay legible at racing speed
   slots: 40,                       // markings on the road at once
   rows: 8,                         // strip rows down one marking (it follows crests and banks)
   liftM: 0.16,                     // above arrows, pictures and the displaced liquid
@@ -46,7 +47,7 @@ export const ROAD_PAINT = Object.freeze({
 const VERTS = (ROAD_PAINT.rows + 1) * (ROAD_PAINT.cols + 1), LOOK_VEC4 = 5;
 
 /** The atlas: every marking of the song drawn once, a few per frame. */
-function createAtlas(P = ROAD_PAINT) {
+function createAtlas(P = ROAD_PAINT, styles = STYLES) {
   const H = Q.name === 'phone' ? P.atlasPhoneH : P.atlasH;
   const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
   if (canvas) { canvas.width = P.atlasW; canvas.height = H; }
@@ -56,21 +57,6 @@ function createAtlas(P = ROAD_PAINT) {
   tex.colorSpace = NoColorSpace;          // masks, not colours
   tex.anisotropy = 8;                     // the grazing angle needs it
   let job = null;
-  const metrics = new Map();
-
-  /** px metrics of one look at one font size: the baseline offset that centres caps (and x-height) in a row. */
-  function metricOf(st, px) {
-    const k = st.face + '|' + st.weight + '|' + px;
-    let m = metrics.get(k);
-    if (!m) {
-      ctx.font = FACES[st.face].css(px, st.weight);
-      const h = ctx.measureText('H'), g = ctx.measureText('g');
-      const asc = h.actualBoundingBoxAscent || px * 0.7, desc = st.upper ? 0 : (g.actualBoundingBoxDescent || px * 0.2) * 0.6;
-      m = { base: (asc - desc) / 2 }; metrics.set(k, m);
-    }
-    return m;
-  }
-
   function font(st, px, c2 = ctx) {
     c2.font = FACES[st.face].css(px, st.weight);
     if ('letterSpacing' in c2) c2.letterSpacing = Math.round(st.spacing * px) + 'px';
@@ -93,9 +79,14 @@ function createAtlas(P = ROAD_PAINT) {
     for (const rowPx of P.rowPx) {
       const latMPerPx = lenM / rowPx / P.stretch, maxInk = Math.floor(maxInkM / latMPerPx), pad = Math.round(rowPx * P.padPx);
       const widths = items.map((it) => {
-        const st = STYLES[it.style], px = Math.round(rowPx * st.em);
+        const st = styles[it.style];
+        let px = Math.round(rowPx * st.em);
         font(st, px);
-        const w = ctx.measureText(it.text).width;
+        px *= glyphFit(ctx.measureText(it.text), px, rowPx, st.stroke, P.stretch);
+        font(st, px);
+        const measured = ctx.measureText(it.text);
+        const w = Math.max(measured.width, (measured.actualBoundingBoxLeft || 0) + (measured.actualBoundingBoxRight || 0));
+        it.base = ((measured.actualBoundingBoxAscent || px * .8) - (measured.actualBoundingBoxDescent || 0)) / 2;
         it.squeeze = w > maxInk ? maxInk / w : 1;
         it.inkPx = Math.min(w, maxInk);
         it.px = px;
@@ -119,8 +110,8 @@ function createAtlas(P = ROAD_PAINT) {
   }
 
   function drawOne(it) {
-    const { cells, rowPx } = job, c = cells.get(it.key), st = STYLES[it.style], k = P.stretch;
-    const base = metricOf(st, it.px).base, cx = c.x + c.w / 2, cy = c.y + rowPx / 2 + base;
+    const { cells, rowPx } = job, c = cells.get(it.key), st = styles[it.style], k = P.stretch;
+    const base = it.base, cx = c.x + c.w / 2, cy = c.y + rowPx / 2 + base;
     // G: the glow, a shadow only (the text is drawn far off and clipped away), in the tall scratch
     const th = Math.ceil(rowPx * k), t2 = tallOf(c.w, th), OFF = 8192;
     t2.setTransform(1, 0, 0, 1, 0, 0);
@@ -171,7 +162,7 @@ function createAtlas(P = ROAD_PAINT) {
 }
 
 /** The pooled marking mesh and its shader. */
-function createPaint(atlasTex, P = ROAD_PAINT, pal = null) {
+function createPaint(atlasTex, P = ROAD_PAINT, pal = null, styles = STYLES) {
   const n = P.slots, V = VERTS;
   const buf = (k) => new BufferAttribute(new Float32Array(n * V * k), k).setUsage(DynamicDrawUsage);
   // six vertex buffers (WebGPU allows eight per pipeline): the per-look constants live in a uniform array
@@ -192,7 +183,7 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null) {
   const loc = attribute('aLoc', 'vec4'), rect = attribute('aRect', 'vec4'), geo = attribute('aGeo', 'vec4');
   const st = attribute('aState', 'vec4');
   // per look, LOOK_VEC4 vec4s: ink (rgb, alpha), edge, glow, fx (stencil, wear, kick, glitch), fx2 (energy, gloss)
-  const looks = uniformArray(STYLES.flatMap((x) => [new Vector4(...x.ink, x.inkA), new Vector4(...x.edge, x.edgeA),
+  const looks = uniformArray(styles.flatMap((x) => [new Vector4(...x.ink, x.inkA), new Vector4(...x.edge, x.edgeA),
     new Vector4(...x.glow, x.glowA), new Vector4(x.stencil, x.wear, x.kick, x.glitch), new Vector4(x.energy, x.gloss, 0, 0)]), 'vec4');
   const li = int(loc.z.add(0.5)).mul(LOOK_VEC4);
   const ink = looks.element(li), edgeC = looks.element(li.add(1)), glowC = looks.element(li.add(2));
@@ -224,16 +215,18 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null) {
   const slide = vec2(sid.sub(0.5).div(max(geo.x, 0.5)), sid2.sub(0.5).div(max(geo.y, 0.5))).mul(sh).mul(P.shardSlideM * 2);
   const lx = loc.x.add(gx).add(slide.x), ly = loc.y.add(slide.y);
   const tuv = vec2(mix(rect.x, rect.z, clamp(lx, 0.002, 0.998)), mix(rect.y, rect.w, clamp(ly, 0.002, 0.998)));
-  const tx = texture(atlasTex, tuv);
+  // Only the decorative glow drifts. Core and outline retain every letter stroke.
+  const glowTx = texture(atlasTex, tuv);
+  const tx = texture(atlasTex, vec2(mix(rect.x, rect.z, loc.x), mix(rect.y, rect.w, loc.y)));
   const inBox = step(0, lx).mul(step(lx, 1)).mul(step(0, ly)).mul(step(ly, 1));
   // the stencil gap and the worn thermoplastic grain
   const gap = smoothstep(P.stencilAt[0] - 0.012, P.stencilAt[0], loc.y).mul(float(1).sub(smoothstep(P.stencilAt[1], P.stencilAt[1] + 0.012, loc.y))).mul(fx.x);
   const grain = hash(floor(loc.x.mul(geo.x).mul(9)).add(floor(loc.y.mul(geo.y).mul(5)).mul(91.7)).add(geo.w));
   const worn = step(0.8, grain).mul(fx.y).mul(0.75);
   const crack = float(1).sub(smoothstep(0.03, 0.09, F2.sub(F1))).mul(sh);
-  const fill = tx.r.mul(inBox).mul(float(1).sub(gap)).mul(float(1).sub(worn)).mul(float(1).sub(crack));
-  const edge = tx.b.mul(inBox).mul(float(1).sub(tx.r));
-  const glowM = tx.g.mul(inBox);
+  const fill = tx.r.mul(float(1).sub(gap.mul(.25))).mul(float(1).sub(worn.mul(.2)));
+  const edge = tx.b.mul(float(1).sub(tx.r));
+  const glowM = glowTx.g.mul(inBox);
   // IN: the paint wipes in from a glow line, near end to far
   const inK = st.y;
   const reveal = float(1).sub(smoothstep(inK.sub(0.05), inK, loc.y));
@@ -244,9 +237,9 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null) {
   // the gloss: a slow diagonal light running over the letters (the song clock; Gentle runs it slower)
   const sweepAt = fract(u.time.mul(u.sweep).add(geo.w)).mul(2.4).sub(0.7);
   const gloss = exp(loc.x.mul(0.5).add(loc.y).sub(sweepAt).div(0.09).pow(2).negate()).mul(fx2.y).mul(0.9);
-  const themedInk = pal ? mix(pal.col(0), vec3(1), .3).mul(1.25) : ink.xyz;
-  const themedGlow = pal ? pal.col(0) : glowC.xyz;
-  const themedEdge = pal ? pal.col(2).mul(.18) : edgeC.xyz;
+  const themedInk = ink.xyz;
+  const themedGlow = glowC.xyz;
+  const themedEdge = edgeC.xyz;
   const hot = mix(themedInk, vec3(1.4), .48);
   // the shard hue: every shard takes a hue of its own between pink, cyan and gold (the road shatter's colours)
   const tint = mix(mix(vec3(1.25, 0.42, 0.95), vec3(0.42, 0.95, 1.25), sid2), vec3(1.25, 0.95, 0.4), step(0.72, sid));
@@ -278,16 +271,18 @@ function createPaint(atlasTex, P = ROAD_PAINT, pal = null) {
  * @returns {{ object, update(song, songS, kart, mf, ctx): void, clear(): void, dispose(): void, stats(): object }}
  */
 export function createRoadWords(scene, { track, feel = null, photosafe = null, pal = null, waterVolume = null } = {}) {
-  const P = ROAD_PAINT, R = ROAD_LOOK, V = VERTS;
-  const atlas = createAtlas(P), paint = createPaint(atlas.texture, P, pal), sample = createDecalSampler(track, waterVolume);
+  const P = ROAD_PAINT, R = ROAD_LOOK, V = VERTS, profile = roadLetteringProfile(track.id), styles = profile.styles;
+  const atlas = createAtlas(P, styles), paint = createPaint(atlas.texture, P, pal, styles), sample = createDecalSampler(track, waterVolume);
   scene.add(paint.mesh);
   const { a, u } = paint;
   u.lapM.value = track.lengthM;
   let song = null, run = null, cells = null, styleOf = null, keyOf = null, ready = false, rowPx = 0;
   const slotOf = new Map(), slotId = new Int32Array(P.slots).fill(-1), slotS = new Float64Array(P.slots), seen = new Uint8Array(P.slots);
+  const slotLane = new Float64Array(P.slots).fill(NaN), slotScale = new Float64Array(P.slots);
   const fr = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0], w: 14 };
   const player = { s: 0, lat: 0, speedMps: 0 }, look = {}, fl = {};
-  let dropIdx = -1, dropOk = false, staticDirty = false;
+  let dropIdx = -1, dropOk = false, staticDirty = false, lastSongS = NaN;
+  const pose = {};
 
   /** A new song: its run, a look per phrase and the atlas plan (drawn over the next frames). */
   function setSong(s) {
@@ -300,7 +295,7 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     const items = new Map();
     for (const e of sc) {
       if (e.phrase !== ph) { ph = e.phrase; sty = phraseStyle(s, e.startS, ph); }
-      const st = STYLES[sty], text = paintText(e.text, sty);
+      const st = styles[sty], text = st.upper ? e.text.toUpperCase() : e.text.toLowerCase();
       const key = st.face + '|' + st.weight + '|' + st.em + '|' + st.spacing + '|' + st.stroke + '|' + text;
       styleOf[e.i] = sty; keyOf[e.i] = key;
       if (!items.has(key)) items.set(key, { key, text, style: sty });
@@ -320,9 +315,10 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
   }
 
   /** The strip of one marking on the road: ROWS rows from track frames, lateral x, centred on s. */
-  function writeStrip(slot, view) {
-    const c = cells.get(keyOf[view.id]), wM = Math.min(c.wM, Math.max(1, track.frameAt(view.s).w - 1)), lenM = R.lenM, lap = track.lengthM;
-    const lane = clearWordLane(track, view.s, view.x, wM, lenM);
+  function writeStrip(slot, view, laneX, scale) {
+    const c = cells.get(keyOf[view.id]), lenM = R.lenM, lap = track.lengthM;
+    const footprint = letteringFootprint(track, view.s, laneX, c.wM * scale, lenM);
+    const wM = footprint.width, lane = footprint.lane;
     const P3 = a.position.array, N3 = a.normal.array, G4 = a.aGeo.array, seed = (view.id * 0.618034) % 1;
     for (let r = 0; r <= P.rows; r++) {
       const s = wrap(view.s - lenM / 2 + (lenM * r) / P.rows, lap);
@@ -334,10 +330,12 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
       }
     }
     slotS[slot] = view.s;
+    slotLane[slot] = laneX; slotScale[slot] = scale;
   }
 
   function freeSlot(slot) {
     slotOf.delete(slotId[slot]); slotId[slot] = -1;
+    slotLane[slot] = NaN;
     for (let v = 0; v < V; v++) a.aState.array[(slot * V + v) * 4] = 0;
   }
 
@@ -350,8 +348,10 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
       ready = atlas.ready;
     }
     if (!run || !ready || !kart || !Number.isFinite(tS)) { if (paint.mesh.visible) clear(); return; }
+    const dt = paused || !Number.isFinite(lastSongS) ? 0 : Math.max(0, Math.min(.1, tS - lastSongS));
+    lastSongS = tS;
     player.s = kart[S.s] || 0; player.lat = kart[S.lateral] || 0;
-    player.speedMps = Math.max(0, kart[S.speedPct] || 0) * (feel ? feel.get('speed.topMps') : 40);
+    player.speedMps = Math.hypot(kart[S.velX] || 0, kart[S.velY] || 0, kart[S.velZ] || 0);
     const live = run.update(tS, player);
     seen.fill(0);
     let geoDirty = false;
@@ -359,17 +359,24 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
       // The void carries physical sung-word platforms, so ordinary floor paint stops at its lips.
       if ((track.aerials || []).some(a => v.s + v.lenM / 2 > a.gapS0 && v.s - v.lenM / 2 < a.gapS1)) continue;
       let slot = slotOf.get(v.id);
+      profile.pose(run.script[v.id].text, tS, mf?.beatPhase || 0, gentle, pose);
+      const targetLane = player.lat * .9 + pose.offsetM;
       if (slot === undefined) {
         slot = slotId.indexOf(-1);
         if (slot < 0) continue;              // the pool is full: this one waits
         slotId[slot] = v.id; slotOf.set(v.id, slot);
-        writeStatic(slot, v.id); writeStrip(slot, v); staticDirty = geoDirty = true;
-      } else if (slotS[slot] !== v.s || (waterVolume && !paused)) { writeStrip(slot, v); geoDirty = true; }
+        writeStatic(slot, v.id); writeStrip(slot, v, targetLane, pose.scale); staticDirty = geoDirty = true;
+      } else {
+        const lane = gentle ? slotLane[slot] : letteringLane(slotLane[slot], targetLane, dt);
+        if (slotS[slot] !== v.s || lane !== slotLane[slot] || pose.scale !== slotScale[slot] || (waterVolume && !paused)) {
+          writeStrip(slot, v, lane, pose.scale); geoDirty = true;
+        }
+      }
       seen[slot] = 1;
       markLook(v, { gentle }, look);
       for (let k = 0; k < V; k++) {
         const i = (slot * V + k) * 4;
-        a.aState.array[i] = look.alpha; a.aState.array[i + 1] = look.inK; a.aState.array[i + 2] = look.sung; a.aState.array[i + 3] = look.liftM;
+        a.aState.array[i] = look.alpha; a.aState.array[i + 1] = look.inK; a.aState.array[i + 2] = look.sung; a.aState.array[i + 3] = look.liftM + pose.liftM;
       }
     }
     for (let sl = 0; sl < P.slots; sl++) if (!seen[sl] && slotId[sl] >= 0) freeSlot(sl);
@@ -391,7 +398,7 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null, p
     a.aState.needsUpdate = true;
     if (run) run.reset();
     paint.mesh.visible = false;
-    dropIdx = -1; dropOk = false;
+    dropIdx = -1; dropOk = false; lastSongS = NaN;
   }
 
   return {

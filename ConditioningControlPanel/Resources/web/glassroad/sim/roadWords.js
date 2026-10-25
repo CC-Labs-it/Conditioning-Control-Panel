@@ -33,10 +33,10 @@ export const ROAD_LOOK = Object.freeze({
   mergeS: 0.13,        // two road words closer than this share one marking
   mergeMaxChars: 9,    // ...when the two together stay this short
   phraseGapS: 0.45,    // silence longer than this ends a phrase (so does a new chart line)
-  lenM: 8.2,           // a marking's length along the road (the letters' stretched height)
+  lenM: 10.2,          // taller faces remain readable from the low chase camera
   gapM: 1.6,           // road between two markings
   charM: 1.08,         // lateral metres per letter (an estimate for the edge clamp; render measures the real one)
-  maxWidthM: 11,       // a marking is never wider than this (render squeezes a long word to fit)
+  maxWidthM: 11,       // renderer also fits every strip row between the actual rails
   clearS: 0.22,        // a road word this close to a bubble moment is left unpainted
   clearM: 4.5,         // a bubble's predicted spot keeps this much road clear before and after
   followLat: 0.6,      // a phrase sits at this share of the player's lateral (toward the centre)...
