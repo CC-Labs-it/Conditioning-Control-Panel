@@ -20,6 +20,49 @@ namespace CCP.Avalonia.Tests;
 /// SpiralTabView.Refresh reading Core SpiralRoom.StateFor.</summary>
 public sealed class SpiralRoomShellTests
 {
+    // WPF MainWindow.TabNavigation.cs:725: ShowTab("spiral") calls OnTabShown, so explicit navigation
+    // to the tab already showing retries a failed embed (the visibility flip alone never fires).
+    [Fact]
+    public Task ShowTabSpiral_OnTheSameTab_RetriesAFailedEmbed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var oldEngine = SpiralTabView.EngineAvailable;
+        var oldStart = SpiralTabView.StartEmbed;
+        var attempts = 0;
+        SpiralTabView.EngineAvailable = () => true;
+        SpiralTabView.StartEmbed = _ => { attempts++; throw new InvalidOperationException("fixture"); };
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("spiral");
+            Dispatcher.UIThread.RunJobs();
+            var tab = shell.Named<SpiralTabView>("SpiralTab")!;
+            Assert.True(tab.IsVisible);
+            tab.ApplyState(SpiralRoomState.Spiral);
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.Equal(1, attempts);   // latched for this entry
+
+            shell.ShowTab("spiral");     // same tab: no hide/show, only OnTabShown clears the latch
+            Dispatcher.UIThread.RunJobs();
+            tab.ApplyState(SpiralRoomState.Spiral);
+            Assert.Equal(2, attempts);
+        }
+        finally
+        {
+            shell.Close();
+            SpiralTabView.EngineAvailable = oldEngine;
+            SpiralTabView.StartEmbed = oldStart;
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task FuseArmsTheRailChip_ChipOpensTheFog_KillSwitchEndsBoth() => AvaloniaTestDispatcher.RunAsync(() =>
     {

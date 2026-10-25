@@ -63,6 +63,8 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.MakeShowcase = () => SilentShowcase.Instance;
             // P52: no shell arms the real 2 s pending-registration check; PendingRegistrationTests arm it themselves.
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PendingRegistrationDelay = null;
+            // The OS animation switch is off on Windows CI runners; motion tests pin it themselves (SpiralMotionTests).
+            ConditioningControlPanel.Avalonia.Platform.ClientAreaMotion.AnimationsEnabled = () => true;
         });
     public override void After(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>

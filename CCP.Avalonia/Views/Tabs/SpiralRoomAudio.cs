@@ -11,6 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 internal static class SpiralRoomAudio
 {
     internal static Func<string, string?> Resolve = ResolveCue;
+    private static bool _missingLogged;
     internal static void PlayFogEntry() => Play("descent_fog_enter", "ui_deepen", 0.42f, "descent-fog-enter");
     internal static void PlaySplashOpen() => Play("descent_spiral_open", "reveal_chime", 0.34f, "descent-spiral-open");
 
@@ -30,7 +31,15 @@ internal static class SpiralRoomAudio
             var master = CoreSettings.Current.MasterVolume;
             if (!(App.DescentCountdown?.AudioEnabled ?? true) || master <= 0) return;
             var path = Resolve(dedicated) ?? Resolve(fallback);
-            if (string.IsNullOrEmpty(path)) return;
+            if (string.IsNullOrEmpty(path))
+            {
+                // WPF: ONE line for the life of the process; a missing asset is a silent no-op.
+                if (_missingLogged) return;
+                _missingLogged = true;
+                Log.Debug("[Spiral] No sound for {Tag} ({Candidates}) - the room stays quiet.",
+                    tag, string.Join(", ", dedicated, fallback));
+                return;
+            }
             CoreAudio.PlayOneShot(path, Math.Clamp(master / 100f * scale, 0f, 1f), tag);
         }
         catch (Exception ex) { Log.Debug("[Spiral] sfx {Tag} failed: {E}", tag, ex.Message); }

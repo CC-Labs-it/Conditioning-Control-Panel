@@ -231,6 +231,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     case "blinktrainer": MaybeShowFeatureIntro("blinktrainer"); break;
                     // WPF :581 - only once the room shows the map (its IsVisible hook re-read the gates).
                     case "spiral":
+                        // WPF MainWindow.TabNavigation.cs:725: explicit navigation retries a failed embed.
+                        Named<Tabs.SpiralTabView>("SpiralTab")?.OnTabShown();
                         if (Named<Tabs.SpiralTabView>("SpiralTab")?.IsShowingSpiral == true)
                             MaybeShowFeatureIntro("descent-spiral", "spiral");
                         break;
