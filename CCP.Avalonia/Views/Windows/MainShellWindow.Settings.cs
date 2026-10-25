@@ -35,11 +35,8 @@
 //     Services/ContentPacks are not on this head, so no .packs folder is discovered to move.
 //   - The post-change rescan (App.Flash/Video/BubbleCount/ContentPacks RefreshImagesPath etc. and
 //     RefreshAssetTree): those four services and the assets tree are not on this head.
-//   - Services/Auth/SecurityHelper.IsPersonalFolderRoot: the #1053 refusal. Not in Core, so the
-//     guard is re-stated privately below; delete the local copy the day it moves.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Platform.Storage;
@@ -150,61 +147,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
-        /// <summary>
-        /// ponytail: a private re-statement of Services/Auth/SecurityHelper.IsPersonalFolderRoot,
-        /// which is in the WPF head's assembly and so unreachable from here. Same rule minus the
-        /// four Common* special folders (empty on Linux, and this head's reason to exist), same
-        /// fail-closed default (an unreadable path is treated as personal). Delete this and call
-        /// the shared one the day SecurityHelper moves to Core.
-        /// </summary>
-        internal static bool IsPersonalFolderRoot(string? directory)
-        {
-            if (string.IsNullOrWhiteSpace(directory)) return true;
-            try
-            {
-                var dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
-
-                var root = Path.GetPathRoot(dir);
-                if (!string.IsNullOrEmpty(root) &&
-                    string.Equals(dir, Path.TrimEndingDirectorySeparator(root!), StringComparison.OrdinalIgnoreCase))
-                    return true;
-
-                var known = new List<string>();
-                foreach (var folder in new[]
-                {
-                    Environment.SpecialFolder.Desktop,
-                    Environment.SpecialFolder.DesktopDirectory,
-                    Environment.SpecialFolder.MyDocuments,
-                    Environment.SpecialFolder.MyPictures,
-                    Environment.SpecialFolder.MyVideos,
-                    Environment.SpecialFolder.MyMusic,
-                    Environment.SpecialFolder.UserProfile,
-                })
-                {
-                    var p = Environment.GetFolderPath(folder);
-                    if (!string.IsNullOrEmpty(p)) known.Add(p);
-                }
-
-                // Downloads has no SpecialFolder id on any platform; the profile-relative name
-                // catches the default, which is what WPF settles for too.
-                var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                if (!string.IsNullOrEmpty(profile))
-                    foreach (var name in new[] { "Downloads", "Desktop", "Documents", "Pictures", "Videos", "Music" })
-                        known.Add(Path.Combine(profile, name));
-
-                foreach (var p in known)
-                    if (string.Equals(dir, Path.TrimEndingDirectorySeparator(Path.GetFullPath(p)),
-                                      StringComparison.OrdinalIgnoreCase))
-                        return true;
-
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Log.Warning(ex, "IsPersonalFolderRoot check failed for: {Path}", directory);
-                return true;
-            }
-        }
+        /// <summary>WPF Services/Auth/SecurityHelper.IsPersonalFolderRoot (#1053), shared through Core.</summary>
+        internal static bool IsPersonalFolderRoot(string? directory) =>
+            PersonalFolderRoots.IsPersonalFolderRoot(directory);
 
         // =====================================================================================
         //  the "?" panel - MainTutorialOverlay
