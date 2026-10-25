@@ -19,6 +19,7 @@ internal sealed class BrainDrainPlayer
     private bool _busy, _running;
     private long _generation;
     private AppSettings? _settings;
+    private SettingsService? _service;
     internal BrainDrainPlayer(Func<string, double, bool, Action, MindWipePlayer.IVoice?> play,
         TimeProvider? time = null, Func<double>? roll = null)
     { _play = play; _time = time ?? TimeProvider.System; _roll = roll ?? Random.Shared.NextDouble; }
@@ -31,6 +32,8 @@ internal sealed class BrainDrainPlayer
             _running = true;
             _settings = CoreSettings.Current;
             _settings.PropertyChanged += Changed;
+            _service = CoreSettings.Service;
+            if (_service != null) _service.CurrentReplaced += Replaced;
             var interval = BrainDrainAudioPolicy.Interval(_settings.BrainDrainHighRefresh);
             _timer = _time.CreateTimer(_ => Tick(interval), null, interval, interval);
         }
@@ -40,6 +43,17 @@ internal sealed class BrainDrainPlayer
     {
         if (e.PropertyName is nameof(AppSettings.MasterVolume) or nameof(AppSettings.BrainDrainVolume))
             lock (_gate) if (_voice != null) _voice.Volume = Gain();
+    }
+    // A cloud restore/reset swaps the settings object: follow it so live gain changes still land.
+    private void Replaced()
+    {
+        lock (_gate)
+        {
+            if (!_running) return;
+            if (_settings != null) _settings.PropertyChanged -= Changed;
+            _settings = CoreSettings.Current; _settings.PropertyChanged += Changed;
+            if (_voice != null) _voice.Volume = Gain();
+        }
     }
     private static double Gain() => BrainDrainAudioPolicy.Volume(CoreSettings.Current.MasterVolume, CoreSettings.Current.BrainDrainVolume);
     internal void Tick(TimeSpan interval)
@@ -69,14 +83,17 @@ internal sealed class BrainDrainPlayer
     }
     internal void Stop()
     {
-        MindWipePlayer.IVoice? voice;
+        MindWipePlayer.IVoice? voice; bool wasRunning;
         lock (_gate)
         {
+            wasRunning = _running;
             _running = _busy = false; ++_generation;
             _timer?.Dispose(); _timer = null;
             if (_settings != null) _settings.PropertyChanged -= Changed;
-            _settings = null; voice = _voice; _voice = null;
+            if (_service != null) _service.CurrentReplaced -= Replaced;
+            _settings = null; _service = null; voice = _voice; _voice = null;
         }
         voice?.Dispose();
+        if (wasRunning) App.DiscordRpc?.SetIdleActivity();   // WPF LockCard/BrainDrainService.cs:270, as MindWipePlayer.cs:105
     }
 }

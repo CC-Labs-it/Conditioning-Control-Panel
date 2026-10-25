@@ -101,4 +101,36 @@ public sealed class CoreEngineTests
         }
         finally { CoreEngine.Stop(); }
     }
+    // WPF StartStop.cs: Brain Drain starts with the engine when enabled (not audio-only), stops with it,
+    // and follows its toggle live; a preset that clears it stops it.
+    [Theory]
+    [InlineData(true, false, 1)]
+    [InlineData(false, false, 0)]
+    [InlineData(true, true, 0)]
+    public void BrainDrain_hooks_follow_start_stop_live_and_reconcile(bool enabled, bool audioOnly, int starts)
+    {
+        var s = CoreSettings.Current;
+        var (oldEnabled, oldAudio) = (s.BrainDrainEnabled, s.AudioOnlySession);
+        int start = 0, stop = 0;
+        CoreEngine.StartBrainDrain = () => start++;
+        CoreEngine.StopBrainDrain = () => stop++;
+        try
+        {
+            s.BrainDrainEnabled = enabled; s.AudioOnlySession = audioOnly;
+            CoreEngine.ApplyLive("braindrain", true);
+            Assert.Equal((0, 0), (start, stop));   // stopped: nothing arms
+            CoreEngine.Start();
+            Assert.Equal((starts, 0), (start, stop));
+            CoreEngine.ApplyLive("braindrain", false); Assert.Equal(1, stop);
+            CoreEngine.ApplyLive("braindrain", true); Assert.Equal(starts + 1, start);
+            s.BrainDrainEnabled = false; CoreEngine.Reconcile(); Assert.Equal(2, stop);
+            CoreEngine.Stop(); Assert.Equal(3, stop);
+        }
+        finally
+        {
+            CoreEngine.Stop();
+            CoreEngine.StartBrainDrain = CoreEngine.StopBrainDrain = null;
+            (s.BrainDrainEnabled, s.AudioOnlySession) = (oldEnabled, oldAudio);
+        }
+    }
 }

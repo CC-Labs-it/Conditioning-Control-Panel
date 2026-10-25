@@ -57,6 +57,54 @@ public class BrainDrainPlayerTests
         }
         finally { player.Stop(); CorePaths.EffectiveAssetsProvider = oldPath; s.BrainDrainEnabled = oldEnabled; s.BrainDrainVolume = oldVolume; s.MasterVolume = oldMaster; Directory.Delete(root, true); }
     }
+    [Fact]
+    public void StopOfARunningPlayerClearsTheDiscordPresence()
+    {
+        // WPF LockCard/BrainDrainService.cs:270: Stop of a running service goes back to idle; a stopped one leaves
+        // whatever activity another feature set.
+        var oldRpc = global::ConditioningControlPanel.Avalonia.App.DiscordRpc;
+        var rpc = global::ConditioningControlPanel.Avalonia.App.DiscordRpc = new ConditioningControlPanel.Services.DiscordRichPresenceService();
+        var s = CoreSettings.Current; var oldEnabled = s.BrainDrainEnabled;
+        var player = new BrainDrainPlayer((_, _, _, _) => null, time: new FrozenClock());
+        try
+        {
+            s.BrainDrainEnabled = true;
+            player.Start(); Assert.Equal("Deep conditioning", rpc.CurrentState);
+            player.Stop(); Assert.Equal("Browsing", rpc.CurrentState);
+            rpc.SetVideoActivity(); var video = rpc.CurrentState;
+            player.Stop(); Assert.Equal(video, rpc.CurrentState);
+        }
+        finally { player.Stop(); rpc.Dispose(); global::ConditioningControlPanel.Avalonia.App.DiscordRpc = oldRpc; s.BrainDrainEnabled = oldEnabled; }
+    }
+    [Fact]
+    public void FollowsASettingsRestoreForLiveGain()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(Path.Combine(root, "braindrain"));
+        File.WriteAllText(Path.Combine(root, "braindrain", "clip.wav"), "");
+        var oldPath = CorePaths.EffectiveAssetsProvider; var oldProvider = CoreSettings.ServiceProvider;
+        var settingsPath = Path.Combine(CorePaths.UserData, "settings.json");
+        var saved = File.Exists(settingsPath) ? File.ReadAllBytes(settingsPath) : null;
+        var voice = new Voice();
+        var player = new BrainDrainPlayer((_, gain, _, _) => { voice.Gain = gain; return voice; }, time: new FrozenClock(), roll: () => 0);
+        try
+        {
+            CorePaths.EffectiveAssetsProvider = () => root;
+            var service = new ConditioningControlPanel.Services.SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            (service.Current.BrainDrainEnabled, service.Current.MasterVolume, service.Current.BrainDrainVolume) = (true, 100, 100);
+            player.Start(); player.Tick(TimeSpan.FromSeconds(5)); Assert.Equal(1.0, voice.Gain, 8);
+            service.RestoreFrom(new ConditioningControlPanel.Models.AppSettings { BrainDrainEnabled = true, MasterVolume = 100, BrainDrainVolume = 50 });
+            Assert.Equal(0.5, voice.Gain, 8);
+            service.Current.BrainDrainVolume = 20; Assert.Equal(0.2, voice.Gain, 8);
+        }
+        finally
+        {
+            player.Stop(); CorePaths.EffectiveAssetsProvider = oldPath; CoreSettings.ServiceProvider = oldProvider;
+            if (saved is null) File.Delete(settingsPath); else File.WriteAllBytes(settingsPath, saved);
+            Directory.Delete(root, true);
+        }
+    }
     [Theory]
     [InlineData("ChkEnable", "BrainDrainEnabled")]
     [InlineData("ChkMelt", "BrainDrainMeltEnabled")]

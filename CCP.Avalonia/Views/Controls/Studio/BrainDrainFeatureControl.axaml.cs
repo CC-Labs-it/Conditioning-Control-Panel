@@ -73,14 +73,16 @@ public partial class BrainDrainFeatureControl : UserControl
             write(CoreSettings.Current, value); CoreSettings.Save();
         };
     }
-    private void Load()
+    private void Load() => Load(rescan: true);
+    // A settings tick only repaints; the clip folders are rescanned on open, rebind and Refresh.
+    private void Load(bool rescan)
     {
         _loading = true;
         try
         {
             ReadSettings?.Invoke();
             if (CoreSettings.Current.BrainDrainVolume != 100) this.FindControl<MoreFold>("FoldMore")!.IsOpen = true;
-            RefreshClips();
+            if (rescan) RefreshClips();
         }
         finally { _loading = false; }
     }
@@ -92,7 +94,7 @@ public partial class BrainDrainFeatureControl : UserControl
     private void SettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName?.StartsWith("BrainDrain", StringComparison.Ordinal) == true || e.PropertyName == nameof(SettingsModel.AllowOverlayCapture))
-            Dispatcher.UIThread.Post(Load);
+            Dispatcher.UIThread.Post(() => Load(rescan: false));
     }
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
