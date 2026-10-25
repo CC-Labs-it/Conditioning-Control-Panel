@@ -167,3 +167,16 @@ test('replacing a received flash cancels its pending pictures while a short comp
   frames(fx, 3, { flashes: [screen] }); assert.equal(fx.stats.total, 7, 'normal payoff completion leaves the visual burst intact');
   fx.dispose();
 });
+
+test('multiple replacement hits between frames retire the old flash even after prevKind is overwritten', () => {
+  const bus = createBus(), effects = createEffects(bus, makeFeel()), { fx } = cards();
+  const hit = kind => bus.emit('item-hit', { victim: 0, by: 2, kind, verdict: 'hit', durationS: 3 });
+  hit('flash'); effects.update(.1); fx.update(.1, { flashes: [effects.screen] });
+  assert.equal(fx.stats.active, 1); assert.equal(fx.stats.pending, 6);
+  hit('pink'); hit('freeze'); effects.update(.01);
+  assert.equal(effects.screen.kind, 'freeze'); assert.notEqual(effects.screen.prevKind, 'flash');
+  fx.update(.01, { flashes: [effects.screen] }); assert.equal(fx.stats.pending, 0);
+  frames(fx, 2, { flashes: [effects.screen] });
+  assert.equal(fx.stats.total, 1); assert.equal(fx.stats.active, 0);
+  fx.dispose(); effects.dispose();
+});

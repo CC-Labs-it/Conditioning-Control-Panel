@@ -63,7 +63,7 @@ export function createFlashBurst({ source = () => null, photosafe, gentle, paren
   // Keep this latch across clear/seek so a still-held item cannot create a second burst.
   function fromScreen(screen) {
     if (screen?.kind !== 'flash') {
-      if (screen?.prevKind === 'flash' && screen.kind !== 'none') retireScreen(screen);
+      if (screen && screenSeeds.has(screen) && screen.kind !== 'none') retireScreen(screen);
       return;
     }
     if (screenSeeds.has(screen) && screenSeeds.get(screen) === screen.params?.seed) return;
