@@ -196,8 +196,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 const int n = 7;
                 double w = _card.Bounds.Width, h = _card.Bounds.Height;
                 _slices = new Panel();
-                _redGhost = BuildGhost("FlashGlitchRed", src, new SkiaSharp.SKColor(255, 40, 90));
-                _cyanGhost = BuildGhost("FlashGlitchCyan", src, new SkiaSharp.SKColor(40, 230, 255));
+                var pixels = CopyPixels(src as Bitmap);
+                _redGhost = BuildGhost("FlashGlitchRed", src, pixels, Color.FromRgb(255, 40, 90));
+                _cyanGhost = BuildGhost("FlashGlitchCyan", src, pixels, Color.FromRgb(40, 230, 255));
                 var index = _card.Children.IndexOf(_image) + 1;
                 _card.Children.Insert(index, _redGhost);
                 _card.Children.Insert(index + 1, _cyanGhost);
@@ -221,23 +222,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         // WPF FlashLayer.DrawGlitch modulates the source pixels, not a solid colored rectangle.
         // ponytail: cache two tinted frames only for this 280 ms exit; no Effect or animated filter.
-        private Image BuildGhost(string name, IImage source, SkiaSharp.SKColor tint)
+        // One CopyPixels per exit, then a byte-wise modulate per ghost: no encode/decode on the UI thread.
+        private static (byte[] Data, Bitmap Source)? CopyPixels(Bitmap? bmp)
         {
-            using var input = new MemoryStream();
-            ((Bitmap)source).Save(input);
-            using var pixels = SkiaSharp.SKBitmap.Decode(input.ToArray());
-            using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(pixels.Width, pixels.Height));
-            using var filter = SkiaSharp.SKColorFilter.CreateBlendMode(tint, SkiaSharp.SKBlendMode.Modulate);
-            using var paint = new SkiaSharp.SKPaint { ColorFilter = filter };
-            surface.Canvas.DrawBitmap(pixels, 0, 0, paint);
-            using var snapshot = surface.Snapshot();
-            using var data = snapshot.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-            using var output = data.AsStream();
-            var bitmap = new Bitmap(output);
-            Closed += (_, _) => bitmap.Dispose();
+            if (bmp?.Format is not { } fmt || (fmt != PixelFormat.Bgra8888 && fmt != PixelFormat.Rgba8888)) return null;
+            var size = bmp.PixelSize;
+            var data = new byte[size.Width * 4 * size.Height];
+            var pin = System.Runtime.InteropServices.GCHandle.Alloc(data, System.Runtime.InteropServices.GCHandleType.Pinned);
+            try { bmp.CopyPixels(new PixelRect(size), pin.AddrOfPinnedObject(), data.Length, size.Width * 4); }
+            finally { pin.Free(); }
+            return (data, bmp);
+        }
+
+        private Image BuildGhost(string name, IImage source, (byte[] Data, Bitmap Source)? pixels, Color tint)
+        {
+            var ghost = source;
+            if (pixels is var (data, bmp))
+            {
+                var bgra = bmp.Format == PixelFormat.Bgra8888;
+                byte c0 = bgra ? tint.B : tint.R, c2 = bgra ? tint.R : tint.B;
+                var tinted = new byte[data.Length];
+                // Modulate (Skia SKBlendMode.Modulate): channel * tint / 255; alpha unchanged, so premul stays valid.
+                for (var i = 0; i < data.Length; i += 4)
+                {
+                    tinted[i] = (byte)(data[i] * c0 / 255);
+                    tinted[i + 1] = (byte)(data[i + 1] * tint.G / 255);
+                    tinted[i + 2] = (byte)(data[i + 2] * c2 / 255);
+                    tinted[i + 3] = data[i + 3];
+                }
+                var wb = new WriteableBitmap(bmp.PixelSize, bmp.Dpi, bmp.Format!.Value, bmp.AlphaFormat ?? AlphaFormat.Premul);
+                using (var fb = wb.Lock())
+                {
+                    var stride = bmp.PixelSize.Width * 4;
+                    for (var y = 0; y < bmp.PixelSize.Height; y++)
+                        System.Runtime.InteropServices.Marshal.Copy(tinted, y * stride, fb.Address + y * fb.RowBytes, stride);
+                }
+                Closed += (_, _) => wb.Dispose();
+                ghost = wb;
+            }
             return new Image
             {
-                Name = name, Source = bitmap, Stretch = Stretch.Uniform,
+                Name = name, Source = ghost, Stretch = Stretch.Uniform,
                 RenderTransform = new TranslateTransform(), IsHitTestVisible = false, Opacity = 0,
             };
         }

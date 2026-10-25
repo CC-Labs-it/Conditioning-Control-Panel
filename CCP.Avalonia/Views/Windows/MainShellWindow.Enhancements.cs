@@ -15,8 +15,8 @@
 //   AddProSection + the Ditzy Data PRO panels (BuildProLifetimePanel, BuildSeasonRewindPanel,
 //     BuildBestieRecordsPanel, BuildBrainDrainPanel, the season/sparkline/heatmap charts).
 //   OnLuckyProc / EnsureLuckyToast / PlaceLuckyToast / CloseLuckyToast live in
-//     Views/Overlays/LuckyToastWindow.cs, raised by a lucky flash (FlashOverlay.Show); a lucky
-//     bubble (Core AmbientBubbles.Pop) does not raise it yet.
+//     Views/Overlays/LuckyToastWindow.cs, raised by a lucky flash (FlashOverlay.Show) and a lucky
+//     bubble (Core AmbientBubbleField.Pop -> BubbleOverlay.Field.LuckyProc).
 //   The prestige rank-up burst (_prestigeRowBorder) rides on the purchase above.
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows

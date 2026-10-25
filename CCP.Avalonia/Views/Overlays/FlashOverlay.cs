@@ -100,7 +100,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
                 // staggers 300 ms per image.
-                Schedule(flashes, 1000, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
+                _ = Schedule(flashes, 1000, StaggerMs, generation, cap, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
                     done: () => _busy = false);
                 scheduled = true;
             }
@@ -110,12 +110,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>Spawn each placed picture on its own dispatcher timer: Task.Delay continuations
         /// were measured landing 1.7 s late here (thread-pool timer), dispatcher timers stayed on time.
-        /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.</summary>
-        private static void Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
+        /// A spawn the platform refuses stops the rest; CloseAll (a newer generation) drops them.
+        /// The returned task completes once the last one has spawned or been dropped.</summary>
+        private static Task Schedule(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
             int generation, int cap, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null)
         {
             var refused = false;
+            var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (flashes.Count == 0) { done?.Invoke(); finished.SetResult(); }
             for (var i = 0; i < flashes.Count; i++)
             {
                 var (bmp, rect, path, screen) = flashes[i];
@@ -128,9 +131,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                         refused = !Show(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion);
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
-                    finally { if (last) done?.Invoke(); }
+                    finally { if (last) { done?.Invoke(); finished.SetResult(); } }
                 }, TimeSpan.FromMilliseconds(firstMs + i * staggerMs));
             }
+            return finished.Task;
         }
 
         /// <summary>One flash on screen plus what WPF SpawnFlashWindow pays for it: the lucky roll
@@ -432,7 +436,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var occupied = Active.Select(a => a.Rect).ToList();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
                 if (generation != _generation) { foreach (var f in flashes) f.Bitmap.Dispose(); return; }
-                Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
+                await Schedule(flashes, 0, 100, generation, Cap(s, parent.Ambient), Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
                     parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
             }

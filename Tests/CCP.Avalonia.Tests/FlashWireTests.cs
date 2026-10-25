@@ -199,11 +199,10 @@ public sealed class FlashWireTests
             CorePaths.EffectiveAssetsProvider = () => root.FullName;
             s.HydraLimit = 10;
             var parent = ShowOne();
-            await FlashOverlay.SpawnChildren(parent, 2, TimeSpan.FromSeconds(6), 1);
+            // SpawnChildren completes once its last queued spawn has shown or been dropped (no sleep).
+            var spawning = FlashOverlay.SpawnChildren(parent, 2, TimeSpan.FromSeconds(6), 1);
             if (stopBeforeSpawn) FlashOverlay.CloseAll(final: false);
-            // Let the real 0/100 ms dispatcher timers fire, including refused queued spawns.
-            await Task.Delay(200);
-            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            await spawning;
             if (stopBeforeSpawn) Assert.Empty(FlashOverlay.Active);
             else
             {
