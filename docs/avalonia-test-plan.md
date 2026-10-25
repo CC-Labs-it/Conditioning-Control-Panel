@@ -382,7 +382,7 @@ Set the panic key to Enter for steps 1-4 (Settings -> panic key).
 - [ ] `views-tab-remote-control` - WPF `MainWindow/MainWindow.RemoteControl.cs:325-480`
 - [ ] `views-tab-settings` - WPF `Views/Tabs/SettingsTabView.xaml`
 - [ ] `views-tab-she-listening` - WPF `Views/Tabs/SheListeningTabView.xaml`
-- [ ] `views-tab-spiral` - WPF `Views/Tabs/SpiralTabView.xaml`
+1. Enter the armed Spiral fog via the fuse chip with countdown audio enabled and master volume above zero. Expect one deepening cue per entry; ticks and phase repaints must stay silent. Leave and re-enter: cue plays again. Disable countdown audio, then mute master volume: both suppress the next entry cue. With a live Spiral block/browser host (currently unavailable), expect one opening chime per entry, never per repaint/retry; dedicated mod cues precede shipped fallbacks and missing cues are silent. With Windows animation effects disabled or GentleVisuals enabled, expect static fog/splash art while transitions remain allowed; Motion Off disables transitions too. Explicitly navigate to a failed already-visible Spiral room: retry the browser without a second chime. WPF `Views/Tabs/SpiralTabView.xaml.cs:459`, `:1133`, `Services/Descent/DescentRoomSfx.cs`, `Services/MotionFx.cs:36`. Rows: `views-tab-spiral`.
 - [ ] `views-tab-studio` - WPF `Views/Tabs/StudioTabView.xaml.cs:1231`
 - [ ] `views-companion-workshop-cell-theme` - WPF `Views/Controls/Companion/Runtime/WorkshopCellTheme.xaml`
 - [ ] `views-companion-theme` - WPF `Views/Controls/Companion/Themes/CompanionTheme.xaml`

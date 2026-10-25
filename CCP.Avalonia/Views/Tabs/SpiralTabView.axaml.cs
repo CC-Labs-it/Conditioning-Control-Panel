@@ -48,8 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     ///   <item><c>SpiralEmbedView</c> now carries the Core ready/state protocol over WebHost;
     ///     native process-loss reporting and a pre-document carrier remain
     ///     unavailable on this seam.</item>
-    ///   <item><c>MotionFx</c>, <c>DescentRoomSfx</c> and <c>DescentBarkWatcher</c> are
-    ///     WPF-head services; each is a stub at its call site. <c>HelpPopover</c> is real on
+    ///   <item><c>DescentBarkWatcher</c> is a WPF-head service, stubbed at its call site.
+    ///     Motion caps and room entry sounds are real. <c>HelpPopover</c> is real on
     ///     this head and carries the shared Core topic.</item>
     /// </list>
     ///
@@ -143,22 +143,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ============================== motion ==============================
 
-        /// <summary>
-        /// MotionFx's two gates, both real on this head. They are kept apart because the original
-        /// distinguishes them: loops are ambient, the flare and the splash fade are transitions.
-        ///
-        /// <para>PROPERTIES, not the consts they replaced: MotionFx is a property on WPF too, and
-        /// a field captured once would leave the ember loop running for the rest of the session
-        /// after someone turned motion off mid-run.</para>
-        ///
-        /// <para>ponytail: the ONE thing WPF has that this head does not is the cap to Reduced
-        /// when Windows' animation-effects flag is off — see AmbientFxCanvas.Env.Level, which owns
-        /// that note. AllowTransitions is spelled out rather than read from Env because Env carries
-        /// only the ambient half; MotionFx.cs:56 is this same comparison.</para>
-        /// </summary>
-        private static bool AllowAmbientLoops => AmbientFxCanvas.Env.AllowAmbientLoops;
+        // WPF MotionFx: OS/gentle caps remove ambient motion; Off also removes transitions.
+        internal static bool AllowAmbientLoops => AmbientFxCanvas.Env.AllowAmbientLoops
+            && Platform.ClientAreaMotion.Resolve(CoreSettings.Current.MotionLevel,
+                CoreSettings.Current.GentleVisuals) == MotionLevel.Full;
 
-        private static bool AllowTransitions => CoreSettings.Current.MotionLevel != MotionLevel.Off;
+        internal static bool AllowTransitions => Platform.ClientAreaMotion.Resolve(
+            CoreSettings.Current.MotionLevel, CoreSettings.Current.GentleVisuals) != MotionLevel.Off;
 
         // Test seams: headless has no browser engine, so the engine-path reveal is driven by faking both.
         internal static Func<bool> EngineAvailable = () => WebHost.IsAvailable;
@@ -205,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// <summary>WPF _embedGaveUp: one failure per tab ENTRY. Cleared on the way out (Suspend),
         /// so the next entry earns a fresh attempt and a repaint in this one does not retry.</summary>
         private bool _embedGaveUp;
+        private bool _entrySfxSpent, _splashChimed;
 
         private SpiralRoomState _state = SpiralRoomState.Waiting;
 
@@ -291,7 +283,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// original calls here and on every entry to let the companion say hello to the room once
         /// ever. It is decoration and it never blocks the entry it rides on.</para>
         /// </summary>
-        internal void OnTabShown() => Refresh();
+        internal void OnTabShown()
+        {
+            _embedGaveUp = false; // WPF: explicit navigation earns another attempt, even on this tab.
+            Refresh();
+        }
 
         /// <summary>WPF Wire: the fuse's phase and tick drive the fog. BlockChanged has no twin
         /// (DescentService is WPF-only).</summary>
@@ -340,6 +336,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             StopWaitingAmbience();
             TeardownEmbed();
             _embedGaveUp = false;
+            _entrySfxSpent = _splashChimed = false;
         }
 
         // ============================== the state ==============================
@@ -398,8 +395,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     _fogCopy.IsVisible = true;
                     ApplyFogReadout();
                     StartFogFx();
-                    // ponytail: needs DescentRoomSfx.PlayFogEntry() (WPF head), one door sound per
-                    // entry. Audio is decoration; the room paints without it.
+                    if (!_entrySfxSpent)
+                    {
+                        _entrySfxSpent = true;
+                        SpiralRoomAudio.PlayFogEntry();
+                    }
                     break;
 
                 case SpiralRoomState.Spiral:
@@ -842,9 +842,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 _spiralSplash.Opacity = 1;
                 _spiralSplash.IsVisible = true;
 
-                // ponytail: needs DescentRoomSfx.PlaySplashOpen() (WPF head), one chime per ENTRY
-                // and never per retry: a cue that repeated while a browser struggled would sound
-                // exactly like the thing being stuck.
+                if (!_splashChimed)
+                {
+                    _splashChimed = true;
+                    SpiralRoomAudio.PlaySplashOpen();
+                }
 
                 if (!AllowAmbientLoops)
                 {
