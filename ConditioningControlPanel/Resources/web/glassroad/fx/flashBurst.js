@@ -17,7 +17,7 @@ export function flashBurstLayout(index, age, gentle = false) {
 
 /** Cosmetic only. The shared approved decoder retains consent, expiry and source-off ownership. */
 export function createFlashBurst({ source = () => null, photosafe, gentle, parent = globalThis.document?.body,
-  make = () => document.createElement('canvas'), acquireLoom = acquireLoomAtlas } = {}) {
+  make = () => document.createElement('canvas'), acquireLoom = acquireLoomAtlas, visibility = globalThis.document } = {}) {
   const queue = [], seen = new Set(), slots = [], emitted = [], atmosphere = createAtmosphereClock(), amounts = {};
   let loom = null, fallback = make(); fallback.width = fallback.height = 256;
   const placeholder = fallback.getContext('2d');
@@ -49,11 +49,14 @@ export function createFlashBurst({ source = () => null, photosafe, gentle, paren
     atmosphere.update(null, 0, 0);
     for (const slot of slots) { slot.row = null; slot.age = 0; slot.media.update(null, 0); }
   }
+  const hide = () => { if (visibility?.hidden) clear(); };
+  visibility?.addEventListener?.('visibilitychange', hide);
   function update(dt, { paused = false, aspect = 16 / 9, screen } = {}) {
     if (disposed) return;
+    if (visibility?.hidden) { clear(); return; }
     const step = paused ? 0 : Math.max(0, Math.min(.1, dt || 0)), soft = calm(); clock += step;
     const a = screenAmounts(screen, amounts), fog = atmosphere.update(screen, a.pink, step, a.timeMul);
-    const visibility = 1 - Math.max(a.blackout, fog * .95);
+    const visibleAmount = 1 - Math.max(a.blackout, fog * .95);
     while (emitted.length && clock - emitted[0] >= 1) emitted.shift();
     if (soft) for (let i = queue.length - 1; i >= 0; i--) if (queue[i].index >= 3) queue.splice(i, 1);
     if (step > 0 && queue.length && clock >= nextAt && emitted.length < 3) {
@@ -73,7 +76,7 @@ export function createFlashBurst({ source = () => null, photosafe, gentle, paren
       const fade = Math.max(.9, gentle?.fade?.(r.soft ? 1.3 : .9) || (r.soft ? 1.3 : .9));
       if (soft && r.index >= 3 && r.fadeAt === undefined) r.fadeAt = slot.age;
       const outAt = Math.min(r.life - fade, r.fadeAt ?? Infinity);
-      const alpha = ease(slot.age / rise) * (1 - ease((slot.age - outAt) / fade)) * visibility;
+      const alpha = ease(slot.age / rise) * (1 - ease((slot.age - outAt) / fade)) * visibleAmount;
       slot.media.update({ kind: 'flash', k: alpha, params: { seed: r.seed, corner: true } }, step, aspect);
       const p = flashBurstLayout(r.index, slot.age, r.soft), canvas = slot.media.canvas;
       Object.assign(canvas.style, { left: p.x * 100 + 'vw', top: p.y * 100 + 'vh', width: p.w * 100 + 'vw',
@@ -85,6 +88,7 @@ export function createFlashBurst({ source = () => null, photosafe, gentle, paren
     get stats() { return { clock, total, pending: queue.length, active: slots.filter(s => s.row).length, capacity: slots.length }; },
     dispose() {
       if (disposed) return; clear(); disposed = true;
+      visibility?.removeEventListener?.('visibilitychange', hide);
       for (const slot of slots) slot.media.dispose();
       if (fallback) { fallback.width = fallback.height = 1; fallback = null; }
       loom?.dispose(); loom = null;

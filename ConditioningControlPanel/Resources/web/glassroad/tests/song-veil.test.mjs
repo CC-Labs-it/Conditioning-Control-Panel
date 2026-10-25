@@ -89,3 +89,11 @@ test('blackout and settled fog obscure card overlays', () => {
   frames(fx, 4, { screen: fog }); fx.fire({ ...cue, id: 'fog' }); frames(fx, 1, { screen: fog });
   assert.ok(canvases.every(c => c.style.display === 'none' || Number(c.style.opacity) <= .051)); fx.dispose();
 });
+test('hidden tabs release copied pictures and queued bursts without waiting for animation', () => {
+  const visibility = new EventTarget(); visibility.hidden = false;
+  const { fx, canvases } = cards({ visibility, source: () => ({ width: 640, height: 360 }) });
+  fx.fire(cue); frames(fx, .8); assert.ok(fx.stats.active > 0);
+  visibility.hidden = true; visibility.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(fx.stats.active, 0); assert.equal(fx.stats.pending, 0);
+  assert.ok(canvases.every(c => c.style.display === 'none')); fx.dispose();
+});

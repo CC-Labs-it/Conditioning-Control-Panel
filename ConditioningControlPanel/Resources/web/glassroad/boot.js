@@ -422,6 +422,7 @@ async function boot(course, options, lifetime, isCurrent) {
   lifetime.defer(() => cueBurst.dispose());
   Object.defineProperty(debug, 'cueBurst', { get: () => cueBurst.stats });
   Object.defineProperty(debug, 'cueVeils', { get: () => world.veils.stats });
+  Object.defineProperty(debug, 'marquees', { get: () => world.marquees.stats });
   lifetime.defer(() => musicEdges.dispose());
   Object.defineProperty(debug, 'musicEdges', { get: () => musicEdges.stats });
   bus.on('gate-pass', (g) => { if (state === 'race' && !paused) gateScreen.play(g.params, 1); });
@@ -1135,7 +1136,7 @@ async function boot(course, options, lifetime, isCurrent) {
     const cueView = songCues?.update(songS, pv, { paused: frozen, gentle: cueSafety });
     const cueEpoch = cueView?.revision ?? -1;
     if (cueRunSeen !== songCues || cueRevision !== cueEpoch) {
-      cueBurst.clear(); world.veils.clear(); cueRunSeen = songCues; cueRevision = cueEpoch;
+      cueBurst.clear(); world.veils.clear(); world.marquees.clear(); cueRunSeen = songCues; cueRevision = cueEpoch;
     }
     for (const cue of cueView?.fired || NO_WORDS) if (cue.kind === 'VEIL') cueBurst.fire(cue);
     cueBurst.update(frameDt, { paused: frozen, aspect: renderer.aspect, screen: effects.screen });
