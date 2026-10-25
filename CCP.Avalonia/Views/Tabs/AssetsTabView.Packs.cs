@@ -71,7 +71,7 @@ public partial class AssetsTabView
             };
             _currentFolderFiles.Add(item);
             // ponytail: videos keep the existing Fluent placeholder until a portable thumbnailer lands.
-            if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+            loads.Add(LoadThumbnailAsync(item, generation));
         }
         ThumbnailLoads = Task.WhenAll(loads);
     }

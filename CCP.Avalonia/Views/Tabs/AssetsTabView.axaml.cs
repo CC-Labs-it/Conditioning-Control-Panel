@@ -37,8 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// The remote media picker is ported in AssetsTabView.MediaPicker.cs.
     ///
     /// ponytail: not on this head yet - pack cards (the section is hidden in WPF too),
-    /// video thumbnails (WPF uses the
-    /// Windows shell thumbnailer; videos draw the 🎬 placeholder), BtnCreatorDiscord /
+    /// BtnCreatorDiscord /
     /// PacksScrollViewer wheel-to-pan and the pack-card sheen (pack cards only).
     /// </summary>
     public partial class AssetsTabView : UserControl
@@ -289,7 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 var rel = Rel(file);
                 var item = new AssetThumbnailViewModel(file, rel) { IsChecked = !S.DisabledAssetPaths.Contains(rel) };
                 _currentFolderFiles.Add(item);
-                if (!item.IsVideo) loads.Add(LoadThumbnailAsync(item, generation));
+                loads.Add(LoadThumbnailAsync(item, generation));
             }
             ThumbnailLoads = Task.WhenAll(loads);
         }
@@ -307,6 +306,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     try
                     {
                         if (generation != Volatile.Read(ref _thumbGeneration)) return null;
+                        if (item.IsVideo)
+                        {
+                            string? temp = null;
+                            var store = ContentPackStore.Current;
+                            try
+                            {
+                                var path = item.PackFileEntry is { } video
+                                    ? temp = store?.GetPackFileTempPath(item.PackId!, video) : item.FullPath;
+                                return path == null ? null : Platform.VideoThumbnail.Load(path);
+                            }
+                            finally { if (temp != null) store?.DeleteTempFile(temp); }
+                        }
                         using Stream? fs = item.PackFileEntry is { } entry
                             ? ContentPackStore.Current?.GetPackFileStream(item.PackId!, entry)
                             : File.OpenRead(item.FullPath);
@@ -419,9 +430,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private async void ThumbnailItem_OpenInExplorer_Click(object? sender, RoutedEventArgs e)
         {
-            // WPF ExplorerLauncher.RevealInExplorer selects the file; the portable open shows its folder.
+            // WPF selects existing files, falling back to the containing folder when missing.
             if (sender is Control { DataContext: AssetThumbnailViewModel file })
-                await Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), Path.GetDirectoryName(file.FullPath));
+                await Platform.ExternalOpener.RevealAsync(TopLevel.GetTopLevel(this), file.FullPath);
         }
 
         private void OpenAssetPreview(AssetThumbnailViewModel file)
@@ -437,7 +448,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 // The store gives each preview its own temp; release it after the player releases the file.
                 if (temp != null) win.Closed += (_, _) => store?.DeleteTempFile(temp);
                 win.LoadFile(path!);
-                if (TopLevel.GetTopLevel(this) is Window owner) win.Show(owner); else win.Show();
+                if (TopLevel.GetTopLevel(this) is Window owner)
+                {
+                    win.Closed += (_, _) => Platform.PreviewFocus.Reactivate(owner);
+                    win.Show(owner);
+                }
+                else win.Show();
             }
             catch (Exception ex)
             {

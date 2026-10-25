@@ -48,6 +48,34 @@ namespace ConditioningControlPanel.Avalonia.Platform
             catch (Exception ex) { Log.Warning("Could not open {Target}: {Error}", Path.IsPathRooted(target!) ? target : "link", ex.Message); return false; }
         }
 
+        // WPF ExplorerLauncher: keep /select, OUTSIDE the quoted path (#1108).
+        internal static string? RevealArguments(string path)
+            => string.IsNullOrWhiteSpace(path) || path.Contains('"') ? null : $"/select,\"{path}\"";
+
+        internal static Func<string, bool> RevealShell = arguments =>
+        {
+            using var process = Process.Start(new ProcessStartInfo("explorer.exe", arguments)
+                { UseShellExecute = false, CreateNoWindow = true });
+            return true;
+        };
+
+        public static async Task<bool> RevealAsync(TopLevel? top, string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return false;
+            try
+            {
+                if (OperatingSystem.IsWindows() && File.Exists(path))
+                {
+                    var arguments = RevealArguments(Path.GetFullPath(path));
+                    // No Explorer process may escape a test/render sandbox.
+                    return arguments != null && !SandboxNet.Active && RevealShell(arguments);
+                }
+                var folder = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+                return Directory.Exists(folder) && await OpenAsync(top, folder);
+            }
+            catch (Exception ex) { Log.Debug("File reveal failed: {Error}", ex.Message); return false; }
+        }
+
         /// <summary>Open through the window's platform launcher (portal-aware), else the shell. False when refused or failed.</summary>
         public static async Task<bool> OpenAsync(TopLevel? top, string? target)
         {

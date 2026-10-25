@@ -27,6 +27,22 @@ namespace CCP.Avalonia.Tests;
 public sealed class AssetsTabTests
 {
     [Fact]
+    public Task VideoFoldersUseTheThumbnailProvider() => Run(async (shell, tab, s) =>
+    {
+        var previous = ConditioningControlPanel.Avalonia.Platform.VideoThumbnail.Load;
+        var paths = new System.Collections.Concurrent.ConcurrentBag<string>();
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.VideoThumbnail.Load = path => { paths.Add(path); return null; };
+            tab.SelectFolder(tab.AssetTree.Single(n => n.Name == "videos"));
+            await tab.ThumbnailLoads;
+            Assert.Equal(new[] { "v.mp4", "w.mp4" }, paths.Select(Path.GetFileName).OrderBy(n => n));
+            Assert.All(tab.CurrentFolderFiles, file => Assert.False(file.IsLoadingThumbnail));
+        }
+        finally { ConditioningControlPanel.Avalonia.Platform.VideoThumbnail.Load = previous; }
+    });
+
+    [Fact]
     public Task SpiralPickerConfirmsAfterSavingAndCancelLeavesTheChoiceAlone() => Run(async (shell, tab, s) =>
     {
         var control = new ConditioningControlPanel.Avalonia.Views.Features.SpiralFeatureControl();
@@ -63,6 +79,14 @@ public sealed class AssetsTabTests
     {
         var root = Directory.CreateTempSubdirectory("ccp-assets-pack-").FullName;
         var old = ContentPackStore.Current;
+        var oldThumbnail = ConditioningControlPanel.Avalonia.Platform.VideoThumbnail.Load;
+        string? videoTemp = null;
+        ConditioningControlPanel.Avalonia.Platform.VideoThumbnail.Load = path =>
+        {
+            Assert.True(File.Exists(path));
+            videoTemp = path;
+            return null;
+        };
         var manifest = new InstalledPackManifest { PackId = "test-pack", PackName = "Test pack" };
         var packDir = Path.Combine(root, ".packs", "pack-folder");
         Directory.CreateDirectory(Path.Combine(packDir, "content"));
@@ -116,6 +140,13 @@ public sealed class AssetsTabTests
             Assert.Equal(3, preset.EnabledVideoCount);
             Assert.Equal(Loc.GetF("label_0_images_1_videos_active", 5, 3), tab.TxtAssetCounts.Text);
 
+            tab.SelectFolder(pack.Children[1]);
+            await tab.ThumbnailLoads;
+            Assert.NotNull(videoTemp);
+            Assert.False(File.Exists(videoTemp));
+            tab.SelectFolder(pack.Children[0]);
+            await tab.ThumbnailLoads;
+
             // Real context-menu handler opens the existing owned player from a decrypted temp.
             var menu = new MenuItem { DataContext = tab.CurrentFolderFiles[0] };
             typeof(AssetsTabView).GetMethod("ThumbnailItem_Preview_Click", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
@@ -139,6 +170,7 @@ public sealed class AssetsTabTests
         {
             foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
             ContentPackStore.Current = old;
+            ConditioningControlPanel.Avalonia.Platform.VideoThumbnail.Load = oldThumbnail;
             s.InstalledPackIds.Remove("test-pack");
             s.ActivePackIds.Remove("test-pack");
             s.PackGuidMap.Remove("test-pack");
