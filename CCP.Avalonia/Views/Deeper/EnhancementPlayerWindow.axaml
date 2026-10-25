@@ -519,9 +519,15 @@
                         BorderThickness="0,0,0,1"
                         BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}"
                         Padding="12,6">
-                    <TextBlock x:Name="TxtStatus"
-                               Foreground="{DynamicResource TextMutedBrush}"
-                               FontSize="10" TextWrapping="Wrap"/>
+                    <DockPanel LastChildFill="True">
+                        <TextBlock x:Name="TxtHint" DockPanel.Dock="Right" IsVisible="False"
+                                   Foreground="{DynamicResource DeeperAccentSoftBrush}"
+                                   FontSize="10" Margin="12,0,0,0" MaxWidth="420"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock x:Name="TxtStatus"
+                                   Foreground="{DynamicResource TextMutedBrush}"
+                                   FontSize="10" TextWrapping="Wrap"/>
+                    </DockPanel>
                 </Border>
 
                 <!-- Filter strip -->

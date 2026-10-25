@@ -78,6 +78,8 @@ public sealed class CoreStandInTests
         var dir = Directory.CreateTempSubdirectory("ccp-enh-");
         var media = Path.Combine(dir.FullName, "track.mp3");
         File.WriteAllBytes(media, Array.Empty<byte>());
+        _ = global::ConditioningControlPanel.Avalonia.App.EnhancementLibrary;
+        var previousProvider = EnhancementResolver.LibraryMatchProvider;
         EnhancementResolver.LibraryMatchProvider = (_, _) =>
             new EnhancementLibraryEntry { FilePath = Path.Combine(dir.FullName, "lib.ccpenh.json") };
         try
@@ -93,7 +95,7 @@ public sealed class CoreStandInTests
         }
         finally
         {
-            EnhancementResolver.LibraryMatchProvider = null;
+            EnhancementResolver.LibraryMatchProvider = previousProvider;
             dir.Delete(recursive: true);
         }
     });

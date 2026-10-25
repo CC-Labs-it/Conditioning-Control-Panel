@@ -15,6 +15,18 @@ namespace ConditioningControlPanel.Avalonia
 {
     public partial class App : Application
     {
+        // Lazy: rendering a player must not create/watch a library or seed demos.
+        private static readonly Lazy<Services.Deeper.EnhancementLibrary> PlayerLibrary = new(() => new());
+        internal static Services.Deeper.EnhancementLibrary EnhancementLibrary
+        {
+            get
+            {
+                var library = PlayerLibrary.Value;
+                Services.Deeper.EnhancementResolver.LibraryMatchProvider ??= library.FindMatch;
+                return library;
+            }
+        }
+
         /// <summary>The settings service, or null on the headless render path.</summary>
         public static SettingsService? Settings { get; private set; }
 
@@ -1165,6 +1177,7 @@ namespace ConditioningControlPanel.Avalonia
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
+            if (PlayerLibrary.IsValueCreated) PlayerLibrary.Value.Dispose();
             try { Platform.ChasterHead.Service?.Dispose(); } catch { }
 
             // WPF App.OnExit: a best-effort final push, capped at 2 s (off the UI thread, as WPF's Task.Run).

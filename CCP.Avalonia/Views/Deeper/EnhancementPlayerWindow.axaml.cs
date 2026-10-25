@@ -104,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
     /// call site:</para>
     /// <list type="bullet">
     ///   <item><b>Services.</b> Webcam controls reuse this head's portable tracker and Core consent contract.
-    ///         EnhancementLibrary is in Core but this head does not construct one yet. EnhancementHostService and DeeperFetcher no longer block anything: the host's
+    ///         EnhancementLibrary is lazily owned by this head for discovery and promotion. EnhancementHostService and DeeperFetcher no longer block anything: the host's
     ///         load path is EnhancementSerializer + EnhancementValidator, both public in Core, and
     ///         App.DeeperFetcher IS Core's <c>EnhancementFetcher</c>. Both are wired below. What
     ///         does NOT come with them is the host's OTHER half — <c>Bind</c>, the rule engine and
@@ -592,24 +592,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             }
         }
 
-        /// <summary>
-        /// Core's EnhancementResolver ladder (embedded -> sidecar -> library), as WPF calls it.
-        ///
-        /// ponytail: this head leaves EnhancementResolver.LibraryMatchProvider unset, so the library
-        /// tier never hits; the auto-promotion of an embedded enhancement into the library and its
-        /// 6 s toast need an EnhancementLibrary instance (Core) this head does not construct yet. A media file whose enhancement
-        /// lives only in the library lands in the "nothing found" branch and offers Create-new.
-        /// </summary>
+        // WPF discovery order: embedded, sidecar, library; promotion is best effort.
         private void TryAutoLoadEnhancement(string mediaPath)
         {
+            ClearHint();
             _lastMediaPathForCreateNew = mediaPath;
             _btnCreateNewEnhancement.IsVisible = false;
             try
             {
+                var library = App.EnhancementLibrary;
                 var resolved = EnhancementResolver.ResolveForLocalMedia(mediaPath);
                 switch (resolved.Source)
                 {
                     case EnhancementDiscoverySource.Embedded:
+                        var mediaType = DeeperPreview.IsLocalVideoFile(mediaPath) ? MediaTypes.Video : MediaTypes.Audio;
+                        if (library.FindMatch(mediaPath, mediaType) == null)
+                        {
+                            var saved = library.PromoteToLibrary(resolved.Enhancement!, mediaPath);
+                            if (!string.IsNullOrEmpty(saved))
+                            {
+                                _lastDiscoverySource = DiscoverySource.PromotedFromEmbedded;
+                                LoadEnhancementFile(saved);
+                                ShowHint(string.Format(Loc.Get("deeper_player_promoted_to_library_fmt"), System.IO.Path.GetFileName(saved)), 6);
+                                return;
+                            }
+                        }
                         _lastDiscoverySource = DiscoverySource.Embedded;
                         LoadEnhancementInMemory(resolved.Enhancement!, "embedded:" + System.IO.Path.GetFileName(mediaPath));
                         return;
@@ -627,7 +634,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
                 // Nothing found — offer to author against this media.
                 _btnCreateNewEnhancement.IsVisible = true;
-                _txtStatus.Text = Loc.Get("deeper_player_no_enh_for_media");
+                ShowHint(Loc.Get("deeper_player_no_enh_for_media"), null);
             }
             catch (Exception ex)
             {
@@ -662,8 +669,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         /// engine is pointed at it, and the navigation gate then pins the engine to that one file
         /// for the rest of the load. Without both, a MediaSource of "/etc/passwd" renders.
         /// </summary>
+        private string? _localVideoPath;
         private void LoadLocalVideo(string path)
         {
+            _localVideoPath = path;
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -708,6 +717,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void LoadVideoUrl(string url)
         {
+            _localVideoPath = null;
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
@@ -889,6 +899,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             {
                 _currentSec = _localAudio.PositionSeconds;
                 _durationSec = _localAudio.DurationSeconds;
+                RememberDurationOnce(_lastAudioPath, _durationSec);
             }
 
             _txtCurrent.Text = FormatTime(_currentSec);
@@ -917,10 +928,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (_pollInFlight || _pollDisabled || !_videoNavigated) return;
             _pollInFlight = true;
+            var mediaPath = _localVideoPath;
             try
             {
                 var raw = await _videoBrowser.InvokeScriptAsync(DeeperPreview.ReadTime());
 
+                if (_isClosing || !_isVideoMode || mediaPath != _localVideoPath) return;
                 var parts = DeeperPreview.Unquote(raw).Split('|');
                 if (parts.Length != 3) return;
                 // A video element answered, so the page is up: "Loading video…" is now false. WPF
@@ -932,7 +945,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     _currentSec = cur;
                 if (double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var dur)
                     && dur > 0 && !double.IsInfinity(dur))
+                {
                     _durationSec = dur;
+                    RememberDurationOnce(mediaPath, dur);
+                }
 
                 // The page can start or stop playing without us — an autoplay, an ad, the user
                 // clicking the video's own controls. Follow it, or the pill lies the other way.
@@ -1022,6 +1038,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void UpdateHostUi(Enhancement? enh, string? path)
         {
+            if (enh != null) ClearHint();
             _loadedEnhancement = enh;
             ResetWebcamPrompt();
             _loadedFilePath = path;
@@ -1677,6 +1694,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void Window_Closing()
         {
             _isClosing = true;
+            ClearHint();
             CloseWebcamControls();
             AudioWindows.Remove(this);
             DisposeLocalAudio();

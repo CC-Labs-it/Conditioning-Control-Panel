@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -68,6 +69,8 @@ public sealed class DeeperPlayerAudioTests
             win.OpenLocalMediaFile(path); // real picker/association entry, not a test-only state assignment
             Dispatcher.UIThread.RunJobs();
             Assert.True(first.Playing);
+            Assert.True(MediaDurationCache.TryGetCached(path, out var cached));
+            Assert.Equal(95, cached);
             Assert.Equal(Loc.Get("deeper_player_pill_live"), win.FindControl<TextBlock>("StatusPillText")!.Text);
             Assert.Equal(37, first.Volume);
             Assert.Equal("1:35", win.FindControl<TextBlock>("TxtTotal")!.Text);
@@ -80,6 +83,10 @@ public sealed class DeeperPlayerAudioTests
             Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
             Assert.Equal("0:30", win.FindControl<TextBlock>("TxtCurrent")!.Text);
             Assert.Equal("1:40", win.FindControl<TextBlock>("TxtTotal")!.Text);
+            Assert.True(MediaDurationCache.TryGetCached(path, out cached));
+            Assert.Equal(95, cached); // WPF publishes only the first positive duration per load.
+            Assert.True(win.FindControl<TextBlock>("TxtHint")!.IsVisible);
+            Assert.Equal(Loc.Get("deeper_player_no_enh_for_media"), win.FindControl<TextBlock>("TxtHint")!.Text);
             if (Environment.GetEnvironmentVariable("CCP_DEEPER_PLAYER_RENDER") is { Length: > 0 } render)
             {
                 win.UpdateLayout();
