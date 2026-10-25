@@ -10,6 +10,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -71,8 +72,18 @@ public sealed class TakeawayShelfTests
         door.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
         var shop = GameWindow.OpenForTests(GameWindow.JustDropId)!;
         Assert.NotEqual(WindowState.FullScreen, shop.WindowState);
+        Assert.True(shop.Web.LiveSessionMedia);
+        Assert.True(shop.JustDropOwner!.IsLinked);
+        shell.WindowState = WindowState.Minimized;
+        Assert.False(shop.JustDropOwner.IsLinked);
+        shell.WindowState = WindowState.Normal;
+        Assert.True(shop.JustDropOwner.IsLinked);
+        shell.Hide(); Assert.False(shop.JustDropOwner.IsLinked);
+        shell.Show(); Assert.True(shop.JustDropOwner.IsLinked);
+        var ownership = shop.JustDropOwner;
         Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_fullscreen"), ((TextBlock)shop.FullscreenToggle!.Content!).Text);
         shop.Close();
+        Assert.False(ownership.IsLinked);
         Dispatcher.UIThread.RunJobs();
         JustDropService.SetServerEnabledForTests(false);
         door.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
@@ -98,6 +109,12 @@ public sealed class TakeawayShelfTests
         Assert.Equal(WindowState.Normal, live.WindowState);
         Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("btn_fullscreen"), ((TextBlock)toggle.Content!).Text);
         Assert.Equal(WindowState.Minimized, shell.WindowState);
+        Assert.True(live.IsVisible);
+        Assert.False(live.JustDropOwner!.IsLinked);
+        shell.WindowState = WindowState.Normal;
+        Assert.True(live.JustDropOwner.IsLinked);
+        shell.WindowState = WindowState.Minimized;
+        Assert.False(live.JustDropOwner.IsLinked);
         toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(WindowState.FullScreen, live.WindowState);
         Assert.True(live.Topmost);
@@ -129,6 +146,62 @@ public sealed class TakeawayShelfTests
         GameWindow.LaunchJustDropReplay("code1", shell)!.Close();
         Assert.Equal(WindowState.Normal, shell.WindowState);
     });
+
+    [Fact]
+    public Task ReceiptAffordancesUseAccentFocusAndOnlyPinnedReceiptsAndShopLift() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var tab = shell.Named<PresetsTabView>("PresetsTab")!;
+        var shelf = tab.FindControl<StackPanel>("TakeawayShelf")!;
+        var pink = (global::Avalonia.Media.IBrush)Application.Current!.FindResource("PinkBrush")!;
+        var more = (Border)shelf.Children[3];
+        var label = (TextBlock)more.Child!;
+        Assert.Equal(pink, label.Foreground);
+        Assert.Equal(11.5, label.FontSize);
+        Assert.Equal(global::Avalonia.Media.FontWeight.Bold, label.FontWeight);
+        var door = (Border)shelf.Children[^1];
+        Assert.All(door.GetVisualDescendants().OfType<TextBlock>(), text => Assert.Equal(pink, text.Foreground));
+        var priorMotion = CoreSettings.Current.MotionLevel;
+        try
+        {
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            var receipt = (Border)shelf.Children[0];
+            receipt.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, receipt,
+                new Pointer(1, PointerType.Mouse, true), receipt, default, 0, default, default));
+            Assert.Equal(1.02, receipt.RenderTransform!.Value.M11, 5);
+            Assert.Null(receipt.Transitions);
+            receipt.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, receipt,
+                new Pointer(1, PointerType.Mouse, true), receipt, default, 0, default, default));
+            Assert.Equal(1, receipt.RenderTransform!.Value.M11, 5);
+            CoreSettings.Current.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            receipt.RaiseEvent(new PointerEventArgs(InputElement.PointerEnteredEvent, receipt,
+                new Pointer(1, PointerType.Mouse, true), receipt, default, 0, default, default));
+            var transition = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(receipt.Transitions!));
+            Assert.Equal(TimeSpan.FromMilliseconds(150), transition.Duration);
+            Assert.IsType<global::Avalonia.Animation.Easings.QuadraticEaseOut>(transition.Easing);
+            Assert.Null(((Border)tab.FindControl<StackPanel>("TakeawayTray")!.Children[0]).RenderTransform);
+            Assert.Null(more.RenderTransform); // WPF has no lift on the toggle or tray rows
+            receipt.Focus(NavigationMethod.Tab); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(pink, receipt.BorderBrush);
+        }
+        finally { CoreSettings.Current.MotionLevel = priorMotion; }
+    });
+
+    [Fact]
+    public void JustDropEnvironmentKeepsTheLiveClockAndAudioRunningWithoutChangingOtherHosts()
+    {
+        // The package constructs these args internally; the policy uses only auto properties.
+        static global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs Args() =>
+            (global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs)
+                System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs));
+        var live = Args();
+        ConditioningControlPanel.Avalonia.Views.Controls.WebHost.ConfigureEnvironment(live, true);
+        Assert.Equal("--autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-backgrounding-occluded-windows", live.AdditionalBrowserArguments);
+        var other = Args();
+        other.AdditionalBrowserArguments = "existing-arguments";
+        ConditioningControlPanel.Avalonia.Views.Controls.WebHost.ConfigureEnvironment(other, false);
+        Assert.Equal("existing-arguments", other.AdditionalBrowserArguments);
+    }
 
     private sealed class Drawer : HttpMessageHandler
     {

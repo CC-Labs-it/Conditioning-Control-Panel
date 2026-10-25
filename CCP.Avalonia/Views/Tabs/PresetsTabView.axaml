@@ -346,6 +346,9 @@
             <Style Selector="^:pointerover">
                 <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
             </Style>
+            <Style Selector="^:focus-visible">
+                <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+            </Style>
         </ControlTheme>
         <!-- The "order a drop" door: muted stroke on nothing, so the strip ends on an invitation. -->
         <ControlTheme x:Key="SdTakeawayChipDoor" TargetType="Border" BasedOn="{StaticResource SdTakeawayChip}">
@@ -410,6 +413,9 @@
                 <Setter Property="BorderBrush" Value="{DynamicResource TransparentPink40Brush}"/>
                 <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
             </Style>
+            <Style Selector="^:focus-visible">
+                <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+            </Style>
         </ControlTheme>
 
         <!-- ============================ the tray ============================ -->
@@ -424,6 +430,9 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Style Selector="^:pointerover">
                 <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+            </Style>
+            <Style Selector="^:focus-visible">
                 <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
             </Style>
         </ControlTheme>

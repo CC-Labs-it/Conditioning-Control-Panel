@@ -23,11 +23,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// window (PanicSurfaces "games", WPF GameSurfaces.cs:57).
     /// <para>Takeaway replay uses the bare player, fullscreen and panel duck/restore. The window's
     /// fullscreen is the host's (WPF HostOwnedFullscreen): a strip with the toggle in both modes, Esc from
-    /// either focus state, Topmost rented while active. Remaining: native ownership by the panel and
-    /// Chromium's autoplay/no-throttle flags (WebKitGTK has no equivalent).</para>
+    /// either focus state, Topmost rented while active. Native ownership suspends across the panel duck. WebView2 receives the live-playback flags;
+    /// WebKitGTK media policy and page-fullscreen confinement remain unported.</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
+        internal Platform.NativeWindowOwner? JustDropOwner { get; private set; }
+
         internal const string JustDropId = "justdrop";
 
         /// <summary>WPF ChaosWebViewHost HostEscapeMessageType (:1231): consumed by the host, never the page's.</summary>
@@ -171,7 +173,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 try { shell.Activate(); } catch (Exception ex) { Log.Debug("[Game] justdrop: restore activate: {E}", ex.Message); }
             };
             window.Show();
-            if (duck) { shell.WindowState = WindowState.Minimized; window.Activate(); }
+            window.JustDropOwner = new Platform.NativeWindowOwner(window, shell);
+            // Sever before minimizing, so neither X11 nor Windows can cascade-hide the replay.
+            if (duck) window.JustDropOwner.Suspend(true);
+            if (duck) { shell.WindowState = WindowState.Minimized; window.JustDropOwner.Suspend(false); window.Activate(); }
             return window;
         }
 

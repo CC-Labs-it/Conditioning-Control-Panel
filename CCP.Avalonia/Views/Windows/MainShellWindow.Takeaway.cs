@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Media.Transformation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -85,7 +88,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _takeawayMoreCount = Math.Max(0, tray.Children.Count - pinned);
             if (_takeawayMoreCount > 0)
             {
-                _takeawayMoreLabel = new TextBlock { Text = TakeawayText.More(_takeawayMoreCount, false), VerticalAlignment = VerticalAlignment.Center };
+                _takeawayMoreLabel = new TextBlock { Text = TakeawayText.More(_takeawayMoreCount, false), VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = TakeawayPink, FontSize = 11.5, FontWeight = FontWeight.Bold };
                 var more = TakeawayChip("SdTakeawayChipAccent", () => SetTakeawayTrayOpen(!_takeawayTrayOpen));
                 more.Name = "TakeawayMore"; more.Classes.Add("takeaway-affordance"); more.Child = _takeawayMoreLabel;
                 ToolTip.SetTip(more, Loc.Get("tooltip_takeaway_more"));
@@ -96,8 +100,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 var door = TakeawayChip("SdTakeawayChipDoor", () => { if (JustDropService.DoorAvailable) OpenJustDrop(); });
                 door.Name = "TakeawayDoor"; door.Classes.Add("takeaway-affordance");
-                var line = Line(); var plus = IconGlyph.Of(IconKind.Add, size: 15); plus.Margin = new Thickness(0, 0, 6, 0); line.Children.Add(plus);
-                line.Children.Add(new TextBlock { Text = Loc.Get("sd_takeaway_order"), FontWeight = FontWeight.Bold, FontSize = 11.5 });
+                var line = Line(); var plus = IconGlyph.Of(IconKind.Add, size: 15); plus.Margin = new Thickness(0, 0, 6, 0); plus.Foreground = TakeawayPink; line.Children.Add(plus);
+                line.Children.Add(new TextBlock { Text = Loc.Get("sd_takeaway_order"), Foreground = TakeawayPink, FontWeight = FontWeight.Bold, FontSize = 11.5 });
                 door.Child = line; ToolTip.SetTip(door, Loc.Get("tooltip_takeaway_order_drop")); shelf.Children.Add(door);
             }
             Takeaway<TextBlock>("TxtTakeawayCount")!.Text = orders.Count > 0 ? Loc.GetF("sd_takeaway_kept", orders.Count) : "";
@@ -160,11 +164,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        private IBrush TakeawayPink => this.FindResource("PinkBrush") as IBrush ?? Brushes.HotPink;
         private static StackPanel Line() => new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         private Border TakeawayChip(string theme, Action click)
         {
             var chip = new Border { Theme = TakeawayTab?.Resources[theme] as ControlTheme, Focusable = true };
             chip.PointerReleased += (_, e) => { if (e.InitialPressMouseButton != MouseButton.Left) return; e.Handled = true; click(); };
+            // WPF PreparePresetCardFx is attached only to pinned receipts and the shop door.
+            // The tray and toggle have no lift; no sheen is called from WPF's Takeaway builders.
+            if (theme is "SdTakeawayChip" or "SdTakeawayChipDoor")
+            {
+                chip.RenderTransformOrigin = RelativePoint.Center;
+                chip.RenderTransform = TransformOperations.Parse("scale(1)");
+                void Lift(bool on)
+                {
+                    chip.Transitions = AmbientFxCanvas.Env.AllowTransitions ? new Transitions
+                    {
+                        new TransformOperationsTransition { Property = Visual.RenderTransformProperty,
+                            Duration = TimeSpan.FromMilliseconds(150), Easing = new QuadraticEaseOut() },
+                    } : null;
+                    chip.RenderTransform = TransformOperations.Parse(on ? "scale(1.02)" : "scale(1)");
+                }
+                chip.PointerEntered += (_, _) => Lift(true);
+                chip.PointerExited += (_, _) => Lift(false);
+            }
             chip.KeyDown += (_, e) => { if (e.Key is not (Key.Enter or Key.Space)) return; e.Handled = true; click(); };
             return chip;
         }

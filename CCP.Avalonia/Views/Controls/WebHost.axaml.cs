@@ -139,6 +139,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <summary>Run <see cref="CarrierShim"/> after each completed navigation (see there).</summary>
         public bool InjectCarrier { get; set; }
 
+        // WPF JustDropHostService: a live clock must keep running under payload windows.
+        internal bool LiveSessionMedia { get; set; }
+        internal static void ConfigureEnvironment(WebViewEnvironmentRequestedEventArgs e, bool liveSessionMedia)
+        {
+            if (LinuxChoice != "wpe" && e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe)
+                wpe.PreferWebKitGtkInstead = true;
+            if (liveSessionMedia && e is WindowsWebView2EnvironmentRequestedEventArgs windows)
+                windows.AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required "
+                    + "--disable-background-timer-throttling --disable-backgrounding-occluded-windows";
+            // ponytail: WebKitGTK exposes no matching options in this adapter's environment API.
+        }
+
         /// <summary>Host -&gt; page (WPF ChaosWebViewHost.Post): the page's string push, else a message
         /// event on <c>chrome.webview</c>. Every hosted page shares this one carrier script.</summary>
         public Task<string?> PostJsonAsync(string json) => InvokeScriptAsync(
@@ -224,11 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     _web = new NativeWebView();
                     // WebKitGTK unless WPE was chosen: the package picks WPE first, and on wpewebkit 2.54+ its adapter
                     // throws EntryPointNotFoundException in an async void, which takes the whole app down.
-                    if (LinuxChoice != "wpe")
-                        _web.EnvironmentRequested += (_, e) =>
-                        {
-                            if (e is LinuxWpeWebViewEnvironmentRequestedEventArgs wpe) wpe.PreferWebKitGtkInstead = true;
-                        };
+                    _web.EnvironmentRequested += (_, e) => ConfigureEnvironment(e, LiveSessionMedia);
                     // Subscribed once, here, rather than when a caller sets AllowNavigation: the
                     // gate has to be live for the FIRST navigation too, and a caller that assigns
                     // the predicate and the Source in that order would otherwise race the engine.
