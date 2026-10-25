@@ -3281,3 +3281,7 @@ Test-only reliability fix for the tube chat, takeover cue, She Listening pill an
 ## avalonia-port/wire-feat-flash-exit-stay: +336
 - Flash Shatter dismissal on Avalonia: owned v2 switch, falling/tumbling shard exit, drift parked on breaks, explicit `flash` panic surface.
 - Review fixes: shards draw only the image (no black boxes on transparent pictures, fail-proven), exact tray flash-cancel count, no temp PNG from tests, prize-gated RowShatter/BoxFlashV2 theory.
+
+## avalonia-port/wire-shell-settings: +610
+- Help tours, Save→preset offer (localized Yes/No/Cancel via MessageDialog.AskYesNoCancelAsync), pack migration through Core PackFolderMover/AssetFolderSafety.
+- Review fixes: no sleeps in ShellSettingsWiringTests (fail-proved), redundant preset refreshes removed, parity row limits stated inline.
