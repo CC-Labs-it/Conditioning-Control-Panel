@@ -7,6 +7,9 @@ import { createAudio } from '../audio/bus.js';
 import { B1_CUES, UI_CUES, BOT_ECHO } from '../audio/cues-b1.js';
 import { AUDIO_CUES } from '../audio/cues.js';
 import { beatAt, sectionAt, chartAudioUrl, validChart, createMusic } from '../audio/music.js';
+import { courseSongs } from '../track/selection.js';
+import { songCharts } from '../host/bridge.js';
+import { GOON_AUDIO, GOON_CHART } from '../dev/goonChart.mjs';
 import { allocVoices, rivalVoice, distanceLevel, racerDetuneCents, eventLevel, rollTickTimes, ladderSemis, MIX } from '../audio/mix.js';
 
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
@@ -56,7 +59,35 @@ test('sections and the audio url come from the chart', () => {
   assert.equal(sectionAt(chart, 10), 0); assert.equal(sectionAt(chart, 40), 1); assert.equal(sectionAt(chart, 200), 2);
   assert.equal(chartAudioUrl('https://x.test/tracks/preview.json', chart), 'https://x.test/tracks/preview.mp3');
   assert.equal(chartAudioUrl('https://x.test/tracks/chart.json?v=2', { audio: 'mix.ogg' }), 'https://x.test/tracks/mix.ogg');
+  assert.equal(chartAudioUrl('/tracks/chart.json', { audio: '/audio/mix.mp3' }), '/audio/mix.mp3');
+  assert.equal(chartAudioUrl('https://x.test/tracks/chart.json', { audio: '/audio/mix.mp3' }), 'https://x.test/audio/mix.mp3');
+  assert.equal(chartAudioUrl('/tracks/chart.json', { audio: 'mix.mp3' }), '/tracks/mix.mp3');
+  assert.equal(chartAudioUrl('/tracks/chart.json', { audio: 'https://audio.test/mix.mp3' }), 'https://audio.test/mix.mp3');
   assert.ok(validChart(chart)); assert.ok(!validChart({ bpm: 0, sections: [] })); assert.ok(!validChart(null));
+});
+
+test('GOONWORKS default selection prepares its exact root audio URL and exposes timed words at GO', async () => {
+  const charts = courseSongs('goonworks', '?track=goonworks&howto=0', songCharts({ devHost: true }));
+  assert.deepEqual(charts, [GOON_CHART]);
+  const chart = { id: 'goonworks-remix-v4', audio: GOON_AUDIO, bpm: 96.75, downbeatS: .22,
+    durationS: 187.6, sections: [{ startS: 0, endS: 187.6 }],
+    words: [{ w: 'turn', startS: 1, endS: 1.3 }, { w: 'now', startS: 1.4, endS: 1.8 }] };
+  const requested = [], { ctx, log } = fakeCtx(); ctx.state = 'running';
+  const music = createMusic(ctx, ctx.createGain(), createFeel(feelJson), { fetchFn: async url => {
+    requested.push(url);
+    return { ok: url === GOON_CHART || url === GOON_AUDIO,
+      json: async () => chart, arrayBuffer: async () => new ArrayBuffer(8) };
+  } });
+  assert.equal(await music.playChart(charts[0], { prepareOnly: true }), true);
+  assert.deepEqual(requested, [GOON_CHART, GOON_AUDIO]);
+  assert.equal(log.started, 0); assert.equal(music.song, null);
+  assert.equal(await music.playChart(charts[0], { align: () => -2 }), true);
+  assert.equal(log.started, 1); assert.ok(music.playing);
+  assert.equal(music.song.id, chart.id); assert.equal(music.song.words.length, 2);
+  assert.equal(music.song.words[0].startS, 1);
+  ctx.currentTime = 3; assert.equal(music.songS, 1);
+  assert.equal(requested.length, 2, 'GO reuses the prepared recording');
+  music.dispose();
 });
 
 test('voice allocation: nearest n, the player never, a near bot keeps its slot', () => {
