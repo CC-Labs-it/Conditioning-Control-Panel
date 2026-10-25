@@ -15,6 +15,7 @@ const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 
 /** One phase authority for both visible mesh and collision. No wall-clock reads. */
 export function keepGatePhase(gate, timeS, out = {}, beat = null) {
+  if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   if (beat) {
     const period = 2, offset = Math.round((gate.offsetS || 0) / beat.beatS), t = beatCycle(beat.beat + offset, period);
     // Initial offsets also wait for a clear cycle with the full warning before descent.

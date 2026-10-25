@@ -1,5 +1,5 @@
 /* Two wall views and one approaching shutter view share a two-capture runtime budget. */
-import { Group, Mesh, InstancedMesh, MeshBasicNodeMaterial, BoxGeometry, SphereGeometry, Shape, ShapeGeometry,
+import { Group, Mesh, InstancedMesh, MeshBasicNodeMaterial, BoxGeometry, SphereGeometry, Shape, ShapeGeometry, BufferGeometry, Float32BufferAttribute,
   Matrix4, Vector2, Vector3, Quaternion, Color } from 'three/webgpu';
 import { reflector, vec3, uniform, mix } from 'three/tsl';
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
@@ -49,7 +49,8 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     }
     return frame;
   }
-  let started = false, frozen = false, enabled = true, elapsed = 0, gentleOn = false, disposed = false, warming = false, frontStation = null;
+  let started = false, frozen = false, enabled = true, elapsed = 0, gentleOn = false, disposed = false, warming = false, frontStation = null, liveCamera = null;
+  const capturePosition = new Vector3(), captureNormal = new Vector3(), captureView = new Vector3();
   const gateRows = getBoudoirSetpieces(track).mirrorGates;
   const localCamera = new Vector3(), drawSize = new Vector2(), gateColor = new Color(), batches = [], diagnostics = { mirrors: 0, shutters: 0, reflectionNodes: 3,
     reflectionPasses: 0, active: true, paused: false, maxTexturePx: quality === 'phone' ? 384 : MIRROR_ROOM.maxTexturePx, targets: [] };
@@ -70,17 +71,27 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
       }
     }
     const base = node.reflector, nativeUpdate = base.updateBefore.bind(base); let lastCapture = -Infinity;
+    // Foreign scene passes must not replace the player's texture or consume its frame update.
+    base.updateBeforeType = 'render';
     // Cap actual target dimensions as well as scale, including high-DPI desktop windows.
     base._updateResolution = (renderTarget, renderer) => {
       renderer.getDrawingBufferSize(drawSize); const scale = Math.min(base.resolutionScale, diagnostics.maxTexturePx / Math.max(drawSize.x, drawSize.y));
       renderTarget.setSize(Math.max(1, Math.round(drawSize.x * scale)), Math.max(1, Math.round(drawSize.y * scale)));
     };
     base.updateBefore = frame => {
+      const captureHz = gentleOn ? 12 : MIRROR_ROOM.captureHz;
+      // The front pane takes one pass; the second alternates wall views. Freezing both
+      // walls here retained a side-looking warm capture for an entire shutter approach.
+      const wallTurn = Math.floor((elapsed + 1e-6) * captureHz) % 2 ? 1 : -1;
       // Pipeline discovery must never recurse into a real capture. General boot warming also
       // precedes the first world update; the explicit hall warm owns its reflected variants.
-      if (disposed || frame.renderer._isPreCompiling || (!started && !warming)
-        || (!warming && started && (!enabled || frozen || (side ? frontStation !== null : frontStation === null)
-          || elapsed - lastCapture < 1 / (gentleOn ? 12 : MIRROR_ROOM.captureHz)))) return;
+      if (disposed || frame.renderer._isPreCompiling || (!started && !warming) || (!warming && liveCamera && frame.camera !== liveCamera)
+        || (!warming && started && (!enabled || frozen || (side ? frontStation !== null && side !== wallTurn : frontStation === null)
+          || (!base.forceUpdate && elapsed - lastCapture < 1 / captureHz)))) return;
+      capturePosition.setFromMatrixPosition(target.matrixWorld); captureNormal.set(0, 0, 1).transformDirection(target.matrixWorld);
+      captureView.setFromMatrixPosition(frame.camera.matrixWorld).sub(capturePosition);
+      // Keep the last valid view while a passed shutter fades. Native r186 clears it from behind.
+      if (!warming && captureView.dot(captureNormal) <= .01) return;
       const excluded = [...mirrorMaterials, ...shutterMaterials, backingMat], saved = excluded.map(m => m.visible), renderer = frame.renderer;
       const renderTarget = renderer.getRenderTarget(), mrt = renderer.getMRT(), autoClear = renderer.autoClear;
       // Both mirror banks and all shutter glass leave the reflected pass. Frames and racers remain.
@@ -115,15 +126,30 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     block('ink', 0, 21, z, 39, 2, 2); block('rose', 0, 20.75, z + .2, 36, .8, 2.1);
     block('gold', 0, 19.9, z + .3, 36, .16, 2.15);
   }
+  const shardGeometry = new BufferGeometry(); geometries.push(shardGeometry);
+  shardGeometry.setAttribute('position', new Float32BufferAttribute([0,0,0, 1,0,0, 0,1,0], 3)); shardGeometry.computeVertexNormals();
   for (const row of gateRows) {
-    const pane = new Mesh(shutterFace, shutterMaterials[row.station]); pane.name = 'mirror-shutter-glass:' + row.id;
+    const pane = row.breakable ? new Group() : new Mesh(shutterFace, shutterMaterials[row.station]); pane.name = 'mirror-shutter-glass:' + row.id;
     const holder = framedPanel(pane, row.x, BOUDOIR_HAZARD.mirrorHeightM / 2, -(row.s - hall.s0), 0, 6.5, 5.6, row.depthM);
     holder.name = 'mirror-shutter:' + row.id;
+    const fragments = [], gate = { row, holder, fragments, broken: false };
+    if (row.breakable) {
+      const edge = [[-2.6,-2.8],[2.6,-2.8],[3.25,-2.15],[3.25,2.15],[2.6,2.8],[-2.6,2.8],[-3.25,2.15],[-3.25,-2.15]];
+      for (let i = 0; i < edge.length; i++) {
+        const points = [[.55,-.3], edge[i], edge[(i+1)%edge.length]], center = [0,1].map(k => points.reduce((sum,p) => sum+p[k]/3,0));
+        const [a,b,c] = points.map(p => p.map((v,k) => (v-center[k])*.975));
+        const shard = new Group(); shard.name = holder.name + ':shard-' + i; shard.position.set(...center,0); pane.add(shard);
+        const glass = new Mesh(shardGeometry, shutterMaterials[row.station]); glass.matrixAutoUpdate = false;
+        glass.matrix.set(b[0]-a[0],c[0]-a[0],0,a[0], b[1]-a[1],c[1]-a[1],0,a[1], 0,0,1,0, 0,0,0,1); shard.add(glass);
+        fragments.push({ object: shard, x: center[0], y: center[1] });
+      }
+      holder.children[0].userData.breakGate = gate;
+    }
     const lampMat = material('mirror-lane-signal:' + row.id, '#76d7b4'), lamp = new Mesh(box, lampMat);
     lamp.position.set(row.x, 15.9, -(row.s - hall.s0)); lamp.scale.set(row.w - .8, .35, .3); group.add(lamp);
     const arrow = new Group(); arrow.position.set(row.x, .11, -(row.s - hall.s0) + 9); group.add(arrow);
     for (const side of [-1, 1]) { const bar = new Mesh(box, lampMat); bar.position.x = side * .55; bar.rotation.y = side * -.65; bar.scale.set(.25, .08, 1.7); arrow.add(bar); }
-    gates.push({ row, holder, lampMat });
+    gate.lampMat = lampMat; gates.push(gate);
   }
   diagnostics.shutters = gates.length;
   // Architecture stays batched; the small number of moving shutters retain their own transforms.
@@ -137,25 +163,35 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
   function update(dt, view = {}, gentle = false) {
     frozen = !!view.paused; gentleOn = gentle; started = true;
     diagnostics.paused = frozen;
-    if (view.camera?.position) { group.worldToLocal(localCamera.copy(view.camera.position)); enabled = mirrorRoomNear(localCamera, length); }
+    if (view.camera?.position) { liveCamera = view.camera; group.worldToLocal(localCamera.copy(view.camera.position)); enabled = mirrorRoomNear(localCamera, length); }
     diagnostics.active = enabled;
     if (frozen || disposed) return;
     // All three panes at a station share one plane. The approaching glass reflects the
     // actual kart and world, including while it lifts to release a bumped driver.
     const next = gateRows.find(row => row.lane === 0 && localCamera.z + row.s - hall.s0 >= 0
       && localCamera.z + row.s - hall.s0 < 48);
-    frontStation = enabled && next ? next.station : null;
+    const desiredStation = enabled && next ? next.station : null;
+    if (desiredStation !== frontStation && shutterMaterials.every(mat => mat.userData.reflectionMix.value === 0)) {
+      frontStation = desiredStation;
+      if (next) { group.getObjectByName('mirror-plane:0').position.z = -(next.s - hall.s0) + .04; reflections[2].reflector.forceUpdate = true; }
+    }
     diagnostics.frontStation = frontStation;
     shutterMaterials.forEach((mat, station) => {
-      const target = station === frontStation ? 1 : 0, u = mat.userData.reflectionMix;
-      u.value += (target - u.value) * Math.min(1, Math.max(0, dt || 0) / .35);
+      const target = station === frontStation && frontStation === desiredStation ? 1 : 0, u = mat.userData.reflectionMix;
+      const step = Math.max(0, dt || 0) / .35;
+      u.value += Math.max(-step, Math.min(step, target - u.value));
     });
-    if (next) group.getObjectByName('mirror-plane:0').position.z = -(next.s - hall.s0) + .04;
     elapsed += Math.max(0, Math.min(.1, dt || 0));
     const timeS = view.raceTimeS ?? view.timeS ?? 0;
     for (const gate of gates) {
       const phase = releasedMirrorGatePhase(track, gate.row, timeS, machineryBeatAt(track,timeS)); gate.holder.position.y = phase.liftM + BOUDOIR_HAZARD.mirrorHeightM / 2;
-      gateColor.set(phase.liftM >= 6.8 ? '#76d7b4' : phase.phase === 'warn' ? '#e6b563' : '#9b4177');
+      gate.broken = !!phase.broken;
+      const fall = gate.broken ? Math.min(1, Math.max(0,timeS-phase.breakS)/(gentle ? .75 : .5)) : 0;
+      gate.fragments.forEach((part,i) => {
+        part.object.position.set(part.x + Math.sign(part.x)*fall*(.4+i%3*.2), part.y*(1-fall)+(-2.75+i*.025)*fall, fall*(i%2-.5));
+        part.object.rotation.set(-Math.PI/2*fall,0,(i-.5)*.4*fall);
+      });
+      gateColor.set(gate.broken || phase.liftM >= 6.8 ? '#76d7b4' : phase.phase === 'warn' ? '#e6b563' : '#9b4177');
       gate.lampMat.color.lerp(gateColor, Math.min(1, (dt || 0) / .35));
     }
     updateBatches();
@@ -175,7 +211,7 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
     const local = owner ? owner.matrixWorld.clone().invert().multiply(mesh.matrixWorld) : inverseRoom.clone().multiply(mesh.matrixWorld);
     const key = mesh.geometry.id + ':' + mesh.material.id;
     if (!byMaterial.has(key)) byMaterial.set(key, { geometry: mesh.geometry, material: mesh.material, rows: [] });
-    byMaterial.get(key).rows.push({ owner, local }); mesh.removeFromParent();
+    byMaterial.get(key).rows.push({ owner, local, breakGate: mesh.userData.breakGate }); mesh.removeFromParent();
   }
   for (const batch of byMaterial.values()) {
     batch.mesh = new InstancedMesh(batch.geometry, batch.material, batch.rows.length);
@@ -188,6 +224,7 @@ export function buildBoudoirMirrorRoom(track, art, pal, { quality = Q.name } = {
       if (!first && !batch.dynamic) continue;
       for (const [i, row] of batch.rows.entries()) {
         const matrix = row.owner ? temp.multiplyMatrices(inverseRoom, row.owner.matrixWorld).multiply(row.local) : row.local;
+        if (row.breakGate?.broken) matrix.scale(S.set(0,0,0));
         batch.mesh.setMatrixAt(i, matrix);
       }
       batch.mesh.instanceMatrix.needsUpdate = true; batch.mesh.computeBoundingSphere();

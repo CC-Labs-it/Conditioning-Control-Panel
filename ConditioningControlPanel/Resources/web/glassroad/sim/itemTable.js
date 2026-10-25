@@ -7,7 +7,8 @@
  *
  * Toys kit (owner pick 2026-10-25): Pendulum, Disc, Tether, Melt (the spiral trap, bigger), Snap, Surge and
  * Big Spiral. They act on the kart, never cover the screen; the payoff words and flashes play in
- * fx/payoff.js. The first twelve ids keep their wire order and draw at weight 0. Icons of the new
+ * fx/payoff.js. Glass shield and course-themed Pink Fog return beside the toys; the other retired
+ * ids keep their wire order and draw at weight 0. Icons of the new
  * ids use physical toy icons with directional enamel frames.
  */
 

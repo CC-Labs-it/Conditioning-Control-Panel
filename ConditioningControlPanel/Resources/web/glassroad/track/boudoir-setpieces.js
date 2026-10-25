@@ -2,7 +2,7 @@
 import { getBoudoirLayout } from './boudoir-layout.js';
 import { keepGatePhase } from '../sim/keepGates.js';
 import { pendulumBeatPhase } from '../sim/keepChains.js';
-import { beatCycle, machineryRearming, gearBeatTravel } from './machineryBeat.js';
+import { beatCycle, machineryRearming, gearBeatTravel, machineryDuration } from './machineryBeat.js';
 const TAU = Math.PI * 2, ease = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
 export const BOUDOIR_HAZARD = Object.freeze({ pressWidthM: 14, pressDepthM: 8, pressHeightM: 3.2,
   brushAmplitudeM: 2.9, brushRadiusM: 1.12, brushDepthM: 2.5, brushCycleS: 6.4,
@@ -14,6 +14,8 @@ export function powderPressPhase(row, timeS, beat = null) {
 }
 export function mascaraHeads(row) { return row.heads || [row]; }
 export function mascaraPhase(row, timeS, beat = null) {
+  const pace = beat?.fallback ? beat.pace : 1;
+  if (beat?.fallback) { timeS *= pace; beat = null; }
   const head = mascaraHeads(row)[0], K = BOUDOIR_HAZARD;
   const armM = head.armM ?? K.brushArmM, pivotY = head.pivotY ?? K.brushPivotY, amplitudeM = head.amplitudeM ?? K.brushAmplitudeM;
   if (beat) {
@@ -25,13 +27,14 @@ export function mascaraPhase(row, timeS, beat = null) {
       depthM: head.depthM ?? K.brushDepthM, warning: p.safe || Math.abs(p.swing) < .7, safe: p.safe };
   }
   const rate = TAU / (head.cycleS || K.brushCycleS), t = Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (head.offsetS || 0);
-  const a = t * rate, angleMax = Math.asin(amplitudeM / armM), angle = Math.sin(a) * angleMax, angleRate = Math.cos(a) * angleMax * rate;
+  const a = t * rate, angleMax = Math.asin(amplitudeM / armM), angle = Math.sin(a) * angleMax, angleRate = Math.cos(a) * angleMax * rate * pace;
   return { x: (head.x || 0) + Math.sin(angle) * armM, y: pivotY - Math.cos(angle) * armM, z: head.longitudinalM || 0,
     vx: Math.cos(angle) * armM * angleRate, vy: Math.sin(angle) * armM * angleRate, angle,
     pivotX: head.x || 0, pivotY, armM, radiusM: head.radiusM ?? K.brushRadiusM, depthM: head.depthM ?? K.brushDepthM,
     warning: Math.abs(Math.cos(a)) > .55 };
 }
 export function ribbonPhase(row, timeS, beat = null) {
+  if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   if (beat) {
     const period = 4, offset = Math.round((row.offsetS || 0) / beat.beatS);
     const absolute = beat.beat + offset, u = beatCycle(absolute, period), safe = machineryRearming(beat,offset,period);
@@ -52,6 +55,7 @@ export function ribbonPhase(row, timeS, beat = null) {
 }
 /** The next mirror lane opens before the old lane closes, so a full-width wall never forms. */
 export function mirrorGatePhase(row, timeS, beat = null) {
+  if (beat?.fallback) { timeS *= beat.pace; beat = null; }
   if (beat) {
     const offset = Math.round((row.offsetS || 0) / beat.beatS), absolute = beat.beat + offset, cycle = Math.floor(absolute / 4), t = beatCycle(absolute,4);
     const openLane = ((cycle + (row.sequence || 0)) % 3 + 3) % 3, nextLane = (openLane + 1) % 3, previousLane = (openLane + 2) % 3;
@@ -74,16 +78,27 @@ export function mirrorGatePhase(row, timeS, beat = null) {
     blocking: liftM < 1.6, warning: t >= 6.4, cycleS: t };
 }
 // A contact opens the entire station briefly. The same lift drives glass and collision.
-const mirrorReleases = new WeakMap();
+const mirrorReleases = new WeakMap(), brokenMirrors = new WeakMap();
+export function breakBoudoirMirror(track, row, timeS) {
+  if (!row.breakable || !Number.isFinite(timeS)) return false;
+  let broken = brokenMirrors.get(track);
+  if (!broken) { broken = new Map(); brokenMirrors.set(track, broken); }
+  if (broken.has(row.id)) return false;
+  broken.set(row.id, timeS); return true;
+}
 export function releaseBoudoirMirror(track, row, timeS) {
   let releases = mirrorReleases.get(track);
   if (!releases) { releases = new Map(); mirrorReleases.set(track, releases); }
   const key = row.station ?? row.s;
   if (!releases.has(key) || timeS - releases.get(key) > 3.25) releases.set(key, timeS);
 }
-export function resetBoudoirMirrors(track) { mirrorReleases.delete(track); }
+export function resetBoudoirMirrors(track, resetBroken = true) {
+  mirrorReleases.delete(track); if (resetBroken) brokenMirrors.delete(track);
+}
 export function releasedMirrorGatePhase(track, row, timeS, beat = null) {
   const pose = mirrorGatePhase(row, timeS, beat), start = mirrorReleases.get(track)?.get(row.station ?? row.s);
+  const breakS = brokenMirrors.get(track)?.get(row.id);
+  if (breakS !== undefined) return { ...pose, liftM: 0, blocking: false, warning: false, phase: 'broken', broken: true, breakS };
   if (start === undefined) return pose;
   const age = timeS - start;
   if (age < 0 || age > 3.25) return pose;
@@ -113,6 +128,6 @@ export function getBoudoirSetpieces(track, layout = getBoudoirLayout(track)) {
     .map(([id, a, b], i) => ({ id: 'ribbon-conveyor-' + i, kind: 'conveyor', s0: point(id, a), s1: point(id, b), x: 0, w: 12, offsetS: i * 2.2 }));
   const mirrorGates = [45, 100, 155].flatMap((distance, station) => [-9, 0, 9].map((x, lane) => ({
     id: 'mirror-shutter-' + station + '-' + lane, station, lane, sequence: station, kind: 'mirror', s: find('drawer-hall').s0 + distance,
-    x, w: 7, depthM: 1.2, offsetS: station * .7 })));
+    x, w: 7, depthM: 1.2, offsetS: station * .7, breakable: lane === (station + 1) % 3 })));
   return { presses, sweepers, conveyors, mirrorGates };
 }

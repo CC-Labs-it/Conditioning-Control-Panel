@@ -97,6 +97,7 @@ const j = (syn, k) => syn.feel.get('juice.' + k);
 const chordOf = (i) => CHORDS[((i % CHORDS.length) + CHORDS.length) % CHORDS.length];
 
 export const AUDIO_CUES = {
+  'air-word-launch': playAirWordHop,
   'air-word-hop': playAirWordHop,
   'press-thud': playPressThud,
   'phrase-gate': playPhraseGate,

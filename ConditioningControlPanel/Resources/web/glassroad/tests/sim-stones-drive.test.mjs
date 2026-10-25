@@ -77,7 +77,7 @@ test('the field is on the bridge, after its pad, with a stone in some lane at ev
   }
   const plan = createAi(TRACK, makeFeel(), { seed: 1 }).fields();
   assert.equal(plan.length, 1);
-  assert.deepEqual(plan[0].lanes, [-14, 0, 14]);
+  assert.deepEqual(plan[0].lanes, [-18, 0, 18]);
   assert.equal(plan[0].centre, 0);
   assert.ok(plan[0].safe.length >= 1, 'a safe lane');
   assert.equal(FIELD.platforming, true, 'the real course requires deliberate jumps');
@@ -94,7 +94,7 @@ test('every persona commits to a lane, keeps speed and crosses the stones at 18 
     assert.ok(r.worstLane <= 1.5, 'held the lane: ' + label);
     assert.ok(r.minSpeed >= 12, 'kept speed: ' + label);
     assert.equal(r.drifts, 0, 'no drift in the field: ' + label);
-    assert.ok(r.stones >= 4, 'drove over the stones, not the void: ' + label);
+    assert.ok(r.stones >= FIELD.stones.filter(st => st.x === r.lane).length, 'drove over every island, not the void: ' + label);
     personas.add(r.persona); lanes.add(r.lane);
   }
   assert.equal(personas.size, PERSONAS.length, 'every persona drove');

@@ -12,6 +12,7 @@ const frame = () => ({ p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] })
 const dot = (p, row, axis) => p.reduce((v, x, i) => v + (x - row.p[i]) * row[axis][i], 0);
 const FALLBACK = ['LET GO', 'DRIFT AWAY', 'BREATHE SLOW', 'FLOAT ON'];
 const APPEAR_S = .64, FADE_S = .65;
+const FLIGHT_PACE = 1.6;
 const LYRIC_WINDOW_S = 1.25;
 export function bindAirWords(st, run) { runs.set(st, run); held.delete(st); }
 export function phraseBounceActive(st) { return !!runs.get(st)?.bouncing; }
@@ -120,7 +121,7 @@ export function createAirWordRun(song, track) {
   function launch(st, events) {
     const r = route, from = r.points[r.leg], to = r.points[r.leg + 1];
     r.stage = 'flight'; r.elapsed = 0; r.reboundedApex = false;
-    r.duration = r.leg === 0 ? clamp((to.s - from.s) / 23, 2.2, 7) : clamp((to.s - from.s) / 31, 2.2, 5.2);
+    r.duration = (r.leg === 0 ? clamp((to.s - from.s) / 23, 2.2, 7) : clamp((to.s - from.s) / 31, 2.2, 5.2)) / FLIGHT_PACE;
     track.frameAt(from.s, f); from.offset ||= f.b.map(v => v * r.lateral);
     track.frameAt(to.s, f); to.defaultOffset = f.b.map(v => v * r.lateral);
     to.offset = [...to.defaultOffset]; to.catchU = null;
@@ -132,7 +133,10 @@ export function createAirWordRun(song, track) {
     }
     st[S.airborne] = 1; st[S.grounded] = 0; st[S.airTime] = 0; st[S.hopT] = 0;
     if (from.row) events.emit('air-word-hop', contact(from));
-    else events.emit('airborne', { cause: 'lip' });
+    else {
+      events.emit('airborne', { cause: 'lip' });
+      events.emit('air-word-launch', { id: r.zone.id + '-lip', section: r.zone.id, index: 0 });
+    }
   }
   function contact(point) {
     const row = point.row;
