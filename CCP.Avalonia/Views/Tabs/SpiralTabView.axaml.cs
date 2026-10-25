@@ -188,8 +188,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private WebHost? _embed;
         private DescentService? _profileReader;
         internal void SetProfileReader(DescentService reader) { _profileReader = reader; Refresh(); }
-        internal void RefreshFromProfile() => Refresh();
-        internal void StopForPanic() => Suspend();
+        internal void RefreshFromProfile() { if (!_panicParked) Refresh(); }
+
+        /// <summary>Panic parks the room until the user enters it again: a block change must not
+        /// rebuild the browser behind their back.</summary>
+        internal void StopForPanic() { Suspend(); _state = SpiralRoomState.Waiting; _panicParked = true; }
+        private bool _panicParked;
 
         private SpiralRoomState _state = SpiralRoomState.Waiting;
 
@@ -261,7 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PropertyChanged += (_, e) =>
             {
                 if (e.Property != IsVisibleProperty) return;
-                if (IsVisible) Refresh();
+                if (IsVisible) { _panicParked = false; Refresh(); }
                 else Suspend();
             };
         }
@@ -276,7 +280,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// original calls here and on every entry to let the companion say hello to the room once
         /// ever. It is decoration and it never blocks the entry it rides on.</para>
         /// </summary>
-        internal void OnTabShown() => Refresh();
+        internal void OnTabShown() { _panicParked = false; Refresh(); }
 
         /// <summary>The fuse drives the fog; the shell forwards its shared reader's block changes.</summary>
         private void Wire()

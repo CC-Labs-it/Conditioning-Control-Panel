@@ -131,6 +131,11 @@ public sealed class ProfileSpiralTests
             Assert.True(room.IsShowingSpiral);
             Assert.Single(PanicSurfaces.All, surface => surface.Id == "spiral-room").Stop(shell);
             Assert.Empty(room.FindControl<Grid>("EmbedHost")!.Children);
+            Assert.False(room.IsShowingSpiral);
+            shell.ProfileDescent.NotifySurfaces("block after panic"); // must not rebuild the browser
+            Dispatcher.UIThread.RunJobs();
+            Assert.Empty(room.FindControl<Grid>("EmbedHost")!.Children);
+            Assert.False(room.IsShowingSpiral);
             shell.ShowTab("discord");
             shell.OpenProfileBubbleMenu();
             row.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

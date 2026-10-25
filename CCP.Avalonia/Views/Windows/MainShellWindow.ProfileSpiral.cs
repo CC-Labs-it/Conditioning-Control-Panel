@@ -102,8 +102,7 @@ public partial class MainShellWindow
                 || account != settings.UnifiedId || token != settings.AuthToken) return;
             if (!ProfileAdopt.AdoptProfilePoll(settings, user)) return;
             CoreSettings.Save();
-            UpdateQuickLoginUI();
-            RefreshProfileBubble();
+            UpdateQuickLoginUI();   // repaints the profile bubble too
         });
     }
 
