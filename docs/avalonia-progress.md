@@ -3246,3 +3246,7 @@ Avalonia session feature lock now shows WPF's program-session reason copy (title
 
 ## avalonia-port/wire-shell-subjects-fx: +296
 Roster entrance stagger (WPF StaggerSubjectCards/MotionFx.StaggerIn) on the shared BeatLoop; Taken stays dimmed; Reduced animates, Off never starts. Connect press-squish not ported (WPF OnSubjectConnectPress has no caller). SubjectsFxTests fail-proven (rcheck 39749752722); rgate 39753326525 red only on known flakes.
+
+## avalonia-port/wire-shell-ui-updates: +384
+- Signed-in startup leaderboard fetch for the header pills (WPF 500 ms; the test awaits the task, no sleep), mic backstop, XP bonus chips and journal mod gating. Percentile and journal policy are shared in Core.
+- Row shell-ui-updates: stub. Missing items are listed in the row. Tests: UiUpdatesTests, AccountSeedTests.SignedInStartupFetchesPillsWithoutOpeningLeaderboard (fail-proven), LeaderboardPercentileTests.
