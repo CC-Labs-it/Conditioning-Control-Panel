@@ -11,6 +11,25 @@ namespace CCP.Avalonia.Tests;
 public sealed class WebHostSandboxTests
 {
     [Fact]
+    public Task PopupsUseSameWindowAndRespectSandboxAndHostGate() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var web = new WebHost { GateScrolller = false };
+        var allowed = new Uri("http://127.0.0.1:3001/page");
+        web.AllowNavigation = _ => false;
+        web.HandleNewWindow(allowed);
+        web.HandleNewWindow(new Uri("https://example.test/"));
+        web.HandleNewWindow(null);
+        Assert.Equal(0, web.NavigationRequests);
+        web.AllowNavigation = _ => true;
+        web.HandleNewWindow(allowed);
+        Assert.Equal(1, web.NavigationRequests);
+        Assert.Equal(allowed, web.Source);
+        web.HandleNewWindow(new Uri("http://127.0.0.1:3001/popup"));
+        Assert.Equal(1, web.NavigationRequests);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public async Task NavigateRefusesARealSiteInASandbox() =>
         await AvaloniaTestDispatcher.RunAsync(() =>
         {

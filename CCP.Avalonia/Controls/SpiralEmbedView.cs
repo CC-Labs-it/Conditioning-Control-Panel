@@ -6,6 +6,7 @@ using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Descent;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Controls
 {
@@ -52,9 +53,13 @@ namespace ConditioningControlPanel.Avalonia.Controls
         public void PostState(DescentBlock? block)
         {
             if (_disposed) return;
-            var state = SpiralEmbedBridge.BuildState(block,
-                CoreSettings.Current.MotionLevel != MotionLevel.Full, AmbientFxCanvas.Env.CurrentTier);
-            if (_bridge.Post(state.ToString(Formatting.None)) is { } message) _ = Send(message);
+            try
+            {
+                var state = SpiralEmbedBridge.BuildState(block,
+                    CoreSettings.Current.MotionLevel != MotionLevel.Full, AmbientFxCanvas.Env.CurrentTier);
+                if (_bridge.Post(state.ToString(Formatting.None)) is { } message) _ = Send(message);
+            }
+            catch (Exception ex) { Log.Debug(ex, "Spiral PostState failed"); }
         }
 
         internal void Receive(string message)
@@ -62,28 +67,38 @@ namespace ConditioningControlPanel.Avalonia.Controls
             if (_disposed) return;
             var wasReady = IsReady;
             if (_bridge.Receive(message) is { } latest) _ = Send(latest);
-            if (IsReady && !wasReady) Ready?.Invoke(this, EventArgs.Empty);
+            if (IsReady && !wasReady)
+            {
+                try { Ready?.Invoke(this, EventArgs.Empty); }
+                catch (Exception ex) { Log.Debug(ex, "Spiral Ready handler failed"); }
+            }
         }
 
-        private Task Send(string message) => SendJson?.Invoke(message) ??
-            _web?.PostJsonAsync(message) ?? Task.CompletedTask;
+        private async Task Send(string message)
+        {
+            try { await (SendJson?.Invoke(message) ?? _web?.PostJsonAsync(message) ?? Task.CompletedTask); }
+            catch (Exception ex) { Log.Debug(ex, "Spiral state send failed"); }
+        }
 
         internal void OnNavigated(Uri url, bool success)
         {
-            if (_disposed || !SpiralEmbedBridge.AllowsNavigation(url)) return;
+            if (_disposed) return;
             if (!success)
             {
                 Fail("navigation failed");
                 return;
             }
-            Navigated?.Invoke(this, EventArgs.Empty);
+            if (!SpiralEmbedBridge.AllowsNavigation(url)) return;
+            try { Navigated?.Invoke(this, EventArgs.Empty); }
+            catch (Exception ex) { Log.Debug(ex, "Spiral Navigated handler failed"); }
         }
 
         private void Fail(string reason)
         {
             HasFailed = true;
             Dispose();
-            Failed?.Invoke(this, reason);
+            try { Failed?.Invoke(this, reason); }
+            catch (Exception ex) { Log.Debug(ex, "Spiral Failed handler failed"); }
         }
 
         public void Dispose()

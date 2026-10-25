@@ -25,6 +25,41 @@ public sealed class SpiralEmbedViewTests
     }
 
     [Fact]
+    public Task ThrowingSubscribersAndSenderDoNotBreakDecorativeEmbed() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        using var view = new SpiralEmbedView("map")
+        { SendJson = _ => throw new InvalidOperationException("test sender") };
+        view.Navigated += (_, _) => throw new InvalidOperationException("test navigation");
+        view.Ready += (_, _) => throw new InvalidOperationException("test ready");
+        view.Failed += (_, _) => throw new InvalidOperationException("test failure");
+        view.OnNavigated(new Uri(view.Url), true);
+        view.PostState(new DescentBlock { DevotionDays = 1 });
+        view.Receive("{\"type\":\"spiral:ready\"}");
+        Assert.True(view.IsReady);
+        view.PostState(new DescentBlock { DevotionDays = 2 });
+        view.OnNavigated(new Uri(view.Url), false);
+        Assert.True(view.HasFailed);
+        Assert.False(view.IsReady);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FailedNavigationWithoutTrustedUrlStillFallsBack() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        using var view = new SpiralEmbedView("mini");
+        int failed = 0;
+        view.Failed += (_, _) => failed++;
+        view.OnNavigated(new Uri("about:blank"), false);
+        Assert.True(view.HasFailed);
+        view.OnNavigated(new Uri(view.Url), false);
+        Assert.Equal(1, failed);
+        Assert.True(view.HasFailed);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PageHandshakeSendsLatestState_ThenLiveUpdates_DisposeStopsMessages() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

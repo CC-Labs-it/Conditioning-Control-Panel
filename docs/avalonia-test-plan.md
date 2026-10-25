@@ -678,3 +678,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 1. Open Companion -> Engine Room -> Custom. Enter an endpoint, model and API key, then Test Connection and chat through the companion tube. Confirm both use the configured key and reopening the drawer never reveals it. Clear the key and confirm neither action sends a request. Settings must contain no typed key. WPF `MainWindow/MainWindow.CompanionRoom.cs:312` + `CCP.Core/Services/AIService/OpenAiCompatibleService.cs:198`. Rows: `feat-companion-ai-cloud-chat`.
 2. On Windows, open a copied WPF profile with a legacy DPAPI-protected BYO key: Test Connection and chat still work. On Linux that Windows-encrypted key must fail closed; re-enter it to use the OS store (memory only when unavailable). WPF `Services/Auth/SecureStringHelper.cs:37`. Rows: `feat-companion-ai-cloud-chat`.
+
+## Shell native web hosts (FIN5)
+
+1. Home browser: pop out before loading, then click Pop out again and the card placeholder. Expect one 1024x768 window focused each time. Navigate using a site radio while popped out; close it and confirm the same live page returns to the card. Offline mode must refuse popout with the existing toast. Panic and shell close must leave no browser popout. WPF `MainWindow/MainWindow.Browser.cs:2645`. Rows: `shell-webview2-hosts`.
+2. In the Home browser follow a popup link: it navigates the existing host, never opens an unmanaged window. Non-partner ad URLs are refused; HypnoTube retains the WPF partner bypass. Hosted games/embeds still enforce their navigation allowlist, including popup destinations. WPF `Services/Browser/BrowserService.cs:538`. Rows: `shell-webview2-hosts`.
+3. Spiral embed: a failed load shows its existing fallback once, including a failed navigation whose reported URL is about:blank. A throwing host callback or page-send failure must not crash the decorative surface. WPF `Controls/SpiralEmbedView.cs:247`. Rows: `shell-webview2-hosts`.

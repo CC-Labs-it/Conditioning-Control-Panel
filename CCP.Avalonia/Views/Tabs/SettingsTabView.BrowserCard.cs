@@ -6,8 +6,8 @@
 // Mute rides the WebHost script channel (Views/Controls/WebHostMedia.cs) and is re-applied after every navigation,
 // since a new document has no flag. The load prompt: WPF builds the WebView2 on that click; here the engine exists
 // from the start but loads nothing until asked, so the prompt stands in the slot until the first page.
-// ponytail: Pop out (WPF re-parents the WebView2 into a 1024x768 window; NativeWebView cannot be re-parented live)
-// and "Enhance if possible" (no BrowserEnhanceBridge on this head) are greyed with the "not on this build" line.
+// Pop out uses NativeWebView.BeginReparenting to preserve the live page.
+// ponytail: "Enhance if possible" remains disabled (no BrowserEnhanceBridge on this head).
 
 using System;
 using Avalonia.Controls;
@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Platform.WebcamTracker.Instance.StateChanged -= OnBrowserCardTrackerChanged;
                 CoreMods.ModChanged -= OnBrowserCardModChanged;
             };
-            foreach (Control c in new Control[] { ToggleEnhanceIfPossible, BtnPopOutBrowser })
+            foreach (Control c in new Control[] { ToggleEnhanceIfPossible })
             {
                 c.IsEnabled = false;
                 c.Bind(ToolTip.TipProperty, LocBinding("exclusives_not_on_this_build"));
@@ -173,6 +173,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal void SyncBrowserPrompt()
         {
+            if (Shell?.BrowserPopout != null)
+            {
+                BrowserLoadingText.Bind(TextBlock.TextProperty, LocBinding("label_browser_popped_out_nclick_to_focus_window"));
+                BrowserLoadingText.IsVisible = true;
+                return;
+            }
+            BrowserLoadingText.Bind(TextBlock.TextProperty, LocBinding("label_click_to_load_browser"));
             bool prompt = BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             BrowserLoadingText.IsVisible = prompt;
             // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
@@ -181,9 +188,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>WPF BrowserLoadingText_Click: load the selected site. The shell's reload is exactly that, behind the
         /// offline gate (WPF #867).</summary>
-        internal void OnBrowserPromptClick() => Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+        internal void OnBrowserPromptClick()
+        {
+            if (Shell?.BrowserPopout is { } popout) popout.Activate();
+            else Shell?.BtnReloadBrowser_Click(this, new RoutedEventArgs());
+        }
 
-        private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) { }          // greyed: see the header
+        private void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.PopOutBrowser();
         private void ToggleEnhanceIfPossible_Changed(object? sender, RoutedEventArgs e) { } // greyed: see the header
     }
 }

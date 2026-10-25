@@ -86,6 +86,7 @@ public sealed class PanicSurfacesTests
         "leash-task",
         "tour",
         "games",
+        "browser-popout",
         "first-show",
         "voice-capture",
         "ai-followups",

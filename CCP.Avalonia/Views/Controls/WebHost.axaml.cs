@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// A <see cref="NativeWebView"/> that degrades to a legible panel instead of an empty
     /// rectangle when the machine has no web engine.
     ///
-    /// This is NOT a ported view. The WPF head talks to Microsoft.Web.WebView2 directly
+    /// The WPF head talks to Microsoft.Web.WebView2 directly
     /// (ChaosWebViewHost, MainWindow.Browser, SpiralEmbedView) and that package is Windows-only;
     /// Avalonia.Controls.WebView is the cross-platform replacement - WebView2 on Windows,
     /// WebKitGTK or WPE WebKit on Linux - and this control is the single place the head touches
@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
     /// possible here, unlike what the first pass of these views assumed) and
     /// <see cref="InvokeScriptAsync"/>, plus the live URL (<see cref="CurrentUrl"/>,
     /// <see cref="NavigationCompleted"/>). NativeWebView additionally offers WebMessageReceived,
-    /// NewWindowRequested, GoBack/GoForward, Stop and Refresh; nothing needs
+    /// GoBack/GoForward, Stop and Refresh; nothing needs
     /// them yet, so they are not wrapped. It has NO zoom factor, no document-created script
     /// injection, and no fullscreen-element signal.
     ///
@@ -202,6 +202,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         /// <summary>Return keyboard focus to the native page after a title-bar Escape.</summary>
+        internal IDisposable? BeginReparenting() => _web?.BeginReparenting(false);
+
         public void FocusPage()
         {
             if (_web != null) _web.Focus();
@@ -286,6 +288,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // the predicate and the Source in that order would otherwise race the engine.
                     _web.NavigationStarted += OnNavigationStarted;
                     _web.NavigationCompleted += (_, e) => OnNavigationCompleted(e.Request ?? _web?.Source, e.IsSuccess);
+                    _web.NewWindowRequested += (_, e) =>
+                    {
+                        // WPF BrowserService routes popups in-window; never create an unmanaged surface.
+                        e.Handled = true;
+                        HandleNewWindow(e.Request);
+                    };
                     _web.WebMessageReceived += (_, e) => OnWebMessage(e.Body);
                     _web.WebResourceRequested += (_, e) => StampRequestHeader(e);
                     _webSlot.Children.Add(_web);
@@ -334,6 +342,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
             Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
+        }
+
+        /// <summary>Popup destinations obey the same host, sandbox and licence gates as normal navigation.</summary>
+        internal void HandleNewWindow(Uri? target)
+        {
+            if (!Services.Browser.BrowserPopupRules.Allows(CurrentUrl, target)) return;
+            if (RefusesScrolller(target) || !Services.SandboxNet.Allows(target)) return;
+            if (AllowNavigation is { } gate && !gate(target!)) return;
+            Navigate(target!);
         }
 
         /// <summary>
