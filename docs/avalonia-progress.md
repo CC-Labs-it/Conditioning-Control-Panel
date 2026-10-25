@@ -3445,3 +3445,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/wire-shell-profile-vat: +435
 - DescentService moved to CCP.Core and wired on Avalonia: sign-in, accepted sync, Trainer Card open and logout drive the read; the 60 s poll waits for the drawn jar (lane -b) plus a visible active card and an accepted block.
 - A followed curve epoch repaints the level header; the jar stays hidden and the row stays `stub` until wire-shell-profile-vat-b.
+
+## avalonia-port/flake-leash-hold-panic: +19
+- LeashHoldTests park the shell's real 250 ms hold clock through a new `LeashHoldClockInterval` seam. A stray wall-clock tick after the 5 s ask played a 5th leash-tick. Product interval unchanged.
+- Fail-proved: 1 ms interval, rcheck 40195712417 red. 20x rcheck green before (40195628587) and after (40195831964). rgate 40196883118 GATE-OK.
