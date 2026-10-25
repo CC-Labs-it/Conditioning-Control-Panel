@@ -73,7 +73,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 27. **[SAFETY] developers re-check this before release.** Remote Control: let a controller connect, press panic. Expect the controller to drop and everything to stop. WPF `MainWindow/MainWindow.RemoteControl.cs:1401`. Rows: `shell-remote-control`.
 
 ### Possession
-28. Start a session with Possession on; watch shell buttons nudge, drift, breathe or wobble, then ease home. WPF `Services/Possession/Possession.cs`. Rows: `shell-possession`.
+28. Developer/headless stage check (`PossessionHostTests`): open the shell, inspect passive ghost/rubble layers, infer leaf roles and innermost cards, prune excluded/hidden/reserved targets, retain hand tags and stable identities, cap automatic labels at 24, and check scaled bounds plus the cache floors. Live haunting remains unavailable until director/attribution adapters land. WPF `MainWindow/MainWindow.Possession.cs`. Rows: `shell-possession`.
 29. **[SAFETY] developers re-check this before release.** Expect the panic control, the Lockdown tab and the safe word never to be possessed. WPF `Services/Possession/PossessionOffLimitsTree.cs`. Rows: `shell-possession`.
 30. **[SAFETY] developers re-check this before release.** With two or more effects moving, press panic, then tray -> Stop everything. Expect every moved control back in place at once. Rows: `shell-possession`.
 

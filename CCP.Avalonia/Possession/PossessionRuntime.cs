@@ -12,9 +12,8 @@
 // returns every touched control's own transform and origin at once.
 //
 // Still WPF-only (later slices):
-//   possession-head-b: the shell host (MainWindow.Possession.cs walk: Possession.Role opt-in,
-//     InferLeafRole, size/placement filter, display names, the two overlay canvases), the Lockdown
-//     lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
+//   fin4 ports the shell stage and registry in MainShellWindow.Possession.cs. Still needed:
+//     Core director/effect adapters and the Lockdown lifecycle (rungs from the timer, cadence NextDelay/FirstDelay, intensity/photosafe settings,
 //     scenes), EmberAttribution charge + Ghost, PossessionEvents tripwires, PossessionPointer, Warden,
 //     PossessionAudio, PossessionRemember, bark naming of IsBig effects.
 //   possession-head-c: the remaining effects - crack, delete dialog, dissolve, dodge, doki dialog,

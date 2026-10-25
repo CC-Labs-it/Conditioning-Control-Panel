@@ -132,6 +132,16 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         public const int MaxDepth = 16;
 
+        public static readonly AttachedProperty<PossessionRole> RoleProperty =
+            AvaloniaProperty.RegisterAttached<PossessionTree, Control, PossessionRole>("Role");
+        public static PossessionRole GetRole(Control c) => c.GetValue(RoleProperty);
+        public static void SetRole(Control c, PossessionRole v) => c.SetValue(RoleProperty, v);
+
+        public static readonly AttachedProperty<string?> NameProperty =
+            AvaloniaProperty.RegisterAttached<PossessionTree, Control, string?>("Name");
+        public static string? GetName(Control c) => c.GetValue(NameProperty);
+        public static void SetName(Control c, string? v) => c.SetValue(NameProperty, v);
+
         /// <summary>Keeps a control and its subtree out of the haunt (WPF Possession.Exclude).</summary>
         public static readonly AttachedProperty<bool> ExcludeProperty =
             AvaloniaProperty.RegisterAttached<PossessionTree, Control, bool>("Exclude");
