@@ -769,15 +769,25 @@
                             </ComboBox.Template>
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0" Width="8" Height="8" CornerRadius="4" Margin="0,0,8,0"
-                                                Background="{Binding AccentBrush}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="White"
-                                                   VerticalAlignment="Center" FontSize="11"
+                                    <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="Auto,*">
+                                        <Grid.Styles>
+                                            <Style Selector="TextBlock">
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </Style>
+                                            <Style Selector="TextBlock.action">
+                                                <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+                                            </Style>
+                                        </Grid.Styles>
+                                        <Border Grid.Row="0" Grid.ColumnSpan="2" Height="1" Background="#3A3A5C"
+                                                Margin="0,-4,0,5" IsVisible="{Binding IsAction}"/>
+                                        <Border Grid.Row="1" Width="8" Height="8" CornerRadius="4" Margin="0,0,8,0"
+                                                Background="{Binding AccentBrush}" VerticalAlignment="Center"
+                                                IsVisible="{Binding !IsAction}"/>
+                                        <fx:IconGlyph Grid.Row="1" Kind="Settings" Size="10" Margin="0,0,8,0"
+                                                      Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center"
+                                                      IsVisible="{Binding IsAction}"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Name}"
+                                                   Classes.action="{Binding IsAction}" VerticalAlignment="Center" FontSize="11"
                                                    TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}"/>
                                     </Grid>
                                 </DataTemplate>
@@ -793,7 +803,8 @@
                              spare and nothing needs a pinned LineHeight to avoid clipping.
                              AutomationProperties.Name keeps the localized string on the control
                              for screen readers - the visible letters are split across runs. -->
-                        <Button x:Name="BtnManageMods" Click="BtnManageMods_Click"
+                        <!-- WPF 7.1.5 moved this entry to the combo footer. Keep the named launcher for existing callers. -->
+                        <Button x:Name="BtnManageMods" Click="BtnManageMods_Click" IsVisible="False"
                                 ToolTip.Tip="{loc:Str tooltip_manage_mods}"
                                 Margin="4,0,0,0" Height="28" VerticalAlignment="Center"
                                 Background="Transparent" BorderThickness="0" Cursor="Hand">

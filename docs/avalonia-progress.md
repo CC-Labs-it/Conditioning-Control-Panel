@@ -3285,3 +3285,7 @@ Test-only reliability fix for the tube chat, takeover cue, She Listening pill an
 ## avalonia-port/wire-shell-settings: +610
 - Help tours, Save→preset offer (localized Yes/No/Cancel via MessageDialog.AskYesNoCancelAsync), pack migration through Core PackFolderMover/AssetFolderSafety.
 - Review fixes: no sleeps in ShellSettingsWiringTests (fail-proved), redundant preset refreshes removed, parity row limits stated inline.
+
+## avalonia-port/wire-shell-main-window: +217
+
+Header mod selector regains the WPF "Open Mod Manager" footer row, and Home feature-card art follows the active mod via CoreMods.ModChanged. The Mystery/Vault filename fallback (ModTileArt) moves to Core and both heads use it. Ledger row shell-main-window stays stub; follow-up wire-shell-main-window-b.
