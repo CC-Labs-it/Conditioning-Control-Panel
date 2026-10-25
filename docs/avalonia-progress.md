@@ -3235,3 +3235,7 @@ Post-sign-in Discord achievement-sharing offer (WPF Login.cs:214 / Patreon.cs:83
 ## avalonia-port/wire-shell-marquee: +327
 - Codex lane, local review ACCEPT (58). BannerPoolService moved to Core; Avalonia shell pool beat matches WPF timing; row stays stub (rest in wire-shell-marquee-b).
 - Review fix: stale NotificationsSettingsSection comment. rgate 39749619553: only P108 GoonClock + RaceTrack flake red; WPF windows job green.
+
+## avalonia-port/wire-shell-profile-cosmetics: +294
+
+Trainer Card cosmetics paint (banner, accent + glow, title, pins) on own/viewed/save/clear paths, per-step guarded like WPF; avatar-slot rule shared from Core. Tests: ProfileCosmeticsPaintTests (viewed path via /user/lookup, glow asserted; fail-proven), ProfileAvatarSlotClaimTests. Ledger shell-profile-cosmetics stays stub (lane -b). rgate GATE-OK.
