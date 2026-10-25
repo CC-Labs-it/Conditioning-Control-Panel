@@ -2729,6 +2729,10 @@ Remote tab wired as WPF: directory opt-in chain (5-tag cap, n/80, Remember), tit
 - Retained the lane's shared BeatLoop thinking dots, Core CompanionThinkingPulse, Enter-to-send/frame/minimise coverage, and room hide/detach parking while merging the incoming conversation page's room wiring and resume/park lifecycle.
 - Ambient animation ratchets retain both the ChatThresholdView animation migration and the incoming DailyQuestCard Effect migration; no tests or assertions were removed to merge them.
 - Consolidated the parity ledger to one row per id, retaining evidence and the most advanced status up to wired. The incoming prompt-editor progress entry remains above. Existing preview/DataContext composition and community-prompt-browser gaps remain in views-companion-room.
+## avalonia-port/cloud-merge-wire-theme-inputs
+
+- Combined wire-theme-inputs (`b144a765b`) with wire-dialogs-companion-prompt-editor (`6948b6de0`): preserved the TextBox chrome/focus/selection changes and tests, installed prompt badge/shared Core loader, and the complete companion-tip panic registry/tests. No textual merge conflicts.
+- Retained every existing progress entry. The input lane had no separate progress entry; its implementation/evidence remains in the theme-inputs parity row. Consolidated parity IDs using the most advanced status (capped at wired), retained distinct earlier evidence as historical context, and preserved both lanes' evidence.
 
 ## avalonia-port/wire-dialogs-display-name: +989
 - DisplayNameDialog row: stub -> wired. The welcome mode now has its caller: the shell arms WPF CheckPendingRegistrationAsync on Opened, followed by HandlePostAuthAsync and the name loop over the Core LegacyAccountApi (V1).
@@ -3040,3 +3044,11 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-feat-friends-blocked-presence: +296
 - Per-account block fallback and the once-only presence ask, shared with WPF through Core `FriendsBlockList`. The local list is retired only by the landing tick, as on WPF.
 - Fix round: the Core test compiles again, and the WPF `FriendsDrawerKnockTests` regression is fixed (reads stay pure).
+## avalonia-port/cloud-merge-wire-theme-inputs: Deeper dialog merge
+
+- Combined the TextBox input chrome/focus/40% selection theme with the shared Deeper themes and button press/release timing; both namespaces and both App.axaml additions remain.
+- Retained both progress histories and all tests/assertions. Consolidated the parity ledger to one row per ID, retaining the most advanced status capped at wired and preserving distinct older evidence as historical context. No new verification claim.
+
+## avalonia-port/wire-theme-inputs: +291
+- Implicit WPF TextBox chrome + FocusGlowTextBox alias: r8, 8x5 padding, 60% hover border, 45% pink focus glow (200ms), 40% pink selection, 50% disabled.
+- Borderless .transparent boxes keep no halo; 4 deterministic headless tests; row stays stub (ComboBox/CheckBox/menus -> wire-theme-inputs-b).
