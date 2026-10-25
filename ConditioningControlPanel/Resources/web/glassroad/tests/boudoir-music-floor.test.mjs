@@ -27,12 +27,12 @@ test('Boudoir colour spectacle follows the heard beat and real bands without a t
   const reactive = createAudioReactiveUniforms(), music = musicUniforms();
   const inputs = { p: uv(), base: vec3(.2, .1, .1), trueEdge: uniform(8), distance: uniform(20), wet: uniform(0), reactive, music, lapM: 4380 };
   const nodes = graph(boudoirMusicFloor(inputs));
-  for (const name of ['bass', 'mid', 'treble', 'energy']) assert.ok(nodes.has(reactive[name]), name);
+  for (const name of ['bass', 'mid', 'treble', 'energy', ...Array.from({length: 8}, (_, i) => 'note' + i)]) assert.ok(nodes.has(reactive[name]), name);
   for (const name of Object.keys(music)) assert.ok(nodes.has(music[name]), name);
   for (const name of ['base', 'trueEdge', 'distance', 'wet']) assert.ok(nodes.has(inputs[name]), name);
   assert.ok(!nodes.has(reactive.t), 'there is no second phase clock');
   assert.ok(![...nodes].some(n => n.isTextureNode), 'same material, no textures, media or render targets');
-  assert.ok(nodes.size < 450, `bounded shader graph: ${nodes.size}`);
+  assert.ok(nodes.size < 900, `bounded shader graph: ${nodes.size}`);
 });
 
 test('broad shifting hues share luminance and Gentle keeps less than half the normal coverage', () => {

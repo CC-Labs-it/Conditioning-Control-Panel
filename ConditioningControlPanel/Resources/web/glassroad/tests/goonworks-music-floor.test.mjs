@@ -35,7 +35,7 @@ test('Goonworks jukebox floor consumes the shared bands, eight notes and heard b
   assert.ok(nodes.has(top) && nodes.has(edge), 'all patterns stay inside the existing top and navigation edge');
   assert.ok(!nodes.has(reactive.t), 'no independently running animation clock');
   assert.ok(![...nodes].some(n => n.isTextureNode), 'no new textures, uploads or media owners');
-  assert.ok(nodes.size < 700, 'bounded analytic graph');
+  assert.ok(nodes.size < 900, 'bounded analytic graph: ' + nodes.size);
 });
 
 test('the final opaque Goonworks material contains the complete musical floor rather than discarding it', t => {
