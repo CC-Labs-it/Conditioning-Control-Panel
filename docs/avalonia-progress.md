@@ -3265,3 +3265,7 @@ Roster entrance stagger (WPF StaggerSubjectCards/MotionFx.StaggerIn) on the shar
 ## avalonia-port/wire-shell-keyword-triggers: +736
 - Keyboard/audio keyword triggers: matching extracted to Core; armed at boot; panic cuts the clip only; tutorial demo stays a gated no-op stub; foreground looked up only when the scope needs it.
 - Gate 39707879211: only P115 flakes (RaceTrack decode, GoonClock); row stays stub (follow-up -b).
+
+## avalonia-port/sync7-mandatory-video-a: +361
+- Mute + close buttons on every full-screen mandatory video (WPF 5a3e335ff/74dcf0445/51287db40/e3bba7adf); rule moved to Core.
+- Headless real-clip test, fail-proven; floating/browser half left to sync7-mandatory-video-g.
