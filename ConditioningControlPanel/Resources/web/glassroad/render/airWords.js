@@ -6,8 +6,20 @@ import { wordTheme, wordFace } from './wordTheme.js';
 import { letterContours, extrudeLetters, letterCatchPoints } from './wordSolid.js';
 
 export const AIR_WORD_CAPACITY = 12;
-const BITS = 40, CW = 512, CH = 128, CACHE_LIMIT = 24;
+const BITS = 40, CW = 1024, CH = 256, CACHE_LIMIT = 24;
 const clamp01 = x => Math.max(0, Math.min(1, Number(x) || 0));
+
+/** Motion settles before contact. Landing compresses depth while the top stays planted. */
+export function airWordPose(p, timeS, gentle = false, out = {}) {
+  const untilCatch = p.catchS - timeS, landed = timeS - p.landedS;
+  const approaching = Number.isFinite(untilCatch) && untilCatch > 0 ? clamp01((untilCatch - .12) / .25) : 0;
+  const recoil = Number.isFinite(landed) && landed > 0 ? Math.sin(Math.min(1, landed / .36) * Math.PI) ** 2 : 0;
+  const gain = gentle ? .25 : 1;
+  out.y = approaching ? Math.sin(timeS * 2.2 + (p.index || 0)) * .09 * approaching * gain : 0;
+  out.tilt = approaching ? Math.sin(timeS * 1.7 + (p.index || 0)) * .035 * approaching * gain : 0;
+  out.depth = 1 - recoil * .26 * gain;
+  return out;
+}
 
 export function airWordBit(i, timeS, widthM, lengthM, alpha, gentle, out = {}) {
   const phase = ((timeS * (gentle ? .12 : .4) + i * .61803398875) % 1 + 1) % 1;
@@ -25,7 +37,7 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
   const theme = wordTheme(track), face = wordFace(theme, 0), object = new Group();
   object.name = 'air-word-platforms';
   const bitGeo = new OctahedronGeometry(1), empty = new BufferGeometry();
-  const materials = [], cache = new Map(), rows = [], dummy = new Object3D(), pose = {};
+  const materials = [], cache = new Map(), rows = [], dummy = new Object3D(), pose = {}, wordPose = {};
   const matrix = new Matrix4(), bx = new Vector3(), ny = new Vector3(), tz = new Vector3();
   const canvas = doc?.createElement?.('canvas');
   if (canvas) { canvas.width = CW; canvas.height = CH; }
@@ -38,9 +50,9 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
     }
     if (!context?.getImageData) return { geometry: empty, catchPoints: [] };
     context.clearRect(0, 0, CW, CH); context.save();
-    context.font = FACES[face.face].css(92, face.weight);
+    context.font = FACES[face.face].css(184, face.weight);
     context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillStyle = '#ffffff';
-    context.strokeStyle = '#ffffff'; context.lineJoin = 'round'; context.lineWidth = 1.8;
+    context.strokeStyle = '#ffffff'; context.lineJoin = 'round'; context.lineWidth = 3.6;
     const width = Math.max(1, context.measureText(text).width);
     context.translate(CW / 2, CH / 2); context.scale(Math.min(1, (CW - 18) / width), 1);
     // A little ink weight protects fine italic stems without outlining the finished word.
@@ -83,7 +95,7 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
     clock = Number.isFinite(run.timeS) ? run.timeS : clock + Math.max(0, Math.min(.1, dt || 0));
     visible = solidCount = particles = 0;
     for (const row of rows) row.root.visible = false;
-    for (const p of run.platforms || []) {
+    for (const p of (run.platforms || []).slice(-2)) {
       const alpha = clamp01(p.alpha), index = Number(String(p.id).split('-').at(-1));
       if (alpha <= .001 || !Number.isInteger(index) || index < 0 || index >= rows.length) continue;
       const row = rows[index], w = Math.max(.01, p.widthM), l = Math.max(.01, p.lengthM);
@@ -96,7 +108,10 @@ export function createAirWords(scene, track, { feel, photosafe, doc = globalThis
       row.root.visible = true; row.root.position.fromArray(p.p);
       matrix.makeBasis(bx.fromArray(p.b), ny.fromArray(p.n), tz.fromArray(p.t).negate());
       row.root.quaternion.setFromRotationMatrix(matrix);
-      row.letters.scale.set(w, 1, l);
+      airWordPose(p, clock, soft, wordPose);
+      row.letters.position.y = wordPose.y;
+      row.letters.rotation.z = wordPose.tilt;
+      row.letters.scale.set(w, wordPose.depth, l);
       row.solid = !!p.solid; visible++; if (p.solid) solidCount++;
       // The simulation's arrival envelope supplies the only reveal, with no positional pop.
       row.top.opacity = alpha; row.side.opacity = alpha;

@@ -17,6 +17,7 @@ import { createActions } from '../core/actions.js';
 import { clamp } from '../core/math.js';
 import { gap } from './gaps.js';
 import { updateStoneMotion } from '../track/stoneMotion.js';
+import { cleanPace, resetCleanPace } from './cleanPace.js';
 
 const DEG = Math.PI / 180;
 const has = Object.prototype.hasOwnProperty;
@@ -66,6 +67,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
     // sinks: record lap / finish / drop on the racer, then forward (player as is, bots as racer-event)
     r.events = {
       emit(name, p = {}) {
+        if (name === 'drop' || name === 'wall' || name === 'stall') resetCleanPace(r.st, true);
         if (name === 'lap') {
           r.lapTimes.push(p.lapTimeS);
           r.bestLapS = r.bestLapS > 0 ? Math.min(r.bestLapS, p.lapTimeS) : p.lapTimeS;
@@ -91,6 +93,7 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
     racers.clockS = 0;
     for (const r of list) {
       spawn(r.st, track, feel, r.meta.slot);
+      resetCleanPace(r.st);
       copyState(r.prev, r.st); copyState(r.view, r.st);
       Object.assign(r.input, newActions()); Object.assign(r.act, newActions());
       identityMods(r.mods);
@@ -142,7 +145,9 @@ export function createRacers(track, feel, queue, { count = 8, seed = 1, net = nu
       o['kart.gripTcS'] = gap(feel, 'kart.gripTcS') * m.gripMul;
       o['drift.slideTcS'] = gap(feel, 'drift.slideTcS') * m.slideMul;
       if (r.meta.isBot) o['steer.userMul'] = 1;        // steering sensitivity is the player's option only
-      o['speed.topMps'] = feel.get('speed.topMps') * m.capMul * pace;
+      const flow = cleanPace(r.st, act, live ? dt : 0, feel,
+        { enabled: live && !net && !!ctx.cleanPace, drive: ctx.songDrive || 0 });
+      o['speed.topMps'] = feel.get('speed.topMps') * m.capMul * pace * flow;
       if (r.assist) o['gentle.on'] = true; else delete o['gentle.on'];
 
       if (live) {

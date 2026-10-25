@@ -61,7 +61,7 @@ test('pooled physical water spray follows curved contacts and is silent in the a
   t.after(() => water.dispose());
   const st = createState(); st[S.s] = 10; st[S.lateral] = 3; st[S.velZ] = -12; st[S.grounded] = 1; st[S.driftDir] = 1;
   water.kart(0, st, 0.25); assert.equal(bursts.length, 0, 'water never reuses the illustrated teardrop atlas');
-  assert.equal(water.spray.stats().emitted,24);
+  assert.equal(water.spray.stats().emitted,32);
   assert.ok(water.spray.data[1] > 5.2, 'spray is on the bank, not the road centre plane');
   const drift = water.spray.stats().emitted; st[S.driftDir] = 0; water.kart(0, st, 0.2);
   const straight = water.spray.stats().emitted-drift;

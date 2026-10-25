@@ -1,6 +1,6 @@
 /* Accepted Keep assets, placed before shader warmup. All colour is supplied by the host. */
 import { Group, Matrix4, Vector3, Color } from 'three/webgpu';
-import { vec3, texture, uv, vec2, mix, step, attribute, float, smoothstep, normalWorld, positionWorld, cameraPosition, normalize, dot, sin, fwidth } from 'three/tsl';
+import { vec3, texture, uv, vec2, mix, step, attribute, float, smoothstep, normalWorld, positionWorld, cameraPosition, normalize, dot, sin, cos, fwidth } from 'three/tsl';
 import { getKeepLayout } from '../track/keep-layout.js';
 import { createSoftMaterial } from './materials/colossus.js';
 import { buildKeepFortress, keepStoneMaterial } from './keepFortress.js';
@@ -24,7 +24,7 @@ export function applyKeepRoad(road, art) {
   stone.dispose();
 }
 
-export function buildKeepDressing(track, art, pal, samples) {
+export function buildKeepDressing(track, art, pal, samples, { reactive = null, music = null } = {}) {
   const group = new Group(); group.name = 'keep-fortress';
   const materials = new Map(), placed = [], layout = getKeepLayout(track);
   const fortress = buildKeepFortress(track, layout, art), artGroup = new Group();
@@ -44,6 +44,21 @@ export function buildKeepDressing(track, art, pal, samples) {
     }
     paint.dispose(); materials.set(src, material); return material;
   };
+  const archMaterials = new Map();
+  function archFinish(src) {
+    if (archMaterials.has(src)) return archMaterials.get(src);
+    const seam = /seam|glow/.test(src.name), iron = /iron|metal|blackglass/.test(src.name);
+    // The accepted arch GLBs have no UVs; grain and mortar use their geometry/world positions.
+    const material = keepStoneMaterial(seam ? '#ca8652' : iron ? '#673955' : '#a486ad', art, !seam && !iron, false, iron ? 'iron' : 'stone');
+    material.name = 'keep-arch-' + src.name;
+    if (music && reactive) {
+      const parade = cos(positionWorld.y.mul(.24).sub(music.tileBeat.div(4).mul(Math.PI * 2))).mul(.5).add(.5);
+      const energy = reactive.energy.mul(3).clamp(0, 1).mul(mix(float(1), float(.25), reactive.gentle));
+      // Warm light catches the dressed stone and forged seams; motion uses the same song as the floor.
+      material.colorNode = material.colorNode.add(vec3(.8, .29, .08).mul(parade).mul(energy).mul(seam ? .65 : .14));
+    }
+    archMaterials.set(src, material); return material;
+  }
   function place(id, s, x, { scale = 1, wide = 1, turn = 0, y = 0 } = {}) {
     const source = art?.model(id + '-lod' + lod)?.scene;
     if (!source) return;
@@ -53,7 +68,8 @@ export function buildKeepDressing(track, art, pal, samples) {
     holder.position.fromArray(f.p).addScaledVector(X, x).addScaledVector(Y, y);
     if (id.includes('colossus')) holder.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(-f.t[0], -f.t[2]));
     body.scale.set(scale * wide, scale, scale); body.rotation.y = turn;
-    body.traverse((o) => { if (o.isMesh) { o.material = Array.isArray(o.material) ? o.material.map(tint) : tint(o.material); o.castShadow = true; } });
+    const finish = id === 'keep-portcullis-arch' ? archFinish : tint;
+    body.traverse((o) => { if (o.isMesh) { o.material = Array.isArray(o.material) ? o.material.map(finish) : finish(o.material); o.castShadow = true; } });
     holder.name = id; holder.add(body); artGroup.add(holder);
     placed.push({ id, s, x, p: holder.position.toArray() });
     return holder;
@@ -92,5 +108,5 @@ export function buildKeepDressing(track, art, pal, samples) {
     }
   }
   return { group, placed, fortress, casters: [artGroup],
-    dispose() { group.removeFromParent(); fortress.dispose(); materials.forEach((m) => m.dispose()); } };
+    dispose() { group.removeFromParent(); fortress.dispose(); materials.forEach((m) => m.dispose()); archMaterials.forEach((m) => m.dispose()); } };
 }
