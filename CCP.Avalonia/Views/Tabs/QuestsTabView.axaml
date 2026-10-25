@@ -36,66 +36,7 @@
              x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.QuestsTabView">
 
   <UserControl.Resources>
-    <!-- ponytail: local copy of Resources/Theme/MainWindow.xaml:TabButton and :TabButtonActive,
-         hoist when a second view needs it. ContentPresenter carries Content/ContentTemplate
-         explicitly (a bare presenter draws nothing on Avalonia) and the hover trigger is a
-         :pointerover selector; both copied from Theme/Styles.xaml:OutlineButton. -->
-    <ControlTheme x:Key="TabButton" TargetType="Button">
-      <Setter Property="Background" Value="Transparent"/>
-      <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Padding" Value="6,6"/>
-      <Setter Property="MinWidth" Value="65"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <ControlTemplate TargetType="Button">
-          <Border x:Name="border" Background="Transparent"
-                  BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="6" Padding="{TemplateBinding Padding}">
-            <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
-        </ControlTemplate>
-      </Setter>
-      <Style Selector="^:pointerover /template/ Border#border">
-        <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
-      </Style>
-    </ControlTheme>
-
-    <ControlTheme x:Key="TabButtonActive" TargetType="Button">
-      <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
-      <Setter Property="Foreground" Value="White"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="FontWeight" Value="Bold"/>
-      <Setter Property="FontSize" Value="12"/>
-      <Setter Property="Padding" Value="6,6"/>
-      <Setter Property="MinWidth" Value="65"/>
-      <Setter Property="Height" Value="32"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Template">
-        <ControlTemplate TargetType="Button">
-          <Border x:Name="bg" Background="{TemplateBinding Background}"
-                  BorderBrush="{TemplateBinding BorderBrush}"
-                  BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="6" Padding="{TemplateBinding Padding}">
-            <ContentPresenter Content="{TemplateBinding Content}"
-                              ContentTemplate="{TemplateBinding ContentTemplate}"
-                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
-        </ControlTemplate>
-      </Setter>
-      <Style Selector="^:pointerover /template/ Border#bg">
-        <Setter Property="Background" Value="{DynamicResource PinkButtonHoveredBrush}"/>
-      </Style>
-    </ControlTheme>
-
+    <!-- TabButton/TabButtonActive are app-wide in Theme/Styles.xaml. -->
     <!-- Local copy of Resources/Theme/MainWindow.xaml:AnimatedGradientPanel and :AnimatedGradientPanelWide
          (only this view uses them). The particle drift WPF runs as an IsVisible-triggered storyboard is
          driven by QuestsTabView.Fx.cs on the tab's ambient clock. -->
