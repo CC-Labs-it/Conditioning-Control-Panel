@@ -56,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         private readonly LibVLC _vlc;
         private readonly Func<string, string> _pactl = Pactl;
+        private readonly TimeProvider _duckClock = TimeProvider.System;
 
         /// <summary>The seeded instance, so App can restore ducked apps on exit.</summary>
         internal static LibVlcAudio? Instance { get; set; }
@@ -82,7 +83,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>Ducking only, with pactl stubbed: for the state-machine test.</summary>
-        internal LibVlcAudio(Func<string, string> pactl) { _vlc = null!; _pactl = pactl; }
+        internal LibVlcAudio(Func<string, string> pactl, TimeProvider? clock = null)
+        { _vlc = null!; _pactl = pactl; _duckClock = clock ?? TimeProvider.System; }
 
         public void Seed()
         {
@@ -279,6 +281,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private Task _duckWork = Task.CompletedTask; // chained so a duck and its unduck run in order
         private bool _pactlWarned;
         private Timer? _duckWatchdog; // WPF's safety net for a leaked duck ref: force-unduck after 5 min
+        private ITimer? _duckRescan;
+        private double _duckKeep;
+        private long _duckEpoch; // a disposed timer's queued callback cannot enter the next duck window
 
         public void Duck(int strength)
         {
@@ -290,9 +295,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _isDucked = true;
                 _duckWatchdog = new Timer(_ => ForceUnduck(), null, 300_000, Timeout.Infinite);
                 var keep = 1 - Math.Clamp(strength, 0, 100) / 100.0;
+                _duckKeep = keep;
+                var epoch = ++_duckEpoch;
+                var interval = TimeSpan.FromMilliseconds(CoreAudio.DuckRescanIntervalMs);
+                _duckRescan = _duckClock.CreateTimer(_ => RescanForNewSessions(epoch), null, interval, interval);
                 // As WPF: our own layers are in-process, so the sweep skips them - duck them directly.
                 LayeredAudio.Instance?.ApplyDuck((float)(1 - keep));
-                Enqueue(() => DuckSweep(keep));
+                Enqueue(() => DuckSweep(keep, epoch));
             }
         }
 
@@ -305,6 +314,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (!_isDucked || _duckCount > 0) return;
                 _isDucked = false;
                 _duckWatchdog?.Dispose();
+                _duckWatchdog = null;
+                _duckRescan?.Dispose();
+                _duckRescan = null;
                 LayeredAudio.Instance?.ReleaseDuck();
                 Enqueue(Restore);
             }
@@ -343,7 +355,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }, TaskScheduler.Default);
 
-        private void DuckSweep(double keep)
+        /// <summary>WPF RescanForNewSessions: a slow endpoint must not grow a backlog past unduck.</summary>
+        private void RescanForNewSessions(long epoch)
+        {
+            lock (_duckLock)
+            {
+                if (!_isDucked || epoch != _duckEpoch || !_duckWork.IsCompleted) return;
+                var keep = _duckKeep;
+                Enqueue(() => DuckSweep(keep, epoch, rescan: true));
+            }
+        }
+
+        private void DuckSweep(double keep, long epoch, bool rescan = false)
         {
             using var doc = JsonDocument.Parse(_pactl("-f json list sink-inputs"));
             foreach (var si in doc.RootElement.EnumerateArray())
@@ -353,9 +376,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     continue;
                 var index = si.GetProperty("index").GetInt32();
                 var raw = si.GetProperty("volume").EnumerateObject().Select(c => c.Value.GetProperty("value").GetInt32()).ToArray();
+                // PulseAudio volume units: 65536 is unity. WPF skips <=0.001 on rescans so an
+                // already-silent/recycled session is not captured as its original volume.
+                if (rescan && raw.All(v => CoreAudio.IsSilentForDuckRescan(v / 65536f))) continue;
                 lock (_duckLock)
                 {
-                    if (!_isDucked) return;
+                    if (!_isDucked || epoch != _duckEpoch) return;
                     if (!_originalVolumes.TryAdd(index, raw.Select(v => v.ToString()).ToArray())) continue;
                 }
                 try { _pactl($"set-sink-input-volume {index} {string.Join(' ', raw.Select(v => (int)(v * keep)))}"); }
