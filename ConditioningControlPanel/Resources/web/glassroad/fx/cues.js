@@ -77,7 +77,7 @@ export function bumpFeel(dv, minDv, L = BUMP_LOOK) {
   const level = Math.min(1, Math.max(0, (d - min) / Math.max(L.fullDvMps - min, 1e-3)));
   const from = min * L.shakeFromMul;
   const k = Math.min(1, Math.max(0, (d - from) / Math.max(L.fullDvMps - from, 1e-3)));
-  const sideM = d < from ? 0 : L.sideAmpM[0] + (L.sideAmpM[1] - L.sideAmpM[0]) * k;
+  const sideM = L.sideAmpM[1] * k;
   return { level, sideM, rumbleTier: level >= 0.35 ? 2 : 1 };
 }
 

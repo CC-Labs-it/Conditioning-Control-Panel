@@ -146,7 +146,7 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
     if (c) analysis = null;
     else if (analyzed !== buffer) { analysis = analyzeAudioBuffer(buffer); analyzed = buffer; }
     let pos = null;
-    if (song && typeof align === 'function') { try { pos = align(song); } catch (e) { pos = null; } }
+    if (typeof align === 'function') { try { pos = align(song); } catch (e) { pos = null; } }
     if (Number.isFinite(pos)) {
       const a = alignStart(t, latency(), pos, durS);
       s.start(a.when, a.offset);
@@ -170,12 +170,13 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
   const api = {
     /**
      * Load and loop a chart's track. false when anything is missing (no chart ships in B1).
-     * opts.align(song) -> the song position to hear now (see goDownbeat), asked once the audio is decoded.
+     * opts.align(song) -> the song position to hear now, asked once the audio is decoded.
+     * opts.prepareOnly decodes into the cache without creating or starting a voice.
      */
-    async playChart(chartUrl, { align = null } = {}) {
+    async playChart(chartUrl, { align = null, prepareOnly = false } = {}) {
       const my = ++token;
       try {
-        if (cached && cached.url === String(chartUrl)) return start(cached.buffer, cached.chart, cached.chart.bpm, align);
+        if (cached && cached.url === String(chartUrl)) return prepareOnly || start(cached.buffer, cached.chart, cached.chart.bpm, align);
         if (typeof fetchFn !== 'function') return false;
         const r = await fetchFn(chartUrl);
         if (!r || !r.ok) return false;
@@ -188,22 +189,22 @@ export function createMusic(ctx, out, feel, { fetchFn = globalThis.fetch } = {})
         const buf = await decode(bytes);
         if (my !== token) return false;           // a later play or stop won
         cached = { url: String(chartUrl), buffer: buf, chart: c, song: normalizeChart(c) };
-        return start(buf, c, c.bpm, align);
+        return prepareOnly || start(buf, c, c.bpm, align);
       } catch (e) { console.warn('[music] chart', e); return false; }
     },
-    /** Play a File the player picked. The beat runs at opts.bpm (default the game's clock.bpm). */
-    async playFile(file, { bpm } = {}) {
+    /** Play or silently prepare a picked File; opts.align also schedules an uncharted file at GO. */
+    async playFile(file, { bpm, align = null, prepareOnly = false } = {}) {
       const my = ++token;
       try {
         if (!file || typeof file.arrayBuffer !== 'function') return false;
         const b = bpm > 0 ? bpm : feelBpm();
-        if (cachedFile?.file === file) return start(cachedFile.buffer, null, b);
+        if (cachedFile?.file === file) return prepareOnly || start(cachedFile.buffer, null, b, align);
         const bytes = await file.arrayBuffer();
         if (my !== token) return false;
         const buf = await decode(bytes);
         if (my !== token) return false;
         cachedFile = { file, buffer: buf };
-        return start(buf, null, b);
+        return prepareOnly || start(buf, null, b, align);
       } catch (e) { console.warn('[music] file', e); return false; }
     },
     /** Abandon an old course's asynchronous selection without stopping its current recording. */

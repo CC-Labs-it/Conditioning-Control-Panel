@@ -5,8 +5,23 @@ import { readFileSync } from 'node:fs';
 import { createFeel } from '../core/feel.js';
 import { normalizeChart } from '../audio/chart.js';
 import { createShake } from '../fx/shake.js';
+import { setLiveMusic } from '../audio/songShape.js';
 
 const feelJson = JSON.parse(readFileSync(new URL('../feel.json', import.meta.url), 'utf8'));
+
+test('live race music never adds camera bumps by default, while physical kicks still work', () => {
+  const r = rig();
+  setLiveMusic(r.music);
+  try {
+    const shake = createShake(r.feel);
+    for (let t = 8; t < 40; t += 1 / 60) {
+      r.music.songS = t;
+      assert.deepEqual(shake.update(1 / 60), [0, 0, 0]);
+    }
+    shake.kick('hit');
+    assert.ok(shake.update(1 / 60)[1] > 0, 'real impact remains');
+  } finally { setLiveMusic(null); }
+});
 
 /** 120 bpm: 4 intro bars then 28 drop bars; the music voice is a plain object the test moves. */
 function rig({ reduced = false } = {}) {

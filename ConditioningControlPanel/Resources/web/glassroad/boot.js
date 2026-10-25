@@ -58,7 +58,6 @@ import { createFx } from './fx/reactions.js';
 import { createEffects } from './fx/effects.js';
 import { createAudio } from './audio/bus.js';
 import { createSongCache } from './audio/songCache.js';
-import { goDownbeat } from './audio/music.js';
 import { createHud } from './hud/hud.js';
 import { createWordRun } from './sim/words.js';
 import { createWordCount } from './hud/words.js';
@@ -275,8 +274,8 @@ async function boot(course, options, lifetime, isCurrent) {
     shared.counts.audio++; return createAudio(feel, shared.bus, { gentle, musicFetchFn: songCache.fetch });
   })();
   audio.setLaps(laps); audio.setPaused(false); audio.reset();
-  if (!CHARTS.length && !shared.pickedSong) audio.music?.stop();
-  lifetime.defer(() => { audio.music?.cancelPending(); audio.setPaused(false); audio.reset(); });
+  audio.music?.stop();
+  lifetime.defer(() => { audio.music?.stop(); audio.setPaused(false); audio.reset(); });
   lifetime.defer(() => { effects.dispose(); fx.dispose(); });
   const immersion = createImmersion(track);
   const waterContact = createWaterContact(track);
@@ -464,6 +463,8 @@ async function boot(course, options, lifetime, isCurrent) {
     onPlace: () => { racers.interpolate(1); cam.snap(P.view, track, renderer.aspect); }, refuse: () => (online ? 'online' : null) }) : null;
   if (devHook) Object.defineProperty(debug, 'dev', { value: devHook.api, enumerable: false });
   if (BOT) {
+    Object.defineProperty(debug, 'cameraRig', { value: cam.rig, enumerable: false });
+    Object.defineProperty(debug, 'fx', { value: fx, enumerable: false });
     for (const [k, v] of [['track', track], ['feel', feel]]) Object.defineProperty(debug, k, { value: v, enumerable: false });
     Object.defineProperty(debug, 'racers', { get: () => racers, enumerable: false });
     Object.defineProperty(debug, 'ai', { get: () => ai, enumerable: false });
@@ -549,17 +550,17 @@ async function boot(course, options, lifetime, isCurrent) {
   }
   /**
    * Start the race song: the first chart in CHARTS that loads. align(song) -> the song position to hear now, so
-   * go lands on a bar downbeat (S3): the song is offset against go, go never moves.
+   * the recording begins at GO. Late online admission follows the shared race start.
    */
-  // a song the player dropped on the page (solo only): no chart, so the beat shake runs on its analysis
-  // (audio/songShape.js analyzeBuffer) and there are no words. Online the room's chart wins.
+  // A song the player dropped on the page (solo only) has no charted words.
+  // Online the room's chart wins.
   async function playSong(align = null) {
     if (!lifetime.alive) return;
     const my = ++songToken;
     debug.songLoading = true;
     try {
     if (pickedSong && !online && audio.music) {
-      if (await audio.music.playFile(pickedSong)) {
+      if (await audio.music.playFile(pickedSong, { align })) {
         if (my !== songToken) return;
         debug.chart = 'file:' + pickedSong.name;
         if (state === 'race') armWords();
@@ -587,12 +588,20 @@ async function boot(course, options, lifetime, isCurrent) {
     } finally { if (my === songToken) debug.songLoading = false; }
   }
   function stopSong() { songToken++; debug.songLoading = false; if (audio.music) audio.music.stop(); words = null; wordCount.show(false); }
-  // A trusted gesture unlocks the existing bus during loading or in the garage.
-  // Starting a race realigns this same recording to its countdown.
+  // Unlock and decode silently behind the cover. Only the race schedules a music voice.
   async function menuSong() {
-    if (!lifetime.alive || !['boot', 'menu'].includes(state) || debug.songLoading || audio.music?.playing) return;
+    if (!lifetime.alive || !['boot', 'menu'].includes(state) || debug.songLoading) return;
     await audio.start();
-    if (['boot', 'menu'].includes(state) && audio.state === 'running' && !debug.songLoading && !audio.music?.playing) await playSong();
+    if (!lifetime.alive || !['boot', 'menu'].includes(state) || debug.songLoading || !audio.music) return;
+    const my = ++songToken;
+    debug.songLoading = true;
+    try {
+      if (pickedSong) { await audio.music.playFile(pickedSong, { prepareOnly: true }); return; }
+      for (const url of CHARTS) {
+        if (my !== songToken || !lifetime.alive || !['boot', 'menu'].includes(state)) return;
+        if (await audio.music.playChart(url, { prepareOnly: true })) return;
+      }
+    } finally { if (my === songToken) debug.songLoading = false; }
   }
   function unpause() {
     if (!paused) return;
@@ -625,11 +634,12 @@ async function boot(course, options, lifetime, isCurrent) {
     const started = audio.start(); unpause(); resetAll();
     if(garage){world.setLook(0,raceLook(garage.state));debug.playerLook=world.looks()[0];}
     begin();
-    // solo: the song would start with the count; it waits (or starts part way in) so go is a downbeat
-    const align = (song) => goDownbeat(song, goS) - race.goInS;
+    // The recording's beginning is heard at GO, after the entire countdown.
+    const align = () => -race.goInS;
     if (pickedSong || CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
   }
   function toMenu() {
+    stopSong();
     if (online && lobbyUi) lobbyUi.leave();       // quit mid-race online: leave the room (online-left tears down)
     if (online) endOnline();
     unpause(); resetAll();
@@ -670,8 +680,8 @@ async function boot(course, options, lifetime, isCurrent) {
       if (audio.state !== 'running' || debug.songLoading || audio.music?.playing) return;
       if (state === 'boot' || state === 'menu') void menuSong();
       else if (state === 'race') void playSong(song => online
-        ? goDownbeat(song, (online.s.startAt-online.s.countAt)/1000) - (online.s.startAt-online.s.serverNow())/1000
-        : goDownbeat(song, goS) - race.goInS);
+        ? (online.s.serverNow() - online.s.startAt) / 1000
+        : -race.goInS);
     });
   }
   const platform = init.caps.platform === 'desktop' || init.caps.platform === 'phone' ? init.caps.platform : 'web';
@@ -749,9 +759,8 @@ async function boot(course, options, lifetime, isCurrent) {
     hud.setCard(null);
     canvas.focus({ preventScroll: true });
     const started = audio.start(), s = online.s;
-    // the song's 0 s is countAt and go is startAt for every seat: the same chart gives everyone the same offset
-    // (a late joiner lands part way in)
-    const align = (song) => goDownbeat(song, (s.startAt - s.countAt) / 1000) - (s.startAt - s.serverNow()) / 1000;
+    // The song's zero is startAt for every seat; late joiners follow the shared race clock.
+    const align = () => (s.serverNow() - s.startAt) / 1000;
     if (CHARTS.length) Promise.resolve(started).then(() => playSong(align)).catch((e) => console.warn('[glassroad] song', e));
     bridge.runStarted({ track: track.id, laps });
   }
@@ -826,7 +835,7 @@ async function boot(course, options, lifetime, isCurrent) {
     if (!f) return;
     e.preventDefault();
     pickedSong = shared.pickedSong = f;
-    if (state === 'race') Promise.resolve(audio.start()).then(() => playSong()).catch((err) => console.warn('[glassroad] song', err));
+    if (state === 'race') Promise.resolve(audio.start()).then(() => playSong(() => -race.goInS)).catch((err) => console.warn('[glassroad] song', err));
   });
 
   // warm every material and the post chain behind the warming card, a group at a time (the bar moves)
@@ -1011,7 +1020,7 @@ async function boot(course, options, lifetime, isCurrent) {
     racers.interpolate(alpha);                                    // 6. camera
     if (online) online.s.drawRemotes();                           //    remote karts at this frame's server time (100 ms back)
     const mode = state === 'menu' ? 'menu' : state === 'results' ? 'results' : 'race';
-    cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
+    if (!frozen) cam.update(P.view, fs, track, frameDt, renderer.aspect, mode);
     if (HT) hLap('cam');
     if (BOT && debug.peek) peekCamera(cam.camera, track, debug.peek, renderer.aspect);
     const iv = items.view();

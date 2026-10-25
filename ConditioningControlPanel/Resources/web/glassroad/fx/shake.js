@@ -7,7 +7,9 @@
  * local). Kicks add. Under Gentle nothing shakes.
  * Polish 5 (J1): a kick may carry its own amplitude and repeat share (the boost ladder in fx/cues.js:
  * tier 2 shakes smaller, boosts die faster at shake.boostRepeatMul); shakeRun() is the budget of one kick.
- * Polish 6 (BEAT): the beat channel. Once the song reaches its rhythm part the camera dips on the beat
+ * The standalone analysis channel can model beat dips when explicitly supplied a music voice.
+ * Race camera shake uses physical events only; music animates the road and world.
+ * Once an analysis song reaches its rhythm part the channel dips on the beat
  * (audio/songShape.js bakes which beats and how much; the clock is the song, music.songS). Each dip rises over
  * beatShake.inS and falls over beatShake.outS. It ducks under any kick (over beatShake.duckInS, back over
  * duckOutS), so a boost or hit always wins. Gentle and OS reduced motion zero it. update(dt) is unchanged.
@@ -79,7 +81,8 @@ export function createBeatChannel(feel, { music = liveMusic, reduced = reducedMo
 export function createShake(feel, opts = {}) {
   const runs = [];      // { axis, amp, mul, sign, t }
   const out = [0, 0, 0];
-  const beat = createBeatChannel(feel, opts);
+  // Music animates the world. Repeated camera dips read as bumps on smooth road.
+  const beat = createBeatChannel(feel, { music: null, ...opts });
 
   /** ampM and repeatMul default to the kind's shake.* numbers. */
   function kick(kind, ampM = 0, repeatMul = 0) {

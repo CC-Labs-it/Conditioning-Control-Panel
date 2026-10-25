@@ -61,7 +61,8 @@ export function createKick(L = KICK_DEFAULTS) {
     const g = gentle ? L.gentleMul : 1;
     if (kind === 'bump' || kind === 'wall') {
       if (!(mag >= L.bumpMinMps)) return false;
-      const k = clamp(mag / L.bumpFullMps, 0.25, 1) * g;
+      // No minimum-strength jump: a barely audible graze must barely move the camera.
+      const k = clamp((mag - L.bumpMinMps) / (L.bumpFullMps - L.bumpMinMps), 0, 1) * g;
       // A glancing side contact must not look like driving over a raised floor tile.
       // Keep its lateral/FOV response; reserve vertical lift for a substantial impact.
       const liftFrom = L.bumpLiftMinMps ?? KICK_DEFAULTS.bumpLiftMinMps;

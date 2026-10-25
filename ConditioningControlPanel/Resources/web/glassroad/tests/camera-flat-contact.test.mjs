@@ -22,7 +22,7 @@ test('Mainframe flat opening keeps camera height through repeated glancing conta
     maxCameraStep = Math.max(maxCameraStep, Math.abs(rig.eye[1] - lastY)); lastY = rig.eye[1];
     maxSide = Math.max(maxSide, Math.abs(rig.kick.out.x));
   }
-  assert.ok(contacts > 10 && maxSide > 0.05, 'real contact response remains visible');
+  assert.ok(contacts > 10 && maxSide > 0.01 && maxSide < 0.05, 'light contacts stay subtle: ' + maxSide);
   assert.ok(maxCameraStep < 0.001, 'no false floor-step camera lift: ' + maxCameraStep);
 });
 

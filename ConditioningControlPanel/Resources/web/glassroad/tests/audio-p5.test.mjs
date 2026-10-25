@@ -66,6 +66,34 @@ function fakeCtx() {
   return { ctx, starts };
 }
 
+test('silent chart preparation creates no voice; playback hears zero at GO and reuses the decode', async () => {
+  const { ctx, starts } = fakeCtx(); let decodes = 0;
+  ctx.decodeAudioData = async () => { decodes++; return { duration: 265 }; };
+  const chart = { bpm: 96, sections: [], audio: 'mix.mp3' };
+  const fetchFn = async () => ({ ok: true, json: async () => chart, arrayBuffer: async () => new ArrayBuffer(8) });
+  const music = createMusic(ctx, ctx.createGain(), createFeel(feelJson), { fetchFn });
+  assert.equal(await music.playChart('https://x.test/chart.json', { prepareOnly: true }), true);
+  assert.equal(music.playing, false); assert.equal(starts.length, 0);
+  ctx.currentTime = 30;
+  await music.playChart('https://x.test/chart.json', { align: () => -2 });
+  assert.equal(decodes, 1); assert.deepEqual(starts, [[31.98, 0]]);
+  ctx.currentTime = 31; assert.equal(music.songS, 0);
+  ctx.currentTime = 32; assert.ok(Math.abs(music.songS) < 1e-9);
+  ctx.currentTime = 33; assert.ok(Math.abs(music.songS - 1) < 1e-9);
+  music.dispose();
+});
+
+test('personally selected recording also prepares silently and begins at GO', async () => {
+  const { ctx, starts } = fakeCtx();
+  const music = createMusic(ctx, ctx.createGain(), createFeel(feelJson));
+  const file = { arrayBuffer: async () => new ArrayBuffer(8) };
+  await music.playFile(file, { prepareOnly: true });
+  assert.equal(starts.length, 0); assert.equal(music.playing, false);
+  await music.playFile(file, { align: () => -2 });
+  assert.deepEqual(starts, [[6.98, 0]]);
+  music.dispose();
+});
+
 test('music: playChart with align schedules go on the downbeat; without align it starts at once (no change)', async () => {
   const feel = createFeel(feelJson);
   const chart = { bpm: 134.84, downbeatS: 1.147, sections: [{ id: 'a', startS: 0 }], downbeats: [1.147, 1.147 + BAR] };
