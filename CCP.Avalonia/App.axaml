@@ -20,10 +20,16 @@
              each repeating a ResourceInclude. -->
         <ResourceInclude Source="avares://CCP.Avalonia/Views/Controls/Companion/Runtime/WorkshopCellTheme.axaml"/>
       </ResourceDictionary.MergedDictionaries>
+      <!-- WPF App.xaml: one shared monospace chain for DynamicResource consumers. -->
+      <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Courier New</FontFamily>
     </ResourceDictionary>
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <!-- WPF Inputs.xaml implicit chrome; local/keyed themes retain precedence. -->
+    <Style Selector="TextBox">
+      <Setter Property="Theme" Value="{StaticResource InputTextBoxTheme}"/>
+    </Style>
     <!-- Icon size ramp + semantic icon brushes (Controls/Icons, fluent icons 2026-10-10). -->
     <StyleInclude Source="avares://CCP.Avalonia/Theme/Icons.axaml"/>
   </Application.Styles>

@@ -26,6 +26,12 @@ namespace ConditioningControlPanel.Services
         /// <summary>The game can play at all (Avalonia: the shared LibVLC loaded). False skips it,
         /// as WPF skips before counting it started (BubbleCountService.cs:373).</summary>
         bool CanPlay => true;
+        /// <summary>WPF For You guard: only the visible, non-ghosted feed owns the screen.</summary>
+        bool FeedOwnsTheScreen => false;
+        /// <summary>WPF #1418: take/release the mandatory video's bouncing-text hold.</summary>
+        void SetEffectsHold(bool hold) { }
+        /// <summary>WPF #1449: explain the empty local/pack video library in a warning toast.</summary>
+        void ShowNoVideos() { }
     }
 
     /// <summary>
@@ -36,7 +42,7 @@ namespace ConditioningControlPanel.Services
     /// The Bambi Freeze lead-in (:353) goes through <see cref="CoreSubliminal.TriggerBambiFreeze"/>.
     /// A game due while another fullscreen interaction is up waits and replays once it ends
     /// (WPF TriggerGame :321 queueing on InteractionQueue), re-checked every <see cref="QueuePoll"/>.
-    /// Pack clips come through <see cref="PackVideos"/>. ponytail: the For You defer needs the feed host.
+    /// Pack clips come through <see cref="PackVideos"/>; an on-screen feed defers one game for at most 90 s.
     /// </summary>
     public sealed class BubbleCountScheduler
     {
@@ -54,7 +60,9 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _leadIn, _queued;
+        private ITimer? _scheduler, _leadIn, _queued, _feedDefer;
+        private DateTimeOffset? _feedDeadline;
+        private bool _toldNoVideos, _heldFlashes;
         private DateTimeOffset _lastXp = DateTimeOffset.MinValue;
         private int _retryCount;
 
@@ -70,6 +78,12 @@ namespace ConditioningControlPanel.Services
         public bool IsBusy { get; private set; }
         /// <summary>A game is waiting for another fullscreen interaction to end.</summary>
         public bool IsQueued => _queued != null;
+        /// <summary>The effects choice is latched for the whole round, including retry/mercy cards.</summary>
+        public bool HoldsEffects { get; private set; }
+
+        /// <summary>WPF BubbleCountNoVideos.MessageKey (#1449): installed but inactive packs get useful advice.</summary>
+        public static string NoVideosMessageKey(int installedPacks, int activePacks) =>
+            installedPacks > 0 && activePacks == 0 ? "bubblecount_no_videos_packs_off" : "bubblecount_no_videos";
 
         /// <summary>WPF ScheduleNextGame: 3600/perHour (clamped 1-10) jittered +/-20%, never under 60 s.</summary>
         public static double NextIntervalSeconds(int perHour, double roll)
@@ -110,6 +124,8 @@ namespace ConditioningControlPanel.Services
         {
             IsRunning = false;
             Dispose(ref _scheduler);
+            Dispose(ref _feedDefer);
+            _feedDeadline = null;
         }
 
         /// <summary>WPF RefreshSchedule: a live schedule picks up a new frequency.</summary>
@@ -120,8 +136,10 @@ namespace ConditioningControlPanel.Services
         {
             Dispose(ref _leadIn);
             Dispose(ref _queued);   // WPF panic: InteractionQueue.ForceReset drops the queued game
+            Dispose(ref _feedDefer);
+            _feedDeadline = null;
             var wasBusy = IsBusy;
-            Idle();   // WPF ForceCleanup: App.Bubbles.Resume()
+            Idle(resumeFlashes: false);   // WPF ForceCleanup: App.Bubbles.Resume()
             _retryCount = 0;
             try { _host.CloseAll(); } catch (Exception ex) { Log.Warning(ex, "BubbleCountService: close failed"); }
             if (wasBusy) Log.Information("BubbleCountService: ForceCleanup called");
@@ -153,6 +171,13 @@ namespace ConditioningControlPanel.Services
                 Log.Information("BubbleCountService: game dropped - bubble count is disabled in settings");
                 return;
             }
+            if (_host.FeedOwnsTheScreen)
+            {
+                DeferPastFeed(forceTest);
+                return;
+            }
+            Dispose(ref _feedDefer);
+            _feedDeadline = null;
             if (_host.OtherInteractionActive)
             {
                 if (_queued != null) return;   // already waiting
@@ -161,6 +186,13 @@ namespace ConditioningControlPanel.Services
                 return;
             }
             IsBusy = true;
+            HoldsEffects = CoreSettings.Current.BubbleCountPauseEffects;
+            if (HoldsEffects)
+            {
+                _heldFlashes = CoreFlash.IsRunning;
+                CoreFlash.Stop();
+                SetEffectsHold(true);
+            }
             _retryCount = 0;
             CoreBubbles.Pause();   // WPF App.Bubbles.PauseAndClear: nothing else to count
             CoreSubliminal.TriggerBambiFreeze();   // WPF :353, before the 800 ms lead-in
@@ -173,9 +205,38 @@ namespace ConditioningControlPanel.Services
                 {
                     Log.Warning("BubbleCountService: No videos found");
                     Idle();
+                    // WPF #1449: Test Now always tells; scheduled games tell once per launch.
+                    if (forceTest || !_toldNoVideos)
+                    {
+                        _toldNoVideos = true;
+                        try { _host.ShowNoVideos(); }
+                        catch (Exception ex) { Log.Debug(ex, "BubbleCountService: no-videos notice failed"); }
+                    }
                 }
             });
         }
+
+        private void DeferPastFeed(bool forceTest)
+        {
+            if (_feedDefer != null) return; // one replay, never a backlog or a renewed deadline
+            _feedDeadline ??= _time.GetUtcNow() + TimeSpan.FromSeconds(90);
+            if (_time.GetUtcNow() >= _feedDeadline) { _feedDeadline = null; return; }
+            PollFeed(forceTest);
+        }
+
+        private void PollFeed(bool forceTest) => _feedDefer = After(TimeSpan.FromMilliseconds(500), mine =>
+        {
+            if (!ReferenceEquals(mine, _feedDefer)) return;
+            Dispose(ref _feedDefer);
+            if (_host.FeedOwnsTheScreen)
+            {
+                if (_time.GetUtcNow() < _feedDeadline) PollFeed(forceTest);
+                else _feedDeadline = null;
+                return; // expired: release the latch without starting a game
+            }
+            Trigger(forceTest); // rechecks running/enabled; forceTest stays exempt, as WPF
+            if (_feedDefer == null) _feedDeadline = null;
+        });
 
         private void QueueBehind(bool forceTest) => _queued = After(QueuePoll, mine =>
         {
@@ -245,9 +306,23 @@ namespace ConditioningControlPanel.Services
             });
         }
 
-        private void Idle()
+        private void SetEffectsHold(bool hold)
+        {
+            try { _host.SetEffectsHold(hold); }
+            catch (Exception ex) { Log.Warning(ex, "BubbleCountService: effects hold failed"); }
+        }
+
+        private void Idle(bool resumeFlashes = true)
         {
             IsBusy = false;
+            if (HoldsEffects)
+            {
+                HoldsEffects = false;
+                SetEffectsHold(false);
+                if (_heldFlashes && resumeFlashes && CoreEngine.IsRunning && CoreSettings.Current.FlashEnabled)
+                    CoreFlash.Start();
+                _heldFlashes = false;
+            }
             CoreBubbles.Resume();
         }
 

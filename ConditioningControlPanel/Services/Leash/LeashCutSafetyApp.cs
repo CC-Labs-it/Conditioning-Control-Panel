@@ -40,13 +40,8 @@ public static class LeashCutSafetyApp
             catch (Exception ex) { Serilog.Log.Warning("[Leash] Panic-key UI sync failed: {Error}", ex.Message); }
         }
 
-        /// <summary>
-        /// OWED. Circe's Tab keeps one pooled balance (<c>TabState.BalanceSeconds</c>), not
-        /// per-booking rows it can take back: the entry log records what was booked, but nothing
-        /// marks which of the balance's seconds were already pushed, so "the unpushed leash part"
-        /// cannot be carved out cleanly. The live push also lands within about 30 s of a booking.
-        /// Needs a small tab API (leash seconds tracked apart until pushed) from the Chaster side.
-        /// </summary>
-        public bool DropUnpushedLeashBookings() => false;
+        /// <summary>Only the holder's leash time goes; the player's own slip-ups and credits stay.
+        /// False when there is no tab or nothing was dropped.</summary>
+        public bool DropUnpushedLeashBookings() => (App.Chaster?.DropUnpushedLeash() ?? 0) > 0;
     }
 }

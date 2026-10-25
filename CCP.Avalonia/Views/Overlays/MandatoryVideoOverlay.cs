@@ -36,10 +36,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.md). Ambient bubbles
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
-    /// (a Stop that hangs in native code still hangs the UI thread), the toy-button/gaze/haptics
-    /// attention inputs, no-activate z-order, and the remote-media offer after the "no videos" dialog.
+    /// (a Stop that hangs in native code still hangs the UI thread), the gaze
+    /// attention input, no-activate z-order, and the remote-media offer after the "no videos" dialog.
     /// </summary>
-    internal sealed class MandatoryVideoOverlay : IMandatoryVideoHost
+    internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
         public static MandatoryVideoOverlay Instance { get; } = new();
         private MandatoryVideoScheduler _scheduler = null!;
@@ -50,11 +50,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
-        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown);
+        internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons);
 
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
+        private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
         private Media? _media;
@@ -105,6 +106,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal IReadOnlyList<Window> Messages => _messages;
         internal VlcFrameSink? Sink => _sink;
         internal int LiveTargets => _targets.Count;
+        /// <summary>This clip arms the attention checks (never on a floating window).</summary>
+        internal bool AttentionArmed => _attention;
         /// <summary>Milliseconds from Show to the first frame on screen; -1 until then.</summary>
         internal long FirstFrameMs { get; private set; } = -1;
         /// <summary>Total ms spent downscaling blur fills, and how many (CCP perf check).</summary>
@@ -120,7 +123,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private void Play(string path, bool strict)
         {
+            var muted = _userMuted;
             if (_surfaces.Count > 0) CloseAll();
+            _userMuted = muted;   // the output heal replays the same clip: its mute button state stays
             (_path, _strict) = (path, strict);
             _sinceShow.Restart();
             _sinceFrame.Reset();
@@ -132,7 +137,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var s = CoreSettings.Current;
             var host = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-            foreach (var screen in Targets(host, s.FillAllMonitorsWithVideo)) _surfaces.Add(Build(screen, strict));
+            // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
+            Floating = Floats(strict);
+            var screens = Targets(host, s.FillAllMonitorsWithVideo || Floating);
+            if (Floating) screens = new() { screens[_random.Next(screens.Count)] };
+            foreach (var screen in screens) _surfaces.Add(Build(screen, strict));
 
             var vlc = LibVlcAudio.Shared;
             if (vlc == null)
@@ -145,11 +154,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // bouncing text, and arm the attention checks.
             if (s.AudioDuckingEnabled) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
-            _attention = s.AttentionChecksEnabled;
+            _attention = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.AttentionChecksApply(s.AttentionChecksEnabled, Floating);
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
             _player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
-            _player.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
             _sink = new VlcFrameSink(_player, () => _media, bmp =>
             {
@@ -176,6 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     FirstFrameMs = _sinceShow.ElapsedMilliseconds;
                     if (!_gracePaused) _sinceFrame.Start();   // WPF arms the length/max timers once playing
                     Log.Information("VideoService: first frame after {Ms} ms", FirstFrameMs);
+                    ShowVideoControls();   // mute and close, once the clip is rolling (MandatoryVideoOverlay.Controls.cs)
                 }
                 var fill = _surfaces.Any(x => x.Fill.IsVisible);
                 if (fill && _sink?.Bitmap is { } src && _fill != null)
@@ -216,12 +226,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (_attention) DispatcherTimer.RunOnce(SetupAttention, TimeSpan.FromSeconds(2));   // WPF: Task.Delay(2000)
         }
 
+        /// <summary>This clip shows as a floating window (AppSettings.MandatoryVideoFloating), decided per clip.</summary>
+        internal bool Floating { get; private set; }
+
+        /// <summary>WPF DecidePresentation: floating is for an ordinary video only - never a strict one,
+        /// a Lockdown or a Chaos run (DtRH is n/a on this head).</summary>
+        internal static bool Floats(bool strict) => ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ShouldFloat(
+            CoreSettings.Current.MandatoryVideoFloating, strict,
+            ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true, global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+
         /// <summary>WPF VideoService.UpdateMasterVolume / UpdateVideoVolume: a playing clip follows
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
         internal void UpdateVolume()
         {
-            var s = CoreSettings.Current;
-            if (_player is { } p) p.Volume = MandatoryVideoScheduler.EffectiveVolume(s.MasterVolume, s.VideoVolume);
+            if (_player is { } p) ApplyVolume(p);
         }
 
         /// <summary>WPF VideoService.VideoScreens -> App.ResolveScreens (ccp-bugs #1154): the Video
@@ -254,6 +272,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var video = new Image { Stretch = Stretch.Uniform };
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
+            var buttons = new VideoButtons(ToggleUserMute, CloseFromButton);
             var w = new Window
             {
                 Title = "CCP Video",
@@ -262,9 +281,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 ShowInTaskbar = false,
                 CanResize = false,
                 Background = Brushes.Black,
-                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace } },
+                Content = new Panel { ClipToBounds = true, Children = { fill, scrim, video, layer, grace, buttons.Row } },
             };
-            Place(w, screen);
+            var floating = Floating;
+            if (floating)
+            {
+                // WPF: a floating window never takes focus from what is under it (panic and Esc reach
+                // it through the global hooks), and it moves with the mouse.
+                // ponytail: WPF's first-cut drag; the frame's fling and bounce (row 18) replace it.
+                w.ShowActivated = false;
+                PlaceFloating(w, screen, _random);
+                w.PointerPressed += (_, e) => { if (e.GetCurrentPoint(w).Properties.IsLeftButtonPressed) w.BeginMoveDrag(e); };
+            }
+            else Place(w, screen);
             void OnKey(KeyEventArgs e)
             {
                 var s = CoreSettings.Current;
@@ -298,9 +327,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Closing += (_, e) => { if (!_closing && strict && Scheduler.IsPlaying) e.Cancel = true; };
             w.Closed += (_, _) => { if (!_closing) Scheduler.End(); };
             w.Show();
-            w.WindowState = WindowState.FullScreen;
-            w.Activate();
-            return new Surface(w, fill, scrim, video, layer, grace, countdown);
+            if (!floating)
+            {
+                w.WindowState = WindowState.FullScreen;
+                w.Activate();
+            }
+            return new Surface(w, fill, scrim, video, layer, grace, countdown, buttons);
         }
 
         /// <summary>WPF GracePauseOverlayWindow's card: 360x200, centred, #1A1A2E with a 2 px pink edge,
@@ -479,6 +511,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.Height = screen.Bounds.Height / screen.Scaling;
         }
 
+        /// <summary>WPF FloatRectOn: MandatoryVideoFloatingSizePercent of the work area's width, 16:9, at a
+        /// random spot wholly on it (Core FloatingRect, in the area's DIPs). No screen known (headless):
+        /// the window's primary screen.</summary>
+        internal static void PlaceFloating(Window w, global::Avalonia.Platform.Screen? screen, Random random)
+        {
+            screen ??= w.Screens.Primary ?? w.Screens.All.FirstOrDefault();
+            if (screen == null) return;
+            var area = screen.WorkingArea;
+            var scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            var (x, y, width, height) = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FloatingRect(
+                (int)(area.Width / scale), (int)(area.Height / scale), random, CoreSettings.Current.MandatoryVideoFloatingSizePercent);
+            w.WindowStartupLocation = WindowStartupLocation.Manual;
+            w.Position = new PixelPoint(area.X + (int)Math.Round(x * scale), area.Y + (int)Math.Round(y * scale));
+            w.Width = width;
+            w.Height = height;
+        }
+
         internal const int FillWidth = 64;
 
         /// <summary>Box-average <paramref name="src"/> into the small <paramref name="dst"/> (4x4 samples
@@ -568,6 +617,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (elapsed >= t.Due) { t.Remove(); _targets.Remove(t); continue; }
                 t.Move(dt);
             }
+            ReleaseToyBatches();
+        }
+
+        private void ReleaseToyBatches()
+        {
+            if (_toyBatches.Count == 0) return;   // per-frame path: no allocation when no toy is armed
+            foreach (var batch in _toyBatches.ToList())
+                if (!batch.Targets.Any(t => _targets.Contains(t)))
+                {
+                    batch.Binding.Dispose();
+                    _toyBatches.Remove(batch);
+                }
         }
 
         /// <summary>WPF SpawnTarget: one target per screen from the enabled pool ("CLICK ME" when
@@ -580,23 +641,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Scheduler.NoteSpawn();
             var batch = new List<Target>();
             var caught = false;
+            void Hit(Target t)
+            {
+                if (caught || !_targets.Contains(t)) return;
+                caught = true;
+                PlayPop();
+                Scheduler.NoteHit();
+                foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
+                t.FadeOut();
+                ReleaseToyBatches();
+                Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
+            }
             foreach (var x in _surfaces)
             {
                 var t = new Target(x.Layer, text, Math.Max(40, s.AttentionSize), elapsed + s.AttentionLifespan, _random);
-                t.Root.PointerPressed += (_, e) =>
-                {
-                    e.Handled = true;
-                    if (caught) return;
-                    caught = true;
-                    PlayPop();
-                    Scheduler.NoteHit();
-                    foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
-                    t.FadeOut();
-                    Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
-                };
+                t.Root.PointerPressed += (_, e) => { e.Handled = true; Hit(t); };
                 batch.Add(t);
                 _targets.Add(t);
             }
+            var binding = AttentionToyButtonBinding.Arm(CoreHaptics.Service,
+                () => batch.Any(t => _targets.Contains(t)),
+                () => Hit(batch.First(t => _targets.Contains(t))));
+            if (binding != null) _toyBatches.Add((batch, binding));
         }
 
         internal static void PlayPop()
@@ -707,7 +773,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _fill = fill;
                 var ft = new FormattedText(text, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                    new Typeface(new FontFamily($"{(string.IsNullOrWhiteSpace(font) ? "Segoe UI" : font)}, Segoe UI, Arial"), FontStyle.Normal, FontWeight.Bold), size, fill)
+                    new Typeface(new FontFamily($"{(string.IsNullOrWhiteSpace(font) ? "Segoe UI" : font)}, Segoe UI, Arial, {AppFonts.Inter}"), FontStyle.Normal, FontWeight.Bold), size, fill)
                 { TextAlignment = TextAlignment.Center, LineHeight = size * 0.95 };
                 _geo = ft.BuildGeometry(default);
                 var b = _geo?.Bounds ?? default;
@@ -767,11 +833,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.WindowState = WindowState.Maximized;
                 _messages.Add(w);
             }
+            var muted = _mutedAtClose;   // WPF: an attention-check replay skips Cleanup, so it stays muted
             DispatcherTimer.RunOnce(() =>
             {
                 foreach (var w in _messages) w.Close();
                 _messages.Clear();
+                _userMuted = muted;
                 then();
+                if (!Scheduler.IsPlaying) _userMuted = false;   // mercy, or stopped meanwhile: the run is over
             }, TimeSpan.FromMilliseconds(ms));
         });
 
@@ -788,10 +857,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static string NoVideosMessage(MandatoryVideoScheduler s)
         {
             var c = CoreSettings.Current;
-            if (NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration))
-                return Loc.GetF("video_length_filter_emptied", s.LastFunnelEnabled,
-                    NoVideosReason.FormatRange(c.VideoMinDurationSeconds, c.VideoMaxDurationSeconds));
-            return Loc.GetF("video_no_videos_found", Path.Combine(CorePaths.EffectiveAssets, "videos")) + "\n\n" + Loc.Get("video_add_files_hint");
+            var packs = ContentPackStore.Current;
+            return NoVideosReason.Message(Path.Combine(CorePaths.EffectiveAssets, "videos"),
+                s.LastFunnelEnabled, s.LastFunnelDuration, c.VideoMinDurationSeconds, c.VideoMaxDurationSeconds,
+                packs?.InstalledPackIds.Count ?? 0, packs?.GetActivePackIds().Count ?? 0);
         }
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
@@ -800,11 +869,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try
             {
                 _attention = _gracePaused = false;
+                // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
+                _mutedAtClose = _userMuted;
+                _userMuted = false;
                 _graceTimer?.Stop();
                 _guard?.Stop();
                 _graceTimer = _guard = null;
                 _spawnTimes.Clear();
                 _targets.Clear();
+                ReleaseToyBatches();
                 // Stop joins the decoder thread, so after it no callback touches the frame buffer.
                 if (_player != null)
                 {

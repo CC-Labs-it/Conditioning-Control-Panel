@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
+using ConditioningControlPanel.Services.Safety;
 using Serilog;
 
 namespace ConditioningControlPanel.Services.PieceByPiece;
@@ -17,7 +18,7 @@ namespace ConditioningControlPanel.Services.PieceByPiece;
 /// here touches a window, a WebView or a setting; the head's host (Avalonia
 /// <c>Views/Games/GameWindow.Pbp.cs</c>) does that and calls in. WPF spec, PieceByPieceHostService.cs:
 /// identity :330, settings :359 + :758, media-request :447-538, net lane :559-626, watchdogs :694-745.
-/// The WPF host keeps its inline copy (unchanged, so the Windows app behaves exactly as before).
+/// Both heads delegate their net, local media and watchdog decisions to this copy.
 /// </summary>
 public static class PbpHostRules
 {
@@ -59,6 +60,8 @@ public static class PbpHostRules
                 ? ""
                 : o["body"]!.ToString(Newtonsoft.Json.Formatting.None));
         string? refusal = null;
+        // Judged on the BUILT Uri, not the raw string: "/v2/pbp/../user/me" starts with the
+        // prefix and still lands on /v2/user/me once System.Uri collapses it (HostNetPathRule).
         if (!HostNetPathRule.TryBuild(ProxyBaseUrl, path, AllowedPathPrefix, out _)) refusal = "forbidden_path";
         else if (method != "GET" && method != "POST") refusal = "forbidden_method";
         return new NetCall(id, method, path, body, refusal);
@@ -74,10 +77,12 @@ public static class PbpHostRules
     {
         if (call.Refusal != null) return (0, call.Refusal);
         if (string.IsNullOrEmpty(baseUrl)) return (0, "");
+        // Re-judged against the base actually used (a sandbox loopback override), and sent to THAT Uri.
+        if (!HostNetPathRule.TryBuild(baseUrl, call.Path, AllowedPathPrefix, out var target) || target is null)
+            return (0, "forbidden_path");
         try
         {
-            if (!HostNetPathRule.TryBuild(baseUrl, call.Path, AllowedPathPrefix, out var target) || target == null)
-                return (0, "forbidden_path");
+            // PbpNetRelay: the token on every call except the public spectate routes (shared CDN entries).
             using var request = PbpNetRelay.Build(target, call.Method, call.Path, call.Body, authToken, appVersion);
             using var response = await http.SendAsync(request, ct).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);

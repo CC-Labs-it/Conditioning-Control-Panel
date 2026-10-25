@@ -775,6 +775,8 @@ namespace ConditioningControlPanel.Services
                 {
                     if (await TryHandleMergedAsync(response, json))
                         return (false, Localization.Loc.Get("account_merged_retry_hint"), null);
+                    // WPF recovers the session for the NEXT call but does not retry the rename.
+                    await AuthRecovery.HandleUnauthorizedAsync(response);
                     return (false, ServerError(json, response.StatusCode), null);
                 }
                 return (true, null, JObject.Parse(json)["new_display_name"]?.ToString());
@@ -799,14 +801,27 @@ namespace ConditioningControlPanel.Services
                     ["confirmation"] = "DELETE"
                 };
 
-                var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/delete-account");
-                AddAuthHeader(request);
-                request.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
-                var response = await _http.SendAsync(request);
+                HttpRequestMessage Request()
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Post, $"{SERVER_URL}/v2/user/delete-account");
+                    AddAuthHeader(request);
+                    request.Content = new StringContent(payload.ToString(), Encoding.UTF8, "application/json");
+                    return request;
+                }
+                var response = await _http.SendAsync(Request());
                 if (response.IsSuccessStatusCode) return (true, null);
 
                 var json = await response.Content.ReadAsStringAsync();
                 if (await TryHandleMergedAsync(response, json)) return (false, Localization.Loc.Get("account_merged_retry_hint"));
+
+                // WPF: on a 401, retry ONCE and only after a genuine recovery left a token in hand (#879).
+                if (await AuthRecovery.HandleUnauthorizedAsync(response) && !string.IsNullOrEmpty(_settings()?.AuthToken))
+                {
+                    Log.Information("Delete account: retrying after auth token recovery");
+                    response = await _http.SendAsync(Request());
+                    if (response.IsSuccessStatusCode) return (true, null);
+                    json = await response.Content.ReadAsStringAsync();
+                }
                 return (false, ServerError(json, response.StatusCode));
             }
             catch (Exception ex)
