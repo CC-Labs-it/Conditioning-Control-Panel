@@ -3086,3 +3086,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-win-mod-creator: +602
 - Mod Creator Advanced panel (tube layout, bubble scale, skill labels, tooltip overrides) on Avalonia, with rules shared from Core.
 - Row stays stub; art/barks/mantras/audio/portraits/emotes panels left for wire-win-mod-creator-b.
+
+## avalonia-port/wire-shell-blink-trainer: +205
+- Deeper hub webcam setup buttons relay to the Blink Trainer consent/calibration/Quick Recal/tracker workflows; the card shows live shared state.
+- Review fixes: no real-time test wait, single refresh path, complete follow-up list, tracker-label test, honest parity rows (fail-proven; gate 39702277881 green).
