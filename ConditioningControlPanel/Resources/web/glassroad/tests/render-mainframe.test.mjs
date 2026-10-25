@@ -182,7 +182,7 @@ test('Mainframe scans follow the shared song clock, freeze on pause and warn aft
   const before = scan.panel.position.x;
   world.update(0.1, { scanTimeS: 5.5, scanBpm: 120, paused: true });
   assert.equal(scan.panel.position.x, before);
-  world.update(0.1, { scanTimeS: 5.5, scanBpm: 120, scanReady: false }, true);
+  world.update(0.1, { scanTimeS: 4.5, scanBpm: 120, scanReady: false }, true);
   assert.equal(scan.panelMat.color.getHexString(), 'ffd04e');
   assert.ok(scan.panelMat.opacity < 0.52);
   world.dispose();

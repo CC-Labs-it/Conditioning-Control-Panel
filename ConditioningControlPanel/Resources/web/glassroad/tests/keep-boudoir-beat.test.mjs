@@ -11,10 +11,10 @@ const brush = { id:'brush',kind:'sweeper',s:100,x:0,w:14,depthM:2.5,cycleS:6.4,o
 
 test('presses and mirrored lanes change on whole beats and always leave a full open lane', () => {
   const row = { offsetS:0 };
-  assert.equal(keepGatePhase(row,0,{},frame(7)).phase,'warn');
-  assert.equal(keepGatePhase(row,0,{},frame(8)).phase,'lower');
-  assert.equal(keepGatePhase(row,0,{},frame(9)).liftM,0);
-  assert.equal(powderPressPhase(row,999,frame(4.5)).liftM,0);
+  assert.equal(keepGatePhase(row,0,{},frame(.5)).phase,'warn');
+  assert.equal(keepGatePhase(row,0,{},frame(.75)).phase,'lower');
+  assert.equal(keepGatePhase(row,0,{},frame(1)).liftM,0);
+  assert.equal(powderPressPhase(row,999,frame(1)).liftM,0);
   for(let beat=0;beat<80;beat+=.03) {
     const poses = [0,1,2].map(lane => mirrorGatePhase({offsetS:0,lane},0,frame(beat)));
     assert.ok(poses.some(p => p.liftM === 8.4));
@@ -48,7 +48,7 @@ test('seek rearm visibly opens gates, raises pendulums and lowers them with a bo
 });
 
 test('initial pickup keeps pendulums at their authored height and continuous through GO with any offset', () => {
-  const epsilon = .00001;
+  const epsilon = .000001;
   for (const bpm of [40,96.75,240]) for (const offsetS of [0,1.4,-2.2,15.8]) {
     const row = {...brush,offsetS}, bs = 60/bpm;
     const a = mascaraPhase(row,0,frame(-epsilon/bs,bpm)), p = mascaraPhase(row,0,frame(0,bpm)), b = mascaraPhase(row,0,frame(epsilon/bs,bpm));
@@ -74,7 +74,7 @@ test('seek release preserves pendulum position and velocity for offset swings', 
         assert.ok(Math.hypot(p.vx-poses[1].vx,p.vy-poses[1].vy)<.001);
       }
     }
-    const keepPeriod = Math.max(4,Math.ceil(brush.cycleS/bs/4)*4), keepRelease = ((-offset%keepPeriod)+keepPeriod)%keepPeriod;
+    const keepPeriod = 4, keepRelease = ((-offset%keepPeriod)+keepPeriod)%keepPeriod;
     const held = keepChainPhase(row,0,frame(keepRelease-epsilon,bpm,{rearming:true}));
     const moving = keepChainPhase(row,0,frame(keepRelease+epsilon,bpm,{rearming:true}));
     assert.ok(held.safe); assert.ok(!moving.safe);
@@ -85,7 +85,7 @@ test('seek release preserves pendulum position and velocity for offset swings', 
 test('mirror shutters lower continuously after pickup and seek without repeating the opening grace', () => {
   const bpm = 96.75, bs = 60/bpm, epsilon = .00001;
   for (const rearming of [false,true]) for (const offsetS of [0,1.4,-2.2,15.8]) {
-    const offset = Math.round(offsetS/bs), release = rearming ? ((-offset%8)+8)%8 : 0;
+    const offset = Math.round(offsetS/bs), release = rearming ? ((-offset%4)+4)%4 : 0;
     const poses = beat => [0,1,2].map(lane => mirrorGatePhase({lane,offsetS},0,frame(beat,bpm,{rearming})));
     const held = poses(release-epsilon), moving = poses(release+epsilon);
     for (let lane=0;lane<3;lane++) {
@@ -126,7 +126,7 @@ test('physical gate contact follows the heard hold and opens through a music see
     const r={i:0,st:place(track,{s:115,speed:40}),events:recorder(),feel:makeFeel()};
     return gates.apply(r,place(track,{s:105,speed:40}),.1);
   };
-  setMachineryBeat(track,{enabled:true,songS:9.5*60/96.75,raceS:.1,bpm:96.75});
+  setMachineryBeat(track,{enabled:true,songS:1.1*60/96.75,raceS:.1,bpm:96.75});
   assert.equal(crossing(createKeepGates(track,{gates:[gate]})),'gate');
   setMachineryBeat(track,{enabled:true,songS:80,raceS:.1,bpm:96.75});
   assert.equal(crossing(createKeepGates(track,{gates:[gate]})),null);

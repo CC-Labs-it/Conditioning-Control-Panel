@@ -15,16 +15,16 @@ const anchor = (track, songS = offsetS, raceS = 0, extra = {}) => setMachineryBe
   { enabled: true, songS, raceS, bpm: 99.02, offsetS, ...extra });
 
 test('perfume warning, spray, contact and fade land on the recording beat grid', () => {
-  for (const [beat, phase] of [[0, 'clear'], [5.3, 'warn'], [9.3, 'spray'], [10, 'active'], [15.5, 'fade'], [17, 'clear']]) {
-    const a = perfumePhase(zone, 87, {}, frame(beat)), b = perfumePhase(zone, 0, {}, frame(beat + 20));
+  for (const [beat, phase] of [[0, 'clear'], [1.3, 'warn'], [2.3, 'spray'], [3, 'active'], [4.5, 'fade'], [5, 'clear']]) {
+    const a = perfumePhase(zone, 87, {}, frame(beat)), b = perfumePhase(zone, 0, {}, frame(beat + 8));
     assert.equal(a.phase, phase); assert.equal(a.phase, b.phase); assert.ok(Math.abs(a.mist - b.mist) < 1e-10);
   }
-  assert.equal(perfumePhase(zone, 0, {}, frame(9.99)).active, false);
-  assert.equal(perfumePhase(zone, 0, {}, frame(10)).active, true);
-  assert.equal(perfumePhase(zone, 0, {}, frame(15)).active, false);
+  assert.equal(perfumePhase(zone, 0, {}, frame(2.99)).active, false);
+  assert.equal(perfumePhase(zone, 0, {}, frame(3)).active, true);
+  assert.equal(perfumePhase(zone, 0, {}, frame(4)).active, false);
   for (const offset of [0, 1.3, 4.7, -2]) {
-    const row = { ...zone, offsetS: offset }, start = ((-Math.round(offset / beatS) % 20) + 20) % 20;
-    for (let beat = -.5; beat < start + 9; beat += .1)
+    const row = { ...zone, offsetS: offset }, start = ((-Math.round(offset / beatS) % 8) + 8) % 8;
+    for (let beat = -.5; beat < start + 3; beat += .1)
       assert.equal(perfumePhase(row, 6, {}, frame(beat)).active, false, 'full warning for offset ' + offset);
   }
 });
@@ -35,7 +35,7 @@ test('ribbon arrows travel continuously and in the collision direction through b
     const a = pose(beat), b = pose(beat + .001), travel = b.travelM - a.travelM;
     if (a.phase === b.phase) assert.ok(a.direction === 0 ? Math.abs(travel) < 1e-8 : travel * a.direction >= -1e-8);
   }
-  for (const beat of [0, 10, 12, 18, 20, 30, 32, 38, 40])
+  for (const beat of [0, 1.5, 2, 3.5, 4, 6, 7.5, 8, 12])
     assert.ok(Math.abs(pose(beat - 1e-7).travelM - pose(beat + 1e-7).travelM) < 1e-5, 'continuous at ' + beat);
   assert.equal(ribbonPhase(row, 3).travelM, undefined, 'online/no-song fallback stays unchanged');
 });
@@ -56,7 +56,7 @@ hooks.deregister();
 test('perfume drawing and swept contact share heard time, pause and seek rearming', () => {
   const track = fakeTrack({ w: 36 }), events = recorder(), sim = createBoudoirPerfume(track, events, { zones: [zone] });
   const view = createBoudoirPerfumeView(new Group(), track, { zones: [zone] }); anchor(track);
-  const r = { i: 0, kind: 'local', st: place(track, { s: 120, lateral: -5, speed: 35 }), finished: false }, t = 10.5 * beatS;
+  const r = { i: 0, kind: 'local', st: place(track, { s: 120, lateral: -5, speed: 35 }), finished: false }, t = 3.5 * beatS;
   sim.update([r], t); assert.equal(events.all('perfume-contact').length, 1); assert.equal(sim.inspect().zones[0].phase, 'active');
   for (let n = 0; n < 30; n++) view.update(t, { gentle: true });
   assert.ok(view.inspect().cloudOpacity[0] > .1);

@@ -76,7 +76,7 @@ test('fast beat kicks catch a stationary racer when a solid spoke crosses the op
     assert.equal(hit, row.id, 'closed moving spoke at ' + bpm + ' BPM');
     const pose0 = goonworksPose(row, 0, machineryBeatAt(track, 0));
     const pose1 = goonworksPose(row, 60/bpm, machineryBeatAt(track, 60/bpm));
-    assert.ok(Math.abs(Math.abs(pose1.angle-pose0.angle)-Math.PI/6)<1e-9, '30 degrees per beat');
+    assert.ok(Math.abs(Math.abs(pose1.angle-pose0.angle)-Math.PI/2)<1e-9, 'one opening per beat');
     setMachineryBeat(track, null);
   }
 });

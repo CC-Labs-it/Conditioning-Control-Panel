@@ -16,12 +16,13 @@ const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 /** One phase authority for both visible mesh and collision. No wall-clock reads. */
 export function keepGatePhase(gate, timeS, out = {}, beat = null) {
   if (beat) {
-    const offset = Math.round((gate.offsetS || 0) / beat.beatS), t = beatCycle(beat.beat + offset, 16);
+    const period = 2, offset = Math.round((gate.offsetS || 0) / beat.beatS), t = beatCycle(beat.beat + offset, period);
     // Initial offsets also wait for a clear cycle with the full warning before descent.
-    const safe = machineryRearming(beat, offset) || beat.beat < beatCycle(-offset,16), phase = safe ? 'warn' : t < 5 ? 'clear' : t < 8 ? 'warn'
-      : t < 9 ? 'lower' : t < 12 ? 'hold' : t < 14 ? 'rise' : 'clear';
-    const liftM = phase === 'lower' ? KEEP_GATE.liftM * (1 - ease(t - 8)) : phase === 'hold' ? 0
-      : phase === 'rise' ? KEEP_GATE.liftM * ease((t - 12) / 2) : KEEP_GATE.liftM;
+    const safe = machineryRearming(beat, offset, period) || beat.beat < beatCycle(-offset, period), phase = safe ? 'warn' : t < .25 ? 'clear' : t < .75 ? 'warn'
+      : t < 1 ? 'lower' : t < 1.25 ? 'hold' : t < 1.5 ? 'rise' : 'clear';
+    // A quick stroke lands on the beat, then retracts before the next approach.
+    const liftM = phase === 'lower' ? KEEP_GATE.liftM * (1 - ease((t - .75) / .25)) : phase === 'hold' ? 0
+      : phase === 'rise' ? KEEP_GATE.liftM * ease((t - 1.25) / .25) : KEEP_GATE.liftM;
     return Object.assign(out, { phase, liftM, opacity: phase === 'clear' ? .035 : .62,
       blocking: liftM < KEEP_GATE.kartHeightM, cycleS: t * beat.beatS });
   }

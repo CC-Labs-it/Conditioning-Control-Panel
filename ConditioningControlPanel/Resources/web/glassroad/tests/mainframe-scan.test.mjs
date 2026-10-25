@@ -43,8 +43,8 @@ test('Mainframe preserves an explicit song choice and chart=0 silence', () => {
   assert.deepEqual(courseSongs('mainframe', muted, songCharts({ search: muted, devHost: true })), []);
 });
 test('scan phases forecast the sweep and keep an outside bypass for the whole cycle', () => {
-  assert.equal(scanPose(zone, 0).phase, 'clear'); assert.equal(scanPose(zone, 2.5).phase, 'warn');
-  assert.equal(scanPose(zone, 4.5).phase, 'sweep'); assert.equal(scanPose(zone, 6.1).phase, 'hold');
+  assert.equal(scanPose(zone, 0).phase, 'clear'); assert.equal(scanPose(zone, .3).phase, 'warn');
+  assert.equal(scanPose(zone, .6).phase, 'sweep'); assert.equal(scanPose(zone, .8).phase, 'hold');
   assert.equal(scanZones(track).length, 6);
   for (const hazard of scanZones(track)) for (let t = 0; t < 8; t += 0.01) {
     const p = scanPose(hazard, t), width = track.frameAt(hazard.s).w;
@@ -53,15 +53,15 @@ test('scan phases forecast the sweep and keep an outside bypass for the whole cy
 });
 test('one wall contact costs 0.5 seconds once until the kart leaves it', () => {
   const { scan, r, events } = setup();
-  scan.update([r], 5); assert.equal(events.length, 1); assert.ok(Math.abs(r.st[S.stalled] - 0.5) < 1e-6);
-  r.st[S.stalled] = 0.2; scan.update([r], 5.1);
+  scan.update([r], .74); assert.equal(events.length, 1); assert.ok(Math.abs(r.st[S.stalled] - 0.5) < 1e-6);
+  r.st[S.stalled] = 0.2; scan.update([r], .76);
   assert.equal(events.length, 1); assert.ok(r.st[S.stalled] < 0.21);
 });
 test('canal walls make the bank route useful while keeping their outer support safe', () => {
   for (const hazard of scanZones(track).slice(1, 3)) {
     const events = [], scan = createMainframeScan(track, { emit: (name, data) => events.push({ name, ...data }) });
     const r = { i: 0, st: createState() }; r.st[S.s] = hazard.s + 3; r.st[S.lateral] = 16;
-    const activeS = (9 - hazard.offset + 16) % 16 / 2;
+    const activeS = ((1.48 - hazard.offset) % 4 + 4) % 4 / 2;
     scan.update([r], activeS); assert.equal(events.length, 0, 'upper bank bypass');
     r.st[S.lateral] = 0; scan.update([r], activeS + 0.01); assert.equal(events.length, 1, 'channel must dodge the active sweep');
   }
@@ -74,7 +74,7 @@ test('scan contact matches the rendered height above the curved canal, including
     const events = [], scan = createMainframeScan(track, { emit: (name, data) => events.push({ name, ...data }) });
     const racer = { i: 0, st: createState() };
     racer.st[S.s] = hazard.s + 3; racer.st[S.lateral] = x; racer.st[S.height] = h;
-    const activeS = (11.9 - hazard.offset + 16) % 16 / 2;
+    const activeS = ((1.49 - hazard.offset) % 4 + 4) % 4 / 2;
     scan.update([racer], activeS);
     assert.equal(events.length, hits, JSON.stringify({ zone: hazard.id, x, h }));
   }
@@ -85,13 +85,13 @@ test('warning, outside bypass, high flight, rescue and finished racers never rec
     if (mode === 'high') r.st[S.height] = 6;
     if (mode === 'rescue') r.st[S.respawnPhase] = RESPAWN.GRACE;
     if (mode === 'finished') r.finished = true;
-    scan.update([r], mode === 'warn' ? 3 : 5); assert.equal(events.length, 0, mode);
+    scan.update([r], mode === 'warn' ? .3 : .74); assert.equal(events.length, 0, mode);
   }
 });
 test('swept contact catches a crossing between samples; teleport does not', () => {
   for (const teleport of [false, true]) {
     const { scan, r, events } = setup(); r.st[S.s] = zone.s - (teleport ? 30 : 2);
-    scan.update([r], 5); r.st[S.s] = zone.s + zone.len + 2; scan.update([r], 5.1);
+    scan.update([r], .74); r.st[S.s] = zone.s + zone.len + 2; scan.update([r], .76);
     assert.equal(events.length, teleport ? 0 : 1);
   }
 });
@@ -99,7 +99,7 @@ test('song seek rearms through a whole warning bar; reset removes prior contacts
   const { scan, r, events } = setup(); scan.update([r], 0); scan.update([r], 5);
   assert.equal(scan.ready, false); assert.equal(events.length, 0);
   for (let t = 5.1; t <= 7.1; t += 0.1) scan.update([r], t);
-  assert.equal(scan.ready, true); scan.reset(); scan.update([r], 5); assert.equal(events.length, 1);
+  assert.equal(scan.ready, true); scan.reset(); scan.update([r], .74); assert.equal(events.length, 1);
 });
 test('scan uses audible song position and downbeat, or the paused race clock without a song', () => {
   assert.deepEqual(scanClock({ song: { bpm: 135, downbeatS: 0.4 }, songS: 3.4 }, 90), { timeS: 3, bpm: 135 });
@@ -108,14 +108,14 @@ test('scan uses audible song position and downbeat, or the paused race clock wit
 });
 
 test('laser yellow slows and green accelerates, with a forecast before each colour change', () => {
-  assert.equal(scanPose(zone,5).effect,'slow'); assert.equal(scanPose(zone,5).color,'yellow');
-  assert.equal(scanPose(zone,13).effect,'boost'); assert.equal(scanPose(zone,13).color,'green');
-  assert.equal(scanPose(zone,7.2).changingSoon,true); assert.equal(scanPose(zone,7.2).nextEffect,'boost');
-  assert.equal(scanPose(zone,15.2).changingSoon,true); assert.equal(scanPose(zone,15.2).nextEffect,'slow');
-  const {scan,r,events}=setup(); scan.update([r],13);
+  assert.equal(scanPose(zone,.74).effect,'slow'); assert.equal(scanPose(zone,.74).color,'yellow');
+  assert.equal(scanPose(zone,1.74).effect,'boost'); assert.equal(scanPose(zone,1.74).color,'green');
+  assert.equal(scanPose(zone,.95).changingSoon,true); assert.equal(scanPose(zone,.95).nextEffect,'boost');
+  assert.equal(scanPose(zone,1.95).changingSoon,true); assert.equal(scanPose(zone,1.95).nextEffect,'slow');
+  const {scan,r,events}=setup(); scan.update([r],1.74);
   assert.equal(r.st[S.stalled],0); assert.equal(r.st[S.boostKind],BOOST.PAD);
   assert.ok(Math.abs(r.st[S.boostAmount]-.18)<1e-6); assert.equal(events[0].effect,'boost');
-  scan.update([r],13); assert.equal(events.length,1,'pause cannot repeat a contact');
+  scan.update([r],1.74); assert.equal(events.length,1,'pause cannot repeat a contact');
   // Gentle is a rendering input, so it never changes laser collision or colour-clock semantics.
-  assert.deepEqual(scanPose(zone,13,120,false),scanPose(zone,13,120,true));
+  assert.deepEqual(scanPose(zone,1.74,120,false),scanPose(zone,1.74,120,true));
 });

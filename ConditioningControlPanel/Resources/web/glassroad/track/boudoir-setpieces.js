@@ -10,7 +10,7 @@ export const BOUDOIR_HAZARD = Object.freeze({ pressWidthM: 14, pressDepthM: 8, p
   mirrorCycleS: 9.6, mirrorLiftM: 8.4, mirrorWidthM: 7, mirrorHeightM: 6,
   ribbonCycleS: 12, ribbonAccelMps2: 10, ribbonDragMps2: 7, ribbonMaxMps: 42 });
 export function powderPressPhase(row, timeS, beat = null) {
-  return keepGatePhase(row, timeS, {}, beat ? { ...beat, beat: beat.beat * 2, beatS: beat.beatS / 2 } : null);
+  return keepGatePhase(row, timeS, {}, beat);
 }
 export function mascaraHeads(row) { return row.heads || [row]; }
 export function mascaraPhase(row, timeS, beat = null) {
@@ -33,14 +33,14 @@ export function mascaraPhase(row, timeS, beat = null) {
 }
 export function ribbonPhase(row, timeS, beat = null) {
   if (beat) {
-    const period = Math.max(4, Math.ceil(12 / beat.beatS / 4) * 4), offset = Math.round((row.offsetS || 0) / beat.beatS);
+    const period = 4, offset = Math.round((row.offsetS || 0) / beat.beatS);
     const absolute = beat.beat + offset, u = beatCycle(absolute, period), safe = machineryRearming(beat,offset,period);
     const phase = safe ? 'warn'
-      : u < period / 2 ? 'forward' : u < period / 2 + 2 ? 'warn' : u < period - 2 ? 'reverse' : 'clear';
+      : u < 1.5 ? 'forward' : u < 2 ? 'warn' : u < 3.5 ? 'reverse' : 'clear';
     // Integrate the signed belt travel. Reversals no longer teleport every arrow to a new position.
     const travel = b => {
-      const p = beatCycle(b, period), forward = Math.min(p, period / 2), reverse = Math.max(0, Math.min(p - period / 2 - 2, period / 2 - 4));
-      return Math.floor(b / period) * 4 + gearBeatTravel(forward) - gearBeatTravel(reverse);
+      const p = beatCycle(b, period), forward = Math.min(p, 1.5), reverse = Math.max(0, Math.min(p - 2, 1.5));
+      return gearBeatTravel(forward) - gearBeatTravel(reverse);
     };
     const start = beat.rearming ? beatCycle(-offset, period) : 0;
     const travelM = (travel(Math.max(start, beat.beat) + offset) - travel(start + offset)) * 3;
@@ -53,17 +53,17 @@ export function ribbonPhase(row, timeS, beat = null) {
 /** The next mirror lane opens before the old lane closes, so a full-width wall never forms. */
 export function mirrorGatePhase(row, timeS, beat = null) {
   if (beat) {
-    const offset = Math.round((row.offsetS || 0) / beat.beatS), absolute = beat.beat + offset, cycle = Math.floor(absolute / 8), t = beatCycle(absolute,8);
+    const offset = Math.round((row.offsetS || 0) / beat.beatS), absolute = beat.beat + offset, cycle = Math.floor(absolute / 4), t = beatCycle(absolute,4);
     const openLane = ((cycle + (row.sequence || 0)) % 3 + 3) % 3, nextLane = (openLane + 1) % 3, previousLane = (openLane + 2) % 3;
-    if (machineryRearming(beat,offset,8)) return { liftM:8.4,openLane,nextLane,phase:'warn',blocking:false,warning:true,cycleS:t*beat.beatS };
+    if (machineryRearming(beat,offset,4)) return { liftM:8.4,openLane,nextLane,phase:'warn',blocking:false,warning:true,cycleS:t*beat.beatS };
     const lane = row.lane ?? 0; let liftM = lane === openLane ? 8.4 : 0;
-    if (lane === previousLane && t < 2) liftM = 8.4 * (1 - ease(t / 2));
-    if (lane === nextLane && t >= 6) liftM = 8.4 * ease((t - 6) / 2);
+    if (lane === previousLane && t < 1) liftM = 8.4 * (1 - ease(t));
+    if (lane === nextLane && t >= 3) liftM = 8.4 * ease(t - 3);
     // Return from the all-open pickup or seek pose once, never on later cycles.
-    const elapsed = beat.beat - (beat.rearming ? beatCycle(-offset,8) : 0), returning = elapsed >= 0 && elapsed < 2;
+    const elapsed = beat.beat - (beat.rearming ? beatCycle(-offset,4) : 0), returning = elapsed >= 0 && elapsed < 2;
     if (returning) liftM = 8.4 + (liftM - 8.4) * ease(elapsed / 2);
-    return { liftM,openLane,nextLane,phase:lane === openLane ? 'clear' : returning ? 'lower' : lane === nextLane && t >= 4 ? 'warn' : 'hold',
-      blocking:liftM < 1.6,warning:returning || t >= 4,cycleS:t*beat.beatS };
+    return { liftM,openLane,nextLane,phase:lane === openLane ? 'clear' : returning ? 'lower' : lane === nextLane && t >= 2 ? 'warn' : 'hold',
+      blocking:liftM < 1.6,warning:returning || t >= 2,cycleS:t*beat.beatS };
   }
   const absolute = Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (row.offsetS || 0), cycle = Math.floor(absolute / 9.6), t = absolute % 9.6;
   const openLane = ((cycle + (row.sequence || 0)) % 3 + 3) % 3, nextLane = (openLane + 1) % 3, previousLane = (openLane + 2) % 3;
