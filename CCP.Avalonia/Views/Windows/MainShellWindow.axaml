@@ -1795,6 +1795,10 @@
                 <!-- Companion Tab (v5.9 - Hero + AI Brain redesign) -->
                 <views:CompanionTabView x:Name="CompanionTab" Margin="10,5,10,10" IsVisible="False" />
                 <!-- Companion > AI (WPF MainWindow.CompanionTabs.cs "companionai", 48f587200) -->
+                <!-- Companion > Personality / Permissions / Links (WPF MainWindow.CompanionTabs.cs, 5681c132a) -->
+                <cmpPages:PersonalityPage x:Name="CompanionPersonalityTab" Margin="10,5,10,10" IsVisible="False" />
+                <cmpPages:PermissionsPage x:Name="CompanionPermissionsTab" Margin="10,5,10,10" IsVisible="False" />
+                <cmpPages:LinksPage x:Name="CompanionLinksTab" Margin="10,5,10,10" IsVisible="False" />
                 <cmpPages:AiPage x:Name="CompanionAiTab" Margin="10,5,10,10" IsVisible="False" />
 
 
