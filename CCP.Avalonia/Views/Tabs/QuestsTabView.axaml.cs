@@ -124,7 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             else ShowRerollLimit(CoreEntitlement.HasPremium ? "quest_reroll_weekly_none_patron" : "quest_reroll_weekly_none_free");
         }
 
-        internal void ShowRerollLimit(string key)
+        private void ShowRerollLimit(string key)
         {
             if (!CoreEntitlement.HasPremium)
             {

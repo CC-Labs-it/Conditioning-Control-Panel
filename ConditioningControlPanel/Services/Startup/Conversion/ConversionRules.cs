@@ -130,7 +130,8 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
 
         /// <summary>The session recap's one taste line: only at the live end of a completed session
         /// (not a recap reopened from history) for an account with no tier.</summary>
-        public static bool SessionTasteLine(bool completed, bool liveEnd, bool premium) => completed && liveEnd && !premium;
+        public static bool SessionTasteLine(bool completed, bool liveEnd, bool premium)
+            => SessionRecapConversion.SessionTasteLine(completed, liveEnd, premium);   // one copy, in Core
 
         // ------------------------------------------------------------------ stamps
 

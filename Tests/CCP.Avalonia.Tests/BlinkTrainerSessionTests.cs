@@ -481,6 +481,8 @@ public sealed class BlinkTrainerSessionTests
         {
             var slow = new SlowOpen();
             WebcamTracker.SourceFactory = () => slow;
+            var oldPremium = CoreEntitlement.HasPremiumProvider;
+            CoreEntitlement.HasPremiumProvider = () => true;   // WPF f3f7288bf: the Start handler demands premium
             var tab = new BlinkTrainerTabView();
             var host = new Window { Content = tab };
             host.Show();
@@ -497,7 +499,7 @@ public sealed class BlinkTrainerSessionTests
                 Assert.False(BlinkTrainerSession.IsRunning);
                 Assert.Empty(made);
             }
-            finally { host.Close(); }
+            finally { host.Close(); CoreEntitlement.HasPremiumProvider = oldPremium; }
         });
     }
 }

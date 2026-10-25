@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -39,8 +40,14 @@ public sealed class VaultGateTests
         var oldLogin = CoreAccount.IsLoggedInProvider;
         var oldLab = CoreAccount.HasLabAccessProvider;
         var oldAccountPremium = CoreAccount.HasPremiumAccessProvider;
+        // IntakePassService reads CoreSettings.Service; with no provider CoreSettings.Current is a fallback it never sees.
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
         var settings = CoreSettings.Current;
         var spent = (settings.IntakePassSpentWeek, settings.IntakePassSpentUtc);
+        var oldQuests = global::ConditioningControlPanel.Avalonia.App.Quests;
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-vaultgate-reroll-").FullName;
         try
         {
             TierGate.ReconnectIsTheAnswerProvider = () => false;
@@ -48,16 +55,31 @@ public sealed class VaultGateTests
             CoreAccount.IsLoggedInProvider = () => true;
             CoreAccount.HasLabAccessProvider = () => false;
             CoreAccount.HasPremiumAccessProvider = () => false;
+            var board = new QuestService(null, dir);
+            board.Progress.DailyQuests = new System.Collections.Generic.List<ActiveQuest> { new("pop_parade_d"), new("flash_rush_d"), new("spiral_sink_d") };
+            board.Progress.WeeklyQuest = new ActiveQuest("flash_monsoon_w");
+            global::ConditioningControlPanel.Avalonia.App.Quests = board;
             var quests = new QuestsTabView();
             shell.Content = quests;
             shell.Show();
             shell.UpdateLayout();
-            foreach (var key in new[] { "quest_reroll_daily_none_free", "quest_reroll_weekly_none_free" })
+            Dispatcher.UIThread.RunJobs();
+            // The board was painted with a reroll left; the budget runs out before the click (WPF RerollDailySlot / BtnRerollWeekly_Click).
+            board.Progress.DailyRerollsUsed = 99;
+            board.Progress.WeeklyRerollsUsed = 99;
+            var buttons = new[]
             {
-                quests.ShowRerollLimit(key);
+                ("quest_reroll_daily_none_free", quests.FindControl<DailyQuestCard>("DailyCard0")!.FindControl<Button>("BtnReroll")!),
+                ("quest_reroll_weekly_none_free", quests.FindControl<Button>("BtnRerollWeekly")!),
+            };
+            foreach (var (key, button) in buttons)
+            {
+                Assert.True(button.IsEnabled);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
                 Assert.Contains(host.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get(key));
                 Click(host, Loc.Get("quest_reroll_see_basic"));
-                Assert.NotNull(VaultGateDialog.Open);
+                Assert.Contains(Loc.Get("vaultgate_chip_vault"), Texts(VaultGateDialog.Open!));
                 VaultGateDialog.Open!.Close();
                 host.Children.Clear();
             }
@@ -68,7 +90,8 @@ public sealed class VaultGateTests
             shell.UpdateLayout();
             intake.BtnStartIntake_Click(null, new RoutedEventArgs());
             Click(host, Loc.Get("intake_gate_spent_cta"));
-            Assert.Contains(Loc.Get("vaultgate_chip_lab"), Texts(VaultGateDialog.Open!));
+            // WPF MainWindow.Lab.cs:183: tier 1, because unlimited runs are HasPremiumAccess.
+            Assert.Contains(Loc.Get("vaultgate_chip_vault"), Texts(VaultGateDialog.Open!));
         }
         finally
         {
@@ -78,9 +101,12 @@ public sealed class VaultGateTests
             CoreAccount.HasLabAccessProvider = oldLab;
             CoreAccount.HasPremiumAccessProvider = oldAccountPremium;
             (settings.IntakePassSpentWeek, settings.IntakePassSpentUtc) = spent;
+            CoreSettings.ServiceProvider = oldProvider;
+            global::ConditioningControlPanel.Avalonia.App.Quests = oldQuests;
             VaultGateDialog.Open?.Close();
             shell.Close();
             global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(new StackPanel());
+            try { System.IO.Directory.Delete(dir, true); } catch { }
         }
         return Task.CompletedTask;
     });
@@ -100,10 +126,10 @@ public sealed class VaultGateTests
             Assert.Contains(Loc.Get("vaultgate_chip_lab"), Texts(VaultGateDialog.Open!));
             VaultGateDialog.Open!.Close();
             shell.OpenPricedCard("quest_reroll", 1);
-            Assert.NotNull(VaultGateDialog.Open);
+            Assert.Contains(Loc.Get("vaultgate_chip_vault"), Texts(VaultGateDialog.Open!));
             VaultGateDialog.Open!.Close();
             TierGate.ReconnectIsTheAnswerProvider = () => true;
-            shell.OpenPricedCard("gradedintake", 2);
+            shell.OpenPricedCard("gradedintake", 1);
             shell.OpenPricedCard("quest_reroll", 1);
             Assert.Equal(2, reconnects);
             Assert.Null(VaultGateDialog.Open);
