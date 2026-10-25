@@ -3250,3 +3250,6 @@ Roster entrance stagger (WPF StaggerSubjectCards/MotionFx.StaggerIn) on the shar
 ## avalonia-port/wire-shell-ui-updates: +384
 - Signed-in startup leaderboard fetch for the header pills (WPF 500 ms; the test awaits the task, no sleep), mic backstop, XP bonus chips and journal mod gating. Percentile and journal policy are shared in Core.
 - Row shell-ui-updates: stub. Missing items are listed in the row. Tests: UiUpdatesTests, AccountSeedTests.SignedInStartupFetchesPillsWithoutOpeningLeaderboard (fail-proven), LeaderboardPercentileTests.
+
+## avalonia-port/wire-views-tab-deeper-b: +550
+- Deeper tab: real multi-file import + window drop through Core EnhancementImportBatch (WPF shares it) with 1.8 s row reveal; Tutorial/welcome Tour via TutorialHead (panic closes it); webcam chip follows live tracker state (stale-run publishes dropped). Row views-tab-deeper wired.
