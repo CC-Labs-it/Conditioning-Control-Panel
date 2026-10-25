@@ -17,7 +17,7 @@ public sealed class ShellMemoryTests(ITestOutputHelper output)
     [Fact]
     public Task ClosedShellsReleaseMemory() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        AmbientBeatLoopsTests.Setup();
+        LifecycleTestPump.Setup();
         CoreSettings.Current.Welcomed = true;
         CoreSettings.Current.HasAcceptedAgeVerification = true;
         CoreSettings.Current.AvatarEnabled = false;
@@ -37,7 +37,7 @@ public sealed class ShellMemoryTests(ITestOutputHelper output)
     [Fact]
     public Task AnAmbientLoopDoesNotKeepItsClosedWindow() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        AmbientBeatLoopsTests.Setup();
+        LifecycleTestPump.Setup();
         // Ticking, and parked: a loop that starts on a hidden owner (a breath on a hidden tab).
         var windows = new[] { OpenLoopAndClose(parked: false), OpenLoopAndClose(parked: true) };
         await LifecycleTestPump.UntilAsync(() => Array.TrueForAll(windows, w => !w.IsAlive),

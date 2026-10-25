@@ -46,7 +46,7 @@ public sealed class ShellResizeMaximizeTests
 
     private static MainShellWindow Open()
     {
-        AmbientBeatLoopsTests.Setup();
+        LifecycleTestPump.Setup();
         var w = new MainShellWindow();
         w.Show();
         w.MinWidth = w.MinHeight = 0;

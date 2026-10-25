@@ -19,7 +19,7 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class SplashStartupTests
 {
-    private static void Setup() => AmbientBeatLoopsTests.Setup();
+    private static void Setup() => LifecycleTestPump.Setup();
 
     private static double Bar(SplashScreen s) =>
         ((ScaleTransform)s.FindControl<Border>("ProgressFill")!.RenderTransform!).ScaleX;
