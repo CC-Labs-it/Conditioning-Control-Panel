@@ -230,6 +230,20 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Start();
         }
 
+        /// <summary>WPF App.xaml.cs:2747: one moderation session shared by every AI provider.</summary>
+        internal static void SeedModeration()
+        {
+            var log = new Services.Moderation.ModerationLog(new Services.Moderation.ModerationSession());
+            var guard = new Services.Moderation.ModerationGuard();
+            var counter = new Services.Moderation.ModerationCounter(
+                Path.Combine(CorePaths.UserData, "moderation-counter.json"));
+            try { counter.LoadFromDisk(); }
+            catch (Exception ex) { Serilog.Log.Debug("ModerationCounter.LoadFromDisk failed: {Error}", ex.Message); }
+            CoreModerationLog.CounterProvider = () => counter;
+            CoreModerationLog.GuardProvider = () => guard;
+            CoreModerationLog.InstanceProvider = () => log;
+        }
+
         /// <summary>WPF CompanionService.UserMessageSent (the "user just talked to her" signal).</summary>
         internal static event Action? UserMessageSent;
         internal static void NotifyUserMessageSent() => UserMessageSent?.Invoke();
@@ -720,13 +734,7 @@ namespace ConditioningControlPanel.Avalonia
                 if (CoreEngine.Video is { } recapVideo)
                     recapVideo.VideoStarted += () => MediaHistory?.RecordVideo(recapVideo.LastVideoPath);
                 //
-                // The one escalating moderation counter (WPF App.xaml.cs:2653), filed under CorePaths.UserData
-                // for the same reason the log below is not seeded: ApplicationData is a second tree here.
-                var moderationCounter = new ConditioningControlPanel.Services.Moderation.ModerationCounter(
-                    System.IO.Path.Combine(CorePaths.UserData, "moderation-counter.json"));
-                try { moderationCounter.LoadFromDisk(); }
-                catch (Exception ex) { Serilog.Log.Debug("ModerationCounter.LoadFromDisk failed: {Error}", ex.Message); }
-                CoreModerationLog.CounterProvider = () => moderationCounter;
+                SeedModeration();
                 CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;   // WPF App.xaml.cs:380
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
@@ -748,13 +756,6 @@ namespace ConditioningControlPanel.Avalonia
                     () => (Ai as ConditioningControlPanel.Services.AIService.AiServiceStrategy)?.ClearLocalHistory();
                 if (Ai is ConditioningControlPanel.Services.AIService.AiServiceStrategy strategy)
                     _ = Task.Run(async () => { try { await strategy.WarmUpLocalAsync(); } catch (Exception ex) { Serilog.Log.Debug("WarmUpLocal: {E}", ex.Message); } });
-                //
-                // CoreModerationLog's record half stays unseeded, and NOT because a log is unavailable here
-                // - ModerationLog is in Core and would construct fine. It hardcodes
-                // SpecialFolder.ApplicationData (~/.config on Linux) while this head's user data
-                // lives under CorePaths.UserData (~/.local/share), so seeding it would scatter the
-                // CCBill record file into a second tree. That is a fix to the class, in a later
-                // layer, not a seeding decision here.
 
                 // Guided tours (WPF App.Tutorial): the head's TutorialService behind the CoreTutorial
                 // seam every page already calls; PanicSurfaces "tour" ends a tour at once.
@@ -778,6 +779,8 @@ namespace ConditioningControlPanel.Avalonia
                 Services.Invites.InviteRewards.TryUnlockProvider = id => Achievements?.TryUnlock(id) == true;
                 Platform.FriendsHead.SeedInvites(
                     Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"), Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
+                // WPF App.xaml.cs:462 StakeAppHooks.Seed: the stakes' Chaster gate, loss row and wallet (the wire rides the invites door above).
+                Platform.StakeHead.Seed();
                 CoreProgression.TrackBubbleCountResultProvider = correct => Achievements?.TrackBubbleCountResult(correct);
                 CoreProgression.TrackBubbleCountGameStartedProvider = () => Achievements?.TrackBubbleCountGameStarted();
                 CoreProgression.TrackBubbleCountCompletedProvider = () => Quests?.TrackBubbleCountCompleted();
@@ -1177,6 +1180,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
+            try { Platform.KeywordTriggerHead.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
