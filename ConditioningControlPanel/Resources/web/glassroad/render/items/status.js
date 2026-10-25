@@ -21,6 +21,7 @@ import { STATUS_LOOK as L, SHAPE, statusStep, statusState, statusSprites, create
 import { lensDepth, lensScale, lensAlpha } from '../lens.js';
 import { createMalusSpirals } from './malusSpirals.js';
 import { TOYS } from './toyMath.js';
+import { fogPalette } from '../screen-atmosphere.js';
 
 const TINT = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k, s.split(',').map((x) => Number(x) / 255)]));
 const WHITE = [1, 1, 1];
@@ -113,6 +114,7 @@ export function createItemStatus(root, feel, { photosafe = null, cap = 1100, tra
   const LAST = [0, 0, 0], HERE = [0, 0, 0], PC = [0, 0, 0];
   // one status sprite into the cloud, in the current racer's kart space (ctx set per racer: no closures per frame)
   const ctx = { sc: 1, al: 1, col: WHITE, alt: WHITE, dark: false };
+  const fogColours = fogPalette(track?.id).map(hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255));
   const putStatus = (x, y, z, size, shp, a, spin, useAlt) => {
     OFF.set(x * ctx.sc, y * ctx.sc, z * ctx.sc).applyQuaternion(Q).add(V);
     cloud.push(OFF.x, OFF.y, OFF.z, size * ctx.sc, shp, a * ctx.al, spin, useAlt ? ctx.alt : ctx.col, ctx.dark ? 0 : 0.25, ctx.dark ? 0 : 0.5);
@@ -157,7 +159,8 @@ export function createItemStatus(root, feel, { photosafe = null, cap = 1100, tra
       const self = i === 0, sc = self ? L.selfScale : 1, al = self ? L.selfAlpha : 1;
       if (s.fresh && dt > 0) { HERE[0] = V.x; HERE[1] = V.y + 1; HERE[2] = V.z; hitBurst(HERE, s.kind, soft, self); }
       if (al <= 0) continue;
-      ctx.sc = sc; ctx.al = al; ctx.col = colOf(s.kind); ctx.alt = altOf(s.kind); ctx.dark = s.kind === 'blackout';
+      ctx.sc = sc; ctx.al = al; ctx.col = s.kind === 'pink' ? fogColours[0] : colOf(s.kind);
+      ctx.alt = s.kind === 'pink' ? fogColours[1] : altOf(s.kind); ctx.dark = s.kind === 'blackout';
       statusSprites(s.kind, s.age, k, seeds[i], putStatus, GOPT[soft ? 1 : 0]);
     }
 

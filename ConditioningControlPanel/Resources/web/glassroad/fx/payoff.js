@@ -9,7 +9,7 @@
  */
 
 /** What a hit on the local player pays: 'words' (a cascade), 'both' (cascade + flash), 'word' (one word). */
-export const PAYOFF_HITS = Object.freeze({ pendulum: 'words', melt: 'words', snap: 'word', disc: 'both', tether: 'both', shatter: 'both', bigSpiral: 'both' });
+export const PAYOFF_HITS = Object.freeze({ pendulum: 'words', melt: 'words', snap: 'word', disc: 'both', tether: 'both', shatter: 'both', bigSpiral: 'both', pink: 'words' });
 /** Course hazards on the local player. Events with a `racer` field count only for racer 0. */
 export const MALUS_EVENTS = Object.freeze(['keep-gate-hit', 'keep-chain-hit', 'boudoir-press-hit', 'boudoir-sweeper-hit',
   'boudoir-mirror-hit', 'goonworks-hit', 'scan-hit', 'perfume-contact']);
@@ -23,8 +23,18 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
   const rise = (s) => (gentle ? gentle.rise(s) : s), fade = (s) => (gentle ? gentle.fade(s) : s);
   const words = { kind: 'none', k: 0, t: 0, durS: 0, strength: 1, prevKind: 'none', prevK: 0, params: { seed: 0, gentle: false } };
   const flash = { kind: 'none', k: 0, t: 0, durS: 0, prevKind: 'none', prevK: 0, params: { seed: 0, cover: 0, corner: false, scale: 0, gentle: false } };
+  const fog = { kind: 'none', k: 0, t: 0, durS: 1.7, params: { seed: 0, gentle: false } };
   const stats = { cascades: 0, padWords: 0, flashes: 0, refused: 0 };
   let seed = 0, clock = 0, lastCascade = -1e9, lastFlash = -1e9, lastPad = -1e9, flashIn = FLASH_IN_S, flashOut = FLASH_OUT_S;
+  let fogIn = .35, fogOut = .75, fogStrength = .8;
+
+  function showFog() {
+    const granted = !photosafe || photosafe.request('palette');
+    fogIn = rise(granted ? .35 : .75); fogOut = fade(.75);
+    fogStrength = (gOn() ? .45 : .8) * (granted ? 1 : .5);
+    Object.assign(fog, { kind: 'pink', t: 0, k: 0 });
+    fog.params = { seed: ++seed, gentle: gOn() };
+  }
 
   function sayWords(durS) {
     Object.assign(words, { kind: 'brainDrain', t: 0, durS, k: 1 });
@@ -43,6 +53,7 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
     if (!g('on') || clock - lastCascade < g('malusCoolS')) return;
     lastCascade = clock; stats.cascades++;
     sayWords(Math.min(g('cascadeMaxS'), Math.max(g('cascadeMinS'), durS || 0)));
+    showFog();
     if (withFlash) showFlash();
   }
 
@@ -50,7 +61,7 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
     if (!e || e.victim !== 0 || e.verdict !== 'hit') return;
     const pay = PAYOFF_HITS[e.kind];
     if (!pay || !g('on')) return;
-    if (pay === 'word') { if (words.kind === 'none') sayWords(g('padWordS')); return; }
+    if (pay === 'word') { if (words.kind === 'none') { sayWords(g('padWordS')); showFog(); } return; }
     cascade((e.durationS || 0) + 0.6, pay === 'both');
   }
   function onMalus(e, name) {
@@ -66,6 +77,11 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
   function update(dt) {
     if (!(dt > 0)) return;
     clock += dt;
+    if (fog.kind !== 'none') {
+      fog.t += dt;
+      fog.k = fogStrength * Math.min(1, fog.t / fogIn, Math.max(0, 1 - Math.max(0, fog.t - fog.durS) / fogOut));
+      if (fog.t >= fog.durS + fogOut) Object.assign(fog, { kind: 'none', k: 0, t: 0 });
+    }
     if (words.kind !== 'none' && (words.t += dt) >= words.durS + WORD_TAIL_S) Object.assign(words, { kind: 'none', k: 0, t: 0, durS: 0 });
     if (flash.kind !== 'none') {
       const t = (flash.t += dt), up = flashIn > 0 ? Math.min(1, t / flashIn) : 1;
@@ -77,11 +93,12 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
   function reset() {
     Object.assign(words, { kind: 'none', k: 0, t: 0, durS: 0 });
     Object.assign(flash, { kind: 'none', k: 0, t: 0, durS: 0 });
+    Object.assign(fog, { kind: 'none', k: 0, t: 0 });
     clock = 0; lastCascade = lastFlash = lastPad = -1e9;
   }
 
   const offs = [bus.on('item-hit', onHit), bus.on('pad', onPad), ...MALUS_EVENTS.map((name) => bus.on(name, onMalus))];
-  return { words, flash, stats, update, reset, dispose() { for (const off of offs) off(); } };
+  return { words, flash, fog, stats, update, reset, dispose() { for (const off of offs) off(); } };
 }
 
 /** The screen a renderer should read: the item screen while it shows that kind, else the payoff's own. */

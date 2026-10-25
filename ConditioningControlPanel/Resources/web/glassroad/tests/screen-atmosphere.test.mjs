@@ -1,7 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ATMOSPHERE as A, fogFill, tunnelRadius, createAtmosphereClock } from '../render/screen-atmosphere.js';
+import { ATMOSPHERE as A, fogFill, tunnelRadius, createAtmosphereClock, fogPalette } from '../render/screen-atmosphere.js';
+
+test('fog retains the first-course pink and uses a distinct palette on every other course', () => {
+  assert.deepEqual(fogPalette('threshold'), [A.fogFar, A.fogNear]);
+  const palettes = ['threshold', 'keep', 'mainframe', 'boudoir', 'goonworks'].map(id => fogPalette(id).join(','));
+  assert.equal(new Set(palettes).size, 5);
+  assert.deepEqual(fogPalette('mainframe'), ['#123e2c', '#8be5ad']);
+  assert.equal(fogPalette('unknown'), fogPalette('threshold'));
+});
 
 test('fog takes seconds to close over the road, fades with the effect and stays bounded', () => {
   assert.equal(fogFill(1, 0), 0);
