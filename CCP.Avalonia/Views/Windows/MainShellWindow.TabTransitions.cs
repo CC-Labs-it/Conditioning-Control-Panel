@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void AnimateTabIn(Control? tab)
         {
             ResetEntranceParts();
-            if (tab == null) return;
+            if (tab == null) { ClearLeavingFrame(); return; }
             if (!AmbientFxCanvas.Env.AllowTransitions) { ClearLeavingFrame(); return; }
             EnteringTab = tab;
             _entranceWatch.Restart();
@@ -47,18 +47,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _entranceParts.Add((card, TranslateForEntrance(card), 0, 10, 40 * Math.Min(i++, 6), 260));
             }
             AdvanceTabEntrance(TimeSpan.Zero);
-            _entranceTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render,
-                (_, _) => AdvanceTabEntrance(_entranceWatch.Elapsed));
+            // Frame-locked (WPF storyboards ride CompositionTarget.Rendering); stops once settled.
+            if (_entranceTimer == null)
+            {
+                _entranceTimer = new global::ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock(this);
+                _entranceTimer.Tick += (_, _) => AdvanceTabEntrance(_entranceWatch.Elapsed);
+            }
             _entranceTimer.Start();
         }
 
         private readonly System.Diagnostics.Stopwatch _entranceWatch = new();
-        private DispatcherTimer? _entranceTimer;
+        private global::ConditioningControlPanel.Avalonia.Controls.Fx.FrameClock? _entranceTimer;
         private string? _incomingTabKey;
         private readonly List<(Control Item, global::Avalonia.Media.TranslateTransform? Slide, double X, double Y, double Delay, double Duration)> _entranceParts = new();
         private global::Avalonia.Controls.Image? _leavingFrame;
         private global::Avalonia.Media.Imaging.RenderTargetBitmap? _leavingBitmap;
         internal bool HasLeavingTabFrame => _leavingFrame != null;
+        internal PixelSize? LeavingFramePixelSize => _leavingBitmap?.PixelSize;
+        internal double LastLeavingSnapshotMs { get; private set; }
         internal int EntranceCardCount => Math.Max(0, _entranceParts.Count - 1);
 
         // WPF FadeOutgoingTab, adapted: fade a frozen frame rather than re-showing a live tab.
@@ -74,15 +80,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 || old.Parent is not Grid host || old.Bounds.Width <= 0 || old.Bounds.Height <= 0) return;
             try
             {
+                // Device pixels at the window's scaling, so the fading frame stays sharp on HiDPI.
+                double scale = RenderScaling > 0 ? RenderScaling : 1;
+                var watch = System.Diagnostics.Stopwatch.StartNew();
                 _leavingBitmap = new global::Avalonia.Media.Imaging.RenderTargetBitmap(
-                    new PixelSize((int)Math.Ceiling(old.Bounds.Width), (int)Math.Ceiling(old.Bounds.Height)));
+                    SnapshotPixels(old.Bounds.Size, scale), new Vector(96 * scale, 96 * scale));
                 _leavingBitmap.Render(old);
+                LastLeavingSnapshotMs = watch.Elapsed.TotalMilliseconds;
+                Log.Debug("Tab snapshot {Tab}: {Px} in {Ms:F1} ms", CurrentTab, _leavingBitmap.PixelSize, LastLeavingSnapshotMs);
                 _leavingFrame = new global::Avalonia.Controls.Image { Source = _leavingBitmap, IsHitTestVisible = false,
                     Margin = old.Margin, Stretch = global::Avalonia.Media.Stretch.Fill };
                 host.Children.Add(_leavingFrame);
             }
             catch (Exception ex) { Log.Debug("Tab snapshot: {E}", ex.Message); ClearLeavingFrame(); }
         }
+
+        internal static PixelSize SnapshotPixels(Size dips, double scale) =>
+            new((int)Math.Ceiling(dips.Width * scale), (int)Math.Ceiling(dips.Height * scale));
 
         private void ClearLeavingFrame()
         {

@@ -105,6 +105,20 @@ public sealed class TabTransitionsTests
     });
 
     [Fact]
+    public Task LeavingFrameIsRenderedInDevicePixels() => Run(shell =>
+    {
+        // HiDPI: 1.79 is this desktop's scaling; a DIP-sized bitmap would be 101x50 and blurry.
+        Assert.Equal(new PixelSize(180, 90), MainShellWindow.SnapshotPixels(new Size(100.5, 50), 1.79));
+        shell.ShowTab("quests");
+        shell.SettleTabEntrance();
+        shell.UpdateLayout();
+        var old = shell.Named<Control>("QuestsTab")!;
+        shell.ShowTab("achievements");
+        Assert.Equal(MainShellWindow.SnapshotPixels(old.Bounds.Size, shell.RenderScaling), shell.LeavingFramePixelSize);
+        Assert.True(shell.LastLeavingSnapshotMs >= 0);
+    });
+
+    [Fact]
     public Task CardSelectionDescendsWrappersCapsEightAndSkipsDimmedCards() => Run(shell =>
     {
         var panel = new StackPanel();

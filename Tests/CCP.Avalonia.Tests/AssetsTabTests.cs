@@ -156,6 +156,7 @@ public sealed class AssetsTabTests
         {
             shell.ShowTab("settings");
             shell.ShowTab("assets");
+            shell.SettleTabEntrance();   // Full motion: no card mid-rise under the pulse
             Assert.False(tab.MediaLogPulsing);                  // nothing logged since last opened
 
             history.RecordImages(new[] { "/x/a.png" });
@@ -164,10 +165,12 @@ public sealed class AssetsTabTests
             // pulse the whole real-time gap since its last tick as one frame).
             global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             shell.ShowTab("assets");
+            shell.SettleTabEntrance();
             Dispatcher.UIThread.RunJobs();
             Assert.True(tab.MediaLogPulsing);
 
             shell.ShowTab("settings");
+            shell.SettleTabEntrance();
             Dispatcher.UIThread.RunJobs();
             Assert.False(tab.MediaLogPulsing);
             Assert.Equal(1.0, tab.BtnMediaLog.Opacity);
@@ -297,6 +300,7 @@ public sealed class AssetsTabTests
             shell.OpenNavSection("library");
             Dispatcher.UIThread.RunJobs();
             shell.PageStrip!.PillFor("assets")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            shell.SettleTabEntrance();   // Full motion: pointer tests need the settled page
             Dispatcher.UIThread.RunJobs();
             var tab = shell.Named<AssetsTabView>("AssetsTab")!;
             Assert.True(tab.IsVisible);
