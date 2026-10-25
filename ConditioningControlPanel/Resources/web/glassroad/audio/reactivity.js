@@ -3,10 +3,12 @@
  * Bands use real Hz boundaries, independent of the context's sample rate.
  */
 const NONE = Object.freeze({});
+export const NOTE_BANDS = Object.freeze(Array.from({ length: 8 }, (_, i) => 250 * 2 ** (i / 2)));
 const clamp01 = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
 export function createMusicReactivity(ctx, input) {
   const frame = { active: false, frozen: false, bass: 0, mid: 0, treble: 0, energy: 0, songS: 0 };
+  for (let i = 0; i < 8; i++) frame['note' + i] = 0;
   let analyser = null, spectrum = null, waveform = null;
   let bass0 = 0, bass1 = 0, mid1 = 0, treble1 = 0;
   try {
@@ -32,6 +34,7 @@ export function createMusicReactivity(ctx, input) {
     frame.active = false;
     frame.frozen = false;
     frame.bass = frame.mid = frame.treble = frame.energy = 0;
+    for (let i = 0; i < 8; i++) frame['note' + i] = 0;
     frame.songS = Number.isFinite(songS) ? songS : 0;
     return frame;
   }
@@ -75,6 +78,10 @@ export function createMusicReactivity(ctx, input) {
       frame.mid = smooth(frame.mid, band(bass1, mid1) * scale, step, gentle);
       frame.treble = smooth(frame.treble, band(mid1, treble1) * scale, step, gentle);
       frame.energy = smooth(frame.energy, clamp01(rms * 3) * scale, step, gentle);
+      // Eight measured half-octaves reveal melodic movement without another analyser or stems.
+      const hz = ctx.sampleRate / analyser.fftSize;
+      for (let i = 0; i < 8; i++) frame['note' + i] = smooth(frame['note' + i],
+        band(Math.ceil(NOTE_BANDS[i] / hz), Math.min(spectrum.length, Math.ceil(NOTE_BANDS[i] * Math.SQRT2 / hz))) * scale, step, gentle);
       return frame;
     },
     dispose() {

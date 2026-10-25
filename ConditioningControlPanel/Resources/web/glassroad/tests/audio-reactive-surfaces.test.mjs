@@ -125,6 +125,9 @@ test('all authored track floors retain their finish and the reservoir shares the
     assert.equal(road.material.positionNode, null, id + ' never deforms the driving deck');
     if (id === 'mainframe') {
       assert.equal(road.material.transparent, false);
+      assert.ok(nodes.has(road.uniforms.music.tileBeat), 'tile lighting follows the heard beat grid');
+      assert.ok(nodes.has(road.uniforms.music.tileBar), 'accent cycle follows the same song clock');
+      assert.ok(nodes.has(road.uniforms.reactive.note0), 'measured melodic energy still shapes the tiles');
       const world = buildMainframe(track, null, { reactive: road.uniforms.reactive }); t.after(() => world.dispose());
       const reservoir = world.group.getObjectByName('mainframe-reservoir-surface');
       const waterNodes = graph(reservoir.material.colorNode);

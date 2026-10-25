@@ -360,6 +360,7 @@ async function boot(course, options, lifetime, isCurrent) {
   });
   // A visual review may keep the Loom faces without requesting or displaying private media.
   const cardMedia = qs.get('media') === '0' ? null : createCardMedia(world.media, { bridge });
+  world.setItemMediaSource(seed => cardMedia?.sourceForFlash(seed) || null);
   const flashMedia = createFlashMedia({ source: seed => cardMedia?.sourceForFlash(seed) || null });
   const subliminalBurst = createSubliminalBurst({ parent: document.body, primary: () => world.primaryColour() });
   effects.screen.params.mediaFlash = true;

@@ -12,8 +12,9 @@
  * spectrumRamp, PAD_FLOW.hueStep of a turn per chevron length, fixed along the pad) over the pad colour, with a white-hot leading
  * edge, so a pad reads as a clear run of bright arrows. Lips (no mask) take a lighter rainbow tint.
  */
-import { MeshBasicNodeMaterial, AdditiveBlending, Color } from 'three/webgpu';
-import { uniform, uv, fract, smoothstep, vec2, vec3, texture, clamp, abs, float, max, mix, fwidth } from 'three/tsl';
+import { MeshBasicNodeMaterial, AdditiveBlending, Color, CanvasTexture, SRGBColorSpace } from 'three/webgpu';
+import { uniform, uv, fract, smoothstep, vec2, vec3, texture, clamp, abs, float, max, mix, fwidth, attribute, step, sin, cos } from 'three/tsl';
+import { createPlaceholder, releaseLoom } from '../mediaPlaceholders.js';
 import { ROAD_AA } from '../roadAaMath.js';
 import { LOOK } from '../look.js';
 import { spectrumRamp } from './palette.js';
@@ -25,7 +26,7 @@ export const PAD_FLOW = Object.freeze({
   hueStep: 0.2, hueMix: 0.75, lipHueMix: 0.35, gain: 1.5, leadWhite: 0.8,
 });
 
-export function createPadMaterial(hex, mask = null) {
+export function createPadMaterial(hex, mask = null, { artPads = false } = {}) {
   const F = { ...PAD_FLOW, ...(LOOK.padFlow || {}) };
   const u = { phase: uniform(0), pulse: uniform(0) };
   const p = uv();
@@ -61,5 +62,15 @@ export function createPadMaterial(hex, mask = null) {
   const tint = mix(vec3(c.r, c.g, c.b), hueCol, mask ? F.hueMix : F.lipHueMix);
   m.colorNode = tint.mul(body.mul(1 - lo).add(lo).add(centre)).mul(F.gain).add(vec3(1, 0.97, 0.92).mul(edge.add(lead.mul(F.leadWhite))))
     .mul(u.pulse.mul(LOOK.padPulseGain).add(1));
+  if (artPads && (typeof document !== 'undefined' || typeof OffscreenCanvas !== 'undefined')) {
+    const ph = createPlaceholder(0, 256, [[.2,.9,.7],[.85,.35,.8],[.5,.8,1],[1,.85,.9]]);
+    ph.draw(0); releaseLoom();
+    const tex = new CanvasTexture(ph.canvas); tex.colorSpace = SRGBColorSpace;
+    const shape = attribute('padDesign', 'vec4'), q = vec2(p.x.div(abs(shape.x).mul(.72)), p.y.div(shape.y.mul(.65)).sub(1 / 1.3));
+    const angle = u.phase.mul(Math.PI * 2), at = vec2(q.x.mul(cos(angle)).sub(q.y.mul(sin(angle))), q.x.mul(sin(angle)).add(q.y.mul(cos(angle)))).add(.5);
+    const inset = float(1).sub(smoothstep(.46,.5,max(abs(q.x),abs(q.y)))).mul(float(1).sub(step(0,shape.x)));
+    m.colorNode = mix(m.colorNode, texture(tex,at).rgb.mul(1.25), inset);
+    m.addEventListener('dispose', () => tex.dispose());
+  }
   return { material: m, uniforms: u };
 }

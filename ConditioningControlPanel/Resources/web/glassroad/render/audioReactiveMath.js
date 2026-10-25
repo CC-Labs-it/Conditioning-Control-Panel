@@ -19,6 +19,13 @@ export function stepAudioReactive(state, signal, dt, { paused = false, gentle = 
     const next = before + (target - before) * (1 - Math.exp(-elapsed / tau));
     state[band] = next < 1e-5 ? 0 : next;
   }
+  for (let i = 0; i < 8; i++) {
+    const key = 'note' + i;
+    if (!(key in state)) continue;
+    const before = unit(state[key]), target = active ? perceptualAudioBand(signal[key]) : 0;
+    const tau = target > before ? (gentle ? AUDIO_REACTIVE.gentleAttackS : AUDIO_REACTIVE.attackS) : AUDIO_REACTIVE.releaseS;
+    state[key] = before + (target - before) * (1 - Math.exp(-elapsed / tau));
+  }
   if (active && Number.isFinite(signal.songS)) state.t = Math.max(0, signal.songS);
   state.gentle = gentle ? 1 : 0;
   return state;

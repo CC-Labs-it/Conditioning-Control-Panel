@@ -35,6 +35,17 @@ function audioFixture(sampleRate = 48000) {
     level(v) { rms = v; }, frequency(v) { frequency = v; } };
 }
 const file = { arrayBuffer: async () => new ArrayBuffer(4) };
+test('measured melodic half-octaves select different tiles and silence clears every note', () => {
+  const f = audioFixture(), reactive = createMusicReactivity(f.ctx,f.ctx.createGain());
+  for(let band=0;band<8;band++) {
+    reactive.clear(); f.frequency(250*2**((band+.5)/2));
+    for(let frame=0;frame<120;frame++)reactive.read(1/60,{playing:true});
+    for(let other=0;other<8;other++) assert.equal(reactive.frame['note'+other]>0,other===band);
+  }
+  f.level(0); reactive.read(1/60,{playing:true});
+  for(let band=0;band<8;band++)assert.equal(reactive.frame['note'+band],0);
+  reactive.dispose();
+});
 const fetchFn = async () => ({ ok: true, json: async () => ({ bpm: 120, sections: [] }), arrayBuffer: file.arrayBuffer });
 function settle(music, opts) { for (let i = 0; i < 90; i++) music.readReactivity(1 / 60, opts); return music.reactivity; }
 

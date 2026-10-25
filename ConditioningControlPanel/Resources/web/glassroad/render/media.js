@@ -211,7 +211,7 @@ export function createMediaSlots(scene, track, opts = {}) {
   const tun = layout.tunnel ? tunnelLayout(layout.tunnel, track, M, T.tunnelStepMul) : null;
   if (tun) for (const sl of tun.slots) slots.push(sl);
   for (const sl of opts.extraSlots || []) slots.push(sl);
-  if (track.id === 'mainframe') slots.forEach((sl, i) => { sl.program = i % 2 ? 3 : 0; });
+  if (track.id === 'mainframe') slots.forEach((sl, i) => { sl.program = sl.frame === 'boostPad' ? 0 : i % 2 ? 3 : 0; });
 
   // ---- shared placeholder programs ----
   const P = Math.min(T.programs, PROGRAMS.length), cols = placeholderColours();

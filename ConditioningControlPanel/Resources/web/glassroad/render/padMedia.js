@@ -13,7 +13,7 @@ export function padMediaSlots(track) {
       || Math.abs(e.p.reduce((v, n, k) => v + (n - f.p[k]) * f.n[k], 0)) > .012)) continue;
     if (track.canalProfile && [s - h / 2, s, s + h / 2].some(at => track.canalProfile(at, pad.x).blend > 0)) continue;
     slots.push({ id: 'boost-media-' + i, frame: 'boostPad', s, w, h,
-      C: f.p.map((v, k) => v + f.b[k] * pad.x + f.n[k] * .035),
+      C: f.p.map((v, k) => v + f.b[k] * pad.x + f.n[k] * .065),
       X: [...f.b], Y: [...f.t], Z: [...f.n], phone: true, program: 0 });
   }
   const count = Math.min(12, slots.length);

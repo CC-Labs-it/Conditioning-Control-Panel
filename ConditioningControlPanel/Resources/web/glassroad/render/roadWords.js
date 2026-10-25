@@ -22,6 +22,7 @@ import { createRoadRun, ROAD_LOOK } from '../sim/roadWords.js';
 import { FACES } from './fonts.js';
 import { Q } from './quality.js';
 import { STYLES, STYLE, phraseStyle, paintText, packAtlas, markLook, frameLook } from './roadWordsMath.js';
+import { createDecalSampler, clearWordLane } from './surfaceDecals.js';
 
 export const ROAD_PAINT = Object.freeze({
   atlasW: 2048, atlasH: 4096,      // one sheet per song; the phone tier holds half (atlasPhoneH); rows shrink to fit
@@ -31,7 +32,8 @@ export const ROAD_PAINT = Object.freeze({
   stretch: 2.6,                    // letters this many times longer along the road than drawn
   slots: 40,                       // markings on the road at once
   rows: 8,                         // strip rows down one marking (it follows crests and banks)
-  liftM: 0.035,                    // over the glass (with the polygon offset: never z-fighting)
+  liftM: 0.16,                     // above arrows, pictures and the displaced liquid
+  cols: 8,                        // follow curved canal support across the whole word
   buildMs: 3,                      // atlas drawing budget per frame
   glowPx: 0.14,                    // the glow blur (share of the row)
   ringN: 16,                       // offset fills that draw the contour
@@ -41,7 +43,7 @@ export const ROAD_PAINT = Object.freeze({
   glowCover: 0.12,                 // how much of the glow covers the road (the rest is added light)
 });
 
-const VERTS = (ROAD_PAINT.rows + 1) * 2, LOOK_VEC4 = 5;
+const VERTS = (ROAD_PAINT.rows + 1) * (ROAD_PAINT.cols + 1), LOOK_VEC4 = 5;
 
 /** The atlas: every marking of the song drawn once, a few per frame. */
 function createAtlas(P = ROAD_PAINT) {
@@ -169,7 +171,7 @@ function createAtlas(P = ROAD_PAINT) {
 }
 
 /** The pooled marking mesh and its shader. */
-function createPaint(atlasTex, P = ROAD_PAINT) {
+function createPaint(atlasTex, P = ROAD_PAINT, pal = null) {
   const n = P.slots, V = VERTS;
   const buf = (k) => new BufferAttribute(new Float32Array(n * V * k), k).setUsage(DynamicDrawUsage);
   // six vertex buffers (WebGPU allows eight per pipeline): the per-look constants live in a uniform array
@@ -177,13 +179,13 @@ function createPaint(atlasTex, P = ROAD_PAINT) {
   const a = { position: buf(3), normal: buf(3), aLoc: buf(4), aRect: buf(4), aGeo: buf(4), aState: buf(4) };
   const g = new BufferGeometry();
   for (const k in a) g.setAttribute(k, a[k]);
-  const idx = new Uint16Array(n * P.rows * 6);
-  for (let s = 0, o = 0; s < n; s++) for (let r = 0; r < P.rows; r++) {
-    const b = s * V + r * 2;
-    idx[o++] = b; idx[o++] = b + 1; idx[o++] = b + 3; idx[o++] = b; idx[o++] = b + 3; idx[o++] = b + 2;
+  const idx = new Uint16Array(n * P.rows * P.cols * 6), stride = P.cols + 1;
+  for (let s = 0, o = 0; s < n; s++) for (let r = 0; r < P.rows; r++) for (let c = 0; c < P.cols; c++) {
+    const b = s * V + r * stride + c;
+    idx[o++] = b; idx[o++] = b + 1; idx[o++] = b + stride + 1; idx[o++] = b; idx[o++] = b + stride + 1; idx[o++] = b + stride;
   }
   g.setIndex(new BufferAttribute(idx, 1));
-  for (let s = 0; s < n; s++) for (let v = 0; v < V; v++) { a.aLoc.array[(s * V + v) * 4] = v & 1; a.aLoc.array[(s * V + v) * 4 + 1] = (v >> 1) / P.rows; }
+  for (let s = 0; s < n; s++) for (let v = 0; v < V; v++) { a.aLoc.array[(s * V + v) * 4] = (v % stride) / P.cols; a.aLoc.array[(s * V + v) * 4 + 1] = Math.floor(v / stride) / P.rows; }
 
   const u = { kartS: uniform(0), lapM: uniform(1000), wave: uniform(0), waveD: uniform(0), pulse: uniform(0), glitch: uniform(0),
     glow: uniform(0.5), shatter: uniform(0), beat: uniform(0), time: uniform(0), calm: uniform(0), sweep: uniform(0) };
@@ -242,26 +244,29 @@ function createPaint(atlasTex, P = ROAD_PAINT) {
   // the gloss: a slow diagonal light running over the letters (the song clock; Gentle runs it slower)
   const sweepAt = fract(u.time.mul(u.sweep).add(geo.w)).mul(2.4).sub(0.7);
   const gloss = exp(loc.x.mul(0.5).add(loc.y).sub(sweepAt).div(0.09).pow(2).negate()).mul(fx2.y).mul(0.9);
-  const hot = vec3(1.7, 1.5, 1.45);
+  const themedInk = pal ? mix(pal.col(0), vec3(1), .3).mul(1.25) : ink.xyz;
+  const themedGlow = pal ? pal.col(0) : glowC.xyz;
+  const themedEdge = pal ? pal.col(2).mul(.18) : edgeC.xyz;
+  const hot = mix(themedInk, vec3(1.4), .48);
   // the shard hue: every shard takes a hue of its own between pink, cyan and gold (the road shatter's colours)
   const tint = mix(mix(vec3(1.25, 0.42, 0.95), vec3(0.42, 0.95, 1.25), sid2), vec3(1.25, 0.95, 0.4), step(0.72, sid));
   const turn = sh.mul(0.75);
-  const inkCol0 = mix(ink.xyz, ink.xyz.mul(tint), turn);
+  const inkCol0 = mix(themedInk, themedInk.mul(pal ? mix(pal.col(0), pal.col(1), sid2) : tint), turn);
   const inkCol = mix(inkCol0.mul(bright), hot, sung.mul(0.45)).add(vec3(1.2, 1.1, 1.15).mul(gloss));
-  const glowCol = mix(glowC.xyz, tint, turn).mul(float(1).add(sung.mul(0.5)));
+  const glowCol = mix(themedGlow, pal ? pal.col(1) : tint, turn).mul(float(1).add(sung.mul(0.5)));
   // premultiplied: the fill and the contour cover the road, the glow and the wipe line mostly ADD light (a dark
   // halo over the bright glass read as a shadow), so a neon marking glows and the bloom pass picks up its core
   const fA = fill.mul(ink.w).mul(reveal);
-  const eA = edge.mul(edgeC.w).mul(reveal).mul(float(1).sub(fA));
+  const eA = edge.mul(max(edgeC.w, .92)).mul(reveal).mul(float(1).sub(fA));
   const gL = glowM.mul(glowC.w).mul(mix(float(0.7), u.glow, fx2.x)).mul(mix(float(1), float(1.8), sung)).mul(reveal).mul(float(1).sub(fA)).mul(float(1).sub(edge.mul(0.6)));
   const lA = frontLine.mul(0.9);
   const crackL = crack.mul(tx.b).mul(0.9);
-  const lit = inkCol.mul(fA).add(edgeC.xyz.mul(eA)).add(glowCol.mul(gL)).add(vec3(1.6, 1.25, 1.5).mul(lA)).add(glowCol.mul(1.3).mul(crackL));
+  const lit = inkCol.mul(fA).add(themedEdge.mul(eA)).add(glowCol.mul(gL)).add(hot.mul(lA)).add(glowCol.mul(1.3).mul(crackL));
   const cover = clamp(fA.add(eA).add(gL.mul(P.glowCover)).add(lA.mul(0.3)), 0, 1);
   m.colorNode = lit.mul(st.x);
   m.opacityNode = cover.mul(st.x);
   const mesh = new Mesh(g, m);
-  mesh.frustumCulled = false; mesh.renderOrder = 1; mesh.castShadow = false; mesh.receiveShadow = false;
+  mesh.frustumCulled = false; mesh.renderOrder = 5; mesh.castShadow = false; mesh.receiveShadow = false;
   mesh.visible = false;
   mesh.name = 'road-words';
   return { mesh, a, u, dispose() { g.dispose(); m.dispose(); } };
@@ -272,9 +277,9 @@ function createPaint(atlasTex, P = ROAD_PAINT) {
  * @param opts { track, feel (speed.topMps), photosafe (the drop boost asks it once per drop) }
  * @returns {{ object, update(song, songS, kart, mf, ctx): void, clear(): void, dispose(): void, stats(): object }}
  */
-export function createRoadWords(scene, { track, feel = null, photosafe = null } = {}) {
+export function createRoadWords(scene, { track, feel = null, photosafe = null, pal = null, waterVolume = null } = {}) {
   const P = ROAD_PAINT, R = ROAD_LOOK, V = VERTS;
-  const atlas = createAtlas(P), paint = createPaint(atlas.texture, P);
+  const atlas = createAtlas(P), paint = createPaint(atlas.texture, P, pal), sample = createDecalSampler(track, waterVolume);
   scene.add(paint.mesh);
   const { a, u } = paint;
   u.lapM.value = track.lengthM;
@@ -316,14 +321,15 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null } 
 
   /** The strip of one marking on the road: ROWS rows from track frames, lateral x, centred on s. */
   function writeStrip(slot, view) {
-    const c = cells.get(keyOf[view.id]), wM = c.wM, lenM = R.lenM, lap = track.lengthM;
+    const c = cells.get(keyOf[view.id]), wM = Math.min(c.wM, Math.max(1, track.frameAt(view.s).w - 1)), lenM = R.lenM, lap = track.lengthM;
+    const lane = clearWordLane(track, view.s, view.x, wM, lenM);
     const P3 = a.position.array, N3 = a.normal.array, G4 = a.aGeo.array, seed = (view.id * 0.618034) % 1;
     for (let r = 0; r <= P.rows; r++) {
       const s = wrap(view.s - lenM / 2 + (lenM * r) / P.rows, lap);
-      track.frameAt(s, fr);
-      for (let side = 0; side < 2; side++) {
-        const x = view.x + (side ? wM / 2 : -wM / 2), v = slot * V + r * 2 + side;
-        for (let j = 0; j < 3; j++) { P3[v * 3 + j] = fr.p[j] + fr.b[j] * x + fr.n[j] * P.liftM; N3[v * 3 + j] = fr.n[j]; }
+      for (let col = 0; col <= P.cols; col++) {
+        const x = lane + (col / P.cols - .5) * wM, v = slot * V + r * (P.cols + 1) + col;
+        sample(s, x, fr);
+        for (let j = 0; j < 3; j++) { P3[v * 3 + j] = fr.p[j] + fr.n[j] * P.liftM; N3[v * 3 + j] = fr.n[j]; }
         G4[v * 4] = wM; G4[v * 4 + 1] = lenM; G4[v * 4 + 2] = s; G4[v * 4 + 3] = seed;
       }
     }
@@ -356,7 +362,7 @@ export function createRoadWords(scene, { track, feel = null, photosafe = null } 
         if (slot < 0) continue;              // the pool is full: this one waits
         slotId[slot] = v.id; slotOf.set(v.id, slot);
         writeStatic(slot, v.id); writeStrip(slot, v); staticDirty = geoDirty = true;
-      } else if (slotS[slot] !== v.s) { writeStrip(slot, v); geoDirty = true; }
+      } else if (slotS[slot] !== v.s || (waterVolume && !paused)) { writeStrip(slot, v); geoDirty = true; }
       seen[slot] = 1;
       markLook(v, { gentle }, look);
       for (let k = 0; k < V; k++) {

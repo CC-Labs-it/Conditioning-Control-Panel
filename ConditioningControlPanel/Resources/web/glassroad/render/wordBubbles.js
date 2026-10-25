@@ -1,6 +1,9 @@
 /* render/wordBubbles.js - the song's impact words in glass bubbles over the road (sim/words.js views).
  *
- * One instanced sprite draw for every bubble, ring and flash. Pass 4 (owner: "the text inside the bubbles is
+ * Course lettering (owner 2026-10-25): wordTheme.js shares fonts, finishes and colours with wordRush.js.
+ * Mainframe is terminal green, Keep engraved rose/gold, Boudoir satin/pearl, GOONWORKS comic fuchsia,
+ * Threshold prism chrome. Glass follows the live level accent without re-lettering the atlas.
+ * One instanced sprite draw for every bubble, ring and flash. Historical pass 4 (owner: "the text inside the bubbles is
  * actually shiny, pink and cool to look at"): each word is LETTERED once into a slot of a shared canvas atlas
  * (8 x 8 cells) in its kind's diegetic face (render/fonts.js, wordBubblesMath BUBBLE_TEXT: editorial italics,
  * gate capitals, the trigger's own round face): a pink gradient fill, a thick plum stroke over a soft pink
@@ -15,12 +18,13 @@
  * asks photosafe.request('pop') once and is skipped when refused or under Gentle.
  * Only the local player's bubbles exist here: nobody else's are ever drawn.
  */
-import { Sprite, SpriteNodeMaterial, InstancedBufferAttribute, DynamicDrawUsage, CanvasTexture, SRGBColorSpace } from 'three/webgpu';
+import { Color, Sprite, SpriteNodeMaterial, InstancedBufferAttribute, DynamicDrawUsage, CanvasTexture, SRGBColorSpace } from 'three/webgpu';
 import { instancedDynamicBufferAttribute, uv, vec2, vec3, vec4, float, texture, mix, smoothstep, length, max, min, floor, mod, step, atan, sin, clamp,
   uniform, fract, exp, dot } from 'three/tsl';
-import { bubbleLook, fitFontPx, letterLayout, bubbleFace, asciiWord, BUBBLE_LOOK as BL, BUBBLE_TEXT as BT } from './wordBubblesMath.js';
+import { bubbleLook, fitFontPx, letterLayout, asciiWord, BUBBLE_LOOK as BL, BUBBLE_TEXT as BT } from './wordBubblesMath.js';
 import { FACES } from './fonts.js';
 import { scriptBubbles } from '../sim/words.js';
+import { wordTheme, wordFace, wordAccent } from './wordTheme.js';
 
 const GRID = 8, CELL = 256;
 const MODE = { bubble: 0, ring: 1, flash: 2 };
@@ -42,7 +46,7 @@ function glint(c, x, y, r) {
   c.fill();
 }
 
-function wordAtlas() {
+function wordAtlas(theme) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = GRID * CELL;
   const ctx = canvas.getContext('2d');
@@ -58,7 +62,7 @@ function wordAtlas() {
 
   function letter(slot, word, row) {
     const x0 = (slot % GRID) * CELL, y0 = Math.floor(slot / GRID) * CELL, cx = CELL / 2, cy = CELL / 2;
-    const f = bubbleFace(row), face = FACES[f.face];
+    const f = wordFace(theme, row), face = FACES[f.face];
     let text = asciiWord(word);
     if (f.upper) text = text.toUpperCase();
     const ref = 100;
@@ -73,9 +77,9 @@ function wordAtlas() {
     // 1. halo and plum stroke, straight on the atlas
     ctx.save();
     ctx.font = font; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(5, px * BT.stroke); ctx.strokeStyle = BT.plum;
+    ctx.lineWidth = Math.max(5, px * BT.stroke); ctx.strokeStyle = theme.ink;
     for (const blur of [px * BT.haloBlur, 0]) {
-      ctx.shadowColor = BT.halo; ctx.shadowBlur = blur;
+      ctx.shadowColor = theme.halo; ctx.shadowBlur = blur;
       for (let i = 0; i < n; i++) ctx.strokeText(lay.lines[i], x0 + cx + ox, y0 + lineY(i), maxW);
     }
     ctx.restore();
@@ -87,11 +91,25 @@ function wordAtlas() {
       const y = lineY(i), top = y - px * 0.42, foot = y + px * 0.42;
       sc.globalCompositeOperation = 'source-over';
       const g = sc.createLinearGradient(0, top, 0, foot);
-      for (const [at, col] of BT.fill) g.addColorStop(at, col);
+      for (const [at, col] of theme.fill) g.addColorStop(at, col);
       sc.fillStyle = g;
       sc.fillText(lay.lines[i], cx + ox, y, maxW);
     }
     sc.globalCompositeOperation = 'source-atop';
+    // A static finish cut into the letters: terminal scanlines, comic dots, gilt engraving or satin.
+    sc.fillStyle = theme.ink;
+    sc.globalAlpha = theme.motif === 'terminal' ? 0.28 : 0.16;
+    if (theme.motif === 'terminal') {
+      for (let y = 0; y < CELL; y += 6) sc.fillRect(0, y, CELL, 1.5);
+    } else if (theme.motif === 'comic') {
+      for (let y = 0; y < CELL; y += 9) for (let x = (y % 18 ? 4 : 0); x < CELL; x += 9) {
+        sc.beginPath(); sc.arc(x, y, 1.25, 0, Math.PI * 2); sc.fill();
+      }
+    } else if (theme.motif === 'engraved') {
+      sc.strokeStyle = '#fff4d1'; sc.lineWidth = 1;
+      for (let x = -CELL; x < CELL * 2; x += 10) { sc.beginPath(); sc.moveTo(x, 0); sc.lineTo(x - CELL / 2, CELL); sc.stroke(); }
+    }
+    sc.globalAlpha = 1;
     for (let i = 0; i < n; i++) {
       const y = lineY(i), top = y - px * 0.42, foot = y + px * 0.42, w = Math.min(maxW, measure(lay.lines[i]) * px / ref || CELL * 0.8);
       const gl = sc.createLinearGradient(0, top, 0, top + (foot - top) * BT.glossTo);
@@ -101,7 +119,7 @@ function wordAtlas() {
       sc.fillStyle = gl;
       sc.fillRect(0, top - px * 0.3, CELL, (foot - top) * BT.glossTo + px * 0.3);
       sc.fillStyle = '#ffffff';
-      for (let k = 0; k < BT.glitter / n; k++) {
+      for (let k = 0; k < theme.glitter / n; k++) {
         const gx = cx + ox + (r() - 0.5) * w, gy = y + (r() - 0.5) * px * 0.7, gr = 0.8 + r() * 1.6;
         if (r() < 0.25) glint(sc, gx, gy, gr * 2.6);
         else { sc.beginPath(); sc.arc(gx, gy, gr, 0, Math.PI * 2); sc.fill(); }
@@ -112,7 +130,7 @@ function wordAtlas() {
     // 3. a few specular glints riding the letters' edges (the shader twinkles anything this white)
     ctx.save();
     ctx.fillStyle = '#ffffff';
-    for (let k = 0; k < BT.stars; k++) {
+    for (let k = 0; k < theme.stars; k++) {
       const i = k % n, w = Math.min(maxW, measure(lay.lines[i]) * px / ref || CELL * 0.8);
       const gx = x0 + cx + ox + (r() - 0.5) * w * 1.05, gy = y0 + lineY(i) + (k % 2 ? 0.36 : -0.4) * px;
       glint(ctx, gx, gy, px * (0.07 + r() * 0.05));
@@ -149,14 +167,15 @@ function wordAtlas() {
 
 /** The bubble material over one instanced sprite: v = (slot + word fade, alpha, mode, seed). The slot's fraction
  * carries how far the word has left the glass (0 there, TEXT_OUT gone), so a pop empties the bubble. */
-function bubbleCloud(cap, atlas) {
+function bubbleCloud(cap, atlas, theme) {
   const aPos = new InstancedBufferAttribute(new Float32Array(cap * 3), 3).setUsage(DynamicDrawUsage);
   const aSize = new InstancedBufferAttribute(new Float32Array(cap), 1).setUsage(DynamicDrawUsage);
   const aV = new InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(DynamicDrawUsage);
   const pos = instancedDynamicBufferAttribute(aPos, 'vec3'), size = instancedDynamicBufferAttribute(aSize, 'float');
   const v = instancedDynamicBufferAttribute(aV, 'vec4');
   // the shimmer clock and its strengths (uniforms: a Gentle switch never builds a new program)
-  const u = { time: uniform(0), sweepHz: uniform(BT.sweepHz), sweepGain: uniform(BT.sweepGain), twinkle: uniform(1) };
+  const u = { time: uniform(0), sweepHz: uniform(BT.sweepHz), sweepGain: uniform(BT.sweepGain), twinkle: uniform(1),
+    tint: uniform(new Color(theme.accent)), sung: uniform(new Color(theme.echo)) };
   const m = new SpriteNodeMaterial({ transparent: true, depthWrite: false });
   m.positionNode = pos;
   m.scaleNode = size;
@@ -166,7 +185,7 @@ function bubbleCloud(cap, atlas) {
   // glass: a pale pink body, a bright iridescent rim, one highlight top left
   const ang = atan(p.y.sub(0.5), p.x.sub(0.5));
   const film = sin(vec3(0, 2.1, 4.2).add(ang.add(seed.mul(6.28)).add(d.mul(4)))).mul(0.5).add(0.5);
-  const rimTint = mix(vec3(1, 0.62, 0.86), film, 0.35);
+  const rimTint = mix(mix(u.tint, vec3(1), 0.3), film, 0.1);
   const inside = float(1).sub(smoothstep(0.97, 1.0, d));
   const rim = smoothstep(0.72, 0.95, d).mul(inside);
   const spot = float(1).sub(smoothstep(0, 0.16, length(p.sub(vec2(0.34, 0.68)))));
@@ -187,8 +206,8 @@ function bubbleCloud(cap, atlas) {
   // the karaoke light (wordBubblesMath sungLight) rides in the bubble's mode, 0..SUNG_MAX: on its word the
   // glass fills warm gold, the rim glows and the body thickens behind the word, so the line answers the voice
   const sung = clamp(mode.mul(isBubble).div(SUNG_MAX), 0, 1);
-  const bodyCol = mix(mix(vec3(1, 0.86, 0.94), vec3(1, 0.86, 0.46), sung), mix(rimTint, vec3(1, 0.8, 0.3), sung.mul(0.6)), rim);
-  const glassCol = bodyCol.add(vec3(1, 1, 1).mul(spot.mul(0.8))).add(vec3(1, 0.85, 0.5).mul(rim.mul(sung).mul(0.6)));
+  const bodyCol = mix(mix(mix(u.tint, vec3(1), 0.7), mix(u.sung, vec3(1), 0.35), sung), mix(rimTint, u.sung, sung.mul(0.6)), rim);
+  const glassCol = bodyCol.add(vec3(1, 1, 1).mul(spot.mul(0.8))).add(u.sung.mul(rim.mul(sung).mul(0.6)));
   const bubbleCol = mix(glassCol, wordCol, word.a);
   const bubbleA = max(word.a, max(inside.mul(sung.mul(0.38).add(0.3)), max(rim.mul(0.9), spot.mul(0.85)))).mul(inside);
   // ring: a thin bright band; flash: a soft white core
@@ -222,8 +241,8 @@ const sizeOf = (v) => (v.row === 5 ? BL.triggerSizeM : v.row === 3 ? BL.gateSize
  * @returns {{ update(live: object[], song?: object, dt?: number): void, prepare(song: object): void, clear(): void,
  *   dispose(): void, object: object }}
  */
-export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 128 } = {}) {
-  const atlas = wordAtlas(), cloud = bubbleCloud(cap, atlas.texture);
+export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 128, track = null, pal = null } = {}) {
+  const theme = wordTheme(track, pal), atlas = wordAtlas(theme), cloud = bubbleCloud(cap, atlas.texture, theme);
   scene.add(cloud.sprite);
   const flashed = new Map();   // view id -> the pop's flash was granted (asked once per pop)
   const look = {};
@@ -248,6 +267,7 @@ export function createWordBubbles(scene, { feel = null, photosafe = null, cap = 
     cloud.u.sweepHz.value = g ? BT.gentleSweepHz : BT.sweepHz;
     cloud.u.sweepGain.value = g ? BT.gentleSweepGain : BT.sweepGain;
     cloud.u.twinkle.value = g ? 0 : 1;
+    cloud.u.tint.value.set(wordAccent(theme, pal));
     for (const v of live) {
       const seed = ((v.id * 0.618034) % 1);
       if (v.state === 'popped' && !flashed.has(v.id)) flashed.set(v.id, !g && (!photosafe || photosafe.request('pop')));

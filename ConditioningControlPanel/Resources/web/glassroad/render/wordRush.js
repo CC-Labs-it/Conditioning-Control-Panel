@@ -1,7 +1,9 @@
 /* render/wordRush.js - a popped word rushes at the camera (pass 4, owner 2026-10-23: "when we gather that word,
  * the subliminal effect comes at us toward the POV like the Back Room slot machine").
  *
- * The LOOK of the Back Room slot callout (backroom shared/hypno/callout.js, ported by eye, never imported: this
+ * Course lettering (owner 2026-10-25): wordTheme.js supplies the same face, finish and colours as the bubble.
+ * Only the lettering changes; the chart words, zoom timing, Gentle policy and pause are preserved.
+ * The original LOOK of the Back Room slot callout (backroom shared/hypno/callout.js, ported by eye, never imported: this
  * tree never reaches into another web tree): the word centred on screen, 60% -> 130% toward the viewer over
  * about a second with a small lean and stretch, a short hold, then a dissolve that pushes a little further on
  * while a red and a blue ghost split off it. Pink gradient fill, dark plum stroke, a hard drop shadow and a
@@ -17,7 +19,8 @@
  * rushLook is pure (tests/words.test.mjs); createWordRush listens to `word-pop` on the bus.
  */
 import { FACES } from './fonts.js';
-import { bubbleFace, asciiWord, BUBBLE_TEXT as BT } from './wordBubblesMath.js';
+import { asciiWord } from './wordBubblesMath.js';
+import { wordTheme, wordFace, wordAccent, wordFinish } from './wordTheme.js';
 
 export const RUSH = Object.freeze({
   from: 0.6, to: 1.3, zoomMs: 1000, holdMs: 200, outMs: 400,   // the slot callout's own schedule
@@ -87,7 +90,7 @@ const REST_POS = ',0 0,.11em .07em,0 .19em,.23em .3em,0 0';
 // the stroke) and the ghosts blend normally. A filter: drop-shadow chain
 // and mix-blend-mode over the WebGL canvas made Firefox re-rasterise the scaled word offscreen every frame: about
 // 2 s of 40 ms frames per hero rush (dev/hitch-check.mjs, s16 break and the finish)
-const CSS = `
+const CSS = (theme) => `
 .gr-rush{position:fixed;inset:0;z-index:9;pointer-events:none;overflow:hidden;display:none}
 .gr-rush-box{position:absolute;left:50%;top:${RUSH.topPct}%;transform:translate(-50%,-50%) scale(.6);opacity:0;will-change:transform,opacity;
   line-height:1;white-space:nowrap;text-align:center}
@@ -95,17 +98,19 @@ const CSS = `
 .gr-rush-word{position:relative;display:block;color:transparent;-webkit-text-fill-color:transparent;
   background-image:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.9) 50%,transparent 60%),
     linear-gradient(180deg,rgba(255,255,255,.6) 10%,rgba(255,255,255,.2) 45%,rgba(255,255,255,0) 47%),
-    radial-gradient(circle,#fff 0 .011em,transparent .024em),
+    ${wordFinish(theme)},
     radial-gradient(circle,rgba(255,255,255,.85) 0 .007em,transparent .017em),
     radial-gradient(circle,rgba(255,240,250,.9) 0 .009em,transparent .02em),
-    linear-gradient(180deg,${BT.fill.map(([at, c]) => `${c} ${Math.round(at * 100)}%`).join(',')});
-  background-size:300% 100%,100% 100%,.53em .41em,.29em .37em,.71em .23em,100% 100%;background-position:120% 0${REST_POS};
+    linear-gradient(180deg,${theme.fill.map(([at, c]) => `${c} ${Math.round(at * 100)}%`).join(',')});
+  background-size:300% 100%,100% 100%,${theme.motif === 'comic' ? '.19em .19em' : '100% 100%'},.29em .37em,.71em .23em,100% 100%;background-position:120% 0${REST_POS};
   background-repeat:no-repeat,no-repeat,repeat,repeat,repeat,no-repeat;-webkit-background-clip:text;background-clip:text}
-.gr-rush-under{position:absolute;inset:0;color:${BT.plum};-webkit-text-fill-color:${BT.plum};-webkit-text-stroke:.11em ${BT.plum};
-  text-shadow:0 .12em 0 #16020f,0 .07em .03em #16020f,0 0 .3em rgba(255,64,170,.8),0 0 .6em rgba(255,64,170,.35)}
-.gr-rush[data-tier=hero] .gr-rush-under{text-shadow:0 .12em 0 #16020f,0 .07em .03em #16020f,0 0 .28em rgba(255,64,170,.9),0 0 .75em rgba(255,150,215,.55)}
+.gr-rush-under{position:absolute;inset:0;color:${theme.ink};-webkit-text-fill-color:${theme.ink};-webkit-text-stroke:${theme.motif === 'comic' ? '.13em' : '.09em'} ${theme.ink};
+  text-shadow:0 .12em 0 ${theme.ink},0 .07em .03em ${theme.ink},0 0 .3em ${theme.halo}}
 .gr-rush-ghost{position:absolute;inset:0;opacity:0}
-.gr-rush-ghost.r{color:#ff3d8f;-webkit-text-fill-color:#ff3d8f}.gr-rush-ghost.b{color:#5fb0ff;-webkit-text-fill-color:#5fb0ff}
+.gr-rush-ghost.r{color:${theme.accent};-webkit-text-fill-color:${theme.accent}}.gr-rush-ghost.b{color:${theme.echo};-webkit-text-fill-color:${theme.echo}}
+.gr-rush[data-theme=mainframe] .gr-rush-word{background-image:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.7) 50%,transparent 60%),
+  linear-gradient(180deg,rgba(255,255,255,.35),transparent 48%),${wordFinish(theme)},none,none,
+  linear-gradient(180deg,${theme.fill.map(([at, c]) => `${c} ${Math.round(at * 100)}%`).join(',')})}
 `;
 
 /**
@@ -113,20 +118,23 @@ const CSS = `
  * @returns {{ show(e: object): void, update(dt: number, paused?: boolean): void, clear(): void, dispose(): void,
  *   readonly active: boolean, readonly tier: string|null, readonly text: string }}
  */
-export function createWordRush({ bus = null, feel = null, doc = globalThis.document, mount = null } = {}) {
+export function createWordRush({ bus = null, feel = null, doc = globalThis.document, mount = null, track = null, pal = null } = {}) {
+  const theme = wordTheme(track, pal);
   const host = mount || (doc && doc.body);
   const gentle = () => !!(feel && feel.get('gentle.on'));
   let layer = null, box = null, word = null, under = null, ghosts = [], style = null;
   if (doc && host) {
     style = doc.createElement('style');
     style.setAttribute('data-gr-rush', '');
-    style.textContent = CSS;
+    style.textContent = CSS(theme);
     (doc.head || host).appendChild(style);
     layer = doc.createElement('div');
     layer.className = 'gr-rush';
+    layer.setAttribute('data-theme', theme.id);
     layer.setAttribute('aria-hidden', 'true');
     box = doc.createElement('div');
     box.className = 'gr-rush-box';
+    box.style.letterSpacing = theme.tracking + 'em';
     under = doc.createElement('span');
     under.className = 'gr-rush-under';
     box.appendChild(under);
@@ -149,18 +157,20 @@ export function createWordRush({ bus = null, feel = null, doc = globalThis.docum
   function show(e) {
     if (!e || !e.w) return;
     tier = rushTier(e); g = gentle(); t = 0;
-    const f = bubbleFace(e.row || 0), face = FACES[f.face];
+    const f = wordFace(theme, e.row || 0), face = FACES[f.face];
     text = asciiWord(e.w);
     if (f.upper) text = text.toUpperCase();
     if (!layer) return;
     const vw = globalThis.innerWidth || 1280, vh = globalThis.innerHeight || 720;
     let px = RUSH.vh[tier] * (g ? RUSH.gentleVh : 1) * vh / 100;
     const peak = g ? RUSH.gentleTo : RUSH.to;
-    const w = widthOf(text, face.css(px, f.weight), px) * 1.15;   // the padding and the stroke
+    const w = (widthOf(text, face.css(px, f.weight), px) + Math.max(0, theme.tracking) * px * text.length) * 1.15;
     if (w * peak > vw * RUSH.fitVw) px *= (vw * RUSH.fitVw) / (w * peak);
     const font = face.css(px, f.weight);
     word.textContent = text; word.style.font = font;
     under.textContent = text; under.style.font = font;
+    const accent = wordAccent(theme, pal);
+    under.style.textShadow = `0 .12em 0 ${theme.ink},0 .07em .03em ${theme.ink},0 0 ${tier === 'hero' ? '.4em' : '.25em'} ${accent}`;
     for (const gh of ghosts) { gh.textContent = text; gh.style.font = font; gh.style.opacity = '0'; }
     layer.setAttribute('data-tier', tier);
     layer.style.display = 'block';

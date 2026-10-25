@@ -97,9 +97,9 @@ const V = new Vector3(), Q = new Quaternion(), OFF = new Vector3();
 const GOPT = [{ gentle: false }, { gentle: true }];
 
 /** @returns {{ update(view: object, dt: number, karts: object[], opts: object): void, clear(): void, dispose(): void }} */
-export function createItemStatus(root, feel, { photosafe = null, cap = 1100 } = {}) {
+export function createItemStatus(root, feel, { photosafe = null, cap = 1100, track = null, waterVolume = null } = {}) {
   const cloud = statusMaterial(cap);
-  const malusSpirals = createMalusSpirals(root, feel);
+  const malusSpirals = createMalusSpirals(root, feel, { track, waterVolume });
   root.add(cloud.sprite);
   const pool = createBurstPool(640);
   const states = [], seeds = [];

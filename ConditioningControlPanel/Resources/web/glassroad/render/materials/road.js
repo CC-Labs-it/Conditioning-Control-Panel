@@ -31,7 +31,7 @@ import { machineSurface, coolantCaustics } from '../mainframeMaterials.js';
 import { mainframeFloor } from '../mainframeFloor.js';
 import { createBoudoirRoadSurface } from '../boudoirMaterials.js';
 import { createBoudoirWaterPalette } from '../boudoirWater.js';
-import { createAudioReactiveUniforms, reactiveRoadLight, reactiveTint } from '../audioReactive.js';
+import { createAudioReactiveUniforms, reactiveRoadLight, reactiveTint, mainframeTileLight } from '../audioReactive.js';
 import { thresholdGlassFinish } from '../thresholdFinish.js';
 
 /** Road polish numbers; LOOK.roadPolish overrides any key. */
@@ -382,7 +382,8 @@ export function createRoadMaterial(pal, art = null, track = null) {
   // Song-beat geometry stays legible on both surfaces. Its constant colour and dark backing do not
   // brighten the full road; the true edge, centre line and separate pad/word meshes remain clear.
   const reactiveLight = reactiveRoadLight({ p, trueEdge, distance: dist, u: u.reactive, tint: reactiveTint(pal, track?.id) });
-  const musicBody = beatBands.apply(glassBody).add(reactiveLight.mul(float(1).sub(wet)));
+  let musicBody = beatBands.apply(glassBody).add(reactiveLight.mul(float(1).sub(wet)));
+  if (track?.id === 'mainframe') musicBody = mix(musicBody,mainframeTileLight(p, u.reactive, mu, trueEdge, musicBody),float(1).sub(wet));
   const dry = float(1).sub(wet.mul(0.75));
   const finishSheen = boudoir ? boudoir.sheen.mul(u.sheen) : vec3(1, 0.96, 0.98).mul(sheen).mul(castGlass ? castGlass.glaze : 1);
   const litCol = musicBody.add(finishSheen.mul(dry)).add(polish.mul(dry).mul(boudoir ? .08 : track?.id === 'mainframe' ? 0.3 : 1)).mul(float(1).sub(gutter.mul(E.gutterDark)));

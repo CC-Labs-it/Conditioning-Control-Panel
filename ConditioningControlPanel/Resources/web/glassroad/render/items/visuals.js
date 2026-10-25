@@ -1,12 +1,12 @@
 /* render/items/visuals.js - the effect bubbles in the world (CONTRACT-B1 section 3, SCREENFX lane).
  * Every bubble (held over a kart, thrown, lobbed, laid as a trap, a road pickup, a box turning,
  * a shield, a pop ring) is one instance of one sprite cloud wearing the living atlas icon in a glass
- * shell; their drifting motes are one additive cloud. Boxes are spinning DtRH cards (art card-*)
+ * shell; their drifting motes are one additive cloud. Boxes are low floating collectible cards
  * that shrink into a bubble when driven through; the Melt trap is a wobbling spiral puddle; the
  * Pink wave a ring; Echo three rim-lit copies. Pools and per-tier caps from render/items/look.js.
  * Gentle: half speed, no Echo flicker. Reads ItemsView only; ages (t) are seconds since spawn.
- * Wave 2 art (each optional, the look above is the fallback): boxes are the item-card GLB with a slowly
- * breathing edge; held, thrown, trap and box-turn bubbles are the effect-bubble GLB shell (instanced)
+ * Pickups share four moving-picture faces and the owner-selected Drop Duel back. Held, thrown,
+ * trap and box-turn bubbles are the effect-bubble GLB shell (instanced)
  * round the living icon; the Melt puddle samples fx-melt-spiral.
  * Polish 2: icons breathe inside glass that catches a drifting light; throws trail a sparkling ribbon,
  * lobs a dotted arc with a soft shadow and pulsing ring waiting under the target; traps pulse and wake a
@@ -20,19 +20,20 @@
  * Music road pass 2 (render/items/status.js): every racer under an effect wears that effect's look for all to
  * see, throws fly as comets with a trail and sparks, launches puff and landings burst with a shock ring.
  */
-import { Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, Quaternion, Box3, MeshBasicNodeMaterial, DoubleSide } from 'three/webgpu';
+import { Group, Mesh, PlaneGeometry, SphereGeometry, Vector3, Quaternion } from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { S } from '../../sim/state.js';
 import { ITEM_IDS } from '../../sim/itemTable.js';
 import { Q } from '../quality.js';
 import { ITEM_LOOK as L, ITEM_TIERS, MOTE_TINT } from './look.js';
 import {
-  tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool, cardEdgeGlow, shellFit, nearCapR, impactSeen,
+  tierOf, comp, moteAt, popPhase, popMote, rollIconAt, createPool, shellFit, nearCapR, impactSeen,
   breathe, trailLook, trapWarn, lobMark, impactPhase, confettiAt, boxGlint, launchPop, launchFlare, impactFountain,
   iconFps, iconLive,
 } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
-import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shieldCloud, cardEdge, blobShadow, confettiCloud } from './materials.js';
+import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shieldCloud, blobShadow, confettiCloud } from './materials.js';
+import { createPickupCards, PICKUP_CARD } from './pickupCards.js';
 import { createItemStatus } from './status.js';
 import { advanceRibbon, flightSpark } from './flight.js';
 import { selectShieldShells, shieldLook } from './shieldMath.js';
@@ -76,7 +77,7 @@ const MOTE_HEX = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k
 let frame = 0;
 
 /** opts.photosafe (fx/photosafe.js): an impact's soft glow asks it once and is skipped when refused or missing. */
-export function createItemVisuals(scene, art, feel, { photosafe = null, backend = '' } = {}) {
+export function createItemVisuals(scene, art, feel, { photosafe = null, backend = '', track = null, waterVolume = null } = {}) {
   const top = ITEM_TIERS.high, start = tierOf(Q.name);
   const root = new Group(); root.name = 'item-visuals'; scene.add(root);
   // polish 6: webgl2 redraws the icon atlas at most 15 fps (backend from buildWorld's renderer; the debug global is the fallback)
@@ -88,45 +89,28 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   root.add(bubbles.sprite, motes.sprite);
   const confetti = confettiCloud(L.confetti.high * 6 + L.hitConfetti.high * 4);
   root.add(confetti.mesh);
-  const status = createItemStatus(root, feel, { photosafe });
+  const status = createItemStatus(root, feel, { photosafe, track, waterVolume });
   const CONF = L.confettiColours.map(hexRgb);
   const mask = art && art.tex ? art.tex('sky-spiral-open-mask') : null;
   const meltTex = art && art.tex ? art.tex(L.meltMask) : null;
   const gentle = () => !!feel.get('gentle.on');
   let timeS = 0;
 
-  // ---- wave 2: the effect-bubble shell (instanced) and the item card's glowing edge ----
+  // ---- the effect-bubble shell (instanced) and shared collectible card artwork ----
   const fit = shellFit(art && art.row ? art.row(L.shellModel) : null);
   const shellGeo = shellGeometry(art && art.model ? art.model(L.shellModel) : null, fit);
   const shells = shellGeo ? shellCloud(shellGeo, top.bubbles) : null;
   if (shells) root.add(shells.mesh);
   const shields = shieldCloud(), shieldRows = [], shieldState = {}, underlayState = {}; root.add(shields.mesh);
-  const cardModel = art && art.model ? art.model(L.boxCard) : null;
-  const edge = cardModel ? cardEdge(L.cardEdgeColour) : null;
+  const pickupCards = createPickupCards();
 
   // ---- boxes: one card per track box, built on first sight ----
   const boxes = [], prevAlive = [], turnT = [];
   function buildBox(i) {
-    const id = L.boxCards[i % L.boxCards.length], g = art && art.model ? art.model(id) : null;
-    const o = new Group();
-    if (cardModel) {
-      // item-card: base-centred, 1.2 m tall; scaled to boxCardM, its edge swapped for the shared glow
-      const card = cloneSkinned(cardModel.scene), h = new Box3().setFromObject(card).getSize(W).y || 1.2;
-      card.traverse((m) => { if (m.isMesh && m.material && m.material.name === 'item_edge') m.material = edge.material; });
-      card.scale.setScalar(L.boxCardM / h); o.add(card);
-    } else if (g) {
-      const card = cloneSkinned(g.scene), r = new Box3().setFromObject(card).getBoundingSphere({ radius: 1, center: V }).radius || 1;
-      card.scale.setScalar(L.boxSizeM / 2 / r); o.add(card);
-    } else {
-      const material = new MeshBasicNodeMaterial({ color: L.boxColour, side: DoubleSide });
-      o.add(new Mesh(new PlaneGeometry(L.boxSizeM * 0.75, L.boxSizeM), material));
-      spare.push(material);
-    }
-    o.traverse((m) => { if (m.isMesh) m.frustumCulled = false; });
+    const o = pickupCards.build(i);
     root.add(o);
     return o;
   }
-  const spare = [];
 
   // ---- pooled meshes: melt puddles, pink waves, echo copies ----
   const plane = new PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
@@ -179,7 +163,8 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   // puddle or ring material for the first time when several traps are laid together.
   for (const p of [puddles, waves, marks, shadows]) p.prime(p.cap);
   copies.prime(copies.cap);
-  boxes[0] = buildBox(0); boxes[0].visible = false;
+  // Warm all four face materials behind the loading cover, including their canvas map path.
+  for (let i = 0; i < PICKUP_CARD.faces; i++) { boxes[i] = buildBox(i); boxes[i].visible = false; }
 
   // ---- helpers ----
   function addMotes(x, y, z, R, id, n, seed, alpha = 1) {
@@ -240,18 +225,17 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     bubbles.uniforms.time.value = timeS;
     status.update(view, dt, karts);
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
-    if (edge) edge.uniforms.glow.value = cardEdgeGlow(timeS, soft);
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
     shields.begin();
     const endAll = () => { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); shields.end(); if (shells) shells.end(); };
     if (!view) {
       trails.clear(); launches.clear(); glows.clear();
       for (const box of boxes) box.visible = false;
-      endAll(); return;
+      pickupCards.update(dt, soft); endAll(); return;
     }
     const tier = tierOf(Q.name), moteK = tier.motes / top.motes;
     const showS = feel.get('items.popShowS') || 0.6;
-    const mid = cardModel ? L.boxCardM / 2 : 0;   // the bubble rises out of the card's middle
+    const mid = PICKUP_CARD.height / 2;
 
     // boxes: spinning cards; driven through, the card spins away and a bubble rises out of it
     (view.boxes || []).forEach((b, i) => {
@@ -259,8 +243,8 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       if (prevAlive[i] && !b.alive) { turnT[i] = 0; confT[i] = 0; }
       prevAlive[i] = b.alive;
       const turning = turnT[i] !== undefined && turnT[i] < L.boxTurnS + showS;
-      const bob = Math.sin(timeS * L.boxBobHz * 6.283 + i) * L.boxBobM;
-      lay(o, b.p, b.n, timeS * L.boxSpinRadps * 1.0 + i, L.boxHoverM + bob);
+      const bob = Math.sin(timeS * L.boxBobHz * 6.283 + i) * PICKUP_CARD.bob;
+      lay(o, b.p, b.n, timeS * PICKUP_CARD.spin + i, PICKUP_CARD.hover + bob);
       if (turning) {
         turnT[i] += dt;
         const q = Math.min(1, turnT[i] / L.boxTurnS), rise = Math.max(0, turnT[i] - L.boxTurnS) / showS;
@@ -274,12 +258,13 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
         // a glint sweeps the card's face corner to corner now and then
         const gl = o.visible ? boxGlint(timeS, i, soft) : null;
         if (gl && gl.alpha > 0.01) {
-          const h = (cardModel ? L.boxCardM : L.boxSizeM) * 0.42 * o.scale.x;
+          const h = PICKUP_CARD.height * 0.42 * o.scale.x;
           W.set(gl.u * h * 0.7, mid + gl.u * h, 0.06).applyQuaternion(o.quaternion).add(o.position);
           motes.push(W.x, W.y, W.z, L.glintSizeM * (0.6 + 0.4 * gl.alpha), 1, 0.97, 1, gl.alpha);
           motes.push(W.x, W.y, W.z, L.glintSizeM * 2.2, 1, 0.75, 0.9, gl.alpha * 0.25);
         }
       }
+      if (o.visible && iconSeen(o.position.x, o.position.y + mid, o.position.z, mid)) pickupCards.use(i);
       // taken: confetti cards burst out of the card, tumble and fall
       if (confT[i] !== undefined) {
         confT[i] += dt;
@@ -495,21 +480,22 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     for (const [k, g] of glows) if (g.f !== frame) glows.delete(k);
     frame++;
 
+    pickupCards.update(dt, soft);
     icons.tick(dt, timeS, soft);
     endAll();
   }
 
   return {
     update,
+    setMediaSource(fn) { pickupCards.setMediaSource(fn); },
     dispose() {
       scene.remove(root);
       status.dispose(); icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose(); shields.dispose();
       if (shells) shells.dispose();
-      if (edge) edge.material.dispose();
+      pickupCards.dispose();
       puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());
       marks.each((e) => e.mesh.material.dispose()); shadows.each((e) => e.mesh.material.dispose()); confetti.dispose();
       ghostLook.material.dispose();
-      for (const m of spare) m.dispose();
     },
   };
 }

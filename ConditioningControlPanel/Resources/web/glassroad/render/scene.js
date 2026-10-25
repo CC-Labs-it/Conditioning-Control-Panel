@@ -127,6 +127,7 @@ export function meshFrom(d, material) {
   g.setAttribute('flow', new BufferAttribute(d.flow && d.flow.length === n * 2 ? d.flow : new Float32Array(n * 2), 2));
   g.setAttribute('forkWidth', new BufferAttribute(d.forkWidth && d.forkWidth.length === n ? d.forkWidth : new Float32Array(n), 1));
   g.setAttribute('roadEdge', new BufferAttribute(d.roadEdge && d.roadEdge.length === n ? d.roadEdge : new Float32Array(n).fill(1), 1));
+  if (d.padDesign) g.setAttribute('padDesign', new BufferAttribute(d.padDesign, 4));
   g.setIndex(new BufferAttribute(d.indices, 1));
   g.computeBoundingSphere();
   return new Mesh(g, material);
@@ -229,7 +230,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   // EDGES lane: open edges (hazard strip, lip, haze below) and rail end posts, one draw (render/edges.js)
   let edges = null;
   try { edges = createEdges(scene, track, pal, { pulse: rails.uniforms.pulse }); } catch (e) { console.warn('[glassroad/world] edges failed: ' + (e && e.message)); }
-  const pad = createPadMaterial(isMainframe ? '#75f8a7' : LOOK.padColour, art && art.tex('boost-chevron-mask')), lip = createPadMaterial(LOOK.lipColour);
+  const pad = createPadMaterial(isMainframe ? '#75f8a7' : LOOK.padColour, art && art.tex('boost-chevron-mask'), { artPads: true }), lip = createPadMaterial(LOOK.lipColour);
   const padMesh = add(meshFrom(track.meshes.pads, pad.material));
   // Composite over the transparent road and water, before wakes, with depth occlusion intact.
   if (padMesh) padMesh.renderOrder = .9;
@@ -342,22 +343,22 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
   if (routes && bus) offs.push(bus.on('route-land', (p) => routes.land(p || {})));
   const kartPos = [];
   let itemVis = null;
-  try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe, backend: renderer ? renderer.backend : '' }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
+  try { itemVis = itemsMod ? itemsMod.createItemVisuals(scene, art, feel, { photosafe, track, waterVolume, backend: renderer ? renderer.backend : '' }) : null; } catch (e) { console.warn('[glassroad/world] item visuals failed: ' + (e && e.message)); }
   // the music road (handoff-1022/MUSIC-ROAD-BRIEF.md): the road, rails and helix answer the song; the
   // player's own word bubbles ride the road. No song: both rest and the race looks as before
   let musicRoad = null, wordVis = null;
   try { musicRoad = createMusicRoad({ road, rails, track, pal, photosafe, scene }); } catch (e) { console.warn('[glassroad/world] music road failed: ' + (e && e.message)); }
-  try { wordVis = createWordBubbles(scene, { feel, photosafe }); } catch (e) { console.warn('[glassroad/world] word bubbles failed: ' + (e && e.message)); }
+  try { wordVis = createWordBubbles(scene, { feel, photosafe, track, pal }); } catch (e) { console.warn('[glassroad/world] word bubbles failed: ' + (e && e.message)); }
   // pass 4: the ROAD words painted on the track like road markings (render/roadWords.js, in the scene from boot for the warm)
   let roadWords = null;
-  try { roadWords = createRoadWords(scene, { track, feel, photosafe }); } catch (e) { console.warn('[glassroad/world] road words failed: ' + (e && e.message)); }
+  try { roadWords = createRoadWords(scene, { track, feel, photosafe, pal, waterVolume }); } catch (e) { console.warn('[glassroad/world] road words failed: ' + (e && e.message)); }
   // a word taken: the pop burst, a ring under the kart and light streaks (render/wordPopFx.js, on `word-pop`)
   let wordFx = null;
   try { wordFx = createWordPopFx(scene, { particles, wakes, kart, bus, feel, photosafe }); } catch (e) { console.warn('[glassroad/world] word pop fx failed: ' + (e && e.message)); }
   // pass 4: the popped word rushes at the camera (render/wordRush.js, a DOM layer under the cards, on `word-pop`)
   let wordRush = null;
   const phraseGates = createPhraseGates(scene, track, { feel, photosafe, bus });
-  try { wordRush = globalThis.document ? createWordRush({ bus, feel }) : null; } catch (e) { console.warn('[glassroad/world] word rush failed: ' + (e && e.message)); }
+  try { wordRush = globalThis.document ? createWordRush({ bus, feel, track, pal }) : null; } catch (e) { console.warn('[glassroad/world] word rush failed: ' + (e && e.message)); }
 
   // positional juice from the bus, applied in the next update (bus events flush before world.update)
   const pending = [];
@@ -655,7 +656,7 @@ export function buildWorld(track, feel, { art = null, bus = null, seed = 1, coun
     if (terraceScreen) terraceScreen.dispose();
     for (const off of offs) off();
   }
-  return { primaryColour: () => pal.primaryHex(), scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
+  return { setItemMediaSource: source => itemVis?.setMediaSource(source), primaryColour: () => pal.primaryHex(), scene, kart, karts: kartObjs, update, dispose, shadows, colossi, spirals, media, worldScreens, musicRoad, reactive: road.uniforms.reactive, roadWords, wordRush, phraseGates, terrace, court, stones, mainframe, boudoirDressing, boudoirForks, perfumeView, boudoirHazardView, mirrorRoom, waterVolume, underwaterFx, waterfall, keepDressing, keepGates, keepChains, keepBackdrop, keepDrawbridge, goonworks, goonworksHazards,
     // multiplayer looks (ART5 render/wardrobe.js): re-dress seat i with { outfit, vehicle } ids, undefined = the seat's own pick
     setLook: (i, ids) => karts.setLook(i, ids), looks: () => karts.looks(),
     // a restart also wipes the last race's skid marks and word bubbles

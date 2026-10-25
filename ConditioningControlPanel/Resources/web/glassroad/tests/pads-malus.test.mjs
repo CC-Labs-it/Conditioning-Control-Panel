@@ -40,18 +40,13 @@ test('Loom underlays follow a malus, fade out, ignore buffs and clear on reset',
   const mesh = root.children[0], st = new Float64Array(100);
   st[S.posX] = 12; st[S.posY] = 2; st[S.quatW] = 1;
   const kart = { st, fxv: { effect: 'freeze' } };
-  // Inspect the actual instance coverage input rather than a second lifecycle model.
-  function coverage() {
-    const seen = new Set(), pending = [mesh.material.opacityNode];
-    while (pending.length) { const n = pending.pop(); if (seen.has(n)) continue; seen.add(n);
-      if (n.value?.isInstancedBufferAttribute) return n.value.array[0];
-      for (const child of n.getChildren()) pending.push(child);
-    }
-    throw new Error('missing instanced coverage');
-  }
+  const coverage = () => mesh.geometry.getAttribute('malusAlpha').array[0];
   fx.update([kart], .1); const rise = coverage(); assert.ok(rise > 0 && rise < 1);
   for (let i = 0; i < 5; i++) fx.update([kart], .1);
-  assert.equal(coverage(), 1); assert.equal(mesh.instanceMatrix.array[12], 12);
+  assert.equal(coverage(), 1);
+  const position = mesh.geometry.getAttribute('position');
+  assert.ok(Math.abs(position.getX(24) - 12) < 1e-5);
+  assert.ok(position.getY(24) > 2.1);
   kart.fxv.effect = null; fx.update([kart], .1); assert.ok(coverage() > 0 && coverage() < 1);
   for (let i = 0; i < 5; i++) fx.update([kart], .1); assert.equal(coverage(), 0);
   kart.fxv.effect = 'golden'; fx.update([kart], .1); assert.equal(coverage(), 0);

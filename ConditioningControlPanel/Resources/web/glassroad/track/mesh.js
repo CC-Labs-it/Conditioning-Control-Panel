@@ -202,10 +202,12 @@ export function buildMeshes(track, dl) {
     }
     for (let k = 0; k < rowsN; k++) m.quad(ids[k][0], ids[k][1], ids[k + 1][0], ids[k + 1][1]);
   };
-  const pads = builder();
-  for (const p of track.boosts) {
+  const pads = builder(), padDesign = [];
+  for (const [index, p] of track.boosts.entries()) {
+    const first = pads.size;
     if (curvedPads.has(p)) roadDecal(pads, roadData, padRoadFaces, p, L);
     else strip(pads, p.s, p.len, p.x, p.w, true);
+    for (let i = first; i < pads.size; i++) padDesign.push(p.w * (index % 2 ? 1 : -1), p.len, p.s, p.x);
   }
   const jumps = builder();
   for (const j of track.jumps) {
@@ -214,7 +216,7 @@ export function buildMeshes(track, dl) {
   }
   const { routeEdge, routeLand } = buildRouteMeshes(track, builder);
   const { edgeStrip, edgeHaze, railCaps } = buildEdgeMeshes(track, dl, runs, railed, railEnds, row, rowS, inField);
-  return { road: roadData, rails: bendCanalMesh(rails.done(), track), pads: pads.done(), jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
+  return { road: roadData, rails: bendCanalMesh(rails.done(), track), pads: { ...pads.done(), padDesign: new Float32Array(padDesign) }, jumps: jumps.done(), routeEdge, routeLand, edgeStrip, edgeHaze, railCaps };
 }
 
 /** Clip curved pads onto the rendered road's triangles. Sampling just the lateral edges floats
