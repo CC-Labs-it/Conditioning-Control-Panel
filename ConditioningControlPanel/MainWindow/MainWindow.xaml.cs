@@ -162,10 +162,7 @@ namespace ConditioningControlPanel
         private bool _avatarWasAttachedBeforeBrowserFullscreen = false;
 
         // Auto-pause state when minimized with attached avatar
-        private bool _autonomyWasPausedOnMinimize = false;
-        private bool _avatarWasMutedOnMinimize = false;
-        private bool _wasAutonomyRunningBeforeMinimize = false;
-        private bool _wasAvatarUnmutedBeforeMinimize = false;
+        private readonly Services.WindowMinimizeRecovery _windowMinimizeRecovery = new();
 
         // Achievement tracking
         private Dictionary<string, Image> _achievementImages = new();
@@ -217,7 +214,9 @@ namespace ConditioningControlPanel
         private DateTime _conditioningStartTime;
         private double _conditioningBaselineMinutes; // TotalConditioningMinutes at session start (avoids double-counting)
         private DispatcherTimer? _conditioningTimeSyncTimer; // Server sync every 15 minutes
-        private int _conditioningTimeSecondCounter; // Count seconds for minute-based saves
+        private int _conditioningTimeSecondCounter; // Ticks, for the debug line only
+        private double _conditioningPendingSeconds; // Real seconds not yet credited (ConditioningClock)
+        private DateTime _conditioningLastTickUtc;
 
         public MainWindow()
         {
@@ -1096,6 +1095,9 @@ namespace ConditioningControlPanel
                 try { App.Haptics?.PanicStop(); }        catch (Exception ex) { LogPanicFallbackStep("haptics", ex); }
                 App.RemoteControl?.StopRemoteHapticsForPanic();   // the remote loop too (decisions 2026-10-08)
                 CancelPendingAi();
+                // Circe's tab: the hold the real handler would open first. Thread-safe (a lock and a
+                // marshalled repaint), and nothing may book while the UI thread is wedged either.
+                try { App.Chaster?.NoteSafetyExit(); }  catch (Exception ex) { LogPanicFallbackStep("chaster hold", ex); }
                 // Conditional, matching the designed panic path in StopEverything (#668): with the
                 // standalone Audio Layers master on, the bed is the user's, not the session's.
                 try
@@ -1517,6 +1519,19 @@ namespace ConditioningControlPanel
                 bool goonInFront = Services.GoonGame.GoonHostService.IsInFront;
                 bool roomInFront = Services.BackRoom.BackRoomHostService.IsRoomInFront;
                 bool intakeInFront = Services.Quiz.IntakeHostService.IsInFront;
+                bool raceReady = Services.Chaos.CaucusHostService.IsReady;
+                bool boardReady = Services.PieceByPiece.PieceByPieceHostService.IsReady;
+                bool breakoutReady = Services.BackRoom.BackRoomHostService.IsBreakoutReady;
+                bool dtrhReady = Services.Chaos.DtrhHostService.IsReady;
+                bool arcademyReady = Services.Arcademy.ArcademyHostService.IsReady;
+                bool goonReady = Services.GoonGame.GoonHostService.IsReady;
+                bool roomReady = Services.BackRoom.BackRoomHostService.IsRoomReady;
+                bool intakeReady = Services.Quiz.IntakeHostService.IsReady;
+                // Only a game that is up can pause: a booting page that kept the press did nothing.
+                bool frontGameReady = Services.Safety.PanicPolicy.KeptEscapeGoesTo(true,
+                    raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
+                    dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
+                    roomInFront, roomReady, intakeInFront, intakeReady) != Services.Safety.PanicPolicy.KeptEscapePage.None;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
                     gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront
@@ -1524,7 +1539,9 @@ namespace ConditioningControlPanel
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
                     lastClaimUtc: _lastRaceEscapeClaimUtc,
-                    nowUtc: now);
+                    nowUtc: now,
+                    frontGameReady: frontGameReady,
+                    fromPanicKey: !_panicFromStopButton);
                 if (!claim) { _lastRaceEscapeClaimUtc = null; return false; }
                 _lastRaceEscapeClaimUtc = now;
                 var gameName = raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece"
@@ -1536,14 +1553,9 @@ namespace ConditioningControlPanel
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
                 // when the real key reached it as well (host-escape.js).
                 switch (Services.Safety.PanicPolicy.KeptEscapeGoesTo(claim,
-                            raceInFront, raceReady: Services.Chaos.CaucusHostService.IsReady,
-                            boardInFront, boardReady: Services.PieceByPiece.PieceByPieceHostService.IsReady,
-                            breakoutInFront, breakoutReady: Services.BackRoom.BackRoomHostService.IsBreakoutReady,
-                            dtrhInFront, dtrhReady: Services.Chaos.DtrhHostService.IsReady,
-                            arcademyInFront, arcademyReady: Services.Arcademy.ArcademyHostService.IsReady,
-                            goonInFront, goonReady: Services.GoonGame.GoonHostService.IsReady,
-                            roomInFront, roomReady: Services.BackRoom.BackRoomHostService.IsRoomReady,
-                            intakeInFront, intakeReady: Services.Quiz.IntakeHostService.IsReady))
+                            raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
+                            dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
+                            roomInFront, roomReady, intakeInFront, intakeReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Race:
                         Services.Chaos.CaucusHostService.PostKeptEscape(); break;
@@ -1570,6 +1582,21 @@ namespace ConditioningControlPanel
                 App.Logger?.Warning("PANIC: race pause probe failed: {Error}", ex.Message);
                 return false;
             }
+        }
+
+        /// <summary>True while a Stop or Panic BUTTON runs the panic path (<see cref="HandlePanicFromStopButton"/>).</summary>
+        private bool _panicFromStopButton;
+
+        /// <summary>
+        /// A Stop / Panic button (the Remote HUD, the leash gate) runs exactly the panic press, except
+        /// that it is never a game's Escape pause: a click is not an Escape (bug hunt 2026-10-22). The
+        /// Remote HUD never takes focus, so the game under it stayed in front and its Stop paused it.
+        /// </summary>
+        private void HandlePanicFromStopButton()
+        {
+            _panicFromStopButton = true;
+            try { HandlePanicKeyPress(); }
+            finally { _panicFromStopButton = false; }
         }
 
         private void HandlePanicKeyPress()
@@ -1619,7 +1646,8 @@ namespace ConditioningControlPanel
             // short grace window, so the press is claimed exactly once whichever of the two
             // deliveries (WPF KeyDown vs the hook's queued handler) lands first - and it is only
             // ASKED when no lock card is open, because asking closes the palette as a side effect.
-            bool paletteClaimed = !lockCardOpen
+            // A Stop / Panic BUTTON is never an Escape: it never closes the palette instead of stopping.
+            bool paletteClaimed = !lockCardOpen && !_panicFromStopButton
                 && string.Equals(App.Settings?.Current?.PanicKey, "Escape", StringComparison.OrdinalIgnoreCase)
                 && SettingsPaletteWindow.TryConsumeEscape();
 
@@ -1769,6 +1797,7 @@ namespace ConditioningControlPanel
                 // Standalone Lab minigames run outside the engine, so the tail below never reaches
                 // them; the override mode's stop pass stops them by hand for the same reason.
                 try { App.BlinkTrainer?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                PanicStopOffEngineHosts();
                 RunPanicStopTail(advanceExitLadder: false);
                 return;
             }
@@ -1799,6 +1828,7 @@ namespace ConditioningControlPanel
             // Stop standalone Lab minigames first — they run independently of
             // the main engine, so the rest of the panic flow won't touch them.
             App.BlinkTrainer?.Stop();
+            PanicStopOffEngineHosts();
 
             RunPanicStopTail(advanceExitLadder: true);
         }
@@ -2002,6 +2032,11 @@ namespace ConditioningControlPanel
             Step("bouncing text", () => App.BouncingText?.Stop());
             Step("mind wipe", () => App.MindWipe?.Stop());
             Step("brain drain", () => App.BrainDrain?.Stop());
+            // The two media hosts outside VideoService. A Takeover web video (or any page video in
+            // the built-in browser) kept playing, fullscreen and topmost with the engine off; the
+            // Deeper player kept playing and its timeline re-fired effects at the next cue.
+            Step("web video", PanicEndBrowserMedia);
+            Step("Deeper player", Views.Deeper.EnhancementPlayerWindow.PanicPauseAll);
 
             // --- overlays ---
             // Stop() already clears _isRunning and calls StopPinkFilter/StopSpiral/StopBrainDrainBlur,
@@ -2066,6 +2101,26 @@ namespace ConditioningControlPanel
             VideoDiag.Log("PANIC", "stop-all pass complete");
         }
 
+        /// <summary>Ends a browser takeover and pauses every page video, fullscreen dropped. The
+        /// synchronous body, so the queue slot is free before the pass resets the queue.</summary>
+        private static void PanicEndBrowserMedia()
+        {
+            if (App.BrowserMedia != null) App.BrowserMedia.ForceEndCore("panic");
+            else App.MainWindowRef?.EndWebVideoTakeover();
+        }
+
+        /// <summary>
+        /// The legacy ladder (PanicOverridesAll off) never runs <see cref="PanicStopEverySurface"/>,
+        /// and its tail only reached what the engine owns: the toy kept vibrating, a Takeover web
+        /// video and the Deeper player kept playing. The three it missed, before its stop tail.
+        /// </summary>
+        private void PanicStopOffEngineHosts()
+        {
+            try { App.Haptics?.PanicStop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { PanicEndBrowserMedia(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            try { Views.Deeper.EnhancementPlayerWindow.PanicPauseAll(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        }
+
         /// <summary>
         /// Stops every "ad-hoc" effect that can be live without the engine running — i.e. effects
         /// fired by voice commands ("She's Listening"), dashboard one-shots, or Deeper. The normal
@@ -2077,6 +2132,9 @@ namespace ConditioningControlPanel
         {
             try
             {
+                // A Takeover pulse writes its boost into the saved spiral/pink settings; settle it
+                // now, as the stop-all pass does, instead of leaving it there for up to 30 s.
+                App.Autonomy?.CancelActivePulses();
                 App.KillAllAudio();
                 App.Video?.Stop();
                 App.Flash?.Stop();
@@ -2088,12 +2146,13 @@ namespace ConditioningControlPanel
                 App.BrainDrain?.Stop();
                 App.LockCard?.Stop(dismissOpenCards: true);   // panic: the card on screen is the point
 
-                // Clear the settings flags so a running reconcile loop won't recreate them, then
-                // stop the windows directly — voice/Deeper start spiral & pink ad-hoc (no reconcile
-                // loop), so RefreshOverlays() (gated on the service's IsRunning) can't see them.
-                EnablePinkFilter(false);
-                EnableSpiral(false);
-                App.Overlay?.RefreshOverlays();
+                // Stop the overlay service (no reconcile tick can repaint while it is stopped), then
+                // the windows directly: voice/Deeper start spiral & pink ad-hoc. Never
+                // EnablePinkFilter(false)/EnableSpiral(false) here: those are the user's SAVED
+                // switches, and this runs on every idle panic press and on the double-press exit,
+                // so each one left Spiral and Pink Filter off for every later run (same rule as
+                // PanicStopEverySurface).
+                App.Overlay?.Stop();
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
             }
@@ -3411,41 +3470,19 @@ namespace ConditioningControlPanel
         /// </summary>
         private string GetModeAwareQuestImagePath(Models.QuestDefinition quest)
         {
-            // Use EffectiveImagePath which prefers cached remote images over embedded
-            var imagePath = quest.EffectiveImagePath;
-
-            if (string.IsNullOrEmpty(imagePath))
-                return imagePath;
-
-            // For embedded resources, check if mod has overrides or if mode-specific swap is needed
-            if (imagePath.StartsWith("pack://"))
+            var path = quest.EffectiveImagePath;
+            if (string.IsNullOrEmpty(path)) return path;
+            const string prefix = "pack://application:,,,/Resources/";
+            if (path.StartsWith(prefix, StringComparison.Ordinal))
             {
-                // Extract relative path from pack URI
-                var prefix = "pack://application:,,,/Resources/";
-                if (imagePath.StartsWith(prefix))
-                {
-                    var relativePath = imagePath.Substring(prefix.Length);
-                    if (Services.ModResourceResolver.HasModOverride(relativePath))
-                        return Services.ModResourceResolver.ResolveUri(relativePath);
-                }
-
-                // Legacy mode-specific swaps for built-in mods
-                if (App.Settings?.Current?.IsSissyMode == true)
-                {
-                    if (imagePath.Contains("logo.png"))
-                        return "pack://application:,,,/Resources/logo2.png";
-                    if (imagePath.Contains("bambi takeover.png"))
-                        return "pack://application:,,,/Resources/features/mandatory_videos.png";
-                }
-                // CCP Default uses the same neutral wordmark as Sissy.
-                if (App.Mods?.IsCCPDefault == true)
-                {
-                    if (imagePath.Contains("logo.png"))
-                        return "pack://application:,,,/Resources/logo2.png";
-                }
+                var relative = path.Substring(prefix.Length);
+                if (Services.ModResourceResolver.HasModOverride(relative))
+                    return Services.ModResourceResolver.ResolveUri(relative);
             }
-
-            return imagePath;
+            if (path.StartsWith("pack://", StringComparison.Ordinal) && QuestStampRules.LegacyImageOverride(path,
+                App.Settings?.Current?.IsSissyMode == true, App.Mods?.IsCCPDefault == true) is { } resource)
+                return prefix + resource;
+            return path;
         }
 
         /// <summary>

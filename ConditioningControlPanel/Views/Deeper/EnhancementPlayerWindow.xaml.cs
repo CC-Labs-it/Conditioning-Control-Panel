@@ -2517,6 +2517,30 @@ namespace ConditioningControlPanel.Views.Deeper
         }
 
         /// <summary>
+        /// Panic hook: PAUSE the Deeper player (audio or video) and drop its fullscreen. Nothing in
+        /// the panic pass touched it, so a Deeper run kept playing its media after a panic and its
+        /// timeline started the spiral, flashes and toy bands again at the next cue. Paused, not
+        /// unloaded: the playhead stops, so no cue fires, and Play picks up where it was.
+        /// </summary>
+        internal static void PanicPauseAll()
+        {
+            var w = Current;
+            if (w != null)
+            {
+                try
+                {
+                    if (w._videoSource != null) { if (w._videoSource.IsPlaying) w._videoSource.Pause(); }
+                    else if (w._player.IsPlaying) w._player.Pause();
+                    w.BtnPlayPause.Content = "▶";
+                }
+                catch (Exception ex) { App.Logger?.Warning("EnhancementPlayer: panic pause failed: {Error}", ex.Message); }
+            }
+            // The shared player can outlive its window's controls; pause it at the source too.
+            try { if (App.DeeperPlayer?.IsPlaying == true) App.DeeperPlayer.Pause(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            ForceExitFullscreenAll();
+        }
+
+        /// <summary>
         /// Runs a teardown that arrived while a fullscreen transition held the
         /// lock. Called from the finally of both Enter and Exit.
         /// </summary>

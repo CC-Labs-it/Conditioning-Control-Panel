@@ -149,8 +149,7 @@ public static class EmiDoors
     // start button calls IntakeHostService.Launch - counting both would score one sitting twice.
     // "spiral" as a TAB key is the Spiral Room, a different thing from the spiral OVERLAY card.
 
-    /// <summary>Tab key -> the door it scores.</summary>
-    public static readonly IReadOnlyDictionary<string, string> TabTargets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> _tabTargets = new(StringComparer.OrdinalIgnoreCase)
     {
         ["presets"] = "sessions",
         ["companion"] = "companion",
@@ -165,8 +164,7 @@ public static class EmiDoors
         ["progression"] = "progression",
     };
 
-    /// <summary>Studio rack key -> the door it scores. Never the Studio itself.</summary>
-    public static readonly IReadOnlyDictionary<string, string> RackTargets = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> _rackTargets = new(StringComparer.OrdinalIgnoreCase)
     {
         ["flash"] = "flashes",
         ["video"] = "videos",
@@ -177,6 +175,21 @@ public static class EmiDoors
         ["braindrain"] = "braindrain",
         ["mindwipe"] = "mindwipe",
     };
+
+    /// <summary>Tab key -> the door it scores.</summary>
+    public static readonly IReadOnlyDictionary<string, string> TabTargets = _tabTargets;
+
+    /// <summary>Studio rack key -> the door it scores. Never the Studio itself.</summary>
+    public static readonly IReadOnlyDictionary<string, string> RackTargets = _rackTargets;
+
+    /// <summary>The ring door taught by a tab open, shared by both heads.
+    /// Host launchers count themselves; intake landing and Spiral Room aren't their host cards.</summary>
+    public static string? TargetForTab(string? key) =>
+        key != null && _tabTargets.TryGetValue(key, out var target) ? target : null;
+
+    /// <summary>The Studio module's ring door; opening Studio itself teaches no card.</summary>
+    public static string? TargetForRack(string? key) =>
+        key != null && _rackTargets.TryGetValue(key, out var target) ? target : null;
 
     /// <summary>
     /// The head's catalogue, in table order. <paramref name="wire"/> answers each id with its three

@@ -56,9 +56,10 @@ namespace ConditioningControlPanel.Services
 
         public static bool CanStart(AppSettings s) => s.AutonomyModeEnabled && s.AutonomyConsentGiven && HasEntitlement;
 
-        /// <summary>A pulse that started the overlay service stops it, once no sibling holds it (#1180).</summary>
-        public static bool ShouldStopOverlayAfterPulse(bool overlayWasRunningBeforePulse, bool otherPulseActive)
-            => !overlayWasRunningBeforePulse && !otherPulseActive;
+        /// <summary>A pulse that started the overlay service stops it, once no sibling holds it (#1180),
+        /// and never while the engine runs: START inside the 30 s borrowed the service (WPF 8fe2a80a0).</summary>
+        public static bool ShouldStopOverlayAfterPulse(bool overlayWasRunningBeforePulse, bool otherPulseActive, bool engineRunning = false)
+            => !overlayWasRunningBeforePulse && !otherPulseActive && !engineRunning;
 
         /// <summary>An announced action still fires only if Takeover is on and not restarted since (#1153).</summary>
         public static bool ShouldRunDelayedAction(bool enabled, int generationAtSchedule, int generationNow)
