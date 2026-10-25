@@ -187,7 +187,7 @@ export function createAirWordRun(song, track) {
       if (!to.row) to.offset = [...offset];
       r.s = from.s + (to.s - from.s) * u;
       // A real descending arc meets the late phrase with momentum. The next leg springs at once.
-      const arc = r.leg === 0 ? 3.6 * 4 * u * (1 - u) : 3.5 * 6.75 * u * (1 - u) ** 2;
+      const arc = r.leg === 0 ? 2.2 * 4 * u * (1 - u) : 3.5 * 6.75 * u * (1 - u) ** 2;
       y = from.y + (to.y - from.y) * smooth(u) + arc;
       st[S.airTime] += dt;
       if (u >= 1) {

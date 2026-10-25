@@ -5,6 +5,7 @@ import { loadTrack } from '../track/load.js';
 import { S, RESPAWN } from '../sim/state.js';
 import { step, spawn } from '../sim/kart.js';
 import { glideActive } from '../sim/glide.js';
+import { phraseFlightPoints, phraseEase } from '../core/phraseFlight.js';
 import { createAirWordRun, bindAirWords, airWordQuery, phraseBounceActive } from '../sim/airWords.js';
 import { DT, place, makeFeel, recorder, acts } from './sim-fake.mjs';
 
@@ -130,6 +131,23 @@ test('one phrase rescues a fast visible fall and sends the kart across the rest 
   }
   assert.ok(firstContact - firstSeen >= .60 && firstContact - firstSeen <= .67);
   assert.equal(ev.all('air-word-hop').length, 1);
+});
+
+test('the first arc remains within 2.2 metres of the steady camera grade on every gap', () => {
+  for (const tr of tracks) for (const zone of tr.aerials) {
+    const f = setup(tr, zone), [start, catchPoint] = phraseFlightPoints(tr, zone);
+    let peak = 0;
+    while (!f.ev.all('air-word-land').length) {
+      tick(f);
+      if (f.st[S.s] <= start.s) continue;
+      const u = Math.min(1, (f.st[S.s] - start.s) / (catchPoint.s - start.s));
+      const baseline = start.y + (catchPoint.y - start.y) * phraseEase(u);
+      const above = f.st[S.posY] - baseline;
+      assert.ok(above <= 2.201, tr.id + ': first jump left the stable framing envelope');
+      peak = Math.max(peak, above);
+    }
+    assert.ok(peak > 2.15, tr.id + ': first arc still has a visible jump');
+  }
 });
 
 test('contact springs without stopping forward travel and opens the hat only after the rebound apex', () => {
