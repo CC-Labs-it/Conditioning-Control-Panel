@@ -25,7 +25,7 @@ namespace CCP.Avalonia.Tests;
 /// <summary>The shared game host (WPF LauncherHost.LaunchGame -> BreakoutHostService.LaunchDemo ->
 /// ChaosWebViewHost): the launcher's Play opens it after the leash check, the page protocol answers
 /// ready with init and media-request with a deal, exit-done closes it, and the panic registry closes it.</summary>
-public sealed class GameWindowTests
+public sealed partial class GameWindowTests
 {
     private static void Run(Action<MainShellWindow, LauncherWindow> body)
     {
@@ -56,6 +56,7 @@ public sealed class GameWindowTests
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(LauncherWindow.BackToLauncher(shell));
+                shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
                 Dispatcher.UIThread.RunJobs();
                 body(shell, LauncherWindow.Instance!);
             }

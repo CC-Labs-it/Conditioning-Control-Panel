@@ -19,7 +19,6 @@
 //   private void UpdateAccountLinkingUI(…)
 //   internal async void BtnLinkPatreon_Click(…)
 //   internal async void BtnLinkDiscord_Click(…)
-//   internal void OfferAchievementSharingAfterDiscordLink(…)
 //   internal void BtnVisitPatreon_Click(…)
 //   private void OnPatreonTierChanged(…)
 //   private void MaybeShowPremiumCelebration(…)
@@ -42,8 +41,6 @@
 //   internal void BtnSwitchCompanion_Click(…)
 //   (RevealCompanionWorkshopCell + the cell -> page map are ported: MainShellWindow.CompanionFx.cs)
 //   private void OnCompanionProviderSelected(…)
-//   private async Task MaybeOfferLocalAiSetupAsync(…)
-//   internal void BtnSetupLocalAi_Click(…)
 //   internal void BtnLabEffectsSetupLocal_Click(…)
 //   private void LaunchLocalAiSetupWizard(…)
 //   private static void CommitFocusedEdit(…)
@@ -61,9 +58,9 @@
 //   internal void SyncLabEffectPermsUI(…)
 //   private void SyncAiBrainUI(…)
 //   internal void ChkMuteWhispers_Changed(…)
-//   internal async void ChkPauseBrowser_Changed(…)
+//   (ChkPauseBrowser_Changed / SetBrowserPaused: Home browser part ported, WorkshopBehaviorCell ->
+//    MainShellWindow.WorkshopBehavior.cs; the Avatar Tube mirror is not)
 //   internal void ChkVoiceLines_Changed(…)
-//   private async Task SetBrowserPaused(…)
 //   public void SyncQuickControlsUI(…)
 //   public void SyncWhispersUI(…)
 //   private int _preMuteMasterVolume

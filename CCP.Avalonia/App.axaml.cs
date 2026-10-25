@@ -31,6 +31,27 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The lookup resumes off the UI thread (ConfigureAwait(false)); its opener builds a window.</summary>
         internal static Task<bool> OnUiThread(Func<bool> open) => Dispatcher.UIThread.InvokeAsync(open).GetTask();
 
+        /// <summary>WPF App.xaml.cs:2853/2928: publish the ledger, sweep retention on disk (creates nothing),
+        /// and let the awareness switch start/stop it. Startup calls this; tests drive the same hook.</summary>
+        internal static void InstallPrivacyLedger(ConditioningControlPanel.Services.Awareness.ActivityLedger ledger)
+        {
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = ledger;
+            try { ledger.PruneOnDisk(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "ActivityLedger: startup retention sweep failed"); }
+            WindowAwarenessService.V2Lifecycle = start =>
+            {
+                if (start && System.IO.File.Exists(ledger.LedgerPath)) ledger.Start();
+                else if (!start) ledger.Stop();
+            };
+        }
+
+        /// <summary>WPF App.OnExit:6285: dispose the ledger and unpublish it.</summary>
+        internal static void ReleasePrivacyLedger()
+        {
+            try { ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger?.Dispose(); } catch { }
+            ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger = null;
+        }
+
         /// <summary>The achievement engine (achievements.json), or null on the headless render path.
         /// Local-only: no sync, no streak writes, no ResetProgress on this head (oracle-achievements.md).</summary>
         internal static AchievementEngine? Achievements { get; private set; }
@@ -62,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             Services.DiscordRichPresenceService.PostToUi = a => Dispatcher.UIThread.Post(a);
             DiscordRpc = new Services.DiscordRichPresenceService();
+            CoreDiscord.ServiceProvider = () => DiscordRpc;
             ApplyRichPresence();
         }
 
@@ -85,6 +107,9 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>The Core quest board (WPF App.Quests), built by StartQuests before the shell.</summary>
         internal static QuestService? Quests { get; set; }
+
+        /// <summary>WPF App.QuestDefinitions: the quest catalogue and the season title.</summary>
+        internal static QuestDefinitionService? QuestDefinitions { get; set; }
 
         /// <summary>WPF App.Programs (App.xaml.cs:2704), the full writing instance since programs 3a
         /// (docs/avalonia-decisions.md): timers, startup repair + rollover, Dispose flush. A file stamped by
@@ -121,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia
             CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
                 Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 
-            var definitions = new QuestDefinitionService();
+            var definitions = QuestDefinitions = new QuestDefinitionService();
             _ = definitions.InitializeAsync(); // cache first, then the server, as WPF
             Quests = new QuestService(definitions);
             global::ConditioningControlPanel.Services.Companion.ConversationDelivery.QuestsOpenProvider = () => Quests?.HasUnfinishedQuest();
@@ -228,6 +253,20 @@ namespace ConditioningControlPanel.Avalonia
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.OpenLink = url =>
                 _ = Views.Controls.Companion.CompanionLinkLauncher.OpenAsync(url);
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Start();
+        }
+
+        /// <summary>WPF App.xaml.cs:2747: one moderation session shared by every AI provider.</summary>
+        internal static void SeedModeration()
+        {
+            var log = new Services.Moderation.ModerationLog(new Services.Moderation.ModerationSession());
+            var guard = new Services.Moderation.ModerationGuard();
+            var counter = new Services.Moderation.ModerationCounter(
+                Path.Combine(CorePaths.UserData, "moderation-counter.json"));
+            try { counter.LoadFromDisk(); }
+            catch (Exception ex) { Serilog.Log.Debug("ModerationCounter.LoadFromDisk failed: {Error}", ex.Message); }
+            CoreModerationLog.CounterProvider = () => counter;
+            CoreModerationLog.GuardProvider = () => guard;
+            CoreModerationLog.InstanceProvider = () => log;
         }
 
         /// <summary>WPF CompanionService.UserMessageSent (the "user just talked to her" signal).</summary>
@@ -446,6 +485,10 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.SecretStore.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
+                // the ledger starts when awareness turns on. No observer feeds it on this head yet.
+                InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
+
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
                 global::ConditioningControlPanel.Services.Race.RacingAccess.IsGrantedProvider = id => Platform.PrizeOwnership.IsGranted(id);
                 CorePaths.EffectiveAssetsProvider = ResolveEffectiveAssetsPath;
@@ -720,13 +763,7 @@ namespace ConditioningControlPanel.Avalonia
                 if (CoreEngine.Video is { } recapVideo)
                     recapVideo.VideoStarted += () => MediaHistory?.RecordVideo(recapVideo.LastVideoPath);
                 //
-                // The one escalating moderation counter (WPF App.xaml.cs:2653), filed under CorePaths.UserData
-                // for the same reason the log below is not seeded: ApplicationData is a second tree here.
-                var moderationCounter = new ConditioningControlPanel.Services.Moderation.ModerationCounter(
-                    System.IO.Path.Combine(CorePaths.UserData, "moderation-counter.json"));
-                try { moderationCounter.LoadFromDisk(); }
-                catch (Exception ex) { Serilog.Log.Debug("ModerationCounter.LoadFromDisk failed: {Error}", ex.Message); }
-                CoreModerationLog.CounterProvider = () => moderationCounter;
+                SeedModeration();
                 CoreAi.IsAvailableProvider = () => Ai?.IsAvailable == true;   // WPF App.xaml.cs:380
                 await step(0.85, "Initializing companion...");
                 // WPF App.xaml.cs:2690: built unconditionally, UseCompanionBrain decides per send. The bark
@@ -748,13 +785,6 @@ namespace ConditioningControlPanel.Avalonia
                     () => (Ai as ConditioningControlPanel.Services.AIService.AiServiceStrategy)?.ClearLocalHistory();
                 if (Ai is ConditioningControlPanel.Services.AIService.AiServiceStrategy strategy)
                     _ = Task.Run(async () => { try { await strategy.WarmUpLocalAsync(); } catch (Exception ex) { Serilog.Log.Debug("WarmUpLocal: {E}", ex.Message); } });
-                //
-                // CoreModerationLog's record half stays unseeded, and NOT because a log is unavailable here
-                // - ModerationLog is in Core and would construct fine. It hardcodes
-                // SpecialFolder.ApplicationData (~/.config on Linux) while this head's user data
-                // lives under CorePaths.UserData (~/.local/share), so seeding it would scatter the
-                // CCBill record file into a second tree. That is a fix to the class, in a later
-                // layer, not a seeding decision here.
 
                 // Guided tours (WPF App.Tutorial): the head's TutorialService behind the CoreTutorial
                 // seam every page already calls; PanicSurfaces "tour" ends a tour at once.
@@ -778,6 +808,8 @@ namespace ConditioningControlPanel.Avalonia
                 Services.Invites.InviteRewards.TryUnlockProvider = id => Achievements?.TryUnlock(id) == true;
                 Platform.FriendsHead.SeedInvites(
                     Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"), Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
+                // WPF App.xaml.cs:462 StakeAppHooks.Seed: the stakes' Chaster gate, loss row and wallet (the wire rides the invites door above).
+                Platform.StakeHead.Seed();
                 CoreProgression.TrackBubbleCountResultProvider = correct => Achievements?.TrackBubbleCountResult(correct);
                 CoreProgression.TrackBubbleCountGameStartedProvider = () => Achievements?.TrackBubbleCountGameStarted();
                 CoreProgression.TrackBubbleCountCompletedProvider = () => Quests?.TrackBubbleCountCompleted();
@@ -1101,10 +1133,12 @@ namespace ConditioningControlPanel.Avalonia
                 if (Interlocked.Exchange(ref _warnedMissingCustomAssetsPath, 1) == 0)
                     Serilog.Log.Warning("CustomAssetsPath '{Path}' does not exist — falling back to default assets folder. Imports/extractions will go to the default location.", customPath);
             }
-            return _defaultAssetsPath ??= DefaultAssetsPath(OperatingSystem.IsLinux(),
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), CorePaths.UserData,
-                sandboxed: !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
+            return DefaultAssetsRoot;
         }
+
+        internal string DefaultAssetsRoot => _defaultAssetsPath ??= DefaultAssetsPath(OperatingSystem.IsLinux(),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), CorePaths.UserData,
+            sandboxed: !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
 
         private string? _defaultAssetsPath;
 
@@ -1177,6 +1211,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopMantra(((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).Windows); } catch { }
 
             // Restore any app we ducked; a pending Unduck would otherwise die with the process.
+            try { Platform.KeywordTriggerHead.Stop(); } catch { }
             try { Platform.LibVlcAudio.Instance?.Shutdown(); } catch { }
             try { Platform.LayeredAudio.Instance?.Shutdown(); } catch { }
             try { ReleaseContent?.Dispose(); } catch { }
@@ -1204,6 +1239,7 @@ namespace ConditioningControlPanel.Avalonia
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
+            ReleasePrivacyLedger();
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
             // WPF App.OnExit:6336: only the `ollama serve` this app spawned; a user's own server is untouched.

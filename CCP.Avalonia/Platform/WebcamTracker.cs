@@ -157,6 +157,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private volatile WebcamCalibrationData? _calibration;
         private volatile bool _calibrationLoaded;
 
+        /// <summary>Face found/lost from the capture thread: only while this run is still current, so a
+        /// Stop (panic) that overtakes the frame is never followed by a green Tracking/Face lost.</summary>
+        private void PublishIfCurrent(Run? run, WebcamTrackingState state)
+        {
+            lock (_gate) { if (_run == run) SetTrackingState(state); }
+        }
+
         public bool IsRunning => _run != null;
         /// <summary>Why the last start failed, for the user; null after a good start.</summary>
         public string? LastError { get; private set; }
@@ -426,15 +433,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private void ProcessFrame(Run run, Mat bgr)
         {
             var found = run.Face!.Detect(bgr);
-            if (found is not { } f0) { NoFace(); return; }
+            if (found is not { } f0) { NoFace(run); return; }
             int x = Math.Clamp(f0.X, 0, bgr.Width - 1), y = Math.Clamp(f0.Y, 0, bgr.Height - 1);
             var r = new Rect(x, y, Math.Clamp(f0.Width, 0, bgr.Width - x), Math.Clamp(f0.Height, 0, bgr.Height - y));
-            if (r.Width < 16 || r.Height < 16) { NoFace(); return; }
+            if (r.Width < 16 || r.Height < 16) { NoFace(run); return; }
             var lm = run.Mesh!.Detect(bgr, r);
-            if (lm == null) { NoFace(); return; }
+            if (lm == null) { NoFace(run); return; }
             if (_gaze.FaceSeen())
             {
-                SetTrackingState(WebcamTrackingState.Tracking);
+                PublishIfCurrent(run, WebcamTrackingState.Tracking);
                 Dispatcher.UIThread.Post(() => OnFaceFound?.Invoke());
             }
             if (HeadPose(_gaze, lm, bgr.Width, bgr.Height) is { } pose)
@@ -511,11 +518,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return fired;
         }
 
-        internal void NoFace()
+        /// <summary>Tests call it bare; the capture thread passes its run so a stale run never publishes.</summary>
+        internal void NoFace() => NoFace(null);
+
+        private void NoFace(Run? run)
         {
             if (_gaze.FaceMissing())
             {
-                SetTrackingState(WebcamTrackingState.FaceLost);
+                PublishIfCurrent(run, WebcamTrackingState.FaceLost);
                 Dispatcher.UIThread.Post(() => OnFaceLost?.Invoke());
             }
             _blink.CancelClosure();

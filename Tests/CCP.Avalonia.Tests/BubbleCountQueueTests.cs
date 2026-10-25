@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using Avalonia.LogicalTree;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -109,6 +112,132 @@ public sealed class BubbleCountQueueTests
             host.CloseAll();
             (host.Scheduler, CoreEngine.BubbleCount, s.BubbleCountStrictLock) = (real, prevEngine, strict);
             System.IO.File.Delete(clip);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task PauseEffectsEditorPersistsAndFollowsSettingsReplacement() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        settings.Current.BubbleCountPauseEffects = false;
+        CoreSettings.ServiceProvider = () => settings;
+        var card = new BubbleCountFeatureControl();
+        var window = new Window { Content = card };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var check = card.FindControl<CheckBox>("ChkPauseEffects")!;
+            Assert.NotNull(check);
+            Assert.False(check.IsChecked);
+            check.IsChecked = true;
+            settings.SaveImmediate();
+            var restored = new SettingsService();
+            Assert.True(restored.Current.BubbleCountPauseEffects);
+            restored.Current.BubbleCountPauseEffects = false;
+            CoreSettings.ServiceProvider = () => restored;
+            card.RebindToCurrentSettings();
+            Assert.False(check.IsChecked);
+            restored.Current.BubbleCountPauseEffects = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(check.IsChecked); // external setting changes repaint the loaded rack panel
+            check.IsChecked = false;
+            Assert.False(restored.Current.BubbleCountPauseEffects);
+            Assert.True(settings.Current.BubbleCountPauseEffects); // discarded settings stay untouched
+        }
+        finally { window.Close(); CoreSettings.ServiceProvider = oldProvider; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task TestNowOverForYouWaitsWithoutFreezingThenReplaysOnce() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var clock = new Clock();
+        var host = BubbleCountHost.Instance;
+        var b = new BubbleCountScheduler(host, clock, () => new[] { "/none/clip.mp4" });
+        var (oldEngine, oldFreeze) = (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider);
+        var freezes = 0;
+        CoreEngine.BubbleCount = b;
+        CoreSubliminal.BambiFreezeProvider = () => freezes++;
+        // No browser navigation or remote media: just the real feed window's visible lifecycle.
+        var feed = new global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow(
+            global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Games["fyp"]);
+        try
+        {
+            feed.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(host.FeedOwnsTheScreen);
+            var button = new BubbleCountFeatureControl().FindControl<Button>("BtnTest")!;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            clock.Advance(TimeSpan.FromSeconds(10));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(b.IsBusy);
+            Assert.Equal(0, freezes);
+            feed.Close();
+            Assert.False(host.FeedOwnsTheScreen);
+            clock.Advance(TimeSpan.FromMilliseconds(500));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(b.IsBusy);
+            Assert.Equal(1, freezes);
+            MainShellWindow.StopEngine(); // the existing panic/engine route cancels the deferred/game state
+            clock.Advance(TimeSpan.FromSeconds(2));
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(b.IsBusy);
+            Assert.Empty(BubbleCountWindow.OpenWindows);
+        }
+        finally
+        {
+            b.ForceCleanup(); feed.Close();
+            (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider) = (oldEngine, oldFreeze);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task EmptyLibraryTestNowShowsTheLocalizedWarningToast() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var hostField = typeof(global::ConditioningControlPanel.Avalonia.Helpers.NotificationService)
+            .GetField("_host", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var service = global::ConditioningControlPanel.Avalonia.App.Notifications;
+        var oldHost = hostField.GetValue(service);
+        var oldPacks = ContentPackStore.Current;
+        var clock = new Clock();
+        var b = new BubbleCountScheduler(BubbleCountHost.Instance, clock, () => Array.Empty<string>());
+        var panel = new StackPanel();
+        try
+        {
+            ContentPackStore.Current = null;
+            service.AttachHost(panel);
+            panel.Children.Clear();
+            b.Trigger(forceTest: true);
+            clock.Advance(BubbleCountScheduler.LeadIn);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(b.IsBusy);
+            var toast = Assert.Single(panel.Children);
+            Assert.Contains(toast.GetLogicalDescendants().OfType<TextBlock>(), t =>
+                t.Text == global::ConditioningControlPanel.Localization.Loc.Get("bubblecount_no_videos"));
+            Assert.Empty(BubbleCountWindow.OpenWindows);
+        }
+        finally
+        {
+            b.ForceCleanup(); ContentPackStore.Current = oldPacks;
+            foreach (var child in panel.Children.OfType<Border>()) (child.Tag as DispatcherTimer)?.Stop();
+            hostField.SetValue(service, oldHost);
         }
         return Task.CompletedTask;
     });

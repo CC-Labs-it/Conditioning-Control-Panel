@@ -42,10 +42,12 @@ namespace ConditioningControlPanel.Services.JustDrop
         private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(90);
 
         private static readonly SemaphoreSlim _gate = new(1, 1);
-        private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(12) };
+        internal static HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(12) };
 
         private static IReadOnlyList<Order> _cached = Array.Empty<Order>();
         private static DateTimeOffset _cachedAt = DateTimeOffset.MinValue;
+        private static string _cachedFor = "";
+        private static string _cachedToken = "";
 
         /// <summary>One filed receipt, in the server's own shape (justdrop.js cleanOrder).</summary>
         internal sealed class Order
@@ -88,8 +90,6 @@ namespace ConditioningControlPanel.Services.JustDrop
         /// </summary>
         public static async Task<IReadOnlyList<Order>> FetchAsync(CancellationToken ct = default)
         {
-            if (_cachedAt > DateTimeOffset.UtcNow - CacheFor) return _cached;
-
             var token = SafeAuthToken();
             var unifiedId = SafeUnifiedId();
             if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(unifiedId))
@@ -101,9 +101,9 @@ namespace ConditioningControlPanel.Services.JustDrop
             await _gate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
-                // Re-check inside the gate: a caller may have refreshed while we queued.
-                if (_cachedAt > DateTimeOffset.UtcNow - CacheFor) return _cached;
-
+                // Re-check inside the gate: identity may change while a request queues.
+                if (SafeUnifiedId() != unifiedId || SafeAuthToken() != token) return Array.Empty<Order>();
+                if (_cachedFor == unifiedId && _cachedToken == token && _cachedAt > DateTimeOffset.UtcNow - CacheFor) return _cached;
                 var url = $"{ProxyBaseUrl}/v2/justdrop/orders?unified_id={Uri.EscapeDataString(unifiedId)}";
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 // The device door, NOT Authorization: Bearer. resolveCaller() picks the JWT door
@@ -112,31 +112,35 @@ namespace ConditioningControlPanel.Services.JustDrop
                 request.Headers.Add("X-Auth-Token", token);
                 request.Headers.Add("Accept", "application/json");
 
-                using var response = await _http.SendAsync(request, ct).ConfigureAwait(false);
+                using var response = await Http.SendAsync(request, ct).ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
                     await MergedAccountRecovery.TryHandleAsync(response).ConfigureAwait(false);   // contract D
-                    App.Logger?.Debug("JustDrop orders: {Status}; shelf stays empty", (int)response.StatusCode);
+                    Serilog.Log.Debug("JustDrop orders: {Status}; shelf stays empty", (int)response.StatusCode);
                     return Array.Empty<Order>();
                 }
 
                 var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
                 var parsed = Parse(body);
+                // Never publish an old account's drawer after sign-out or account switch.
+                if (SafeUnifiedId() != unifiedId || SafeAuthToken() != token) return Array.Empty<Order>();
+                _cachedFor = unifiedId;
+                _cachedToken = token;
                 _cached = parsed;
                 _cachedAt = DateTimeOffset.UtcNow;
-                App.Logger?.Information("JustDrop orders: {Count} in the drawer", parsed.Count);
+                Serilog.Log.Information("JustDrop orders: {Count} in the drawer", parsed.Count);
                 return parsed;
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                App.Logger?.Debug("JustDrop orders: fetch failed ({Error})", ex.Message);
+                Serilog.Log.Debug("JustDrop orders: fetch failed ({Error})", ex.Message);
                 return Array.Empty<Order>();
             }
             finally { _gate.Release(); }
         }
 
-        private static IReadOnlyList<Order> Parse(string body)
+        internal static IReadOnlyList<Order> Parse(string body)
         {
             var list = new List<Order>();
             try
@@ -168,7 +172,7 @@ namespace ConditioningControlPanel.Services.JustDrop
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("JustDrop orders: unparseable body ({Error})", ex.Message);
+                Serilog.Log.Debug("JustDrop orders: unparseable body ({Error})", ex.Message);
                 return Array.Empty<Order>();
             }
             return list;
@@ -176,13 +180,13 @@ namespace ConditioningControlPanel.Services.JustDrop
 
         private static string SafeAuthToken()
         {
-            try { return App.Settings?.Current?.AuthToken ?? string.Empty; }
+            try { return CoreSettings.Current.AuthToken ?? string.Empty; }
             catch { return string.Empty; }
         }
 
         private static string SafeUnifiedId()
         {
-            try { return App.UnifiedUserId ?? string.Empty; }
+            try { return CoreAccount.UnifiedUserId ?? string.Empty; }
             catch { return string.Empty; }
         }
     }

@@ -61,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("settings-palette", _ => SettingsPaletteWindow.CloseIfOpen()),
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
             new("profile-faucet", sh => sh?.CancelFaucetCharge(silent: true)), // cancel the ladder before audio/haptics teardown
+            new("keyword-triggers", _ => Platform.KeywordTriggerHead.StopAudio()),   // the clip only; the switch stays armed
             new("haptics", _ => CoreHaptics.Service?.PanicStop()),
             new("remote-haptics", _ => RemoteCommands.StopHaptics()),   // decisions 2026-10-08
             new("takeover", sh => sh?.StopAutonomyForPanic()),           // WPF KillAllAudio -> Autonomy.Stop
@@ -77,11 +78,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // so the leash task parks before StopEngine and before its lock card closes.
             new("engine", _ => MainShellWindow.StopEngine(),
                 After: ["ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task"]),
+            new("flash", _ => Overlays.FlashOverlay.CloseAll(final: false)), // Includes standalone pops and mid-Shatter exits.
             // WPF StopEngine -> MainWindow.StartStop.cs:505 App.SkillTree?.Stop(): the 3x ends with/after the engine.
             new("pink-rush", _ => PinkRushHost.Stop(), After: ["engine"]),                 // WPF StopEngine -> SkillTree.Stop: the 3x ends
             // WPF :1978 "corner GIFs": the standalone Spiral-card slots close (settings untouched) and queued ones cancel;
             // :1974-1978 the engine-owned session GIF goes first, these standalone slots after it.
             new("corner-gif", _ => Overlays.CornerGifOverlay.StopAll(), After: ["engine"]),
+            new("emi-desk-feedback", _ => EmiDesk.EmiDeskService.Instance.Window?.CancelChain()),   // P06; WPF left it (MainWindow.xaml.cs:1934-2013 never touches the desk)
             // WPF :1981-1982 "tube speech"/"avatar voice": cut her line, drop the queue/animations and the bubble.
             // WPF :1978-1981: after the corner GIFs.
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence(), After: ["corner-gif"]),
@@ -93,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("attention-test", _ => Overlays.AttentionTestTarget.CloseAll()),   // the style editor's Test target (P06; WPF left it up)
             new("deeper-editor-audio", _ => Deeper.DeeperEditorWindow.PauseAllForPanic()),   // P06; WPF left it playing
             new("knock-cards", _ => Overlays.KnockCard.FoldAll()),   // P06; WPF left them up. Folded as Later: they wait in the Inbox
+            new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
             new("camera", _ => MainShellWindow.StopCameraForPanic(), After: ["gaze-minigame"]),   // decision C: last, fire-and-forget; gaze reads it
         };
 
