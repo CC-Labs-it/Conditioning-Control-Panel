@@ -8,7 +8,7 @@
  * Toys kit (owner pick 2026-10-25): Pendulum, Disc, Tether, Melt (the spiral trap, bigger), Snap, Surge and
  * Big Spiral. They act on the kart, never cover the screen; the payoff words and flashes play in
  * fx/payoff.js. The first twelve ids keep their wire order and draw at weight 0. Icons of the new
- * ids borrow old art until the toys art lands.
+ * ids use physical toy icons with directional enamel frames.
  */
 
 export const ITEM_IDS = ['flash', 'spiral', 'brainDrain', 'freeze', 'blackout', 'pink', 'melt', 'shatter', 'surge', 'glass', 'echo', 'golden',
@@ -32,11 +32,11 @@ export const ITEMS = Object.freeze({
   glass: { use: 'self', view: null, bot: null, icon: fx('bubble.png') },
   echo: { use: 'self', view: null, bot: null, icon: fx('glitch.png') },
   golden: { use: 'self', view: null, bot: null, icon: fx('golden.png') },
-  pendulum: { use: 'throw', view: 'none', bot: 'steer', icon: fx('golden.png') },
-  disc: { use: 'bounce', view: 'none', bot: 'spin', icon: fx('prism.png') },
-  tether: { use: 'tether', view: 'none', bot: 'spin', icon: fx('glitch.png') },
-  snap: { use: 'self', view: null, bot: 'steer', icon: fx('bubble.png') },
-  bigSpiral: { use: 'lob', view: 'none', bot: 'steer', icon: fx('spiral.png') },
+  pendulum: { use: 'throw', view: 'none', bot: 'steer', icon: fx('pendulum.png') },
+  disc: { use: 'bounce', view: 'none', bot: 'spin', icon: fx('disc.png') },
+  tether: { use: 'tether', view: 'none', bot: 'spin', icon: fx('tether.png') },
+  snap: { use: 'self', view: null, bot: 'steer', icon: fx('snap.png') },
+  bigSpiral: { use: 'lob', view: 'none', bot: 'steer', icon: fx('bigspiral.png') },
 });
 
 export const BUCKETS = ['front', 'middle', 'back'];

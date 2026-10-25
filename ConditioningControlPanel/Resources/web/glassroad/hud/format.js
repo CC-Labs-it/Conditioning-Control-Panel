@@ -53,8 +53,8 @@ export const ITEM_NAMES = {
 const ICON_FILES = {
   flash: 'flash', spiral: 'spiral', brainDrain: 'braindrain', freeze: 'bambifreeze', blackout: 'blackout',
   pink: 'pinkfilter', melt: 'melt', shatter: 'prism', surge: 'gold_droplet', glass: 'bubble', echo: 'glitch', golden: 'golden',
-  // toys kit: borrowed art until Astra's icons land (same names as sim/itemTable.js ITEMS[id].icon)
-  pendulum: 'golden', disc: 'prism', tether: 'glitch', snap: 'bubble', bigSpiral: 'spiral',
+  // Directional enamel frames match the world atlas and sim/itemTable.js.
+  pendulum: 'pendulum', disc: 'disc', tether: 'tether', snap: 'snap', bigSpiral: 'bigspiral',
 };
 export const ICON_IDS = Object.keys(ICON_FILES);
 /** 'spiral' -> 'art/fx/spiral.png' (relative to the page); unknown -> the empty bubble. */
