@@ -56,16 +56,10 @@ namespace ConditioningControlPanel.Avalonia
         /// <summary>The presence switch moved (either surface): the other one repaints from the setting.</summary>
         internal static event Action? RichPresenceChanged;
 
-        /// <summary>WPF App.xaml.cs:3060/3067: the funscript follows the mandatory clip's playhead, and the
-        /// connecting edge of a toy fires EMI Desk's <c>hapticsConnected</c> moment. Before the service exists.</summary>
+        /// <summary>WPF App.xaml.cs:3067: the connecting edge of a toy fires EMI Desk's <c>hapticsConnected</c>
+        /// moment. Seeded before the service exists.</summary>
         internal static void SeedHapticHeadSeams()
         {
-            Services.Haptics.FunScriptService.SubscribePlaybackTime = h =>
-            {
-                var video = Views.Overlays.MandatoryVideoOverlay.Instance;
-                video.PrimaryPlaybackTimeMsChanged += h;
-                return () => video.PrimaryPlaybackTimeMsChanged -= h;
-            };
             Services.HapticService.EmiDeskFire = (moment, ctx) =>
                 Views.Windows.EmiDesk.EmiDeskService.Instance.Fire(moment, ctx);
         }
@@ -568,6 +562,9 @@ namespace ConditioningControlPanel.Avalonia
                 CoreEntitlement.IntakePassAvailableProvider = () => IntakePass.IsPassAvailable;
                 // WPF App.xaml.cs:2875/2941: the one HapticService, gated (premium / daily free) in its
                 // mixer. Connects only to what the user runs (Intiface at ButtplugUrl, Lovense Remote).
+                // WPF App.xaml.cs:3060: the funscript follows the mandatory video's playhead.
+                ConditioningControlPanel.Services.Haptics.FunScriptService.SubscribePlaybackTime =
+                    Views.Overlays.MandatoryVideoOverlay.SubscribePlaybackTime;
                 Views.Overlays.HapticMockToast.Seed();
                 SeedHapticHeadSeams();
                 CoreHaptics.Service = new Services.HapticService(Settings.Current.Haptics);

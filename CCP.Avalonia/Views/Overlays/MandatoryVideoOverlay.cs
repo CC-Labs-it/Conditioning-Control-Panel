@@ -36,8 +36,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// WPF's vout heal, but on the same shared LibVLC (docs/avalonia-decisions.md). Ambient bubbles
     /// are paused by the Core scheduler.
     /// ponytail: missing against WPF - the off-thread UI-wedge watchdog and the LibVLC retire/quarantine
-    /// (a Stop that hangs in native code still hangs the UI thread), the toy-button/gaze/haptics
-    /// attention inputs, no-activate z-order, and the remote-media offer after the "no videos" dialog.
+    /// (a Stop that hangs in native code still hangs the UI thread), the gaze
+    /// attention input and no-activate z-order.
     /// </summary>
     internal sealed class MandatoryVideoOverlay : IMandatoryVideoHost
     {
@@ -55,12 +55,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
+        private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
-        /// <summary>WPF VideoService.PrimaryPlaybackTimeMsChanged: the clip's position in ms, raised on
-        /// LibVLC's thread. FunScriptService follows it (seeded in App.axaml.cs).</summary>
-        public event Action<long>? PrimaryPlaybackTimeMsChanged;
-        internal void RaisePlaybackTimeForTest(long ms) => PrimaryPlaybackTimeMsChanged?.Invoke(ms);
         private Media? _media;
         private VlcFrameSink? _sink;
         private WriteableBitmap? _fill;
@@ -99,6 +96,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The global panic listener can stop a video right now (LockCardWindow #875's
         /// PanicHookIsInstalled). Tests swap it.</summary>
         internal static Func<bool> PanicListenerLive = () => PanicListeners.Live;
+
+        /// <summary>WPF VideoService.PrimaryPlaybackTimeMsChanged (:685): the playhead the funscript
+        /// follows (FunScriptService.SubscribePlaybackTime, seeded in App). Raised on LibVLC's thread.</summary>
+        internal event Action<long>? PlaybackTimeMsChanged;
+
+        internal void RaisePlaybackTime(long ms)
+        {
+            try { PlaybackTimeMsChanged?.Invoke(ms); }
+            catch (Exception ex) { Log.Debug("PlaybackTimeMsChanged handler error: {Error}", ex.Message); }
+        }
+
+        /// <summary>The FunScriptService.SubscribePlaybackTime seam (WPF App.xaml.cs:3060-3066).</summary>
+        internal static Action? SubscribePlaybackTime(Action<long> handler)
+        {
+            Instance.PlaybackTimeMsChanged += handler;
+            return () => Instance.PlaybackTimeMsChanged -= handler;
+        }
 
         internal IReadOnlyList<Window> Windows => _surfaces.Select(s => s.Window).ToList();
         internal IReadOnlyList<Surface> Surfaces => _surfaces;
@@ -194,9 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _player.TimeChanged += (_, e) =>
             {
                 Interlocked.Exchange(ref _watchedMs, e.Time);
-                // WPF VideoService.cs:3514: the playhead the funscript follows (LibVLC's thread).
-                try { PrimaryPlaybackTimeMsChanged?.Invoke(e.Time); }
-                catch (Exception ex) { Log.Debug("PrimaryPlaybackTimeMsChanged handler error: {Error}", ex.Message); }
+                RaisePlaybackTime(e.Time);
             };
             _player.EndReached += (_, _) =>
             {
@@ -566,6 +578,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (elapsed >= t.Due) { t.Remove(); _targets.Remove(t); continue; }
                 t.Move(dt);
             }
+            ReleaseToyBatches();
+        }
+
+        private void ReleaseToyBatches()
+        {
+            if (_toyBatches.Count == 0) return;   // per-frame path: no allocation when no toy is armed
+            foreach (var batch in _toyBatches.ToList())
+                if (!batch.Targets.Any(t => _targets.Contains(t)))
+                {
+                    batch.Binding.Dispose();
+                    _toyBatches.Remove(batch);
+                }
         }
 
         /// <summary>WPF SpawnTarget: one target per screen from the enabled pool ("CLICK ME" when
@@ -578,23 +602,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Scheduler.NoteSpawn();
             var batch = new List<Target>();
             var caught = false;
+            void Hit(Target t)
+            {
+                if (caught || !_targets.Contains(t)) return;
+                caught = true;
+                PlayPop();
+                Scheduler.NoteHit();
+                foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
+                t.FadeOut();
+                ReleaseToyBatches();
+                Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
+            }
             foreach (var x in _surfaces)
             {
                 var t = new Target(x.Layer, text, Math.Max(40, s.AttentionSize), elapsed + s.AttentionLifespan, _random);
-                t.Root.PointerPressed += (_, e) =>
-                {
-                    e.Handled = true;
-                    if (caught) return;
-                    caught = true;
-                    PlayPop();
-                    Scheduler.NoteHit();
-                    foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
-                    t.FadeOut();
-                    Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
-                };
+                t.Root.PointerPressed += (_, e) => { e.Handled = true; Hit(t); };
                 batch.Add(t);
                 _targets.Add(t);
             }
+            var binding = AttentionToyButtonBinding.Arm(CoreHaptics.Service,
+                () => batch.Any(t => _targets.Contains(t)),
+                () => Hit(batch.First(t => _targets.Contains(t))));
+            if (binding != null) _toyBatches.Add((batch, binding));
         }
 
         internal static void PlayPop()
@@ -705,7 +734,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 _fill = fill;
                 var ft = new FormattedText(text, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                    new Typeface(new FontFamily($"{(string.IsNullOrWhiteSpace(font) ? "Segoe UI" : font)}, Segoe UI, Arial"), FontStyle.Normal, FontWeight.Bold), size, fill)
+                    new Typeface(new FontFamily($"{(string.IsNullOrWhiteSpace(font) ? "Segoe UI" : font)}, Segoe UI, Arial, {AppFonts.Inter}"), FontStyle.Normal, FontWeight.Bold), size, fill)
                 { TextAlignment = TextAlignment.Center, LineHeight = size * 0.95 };
                 _geo = ft.BuildGeometry(default);
                 var b = _geo?.Bounds ?? default;
@@ -774,22 +803,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         });
 
         /// <summary>WPF's guidance dialog when the library is empty (once per launch).</summary>
-        private void ShowNoVideos() => Dispatcher.UIThread.Post(() =>
+        private void ShowNoVideos()
         {
-            var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-            if (owner == null) return;
-            _ = Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(Scheduler));
-        });
+            // WPF VideoService.cs:2474 reads the funnel at trigger time; a refill before the post runs must not flip it.
+            var s = Scheduler;
+            var filterEmptied = NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration);
+            Dispatcher.UIThread.Post(() =>
+            {
+                var owner = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                if (owner == null) return;
+                _ = ShowNoVideosAsync(owner, s, filterEmptied);
+            });
+        }
+
+        /// <summary>WPF VideoService.cs:2486-2495: the guidance box, then - AFTER it closes, and only when
+        /// the length filter did not cause the empty library - the remote-media offer.</summary>
+        internal static async System.Threading.Tasks.Task ShowNoVideosAsync(Window owner, MandatoryVideoScheduler s, bool filterEmptied)
+        {
+            try
+            {
+                await Dialogs.MessageDialog.ShowAsync(owner, Loc.Get("video_no_videos_title"), NoVideosMessage(s));
+                if (!filterEmptied) RemoteMediaOffer.Offer("videos", owner);
+            }
+            catch (Exception ex) { Log.Debug("VideoService: no-videos dialog failed: {Error}", ex.Message); }
+        }
 
         /// <summary>WPF TriggerVideo's guidance text: #1352 names the length filter when it emptied a
         /// library that has files, else the add-files hint.</summary>
         internal static string NoVideosMessage(MandatoryVideoScheduler s)
         {
             var c = CoreSettings.Current;
-            if (NoVideosReason.LengthFilterEmptied(s.LastFunnelEnabled, s.LastFunnelDuration))
-                return Loc.GetF("video_length_filter_emptied", s.LastFunnelEnabled,
-                    NoVideosReason.FormatRange(c.VideoMinDurationSeconds, c.VideoMaxDurationSeconds));
-            return Loc.GetF("video_no_videos_found", Path.Combine(CorePaths.EffectiveAssets, "videos")) + "\n\n" + Loc.Get("video_add_files_hint");
+            var packs = ContentPackStore.Current;
+            return NoVideosReason.Message(Path.Combine(CorePaths.EffectiveAssets, "videos"),
+                s.LastFunnelEnabled, s.LastFunnelDuration, c.VideoMinDurationSeconds, c.VideoMaxDurationSeconds,
+                packs?.InstalledPackIds.Count ?? 0, packs?.GetActivePackIds().Count ?? 0);
         }
 
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
@@ -803,6 +850,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _graceTimer = _guard = null;
                 _spawnTimes.Clear();
                 _targets.Clear();
+                ReleaseToyBatches();
                 // Stop joins the decoder thread, so after it no callback touches the frame buffer.
                 if (_player != null)
                 {

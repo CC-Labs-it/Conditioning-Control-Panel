@@ -5,28 +5,27 @@ using Avalonia;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
-using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.EmiDesk;
-using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.Haptics.Core;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>WPF App.xaml.cs:3060/3067: the two haptics head seams this head seeds at startup.</summary>
+/// <summary>WPF App.xaml.cs:3067: toy connect fires EMI Desk's hapticsConnected moment. The playhead seam
+/// (App.xaml.cs:3060) is covered by FunScriptPlayheadTests.</summary>
 public sealed class HapticHeadSeamsTests
 {
     [Fact]
-    public Task ToyConnectFiresEmiMomentAndFunScriptFollowsTheClipPlayhead() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task ToyConnectFiresEmiDeskHapticsConnectedMoment() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
-        var old = (FunScriptService.SubscribePlaybackTime, HapticService.EmiDeskFire, MockProviderV2.Toast);
+        var old = (HapticService.EmiDeskFire, MockProviderV2.Toast);
         var moments = new List<EmiMoment>();
         EventHandler<EmiMoment> observer = (_, m) => moments.Add(m);
         var desk = EmiDeskService.Instance;
@@ -45,19 +44,11 @@ public sealed class HapticHeadSeamsTests
                 Assert.True(await haptics.ConnectAsync());
             var connected = Assert.Single(moments, m => m.Id == "hapticsConnected");
             Assert.NotNull(connected.Context?.GetType().GetProperty("target")?.GetValue(connected.Context));
-
-            var seen = new List<long>();
-            var unsubscribe = FunScriptService.SubscribePlaybackTime!(seen.Add);
-            Assert.NotNull(unsubscribe);
-            MandatoryVideoOverlay.Instance.RaisePlaybackTimeForTest(1234);
-            unsubscribe!();
-            MandatoryVideoOverlay.Instance.RaisePlaybackTimeForTest(5678);
-            Assert.Equal(new long[] { 1234 }, seen);
         }
         finally
         {
             desk.MomentFired -= observer;
-            (FunScriptService.SubscribePlaybackTime, HapticService.EmiDeskFire, MockProviderV2.Toast) = old;
+            (HapticService.EmiDeskFire, MockProviderV2.Toast) = old;
         }
     });
 }

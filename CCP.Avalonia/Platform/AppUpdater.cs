@@ -210,6 +210,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 OpenDialog = null;
                 _busy = false;
+                RemoteMediaOffer.FlushPending();
             }
         }
 
@@ -250,6 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             finally
             {
                 _busy = false;
+                RemoteMediaOffer.FlushPending();
             }
         }
 

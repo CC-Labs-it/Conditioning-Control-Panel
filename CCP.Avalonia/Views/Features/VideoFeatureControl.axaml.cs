@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -64,13 +65,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             BtnTestVideo.Click += BtnTestVideo_Click;
 
             LoadFromSettings();
-
-            // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt +
-            // App.Mods.ModChanged). The mod-override half of ResolveImageDecoded is portable now
-            // (CoreModArt.OverridePath), but the plate still needs a named ImageBrush in the
-            // .axaml, which Avalonia rejects (x:Name on a brush is AVLN2000); the port draws a
-            // static wash instead, so there is nothing here to repaint.
         }
+
+        // ---- feature art (mod-aware), WPF ApplyFeatureArt + OnModChanged ------------------------
+
+        private const string FeatureArtPath = "features/mandatory_videos.png";
+
+        /// <summary>Paints the (possibly mod-overridden) art into the hero strip (480 px decode,
+        /// opacity 0.9, right-aligned) and the side plate (800 px). A null resolve leaves the
+        /// authored wash standing, as WPF leaves its pack:// default. Brushes are built here because
+        /// x:Name on a brush is AVLN2000.</summary>
+        private void ApplyFeatureArt()
+        {
+            try
+            {
+                if (Helpers.ModArt.TryLoad(FeatureArtPath, 480) is { } hero)
+                    HeroArt.Background = new global::Avalonia.Media.ImageBrush(hero)
+                    {
+                        Stretch = global::Avalonia.Media.Stretch.UniformToFill,
+                        AlignmentX = global::Avalonia.Media.AlignmentX.Right,
+                        Opacity = 0.9,
+                    };
+                if (Helpers.ModArt.TryLoad(FeatureArtPath, 800) is { } side)
+                    SideArt.Background = new global::Avalonia.Media.ImageBrush(side)
+                    {
+                        Stretch = global::Avalonia.Media.Stretch.UniformToFill,
+                    };
+            }
+            catch (Exception ex) { Log.Debug("VideoFeatureControl.ApplyFeatureArt: {E}", ex.Message); }
+        }
+
+        /// <summary>ModChanged can be raised off the UI thread, so the repaint is marshalled.</summary>
+        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(ApplyFeatureArt);
 
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
 
@@ -81,13 +107,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+            CoreMods.ModChanged += OnModChanged;
             RebindToCurrentSettings();
+            ApplyFeatureArt();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            CoreMods.ModChanged -= OnModChanged;
             Unhook();
             base.OnDetachedFromVisualTree(e);
         }
@@ -412,7 +441,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             await new AttentionTargetEditorDialog().ShowDialogSafe(owner);
         }
 
-        private async void BtnTestVideo_Click(object? sender, RoutedEventArgs e)
+        /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
+        internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
+
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = ReportFault(TestVideoAsync());
+
+        // WPF BtnTestVideo_Click's catch: log, then tell the user ("Error triggering video: ...").
+        private async Task ReportFault(Task run)
+        {
+            try { await run; }
+            catch (Exception ex)
+            {
+                Serilog.Log.Error(ex, "Error in BtnTestVideo_Click");
+                if (TopLevel.GetTopLevel(this) is Window owner)
+                    await Dialogs.MessageDialog.ShowAsync(owner, "Error", $"Error triggering video: {ex.Message}");
+            }
+        }
+
+        private async Task TestVideoAsync()
         {
             // WPF BtnTestVideo_Click -> TriggerVideo(userInitiated: true), after its stuck-video prompt.
             // ponytail: WPF's second prompt ("another interaction is in progress") needs the interaction
@@ -423,7 +469,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
                 if (!await Dialogs.MessageDialog.ConfirmAsync(owner, "Video Playing",
                         "A video appears to be playing.\n\nIf you don't see a video, it may be stuck. Click Yes to force reset and try again.",
-                        okText: "Yes")) return;
+                        okText: "Yes", cancelText: "No")) return;
                 Serilog.Log.Warning("User requested force reset of stuck video state");
                 video.ForceCleanup();
             }
