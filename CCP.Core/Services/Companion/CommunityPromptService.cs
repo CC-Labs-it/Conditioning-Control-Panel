@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
-using System.Windows;
-using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services.Moderation;
+using Serilog;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
 
@@ -21,6 +21,9 @@ namespace ConditioningControlPanel.Services
         private readonly string _manifestCachePath;
         private List<CommunityPromptManifestEntry> _availablePrompts = new();
         private bool _disposed;
+        private readonly bool _ownsHttpClient;
+        private readonly Func<IPromptValidator?> _validatorProvider;
+        public event EventHandler<int>? ValidationAdvisory;
 
         // Server endpoint for prompts manifest
         private const string PromptsManifestUrl = "https://codebambi-proxy.vercel.app/prompts/manifest";
@@ -36,19 +39,22 @@ namespace ConditioningControlPanel.Services
         /// Gets the list of installed prompt IDs.
         /// </summary>
         public IReadOnlyList<string> InstalledPromptIds =>
-            App.Settings?.Current?.InstalledCommunityPromptIds ?? new List<string>();
+            CoreSettings.Current?.InstalledCommunityPromptIds ?? new List<string>();
 
         /// <summary>
         /// Gets the currently active community prompt ID (null = using built-in).
         /// </summary>
-        public string? ActivePromptId => App.Settings?.Current?.ActiveCommunityPromptId;
+        public string? ActivePromptId => CoreSettings.Current?.ActiveCommunityPromptId;
 
-        public CommunityPromptService()
+        public CommunityPromptService(HttpClient? httpClient = null, string? userDataPath = null,
+            Func<IPromptValidator?>? validatorProvider = null)
         {
-            _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
+            _ownsHttpClient = httpClient == null;
+            _httpClient = httpClient ?? new HttpClient();
+            if (_ownsHttpClient) _httpClient.Timeout = TimeSpan.FromSeconds(30);
+            _validatorProvider = validatorProvider ?? (() => new PromptValidator());
 
-            _promptsFolder = Path.Combine(App.UserDataPath, Companion.InstalledCommunityPrompts.FolderName);
+            _promptsFolder = Path.Combine(userDataPath ?? CorePaths.UserData, Companion.InstalledCommunityPrompts.FolderName);
             _manifestCachePath = Path.Combine(_promptsFolder, "manifest-cache.json");
 
             // Create prompts folder if needed
@@ -60,7 +66,7 @@ namespace ConditioningControlPanel.Services
             // Load cached manifest
             LoadCachedManifest();
 
-            App.Logger?.Debug("CommunityPromptService initialized. Prompts folder: {Folder}", _promptsFolder);
+            Log.Debug("CommunityPromptService initialized. Prompts folder: {Folder}", _promptsFolder);
         }
 
         #region Manifest & Discovery
@@ -71,9 +77,9 @@ namespace ConditioningControlPanel.Services
         public async Task<List<CommunityPromptManifestEntry>> GetAvailablePromptsAsync(bool forceRefresh = false)
         {
             // Skip network request if offline mode is enabled
-            if (App.Settings?.Current?.OfflineMode == true)
+            if (CoreSettings.Current?.OfflineMode == true)
             {
-                App.Logger?.Debug("Offline mode enabled, using cached prompts only");
+                Log.Debug("Offline mode enabled, using cached prompts only");
                 return _availablePrompts;
             }
 
@@ -97,17 +103,17 @@ namespace ConditioningControlPanel.Services
                         // Cache the manifest
                         await File.WriteAllTextAsync(_manifestCachePath, json);
 
-                        App.Logger?.Information("Fetched {Count} community prompts from server", _availablePrompts.Count);
+                        Log.Information("Fetched {Count} community prompts from server", _availablePrompts.Count);
                     }
                 }
                 else
                 {
-                    App.Logger?.Warning("Failed to fetch community prompts manifest: {Status}", response.StatusCode);
+                    Log.Warning("Failed to fetch community prompts manifest: {Status}", response.StatusCode);
                 }
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning("Error fetching community prompts manifest: {Error}", ex.Message);
+                Log.Warning("Error fetching community prompts manifest: {Error}", ex.Message);
                 Error?.Invoke(this, ex);
             }
 
@@ -125,13 +131,13 @@ namespace ConditioningControlPanel.Services
                     if (manifest?.Prompts != null)
                     {
                         _availablePrompts = new List<CommunityPromptManifestEntry>(manifest.Prompts);
-                        App.Logger?.Debug("Loaded {Count} prompts from manifest cache", _availablePrompts.Count);
+                        Log.Debug("Loaded {Count} prompts from manifest cache", _availablePrompts.Count);
                     }
                 }
             }
             catch (Exception ex)
             {
-                App.Logger?.Debug("Could not load manifest cache: {Error}", ex.Message);
+                Log.Debug("Could not load manifest cache: {Error}", ex.Message);
             }
         }
 
@@ -145,9 +151,9 @@ namespace ConditioningControlPanel.Services
         public async Task<CommunityPrompt?> InstallPromptAsync(string promptId)
         {
             // Block downloads in offline mode
-            if (App.Settings?.Current?.OfflineMode == true)
+            if (CoreSettings.Current?.OfflineMode == true)
             {
-                App.Logger?.Information("Offline mode enabled, prompt download blocked");
+                Log.Information("Offline mode enabled, prompt download blocked");
                 return null;
             }
 
@@ -158,7 +164,7 @@ namespace ConditioningControlPanel.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    App.Logger?.Warning("Failed to download prompt {Id}: {Status}", promptId, response.StatusCode);
+                    Log.Warning("Failed to download prompt {Id}: {Status}", promptId, response.StatusCode);
                     return null;
                 }
 
@@ -167,7 +173,7 @@ namespace ConditioningControlPanel.Services
 
                 if (prompt == null)
                 {
-                    App.Logger?.Warning("Failed to parse prompt {Id}", promptId);
+                    Log.Warning("Failed to parse prompt {Id}", promptId);
                     return null;
                 }
 
@@ -176,22 +182,22 @@ namespace ConditioningControlPanel.Services
                 await File.WriteAllTextAsync(filePath, json);
 
                 // Add to installed list
-                var settings = App.Settings?.Current;
+                var settings = CoreSettings.Current;
                 if (settings != null && !settings.InstalledCommunityPromptIds.Contains(promptId))
                 {
                     settings.InstalledCommunityPromptIds.Add(promptId);
-                    App.Settings?.Save();
+                    CoreSettings.Save();
                 }
 
                 prompt.IsInstalled = true;
                 PromptInstalled?.Invoke(this, prompt);
 
-                App.Logger?.Information("Installed community prompt: {Name} by {Author}", prompt.Name, prompt.Author);
+                Log.Information("Installed community prompt: {Name} by {Author}", prompt.Name, prompt.Author);
                 return prompt;
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "Error installing prompt {Id}", promptId);
+                Log.Error(ex, "Error installing prompt {Id}", promptId);
                 Error?.Invoke(this, ex);
                 return null;
             }
@@ -212,7 +218,7 @@ namespace ConditioningControlPanel.Services
                 }
 
                 // Remove from installed list
-                var settings = App.Settings?.Current;
+                var settings = CoreSettings.Current;
                 if (settings != null)
                 {
                     settings.InstalledCommunityPromptIds.Remove(promptId);
@@ -223,15 +229,15 @@ namespace ConditioningControlPanel.Services
                         settings.ActiveCommunityPromptId = null;
                     }
 
-                    App.Settings?.Save();
+                    CoreSettings.Save();
                 }
 
                 PromptRemoved?.Invoke(this, promptId);
-                App.Logger?.Information("Removed community prompt: {Id}", promptId);
+                Log.Information("Removed community prompt: {Id}", promptId);
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "Error removing prompt {Id}", promptId);
+                Log.Error(ex, "Error removing prompt {Id}", promptId);
                 Error?.Invoke(this, ex);
             }
         }
@@ -275,11 +281,11 @@ namespace ConditioningControlPanel.Services
             var prompt = GetInstalledPrompt(promptId);
             if (prompt == null)
             {
-                App.Logger?.Warning("Cannot activate prompt {Id} - not installed", promptId);
+                Log.Warning("Cannot activate prompt {Id} - not installed", promptId);
                 return false;
             }
 
-            var settings = App.Settings?.Current;
+            var settings = CoreSettings.Current;
             if (settings == null) return false;
 
             // CCBill AI Addendum: gate community/asset prompts that ship a SlutModePersonality
@@ -290,7 +296,7 @@ namespace ConditioningControlPanel.Services
             if (ExplicitContentGate.RequiresAcknowledgement(probe, slutModeOn)
                 && !ExplicitContentGate.IsAlreadyAcknowledged(settings.CompanionPrompt))
             {
-                App.Logger?.Warning("ActivatePrompt {Id} refused: explicit-content acknowledgement not granted", promptId);
+                Log.Warning("ActivatePrompt {Id} refused: explicit-content acknowledgement not granted", promptId);
                 return false;
             }
 
@@ -301,7 +307,7 @@ namespace ConditioningControlPanel.Services
             // ModerationGuard at inference time remains the load-bearing layer.
             try
             {
-                var validator = App.PromptValidator;
+                var validator = _validatorProvider();
                 if (validator != null && prompt.PromptSettings != null)
                 {
                     var ps = prompt.PromptSettings;
@@ -322,55 +328,36 @@ namespace ConditioningControlPanel.Services
                         if (!result.Clean)
                         {
                             flaggedFields.Add(name);
-                            App.ModerationLog?.RecordEdit(name, result.MatchedPatterns.Count, surface: "community_prompt");
+                            CoreModerationLog.RecordEdit(name, result.MatchedPatterns.Count, surface: "community_prompt");
                         }
                     }
 
                     if (flaggedFields.Count > 0)
                     {
-                        App.Logger?.Information(
+                        Log.Information(
                             "CommunityPromptService.ActivatePrompt {Id}: PromptValidator flagged {Count} field(s): {Fields}",
                             promptId, flaggedFields.Count, string.Join(",", flaggedFields));
 
-                        try
-                        {
-                            var title = Loc.Get("community_prompt_warning_title");
-                            var body = Loc.GetF("community_prompt_warning_body", flaggedFields.Count);
-                            Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
-                            {
-                                try
-                                {
-                                    MessageBox.Show(body, title, MessageBoxButton.OK, MessageBoxImage.Warning);
-                                }
-                                catch (Exception inner)
-                                {
-                                    App.Logger?.Debug("Community prompt advisory toast failed: {Error}", inner.Message);
-                                }
-                            }));
-                        }
-                        catch (Exception ex)
-                        {
-                            App.Logger?.Debug("Community prompt advisory dispatch failed: {Error}", ex.Message);
-                        }
+                        ValidationAdvisory?.Invoke(this, flaggedFields.Count);
                     }
                 }
             }
             catch (Exception ex)
             {
                 // Validator failures must not block activation - soft surface.
-                App.Logger?.Debug("CommunityPromptService PromptValidator pass failed: {Error}", ex.Message);
+                Log.Debug("CommunityPromptService PromptValidator pass failed: {Error}", ex.Message);
             }
 
             // Apply the prompt settings
             settings.CompanionPrompt = prompt.PromptSettings;
             settings.CompanionPrompt.UseCustomPrompt = true;
             settings.ActiveCommunityPromptId = promptId;
-            App.Settings?.Save();
+            CoreSettings.Save();
 
             prompt.IsActive = true;
             PromptActivated?.Invoke(this, prompt);
 
-            App.Logger?.Information("Activated community prompt: {Name}", prompt.Name);
+            Log.Information("Activated community prompt: {Name}", prompt.Name);
             return true;
         }
 
@@ -391,13 +378,13 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public void DeactivatePrompt()
         {
-            var settings = App.Settings?.Current;
+            var settings = CoreSettings.Current;
             if (settings == null) return;
 
             ClearCustomPromptOverride(settings);
-            App.Settings?.Save();
+            CoreSettings.Save();
 
-            App.Logger?.Information("Deactivated community prompt, using default/custom settings");
+            Log.Information("Deactivated community prompt, using default/custom settings");
         }
 
         #endregion
@@ -420,7 +407,7 @@ namespace ConditioningControlPanel.Services
         {
             var json = JsonConvert.SerializeObject(prompt, Formatting.Indented);
             await File.WriteAllTextAsync(filePath, json);
-            App.Logger?.Information("Exported prompt to: {Path}", filePath);
+            Log.Information("Exported prompt to: {Path}", filePath);
             return filePath;
         }
 
@@ -434,7 +421,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (!File.Exists(filePath))
                 {
-                    App.Logger?.Warning("Import file not found: {Path}", filePath);
+                    Log.Warning("Import file not found: {Path}", filePath);
                     return null;
                 }
 
@@ -443,7 +430,7 @@ namespace ConditioningControlPanel.Services
 
                 if (prompt == null)
                 {
-                    App.Logger?.Warning("Failed to parse prompt file: {Path}", filePath);
+                    Log.Warning("Failed to parse prompt file: {Path}", filePath);
                     return null;
                 }
 
@@ -458,22 +445,22 @@ namespace ConditioningControlPanel.Services
                 File.WriteAllText(localPath, JsonConvert.SerializeObject(prompt, Formatting.Indented));
 
                 // Add to installed list
-                var settings = App.Settings?.Current;
+                var settings = CoreSettings.Current;
                 if (settings != null && !settings.InstalledCommunityPromptIds.Contains(prompt.Id))
                 {
                     settings.InstalledCommunityPromptIds.Add(prompt.Id);
-                    App.Settings?.Save();
+                    CoreSettings.Save();
                 }
 
                 prompt.IsInstalled = true;
                 PromptInstalled?.Invoke(this, prompt);
 
-                App.Logger?.Information("Imported prompt: {Name} by {Author}", prompt.Name, prompt.Author);
+                Log.Information("Imported prompt: {Name} by {Author}", prompt.Name, prompt.Author);
                 return prompt;
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "Error importing prompt from {Path}", filePath);
+                Log.Error(ex, "Error importing prompt from {Path}", filePath);
                 Error?.Invoke(this, ex);
                 return null;
             }
@@ -485,6 +472,9 @@ namespace ConditioningControlPanel.Services
 
         private string GetPromptFilePath(string promptId)
         {
+            // Manifest IDs and imported GUIDs are filenames, never paths outside the prompt store.
+            if (string.IsNullOrWhiteSpace(promptId) || promptId.IndexOfAny(new[] { '/', '\\', ':', '\0' }) >= 0)
+                throw new ArgumentException("Invalid community prompt ID", nameof(promptId));
             return Path.Combine(_promptsFolder, $"{promptId}.json");
         }
 
@@ -494,7 +484,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_disposed) return;
             _disposed = true;
-            _httpClient?.Dispose();
+            if (_ownsHttpClient) _httpClient.Dispose();
         }
     }
 }

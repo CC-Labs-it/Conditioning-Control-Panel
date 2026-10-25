@@ -1323,3 +1323,29 @@ Behaviour (refund, re-raise, Dispose detaching) is unchanged. The Avalonia gate 
 - Option B: keep scoped sending; record the difference in the `views-profile-privacy-panel` parity row.
 - Choice: B, interim. Advised by the supervisor: never risk revoking a server privacy grant without an owner decision.
   oracle-deep decision pending; follow-up lane wire-views-profile-privacy-panel-b.
+## 2026-10-22: Scrolller web gate on Avalonia: headers + navigation guard; refusing sub-resources is a follow-up (avalonia-port/sync7-scrolller-d)
+- Question: WPF ScrolllerWebGate (main c45d58a65, f7102be55, 92fdebaa4) answers Scrolller requests inside WebView2 pages:
+  a local 403 while the licence switch is off, the device cache (200/206/416), whole fetches charged to the daily share. Licence
+  compliance: with the switch off the app must not fetch Scrolller.
+- Finding: Avalonia.Controls.WebView 12.1.0's `WebResourceRequestedEventArgs` carries only `Request` (Uri, Method, Headers with
+  TrySet/TryRemove): no response, no deferral, no cancel. On Linux it is raised from WebKitGTK `resource-load-started`.
+- Options: (A) rules into Core, WebHost rewrites the headers it can; (B) native interop per engine (WebKitGTK user content
+  filter, WebView2 COM filter via `TryGetPlatformHandle`).
+- Answer (advised by: supervisor; oracle-deep review pending): interim A plus a navigation guard. Core `ScrolllerWebRules` holds
+  the gate's pure rules (WPF forwards, one copy). `WebHost` gives every hosted page's Scrolller requests the honest user-agent and
+  replaces a foreign Referer; while `ScrolllerPolicy.Enabled` is off it cancels top-level navigations to Scrolller and refuses
+  `Navigate`/`Source` to it. The in-app browser (`GateScrolller="False"`) is the user's own browsing and stays untouched, as in WPF.
+- Gap: Scrolller sub-resources embedded in a page cannot be refused, served from the device cache or charged on this engine.
+  Follow-up unit `sync7-scrolller-d-native`: WebKitGTK user content filter (Linux, tested) + WebView2 AddWebResourceRequestedFilter
+  (Windows, compiled-not-run).
+- Tests: `Tests/CCP.Avalonia.Tests/WebHostScrolllerGateTests.cs`, `Tests/CCP.Core.Tests/ScrolllerWebRulesTests.cs`.
+
+## 2026-10-22: The installer stall copy lives twice: WPF keeps its own, Avalonia uses Core (avalonia-port/updater-stall-timeout)
+- Question: Core `ReleaseFeed.CopyWithStallTimeoutAsync` (port of WPF ddc9dd047) is a second copy of WPF
+  `UpdateService.CopyWithStallTimeoutAsync` (`ConditioningControlPanel/Services/Update/UpdateService.cs:657`). CLAUDE.md forbids
+  a second copy of logic.
+- Options: A) delegate: WPF calls Core, as `UpdateService.IsTransientNetworkError` (`:1483`) already does; B) keep: WPF keeps
+  its own copy, only the Avalonia `AppUpdater` uses Core.
+- Choice: B (keep), advised by the reviewer and the supervisor.
+- Reason: the WPF head is frozen, and the last WPF release's updater is what hands users over to this release, so its behaviour
+  must stay byte-identical. The two copies are equal today; Core tests (`ReleaseFeedTests`, `AppUpdaterTests`) cover the Core one.
