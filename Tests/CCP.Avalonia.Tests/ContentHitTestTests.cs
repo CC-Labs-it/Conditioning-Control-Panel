@@ -58,6 +58,8 @@ public sealed class ContentHitTestTests
                     if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
                     // Click-proof on purpose (WPF Hidden): only the Presets rack row actions at rest; their hover path has its own test.
                     if (b.GetVisualAncestors().OfType<StackPanel>().Any(s => s.Classes.Contains("rackActions") && !s.IsHitTestVisible)) continue;
+                    // Same for the Awareness privacy chips' close buttons (CmpZ5ChipCloseStyle: inert until the chip is hovered).
+                    if (b.Classes.Contains("cmpChipClose") && !b.IsHitTestVisible) continue;
                     var p = b.TranslatePoint(new Point(b.Bounds.Width / 2, b.Bounds.Height / 2), w)!.Value;
                     if (!new Rect(w.Bounds.Size).Contains(p) || b.GetVisualAncestors().OfType<ScrollViewer>().Any(s => !Inside(s, p, w))) continue;
                     if (w.GetVisualsAt(p).OfType<Button>().FirstOrDefault(o => o != b && !b.IsVisualAncestorOf(o)) is { } over && !over.IsVisualAncestorOf(b)) continue;   // another control drawn on top, e.g. the Start footer

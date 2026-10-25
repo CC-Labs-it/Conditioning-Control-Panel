@@ -57,7 +57,7 @@ public sealed class AwarenessCompanionHostingTests
         {
             CoreSettings.Current.AwarenessRetentionDays = 42;
             shell.ShowTab("companion");
-        Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs();
             shell.ShowTab("awareness");
             Assert.Equal(42, privacy.ViewModel!.RetentionDays);
             Assert.Equal(42, CoreSettings.Current.AwarenessRetentionDays);
@@ -90,7 +90,7 @@ public sealed class AwarenessCompanionHostingTests
         shell.ShowTab("companion");
         Dispatcher.UIThread.RunJobs();
         Assert.Same(shell, TopLevel.GetTopLevel(room));
-        room.FocusAwareness();
+        room.FindControl<CompanionHeroCard>("HeroZone")!.ViewModel!.FocusAwarenessCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal("awareness", shell.CurrentTab);
         Assert.True(privacy.IsEffectivelyVisible);
