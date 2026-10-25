@@ -127,7 +127,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
-            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshProgramSessionRow();
         }
 
         /// <summary>WPF TxtPauseIcon + BtnPauseSession.ToolTip: "\u25B6" + resume while paused, else "\u23F8" + the count.</summary>
@@ -136,6 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (Named<Button>("BtnPauseSession") is not { } b) return;
             b.IsVisible = true;
             if (Named<TextBlock>("TxtPauseIcon") is { } icon) icon.Text = paused ? "\u25B6" : "\u23F8";
+            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             var count = App.Sessions?.PauseCount ?? 0;
             b.Bind(ToolTip.TipProperty, paused || count == 0
                 ? (Binding)new StrExtension(paused ? "tooltip_resume_session" : "tooltip_pause_session_100_xp_penalty_per_pause").ProvideValue(null!)
@@ -146,8 +146,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// and both clock labels. Runs on the UI thread (the runner ticks through CoreDispatch).</summary>
         internal void OnSessionTick()
         {
-            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshProgramSessionRow(clockOnly: true);
             RefreshSessionFeatureLock(force: false);
+            Named<Tabs.ProgramsTabView>("ProgramsTab")?.RefreshLiveSessionProgress();
             if (App.Sessions is not { IsRunning: true, CurrentSession: { } session } runner) return;
             PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
             if (Named<Button>("BtnPauseSession") is { IsVisible: false }) SetPauseButton(false);   // WPF OnSessionStarted
@@ -177,10 +177,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnSessionLogReady(object? sender, SessionLogReadyEventArgs e)
         {
+            if (_windowClosed || _exitRequested) return;
             if (_suppressNextSessionSummary) { _suppressNextSessionSummary = false; return; }
             var log = e.Log;
             Dispatcher.UIThread.Post(() =>
             {
+                if (_windowClosed || _exitRequested) return;
                 try
                 {
                     var dialog = new SessionCompleteWindow(log);

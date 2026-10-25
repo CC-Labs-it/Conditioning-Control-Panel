@@ -1372,9 +1372,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             return windowMs > 0 && (DateTime.UtcNow - _lastAiBubbleUtc).TotalMilliseconds < windowMs;
         }
 
-        /// <summary>The user's avatar mute. WPF mirrors this setting into a field the quick menu
-        /// flips; reading the setting itself is the same answer with nothing to keep in sync.</summary>
-        public bool IsMuted => CoreSettings.Current.AvatarMuted;
+        private bool _windowMuted;
+        /// <summary>Saved voice mute plus the shell's temporary attached-minimize mute.</summary>
+        public bool IsMuted => CoreSettings.Current.AvatarMuted || _windowMuted;
+
+        internal void SetWindowMute(bool muted)
+        {
+            _windowMuted = muted;
+            UpdateQuickMenuState();
+        }
 
         /// <summary>
         /// Auto-hide, at the user's Bubble Duration (1-10s). A long line gets an ESL-friendly

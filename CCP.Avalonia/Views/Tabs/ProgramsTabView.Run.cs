@@ -80,12 +80,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnPropertyChanged(change);
             if (change.Property != IsVisibleProperty) return;
-            if (!IsVisible || VisualRoot is null) { SyncIgnition(); StopSessionSheen(); return; }
+            if (!IsVisible || VisualRoot is null) { SyncIgnition(); return; }
             var enrollment = AvApp.Programs?.ActiveEnrollment;
             var boundaryCrossed = _builtStale is { } built && enrollment != null &&
                                   built != IsSnapshotStale(enrollment, Clock.GetLocalNow().DateTime);
             if (_refreshPending || boundaryCrossed) RefreshPrograms();
-            RefreshProgramSessionRow();
             SyncIgnition();   // WPF :1661: clocks stop behind a hidden tab and re-arm on the way back
         }
 
@@ -147,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ToolTip.SetTip(Find<Button>("BtnProgramRestart"), restartBlocked);
                 Find<Button>("BtnProgramDismissGraduated").IsEnabled = !readOnly;
                 // WPF :540: the edge glow is a sibling of the whole view; leaving the run parks it.
-                if (!run) { StopIgnitionLoops(); StopSessionSheen(); _ignitionEnrollment = null; }
+                if (!run) { StopIgnitionLoops(); _ignitionEnrollment = null; }
             }
         }
 
@@ -226,8 +225,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         }
 
         /// <summary>WPF UpdateProgramSessionRow :1451-1585, button and glyph states. Repainted on every
-        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged). The 1 s tick calls
-        /// only PaintSessionProgress (RefreshProgramSessionRow clockOnly), never this.</summary>
+        /// refresh and on a session start/end (ProgramEngineBridge.SessionChanged). The separate
+        /// live clock/bar update never rebuilds these buttons or the task list on a tick (P07).</summary>
         private void UpdateSessionRow(ProgramService svc, ProgramEnrollment enrollment, ProgramDayRecord record,
                                       IBrush accent, IBrush muted)
         {
@@ -239,7 +238,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 : record.SessionCompleted ? ("programs_session_done", false, null)
                 : running ? ("programs_session_other_running", false, "programs_session_other_running_hint")
                 : ("btn_program_start_session", enrollment.State != ProgramEnrollmentState.Paused, (string?)null);
-            PaintSessionProgress(svc, ours, accent);
             var glyph = Find<IconGlyph>("TxtTodaySessionGlyph");
             glyph.Kind = ours ? IconKind.RadioButton : record.SessionCompleted ? IconKind.Checkmark : IconKind.Circle;
             glyph.Foreground = ours || record.SessionCompleted ? accent : muted;
@@ -249,6 +247,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // P09: choose the key in code and bind it, so a language switch keeps the state's text.
             Find<TextBlock>("TxtStartTodaySession").Bind(TextBlock.TextProperty,
                 (global::Avalonia.Data.Binding)new Localization.StrExtension(key).ProvideValue(null!));
+            RefreshLiveSessionProgress();
         }
 
         // ---- reward track (WPF BuildProgramDayStrip :794-939) ----

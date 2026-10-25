@@ -41,6 +41,7 @@ public sealed class CompanionHeroSyncTests
         try
         {
             shell.Show();
+            CollapsedRoom.Show(shell);    // the hero card has no v2 page
             shell.ShowTab("companion");   // the user's path in
             Dispatcher.UIThread.RunJobs();
             var vm = global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(shell).OfType<CompanionHeroCard>().Single().ViewModel!;

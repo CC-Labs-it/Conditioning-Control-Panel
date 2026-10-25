@@ -85,7 +85,7 @@ public sealed class ProgramsRunLifecycleTests
             Assert.False(F<Button>("BtnStartTodaySession").IsEnabled);
             Assert.True(F<Grid>("TodaySessionProgressRow").IsEffectivelyVisible);
             Assert.True(F<TextBlock>("TxtTodaySessionProgress").IsEffectivelyVisible);
-            Assert.Contains(SessionClockLabel.ProgramClock(TimeSpan.FromMinutes(runner.CurrentSession!.DurationMinutes)),
+            Assert.Contains(ConditioningControlPanel.Services.Program.ProgramSessionProgress.Clock(TimeSpan.FromMinutes(runner.CurrentSession!.DurationMinutes)),
                 F<TextBlock>("TxtTodaySessionProgress").Text);
             Assert.InRange(F<ProgressBar>("TodaySessionProgressBar").Value, 0, 100);
             Assert.Equal(ProgramHeatTier.Warm, tab.IgnitionTier); // day 1/7 already crosses Warm

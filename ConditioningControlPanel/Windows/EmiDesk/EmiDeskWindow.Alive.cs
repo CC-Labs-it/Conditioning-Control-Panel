@@ -114,7 +114,7 @@ public partial class EmiDeskWindow
     /// <summary>The fourth poke inside the window. The pet flick, wearing a look.</summary>
     private static readonly EmiChain PokeAnnoyChain = new(
         "pokeAnnoy", "POKE 4 (annoyed)",
-        new[] { new EmiFrame(EmiAlive.PokeAnnoyFace, 700), new EmiFrame(EmiChains.RestFace, 180) },
+        EmiChains.PatFrames(EmiPatFeedback.Annoyed),
         BodyFrame: "idle");
 
     /// <summary>
@@ -123,11 +123,7 @@ public partial class EmiDeskWindow
     /// </summary>
     private static readonly EmiChain PokeRageChain = new(
         "pokeRage", "POKE 5 (rage)",
-        new[]
-        {
-            new EmiFrame(">.<", 200), new EmiFrame(">_<", 200), new EmiFrame(">.<", 200),
-            new EmiFrame(EmiAlive.PokeRageFace, EmiAlive.PokeRageHoldMs)
-        },
+        EmiChains.PatFrames(EmiPatFeedback.Rage),
         Fx: "storm", Move: "shiver", BodyFrame: "shock");
 
     // ---------------------------------------------------------------- lifetime
