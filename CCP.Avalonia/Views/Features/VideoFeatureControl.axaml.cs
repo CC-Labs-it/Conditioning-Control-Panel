@@ -5,6 +5,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Localization;
@@ -66,11 +70,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
 
             LoadFromSettings();
 
-            // ponytail: WPF also repaints the hero and side art plates here (ApplyFeatureArt +
-            // App.Mods.ModChanged). The mod-override half of ResolveImageDecoded is portable now
-            // (CoreModArt.OverridePath), but the plate still needs a named ImageBrush in the
-            // .axaml, which Avalonia rejects (x:Name on a brush is AVLN2000); the port draws a
-            // static wash instead, so there is nothing here to repaint.
+            ApplyFeatureArt();
         }
 
         // ---- settings instance tracking (WPF: SettingsHook + ISettingsRebindable) --------------
@@ -82,6 +82,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             base.OnAttachedToVisualTree(e);
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced += OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+            CoreMods.ModChanged += OnModChanged;
+            ApplyFeatureArt();
             RebindToCurrentSettings();
         }
 
@@ -89,8 +91,45 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         {
             if (CoreSettings.Service is { } svc) svc.CurrentReplaced -= OnCurrentReplaced;
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            CoreMods.ModChanged -= OnModChanged;
+            ClearFeatureArt();
             Unhook();
             base.OnDetachedFromVisualTree(e);
+        }
+
+        private Bitmap? _heroArt, _sideArt;
+
+        private void OnModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(() =>
+        {
+            if (_hooked != null) ApplyFeatureArt();
+        });
+
+        private void ApplyFeatureArt()
+        {
+            // WPF resolves each plate at its own decode width, override first, built-in second.
+            Paint(VideoHeroArt, ref _heroArt, 480, true);
+            Paint(VideoSideArt, ref _sideArt, 800, false);
+        }
+
+        private static void Paint(Border plate, ref Bitmap? previous, int width, bool hero)
+        {
+            var art = Helpers.ModArt.TryLoad("features/mandatory_videos.png", width);
+            if (art == null) return; // WPF null resolve keeps the authored plate standing.
+            plate.Background = new ImageBrush(art)
+            {
+                Stretch = Stretch.UniformToFill,
+                AlignmentX = hero ? AlignmentX.Right : AlignmentX.Center,
+                Opacity = hero ? 0.9 : 1,
+            };
+            previous?.Dispose();
+            previous = art;
+        }
+
+        private void ClearFeatureArt()
+        {
+            VideoHeroArt.Background = VideoSideArt.Background = null;
+            _heroArt?.Dispose(); _sideArt?.Dispose();
+            _heroArt = _sideArt = null;
         }
 
         private void OnCurrentReplaced() => Dispatcher.UIThread.Post(RebindToCurrentSettings);
@@ -416,14 +455,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>The last Test click's run, so a test can await it instead of yielding (P57).</summary>
         internal Task TestVideoRun { get; private set; } = Task.CompletedTask;
 
-        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = LogFault(TestVideoAsync());
+        private void BtnTestVideo_Click(object? sender, RoutedEventArgs e) => TestVideoRun = ShowTestFailure(TestVideoAsync());
 
-        // The click used to be async void (faults reached the global handler); a stored Task
-        // would swallow them silently, so log here instead.
-        private static async Task LogFault(Task run)
+        private static readonly HashSet<MessageDialog> TestErrors = new();
+
+        internal static void CloseTestErrorsForPanic()
+        {
+            foreach (var dialog in TestErrors.ToArray()) dialog.Close();
+        }
+
+        private async Task ShowTestFailure(Task run)
         {
             try { await run; }
-            catch (Exception ex) { Serilog.Log.Error(ex, "Test video failed"); }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Error in BtnTestVideo_Click");
+                if (TopLevel.GetTopLevel(this) is not Window owner) return;
+                var dialog = new MessageDialog("Error", $"Error triggering video: {ex.Message}", showCancel: false);
+                TestErrors.Add(dialog);
+                try { await dialog.ShowDialogSafe(owner); }
+                finally { TestErrors.Remove(dialog); }
+            }
         }
 
         private async Task TestVideoAsync()

@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Mandatory video finishing slice
+
+1. Open Studio's Mandatory Video card. Compare both art plates with WPF, switch to a mod that overrides mandatory-video art, and switch back. Both plates repaint, with the hero aligned right; reopening the card keeps the active art. WPF `Features/VideoFeatureControl.xaml.cs:563` Rows: `feat-video`
+2. If Test encounters a playback/library exception, it shows title **Error** and **Error triggering video: <message>**, with OK to dismiss. Panic also dismisses the error without starting playback. The exception path is injected by `VideoFeatureCompletionTests`; it does not require damaging a real library. WPF `Features/VideoFeatureControl.xaml.cs:533` Rows: `feat-video`
