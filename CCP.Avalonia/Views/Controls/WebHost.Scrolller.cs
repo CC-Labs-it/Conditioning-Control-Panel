@@ -13,6 +13,10 @@ public partial class WebHost
     private int _scrolllerStopVersion;
     private Uri? _scrolllerOriginal, _scrolllerLocal;
 
+    /// <summary>False leaves Scrolller alone on this host: WPF exempts the in-app browser
+    /// (BrowserService never attaches ScrolllerWebGate; ScrolllerWebGateTests: "the user's own browsing").</summary>
+    public bool GatesScrolller { get; set; } = true;
+
     private void TrackScrolllerHost()
     {
         ScrolllerHosts.RemoveAll(w => !w.TryGetTarget(out _));
@@ -21,18 +25,23 @@ public partial class WebHost
 
     internal bool GateScrolllerNavigation(Uri uri)
     {
+        if (!GatesScrolller) return true;
         if (!ScrolllerNavigationGate.AllowsNavigation(uri)) return false;
+        // Media: the engine callback cancels the raw navigation and replaces it with the local URL.
         _scrolllerNavigation = ScrolllerNavigationGate.IsMedia(uri);
-        if (!_scrolllerNavigation) return true;
-        // The engine callback cancels raw media navigations and replaces them with the local URL.
         return true;
     }
 
     private Uri ScrolllerTarget(Uri uri)
     {
-        if (!ScrolllerNavigationGate.IsMedia(uri)) return uri;
+        if (!GatesScrolller || !ScrolllerNavigationGate.IsMedia(uri)) return uri;
         _scrolllerOriginal = uri;
         return _scrolllerLocal = new Uri(WebAssetServer.Shared.ScrolllerUrl(uri));
+    }
+
+    internal void StampScrolllerHeadersIfGated(Uri uri, WebViewWebRequestHeaders headers)
+    {
+        if (GatesScrolller) StampScrolllerHeaders(uri, headers);
     }
 
     internal static void StampScrolllerHeaders(Uri uri, WebViewWebRequestHeaders headers)
@@ -57,7 +66,7 @@ public partial class WebHost
     {
         WebAssetServer.StopScrolller();
         foreach (var weak in ScrolllerHosts)
-            if (weak.TryGetTarget(out var host) && (host._scrolllerNavigation
+            if (weak.TryGetTarget(out var host) && host.GatesScrolller && (host._scrolllerNavigation
                 || host.Source is { } source && ScrolllerNavigationGate.IsMedia(source)))
             {
                 host._scrolllerStopVersion++;

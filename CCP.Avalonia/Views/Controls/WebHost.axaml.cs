@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 if (e.Request?.Uri is { } uri)
                 {
-                    StampScrolllerHeaders(uri, e.Request.Headers);
+                    StampScrolllerHeadersIfGated(uri, e.Request.Headers);
                     Stamp(uri, e.Request.Headers.TrySet);
                 }
             }
@@ -282,7 +282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
             void RouteScrolllerNavigation()
             {
-                if (rawTarget != null && ConditioningControlPanel.Services.Fyp.Online.ScrolllerNavigationGate.IsMedia(rawTarget))
+                if (GatesScrolller && rawTarget != null && ConditioningControlPanel.Services.Fyp.Online.ScrolllerNavigationGate.IsMedia(rawTarget))
                 {
                     e.Cancel = true;
                     var version = _scrolllerStopVersion;

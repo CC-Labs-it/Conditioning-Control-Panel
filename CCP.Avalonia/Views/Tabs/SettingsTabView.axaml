@@ -1284,7 +1284,8 @@
                      CoreWebView2 message handlers, the cookie + user-data-folder setup and the
                      mute/enhance script injection. None of that has a wrapper API yet, so the
                      Source stays unset and the panel is what draws. -->
-                <controls:WebHost x:Name="BrowserWebHost"/>
+                <!-- GatesScrolller off: WPF BrowserService never attaches ScrolllerWebGate (the user's own browsing). -->
+                <controls:WebHost x:Name="BrowserWebHost" GatesScrolller="False"/>
                 <TextBlock x:Name="BrowserLoadingText"
                            IsVisible="False"
                            Text="{loc:StrBare label_click_to_load_browser}"
