@@ -87,6 +87,23 @@ public sealed class HelpVideoWindowTests
         finally { win.Close(); }
     });
 
+    [Fact]
+    public Task MissingClipFallsBackAndDrawnLoopStillWins() => Run(() =>
+    {
+        HelpVideoWindow.Show(new HelpContent { SectionId = "MissingClip", Title = "Help",
+            ClipFile = "missing-fin4-clip.mp4", WhatItDoes = "Fallback" }, null);
+        try
+        {
+            Assert.False(Current()!.FindControl<Border>("VideoContainer")!.IsVisible);
+            Assert.Equal("Fallback", Current()!.FindControl<TextBlock>("TxtCaption")!.Text);
+            HelpVideoWindow.Show(new HelpContent { SectionId = "WebcamCalibration", Title = "Help",
+                ClipFile = "missing-fin4-clip.mp4", WhatItDoes = "Fallback" }, null);
+            Assert.Single(Current()!.GetVisualDescendants().OfType<HelpLoopView>());
+            Assert.Empty(Current()!.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Views.Controls.InlineLoopVideo>());
+        }
+        finally { Current()?.Close(); }
+    });
+
     private static HelpVideoWindow? Current() =>
         (HelpVideoWindow?)typeof(HelpVideoWindow).GetField("_current", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null);
 

@@ -82,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private MandatoryVideoOverlay() => Scheduler = new MandatoryVideoScheduler(this)
         {
             DurationOf = LengthOf,
+            CascadeIsRaining = () => Views.Chaos.ChaosGifCascadeOverlay.IsRaining,
             // WPF VideoService _packVideoQueue: active content-pack clips join the pick.
             PackVideos = new ConditioningControlPanel.Services.PackMediaPool(ConditioningControlPanel.Services.ContentPackStore.VideoType),
         };

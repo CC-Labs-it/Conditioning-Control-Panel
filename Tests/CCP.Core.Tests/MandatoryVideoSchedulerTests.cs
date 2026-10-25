@@ -37,6 +37,64 @@ public sealed class MandatoryVideoSchedulerTests
     private static readonly string[] Clips = { "/v/a.mp4", "/v/b.mkv" };
 
     [Fact]
+    public void CascadeHoldsAndCoalescesEarnedClipThenReplaysWithOriginalStrictness() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        Assert.True(v.Trigger(true, Clips[0]));
+        Assert.True(v.Trigger(false, Clips[1]));
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        rain = false;
+        clock.Advance(TimeSpan.FromMilliseconds(250));
+        Assert.True(v.IsPlaying);
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal((Clips[0], true), Assert.Single(host.Shown));
+        v.Stop();
+    });
+
+    [Fact]
+    public void ScheduledCascadeReplayRechecksFeatureEnabled() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        v.Start();
+        v.Trigger(userEarned: false);
+        CoreSettings.Current.MandatoryVideosEnabled = false;
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        v.Stop();
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CascadeDeadlineDoesNotExtendAndCleanupCancelsPendingReplay(bool forceCleanup) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var rain = true;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(89));
+        v.Trigger();
+        clock.Advance(TimeSpan.FromSeconds(1));
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        rain = true;
+        v.Trigger();
+        if (forceCleanup) v.ForceCleanup(); else v.Stop();
+        rain = false;
+        clock.Advance(TimeSpan.FromSeconds(2));
+        Assert.Empty(host.Shown);
+        v.Trigger(); // a stopped deferred request cannot latch future earned triggers
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        v.Stop();
+    });
+
+    [Fact]
     public void Rate_follows_videos_per_hour_with_the_pre_roll_and_End_rearms() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host();

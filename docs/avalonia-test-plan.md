@@ -673,3 +673,8 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Shell video playback follow-up
+
+1. During GIF rain, trigger a video twice. Neither should cover the rain; when it clears within 90 seconds, one video starts after the normal 1.3 second pre-roll, preserving the first request. Stop everything while waiting and confirm no video appears later. Keep rain active past 90 seconds and confirm the held request expires. WPF `Services/Video/VideoService.cs:1916` Rows: `shell-video-playback`
+2. Open a help topic with an available tutorial clip and no drawn loop: the clip loops silently with its caption/link below it. Open another topic, close it, and press panic: no help clip/player remains. A missing clip keeps the caption fallback; a topic with a drawn loop uses that instead of its clip. Shipped topics currently prefer drawn loops or have no clip, so use a development topic with ClipFile set to a test clip for the video case. WPF `Windows/HelpVideoWindow.xaml.cs:170` Rows: `shell-video-playback`
