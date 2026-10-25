@@ -235,6 +235,104 @@ public sealed class PlayWallTests
         });
     }
 
+    [Fact]
+    public void PlayEntranceFollowsMotion_AndCancelsWhenHiddenOrDetached()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var settings = CoreSettings.Current;
+            var previous = settings.MotionLevel;
+            var play = new global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView();
+            var field = play.GetType().GetField("_entrance", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            System.Threading.CancellationTokenSource? Active() => (System.Threading.CancellationTokenSource?)field.GetValue(play);
+            var host = new Window { Content = play };
+            try
+            {
+                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Full;
+                host.Show();
+                Dispatcher.UIThread.RunJobs();
+                var first = Assert.IsType<System.Threading.CancellationTokenSource>(Active()).Token;
+                Assert.False(first.IsCancellationRequested);
+                play.IsVisible = false;
+                Assert.True(first.IsCancellationRequested);
+                Assert.Null(Active());
+                play.IsVisible = true;
+                var second = Assert.IsType<System.Threading.CancellationTokenSource>(Active()).Token;
+                Assert.NotEqual(first, second);
+                host.Content = null;
+                Assert.True(second.IsCancellationRequested);
+                settings.MotionLevel = global::ConditioningControlPanel.Models.MotionLevel.Off;
+                host.Content = play;
+                Assert.Null(Active());
+                Assert.Equal(1, play.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Opacity);
+            }
+            finally { host.Close(); settings.MotionLevel = previous; }
+        });
+    }
+
+    [Fact]
+    public void TrackerEventsPaintBothCards_AndDetachStopsPainting()
+    {
+        AvaloniaTestDispatcher.Run(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var tracker = WebcamTracker.Instance;
+            var play = new global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView();
+            var host = new Window { Content = play };
+            try
+            {
+                // WPF stagger selects sections, never individual dimmed eye cards.
+                var targets = play.EntranceTargets();
+                Assert.Equal(8, targets.Length);
+                Assert.Equal("GamesGrid", targets[2].Name);
+                Assert.DoesNotContain(play.FindControl<Border>("PlayFocusCard")!, targets);
+                tracker.PublishStatus(WebcamStatus.Stopped);
+                host.Show();
+                Dispatcher.UIThread.RunJobs();
+                foreach (var status in new[] { WebcamStatus.Stopped, WebcamStatus.Starting, WebcamStatus.Tracking,
+                    WebcamStatus.FaceLost, WebcamStatus.Error, WebcamStatus.Stopped })
+                {
+                    tracker.PublishStatus(status);
+                    Dispatcher.UIThread.RunJobs();
+                    bool live = status is WebcamStatus.Tracking or WebcamStatus.FaceLost;
+                    foreach (var card in new[] { "PlayGazeCard", "PlayFocusCard" })
+                        Assert.Equal(live ? 1 : 0.62, play.FindControl<Border>(card)!.Opacity);
+                    foreach (var note in new[] { "PlayGazeNeedsTracker", "PlayFocusNeedsTracker" })
+                        Assert.Equal(!live, play.FindControl<Border>(note)!.IsVisible);
+                    var key = status switch
+                    {
+                        WebcamStatus.Starting => "rf_webcam_starting",
+                        WebcamStatus.Tracking => "rf_webcam_tracking",
+                        WebcamStatus.FaceLost => "rf_webcam_face_lost",
+                        WebcamStatus.Error => "rf_webcam_error",
+                        _ => "rf_webcam_stopped",
+                    };
+                    Assert.Equal(Loc.Get(key), play.FindControl<TextBlock>("TxtWebcamStatusChipPlay")!.Text);
+                    Assert.True(play.TryFindResource(live ? "SuccessGreenBrush" : "TextMutedBrush", out var expectedFill));
+                    Assert.Same(expectedFill, play.FindControl<global::Avalonia.Controls.Shapes.Ellipse>("WebcamStatusChipPlayDot")!.Fill);
+                    // Tier repaint must never overwrite tracker dimming.
+                    play.RefreshPlayCards();
+                    Assert.Equal(live ? 1 : 0.62, play.FindControl<Border>("PlayFocusCard")!.Opacity);
+                }
+                host.Content = null;
+                tracker.PublishStatus(WebcamStatus.Tracking);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0.62, play.FindControl<Border>("PlayFocusCard")!.Opacity);
+                host.Content = play;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, play.FindControl<Border>("PlayFocusCard")!.Opacity);
+            }
+            finally { host.Close(); tracker.PublishStatus(WebcamStatus.Stopped); Dispatcher.UIThread.RunJobs(); }
+        });
+    }
+
     [Theory]
     [InlineData("BtnPlayBreakoutDemo", "breakoutdemo", "/backroom/stations/breakout/play.html")]
     [InlineData("BtnPlayChess", "piecebypiece", "/piecebypiece/index.html")]

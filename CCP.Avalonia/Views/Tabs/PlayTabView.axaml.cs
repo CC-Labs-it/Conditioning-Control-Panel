@@ -1,4 +1,9 @@
 using System;
+using System.Linq;
+using System.Threading;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
+using Avalonia.Styling;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -57,11 +62,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged += OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged += OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged += OnIntakePassStateChanged;
+            Platform.WebcamTracker.Instance.StateChanged += OnTrackerChanged;
             RefreshPlayCards();
+            RefreshTracker();
+            StartEntrance();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
+            StopEntrance();
+            Platform.WebcamTracker.Instance.StateChanged -= OnTrackerChanged;
             CoreMods.ModChanged -= OnModChangedRepaintArt;
             App.IntakePass.PassStateChanged -= OnIntakePassStateChanged;
             LocalizationManager.Instance.LanguageChanged -= OnIntakePassStateChanged;
@@ -72,12 +82,83 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
         {
             base.OnPropertyChanged(change);
-            if (change.Property == IsVisibleProperty && IsVisible && VisualRoot != null) RefreshPlayCards();
+            if (change.Property == IsVisibleProperty && VisualRoot != null)
+            {
+                if (IsVisible) { RefreshPlayCards(); RefreshTracker(); StartEntrance(); }
+                else StopEntrance();
+            }
         }
 
         // The pass is spent (or entitlement lands) off the UI thread.
         private void OnIntakePassStateChanged(object? sender, EventArgs e) =>
-            Dispatcher.UIThread.Post(RefreshPlayCards);
+            Dispatcher.UIThread.Post(() => { RefreshPlayCards(); RefreshTracker(); });
+
+        private CancellationTokenSource? _entrance;
+
+        // WPF ChromeFx.FindStaggerTargets walks through ScrollViewer to the wall panel,
+        // takes its first eight visible, opaque children, then MotionFx.StaggerIn caps delay at six.
+        internal Control[] EntranceTargets() => WallScroll.Content is Panel wall
+            ? wall.Children.Where(c => c.IsVisible && c.Opacity > 0.99).Take(8).ToArray()
+            : Array.Empty<Control>();
+
+        private void StopEntrance()
+        {
+            _entrance?.Cancel();
+            _entrance?.Dispose();
+            _entrance = null;
+        }
+
+        private void StartEntrance()
+        {
+            StopEntrance();
+            if (!AmbientFxCanvas.Env.AllowTransitions) return;
+            _entrance = new CancellationTokenSource();
+            int index = 0;
+            foreach (var target in EntranceTargets())
+            {
+                target.RenderTransform = new TranslateTransform();
+                var delay = TimeSpan.FromMilliseconds(40 * Math.Min(index++, 6));
+                Enter(target, delay, 220, OpacityProperty, 0, 1, _entrance.Token);
+                Enter(target, delay, 260, TranslateTransform.YProperty, 10, 0, _entrance.Token);
+            }
+        }
+
+        private static void Enter(Control target, TimeSpan delay, int ms, AvaloniaProperty property,
+            double from, double to, CancellationToken cancel) => _ = new Animation
+            {
+                Delay = delay, Duration = TimeSpan.FromMilliseconds(ms),
+                Easing = new QuadraticEaseOut(), FillMode = FillMode.Backward,
+                Children =
+                {
+                    new KeyFrame { Cue = new Cue(0), Setters = { new Setter(property, from) } },
+                    new KeyFrame { Cue = new Cue(1), Setters = { new Setter(property, to) } },
+                },
+            }.RunAsync(target, cancel);
+
+        private void OnTrackerChanged() => Dispatcher.UIThread.Post(() =>
+        {
+            if (VisualRoot != null) RefreshTracker();
+        });
+
+        // WPF MainWindow.LabTab.cs UpdateLabTrackerUi / WebcamStateText. FaceLost still
+        // owns a running tracker, so it keeps the cards bright and the chip green.
+        private void RefreshTracker()
+        {
+            var state = Platform.WebcamTracker.Instance.Status;
+            bool live = state is Platform.WebcamStatus.Tracking or Platform.WebcamStatus.FaceLost;
+            PlayGazeCard.Opacity = PlayFocusCard.Opacity = live ? 1 : 0.62;
+            PlayGazeNeedsTracker.IsVisible = PlayFocusNeedsTracker.IsVisible = !live;
+            if (this.TryFindResource(live ? "SuccessGreenBrush" : "TextMutedBrush", out var brush)
+                && brush is IBrush fill) WebcamStatusChipPlayDot.Fill = fill;
+            TxtWebcamStatusChipPlay.Text = Loc.Get(state switch
+            {
+                Platform.WebcamStatus.Starting => "rf_webcam_starting",
+                Platform.WebcamStatus.Tracking => "rf_webcam_tracking",
+                Platform.WebcamStatus.FaceLost => "rf_webcam_face_lost",
+                Platform.WebcamStatus.Error => "rf_webcam_error",
+                _ => "rf_webcam_stopped",
+            });
+        }
 
         /// <summary>
         /// Every card hero, WPF's <c>PlayTabView.xaml</c> table restated: the Border that owns the
