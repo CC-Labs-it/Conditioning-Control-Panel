@@ -3507,3 +3507,7 @@ Restores the late Dormant shimmer in ChatThresholdView (WPF State -> PlayDormant
 ## avalonia-port/fin-shell-tab-navigation: +622
 
 Review FIX round done in 78dd1813a: snapshot fade cut (listed under Missing), entrance on FrameClock + TabClock TimeProvider, EMI case-insensitive, stale notes fixed. rgate 39901379337 red only on known RaceTrack flake (P115). Not pushed.
+
+## avalonia-port/fin-feat-pbp-host: +235
+
+Piece-by-piece standalone host: Core HostNetPathRule/PbpNetRelay reused (pure renames), kept Escape, reduced-motion caps, watch preferences persisted via typed whitelist. Review fix: flush debounced save in GameWindowTests before disk reload. rgate GATE-OK run 39921724996. Row stays `stub` (stakes, media/friends, recovery, SeasonRecap, process-failed close, focus/profile missing).
