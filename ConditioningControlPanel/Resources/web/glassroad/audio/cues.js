@@ -10,6 +10,7 @@ import { SOUND, CHORDS, noiseBuffer } from './engine.js';
 import { ladderSemis } from './mix.js';
 import { playPhraseGate } from './phraseGates.js';
 import { playPressThud } from './pressThud.js';
+import { playAirWordHop } from './airWordHop.js';
 
 export function makeSynth(ctx, out, feel, engine) {
   let nbuf = null;
@@ -96,6 +97,7 @@ const j = (syn, k) => syn.feel.get('juice.' + k);
 const chordOf = (i) => CHORDS[((i % CHORDS.length) + CHORDS.length) % CHORDS.length];
 
 export const AUDIO_CUES = {
+  'air-word-hop': playAirWordHop,
   'press-thud': playPressThud,
   'phrase-gate': playPhraseGate,
   countdown(syn) { syn.tone(syn.semis(0), { dur: 0.12, vol: 0.16 }); },
@@ -138,8 +140,8 @@ export const AUDIO_CUES = {
     syn.tone(hz * 2, { type: 'sine', dur: .46, vol: .035, attack: .009 });
     syn.tone(hz * 3, { type: 'sine', dur: .13, vol: .012, attack: .004 });
   },
-  land(syn, { tier = 0 }) {
-    if (tier < 2) return;
+  land(syn, { tier = 0, airWord = false }) {
+    if (airWord || tier < 2) return;
     const loud = tier >= 3 ? 1 : 0.55;
     syn.tone(syn.semis(-24), { type: 'sine', dur: 0.2, vol: 0.3 * loud, glide: syn.semis(-31) });
     syn.noise({ dur: 0.15, vol: 0.12 * loud, freq: 220, q: 0.7 });
