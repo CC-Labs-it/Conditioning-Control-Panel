@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
@@ -195,6 +196,12 @@ public sealed class BrainDrainAudioTests
     public async Task ReplacedSettingsRefreshTheClipAndDetachTheOldObject()
     {
         var oldProvider = CoreSettings.ServiceProvider;
+        // RestoreFrom saves settings.json (and may rotate backups) in the shared sandbox; put the
+        // files back afterwards so a later `new SettingsService()` does not load this test's values (P02).
+        var dir = CorePaths.UserData;
+        var saved = Directory.Exists(dir)
+            ? Directory.GetFiles(dir, "settings*").ToDictionary(p => p, File.ReadAllBytes)
+            : new System.Collections.Generic.Dictionary<string, byte[]>();
         var service = new SettingsService(); // assembly-owned CCP_USERDATA_DIR sandbox
         CoreSettings.ServiceProvider = () => service;
         try
@@ -225,7 +232,14 @@ public sealed class BrainDrainAudioTests
                 await Task.CompletedTask;
             });
         }
-        finally { CoreSettings.ServiceProvider = oldProvider; }
+        finally
+        {
+            CoreSettings.ServiceProvider = oldProvider;
+            if (Directory.Exists(dir))
+                foreach (var p in Directory.GetFiles(dir, "settings*"))
+                    if (!saved.ContainsKey(p)) File.Delete(p);
+            foreach (var (p, bytes) in saved) File.WriteAllBytes(p, bytes);
+        }
     }
 
     private static async Task WithPlayer(Func<Func<Func<string, double, bool, Action, BrainDrainPlayer.Voice?>, BrainDrainPlayer>, Task> test)

@@ -78,8 +78,10 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Debug("BrainDrain: volume refresh failed: {E}", ex.Message); }
         }
 
-        // Adapted from f601b7917 MasterVolumeWatch: observe the setting itself, including
-        // replacement, so hotkeys/presets/remotes reach the live sample just like the slider.
+        // Divergent (improved): extends #1432's MasterVolumeWatch idea (f601b7917) to Brain Drain.
+        // WPF Brain Drain is not a watch subscriber; it follows master only via the slider
+        // (MainWindow.UiUpdates.cs:1045) and its own-volume refresh. Here hotkey/preset/remote
+        // writes and settings replacement reach the live sample too.
         // ponytail: this player owns its subscriptions; no app-wide watch for one consumer.
         private void WatchVolumeSettings()
         {
