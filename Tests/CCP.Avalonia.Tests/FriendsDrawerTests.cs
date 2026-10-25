@@ -43,13 +43,14 @@ public sealed class FriendsDrawerTests
         /// <summary>When set, a "send" waits for it: the answer is still out while the test folds the drawer.</summary>
         public TaskCompletionSource? HoldSends;
         public string StateBody = State;
+        public bool ActSucceeds = true;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             var op = r.RequestUri!.AbsolutePath.Split('/').Last();
             lock (Ops) Ops.Add(op);
             if (op == "send") { Sends.Add(await r.Content!.ReadAsStringAsync(ct)); if (HoldSends != null) await HoldSends.Task; }
             var body = op == "state" ? StateBody : op == "poll" ? """{"ok":true,"online":[],"inbox":[],"receipts":[]}"""
-                : op == "send" ? """{"ok":true,"status":"sent"}""" : """{"ok":true}""";
+                : op == "send" ? """{"ok":true,"status":"sent"}""" : ActSucceeds ? """{"ok":true}""" : """{"ok":false,"error":"try_later"}""";
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
         }
     }
@@ -139,7 +140,10 @@ public sealed class FriendsDrawerTests
     public Task ASendAnsweredAfterTheDrawerFoldsFliesOverTheChipsWindow() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (global::Avalonia.Application.Current is null)
-            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(AppFonts.Options())
+                .ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, wire) = Service();
         var chip = new FriendsRailChip(svc) { Width = 200, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Bottom };
@@ -230,13 +234,17 @@ public sealed class FriendsDrawerTests
     [Fact]
     public Task TheDrawerListsFriendsRequestsAndBlockedAndTheChipCountsOnline() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
-        var (svc, _) = Service();
+        var (svc, wire) = Service();
+        wire.StateBody = State.Replace("\"outgoing\":[]", "\"outgoing\":[{\"id\":\"u_out\",\"name\":\"Oli\",\"via\":null,\"at\":\"2026-09-01T00:00:00Z\"}]");
         var chip = new FriendsRailChip(svc);
         await svc.RefreshAsync();
         Assert.Equal(1, chip.PillCount);
         var d = chip.Drawer;
         d.Render();
         foreach (var tag in new[] { "friends-row:u_on", "friends-row:u_off", "friends-request-in:u_req" }) Assert.NotNull(Tagged<Border>(d, tag));
+        // WPF FriendsDrawer.cs:785-818: only an incoming request carries the Block menu
+        Assert.NotNull(Tagged<Border>(d, "friends-request-in:u_req")!.ContextMenu);
+        Assert.Null(Tagged<Border>(d, "friends-request-out:u_out")!.ContextMenu);
         Assert.Equal("CCP-ABCDE", Tagged<TextBlock>(d, "friends-my-code")!.Text);
         Assert.Null(Tagged<Border>(d, "friends-blocked:u_bad"));
         d.ToggleBlocked();
@@ -249,7 +257,10 @@ public sealed class FriendsDrawerTests
     public Task AClickInsideTheDrawerKeepsItOpen() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(AppFonts.Options())
+                .ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var (svc, _) = Service();
@@ -313,6 +324,50 @@ public sealed class FriendsDrawerTests
         Assert.Equal(Loc.Get("friends_report_done"), Tagged<TextBlock>(d, "friends-result")!.Text);
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task TheFriendsPageAsksOnceAndRespectsBothAnswers(bool share) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var previousAsked = PresenceAsk.Asked;
+        var previousMark = PresenceAsk.MarkAsked;
+        bool asked = false;
+        PresenceAsk.Asked = () => asked;
+        PresenceAsk.MarkAsked = () => asked = true;
+        var page = new global::ConditioningControlPanel.Avalonia.Views.Tabs.FriendsTabView(svc);
+        try
+        {
+            await svc.RefreshAsync();
+            page.OnShown();
+            var ask = Tagged<Border>(page, "friends-presence-ask");
+            Assert.NotNull(ask);
+            Assert.True(ask.IsVisible);
+            Assert.Contains(ask.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("friends_presence_ask"));
+            Assert.Equal(1, Grid.GetRow(ask));
+            Click(page, share ? "friends-presence-yes" : "friends-presence-no");
+            Assert.True(asked);
+            Assert.Equal(share, svc.PresenceShared);
+            Assert.False(ask.IsVisible);
+            page.OnHidden();
+            page.OnShown();
+            Assert.False(ask.IsVisible);  // switching away and back never repeats an answered question
+            // Already sharing never asks, even when no marker exists yet.
+            asked = false;
+            svc.PresenceShared = true;
+            page.Drawer.Render();
+            Assert.False(ask.IsVisible);
+            var signedOut = new global::ConditioningControlPanel.Avalonia.Views.Tabs.FriendsTabView(Service(null).Svc);
+            Assert.False(Tagged<Border>(signedOut, "friends-presence-ask")!.IsVisible);
+        }
+        finally
+        {
+            page.OnHidden();
+            PresenceAsk.Asked = previousAsked;
+            PresenceAsk.MarkAsked = previousMark;
+        }
+    });
+
     [Fact]
     public Task ThePresenceSwitchFlipsSharingAndAnswersTheAsk() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -331,6 +386,94 @@ public sealed class FriendsDrawerTests
         finally { PresenceAsk.MarkAsked = before; }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task TheOnceOnlyAskOffersBothAnswersAndStaysRetired(bool yes) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var oldAsked = PresenceAsk.Asked;
+        var oldMark = PresenceAsk.MarkAsked;
+        var asked = false;
+        PresenceAsk.Asked = () => asked;
+        PresenceAsk.MarkAsked = () => asked = true;
+        try
+        {
+            var d = new FriendsDrawer(svc);
+            await svc.RefreshAsync();
+            Assert.NotNull(Tagged<Button>(d, "friends-presence-yes"));
+            Assert.NotNull(Tagged<Button>(d, "friends-presence-no"));
+            Click(d, yes ? "friends-presence-yes" : "friends-presence-no");
+            Assert.Equal(yes, svc.PresenceShared);
+            Assert.True(asked);
+            Assert.Null(Tagged<Button>(d, "friends-presence-yes"));
+            d.TogglePresence();
+            d.TogglePresence();
+            d.Render();
+            Assert.Null(Tagged<Button>(d, "friends-presence-no"));
+            var signedOut = new FriendsDrawer(Service(account: null).Svc);
+            Assert.Null(Tagged<Button>(signedOut, "friends-presence-yes"));
+            Assert.Equal(Loc.Get("friends_me_signed_out"), Tagged<TextBlock>(signedOut, "friends-me-status")!.Text);
+        }
+        finally { PresenceAsk.Asked = oldAsked; PresenceAsk.MarkAsked = oldMark; }
+    });
+
+    [Fact]
+    public Task AnOldServerRemembersOnlySuccessfulBlocksAndUnblocksPerAccount() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, wire) = Service();
+        wire.StateBody = State.Replace(",\"blocked\":[{\"id\":\"u_bad\",\"name\":\"Bob\"}]", "");
+        var (old, oldAccount, oldHead) = (FriendsBlockList.Shared, FriendsBlockList.Account, FriendsHead.Service);
+        var entries = new List<BlockedEntry>();
+        FriendsBlockList.Shared = new FriendsBlockList(() => entries, rows => entries = rows.ToList());
+        var account = "me";
+        FriendsBlockList.Account = () => account;
+        try
+        {
+            var d = new FriendsDrawer(svc);
+            await svc.RefreshAsync();
+            Assert.Null(svc.Snapshot.Blocked);
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.ConfirmAsync("u_on", "Mia", "block"));
+            Assert.Empty(entries);
+            wire.ActSucceeds = true;
+            Assert.Equal(ActResult.Done, await d.ConfirmAsync("u_on", "Mia", "block"));
+            var remembered = Assert.Single(entries);
+            d.ToggleBlocked();
+            Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_on"));
+            account = "other";
+            d.Render();
+            Assert.Null(Tagged<Border>(d, "friends-blocked:u_on"));
+            account = "me";
+            wire.ActSucceeds = false;
+            Assert.NotEqual(ActResult.Done, await d.UnblockAsync(remembered));
+            Assert.Single(entries);
+            wire.ActSucceeds = true;
+            Assert.Equal(ActResult.Done, await d.UnblockAsync(remembered));
+            Assert.Empty(entries);
+            Assert.Null(Tagged<Border>(d, "friends-blocked:u_on"));
+            Assert.Equal(ActResult.Done, await d.BlockRequesterAsync(svc.Snapshot.Incoming[0]));
+            Assert.Equal("u_req", Assert.Single(entries).Id);
+            Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_req"));
+            FriendsBlockList.Shared.Add("me", "stale", "Stale", DateTimeOffset.UtcNow);
+            wire.StateBody = State;
+            await svc.RefreshAsync();
+            d.Render();
+            Assert.NotNull(Tagged<Border>(d, "friends-blocked:u_bad"));
+            Assert.Null(Tagged<Border>(d, "friends-blocked:stale"));
+            Assert.Equal(2, entries.Count);   // WPF: showing the server's list never writes this PC's file
+            FriendsHead.Service = svc;
+            FriendsLanding.Tick();             // WPF FriendsLanding.cs:71: the landing tick retires it once
+            Assert.Empty(entries);
+            Assert.Equal(3, wire.Ops.Count(op => op == "block"));
+        }
+        finally
+        {
+            FriendsLanding.Stop();
+            (FriendsBlockList.Shared, FriendsBlockList.Account, FriendsHead.Service) = (old, oldAccount, oldHead);
+        }
+    });
+
     [Fact]
     public Task SignedOutShowsTheSignInButtonAndNoCode() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -346,7 +489,10 @@ public sealed class FriendsDrawerTests
     public Task RemovingAFriendThrowsAFloatingWordOverTheWindowThatClosesItself() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (global::Avalonia.Application.Current is null)
-            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+            global::Avalonia.AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .WithInterFont()
+                .With(AppFonts.Options())
+                .ConfigureFonts(AppFonts.Register).UseSkia()
                 .UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var (svc, _) = Service();
         var d = new FriendsDrawer(svc);
@@ -410,6 +556,110 @@ public sealed class FriendsDrawerTests
         Tagged<Button>(d, "friends-invite-link")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(1, asked);
     });
+    // ---- open goon tables (WPF FriendsDrawer.Tables.cs; ConditioningControlPanel.Tests/FriendsDrawerTablesTests) ----
+
+    private static global::ConditioningControlPanel.Services.GoonGame.OpenTablesReply ZedHosting() =>
+        global::ConditioningControlPanel.Services.GoonGame.GoonOpenTablesApi.Parse(
+            """{"ok":true,"tables":[{"code":"ZEDD42","name":"Zed","friend":true,"friendId":"u_off","cardSec":60}]}""");
+
+    private static string[] RowIds(Control d) => d.GetLogicalDescendants().OfType<Border>()
+        .Select(b => b.Tag as string).Where(t => t != null && t.StartsWith("friends-row:")).Select(t => t!.Substring(12)).ToArray();
+
+    [Fact]
+    public Task AHostingFriendFloatsToTheTopWithJoin() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var d = new FriendsDrawer(svc);
+        await svc.RefreshAsync();
+        d.Render();
+        Assert.Equal(new[] { "u_on", "u_off" }, RowIds(d));
+        d.Tables = ZedHosting;
+        d.CanJoinTables = () => true;
+        d.Render();
+        // Zed is offline, but the listing says they are at a table: they lead, pink, with Join.
+        Assert.Equal(new[] { "u_off", "u_on" }, RowIds(d));
+        var row = Tagged<Border>(d, "friends-row:u_off")!;
+        Assert.NotNull(Tagged<TextBlock>(row, "friends-table-hosting"));
+        Assert.Null(Tagged<TextBlock>(row, "friends-activity"));
+        Assert.IsType<global::Avalonia.Media.LinearGradientBrush>(row.Background);
+        Assert.Null(Tagged<Button>(Tagged<Border>(d, "friends-row:u_on")!, "friends-table-join"));
+        // No Goon host on this head: Join words it in the row and the drawer stays open.
+        int closed = 0;
+        d.CloseRequested += () => closed++;
+        Click(row, "friends-table-join");
+        Assert.Equal(Loc.Get("exclusives_not_on_this_build"), Tagged<TextBlock>(d, "friends-result")!.Text);
+        Assert.Equal(0, closed);
+        // With a host, Join sits down with the table's code and folds the drawer (WPF PressJoin).
+        var joined = new List<string>();
+        d.JoinTable = joined.Add;
+        Click(Tagged<Border>(d, "friends-row:u_off")!, "friends-table-join");
+        Assert.Equal(new[] { "ZEDD42" }, joined);
+        Assert.Equal(1, closed);
+    });
+
+    [Fact]
+    public Task ASignedOutDrawerSeesALockThatNeverLaunches() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var (svc, _) = Service();
+        var d = new FriendsDrawer(svc) { Tables = ZedHosting, CanJoinTables = () => false };
+        var joined = new List<string>();
+        d.JoinTable = joined.Add;
+        await svc.RefreshAsync();
+        d.Render();
+        var row = Tagged<Border>(d, "friends-row:u_off")!;
+        Assert.Null(Tagged<Button>(row, "friends-table-join"));
+        Click(row, "friends-table-locked");
+        Assert.Empty(joined);
+        Assert.Null(Tagged<TextBlock>(d, "friends-result"));
+    });
+
+    [Fact]
+    public Task TheTablesPollRunsOnlyWhileTheDrawerIsOpen() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var tables = global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.Fetch;
+        global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.ResetForTests();
+        global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.Fetch = _ => Task.FromResult(ZedHosting());
+        try
+        {
+            var (svc, _) = Service();
+            var d = new FriendsDrawer(svc) { CanJoinTables = () => true };
+            await svc.RefreshAsync();
+            d.OnOpened();
+            Assert.True(d.TablesPolling);
+            Assert.Equal(FriendsDrawer.TablesPoll, TimeSpan.FromSeconds(30));
+            // The listing lands through GoonOpenTables.Changed and repaints the open drawer.
+            await Until(() => Tagged<TextBlock>(d, "friends-table-hosting") != null);
+            Assert.NotNull(Tagged<Button>(d, "friends-table-join"));
+            d.OnClosed();
+            Assert.False(d.TablesPolling);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.ResetForTests();
+            global::ConditioningControlPanel.Services.GoonGame.GoonOpenTables.Fetch = tables;
+        }
+    });
+    /// <summary>WPF App.xaml.cs:459: the open-tables listing rides the friends proxy and door; a sandbox
+    /// reaches only a loopback address, else GoonOpenTablesApi has no address and asks nothing.</summary>
+    [Fact]
+    public void TheOpenTablesWireIsSeededWithTheFriendsDoor()
+    {
+        var w = global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultIdentity;
+        var u = global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultBaseUrl;
+        var (iw, iu) = (global::ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity, global::ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl);
+        try
+        {
+            FriendsHead.SeedInvites("/tmp/sandbox", "http://127.0.0.1:3001/");
+            Assert.Equal("http://127.0.0.1:3001", global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultBaseUrl());
+            FriendsHead.SeedInvites("/tmp/sandbox", null);
+            Assert.Null(global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultBaseUrl());
+        }
+        finally
+        {
+            (global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultIdentity, global::ConditioningControlPanel.Services.Lobby.LobbyWire.DefaultBaseUrl) = (w, u);
+            (global::ConditioningControlPanel.Services.Invites.InviteApi.DefaultIdentity, global::ConditioningControlPanel.Services.Invites.InviteApi.DefaultBaseUrl) = (iw, iu);
+        }
+    }
 
     /// <summary>WPF FriendsDrawer.Feed.cs + FriendsRailChip UpdateBadge: the chip's pink badge counts unread feed
     /// lines; opening the drawer shows "What happened" newest first, reads what it shows (badge drops, dots stay

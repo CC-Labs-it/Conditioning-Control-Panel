@@ -212,7 +212,7 @@ namespace ConditioningControlPanel.Services
                 // the clip to LibVLC, and WedgeWatchdogTick also no-ops while _browserActive.
                 StopWedgeWatchdog();
 
-                App.Bubbles?.PauseAndClear();
+                if (Video.VideoFlashRule.ClearsBubbles(floating: IsFloating)) App.Bubbles?.PauseAndClear();
                 if (Video.MandatoryVideoPresentation.AttentionChecksApply(App.Settings.Current.AttentionChecksEnabled, IsFloating)) SetupAttention();
 
                 VideoDiag.Log("VIDEO", $"browser session on screen ({_windows.Count} window(s)) - {Path.GetFileName(path)}");
@@ -225,7 +225,8 @@ namespace ConditioningControlPanel.Services
                 // Closing veto would refuse to close the windows this throw is trying to clean up
                 // and strand fullscreen surfaces on screen forever. Same clear/restore dance as the
                 // runtime fallback, strict bridge included.
-                try { StopBrowserSessionForHandoff(); } catch { }
+                CarryMaxLenCap(replay: true);   // read Browser.PlayedMs before the handoff: the LibVLC replay continues the clip's cap
+            try { StopBrowserSessionForHandoff(); } catch { }
                 // The disarm above already ran if the throw came after it; the LibVLC attempt this
                 // false return triggers must not build its windows unguarded (that window creation
                 // is where the historic freeze strikes). Pre-roll re-arm, same as FallbackToLibVlc.

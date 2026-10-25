@@ -468,6 +468,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private Windows.MainShellWindow? Shell => TopLevel.GetTopLevel(this) as Windows.MainShellWindow;
 
+        /// <summary>WPF OpenCompanionPermissions_Click (5681c132a): the one-line link to the companion's one permissions list.</summary>
+        private void OpenCompanionPermissions_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e) => Shell?.ShowTab("permissions");
+
         /// <summary>WPF BtnAutonomyStartStop_Click: its own consent text (MainWindow.Autonomy.cs:143), then the toggle.</summary>
         private async void BtnAutonomyStartStop_Click(object? sender, RoutedEventArgs e)
         {

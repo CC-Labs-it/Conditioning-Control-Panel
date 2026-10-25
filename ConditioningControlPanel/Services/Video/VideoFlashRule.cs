@@ -15,5 +15,9 @@ namespace ConditioningControlPanel.Services.Video
     internal static class VideoFlashRule
     {
         public static bool StopsFlashes(bool floating) => !floating;
+
+        /// <summary>The same answer for the ambient bubbles (ccp-bugs #1487): a full-screen video pauses and
+        /// clears them so they never fight it for clicks; a floating one leaves them popping.</summary>
+        public static bool ClearsBubbles(bool floating) => !floating;
     }
 }

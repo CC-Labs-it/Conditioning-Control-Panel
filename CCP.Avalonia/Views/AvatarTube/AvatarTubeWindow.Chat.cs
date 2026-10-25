@@ -25,6 +25,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private int _thinkingTickCount;
         private int _thinkingGeneration;
         private DispatcherTimer? _bounceTimer;
+        // Per-window clock/steps: tests advance the same callbacks as the dispatcher timers.
+        internal Func<TimeSpan> ChatClock = () => Stopwatch.GetElapsedTime(0);
+        internal Action? ThinkingFrame { get; private set; }
+        internal Action? BounceFrame { get; private set; }
         private string? _askCardId;
         private string? _askQuestion;
         private Action<AskCard>? _askHook;
@@ -59,9 +63,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }
 
             _thinkingTimer = new DispatcherTimer { Interval = ThinkingPhrases.TickInterval };
-            _thinkingTimer.Tick += (s, _) =>
+            ThinkingFrame = () =>
             {
-                if (generation != _thinkingGeneration) { (s as DispatcherTimer)?.Stop(); return; }
+                if (generation != _thinkingGeneration) return;
                 if (++_thinkingTickCount > 3)
                 {
                     _thinkingPhraseBase = ThinkingPhrases.Pick(Random.Shared);
@@ -69,6 +73,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 }
                 _txtSpeech.Text = ThinkingPhrases.Frame(_thinkingPhraseBase, _thinkingTickCount);
             };
+            var thinkingFrame = ThinkingFrame;
+            _thinkingTimer.Tick += (_, _) => thinkingFrame();
             _thinkingTimer.Start();
         }
 
@@ -78,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _thinkingGeneration++;
             _thinkingTimer?.Stop();
             _thinkingTimer = null;
+            ThinkingFrame = null;
             _isWaitingForAi = false;
         }
 
@@ -92,14 +99,16 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var translate = new TranslateTransform();
             host.RenderTransform = translate;
             _bounceTimer?.Stop();
-            var clock = Stopwatch.StartNew();
+            var started = ChatClock();
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            timer.Tick += (_, _) =>
+            BounceFrame = () =>
             {
-                var ms = clock.Elapsed.TotalMilliseconds;
+                var ms = (ChatClock() - started).TotalMilliseconds;
                 translate.Y = DoubleBounceY(ms);
-                if (ms >= 280) { timer.Stop(); host.RenderTransform = null; }
+                if (ms >= 280) { timer.Stop(); host.RenderTransform = null; BounceFrame = null; }
             };
+            var bounceFrame = BounceFrame;
+            timer.Tick += (_, _) => bounceFrame();
             _bounceTimer = timer;
             timer.Start();
         }

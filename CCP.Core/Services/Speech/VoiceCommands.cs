@@ -26,6 +26,10 @@ namespace ConditioningControlPanel.Services.Speech
         public Func<IReadOnlyList<string>, RecognizeOptions, Task<PhraseResult>> Recognize = (_, _) => Task.FromResult(PhraseResult.NotAvailable);
         /// <summary>Intent name -> the head's action; null = this head cannot run it (left out of the grammar).</summary>
         public Func<string, Action?> ActionFor = _ => null;
+        /// <summary>In place of <see cref="ActionFor"/> for a command that applies its own safety rule:
+        /// false = it did nothing on purpose (panic where the panic key cannot run), so no confirmation
+        /// is spoken. Null = run <see cref="ActionFor"/> (which still decides whether the intent is offered).</summary>
+        public Func<string, Func<bool>?> RunFor = _ => null;
         public Func<VoiceGuard, bool> IsBlocked = _ => false;
         /// <summary>A refused command: the lockdown escape tripwire (EscapeKinds.Stop).</summary>
         public Action OnRefused = () => { };
@@ -137,8 +141,10 @@ namespace ConditioningControlPanel.Services.Speech
         // Guard EVERY intent that reaches a privileged teardown, not just the obvious ones: the
         // original report was `video_off`, but session `pause` funnels into SessionEngine.PauseSession
         // -> Video.Stop() through a completely different file, and its aliases ("wait", "hold on")
-        // are the ones a frustrated user actually reaches for. Panic stays unguarded — it is the
-        // intended way out and routes to the same teardown on purpose.
+        // are the ones a frustrated user actually reaches for. Panic does not use this guard: it is the
+        // intended way out and reaches exactly as far as the panic key (hard rule 6, owner 2026-10-22):
+        // under Lockdown or with panic off it does nothing but the leash part (VoicePanicReach, asked
+        // inside the head's panic, VoiceCommandHost.RunFor). Strict Lock alone leaves it whole, as it leaves the key.
 
         // ── Alias expansion ────────────────────────────────────────────────────
         // Toggle features share a wide, consistent spoken vocabulary so natural phrasings all land.
@@ -175,7 +181,8 @@ namespace ConditioningControlPanel.Services.Speech
         public static IReadOnlyList<VoiceCommandIntent> Intents => _voiceCommandIntents ??= new()
         {
             // ── Safety ────────────────────────────────────────────────────────────
-            // Routes to the exact panic-key teardown. A false positive just stops things.
+            // Routes to the exact panic-key teardown. A false positive just stops things. Where the
+            // panic key cannot run it says nothing and stops nothing (bar a leash task).
             new VoiceCommandIntent
             {
                 Name = "panic",
@@ -1178,8 +1185,21 @@ namespace ConditioningControlPanel.Services.Speech
                 return;
             }
 
-            try { Host.ActionFor(intent.Name)?.Invoke(); }
-            catch (Exception ex) { Log.Warning(ex, "AutonomyService: voice command '{Name}' execute failed", intent.Name); }
+            // A command that applies its own safety rule (the panic, VoiceCommandHost.RunFor) reports
+            // whether it ran; false = it did nothing on purpose, so no confirmation is spoken.
+            if (Host.RunFor(intent.Name) is { } run)
+            {
+                bool ran = true;
+                try { ran = run(); }
+                catch (Exception ex) { Log.Warning(ex, "AutonomyService: voice command '{Name}' run failed", intent.Name); }
+                // Refused by its own safety rule: no line claims it worked.
+                if (!ran) return;
+            }
+            else
+            {
+                try { Host.ActionFor(intent.Name)?.Invoke(); }
+                catch (Exception ex) { Log.Warning(ex, "AutonomyService: voice command '{Name}' execute failed", intent.Name); }
+            }
 
             // Utility verbs get a short, text-only ack. Feature verbs prefer the voiced manifest variant
             // (text + matching clip for the active mod), falling back to the inline per-mod text.

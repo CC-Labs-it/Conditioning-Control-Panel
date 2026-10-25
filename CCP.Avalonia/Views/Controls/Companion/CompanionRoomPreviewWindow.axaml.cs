@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
+using ConditioningControlPanel.Views.Controls.Companion;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
 {
@@ -14,9 +15,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     /// opened and why nothing in the app opens it by itself.
     ///
     /// <para>PORTED from ConditioningControlPanel/Views/Controls/Companion/CompanionRoomPreviewWindow.xaml.cs.
-    /// The strip, the current-state label and the width toggle cross as they are. What does not:
-    /// <c>MockCompanionRoomVm</c> and <c>ICompanionRoomVm</c> live in the WPF head, so
-    /// <see cref="ShowVariant"/> re-labels the strip but cannot yet swap the page's state.</para>
+    /// The strip, label, width toggle and chat/memory mock states cross. The remaining six zone
+    /// mock contracts still live in WPF; see the follow-up lane in the parity ledger.</para>
     ///
     /// <para><b>Nothing constructs this window here — and nothing constructs it on WPF either.</b>
     /// Checked before assuming: its one entry point is
@@ -36,11 +36,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// <summary>…and the width it goes back to. Both sit clear of the hysteresis band.</summary>
         private const double WideWidth = 1240;
 
-        // ponytail: mirrors the keys of MockCompanionRoomVm.Variants (ConditioningControlPanel/
-        // Views/Controls/Companion/MockCompanionRoomVm.cs). Read the dictionary directly once that
-        // file is reachable - it hangs off ICompanionRoomVm and its eight zone interfaces, which
-        // are the same thing blocking CompanionRoomView.ViewModel.
-        private static readonly string[] Variants = { "default", "freeTier", "dormant", "empty", "drained", "disabled" };
+        // ponytail: the WPF page composes eight mocks; this slice seats chat, diary and attention.
+        // Factories preserve the WPF strip order (MockCompanionRoomVm.cs:94-161) and create a fresh
+        // exhibit on every switch. Attention: Plenty 0.72, Saving 0.30, Drained 0.0 + spent detail.
+        private static AttentionGaugeViewModel Plenty() => AttentionGaugeViewModel.CreatePreview(0.72);
+
+        private static readonly IReadOnlyDictionary<string, Func<(ChatThresholdViewModel Chat, MemoryDiaryViewModel Memory, AttentionGaugeViewModel Attention)>> Variants =
+            new Dictionary<string, Func<(ChatThresholdViewModel, MemoryDiaryViewModel, AttentionGaugeViewModel)>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["default"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live), new(), Plenty()),
+                ["freeTier"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Locked), new(), AttentionGaugeViewModel.CreatePreview(0.30)),
+                ["dormant"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Dormant), MemoryDiaryViewModel.PreviewDormant(), Plenty()),
+                ["empty"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live, fresh: true), MemoryDiaryViewModel.PreviewEmpty(), Plenty()),
+                ["drained"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Live), new(), AttentionGaugeViewModel.CreatePreview(0.0, "companion_attention_detail_line_spent")),
+                ["disabled"] = () => (ChatThresholdViewModel.CreatePreview(CompanionZoneState.Disabled), new(), Plenty())
+            };
 
         private readonly Dictionary<string, Button> _stateButtons = new(StringComparer.OrdinalIgnoreCase);
 
@@ -75,12 +85,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         /// </summary>
         public bool ShowVariant(string? variantKey)
         {
-            if (variantKey == null || !_stateButtons.ContainsKey(variantKey)) return false;
-
-            // ponytail: WPF sets Room.ViewModel = MockCompanionRoomVm.Get(key) here. Blocked on the
-            // same pair as above (MockCompanionRoomVm + ICompanionRoomVm, both in the WPF head), so
-            // the strip changes the LABEL and nothing else: every zone on this head seeds itself
-            // from CoreSettings and has no variant to be switched into.
+            if (variantKey == null || !Variants.TryGetValue(variantKey, out var factory)) return false;
+            var (chat, memory, attention) = factory();
+            Room.SetPreviewZones(chat, memory, attention);
             CurrentVariantKey = variantKey;
             CurrentLabel.Text = variantKey;
 
@@ -97,7 +104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         private void BuildStateStrip()
         {
             this.TryFindResource("CmpChipButtonStyle", out var chip);
-            foreach (var key in Variants)
+            foreach (var key in Variants.Keys)
             {
                 var button = new Button
                 {

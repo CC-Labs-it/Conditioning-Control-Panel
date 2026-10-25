@@ -48,7 +48,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     ///         equivalent in one respect worth naming: WS_EX_NOACTIVATE makes activation
     ///         *impossible*, where <c>ShowActivated="False"</c> only declines it at show time - a
     ///         click on this panel can still focus it on X11.</item>
-    ///   <item><b>The two global hooks are a poll here</b> (X11Pointer, non-consuming). See
+    ///   <item><b>Windows has scoped, non-consuming global hooks</b>; X11Pointer polls on Linux. See
     ///         <see cref="InstallHooks"/> for what that does and does not cover.</item>
     ///   <item><b>The owner is optional.</b> <c>EmiDeskWindow</c> is the widget this panel hangs
     ///         off and it is ported, so the constructor takes it and every <c>_owner.*</c> call is
@@ -113,6 +113,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public EmiOptionsWindow(EmiDeskWindow? owner)
         {
             _owner = owner;
+            // Headless/render test windows never install hooks on the real desktop.
+            StartDismissListener = callback => TryGetPlatformHandle()?.HandleDescriptor == "HWND"
+                ? Win32OptionsDismiss.Start(callback) : null;
             AvaloniaXamlLoader.Load(this);
 
             _btnPanelClose = this.FindControl<Button>("BtnPanelClose")!;
@@ -134,6 +137,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // and an unfilled panel would prove nothing about the switches or the segments.
             LoadValues();
 
+            Closed += (_, _) =>
+            {
+                _closingForGood = true;
+                ClosePanel();
+                if (_owner is not null)
+                {
+                    _owner.Moved -= OnOwnerMoved;
+                    _owner.Resized -= OnOwnerResized;
+                }
+            };
             // The chrome on her body stays lit while the pointer is in here, so the gear that
             // opened this is still on screen to close it again after the round trip.
             PointerEntered += (_, _) => Hold(true);
@@ -265,6 +278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 StopWidthPersist();
                 if (!_open && !IsVisible) return;
                 _open = false;
+                _hotPx = Array.Empty<PixelRect>();
                 Hide();
 
                 Log.Debug("[EmiDesk] options panel closed");
@@ -633,25 +647,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private PixelRect[] _hotPx = Array.Empty<PixelRect>();
         private DispatcherTimer? _awayPoll;
+        private IDisposable? _dismissListener;
+        private int _dismissGeneration;
+
+        // Platform seam: tests supply a listener without installing real desktop hooks.
+        internal Func<Action<PixelPoint?, bool>, IDisposable?> StartDismissListener;
         private bool _wasDown, _wasEsc;
 
         /// <summary>The desktop-wide pointer read. A seam only so a test can play a click.</summary>
         internal Func<(PixelPoint At, bool Pressed, bool Escape)?> ReadPointer = X11Pointer.Read;
 
-        /// <summary>
-        /// WPF installed a low-level mouse hook and a low-level keyboard hook here: a click anywhere
-        /// off the panel and off her body, or Escape anywhere, folds it. This head POLLS the same two
-        /// facts instead (<see cref="X11Pointer"/>, non-consuming like the hook), every 30 ms while
-        /// the panel is open.
-        ///
-        /// <para>ponytail: a poll, not a hook, so a press-and-release faster than one tick is missed
-        /// (a real click is ~100 ms). Wayland-native windows are invisible to it; the answer there is
-        /// a layer-shell surface, not this.</para>
-        /// </summary>
+        /// <summary>Use the WPF non-consuming hooks on Windows; retain the X11 fallback.
+        /// ponytail: Wayland-native windows and sub-tick X11 presses remain follow-up work.</summary>
         private void InstallHooks()
         {
-            if (_awayPoll != null) return;
-            // Armed as "already down": the click that opened the panel is still held right now.
+            if (_dismissListener != null || _awayPoll != null) return;
+            int generation = ++_dismissGeneration;
+            _dismissListener = StartDismissListener((at, escape) =>
+            {
+                // Never hide a window or unhook from inside a native hook callback.
+                Dispatcher.UIThread.Post(() =>
+                {
+                    // A queued press from a previous opening must not fold a reopened panel.
+                    if (!_open || generation != _dismissGeneration) return;
+                    if (escape || (at is { } point && Array.TrueForAll(_hotPx, h => !h.Contains(point))))
+                        ClosePanel();
+                });
+            });
+            if (_dismissListener != null) return;
             _wasDown = _wasEsc = true;
             _awayPoll = new DispatcherTimer(TimeSpan.FromMilliseconds(30), DispatcherPriority.Background, (_, _) => PollClickAway());
             _awayPoll.Start();
@@ -659,6 +682,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void RemoveHooks()
         {
+            ++_dismissGeneration;
+            _dismissListener?.Dispose();
+            _dismissListener = null;
             _awayPoll?.Stop();
             _awayPoll = null;
         }

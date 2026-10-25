@@ -90,6 +90,16 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
+    <!-- WPF CopyCirceNeutralOverrides* (csproj :885): CirceNeutralPackPatch re-applies these after every
+         builtin-locked re-extract. A profile moved from Windows always re-extracts (the archive path
+         changed), so without them the neutral voice lines and art reverted (real-profile migration test).
+         None, not Content: VideoLAN.LibVLC.Windows.targets feeds every Content path to MakeRelative, and
+         a file name with a comma breaks that call (MSB4186 on Windows). -->
+    <None Include="..\ConditioningControlPanel\LockedMod\overrides\**\*" Link="LockedMod\overrides\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </None>
     <!-- WPF CornerGifMedia's built-in corner asset (pre-scaled), CornerGifOverlay's fallback. -->
     <Content Include="..\Assets\spiral_corner.gif" Link="Resources\spiral_corner.gif">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
