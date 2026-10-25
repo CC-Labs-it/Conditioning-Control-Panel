@@ -143,7 +143,7 @@ export function createBoudoirHazardView(scene, track) {
       beltTarget.set(p.direction > 0 ? '#94e2c8' : p.direction < 0 ? '#f29ab4' : '#e8c675');
       belt.colour.value.lerp(beltTarget, 1 - Math.exp(-Math.max(0, dt) / .3));
       for (let i = 0; i < belt.count; i++) {
-        const shift = p.direction * clock * 5, d = ((i * length / belt.count + shift) % length + length) % length;
+        const shift = p.travelM ?? p.direction * clock * 5, d = ((i * length / belt.count + shift) % length + length) % length;
         const f = track.surfaceAt(belt.row.s0 + d, 0); Q.setFromRotationMatrix(basis(f));
         if (p.direction < 0) Q.multiply(reverse);
         P.fromArray(f.p).addScaledVector(Y.fromArray(f.n), .09); belt.arrows.setMatrixAt(i, M.compose(P, Q, Scale.set(1, 1, 1)));

@@ -1,14 +1,32 @@
 /* Boudoir perfume: a visible timed volume slows the short line, with a permanent dry lane.
- * The caller supplies the audible song clock (or race clock), never wall time. */
+ * The caller supplies race time; the shared adapter maps it to heard song time in solo. */
 import { S, RESPAWN } from './state.js';
 import { getBoudoirLayout } from '../track/boudoir-layout.js';
+import { machineryBeatAt, machineryRearming, beatCycle } from '../track/machineryBeat.js';
 
 export const PERFUME = Object.freeze({ cycleS: 12, warnS: 3, sprayS: 5, activeS: 5.6,
   clearS: 9, fadeS: 10.2, rearmS: 2, heightM: 2.5, radiusM: .65, speedMps: 18, dragPerS: 3.2 });
 const smooth = v => { v = Math.max(0, Math.min(1, v)); return v * v * (3 - 2 * v); };
 
 /** Shared phase authority for simulation and drawing. All fades last at least 600 ms. */
-export function perfumePhase(zone, timeS, out = {}) {
+export function perfumePhase(zone, timeS, out = {}, beat = null) {
+  if (beat) {
+    const step = beat.beatS, offset = Math.round((zone.offsetS || 0) / step);
+    const warn = Math.round(PERFUME.warnS / step), spray = warn + Math.ceil((PERFUME.sprayS - PERFUME.warnS) / step);
+    const active = spray + Math.ceil((PERFUME.activeS - PERFUME.sprayS) / step);
+    const clear = Math.max(active + 1, Math.round(PERFUME.clearS / step));
+    const fade = clear + Math.ceil((PERFUME.fadeS - PERFUME.clearS) / step);
+    const period = Math.max(Math.ceil(PERFUME.cycleS / step / 4) * 4, Math.ceil((fade + 1) / 4) * 4);
+    const t = beatCycle(beat.beat + offset, period);
+    // Initial pickup and every seek wait for a full clear/warn/spray sequence.
+    const safe = machineryRearming(beat, offset, period) || beat.beat < beatCycle(-offset, period);
+    const phase = safe ? 'warn' : t < warn || t >= fade ? 'clear' : t < spray ? 'warn' : t < active ? 'spray' : t < clear ? 'active' : 'fade';
+    const mist = safe || t < spray || t >= fade ? 0 : t < active ? smooth((t - spray) / (active - spray))
+      : t < clear ? 1 : 1 - smooth((t - clear) / (fade - clear));
+    const warning = safe ? 1 : phase === 'warn' ? smooth((t - warn) * step / .6)
+      : phase === 'spray' || phase === 'active' ? 1 : phase === 'fade' ? mist : 0;
+    return Object.assign(out, { phase, mist, warning, active: phase === 'active', cycleS: t * step });
+  }
   const K = PERFUME, t = ((Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (zone.offsetS || 0)) % K.cycleS + K.cycleS) % K.cycleS;
   const phase = t < K.warnS || t >= K.fadeS ? 'clear' : t < K.sprayS ? 'warn' : t < K.activeS ? 'spray' : t < K.clearS ? 'active' : 'fade';
   const mist = t < K.sprayS || t >= K.fadeS ? 0 : t < K.activeS ? smooth((t - K.sprayS) / (K.activeS - K.sprayS))
@@ -43,7 +61,7 @@ export function createBoudoirPerfume(track, events, { zones } = {}) {
   const rows = perfumeZones(track, zones), K = PERFUME, pose = {}, bounds = [0, 1];
   let previous = new WeakMap(), lastT = null, safeUntil = -Infinity;
   const api = { rows, ready: true, hits: 0, update, reset,
-    inspect(timeS = lastT ?? 0) { return { ready: api.ready, hits: api.hits, timeS, zones: rows.map(z => ({ ...z, ...perfumePhase(z, timeS) })) }; } };
+    inspect(timeS = lastT ?? 0) { return { ready: api.ready, hits: api.hits, timeS, zones: rows.map(z => ({ ...z, ...perfumePhase(z, timeS, {}, machineryBeatAt(track, timeS)) })) }; } };
   function reset() { previous = new WeakMap(); lastT = null; safeUntil = -Infinity; api.ready = true; api.hits = 0; }
   function update(racers, timeS, dt = 1 / 60, { paused = false } = {}) {
     if (paused || !rows.length || !Number.isFinite(timeS) || !Number.isFinite(dt) || dt <= 0) return;
@@ -69,7 +87,7 @@ export function createBoudoirPerfume(track, events, { zones } = {}) {
         for (let n = 0; n < 4; n++) {
           const a = bounds[0] + (bounds[1] - bounds[0]) * (n + .5) / 4;
           const t = prev.t + (timeS - prev.t) * a;
-          if (t >= safeUntil && perfumePhase(zone, t, pose).active) active++;
+          if (t >= safeUntil && perfumePhase(zone, t, pose, machineryBeatAt(track, t)).active) active++;
         }
         const share = (bounds[1] - bounds[0]) * active / 4;
         if (share > exposure) { exposure = share; hit = zone; }

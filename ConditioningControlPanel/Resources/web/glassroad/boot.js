@@ -1040,7 +1040,7 @@ async function boot(course, options, lifetime, isCurrent) {
         const sc = scanClock(online ? null : audio.music, racers.clockS);
         scan.update(racers.list, sc.timeS, sc.bpm);
         industry.update(racers.list, racers.clockS, clock.dt);
-        perfume.update(racers.list, sc.timeS, clock.dt);
+        perfume.update(racers.list, racers.clockS, clock.dt);
       }
       contact.update(clock.dt, racers.list, race);                //    bumps, ghosts, slipstream
       standings.update(racers.list, race, clock.dt);              //    places, race-result

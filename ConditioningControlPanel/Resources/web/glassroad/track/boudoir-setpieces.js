@@ -2,7 +2,7 @@
 import { getBoudoirLayout } from './boudoir-layout.js';
 import { keepGatePhase } from '../sim/keepGates.js';
 import { pendulumBeatPhase } from '../sim/keepChains.js';
-import { beatCycle, machineryRearming } from './machineryBeat.js';
+import { beatCycle, machineryRearming, gearBeatTravel } from './machineryBeat.js';
 const TAU = Math.PI * 2, ease = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
 export const BOUDOIR_HAZARD = Object.freeze({ pressWidthM: 14, pressDepthM: 8, pressHeightM: 3.2,
   brushAmplitudeM: 2.9, brushRadiusM: 1.12, brushDepthM: 2.5, brushCycleS: 6.4,
@@ -32,9 +32,17 @@ export function mascaraPhase(row, timeS, beat = null) {
 export function ribbonPhase(row, timeS, beat = null) {
   if (beat) {
     const period = Math.max(4, Math.ceil(12 / beat.beatS / 4) * 4), offset = Math.round((row.offsetS || 0) / beat.beatS);
-    const u = beatCycle(beat.beat + offset, period), phase = machineryRearming(beat,offset,period) ? 'warn'
+    const absolute = beat.beat + offset, u = beatCycle(absolute, period), safe = machineryRearming(beat,offset,period);
+    const phase = safe ? 'warn'
       : u < period / 2 ? 'forward' : u < period / 2 + 2 ? 'warn' : u < period - 2 ? 'reverse' : 'clear';
-    return { phase, direction: phase === 'forward' ? 1 : phase === 'reverse' ? -1 : 0, timeS: u * beat.beatS };
+    // Integrate the signed belt travel. Reversals no longer teleport every arrow to a new position.
+    const travel = b => {
+      const p = beatCycle(b, period), forward = Math.min(p, period / 2), reverse = Math.max(0, Math.min(p - period / 2 - 2, period / 2 - 4));
+      return Math.floor(b / period) * 4 + gearBeatTravel(forward) - gearBeatTravel(reverse);
+    };
+    const start = beat.rearming ? beatCycle(-offset, period) : 0;
+    const travelM = (travel(Math.max(start, beat.beat) + offset) - travel(start + offset)) * 3;
+    return { phase, direction: phase === 'forward' ? 1 : phase === 'reverse' ? -1 : 0, timeS: u * beat.beatS, travelM };
   }
   const t = ((Math.max(0, Number.isFinite(timeS) ? timeS : 0) + (row.offsetS || 0)) % 12 + 12) % 12;
   const phase = t < 5.5 ? 'forward' : t < 7.5 ? 'warn' : t < 10.5 ? 'reverse' : 'clear';

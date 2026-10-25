@@ -3,6 +3,7 @@ import { Group, InstancedMesh, Mesh, MeshBasicNodeMaterial, SphereGeometry, BoxG
   Float32BufferAttribute, Matrix4, Vector3, Quaternion, DoubleSide } from 'three/webgpu';
 import { uniform, normalView, positionViewDirection, abs, dot, pow } from 'three/tsl';
 import { perfumeZones, perfumePhase, PERFUME } from '../sim/boudoirPerfume.js';
+import { machineryBeatAt } from '../track/machineryBeat.js';
 
 export function createBoudoirPerfumeView(scene, track, { zones } = {}) {
   const group = new Group(); group.name = 'boudoir-perfume'; scene.add(group);
@@ -58,7 +59,7 @@ export function createBoudoirPerfumeView(scene, track, { zones } = {}) {
   function update(timeS, { ready = true, gentle = false, paused = false, active = true, dt = 1 / 60 } = {}) {
     if (paused) return;
     for (const e of entries) {
-      perfumePhase(e.zone, timeS, pose);
+      perfumePhase(e.zone, timeS, pose, machineryBeatAt(track, timeS));
       const warning = active ? ready ? pose.warning : 1 : 0, mist = active && ready ? pose.mist : 0;
       const share = gentle ? .78 : 1, rise = Math.min(1, Math.max(0, dt) / .3);
       // Clock discontinuities still fade in, including a seek directly into an active spray.
