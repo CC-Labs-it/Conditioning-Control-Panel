@@ -80,7 +80,9 @@ public partial class AvailableSubjectsTabView : UserControl
     internal void Repaint()
     {
         var gates = ReadGates();
-        PaintSnapshot(gates.SignedIn ? _snapshot with { SignedIn = true } : LobbySnapshot.Empty, gates);
+        // WPF recomputes the error panel from LastRoundOk on every paint (MainWindow.Lobby.cs:116).
+        PaintSnapshot(gates.SignedIn ? _snapshot with { SignedIn = true } : LobbySnapshot.Empty, gates,
+            gates.SignedIn && _lobby?.LastRoundOk == false);
     }
 
     internal void SetNarrow(bool narrow)

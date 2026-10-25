@@ -153,6 +153,30 @@ public sealed class LobbyPageTests
     });
 
     [Fact]
+    public void ReopeningTheTabAfterAFailedRoundKeepsTheErrorPanel() => Run(() =>
+    {
+        var timer = new LobbyTimer();
+        var service = new LobbyService(timer, () => true, () => Array.Empty<Friend>(),
+            () => Task.FromResult(new PbpLobbyReply(Array.Empty<PbpOpenSeat>(), Array.Empty<PbpPlayingGame>(), false)),
+            () => Task.FromResult(OpenTablesReply.Empty),
+            () => Task.FromResult(((System.Collections.Generic.IReadOnlyList<RemoteSeat>)Array.Empty<RemoteSeat>(), false)));
+        var page = new AvailableSubjectsTabView { CreateLobby = () => service, IsVisible = false };
+        page.ReadGates = () => LobbyGates.From(true, false, false);
+        var window = new Window { Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            page.IsVisible = true;
+            Assert.False(service.LastRoundOk);
+            page.Repaint(); // tier change / reopen path: repaints without a new round
+
+            Assert.True(Named<Border>(page, "AvailableSubjectsErrorPanel").IsVisible);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
     public void HostLocksFollowTheirOwnGates() => Run(() =>
     {
         var page = new AvailableSubjectsTabView();
