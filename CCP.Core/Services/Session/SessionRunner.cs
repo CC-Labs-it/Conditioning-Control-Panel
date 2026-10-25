@@ -352,13 +352,14 @@ namespace ConditioningControlPanel.Services
         // ---- the session corner GIF (WPF SessionEngine.cs:862-896, 1731-1797, 2126-2320) ----
 
         /// <summary>WPF CanRaiseCornerGif over Core <see cref="CornerGifPlanner.AllowSessionCornerGif"/>.
-        /// The user's spiral master is read live (this runner writes it only at the delayed spiral start, as WPF does).</summary>
-        private static bool CanRaiseCornerGif(SessionSettings ss)
+        /// The user's spiral master is the pre-session snapshot, as WPF UserSpiralAllowed
+        /// (SessionEngine.cs:1786): Apply overrides SpiralEnabled with the session's own value.</summary>
+        private bool CanRaiseCornerGif(SessionSettings ss)
         {
             var s = CoreSettings.Current;
             return CornerGifPlanner.AllowSessionCornerGif(ss.CornerGifEnabled, s.SessionCornerGifAllowed,
                 CoreCornerGif.StandaloneActive, CornerGifPlanner.SessionCornerArtIsSpiral(ss.CornerGifPath),
-                s.SpiralEnabled, CoreCornerGif.SpiralOverlayActive);
+                _snapshot?.SpiralEnabled ?? s.SpiralEnabled, CoreCornerGif.SpiralOverlayActive);
         }
 
         /// <summary>The per-second admission recheck, delayed start and delayed end.</summary>
