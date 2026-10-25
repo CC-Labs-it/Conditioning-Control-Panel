@@ -33,6 +33,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal Func<bool> TrayHostPresent { get; set; } = ProbeTrayHost;
 
         private bool _exitRequested;
+        // Test seam: headless cannot raise an OS/app shutdown, so tests set the shutdown flag directly.
+        internal void MarkExitRequestedForTest() => _exitRequested = true;
         // WPF TrayIconService._windowClosed: Show() on a closed window throws.
         private bool _windowClosed;
         // WPF TrayIconService._hasShownFirstMinimizeNotification.
@@ -49,8 +51,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             };
             // SNI Activate (left click) arrives as Clicked; WPF restores on single and double click.
             Tray.Clicked += (_, _) => ShowFromTray();
-            Closed += (_, _) => _windowClosed = true;
+            AttachFeedTooltip(Platform.FriendsHead.Feed, Platform.FriendsHead.Service);
             return Tray;
+        }
+
+        /// <summary>WPF FriendsFeedTray: the tray tooltip adds how many friends-feed lines are unread.
+        /// Refreshed on every feed change, and on an account change (the feed switches accounts lazily and
+        /// raises nothing; WPF refreshes on hover, which Avalonia's tray does not have).</summary>
+        internal void AttachFeedTooltip(global::ConditioningControlPanel.Services.Friends.FriendsFeed? feed,
+            global::ConditioningControlPanel.Services.Friends.IFriendsService? service = null)
+        {
+            if (Tray == null || feed == null) return;
+            var baseText = Tray.ToolTipText ?? "";
+            void Refresh()
+            {
+                if (!global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { global::Avalonia.Threading.Dispatcher.UIThread.Post(Refresh); return; }
+                try
+                {
+                    var n = feed.Unread;
+                    if (Tray != null) Tray.ToolTipText = global::ConditioningControlPanel.Services.Friends.FriendsFeedRules.TrayText(baseText, n, n > 0 ? Loc.GetF("friends_feed_tray", n) : "");
+                }
+                catch (Exception ex) { Serilog.Log.Debug("[Friends] tray tooltip failed: {E}", ex.Message); }
+            }
+            void OnIdentity(object? s, EventArgs e) => Refresh();
+            void OnSnapshot(global::ConditioningControlPanel.Services.Friends.FriendsSnapshot _) => Refresh();
+            feed.Changed += Refresh;
+            CoreAccount.UnifiedIdentityChanged += OnIdentity;
+            if (service != null) service.SnapshotChanged += OnSnapshot;
+            Closed += (_, _) =>
+            {
+                feed.Changed -= Refresh;
+                CoreAccount.UnifiedIdentityChanged -= OnIdentity;
+                if (service != null) service.SnapshotChanged -= OnSnapshot;
+            };
+            Refresh();
         }
 
         /// <summary>WPF order: Show, Back to CC Labs, Wake, separator, Exit - with Stop everything above Exit.</summary>
@@ -126,7 +160,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 try { Services.LockdownService.Current?.NotifyEscapeAttempt(Services.Possession.EscapeKinds.Close); } catch { }
                 e.Cancel = true;
-                base.OnClosing(e);
                 return;
             }
             // WPF WindowChrome.cs:140: closing (real exit OR minimize-to-tray) always ends a Chaos run.
@@ -135,18 +168,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 && TrayHostPresent())
             {
                 e.Cancel = true;
+                // WPF WindowChrome.cs:345: quizzes are unowned topmost windows that would stay on screen.
+                PopQuizWindow.ForceCloseAll();
+                QuizWindow.CloseAll();
                 Hide();
                 HideAvatarTube();
+                // ponytail: WPF fires App.EmiDesk "minimizedToTray" here (WindowChrome.cs:362); this head has no EmiDesk Fire moment bus yet.
                 if (!_shownFirstMinimizeNotification)
                 {
                     _shownFirstMinimizeNotification = true;
                     Platform.OsNotifications.Show(Loc.Get("app_title"), Loc.Get("tray_balloon_body"), ShowFromTray);
                 }
             }
+            // A tray hide is not an exit: preserve the session and public Closing subscriptions.
+            if (e.Cancel) return;
+            EnsureSessionRestoredForExit();
             // WPF WindowChrome.cs:180: a confirmed library delete still in its undo grace is honoured.
-            if (!e.Cancel) try { CommitPendingDeeperDeletesOnExit(); } catch { }
+            try { CommitPendingDeeperDeletesOnExit(); } catch { }
             // WPF WindowChrome.cs:176: the Companion drawers' state, when quitting from that tab.
-            if (!e.Cancel) try { PersistCompanionDrawerStatesOnExit(); } catch { }
+            try { PersistCompanionDrawerStatesOnExit(); } catch { }
             base.OnClosing(e);
         }
 

@@ -153,8 +153,9 @@ public sealed class LauncherWindowTests
         Assert.True(launcher.IsVisible);
         Assert.False(shell.IsVisible);
 
-        // Only the destinations this head has: the Breakout demo and Piece by Piece game hosts, then the intake tab.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "intake" }, Tiles(launcher));
+        // Only the destinations this head has: the Breakout demo, Piece by Piece and Down the Rabbit Hole game hosts,
+        // then the intake tab.
+        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));

@@ -42,8 +42,7 @@
                                      templated parent
        FontFamily /Fonts/#Fredoka -> "Fredoka, Segoe UI, Inter": the head ships Inter; Fredoka is
                                      used when installed, nothing breaks when it is not
-       Font.Mono DynamicResource  -> a literal monospace stack; the Avalonia head has no Font.Mono
-                                     key yet (hoist to App.axaml when a second consumer appears) -->
+       Font.Mono DynamicResource  -> unchanged: the App.axaml Font.Mono resource -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:cmp="clr-namespace:ConditioningControlPanel.Avalonia.Views.Controls.Companion"
@@ -1196,9 +1195,7 @@
         <Setter Property="Padding" Value="13,10,13,10"/>
     </ControlTheme>
     <ControlTheme x:Key="CmpWireTextStyle" TargetType="TextBlock">
-        <!-- ponytail: literal stack; the head has no Font.Mono key yet. Hoist to App.axaml when a
-             second monospace consumer appears. -->
-        <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, DejaVu Sans Mono, monospace"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Foreground" Value="#FF8FE3B0"/>
         <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
@@ -1494,7 +1491,8 @@
            CmpShimmerSweepStoryboard     TranslateTransform.X -90 to host width (900 default),
                                          1.4s, 0.25s delay, CubicEaseInOut, once
            CmpNodePulseStoryboard        scale 1.0 to 1.18 and back, 0.32s out + 0.32s back, once
-           CmpThinkingDotsStoryboard     Opacity 0.25 to 1.0, 0.45s each way, forever while sending
+           CmpThinkingDotsStoryboard     Opacity 0.25 to 1.0, 0.45s each way, 0.15s stagger, while IsThinking
+                                         (ChatThresholdView BeatLoop; parks when hidden or minimised)
            CmpCursorBlinkStoryboard      IsVisible on 0.6s / off 0.6s, forever while the card is live -->
 
 </ResourceDictionary>

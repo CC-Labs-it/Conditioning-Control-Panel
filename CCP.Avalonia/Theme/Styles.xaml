@@ -11,10 +11,17 @@
      That one substitution is the bulk of the work in porting a view, which is why it is worth
      writing down here rather than rediscovering it 193 times.
 
-     Only the styles needed by the first ported view live here. The remaining ~12 keys in
-     Controls.xaml and the rest of MainWindow.xaml follow the same mapping. -->
+     Shared themes used by the ported views live here. MainWindow.xaml still has unported
+     implicit scroll/tree styles and keyed session/art/emote themes; see theme-main-window
+     in docs/avalonia-parity.md for the named follow-up lane.
+     Controls.xaml keys are shared here, including the three Deeper button themes.
+     Action/Secondary/Outline carry WPF's 80ms press / 150ms BackEase(0.3) release.
+     ponytail: SecondaryButton/PinkButton HudPlank depth and the ToggleStyle timing gaps below
+     remain wire-theme-controls-b. -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+                    xmlns:theme="clr-namespace:ConditioningControlPanel.Avalonia.Theme">
 
   <!-- MainWindow.xaml:525 -->
   <ControlTheme x:Key="SectionPanel" TargetType="Border">
@@ -77,32 +84,60 @@
     <Setter Property="Margin" Value="0,0,0,8"/>
   </ControlTheme>
 
-  <!-- MainWindow.xaml:677. The WPF original carries a ControlTemplate drawing a "?" in an
-       18x18 rounded border, plus ToolTipService timings. Avalonia has no ToolTipService - the
-       equivalents are ToolTip.ShowDelay and friends - so those are dropped here rather than
-       guessed at; the visual template is reproduced faithfully. -->
-  <ControlTheme x:Key="HelpButtonStyle" TargetType="Button">
-    <Setter Property="Width" Value="18"/>
-    <Setter Property="Height" Value="18"/>
-    <Setter Property="Background" Value="Transparent"/>
-    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+  <!-- WPF MainWindow.xaml:22: one implicit tooltip theme. No Effect/offscreen layer;
+       the framework's owner placement defaults to Pointer (WPF Mouse). -->
+  <ControlTheme x:Key="{x:Type ToolTip}" TargetType="ToolTip">
+    <Setter Property="Background" Value="{DynamicResource DarkerBgBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentBrush}"/>
+    <Setter Property="Padding" Value="10,6"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ToolTip">
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- Current WPF Resources/Theme/MainWindow.xaml:739: 22px help chrome and owner tooltip delays.
+       ponytail: Avalonia has no ShowDuration property; the 60-second lifetime needs a UI seam. -->
+  <ControlTheme x:Key="HelpButtonStyle" TargetType="Button">
+    <Setter Property="Width" Value="22"/>
+    <Setter Property="Height" Value="22"/>
+    <Setter Property="Background" Value="{DynamicResource PanelBgBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource SecondaryBrush}"/>
+    <Setter Property="Cursor" Value="Help"/>
     <Setter Property="VerticalAlignment" Value="Center"/>
     <Setter Property="Margin" Value="8,0,0,0"/>
     <Setter Property="Padding" Value="0"/>
+    <Setter Property="ToolTip.ShowDelay" Value="100"/>
+    <Setter Property="ToolTip.BetweenShowDelay" Value="0"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="Button">
-        <Border Background="{TemplateBinding Background}"
-                BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}"
-                CornerRadius="9" Width="18" Height="18">
-          <TextBlock Text="?" FontSize="11"
+        <Border x:Name="border" Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="11" Width="{TemplateBinding Width}" Height="{TemplateBinding Height}">
+          <TextBlock Text="?" FontSize="13" FontWeight="SemiBold" Margin="0,-1,0,0"
                      Foreground="{TemplateBinding Foreground}"
                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
       </ControlTemplate>
     </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#border">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
   </ControlTheme>
 
   <!-- Controls.xaml:16. Lives here rather than Brushes.xaml because SettingCardStyle references
@@ -130,10 +165,22 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
   </ControlTheme>
 
+  <!-- Controls.xaml:60-87: press scales to 0.97 over 80ms (linear), release returns over 150ms
+       with BackEase EaseOut Amplitude 0.3. Avalonia has no Enter/ExitActions, so the direction is
+       chosen by which Transitions the Border carries: :pressed swaps in the 80ms set. -->
+  <Transitions x:Key="PressReleaseTransitions">
+    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.15">
+      <TransformOperationsTransition.Easing>
+        <theme:BackEaseOutAmplitude Amplitude="0.3"/>
+      </TransformOperationsTransition.Easing>
+    </TransformOperationsTransition>
+  </Transitions>
+  <Transitions x:Key="PressDownTransitions">
+    <TransformOperationsTransition Property="{x:Static Visual.RenderTransformProperty}" Duration="0:0:0.08"/>
+  </Transitions>
+
   <!-- Controls.xaml:36. The press-feedback Storyboards (scale 0.97 in, BackEase out) become a
-       :pressed RenderTransform: Avalonia has no Trigger EnterActions/ExitActions, and the
-       HelpButtonStyle above already sets the precedent of reproducing the visual rather than
-       guessing at unmappable trigger machinery.
+       :pressed RenderTransform plus the direction-specific Transitions above.
        WPF's bare <ContentPresenter/> also has to name what it presents on Avalonia. -->
   <ControlTheme x:Key="ActionButton" TargetType="Button">
     <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
@@ -157,7 +204,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource DarkPinkBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -184,7 +235,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource PanelAccentHoverBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -409,7 +464,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource TransparentPinkBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
   </ControlTheme>
@@ -530,9 +589,48 @@
     <Setter Property="VerticalAlignment" Value="Center"/>
   </ControlTheme>
 
-  <!-- Inputs.xaml:388. In WPF a thin alias over the implicit TextBox. Avalonia has no implicit
-       theme of ours to alias, so BasedOn the Fluent default - the key exists for its call site. -->
-  <ControlTheme x:Key="FocusGlowTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"/>
+  <!-- Inputs.xaml:314-394. Keep Fluent's editing/IME/scroll parts and replace the chrome.
+       The implicit style is applied in App.axaml; a locally authored Theme still wins. -->
+  <ControlTheme x:Key="InputTextBoxTheme" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+    <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PanelAccentHoverBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="8,5"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="MinWidth" Value="0"/>
+    <Setter Property="CaretBrush" Value="{DynamicResource PinkBrush}"/>
+    <!-- Avalonia paints SelectionBrush at full strength; WPF applies SelectionOpacity 0.4. -->
+    <Setter Property="SelectionBrush" Value="{DynamicResource SelectionPinkBrush}"/>
+    <Setter Property="DragDrop.AllowDrop" Value="True"/>
+    <Setter Property="fx:InputFx.IsEnabled" Value="True"/>
+    <Setter Property="fx:InputFx.GlowColor" Value="{DynamicResource PinkColor}"/>
+    <Style Selector="^:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource InputHoverBorderBrush}"/>
+    </Style>
+    <Style Selector="^:focus-within">
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:focus-within /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+      <Setter Property="BorderThickness" Value="{Binding BorderThickness, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.5"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+    </Style>
+    <Style Selector="^:disabled /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
+      <Setter Property="BorderBrush" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}"/>
+    </Style>
+  </ControlTheme>
+  <ControlTheme x:Key="FocusGlowTextBox" TargetType="TextBox" BasedOn="{StaticResource InputTextBoxTheme}"/>
 
   <!-- MainWindow.xaml:280. The WPF template replaced wholesale, and so does this one: a
        ControlTheme's Resources are NOT in the DynamicResource lookup path of the templated parts,
@@ -786,6 +884,139 @@
       <Style Selector="^:pointerover /template/ Border#bd">
           <Setter Property="Background" Value="{DynamicResource DangerBrush}"/>
       </Style>
+  </ControlTheme>
+
+  <!-- WPF TabButton/TabButtonActive, reused from the existing quest view port. -->
+  <ControlTheme x:Key="TabButton" TargetType="Button">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Padding" Value="6,6"/>
+    <Setter Property="MinWidth" Value="65"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Button">
+        <Border x:Name="border" Background="Transparent"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="6" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#border">
+      <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="TabButtonActive" TargetType="Button">
+    <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Padding" Value="6,6"/>
+    <Setter Property="MinWidth" Value="65"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Button">
+        <Border x:Name="bg" Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="6" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#bg">
+      <Setter Property="Background" Value="{DynamicResource PinkButtonHoveredBrush}"/>
+    </Style>
+  </ControlTheme>
+
+        <!-- WPF Controls.xaml:563. Standard body button, 8px corners; Background / BorderBrush /
+             Padding stay TemplateBound so every inline setter at the call sites keeps working. -->
+        <ControlTheme x:Key="DeeperRoundButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="8"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.85"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.70"/>
+            </Style>
+            <Style Selector="^:disabled /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.40"/>
+            </Style>
+        </ControlTheme>
+
+        <!-- WPF Controls.xaml:597. Icon-only buttons, 6px corners, no size defaults. -->
+        <ControlTheme x:Key="DeeperRoundIconButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="6"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.85"/>
+            </Style>
+            <Style Selector="^:pressed /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.70"/>
+            </Style>
+            <Style Selector="^:disabled /template/ Border#bd">
+                <Setter Property="Opacity" Value="0.40"/>
+            </Style>
+        </ControlTheme>
+
+
+  <!-- WPF Controls.xaml:629. The creator lock's checked plate is six-pixel rounded. -->
+  <ControlTheme x:Key="DeeperRoundIconToggleButton" TargetType="ToggleButton">
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="bd" CornerRadius="6" Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:checked /template/ Border#bd">
+      <Setter Property="Background" Value="{DynamicResource DeeperAccentTransparent20Brush}"/>
+    </Style>
+    <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Opacity" Value="0.85"/></Style>
   </ControlTheme>
 
 </ResourceDictionary>

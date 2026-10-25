@@ -17,6 +17,8 @@ using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Tours;
+using ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -54,8 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     ///     against a sibling; <c>Topmost</c> in the markup is the whole z-order story.</item>
     ///   <item><b>The deck and the demos are the real ones</b>: <c>EmiBookCards</c>,
     ///     <c>EmiBookDemos</c> and <c>EmiPixelCanvas</c> live in Core; this window blits the buffer
-    ///     into its own <c>WriteableBitmap</c>. The glyphs and the fonts are still stubs, each marked
-    ///     <c>ponytail:</c> below.</item>
+    ///     into its own <c>WriteableBitmap</c>. Core rail painters and the bundled fonts
+    ///     match the WPF book.</item>
     ///   <item><b>The emphasis parser is the real one.</b> <c>EmiBookText.Parse</c> is already in
     ///     Core, so the <c>*asterisk*</c> runs are ported rather than approximated.
     ///     <c>EmiBookLayout.Place</c> makes the side/width decision.</item>
@@ -281,26 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         // ---------------------------------------------------------------- wiring
 
-        /// <summary>
-        /// Press Start 2P for the chrome and the title, the mono body face for the copy - as
-        /// NAME CHAINS, which is the road EmiRingWindow and EmiDeskWindow.axaml already take on this
-        /// head. WPF loads both through a pack:// base URI out of <c>Resources/emi/fonts</c> and its
-        /// header warns that naming a font in markup finds installed fonts only; on Avalonia there
-        /// is nothing to name yet either way.
-        ///
-        /// <para>ponytail: the blocker is NOT EmiFace, and it is not a move to Core. Both faces are
-        /// already in the repo at <c>Assets/emi/fonts/PressStart2P-latin.ttf</c> and
-        /// <c>NotoSansMono-latin.ttf</c>; what is missing is an <c>AvaloniaResource</c> link for
-        /// <c>Assets/emi/fonts/</c> in CCP.Avalonia.csproj, which this layer does not own. Until
-        /// that one line lands the chain falls through to the system mono face - so the pixel
-        /// look is missing, nothing is blank, and the panel lights up the moment the link is
-        /// added or a reader has the font installed.</para>
-        ///
-        /// <para>The SIZES are ported verbatim because they are the layout - 16 for the title, 8 for
-        /// the chrome, one whole number of pixels per 8x8 cell. At those sizes a proportional
-        /// fallback reads much smaller than Press Start 2P does, which is why the chrome looks
-        /// small on a machine without it.</para>
-        /// </summary>
+        /// <summary>WPF's bundled pixel chrome and monospace body faces, at the same sizes.</summary>
         private void ApplyFonts()
         {
             try
@@ -333,11 +316,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         }
 
         /// <summary><c>EmiFace.PixelFont</c>'s chain, the same string EmiRingWindow uses.</summary>
-        private static readonly FontFamily PixelFont = new("Press Start 2P, Consolas, monospace");
+        private static readonly FontFamily PixelFont = new("avares://CCP.Avalonia/Resources/emi/fonts#Press Start 2P, Consolas, monospace");
 
         /// <summary><c>EmiFace.FaceFont</c>'s chain, the same one EmiDeskWindow.axaml carries.</summary>
         private static readonly FontFamily FaceFont =
-            new("Noto Sans Mono, DejaVu Sans Mono, Consolas, monospace");
+            new("avares://CCP.Avalonia/Resources/emi/fonts#Noto Sans Mono, DejaVu Sans Mono, Consolas, monospace");
 
         /// <summary>WPF BtnCompleteGuide: the website manual (EmiCodex.OpenManualInBrowser). Test seam.</summary>
         internal static Action OpenManual = ConditioningControlPanel.Avalonia.Views.Windows.Codex.OpenManualInBrowser;
@@ -345,6 +328,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void WireControls()
         {
             _btnClose.Click += (_, _) => CloseBook();
+            this.FindControl<Button>("BtnFirstShow")!.Click += (_, _) =>
+            {
+                var owner = _owner;
+                CloseBook();
+                // Native Wayland refuses the show after the book is gone: put the book back.
+                if (!FirstShowService.Open(TutorialHeadHooks.Shell)) owner?.OpenBook();
+            };
             this.FindControl<Button>("BtnCompleteGuide")!.Click += (_, _) => OpenManual();
             _btnPrev.Click += (_, _) => Step(-1);
             _btnNext.Click += (_, _) => Step(+1);
@@ -897,48 +887,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             _btnGo.IsEnabled = TourReady();
         }
 
-        /// <summary>
-        /// Can the walk-through actually run? WPF's answer is <c>EmiOffers.TourFeasible</c>
-        /// (ConditioningControlPanel/Services/EmiDesk/EmiOffers.cs), four conditions.
-        ///
-        /// <para>ponytail: the old note here said all four need "a move to Core", and THREE of them
-        /// no longer do - RE-AUDITED 2026-09-04 against Core rather than believed:</para>
-        /// <list type="bullet">
-        ///   <item><c>Application.Current.MainWindow is MainWindow</c> resolves: the desktop
-        ///         lifetime's MainWindow is what <c>App.MainWindowRef</c> was, the resolution
-        ///         <c>EmiDeskWindow.AppMainWindow</c> already uses.</item>
-        ///   <item><c>SessionEngine.Active?.IsRunning</c> is <c>CoreSession.IsSessionRunning</c>
-        ///         (a session, not the plain engine), in Core. Unseeded on this head, and "no session is running" is the truth here,
-        ///         not a placebo.</item>
-        ///   <item><c>App.Tutorial?.IsActive</c> is <c>CoreTutorial.IsActive</c>, in Core since the
-        ///         tutorial seam landed, and seeded here by <c>Tours.TutorialHead.Seed</c>.</item>
-        ///   <item><c>EmiState.HasTourDone(tour)</c>, the already-walked latch, is the one that is
-        ///         genuinely still head-side (Services/EmiDesk/EmiState.cs).</item>
-        /// </list>
-        /// <para>So this is NOT restored, and deliberately: the button cannot start a tour (see
-        /// <see cref="Go"/>), so gating it on the running-tour checks would imply a tour it never
-        /// opens. The thing that would make the button honest
-        /// is <see cref="Go"/> being able to START a tour, and it cannot - see there. It stays lit
-        /// so the card renders in its full shape, which is what the render proves.</para>
-        /// </summary>
-        private static bool TourReady() => true;
+        /// <summary>WPF TourReady: a shell, no running session and no active tour. The completion
+        /// latch prevents unsolicited offers, never a replay requested from the book.</summary>
+        private static bool TourReady() => TutorialHeadHooks.Shell != null &&
+            !CoreSession.IsSessionRunning && !CoreTutorial.IsActive;
 
-        /// <summary>
-        /// ponytail: the tour half is NOT blocked on a move any more and the old note was wrong to
-        /// say so. <c>CoreTutorial.Start(tourName)</c> is in Core and seeded by
-        /// <c>Tours.TutorialHead.Seed</c>; what is missing is this button calling it (and the
-        /// HasTourDone latch above), so it does not walk you anywhere yet. The door half
-        /// is <c>EmiTargets.Open</c>. Both ends of the button are a
-        /// detour into the app. The door half is wired: straight through <see cref="EmiTargets"/>,
-        /// the ring's own Pick, so a door opened from the book is a door used. The
-        /// <c>effectFired</c> moment WPF fires after it has no <c>App.EmiDesk.Fire</c> here.
         private void Go()
         {
             var cards = EmiBookCards.All;
             if (_index < 0 || _index >= cards.Count) return;
             var card = cards[_index];
-            if (card.Target != null) { EmiTargets.Find(card.Target)?.Open(); return; }
-            Log.Debug("[EmiDesk] book tour for {Card} is not wired on this head", card.Id);
+            // WPF wraps the detour the same way (EmiBookWindow.xaml.cs:834); this head has no
+            // UI-thread exception handler, so a throw here would take the app down.
+            try
+            {
+                if (card.Target != null) { EmiTargets.Find(card.Target)?.Open(); return; }
+                if (card.Tour == null || !TourReady()) return;
+                if (!Enum.TryParse<TutorialType>(card.Tour, out var type) || !Enum.IsDefined(type))
+                {
+                    Log.Warning("[EmiDesk] book card {Card} names an unknown tour {Tour}", card.Id, card.Tour);
+                    return;
+                }
+                CloseBook();
+                CoreTutorial.Start(card.Tour);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "[EmiDesk] book detour failed for {Card}", card.Id);
+            }
+            // ponytail: bookGo/bookTour moments need the desk's moment bus (wire-win-emi-book-b).
         }
 
         private void RenderTabs()
@@ -958,6 +935,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 }
                 catch (Exception ex) { Log.Debug(ex, "[EmiDesk] book tab {Tab} render failed", i); }
             }
+        }
+
+        private static readonly Dictionary<string, WriteableBitmap> Glyphs = new(StringComparer.Ordinal);
+
+        /// <summary>Static rail art: blit once on the UI thread, then reuse across card flips.</summary>
+        private static WriteableBitmap? Glyph(string id)
+        {
+            if (Glyphs.TryGetValue(id, out var cached)) return cached;
+            int size = EmiBookGlyphPainters.Size;
+            var canvas = new EmiPixelCanvas(size, size);
+            if (!EmiBookGlyphPainters.Draw(id, canvas)) return null;
+            var bitmap = new WriteableBitmap(new PixelSize(size, size), new Vector(96, 96), PixelFormat.Bgra8888, AlphaFormat.Unpremul);
+            using (var frame = bitmap.Lock())
+                for (int y = 0; y < size; y++)
+                    Marshal.Copy((int[])(object)canvas.Pixels, y * size, frame.Address + y * frame.RowBytes, size);
+            Glyphs.Add(id, bitmap);
+            return bitmap;
         }
 
         /// <summary>
@@ -986,17 +980,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     chip.Classes.Set("on", here);
                     ToolTip.SetTip(chip, card.Title);
 
-                    // ponytail: needs EmiBookGlyphs.For (WPF head; 16-cell glyphs blown up 2x with
-                    // nearest neighbour). AUDITED 2026-09-04: that file does NOT move whole and
-                    // should not be asked to. Its 26 painters and the Disc / PlayHead / DownHead
-                    // primitives are pure and belong in Core beside the deck; For() and Build()
-                    // return System.Windows.Media.ImageSource and are the head's half by nature -
-                    // so this splits the same way EmiPixelCanvas does (see StartClock above), and
-                    // the two are one job. With no glyph the original's
-                    // OWN fallback runs - a card with no glyph still gets a chip, because skipping
-                    // it would silently drop a page out of the only navigation that names its
-                    // destinations.
-                    chip.Content = new Border { Width = 10, Height = 10, Background = here ? NudgeHot : NudgePlain };
+                    var source = Glyph(card.Id);
+                    if (source != null)
+                    {
+                        var image = new Image { Source = source, Width = 32, Height = 32, Opacity = here ? 1 : 0.5 };
+                        RenderOptions.SetBitmapInterpolationMode(image, BitmapInterpolationMode.None);
+                        chip.Content = image;
+                    }
+                    else chip.Content = new Border { Width = 10, Height = 10, Background = here ? NudgeHot : NudgePlain };
 
                     chip.Click += (_, _) => SelectCard(target, speak: true);
                     _rail.Children.Add(chip);
@@ -1055,7 +1046,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         ///
         /// <para>ponytail: the OWNER is here now, so this is one member away. What is missing is
         /// <c>EmiDeskWindow.SpeakLine</c> and the <c>LineDraw</c> record, and those are blocked on
-        /// <c>EmiLineEngine</c> + <c>EmiChains.Player</c>.
+        /// <c>EmiLineEngine</c> + <c>EmiChainPlayer</c> (WPF head).
         /// EmiLineEngine is in Core now (CCP.Core/Services/EmiDesk, WPF seeds its ask probes;
         /// unset here means no offers);
         /// EmiChains is still WPF-only, its whole head coupling is Player's DispatcherTimer, one

@@ -1,45 +1,18 @@
-// PORTED-IN-PART from ConditioningControlPanel/MainWindow/MainWindow.TabFxTakeoverLabStatus.cs
-// (336 lines). The status-pulse half is LIVE here; the Lab half was already a tombstone in WPF.
-//
-// What is real: the registry (_statusPulses), its single decision point (ApplyStatusPulse) and the
-// four per-tab entry points. A dot breathes only while its feature genuinely runs, which is the
-// whole "zero idle loops" rule the WPF file is held to. WPF's DoubleAnimation with AutoReverse +
-// RepeatBehavior.Forever over DropShadowEffect.Opacity becomes a BeatLoop on the window's 30 fps
-// beat writing the same property on the same SineEase InOut curve (lag fix, P82: an infinite
-// Animation kept the whole window composing at render rate).
-//
-// On WPF each status tab calls its Set*StatusPulse from the state-change method it already has.
-// Here SetBlinkTrainerStatusPulse is called by BlinkTrainerTabView.RefreshStatusRow and
-// SetHapticsStatusPulse as below; check SheListening/Awareness callers before assuming they are wired.
-//
-// Deviations, each because the symbol is not on this head:
-//   * MotionFx.AllowAmbientLoops and PerformanceProfile.CurrentTier / AllowGlow / MaxGlowBlurRadius
-//     (ConditioningControlPanel/Services/MotionFx.cs, /Services/PerformanceProfile.cs) are not in
-//     Core. The gate keeps the two halves that ARE here - window focus and not-minimised - and the
-//     blur is used unclamped. Restore both when they move: two `&&` and one Math.Min.
-//   * FxTheme.GlowColor (ConditioningControlPanel/Services/FxTheme.cs) is the mod's glow. This head
-//     resolves the same slot through the FxGlowColor theme key, which is what a mod switch
-//     rewrites, so the retint on CoreMods.ModChanged still lands.
-//   * AmbientFrameRate (Timeline.SetDesiredFrameRate) has no Avalonia twin - same reason as
-//     MainShellWindow.AmbientFx.cs's note.
-//   * Tab visibility: WPF's IsVisibleChanged becomes a PropertyChanged filter on IsVisibleProperty,
-//     which is exactly the property ShowTab writes.
-//
-// SetHapticsStatusPulse is called by HapticsTabView.RefreshHapticConnectionUi with the real
-// connection state. The lookup is TWO hops, StudioRack -> PanelHaptics -> HapticStatusDot, because
-// the dot lives in HapticsTabView's own namescope.
+// WPF MainWindow.TabFxTakeoverLabStatus.cs: the four status intents and global ambient gates.
+// Avalonia uses sibling Border.BoxShadow layers on the shared beat; the feature owns the dot's
+// fill, and the dot's opacity is pinned to 1 (only the sibling layer breathes). Lab remains retired, and the Takeover orb owns its own Skia clock.
+// Awareness: AwarenessTabView.UpdateStatusIndicator calls SetAwarenessStatusPulse with the master
+// switch, as WPF UpdateAwarenessStatusIndicator(masterOn) does (MainWindow.Awareness.cs:78,375).
 
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using Avalonia;
-using Avalonia.Animation;
-using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Avalonia.Controls;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Models;
 using Serilog;
 
@@ -71,13 +44,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             internal bool Wanted;
             internal double Blur;
             internal Color Tint;
-            internal DropShadowEffect? Glow;
+            internal Border? Glow;
+            internal IDisposable? Visibility;
             internal BeatLoop? Clock;
         }
 
-        /// <summary>Window focus + not minimised: the ambient gate every loop in this file passes
-        /// through. See the header for the two halves that are missing.</summary>
-        internal bool Pr4aAmbientAllowed => IsActive && WindowState != WindowState.Minimized;
+        /// <summary>WPF focus, minimisation, motion and performance gates through the existing head environment.</summary>
+        internal bool Pr4aAmbientAllowed => IsActive && WindowState != WindowState.Minimized
+            && AmbientFxCanvas.Env.AllowAmbientLoops;
 
         /// <summary>The mod's glow colour, from the one theme key a mod switch rewrites. The
         /// fallback is the shipped FxGlowColor, so a missing key tints rather than throwing.</summary>
@@ -106,11 +80,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 HookPr4aTab(Named<Control>("BlinkTrainerTab"));
                 HookPr4aTab(Named<Control>("SheListeningTab"));
                 HookPr4aTab(Named<Control>("AwarenessTab"));
+                HookPr4aTab(StudioRack);
+                HookPr4aTab(StudioRack?.HapticsPanel);
+                AmbientFxCanvas.Env.MotionGateChanged += ApplyPr4aFxLoops;
 
                 CoreMods.ModChanged += OnPr4aModChanged;
                 // ModChanged is a STATIC event and this is an instance handler, so the
                 // subscription would root the window for the life of the process.
-                Closed += (_, _) => CoreMods.ModChanged -= OnPr4aModChanged;
+                Closed += (_, _) =>
+                {
+                    CoreMods.ModChanged -= OnPr4aModChanged;
+                    AmbientFxCanvas.Env.MotionGateChanged -= ApplyPr4aFxLoops;
+                    foreach (var req in _statusPulses.Values)
+                    {
+                        StopStatusPulseClock(req);
+                        req.Visibility?.Dispose();
+                        if (req.Glow != null) req.Glow.IsVisible = false;
+                    }
+                    _statusPulses.Clear();
+                };
             }
             catch (Exception ex) { Log.Warning(ex, "EnsurePr4aFx failed"); }
         }
@@ -134,7 +122,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnPr4aTabPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
         {
             if (e.Property != Visual.IsVisibleProperty) return;
-            try { ApplyPr4aFxLoops(); }
+            try
+            {
+                // WPF's arrival seed for an auto-connected device is not needed here: HapticsTabView's
+                // attach (RefreshHapticToys -> RefreshHapticConnectionUi) reports it to the shell.
+                ApplyPr4aFxLoops();
+            }
             catch (Exception ex) { Log.Debug("OnPr4aTabPropertyChanged: {E}", ex.Message); }
         }
 
@@ -149,8 +142,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     foreach (var req in _statusPulses.Values)
                     {
                         req.Tint = tint;
-                        if (req.Glow != null) req.Glow.Color = tint;
+                        if (req.Glow != null) PaintStatusGlow(req);
                     }
+                    PremiumGateFx.RefreshAll();
                 }
                 catch (Exception ex) { Log.Debug("OnPr4aModChanged: {E}", ex.Message); }
             }
@@ -177,9 +171,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Records whether a status element wants to pulse and re-evaluates it. The ONLY entry
         /// point, so "the feature stopped" and "the window lost focus" land in the same place.
         /// </summary>
-        private void SetStatusPulse(Control? dot, bool on, bool large = false)
+        private void SetStatusPulse(Control? dot, Border? glow, bool on, bool large = false)
         {
-            if (dot == null) return;
+            if (dot == null || glow == null) return;
             try
             {
                 if (!_statusPulses.TryGetValue(dot, out var req))
@@ -188,6 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _statusPulses[dot] = req = new StatusPulseRequest();
                 }
                 req.Wanted = on;
+                req.Glow = glow;
                 req.Blur = large ? StatusPulseBlurLarge : StatusPulseBlurSmall;
                 req.Tint = Pr4aGlowColor;
                 ApplyStatusPulse(dot, req);
@@ -204,10 +199,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Debug("ApplyPr4aStatusPulses: {E}", ex.Message); }
         }
 
+        /// <summary>Paints the sibling glow layer in the dot's tint, blur capped by the tier.</summary>
+        private static void PaintStatusGlow(StatusPulseRequest req)
+        {
+            if (req.Glow == null) return;
+            var tier = AmbientFxCanvas.Env.CurrentTier;
+            req.Glow.Background = new SolidColorBrush(req.Tint);
+            req.Glow.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Color = req.Tint,
+                Blur = Math.Min(req.Blur, AmbientFxCanvas.Env.MaxGlowBlurRadius(tier)),
+            });
+        }
+
         /// <summary>
-        /// One dot, one decision. The pulse is a breathing glow BEHIND the dot rather than an
+        /// One dot, one decision. The pulse is a breathing sibling shadow BEHIND the dot rather than an
         /// opacity blink ON it: a status light that keeps disappearing reads as a fault, one that
-        /// breathes reads as a pulse. Only the effect's Opacity moves - an animated BlurRadius
+        /// breathes reads as a pulse. Only the sibling layer's Opacity moves - an animated BlurRadius
         /// re-rasterises the kernel every frame, which is the expensive part.
         ///
         /// Off means the dot goes back to exactly what its own code painted: the local Effect is
@@ -218,35 +226,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             try
             {
-                bool run = req.Wanted && dot.IsEffectivelyVisible && Pr4aAmbientAllowed;
-
+                if (req.Glow is not { } glow) return;
+                if (req.Visibility == null && dot.IsAttachedToVisualTree())
+                    req.Visibility = EffectiveVisibility.Watch(dot, ApplyPr4aFxLoops);
+                bool run = req.Wanted && dot.IsEffectivelyVisible && Pr4aAmbientAllowed
+                    && AmbientFxCanvas.Env.AllowGlow(AmbientFxCanvas.Env.CurrentTier);
+                // Neither the dot's fill nor its opacity carries the animation.
+                dot.ClearValue(Visual.EffectProperty);
+                dot.Opacity = 1;
                 if (!run)
                 {
                     StopStatusPulseClock(req);
-                    req.Glow = null;
-                    dot.Opacity = 1;
-                    dot.ClearValue(Visual.EffectProperty);
+                    glow.IsVisible = false;
+                    glow.Opacity = 1;
                     return;
                 }
-
-                if (req.Glow != null && ReferenceEquals(dot.Effect, req.Glow))
-                    return;                          // already breathing, leave the clock alone
-
-                StopStatusPulseClock(req);
-                req.Glow = new DropShadowEffect
-                {
-                    Color = req.Tint,
-                    BlurRadius = req.Blur,
-                    OffsetX = 0,
-                    OffsetY = 0,
-                    Opacity = StatusPulseMaxOpacity,
-                };
-                dot.Effect = req.Glow;
-
-                // AutoReverse + SineEase InOut over 2.8 s on the 30 fps beat, not an infinite Animation (P82).
-                var glow = req.Glow;
-                req.Clock = new BeatLoop(dot, t => glow.Opacity =
-                    StatusPulseMinOpacity + (StatusPulseMaxOpacity - StatusPulseMinOpacity) * BeatLoop.Breath(t, StatusPulseSeconds));
+                PaintStatusGlow(req);
+                glow.IsVisible = true;
+                if (req.Clock?.IsRunning == true) return;
+                req.Clock = new BeatLoop(glow, t => glow.Opacity = Math.Clamp(
+                    StatusPulseMinOpacity + (StatusPulseMaxOpacity - StatusPulseMinOpacity)
+                    * BeatLoop.Breath(t, StatusPulseSeconds), 0, 1));
                 req.Clock.Start();
             }
             catch (Exception ex) { Log.Debug("ApplyStatusPulse: {E}", ex.Message); }
@@ -267,30 +267,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void SetBlinkTrainerStatusPulse(bool running)
         {
             EnsurePr4aFx();
-            SetStatusPulse(Named<Control>("BlinkTrainerTab")?.FindControl<Control>("BlinkTrainerStatusDot"), running);
+            var tab = Named<Control>("BlinkTrainerTab");
+            SetStatusPulse(tab?.FindControl<Control>("BlinkTrainerStatusDot"),
+                tab?.FindControl<Border>("BlinkTrainerStatusGlow"), running);
         }
 
         /// <summary>Haptics: the connection dot breathes while a device is actually connected.</summary>
         internal void SetHapticsStatusPulse(bool connected)
         {
             EnsurePr4aFx();
-            SetStatusPulse(
-                StudioRack?.FindControl<Control>("PanelHaptics")?.FindControl<Control>("HapticStatusDot"),
-                connected);
+            var tab = StudioRack?.HapticsPanel;
+            SetStatusPulse(tab?.FindControl<Control>("HapticStatusDot"),
+                tab?.FindControl<Border>("HapticStatusGlow"), connected);
         }
 
         /// <summary>She's Listening: the 64px mic disc breathes while the mic is armed.</summary>
         internal void SetSheListeningStatusPulse(bool armed)
         {
             EnsurePr4aFx();
-            SetStatusPulse(Named<Control>("SheListeningTab")?.FindControl<Control>("SL_StatusDot"), armed, large: true);
+            var tab = Named<Control>("SheListeningTab");
+            SetStatusPulse(tab?.FindControl<Control>("SL_StatusDot"),
+                tab?.FindControl<Border>("SL_StatusGlow"), armed, large: true);
         }
 
         /// <summary>Awareness: the dot breathes while the engine is live.</summary>
         internal void SetAwarenessStatusPulse(bool live)
         {
             EnsurePr4aFx();
-            SetStatusPulse(Named<Control>("AwarenessTab")?.FindControl<Control>("AwarenessStatusDot"), live);
+            var tab = Named<Control>("AwarenessTab");
+            SetStatusPulse(tab?.FindControl<Control>("AwarenessStatusDot"),
+                tab?.FindControl<Border>("AwarenessStatusGlow"), live);
         }
     }
 }

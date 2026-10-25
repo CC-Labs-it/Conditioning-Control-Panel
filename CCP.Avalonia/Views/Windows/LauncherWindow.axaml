@@ -8,10 +8,11 @@
         Title="CC Labs"
         Icon="avares://CCP.Avalonia/Resources/app.ico"
         Height="800" Width="1280" MinHeight="680" MinWidth="1000"
-        Background="{DynamicResource DarkerBgBrush}"
+        Background="Transparent" TransparencyLevelHint="Transparent"
+        Win32Properties.WindowCornerPreference="Round"
         WindowStartupLocation="CenterScreen"
         SystemDecorations="None" CanResize="True"
-        FontFamily="Segoe UI">
+        FontFamily="Segoe UI" DragDrop.AllowDrop="True">
 
     <Window.Resources>
         <ControlTheme x:Key="LauncherCta" TargetType="Button">
@@ -143,6 +144,9 @@
     </Window.Styles>
 
     <!-- Backdrop, event layers and edge: WPF LauncherWindow.xaml:235-334 and 590-635; LauncherWindow.Fx.cs drives them. -->
+    <!-- Rounded corners (WPF Edge.cs OnSourceInitialized: DWM round, the edge's CornerRadius 8 follows it).
+         Windows gets the same DWM call; elsewhere the window is transparent and this frame clips to 8. -->
+    <Border x:Name="WindowFrame" CornerRadius="8" ClipToBounds="True" Background="{DynamicResource DarkerBgBrush}">
     <Panel x:Name="RootGrid">
     <Border IsHitTestVisible="False">
         <Border.Background>
@@ -400,7 +404,7 @@
         <Border BorderBrush="{DynamicResource PinkBrush}" BorderThickness="4" CornerRadius="8" Opacity="0.85"/>
         <Border x:Name="EdgeGlint" BorderThickness="4" CornerRadius="8" Opacity="0">
             <Border.BorderBrush>
-                <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%" TransformOrigin="50%,50%">
+                <LinearGradientBrush StartPoint="0%,50%" EndPoint="100%,50%" TransformOrigin="0%,0%">
                     <GradientStop Color="#00FFFFFF" Offset="0.40"/>
                     <GradientStop Color="#F0FFFFFF" Offset="0.50"/>
                     <GradientStop Color="#00FFFFFF" Offset="0.60"/>
@@ -409,4 +413,5 @@
         </Border>
     </Panel>
     </Panel>
+    </Border>
 </Window>
