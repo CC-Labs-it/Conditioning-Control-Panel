@@ -9,8 +9,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
 public partial class MainShellWindow
 {
+    // WPF xaml.cs:3662 reruns only ApplyModFeatureNames on a language change.
     private void OnModShellLanguageChanged(object? sender, EventArgs e) =>
-        Dispatcher.UIThread.Post(RefreshModShell);
+        Dispatcher.UIThread.Post(ApplyModFeatureNames);
 
     // Repaint only: external activations must not clear a pending choice or reapply presets.
     private void RefreshModShell()

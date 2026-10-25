@@ -44,8 +44,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (AvApp.Mods is not { } mods) return;   // headless render: keep the sample chip
             _modSwitchHost = this;
             Closed += (_, _) => { if (_modSwitchHost == this) _modSwitchHost = null; };
-            InitializeModSelector();
-            RefreshThemeAwareElements();
             RefreshModShell();
             LocalizationManager.Instance.LanguageChanged += OnModShellLanguageChanged;
             Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= OnModShellLanguageChanged;

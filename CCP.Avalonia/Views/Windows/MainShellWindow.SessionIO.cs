@@ -68,6 +68,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Media;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using Serilog;
@@ -145,9 +146,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 catch (Exception ex)
                 {
                     Log.Error(ex, "Failed to open dropped media");
-                    var host = choice == "play" ? "Player" : "Editor";
-                    await Dialogs.MessageDialog.ShowAsync(this, $"Open {host} failed",
-                        $"Couldn't open Deeper {host}:\n\n{ex.GetType().Name}: {ex.Message}");
+                    var host = choice switch { "play" => "Deeper Player", "edit" => "Deeper Editor", _ => "Library import" };
+                    await Dialogs.MessageDialog.ShowAsync(this, $"{host} failed",
+                        $"Couldn't complete {host}:\n\n{ex.GetType().Name}: {ex.Message}");
                 }
                 return;
             }
@@ -230,28 +231,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private Window? _mediaDropDialog;
 
+        // WPF ShowMediaDropChoiceDialog (MainWindow.Presets.cs:825-935): DarkerBg card with a pink
+        // border and pink bold title, three pink buttons and a faint Cancel link. TextBlock
+        // children, not Content strings: Avalonia parses "_" as an access key (CLAUDE.md trap 1).
         private async Task<string?> ShowMediaDropChoiceAsync(string path)
         {
+            T? Res<T>(string key) where T : class => this.TryFindResource(key, out var r) ? r as T : null;
+            var pink = Res<IBrush>("PinkBrush");
             var dialog = new Window
             {
-                Title = Loc.Get("dlg_media_drop_title"), Width = 460, CanResize = false,
-                SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner
+                Title = Loc.Get("dlg_media_drop_title"), Width = 460, CanResize = false, MinHeight = 240, MaxHeight = 600,
+                SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = Res<IBrush>("DarkerBgBrush")
             };
             var scope = new NameScope();
             NameScope.SetNameScope(dialog, scope);
-            var stack = new StackPanel { Margin = new global::Avalonia.Thickness(20), Spacing = 8 };
-            stack.Children.Add(new TextBlock { Text = dialog.Title, FontSize = 18 });
-            stack.Children.Add(new TextBlock { Text = Path.GetFileName(path), TextWrapping = global::Avalonia.Media.TextWrapping.Wrap });
+            var stack = new StackPanel();
+            stack.Children.Add(new TextBlock { Text = dialog.Title, Foreground = pink, FontSize = 18, FontWeight = FontWeight.Bold,
+                HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center, Margin = new global::Avalonia.Thickness(0, 0, 0, 8) });
+            stack.Children.Add(new TextBlock { Text = Path.GetFileName(path), Foreground = Brushes.White, FontSize = 12, Opacity = 0.75,
+                TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center, Margin = new global::Avalonia.Thickness(0, 0, 0, 16) });
             foreach (var action in new[] { "play", "edit", "library", "cancel" })
             {
                 var value = action;
-                var button = new Button { Name = "MediaDrop_" + action, Content = Loc.Get("dlg_media_drop_" + action),
-                    HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch };
+                var cancel = action == "cancel";
+                var button = new Button
+                {
+                    Name = "MediaDrop_" + action,
+                    Theme = Res<global::Avalonia.Styling.ControlTheme>(cancel ? "SecondaryButton" : "ActionButton"),
+                    Content = new TextBlock { Text = Loc.Get("dlg_media_drop_" + action) },
+                    HorizontalAlignment = cancel ? global::Avalonia.Layout.HorizontalAlignment.Center : global::Avalonia.Layout.HorizontalAlignment.Stretch,
+                    Padding = cancel ? new global::Avalonia.Thickness(8, 6) : new global::Avalonia.Thickness(20, 12),
+                    Margin = new global::Avalonia.Thickness(0, cancel ? 8 : 0, 0, cancel ? 0 : 8),
+                    FontSize = cancel ? 11 : 13, FontWeight = cancel ? FontWeight.Normal : FontWeight.SemiBold
+                };
+                if (cancel) { button.Background = Brushes.Transparent; button.Opacity = 0.7; }
                 scope.Register(button.Name!, button);
                 button.Click += (_, _) => dialog.Close(value);
                 stack.Children.Add(button);
             }
-            dialog.Content = stack;
+            dialog.Content = new Border
+            {
+                Background = Res<IBrush>("DarkerBgBrush"), BorderBrush = pink, BorderThickness = new global::Avalonia.Thickness(2),
+                CornerRadius = new global::Avalonia.CornerRadius(12), Padding = new global::Avalonia.Thickness(20), Child = stack
+            };
             _mediaDropDialog = dialog;
             try { return await dialog.ShowDialogSafe<string?>(this); }
             finally { if (_mediaDropDialog == dialog) _mediaDropDialog = null; }

@@ -79,7 +79,16 @@ public sealed class ModChoiceTests
             var pending = shell.ImportDroppedFilesAsync(new[] { path });
             var dialog = await Owned<Window>(shell);
             foreach (var action in new[] { "play", "edit", "library", "cancel" })
-                Assert.NotNull(dialog.FindControl<Button>("MediaDrop_" + action));
+            {
+                var button = dialog.FindControl<Button>("MediaDrop_" + action)!;
+                Assert.IsType<TextBlock>(button.Content);
+                Assert.True(shell.TryFindResource(action == "cancel" ? "SecondaryButton" : "ActionButton", out var theme));
+                Assert.Same(theme, button.Theme);
+            }
+            Assert.True(shell.TryFindResource("PinkBrush", out var pink));
+            var card = Assert.IsType<Border>(dialog.Content);
+            Assert.Same(pink, card.BorderBrush);
+            Assert.Equal(FontWeight.Bold, Assert.IsType<StackPanel>(card.Child).Children.OfType<TextBlock>().First().FontWeight);
             shell.StopDroppedMediaForPanic();
             await pending;
             Assert.False(dialog.IsVisible);
@@ -100,9 +109,10 @@ public sealed class ModChoiceTests
             var pending = shell.ImportDroppedFilesAsync(new[] { path });
             var dialog = await Owned<Window>(shell);
             dialog.FindControl<Button>("MediaDrop_" + action)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            var host = await Owned<Window>(shell);
-            if (action == "edit") Assert.IsType<ConditioningControlPanel.Avalonia.Views.Deeper.DeeperEditorWindow>(host);
-            else Assert.IsType<ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow>(host);
+            // By type: the choice dialog can still be listed while its Close completes.
+            Window host = action == "edit"
+                ? await Owned<ConditioningControlPanel.Avalonia.Views.Deeper.DeeperEditorWindow>(shell)
+                : await Owned<ConditioningControlPanel.Avalonia.Views.Deeper.EnhancementPlayerWindow>(shell);
             Assert.True(host.IsVisible);
             shell.StopDroppedMediaForPanic();
             host.Close();
