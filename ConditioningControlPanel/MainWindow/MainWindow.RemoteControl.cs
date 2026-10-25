@@ -686,9 +686,9 @@ namespace ConditioningControlPanel
         /// Refreshes the header listing pill and the Session Code confirmation
         /// banner from the current remote-session state:
         ///   • no active session            → pill hidden, banner hidden
-        ///   • active, not opted in         → "Private only"
-        ///   • active, opted in, no claimer → "Listed" + confirmation banner
-        ///   • active, opted in, claimed    → "Claimed" + confirmation banner
+        ///   • active, not opted in         → "Remote: private"
+        ///   • active, opted in, no claimer → "Remote: listed" + confirmation banner
+        ///   • active, opted in, claimed    → "Remote: claimed" + confirmation banner
         /// </summary>
         private void UpdateDirectoryListingStatus()
         {
@@ -714,21 +714,21 @@ namespace ConditioningControlPanel
             string tip;
             if (!_directoryOptedIn)
             {
-                text = "Private only";
+                text = "Remote: private";
                 dot = System.Windows.Media.Color.FromRgb(0x8A, 0x8A, 0xA0); // muted grey
-                tip = "Your session is private — you are not listed in the Available Subjects Directory.";
+                tip = "Your Remote session is private: you are not listed in the Available Subjects Directory. Goon tables have their own Who sees this table switch.";
             }
             else if (claimed)
             {
-                text = "Claimed";
+                text = "Remote: claimed";
                 dot = System.Windows.Media.Color.FromRgb(0x00, 0xFF, 0x88); // green
-                tip = "A controller has claimed your directory listing.";
+                tip = "A controller has claimed your Remote listing.";
             }
             else
             {
-                text = "Listed";
+                text = "Remote: listed";
                 dot = System.Windows.Media.Color.FromRgb(0xB4, 0x7B, 0xFF); // neon purple (directory accent)
-                tip = "You're listed in the Available Subjects Directory and waiting to be claimed.";
+                tip = "Your Remote session is listed in the Available Subjects Directory and waiting to be claimed.";
             }
 
             if (TxtDirectoryStatus != null) TxtDirectoryStatus.Text = text;
@@ -952,7 +952,6 @@ namespace ConditioningControlPanel
         {
             try
             {
-                if (_remoteOverlayBrowserRevealed == reveal) return;
                 _remoteOverlayBrowserRevealed = reveal;
 
                 if (reveal)
@@ -961,7 +960,8 @@ namespace ConditioningControlPanel
                     App.Logger?.Information(
                         "[RemoteControl] Browser un-hidden for a controller video (the remote overlay stays behind the WebView)");
                 }
-                else if (RemoteControlOverlay.Visibility == System.Windows.Visibility.Visible)
+                else if (Services.Browser.RemoteBrowserStopRule.HideBrowser(
+                    RemoteControlOverlay.Visibility == System.Windows.Visibility.Visible, reveal))
                 {
                     // Controller still connected: the overlay needs its airspace back so the
                     // session code is legible again.
@@ -1305,6 +1305,7 @@ namespace ConditioningControlPanel
                     _sessionEngine.PhaseChanged += OnSessionPhaseChanged;
                     _sessionEngine.SessionStarted += OnSessionStarted;
                     _sessionEngine.SessionStopped += OnSessionStopped;
+                    WatchSessionClocks(_sessionEngine);
                     // Attach the bark system to this session engine (it's MainWindow-owned
                     // and created lazily, so BarkService can't subscribe at its own Start()).
                     App.Bark?.AttachSessionEngine(_sessionEngine);
@@ -1350,10 +1351,49 @@ namespace ConditioningControlPanel
             }
         }
 
-        internal void ResumeSessionFromRemote()
+        /// <summary>The pause a LOCAL panic left on the session (PanicAftermath): a remote resume of
+        /// exactly that pause is refused. Cleared when a session starts or stops.</summary>
+        private Services.Safety.PanicAftermath.PanicPause? _panicPause;
+
+        /// <summary>Counts session runs: Session objects are reused (cached built-ins, custom
+        /// sessions), so a mark names the run as well as the object.</summary>
+        private int _sessionRun;
+
+        /// <summary>The local panic only (RunPanicStopTail). A remote panic never marks: the
+        /// controller may resume its own panic (owner, 2026-10-19).</summary>
+        private void NoteLocalPanicPause()
+        {
+            var engine = _sessionEngine;
+            _panicPause = Services.Safety.PanicAftermath.MarkPause(engine?.CurrentSession, _sessionRun,
+                engine?.IsRunning == true, engine?.IsPaused == true, engine?.PauseCount ?? 0);
+        }
+
+        /// <summary>TRUE while the running session still sits in the pause a LOCAL panic left: a
+        /// remote resume_session or start_session must not undo it (PanicAftermath).</summary>
+        internal bool LocalPanicHoldsSession
+        {
+            get
+            {
+                var engine = _sessionEngine;
+                return engine?.IsRunning == true && Services.Safety.PanicAftermath.RemoteResumeRefused(
+                    _panicPause, engine.CurrentSession, _sessionRun, engine.IsPaused, engine.PauseCount);
+            }
+        }
+
+        /// <summary>FALSE when the resume was refused (a local panic paused this session), so the
+        /// remote command reports it instead of a silent ok.</summary>
+        internal bool ResumeSessionFromRemote()
         {
             try
             {
+                // A remote (or voice) resume never undoes a local panic: ResumeSession would restart
+                // flashes, video and subliminals with the engine stopped. Only a local START or
+                // Resume picks that pause up; the controller is told (reason "panic").
+                if (LocalPanicHoldsSession)
+                {
+                    App.Logger?.Information("[RemoteControl] Resume refused: a local panic paused this session");
+                    return false;
+                }
                 if (_sessionEngine?.IsRunning == true && _sessionEngine.IsPaused)
                     _sessionEngine.ResumeSession();
             }
@@ -1361,6 +1401,7 @@ namespace ConditioningControlPanel
             {
                 App.Logger?.Error(ex, "[RemoteControl] Failed to resume session from remote");
             }
+            return true;
         }
 
         internal void StopSessionFromRemote() => StopEngineAndSession("RemoteControl");
@@ -1398,55 +1439,83 @@ namespace ConditioningControlPanel
             catch (Exception ex) { App.Logger?.Debug("AI command cancel on panic failed: {Error}", ex.Message); }
         }
 
-        internal void TriggerPanicFromRemote()
+        /// <summary>
+        /// The voice "panic" (red, safe word, stop everything): the wearer's own way out, so it stops
+        /// what the panic key stops. It used to run a short list of its own: the toy kept vibrating, a
+        /// game window, the Deeper player, a Takeover web video and a running leash task all stayed
+        /// up, and the engine kept running. The controller's trigger_panic is a different path
+        /// (RemoteControlService.StopAllRemoteEffects). No pause mark here (PanicAftermathTests).
+        ///
+        /// <para>Hard rule 6 (owner, 2026-10-22): it reaches exactly as far as the panic key
+        /// (VoicePanicReach). Under Lockdown or with panic switched off it does nothing, except the
+        /// leash part while leashed, as the key does. True = the whole panic ran (the recogniser
+        /// speaks its "everything's off" line only then).</para>
+        /// </summary>
+        internal bool TriggerPanicFromRemote()
         {
-            CancelPendingAi();
             try
             {
+                var reach = Services.Safety.VoicePanicReach.Decide(
+                    lockdownActive: App.Lockdown?.IsActive == true,
+                    panicKeyEnabled: App.Settings?.Current?.PanicKeyEnabled == true,
+                    leashed: Controls.Leash.LeashSurfaces.IsLeashed);
+                if (reach == Services.Safety.VoicePanicReach.Reach.LeashOnly)
+                {
+                    App.Logger?.Information("[Panic] Voice panic while the panic key cannot run: leash safety only");
+                    try { LeashOnPanicPress(panicRuns: false); } catch (Exception ex) { Diag.Swallowed(ex); }
+                    return false;
+                }
+                if (reach == Services.Safety.VoicePanicReach.Reach.Refused)
+                {
+                    App.Logger?.Information("[Panic] Voice panic refused: the panic key cannot run (Lockdown or panic off)");
+                    return false;
+                }
+                // Pending AI follow-ups never outlive a panic that ran (as far as the panic key reaches).
+                CancelPendingAi();
+
                 // EMI Desk (MOMENTS 4.B): the second panic entry point. Nothing else hooks it - the
-                // bark's Panic trigger is raised from the key path only - so without this a remote
+                // bark's Panic trigger is raised from the key path only - so without this a voice
                 // panic would leave her chatting.
                 try { App.EmiDesk?.Fire("panicPressed", null); } catch { }
+                // Circe's tab: the voice panic ("red", "safe word") is a way out like the key, so it
+                // opens the same safety hold. Without it the next ten minutes still booked prices.
+                try { App.Chaster?.NoteSafetyExit(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                // Trigger Mode stays quiet too. No pause mark: the controller may resume its own panic.
+                Services.Safety.PanicAftermath.ArmQuiet();
 
-                App.Logger?.Information("[RemoteControl] Panic triggered from remote");
+                App.Logger?.Information("[Panic] Voice panic: stopping every surface");
+
+                // The rest of the panic key's preamble: the welcome show, a leash task.
+                try { Services.FirstShow.FirstShowService.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+                try { LeashOnPanicPress(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
                 // Track panic press for Relapse achievement
                 App.Achievements?.TrackPanicPressed();
-
-                // Kill all audio immediately
-                App.KillAllAudio();
-                App.Autonomy?.CancelActivePulses();
 
                 if (_sessionEngine != null && _sessionEngine.IsRunning && !_sessionEngine.IsPaused)
                 {
                     _sessionEngine.PauseSession();
                 }
 
-                // Stop video explicitly (closes all video windows)
-                App.Video?.Stop();
+                App.LockCard?.Stop(dismissOpenCards: true);   // voice panic == panic key
+                // Everything the panic key's stop pass takes down, one guarded step at a time.
+                PanicStopEverySurface();
 
-                // Stop other active effects
-                App.Flash?.Stop();
-                App.Subliminal?.Stop();
-                App.Bubbles?.Stop();
-                App.BouncingText?.Stop();
-                App.BubbleCount?.Stop();
-                App.MindWipe?.Stop();
-                App.BrainDrain?.Stop();
-                App.LockCard?.Stop(dismissOpenCards: true);   // remote panic == local panic
-
-                // Turn off overlays but keep the overlay service alive
-                // so the controller can turn them back on. Clear the settings flags first so a
-                // running reconcile loop won't recreate them, then stop the windows directly:
-                // voice/Deeper start spiral & pink ad-hoc (no reconcile loop), so RefreshOverlays()
-                // — gated on the service's IsRunning — can't see those windows to tear them down.
-                EnablePinkFilter(false);
-                EnableSpiral(false);
-                App.Overlay?.RefreshOverlays();
+                // Turn off overlays. The overlay service stops (no reconcile tick can repaint while
+                // it is stopped); a controller's show_pink_filter / show_spiral starts it again
+                // through EnsureOverlayRunning, and a session resume restarts it. Then the windows
+                // directly: voice/Deeper start spiral & pink ad-hoc. Never EnablePinkFilter(false) /
+                // EnableSpiral(false) here: those are the user's SAVED switches, and a panic must
+                // not leave them off for every later run.
+                App.Overlay?.Stop();
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
 
-                App.InteractionQueue?.ForceReset();
+                // The engine stops, and the scheduler must not start it again: what STOP does. The
+                // reach check at the top already left Lockdown and panic-off out (hard rule 6).
+                if (App.Settings?.Current?.SchedulerEnabled == true && IsInScheduledTimeWindow())
+                    _manuallyStoppedDuringSchedule = true;
+                if (_isRunning) StopEngine();
 
                 Show();
                 WindowState = WindowState.Normal;
@@ -1455,10 +1524,12 @@ namespace ConditioningControlPanel
                 Topmost = false;
                 App.Overlay?.NotifyTopWindowClosed();
                 ShowAvatarTube();
+                return true;
             }
             catch (Exception ex)
             {
-                App.Logger?.Error(ex, "[RemoteControl] Failed to trigger panic from remote");
+                App.Logger?.Error(ex, "[Panic] Voice panic failed");
+                return true;
             }
         }
 

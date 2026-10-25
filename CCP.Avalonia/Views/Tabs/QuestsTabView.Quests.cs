@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
@@ -58,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             WeeklyProgressTrack.SizeChanged -= OnWeeklyTrackSizeChanged;
         }
 
-        private void OnWeeklyTrackSizeChanged(object? sender, SizeChangedEventArgs e) => ApplyWeeklyBar();
+        private void OnWeeklyTrackSizeChanged(object? sender, SizeChangedEventArgs e) => ApplyWeeklyBar(animate: false);
 
         // ShowTab calls RefreshQuestUI on every entry in WPF; IsVisible flipping true is that entry.
         protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -116,7 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // Server-rolled quests have no loc key, so the lookup returns the raw key (WPF :150).
         private static string Localized(string localized, string fallback) =>
-            string.IsNullOrWhiteSpace(localized) || localized.StartsWith("quest_", StringComparison.Ordinal) ? fallback : localized;
+            QuestStampRules.Text(localized, fallback);
 
         private static DailyQuestCardModel BuildDailyCardModel(int slot, ActiveQuest quest, QuestDefinition def, int rerollsLeft, AppSettings s)
         {
@@ -134,9 +136,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 XpText = $"{xp} XP",
                 StreakBonusPct = streakPct,
                 RerollBonusPct = rerollPct,
-                // ponytail: no quest art - GetModeAwareQuestImagePath resolves pack:// resources this
-                // head does not ship; the card draws its icon instead.
-                Art = null,
+                Art = GetQuestArt(def),
                 CanReroll = canReroll,
                 RerollKey = canReroll ? "btn_reroll_with_count" : "btn_reroll_none",
                 RerollCount = rerollsLeft,
@@ -183,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var rerollText = TxtWeeklyReroll;
             if (weeklyDef != null && weekly != null)
             {
+                ImgWeeklyQuest.Source = GetQuestArt(weeklyDef);
                 TxtWeeklyQuestIcon.Emoji = weeklyDef.Icon;   // collapsed, as in WPF
                 TxtWeeklyQuestName.Text = CoreMods.MakeModAware(weeklyDef.Name);
                 TxtWeeklyQuestDesc.Text = CoreMods.MakeModAware(weeklyDef.Description);
@@ -240,10 +241,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             PaintStreakCalendar();
         }
 
-        private void ApplyWeeklyBar()
+        private void ApplyWeeklyBar(bool animate = true)
         {
             var width = WeeklyProgressTrack.Bounds.Width;
-            if (width > 0) WeeklyProgressFill.Width = width * _weeklyFraction;
+            if (width <= 0) return;
+            var target = width * _weeklyFraction;
+            var current = WeeklyProgressFill.Width;
+            if (animate && Math.Abs(target - current) < 0.5) return;
+            // WPF SetQuestProgress / MotionFx.BarFill: progress takes 0.6 s QuadraticEaseOut;
+            // a resize is layout, so it cancels the tween and seats the stored fraction now.
+            WeeklyProgressFill.Transitions = null;
+            WeeklyProgressFill.Width = double.IsNaN(current) ? 0 : current;
+            WeeklyProgressFill.Transitions = animate && AmbientFxCanvas.Env.AllowTransitions
+                ? new Transitions { new DoubleTransition { Property = WidthProperty,
+                    Duration = TimeSpan.FromSeconds(0.6), Easing = new QuadraticEaseOut() } }
+                : null;
+            WeeklyProgressFill.Width = target;
         }
 
         private void PaintMonth(QuestService quests)

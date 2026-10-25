@@ -407,10 +407,10 @@ public class BillboardProvidersTests
     // =====================================================================================
 
     [Fact]
-    public void CreateAll_hands_back_the_five_providers()
+    public void CreateAll_hands_back_the_six_providers()
     {
         var all = BillboardProviders.CreateAll();
-        Assert.Equal(new[] { "live", "waiting", "resume", "event", "tip" }, all.Select(p => p.Id));
+        Assert.Equal(new[] { "live", "featured", "waiting", "resume", "event", "tip" }, all.Select(p => p.Id));
     }
 
     [Fact]

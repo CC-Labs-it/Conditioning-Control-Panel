@@ -18,8 +18,11 @@ namespace ConditioningControlPanel.Services
     /// Pop quiz follows WPF: the user-level AppSettings toggle, not the per-session PopQuiz* fields
     /// (dead in WPF too, BuiltInPrograms.cs:430).
     ///
+    /// The session-scoped corner GIF too: admission, start/end minute, pause hide, stop handback and
+    /// the #474 live edits; the head draws it through <see cref="CoreCornerGif.SessionShowHandler"/>.
+    ///
     /// ponytail: not driven here - video, bubbles, bubble count, mind wipe, brain drain, spiral,
-    /// corner GIF, ducking, phase events,
+    /// ducking, phase events,
     /// EMI Desk, Discord, friends, season recap and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>
@@ -32,7 +35,7 @@ namespace ConditioningControlPanel.Services
         private PhrasePoolCustody? _custody;
         private DateTime _startTime;
         private TimeSpan _lastElapsed;
-        private TimeSpan _pausedElapsed;
+        internal TimeSpan _pausedElapsed; // internal: tests step the paused clock (ProgramsSessionProgressTests)
         private readonly Random _random = new();
 
         public SessionLogService SessionLog { get; }
@@ -49,6 +52,13 @@ namespace ConditioningControlPanel.Services
         /// <summary>The ramped pink tint in percent once it has started, else null. WPF drives the overlay
         /// with it directly (SetSustainedOverlayOpacity) and never writes PinkFilterOpacity (#471).</summary>
         public double? PinkOpacity { get; private set; }
+
+        /// <summary>The session corner GIF is on screen (WPF _cornerGifWindow != null).</summary>
+        public bool CornerGifShown { get; private set; }
+
+        /// <summary>WPF _cornerHandbackOwed: we took the corner, so the first terminal close
+        /// re-queues the standalone slots. A hide-only close (pause, live edit) keeps the debt.</summary>
+        private bool _cornerHandbackOwed;
 
         /// <summary>After every live tick: WPF's ProgressUpdated, for the head's clock labels.</summary>
         public event Action? Ticked;
@@ -104,6 +114,10 @@ namespace ConditioningControlPanel.Services
             _snapshot = SessionSettingsSnapshot.Capture(s);
             _custody = PhrasePoolCustody.Begin(s, session.Settings, CoreMods.ActiveModId, session);
             Apply(session.Settings, s);
+
+            // SessionEngine.cs:198: raised at start whenever admitted (WPF does not read the start
+            // minute here either; the Tick re-raise below is the delayed-start path).
+            if (CanRaiseCornerGif(session.Settings)) ShowCornerGif(session.Settings);
 
             _timer = new Timer(_ => CoreDispatch.Post(() => Tick(Elapsed)), null, 1000, 1000);
             SessionLog.BeginSession(session);
@@ -202,6 +216,7 @@ namespace ConditioningControlPanel.Services
             LockCardScheduler.Instance.Stop();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:527, closes an open quiz
             CoreBouncingText.Stop();
+            CloseCornerGif(handBack: false);   // SessionEngine.cs:531: hide only, the claim survives
             Log.Information("Session paused (pause #{Count}, -100 XP penalty)", PauseCount);
         }
 
@@ -220,6 +235,11 @@ namespace ConditioningControlPanel.Services
             if (ss.LockCardEnabled && !_deferred.IsPending("lock cards")) LockCardScheduler.Instance.Start(Remaining.TotalMinutes);
             if (ss.BouncingTextEnabled && !_deferred.IsPending("bouncing text")) CoreBouncingText.Start();
             if (CoreSettings.Current.PopQuizEnabled) CoreEngine.PopQuiz?.Start();   // SessionEngine.cs:574
+            // SessionEngine.cs:575: the pause closed it; admission is asked afresh.
+            var minutes = Elapsed.TotalMinutes;
+            if (!CornerGifShown && CanRaiseCornerGif(ss) && minutes >= ss.CornerGifStartMinute
+                && (ss.CornerGifEndMinute <= 0 || minutes < ss.CornerGifEndMinute))
+                ShowCornerGif(ss);
             Log.Information("Session resumed");
         }
 
@@ -256,6 +276,7 @@ namespace ConditioningControlPanel.Services
                 s.PinkFilterEnabled = true;
                 Log.Information("Pink filter activated at {Minutes:F1} minutes (target was {Target:F1})", minutes, PinkStartMinute);
             }
+            TickCornerGif(session.Settings, minutes);
             Ticked?.Invoke();
         }
 
@@ -283,6 +304,97 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        // ---- the session corner GIF (WPF SessionEngine.cs:862-896, 1731-1797, 2126-2320) ----
+
+        /// <summary>WPF CanRaiseCornerGif over Core <see cref="CornerGifPlanner.AllowSessionCornerGif"/>.
+        /// The user's spiral master is read live: unlike WPF, this runner never writes SpiralEnabled.</summary>
+        private static bool CanRaiseCornerGif(SessionSettings ss)
+        {
+            var s = CoreSettings.Current;
+            return CornerGifPlanner.AllowSessionCornerGif(ss.CornerGifEnabled, s.SessionCornerGifAllowed,
+                CoreCornerGif.StandaloneActive, CornerGifPlanner.SessionCornerArtIsSpiral(ss.CornerGifPath),
+                s.SpiralEnabled, CoreCornerGif.SpiralOverlayActive);
+        }
+
+        /// <summary>The per-second admission recheck, delayed start and delayed end.</summary>
+        private void TickCornerGif(SessionSettings ss, double minutes)
+        {
+            if (CornerGifShown && !CanRaiseCornerGif(ss))
+            {
+                CloseCornerGif(handBack: true);
+                Log.Information("Corner GIF hidden mid-session (user master, a standalone corner overlay, or the fullscreen spiral now owns the corner)");
+            }
+            // ponytail: the end-minute guard is ours. WPF re-raises a delayed start after its end
+            // minute closed it, so it flickers open and shut every tick from then on.
+            if (!CornerGifShown && ss.CornerGifStartMinute > 0 && minutes >= ss.CornerGifStartMinute
+                && (ss.CornerGifEndMinute <= 0 || minutes < ss.CornerGifEndMinute) && CanRaiseCornerGif(ss))
+            {
+                ShowCornerGif(ss);
+                Log.Information("Corner GIF activated at {Minutes:F1} minutes (target was {Target})", minutes, ss.CornerGifStartMinute);
+            }
+            if (ss.CornerGifEnabled && CornerGifShown && ss.CornerGifEndMinute > 0 && minutes >= ss.CornerGifEndMinute)
+            {
+                CloseCornerGif(handBack: true);
+                Log.Information("Corner GIF deactivated at {Minutes:F1} minutes (target was {Target})", minutes, ss.CornerGifEndMinute);
+            }
+        }
+
+        private void ShowCornerGif(SessionSettings ss)
+        {
+            if (!CanRaiseCornerGif(ss) || CoreCornerGif.SessionShowHandler is not { } show) return;
+            show(new CornerGifOverlaySetting
+            {
+                Enabled = true,
+                GifPath = ss.CornerGifPath,
+                Position = ss.CornerGifPosition,
+                Size = ss.CornerGifSize > 0 ? ss.CornerGifSize : CornerGifPlanner.DefaultSize,
+                Opacity = ss.CornerGifOpacity,
+            });
+            CornerGifShown = true;
+            _cornerHandbackOwed = true;
+        }
+
+        private void CloseCornerGif(bool handBack)
+        {
+            bool giveBack = handBack && _cornerHandbackOwed;
+            if (handBack) _cornerHandbackOwed = false;
+            if (!CornerGifShown && !giveBack) return;
+            CornerGifShown = false;
+            try { CoreCornerGif.SessionCloseHandler?.Invoke(giveBack); }
+            catch (Exception ex) { Log.Warning(ex, "Corner GIF close failed"); }
+        }
+
+        private bool _refreshingCornerGifPolicy;
+
+        /// <summary>WPF RefreshCornerGifPolicy (SessionEngine.cs:1759): admission re-asked now, for
+        /// the Spiral card's session switch, a standalone slot change and the fullscreen spiral
+        /// leaving. Takes it down when refused; brings a minute-0 one back when allowed again.</summary>
+        public void RefreshCornerGifPolicy()
+        {
+            if (_refreshingCornerGifPolicy || CurrentSession is not { } session) return;
+            _refreshingCornerGifPolicy = true;   // the handback re-enters through the head's refresh
+            try
+            {
+                var ss = session.Settings;
+                if (CornerGifShown && !CanRaiseCornerGif(ss)) { CloseCornerGif(handBack: true); return; }
+                if (!CornerGifShown && IsRunning && !IsPaused && CanRaiseCornerGif(ss) && ss.CornerGifStartMinute == 0
+                    && (ss.CornerGifEndMinute <= 0 || Elapsed.TotalMinutes < ss.CornerGifEndMinute))
+                    ShowCornerGif(ss);
+            }
+            finally { _refreshingCornerGifPolicy = false; }
+        }
+
+        /// <summary>WPF UpdateCornerGifPath/Size/Position/Opacity (#474): the session's own
+        /// settings take the edit, and a shown overlay is re-shown with it (hide-only close).</summary>
+        public void UpdateCornerGif(Action<SessionSettings> edit)
+        {
+            if (CurrentSession is not { } session) return;
+            edit(session.Settings);
+            if (!CornerGifShown) return;
+            CloseCornerGif(handBack: false);
+            ShowCornerGif(session.Settings);
+        }
+
         private static double Lerp(double a, double b, double t) => a + (b - a) * Math.Clamp(t, 0, 1);
 
         public void Stop(bool completed = false) => Stop(completed, Elapsed);
@@ -299,6 +411,7 @@ namespace ConditioningControlPanel.Services
             _timer = null;
             _deferred.Clear();
             CoreEngine.PopQuiz?.Stop();   // SessionEngine.cs:372
+            CloseCornerGif(handBack: true);   // SessionEngine.cs:356
 
             var s = CoreSettings.Current;
             s.ClearSessionFlashRamp();   // SessionEngine.cs:390, ahead of the restore

@@ -26,6 +26,7 @@ import { tileValue } from './rules.js';
 import { mountArcademyGame } from './arcademyHost.js';
 import { media as goonMedia } from '../../exec/media.js';
 import { createNoiseView } from './noiseView.js';
+import { pageMark } from '../../exec/scrolllerMark.js';
 
 // The prefix is gg-nduel, NOT gg-duel: the lobby's YOU vs THEM card owns .gg-duel and
 // .gg-duel-name, and this sheet's fixed full-screen .gg-duel lifted that card out of the
@@ -192,6 +193,7 @@ export function createDuelView({ media = goonMedia, mount = mountArcademyGame, o
   function killStage() {
     const h = live;
     live = null;
+    pageMark().pin('duel', false);
     if (h) { try { h.destroy(); } catch (_e) { /* torn down anyway */ } }
     while (stage.firstChild) stage.removeChild(stage.firstChild);
     stage.hidden = true;
@@ -265,6 +267,8 @@ export function createDuelView({ media = goonMedia, mount = mountArcademyGame, o
       }
       if (my !== gen) { try { h.destroy(); } catch (_e) { /* gone */ } return null; }
       live = h;
+      // a class dealt from the online pool (or a Sort duel's noise boards) plays Scrolller pictures
+      try { if (piles || (media && media.onlineCount && media.onlineCount() > 0)) pageMark().pin('duel', true); } catch (_e) { /* credit only */ }
       return {
         result: () => h.result(),
         log: () => (typeof h.log === 'function' ? h.log() : []),

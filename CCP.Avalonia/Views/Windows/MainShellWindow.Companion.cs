@@ -154,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private bool _avatarWasAttachedBeforeMaximize;
+        private readonly Services.WindowMinimizeRecovery _windowMinimizeRecovery = new();
 
         /// <summary>WPF MainWindow.WindowChrome.cs:68-92,414-455: minimise hides an attached tube,
         /// maximise detaches it, restore shows it and re-attaches what maximise detached.</summary>
@@ -161,7 +162,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var tube = _avatarTubeWindow;
             if (tube == null) return;
-            if (WindowState == WindowState.Minimized) { HideAvatarTube(); return; }
+            if (WindowState == WindowState.Minimized)
+            {
+                var recovery = _windowMinimizeRecovery.Minimized(!tube.IsDetached, Autonomy.IsEnabled,
+                    LockdownActive, tube.IsMuted);
+                if (recovery.PauseAutonomy) Autonomy.Stop();
+                if (recovery.MuteAvatar) tube.SetWindowMute(true);
+                HideAvatarTube();
+                return;
+            }
             if (WindowState == WindowState.Maximized && !tube.IsDetached)
             {
                 _avatarWasAttachedBeforeMaximize = true;
@@ -172,6 +181,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 tube.Attach();
                 _avatarWasAttachedBeforeMaximize = false;
+            }
+            if (WindowState == WindowState.Normal)
+            {
+                var recovery = _windowMinimizeRecovery.Restored();
+                if (recovery.ResumeAutonomy) Autonomy.Start();
+                if (recovery.UnmuteAvatar) tube.SetWindowMute(false);
             }
         }
 

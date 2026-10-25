@@ -22,7 +22,8 @@ namespace ConditioningControlPanel.Avalonia.Controls
     /// </summary>
     public static class HoverPop
     {
-        private const double PopScale = 1.06, BackEaseAmplitude = 0.5;
+        private const double PopScale = 1.06;
+        private static readonly global::ConditioningControlPanel.Avalonia.Theme.BackEaseOutAmplitude BackEase = new() { Amplitude = 0.5 };
         private const double EnterScaleMs = 220, LeaveScaleMs = 180, LeaveRotateMs = 120;
         private static readonly (double Ms, double Deg)[] Wobble = { (0, 0), (90, 2.2), (200, -1.4), (310, 0.7), (430, 0) };
 
@@ -154,11 +155,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
         private static double QuadInOut(double t) => t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
 
         // WPF BackEase EaseOut: 1 - f(1 - t), f(x) = x^3 - x * A * sin(pi x).
-        private static double BackOut(double t)
-        {
-            double x = 1 - t;
-            return 1 - (x * x * x - x * BackEaseAmplitude * Math.Sin(Math.PI * x));
-        }
+        private static double BackOut(double t) => BackEase.Ease(t);
 
         private static Rig? EnsureRig(Control c)
         {

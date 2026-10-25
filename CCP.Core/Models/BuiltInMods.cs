@@ -1186,8 +1186,6 @@ namespace ConditioningControlPanel.Models
                     // Baseline HypnoTube pool the Companion may suggest (non-VIP only).
                     DefaultVideoLinks = new Dictionary<string, string>
                     {
-                        { "Hypno Trance", "https://hypnotube.com/video/hypno-trance-127460.html" },
-                        { "Deep Acceptance", "https://hypnotube.com/video/deep-acceptance-113157.html" },
                         { "I Wanna", "https://hypnotube.com/video/i-wanna-122259.html" },
                         { "OMGFY - Special Edition", "https://hypnotube.com/video/omgfy-special-edition-82977.html" },
                         { "Dont Think Slut 2", "https://hypnotube.com/video/dont-think-slut-2-72084.html" },
@@ -1547,7 +1545,6 @@ namespace ConditioningControlPanel.Models
                         { "Jinxs Clinic - Latex Clinic", "https://hypnotube.com/video/jinxs-clinic-latex-clinic-87627.html" },
                         { "Latex Drone Stretches His Hole", "https://hypnotube.com/video/latex-drone-stretches-his-hole-90036.html" },
                         { "Bambi Gas Mask", "https://hypnotube.com/video/bambi-gas-mask-97015.html" },
-                        { "The Rise Of The Drones", "https://hypnotube.com/video/the-rise-of-the-drones-32786.html" },
                         { "Jinxs Clinic - Latex Nightmare Ending", "https://hypnotube.com/video/jinxs-clinic-latex-nightmare-ending-87486.html" },
                         { "Hypnodoll Deepthroat Training", "https://hypnotube.com/video/hypnodoll-deepthroat-training-117537.html" },
                         { "Ultimate Sissy Slut Hypno", "https://hypnotube.com/video/ultimate-sissy-slut-hypno-16.html" },
@@ -1557,7 +1554,6 @@ namespace ConditioningControlPanel.Models
                         { "Pierrots Experimental Film", "https://hypnotube.com/video/pierrots-experimental-film-117798.html" },
                         { "Poppers Goon Slut", "https://hypnotube.com/video/poppers-goon-slut-109249.html" },
                         { "Drone Reprogramming Misandry Module", "https://hypnotube.com/video/drone-reprogramming-misandry-module-65622.html" },
-                        { "Rubberdoll Obedience Trainer By Hypno_Authority", "https://hypnotube.com/video/rubberdoll-obedience-trainer-by-hypno-authority-87892.html" },
                         { "Anal Slut Programming", "https://hypnotube.com/video/anal-slut-programming-35855.html" }
                     }
                 },
@@ -2324,13 +2320,10 @@ namespace ConditioningControlPanel.Models
                         { "Mommy Wants A Good Obedient Boy - Voiced", "https://hypnotube.com/video/mommy-wants-a-good-obedient-boy-voiced-132552.html" },
                         { "Perfect Feet And Pixel Denial PMV", "https://hypnotube.com/video/perfect-feet-and-pixel-denial-pmv-132536.html" },
                         { "Youre A Loser - BNWO Conditioning - RLGL Edit", "https://hypnotube.com/video/youre-a-loser-bnwo-conditioning-rlgl-edit-132468.html" },
-                        { "Car Cleaning Cuck - Audio", "https://hypnotube.com/video/car-cleaning-cuck-audio-132494.html" },
-                        { "Cuckold SPH - You Sleep On The Floor", "https://hypnotube.com/video/cuckold-sph-you-sleep-on-the-floor-132500.html" },
                         { "Becoming Cuckold", "https://hypnotube.com/video/becoming-cuckold-132316.html" },
                         { "Lethal Venom PMV Part 2", "https://hypnotube.com/video/lethal-venom-pmv-part-2-132321.html" },
                         { "Puppy Prone - Voiced", "https://hypnotube.com/video/puppy-prone-voiced-132269.html" },
                         { "SPH Hentai Overload", "https://hypnotube.com/video/sph-hentai-overload-132307.html" },
-                        { "BBC Barbie", "https://hypnotube.com/video/bbc-barbie-132233.html" },
                         { "Scrolling Is Sex -Tooner JOI", "https://hypnotube.com/video/scrolling-is-sex-tooner-joi-132201.html" },
                         { "Whiteboi Relapse", "https://hypnotube.com/video/whiteboi-relapse-132046.html" },
                         { "Unohana Teaches You Bankai With Her Special Method - Dildo JOI", "https://hypnotube.com/video/unohana-teaches-you-bankai-with-her-special-method-dildo-joi-132073.html" },
