@@ -12,6 +12,11 @@ default so the code has no hidden number.
 - `speed.maxPct` 1.3: ceiling of speedPct (forward speed / topMps) with every boost stacked (added).
 
 ## engine
+Solo clean driving gradually adds 30% to the normal ceiling over 12 seconds. Heard-song tempo and
+intensity add up to another 26%, eased over two seconds. A collision clears the streak and holds
+rebuilding for 1.5 seconds. Braking/coasting releases it over three seconds; rescue and stall clear it.
+The `cleanPace` group holds these values. Online keeps the authority's existing pace until parity.
+
 - `engine.bandGains` [0.9, 0.8, 0.55, 0.35, 0.25]: five equal bands over 0..top; engineV gains `gain * top` per second in its band. The last two bands are the weight.
 - `engine.chaseTcS` 0.15: velocity chases engineV, `v += (engineV - v) * dt / 0.15`.
 - `engine.brakeMps2` 22: engineV loss per second under full brake (added).

@@ -69,6 +69,7 @@ import { createAirWordRun, bindAirWords } from './sim/airWords.js';
 import { createSongCueRun } from './sim/songCues.js';
 import { createFlashBurst } from './fx/flashBurst.js';
 import { AERIAL_REVISION } from './track/aerial.js';
+import { songDrive } from './sim/cleanPace.js';
 import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
 import { createSlotFx } from './render/items/slotfx.js';
@@ -453,7 +454,7 @@ async function boot(course, options, lifetime, isCurrent) {
   const arches = world.colossi ? world.colossi.placed.filter((x) => x.spec && x.spec.kind === 'arch').map((x) => ({ id: x.id, s: x.spec.s })) : [];
 
   const clock = createClock({ hz: feel.get('clock.hz'), maxSubsteps: feel.get('clock.maxSubsteps'), bpm: feel.get('clock.bpm') });
-  const assist = createAssist(track, feel);       // the player's Steer assist (Options), never the bots'
+  let assist;       // Rebuilt with the player's current pace overlay on every run.
   // the run: solo (count COUNT, the page seed) or online (one racer per seat from the room session, its seed, the
   // queue tapped so local cp / lap / finish / drop and pulses go up); rebuilt by buildRun on every switch
   let race, racers, ai, contact, standings, items, scan, industry, perfume, P, sctx, aiCtx, kartViews, mapXz, fall, looksOnline = false;
@@ -481,6 +482,7 @@ async function boot(course, options, lifetime, isCurrent) {
     standings = createStandings(track, feel, q);
     items = s ? s.mount(racers, race, q) : createItems(track, feel, q, { seed: sd });
     P = racers.player;
+    assist = createAssist(track, P.feel);
     if (!s) { airWords = createAirWordRun(null, track); bindAirWords(P.st, airWords); }
     sctx = { ai, items, standings, hazards };
     aiCtx = { racers: racers.list, items, standings, race };
@@ -1038,6 +1040,8 @@ async function boot(course, options, lifetime, isCurrent) {
     const simOn = inRace && (online ? online.go : !paused);
     const machineryMusic = audio.music;
     const machinerySong = machineryMusic?.song || machineryMusic?.analysis;
+    sctx.cleanPace = !online;
+    sctx.songDrive = machineryMusic?.playing ? songDrive(machinerySong, machineryMusic.songS) : 0;
     if (!paused || online) setMachineryBeat(track, { enabled: inRace && !online && (race.phase === 'racing' || race.phase === 'finished') && !!machineryMusic?.playing,
       songS: machineryMusic?.songS, raceS: racers.clockS + (simOn ? steps * clock.dt : 0),
       bpm: machinerySong?.bpm, offsetS: machinerySong?.downbeatS ?? machinerySong?.downbeats?.[0] ?? 0, playing: simOn });
@@ -1062,6 +1066,7 @@ async function boot(course, options, lifetime, isCurrent) {
         { active: !online && (race.phase === 'racing' || race.phase === 'finished'), paused });
       sctx.timeS = online ? online.s.raceTimeS() : undefined;
       racers.step(clock.dt, pa, race, sctx);
+      debug.cleanTopMps = P.feel.get('speed.topMps');
       if (race.phase === 'racing' || race.phase === 'finished') {
         const sc = scanClock(online ? null : audio.music, racers.clockS);
         scan.update(racers.list, sc.timeS, sc.bpm);

@@ -16,6 +16,7 @@ import { wrap, clamp } from '../core/math.js';
 import { gap } from './gaps.js';
 import { grantBoost } from './grant.js';
 import { BUBBLE_RAM } from '../core/bubble.js';
+import { resetCleanPace } from './cleanPace.js';
 
 const FR = { p: [0, 0, 0], t: [0, 0, 0], n: [0, 0, 0], b: [0, 0, 0] };
 const QO = { normal: [0, 0, 0], p: [0, 0, 0] };
@@ -126,6 +127,7 @@ export function createContact(track, feel, events) {
         const key = i * 64 + j;
         const closing = (a[S.velX] - b[S.velX]) * U[0] + (a[S.velY] - b[S.velY]) * U[1] + (a[S.velZ] - b[S.velZ]) * U[2];
         if (!cool.has(key)) {
+          resetCleanPace(a, true); resetCleanPace(b, true);
           const c = Math.max(0, closing);
           if (shieldA || shieldB) {
             const fling = (r, side) => {

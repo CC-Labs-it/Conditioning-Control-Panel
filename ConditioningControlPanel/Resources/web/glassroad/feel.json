@@ -1,6 +1,7 @@
 {
   "version": 1,
   "speed": { "topMps": 30, "reverseMps": 6, "minMps": 3, "maxPct": 1.3 },
+  "cleanPace": { "cleanGain": 0.3, "musicGain": 0.26, "buildS": 12, "releaseS": 3, "musicEaseS": 2, "minMps": 8 },
   "engine": {
     "bandGains": [0.9, 0.8, 0.55, 0.35, 0.25],
     "chaseTcS": 0.15,
