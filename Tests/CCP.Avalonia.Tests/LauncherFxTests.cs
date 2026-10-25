@@ -55,6 +55,7 @@ public sealed class LauncherFxTests
                 shell.Show();
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(LauncherWindow.BackToLauncher(shell));
+                shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
                 Dispatcher.UIThread.RunJobs();
                 var launcher = LauncherWindow.Instance!;
                 launcher.UpdateLayout();
