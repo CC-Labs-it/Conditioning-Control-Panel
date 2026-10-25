@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -250,9 +251,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             linkDiscord.IsVisible = hasUnifiedId && !hasLinkedDiscord;
             // WPF BtnLinkDiscord_Click finally: the label comes back after a failed/cancelled link.
             if (linkDiscord.IsEnabled) Find<IconLabel>("TxtBtnLinkDiscord").Key = "btn_link_discord";
-            // ponytail: CloudSettingsBackupSection stays hidden and BtnExportData collapsed until
-            // ProfileSync's backup/restore/export calls reach this head (MainShellWindow.CloudBackup.cs).
+            // WPF MainWindow.Patreon.cs:682-688. ponytail: BtnExportData stays collapsed (wire-views-settings-account-b-next).
+            Find<Border>("CloudSettingsBackupSection").IsVisible = hasUnifiedId;
             Find<Border>("DataPrivacySection").IsVisible = hasUnifiedId;
+            if (hasUnifiedId) _ = UpdateBackupStatusAsync();
         }
 
         // ---- provider buttons (WPF MainWindow.Patreon.cs:455/526, MainWindow.SubscribeStar.cs:92) ----
@@ -474,11 +476,98 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 PresenceAsk.MarkAsked);
         }
 
-        // ponytail: cloud settings backup - ProfileSyncService.BackupSettingsAsync /
-        // GetSettingsBackupInfoAsync / RestoreSettingsFromCloudAsync, all still in the WPF head.
-        // CloudSettingsBackupSection stays hidden until they land (MainShellWindow.CloudBackup.cs).
-        private void BtnBackupSettingsNow_Click(object? sender, RoutedEventArgs e) { }
-        private void BtnRestoreSettings_Click(object? sender, RoutedEventArgs e) { }
+        // ---- cloud settings backup (WPF MainWindow.CloudBackup.cs, Core CloudSettingsBackup) ----
+
+        /// <summary>Tests only: the client both buttons and the status line use.</summary>
+        internal static Func<CloudSettingsBackup> NewBackup = () => new CloudSettingsBackup();
+
+        /// <summary>Tests only: the restore question (WPF MessageBox YesNo).</summary>
+        internal static Func<Window?, string, string, Task<bool>> Confirm = async (owner, title, body) =>
+            owner != null && await MessageDialog.ConfirmAsync(owner, title, body);
+
+        private async void BtnBackupSettingsNow_Click(object? sender, RoutedEventArgs e) => await Guard(BackupNowAsync());
+        private async void BtnRestoreSettings_Click(object? sender, RoutedEventArgs e) => await Guard(RestoreAsync());
+
+        /// <summary>WPF BtnBackupSettingsNow_Click: a forced upload, then the outcome and the status line.</summary>
+        internal async Task BackupNowAsync()
+        {
+            var button = Find<Button>("BtnBackupSettingsNow");
+            var label = Find<IconLabel>("TxtBtnBackupSettingsNow");
+            button.IsEnabled = false;
+            label.Key = "btn_backing_up";
+            try
+            {
+                if (await NewBackup().BackupAsync(CoreSettings.Current))
+                {
+                    await Tell(Owner, Loc.Get("title_backup_complete"), Loc.Get("msg_settings_backed_up_to_cloud_successfully"));
+                    await UpdateBackupStatusAsync();
+                }
+                else await Tell(Owner, Loc.Get("title_backup_failed"), Loc.Get("msg_failed_to_backup_settings"));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Manual settings backup failed");
+                await Tell(Owner, Loc.Get("title_backup_error"), Loc.GetF("msg_backup_failed_0", ex.Message));
+            }
+            finally
+            {
+                button.IsEnabled = true;
+                label.Key = "btn_backup_now";
+            }
+        }
+
+        /// <summary>WPF BtnRestoreSettings_Click: refused in a locked session, asked first, then the backup
+        /// (with this machine's identity, progression and absolute paths kept) replaces the settings and
+        /// the sections repaint (CurrentReplaced + the per-open refresh).</summary>
+        internal async Task RestoreAsync()
+        {
+            if (Shell?.RefuseActionIfSessionLocked("cloud-restore-settings") ?? CoreSession.IsSessionRunning) return;
+            if (!await Confirm(Owner, Loc.Get("title_restore_settings_from_cloud"), Loc.Get("msg_restore_settings_confirm"))) return;
+            var button = Find<Button>("BtnRestoreSettings");
+            var label = Find<TextBlock>("TxtBtnRestoreSettings");
+            button.IsEnabled = false;
+            label.Text = Loc.Get("btn_restoring");
+            try
+            {
+                var restored = await NewBackup().DownloadAsync(CoreSettings.Current);
+                if (restored == null || CoreSettings.Service is not { } service)
+                {
+                    await Tell(Owner, Loc.Get("title_restore_failed"), Loc.Get("msg_no_cloud_backup_found_or_restore_failed"));
+                    return;
+                }
+                service.RestoreFrom(restored);
+                this.FindAncestorOfType<Tabs.AppSettingsTabView>()?.RefreshSections();
+                await Tell(Owner, Loc.Get("title_settings_restored"), Loc.Get("msg_settings_restored_from_cloud"));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Manual settings restore failed");
+                await Tell(Owner, Loc.Get("title_restore_error"), Loc.GetF("msg_restore_failed_0", ex.Message));
+            }
+            finally
+            {
+                button.IsEnabled = true;
+                label.Text = Loc.Get("btn_restore_from_cloud");
+            }
+        }
+
+        /// <summary>WPF UpdateBackupStatus: the last backup's date and version, or why there is none.</summary>
+        private async Task UpdateBackupStatusAsync()
+        {
+            var status = Find<TextBlock>("TxtCloudBackupStatus");
+            try
+            {
+                var info = await NewBackup().GetInfoAsync(CoreSettings.Current);
+                status.Text = info?.BackedUpAt is { } at
+                    ? Loc.GetF("label_last_backup_0_v_1", at.ToLocalTime().ToString("MMM d, yyyy h:mm tt"), info.Value.AppVersion ?? "")
+                    : Loc.Get("label_no_cloud_backup_found_back_up_your_settings_t");
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Failed to update backup status: {Error}", ex.Message);
+                status.Text = Loc.Get("label_could_not_check_backup_status");
+            }
+        }
 
         // ponytail: GDPR export - ProfileSyncService.ExportDataAsync plus a save-file picker; the
         // button stays collapsed until that transport reaches Core.

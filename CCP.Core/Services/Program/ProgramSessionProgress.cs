@@ -8,8 +8,11 @@ public readonly record struct ProgramSessionProgress(TimeSpan Elapsed, TimeSpan 
     public static ProgramSessionProgress From(TimeSpan elapsed, int durationMinutes)
     {
         var total = TimeSpan.FromMinutes(Math.Max(1, durationMinutes));
+        // The bar follows WPF SessionEngine.ProgressPercent against the real length: a zero-length
+        // session reads full (elapsed / 0 = +inf, Min 100), while the clock keeps the 1-minute floor.
+        var percent = durationMinutes > 0 ? Math.Clamp(elapsed.TotalMinutes / durationMinutes * 100, 0, 100) : 100;
         elapsed = elapsed < TimeSpan.Zero ? TimeSpan.Zero : elapsed > total ? total : elapsed;
-        return new(elapsed, total, elapsed.TotalSeconds / total.TotalSeconds * 100);
+        return new(elapsed, total, percent);
     }
 
     /// <summary>WPF FormatProgramClock: m:ss, h:mm:ss after an hour, never negative.</summary>

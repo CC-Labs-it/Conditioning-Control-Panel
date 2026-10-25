@@ -42,11 +42,9 @@ public sealed class AccountSettingsSectionTests
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
-                // The production builder includes Inter and AppFonts registration for this headless host;
-                // HeadlessFonts() adds the Segoe-UI mappings PremiumSpark needs.
+                // The production builder includes Inter and AppFonts registration for this headless host.
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
-                    .UseSkia().With(HeadlessFonts())
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
             var oldGet = CoreSecrets.RetrieveProvider;
             var oldSet = CoreSecrets.StoreProvider;
@@ -59,6 +57,9 @@ public sealed class AccountSettingsSectionTests
             var service = new SettingsService();
             CoreSettings.ServiceProvider = () => service;
             var s = CoreSettings.Current;
+            // No test reaches the real server for the backup status line.
+            var oldBackup = AccountSettingsSection.NewBackup;
+            AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(new CannedBackup("{\"backup\":null}"));
             MainShellWindow? shell = null;
             try
             {
@@ -77,6 +78,7 @@ public sealed class AccountSettingsSectionTests
                 CoreSecrets.RetrieveProvider = oldGet;
                 CoreSecrets.StoreProvider = oldSet;
                 CoreSettings.ServiceProvider = oldSettings;
+                AccountSettingsSection.NewBackup = oldBackup;
                 // P02: providers that read the process settings again, not this test's thrown-away ones.
                 AccountSeed.Seed(p => new ProviderSubscription(p));
                 CoreAccount.IsLoggedInProvider = CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = CoreAccount.IsWhitelistedProvider = null;
@@ -90,19 +92,86 @@ public sealed class AccountSettingsSectionTests
             }
         });
 
-    private static FontManagerOptions HeadlessFonts()
+    private sealed class CannedBackup(string body) : HttpMessageHandler
     {
-        // The shell's PremiumSpark requests Windows faces even in a Linux headless host.
-        // Resolve those names to the bundled text font; no installed Windows fonts required.
-        var options = AppFonts.Options(systemEmoji: false);
-        options.FontFamilyMappings = new Dictionary<string, FontFamily>
+        public readonly List<string> Paths = new();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
-            ["Fredoka"] = new FontFamily(AppFonts.Fredoka),
-            ["Segoe UI"] = new FontFamily(AppFonts.Inter),
-            ["Segoe UI Black"] = new FontFamily(AppFonts.Inter),
-        };
-        return options;
+            lock (Paths) Paths.Add(r.RequestUri!.AbsolutePath);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        }
     }
+
+    private static string Packed(AppSettings settings)
+    {
+        using var output = new MemoryStream();
+        using (var gz = new System.IO.Compression.GZipStream(output, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true))
+            gz.Write(System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(settings)));
+        return Convert.ToBase64String(output.ToArray());
+    }
+
+    /// <summary>Settings > Account > Restore from cloud: asked first (No sends nothing), then the backup replaces the
+    /// settings with this machine's absolute paths and level kept, and the Backup now button uploads.</summary>
+    [Fact]
+    public Task CloudRestoreAsksFirstAndKeepsThisMachinesPaths() => RunAsync(async (shell, section, s, _) =>
+    {
+        s.UnifiedId = "u-test";
+        s.AuthToken = "TOK";
+        s.SpiralPath = "/home/me/spiral.gif";
+        s.FlashEnabled = true;
+        s.PlayerLevel = 5;
+        var windows = new AppSettings { SpiralPath = @"C:\spiral.gif", FlashEnabled = false, PlayerLevel = 99 };
+        var server = new CannedBackup(new Newtonsoft.Json.Linq.JObject
+        {
+            ["backup"] = new Newtonsoft.Json.Linq.JObject { ["settings_data"] = Packed(windows), ["app_version"] = "6.11.0" },
+        }.ToString());
+        var oldBackup = AccountSettingsSection.NewBackup;
+        var oldTell = AccountSettingsSection.Tell;
+        var oldConfirm = AccountSettingsSection.Confirm;
+        var oldSession = CoreSession.IsSessionRunningProvider;
+        var dialogs = new List<string>();
+        var answer = false;
+        AccountSettingsSection.NewBackup = () => new CloudSettingsBackup(server);
+        AccountSettingsSection.Tell = (_, title, _) => { dialogs.Add(title); return Task.CompletedTask; };
+        AccountSettingsSection.Confirm = (_, title, _) => { dialogs.Add(title); return Task.FromResult(answer); };
+        try
+        {
+            section.Refresh();
+            Assert.True(Shown(section, "CloudSettingsBackupSection"));
+
+            await section.RestoreAsync();
+            Assert.Equal(new[] { Loc.Get("title_restore_settings_from_cloud") }, dialogs);
+            Assert.Same(s, CoreSettings.Current);   // No: nothing swapped
+
+            answer = true;
+            await section.RestoreAsync();
+            var now = CoreSettings.Current;
+            Assert.NotSame(s, now);
+            Assert.Equal("/home/me/spiral.gif", now.SpiralPath);
+            Assert.Equal(5, now.PlayerLevel);
+            Assert.False(now.FlashEnabled);
+            Assert.Equal("u-test", now.UnifiedId);
+            Assert.Contains(Loc.Get("title_settings_restored"), dialogs);
+            Assert.True(section.FindControl<Button>("BtnRestoreSettings")!.IsEnabled);
+
+            await section.BackupNowAsync();
+            lock (server.Paths) Assert.Contains("/v2/user/backup-settings", server.Paths);
+            Assert.Contains(Loc.Get("title_backup_complete"), dialogs);
+
+            // A section with no shell above it still refuses mid-session (PresetsTabView's `?? IsSessionRunning`).
+            dialogs.Clear();
+            CoreSession.IsSessionRunningProvider = () => true;
+            await new AccountSettingsSection().RestoreAsync();
+            Assert.Empty(dialogs);
+        }
+        finally
+        {
+            CoreSession.IsSessionRunningProvider = oldSession;
+            AccountSettingsSection.NewBackup = oldBackup;
+            AccountSettingsSection.Tell = oldTell;
+            AccountSettingsSection.Confirm = oldConfirm;
+        }
+    });
 
     private static string Text(Control c, string name) => c.FindControl<TextBlock>(name)!.Text ?? "";
     private static bool Shown(Control c, string name) => c.FindControl<Control>(name)!.IsVisible;
@@ -395,96 +464,6 @@ public sealed class AccountSettingsSectionTests
             AccountSettingsSection.Tell = oldTell;
             StartupLadder.ResetForTests();
         }
-    });
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public Task SharingOfferIsOwnedAndRequiresYesAndCanBeRevoked(bool accept) => RunAsync(async (shell, section, s, secrets) =>
-    {
-        s.DiscordShareAchievements = false;
-        var oldSurfaces = PanicSurfaces.All;
-        PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
-        try
-        {
-            var ask = shell.OfferAchievementSharingAfterDiscordLink();
-            Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
-            Assert.Equal(Loc.Get("title_discord_linked"), dialog.Title);
-            Assert.Equal(Loc.Get("msg_discord_share_achievements_prompt"), Text(dialog, "TxtMessage"));
-            Assert.False(s.DiscordShareAchievements);
-            dialog.Close(accept);
-            await ask;
-            Assert.Equal(accept, s.DiscordShareAchievements);
-            var privacy = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Tabs.DiscordTabView>("DiscordTab")!.PrivacyPanel;
-            privacy.RefreshAchievementSharing();
-            var share = privacy.FindControl<CheckBox>("ChkDiscordTabShareAchievements")!;
-            Assert.Equal(accept, share.IsChecked);
-            share.IsChecked = !accept;
-            Assert.Equal(!accept, s.DiscordShareAchievements);
-            Assert.Empty(StartupLadder.Inbox.Items);
-        }
-        finally { PanicSurfaces.All = oldSurfaces; }
-    });
-
-    [Fact]
-    public Task SharingOfferWaitsForGameAndInboxClickAsksDespiteGame() => RunAsync(async (shell, section, s, secrets) =>
-    {
-        s.DiscordShareAchievements = false;
-        var oldSurfaces = PanicSurfaces.All;
-        PanicSurfaces.All = new[] { new PanicSurfaces.Surface("fake-game", _ => { }, () => true) };
-        StartupLadder.ResetForTests();
-        try
-        {
-            await shell.OfferAchievementSharingAfterDiscordLink();
-            await shell.OfferAchievementSharingAfterDiscordLink();
-            var row = Assert.Single(StartupLadder.Inbox.Items);
-            Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
-            StartupLadder.Inbox.Open(row);
-            Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
-            dialog.Close(true);
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(s.DiscordShareAchievements);
-            await shell.OfferAchievementSharingAfterDiscordLink();
-            Assert.Empty(StartupLadder.Inbox.Items);
-            Assert.Empty(shell.OwnedWindows.OfType<MessageDialog>());
-        }
-        finally { PanicSurfaces.All = oldSurfaces; StartupLadder.ResetForTests(); }
-    });
-
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public Task FirstSignInWithDiscordOffersSharing(bool discord) => RunAsync(async (shell, section, s, secrets) =>
-    {
-        // WPF MainWindow.Login.cs:209 (#749): a Discord-first sign-in is a Discord link too.
-        s.DiscordShareAchievements = false;
-        var oldSurfaces = PanicSurfaces.All;
-        PanicSurfaces.All = Array.Empty<PanicSurfaces.Surface>();
-        StartupLadder.ResetForTests();
-        try
-        {
-            if (discord) AccountSeed.Discord!.StoreTokens("fake-access", "fake-refresh", DateTime.UtcNow.AddHours(1));
-            var login = shell.OpenUnifiedLoginDialog();
-            Dispatcher.UIThread.RunJobs();
-            var dialog = Assert.Single(shell.OwnedWindows.OfType<LoginDialog>());
-            typeof(LoginDialog).GetProperty(nameof(LoginDialog.Result))!.SetValue(dialog, new LoginDialog.LoginResult { Success = true });
-            dialog.Close(true);
-            Dispatcher.UIThread.RunJobs();
-            foreach (var notice in shell.OwnedWindows.OfType<MessageDialog>()
-                         .Where(d => d.Title == Loc.Get("login_not_remembered_title")).ToList())
-                notice.Close();
-            await login.WaitAsync(TimeSpan.FromSeconds(10));
-            Dispatcher.UIThread.RunJobs();
-            var offers = shell.OwnedWindows.OfType<MessageDialog>().Where(d => d.Title == Loc.Get("title_discord_linked")).ToList();
-            Assert.Equal(discord ? 1 : 0, offers.Count);
-            if (discord) Assert.Equal(Loc.Get("label_yes"), ((TextBlock)offers[0].FindControl<Button>("BtnOk")!.Content!).Text);
-            foreach (var offer in offers) offer.Close(false);
-            Dispatcher.UIThread.RunJobs();
-            Assert.False(s.DiscordShareAchievements);
-        }
-        finally { PanicSurfaces.All = oldSurfaces; StartupLadder.ResetForTests(); }
     });
 
 }

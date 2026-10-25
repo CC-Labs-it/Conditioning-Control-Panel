@@ -5,15 +5,15 @@
 // px throughout, as WPF's physical route did (GetWindowRect/SetWindowPos). The saved
 // AvatarTubeLeft/Top stay in WPF's DIPs, so a WPF-written file reads unchanged: px = dip * DesktopScaling.
 //
-// ponytail: skipped from WPF - make-room (moving main so she fits), the mirrored art on a right
-// dock, measured mod-art insets (stock 239/353 are used), Ctrl+scroll / arrow-key zoom (the menu's
-// Shrink/Grow below do zoom, and write AvatarTubeScale) and the floating bob. Add each when a user misses it.
+// ponytail: mirrored right-dock art, measured mod-art insets (stock 239/353 are used),
+// and the floating bob remain in the WPF reference.
 
 using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.AvatarTubeLayout;
 using Serilog;
@@ -66,11 +66,28 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 _parentWindow.PositionChanged += OnParentPositionChanged;
                 _parentWindow.PropertyChanged += OnParentPropertyChanged;
             }
+            AddHandler(PointerWheelChangedEvent, (_, e) =>
+            {
+                if (_isAttached || !e.KeyModifiers.HasFlag(KeyModifiers.Control)) return;
+                e.Handled = true;
+                StepScale(e.Delta.Y > 0 ? ScaleStep : -ScaleStep);
+            }, RoutingStrategies.Tunnel);
+            AddHandler(KeyDownEvent, (_, e) =>
+            {
+                if (_isAttached || e.Key is not (Key.Up or Key.Down)) return;
+                e.Handled = true;
+                StepScale(e.Key == Key.Up ? ScaleStep : -ScaleStep);
+            }, RoutingStrategies.Tunnel);
+            PropertyChanged += (_, e) =>
+            {
+                if (e.Property == IsVisibleProperty && !IsVisible) RestoreMadeRoom();
+            };
             ApplyModeChrome();
         }
 
         private void ReleaseWindowing()
         {
+            RestoreMadeRoom();
             if (ToggleDetachedSink == (Action)ToggleDetached) ToggleDetachedSink = null;
             if (_parentWindow == null) return;
             _parentWindow.PositionChanged -= OnParentPositionChanged;
@@ -107,6 +124,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void SetAttached(bool attached)
         {
             if (_isAttached == attached) return;
+            if (!attached) RestoreMadeRoom();
+            else _makeRoom.Rearm();
             _isAttached = attached;
             _restorePending = false;   // the user's own mode change wins over the saved one
             // WPF Windowing.cs:2352-2359: attach resets her to the base size (not saved).
@@ -231,7 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF UpdatePosition's physical route: dock beside main per TubeDockPlacement.</summary>
         internal void UpdatePosition()
         {
-            if (!_isAttached || _parentWindow is not { } p || p.WindowState == WindowState.Minimized) return;
+            if (_applyingRoom || !_isAttached || _parentWindow is not { } p || p.WindowState == WindowState.Minimized) return;
             var pr = new PixelRect(p.Position, PixelSize.FromSize(p.ClientSize, p.DesktopScaling));
             if (pr.Width <= 0 || pr.Height <= 0) return;
             var work = p.Screens.ScreenFromWindow(p)?.WorkingArea ?? new PixelRect(-100000, -100000, 200000, 200000);
@@ -239,7 +258,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             var size = TubePixelSize;
             int rightInset = (int)Math.Round(Math.Max(0, (TubeArtRightPadding - SeamOverlapOverMain) * art - day));
             int leftInset = (int)Math.Round(Math.Max(0, TubeArtLeftPadding * art - day));
-            var plan = TubeDockPlacement.Place(ToBox(pr), size.Width, size.Height, leftInset, rightInset,
+            var parent = MakeRoom(ToBox(pr), work, size.Width - leftInset - rightInset);
+            var plan = TubeDockPlacement.Place(parent, size.Width, size.Height, leftInset, rightInset,
                 (int)Math.Round(VerticalOffset * art), ToBox(work));
             Position = new PixelPoint(plan.Left, plan.Top);
             // WPF's transparent margin was click-through (layered window); an X11 window takes
