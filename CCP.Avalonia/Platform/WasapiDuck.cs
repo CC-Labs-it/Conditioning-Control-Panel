@@ -12,8 +12,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
     /// our own process and pid 0 (system sounds) are skipped; an original is captured once and never
     /// overwritten while it survives (WPF: recapturing is how volumes ratcheted toward 0%); a restore that
     /// throws keeps its original for the next one.
-    /// shortcut: WPF's 2.5 s rescan, 3 min restore retry, process-name fallback, crash-recovery file and
-    /// WebView2 exclusion are not ported (win-avalonia-parity-b); the Linux pactl sweep has none of them either.
+    /// WebView2 processes (BambiCloud, browser video) are skipped while ExcludeBambiCloudFromDucking is on
+    /// (WPF :987, by name like :1060; WPF's extra "browser session active" OR is not ported).
+    /// shortcut: WPF's 2.5 s rescan, 3 min restore retry, process-name fallback and crash-recovery file
+    /// are not ported (win-avalonia-parity-b); the Linux pactl sweep has none of them either.
     /// </summary>
     internal sealed class WasapiDuck
     {
@@ -22,23 +24,36 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private readonly Action<SessionVisitor> _forEachSession;
         private readonly int _ownPid;
+        private readonly Func<int, string?> _processName;
         private readonly Dictionary<int, float> _originals = new();
 
         /// <param name="forEachSession">Visits every render session (the WASAPI walk by default; tests hand in fakes).</param>
-        internal WasapiDuck(Action<SessionVisitor>? forEachSession = null, int? ownPid = null)
+        internal WasapiDuck(Action<SessionVisitor>? forEachSession = null, int? ownPid = null, Func<int, string?>? processName = null)
         {
             _forEachSession = forEachSession ?? ForEachRenderSession;
             _ownPid = ownPid ?? Environment.ProcessId;
+            _processName = processName ?? ProcessName;
+        }
+
+        private static string? ProcessName(int pid)
+        {
+            try { using var p = System.Diagnostics.Process.GetProcessById(pid); return p.ProcessName; }
+            catch { return null; } // exited mid-sweep
         }
 
         /// <summary>Scale every other app's session to <paramref name="keep"/>; stops early once unducked.</summary>
-        internal void Sweep(double keep, Func<bool> stillDucked) => _forEachSession((pid, get, set) =>
+        internal void Sweep(double keep, Func<bool> stillDucked)
         {
-            if (pid == _ownPid || pid == 0 || !stillDucked()) return;
-            var volume = get();
-            lock (_originals) { if (!_originals.TryAdd(pid, volume)) return; }
-            set(Math.Max(0f, volume * (float)keep));
-        });
+            var excludeWebView2 = CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true;
+            _forEachSession((pid, get, set) =>
+            {
+                if (pid == _ownPid || pid == 0 || !stillDucked()) return;
+                if (excludeWebView2 && _processName(pid)?.IndexOf("webview2", StringComparison.OrdinalIgnoreCase) >= 0) return;
+                var volume = get();
+                lock (_originals) { if (!_originals.TryAdd(pid, volume)) return; }
+                set(Math.Max(0f, volume * (float)keep));
+            });
+        }
 
         /// <summary>Put every captured session back; an entry whose restore threw stays for the next one.</summary>
         internal void Restore()

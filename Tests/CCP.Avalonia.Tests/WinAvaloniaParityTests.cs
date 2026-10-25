@@ -69,6 +69,55 @@ public sealed class WinAvaloniaParityTests
     }
 
     [Fact]
+    public void WebView2SessionsAreSkippedWhileExcludeBambiCloudIsOnLikeWpf()
+    {
+        var fake = new FakeSessions();
+        string? Name(int pid) => pid == 9 ? "msedgewebview2" : "firefox";
+        var was = CoreSettings.Current.ExcludeBambiCloudFromDucking;
+        try
+        {
+            CoreSettings.Current.ExcludeBambiCloudFromDucking = true;
+            var duck = new WasapiDuck(fake.ForEach, OwnPid, Name);
+            duck.Sweep(0.2, () => true);
+            Assert.Equal(0.1f, fake.Volume[7], 3);
+            Assert.Equal(1f, fake.Volume[9]);         // BambiCloud / browser video keeps its level
+            duck.Restore();
+
+            CoreSettings.Current.ExcludeBambiCloudFromDucking = false;
+            duck.Sweep(0.2, () => true);
+            Assert.Equal(0.2f, fake.Volume[9], 3);    // setting off: ducked like any other app
+            duck.Restore();
+        }
+        finally { CoreSettings.Current.ExcludeBambiCloudFromDucking = was; }
+    }
+
+    [Fact]
+    public void SeedHooksCoreDuckingWhenTheWindowsSweepIsPresent()
+    {
+        var (instance, layered, duckP, unduckP, genP, oneShot, stoppable) = (LibVlcAudio.Instance, LayeredAudio.Instance,
+            CoreAudio.DuckProvider, CoreAudio.UnduckProvider, CoreAudio.DuckGenerationProvider,
+            CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider);
+        try
+        {
+            CoreAudio.DuckProvider = null;
+            var fake = new FakeSessions();
+            var audio = new LibVlcAudio(new WasapiDuck(fake.ForEach, OwnPid, _ => "firefox"));
+            audio.Seed();
+            CoreAudio.Duck(80);                       // the app-wide path, not audio.Duck
+            audio.Drain();
+            Assert.Equal(0.1f, fake.Volume[7], 3);
+            audio.Shutdown();
+            Assert.Equal(0.5f, fake.Volume[7], 3);
+        }
+        finally
+        {
+            LibVlcAudio.Instance = instance; LayeredAudio.Instance = layered;
+            CoreAudio.DuckProvider = duckP; CoreAudio.UnduckProvider = unduckP; CoreAudio.DuckGenerationProvider = genP;
+            CoreAudio.PlayOneShotProvider = oneShot; CoreAudio.PlayStoppableProvider = stoppable;
+        }
+    }
+
+    [Fact]
     public void MicResolvesSavedNameThenIndexElseDeviceZeroLikeWpf()
     {
         var devices = new List<SpeechInputDevice> { new(-1, "System default"), new(0, "Headset"), new(1, "Webcam mic") };
