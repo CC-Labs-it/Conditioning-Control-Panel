@@ -3126,3 +3126,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-audio-playback-devices: +208
 - WPF's 2.5 s mid-duck rescan ported to the Linux pactl ducker (shared Core rule), timer retired on unduck/panic/shutdown.
 - GATE-OK (run 39702243881); row stays stub.
+
+## avalonia-port/wire-win-media-history: +475
+- Media Log wired: reveal selects the file (Explorer /select, open -R, FileManager1.ShowItems), Load preview behind consent (redirects by hand, WPF headers), broken-clip plate only for empty/image/audio files.
+- Review fixes 7eaf2bfe9; rgate run 39690948829 green except a known Windows flake (P94).
