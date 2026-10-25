@@ -3441,3 +3441,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 ## avalonia-port/fin-shell-tab-fx-presets-quests-achievements: +1
 - Dependency-only NOOP audit; ledger row stays stub with explicit Missing list (shell-takeaway, shell-chrome-fx).
 - Review ACCEPT; fix: row reference repointed to PR body. Doc-only, no rgate (pushq re-gates).
+
+## avalonia-port/wire-shell-profile-vat: +435
+- DescentService moved to CCP.Core and wired on Avalonia: sign-in, accepted sync, Trainer Card open and logout drive the read; the 60 s poll waits for the drawn jar (lane -b) plus a visible active card and an accepted block.
+- A followed curve epoch repaints the level header; the jar stays hidden and the row stays `stub` until wire-shell-profile-vat-b.
