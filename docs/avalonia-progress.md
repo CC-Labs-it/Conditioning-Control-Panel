@@ -3308,3 +3308,7 @@ Header mod selector regains the WPF "Open Mod Manager" footer row, and Home feat
 ## avalonia-port/wire-svc-discord-rich-presence: +192
 - Discord presence follows Flash, Session and Video lifecycles through the Core `CoreDiscord` hook; the attention retry keeps "Watching" as WPF does.
 - Brain Drain, Goon Game and Mind Wipe session callers follow in wire-svc-discord-rich-presence-b.
+
+## avalonia-port/wire-shell-takeaway: +567
+- Takeaway shelf: Core JustDropOrdersService/TakeawayText (git mv, shared with WPF), three pinned receipts plus the tray, +n toggle, guarded shop door, copy taste link, bare-player replay with panel duck/restore and panic close.
+- Review fixes: left-aligned shelf (fail-proven), session-end refresh, reload after a mid-fetch account switch, ServerEnabled restore in tests. rgate GATE-OK.
