@@ -186,7 +186,7 @@ public sealed class ChaosRunConfig
         cfg.MotionOverride = Enum.TryParse<ChaosMotion>(s.ChaosMotionMode, out var m) ? m : (ChaosMotion?)null;
         cfg.EnabledVariants = ClampVariants(s.ChaosEnabledVariants);   // null = all
         cfg.ScreenShakeEnabled = s.ChaosScreenShakeEnabled;
-        cfg.ColorFlashesEnabled = s.ChaosColorFlashesEnabled;
+        cfg.ColorFlashesEnabled = Safety.GentleVisuals.ColourFlashes(s.ChaosColorFlashesEnabled);   // off while gentle visuals are on
         cfg.ShakeIntensity = Math.Clamp(s.ChaosShakeIntensity, 0.0, 1.0);
         cfg.EffectIntensity = Math.Clamp(s.ChaosEffectIntensity, 0.2, 1.5);
         cfg.BoonDraftEnabled = s.ChaosBoonDraftEnabled;

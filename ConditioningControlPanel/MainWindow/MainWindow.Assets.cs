@@ -551,74 +551,10 @@ namespace ConditioningControlPanel
 
         private AssetTreeItem? BuildPackTree(string packId)
         {
-            var packFiles = App.ContentPacks?.GetPackFiles(packId);
-            if (packFiles == null || packFiles.Count == 0)
-                return null;
-
-            // Get pack name from built-in packs
-            var packs = App.ContentPacks?.GetBuiltInPacks();
-            var packInfo = packs?.FirstOrDefault(p => p.Id == packId);
-            var packName = packInfo?.Name ?? packId;
-
-            var packNode = new AssetTreeItem
-            {
-                Name = packName,
-                FullPath = "",
-                IsPackFolder = true,
-                PackId = packId,
-                IsChecked = true,
-                IsExpanded = false
-            };
-
-            // Images subfolder
-            var imageFiles = packFiles.Where(f => f.FileType == "image").ToList();
-            if (imageFiles.Count > 0)
-            {
-                // Count active images (not in DisabledAssetPaths)
-                var activeImageCount = imageFiles.Count(f =>
-                    !App.Settings.Current.DisabledAssetPaths.Contains($"pack:{packId}/{f.OriginalName}"));
-
-                var imagesNode = new AssetTreeItem
-                {
-                    Name = "images",
-                    FullPath = "",
-                    IsPackFolder = true,
-                    PackId = packId,
-                    PackFileType = "image",
-                    IsChecked = activeImageCount > 0,
-                    FileCount = imageFiles.Count,
-                    CheckedFileCount = activeImageCount,
-                    Parent = packNode
-                };
-                packNode.Children.Add(imagesNode);
-            }
-
-            // Videos subfolder
-            var videoFiles = packFiles.Where(f => f.FileType == "video").ToList();
-            if (videoFiles.Count > 0)
-            {
-                // Count active videos (not in DisabledAssetPaths)
-                var activeVideoCount = videoFiles.Count(f =>
-                    !App.Settings.Current.DisabledAssetPaths.Contains($"pack:{packId}/{f.OriginalName}"));
-
-                var videosNode = new AssetTreeItem
-                {
-                    Name = "videos",
-                    FullPath = "",
-                    IsPackFolder = true,
-                    PackId = packId,
-                    PackFileType = "video",
-                    IsChecked = activeVideoCount > 0,
-                    FileCount = videoFiles.Count,
-                    CheckedFileCount = activeVideoCount,
-                    Parent = packNode
-                };
-                packNode.Children.Add(videosNode);
-            }
-
-            packNode.FileCount = packFiles.Count;
-            packNode.IsChecked = packNode.Children.Any(c => c.IsChecked);
-            return packNode;
+            var files = App.ContentPacks?.GetPackFiles(packId);
+            if (files == null) return null;
+            var name = App.ContentPacks?.GetBuiltInPacks()?.FirstOrDefault(p => p.Id == packId)?.Name ?? packId;
+            return Services.AssetPackTree.Build(packId, name, files, App.Settings.Current.DisabledAssetPaths);
         }
 
         private AssetTreeItem BuildFolderTree(string path, string name)
@@ -2289,15 +2225,13 @@ namespace ConditioningControlPanel
         {
             _remoteFineTuneOpen = open;
             var tab = AssetsTab;
-            if (tab == null) return;
-            if (tab.RemoteFineTuneScroll != null)
-                tab.RemoteFineTuneScroll.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-            // One decision at a time: the browser steps aside while the list is open, which is
-            // also the only way the list fits on a page that never scrolls (desk run 4).
-            if (tab.AssetBrowserSection != null)
-                tab.AssetBrowserSection.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
-            if (tab.TxtRemoteFineTuneChevron != null)
-                tab.TxtRemoteFineTuneChevron.Text = open ? "" : "";
+            if (tab?.RemoteFineTuneScroll == null) return;
+            // One decision at a time: the browser steps aside while the list is open and the
+            // list takes the height the page has left (#1410). On "My own assets" the list is
+            // not on the page at all, so the browser always comes back (#1409).
+            var remote = !string.Equals(App.Settings?.Current?.MediaSource ?? MediaSrcLocal,
+                MediaSrcLocal, StringComparison.Ordinal);
+            tab.ApplyFineTuneLayout(open, remote);
         }
 
         /// <summary>Own assets / Reddit / Both, as the segments of one rounded bar
@@ -2390,6 +2324,8 @@ namespace ConditioningControlPanel
                 PaintRemotePickerChrome(settings);
                 RebuildRemoteCustomSubChips(settings);
                 SetRemoteFineTuneOpen(_remoteFineTuneOpen);
+                // The online media card and the title bar pill follow the source.
+                RefreshOnlineMeter();
             }
             catch (Exception ex) { App.Logger?.Warning(ex, "Remote media picker refresh failed"); }
             finally { _remotePickerSyncing = false; }

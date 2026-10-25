@@ -36,11 +36,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 fallbacks.Add(new FontFallback { FontFamily = new FontFamily(SystemEmojiFontCollection.CollectionKey + "#" + emoji), UnicodeRange = EmojiRange });
             fallbacks.Add(new FontFallback { FontFamily = new FontFamily(NotoEmoji), UnicodeRange = EmojiRange });
             var mappings = new Dictionary<string, FontFamily> { ["Fredoka"] = new FontFamily(Fredoka) };
-            // WPF's "Consolas, Courier New" (66 sites) has neither face off Windows, and Avalonia never
-            // resolves a generic "monospace" inside a composite family (it requires the returned family
-            // name to contain the requested one), so both go to the already-bundled Noto Sans Mono.
+            // Every link in WPF's Font.Mono chain (App.xaml) needs a portable mapping. Avalonia
+            // cannot resolve generic "monospace" inside a composite family (the returned family's
+            // name must contain the requested one). Bundled Noto Sans Mono serves both cases.
             if (!System.OperatingSystem.IsWindows())
-                mappings["Consolas"] = mappings["monospace"] = new FontFamily(Mono);
+                mappings["Cascadia Mono"] = mappings["Consolas"] = mappings["Courier New"] =
+                    mappings["monospace"] = new FontFamily(Mono);
             return new FontManagerOptions
             {
                 DefaultFamilyName = Inter,

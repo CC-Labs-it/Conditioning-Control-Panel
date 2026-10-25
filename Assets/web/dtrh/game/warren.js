@@ -77,6 +77,11 @@ const STATION_META = {
   boudoir: { label: 'THE BOUDOIR', glyph: '🛏', accent: 0xff8ac2, sub: 'craft · what you carried down' },
 };
 
+/* ---- feel pass, wave 2 (hub lane). These match the animation lengths in feel-hub.css. ---- */
+const REFUSE_MS = 380;   // the sideways no on a refused buy button
+const BLOOM_MS = 1500;   // the bought row's bloom
+const DRAIN_MS = 950;    // the wallet chip draining after a spend
+
 export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, runSetup, onDescend, onExit, onOptions, onReportBug, fullscreen, guide }) {
   const root = document.createElement('div');
   root.className = 'wr-root';
@@ -639,8 +644,8 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
     // currency chips
     chrome.chips.innerHTML = '';
     el('wr-chip', chrome.chips, v.rankName);
-    el('wr-chip', chrome.chips, `${GLYPHS.drops} ${nfmt(v.sparks)}`);
-    el('wr-chip', chrome.chips, `${GLYPHS.gold} ${nfmt(v.gold)}`);
+    walletChip('sparks', v.sparks, `${GLYPHS.drops} ${nfmt(v.sparks)}`);
+    walletChip('gold', v.gold, `${GLYPHS.gold} ${nfmt(v.gold)}`);
 
     // FALL IN caption + chips under the portal
     chrome.fall.innerHTML = '';
@@ -794,8 +799,8 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
 
   const STATION_WINDOWS = {
     toybox: [
-      { id: 'hands',  side: 'left',  title: 'POCKETS', sub: 'grab toys in the fall, fire from the dock', render: renderHandsWin },
-      { id: 'toys',   side: 'left',  title: 'TOYS', sub: 'you press them mid-descent', reveal: 'toybox_toys',
+      { id: 'hands',  side: 'left',  title: 'POCKETS', sub: 'grab toys in the fall, they wake on their own', render: renderHandsWin },
+      { id: 'toys',   side: 'left',  title: 'TOYS', sub: 'they wake on their own mid-descent', reveal: 'toybox_toys',
         gate: (v) => catHasDiscovery(v, 'skill'), render: shelfWin('skill') },
       { id: 'accs',   side: 'right', title: 'ACCESSORIES', sub: 'they shape the whole fall', reveal: 'toybox_accessories',
         gate: (v) => catHasDiscovery(v, 'accessory'), render: shelfWin('accessory') },
@@ -963,12 +968,54 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
     cols.left.scrollTop = keep.l;
     cols.right.scrollTop = keep.r;
     winLayer.scrollTop = keep.w;   // no-ops on the desktop (non-scrolling) layer
+    applyBloom();
   }
 
   // ============================ shared row/tile builders ============================
 
+  // ---- feel pass, wave 2: the bank pays and takes visibly; a refusal is a small sideways no ----
+  const feelTimers = new Set();
+  function feelLater(fn, ms) {
+    const id = window.setTimeout(() => { feelTimers.delete(id); try { fn(); } catch (_) { /* ignore */ } }, ms);
+    feelTimers.add(id);
+  }
+  function feelMoment(event, data) {
+    try { window.dispatchEvent(new CustomEvent('dtrh:feel', { detail: Object.assign({ kind: 'moment', event }, data || {}) })); } catch (_) { /* ignore */ }
+  }
+  function refuse(b) {
+    feelMoment('purchase-refused');
+    if (!b || b.classList.contains('is-refused')) return;
+    b.classList.add('is-refused');
+    feelLater(() => b.classList.remove('is-refused'), REFUSE_MS);
+  }
+  let bloomKey = null, bloomUntil = 0;
+  function bought(key, currency) {
+    bloomKey = key; bloomUntil = performance.now() + BLOOM_MS;
+    feelMoment('purchase', { key, currency });
+  }
+  /* refreshWins rebuilds every row, so the bloom is re-applied to the fresh row by its key. */
+  function applyBloom() {
+    if (!bloomKey || !winLayer || performance.now() > bloomUntil) { bloomKey = null; return; }
+    for (const r of winLayer.querySelectorAll('[data-fk]')) {
+      if (r.dataset.fk !== bloomKey) continue;
+      r.classList.add('is-bought');
+      feelLater(() => r.classList.remove('is-bought'), BLOOM_MS);
+    }
+    bloomKey = null;
+  }
+  const wallet = { sparks: null, gold: null, sparksUntil: 0, goldUntil: 0 };
+  /* A balance that just went DOWN drains visibly on its chip (a truthful take: read from the view). */
+  function walletChip(kind, value, text) {
+    const now = performance.now();
+    if (wallet[kind] != null && value < wallet[kind]) wallet[kind + 'Until'] = now + DRAIN_MS;
+    wallet[kind] = value;
+    const c = el('wr-chip', chrome.chips, text);
+    if (now < wallet[kind + 'Until']) c.classList.add('is-drain');
+    return c;
+  }
+
   function buyBtn(label, enabled, onClick) {
-    const b = btn('wr-buy' + (enabled ? '' : ' is-off'), label, () => { if (enabled) onClick(); else sfx('ui_denied', 0.45); });
+    const b = btn('wr-buy' + (enabled ? '' : ' is-off'), label, () => { if (enabled) onClick(); else { sfx('ui_denied', 0.45); refuse(b); } });
     return b;
   }
 
@@ -993,6 +1040,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
     const accent = BRANCH_COLOR[u.branch] || '232,67,147';
     const row = el('wr-row wr-row--stack' + (on ? ' is-on' : owned ? ' is-owned' : ''));
     row.style.setProperty('--acc', accent);
+    row.dataset.fk = 'up:' + u.id;
     const top = el('wr-row-top', row);
     const icon = artIcon(`${ART}upgrades/${u.id}.png`, u.glyph, accent, 76);
     if (!owned) icon.style.opacity = '0.55';
@@ -1011,6 +1059,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
       const rankLocked = v.isPurchaseRankLocked(u.id);
       const b = buyBtn(`Train  ${GLYPHS.drops}${u.cost}`, v.canAffordUpgrade(u.id) && !rankLocked, () => {
         cmd('purchase-upgrade', { id: u.id, cost: u.cost });
+        bought('up:' + u.id, 'sparks');
         showUnlockCard(cardForHabit(u.id));
         window.setTimeout(() => runRevealFlashes('purchase'), 300);
       });
@@ -1034,6 +1083,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
     const accent = !unlocked ? '232,67,147' : boonAcc(b, maxed);
     const row = el('wr-row wr-row--stack' + (unlocked ? ' is-owned' : ''));
     row.style.setProperty('--acc', accent);
+    row.dataset.fk = 'boon:' + b.id;
     const top = el('wr-row-top', row);
 
     // Undiscovered = a MYSTERY: keyhole, "???", never the boon's face.
@@ -1067,6 +1117,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
       const capLocked = v.isCapstoneRankLocked(b.id);
       const deepen = buyBtn(`deepen  ${GLYPHS.drops}${cost}`, !capLocked && v.canAffordDeepen(b.id), () => {
         cmd('set-lifetime-boon', { id: b.id, level: level + 1, cost });
+        bought('boon:' + b.id, 'sparks');
         const willMax = level + 1 >= b.levelValues.length;
         if (willMax && b.capstone) window.setTimeout(() => showUnlockCard(cardForCapstone(b.id)), 250);
         else sfx('ui_deepen', 0.5);
@@ -1085,8 +1136,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
       el('wr-row-desc', det, b.desc);
       if (b.flavor) el('wr-row-flavor', det, b.flavor);
       if (b.activeUse) {
-        const useHint = b.cooldownSec > 0 ? `${b.cooldownSec}s cooldown` : 'limited uses';
-        el('wr-row-active', det, `CONSUMABLE · grab it in the fall, fire from the dock · ${useHint}`);
+        el('wr-row-active', det, 'TOY · grab it in the fall, it wakes on its own');
       }
       if (b.capstone) el('wr-row-capstone' + (maxed ? ' is-maxed' : ''), det, 'max: ' + b.capstone);
       if (b.flavor || b.activeUse || b.capstone || b.desc.length > 100) wireExpand(row, 'boon:' + b.id);
@@ -1143,7 +1193,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
   /** POCKETS pane: consumable HUD slots. Start with one, sew the rest. */
   function renderHandsWin(body, v) {
     const handsCard = el('wr-card', body);
-    el('wr-card-sub', handsCard, `${v.consumableSlots} pocket${v.consumableSlots === 1 ? '' : 's'} · grab toys in the fall and fire them from the dock.`);
+    el('wr-card-sub', handsCard, `${v.consumableSlots} pocket${v.consumableSlots === 1 ? '' : 's'} · grab toys in the fall. they dock and wake on their own.`);
     const handsRow = el('wr-pockets', handsCard);
     for (let i = 0; i < MAX_CONSUMABLE_SLOTS; i++) {
       const owned = i < v.consumableSlots;
@@ -1197,6 +1247,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
       const rankLocked = !owned && v.isDialRankLocked(r.rankReq);
       const row = el('wr-row' + (owned ? ' is-owned' : ''), card);
       row.style.setProperty('--acc', '255,215,0');
+      row.dataset.fk = 'dial:' + r.id;
       const mid = el('wr-row-mid', row);
       el('wr-row-name', mid, r.label);
       if (r.rankReq != null) el('wr-row-flavor', mid, `a deep dial · opens at ${RANK_NAMES[r.rankReq]}`);
@@ -1212,8 +1263,9 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
         // her one gift: a short balance still buys your very first dial
         const clickable = afford || v.dialGiftEligible();
         const b = btn('wr-buy wr-buy--gold' + (afford ? '' : ' is-short'), `unlock  ${GLYPHS.gold} ${r.price}`, () => {
-          if (!clickable) { sfx('ui_denied', 0.45); return; }
+          if (!clickable) { sfx('ui_denied', 0.45); refuse(b); return; }
           cmd('purchase-dial', { id: r.id, cost: r.price });
+          bought('dial:' + r.id, 'gold');
           bark('dial-unlocked', { id: r.id });
           window.setTimeout(() => runRevealFlashes('purchase'), 250);
         }, right);
@@ -1237,6 +1289,7 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
   function consoleRow(item, v) {
     const owned = v.bench.has(item.id);
     const row = el('wr-row wr-row--bench');
+    row.dataset.fk = 'bench:' + item.id;
     el('wr-bench-glyph', row, item.glyph);
     const mid = el('wr-row-mid', row);
     el('wr-row-name', mid, item.label);
@@ -1247,11 +1300,12 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
     } else {
       const afford = v.gold >= item.cost;
       const b = btn('wr-buy wr-buy--gold' + (afford ? '' : ' is-short is-off'), `buy  ${GLYPHS.gold} ${nfmt(item.cost)}`, () => {
-        if (!afford) { sfx('ui_denied', 0.45); return; }
+        if (!afford) { sfx('ui_denied', 0.45); refuse(b); return; }
         cmd('bench-buy', { id: item.id, cost: item.cost });
+        bought('bench:' + item.id, 'gold');
         window.setTimeout(() => {
           const nv = view();
-          if (!nv.bench.has(item.id)) { sfx('ui_denied', 0.45); return; }
+          if (!nv.bench.has(item.id)) { sfx('ui_denied', 0.45); feelMoment('purchase-refused'); return; }
           sfx('ui_unlock', 0.55);
           runRevealFlashes('purchase');
         }, 300);
@@ -1957,6 +2011,10 @@ export function createWarren({ hud, bridge, stations, getMeta, getMediaStats, ru
         try { sfx('reveal_chime', 0.5); } catch (e) { /* ignore */ }
       },
     },
-    dispose() { hud.classList.remove('wr-open'); root.remove(); },
+    dispose() {
+      for (const id of feelTimers) window.clearTimeout(id);
+      feelTimers.clear();
+      hud.classList.remove('wr-open'); root.remove();
+    },
   };
 }
