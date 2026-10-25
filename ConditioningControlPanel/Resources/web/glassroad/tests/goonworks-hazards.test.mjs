@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadTrack } from '../track/load.js';
 import { getGoonworksLayout } from '../track/goonworks-layout.js';
-import { goonworksSetpieces, goonworksPose, apertureContains } from '../track/goonworks-setpieces.js';
+import { goonworksSetpieces, goonworksPose, apertureContains, apertureAngle } from '../track/goonworks-setpieces.js';
+import { setMachineryBeat, machineryBeatAt } from '../track/machineryBeat.js';
 import { createGoonworksHazards, goonworksOverlap } from '../sim/goonworksHazards.js';
 import { S, RESPAWN, cloneState } from '../sim/state.js';
 import { makeFeel, place, recorder } from './sim-fake.mjs';
@@ -48,6 +49,36 @@ test('wheel support and missing-sector containment stay bounded across a full re
     if (goonworksOverlap(row, pose, { x: 0, along: 0, h: 0 })) blocked++; else clear++;
   }
   assert.ok(clear > 30 && blocked > 60);
+});
+
+test('all four equally spaced windows pass a complete kart, and all four spokes block it', () => {
+  const row = rows.find(r => r.kind === 'wheel');
+  assert.equal(row.openings, 4);
+  for (let i = 0; i < 4; i++) {
+    const open = { angle: -Math.PI / 2 + i * Math.PI / 2 };
+    assert.equal(goonworksOverlap(row, open, {x:0,along:0,h:0}), false, 'opening ' + i);
+    assert.equal(goonworksOverlap(row, {angle:open.angle + Math.PI / 4}, {x:0,along:0,h:0}), true, 'spoke ' + i);
+    for (const radius of [2,8,14]) {
+      const angle = open.angle + i * Math.PI / 2;
+      assert.equal(apertureContains(row, open, Math.cos(angle)*radius, row.centerY + Math.sin(angle)*radius), false);
+    }
+  }
+});
+
+test('fast beat kicks catch a stationary racer when a solid spoke crosses the opening', () => {
+  const row = rows.find(r => r.kind === 'wheel');
+  for (const bpm of [96.75, 180, 240]) {
+    setMachineryBeat(track, {enabled:true,songS:0,raceS:0,bpm,offsetS:0,playing:true});
+    const toys = createGoonworksHazards(track, layout), r = racer(row, 0);
+    toys.apply(r, cloneState(r.st), 0);
+    let hit = null;
+    for (let i = 1; i <= 24 && !hit; i++) hit = toys.apply(r, cloneState(r.st), i / 120);
+    assert.equal(hit, row.id, 'closed moving spoke at ' + bpm + ' BPM');
+    const pose0 = goonworksPose(row, 0, machineryBeatAt(track, 0));
+    const pose1 = goonworksPose(row, 60/bpm, machineryBeatAt(track, 60/bpm));
+    assert.ok(Math.abs(Math.abs(pose1.angle-pose0.angle)-Math.PI/6)<1e-9, '30 degrees per beat');
+    setMachineryBeat(track, null);
+  }
 });
 
 test('screen shutters sweep their true lateral position and leave both outside lanes open', () => {
@@ -164,7 +195,7 @@ test('wheel face colours tile one opaque surface without hidden caps at either v
           area[m.position.z > 0 ? 0 : 1] += Math.abs(cross.z) / 2;
         }
       }
-      const expected = row.radius ** 2 * (Math.PI * 2 - row.gap) / 2;
+      const expected = row.radius ** 2 * (Math.PI * 2 - row.gap * row.openings) / 2;
       for (const value of area) assert.ok(Math.abs(value - expected) / expected < .001, `cap colors cover ${value}, expected ${expected}`);
       for (const time of [0, 2.35, 5.1]) {
         view.update(time); scene.updateMatrixWorld(true);
@@ -174,7 +205,7 @@ test('wheel face colours tile one opaque surface without hidden caps at either v
             const angle = (i + .371) * Math.PI * 2 / 49;
             const origin = new Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, side * distance).applyMatrix4(rotor.matrixWorld);
             const hits = new Raycaster(origin, direction, 0, distance + row.depth).intersectObjects(surface, false);
-            const solid = angle > row.gap / 2 && angle < Math.PI * 2 - row.gap / 2;
+            const solid = apertureAngle(row, angle) >= row.gap / 2;
             assert.equal(hits.length, solid ? 1 : 0, `${row.id} at ${time}s, side ${side}, ${distance}m, radius ${radius}, angle ${angle}`);
             if (solid) assert.ok(Math.abs(hits[0].distance - (distance - row.depth / 2)) < .0001);
           }

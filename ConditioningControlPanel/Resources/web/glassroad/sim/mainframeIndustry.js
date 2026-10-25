@@ -1,9 +1,12 @@
 // Physical machine rooms. Render and contact share these race-clock poses.
 import { S, BOOST, RESPAWN } from './state.js';
 import { applyBoost, boostHoldLeftS } from './boost.js';
-import { clamp } from '../core/math.js';
+import { clamp, wrap } from '../core/math.js';
 import { yawParams, calmOf } from './steer.js';
 import { machineryBeatAt, beatCycle, machineryRearming } from '../track/machineryBeat.js';
+import { makeQuery } from '../track/query.js';
+
+export const PRESS_BODY = Object.freeze({ height: 2.2, radius: .7, kartHeight: 1.6, repeatS: .8 });
 
 export function industryZones(track) {
   if (track.id !== 'mainframe') return [];
@@ -32,12 +35,12 @@ export function industryPose(zone, timeS, beat = null) {
   if (beat && zone.kind === 'piston') {
     const offset = Math.round(zone.offsetS / beat.beatS);
     // An initial offset must enter at clear, never skip straight to a closed press.
-    const safe = machineryRearming(beat, offset) || beat.beat < beatCycle(-offset,16);
-    const t = beatCycle(beat.beat + offset, 16);
-    const phase = safe ? 'warn' : t < 4 ? 'clear' : t < 7 ? 'warn' : t < 8 ? 'lower' : t < 10 ? 'hold' : t < 13 ? 'rise' : 'clear';
-    const lift = phase === 'lower' ? 7 * (1 - ease(t - 7)) : phase === 'hold' ? 0 : phase === 'rise' ? 7 * ease((t - 10) / 3) : 7;
-    return { phase, lift, active: lift < 1.6, warning: phase === 'warn', travel: t / 16,
-      impactIndex: safe ? null : Math.floor((beat.beat + offset - 8) / 16) };
+    const safe = machineryRearming(beat, offset, 8) || beat.beat < beatCycle(-offset,8);
+    const t = beatCycle(beat.beat + offset, 8);
+    const phase = safe ? 'warn' : t < 1 ? 'clear' : t < 3 ? 'warn' : t < 4 ? 'lower' : t < 5 ? 'hold' : t < 6 ? 'rise' : 'clear';
+    const lift = phase === 'lower' ? 7 * (1 - ease(t - 3)) : phase === 'hold' ? 0 : phase === 'rise' ? 7 * ease(t - 5) : 7;
+    return { phase, lift, active: lift < PRESS_BODY.kartHeight, warning: phase === 'warn', travel: t / 8,
+      impactIndex: safe ? null : Math.floor((beat.beat + offset - 4) / 8) };
   }
   const t = ((Math.max(0, timeS) + zone.offsetS) % 9 + 9) % 9;
   if (zone.kind !== 'piston') return { phase: 'running', lift: 0, active: true, warning: false, travel: t / 9 };
@@ -47,19 +50,77 @@ export function industryPose(zone, timeS, beat = null) {
   return { phase, lift, active: lift < 1.6, warning: phase === 'warn', travel: t / 9 };
 }
 
+function local(st, z) {
+  const d = z.p.map((v,j) => st[S.posX+j] - v);
+  return { x: d.reduce((a,v,j)=>a+v*z.b[j],0), along: d.reduce((a,v,j)=>a+v*z.t[j],0), h: d.reduce((a,v,j)=>a+v*z.n[j],0) };
+}
+/** The same solid head the renderer draws, with space for the kart's actual body. */
+export function pressOverlap(z, pose, p) {
+  return Math.abs(p.x-z.x) < z.w/2+PRESS_BODY.radius && Math.abs(p.along) < z.len/2+PRESS_BODY.radius
+    && p.h >= -.6 && p.h + PRESS_BODY.kartHeight > pose.lift && p.h < pose.lift + PRESS_BODY.height;
+}
+
 export function createMainframeIndustry(track, events) {
-  const zones = industryZones(track), memory = new Map(), yp = {};
-  let lastT = null;
-  const api = { zones, hits: 0, update, steer, reset };
-  function reset() { memory.clear(); lastT = null; api.hits = 0; }
+  const zones = industryZones(track), memory = new Map(), yp = {}, query = makeQuery();
+  let times = new WeakMap();
+  const api = { zones, hits: 0, update, apply, steer, reset };
+  function reset() { memory.clear(); times = new WeakMap(); api.hits = 0; }
+  function pressHit(r,z,previous,timeS,t0,sink) {
+    const st=r.st, distance=Math.hypot(...z.p.map((_,j)=>st[S.posX+j]-previous[S.posX+j]));
+    if(distance>25) return false;
+    if(Math.abs(wrap(previous[S.s]-z.s+track.lengthM/2,track.lengthM)-track.lengthM/2)>distance+z.len/2+3)return false;
+    const a=local(previous,z), b=local(st,z), at=f=>({x:a.x+(b.x-a.x)*f,along:a.along+(b.along-a.along)*f,h:a.h+(b.h-a.h)*f});
+    if(Math.min(Math.abs(a.along),Math.abs(b.along))>z.len/2+PRESS_BODY.radius+distance || Math.min(a.h,b.h)>10) return false;
+    const solid=f=>pressOverlap(z,industryPose(z,t0+(timeS-t0)*f,machineryBeatAt(track,t0+(timeS-t0)*f)),at(f));
+    const inside=solid(0);
+    if(inside&&!solid(1))return false; // A caught kart may always escape the head.
+    const steps=Math.min(128,Math.max(2,Math.ceil((distance+(timeS-t0)*45)/.2)));
+    let fraction=inside?1:null;
+    if(!inside)for(let i=1;i<=steps;i++)if(solid(i/steps)){
+      let lo=(i-1)/steps,hi=i/steps;
+      for(let n=0;n<9;n++){const mid=(lo+hi)/2;if(solid(mid))hi=mid;else lo=mid;}
+      fraction=lo;break;
+    }
+    if(fraction===null)return false;
+    const point=at(fraction), xDepth=z.w/2+PRESS_BODY.radius-Math.abs(point.x-z.x), alongDepth=z.len/2+PRESS_BODY.radius-Math.abs(point.along);
+    const sideHit=xDepth<alongDepth, axis=sideHit?z.b:z.t, value=sideHit?point.x-z.x:point.along, sign=Math.sign(value)||-1;
+    if(inside){
+      const push=(sideHit?xDepth:alongDepth)+.06;
+      for(let j=0;j<3;j++)st[S.posX+j]+=axis[j]*sign*push;
+    }else{
+      const f=Math.max(0,fraction-.06/Math.max(distance,.06));
+      for(let j=0;j<3;j++)st[S.posX+j]=previous[S.posX+j]+(st[S.posX+j]-previous[S.posX+j])*f;
+    }
+    const speed=axis.reduce((v,n,j)=>v+st[S.velX+j]*n,0), inward=Math.min(0,speed*sign);
+    for(let j=0;j<3;j++)st[S.velX+j]+=axis[j]*sign*(1.2-inward);
+    st[S.engineV]=Math.min(Math.abs(st[S.engineV])*.15,5);
+    st[S.stalled]=Math.max(st[S.stalled],.32);
+    st[S.boostKind]=BOOST.NONE;st[S.boostAmount]=st[S.boostHoldS]=st[S.boostT]=0;
+    st[S.driftDir]=st[S.driftCharge]=st[S.driftStage]=0;
+    const q=track.query(st[S.posX],st[S.posY],st[S.posZ],st[S.seg]|0,query);
+    for(const k of ['seg','segT','s','lateral','height'])st[S[k]]=q[k];
+    const key=r.i+':'+z.id, fresh=timeS>=(memory.get(key)??-Infinity);
+    if(fresh){memory.set(key,timeS+PRESS_BODY.repeatS);api.hits++;
+      events?.emit('industry-hit',{racer:r.i,zone:z.id,kind:z.kind,s:z.s,x:z.x});
+      sink?.emit('wall',{dv:Math.max(2,-inward),kind:'press'});
+    }
+    return true;
+  }
   function update(racers, timeS, dt) {
-    if (!Number.isFinite(timeS) || !(dt > 0) || lastT === timeS) return;
-    if (lastT !== null && (timeS < lastT || timeS - lastT > .5)) { memory.clear(); lastT = timeS; return; }
-    lastT = timeS;
-    for (const r of racers) {
+    if(!(dt>0))return;
+    for(const r of racers)apply(r,r.prev||r.st,timeS,r.events,dt);
+  }
+  function apply(r, previous, timeS, sink=r.events, dt=1/60) {
+      if(!Number.isFinite(timeS))return;
+      const old=times.get(r);
+      if(old===timeS)return;
+      times.set(r,timeS);
+      if(old!==undefined&&(timeS<old||timeS-old>.5)){for(const z of zones)memory.delete(r.i+':'+z.id);return;}
       const st = r.st;
-      if (r.finished || r.kind === 'remote' || st[S.respawnPhase] !== RESPAWN.NONE) continue;
+      if (r.finished || r.kind === 'remote' || st[S.respawnPhase] !== RESPAWN.NONE) return;
+      const t0=old??Math.max(0,timeS-dt);
       for (const z of zones) {
+        if(z.kind==='piston'){if(pressHit(r,z,previous,timeS,t0,sink))return z.id;continue;}
         // World-space height rejects a different road deck at an XZ crossing.
         const d = [st[S.posX] - z.p[0], st[S.posY] - z.p[1], st[S.posZ] - z.p[2]];
         const x = d.reduce((a,v,j) => a + v*z.b[j],0), along = d.reduce((a,v,j) => a + v*z.t[j],0);
@@ -75,17 +136,13 @@ export function createMainframeIndustry(track, events) {
         }
         if (memory.has(key)) continue;
         memory.set(key, timeS);
-        if (z.kind === 'piston') {
-          st[S.stalled] = Math.max(st[S.stalled], .32);
-          st[S.engineV] *= .82;
-        } else if (z.kind === 'belt') {
+        if (z.kind === 'belt') {
           if (!(r.feel && st[S.boostAmount] >= .16 && boostHoldLeftS(st,r.feel) > 0))
             applyBoost(st, BOOST.PAD, 0, r.feel, r.events || events, { amount: .16, holdS: .65 });
         }
         api.hits++;
         events?.emit(z.kind === 'belt' ? 'industry-boost' : 'industry-hit', { racer:r.i,zone:z.id,kind:z.kind,s:z.s,x:z.x });
       }
-    }
   }
   function steer(r, actions) {
     if (!zones.length || r.st[S.airborne] || r.st[S.respawnPhase] !== RESPAWN.NONE) return false;

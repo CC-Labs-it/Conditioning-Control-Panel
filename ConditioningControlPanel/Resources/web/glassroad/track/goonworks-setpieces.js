@@ -3,7 +3,8 @@ import { getGoonworksLayout } from './goonworks-layout.js';
 import { beatCycle, gearBeatTravel, machineryRearming } from './machineryBeat.js';
 
 export const GOONWORKS_TOYS = Object.freeze({ kartRadius: .7, kartHeight: 1.6, stallS: .28, repeatS: 1.1,
-  wheelRadius: 15.5, wheelCenterY: 12.5, wheelDepth: 2.4, wheelGap: 125 * Math.PI / 180 });
+  wheelRadius: 15.5, wheelCenterY: 12.5, wheelDepth: 2.4, wheelGap: 50 * Math.PI / 180, wheelOpenings: 4,
+  cycleBeats: 8, wheelRadiansPerBeat: Math.PI / 6 });
 const TAU = Math.PI * 2;
 const cycle = (t, period) => ((t % period) + period) % period;
 const ease = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
@@ -19,8 +20,8 @@ export function goonworksSetpieces(track, layout = getGoonworksLayout(track)) {
   };
   for (let i = 0; i < 3; i++) add('wheel', 'aperture-wheel-' + i, part('mill-hall'), .22 + i * .28,
     { x: 0, centerY: GOONWORKS_TOYS.wheelCenterY, radius: GOONWORKS_TOYS.wheelRadius,
-      gap: GOONWORKS_TOYS.wheelGap, depth: GOONWORKS_TOYS.wheelDepth,
-      phase: -Math.PI / 2 + i * 1.9, speed: (i % 2 ? -.48 : .48), bypass: 18.5 });
+      gap: GOONWORKS_TOYS.wheelGap, openings: GOONWORKS_TOYS.wheelOpenings, depth: GOONWORKS_TOYS.wheelDepth,
+      phase: -Math.PI / 2 + i * 1.9, speed: (i % 2 ? -.8 : .8), bypass: 18.5 });
   for (let i = 0; i < 4; i++) add('shutter', 'screen-shutter-' + i, part('grotto-gallery'), .18 + i * .21,
     { x: 0, w: 10, h: 8.5, depth: 1.8, travel: 6.5, offsetS: i * 1.7, periodS: 8.2, bypass: 14.8 });
   for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) add('block', 'quiz-block-' + j + '-' + i,
@@ -41,19 +42,21 @@ export function goonworksPose(row, timeS = 0, beat = null) {
   const offset = Math.round((row.offsetS || 0) / (beat?.beatS || 1));
   // Moving toys follow their authored pickup pose. Rising toys wait for a full warning cycle.
   const moving = row.kind === 'wheel' || row.kind === 'shutter';
-  const waiting = beat && !moving && beat.beat < beatCycle(-offset,16);
-  if (beat && (waiting || (beat.rearming && machineryRearming(beat, offset)))) return { angle: row.kind === 'wheel' ? -Math.PI / 2 : 0, phase: 'warn', warning: true,
+  const period = GOONWORKS_TOYS.cycleBeats;
+  const waiting = beat && !moving && beat.beat < beatCycle(-offset, period);
+  if (beat && (waiting || (beat.rearming && machineryRearming(beat, offset, period)))) return { angle: row.kind === 'wheel' ? -Math.PI / 2 : 0, phase: 'warn', warning: true,
     active: row.kind === 'wheel' || row.kind === 'shutter', x: row.x,
     height: row.kind === 'wheel' ? row.radius * 2 : row.kind === 'shutter' ? row.h : 0 };
   if (row.kind === 'wheel') {
-    const angle = (beat?.rearming ? -Math.PI / 2 : row.phase) + (beat ? gearBeatTravel(Math.max(0, beat.beat)) * Math.sign(row.speed) * Math.PI / 12 : time * row.speed);
-    const down = Math.abs(Math.atan2(Math.sin(-Math.PI / 2 - angle), Math.cos(-Math.PI / 2 - angle)));
+    const angle = (beat?.rearming ? -Math.PI / 2 : row.phase) + (beat ? gearBeatTravel(Math.max(0, beat.beat)) * Math.sign(row.speed) * GOONWORKS_TOYS.wheelRadiansPerBeat : time * row.speed);
+    const down = apertureAngle(row, -Math.PI / 2 - angle);
     return { angle, phase: down < row.gap * .38 ? 'open' : 'turning', warning: down < row.gap * .65,
       active: true, x: row.x, height: row.radius * 2 };
   }
-  const t = beat ? beatCycle(beat.beat + offset, 16) : cycle(time + (row.offsetS || 0), row.periodS);
+  // Reuse the authored phases at double pace: a full warning still precedes every rise.
+  const t = beat ? beatCycle(beat.beat + offset, period) * 2 : cycle(time + (row.offsetS || 0), row.periodS);
   if (row.kind === 'shutter') {
-    const angle = (beat ? gearBeatTravel(t) / 16 : t / row.periodS) * TAU;
+    const angle = (beat ? gearBeatTravel(t / 2) / period : t / row.periodS) * TAU;
     return { x: row.x + Math.sin(angle) * row.travel, height: row.h, active: true,
       warning: Math.abs(Math.cos(angle)) > .7, phase: 'sweep', angle: 0 };
   }
@@ -81,12 +84,18 @@ export function goonworksPose(row, timeS = 0, beat = null) {
     phase, active: phase === 'flip', warning: phase === 'warn' };
 }
 
-/** A point is solid only inside the actual disc sector, never inside its missing wedge. */
+/** Angular distance to the closest of the four equally spaced opening centres. */
+export function apertureAngle(row, angle) {
+  const spacing = TAU / (row.openings || 1);
+  return Math.abs(cycle(angle + spacing / 2, spacing) - spacing / 2);
+}
+
+/** A point is solid only inside a real spoke, never inside any of its four cutouts. */
 export function apertureContains(row, pose, x, height) {
   const dx = x - row.x, dy = height - row.centerY;
   if (dx * dx + dy * dy > row.radius * row.radius) return false;
   const angle = Math.atan2(dy, dx) - pose.angle;
-  return Math.abs(Math.atan2(Math.sin(angle), Math.cos(angle))) >= row.gap / 2;
+  return apertureAngle(row, angle) >= row.gap / 2;
 }
 
 export function goonworksLocal(st, row, positionIndex = 0) {

@@ -75,8 +75,14 @@ export function createGoonworksHazards(track, layout) {
       const solid = f => goonworksOverlap(row, poseAt(row, t0 + (t1 - t0) * f), at(f));
       // Already-inside racers can escape a closing toy. An after-contact sweep below prevents rear-bump tunnelling.
       if (row.kind !== 'flipper' && solid(0)) continue;
-      const edgeSpeed = machineryBeatAt(track,t1) ? 90 : 12;
-      const steps = Math.min(96, Math.max(2, Math.ceil((distance + Math.max(0, t1 - t0) * edgeSpeed) / .3)));
+      const beat = machineryBeatAt(track, t1);
+      // The kicked stroke peaks at 4.49 times its average speed. Include moving edges in the
+      // sweep budget, especially at 240 BPM, so a spoke cannot slip between contact samples.
+      const edgeSpeed = beat ? row.kind === 'wheel'
+        ? row.radius * K.wheelRadiansPerBeat * 4.5 / beat.beatS
+        : row.kind === 'shutter' ? row.travel * Math.PI * 2 / K.cycleBeats * 4.5 / beat.beatS : 45 / beat.beatS
+        : row.kind === 'wheel' ? row.radius * Math.abs(row.speed) : 12;
+      const steps = Math.min(256, Math.max(2, Math.ceil((distance + Math.max(0, t1 - t0) * edgeSpeed) / .3)));
       for (let i = 0; i <= steps; i++) {
         const fraction = i / steps; if (!solid(fraction)) continue;
         let lo = Math.max(0, (i - 1) / steps), hi = fraction;

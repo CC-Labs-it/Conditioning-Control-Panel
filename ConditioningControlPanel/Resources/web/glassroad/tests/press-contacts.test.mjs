@@ -9,9 +9,9 @@ const zone = { id: 'press', kind: 'piston', p: [0, 0, 0], b: [1, 0, 0], x: 0, of
 test('one quiet thud at the real floor contact, no repeat during its hold', () => {
   const track = {}, heard = [], contacts = createPressContacts(track, (...args) => heard.push(args), [zone]);
   setMachineryBeat(track, { enabled: true, songS: 0, raceS: 0, bpm: 120 });
-  contacts.update(3.9, [0, 0, 0]);
-  contacts.update(4, [0, 0, 0]);
-  contacts.update(4.1, [0, 0, 0]);
+  contacts.update(1.9, [0, 0, 0]);
+  contacts.update(2, [0, 0, 0]);
+  contacts.update(2.1, [0, 0, 0]);
   assert.equal(heard.length, 1);
   assert.equal(heard[0][0], 'press-thud');
   assert.equal(heard[0][1].gain, 1);
@@ -19,14 +19,14 @@ test('one quiet thud at the real floor contact, no repeat during its hold', () =
 test('seeks, paused frames, menus and distant impacts stay quiet', () => {
   const track = {}, heard = [], contacts = createPressContacts(track, (...args) => heard.push(args), [zone]);
   setMachineryBeat(track, { enabled: true, songS: 0, raceS: 0, bpm: 120 });
-  contacts.update(3.9, [0, 0, 0]);
-  contacts.update(4, [0, 0, 0], { paused: true });
-  contacts.update(12, [0, 0, 0]);
-  contacts.update(19.9, [49, 0, 0]);
-  contacts.update(20, [49, 0, 0]);
-  contacts.update(27.9, [0, 0, 0]);
-  contacts.update(28, [0, 0, 0], { active: false });
-  contacts.update(28.1, [0, 0, 0]);
+  contacts.update(1.9, [0, 0, 0]);
+  contacts.update(2, [0, 0, 0], { paused: true });
+  contacts.update(6, [0, 0, 0]);
+  contacts.update(9.9, [49, 0, 0]);
+  contacts.update(10, [49, 0, 0]);
+  contacts.update(13.9, [0, 0, 0]);
+  contacts.update(14, [0, 0, 0], { active: false });
+  contacts.update(14.1, [0, 0, 0]);
   assert.equal(heard.length, 0);
 });
 test('simultaneous nearby presses yield only the closest thud', () => {

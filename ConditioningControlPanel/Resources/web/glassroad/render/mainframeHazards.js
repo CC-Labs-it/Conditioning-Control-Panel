@@ -56,7 +56,7 @@ export function buildMainframeHazards(track, art) {
         const bottom=pose.lift+2, top=12.4;
         e.shaft.position.y=(bottom+top)/2; e.shaft.scale.y=top-bottom;
       }
-      // Warning grows over 1.8 seconds, never flashes. Gentle retains identical collision timing.
+      // Warning grows through two song beats, never flashes. Gentle retains collision timing.
       for(const lamp of e.lamps) {
         const target=pose.warning?.25:pose.active?.14:.06;
         lamp.scale.y+=(target-lamp.scale.y)*Math.min(1,dt/.3);

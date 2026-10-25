@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { loadTrack } from '../track/load.js';
-import { industryZones, industryPose, createMainframeIndustry } from '../sim/mainframeIndustry.js';
+import { industryZones, industryPose, createMainframeIndustry, pressOverlap, PRESS_BODY } from '../sim/mainframeIndustry.js';
 import { S, BOOST } from '../sim/state.js';
 import { makeFeel, place } from './sim-fake.mjs';
 import { makeRace } from './sim-racers-harness.mjs';
@@ -36,8 +36,33 @@ test('press contact is bounded, single-shot, with centre bypass and other-deck r
     const {industry,r,log}=setup(z,{x,height:h}); industry.update([r],active,1/60);
     assert.equal(industry.hits,hit); assert.equal(log.filter(e=>e.name==='industry-hit').length,hit);
     industry.update([r],active+.02,1/60); assert.equal(industry.hits,hit);
-    if(hit) assert.ok(r.st[S.engineV]>=24 && r.st[S.stalled]<.33);
+    if(hit) assert.ok(r.st[S.engineV]<=5 && r.st[S.stalled]<.33);
   }
+});
+
+test('closed heads stop a complete high-speed swept crossing, open heads and centre lane pass',()=> {
+  const z=zones[0];
+  const at=(along,x=z.x,h=0)=>{
+    const st=place(track,{s:z.s+along,lateral:x,height:h,speed:65});
+    for(let j=0;j<3;j++){st[S.posX+j]=z.p[j]+z.t[j]*along+z.b[j]*x+z.n[j]*h;st[S.velX+j]=z.t[j]*65;}
+    return st;
+  };
+  for(const [time,x,hit] of [[5.5,z.x,true],[1,z.x,false],[5.5,0,false]]){
+    const {industry,r,log}=setup(z);r.st=at(7,x);r.prev=at(-7,x);
+    industry.apply(r,r.prev,time,r.events);
+    assert.equal(industry.hits,hit?1:0);
+    const along=z.t.reduce((sum,n,j)=>sum+(r.st[S.posX+j]-z.p[j])*n,0);
+    if(hit){assert.ok(along < -z.len/2-PRESS_BODY.radius);assert.ok(r.st[S.engineV]<=5);assert.ok(log.some(e=>e.name==='wall'));}
+    else assert.ok(along>6.9);
+  }
+});
+
+test('head volume allows real clearance but catches an airborne kart against the visible raised head',()=> {
+  const z=zones[0], pose={lift:3.5};
+  assert.equal(pressOverlap(z,pose,{x:z.x,along:0,h:0}),false);
+  assert.equal(pressOverlap(z,pose,{x:z.x,along:0,h:2.1}),true);
+  assert.equal(pressOverlap(z,pose,{x:z.x,along:0,h:6}),false);
+  assert.equal(pressOverlap(z,pose,{x:z.x+z.w/2+.8,along:0,h:2.1}),false);
 });
 test('tar slows only its physical surface; centre and hops stay free, pause and reset deterministic',()=> {
   const z=zones.find(z=>z.kind==='tar');
