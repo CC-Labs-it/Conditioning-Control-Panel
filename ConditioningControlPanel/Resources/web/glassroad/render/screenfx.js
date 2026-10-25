@@ -250,8 +250,8 @@ export function createScreenFx(three, art = currentArt()) {
         const q = abs(p).sub(half).add(L.flashRound);
         const d = length(max(q, 0)).add(min(max(q.x, q.y), 0)).sub(L.flashRound);
         const inside = dz(smoothstep(-F, F, d).oneMinus());
-        const cu = p.div(half.y.mul(2)), ca = u.t.mul(0.5);
-        const iuv = vec2(cu.x.mul(cos(ca)).sub(cu.y.mul(sin(ca))), cu.x.mul(sin(ca)).add(cu.y.mul(cos(ca)))).mul(0.95).add(0.5);
+        const cu = p.div(half.y.mul(2)), irisAngle = u.t.mul(0.5);
+        const iuv = vec2(cu.x.mul(cos(irisAngle)).sub(cu.y.mul(sin(irisAngle))), cu.x.mul(sin(irisAngle)).add(cu.y.mul(cos(irisAngle)))).mul(0.95).add(0.5);
         const ic = texture(icon, clamp(iuv, 0, 1));
         // an ink glow just inside the feathered edge, a faint halo of paper light just outside it
         const rim = smoothstep(-F * 3, -F * 0.5, d).mul(inside);

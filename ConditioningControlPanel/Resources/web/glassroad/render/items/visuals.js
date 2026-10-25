@@ -32,11 +32,13 @@ import {
   iconFps, iconLive,
 } from './fxmath.js';
 import { createLivingIcons, cellOf } from './living.js';
-import { bubbleCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shieldCloud, blobShadow, confettiCloud } from './materials.js';
+import { bubbleCloud, toyIconCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shieldCloud, blobShadow, confettiCloud } from './materials.js';
 import { createPickupCards, PICKUP_CARD } from './pickupCards.js';
 import { createItemStatus } from './status.js';
 import { advanceRibbon, flightSpark } from './flight.js';
 import { createTethers } from './tethers.js';
+import { createToyProps } from './toys.js';
+import { TOYS } from './toyMath.js';
 import { selectShieldShells, shieldLook } from './shieldMath.js';
 
 const UP = new Vector3(0, 1, 0), V = new Vector3(), W = new Vector3(), N = new Vector3(), QT = new Quaternion(), QS = new Quaternion();
@@ -78,7 +80,7 @@ const MOTE_HEX = Object.fromEntries(Object.entries(MOTE_TINT).map(([k, s]) => [k
 let frame = 0;
 
 /** opts.photosafe (fx/photosafe.js): an impact's soft glow asks it once and is skipped when refused or missing. */
-export function createItemVisuals(scene, art, feel, { photosafe = null, backend = '', track = null, waterVolume = null } = {}) {
+export function createItemVisuals(scene, art, feel, { photosafe = null, backend = '', track = null, waterVolume = null, palette } = {}) {
   const top = ITEM_TIERS.high, start = tierOf(Q.name);
   const root = new Group(); root.name = 'item-visuals'; scene.add(root);
   // polish 6: webgl2 redraws the icon atlas at most 15 fps (backend from buildWorld's renderer; the debug global is the fallback)
@@ -86,12 +88,14 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   const icons = createLivingIcons({ px: start.iconPx, fps: () => iconFps(tierOf(Q.name).iconFps, backendOf()) });
   // motes: bubble rings, pop sprays, throw ribbons, lob dots, box glints and impact glows share one draw
   const bubbles = bubbleCloud(top.bubbles + 24, icons.texture);
+  const toyIcons = toyIconCloud(top.bubbles, icons.texture);
   const motes = moteCloud(top.bubbles * top.motes + 24 * Math.ceil(L.popMotes * L.impactMotesMul) + 8 * (2 * L.trailPts + L.lobDots + 17) + 12 * L.fountain.high + top.puddles * 10 + 24);
-  root.add(bubbles.sprite, motes.sprite);
+  root.add(bubbles.sprite, toyIcons.sprite, motes.sprite);
   const confetti = confettiCloud(L.confetti.high * 6 + L.hitConfetti.high * 4);
   root.add(confetti.mesh);
   const status = createItemStatus(root, feel, { photosafe, track, waterVolume });
-  const tethers = createTethers(root);
+  const tethers = createTethers(root, art, { photosafe, feel });
+  const toys = createToyProps(root, art, feel, { photosafe, palette });
   const CONF = L.confettiColours.map(hexRgb);
   const mask = art && art.tex ? art.tex('sky-spiral-open-mask') : null;
   const meltTex = art && art.tex ? art.tex(L.meltMask) : null;
@@ -107,7 +111,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   const pickupCards = createPickupCards();
 
   // ---- boxes: one card per track box, built on first sight ----
-  const boxes = [], prevAlive = [], turnT = [];
+  const boxes = [], prevAlive = [], turnT = [], boxOwners = new Map();
   function buildBox(i) {
     const o = pickupCards.build(i);
     root.add(o);
@@ -194,16 +198,19 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
   function bubble(x, y, z, id, R, alpha = 1, mode = MODE.icon, seed = 0, moteN = -1, nearFrac = L.nearMaxFrac) {
     R = capR(x, y, z, R, nearFrac);
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
-    const cell = mode >= MODE.shell ? -1 : cellOf(id);
+    const shellOnly = mode === MODE.shell || mode === MODE.goldShell;
+    const cell = shellOnly ? -1 : cellOf(id);
     if (cell >= 0) icons.use(id, iconSeen(x, y, z, R));
-    const br = mode >= MODE.shell ? 1 : breathe(timeS, seed, gentle());
-    if (!bubbles.push(x, y, z, (R * 2 * br) / (mode >= MODE.shell ? L.shellFill : L.iconFill), cell, alpha, mode, seed)) return;
+    const br = shellOnly || TOYS.has(id) ? 1 : breathe(timeS, seed, gentle());
+    const cloud = mode === MODE.bare && TOYS.has(id) ? toyIcons : bubbles;
+    if (!cloud.push(x, y, z, (R * 2 * br) / (shellOnly ? L.shellFill : L.iconFill), cell, alpha, mode, seed)) return;
     drawn++;
     const n = moteN >= 0 ? moteN : tierOf(Q.name).motes;
     if (n > 0) addMotes(x, y, z, R, id, n, seed, alpha);
   }
   /** A 3D effect bubble (held, thrown, trap, box turn): the GLB shell round a bare living icon; the sprite bubble without it. */
   function bubble3d(x, y, z, id, R, alpha = 1, seed = 0, moteN = -1, nearFrac = L.nearMaxFrac) {
+    if (TOYS.has(id)) { bubble(x, y, z, id, R, alpha, MODE.bare, seed, 0, nearFrac); return; }
     if (!shells) { bubble(x, y, z, id, R, alpha, MODE.icon, seed, moteN, nearFrac); return; }
     R = capR(x, y, z, R, nearFrac);
     if (drawn >= tierOf(Q.name).bubbles || R <= 0.001) return;
@@ -220,18 +227,23 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
 
   function update(view, dt, karts = [], camera = null, musicView = {}) {
     dt = Math.max(0, Math.min(dt || 0, 0.1));
+    if (musicView.paused) dt = 0;
     cam = camera;
     if (cam && cam.matrixWorld) { const e = cam.matrixWorld.elements; camFx = -e[8]; camFy = -e[9]; camFz = -e[10]; }
     const soft = gentle(), rate = soft ? 0.5 : 1;
+    const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     timeS += dt * rate;
     bubbles.uniforms.time.value = timeS;
     status.update(view, dt, karts, musicView);
-    tethers.update(view, dt * rate);
+    tethers.update(view, dt, karts, soft || reduced, palette?.());
+    toys.begin(view, dt, karts, camera, soft || reduced);
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
-    bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
+    bubbles.begin(); toyIcons.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
     shields.begin();
-    const endAll = () => { bubbles.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); shields.end(); if (shells) shells.end(); };
+    const endAll = () => { bubbles.end(); toyIcons.end(); motes.end(); puddles.end(); waves.end(); copies.end(); marks.end(); shadows.end(); confetti.end(); shields.end(); if (shells) shells.end(); };
     if (!view) {
+      toys.clear(); tethers.clear(); status.clear();
+      boxOwners.clear();
       trails.clear(); launches.clear(); glows.clear();
       for (const box of boxes) box.visible = false;
       pickupCards.update(dt, soft); endAll(); return;
@@ -254,9 +266,12 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
         o.visible = q < 1; o.scale.setScalar(1 - q);
         o.quaternion.multiply(QS.setFromAxisAngle(UP, q * q * 9));
         const up = rise + mid * (1 - q);
-        bubble3d(o.position.x + N.x * up, o.position.y + N.y * up, o.position.z + N.z * up, 'box', L.bubbleR * Math.min(1, q * 1.4), 1 - rise, i);
+        const held = view.held?.find(h => h.racer === boxOwners.get(i));
+        if (held?.id) bubble3d(o.position.x + N.x * up, o.position.y + N.y * up, o.position.z + N.z * up,
+          held.id, L.bubbleR * Math.min(1, q * 1.4), 1 - rise, i);
       } else {
         turnT[i] = undefined;
+        boxOwners.delete(i);
         o.visible = !!b.alive; o.scale.setScalar(Math.max(0.01, b.k === undefined ? 1 : b.k));
         // a glint sweeps the card's face corner to corner now and then
         const gl = o.visible ? boxGlint(timeS, i, soft) : null;
@@ -297,6 +312,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
       const bob = Math.sin(timeS * L.heldBobHz * 6.283 + h.racer) * L.heldBobM * (me ? 0.5 : 1);
       kartPos(k); W.set(sx, sy + bob, sz).applyQuaternion(kartQuat(k)).add(V);
       const id = h.rolling ? rollIconAt(h.rollT, ITEM_IDS, soft ? L.rollSwapGentleS : L.rollSwapS) : h.id;
+      if (!h.rolling && toys.place(id, [W.x, W.y, W.z], { held: true, rotation: QT })) continue;
       bubble3d(W.x, W.y, W.z, id || 'box', L.heldR * (me ? L.playerHeldScale : 1), 1, h.racer * 7, me ? 4 : -1);
     }
 
@@ -307,6 +323,18 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     for (const pr of view.projectiles || []) {
       const x = comp(pr.p, 0), y = comp(pr.p, 1), z = comp(pr.p, 2), lob = pr.mode === 'lob', id = pr.id | 0, age = pr.t || 0;
       const radius = pr.radiusM || (lob ? L.lobR : L.throwR);
+      const physical = toys.place(pr.kind, pr.p, { age, velocity: pr.v });
+      if (physical) {
+        seen.add(id);
+        const h = trailOf(id, 10), c = TINTS[pr.kind] || TINTS.box;
+        if (age < (h.age || 0)) h.n = 0;
+        h.age = age; advanceRibbon(h, x, y, z, .24);
+        if (!soft && !reduced) for (let i = 0; i < h.n - 1; i++) {
+          const j = i * 3, a = (i + 1) / h.n;
+          motes.push(h.pts[j], h.pts[j + 1], h.pts[j + 2], .06 + .06 * a, c[0], c[1], c[2], a * .55);
+        }
+        continue;
+      }
       bubble3d(x, y, z, pr.kind, radius * launchPop(age, soft), 1, id * 3, -1, L.hazardMaxFrac);
       seen.add(id);
       // where it left: a glow swells and goes (capped like an impact glow), a ring opens on the road
@@ -360,7 +388,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
         d2 = Math.min(d2, dx * dx + dy * dy + dz * dz);
       }
       const warn = tr.armed ? trapWarn(Math.sqrt(d2)) : 0;
-      const ringR = tr.radiusM || (tr.kind === 'melt' ? (feel.get('items.meltRadiusM') || 3.6) : L.trapWarnRingM);
+      const ringR = tr.radiusM || (tr.kind === 'melt' ? (feel.get('items.meltRadiusM') || 5.4) : L.trapWarnRingM);
       // The steady footprint is the real contact radius; the warning brightens it
       // rather than changing its size, so the driver can judge the escape line.
       mark(tr.p, tr.n, ringR, MOTE_HEX[tr.kind] || L.trapWarnColour, (tr.armed ? 0.38 : 0.2) + warn * 0.45 * (soft ? 0.5 : 1));
@@ -373,7 +401,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
         const span = 1 + L.meltWobble * 0.5 + L.meltDripAmp;
         const R = ringR * L.meltPuddleMul;
         lay(e.mesh, tr.p, tr.n, 0, L.meltLiftM); e.mesh.scale.setScalar(R * span);
-        e.mesh.visible = true; e.u.time.value = timeS; e.u.alpha.value = alpha * Math.min(1, (tr.t || 0) * 3 + 0.2); e.u.seed.value = (tr.id | 0) * 1.7;
+        e.mesh.visible = true; e.u.time.value = reduced || soft ? 0 : timeS; e.u.alpha.value = alpha * Math.min(1, (tr.t || 0) / (soft || reduced ? .3 : .12)); e.u.seed.value = (tr.id | 0) * 1.7;
         const n = Math.round((soft ? 4 : 8) * moteK);
         for (let i = 0; i < n; i++) {
           const a = timeS * 0.45 + i * 6.283 / n + (tr.id | 0), r = R * (0.62 + 0.18 * Math.sin(a * 2));
@@ -432,6 +460,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
 
     // pops: a ring that opens and fades, and a spray of motes in the kind's colour
     for (const pop of view.pops || []) {
+      if (TOYS.has(pop.kind)) continue;
       const q = popPhase(pop.t || 0, showS);
       if (q >= 1) continue;
       const x = comp(pop.p, 0), y = comp(pop.p, 1) + 0.6, z = comp(pop.p, 2);
@@ -484,16 +513,26 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     frame++;
 
     pickupCards.update(dt, soft);
-    icons.tick(dt, timeS, soft);
+    icons.tick(dt, timeS, soft, reduced);
     endAll();
   }
 
+  function clear() {
+    timeS = 0;
+    prevAlive.length = turnT.length = confT.length = 0;
+    update(null, 0);
+  }
+
   return {
-    update,
+    update, clear,
+    event(name, payload) {
+      if (name === 'item-box' && payload) boxOwners.set(payload.box, payload.racer);
+      toys.event(name, payload); tethers.event(name, payload);
+    },
     setMediaSource(fn) { pickupCards.setMediaSource(fn); },
     dispose() {
       scene.remove(root);
-      status.dispose(); tethers.dispose(); icons.dispose(); bubbles.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose(); shields.dispose();
+      status.dispose(); tethers.dispose(); toys.dispose(); icons.dispose(); bubbles.dispose(); toyIcons.dispose(); motes.dispose(); plane.dispose(); ghostGeo.dispose(); shields.dispose();
       if (shells) shells.dispose();
       pickupCards.dispose();
       puddles.each((e) => e.mesh.material.dispose()); waves.each((e) => e.mesh.material.dispose());
