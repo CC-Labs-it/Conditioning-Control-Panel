@@ -3199,3 +3199,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-views-companion-workshop-community-cell: +1
 - Community prompt Workshop cell wired on Core CommunityPromptService; rows and Z4 readout stay in sync on Activate/Remove, Z4 Reset/preset pick and tab show, like WPF.
 - Gate: rgate 39697210905 green except known flakes (RaceTrack, GoonClock P108); consent gate tested.
+
+## avalonia-port/wire-win-whatmoved-card: +117
+- What moved card: parity tests for the Show me landings, read mode, keys and fresh install. Duplicate tests removed.
+- Row icons are now Fluent glyphs (IconMap, 📑 -> Tabs), not emoji text.
