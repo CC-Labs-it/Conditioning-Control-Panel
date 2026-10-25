@@ -68,7 +68,9 @@ public sealed class ChasterBillTests
         new SecretChasterTokenStore().Write(new ChasterStoredTokens("acc", "ref", DateTime.UtcNow.AddHours(1)));
         var chaster = new ChasterService(new ChasterClient(new FakeChaster()), new SecretChasterTokenStore(), Path.Combine(dir, "chaster_tab.json"),
             () => new ChasterOptions(CoreSettings.Current.ChasterTabEnabled, CoreSettings.Current.ChasterLockId,
-                new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>()), Paused: CoreSettings.Current.ChasterPaused));
+                new HashSet<string>(CoreSettings.Current.ChasterPrices ?? new List<string>()), Paused: CoreSettings.Current.ChasterPaused, Limits: TabLimits.FromMinutes(
+                    LimitChange.Effective(CoreSettings.Current.ChasterDayLimit, DateTime.UtcNow),
+                    LimitChange.Effective(CoreSettings.Current.ChasterBacklogLimit, DateTime.UtcNow))));
         ChasterHead.Service = chaster;
         var shell = new MainShellWindow();
         try

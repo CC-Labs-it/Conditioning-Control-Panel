@@ -104,6 +104,14 @@
             <Style Selector="^:checked /template/ Border#Fill"><Setter Property="Opacity" Value="0.16"/></Style>
             <Style Selector="^:checked /template/ ContentPresenter#Cp"><Setter Property="Opacity" Value="1"/></Style>
         </ControlTheme>
+        <ControlTheme x:Key="CirceFoot" TargetType="Border">
+            <Setter Property="Background" Value="#10FFFFFF"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource GlassBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Margin" Value="0,0,8,8"/>
+        </ControlTheme>
         <ControlTheme x:Key="CirceHowLine" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
             <Setter Property="FontSize" Value="13"/>
@@ -594,6 +602,80 @@
                                    Foreground="#E0B052" VerticalAlignment="Center"/>
                     </Grid>
                 </Panel>
+                        <!-- the footer facts -->
+                        <WrapPanel x:Name="FootRow" Margin="0,14,-8,0">
+                            <Border Theme="{StaticResource CirceFoot}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="PANIC" FontFamily="Fredoka, Segoe UI" FontSize="11" FontWeight="Bold" Foreground="#FF6B8A" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{loc:Str chaster_fact_panic}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Theme="{StaticResource CirceFoot}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="LIVE" FontFamily="Fredoka, Segoe UI" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource TextLightBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{loc:Str chaster_fact_push_launch}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Theme="{StaticResource CirceFoot}">
+                                <StackPanel Orientation="Horizontal">
+                                    <fx:IconGlyph Kind="ArrowCounterclockwise" Size="12" Foreground="#5FFFD0" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{loc:Str chaster_fact_floor_long}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Theme="{StaticResource CirceFoot}">
+                                <StackPanel Orientation="Horizontal">
+                                    <fx:IconGlyph Kind="LinkDismiss" Size="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{loc:Str chaster_fact_unlink}" FontSize="11" Foreground="{DynamicResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </WrapPanel>
+
+                        <!-- the two limits, behind one link: most players never touch them -->
+                        <Grid Margin="0,10,0,0">
+                            <Button x:Name="BtnLimits" Theme="{StaticResource CirceLink}" Content="{loc:Str chaster_limits}"
+                                    HorizontalAlignment="Left" Click="BtnLimits_Click"/>
+                        </Grid>
+                        <Border x:Name="LimitsCard" IsVisible="False" Theme="{StaticResource CirceCard}" Margin="0,10,0,0">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="90"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="{loc:Str chaster_limit_day}" FontSize="13" Foreground="{DynamicResource TextLightBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                <Slider x:Name="SliderDayLimit" Grid.Column="1" Minimum="15" Maximum="720" TickFrequency="15"
+                                        IsSnapToTickEnabled="True" SmallChange="15" LargeChange="60" VerticalAlignment="Center"
+                                        ValueChanged="LimitSlider_ValueChanged"/>
+                                <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">
+                                    <TextBlock x:Name="TxtDayLimit" FontFamily="Consolas, Courier New" FontSize="15" FontWeight="Bold"
+                                               Foreground="#FF6B8A" HorizontalAlignment="Right"/>
+                                    <!-- a raise waits a day: the figure it goes to, and when -->
+                                    <TextBlock x:Name="TxtDayPending" FontFamily="Consolas, Courier New" FontSize="10.5" HorizontalAlignment="Right"
+                                               Foreground="#E0B052" IsVisible="False" ToolTip.Tip="{loc:Str chaster_limit_pending_tip}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Row="1" Text="{loc:Str chaster_limit_backlog}" FontSize="13" Foreground="{DynamicResource TextLightBrush}"
+                                           VerticalAlignment="Center" Margin="0,12,16,0" ToolTip.Tip="{loc:Str chaster_limit_backlog_hint}"/>
+                                <Slider x:Name="SliderBacklogLimit" Grid.Row="1" Grid.Column="1" Minimum="60" Maximum="2880" TickFrequency="60"
+                                        IsSnapToTickEnabled="True" SmallChange="60" LargeChange="360" VerticalAlignment="Center" Margin="0,12,0,0"
+                                        ValueChanged="LimitSlider_ValueChanged" ToolTip.Tip="{loc:Str chaster_limit_backlog_hint}"/>
+                                <StackPanel Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,12,0,0">
+                                    <TextBlock x:Name="TxtBacklogLimit" FontFamily="Consolas, Courier New" FontSize="15"
+                                               FontWeight="Bold" Foreground="#FF6B8A" HorizontalAlignment="Right"/>
+                                    <TextBlock x:Name="TxtBacklogPending" FontFamily="Consolas, Courier New" FontSize="10.5" HorizontalAlignment="Right"
+                                               Foreground="#E0B052" IsVisible="False" ToolTip.Tip="{loc:Str chaster_limit_pending_tip}"/>
+                                </StackPanel>
+                                <CheckBox x:Name="ChkRelock" Grid.Row="2" Grid.ColumnSpan="3" Margin="0,14,0,0"
+                                          Content="{loc:Str chaster_relock}" ToolTip.Tip="{loc:Str chaster_relock_hint}"
+                                          Foreground="{DynamicResource TextLightBrush}" FontSize="13"
+                                          IsCheckedChanged="ChkRelock_Changed"/>
+                            </Grid>
+                        </Border>
             </StackPanel>
         </Grid>
     </ScrollViewer>

@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## FIN4 Chaster limits and footer
+
+1. Open Chaster from the rail with a linked loopback test account. Open Limits, then close it; it starts collapsed. Toggle relock and revisit the tab: the choice remains. WPF `Views/Tabs/ChasterTabView.xaml.cs:770-847`. Rows: `views-tab-chaster`.
+2. Lower the day cap: the effective amount changes immediately. Raise it: the effective amount stays and a target plus local landing time appears; revisit and the slider still shows the target. Lower back below the effective cap to cancel. Drag backlog below day: it follows the day. Check the day cap meter and both cap facts refresh. WPF `Views/Tabs/ChasterTabView.xaml.cs:773-836`. Rows: `views-tab-chaster`.
+3. Press Gentle then Strict: both limit sliders follow the preset, preserving Core's delayed-raise rules. Check PANIC, LIVE, floor and unlink footer facts, then switch language. WPF `Views/Tabs/ChasterTabView.xaml:987-1061` and `Views/Tabs/ChasterTabView.xaml.cs:1174-1179`. Rows: `views-tab-chaster`.

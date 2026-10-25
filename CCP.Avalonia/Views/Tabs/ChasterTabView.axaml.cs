@@ -4,8 +4,8 @@
 // the link flow (:830-863) on the Core loopback OAuth, the lock pick (:962-1053) and the fact cap.
 // Circe's mood is the CircesMoodMeter heat row and her lines land in PageSays (WPF ChasterTabView.Mood.cs).
 // ponytail: the ground (spiral/glow/ambient), hero art, paper tag,
-// limits, the row trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
-// menu (Menu.cs), how-it-works/hint/reset (Help.cs) and the price box (PriceEdit.cs) are partials.
+// the row trailer and most Fx. The numbers + receipt (Numbers.cs), calendar (Calendar.cs), keys (Keys.cs),
+// limits (Limits.cs), menu (Menu.cs), how-it-works/hint/reset (Help.cs) and the price box (PriceEdit.cs) are partials.
 // The heads-up clock, raffle card and ladder scrap are ChasterTabView.Ladder.cs (ChasterTabView.Fx.cs: FxSwitch/FxConsentShown/FxConsentOk
 // bursts included) are later slices. Unlink, the switch + consent and pause are real (slice 2).
 using System;
@@ -129,6 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             TxtFactCap1.Text = TxtFactCap2.Text = CircesTab.Format((chaster?.Caps ?? TabLimits.Default).DailySeconds, signed: false);
             if (!linked) LockRow.IsVisible = false;
             RefreshHero();
+            RefreshLimits();
             ConsentCard.IsVisible = false;
             if (!linked) return;
             var on = CoreSettings.Current.ChasterTabEnabled;
