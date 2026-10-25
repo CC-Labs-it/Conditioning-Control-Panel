@@ -3003,3 +3003,7 @@ The Studio rack Haptics row right-click now goes through the page's own box (wit
 ## avalonia-port/wire-shell-notifications-toasts: +340
 - Avalonia NotificationService gains WPF's ShowSticky/Dismiss(key) (pre-host replay, dedup, persisted × dismissal via Core NotificationDismissals, secondary action row); catalogue/deeper acceptance notices are sticky; Pink Rush reuses passive corner placement.
 - Tests are deterministic (no wall-clock waits); row stays stub, remaining lifecycle callers named under wire-shell-notifications-toasts-b.
+
+## avalonia-port/chaos-payout-fallin-c: +341
+- Chaos fuse ring flash/brink phases + danger breathe; SNAP/NO FOCUS/effect labels; defuse/detonation cues and HUD flashes; WPF pulse/shake calls behind unseeded hooks.
+- Barks deferred to chaos-payout-barks (needs companion-barks BarkEngine); remap/heavy gate/pulse window/shake to chaos-payout-fallin-d.
