@@ -103,9 +103,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
     public sealed class MakeHerYoursViewModel : INotifyPropertyChanged
     {
         private readonly global::Avalonia.Visual? _host;
-        // WPF App.CommunityPrompts: one service, owned by the room's Workshop COMMUNITY cell (null outside the room).
+        // WPF App.CommunityPrompts: one service, owned by the room's Workshop COMMUNITY cell. v2 adopts this view
+        // onto Companion > Personality, outside the collapsed room, so fall back to the shell's room.
         private Runtime.WorkshopCommunityCell? Community =>
-            (_host?.FindAncestorOfType<CompanionRoomView>()?.WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Community;
+            ((_host?.FindAncestorOfType<CompanionRoomView>() ?? Shell?.RoomView())?.WorkshopZone.DataContext as Runtime.WorkshopRuntimeVm)?.Parts.Community;
         private Window? Owner() => _host == null ? null : TopLevel.GetTopLevel(_host) as Window;
         private readonly ObservableCollection<PresetChip> _presets = new();
         private bool _isSpiceOn;

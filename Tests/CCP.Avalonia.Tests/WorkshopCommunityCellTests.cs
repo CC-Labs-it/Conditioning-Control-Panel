@@ -11,6 +11,7 @@ using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion.Runtime;
@@ -178,7 +179,7 @@ public sealed class WorkshopCommunityCellTests
     });
 
     [Fact]
-    public Task CommunityCellIsReachableThroughTheCompanionWorkshopDrawer() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task CommunityCellIsReachableThroughTheCompanionPersonalityPage() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
@@ -193,9 +194,11 @@ public sealed class WorkshopCommunityCellTests
         var shell = new MainShellWindow();
         try
         {
-            shell.Show(); shell.ShowTab("companion"); Dispatcher.UIThread.RunJobs();
-            shell.GetLogicalDescendants().OfType<WorkshopAccordion>().Single().ExpandAndReveal(); Dispatcher.UIThread.RunJobs();
+            // Companion v2 collapses the room (WPF CompanionTabView.xaml.cs:36-40); the cell and Z4 live on
+            // Companion > Personality (WPF PersonalityPage.xaml.cs:38-48).
+            shell.Show(); shell.ShowTab("personality"); Dispatcher.UIThread.RunJobs();
             var cell = shell.GetLogicalDescendants().OfType<WorkshopCommunityCell>().Single();
+            Assert.NotNull(cell.FindAncestorOfType<global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.PersonalityPage>());
             Assert.True(cell.IsVisible); Assert.True(cell.FindControl<Button>("BtnBrowsePrompts")!.IsVisible);
 
             // WPF re-reads Z4 straight after Activate/Remove (MainWindow.CompanionTab.cs:184), not on the next tab show.

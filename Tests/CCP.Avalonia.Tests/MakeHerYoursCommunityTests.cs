@@ -27,7 +27,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>Z4's Community link (WPF BtnBrowsePrompts_Click, MainWindow.Patreon.cs:2252-2291) driven
-/// from the shell's Companion tab, through the shared Core CommunityPromptService.</summary>
+/// from the shell's Companion > Personality page, through the shared Core CommunityPromptService.</summary>
 public sealed class MakeHerYoursCommunityTests
 {
     private sealed class Handler : HttpMessageHandler
@@ -82,11 +82,14 @@ public sealed class MakeHerYoursCommunityTests
         try
         {
             shell.Show();
-            shell.ShowTab("companion");
+            // Companion v2 (WPF CompanionTabView.xaml.cs:36-40): Z4 and the Community cell live on
+            // Companion > Personality (WPF PersonalityPage.xaml.cs:38-48), adopted out of the collapsed room.
+            shell.ShowTab("personality");
             Dispatcher.UIThread.RunJobs();
             var view = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single();
+            Assert.NotNull(view.FindAncestorOfType<global::ConditioningControlPanel.Avalonia.Views.Controls.Companion.Pages.PersonalityPage>());
             // The one shared service is the room's Workshop COMMUNITY cell's (WPF App.CommunityPrompts).
-            var cell = (view.FindAncestorOfType<CompanionRoomView>()!.WorkshopZone.DataContext as WorkshopRuntimeVm)!.Parts.Community;
+            var cell = (shell.RoomView()!.WorkshopZone.DataContext as WorkshopRuntimeVm)!.Parts.Community;
             cell.Service = prompts;
             bool CellLists(string name) => cell.FindControl<StackPanel>("InstalledPromptsPanel")!.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == name);
             File.WriteAllText(Path.Combine(dir, "community-prompts", "installed-id.json"),
