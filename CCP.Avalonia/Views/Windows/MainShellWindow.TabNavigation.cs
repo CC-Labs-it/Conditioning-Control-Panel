@@ -6,9 +6,11 @@
 // is real too, and runs inside ShowTab (MainShellWindow.AmbientFx.cs).
 //
 // What is NOT, on purpose, each named so it is not lost silently:
-//   - The transition choreography (AnimateTabIn, the Stop*Shimmer/Pulse/Motion calls).
-//   - Per-tab side effects on the way in (RefreshPresetsList, StopPolling on leaving Available Subjects,
-//     UpdatePatreonUI, RefreshIntakePassTile, RefreshDashboardRail - its favorites half is restored). Those reach App.* or a service.
+//   - Transition choreography lives in MainShellWindow.TabTransitions.cs. Season shimmer,
+//     skill-tree air and vault motion park with IsVisible. RefreshEntitlementVeils owns the
+//     tab half of UpdatePatreonUI, AccountSettingsSection owns its account half.
+//   - AvailableSubjects StopPolling/LeaveLobbyTab await the unported directory + lobby lifecycle.
+//     (WPF BtnPresets_Click's RefreshPresetsList is dead: no XAML names the handler.)
 //     The FIVE that do not are restored in OnTabShown below:
 //       * StudioTab.OnTabShown() for "studio" and StudioTab.FocusRackEntry("haptics") for the
 //         haptics alias - ported view state on StudioTabView. Without the second, ShowTab("haptics")
@@ -171,6 +173,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var panel = this.FindControl<Control>(name);
                 if (panel is not null) panel.IsVisible = name == target;
             }
+            // WPF AnimateTabIn on every arm of the switch (MainShellWindow.TabTransitions.cs).
+            AnimateTabIn(this.FindControl<Control>(target), tab);
             NoteTabHistory(tab); // back/forward (MainShellWindow.TabHistory.cs); unknown keys never reach it
             _tabBefore = CurrentTab;
             CurrentTab = tab;
@@ -199,7 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // three (MainWindow.TabNavigation.cs:260/476/501): the Dashboard and the rack
                     // both host real dose dials, so a lock that was latched rather than re-derived
                     // could survive a crash, an abort or an out-of-order session event.
-                    case "settings": RefreshFavoritesRail(); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("daily-free", "settings"); break;
+                    case "settings": RefreshFavoritesRail(); RefreshSessionFeatureLock(); RefreshIntakePassTile(); MaybeShowFeatureIntro("daily-free", "settings"); break;
                     case "progression": RefreshFavoritesRail(); break; // WPF TabNavigation.cs:308 (RefreshDashboardRail)
                     case "studio": StudioRack?.OnTabShown(); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("studio-rack", "studio"); break;
                     case "haptics": StudioRack?.FocusRackEntry("haptics"); RefreshSessionFeatureLock(); MaybeShowFeatureIntro("haptics"); break;
@@ -280,11 +284,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                     // WPF MainWindow.TabNavigation.cs:324-337: spend the tab's seen-flag on any
                     // route in, then the one-time explainer on top of the tab just shown.
-                    // ponytail: no rail pulse to stop on this head (StopProgramsTabPulse).
                     case "programs":
                         if (!CoreSettings.Current.HasSeenProgramsTab)
                         {
                             CoreSettings.Current.HasSeenProgramsTab = true;
+                            StopNavDoorHeaderPulse("programs"); // WPF :453 StopProgramsTabPulse
                             CoreSettings.Save();
                         }
                         ProgramsIntroPopup.ShowIfFirstTime(this);

@@ -254,6 +254,7 @@ public sealed class AssetsTabTests
     {
         var cb = await Realized(shell, () => tab.AssetTreeView.GetVisualDescendants().OfType<CheckBox>().FirstOrDefault());
         var row = (Control)cb.GetVisualParent()!;
+        shell.CompleteTabTransition(); // sample the row after its tab entrance has landed
         var on = cb.TranslatePoint(new Point(cb.Bounds.Width / 2, cb.Bounds.Height / 2), shell)!.Value;
         void Hover(Point p)
         {
