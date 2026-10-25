@@ -92,10 +92,12 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
   const karts = opts.karts || [];
   let enabled = opts.enabled !== false;
   let mode = shadowMode(Q.shadows, Q.name, enabled);
+  let disposed = false;
   const owned = [];
   const lamp = light || new DirectionalLight('#ffffff', 0);
   if (!light) { lamp.position.set(...dir); scene.add(lamp); owned.push(lamp); }
-  if (!lamp.target.parent) scene.add(lamp.target);
+  const addedTarget = !lamp.target.parent;
+  if (addedTarget) scene.add(lamp.target);
 
   // the map, set up once at the start tier's size (a later governor step only turns it off or on)
   const size = shadowSize(Q.name, W);
@@ -169,7 +171,7 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
 
   /** cameraPos: [x, y, z] or a Vector3; forward (optional): the view direction, for the lead. */
   function update(cameraPos, forward = null) {
-    if (mode === 'off') return;
+    if (disposed || mode === 'off') return;
     if (mode === 'map') {
       const c = Array.isArray(cameraPos) ? cameraPos : [cameraPos.x, cameraPos.y, cameraPos.z];
       let centre = c;
@@ -203,6 +205,7 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
 
   /** Re-read Q after a governor step (map <-> blob; the map keeps its boot size). */
   function retier() {
+    if (disposed) return;
     const next = shadowMode(Q.shadows, Q.name, enabled);
     if (next !== mode) { mode = next; apply(); }
   }
@@ -212,10 +215,16 @@ export function buildShadows(renderer, scene, light, Q, opts = {}) {
     update,
     retier,
     /** The options toggle: off keeps the contact blobs and the baked strips, drops the map. */
-    setEnabled(on) { enabled = !!on; retier(); },
+    setEnabled(on) { if(disposed)return;enabled = !!on; retier(); },
     dispose() {
+      if (disposed) return; disposed = true; mode = 'off';
       lamp.castShadow = false;
       for (const o of owned) { if (o.parent) o.parent.remove(o); }
+      if (addedTarget) lamp.target.removeFromParent();
+      // The course lamp's dispose event releases r186 AnalyticLightNode's ShadowNode,
+      // including both private VSM blur targets/materials. shadow.dispose() alone misses those.
+      lamp.dispose();
+      blobs?.dispose();
       catchMat.dispose(); blobMat.dispose(); blobGeo.dispose();
       if (spots) { spots.geometry.dispose(); spots.material.dispose(); }
     },
