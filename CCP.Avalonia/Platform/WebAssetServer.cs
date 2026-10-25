@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 /// Anything without the token, with a foreign Host header (DNS rebinding), or resolving outside the
 /// root is refused.
 /// </summary>
-public sealed class WebAssetServer : IDisposable
+public sealed partial class WebAssetServer : IDisposable
 {
     static readonly object _sharedLock = new();
     static WebAssetServer? _shared;
@@ -135,13 +135,16 @@ public sealed class WebAssetServer : IDisposable
             return;
         }
 
-        var path = ResolveFile(req.Url!.AbsolutePath);
+        var scrolller = req.Url!.AbsolutePath == "/ccp.scrolller";
+        var path = scrolller ? ResolveScrolller(ctx) : ResolveFile(req.Url.AbsolutePath);
+        if (scrolller && path == null) { res.StatusCode = 403; return; }
         if (path == null) { res.StatusCode = 404; return; }
 
         if (queryToken)
             res.Headers.Add("Set-Cookie", $"{CookieName}={Token}; Path=/; HttpOnly; SameSite=Strict");
         res.ContentType = Types.GetValueOrDefault(Path.GetExtension(path), "application/octet-stream");
-        res.Headers.Add("Cache-Control", "no-cache");
+        res.Headers.Add("Cache-Control", scrolller ? "no-store" : "no-cache");
+        if (scrolller) res.Headers.Add("Access-Control-Allow-Origin", "*");
         res.Headers.Add("X-Content-Type-Options", "nosniff");
         res.Headers.Add("Referrer-Policy", "no-referrer");
         res.Headers.Add("Accept-Ranges", "bytes");
@@ -162,6 +165,7 @@ public sealed class WebAssetServer : IDisposable
         var buf = new byte[81920];
         for (long left = to - from + 1; left > 0;)
         {
+            if (scrolller && !ScrolllerRequestAlive(ctx)) return;
             int n = file.Read(buf, 0, (int)Math.Min(buf.Length, left));
             if (n <= 0) break;
             res.OutputStream.Write(buf, 0, n);

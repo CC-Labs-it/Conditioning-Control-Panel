@@ -84,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
             if (url is null) return;
+            if (url == _scrolllerLocal && _scrolllerOriginal != null) url = _scrolllerOriginal;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
             NavigationCompleted?.Invoke(url);
@@ -110,7 +111,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             try
             {
-                if (e.Request?.Uri is { } uri) Stamp(uri, e.Request.Headers.TrySet);
+                if (e.Request?.Uri is { } uri)
+                {
+                    StampScrolllerHeaders(uri, e.Request.Headers);
+                    Stamp(uri, e.Request.Headers.TrySet);
+                }
             }
             catch (Exception ex) { Log.Debug("WebHost: request header not set: {Error}", ex.Message); }
         }
@@ -264,20 +269,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             }
 
             _fallback.IsVisible = _web is null;
+            TrackScrolllerHost();
             ApplySource();
         }
 
         private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
         {
-            var target = e.Request;
+            var rawTarget = e.Request;
+            var target = rawTarget != null && rawTarget == _scrolllerLocal ? _scrolllerOriginal : rawTarget;
+            if (target != null && !GateScrolllerNavigation(target)) { e.Cancel = true; return; }
             // A CCP_USERDATA_DIR sandbox never loads a real site, whatever the caller's gate says.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(target)) { e.Cancel = true; return; }
+            void RouteScrolllerNavigation()
+            {
+                if (rawTarget != null && ConditioningControlPanel.Services.Fyp.Online.ScrolllerNavigationGate.IsMedia(rawTarget))
+                {
+                    e.Cancel = true;
+                    var version = _scrolllerStopVersion;
+                    global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        if (version == _scrolllerStopVersion) Navigate(rawTarget);
+                    });
+                }
+            }
             var gate = AllowNavigation;
-            if (gate is null) return;
+            if (gate is null) { RouteScrolllerNavigation(); return; }
             // No URL to judge: refuse. A navigation the gate cannot see is exactly the one a
             // hostile page would use to slip past it.
             if (target is null) { e.Cancel = true; return; }
-            if (gate(target)) return;
+            if (gate(target)) { RouteScrolllerNavigation(); return; }
             e.Cancel = true;
             // Host + path only: a signed media URL's query string must not reach the log.
             Log.Warning("WebHost: navigation blocked to {Host}{Path}", target.Host, target.AbsolutePath);
@@ -293,9 +313,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             NavigationRequests++;
+            if (!GateScrolllerNavigation(url)) return;
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
             if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return; }
             if (_web is null) return;
+            url = ScrolllerTarget(url);
             try { _web.Navigate(url); }
             catch (Exception ex) { Log.Debug("WebHost: Navigate failed: {Error}", ex.Message); }
         }
@@ -326,12 +348,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             if (_txtSource is null) return; // fired before the XAML loaded
             var src = Source;
+            if (src != null && !GateScrolllerNavigation(src)) src = null;
             // src! because NativeWebView.Source is annotated non-nullable while its StyledProperty's
             // own default IS null - clearing the page back to null is a real state, not a bug.
             // A sandbox never loads a real site (see OnNavigationStarted); the panel may still name it.
             if (_web is not null)
             {
-                if (!_explicitNavigate) _web.Source = ConditioningControlPanel.Services.SandboxNet.Allows(src) ? src! : null!;
+                if (!_explicitNavigate) _web.Source = src != null && ConditioningControlPanel.Services.SandboxNet.Allows(src) ? ScrolllerTarget(src) : null!;
                 return;
             }
             // No engine: the panel at least names the page that was meant to load.

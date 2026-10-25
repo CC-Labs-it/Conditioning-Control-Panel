@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Scrolller navigation fallback
+
+1. In Home's browser, navigate directly to a Scrolller image/GIF/clip URL. Compare first download and replay: the first charges received bytes; replay uses the device cache without another charge. After today's allowance is exhausted or while away, cached media still opens and an uncached URL is refused. WPF `ConditioningControlPanel/Services/Fyp/Online/ScrolllerWebGate.cs` Rows: `host-scrolller-web-gate`
+2. Turn the server Scrolller switch off: direct Scrolller navigation and previously issued local media URLs refuse. Press panic during a direct-media fetch or replay: playback and transfer stop; a new explicit navigation can start again. WPF `ConditioningControlPanel/Services/Fyp/Online/ScrolllerWebGate.cs` Rows: `host-scrolller-web-gate`
+3. Known deviation: clips download whole before playing (64 MB cap). Embedded image/video/fetch/worker requests get honest identity headers, but cannot be refused, routed to the device cache or charged. Do not report these as full gate parity. WPF `ConditioningControlPanel/Services/Fyp/Online/ScrolllerWebGate.cs` Rows: `host-scrolller-web-gate`
