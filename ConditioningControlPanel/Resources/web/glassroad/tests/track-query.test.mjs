@@ -63,6 +63,22 @@ test('query: wide start shoulder stays on its floor beneath the raised bridge', 
   }
 });
 
+test('query: widened raised shoulder keeps its floor above the lower return deck', () => {
+  const s = 411.8929435091897, lateral = 14.614250674198498, height = .1246495121739104;
+  const { f, P } = place(s, lateral, height);
+  for (const hint of [-1, f.seg, f.seg + 3]) {
+    const q = tr.query(...P, hint);
+    assert.ok(sDiff(q.s, s) < 1e-3);
+    assert.ok(Math.abs(q.height - height) < 1e-3);
+    assert.equal(q.onRoad, true);
+    assert.ok(q.p[1] > 15, 'the lower return deck cannot own this shoulder contact');
+  }
+  const lowerFlight = tr.query(...P, 494);
+  assert.equal(lowerFlight.seg, 494, 'an explicit lower-route hint still owns its airborne coordinates');
+  assert.ok(lowerFlight.height > 13);
+  assert.ok(Math.abs(lowerFlight.p[1] - 2) < 1e-3);
+});
+
 test('query: past the edge, open sides and rails', () => {
   const railS = tr.nodeS[20] + 4, openS = tr.nodeS[OPEN] + 4;
   for (const side of [-1, 1]) {

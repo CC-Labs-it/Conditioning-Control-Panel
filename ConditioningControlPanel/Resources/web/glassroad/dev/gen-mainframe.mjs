@@ -113,7 +113,7 @@ export function buildMainframe() {
     const node = nearest(s); nodes[node].flags.push('boost'); track.boosts.push({ node, x: 0, w: 6, len: 7.5 });
   }
   for (const d of [80, 90, 100, 110, 120]) track.items.push({ node: nearest(at('canal', d)), x: -3, kind: 'bubble' });
-  const from = spans.memory.from + 4, to = spans.memory.to - 4, lanes = [-80, -40, 0, 40, 80], stones = [];
+  const from = spans.memory.from + 4, to = from + Math.round((spans.memory.to - 4 - from) * 2 / 3), lanes = [-80, -40, 0, 40, 80], stones = [];
   const s0 = loaded.nodeS[from], s1 = loaded.nodeS[to];
   for (let i = from; i < to; i++) nodes[i].flags = ['open'];
   const put = (id, a, b, lateral, width) => {
@@ -122,7 +122,7 @@ export function buildMainframe() {
     stones.push({ id, node, ds: round(s0 + a - loaded.nodeS[node]), x: lateral, w: width, len: round(b - a), shape: 'hex' });
   };
   // Each memory block is a destination, with a deliberate jump before its broad landing face.
-  const gapM = 14, count = Math.round((s1 - s0 + gapM) / 68), pitch = (s1 - s0 + gapM) / count;
+  const gapM = 14, count = Math.ceil((s1 - s0 + gapM) / 68), pitch = (s1 - s0 + gapM) / count;
   for (let row = 0; row < count; row++) {
     const a = row * pitch, b = row === count - 1 ? s1 - s0 : a + pitch - gapM;
     lanes.forEach((lateral, lane) => {
@@ -134,7 +134,7 @@ export function buildMainframe() {
       put(`memory-link-${lane}-${row}`, b - 1, b + 15, lateral, 16);
     }
   }
-  track.fields.push({ id: 'memory-tiles', from, to, lanes, stones, platforming: true });
+  track.fields.push({ id: 'memory-tiles', from, to, boostClearTo: spans.memory.to - 4, lanes, stones, platforming: true });
   const scanS = [180, loaded.nodeS[spans.canal.from] + 85, loaded.nodeS[spans.canal.from] + 170,
     at('skybridge', 160), loaded.nodeS[spans['memory-exit'].to] - 35, loaded.nodeS[spans.submerged.from] + 130];
   const scanHalls = scanS.map((s, i) => ({ id: 'scan-' + i, s, node: nearest(s), from: nearest(s - 20), to: nearest(s + 20) }));

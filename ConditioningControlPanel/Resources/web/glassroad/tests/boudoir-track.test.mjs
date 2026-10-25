@@ -73,12 +73,12 @@ test('Bath channel has real curved support, flowing water, a descent and deep sp
   const chute = layout.landmarks.find(p => p.id === 'bath-chute');
   assert.ok(track.frameAt(chute.s0 + 2).p[1] - track.frameAt(chute.s1 - 2).p[1] > 30);
 });
-test('Ten compact islands have broad coherent landing surfaces and close cleanly onto the deck', () => {
-  const track = course(), field = track.fields[0]; assert.equal(field.stones.length, 10);
+test('Seven compact islands have broad coherent landing surfaces and close cleanly onto the deck', () => {
+  const track = course(), field = track.fields[0]; assert.equal(field.stones.length, 7);
   assert.ok(field.stones.every(s => s.w === 32 && s.len === 26));
   assert.ok(Math.abs(field.stones[0].s - field.fromS) < .001);
   assert.ok(Math.abs(field.stones.at(-1).s + 26 - field.toS) < .001);
-  for (let i = 1; i < field.stones.length; i++) assert.ok(field.stones[i].s - field.stones[i - 1].s - 26 > 4.4);
+  for (let i = 1; i < field.stones.length; i++) assert.ok(Math.abs(field.stones[i].s - field.stones[i - 1].s - 29) < .001);
 });
 for (const seed of [1, 241023, 20261024]) test('Boudoir eight-racer two-lap race completes without falls, seed ' + seed, () => {
   const r = makeRace({ track: course(), seed, items: createItems });

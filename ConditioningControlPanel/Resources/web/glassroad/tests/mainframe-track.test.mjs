@@ -52,7 +52,7 @@ test('Mainframe reactor is a full physical helix with a clear raised crossing', 
 });
 test('Mainframe memory tiles start supported in every lane and meet the exit deck', () => {
   const field = track.fields[0];
-  assert.ok(field.toS - field.fromS >= 700);
+  assert.ok(Math.abs(field.toS - field.fromS - 480) < .01);
   assert.equal(field.platforming, true);
   assert.equal(field.lanes.length, 5);
   assert.ok(field.stones.every(stone => stone.shape === 'hex' && stone.w >= (stone.id.startsWith('memory-link') ? 16 : 36)));
@@ -76,7 +76,7 @@ test('Mainframe islands expose void between lanes instead of overlapping into a 
     assert.equal(stoneIn(field, field.fromS + first[i].len / 2, x), null);
     assert.ok(first[i].x - first[i - 1].x - (first[i].w + first[i - 1].w) / 2 >= 2);
   }
-  assert.equal(field.stones.filter(stone => stone.id.startsWith('memory-link')).length, 20);
+  assert.equal(field.stones.filter(stone => stone.id.startsWith('memory-link')).length, 14);
 });
 test('Mainframe jumps retain their physical gallery path above both landings and the void', () => {
   const field = track.fields[0];

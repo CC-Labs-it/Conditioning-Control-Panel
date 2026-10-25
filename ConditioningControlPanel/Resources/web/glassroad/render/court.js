@@ -24,12 +24,33 @@ export function courtLayout(track) {
             [hole.w + width * 2, height, width], { hole: hole.id });
         }
       };
+      if (track.id === 'keep') {
+        // Short chipped blocks follow curved slabs; every piece stays outside the missing stone.
+        const pieces = Math.ceil(hole.len / 1.6), dz = hole.len / pieces;
+        for (const side of [-1, 1]) for (let i = 0; i < pieces; i++) {
+          const s = hole.s + (i + .5) * dz, width = .32 + (i % 3) * .09;
+          add('rim', s, hole.x + side * (hole.w / 2 + width / 2 + .12), -.015,
+            [width, .10 + (i % 3) * .025, dz - .12], { hole: hole.id });
+          add('shaft', s, hole.x + side * (hole.w / 2 + .3), -2.55,
+            [.32, 4.7, dz + .03], { hole: hole.id });
+        }
+        const columns = Math.ceil(hole.w / 1.5), dx = hole.w / columns;
+        for (const side of [-1, 1]) for (let i = 0; i < columns; i++) {
+          const x = hole.x - hole.w / 2 + (i + .5) * dx;
+          add('rim', hole.s + (side > 0 ? hole.len : 0) + side * .3, x, -.01,
+            [dx - .1, .11 + (i % 2) * .035, .35], { hole: hole.id });
+          add('shaft', hole.s + (side > 0 ? hole.len : 0) + side * .3, x, -2.55,
+            [dx + .03, 4.7, .35], { hole: hole.id });
+        }
+        continue;
+      }
       ring('rim', K.rimW, K.rimH / 2, K.rimH);
       // The brass collar owns the upper wall slice, avoiding coplanar inner faces.
       const shaftTop = K.wallTop - K.collarH;
       ring('shaft', K.wallW, (shaftTop - K.depth) / 2, K.depth + shaftTop);
       ring('brass', K.wallW + 0.015, K.wallTop - K.collarH / 2, K.collarH);
     }
+    if (track.id === 'keep') continue;
     // A paired silhouette marks the way out without a beam over the driving line.
     const s = c.toS - K.exitInset, f = track.frameAt(s);
     for (const side of [-1, 1]) {
@@ -51,7 +72,7 @@ export function buildCourt(track, pal) {
   for (const [key, hex] of [['rim', '#f3e2ce'], ['shaft', '#271f38'], ['brass', '#cda15f']]) {
     const rows = layout[key];
     if (!rows.length) continue;
-    const c = new Color(hex), base = vec3(c.r, c.g, c.b), material = new MeshBasicNodeMaterial();
+    const c = new Color(track.id === 'keep' ? key === 'rim' ? '#b99caf' : '#28172f' : hex), base = vec3(c.r, c.g, c.b), material = new MeshBasicNodeMaterial();
     const shade = clamp(dot(normalize(normalWorld), normalize(vec3(...LOOK.lightDir))).mul(0.38).add(0.62), 0.24, 1);
     material.name = 'court-' + key;
     material.colorNode = mix(base, pal?.col ? pal.col(1) : base, key === 'shaft' ? 0.035 : 0.015).mul(shade);
