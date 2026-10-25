@@ -147,6 +147,11 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF: a pass pays (replays + 1) x 50 + 200 XP.</summary>
         public static int AttentionPassXp(int penalties) => (penalties + 1) * 50 + 200;
 
+        /// <summary>WPF VideoService.cs:3494/3861: a mandatory video decodes in software (the LibVLC
+        /// hardware path can wedge on a white frame, #533/#537/#540) unless the user opted into GPU
+        /// decode (VideoForceHardwareDecoding); this is the media option that forces it, or null.</summary>
+        public static string? SoftwareDecodeOption(bool forceHardware) => forceHardware ? null : ":avcodec-hw=none";
+
         /// <summary>WPF NeedsBlurFill: bars (and so the blurred fill) only when the clip's aspect is
         /// more than 3% off the screen's.</summary>
         public static bool NeedsBlurFill(double videoAspect, double screenAspect) =>
@@ -182,6 +187,13 @@ namespace ConditioningControlPanel.Services
             if (key == "Escape") return VideoKeyAction.Dismiss;
             return panicEnabled && key == panicKey ? VideoKeyAction.ForceStop : VideoKeyAction.None;
         }
+
+        /// <summary>WPF SetupStrictHandlers' Closing veto: a strict window refuses a user close only
+        /// while the clip is genuinely playing (never a real teardown, or a strict window is left
+        /// black and un-closable), and stands down once the app has wedged - a lock is only
+        /// defensible while the app responds (#765).</summary>
+        public static bool StrictVetoesClose(bool videoPlaying, bool cleaningUp, bool wedgeStallSeen)
+            => videoPlaying && !cleaningUp && !wedgeStallSeen;
 
         // ---- grace pause (WPF #735) and the clip guards ----
 
@@ -232,10 +244,10 @@ namespace ConditioningControlPanel.Services
         /// <see cref="GuardHeals"/>. "max length" (VideoMaxDurationSeconds cap), "overran" (length + 5 s
         /// safety timer, or 600 s with no length) end the clip. Null = fine.</summary>
         public static string? Guard(double sinceShow, double played, bool framed, bool hasVideo, double lengthSeconds,
-            double sinceFrame, int maxSeconds)
+            double sinceFrame, int maxSeconds, double capSpentBefore = 0)
         {
             if (!framed && hasVideo) return sinceShow >= NoFrameSeconds ? "no frame" : null;
-            if (maxSeconds > 0 && played >= maxSeconds) return "max length";
+            if (VideoMaxCap.CapLeft(maxSeconds, capSpentBefore + played) <= 0) return "max length";
             if (lengthSeconds > 0 ? played >= lengthSeconds + 5 : played >= FallbackSeconds) return "overran";
             return framed && sinceFrame >= OutputLostSeconds ? "output lost" : null;
         }

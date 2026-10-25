@@ -23,7 +23,8 @@
        SdRowActionDanger BasedOn        -> NOT BasedOn: the base's :pointerover sets a pink fill the
                                            danger variant must not inherit. Restated in full.
        Visibility="Collapsed"           -> IsVisible="False"
-       Visibility="Hidden" (SdRackActions) -> dropped; see the note on that key below
+       Visibility="Hidden" (SdRackActions) -> Opacity 0 + no hit test (keeps the row's right edge);
+                                           the rackActions style under UserControl.Styles
        Panel.ZIndex="-1"                -> ZIndex="-1"
        helpers:EmojiTextBlock           -> TextBlock (Avalonia renders colour emoji natively)
        ToolTip="…"                      -> ToolTip.Tip="…"
@@ -129,12 +130,7 @@
             <Setter Property="Margin" Value="10,0,0,0"/>
         </ControlTheme>
 
-        <!-- SdRackActions is NOT ported. On WPF it is Visibility="Hidden" plus a DataTrigger on
-             the ancestor row's IsMouseOver, so a row's action buttons only appear under the
-             pointer. The read-only Core rows keep the same disabled action geometry for now;
-             CRUD belongs with RepaintSessionRack and the head-owned session services.
-             ponytail: restore the hover reveal (a `Border:pointerover StackPanel.rackActions`
-             selector) when those services move to Core. -->
+        <!-- SdRackActions: see the rackActions style under UserControl.Styles. -->
 
         <!-- ============================ pills and badges ============================ -->
         <ControlTheme x:Key="SdPill" TargetType="Border">
@@ -498,6 +494,23 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
         </ControlTheme>
     </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- WPF SdRackActions: a row's action buttons exist only under the pointer. Hidden, not
+             collapsed, so the row's right edge does not shuffle as the pointer crosses the list:
+             Avalonia has no Hidden, so the buttons go transparent and unhittable instead. -->
+        <Style Selector="StackPanel.rackActions">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <!-- WPF Visibility=Hidden also leaves the tab order: no Tab onto an invisible Edit/Delete. -->
+            <Setter Property="KeyboardNavigation.TabNavigation" Value="None"/>
+        </Style>
+        <Style Selector="Border:pointerover > Grid > StackPanel.rackActions">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
+            <Setter Property="KeyboardNavigation.TabNavigation" Value="Continue"/>
+        </Style>
+    </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,*">
 
@@ -920,8 +933,8 @@
                                                   Theme="{StaticResource ToggleStyle}"
                                                   HorizontalAlignment="Right"/>
                                     </Grid>
+                                    <!-- Filled per session (SelectSession), so no loc binding to clobber. -->
                                     <TextBlock x:Name="TxtCornerGifDesc"
-                                               Text="{loc:Str label_place_a_subtle_gif_in_a_screen_corner}"
                                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                                Margin="0,5,0,0" TextWrapping="Wrap"/>
 
@@ -962,7 +975,7 @@
                                         <Grid ColumnDefinitions="*,50">
                                             <Slider x:Name="SliderCornerGifSize" Minimum="100" Maximum="600" Value="300"
                                                     VerticalAlignment="Center"/>
-                                            <TextBlock x:Name="TxtCornerGifSize" Grid.Column="1" Text="{loc:Str label_300px}"
+                                            <TextBlock x:Name="TxtCornerGifSize" Grid.Column="1" Text="300px"
                                                        Foreground="{DynamicResource TextSecondaryBrush}" FontSize="10" VerticalAlignment="Center"
                                                        HorizontalAlignment="Right"/>
                                         </Grid>

@@ -1,251 +1,135 @@
-<!-- PORTED from ConditioningControlPanel/Views/Tabs/AvailableSubjectsTabView.xaml.
-     Structure, ordering, spacing, every x:Name and every loc key are preserved so the two diff
-     directly. Deviations, all forced by real WPF/Avalonia differences:
-
-       <Style x:Key TargetType>          ->  <ControlTheme x:Key TargetType>, applied with Theme=
-       ControlTemplate.Triggers          ->  ^:pointerover / ^:disabled nested selectors
-       <ContentPresenter/>               ->  Content="{TemplateBinding Content}" (trap 6: a bare
-                                             presenter draws NOTHING in Avalonia)
-       Content="{loc:Str ...}" on Button ->  a <TextBlock> child (trap 1: "_" is an access key and
-                                             every loc key here is snake_case)
-       Image + EmojiToImageSource        ->  TextBlock (Avalonia renders colour emoji natively)
-       Visibility="Collapsed"            ->  IsVisible="False"
-       BoolToVisibility                  ->  IsVisible="{Binding HasStatusText}" / "{Binding HasTags}"
-       ToolTip="..."                     ->  ToolTip.Tip="..."
-       x:FieldModifier="internal"        ->  dropped; the x:Names are kept and reached with FindControl
-       <Run Text="{Binding Level}"/>     ->  {Binding LevelDisplay}, the int pre-formatted on the row,
-                                             so the "Lv " Run pair needs no converter
-
-     Dropped, each for a reason that is not a shortcut:
-       PreviewMouseWheel on the scroller - it forwarded to MainWindow only to turn a vertical
-         wheel notch into horizontal scrolling. Avalonia's ScrollViewer already scrolls
-         horizontally when it cannot scroll vertically, so there is nothing to undo.
-       PreviewMouseLeftButtonDown/Up + MouseLeave on Connect - MotionFx.PressSquish, which lives
-         in the WPF head. See the code-behind.
-
-     The roster is placeholder data built in the code-behind (App.AvailableSubjects is a WPF-head
-     service): four rows covering every branch the template carries - status text, tags, a claimed
-     row (dimmed + disabled Connect) and a bare one. -->
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
-             xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
-             xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
-             x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.AvailableSubjectsTabView"
-             mc:Ignorable="d"
-             d:DesignHeight="450" d:DesignWidth="800">
-
-    <UserControl.Resources>
-
-        <!-- The CTA's WPF Button.Style, verbatim: purple plate, white text, 8px radius,
-             hover dims the plate to 0.9. -->
-        <ControlTheme x:Key="SubjectsCtaButton" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource NeonPurpleBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="border" CornerRadius="8"
-                            Padding="{TemplateBinding Padding}"
-                            Background="{TemplateBinding Background}">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:pointerover /template/ Border#border">
-                <Setter Property="Opacity" Value="0.9"/>
-            </Style>
-        </ControlTheme>
-
-        <!-- The card's Connect button. Same plate; disabled repaints it to the muted violet
-             the "Taken" state wears. -->
-        <ControlTheme x:Key="SubjectsConnectButton" TargetType="Button">
-            <Setter Property="Background" Value="{DynamicResource NeonPurpleBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Template">
-                <ControlTemplate TargetType="Button">
-                    <Border x:Name="border" CornerRadius="8"
-                            Padding="{TemplateBinding Padding}"
-                            Background="{TemplateBinding Background}">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          ContentTemplate="{TemplateBinding ContentTemplate}"
-                                          HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Style Selector="^:disabled /template/ Border#border">
-                <Setter Property="Background" Value="#3A2E5A"/>
-            </Style>
-            <Style Selector="^:disabled">
-                <Setter Property="Foreground" Value="White"/>
-            </Style>
-        </ControlTheme>
-
-    </UserControl.Resources>
-
-    <Grid Margin="36,28,36,28" RowDefinitions="Auto,Auto,*">
-
-        <!-- ============================================================ -->
-        <!-- AMBIENT LAYER - the one looping FX on this tab: a very sparse -->
-        <!-- fog drift behind the roster. Declared FIRST so it is the      -->
-        <!-- bottom of the grid's z-order; the cards paint their own opaque-->
-        <!-- surfaces on top, so the mist only reads through the gutters.  -->
-        <!--                                                              -->
-        <!-- Two puffs at low intensity, not the default three: this tab is-->
-        <!-- a roster you scan, and the air behind it must never compete   -->
-        <!-- with a name. The tint comes from FxTheme (the mod's mist      -->
-        <!-- colour), so it follows the active mod instead of being nailed -->
-        <!-- to one hex - see MainWindow.SubjectsFx for why that is not    -->
-        <!-- literally NeonPurple.                                        -->
-        <!--                                                              -->
-        <!-- AmbientFxCanvas is hit-test invisible by construction and runs -->
-        <!-- a self-stopping clock. MainWindow.SubjectsFx starts it and     -->
-        <!-- registers it with RegisterTabFx; on this head the code-behind  -->
-        <!-- starts it with the same tuning and stops it on unload.         -->
-        <!-- ============================================================ -->
-        <fx:AmbientFxCanvas x:Name="SubjectsAmbientFx" Grid.Row="0" Grid.RowSpan="3"/>
-
-        <!-- Header -->
-        <Grid Grid.Row="0" Margin="0,0,0,18" ColumnDefinitions="Auto,*,Auto">
-            <fx:IconGlyph Grid.Column="0" Kind="Globe" Size="30"
-                       VerticalAlignment="Center" Margin="7,0,23,0"/>
-            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Theme="{StaticResource Type.PageTitle}" Text="{loc:Str tab_available_subjects}"/>
-                <TextBlock Text="{loc:Str desc_available_subjects}"
-                           Foreground="{DynamicResource TextMutedBrush}"
-                           FontSize="13" Margin="0,4,0,0" TextWrapping="Wrap"/>
-            </StackPanel>
-
-            <!-- "Become a subject!" CTA. Free users get the button +
-                 italic subtitle pointing to Patreon; premium users get
-                 the button alone, opening the Remote Control tab. -->
-            <StackPanel Grid.Column="2" VerticalAlignment="Center"
-                        HorizontalAlignment="Right" MaxWidth="260" Margin="16,0,0,0">
-                <Button x:Name="BtnBecomeASubject"
-                        Theme="{StaticResource SubjectsCtaButton}"
-                        Click="BtnBecomeASubject_Click"
-                        ToolTip.Tip="{loc:Str tooltip_become_a_subject}"
-                        FontSize="13" FontWeight="Bold"
-                        Padding="16,9" BorderThickness="0" Cursor="Hand"
-                        HorizontalAlignment="Right">
-                    <TextBlock Text="{loc:Str btn_become_a_subject}"/>
-                </Button>
-                <TextBlock x:Name="TxtBecomeASubjectSubtitle"
-                           Text="{loc:Str desc_become_a_subject_locked}"
-                           Foreground="{DynamicResource TextMutedBrush}"
-                           FontSize="11" FontStyle="Italic"
-                           Margin="0,6,0,0" TextWrapping="Wrap"
-                           TextAlignment="Right"
-                           IsVisible="False"/>
-            </StackPanel>
-        </Grid>
-
-        <!-- Empty state (visible iff service.IsEmpty + !HasError) -->
-        <Border Grid.Row="1" x:Name="AvailableSubjectsEmptyPanel"
-                Background="{DynamicResource SurfaceBgBrush}"
-                BorderBrush="{DynamicResource NeonPurpleBrush}" BorderThickness="1"
-                CornerRadius="10" Padding="24,18" Margin="0,0,0,12"
-                IsVisible="False">
-            <TextBlock Text="{loc:Str empty_available_subjects}"
-                       Foreground="{DynamicResource TextMutedBrush}"
-                       FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
-        </Border>
-
-        <!-- Error state (visible iff service.HasError) -->
-        <Border Grid.Row="1" x:Name="AvailableSubjectsErrorPanel"
-                Background="{DynamicResource SurfaceBgBrush}"
-                BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1"
-                CornerRadius="10" Padding="24,18" Margin="0,0,0,12"
-                IsVisible="False">
-            <TextBlock Text="{loc:Str error_available_subjects}"
-                       Foreground="{DynamicResource TextMutedBrush}"
-                       FontSize="13" TextWrapping="Wrap" LineHeight="20"/>
-        </Border>
-
-        <!-- Side-scrollable horizontal card list. ItemsSource is bound
-             in code-behind to App.AvailableSubjects.Entries. Each card
-             gets a fixed 260px width to keep horizontal scrolling
-             intentional rather than incidental. -->
-        <ScrollViewer Grid.Row="2" x:Name="AvailableSubjectsScroller"
-                      HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollBarVisibility="Disabled">
-            <ItemsControl x:Name="AvailableSubjectsList">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Orientation="Horizontal"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="tabs:SubjectRow">
-                        <Border Width="260" Margin="0,0,12,4" Opacity="{Binding CardOpacity}"
-                                Background="{DynamicResource SurfaceBgBrush}"
-                                BorderBrush="{DynamicResource NeonPurpleBrush}"
-                                BorderThickness="1" CornerRadius="10" Padding="18,14">
-                            <StackPanel>
-                                <!-- Top row: name + level + tier badge -->
-                                <Grid Margin="0,0,0,8" ColumnDefinitions="*,Auto">
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{Binding DisplayName}" Foreground="White"
-                                                   FontSize="15" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Foreground="{DynamicResource TextMutedBrush}"
-                                                   FontSize="11" Margin="0,2,0,0">
-                                            <Run Text="Lv "/><Run Text="{Binding LevelDisplay}"/>
-                                        </TextBlock>
-                                    </StackPanel>
-                                    <Border Grid.Column="1" Background="{DynamicResource NeonPurpleTransparent20Brush}"
-                                            CornerRadius="9999" Padding="8,3" VerticalAlignment="Top">
-                                        <TextBlock Text="{Binding TierLabel}"
-                                                   Foreground="{DynamicResource NeonPurpleBrush}"
-                                                   FontSize="10" FontWeight="Bold"/>
-                                    </Border>
-                                </Grid>
-
-                                <!-- Status text (only when present) -->
-                                <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource TextMutedBrush}"
-                                           FontSize="12" TextWrapping="Wrap" Margin="0,0,0,8"
-                                           IsVisible="{Binding HasStatusText}"/>
-
-                                <!-- Tags as pill badges (mirrors cclabs-web /dashboard/subjects) -->
-                                <ItemsControl ItemsSource="{Binding Tags}" Margin="0,0,0,12"
-                                              IsVisible="{Binding HasTags}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel Orientation="Horizontal"/>
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="x:String">
-                                            <Border Background="{DynamicResource NeonPurpleTransparent20Brush}"
-                                                    CornerRadius="9999" Padding="7,2" Margin="0,0,5,5">
-                                                <TextBlock Text="{Binding}"
-                                                           Foreground="{DynamicResource NeonPurpleBrush}"
-                                                           FontSize="10" FontWeight="SemiBold"/>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-
-                                <!-- Connect button (or Taken disabled) -->
-                                <Button Theme="{StaticResource SubjectsConnectButton}"
-                                        Tag="{Binding UnifiedId}"
-                                        IsEnabled="{Binding IsConnectEnabled}"
-                                        Click="BtnConnectSubject_Click"
-                                        FontSize="13" FontWeight="Bold"
-                                        Padding="0,8" BorderThickness="0" Cursor="Hand"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center">
-                                    <TextBlock Text="{Binding ConnectButtonText}"/>
-                                </Button>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+<!-- WPF AvailableSubjectsTabView is the Lobby now. Ported frame and responsive columns;
+     polling, Chess/Goon host doors and row joins remain the named b-lane. -->
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+ xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+ xmlns:tabs="clr-namespace:ConditioningControlPanel.Avalonia.Views.Tabs"
+ x:Class="ConditioningControlPanel.Avalonia.Views.Tabs.AvailableSubjectsTabView">
+ <UserControl.Resources>
+  <ControlTheme x:Key="LobbyPill" TargetType="Button">
+   <Setter Property="Foreground" Value="White"/><Setter Property="Background" Value="#18FFFFFF"/>
+   <Setter Property="BorderBrush" Value="#33FFFFFF"/><Setter Property="BorderThickness" Value="1"/>
+   <Setter Property="CornerRadius" Value="18"/><Setter Property="FontFamily" Value="Fredoka, Segoe UI"/>
+   <Setter Property="FontSize" Value="14"/><Setter Property="FontWeight" Value="SemiBold"/>
+   <Setter Property="Padding" Value="16,8"/><Setter Property="Margin" Value="0,0,10,8"/>
+   <Setter Property="Cursor" Value="Hand"/>
+   <!-- A property-only Button ControlTheme has no Template and draws nothing (CLAUDE.md trap 4). -->
+   <Setter Property="Template">
+    <ControlTemplate TargetType="Button">
+     <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+             BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+      <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                        Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+     </Border>
+    </ControlTemplate>
+   </Setter>
+   <Style Selector="^:pointerover /template/ Border#bd"><Setter Property="Background" Value="#28FFFFFF"/></Style>
+   <Style Selector="^:pressed /template/ Border#bd"><Setter Property="Opacity" Value="0.8"/></Style>
+   <Style Selector="^:disabled /template/ Border#bd"><Setter Property="Opacity" Value="0.45"/></Style>
+  </ControlTheme>
+  <ControlTheme x:Key="LobbyColumn" TargetType="Border">
+   <Setter Property="CornerRadius" Value="18"/><Setter Property="Padding" Value="12,12,6,8"/>
+   <Setter Property="Background" Value="{DynamicResource DepthWellFloorBrush}"/>
+   <Setter Property="BorderBrush" Value="{DynamicResource DepthPressedBevel}"/><Setter Property="BorderThickness" Value="1"/>
+  </ControlTheme>
+  <ControlTheme x:Key="LobbyHead" TargetType="TextBlock">
+   <Setter Property="FontFamily" Value="Fredoka, Segoe UI"/><Setter Property="FontSize" Value="16"/>
+   <Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+   <Setter Property="VerticalAlignment" Value="Center"/>
+  </ControlTheme>
+  <ControlTheme x:Key="LobbyCount" TargetType="TextBlock">
+   <Setter Property="FontFamily" Value="Fredoka, Segoe UI"/><Setter Property="FontSize" Value="13"/>
+   <Setter Property="FontWeight" Value="Bold"/><Setter Property="Foreground" Value="#2A0618"/>
+  </ControlTheme>
+  <ControlTheme x:Key="LobbyColumnEmpty" TargetType="TextBlock">
+   <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Setter Property="FontSize" Value="12.5"/>
+   <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
+  </ControlTheme>
+  <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
+   <Border Margin="0,0,6,8" CornerRadius="14" Padding="10,9" Background="#14FFFFFF" BorderBrush="#24FFFFFF" BorderThickness="1">
+    <Grid ColumnDefinitions="*,Auto">
+     <StackPanel>
+      <StackPanel Orientation="Horizontal">
+       <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextLightBrush}" FontWeight="SemiBold" MaxLines="1" TextTrimming="CharacterEllipsis" MaxWidth="190"/>
+       <Ellipse Width="7" Height="7" Margin="7,1,0,0" VerticalAlignment="Center" Fill="#5FFFD0" IsVisible="{Binding Friend}" ToolTip.Tip="{loc:Str lobby_friend_tip}"/>
+      </StackPanel>
+      <TextBlock Text="{Binding Line}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,2,0,0" MaxLines="1" TextTrimming="CharacterEllipsis"/>
+     </StackPanel>
+     <!-- ponytail: the row's game/claim door is not wired in this slice. -->
+     <Button Grid.Column="1" IsEnabled="False" IsVisible="{Binding HasButton}" Opacity="{Binding ButtonOpacity}" MinWidth="64" Margin="8,0,0,0" VerticalAlignment="Center">
+      <StackPanel Orientation="Horizontal" Spacing="4"><fx:IconGlyph Kind="LockClosed" Size="12" IsVisible="{Binding Locked}"/><TextBlock Text="{Binding ButtonText}"/></StackPanel>
+     </Button>
     </Grid>
+   </Border>
+  </DataTemplate>
+ </UserControl.Resources>
+ <Grid>
+  <Border IsHitTestVisible="False"><Border.Background><RadialGradientBrush GradientOrigin="28%,10%" Center="28%,10%" RadiusX="90%" RadiusY="90%"><GradientStop Color="#552C1450" Offset="0"/><GradientStop Color="#00100A1E" Offset="1"/></RadialGradientBrush></Border.Background></Border>
+  <Border IsHitTestVisible="False" Opacity="0.30"><Border.Background><RadialGradientBrush GradientOrigin="82%,15%" Center="82%,15%" RadiusX="50%" RadiusY="50%"><GradientStop Color="{DynamicResource FxGlowColor}" Offset="0"/><GradientStop Color="#00000000" Offset="1"/></RadialGradientBrush></Border.Background></Border>
+  <Border IsHitTestVisible="False" Opacity="0.18"><Border.Background><RadialGradientBrush GradientOrigin="12%,90%" Center="12%,90%" RadiusX="45%" RadiusY="45%"><GradientStop Color="{DynamicResource FxParticleColor}" Offset="0"/><GradientStop Color="#00000000" Offset="1"/></RadialGradientBrush></Border.Background></Border>
+  <fx:AmbientFxCanvas x:Name="SubjectsAmbientFx"/>
+  <Grid Margin="32,26,32,22" RowDefinitions="Auto,Auto,Auto,*">
+   <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+    <TextBlock Theme="{StaticResource Type.PageTitle}" Text="{loc:Str tab_available_subjects}"/>
+    <TextBlock x:Name="TxtLobbyCount" Text="{loc:Str desc_available_subjects}" Foreground="{DynamicResource PinkSoftBrush}" FontFamily="Fredoka, Segoe UI" FontSize="16" Margin="14,0,0,5" VerticalAlignment="Bottom"/>
+   </StackPanel>
+   <StackPanel Grid.Row="1">
+    <WrapPanel>
+     <Button x:Name="BtnHostChess" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_chess}"/></Button>
+     <Button x:Name="BtnHostGoon" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_goon}"/></Button>
+     <Button x:Name="BtnBecomeASubject" Theme="{StaticResource LobbyPill}" Click="BtnBecomeASubject_Click" ToolTip.Tip="{loc:Str desc_optin_directory_consent}">
+      <StackPanel Orientation="Horizontal" Spacing="6"><fx:IconGlyph x:Name="RemoteHostLock" Kind="LockClosed" Size="13"/><TextBlock Text="{loc:Str lobby_host_remote}"/></StackPanel>
+     </Button>
+    </WrapPanel>
+    <TextBlock x:Name="TxtBecomeASubjectSubtitle" Text="{loc:Str desc_become_a_subject_locked}" Foreground="{DynamicResource TextDimBrush}" FontSize="11" Margin="4,0,0,4" IsVisible="False"/>
+    <Border x:Name="AvailableSubjectsErrorPanel" IsVisible="False" Margin="0,6,0,0" Padding="14,8" CornerRadius="12" Background="#14FFFFFF" BorderBrush="{DynamicResource DangerBrush}" BorderThickness="1">
+     <TextBlock Text="{loc:Str lobby_error}" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="13"/>
+    </Border>
+   </StackPanel>
+   <StackPanel x:Name="LobbyTabStrip" Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0" IsVisible="False">
+    <Button x:Name="TabOpen" Theme="{StaticResource LobbyPill}" Tag="0" Click="LobbyTab_Click"/>
+    <Button x:Name="TabPlaying" Theme="{StaticResource LobbyPill}" Tag="1" Click="LobbyTab_Click"/>
+    <Button x:Name="TabFriends" Theme="{StaticResource LobbyPill}" Tag="2" Click="LobbyTab_Click"/>
+   </StackPanel>
+   <Grid x:Name="LobbyColumns" Grid.Row="3" Margin="0,10,0,0" ColumnDefinitions="*,*,*">
+    <Border x:Name="LobbyOpenColumn" Grid.Column="0" Theme="{StaticResource LobbyColumn}">
+     <DockPanel>
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,10">
+       <TextBlock Text="{loc:Str lobby_list_open}" Theme="{StaticResource LobbyHead}"/>
+       <Border CornerRadius="10" Background="#FF5FA2" Padding="8,1,8,2" Margin="8,0,0,0" VerticalAlignment="Center"><TextBlock x:Name="LobbyOpenCount" Text="0" Theme="{StaticResource LobbyCount}"/></Border>
+      </StackPanel>
+      <Border x:Name="AvailableSubjectsEmptyPanel" DockPanel.Dock="Top">
+       <StackPanel><TextBlock x:Name="TxtLobbyEmpty" Text="{loc:Str lobby_empty_open}" Theme="{StaticResource LobbyColumnEmpty}"/>
+        <WrapPanel HorizontalAlignment="Center" Margin="0,8,0,4">
+         <Button x:Name="BtnEmptyHostChess" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_chess}"/></Button>
+         <Button x:Name="BtnEmptyHostGoon" Theme="{StaticResource LobbyPill}" IsEnabled="False"><TextBlock Text="{loc:Str lobby_host_goon}"/></Button>
+        </WrapPanel>
+       </StackPanel>
+      </Border>
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsControl x:Name="AvailableSubjectsList" ItemTemplate="{StaticResource LobbyRowTemplate}"/></ScrollViewer>
+     </DockPanel>
+    </Border>
+    <Border x:Name="LobbyPlayingSection" Grid.Column="1" Theme="{StaticResource LobbyColumn}">
+     <DockPanel>
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,10">
+       <TextBlock Text="{loc:Str lobby_list_playing}" Theme="{StaticResource LobbyHead}"/>
+       <Border CornerRadius="10" Background="#B99CFF" Padding="8,1,8,2" Margin="8,0,0,0" VerticalAlignment="Center"><TextBlock x:Name="LobbyPlayingCount" Text="0" Theme="{StaticResource LobbyCount}"/></Border>
+      </StackPanel>
+      <TextBlock x:Name="LobbyPlayingEmpty" DockPanel.Dock="Top" Text="{loc:Str lobby_empty_playing}" Theme="{StaticResource LobbyColumnEmpty}"/>
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsControl x:Name="LobbyPlayingList" ItemTemplate="{StaticResource LobbyRowTemplate}"/></ScrollViewer>
+     </DockPanel>
+    </Border>
+    <Border x:Name="LobbyFriendsSection" Grid.Column="2" Theme="{StaticResource LobbyColumn}">
+     <DockPanel>
+      <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,10">
+       <TextBlock Text="{loc:Str lobby_list_friends}" Theme="{StaticResource LobbyHead}"/>
+       <Border CornerRadius="10" Background="#5FFFD0" Padding="8,1,8,2" Margin="8,0,0,0" VerticalAlignment="Center"><TextBlock x:Name="LobbyFriendsCount" Text="0" Theme="{StaticResource LobbyCount}"/></Border>
+      </StackPanel>
+      <TextBlock x:Name="LobbyFriendsEmpty" DockPanel.Dock="Top" Text="{loc:Str lobby_empty_friends}" Theme="{StaticResource LobbyColumnEmpty}"/>
+      <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsControl x:Name="LobbyFriendsList" ItemTemplate="{StaticResource LobbyRowTemplate}"/></ScrollViewer>
+     </DockPanel>
+    </Border>
+   </Grid>
+  </Grid>
+ </Grid>
 </UserControl>
