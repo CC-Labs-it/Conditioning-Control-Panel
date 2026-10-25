@@ -39,6 +39,32 @@ function setFrame(kart, p, t, n, speed = 24) {
   kart[S.speedPct] = speed / 30; kart[S.grounded] = 1;
 }
 
+test('follow: the raised chase reveals more floor lettering while keeping the racer close and centred', () => {
+  for (const aspect of ASPECTS) {
+    const beforeFeel = freshFeel(); beforeFeel.set('camera.eyeUpM', 1.95);
+    const before = createCamRig(beforeFeel), now = createCamRig(freshFeel()), k = createState();
+    setFrame(k, [0, 0, 0], [0, 0, -1], [0, 1, 0], 0);
+    before.snap(k, aspect); now.snap(k, aspect);
+    assertAnchor(now, k, aspect);
+    const screenY = (rig, p) => {
+      const forward = norm(sub(rig.look, rig.eye)), right = norm(cross(forward, rig.up));
+      const up = cross(right, forward), delta = sub(p, rig.eye);
+      return .5 - dot(delta, up) / dot(delta, forward) / Math.tan(rig.vFov * Math.PI / 360) / 2;
+    };
+    const pitch = rig => Math.atan2(rig.eye[1] - rig.look[1], rig.eye[2] - rig.look[2]);
+    const tilt = (pitch(now) - pitch(before)) * 180 / Math.PI;
+    assert.ok(tilt > 3 && tilt < 5, 'modest downward tilt: ' + tilt);
+    for (const ahead of [8, 16, 28]) {
+      // Project the ends of a 4 m stroke lying on the road, independent of the camera aim helper.
+      const height = rig => screenY(rig, [0, .16, -ahead + 2]) - screenY(rig, [0, .16, -ahead - 2]);
+      assert.ok(height(now) > height(before) * 1.1, 'less foreshortening at ' + ahead + ' m');
+    }
+    const size = rig => screenY(rig, [0, 0, 0]) - screenY(rig, [0, 1, 0]);
+    assert.ok(size(now) / size(before) > .94, 'retain the accepted apparent racer height');
+    assert.equal(now.vFov, before.vFov, 'no zoom used to recover composition');
+  }
+});
+
 test('follow: grounded turns keep the actual racer centred while the eye yaw remains eased', () => {
   for (const aspect of ASPECTS) {
     const rig = createCamRig(freshFeel()), k = createState(); rig.useVel = false;

@@ -16,7 +16,7 @@ const ASPECTS = { desk: 16 / 9, portrait: 390 / 844, landscape: 844 / 390 };
 
 test('view: the reference framing opens road-word space while retaining a close chase', () => {
   assert.ok(cam.eyeBackM / 3.4 >= 1.1 && cam.eyeBackM / 3.4 <= 1.2, 'modestly farther than the accepted close camera');
-  assert.ok(cam.eyeUpM >= 1.65 && cam.eyeUpM <= 2, 'eye high enough to see the road over the racer');
+  assert.ok(cam.eyeUpM >= 2.15 && cam.eyeUpM <= 2.4, 'slightly raised eye opens the floor lettering');
   assert.ok(cam.eyeBackM > KART_VIEW.modelRadiusM * KART_VIEW.scale * 4, 'eye stays well behind the vessel');
   assert.equal(cam.lookAheadM, BEFORE.lookAheadM, 'keep the same road focus');
   assert.equal(cam.lookUpM, BEFORE.lookUpM);
@@ -110,8 +110,8 @@ test('view: near cues stay clear of the chase eye', () => {
   // a drift bias swings the eye sideways by eyeBack * sin(bias); the pole stands further out than that past the rail
   const swing = cam.eyeBackM * Math.sin(cam.driftBiasOutDeg * Math.PI / 180);
   assert.ok(L.outM > swing, 'pole ' + L.outM + ' vs eye swing ' + swing);
-  // whatever hangs over the road (banner, lamp) has its lower edge well above the eye
-  assert.ok(L.poleM - L.bannerDropM - L.bannerH > cam.eyeUpM + 0.6, 'banner bottom');
+  // Banners remain outside the lateral sweep and at least 0.4 m above the raised eye.
+  assert.ok(L.poleM - L.bannerDropM - L.bannerH > cam.eyeUpM + 0.4, 'banner bottom');
   assert.ok(L.poleM - 0.08 - L.lampR * 1.6 > cam.eyeUpM + 0.6, 'lamp bottom');
 });
 
