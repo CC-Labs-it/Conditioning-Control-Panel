@@ -1,11 +1,19 @@
 using System;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.LogicalTree;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
+using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using Xunit;
@@ -64,7 +72,7 @@ public sealed class SheListeningActionTests
     {
         var old = CoreEngine.BubbleCount;
         var enabled = CoreSettings.Current.BubbleCountEnabled;
-        var count = new BubbleCountScheduler(new CountHost());
+        var count = new BubbleCountScheduler(new CountHost(), new FrozenClock());   // P08: the lead-in timer never fires
         CoreEngine.BubbleCount = count;
         CoreSettings.Current.BubbleCountEnabled = false;
         try
@@ -97,6 +105,34 @@ public sealed class SheListeningActionTests
             Assert.False(s.AvatarMuted);
         }
         finally { (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted) = saved; AudioSettingsBinder.RaiseChanged(); }
+    });
+
+    [Fact]
+    public void MuteCutsTheClipAndRefreshesQuickMenuAndHeroMirror() => Run(shell =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted, s.AvatarEnabled);
+        try
+        {
+            s.AvatarMuted = false;
+            s.AvatarEnabled = true;
+            shell.Show();
+            shell.ShowTab("companion");
+            shell.ShowAvatarTube();
+            Dispatcher.UIThread.RunJobs();
+            var tube = shell.Tube!;
+            var hero = shell.GetLogicalDescendants().OfType<CompanionHeroCard>().Single().ViewModel!;
+            Assert.False(hero.IsMuted);
+            var cuts = 0;
+            typeof(AvatarTubeWindow).GetField("_stopSpoken", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(tube, (Action)(() => cuts++));
+            shell.ApplyVoiceMute(true);   // the route itself; a spoken ack would cut the clip on its own
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, cuts);
+            Assert.True(hero.IsMuted);
+            Assert.Equal("menu_mute_avatar_on", (tube.FindControl<MenuItem>("MenuItemMute")!.Header as IconLabel)?.Key);
+        }
+        finally { (s.MasterVolume, s.SubAudioEnabled, s.AvatarMuted, s.AvatarEnabled) = saved; AudioSettingsBinder.RaiseChanged(); }
     });
 
     [Theory]
@@ -149,6 +185,17 @@ public sealed class SheListeningActionTests
         public void DropDeferred() { }
         public void Open(bool isTest) { Opens++; Test = isTest; }
         public void CloseAll() { }
+    }
+
+    private sealed class FrozenClock : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback cb, object? state, TimeSpan due, TimeSpan period) => new Idle();
+        private sealed class Idle : ITimer
+        {
+            public bool Change(TimeSpan due, TimeSpan period) => true;
+            public void Dispose() { }
+            public ValueTask DisposeAsync() => default;
+        }
     }
 
     private sealed class CountHost : IBubbleCountHost
