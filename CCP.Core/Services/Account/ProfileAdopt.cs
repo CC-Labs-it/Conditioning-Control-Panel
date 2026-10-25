@@ -108,6 +108,25 @@ namespace ConditioningControlPanel.Services
             return true;
         }
 
+        /// <summary>WPF ProfileSyncService.TryAdoptFromProfilePoll: read-only cross-device
+        /// progression. Does not save; the head follows the curve first, then saves and repaints.</summary>
+        public static bool TryAdoptFromProfilePoll(AppSettings settings, int serverLevel, double serverTotalXp, string? serverSeason)
+        {
+            if (settings.OfflineMode || string.IsNullOrEmpty(settings.UnifiedId)
+                || serverLevel <= 0 || serverTotalXp <= 0 || !double.IsFinite(serverTotalXp)
+                || DescentMigrationChoices.IsValid(settings.PendingDescentMigrationChoice)) return false;
+            if (serverSeason != null && !string.Equals(serverSeason, settings.CurrentSeason ?? string.Empty, StringComparison.Ordinal)) return false;
+
+            var localTotalXp = TotalXp(settings);
+            var watermark = ActiveXpWatermark(settings);
+            if (serverTotalXp <= localTotalXp + 0.01 || watermark <= 0 || localTotalXp > watermark + 0.01) return false;
+
+            settings.PlayerLevel = serverLevel;
+            settings.PlayerXP = XpCurve.GetCurrentLevelXP(serverLevel, serverTotalXp, Epoch(settings));
+            RecordAgreedServerXp(settings, serverTotalXp, TotalXp(settings), "profile poll");
+            return true;
+        }
+
         /// <summary>True if the string is a "yyyy-MM" month key.</summary>
         public static bool LooksLikeMonthKey(string k) =>
             k.Length == 7 && k[4] == '-' && int.TryParse(k.Substring(0, 4), out _) && int.TryParse(k.Substring(5, 2), out _);

@@ -87,6 +87,20 @@ namespace ConditioningControlPanel.Avalonia
             Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
         }
 
+        /// <summary>WPF DescentService handoff: curve before level, then clean-ledger adoption.
+        /// The service checks the account generation before this synchronous handoff; only the
+        /// imperative header repaint is posted to the UI thread, as with the curve-only path.</summary>
+        internal static void AdoptServerProgression(int level, double xp, string? season, int? epoch,
+            Func<Views.Windows.MainShellWindow?> shell)
+        {
+            var settings = CoreSettings.Current;
+            var changed = Services.ProfileAdopt.ApplyCurveEpoch(settings, epoch);
+            changed |= Services.ProfileAdopt.TryAdoptFromProfilePoll(settings, level, xp, season);
+            if (!changed) return;
+            CoreSettings.Save();
+            Dispatcher.UIThread.Post(() => shell()?.UpdateLevelDisplay());
+        }
+
         /// <summary>WPF App.xaml.cs:3126: built always, armed only if asked AND a Discord is linked. The client
         /// connects on its own thread; no Discord running is a logged failure, nothing else.</summary>
         internal static void StartRichPresence()
@@ -627,8 +641,8 @@ namespace ConditioningControlPanel.Avalonia
                 DescentCountdown.Start();
                 Descent = new Services.Descent.DescentService
                 {
-                    // ponytail: full clean-ledger level/XP poll adoption needs the remaining profile lane.
-                    ProgressionReceived = (_, _, _, epoch) => AdoptServerCurveEpoch(epoch, () => desktop.MainWindow as Views.Windows.MainShellWindow),
+                    ProgressionReceived = (level, xp, season, epoch) => AdoptServerProgression(level, xp, season, epoch,
+                        () => desktop.MainWindow as Views.Windows.MainShellWindow),
                 };
                 // WPF MainWindow.Marquee.cs:688: the server announcement check, 7 s after the shell opens.
                 // A sandbox never reaches the real proxy (the dailyFree rule above).

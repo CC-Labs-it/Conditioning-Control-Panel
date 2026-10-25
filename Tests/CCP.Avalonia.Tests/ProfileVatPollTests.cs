@@ -19,6 +19,56 @@ namespace CCP.Avalonia.Tests;
 public sealed class ProfileVatPollTests
 {
     [Fact]
+    public Task ProfileReadingAdoptsACleanLeadAndRepaintsTheHeader() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var s = CoreSettings.Current;
+        var saved = (s.UnifiedId, s.OfflineMode, s.PlayerLevel, s.PlayerXP, s.DescentEpoch,
+            s.CurrentSeason, s.LastConfirmedServerXp, s.LastConfirmedServerXpAccount,
+            s.LastConfirmedServerXpSeason, s.PendingDescentMigrationChoice, s.HighestLevelEver);
+        var savedClock = global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time;
+        var clock = new SteppedTime();
+        global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = clock;
+        MainShellWindow? shell = null;
+        try
+        {
+            (s.UnifiedId, s.OfflineMode, s.PlayerLevel, s.PlayerXP, s.DescentEpoch,
+                s.CurrentSeason, s.PendingDescentMigrationChoice) = ("poll-test", false, 45, 10, XpCurve.CurveEpochLegacy, "2026-10", null);
+            s.LastConfirmedServerXp = ProfileAdopt.TotalXp(s);
+            s.LastConfirmedServerXpAccount = s.UnifiedId;
+            s.LastConfirmedServerXpSeason = s.CurrentSeason;
+            var target = XpCurve.GetTotalXP(46, 20, XpCurve.CurveEpochDescent);
+            shell = new MainShellWindow(); shell.Show(); Dispatcher.UIThread.RunJobs();
+            shell.Named<TextBlock>("TxtXP")!.Text = "stale";
+            global::ConditioningControlPanel.Avalonia.App.AdoptServerProgression(46, target, s.CurrentSeason,
+                XpCurve.CurveEpochDescent, () => shell);
+            Dispatcher.UIThread.RunJobs();
+            // Full-motion runs count up from zero; advance the shared clock to the final readout.
+            clock.Advance(TimeSpan.FromSeconds(2));
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
+            Assert.Equal(XpCurve.CurveEpochDescent, s.DescentEpoch);
+            Assert.Equal(46, s.PlayerLevel);
+            Assert.Equal(20, s.PlayerXP, 6);
+            Assert.Equal(target, s.LastConfirmedServerXp);
+            var needed = XpCurve.GetXPForLevel(46, XpCurve.CurveEpochDescent);
+            Assert.Equal($"20 / {(int)needed} XP", shell.Named<TextBlock>("TxtXP")!.Text);
+        }
+        finally
+        {
+            shell?.Close();
+            global::ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = savedClock;
+            (s.UnifiedId, s.OfflineMode, s.PlayerLevel, s.PlayerXP, s.DescentEpoch,
+                s.CurrentSeason, s.LastConfirmedServerXp, s.LastConfirmedServerXpAccount,
+                s.LastConfirmedServerXpSeason, s.PendingDescentMigrationChoice, s.HighestLevelEver) = saved;
+            CoreSettings.Save();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PollWaitsForTheDrawnJarThenNeedsTheVisibleActiveCardAndAnAcceptedBlock() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)

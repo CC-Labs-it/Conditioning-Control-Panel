@@ -673,3 +673,9 @@ area sections above; report against the commit row only when no screen row fits.
 
 - Screen-specific steps for rows that only have the general check (G) above; add them as testers find gaps.
 - Per-commit rows of main syncs 4-6 that touch no screen in sections 1-7.
+
+## Profile VAT cross-device progression
+
+1. WPF `MainWindow/MainWindow.ProfileVat.cs` and `Services/Settings/ProfileSyncService.cs`: sign in, finish a sync, earn a small amount of XP on another device, then open Trainer Card. The header follows the server curve and shows the new total without restarting. Rows: `shell-profile-vat`.
+2. WPF `Services/Settings/ProfileSyncService.cs`: earn local XP without syncing, then open Trainer Card with a higher server total. The read-only fetch must preserve local progress; repeat with a different season or a pending migration and confirm no adoption. Rows: `shell-profile-vat`.
+3. WPF `MainWindow/MainWindow.ProfileVat.cs`: an account without a descent block keeps its original avatar and no jar. This head intentionally keeps the jar hidden even with a block until the faucet host is ported; do not treat this step as full VAT parity. Rows: `shell-profile-vat`.
