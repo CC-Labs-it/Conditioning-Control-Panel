@@ -53,7 +53,10 @@ export function createPayoff(bus, feel, { gentle = null, photosafe = null, rand 
     if (pay === 'word') { if (words.kind === 'none') sayWords(g('padWordS')); return; }
     cascade((e.durationS || 0) + 0.6, pay === 'both');
   }
-  function onMalus(e) { if (!e || e.racer === undefined || e.racer === 0) cascade(g('cascadeMinS'), true); }
+  function onMalus(e, name) {
+    if (name === 'scan-hit' && e?.effect === 'boost') return;
+    if (!e || e.racer === undefined || e.racer === 0) cascade(g('cascadeMinS'), true);
+  }
   function onPad() {
     if (!g('on') || words.kind !== 'none' || clock - lastPad < g('padCoolS') || rand() >= g('padWordChance')) return;
     lastPad = clock; stats.padWords++;

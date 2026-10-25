@@ -85,6 +85,23 @@ test('a lob bridges world space to a racer on another path and pause or reset le
   t.items.reset(); assert.equal(t.items.view().projectiles.length, 0); assert.equal(t.items.view().traps.length, 0); assert.equal(t.items.view().pops.length, 0);
 });
 
+test('Tether releases when paths separate even if mapped progress overtakes the target', () => {
+  for (const fork of track.forks) for (const changedRacer of [0, 1]) {
+    const local = fork.lengthM * .5;
+    const list = [racer(state(fork, local)), racer(state(fork, local + 10), 1)], t = setup(list);
+    t.fire(0, 'tether');
+    assert.equal(t.items.view().tethers.length, 1, 'nearby racers initially share one physical branch');
+    list[changedRacer].st = state(null, changedRacer === 0 ? list[1].st[S.s] + 5 : list[0].st[S.s] - 5);
+    assert.ok(list[0].st[S.s] > list[1].st[S.s], 'lap progress now says the tower passed');
+    assert.notEqual(track.forkAtSeg(list[0].st[S.seg]), track.forkAtSeg(list[1].st[S.seg]));
+    t.tick();
+    assert.equal(t.rec.first('tether-break').payload.reason, 'range');
+    assert.equal(t.hits().length, 0, 'a remote mapped crossing cannot spin the victim');
+    assert.equal(t.items.view().tethers.length, 0);
+    assert.equal(list[0].mods.capMul, 1); assert.equal(list[1].mods.capMul, 1);
+  }
+});
+
 test('Shatter uses the selected path rail safety instead of a distant main gap', () => {
   const fork = track.forks[1], local = fork.lengthM * .5, s = fork.mainS(local), mainSeg = track.frameAt(s).seg;
   const r = racer(state(fork, local));

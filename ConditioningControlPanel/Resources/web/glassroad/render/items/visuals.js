@@ -226,7 +226,7 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
     timeS += dt * rate;
     bubbles.uniforms.time.value = timeS;
     status.update(view, dt, karts, musicView);
-    tethers.update(view, dt);
+    tethers.update(view, dt * rate);
     if (shells) { shells.uniforms.time.value = timeS; shells.begin(); }
     bubbles.begin(); motes.begin(); puddles.begin(); waves.begin(); copies.begin(); marks.begin(); shadows.begin(); confetti.begin(); drawn = 0;
     shields.begin();
