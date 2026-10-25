@@ -70,6 +70,7 @@ import { createWordCount } from './hud/words.js';
 import { openFeelSheet } from './hud/feelSheet.js';
 import { createSlotFx } from './render/items/slotfx.js';
 import { createGateScreen } from './render/gateScreen.js';
+import { createMusicEdges } from './render/musicEdges.js';
 import { loadFonts } from './render/fonts.js';
 import { createAssist } from './sim/assist.js';
 import { createRoomSession } from './net/room.js';
@@ -405,6 +406,10 @@ async function boot(course, options, lifetime, isCurrent) {
   // passing through a spiral gate plays that gate's own Loom over the view (photosafe, Gentle halves it)
   const gateScreen = createGateScreen(document.body, { feel, photosafe, tier: renderer.tier });
   lifetime.defer(() => gateScreen.dispose());
+  const musicEdges = createMusicEdges({ parent: document.body, photosafe, palette: () => world.musicColours(), tier: renderer.tier });
+  const edgeMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  lifetime.defer(() => musicEdges.dispose());
+  Object.defineProperty(debug, 'musicEdges', { get: () => musicEdges.stats });
   bus.on('gate-pass', (g) => { if (state === 'race' && !paused) gateScreen.play(g.params, 1); });
   const cam = createChaseCamera(feel, { bus });
   lifetime.defer(() => cam.dispose());   // the kick layer hears the player's bumps and wall hits
@@ -1160,12 +1165,14 @@ async function boot(course, options, lifetime, isCurrent) {
       if (k) { kartAt.x = k.x; kartAt.y = k.y; goPoint = kartAt; }
     }
     if (HT) hLap('world');
+    musicEdges.update(frameDt, { enabled: inRace && race.phase === 'racing' && !P.finished, paused,
+      gentle: reactiveOptions.gentle, reducedMotion: edgeMotion.matches, beatSong, songS, audioReactive, screen: effects.screen });
     renderer.setHold(state === 'race' || state === 'intro');                           //    no tier step (a relink) mid-race or under the pause card
     const garageScene=!!garage&&state==='menu',inGarage=garageScene&&hud.card==='menu';
     garage?.setVisible(inGarage);
     if(garageScene)garage.render(frameDt,matchMedia('(prefers-reduced-motion: reduce)').matches,{gentle:hostGentle||!!feel.get('gentle.on')||!!hud.options.gentlePreview});
     else renderer.render({ scene: world.scene, camera: cam.camera, fx: fs, dt: frozen ? 0 : frameDt,
-      musicView: { song: beatSong, songS, audioReactive, paused: frozen } });   // 7. render
+      musicView: { song: beatSong, songS, audioReactive, paused: frozen, musicEdgeShift: musicEdges.shiftU } });   // 7. render
     if (HT) hLap('render');
 
     const place = inRace && standings.order.length ? standings.placeOf(0) : 0;   // 8. hud
