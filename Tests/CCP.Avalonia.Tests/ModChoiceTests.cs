@@ -62,7 +62,8 @@ public sealed class ModChoiceTests
         s.UserPersonalityPresets.Add(new PersonalityPreset { Id = "pick-neutral", Name = "Neutral pick" });
         s.UserPersonalityPresets.Add(new PersonalityPreset { Id = "pick-drone", Name = "Drone pick" });
         s.SlutModeEnabled = false;
-        shell.ShowTab("companion");
+        // Companion v2 collapses the room; the chips live on Companion > Personality, whose OnShown re-syncs them.
+        shell.ShowTab("personality");
         Dispatcher.UIThread.RunJobs();
         var personality = shell.GetLogicalDescendants().OfType<MakeHerYoursView>().Single().ViewModel;
         personality.Presets.Single(p => p.Id == "pick-neutral").IsSelected = true;
