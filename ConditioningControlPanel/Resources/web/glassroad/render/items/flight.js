@@ -41,3 +41,13 @@ export function flightSpark(i, n, time, seed, velocity, radius, out) {
   out[2] = uz * c + wz * s - vz * back;
   return (1 - q) * 0.85;
 }
+
+/** A short expanding release cone, anchored at launch and flowing opposite the actual throw. */
+export function launchSpark(i, n, age, seed, velocity, out) {
+  if (!(age > 0) || age >= .48) return 0;
+  const q = age / .48, ring = (i + .5) / Math.max(1, n);
+  flightSpark(i, n, 0, seed, velocity, .6 + ring * .45, out);
+  const spread = .25 + q * 2.7;
+  for (let k = 0; k < 3; k++) out[k] *= spread;
+  return Math.min(1, age / .06) * (1 - q) ** 2;
+}

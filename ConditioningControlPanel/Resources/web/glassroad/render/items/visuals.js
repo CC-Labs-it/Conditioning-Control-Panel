@@ -35,7 +35,7 @@ import { createLivingIcons, cellOf } from './living.js';
 import { bubbleCloud, toyIconCloud, moteCloud, meltPuddle, ghost, ringGlow, shellCloud, shieldCloud, blobShadow, confettiCloud } from './materials.js';
 import { createPickupCards, PICKUP_CARD } from './pickupCards.js';
 import { createItemStatus } from './status.js';
-import { advanceRibbon, flightSpark } from './flight.js';
+import { advanceRibbon, flightSpark, launchSpark } from './flight.js';
 import { createTethers } from './tethers.js';
 import { createToyProps } from './toys.js';
 import { TOYS, TOY_TRAIL, toyTrailPoint } from './toyMath.js';
@@ -342,12 +342,25 @@ export function createItemVisuals(scene, art, feel, { photosafe = null, backend 
         h.age = age; h.kind = pr.kind; h.retired = 0;
         advanceRibbon(h, x, y, z, TOY_TRAIL.stepM);
         toyWake(h, Math.min(1, age / .12), soft || reduced);
+        let launch = launches.get(id);
+        if (!launch || age < launch.age) launches.set(id, launch = { x, y, z, age, v: pr.v ? [...pr.v] : [0, 0, -1] });
+        launch.age = age;
+        if (!soft && !reduced && age < .48) {
+          const count = Math.max(4, Math.round(12 * moteK));
+          for (let i = 0; i < count; i++) {
+            const alpha = launchSpark(i, count, age, id, launch.v, OFF);
+            if (alpha <= .001) continue;
+            const white = i % 3 === 0;
+            motes.push(launch.x + OFF[0], launch.y + OFF[1], launch.z + OFF[2], white ? .32 : .5,
+              white ? 1 : c[0], white ? .96 : c[1], white ? .9 : c[2], alpha * .85);
+          }
+        }
         // Bound the live wake to the same existing mote draw, with actual velocity orientation.
         if (!soft && !reduced && Math.hypot(...(pr.v || [0, 0, 0])) > .5) {
           const n = Math.max(4, Math.round(8 * moteK));
           for (let i = 0; i < n; i++) {
-            const a = flightSpark(i, n, timeS, id, pr.v, .5, OFF);
-            motes.push(x + OFF[0], y + OFF[1], z + OFF[2], .22, c[0], c[1], c[2], a * Math.min(1, age / .12));
+            const a = flightSpark(i, n, timeS, id, pr.v, .75, OFF);
+            motes.push(x + OFF[0], y + OFF[1], z + OFF[2], .3, c[0], c[1], c[2], a * Math.min(1, age / .12));
           }
         }
         continue;

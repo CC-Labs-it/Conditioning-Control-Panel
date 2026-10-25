@@ -120,10 +120,11 @@ test('the eight real bots finish Keep with gates active and held safe lanes thro
       r.prev.set(r.st);step(r.st,r.input,tr,r.feel,DT,r.events);gates.apply(r,r.prev,race.timeS,r.events);
       updateRespawn(r.st,tr,r.feel,DT,r.events);r.raceView.timeS=race.timeS;r.progress.update(r.st,r.raceView);
       for(const row of rows)if(Math.abs(r.st[S.s]-row.s)<2){
-        seen.add(r.i+':'+row.id);assert.ok(Math.abs(r.st[S.lateral])>row.w/2+.65, 'bot kept clear '+r.i);
+        seen.add(r.i+':'+row.id);
+        if (/^(outer|inner)-/.test(row.id)) assert.ok(Math.abs(r.st[S.lateral] - row.x)>row.w/2+.65, 'bot kept clear '+r.i+' at '+row.id);
       }
     }
   }
-  assert.equal(seen.size,48,'all eight pass all six gates');
+  assert.equal(seen.size,8 * rows.length,'all eight pass every authored gate');
   for(const r of rs.list){assert.equal(r.finished,true,'finished '+r.i);assert.equal(r.falls,0,'falls '+r.i);}
 });

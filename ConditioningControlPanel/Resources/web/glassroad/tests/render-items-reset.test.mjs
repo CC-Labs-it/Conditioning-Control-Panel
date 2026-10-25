@@ -11,7 +11,7 @@ const hooks = registerHooks({ resolve(s, c, next) {
   if (s.startsWith('three/addons/')) return { url: new URL('../vendor/' + s, import.meta.url).href, shortCircuit: true };
   return next(s, c);
 } });
-const { Group } = await import('three/webgpu');
+const { Group, Vector3 } = await import('three/webgpu');
 const { GLTFLoader } = await import('../vendor/three/addons/loaders/GLTFLoader.js');
 const { MeshoptDecoder } = await import('../vendor/three/addons/libs/meshopt_decoder.module.js');
 const { createItemVisuals } = await import('../render/items/visuals.js');
@@ -96,15 +96,25 @@ test('physical projectiles retain readable wakes through a pass, fade after a hi
     const scene = new Group();
     visuals = createItemVisuals(scene, { model: id => id === 'toy-disc' ? model : null }, feel, { photosafe: { request: () => true } });
     const root = scene.getObjectByName('item-visuals'), motes = root.children[2], toys = scene.getObjectByName('physical-toys');
-    const shot = { id: 12, kind: 'disc', mode: 'throw', t: 0, p: [0, 2, 0], v: [40, 0, 0] };
+    const shot = { id: 12, kind: 'disc', mode: 'throw', t: .12, p: [0, 2, 0], v: [40, 10, 0], radiusM: .55 };
     visuals.event('item-fire', { id: 'disc', p: [0, 0, 0] });
+    const snapshot = structuredClone(shot);
+    visuals.update({ projectiles: [shot] }, .1);
+    const release = toys.children.find(o => o.type === 'Group' && o.visible);
+    assert.ok(release.scale.z / release.scale.x > 1.65, 'actual GLB stretches along the throw during release');
+    assert.ok(new Vector3(0, 0, -1).applyQuaternion(release.quaternion).dot(new Vector3(...shot.v).normalize()) > .9999,
+      'release direction follows uphill flight, not just horizontal yaw');
+    assert.deepEqual(shot, snapshot, 'presentation never alters aim, position or contact radius');
+    assert.ok(motes.count >= 12, 'release cone is visible before a ribbon has built up');
+    shot.v = [40, 0, 0];
     for (let i = 0; i < 7; i++) {
       shot.t = i * .1; shot.p[0] = i * 4;
       visuals.update({ projectiles: [shot] }, .1);
     }
     assert.ok(motes.count >= 40, 'actual GLB flight carries a continuous core and halo wake');
     const carrier = toys.children.find(o => o.type === 'Group' && o.visible);
-    assert.ok(carrier.scale.x >= 1.8, 'the actual exported disc is materially enlarged');
+    assert.ok(carrier.scale.x >= 2.8, 'the actual exported disc is materially enlarged');
+    assert.equal(carrier.scale.x, carrier.scale.z, 'release deformation settles back to the authored silhouette');
     const paused = motes.count;
     visuals.update({ projectiles: [shot] }, .1, [], null, { paused: true });
     assert.equal(motes.count, paused, 'pause does not change a live wake');
