@@ -40,7 +40,7 @@ import { screenAmounts, flashPanes, shatterTilt, frostThreshold, shatterPhase, s
 import { HIT_LOOK } from './items/look.js';
 import { ITEMS } from '../sim/itemTable.js';
 import { maskLook } from './atlas.js';
-import { ATMOSPHERE as A, tunnelRadius, createAtmosphereClock } from './screen-atmosphere.js';
+import { ATMOSPHERE as A, tunnelRadius, createAtmosphereClock, fogPalette } from './screen-atmosphere.js';
 import { acquireLoomAtlas, loomAtlasUv } from './loomAtlas.js';
 import { createSpiralBeatClock } from './spiralBeat.js';
 
@@ -83,11 +83,13 @@ export function createScreenFx(three, art = currentArt()) {
     frostThr: uniform(1), crack: uniform(0), slide: uniform(0), spiralR: uniform(0),
     meterK: uniform(0), remain: uniform(0), meterRgb: uniform(new Color(1, 1, 1)), badgeS: uniform(1),
     hitK: uniform(0), hitRgb: uniform(new Color(1, 1, 1)), badgeCell: uniform(new Vector2(0, 0)), mirror: uniform(1), fogFill: uniform(0),
+    fogFar: uniform(new Color(A.fogFar)), fogNear: uniform(new Color(A.fogNear)),
   };
   const K = L.lane;
   const amt = {};
   let clock = 0;
   const atmosphere = createAtmosphereClock();
+  const payoffAtmosphere = createAtmosphereClock();
 
   // The tunnel is the only clear opening. Bloom must respect the same opening.
   function tunnelShut() {
@@ -220,7 +222,7 @@ export function createScreenFx(three, art = currentArt()) {
             const front = smoothstep(u.fogFill.mul(0.8).sub(0.2), u.fogFill.mul(0.8).add(0.08), edgeDistance.add(billow.mul(0.13))).oneMinus();
             const density = smoothstep(0.2, 0.72, billow).mul(front).mul(u.fogFill).mul(A.fogDepth);
             const alpha = density.negate().exp().oneMinus();
-            const cloud = mix(rgb(A.fogFar), rgb(A.fogNear), billow.mul(0.65).add(q * 0.25));
+            const cloud = mix(u.fogFar, u.fogNear, billow.mul(0.65).add(q * 0.25));
             col.assign(mix(col, cloud, alpha));
             fogOcclusion.assign(fogOcclusion.oneMinus().mul(alpha.oneMinus()).oneMinus());
           }
@@ -311,14 +313,17 @@ export function createScreenFx(three, art = currentArt()) {
     })();
   }
 
-  function update(screen, dt, aspect, view = {}) {
+  function update(screen, dt, aspect, view = {}, payoffFog = null, theme = 'threshold') {
     u.musicEdgeX.value = Number.isFinite(view.musicEdgeShift) ? Math.max(-.01, Math.min(.01, view.musicEdgeShift)) : 0;
     const a = screenAmounts(screen, amt), m = meterLook(screen);
     const activeSpiral = a.spiral > 0;
     if (activeSpiral && !wasSpiral) spiralStyle.value = spiralSerial++ % 6;
     wasSpiral = activeSpiral;
     if (!view.paused) spiralAngle.value += Math.max(0, dt || 0) * .45 * a.timeMul * beat.update(dt, view, a.gentle);
-    u.fogFill.value = atmosphere.update(screen, a.pink, dt, a.timeMul);
+    const fogColours = fogPalette(theme);
+    u.fogFar.value.set(fogColours[0]); u.fogNear.value.set(fogColours[1]);
+    u.fogFill.value = Math.max(atmosphere.update(screen, a.pink, dt, a.timeMul),
+      payoffAtmosphere.update(payoffFog, payoffFog?.k || 0, dt, payoffFog?.params?.gentle ? .5 : 1));
     u.hitK.value = m.hitK; u.meterK.value = m.meterK; u.remain.value = m.remain; u.badgeS.value = m.badgeS;
     if (m.hitK > 0) u.hitRgb.value.set(m.hitHex);
     if (m.meterK > 0) {
@@ -326,10 +331,10 @@ export function createScreenFx(three, art = currentArt()) {
       const ci = Math.max(0, SCREEN_KINDS.indexOf(screen.kind));
       u.badgeCell.value.set(ci % 4, (ci / 4) | 0);
     }
-    const any = a.any || m.hitK > 0 || m.meterK > 0;
+    const any = a.any || m.hitK > 0 || m.meterK > 0 || u.fogFill.value > .0005;
     u.any.value = any ? 1 : 0;
     if (!any) { clock = 0; return; }
-    clock += (dt || 0) * a.timeMul;
+    clock += (dt || 0) * Math.min(a.timeMul, payoffFog?.params?.gentle && payoffFog.k > 0 ? .5 : 1);
     u.t.value = clock;
     u.runT.value = (screen.t || 0) * a.timeMul;
     u.aspect.value = aspect > 0 ? aspect : 16 / 9;
