@@ -3420,3 +3420,7 @@ Mantra Lab completion close timer is now stopped in Cleanup, so an early-closed 
 
 - `ctrl-spiral-rail-host` stub -> wired under P122: WPF no longer mounts `SpiralRailHost` (MainWindow.xaml:746-749 gives the slot to `ChasterRailChip`); Avalonia host stays dormant and collapsed.
 - Ledger-only diff (docs/avalonia-parity.md:466). Existing `SpiralRailHostTests` run via rcheck (run 39921170660): 2/2 passed.
+
+## avalonia-port/fin-ctrl-v2-get-it-row: +1
+
+- NOOP lane: dependency analysis; `ctrl-v2-get-it-row` stays stub (blocked by svc-prize-ownership, feat-bubble-pop). Stub reason now names the missing GrantsChanged repaint. rgate GATE-OK (run 39928533953).
