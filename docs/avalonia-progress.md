@@ -3341,3 +3341,7 @@ Header mod selector regains the WPF "Open Mod Manager" footer row, and Home feat
 
 ## avalonia-port/fin-views-companion-chat-threshold: +296
 Companion chat threshold (Z2) motion matches WPF: staggered thinking dots on the shared BeatLoop (450ms each way, 0/150/300ms delays, own repeat cycles, parked when hidden/minimised, reset on stop), state-triggered dormant shimmer (0.25s wait, 1.4s CubicEaseInOut, hidden if unloaded mid-sweep), VM detach on unload and re-sync on reload. Ledger views-companion-chat-threshold stays stub (BrowserMedia ownership + autoplay owned by wire-shell-browser-b-next); stale thinking-dots gap removed from views-companion-room. Tests: ChatThresholdMotionTests, HerRoomChatMemoryTests (rcheck 39898672572); rgate 39899074901 green except known P108 GoonClock flake.
+
+## avalonia-port/migration-privacy-seed: +141
+- Moving from the Windows app keeps your six privacy choices owned by your account, so the first sync sends exactly what Windows always sent.
+- A fresh install, a different account or an incomplete settings file sends no privacy values until you change them yourself.
